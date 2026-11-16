@@ -35,6 +35,8 @@ mod sandbox;
 
 pub(crate) use adapter::ADAPTER;
 #[cfg(target_os = "linux")]
+pub use cgroup::give_controllers;
+#[cfg(target_os = "linux")]
 pub(crate) use cgroup::ExecGroup;
 #[cfg(target_os = "linux")]
 pub use provider::NamespaceProvider;

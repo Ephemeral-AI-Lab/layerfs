@@ -213,6 +213,8 @@ environment
    prepare: Local parts + copied daemon, helper and runtime layer + spec
             + upper/work
    cgroup::create /sys/fs/cgroup/layerfs/<id>  (needs cgroup.kill)
+     layerfs/ gives its children +memory +pids, those its parent lists
+     (give_controllers; a failed write is one log line, not a failure)
    spawn: helper init --spec <spec>
             joins the cgroup; unshare(NEWNS | NEWPID | NEWIPC); private
             v

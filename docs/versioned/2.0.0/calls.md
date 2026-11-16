@@ -320,8 +320,9 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
     `oom_kills`: out-of-memory kills in it and its Workspace and command
     groups; #182); a value the
     kernel does not keep there is `null`, and when that is the memory
-    or the process count `usage_reason` is `no_controller` (so on the
-    machines of this build, where only `cpu_usec` is kept). `usage` is
+    or the process count `usage_reason` is `no_controller` (where the
+    machine gives Sandboxes no memory or pids controller; docker, Lima and
+    Apple Container machines of this build give both). `usage` is
     `null`, with `usage_reason`, for a `native` Sandbox, which is a plain process
     (`host_process`), for a runtime this build reads no usage of
     (`not_supported`), on a machine without cgroup v2 (`cgroup_v1`), when
