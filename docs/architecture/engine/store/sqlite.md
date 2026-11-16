@@ -113,6 +113,16 @@ quarantines the session and keeps the lock
 ([`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs),
 [`lane.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/lane.rs)).
 
+Windows holds the same lane as a named kernel mutex, one per Store
+directory (a stable hash of its canonical text in the `Local`
+namespace): acquired with one bounded wait, held for the short writer
+job and released on drop, with `try_acquire` answering the 0 ms
+attempt for skippable work (the idle checkpoint). Darwin keeps
+sole-owner Init and the exact `Busy` cross-session: its `flock`
+conflicts with SQLite's open-file locks. A probe on the CLI chain -
+two writer processes, ten concurrent writes each into one Store -
+lands all twenty with zero `Busy` (Plan B, #454).
+
 ## Checkpoints
 
 ```text
