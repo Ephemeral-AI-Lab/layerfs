@@ -49,7 +49,9 @@ pub(crate) struct OpRow {
 /// What Phase A leaves for Phase B.
 pub(crate) struct Built {
     pub(crate) scratch: String,
-    pub(crate) scratch_bytes: u64,
+    /// The run's peak temp: the scratch relations plus the WAL they wrote,
+    /// sampled after every copy batch (never the post-build final size alone).
+    pub(crate) peak_temp: u64,
     pub(crate) dead: DeadTotals,
 }
 

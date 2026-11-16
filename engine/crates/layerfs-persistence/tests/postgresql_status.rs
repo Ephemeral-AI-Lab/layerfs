@@ -115,8 +115,8 @@ fn the_projection_reads_gc_op_gc_intent_and_owner_liveness() {
             &format!(
                 "INSERT INTO {s}.gc_op \
                  (id,generation,phase,scratch_schema,mark_serial,mark_pack_id,mark_digest,\
-                  started_ms,artifact,pid,backend_start) \
-                 VALUES (1,$1,'build',$2,$3,$4,$5,$6,$2,$7,$8)"
+                  started_ms,artifact,pid,backend_start,op_id) \
+                 VALUES (1,$1,'build',$2,$3,$4,$5,$6,$2,$7,$8,$9)"
             ),
             &[
                 &7i64,
@@ -127,6 +127,7 @@ fn the_projection_reads_gc_op_gc_intent_and_owner_liveness() {
                 &1_700_000_000_000i64,
                 &i64::from(pid),
                 &start,
+                &op_id.to_vec(),
             ],
         )
         .unwrap();
@@ -223,9 +224,9 @@ fn every_postgresql_failpoint_projects_its_phase() {
             .unwrap()
             .unwrap_or_else(|| panic!("{tag}: the op row remains"));
         assert_eq!(status.phase, phase, "{tag}: the row records the phase");
-        // The released `gc_intent` is gone, so the scratch name carries the
-        // op identity the projection shows.
-        assert_eq!(status.op_id, [op; 16], "{tag}: the artifact names the op");
+        // The released `gc_intent` is gone, so the `gc_op` row's own
+        // `op_id` carries the identity the projection shows.
+        assert_eq!(status.op_id, [op; 16], "{tag}: the op row names the op");
         assert!(
             !status.alive,
             "{tag}: the failed owner is not running the op"

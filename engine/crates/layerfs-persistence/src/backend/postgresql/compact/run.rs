@@ -55,7 +55,9 @@ pub(crate) fn round(
     let stored = u64::try_from(tuple.stored).unwrap_or(0);
     let live = live_stored(session, schema)?;
     let dead_bytes = stored.saturating_sub(u64::try_from(live).unwrap_or(0));
-    let scratch = scratch_name(&request.op_id);
+    // The scratch name is the Store's catalog identity, not this caller's
+    // operation id: a crash on another machine can still name the artifact.
+    let scratch = scratch_name(handles.history.catalog_id.as_slice());
     let mark_dead = persist_mark(session, schema, &mark, &tuple, &scratch, request)?;
     let generation = u64::try_from(tuple.generation).unwrap_or(0);
     let kept = CompactKeptWaste::from_waste(mark.objects().waste());

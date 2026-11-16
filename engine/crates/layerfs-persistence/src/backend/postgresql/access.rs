@@ -54,27 +54,42 @@ const MISSING: &str = "SELECT p.privilege || ' on ' || $1::text || '.' || c.reln
      ELSE has_table_privilege(c.oid, p.privilege) END \
      ORDER BY c.relkind DESC, c.relname, p.at";
 
-/// The five Store-wide privileges a compaction needs before it names or
-/// creates its scratch schema, in the order [`compaction_missing`] reports a
-/// missing one: the schema's `USAGE` and `CREATE`, the database's `CREATE`
-/// and `TEMP`, and `pg_read_all_stats`. `CREATE` on the schema is the
-/// `ALTER TABLE ... SET SCHEMA` of Phase B; `CREATE` on the database is the
-/// scratch schema itself; `pg_read_all_stats` is the recorded owner's
-/// `pg_stat_activity` row and its `pg_terminate_backend` proof.
+/// The Store-wide privileges a compaction needs before it names or creates
+/// its scratch schema, in the order [`compaction_missing`] reports a missing
+/// one: the schema's `USAGE` and `CREATE`, the database's `CREATE` and `TEMP`,
+/// `pg_read_all_stats`, and ownership of every Store table. `CREATE` on the
+/// schema is the `ALTER TABLE ... SET SCHEMA` of Phase B; `CREATE` on the
+/// database is the scratch schema itself; `pg_read_all_stats` is the recorded
+/// owner's `pg_stat_activity` row and its `pg_terminate_backend` proof; the
+/// tables' owner is what lets Phase B `DROP TABLE` and `ALTER TABLE ... SET
+/// SCHEMA` them, and an owner has every privilege with grant option, so the
+/// column checks both `pg_class.relowner` membership and the ACL form.
 const COMPACTION: &str = "SELECT \
      has_schema_privilege($1::text, 'USAGE')::int, \
      has_schema_privilege($1::text, 'CREATE')::int, \
      has_database_privilege(current_database(), 'CREATE')::int, \
      has_database_privilege(current_database(), 'TEMP')::int, \
-     pg_has_role('pg_read_all_stats', 'MEMBER')::int";
+     pg_has_role('pg_read_all_stats', 'MEMBER')::int, \
+     (SELECT COALESCE(bool_and( \
+          pg_has_role(c.relowner, 'MEMBER') \
+          AND has_table_privilege(c.oid, 'SELECT WITH GRANT OPTION') \
+          AND has_table_privilege(c.oid, 'INSERT WITH GRANT OPTION') \
+          AND has_table_privilege(c.oid, 'UPDATE WITH GRANT OPTION') \
+          AND has_table_privilege(c.oid, 'DELETE WITH GRANT OPTION') \
+          AND has_table_privilege(c.oid, 'TRUNCATE WITH GRANT OPTION') \
+          AND has_table_privilege(c.oid, 'REFERENCES WITH GRANT OPTION') \
+          AND has_table_privilege(c.oid, 'TRIGGER WITH GRANT OPTION')), TRUE)::int \
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace \
+        WHERE n.nspname = $1::text AND c.relkind IN ('r', 'p'))";
 
 /// The privilege named for each [`COMPACTION`] column, in its order.
-const COMPACTION_NAMES: [&str; 5] = [
+const COMPACTION_NAMES: [&str; 6] = [
     "USAGE on the Store schema",
     "CREATE on the Store schema",
     "CREATE on the database",
     "TEMP on the database",
     "pg_read_all_stats",
+    "ownership of the Store's tables",
 ];
 
 /// The first Store-wide privilege `session`'s role lacks for a PostgreSQL

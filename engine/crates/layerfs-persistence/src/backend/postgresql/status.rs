@@ -94,8 +94,9 @@ pub fn status(url: &str, schemas: &[String]) -> Result<PostgresStatus, PostgresS
 #[doc(hidden)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PostgresCompactOpStatus {
-    /// The 16-byte operation identity, from `gc_intent` or the `lfs_gc_`
-    /// scratch name `gc_op` records.
+    /// The 16-byte operation identity: the `gc_op` row's own `op_id`, then a
+    /// remaining `gc_intent`, then (for a row written before `op_id` was
+    /// recorded) the `lfs_gc_` scratch name.
     pub op_id: [u8; 16],
     /// The generation the run started at.
     pub generation: i64,
@@ -179,7 +180,8 @@ pub fn compact_status(
                          WHERE a.datname=current_database() AND a.pid=o.pid \
                            AND a.backend_start::text=o.backend_start \
                            AND (o.usename IS NULL OR a.usename::text=o.usename) \
-                           AND a.state IS DISTINCT FROM 'idle') \
+                           AND a.state IS DISTINCT FROM 'idle'), \
+                o.op_id \
            FROM {table}.gc_op o \
            LEFT JOIN LATERAL (SELECT op_id,owner_runtime,owner_boot,state \
                                 FROM {table}.gc_intent WHERE kind='compaction' \
@@ -207,8 +209,9 @@ pub fn compact_status(
     let failed = |error: postgres::Error| PostgresStatusError::Failed(error.to_string());
     let intent: Option<Vec<u8>> = row.try_get(9).map_err(failed)?;
     let artifact: Option<String> = row.try_get(5).map_err(failed)?;
+    let recorded: Option<Vec<u8>> = row.try_get(15).map_err(failed)?;
     let op = PostgresCompactOpStatus {
-        op_id: op_identity(intent, artifact.as_deref()),
+        op_id: op_identity(recorded, intent, artifact.as_deref()),
         generation: row.try_get(0).map_err(failed)?,
         phase: row.try_get(1).map_err(failed)?,
         started_ms: row.try_get(2).map_err(failed)?,
@@ -230,11 +233,16 @@ pub fn compact_status(
     Ok(Some(op))
 }
 
-/// The `lfs_gc_<hex>` scratch name `gc_op.artifact` records carries the
-/// operation identity, so a row whose `gc_intent` was already released still
-/// projects a stable `op.id`.
-fn op_identity(intent: Option<Vec<u8>>, artifact: Option<&str>) -> [u8; 16] {
-    if let Some(bytes) = intent {
+/// The operation identity: the `gc_op` row records it at the mark, so a row
+/// whose `gc_intent` was already released still projects a stable `op.id`.
+/// The intent is the next fallback and the old `lfs_gc_<hex(op_id)>` artifact
+/// the last, for a row written before `gc_op.op_id` existed.
+fn op_identity(
+    recorded: Option<Vec<u8>>,
+    intent: Option<Vec<u8>>,
+    artifact: Option<&str>,
+) -> [u8; 16] {
+    for bytes in [recorded, intent].into_iter().flatten() {
         if let Ok(op) = <[u8; 16]>::try_from(bytes.as_slice()) {
             return op;
         }

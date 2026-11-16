@@ -69,6 +69,9 @@ gc_op id bigint NO
 gc_op generation bigint NO
 gc_op phase text NO
 gc_op scratch_schema text YES
+gc_op op_id bytea YES
+gc_op mark_fingerprint text YES
+gc_op mark_visited bigint YES
 gc_op mark_serial bigint YES
 gc_op mark_pack_id bigint YES
 gc_op mark_digest bytea YES
