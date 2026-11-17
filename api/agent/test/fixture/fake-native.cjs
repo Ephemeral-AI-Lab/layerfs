@@ -50,6 +50,7 @@ function answer(op, args) {
     case "branch.merge": return { value: { kind: "Merged", branch: args.name, head: "m3rge", root: "r00t" } };
     case "branch.publish": return { value: { kind: "Added", source: { branch: "feature", commit: "pub1" }, publishedLayer: { id: "lay1" } } };
     case "fs.read": return { value: args.startLine === 1 ? { text: "a\n", nextLine: 2 } : { text: "b\n", nextLine: null } };
+    case "fs.read_bytes": return { value: { bytes: Buffer.from([0, 255, 1]), size: 5, hasMore: true } };
     case "fs.stat": return { value: { type: "file", size: 5, mode: 420 } };
     case "fs.rm": return { value: { kind: "UpToDate", head: "h3ad" } };
     case "workspace.mount": return { value: { kind: "Mounted", sandbox: args.sandbox, container: `layerfs-website-${args.sandbox}`, path: "/workspaces/w1", image: "fake-image", branch: args.branch, base: "b4se", baseLayer: "lay0", root: "r00t" } };

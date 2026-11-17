@@ -1,5 +1,6 @@
 // The `fs` commands, in help order: reads at a saved snapshot and one-Commit Branch writes.
 import read from "./read.js";
+import read_bytes from "./read_bytes.js";
 import list from "./list.js";
 import stat from "./stat.js";
 import grep from "./grep.js";
@@ -14,4 +15,4 @@ import rm from "./rm.js";
 import cp from "./cp.js";
 import mv from "./mv.js";
 
-export default { read, list, stat, grep, glob, diff_files, blame, write, edit, apply, mkdir, rm, cp, mv };
+export default { read, read_bytes, list, stat, grep, glob, diff_files, blame, write, edit, apply, mkdir, rm, cp, mv };

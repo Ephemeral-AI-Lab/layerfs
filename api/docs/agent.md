@@ -269,7 +269,7 @@ trace line covers the command's run.
 | --- | --- |
 | `LayerFS` (2) | `LayerFS.open(name)`, `LayerFS.init(name, folder, timeout?)`: static, each returns a ready client |
 | project (2) | `list_branches(pageSize?, pagePos?)`, `list_sandboxes(pageSize?, pagePos?)` |
-| fs reads (7) | `read(ref, path, startLine?, endLine?)`, `list(ref, path?, pageSize?, pagePos?)`, `stat(ref, path)`, `grep(ref, pattern, path?, pageSize?, pagePos?)`, `glob(ref, pattern, path?, pageSize?, pagePos?)`, `diff_files(leftRef, leftPath, rightRef, rightPath)`, `blame(ref, path, fromLine?)` |
+| fs reads (8) | `read(ref, path, startLine?, endLine?)`, `read_bytes(ref, path, offset?, length?)`, `list(ref, path?, pageSize?, pagePos?)`, `stat(ref, path)`, `grep(ref, pattern, path?, pageSize?, pagePos?)`, `glob(ref, pattern, path?, pageSize?, pagePos?)`, `diff_files(leftRef, leftPath, rightRef, rightPath)`, `blame(ref, path, fromLine?)` |
 | fs writes (7) | `write(branch, path, content, message? \| { message?, mode? })`, `edit(branch, path, oldText, newText, message?)`, `apply(branch, changes, message?)`, `mkdir(branch, path, message? \| { message?, mode? })`, `rm(branch, path, message?)`, `cp(branch, from, to, message?)`, `mv(branch, from, to, message?)` |
 | branch (6) | `fork(name, fromRef?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `diff_branches(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `merge(a, b, name, message?, units?)`, `publish(branch, commit?)` |
 | sandbox (3) | `create({ image }?)` → `{ sandbox, image }`, `list_workspaces(sandbox, pageSize?, pagePos?)`, `close(sandbox)` |
@@ -341,9 +341,14 @@ binary `content` is sent as `bytes`. Bytes in a `SharedArrayBuffer` or a
 detached `ArrayBuffer` are refused as InvalidInput, and so is anything else,
 such as an array of numbers. The bytes are copied once the call starts, after
 the client's Store is open, so do not change them until the call settles.
-Reads are text only: `fs.read` refuses a file that is not UTF-8 text as
-`Binary`, and `fs.stat` reports its size. `node api/agent/test/binary_write.mjs`
-checks these forms and refusals on Linux.
+`fs.read` is text only: it refuses a file that is not UTF-8 text as `Binary`,
+and `fs.stat` reports its size. `fs.read_bytes(ref, path, offset?, length?)`
+returns up to `length` raw bytes from `offset` (default 0), capped at one 48 KiB
+window, with the file's `size` and `hasMore`; a larger file is paged by
+advancing `offset` by the returned byte count. It refuses a directory
+`IsDirectory`, a symlink `NotFile` and a missing path `NoSuchPath`; an offset
+past the end answers empty `bytes` with `hasMore: false`.
+`node api/agent/test/binary_write.mjs` checks these forms and refusals on Linux.
 
 ### Pages and reads
 
@@ -360,9 +365,11 @@ component-by-component byte order, then line number for grep. Commit history is
 newest first along first parents. Every call resolves each live ref once; separate
 calls against live heads can shift numeric positions.
 
-Read/blame use 1-based inclusive line positions, no byte offsets or byte-read
-method. Responses fit the authenticated control frame: at most 2000 lines and
-48 KiB of text/value payload, below the selected 256 KiB ceiling. LF separates
+Read/blame use 1-based inclusive line positions. `fs.read_bytes` is the byte
+read: it takes a byte `offset` and `length`, capped at one 48 KiB window, and
+answers the file's `size` and `hasMore`. Responses fit the authenticated
+control frame: at most 2000 lines and 48 KiB of text/value payload, below the
+selected 256 KiB ceiling. LF separates
 lines; CRLF text is preserved, and a final LF creates no phantom line. Read reports
 `startLine`, `endLine`, `truncated`, `lineTruncated` and `nextLine`. Huge lines return
 a UTF-8 prefix, with no within-line continuation; the remainder is explicitly
@@ -502,6 +509,7 @@ table differs, and when a family's files stop matching the SDK's.
 | `branch.merge` | `layerfs branch merge <a> <b> <name> [-m <text>] [--units <json>]` |
 | `branch.publish` | `layerfs branch publish <branch> [<commit>]` |
 | `fs.read` | `layerfs fs read <ref> <path> [--start-line <n>] [--end-line <n>]` |
+| `fs.read_bytes` | `layerfs fs read_bytes <ref> <path> [--offset <n>] [--length <n>]` |
 | `fs.list` | `layerfs fs list <ref> [<path>] [--page-size <n>] [--page-pos <n>]` |
 | `fs.stat` | `layerfs fs stat <ref> <path>` |
 | `fs.grep` | `layerfs fs grep <ref> <pattern> [<path>] [--page-size <n>] [--page-pos <n>]` |

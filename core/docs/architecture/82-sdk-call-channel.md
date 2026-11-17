@@ -4,7 +4,7 @@
 > #352 and #373 source updates below. Correctness receipts and the component
 > counter screen are distinct from this architecture.
 
-The JavaScript SDK has 27 positional methods in four groups (29 before #373
+The JavaScript SDK has 28 positional methods in four groups (29 before #373
 replaced the `sandbox` group with `workspace`; see the #373 update below). The
 [SDK guide](../../../api/docs/agent.md) lists signatures, environment configuration,
 read/page limits and compatibility. [SPEC](../issues/327/SPEC.md) describes the
@@ -68,6 +68,13 @@ read caches (then `sdk/cached.rs`, now store-service `read/cached.rs`) and resol
 the walker memoizes directory pages and the inode table's upper pages. Results
 are byte-identical to the earlier calls; paging still counts positions.
 
+Issue #417 source update, 2026-10-28: `fs.read_bytes` reads one bounded raw
+byte window through `layerfs-content`'s `read_range`, at the same immutable
+snapshot and path lookup as `fs.read`. `length` defaults to and is capped at the
+48 KiB text window; an offset past the end returns no bytes and `hasMore:
+false`. No storage, binding or control-record change is needed: the binding
+already returns `SdkValue::Bytes` as a Buffer.
+
 Diff omits a same-identity directory only when its metadata is also unchanged.
 Directory metadata changes occupy a returned item and therefore exactly one
 pagination position. This corrects the earlier mismatch where the scan counted
@@ -85,8 +92,10 @@ retains the original failure and custody. There is no resident paths draft or
 separate canonical encoder. Main is read-only except through publish.
 
 Immutable reads use 1-based inclusive lines, at most 2,000 lines/48 KiB reply
-payload. Huge-line UTF-8 prefixes, omitted remainder and nextLine are explicit;
-there is no byte-read method. Grep streams literal matching. Blame follows
+payload. Huge-line UTF-8 prefixes, omitted remainder and nextLine are explicit.
+`fs.read_bytes` is the byte read: at most 48 KiB of a regular file's raw bytes
+from a byte offset, with the file's size and hasMore; a directory, symlink or
+missing path is refused. Grep streams literal matching. Blame follows
 immutable first parents without retaining the entire chain, skips unchanged
 content IDs and uses bounded LCS with exact common edges. In coarse comparisons,
 a line is inherited from the common suffix only when it starts at a
