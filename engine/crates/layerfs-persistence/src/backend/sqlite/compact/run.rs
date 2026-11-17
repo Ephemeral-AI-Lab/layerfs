@@ -278,14 +278,13 @@ impl SqliteHandles {
 
             // §7 step 2: a stop here leaves the open session, the writer lane,
             // the committed intent, the visited scratch and the op record; the
-            // live Store is at `G`.
+            // live Store is at `G`. The admission record already names this
+            // run, its generation and its owner, which is all a later call
+            // judges a leftover by, and `store.status` reads its phase as
+            // `mark`; the mark's tuple and digest go out with the next write.
             op.tuple = tuple.clone();
             op.live_heads_digest = mark.live_heads_digest();
             op.phase = "mark".to_owned();
-            if let Err(error) = op.write(&store) {
-                abort_run(&history, &store, &op_id);
-                return Err(error);
-            }
             // §7 step 1: with the lane held, no writer can append while the
             // intent, the op record and the WAL are settled together.
             if let Err(error) = session.checkpoint_holding() {
@@ -405,12 +404,6 @@ impl SqliteHandles {
                 peak_temp: built.peak_temp_bytes(),
                 total_stored: total,
             });
-            // §7 step 7: every artifact and the op record are durable before
-            // the verification reads them back.
-            if let Err(error) = sync_directory(&store) {
-                abort_before_install(&store, &op_id, true);
-                return Err(error);
-            }
             stop_at(request, CompactFailpoint::AfterBuild, &op, &store)?;
             stop_at(request, CompactFailpoint::AfterWalSwitch, &op, &store)?;
             metrics.end_phase();
