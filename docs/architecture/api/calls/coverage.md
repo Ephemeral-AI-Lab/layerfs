@@ -63,7 +63,7 @@ Front-end problems: none.
 | `branch.get_commit` | project, branch, commit | - | yes | yes | yes | yes | yes |
 | `branch.fork` | project, name, from_branch, ?from_commit | - | yes | yes | yes | yes | yes |
 | `branch.merge` | project, name, a, b | message, units | yes | yes | yes | yes | yes |
-| `branch.publish` | project, branch, ?commit | - | yes | yes | yes | yes | yes |
+| `branch.publish` | project, branch, ?commit | expected_base, expected_head, force | yes | yes | yes | yes | yes |
 | `branch.diff` | project, from_branch, to_branch | paths_only, page_size, page_pos, cursor, page, from_commit, to_commit, path_prefix, include_attribution, continuation | yes | yes | yes | yes | yes |
 | `branch.remove` | project, branch | - | yes | yes | yes | yes | admin |
 | `commit.list` | project, branch | page_size, page_pos | yes | yes | yes | yes | yes |
@@ -85,7 +85,7 @@ Front-end problems: none.
 | `file.cp` | project, branch, from_path, to_path | message | yes | yes | yes | yes | yes |
 | `file.apply` | project, branch, changes | message | yes | yes | yes | yes (stdin/--from) | yes |
 | `sandbox.create` | project, name, ?machine | image, on_progress() | yes | yes | yes | yes (--progress) | admin |
-| `sandbox.list` | ?project | page_size, page_pos | yes | yes | yes | yes | yes |
+| `sandbox.list` | ?project | page_size, page_pos, live | yes | yes | yes | yes | yes |
 | `sandbox.get` | name | page_size, page_pos | yes | yes | yes | yes | yes |
 | `sandbox.close` | name | force | yes | yes | yes | yes | admin |
 | `sandbox.files` | sandbox, ?path | depth, cursor, limit, offset, length | yes | yes | yes | yes | no (UI only) |
