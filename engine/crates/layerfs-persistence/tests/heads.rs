@@ -10,8 +10,8 @@ use layerfs_history::records::{
 };
 use layerfs_history::{BranchId, HistoryCatalog, HistoryCatalogConfig};
 use layerfs_persistence::{
-    read_heads, PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePackLayout,
-    SqlitePersistenceProfile,
+    heads_digest, read_heads, PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles,
+    SqlitePackLayout, SqlitePersistenceProfile,
 };
 use layerfs_storage::StoragePolicy;
 use support::{branch_id, name, root, stack, Temp};
@@ -50,6 +50,78 @@ fn commit(history: &dyn HistoryCatalog, branch: BranchId, tag: u8) {
         matches!(outcome, CommitOutcome::Committed { .. }),
         "{outcome:?}"
     );
+}
+
+/// A soft removal writes a marker and leaves the base row in place; the backup
+/// heads digest must follow the visible history, not the leftover rows. A
+/// removed Branch leaves its project's line and a removed project leaves
+/// nothing, so a pushed copy's `layerfs-heads` names the live heads only.
+#[test]
+fn a_retired_project_or_branch_leaves_the_backup_heads_digest() {
+    let temp = Temp::new("heads-retired");
+    let path = temp.join("store");
+    let handles = SqliteHandles::create(
+        config(path.clone()),
+        StoragePolicy::frozen_default(),
+        &HistoryCatalogConfig {
+            binding_key: BINDING.to_vec(),
+            cursor_key: CURSOR,
+            incarnation: 3,
+        },
+    )
+    .unwrap();
+    let record = handles
+        .history
+        .initialize_layerstack(&StackInitialization {
+            logical: 10,
+            stack: stack(1),
+            name: name("shop"),
+            scope: root(200),
+            profile: root(201),
+            genesis_root: root(1),
+        })
+        .unwrap();
+    let branch = branch_id(1);
+    handles
+        .history
+        .fork(&ForkRequest {
+            stack: stack(1),
+            branch,
+            name: name("work"),
+            source: ForkSource::Layer(record.head_layer),
+        })
+        .unwrap();
+    commit(&handles.history, branch, 5);
+    assert_eq!(read_heads(&path).unwrap().len(), 2);
+    let live = heads_digest(&path).unwrap();
+
+    handles.history.mark_branch_removed(branch, 1_000).unwrap();
+    // The marker is not a delete: `branch_any` still renders the row.
+    assert!(handles.history.branch_any(branch).unwrap().is_some());
+    let after_branch = read_heads(&path).unwrap();
+    assert_eq!(after_branch.len(), 1, "{after_branch:?}");
+    assert!(
+        after_branch[0].starts_with("stack shop "),
+        "{after_branch:?}"
+    );
+    let branch_removed = heads_digest(&path).unwrap();
+    assert_ne!(branch_removed, live, "a removed Branch changes the digest");
+
+    handles.history.mark_stack_deleted(stack(1), 1_000).unwrap();
+    assert_eq!(
+        handles.history.stack_deleted_ms(stack(1)).unwrap(),
+        Some(1_000)
+    );
+    assert!(
+        read_heads(&path).unwrap().is_empty(),
+        "a removed project leaves no heads line"
+    );
+    let project_removed = heads_digest(&path).unwrap();
+    assert_ne!(
+        project_removed, branch_removed,
+        "a removed project changes the digest"
+    );
+    assert_ne!(project_removed, live);
 }
 
 #[test]

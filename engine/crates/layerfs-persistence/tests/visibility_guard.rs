@@ -4,11 +4,14 @@
 //!
 //! The statements are discovered from the shipped SQL directories rather than
 //! from a hand-kept list, so a new statement that reads either table without
-//! the filter fails here until it is filtered or allow-listed. Every allow-list
-//! entry carries its reason and is proved to still be a live statement that
-//! reads the table, so the list cannot rot. The lookup pairs and the
-//! snapshot/live statements §4.2 names by hand are also pinned, because a scan
-//! alone would not notice a deletion.
+//! the filter fails here until it is filtered or allow-listed. The scan also
+//! covers the crate's own Rust source: an inline `SELECT ... FROM`/`JOIN`
+//! literal that names `branch` or `layer_stack` is held to the same filter, so
+//! a read outside the `sql/` directories (such as `backend/sqlite/heads.rs`)
+//! cannot bypass the guard. Every allow-list entry carries its reason and is
+//! proved to still be a live statement that reads the table, so the list cannot
+//! rot. The lookup pairs and the snapshot/live statements §4.2 names by hand are
+//! also pinned, because a scan alone would not notice a deletion.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -171,11 +174,34 @@ fn words(sql: &str) -> Vec<&str> {
         .collect()
 }
 
+/// The SQL with its schema placeholders removed: `{s}.branch` and
+/// `{schema}.branch` become `branch`, and `{}.pack` becomes `pack`, so an
+/// inline `format!` statement is scanned like a shipped one.
+fn without_placeholders(sql: &str) -> String {
+    let sql = without_comments(sql);
+    let mut out = String::with_capacity(sql.len());
+    let mut rest = sql.as_str();
+    while let Some(open) = rest.find('{') {
+        let Some(close) = rest[open..].find('}') else {
+            break;
+        };
+        out.push_str(&rest[..open]);
+        let after = open + close + 1;
+        if rest[after..].starts_with('.') {
+            rest = &rest[after + 1..];
+        } else {
+            rest = &rest[after..];
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 /// Whether `sql` reads rows of `table` through a `FROM`/`JOIN` relation
 /// (including a subquery), rather than writing to it. `DELETE FROM` and
 /// an `UPDATE`/`INSERT` are not reads; `INSERT ... SELECT ... FROM` is.
 fn reads(sql: &str, table: &str) -> bool {
-    let normalized = without_comments(sql).replace("{s}.", "");
+    let normalized = without_placeholders(sql);
     let words = words(&normalized);
     words.iter().enumerate().any(|(index, word)| {
         let relation = word.eq_ignore_ascii_case("from") || word.eq_ignore_ascii_case("join");
@@ -193,6 +219,291 @@ fn reads(sql: &str, table: &str) -> bool {
 fn has_filter(sql: &str, markers: &[&str]) -> bool {
     let sql = without_comments(sql).to_ascii_lowercase();
     sql.contains("not exists") && markers.iter().all(|marker| sql.contains(marker))
+}
+
+/// One inline SQL literal found in the crate's own Rust source.
+struct InlineSql {
+    /// Path relative to the crate root, e.g. `src/backend/sqlite/heads.rs`.
+    file: String,
+    line: usize,
+    sql: String,
+}
+
+/// An inline statement that reads a filtered table without the §4.2 filter,
+/// and why. `needle` pins the statement: when the literal changes the entry
+/// stops matching, so the test fails until the site is read again.
+struct InlineAllow {
+    file: &'static str,
+    needle: &'static str,
+    /// Retired-row tables the statement must still name, when it depends on
+    /// seeing that state.
+    markers: &'static [&'static str],
+    reason: &'static str,
+}
+
+/// The inline read sites that may read `branch`/`layer_stack` unfiltered.
+/// Every entry is a compaction-internal decision, not a convenience.
+const INLINE_ALLOWED: &[InlineAllow] = &[
+    InlineAllow {
+        file: "src/backend/postgresql/compact/cleanup.rs",
+        needle: "UNION SELECT b.layer_stack_id FROM {schema}.branch b",
+        markers: &[],
+        reason: "5.1/8 compaction cleanup: the dead LayerStacks are the ones that carry \
+                 `gc_dead` rows, which by construction are the rows the mark did not keep, \
+                 so this read must see a retired Stack too; the ids are about to be deleted \
+                 and nothing is rendered from this read",
+    },
+    InlineAllow {
+        file: "src/backend/postgresql/compact/op.rs",
+        needle: "SELECT 'branch',b.branch_id FROM {schema}.branch b",
+        markers: &[],
+        reason: "6.1/8 mark: the dead set is exactly the history the `kept_node` closure did \
+                 not retain, a retired Branch's own row included, so the collection must not \
+                 hide it; the statement writes `gc_dead`, renders nothing and runs inside the \
+                 exclusive compaction window",
+    },
+    InlineAllow {
+        file: "src/backend/postgresql/schema.rs",
+        needle: "INSERT INTO project_epoch(layer_stack_id, epoch)",
+        markers: &[],
+        reason: "4/8 additive migration: seeds one `project_epoch` row per existing \
+                 LayerStack, live or retired, so a later removal marker always finds the row \
+                 it bumps; a one-time schema step inside the Store write lane, not a client \
+                 read",
+    },
+    InlineAllow {
+        file: "src/backend/sqlite/schema.rs",
+        needle: "INSERT INTO project_epoch(layer_stack_id,epoch)",
+        markers: &[],
+        reason: "4/8 additive migration: the SQLite half of the same one-time seed of one \
+                 `project_epoch` row per existing LayerStack, live or retired; not a client \
+                 read",
+    },
+];
+
+/// Every inline SQL literal in `src` that reads `branch` or `layer_stack`.
+fn inline_sql() -> Vec<InlineSql> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    collect_sources(&root, &mut files);
+    let mut out = Vec::new();
+    for path in files {
+        let file = format!(
+            "src/{}",
+            path.strip_prefix(&root)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/")
+        );
+        let source = fs::read_to_string(&path).unwrap();
+        for (line, sql) in string_literals(&source) {
+            if !sql.to_ascii_lowercase().contains("select") {
+                continue;
+            }
+            if reads(&sql, "branch") || reads(&sql, "layer_stack") {
+                out.push(InlineSql {
+                    file: file.clone(),
+                    line,
+                    sql,
+                });
+            }
+        }
+    }
+    out.sort_by(|left, right| {
+        (left.file.as_str(), left.line).cmp(&(right.file.as_str(), right.line))
+    });
+    out
+}
+
+fn collect_sources(directory: &Path, out: &mut Vec<std::path::PathBuf>) {
+    for entry in fs::read_dir(directory).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            collect_sources(&path, out);
+        } else if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
+            out.push(path);
+        }
+    }
+}
+
+/// The `(line, text)` of every string literal in `source`, skipping comments.
+/// Rust string escapes are flattened to the character they escape; a line
+/// continuation contributes nothing, so a wrapped SQL statement reads as one
+/// line of words.
+fn string_literals(source: &str) -> Vec<(usize, String)> {
+    let bytes = source.as_bytes();
+    let mut out = Vec::new();
+    let mut line = 1usize;
+    let mut index = 0usize;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'\n' => {
+                line += 1;
+                index += 1;
+            }
+            b'/' if bytes.get(index + 1) == Some(&b'/') => {
+                while index < bytes.len() && bytes[index] != b'\n' {
+                    index += 1;
+                }
+            }
+            b'/' if bytes.get(index + 1) == Some(&b'*') => {
+                let mut depth = 1usize;
+                index += 2;
+                while index < bytes.len() && depth > 0 {
+                    match (bytes[index], bytes.get(index + 1)) {
+                        (b'\n', _) => {
+                            line += 1;
+                            index += 1;
+                        }
+                        (b'/', Some(b'*')) => {
+                            depth += 1;
+                            index += 2;
+                        }
+                        (b'*', Some(b'/')) => {
+                            depth -= 1;
+                            index += 2;
+                        }
+                        _ => index += 1,
+                    }
+                }
+            }
+            b'r' => {
+                let mut cursor = index + 1;
+                let mut hashes = 0usize;
+                while bytes.get(cursor) == Some(&b'#') {
+                    hashes += 1;
+                    cursor += 1;
+                }
+                if bytes.get(cursor) != Some(&b'"') {
+                    index += 1;
+                    continue;
+                }
+                let start = line;
+                cursor += 1;
+                let mut text = String::new();
+                while cursor < bytes.len() {
+                    if bytes[cursor] == b'"' {
+                        let mut close = cursor + 1;
+                        let mut closing = 0usize;
+                        while closing < hashes && bytes.get(close) == Some(&b'#') {
+                            closing += 1;
+                            close += 1;
+                        }
+                        if closing == hashes {
+                            cursor = close;
+                            break;
+                        }
+                    }
+                    if bytes[cursor] == b'\n' {
+                        line += 1;
+                    }
+                    text.push(bytes[cursor] as char);
+                    cursor += 1;
+                }
+                out.push((start, text));
+                index = cursor;
+            }
+            b'"' => {
+                let start = line;
+                let mut cursor = index + 1;
+                let mut text = String::new();
+                while cursor < bytes.len() {
+                    match bytes[cursor] {
+                        b'\\' => {
+                            cursor += 1;
+                            if let Some(&next) = bytes.get(cursor) {
+                                if next == b'\n' {
+                                    line += 1;
+                                } else {
+                                    text.push(next as char);
+                                }
+                                cursor += 1;
+                            }
+                        }
+                        b'"' => {
+                            cursor += 1;
+                            break;
+                        }
+                        b'\n' => {
+                            line += 1;
+                            text.push('\n');
+                            cursor += 1;
+                        }
+                        other => {
+                            text.push(other as char);
+                            cursor += 1;
+                        }
+                    }
+                }
+                out.push((start, text));
+                index = cursor;
+            }
+            _ => index += 1,
+        }
+    }
+    out
+}
+
+#[test]
+fn every_inline_sql_read_of_branch_or_layer_stack_is_filtered_or_allow_listed() {
+    let statements = inline_sql();
+    assert!(
+        statements.len() >= 5,
+        "the inline SQL scan found only {} reads; the scan boundary moved",
+        statements.len()
+    );
+    let mut matched = BTreeSet::new();
+    let mut violations = Vec::new();
+    for statement in &statements {
+        if let Some(allow) = INLINE_ALLOWED
+            .iter()
+            .find(|allow| allow.file == statement.file && statement.sql.contains(allow.needle))
+        {
+            assert!(
+                !allow.reason.is_empty(),
+                "{}: an inline allow-list entry needs a reason",
+                statement.file
+            );
+            for marker in allow.markers {
+                assert!(
+                    statement.sql.contains(marker),
+                    "{}:{} must still read {marker}",
+                    statement.file,
+                    statement.line
+                );
+            }
+            matched.insert((allow.file, allow.needle));
+            continue;
+        }
+        let branch = reads(&statement.sql, "branch");
+        let markers: &[&str] = if branch {
+            &["branch_retired", "layer_stack_retired"]
+        } else {
+            &["layer_stack_retired"]
+        };
+        if !has_filter(&statement.sql, markers) {
+            violations.push(format!(
+                "{}:{} reads `branch`/`layer_stack` without the §4.2 filter; add the \
+                 NOT EXISTS markers or a reasoned inline allow-list entry: {}",
+                statement.file,
+                statement.line,
+                statement.sql.trim()
+            ));
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "inline SQL reads need the marker filter or an inline allow-list entry:\n\n{}",
+        violations.join("\n\n")
+    );
+    for allow in INLINE_ALLOWED {
+        assert!(
+            matched.contains(&(allow.file, allow.needle)),
+            "inline allow-list entry {} ({}) matches no inline read that reads branch/layer_stack",
+            allow.file,
+            allow.needle
+        );
+    }
 }
 
 #[test]

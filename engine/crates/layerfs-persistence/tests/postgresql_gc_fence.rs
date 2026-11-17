@@ -795,6 +795,9 @@ fn a_write_from_a_session_opened_before_the_swap_is_stale() {
     let handles = schema.create(&binding, CURSOR);
     let (shop, work, _) = project(&handles.history, 1);
     let first = commit(&handles.history, work, 5);
+    // The client reads at `G` build the request before the swap, as a real
+    // caller does; the write that runs after it is the one under test.
+    let request = commit_request(&handles.history, work, root(6));
     let before = counts(&mut schema.admin());
 
     // Stand in for compaction's Phase B swap: install `G + 1`.
@@ -806,10 +809,7 @@ fn a_write_from_a_session_opened_before_the_swap_is_stale() {
         )
         .unwrap();
 
-    let refused = handles
-        .history
-        .commit_branch(&commit_request(&handles.history, work, root(6)))
-        .unwrap_err();
+    let refused = handles.history.commit_branch(&request).unwrap_err();
     assert!(
         matches!(refused, HistoryError::StaleStore),
         "a Commit at the old generation is StaleStore: {refused:?}"
@@ -842,6 +842,57 @@ fn a_write_from_a_session_opened_before_the_swap_is_stale() {
         landed,
         layerfs_history::records::CommitOutcome::Committed { .. }
     ));
+}
+
+/// F44R2-1: the same generation fence guards reads. A session opened at `G`
+/// cannot render a project or a Branch at `G` after a swap installed `G + 1`:
+/// the `Mode::Read` transaction and the single-statement reads join
+/// `history_meta.catalog_incarnation` and answer `StaleStore`, and a fresh
+/// open at the installed generation reads them.
+#[test]
+fn a_read_from_a_session_opened_before_the_swap_is_stale() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "fence_read_generation");
+    let binding = binding("fence_read_generation");
+    let handles = schema.create(&binding, CURSOR);
+    let (shop, work, _) = project(&handles.history, 1);
+    commit(&handles.history, work, 5);
+
+    // Stand in for compaction's Phase B swap: install `G + 1`.
+    schema
+        .admin()
+        .execute(
+            "UPDATE history_meta SET catalog_incarnation=catalog_incarnation+1 WHERE id=1",
+            &[],
+        )
+        .unwrap();
+
+    // A read transaction: the check rides in its BEGIN batch.
+    let refused = handles.history.layer_stack(shop).unwrap_err();
+    assert!(
+        matches!(refused, HistoryError::StaleStore),
+        "a project read at the old generation is StaleStore: {refused:?}"
+    );
+    // A single-statement read that resolves a Branch and its roots.
+    let refused = handles.history.branch_snapshot(work).unwrap_err();
+    assert!(
+        matches!(refused, HistoryError::StaleStore),
+        "a Branch snapshot at the old generation is StaleStore: {refused:?}"
+    );
+    // The by-name one-statement read joins the same generation column.
+    let refused = handles
+        .history
+        .branch_snapshot_named(&name("project-1"), &name("work"))
+        .unwrap_err();
+    assert!(
+        matches!(refused, HistoryError::StaleStore),
+        "a named Branch snapshot at the old generation is StaleStore: {refused:?}"
+    );
+
+    // Reopening at the installed generation is the documented recovery.
+    let fresh = schema.open(&binding, CURSOR).unwrap();
+    assert!(fresh.history.layer_stack(shop).unwrap().is_some());
+    assert!(fresh.history.branch_snapshot(work).unwrap().is_some());
 }
 
 /// Two concurrent `branch.remove` calls in one project take the same epoch

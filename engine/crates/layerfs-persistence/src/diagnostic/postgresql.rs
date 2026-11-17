@@ -274,7 +274,7 @@ impl PostgresHandles {
         options: Options,
         observer: &mut dyn FnMut(Observation),
     ) -> Result<(), PersistenceError> {
-        let logical=self.storage.session.run::<_,BackendError>(false,|tx|{
+        let logical=self.storage.session.run_observed::<_,BackendError>(false,|tx|{
             options.check()?;
             if let Some(deadline)=options.deadline{
                 let millis=deadline.saturating_duration_since(std::time::Instant::now()).as_millis().max(1).min(i32::MAX as u128);
@@ -347,7 +347,7 @@ impl PostgresHandles {
         let mut incomplete = false;
         loop {
             options.check()?;
-            let relations=self.storage.session.run::<_,BackendError>(false,|tx|tx.query("SELECT c.oid::bigint,c.relkind::text,COALESCE(a.amname,'')::text,COALESCE(i.indisvalid AND i.indisready,true)::int::bigint FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace LEFT JOIN pg_catalog.pg_am a ON a.oid=c.relam LEFT JOIN pg_catalog.pg_index i ON i.indexrelid=c.oid WHERE n.nspname=current_schema() AND c.oid::bigint>$1 AND c.relkind IN ('r','i','m','p','I','f','S') ORDER BY c.oid LIMIT 64",vec![Param::I64(after)]))?;
+            let relations=self.storage.session.run_observed::<_,BackendError>(false,|tx|tx.query("SELECT c.oid::bigint,c.relkind::text,COALESCE(a.amname,'')::text,COALESCE(i.indisvalid AND i.indisready,true)::int::bigint FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace LEFT JOIN pg_catalog.pg_am a ON a.oid=c.relam LEFT JOIN pg_catalog.pg_index i ON i.indexrelid=c.oid WHERE n.nspname=current_schema() AND c.oid::bigint>$1 AND c.relkind IN ('r','i','m','p','I','f','S') ORDER BY c.oid LIMIT 64",vec![Param::I64(after)]))?;
             if relations.is_empty() {
                 break;
             }
@@ -367,7 +367,7 @@ impl PostgresHandles {
                 let started = std::time::Instant::now();
                 let mut corrupt = false;
                 let mut denied = false;
-                let result=self.storage.session.run::<_,BackendError>(false,|tx|{
+                let result=self.storage.session.run_observed::<_,BackendError>(false,|tx|{
                     let functions=tx.query("SELECT n.nspname,p.proname,has_function_privilege(p.oid,'EXECUTE')::int::bigint FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace JOIN pg_catalog.pg_depend d ON d.objid=p.oid AND d.classid='pg_proc'::regclass AND d.deptype='e' JOIN pg_catalog.pg_extension e ON e.oid=d.refobjid WHERE e.extname='amcheck' AND p.proname=$1 AND ((p.proname='bt_index_check' AND p.proargtypes::text='2205 16') OR (p.proname='verify_heapam' AND p.proargtypes[0]=2205 AND p.proargtypes[1]=16 AND p.proargtypes[2]=16 AND p.proargtypes[3]=25 AND p.pronargs-p.pronargdefaults<=4)) ORDER BY p.oid LIMIT 1",vec![Param::Text(if kind=="i"{"bt_index_check"}else{"verify_heapam"}.to_owned())])?;
                     let Some(function)=functions.first()else{return Ok(None);};let schema:String=function.get(0)?;let name:String=function.get(1)?;if function.get::<i64>(2)?!=1{denied=true;return Ok(None);}
                     let quote=|s:&str|format!("\"{}\"",s.replace('"',"\"\""));

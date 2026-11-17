@@ -1510,11 +1510,14 @@ fn a_killed_backend_during_phase_c_resumes_at_g_plus_1() {
     // persisted dead history rows, the op row and the old totals remain.
     assert_eq!(db_generation(&schema), before + 1);
     assert_eq!(totals(&schema), totals_before);
+    // The swap installed `G + 1` after `setup` opened, so `setup` is stale:
+    // an observation of the installed Store opens at the new generation.
+    let observed = schema.open();
     assert!(
-        !located(&setup, dead),
+        !located(&observed, dead),
         "the committed swap already replaced the payload tables"
     );
-    assert!(located(&setup, live));
+    assert!(located(&observed, live));
     let (op_pid, op_start, op_phase) = op_owner(&schema).expect("the op row survives the kill");
     assert_eq!((op_pid, op_phase), (pid, "swap".to_owned()));
     assert_eq!(op_start, start);
@@ -1525,7 +1528,7 @@ fn a_killed_backend_during_phase_c_resumes_at_g_plus_1() {
     assert!(schema.scalar("SELECT count(*) FROM {s}.gc_dead") > 0);
     assert_owner_ended(&schema, pid, &start);
     // A real kill runs no error path: the intent is still registered.
-    let intents = compaction_intents(&setup, &schema);
+    let intents = compaction_intents(&observed, &schema);
     assert_eq!(
         intents.len(),
         1,
@@ -1594,9 +1597,12 @@ fn a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1() {
     assert!(!schema.scratch_exists());
     assert!(schema.scalar("SELECT count(*) FROM {s}.gc_dead") > 0);
     // A simulated lost reply keeps the process alive and releases its intent;
-    // the real kill below then proves the owner ended.
+    // the real kill below then proves the owner ended. The child installed
+    // `G + 1` after `setup` opened, so the admission row is read on a fresh
+    // session (a stale one answers `StaleStore`).
+    let observed = schema.open();
     assert!(
-        compaction_intents(&setup, &schema).is_empty(),
+        compaction_intents(&observed, &schema).is_empty(),
         "the failpoint path released its own intent"
     );
     kill_recorded_owner(&schema, pid, &start);

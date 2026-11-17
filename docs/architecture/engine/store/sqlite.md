@@ -164,14 +164,20 @@ quarantines the session and keeps the lock
 
 | Function | Returns | Source |
 | --- | --- | --- |
-| `read_heads(path)` | Sorted lines `stack <name> <head_layer_id>` and `branch <project> <name> <base_layer_id> <head_commit_id or ->`, lowercase hex | [`heads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/heads.rs) |
+| `read_heads(path)` | Sorted lines `stack <name> <head_layer_id>` and `branch <project> <name> <base_layer_id> <head_commit_id or ->` for live rows only, lowercase hex | [`heads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/heads.rs) |
 | `heads_digest(path)` | sha256 of those lines, each ending in `\n` | same |
 
 `read_heads` opens its own read-write but `query_only` connection, because
 SQLite cannot open a WAL file read-only without a `-shm`. A busy Store is
 reported, never waited on. The heads change exactly when history changes, so
 the digest identifies a backup copy
-([Control: Backups](../../control/backups/README.md)).
+([Control: Backups](../../control/backups/README.md)). Both reads are filtered
+by the same §4.2 markers the catalog uses: a row named by `branch_retired`
+leaves no `branch` line, and a row named by `layer_stack_retired` leaves
+neither its `stack` line nor its Branches' lines. A soft removal is a marker,
+not a delete, so the base rows can still be present while the backup digest
+already names the visible history; `visibility_guard` scans inline SQL in
+`src` too, which is what holds `heads.rs` to that filter.
 
 ## Objects
 
