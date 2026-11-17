@@ -56,6 +56,49 @@ fn a_legacy_bare_standby_list_is_first_one() {
     assert!(!standby_satisfied(2, "s1", &[]));
 }
 
+/// F50R6-2 (§8 step 10): PostgreSQL's token spacing allows no whitespace
+/// between `num_sync` and the list's `(` (`FIRST 2(s1,s2)`, `ANY 1(s1)`), and
+/// a standby name that starts with `first` or `any` is a legacy name, not the
+/// keyword followed by a remainder.
+#[test]
+fn standby_forms_parse_without_spacing_and_names_keep_their_prefix() {
+    // No space between the count and the list.
+    assert!(standby_satisfied(
+        2,
+        "FIRST 2(s1,s2)",
+        &[replica("s1", "sync"), replica("s2", "sync")]
+    ));
+    assert!(!standby_satisfied(
+        2,
+        "FIRST 2(s1,s2)",
+        &[replica("s1", "sync")]
+    ));
+    assert!(standby_satisfied(
+        2,
+        "ANY 1(s1)",
+        &[replica("s1", "quorum")]
+    ));
+    assert!(!standby_satisfied(2, "ANY 1(s1)", &[]));
+    // `first_standby`/`anybody` are names; the old prefix match read the
+    // remainder as the name instead.
+    assert!(standby_satisfied(
+        2,
+        "first_standby",
+        &[replica("first_standby", "sync")]
+    ));
+    assert!(!standby_satisfied(
+        2,
+        "first_standby",
+        &[replica("first", "sync")]
+    ));
+    assert!(standby_satisfied(
+        2,
+        "anybody",
+        &[replica("anybody", "sync")]
+    ));
+    assert!(!standby_satisfied(2, "anybody", &[replica("any", "sync")]));
+}
+
 #[test]
 fn synchronous_commit_strength_is_the_spec_order() {
     assert_eq!(sync_rank("off"), 0);

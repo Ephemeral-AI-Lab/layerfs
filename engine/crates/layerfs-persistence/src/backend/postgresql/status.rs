@@ -143,21 +143,32 @@ pub struct PostgresCompactOpStatus {
 
 impl PostgresCompactOpStatus {
     /// The `store.status` projection of this operation: `busy` while the run
-    /// is in flight — its compaction `gc_intent` is still present and its
-    /// owner backend is alive — and `unresolved` once the run returned (the
-    /// intent is released) or its owner is gone. A released intent is the
-    /// PostgreSQL form of SQLite's `returned` record: the owner may still be
-    /// alive, but it is no longer running the op. `uncertain` stays true for
-    /// every remaining row, live or leftover; `state` separates the two. The
-    /// phases are PostgreSQL's §8 ones: `mark`, `build`, `swap`, `cleanup`.
+    /// is in flight — its compaction `gc_intent` is still `live` and its
+    /// owner is not provably gone — and `unresolved` once the run returned
+    /// (the intent is released), was marked `uncertain`, or its owner is
+    /// dead. A released intent is the PostgreSQL form of SQLite's `returned`
+    /// record: the owner may still be alive, but it is no longer running the
+    /// op. `uncertain` stays true for every remaining row, live or leftover;
+    /// `state` separates the two. The phases are PostgreSQL's §8 ones:
+    /// `mark`, `build`, `swap`, `cleanup`.
     #[must_use]
     pub fn status(&self) -> CompactStatus {
         // SQLite marks a record `returned` before replying; PostgreSQL
         // releases the intent. Either way the op is in flight only while the
-        // intent is still there *and* its owner still runs it. Before
-        // `persist_mark` there is no `gc_op` row naming an owner yet: the
-        // registered Phase M intent is then the in-flight witness.
-        let in_flight = self.intent_state.is_some() && (self.alive || self.intent_only);
+        // intent is still *live* and its owner still runs it. Before
+        // `persist_mark` there is no `gc_op` row naming a backend owner yet:
+        // the registered Phase M intent is then the in-flight witness, but
+        // only while it is live and its process owner is not provably gone.
+        // An uncertain intent says the outcome is unknown, not that the run
+        // continues; a dead process owner cannot be running it at all.
+        let dead_owner = crate::history::admission::OwnerView::now().owner_dead(
+            self.owner_runtime.as_deref(),
+            self.owner_boot.as_deref(),
+            true,
+        );
+        let in_flight = self.intent_state.as_deref() == Some("live")
+            && (self.alive || self.intent_only)
+            && !dead_owner;
         CompactStatus {
             id: format!("op-{}", hex(&self.op_id)),
             name: "store.compact",
