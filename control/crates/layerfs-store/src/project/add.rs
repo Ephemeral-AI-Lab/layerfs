@@ -265,6 +265,25 @@ pub fn add_failure(error: InitError, entry: Option<&Path>, name: &str, store: &s
                 None,
             );
         }
+        // The acquisition retains an unknown outcome as
+        // `ProjectError::Uncertain { cause, .. }` (`backing.settle`). A
+        // history cause is still the call's own: `lookup::history_in` keeps
+        // spec §10 A6's entity, phase and operation (F43R6-1), while a
+        // definite history cause keeps its code.
+        InitError::Project(ProjectError::Uncertain { cause, .. }) => match cause.as_ref() {
+            ProjectError::History(error) => {
+                return lookup::history_in(
+                    error.clone(),
+                    GcScopeKind::Project,
+                    name,
+                    Some("init"),
+                    None,
+                );
+            }
+            _ => {
+                return failed(format!("adding project {name} to Store {store}: {error:?}"))
+            }
+        },
         _ => return failed(format!("adding project {name} to Store {store}: {error:?}")),
     };
     if let Some(entry) = entry {

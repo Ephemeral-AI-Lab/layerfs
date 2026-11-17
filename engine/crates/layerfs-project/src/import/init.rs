@@ -151,6 +151,7 @@ pub fn init_observed(
         store,
         catalog,
         &request,
+        op,
         &source,
         &backing,
         &mut progress,
@@ -227,6 +228,7 @@ fn acquire<'a>(
     store: &'a Storage,
     catalog: &dyn HistoryCatalog,
     request: &InitRequest<'_>,
+    op: [u8; 16],
     source: &std::fs::Metadata,
     backing: &Backing<'_>,
     progress: &mut ImportProgress,
@@ -266,7 +268,11 @@ fn acquire<'a>(
                 scope: scope.object(),
                 count: scanned.entries,
             })
-            .map_err(ProjectError::History)
+            .map_err(|error| {
+                ProjectError::History(
+                    error.with_unknown(init_unknown_state(request.name.as_str(), Some(op))),
+                )
+            })
     })?;
     let provider = store.reader().map_err(storage)?;
     let (root, save) = timer.child("history.import_tree").run(|_| {
