@@ -183,7 +183,7 @@ impl Kernel {
         let mutation = match wait(KernelMutation::perform(services, request)) {
             Ok(mutation) => mutation,
             Err(failure) => {
-                let status = if crate::kernel::failure_is_stale(&failure.reason) {
+                let status = if crate::read::failure_is_stale(&failure.reason) {
                     Status::Stale
                 } else {
                     Status::Io
@@ -261,9 +261,11 @@ impl Kernel {
     /// The entry a name binds now, or none.
     fn existing(&self, parent: u64, name: &[u8]) -> Result<Option<ViewStat>, Status> {
         match self.lookup(parent, name) {
-            Ok(stat) => Ok(Some(stat)),
-            Err(Status::NoEnt) => Ok(None),
-            Err(status) => Err(status),
+            Ok((stat, _)) => Ok(Some(stat)),
+            Err(refused) => match refused.status {
+                Status::NoEnt => Ok(None),
+                status => Err(status),
+            },
         }
     }
     /// CREATE of a regular file.
@@ -463,7 +465,8 @@ impl Kernel {
     /// export held for the inode it detached. Only the inode the publishing
     /// job itself retired skips the release jobs.
     fn finish_unlink(&self, parent: u64, name: &[u8], retire: Retire, detached: Option<ViewStat>) {
-        self.table().by_name.remove(&(parent, name.to_vec()));
+        self.companion_drop_for(parent, name);
+        self.table().unbind_any(&(parent, name.to_vec()));
         let Some(target) = detached else {
             return;
         };
@@ -499,6 +502,9 @@ impl Kernel {
             tickets,
             |_| Ok(MutationInput::Named(remove::unlink(parent, checked))),
         )?;
+        if let Some(detached) = &published.detached {
+            self.trace_main_file("REMOVE", parent, name, detached.serial, "Ok");
+        }
         self.finish_unlink(parent, name, retire, published.detached);
         Ok(published.wcc[0].clone())
     }
@@ -572,6 +578,11 @@ impl Kernel {
                     self.mutate(from, None, None, Expect::Nothing, tickets, |_| {
                         Ok(MutationInput::Named(remove::unlink(from, source_name)))
                     })?;
+                self.companion_drop_for(from, name);
+                if source.namespace_refs <= 1 {
+                    // The last name of the inode went with the silly rename.
+                    self.companion_drop_inode(source.serial);
+                }
                 self.silly_renamed.fetch_add(1, Ordering::Relaxed);
                 let replaced = {
                     let mut table = self.table();
@@ -627,7 +638,7 @@ impl Kernel {
         if directory {
             self.saw_directory(serial, to);
         }
-        self.renamed(serial, to, new_name);
+        self.renamed(serial, from, name, to, new_name);
     }
     /// LINK: one more name for `serial`.
     pub fn link(
@@ -637,8 +648,10 @@ impl Kernel {
         name: &[u8],
         tickets: &mut Tickets,
     ) -> Result<(ViewStat, Wcc), Status> {
+        // A companion holds no engine inode, so its LINK is another `._` name
+        // of the same companion, decided in the export alone.
         if crate::apple_double::companion(serial) {
-            return Err(Status::Access);
+            return self.companion_link(serial, parent, name);
         }
         let checked = self.checked(name, true)?;
         let published = self.mutate(
@@ -652,6 +665,7 @@ impl Kernel {
         let stat = published.stat.ok_or(Status::ServerFault)?;
         // The engine took one more lookup reference; the export holds one.
         self.entry_taken(&stat, parent, name);
+        self.trace_main_file("LINK", parent, name, stat.serial, "Ok");
         Ok((stat, published.wcc[0].clone()))
     }
     /// SETATTR. `guard` is the client's expected ctime (seconds,

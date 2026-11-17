@@ -20,8 +20,7 @@ pub struct DirectoryStream {
     offset: u64,
     parent: Option<u64>,
     window: Option<KernelDirectoryWindow>,
-    /// The reply shows every entry's facts, as READDIRPLUS does: the listing
-    /// then reads them from the authoritative base, outside the owner.
+    /// The reply shows each entry's facts (READDIRPLUS).
     attributes: bool,
     ended: bool,
 }
@@ -183,7 +182,14 @@ impl DirectoryStream {
         let started = std::time::Instant::now();
         let reply = self
             .services
-            .directory_visit(self.mount, self.serial, self.handle, self.offset, after)
+            .directory_visit(
+                self.mount,
+                self.serial,
+                self.handle,
+                self.offset,
+                after,
+                self.attributes,
+            )
             .await;
         crate::phase::charge(crate::phase::Phase::DirectoryVisit, started);
         let reply = reply?;
@@ -223,11 +229,12 @@ impl DirectoryStream {
             let Some(window) = self.window.take().filter(|_| !self.ended) else {
                 return Ok(None);
             };
-            // Only a window whose inherited names or kinds memory did not
-            // hold leaves the receive loop and takes one Store reader; a
-            // reply that shows facts needs that reader even when it does.
+            // Only a window whose inherited names, kinds or facts memory did
+            // not hold leaves the receive loop and takes one Store reader: a
+            // local directory, and a window whose inherited entries are all
+            // resident, are answered without it.
             let started = std::time::Instant::now();
-            let base = if self.attributes || window.listing.is_none() {
+            let base = if window.needs_base(self.attributes) {
                 // Provider reads never run on the loop that received the request.
                 Some(self.services.base().await?)
             } else {
@@ -277,9 +284,8 @@ impl DirectoryBatch {
     }
     /// Records the entries whose handles this reply hands out, so the
     /// publishing visit takes their kernel references with the offsets.
-    /// `accepted` is the prefix the reply buffer took; only published
-    /// offsets can make a handle's fence answer, so a reused reply adopts
-    /// nothing.
+    /// `accepted` is the prefix the reply buffer took; only published offsets
+    /// can make a handle's fence answer, so a reused reply adopts nothing.
     pub fn adopt(&mut self, accepted: usize) {
         let entries: Vec<(u64, bool)> = self.batch.entries[..accepted]
             .iter()

@@ -42,6 +42,12 @@ pub struct Watch {
     /// Each engine read window the export asked for: offset and length. One
     /// call may fill its whole transfer from several of them.
     pub reads: Mutex<Vec<(u64, u32)>>,
+    /// Owner read visits (`observe_visit`): the jobs a LOOKUP, GETATTR or
+    /// OPEN spends. One LOOKUP spends exactly one.
+    pub visits: AtomicU64,
+    /// Store readers a request took for a base demand: at most one per reply,
+    /// never one per listed name.
+    pub bases: AtomicU64,
 }
 pub struct Spy {
     pub inner: Arc<dyn MountServices>,
@@ -70,9 +76,10 @@ impl RequestServices for Request {
         handle: u64,
         offset: u64,
         after: Option<Vec<u8>>,
+        attributes: bool,
     ) -> ServiceFuture<'_, ServiceReply<Arc<KernelDirectoryWindow>>> {
         self.inner
-            .directory_visit(mount, serial, handle, offset, after)
+            .directory_visit(mount, serial, handle, offset, after, attributes)
     }
     fn publish_cookies(
         &self,
@@ -123,10 +130,12 @@ impl RequestServices for Request {
         operation: KernelReadOperation,
         facts: Arc<VisitFacts>,
     ) -> ServiceFuture<'_, ServiceReply<Arc<KernelReadOutcome>>> {
+        self.watch.visits.fetch_add(1, Ordering::AcqRel);
         self.inner
             .observe_visit(mount, request, serial, handle, operation, facts)
     }
     fn base(&self) -> ServiceFuture<'_, BaseView> {
+        self.watch.bases.fetch_add(1, Ordering::AcqRel);
         self.inner.base()
     }
     fn mutate_visit(

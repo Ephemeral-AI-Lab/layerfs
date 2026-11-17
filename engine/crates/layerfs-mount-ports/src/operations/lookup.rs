@@ -3,7 +3,7 @@ use crate::ports::{BaseDemandFailed, Fenced, RequestServices, ServiceError, Serv
 use layerfs_overlay::KernelMount;
 use layerfs_workspace::{
     KernelReadDecision, KernelReadFailure, KernelReadOperation, KernelReadOutcome, KernelReadValue,
-    Refusal, VisitFacts,
+    Refusal, ViewStat, VisitFacts,
 };
 use std::{fmt, sync::Arc};
 
@@ -17,6 +17,9 @@ pub(super) struct Custody {
     pub data_input: Option<super::ReadDataInput>,
     // Retain the engine receipt through every cloned outcome consumer.
     pub receipt: Option<ServiceReply<Arc<KernelReadOutcome>>>,
+    /// The directory row a refused LOOKUP read in the same job, fresh from
+    /// that job (see [`KernelRead::refused_directory`]).
+    pub refused_directory: Option<ViewStat>,
 }
 /// A deciding answer and the receipt of the visit that decided it.
 /// The request holds nothing else in the engine; the kernel's lookup, open
@@ -126,6 +129,13 @@ impl KernelRead {
     pub fn value(&self) -> Result<&KernelReadValue, Refusal> {
         self.value.as_ref().map_err(|refusal| *refusal)
     }
+    /// The directory row a refused LOOKUP read in its own job, when it read
+    /// one: the fresh facts its reply's directory attributes are made of.
+    /// `None` for every other refusal and for every other operation, none of
+    /// which read a directory row.
+    pub fn refused_directory(&self) -> Option<&ViewStat> {
+        self.custody.refused_directory.as_ref()
+    }
     /// Preserve a successfully decided request when kernel reply conversion or
     /// another downstream invariant fails before consumer disposal.
     pub fn retain(self, reason: ServiceError) -> ReadFailure {
@@ -160,6 +170,7 @@ impl Custody {
             operation,
             data_input: None,
             receipt: None,
+            refused_directory: None,
         }
     }
     pub(super) const fn target(&self) -> (KernelMount, u64, Option<u64>) {
@@ -189,17 +200,21 @@ impl Custody {
             let receipt = receipt?;
             let original = receipt.get().clone();
             let needs = match (&original.result, &original.decision) {
-                (Ok(None), Some(KernelReadDecision::Value(inode))) => {
-                    let stat = inode.clone().into();
+                (Ok(None), Some(KernelReadDecision::Value(decided))) => {
+                    let stat = decided.inode.clone().into();
                     self.receipt = Some(receipt);
                     return Ok(Ok(KernelReadValue {
                         stat,
+                        parent: decided.parent.clone().map(Into::into),
                         file: original.open_candidate,
                         directory: original.directory_candidate,
                         original,
                     }));
                 }
-                (Ok(None), Some(KernelReadDecision::Refused(refusal))) => return Ok(Err(*refusal)),
+                (Ok(None), Some(KernelReadDecision::Refused { refusal, directory })) => {
+                    self.refused_directory = directory.clone().map(Into::into);
+                    return Ok(Err(*refusal));
+                }
                 (Ok(None), Some(KernelReadDecision::Needs(needs))) if !needs.is_empty() => needs,
                 _ => {
                     self.receipt = Some(receipt);
