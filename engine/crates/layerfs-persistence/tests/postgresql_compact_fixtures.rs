@@ -1777,6 +1777,92 @@ fn a_save_after_the_swap_survives_the_resumed_cleanup() {
     assert!(reopened.history.layer_stack(stack.id).unwrap().is_some());
 }
 
+/// Two `file_digest` rows can name one root (F50-2 above collects such a
+/// row). When both exist at the mark and the root is dead, the persisted dead
+/// set holds the root once: `gc_dead` is keyed by `(kind, id)`, and a second
+/// copy of the root refused the whole mark.
+#[test]
+fn two_digest_rows_of_one_dead_root_are_both_collected() {
+    let Some(url) = url() else { return };
+    let f = Fixture::new(&url, "twins");
+    let live = tree(&f, whole_file(&f, b"twins live content"), 1);
+    let _stack = initialize(&f.handles, 1, live);
+    let dead = saved_whole_file(&f.handles, b"a root two digests name");
+    f.handles
+        .history
+        .record_file_digests(&[
+            FileDigest {
+                root: *dead.as_bytes(),
+                length: 131_072,
+                digest: *blake3::hash(b"twin one").as_bytes(),
+            },
+            FileDigest {
+                root: *dead.as_bytes(),
+                length: 131_073,
+                digest: *blake3::hash(b"twin two").as_bytes(),
+            },
+        ])
+        .unwrap();
+    let schema = &f.schema;
+    let twins = format!(
+        "SELECT count(*) FROM {{s}}.file_digest WHERE root=decode('{}','hex')",
+        hex(dead.as_bytes())
+    );
+    assert_eq!(schema.scalar(&twins), 2, "both rows exist at the mark");
+    let before = generation(&f.handles);
+
+    let receipt = f.handles.compact(&request(0x41)).unwrap();
+
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_after, before + 1);
+    assert!(!located(&f.handles, dead));
+    assert_eq!(schema.scalar(&twins), 0, "both rows went with their root");
+    assert_phase_c_settled(schema, 0x41);
+}
+
+/// Phase C deletes dead digest rows in batches of 1,000 by a numbered key
+/// list. More dead rows than two batches hold, with one retained row among
+/// them: every dead row goes, across the batch boundaries, and the retained
+/// row stays.
+#[test]
+fn dead_digest_rows_beyond_one_batch_are_all_collected() {
+    let Some(url) = url() else { return };
+    let f = Fixture::new(&url, "digests");
+    let content = whole_file(&f, b"digests live content");
+    let live = tree(&f, content, 1);
+    let _stack = initialize(&f.handles, 1, live);
+    let kept = *blake3::hash(b"a digest of retained content").as_bytes();
+    let mut rows = vec![FileDigest {
+        root: *content.as_bytes(),
+        length: 131_072,
+        digest: kept,
+    }];
+    // Roots no object carries: unvisited, so each row is a dead-set member.
+    rows.extend((0..2_500u32).map(|index| FileDigest {
+        root: *blake3::hash(&[b"dead root".as_slice(), &index.to_le_bytes()].concat()).as_bytes(),
+        length: 131_072 + u64::from(index),
+        digest:
+            *blake3::hash(&[b"dead digest".as_slice(), &index.to_le_bytes()].concat()).as_bytes(),
+    }));
+    f.handles.history.record_file_digests(&rows).unwrap();
+    let _dead = saved_whole_file(&f.handles, b"a pack the rebuild drops");
+    let schema = &f.schema;
+    assert_eq!(schema.count("file_digest"), 2_501);
+    let before = generation(&f.handles);
+
+    let receipt = f.handles.compact(&request(0x42)).unwrap();
+
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_after, before + 1);
+    assert_eq!(
+        schema.count("file_digest"),
+        1,
+        "only the retained row is left"
+    );
+    assert_eq!(digest_rows(schema, &kept), 1);
+    assert_phase_c_settled(schema, 0x42);
+}
+
 /// AC-21, AC-24, AC-39: the PostgreSQL `project_epoch` fence. Commits and
 /// Layers leave it alone; a marker write bumps it once; a repeated marker is
 /// `UpToDate` and does not bump it; compact copies it; a missing row refuses

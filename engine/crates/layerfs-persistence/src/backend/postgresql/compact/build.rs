@@ -16,36 +16,55 @@ use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
 use std::sync::Arc;
 
-pub(crate) fn retained_totals(
-    session: &Arc<Session>,
-    schema: &str,
-) -> HistoryResult<(i64, i64, i64)> {
+/// The stored and metadata bytes of the packs the mark retained.
+fn retained_pack_totals(session: &Arc<Session>, schema: &str) -> HistoryResult<(i64, i64)> {
     stage(session, |tx| {
-        let canonical = scalar(
-            tx,
+        let rows = tx.query(
             &format!(
-                "SELECT COALESCE(SUM(l.canonical_length)::bigint,0) FROM {schema}.object_location l \
-                 WHERE EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=l.object_id)"
-            ),
-            Vec::new(),
-        )?;
-        let stored = scalar(
-            tx,
-            &format!(
-                "SELECT COALESCE(SUM(p.length)::bigint,0) FROM {schema}.pack p \
+                "SELECT COALESCE(SUM(p.length)::bigint,0),\
+                        COALESCE((SUM(p.length) FILTER (WHERE p.domain=0))::bigint,0) \
+                 FROM {schema}.pack p \
                  WHERE EXISTS (SELECT 1 FROM pg_temp.gc_live_pack v WHERE v.pack_id=p.pack_id)"
             ),
             Vec::new(),
         )?;
-        let metadata = scalar(
-            tx,
-            &format!(
-                "SELECT COALESCE(SUM(p.length)::bigint,0) FROM {schema}.pack p \
-                 WHERE p.domain=0 AND EXISTS (SELECT 1 FROM pg_temp.gc_live_pack v WHERE v.pack_id=p.pack_id)"
-            ),
+        let row = rows
+            .first()
+            .ok_or(HistoryError::Integrity("compaction retained totals"))?;
+        Ok((row.get(0)?, row.get(1)?))
+    })
+}
+
+/// The copy set: every `object_location` row of a visited object, in a session
+/// temporary table indexed on `pack_id`.
+///
+/// The Store's `object_location` has no `pack_id` index, so reading one batch's
+/// rows from it scans the whole table, and the copy would cost batches times
+/// objects. This is the one scan of the source; each batch then reads its own
+/// `pack_id` range through the index. Returns the set's row count, the
+/// retained canonical bytes and the set's own size, which is temporary space
+/// this run holds until the session ends and so part of its peak.
+fn copy_set(session: &Arc<Session>, schema: &str) -> HistoryResult<(i64, i64, u64)> {
+    stage(session, |tx| {
+        tx.batch(&format!(
+            "DROP TABLE IF EXISTS pg_temp.gc_copy;\
+             CREATE TEMP TABLE gc_copy ON COMMIT PRESERVE ROWS AS \
+              SELECT l.* FROM {schema}.object_location l \
+               WHERE EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=l.object_id);\
+             CREATE INDEX gc_copy_pack ON pg_temp.gc_copy (pack_id);\
+             ANALYZE pg_temp.gc_copy;"
+        ))?;
+        let rows = tx.query(
+            "SELECT count(*),COALESCE(SUM(canonical_length)::bigint,0),\
+                    pg_total_relation_size('pg_temp.gc_copy'::regclass)::bigint \
+             FROM pg_temp.gc_copy",
             Vec::new(),
         )?;
-        Ok((canonical, stored, metadata))
+        let row = rows
+            .first()
+            .ok_or(HistoryError::Integrity("compaction copy set"))?;
+        let bytes = u64::try_from(row.get::<i64>(2)?).unwrap_or(0);
+        Ok((row.get(0)?, row.get(1)?, bytes))
     })
 }
 
@@ -183,8 +202,10 @@ fn peak_sample(session: &Arc<Session>, scratch: &str, wal_start: &str) -> Histor
     Ok(scratch_bytes.saturating_add(u64::try_from(wal_bytes).unwrap_or(0)))
 }
 
-/// Phase A: copy retained rows in pack-id batches, each its own transaction;
-/// a retried batch first deletes its own range, so the copy is idempotent.
+/// Phase A: copy retained rows in pack-id batches, each its own transaction.
+/// A batch first deletes its own range, so the copy is idempotent. The
+/// location rows come from the copy set, so a batch reads its own rows through
+/// an index instead of scanning the Store's table and the visited set.
 pub(crate) fn build(
     session: &Arc<Session>,
     schema: &str,
@@ -222,82 +243,62 @@ pub(crate) fn build(
             .get(0)
             .map_err(Into::into)
     })?;
+    let visited = mark.objects().len() as i64;
+    let (copy_rows, canonical, copy_bytes) = copy_set(session, schema)?;
+    // One location row per visited object, or the source holds a duplicate or
+    // lacks a locator; the scratch table's own distinct count follows the copy.
+    if copy_rows != visited {
+        return Err(HistoryError::Integrity("compaction copy set"));
+    }
     let mut peak_temp = 0u64;
+    let mut copied_rows = 0i64;
     for batch in byte_batches(&live_packs) {
         let lo = batch[0].0;
         let hi = batch[batch.len() - 1].0;
         let expected_packs = batch.len() as i64;
-        stage(session, |tx| {
+        let (pack_rows, objects) = stage(session, |tx| {
+            // §8 step 3: a batch first deletes its own range. The scratch
+            // `object_location` has no `pack_id` index (the Store's has none,
+            // and the scratch table becomes the Store's), so this is one scan
+            // of the rows copied so far.
             tx.batch(&format!(
                 "DELETE FROM {scratch}.pack WHERE pack_id BETWEEN {lo} AND {hi};\
                  DELETE FROM {scratch}.object_location WHERE pack_id BETWEEN {lo} AND {hi};"
             ))?;
-            tx.query(
-                &format!(
-                    "INSERT INTO {scratch}.pack SELECT p.* FROM {schema}.pack p \
-                     WHERE p.pack_id BETWEEN $1 AND $2 \
-                     AND EXISTS (SELECT 1 FROM pg_temp.gc_live_pack v WHERE v.pack_id=p.pack_id)"
-                ),
-                vec![Param::I64(lo), Param::I64(hi)],
-            )?;
-            tx.query(
-                &format!(
-                    "INSERT INTO {scratch}.object_location SELECT l.* FROM {schema}.object_location l \
-                     WHERE l.pack_id BETWEEN $1 AND $2 \
-                     AND EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=l.object_id)"
-                ),
-                vec![Param::I64(lo), Param::I64(hi)],
-            )?;
-            // Assert this batch's own pack_id range: the scratch range holds
-            // exactly the live packs and visited objects of the source range,
-            // and no object is duplicated.
+            // Each insert reports its own row count: this batch's range holds
+            // exactly the live packs and the copy set's rows of that range.
             let pack_rows = scalar(
                 tx,
-                &format!("SELECT count(*) FROM {scratch}.pack WHERE pack_id BETWEEN {lo} AND {hi}"),
-                Vec::new(),
+                &format!(
+                    "WITH copied AS (INSERT INTO {scratch}.pack SELECT p.* FROM {schema}.pack p \
+                      WHERE p.pack_id BETWEEN $1 AND $2 \
+                        AND EXISTS (SELECT 1 FROM pg_temp.gc_live_pack v WHERE v.pack_id=p.pack_id) \
+                      RETURNING 1) SELECT count(*) FROM copied"
+                ),
+                vec![Param::I64(lo), Param::I64(hi)],
             )?;
             let objects = scalar(
                 tx,
                 &format!(
-                    "SELECT count(*) FROM {scratch}.object_location WHERE pack_id BETWEEN {lo} AND {hi}"
+                    "WITH copied AS (INSERT INTO {scratch}.object_location \
+                      SELECT c.* FROM pg_temp.gc_copy c WHERE c.pack_id BETWEEN $1 AND $2 \
+                      RETURNING 1) SELECT count(*) FROM copied"
                 ),
-                Vec::new(),
+                vec![Param::I64(lo), Param::I64(hi)],
             )?;
-            let distinct = scalar(
-                tx,
-                &format!(
-                    "SELECT count(DISTINCT object_id) FROM {scratch}.object_location WHERE pack_id BETWEEN {lo} AND {hi}"
-                ),
-                Vec::new(),
-            )?;
-            let source_objects = scalar(
-                tx,
-                &format!(
-                    "SELECT count(*) FROM {schema}.object_location l \
-                     WHERE l.pack_id BETWEEN {lo} AND {hi} \
-                     AND EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=l.object_id)"
-                ),
-                Vec::new(),
-            )?;
-            let source_distinct = scalar(
-                tx,
-                &format!(
-                    "SELECT count(DISTINCT l.object_id) FROM {schema}.object_location l \
-                     WHERE l.pack_id BETWEEN {lo} AND {hi} \
-                     AND EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=l.object_id)"
-                ),
-                Vec::new(),
-            )?;
-            if pack_rows != expected_packs
-                || objects != source_objects
-                || distinct != source_distinct
-                || objects != distinct
-            {
-                return Err(HistoryError::Integrity("compaction batch count"));
-            }
-            Ok(())
+            Ok((pack_rows, objects))
         })?;
-        peak_temp = peak_temp.max(peak_sample(session, scratch, &wal_start)?);
+        if pack_rows != expected_packs {
+            return Err(HistoryError::Integrity("compaction batch count"));
+        }
+        copied_rows = copied_rows.saturating_add(objects);
+        peak_temp =
+            peak_temp.max(peak_sample(session, scratch, &wal_start)?.saturating_add(copy_bytes));
+    }
+    // Every row of the copy set was copied once: a visited object in a pack
+    // outside the live list would be left out of every range.
+    if copied_rows != visited {
+        return Err(HistoryError::Integrity("compaction batch count"));
     }
     stage(session, |tx| {
         tx.batch(&format!(
@@ -321,24 +322,20 @@ pub(crate) fn build(
     if !failures.is_empty() {
         return Err(HistoryError::Integrity("compaction scratch contract"));
     }
-    peak_temp = peak_temp.max(peak_sample(session, scratch, &wal_start)?);
+    peak_temp =
+        peak_temp.max(peak_sample(session, scratch, &wal_start)?.saturating_add(copy_bytes));
     let (objects, distinct, pack_rows) = stage(session, |tx| {
-        let objects = scalar(
-            tx,
-            &format!("SELECT count(*) FROM {scratch}.object_location"),
+        let rows = tx.query(
+            &format!(
+                "SELECT count(*),count(DISTINCT object_id),(SELECT count(*) FROM {scratch}.pack) \
+                 FROM {scratch}.object_location"
+            ),
             Vec::new(),
         )?;
-        let distinct = scalar(
-            tx,
-            &format!("SELECT count(DISTINCT object_id) FROM {scratch}.object_location"),
-            Vec::new(),
-        )?;
-        let pack_rows = scalar(
-            tx,
-            &format!("SELECT count(*) FROM {scratch}.pack"),
-            Vec::new(),
-        )?;
-        Ok((objects, distinct, pack_rows))
+        let row = rows
+            .first()
+            .ok_or(HistoryError::Integrity("compaction object count"))?;
+        Ok((row.get::<i64>(0)?, row.get::<i64>(1)?, row.get::<i64>(2)?))
     })?;
     if distinct != mark.objects().len() as i64
         || objects != distinct
@@ -346,7 +343,7 @@ pub(crate) fn build(
     {
         return Err(HistoryError::Integrity("compaction object count"));
     }
-    let (canonical, stored, metadata) = retained_totals(session, schema)?;
+    let (stored, metadata) = retained_pack_totals(session, schema)?;
     let dead = DeadTotals {
         canonical: tuple.canonical - canonical,
         stored: tuple.stored - stored,

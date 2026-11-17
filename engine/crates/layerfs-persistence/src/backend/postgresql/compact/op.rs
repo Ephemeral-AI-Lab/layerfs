@@ -311,13 +311,6 @@ pub(crate) fn load_visited(
     schema: &str,
     mark: &MarkResult,
 ) -> HistoryResult<()> {
-    let objects: Vec<Vec<u8>> = mark
-        .objects()
-        .objects()
-        .iter()
-        .map(|id| id.as_bytes().to_vec())
-        .collect();
-    let packs: Vec<i64> = mark.objects().packs().to_vec();
     stage(session, |tx| {
         tx.batch(
             "DROP TABLE IF EXISTS pg_temp.gc_visited;\
@@ -327,14 +320,15 @@ pub(crate) fn load_visited(
         )?;
         // A large visited set is a bulk load, not a parameter array: COPY
         // streams it without one round trip per row and without SQL text that
-        // grows with the mark. The ids were bound in memory for the array form;
-        // here each row is written straight from the mark.
+        // grows with the mark. Each row is written straight from the mark's
+        // own ids, so the load holds no second copy of the set.
         tx.copy_in(
             "COPY pg_temp.gc_visited(object_id) FROM STDIN (FORMAT binary)",
             &[Type::BYTEA],
             |writer| {
-                for id in &objects {
-                    writer.write(&[id])?;
+                for id in mark.objects().objects() {
+                    let id: &[u8] = id.as_bytes();
+                    writer.write(&[&id])?;
                 }
                 Ok(())
             },
@@ -343,7 +337,7 @@ pub(crate) fn load_visited(
             "COPY pg_temp.gc_live_pack(pack_id) FROM STDIN (FORMAT binary)",
             &[Type::INT8],
             |writer| {
-                for pack in &packs {
+                for pack in mark.objects().packs() {
                     writer.write(&[pack])?;
                 }
                 Ok(())
@@ -365,7 +359,9 @@ pub(crate) fn load_visited(
 /// delete each project closure in its per-project transaction instead of
 /// scanning the derived tables for orphans in the final settle. The
 /// run/depth and key/x primary keys are persisted as the concatenated bytes
-/// run || int8send(depth) and key || int8send(x).
+/// run || int8send(depth) and key || int8send(x). A digest root is recorded
+/// once however many `file_digest` rows name it; every other arm selects its
+/// table's own key.
 pub(crate) fn persist_mark(
     session: &Arc<Session>,
     schema: &str,
@@ -394,7 +390,7 @@ pub(crate) fn persist_mark(
              SELECT 'signature',int8send(cs.slot)||int8send(cs.stamp) FROM {schema}.content_signature cs \
               WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=cs.object_id) \
              UNION ALL \
-             SELECT 'digest',fd.root FROM {schema}.file_digest fd \
+             SELECT DISTINCT 'digest',fd.root FROM {schema}.file_digest fd \
               WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=fd.root) \
              UNION ALL \
              SELECT 'layer_lineage',ll.layer_id FROM {schema}.layer_lineage ll \
