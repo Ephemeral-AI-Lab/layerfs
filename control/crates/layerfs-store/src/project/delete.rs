@@ -357,6 +357,9 @@ fn removed(store: &str, project: &str, deleted_ms: i64, home_entry_removed: bool
 struct Finish<'a> {
     effects: &'a mut dyn Effects,
     admission: Admission,
+    /// Whether the call had no durable intent: a fresh call may not finish a
+    /// retired project, while a retry resolves itself through its sidecar.
+    fresh: bool,
 }
 
 /// The mutating part of `delete_with` after the sidecar is durable: the marker
@@ -369,10 +372,13 @@ fn mark_and_finish(
     mut current: Intent,
     mut deleted_ms: i64,
     pending_retry: bool,
-    fresh: bool,
     finish: Finish<'_>,
 ) -> Outcome {
-    let Finish { effects, admission } = finish;
+    let Finish {
+        effects,
+        admission,
+        fresh,
+    } = finish;
     let deletion = effects.mark(admission, deleted_ms, pending_retry)?;
     if fresh && !matches!(deletion, Deletion::Marked { .. }) {
         // The call had no sidecar, so it had to find a live project, and the
@@ -531,10 +537,10 @@ pub fn delete_with(
         current,
         deleted_ms,
         pending_retry,
-        fresh,
         Finish {
             effects: &mut *effects,
             admission,
+            fresh,
         },
     );
     let released = effects.release(admission);
