@@ -1221,7 +1221,7 @@ fn json_host(host: &HostInfo) -> String {
         .iter()
         .map(|disk| {
             format!(
-                "\n      {{\"name\": \"{}\", \"model\": \"{}\", \"rotational\": {}, \
+                "\n      {{\"name\": {}, \"model\": {}, \"rotational\": {}, \
                  \"sizeBytes\": {}}}",
                 json_string(&disk.name),
                 json_string(&disk.model),
@@ -1649,4 +1649,234 @@ fn run() -> Result<()> {
     emit(&out, &options.out)?;
     cleanup(&scratch, options.keep);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The R730 values `/sys/block` reported on the host where the bug showed
+    /// up: one rotational `sda` whose model file carries trailing spaces.
+    fn r730_host() -> HostInfo {
+        HostInfo {
+            product: "PowerEdge R730".to_owned(),
+            cpu_model: "Intel(R) Xeon(R) CPU E5-2640 v4 @ 2.40GHz".to_owned(),
+            kernel: "6.8.0-79-generic".to_owned(),
+            cpus: 40,
+            mem_bytes: 134_936_772_608,
+            tmp_filesystem: "ext4".to_owned(),
+            host_class: "Dell PowerEdge R730 / PERC / rotational (owner target class)".to_owned(),
+            host_class_source: "detected".to_owned(),
+            detected_host_class: "Dell PowerEdge R730 / PERC / rotational (owner target class)"
+                .to_owned(),
+            storage_media: "rotational".to_owned(),
+            detected_storage_media: "rotational".to_owned(),
+            not_nvme: true,
+            nominal_read_mbs: 500,
+            nominal_write_mbs: 600,
+            disks: vec![DiskInfo {
+                name: "sda".to_owned(),
+                model: "PERC H730 Mini  ".to_owned(),
+                rotational: true,
+                size_bytes: 4_798_770_010_624,
+            }],
+        }
+    }
+
+    #[test]
+    fn host_json_disk_entry_is_a_string_value() {
+        let text = json_host(&r730_host());
+        parse_json(&text).expect("host block must be valid JSON");
+        assert!(text.contains("\"name\": \"sda\""), "{text}");
+        assert!(text.contains("\"model\": \"PERC H730 Mini  \""), "{text}");
+    }
+
+    #[test]
+    fn host_json_escapes_quotes_and_backslashes_in_a_disk_model() {
+        let mut host = r730_host();
+        host.disks[0].model = "PERC \"H730\" \\ Mini".to_owned();
+        let text = json_host(&host);
+        parse_json(&text).expect("host block must be valid JSON");
+        assert!(
+            text.contains(r#""model": "PERC \"H730\" \\ Mini""#),
+            "{text}"
+        );
+    }
+
+    // The harness emits its own JSON, so the test needs a syntax check and not
+    // a data model: a compact dependency-free parser for the shapes `json_host`
+    // produces (object, array, string, number, true/false/null).
+    fn parse_json(text: &str) -> std::result::Result<(), String> {
+        let bytes = text.as_bytes();
+        let mut at = 0;
+        check_value(bytes, &mut at, 0)?;
+        check_whitespace(bytes, &mut at);
+        if at == bytes.len() {
+            Ok(())
+        } else {
+            Err(format!("trailing bytes at offset {at}"))
+        }
+    }
+
+    fn check_whitespace(bytes: &[u8], at: &mut usize) {
+        while matches!(bytes.get(*at), Some(b' ' | b'\t' | b'\n' | b'\r')) {
+            *at += 1;
+        }
+    }
+
+    fn check_value(bytes: &[u8], at: &mut usize, depth: usize) -> std::result::Result<(), String> {
+        if depth > 64 {
+            return Err("nesting too deep".to_owned());
+        }
+        check_whitespace(bytes, at);
+        match bytes.get(*at).copied() {
+            Some(b'"') => check_string(bytes, at),
+            Some(b'{') => check_object(bytes, at, depth),
+            Some(b'[') => check_array(bytes, at, depth),
+            Some(b't') => check_literal(bytes, at, b"true"),
+            Some(b'f') => check_literal(bytes, at, b"false"),
+            Some(b'n') => check_literal(bytes, at, b"null"),
+            Some(b'-' | b'0'..=b'9') => check_number(bytes, at),
+            _ => Err(format!("no JSON value at offset {at}")),
+        }
+    }
+
+    fn check_string(bytes: &[u8], at: &mut usize) -> std::result::Result<(), String> {
+        if bytes.get(*at) != Some(&b'"') {
+            return Err(format!("no string at offset {at}"));
+        }
+        *at += 1;
+        loop {
+            match bytes.get(*at).copied() {
+                None => return Err("unterminated string".to_owned()),
+                Some(b'"') => {
+                    *at += 1;
+                    return Ok(());
+                }
+                Some(b'\\') => {
+                    *at += 1;
+                    match bytes.get(*at).copied() {
+                        Some(b'"' | b'\\' | b'/' | b'b' | b'f' | b'n' | b'r' | b't') => {
+                            *at += 1;
+                        }
+                        Some(b'u') => {
+                            *at += 1;
+                            for _ in 0..4 {
+                                if !bytes.get(*at).is_some_and(u8::is_ascii_hexdigit) {
+                                    return Err("bad \\u escape".to_owned());
+                                }
+                                *at += 1;
+                            }
+                        }
+                        _ => return Err("bad escape".to_owned()),
+                    }
+                }
+                Some(control) if control < 0x20 => {
+                    return Err("raw control byte in string".to_owned())
+                }
+                Some(_) => *at += 1,
+            }
+        }
+    }
+
+    fn check_object(bytes: &[u8], at: &mut usize, depth: usize) -> std::result::Result<(), String> {
+        *at += 1;
+        check_whitespace(bytes, at);
+        if bytes.get(*at) == Some(&b'}') {
+            *at += 1;
+            return Ok(());
+        }
+        loop {
+            check_whitespace(bytes, at);
+            check_string(bytes, at)?;
+            check_whitespace(bytes, at);
+            if bytes.get(*at) != Some(&b':') {
+                return Err(format!("no colon at offset {at}"));
+            }
+            *at += 1;
+            check_value(bytes, at, depth + 1)?;
+            check_whitespace(bytes, at);
+            match bytes.get(*at).copied() {
+                Some(b',') => *at += 1,
+                Some(b'}') => {
+                    *at += 1;
+                    return Ok(());
+                }
+                _ => return Err(format!("bad object at offset {at}")),
+            }
+        }
+    }
+
+    fn check_array(bytes: &[u8], at: &mut usize, depth: usize) -> std::result::Result<(), String> {
+        *at += 1;
+        check_whitespace(bytes, at);
+        if bytes.get(*at) == Some(&b']') {
+            *at += 1;
+            return Ok(());
+        }
+        loop {
+            check_value(bytes, at, depth + 1)?;
+            check_whitespace(bytes, at);
+            match bytes.get(*at).copied() {
+                Some(b',') => *at += 1,
+                Some(b']') => {
+                    *at += 1;
+                    return Ok(());
+                }
+                _ => return Err(format!("bad array at offset {at}")),
+            }
+        }
+    }
+
+    fn check_literal(
+        bytes: &[u8],
+        at: &mut usize,
+        literal: &[u8],
+    ) -> std::result::Result<(), String> {
+        let rest = bytes.get(*at..).unwrap_or_default();
+        if rest.starts_with(literal) {
+            *at += literal.len();
+            Ok(())
+        } else {
+            Err(format!("bad literal at offset {at}"))
+        }
+    }
+
+    fn check_number(bytes: &[u8], at: &mut usize) -> std::result::Result<(), String> {
+        let start = *at;
+        if bytes.get(*at) == Some(&b'-') {
+            *at += 1;
+        }
+        match bytes.get(*at).copied() {
+            Some(b'0') => *at += 1,
+            Some(b'1'..=b'9') => {
+                while matches!(bytes.get(*at), Some(b'0'..=b'9')) {
+                    *at += 1;
+                }
+            }
+            _ => return Err(format!("bad number at offset {start}")),
+        }
+        if bytes.get(*at) == Some(&b'.') {
+            *at += 1;
+            if !matches!(bytes.get(*at), Some(b'0'..=b'9')) {
+                return Err(format!("bad fraction at offset {start}"));
+            }
+            while matches!(bytes.get(*at), Some(b'0'..=b'9')) {
+                *at += 1;
+            }
+        }
+        if matches!(bytes.get(*at), Some(b'e' | b'E')) {
+            *at += 1;
+            if matches!(bytes.get(*at), Some(b'+' | b'-')) {
+                *at += 1;
+            }
+            if !matches!(bytes.get(*at), Some(b'0'..=b'9')) {
+                return Err(format!("bad exponent at offset {start}"));
+            }
+            while matches!(bytes.get(*at), Some(b'0'..=b'9')) {
+                *at += 1;
+            }
+        }
+        Ok(())
+    }
 }
