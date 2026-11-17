@@ -29,10 +29,17 @@ use std::collections::BTreeMap;
 /// After the head: a wider directory, then record headers. No pack needs more.
 const ROUNDS: usize = 4;
 /// Bytes of each pack the first read asks for: the directory of a pack of up
-/// to about sixty groups, its first group's record directory and first record
-/// header. Small on purpose: on a cold cache each further page of a pack is
-/// one more random read. A pack with a wider directory is read again.
-const HEAD_BYTES: usize = 1024;
+/// to about twenty groups, its first group's record directory and first
+/// record header. A pack with a wider directory is read again.
+///
+/// The size is chosen so the read never leaves the pack row's own page in a
+/// SQLite Store. A row too large for its 4,096-byte page keeps at least its
+/// first 489 bytes there and the rest in a chain of further pages; the
+/// columns before the body take at most 49 of those. Up to 440 bytes of body
+/// are therefore always on the page the row lookup has already loaded, and
+/// one byte more costs every such pack another page read: a random one on a
+/// cold cache. A PostgreSQL Store reads its first stored piece either way.
+const HEAD_BYTES: usize = 432;
 /// Packs whose heads one call reads.
 const HEAD_PACKS: usize = 256;
 /// Ranges one call asks for, over all its packs.
