@@ -2,7 +2,7 @@
 //! digest.
 //!
 //! A mark starts at the roots of every Commit and Layer the §6.1 history
-//! closure retained. Every locator is loaded once, in pack order, and the walk
+//! closure retained. Every locator is loaded once, unsorted, and the walk
 //! follows each object's direct logical references and its record-header delta
 //! base to the fixpoint. The walk is metadata-only: a role that names no other
 //! object costs one header read, not a payload decode, and reference-bearing
@@ -252,9 +252,9 @@ fn mark_recorded(
     let history = kept::mark(tx)?;
     let policy = tx.mechanics().policy().map_err(storage)?;
     let capacities = StorageCapacities::from_policy(policy).map_err(storage)?;
-    // Every locator is loaded once, in pack order. The walk's queue and the
-    // kept-waste attribution share that one read, so a mark never asks the
-    // engine for a single object location again.
+    // Every locator is loaded once. The walk's queue and the kept-waste
+    // attribution share that one read, so a mark never asks the engine for a
+    // single object location again.
     let located = locate_all(tx)?;
     let source = ClosureSource {
         mechanics: tx.mechanics(),
@@ -290,7 +290,12 @@ fn roots(tx: &Transaction<'_>) -> HistoryResult<Vec<ObjectId>> {
     Ok(roots.into_iter().collect())
 }
 
-/// Every stored locator, read once in pack order.
+/// Every stored locator, read once in the table's own key order.
+///
+/// An object has one locator row (its identity is the table's key), so no
+/// order is needed to pick a winner, and asking for pack order made the
+/// engine sort every row of the table for each mark. Both maps below are
+/// keyed, so they do not need sorted input either.
 ///
 /// `locations` answers the walk; `inventory` answers kept-waste attribution.
 /// They are two views of the same single `gc_object_locations` read, so the
@@ -342,7 +347,7 @@ fn locate_all(tx: &Transaction<'_>) -> HistoryResult<Located> {
     Ok(located)
 }
 
-/// The in-memory closure of one mark, before `keptWaste` is attributed./// The in-memory closure of one mark, before `keptWaste` is attributed.
+/// The in-memory closure of one mark, before `keptWaste` is attributed.
 struct Closure {
     /// Every reached object and its winning locator.
     visited: BTreeMap<ObjectId, ObjectLocation>,
