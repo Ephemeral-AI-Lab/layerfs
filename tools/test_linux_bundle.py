@@ -166,7 +166,7 @@ class LinuxBundleTests(unittest.TestCase):
         self.assertEqual(
             [c[c.index("-p") + 1] for c in cargo], ["layerfs-daemon", "layerfs-cli", "layerfs-sandbox-backend"]
         )
-        self.assertIn("layerfs-daemon/postgresql", cargo[0])
+        self.assertNotIn("--features", cargo[0])
         self.assertIn("--no-default-features", cargo[1])
         self.assertTrue(all(t == 120 for _, t in self.commands))
         self.assertTrue(all(c[c.index("-j") + 1] == "6" for c in cargo))

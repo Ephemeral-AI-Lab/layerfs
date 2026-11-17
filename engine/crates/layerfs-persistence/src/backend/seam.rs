@@ -16,7 +16,6 @@ pub(crate) const ORDINAL_END: i64 = 4_294_967_296;
 #[derive(Clone)]
 pub(crate) enum Engine {
     Sqlite(Arc<super::Session>),
-    #[cfg(feature = "postgresql")]
     Postgres(Arc<super::postgresql::session::connection::Session>),
 }
 
@@ -36,7 +35,6 @@ pub(crate) trait HistoryStatements {
 }
 
 /// One column of an array statement; only PostgreSQL reads them.
-#[cfg_attr(not(feature = "postgresql"), allow(dead_code))]
 pub(crate) enum Column {
     I64(Vec<i64>),
     Bytes(Vec<Vec<u8>>),

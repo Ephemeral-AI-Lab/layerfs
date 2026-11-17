@@ -10,7 +10,6 @@
 //! `host=127.0.0.1 port=55433 user=postgres password=... dbname=postgres
 //! sslmode=disable`). Without it each test reports NOT_RUN and passes nothing.
 //! Sizes are read with catalog functions on the test's own disposable schema.
-#![cfg(feature = "postgresql")]
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{PostgresHandles, PostgresSelection};

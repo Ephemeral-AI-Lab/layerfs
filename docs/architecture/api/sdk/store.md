@@ -222,7 +222,6 @@ again keeps its binding
 | `InvalidInput` | a URL that is not PostgreSQL, holds a password, or lacks a user with `password`; a bad `synchronous_commit`; a password that is not a reference |
 | `Unavailable` | the reference does not resolve; no session (no database, wrong user or password); a lock held 120 s |
 | `Exists` | the name is taken, or another PostgreSQL Store of this home connects the same database (by URL, or by binding once read) |
-| `Unsupported` | a build without the `postgresql` feature (the default Node, Python and CLI builds) |
 
 ### store.attach
 
@@ -380,7 +379,7 @@ recorded, or a call in this process is running on it,
 | `NotFound` | no Store of that name | [`record.rs`](../../../../control/crates/layerfs-store/src/record.rs) |
 | `Busy`, `Unresolved` | another operation's `op`; an unresolved one is shown by `store status` and cleared by `store remove` (or the same push or pull) | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) |
 | `Unavailable` | a stopped machine; a server that does not answer | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`postgresql/open.rs`](../../../../control/crates/layerfs-store/src/postgresql/open.rs) |
-| `Unsupported` | a build without the `postgresql` feature; new work on a removed platform's machine | [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs), [`calls/platform_policy.rs`](../../../../api/crates/layerfs-api/src/calls/platform_policy.rs) |
+| `Unsupported` | new work on a removed platform's machine | [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs), [`calls/platform_policy.rs`](../../../../api/crates/layerfs-api/src/calls/platform_policy.rs) |
 | `Unknown` | a step's answer was lost; an uncertain push, pull or remove appends to `log/uncertain.jsonl`, and nothing is cleaned up on a guess | [`sqlite/family.rs`](../../../../control/crates/layerfs-store/src/sqlite/family.rs) |
 
 ## Related

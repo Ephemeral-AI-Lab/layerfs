@@ -7,7 +7,6 @@
 //! TOAST relation.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#![cfg(feature = "postgresql")]
 use layerfs_content::{ObjectId, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{PostgresHandles, PostgresSelection};

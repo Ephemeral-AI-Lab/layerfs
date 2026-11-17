@@ -206,7 +206,6 @@ fn sqlite_saved_queries_resume_in_new_processes() {
     std::fs::remove_dir_all(source).unwrap();
 }
 #[test]
-#[cfg(feature = "postgresql")]
 fn postgresql_saved_queries_resume_in_new_processes() {
     let Ok(url) = std::env::var("LAYERFS_TEST_POSTGRES_URL") else {
         eprintln!("NOT_RUN: LAYERFS_TEST_POSTGRES_URL unset");

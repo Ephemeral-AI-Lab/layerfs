@@ -73,7 +73,7 @@ Branch's base) and `root` (that Branch's effective root)
 
 | Store | Runs in |
 | --- | --- |
-| PostgreSQL | caller's process (a build with the `postgresql` feature) |
+| PostgreSQL | caller's process |
 | sqlite on a locally executing machine (`native` on Linux or macOS) | caller's process; the kernel guard admits the Store's directory only when it is owned by this user and private (`0700`) on Linux ext4, xfs or btrfs, or macOS apfs or hfs |
 | sqlite on any other machine, and `native` on Windows | that machine's worker, on a staged copy of the folder sent from the caller |
 
@@ -214,7 +214,7 @@ per 200 ms besides the first and last
 | --- | --- | --- |
 | sqlite on a locally executing machine | caller's process | caller's host |
 | sqlite on a worker machine | that worker, streaming bounded entry and byte frames with backpressure over one request | caller's host |
-| PostgreSQL | caller's process (`postgresql` feature) | caller's host |
+| PostgreSQL | caller's process | caller's host |
 
 | Error | When |
 | --- | --- |

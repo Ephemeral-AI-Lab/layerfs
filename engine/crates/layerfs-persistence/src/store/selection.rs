@@ -1,5 +1,4 @@
 //! The one Store selection: a SQLite file or a PostgreSQL schema.
-#[cfg(feature = "postgresql")]
 use crate::PostgresHandles;
 use crate::{PersistenceConfig, PostgresSelection, SqlWork, SqliteHandles, StorageProvider};
 use layerfs_storage::port::PersistenceError;
@@ -61,7 +60,6 @@ pub enum Handles {
     /// A SQLite Store file session.
     Sqlite(SqliteHandles),
     /// A PostgreSQL Store session (#506).
-    #[cfg(feature = "postgresql")]
     Postgres(PostgresHandles),
 }
 impl Handles {
@@ -100,7 +98,6 @@ impl Handles {
             }
         }
     }
-    #[cfg(feature = "postgresql")]
     fn postgres(
         selection: &PostgresSelection,
         writable: bool,
@@ -113,20 +110,10 @@ impl Handles {
             PostgresHandles::open_read_only(selection, binding, cursor_key)?
         }))
     }
-    #[cfg(not(feature = "postgresql"))]
-    fn postgres(
-        _selection: &PostgresSelection,
-        _writable: bool,
-        _binding: &[u8],
-        _cursor_key: [u8; 32],
-    ) -> Result<Self, PersistenceError> {
-        Err(PersistenceError::BackendUnavailable)
-    }
     /// Refuses every later call of this session; see the kind's `close`.
     pub fn close(&self) {
         match self {
             Self::Sqlite(handles) => handles.close(),
-            #[cfg(feature = "postgresql")]
             Self::Postgres(handles) => handles.close(),
         }
     }
@@ -134,7 +121,6 @@ impl Handles {
     pub fn diagnostics(&self) -> Result<SqlWork, PersistenceError> {
         match self {
             Self::Sqlite(handles) => handles.diagnostics(),
-            #[cfg(feature = "postgresql")]
             Self::Postgres(handles) => handles.diagnostics(),
         }
     }
@@ -142,7 +128,6 @@ impl Handles {
     pub fn file(&self) -> Option<&dyn StoreFile> {
         match self {
             Self::Sqlite(handles) => Some(handles.storage.as_ref()),
-            #[cfg(feature = "postgresql")]
             Self::Postgres(_) => None,
         }
     }

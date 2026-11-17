@@ -6,10 +6,6 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
-[features]
-# PostgreSQL Store engine (#506), off by default.
-postgresql = ["layerfs-persistence/postgresql", "dep:postgres"]
-
 [dependencies]
 layerfs-overlay = { path = "../layerfs-overlay" }
 layerfs-workspace = { path = "../layerfs-workspace" }
@@ -21,10 +17,10 @@ layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
 # Concrete Store opening (bootstrap) and the kernel guard's open.
 layerfs-persistence = { path = "../layerfs-persistence" }
 nix = { version = "=0.31.3", default-features = false, features = ["fs", "user"] }
-# Only the `postgresql` feature's tests use it directly (schema cleanup).
-postgres = { version = "=0.19.14", optional = true }
 
 [dev-dependencies]
+# Only the PostgreSQL tests use it directly (schema cleanup).
+postgres = "=0.19.14"
 # The method-table tests (#536 step 1.1) Init their Store through Project,
 # count its rows and time BLAKE3 over the bytes they write.
 layerfs-project = { path = "../layerfs-project" }

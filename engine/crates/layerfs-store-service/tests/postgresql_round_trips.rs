@@ -27,7 +27,6 @@
 //! overlap. Cache state: the Commits run on one Store opened once (a warm
 //! process, as a daemon serving one Workspace is); the reads reopen the Store
 //! and bind a new Workspace, so nothing they read is cached beforehand.
-#![cfg(feature = "postgresql")]
 use layerfs_content::filesystem::PathName;
 use layerfs_history::{
     BranchId, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryName,

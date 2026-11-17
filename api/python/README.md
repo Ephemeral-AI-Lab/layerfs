@@ -53,8 +53,8 @@ cd api/python && maturin build --locked
 ```
 
 That is a debug build. The wheel to install is `maturin build --release
---locked`; add `--features postgresql` (or `tls`) for PostgreSQL Stores,
-which needs the OpenSSL development files and `patchelf`. The wheel's
+--locked`; add `--features tls` for `https://` remotes. Every build has
+PostgreSQL Stores, which need the OpenSSL development files and `patchelf`. The wheel's
 platform tag follows the build host's glibc (`manylinux_2_39` on Ubuntu 26.04).
 The steps to install it into an empty virtualenv are in
 [api/README.md](../README.md#package-and-install).

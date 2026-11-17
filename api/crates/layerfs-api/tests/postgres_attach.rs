@@ -117,7 +117,7 @@ fn attach_and_detach_refusals_need_no_server() {
     );
     // the check from native finds no server: nothing is recorded
     let (code, message) = attach(&[("name", t("pg")), ("machine", t("native"))]);
-    if cfg!(feature = "postgresql") {
+    if true {
         assert_eq!(code, "Unavailable", "{message}");
         assert!(
             message.starts_with(
@@ -178,7 +178,6 @@ fn attach_and_detach_refusals_need_no_server() {
     let _ = std::fs::remove_dir_all(home);
 }
 
-#[cfg(feature = "postgresql")]
 #[test]
 fn attach_checks_the_machine_s_connection_before_it_records_it() {
     let (Ok(url), Ok(_)) = (

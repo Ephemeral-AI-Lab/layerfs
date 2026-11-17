@@ -23,11 +23,5 @@ libc = "=0.2.189"
 nix = { version = "=0.31.3", default-features = false, features = ["fs", "user", "signal"] }
 
 [features]
-# PostgreSQL Stores (#506, #533): open, attach, create and Init.
-postgresql = [
-    "layerfs-persistence/postgresql",
-    "layerfs-project/postgresql",
-    "layerfs-store-service/postgresql",
-]
 # https:// remotes: Cloudflare R2, MinIO behind TLS.
 tls = ["layerfs-bucket/tls"]

@@ -1,5 +1,4 @@
 //! Actual PostgreSQL amcheck applicability, replica and physical payload matrix.
-#![cfg(feature = "postgresql")]
 mod pg_doctor;
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectRole};
 use layerfs_persistence::{diagnostic::Outcome, PostgresHandles};

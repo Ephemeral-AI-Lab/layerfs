@@ -17,7 +17,6 @@ pub enum SynchronousCommit {
     RemoteApply,
 }
 impl SynchronousCommit {
-    #[cfg_attr(not(feature = "postgresql"), allow(dead_code))]
     pub(crate) const fn setting(self) -> &'static str {
         match self {
             Self::Off => "off",
