@@ -35,7 +35,7 @@ The daemon starts it and has the host's own NFS client mount it.
 | Item | Meaning | Source |
 | --- | --- | --- |
 | `Server::start` | Starts the accept thread; one connection serves one call at a time, in arrival order | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
-| `ExportConfig` | `path` (normally `/`), `uid`/`gid` shown on every inode, `read_only`, `refuse_apple_double`, `lookups_held`; `writable(uid, gid)` is the default | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
+| `ExportConfig` | `path` (normally `/`), `uid`/`gid` shown on every inode, `read_only`, `refuse_apple_double`, `lookups_held`, `companion_spill_dir`, `companion_resident_bytes`; `writable(uid, gid)` is the default | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
 | `Server::stop` | Stop accepting, shut down and join every connection, then `Kernel::release`: descriptors first, then lookup references. The engine mount stays with the caller | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
 | `Kernel` | What a FUSE kernel would hold for a stateless client: one lookup reference per handed-out serial, implicit file and directory descriptors with the facts last published through them, a parent index for `..` | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
 | Verifier | One WRITE/COMMIT verifier per export, from the clock and process id under a random key | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
@@ -141,7 +141,7 @@ drawn once per export; it makes guessing costly and does not authenticate.
 | --- | --- |
 | A publication ticket is released only after the reply's one send attempt, whether or not it reached the client | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
 | A WRITE is split into `WRITE_WINDOW` (256 KiB) windows, each one publication; a failure after the first is a short write of the windows already published. WRITE answers `FILE_SYNC`: published, not durable | [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs), [`changing.rs`](../../../../engine/crates/layerfs-nfs/src/changing.rs) |
-| `wcc_data` pre- and post-op attributes come from the publishing job's own inode state, RENAME included; no reply reads an attribute outside the job | [`changing.rs`](../../../../engine/crates/layerfs-nfs/src/changing.rs), [`kernel_visit.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_visit.rs) |
+| `wcc_data` pre- and post-op attributes come from the publishing job's own inode state, RENAME included; no reply reads an attribute outside the job. An AppleDouble companion's CREATE, REMOVE or RENAME publishes no engine job and answers both halves from `Table::directory_stats` (or absent when unseen) | [`changing.rs`](../../../../engine/crates/layerfs-nfs/src/changing.rs), [`kernel_visit.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_visit.rs), [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
 | RENAME looks nothing up first; a detached (`nlink == 0`) destination's reference and descriptor are retired inside that job | [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |
 | COMMIT answers the attributes last published or observed through the implicit descriptor, so `fsync` costs no owner job | [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |
 | A client silly rename (`.nfs` + 24 hex on Linux; `.nfs.` + 8 hex + `.` + 4 hex on macOS) is served as an UNLINK; the export keeps the inode until the final REMOVE | [`names.rs`](../../../../engine/crates/layerfs-nfs/src/names.rs) |
@@ -176,7 +176,7 @@ drawn once per export; it makes guessing costly and does not authenticate.
 | The refresh never writes into the Workspace and never reverts a mode the install changed | [`refresh.rs`](../../../../engine/crates/layerfs-nfs/src/refresh.rs) |
 | `LAYERFS_NFS_REFRESH=0` leaves the client to `actimeo` and close-to-open | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 
-## AppleDouble files (`apple_double.rs`, `apple_double_codec.rs`)
+## AppleDouble files (`apple_double.rs`, `apple_double/edit.rs`, `apple_double_codec.rs`, `apple_double_spill.rs`)
 
 On NFSv3 the macOS client keeps extended attributes and resource forks in
 `._<name>` files. With `refuse_apple_double`, a regular `._` file (at least
@@ -191,18 +191,38 @@ reaches the Workspace or a Commit; everything is dropped with the export.
 | --- | --- | --- | --- |
 | `HELD` | 4,096 companions | CREATE `NFS3ERR_ACCES` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 | `FILE_BYTES` | 1 MiB per companion | WRITE / SETATTR `NFS3ERR_FBIG` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
-| `RESIDENT_BYTES` | 32 MiB of companion bodies in all | WRITE / SETATTR `NFS3ERR_NOSPC` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| `RESIDENT_BYTES` | 32 MiB of companion bodies in all | Spill least recently touched resident bodies to `companion_spill_dir` (`<mounts>/.appledouble/<namespace>/<serial>`); host disk I/O errors map to `NFS3ERR_NOSPC` (`ENOSPC`/`EDQUOT`), `NFS3ERR_FBIG` (`EFBIG`), `NFS3ERR_ACCES` (`EACCES`), `NFS3ERR_PERM` (`EPERM`), `NFS3ERR_ROFS` (`EROFS`) or `NFS3ERR_IO` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs), [`apple_double_spill.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_spill.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 | `DECODED_ENTRY_BYTES` | 128 KiB counted for one decoded companion | A whole image costing more keeps its bytes as written | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 
 A body a write or resize leaves as a complete AppleDouble image that encodes
 back to the exact bytes the companion holds
 ([`apple_double_codec.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_codec.rs))
-is kept as its FinderInfo and attributes, and every READ synthesizes the same
-bytes again. It takes the same `RESIDENT_BYTES` budget as a body kept as
-written, counted as `Image::cost` (its names and values, not its image), so no
-decoded image is memory the budget cannot see. Partial writes, resource forks
-and other layouts stay as the client wrote them, and a body the budget does not
-take leaves the companion as it was.
+is kept as its FinderInfo and attributes and counted against `RESIDENT_BYTES`
+as `Image::cost` (its names and values, not its image) rather than at its
+length, so no decoded image is memory the budget cannot see, and every READ
+synthesizes the same bytes again. Partial writes, resource forks and other
+layouts stay as the client wrote them.
+
+Bodies kept as written and decoded bodies alike, exceeding `RESIDENT_BYTES`
+together, are written to `<serial>.<n>.tmp` (`create_new`, dir `0700`, file
+`0600`) and renamed to `<serial>`, all of it outside the companion lock; the
+body is committed as spilled under the lock afterwards, so a reader reads the
+body in memory until its file is whole. One writer per companion is the edit
+gate (`Companion::editing`): an edit holds it, and an eviction takes it with
+`try_lock`, skipping a companion someone is editing, one another call removed
+and one whose file cannot be written out; only a call that finds no room and
+then cannot write out its own body answers its own error. A rename is dropped when
+the body changed since the snapshot (`used` tick), and a spilled body is opened
+by path per `pread`/`pwrite`/`set_len` and never held open. One edit per
+companion runs under `Companion::editing` ([`edit.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/edit.rs)),
+recording length and bytes together and spilling its own body rather than
+failing with `NFS3ERR_IO`. A file operation that fails after the spill put the
+length the companion had back, so a refused write reports neither bytes nor the
+longer file the spill made for it. Eviction follows `Companions::by_use`, the
+`(used tick, serial)` order kept on attach, detach and every use: the victim is
+the first entry (O(log n) per round, no walk of the index), and the rounds end
+when no companion holding memory is left.
+`ExportServing::reclaim` and release delete `<mounts>/.appledouble`.
 
 ## Mount (`mount.rs`, daemon `export.rs`)
 

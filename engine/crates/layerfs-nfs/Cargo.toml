@@ -20,3 +20,4 @@ layerfs-persistence = { path = "../layerfs-persistence" }
 layerfs-project = { path = "../layerfs-project" }
 layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
 layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
+libc = "=0.2.189"
