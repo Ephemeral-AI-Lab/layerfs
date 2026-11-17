@@ -1626,16 +1626,23 @@ fn a_save_after_the_swap_survives_the_resumed_cleanup() {
     let op_dead_stored = schema.scalar("SELECT dead_stored FROM {s}.gc_op WHERE id=1");
     let op_dead_canonical = schema.scalar("SELECT dead_canonical FROM {s}.gc_op WHERE id=1");
     let op_physical_before = schema.scalar("SELECT physical_before FROM {s}.gc_op WHERE id=1");
+    let op_physical_after = schema.scalar("SELECT physical_after FROM {s}.gc_op WHERE id=1");
     let op_peak_temp = schema.scalar("SELECT peak_temp FROM {s}.gc_op WHERE id=1");
     assert_eq!(
         schema.scalar("SELECT CASE WHEN kept_waste IS NULL THEN 0::bigint ELSE 1::bigint END FROM {s}.gc_op WHERE id=1"),
         1,
         "the mark's kept waste is persisted for the resumed report"
     );
-    let physical_after = payload_relation_bytes(schema);
-
-    // AC-28: a publication after the swap is not in `gc_dead`.
-    let late = saved_whole_file(&f.handles, b"written between swap and cleanup");
+    // AC-28: a publication after the swap is not in `gc_dead`. Save enough
+    // whole-file bytes to grow the payload relations by whole pages, so
+    // sampling `physical_after` at resume would really differ from the swap's
+    // measurement.
+    let late = saved_whole_file(&f.handles, &pseudo_bytes(131_071, 0x5e));
+    let physical_after_at_resume = payload_relation_bytes(schema);
+    assert!(
+        physical_after_at_resume > u64::try_from(op_physical_after).unwrap(),
+        "the late save grows the payload relations past the swap's measurement"
+    );
     assert!(located(&f.handles, late));
     let late_pack = pack_of(schema, late).expect("a late pack");
 
@@ -1695,6 +1702,13 @@ fn a_save_after_the_swap_survives_the_resumed_cleanup() {
         .expect("a dead-root digest row");
     assert_eq!(inserted_dead_root, 1);
 
+    // Sample again right before the resumed call, after every post-swap
+    // write, so the gap between the swap's value and the resume sample is at
+    // its widest.
+    assert!(
+        payload_relation_bytes(schema) > u64::try_from(op_physical_after).unwrap(),
+        "the resumed call starts with relations larger than the swap's"
+    );
     let receipt = f.handles.compact(&request(0x32)).unwrap();
     assert_eq!(receipt.path, CompactPath::Rebuild);
     assert_eq!(receipt.generation_before, before);
@@ -1712,8 +1726,8 @@ fn a_save_after_the_swap_survives_the_resumed_cleanup() {
     );
     assert_eq!(
         receipt.physical_shrink,
-        u64::try_from(op_physical_before - i64::try_from(physical_after).unwrap()).unwrap(),
-        "the resumed report derives the shrink from the pre-swap relation size"
+        u64::try_from(op_physical_before - op_physical_after).unwrap(),
+        "the resumed report derives the shrink from the swap's persisted sizes"
     );
     assert!(receipt.physical_shrink > 0);
     assert_eq!(

@@ -116,7 +116,8 @@ pub struct PostgresCompactOpStatus {
     pub owner_boot: Option<String>,
     /// The `gc_intent` row's own state (`live`, `uncertain` or `done`), when
     /// it is still there; a crash leaves `live`, so this is evidence, not
-    /// liveness.
+    /// liveness. A released intent is absent: the run returned to its caller,
+    /// which is PostgreSQL's form of SQLite's `returned` record.
     pub intent_state: Option<String>,
     /// The mark's history serial, when recorded.
     pub mark_serial: Option<i64>,
@@ -125,28 +126,38 @@ pub struct PostgresCompactOpStatus {
     /// The mark's live-heads digest, when recorded.
     pub mark_digest: Option<Vec<u8>>,
     /// True while the row remains: the run did not settle, so its outcome is
-    /// unknown. `store.status` reports `busy` while the owner lives and
-    /// `unresolved` once it is gone.
+    /// unknown. `store.status` reports `busy` while the run is in flight and
+    /// `unresolved` once it returned or its owner is gone.
     pub uncertain: bool,
-    /// True when the recorded owner backend is still alive and not `idle`,
-    /// the same §9 test a resolving compaction applies.
+    /// True when the recorded owner backend is still alive (its recorded
+    /// `(pid, backend_start, usename)` is in `pg_stat_activity`), the same §9
+    /// test a resolving compaction applies. Its `idle` state does not make an
+    /// in-flight run a leftover: the state below also needs the intent.
     pub alive: bool,
 }
 
 impl PostgresCompactOpStatus {
-    /// The `store.status` projection of this operation: `busy` while the
-    /// owner lives, `unresolved` once it is gone. `uncertain` stays true for
+    /// The `store.status` projection of this operation: `busy` while the run
+    /// is in flight — its compaction `gc_intent` is still present and its
+    /// owner backend is alive — and `unresolved` once the run returned (the
+    /// intent is released) or its owner is gone. A released intent is the
+    /// PostgreSQL form of SQLite's `returned` record: the owner may still be
+    /// alive, but it is no longer running the op. `uncertain` stays true for
     /// every remaining row, live or leftover; `state` separates the two. The
     /// phases are PostgreSQL's §8 ones: `mark`, `build`, `swap`, `cleanup`.
     #[must_use]
     pub fn status(&self) -> CompactStatus {
+        // SQLite marks a record `returned` before replying; PostgreSQL
+        // releases the intent. Either way the op is in flight only while the
+        // intent is still there *and* the recorded backend still lives.
+        let in_flight = self.intent_state.is_some() && self.alive;
         CompactStatus {
             id: format!("op-{}", hex(&self.op_id)),
             name: "store.compact",
             phase: self.phase.clone(),
             started: self.started_ms,
             uncertain: self.uncertain,
-            state: if self.alive { "busy" } else { "unresolved" },
+            state: if in_flight { "busy" } else { "unresolved" },
             phases: &POSTGRES_COMPACT_PHASES,
         }
     }
@@ -179,8 +190,7 @@ pub fn compact_status(
                 EXISTS (SELECT 1 FROM pg_stat_activity a \
                          WHERE a.datname=current_database() AND a.pid=o.pid \
                            AND a.backend_start::text=o.backend_start \
-                           AND (o.usename IS NULL OR a.usename::text=o.usename) \
-                           AND a.state IS DISTINCT FROM 'idle'), \
+                           AND (o.usename IS NULL OR a.usename::text=o.usename)), \
                 o.op_id \
            FROM {table}.gc_op o \
            LEFT JOIN LATERAL (SELECT op_id,owner_runtime,owner_boot,state \

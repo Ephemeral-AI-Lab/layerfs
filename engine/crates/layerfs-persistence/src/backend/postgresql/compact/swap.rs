@@ -1,6 +1,7 @@
 //! §8 Phase B: the pack swap, its tuple re-read and its verification.
 
 use super::build::relation_bytes;
+use super::build::relation_bytes_tx;
 use super::cleanup::drop_scratch;
 use super::op::digest;
 use super::op::hex;
@@ -124,18 +125,24 @@ pub(crate) fn swap(
         if applied != 0 {
             return Err(HistoryError::Integrity("compaction totals already applied"));
         }
+        // §11: the swap's own post-swap relation size, measured inside the
+        // transaction that makes the moved tables live. Persisting it keeps a
+        // save that lands after the swap (AC-28) out of a resumed `G + 1`
+        // report's `physicalShrink`.
+        let physical_after = relation_bytes_tx(tx, schema, &["pack", "object_location"])?;
         // §11: the swap records everything a resumed `G + 1` report cannot
-        // recompute after the old tables are gone: the pre-swap relation size,
-        // the Phase-A peak and the mark's kept waste.
+        // recompute after the old tables are gone: both relation sizes, the
+        // Phase-A peak and the mark's kept waste.
         tx.query(
             &format!(
-                "UPDATE {schema}.gc_op SET phase='swap',dead_canonical=$1,dead_stored=$2,dead_metadata=$3,physical_before=$4,peak_temp=$5 WHERE id=1"
+                "UPDATE {schema}.gc_op SET phase='swap',dead_canonical=$1,dead_stored=$2,dead_metadata=$3,physical_before=$4,physical_after=$5,peak_temp=$6 WHERE id=1"
             ),
             vec![
                 Param::I64(built.dead.canonical),
                 Param::I64(built.dead.stored),
                 Param::I64(built.dead.metadata),
                 Param::I64(i64::try_from(physical_before).unwrap_or(i64::MAX)),
+                Param::I64(i64::try_from(physical_after).unwrap_or(i64::MAX)),
                 Param::I64(i64::try_from(built.peak_temp).unwrap_or(i64::MAX)),
             ],
         )?;
@@ -158,7 +165,7 @@ pub(crate) fn swap(
         standby_check(tx, rank, &names, op_id, "swap")?;
         Ok(Swapped {
             physical_before,
-            physical_after: 0,
+            physical_after,
             peak_temp: built.peak_temp,
             dead: built.dead,
         })
@@ -180,11 +187,7 @@ pub(crate) fn swap(
         u64::try_from(tuple.generation.saturating_add(1)).unwrap_or(0),
         std::sync::atomic::Ordering::SeqCst,
     );
-    let physical_after = relation_bytes(session, schema, &["pack", "object_location"])?;
-    Ok(Swapped {
-        physical_after,
-        ..result
-    })
+    Ok(result)
 }
 
 /// The `Busy` a contended swap reports: the compaction identity with the

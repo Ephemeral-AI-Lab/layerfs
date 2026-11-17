@@ -233,7 +233,7 @@ pub(crate) fn read_op(session: &Arc<Session>, schema: &str) -> HistoryResult<Opt
     stage(session, |tx| {
         let rows = tx.query(
             &format!(
-                "SELECT generation,phase,artifact,dead_canonical,dead_stored,dead_metadata,dead_logical,totals_applied,pid,backend_start,physical_before,peak_temp,kept_waste,mark_totals,usename FROM {schema}.gc_op WHERE id=1"
+                "SELECT generation,phase,artifact,dead_canonical,dead_stored,dead_metadata,dead_logical,totals_applied,pid,backend_start,physical_before,physical_after,peak_temp,kept_waste,mark_totals,usename FROM {schema}.gc_op WHERE id=1"
             ),
             Vec::new(),
         )?;
@@ -254,16 +254,17 @@ pub(crate) fn read_op(session: &Arc<Session>, schema: &str) -> HistoryResult<Opt
             pid: row.get(8)?,
             backend_start: row.get(9)?,
             physical_before: u64::try_from(row.get::<i64>(10)?).unwrap_or(0),
-            peak_temp: u64::try_from(row.get::<i64>(11)?).unwrap_or(0),
-            kept_waste: match row.get::<Option<Vec<u8>>>(12)? {
+            physical_after: u64::try_from(row.get::<i64>(11)?).unwrap_or(0),
+            peak_temp: u64::try_from(row.get::<i64>(12)?).unwrap_or(0),
+            kept_waste: match row.get::<Option<Vec<u8>>>(13)? {
                 Some(bytes) => decode_kept_waste(&bytes)?,
                 None => CompactKeptWaste::default(),
             },
-            total_stored: match row.get::<Option<Vec<u8>>>(13)? {
+            total_stored: match row.get::<Option<Vec<u8>>>(14)? {
                 Some(bytes) => stored_at_mark(&bytes)?,
                 None => 0,
             },
-            usename: row.get::<Option<String>>(14)?,
+            usename: row.get::<Option<String>>(15)?,
         }))
     })
 }
@@ -431,7 +432,7 @@ pub(crate) fn persist_mark(
                 "INSERT INTO {schema}.gc_op \
                  (id,generation,phase,scratch_schema,mark_serial,mark_pack_id,mark_digest,mark_totals,mark_stamp,started_ms,dead_canonical,dead_stored,dead_metadata,dead_logical,physical_before,peak_temp,kept_waste,totals_applied,artifact,pid,backend_start,usename,incarnation,op_id,mark_fingerprint,mark_visited) \
                  VALUES (1,$1,'mark',$2,$3,$4,$5,int8send($6)||int8send($7)||int8send($8)||int8send($9),$10,$11,0,0,0,$12,0,0,$13,FALSE,$2,pg_backend_pid(),(SELECT backend_start::text FROM pg_stat_activity WHERE pid=pg_backend_pid()),(SELECT usename::text FROM pg_stat_activity WHERE pid=pg_backend_pid()),$1,$14,$15,$16) \
-                 ON CONFLICT (id) DO UPDATE SET generation=EXCLUDED.generation,phase=EXCLUDED.phase,scratch_schema=EXCLUDED.scratch_schema,mark_serial=EXCLUDED.mark_serial,mark_pack_id=EXCLUDED.mark_pack_id,mark_digest=EXCLUDED.mark_digest,mark_totals=EXCLUDED.mark_totals,mark_stamp=EXCLUDED.mark_stamp,started_ms=EXCLUDED.started_ms,dead_canonical=0,dead_stored=0,dead_metadata=0,dead_logical=EXCLUDED.dead_logical,physical_before=0,peak_temp=0,kept_waste=EXCLUDED.kept_waste,totals_applied=FALSE,artifact=EXCLUDED.artifact,pid=EXCLUDED.pid,backend_start=EXCLUDED.backend_start,usename=EXCLUDED.usename,incarnation=EXCLUDED.incarnation,op_id=EXCLUDED.op_id,mark_fingerprint=EXCLUDED.mark_fingerprint,mark_visited=EXCLUDED.mark_visited"
+                 ON CONFLICT (id) DO UPDATE SET generation=EXCLUDED.generation,phase=EXCLUDED.phase,scratch_schema=EXCLUDED.scratch_schema,mark_serial=EXCLUDED.mark_serial,mark_pack_id=EXCLUDED.mark_pack_id,mark_digest=EXCLUDED.mark_digest,mark_totals=EXCLUDED.mark_totals,mark_stamp=EXCLUDED.mark_stamp,started_ms=EXCLUDED.started_ms,dead_canonical=0,dead_stored=0,dead_metadata=0,dead_logical=EXCLUDED.dead_logical,physical_before=0,physical_after=0,peak_temp=0,kept_waste=EXCLUDED.kept_waste,totals_applied=FALSE,artifact=EXCLUDED.artifact,pid=EXCLUDED.pid,backend_start=EXCLUDED.backend_start,usename=EXCLUDED.usename,incarnation=EXCLUDED.incarnation,op_id=EXCLUDED.op_id,mark_fingerprint=EXCLUDED.mark_fingerprint,mark_visited=EXCLUDED.mark_visited"
             ),
             vec![
                 Param::I64(tuple.generation),
