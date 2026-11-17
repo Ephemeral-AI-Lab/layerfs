@@ -30,9 +30,8 @@ use super::types::CompactPath;
 use super::types::CompactReceipt;
 use super::types::CompactRequest;
 use super::types::CompactResidue;
-use super::verify::immutable_digest;
-use super::verify::immutable_tuple;
 use super::verify::live_tuple;
+use super::verify::sealed_state;
 use super::verify::verify;
 use super::verify::VerifyInput;
 use crate::compact_metrics::CompactPhase;
@@ -342,8 +341,8 @@ impl SqliteHandles {
 
             // §7 step 1.5's fence: the seal must not have moved the generation
             // or the heads the mark recorded.
-            let sealed_tuple = match immutable_tuple(&facts.path) {
-                Ok(tuple) => tuple,
+            let (sealed_tuple, sealed_digest) = match sealed_state(&facts.path) {
+                Ok(state) => state,
                 Err(error) => {
                     abort_before_install(&store, &op_id, true);
                     return Err(error);
@@ -353,18 +352,11 @@ impl SqliteHandles {
                 abort_before_install(&store, &op_id, true);
                 return Err(HistoryError::Conflict("the Store changed after the mark"));
             }
-            match immutable_digest(&facts.path) {
-                Ok(digest) if digest == mark.live_heads_digest() => {}
-                Ok(_) => {
-                    abort_before_install(&store, &op_id, true);
-                    return Err(HistoryError::Conflict(
-                        "the Store heads changed after the mark",
-                    ));
-                }
-                Err(error) => {
-                    abort_before_install(&store, &op_id, true);
-                    return Err(error);
-                }
+            if sealed_digest != mark.live_heads_digest() {
+                abort_before_install(&store, &op_id, true);
+                return Err(HistoryError::Conflict(
+                    "the Store heads changed after the mark",
+                ));
             }
             stop_at(request, CompactFailpoint::AfterSeal, &op, &store)?;
 

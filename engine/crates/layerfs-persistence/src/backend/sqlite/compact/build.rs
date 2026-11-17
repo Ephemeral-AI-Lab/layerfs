@@ -415,8 +415,8 @@ SELECT name,seq FROM src.sqlite_sequence",
 logical=(SELECT COALESCE(SUM(logical),0) FROM main.\"commit\")+\
 (SELECT COALESCE(SUM(logical),0) FROM main.layer),\
 canonical=(SELECT COALESCE(SUM(canonical_length),0) FROM main.object_location),\
-stored=(SELECT COALESCE(SUM(length),0) FROM main.pack),\
-metadata=(SELECT COALESCE(SUM(length),0) FROM main.pack WHERE domain=0) WHERE id=1;\
+(stored,metadata)=(SELECT COALESCE(SUM(length),0),\
+COALESCE(SUM(CASE WHEN domain=0 THEN length ELSE 0 END),0) FROM main.pack) WHERE id=1;\
 UPDATE main.history_meta SET catalog_incarnation={generation} WHERE id=1;"
             ))
             .map_err(db_error)?;

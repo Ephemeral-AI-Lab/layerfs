@@ -164,6 +164,30 @@ pub(crate) fn file_heads_digest(connection: &Connection) -> HistoryResult<[u8; 3
     Ok(*hasher.finalize().as_bytes())
 }
 
+/// The staged file's row counts and recomputed sums, one pass per table.
+const SCAN_SQL: &str = "SELECT \
+(SELECT count(*) FROM pragma_foreign_key_check),\
+o.n,o.canonical,p.n,p.stored,p.metadata,\
+(SELECT count(*) FROM kept_node),\
+(SELECT COALESCE(SUM(logical),0) FROM \"commit\")+\
+(SELECT COALESCE(SUM(logical),0) FROM layer) \
+FROM (SELECT count(*) AS n,COALESCE(SUM(canonical_length),0) AS canonical \
+FROM object_location) o,\
+(SELECT count(*) AS n,COALESCE(SUM(length),0) AS stored,\
+COALESCE(SUM(CASE WHEN domain=0 THEN length ELSE 0 END),0) AS metadata FROM pack) p";
+
+/// What [`SCAN_SQL`] returns, in column order.
+struct Scan {
+    foreign_keys: i64,
+    objects: i64,
+    canonical: i64,
+    packs: i64,
+    stored: i64,
+    metadata: i64,
+    history: i64,
+    logical: i64,
+}
+
 /// The staged Store and the mark a verification reads it against.
 pub(crate) struct VerifyInput<'a> {
     pub(crate) store: &'a Path,
@@ -198,22 +222,35 @@ pub(crate) fn verify(
         (layout, acquisition),
     )
     .map_err(HistoryError::from)?;
-    let count = |sql: &str| -> HistoryResult<u64> {
-        let value: i64 = connection
-            .query_row(sql, params![], |row| row.get(0))
-            .map_err(db_error)?;
+    // One statement and one pass over each table: the row counts the mark
+    // fixes and the sums the totals row must equal come from the same scan.
+    let scanned = connection
+        .query_row(SCAN_SQL, params![], |row| {
+            Ok(Scan {
+                foreign_keys: row.get(0)?,
+                objects: row.get(1)?,
+                canonical: row.get(2)?,
+                packs: row.get(3)?,
+                stored: row.get(4)?,
+                metadata: row.get(5)?,
+                history: row.get(6)?,
+                logical: row.get(7)?,
+            })
+        })
+        .map_err(db_error)?;
+    let counted = |value: i64| -> HistoryResult<u64> {
         u64::try_from(value).map_err(|_| HistoryError::Integrity("verification count"))
     };
-    if count("SELECT count(*) FROM pragma_foreign_key_check")? != 0 {
+    if counted(scanned.foreign_keys)? != 0 {
         return Err(HistoryError::Integrity("staged Store foreign key"));
     }
-    if count("SELECT count(*) FROM object_location")? != mark.objects().len() as u64 {
+    if counted(scanned.objects)? != mark.objects().len() as u64 {
         return Err(HistoryError::Integrity("staged Store object count"));
     }
-    if count("SELECT count(*) FROM pack")? != mark.objects().packs().len() as u64 {
+    if counted(scanned.packs)? != mark.objects().packs().len() as u64 {
         return Err(HistoryError::Integrity("staged Store pack count"));
     }
-    if count("SELECT count(*) FROM kept_node")? != mark.history().len() as u64 {
+    if counted(scanned.history)? != mark.history().len() as u64 {
         return Err(HistoryError::Integrity("staged Store history count"));
     }
     stop_at(request, CompactFailpoint::DuringVerify, op, store)?;
@@ -232,34 +269,11 @@ pub(crate) fn verify(
     {
         return Err(HistoryError::Integrity("staged Store allocator tuple"));
     }
-    let totals = connection
-        .query_row(
-            "SELECT \
-(SELECT logical FROM store_totals WHERE id=1),\
-(SELECT COALESCE(SUM(logical),0) FROM \"commit\")+\
-(SELECT COALESCE(SUM(logical),0) FROM layer),\
-(SELECT canonical FROM store_totals WHERE id=1),\
-(SELECT COALESCE(SUM(canonical_length),0) FROM object_location),\
-(SELECT stored FROM store_totals WHERE id=1),\
-(SELECT COALESCE(SUM(length),0) FROM pack),\
-(SELECT metadata FROM store_totals WHERE id=1),\
-(SELECT COALESCE(SUM(length),0) FROM pack WHERE domain=0)",
-            params![],
-            |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, i64>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, i64>(3)?,
-                    row.get::<_, i64>(4)?,
-                    row.get::<_, i64>(5)?,
-                    row.get::<_, i64>(6)?,
-                    row.get::<_, i64>(7)?,
-                ))
-            },
-        )
-        .map_err(db_error)?;
-    if totals.0 != totals.1 || totals.2 != totals.3 || totals.4 != totals.5 || totals.6 != totals.7
+    // The totals row the tuple read, against the sums the scan recomputed.
+    if checked.logical != scanned.logical
+        || checked.canonical != scanned.canonical
+        || checked.stored != scanned.stored
+        || checked.metadata != scanned.metadata
     {
         return Err(HistoryError::Integrity("staged Store totals"));
     }
@@ -278,16 +292,12 @@ pub(crate) fn verify(
     Ok(())
 }
 
-pub(crate) fn immutable_tuple(path: &Path) -> HistoryResult<MarkTuple> {
+/// The sealed file's tuple and live-heads digest through one `immutable=1`
+/// reader (§7 step 1.5).
+pub(crate) fn sealed_state(path: &Path) -> HistoryResult<(MarkTuple, [u8; 32])> {
     let connection = open_immutable(path)?;
     let tuple = file_tuple(&connection)?;
-    connection.close().map_err(|(_, error)| db_error(error))?;
-    Ok(tuple)
-}
-
-pub(crate) fn immutable_digest(path: &Path) -> HistoryResult<[u8; 32]> {
-    let connection = open_immutable(path)?;
     let digest = file_heads_digest(&connection)?;
     connection.close().map_err(|(_, error)| db_error(error))?;
-    Ok(digest)
+    Ok((tuple, digest))
 }
