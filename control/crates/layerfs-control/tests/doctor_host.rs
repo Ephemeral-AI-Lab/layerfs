@@ -27,6 +27,7 @@ fn request(timeout: Duration) -> DoctorRequest {
         timeout: Some(timeout),
         quick: false,
         write_test: false,
+        build: Default::default(),
     }
 }
 fn run(home: &Path) -> SdkValue {
@@ -266,5 +267,127 @@ fn concurrent_management_record_rewrites_leave_consistency_incomplete() {
         .any(|row| row.get_text("id") == Some("host.records")
             && row.get_text("outcome") == Some("unknown")));
     assert!(!report.get_bool("complete"));
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// The row `id` of a report.
+fn row<'a>(report: &'a SdkValue, id: &str) -> &'a SdkValue {
+    let Some(SdkValue::List(checks)) = report.get("checks") else {
+        panic!("{report:?}")
+    };
+    checks
+        .iter()
+        .find(|c| c.get_text("id") == Some(id))
+        .unwrap_or_else(|| panic!("no {id}: {report:?}"))
+}
+
+#[test]
+fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
+    use layerfs_control::home::Build;
+    use std::os::unix::fs::PermissionsExt;
+    let home = home(3);
+    let ours = "1111111111111111111111111111111111111111";
+    let theirs = "2222222222222222222222222222222222222222";
+    let daemon = home.join("layerfs-daemon");
+    std::fs::write(
+        &daemon,
+        format!("binary layerfs-build-identity:{theirs}:clean more"),
+    )
+    .unwrap();
+    std::fs::set_permissions(&daemon, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let shown = daemon.display().to_string();
+    write_entity(
+        &paths::machine_record(&home, "native"),
+        &SdkValue::map([
+            ("name", t("native")),
+            ("platform", t("native")),
+            ("daemon", t(&shown)),
+        ]),
+    )
+    .unwrap();
+    let with = |commit: &'static str| {
+        let request = DoctorRequest {
+            build: Build {
+                commit: Some(commit),
+                dirty: false,
+            },
+            ..request(Duration::from_secs(5))
+        };
+        doctor_target(&home, &request).unwrap()
+    };
+    // another commit: home.get's DaemonMismatch words, as a warning
+    let other = with(ours);
+    let check = row(&other, "host.native_daemon");
+    assert_eq!(check.get_text("severity"), Some("warning"), "{check:?}");
+    assert_eq!(
+        check.get_text("message"),
+        Some(
+            format!(
+                "the native daemon at {shown} was built from 22222222, this build from 11111111; record this build's daemon with `layerfs machine update native --daemon <path>`"
+            )
+            .as_str()
+        )
+    );
+    let evidence = check.get("evidence").unwrap();
+    assert_eq!(evidence.get_text("source"), Some("recorded"));
+    assert_eq!(evidence.get_text("commit"), Some(theirs));
+    assert_eq!(evidence.get("matches"), Some(&SdkValue::Bool(false)));
+    // the same commit, both clean
+    let same = with(theirs);
+    let check = row(&same, "host.native_daemon");
+    assert_eq!(check.get_text("outcome"), Some("pass"), "{check:?}");
+    assert_eq!(
+        check.get("evidence").unwrap().get("matches"),
+        Some(&SdkValue::Bool(true))
+    );
+    // a build that names no commit cannot compare: it passes, saying so
+    let unknown = run(&home);
+    let check = row(&unknown, "host.native_daemon");
+    assert_eq!(check.get_text("outcome"), Some("pass"), "{check:?}");
+    assert!(check
+        .get_text("message")
+        .unwrap()
+        .contains("cannot be compared"));
+    // the native machine's daemon is reported here alone, not by host.artifacts
+    let artifacts = unknown.get("checks").and_then(|c| match c {
+        SdkValue::List(rows) => Some(rows.clone()),
+        _ => None,
+    });
+    assert!(
+        !artifacts
+            .unwrap()
+            .iter()
+            .any(|r| r.get_text("id") == Some("host.artifacts")
+                && r.get_text("message").is_some_and(|m| m.contains("native"))),
+        "{unknown:?}"
+    );
+    // a recorded daemon that is there and not executable says so
+    std::fs::set_permissions(&daemon, std::fs::Permissions::from_mode(0o644)).unwrap();
+    let plain = run(&home);
+    let check = row(&plain, "host.native_daemon");
+    assert_eq!(check.get_text("severity"), Some("error"), "{check:?}");
+    assert_eq!(
+        check.get_text("message"),
+        Some(
+            format!(
+                "the native daemon at {shown} is not executable; `chmod +x` it or record another: `layerfs machine update native --daemon <path>`"
+            )
+            .as_str()
+        )
+    );
+    // a recorded daemon that is not there is an error, in the Sandbox's words
+    std::fs::remove_file(&daemon).unwrap();
+    let gone = run(&home);
+    let check = row(&gone, "host.native_daemon");
+    assert_eq!(check.get_text("severity"), Some("error"), "{check:?}");
+    assert_eq!(
+        check.get_text("message"),
+        Some(
+            format!(
+                "machine native's recorded daemon {shown} is not there; record another with `layerfs machine update native --daemon <path>`"
+            )
+            .as_str()
+        )
+    );
     std::fs::remove_dir_all(home).unwrap();
 }

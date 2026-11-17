@@ -6,6 +6,7 @@ mod get;
 mod init;
 
 use crate::calls::Calls;
+pub(crate) use get::build;
 
 /// Its calls, in the order help lists them.
 pub(crate) fn calls() -> Calls {

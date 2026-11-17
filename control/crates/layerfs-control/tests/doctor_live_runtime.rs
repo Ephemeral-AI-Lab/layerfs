@@ -62,6 +62,7 @@ fn report(home: &Path, target: DoctorTarget) -> SdkValue {
             timeout: Some(Duration::from_secs(3)),
             quick: false,
             write_test: false,
+            build: Default::default(),
         },
     )
     .unwrap();

@@ -14,7 +14,7 @@ use std::path::Path;
 /// `LAYERFS_BUILD_DIRTY` when it was compiled), compared with the Linux
 /// bundle's and the native daemon's; `commit` is `None` when it was built
 /// without one.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Build<'a> {
     /// The 40-digit commit, if known.
     pub commit: Option<&'a str>,
@@ -233,49 +233,108 @@ fn bundle_value(build: Build<'_>, warnings: &mut Vec<SdkValue>) -> SdkValue {
     ])
 }
 
+/// The daemon the native machine runs, as its Sandbox launch chooses it: the
+/// one its record names (`recorded`), else the one beside this host's
+/// bundle (`default`), with the build it names; read from files only.
+pub struct NativeDaemon {
+    /// Where it is.
+    pub path: std::path::PathBuf,
+    /// `recorded` or `default`.
+    pub source: &'static str,
+    /// Whether it is a file.
+    pub present: bool,
+    /// The commit and dirty flag stamped into it, when it names them.
+    pub stamp: Option<(String, bool)>,
+}
+
+impl NativeDaemon {
+    /// The native machine's daemon in `home` (a record that cannot be read
+    /// leaves the default), or `None` when the user cache is unknown.
+    pub fn of(home: &Path) -> Option<Self> {
+        use layerfs_machine::record::MachineRecord;
+        let recorded = MachineRecord::read(home, "native")
+            .ok()
+            .flatten()
+            .and_then(|r| r.daemon().map(std::path::PathBuf::from));
+        let (path, source) = match recorded {
+            Some(path) => (path, "recorded"),
+            None => (
+                layerfs_machine::bundle_dir(std::env::consts::OS)
+                    .ok()?
+                    .join("layerfs-daemon"),
+                "default",
+            ),
+        };
+        // only a regular file is read (a FIFO or device would block or never end)
+        let present = path.is_file();
+        let stamp = present
+            .then(|| std::fs::read(&path).ok())
+            .flatten()
+            .and_then(|bytes| stamp(&bytes));
+        Some(Self {
+            present,
+            path,
+            source,
+            stamp,
+        })
+    }
+
+    /// Whether it comes from `build` (as [`matches`] says).
+    pub fn matches(&self, build: Build<'_>) -> SdkValue {
+        let (commit, dirty) = match &self.stamp {
+            Some((commit, dirty)) => (Some(commit.as_str()), Some(*dirty)),
+            None => (None, None),
+        };
+        matches(build, commit, dirty)
+    }
+
+    /// `DaemonMissing`'s message.
+    pub fn missing(&self) -> String {
+        format!(
+            "no native daemon at {}; the native machine needs this build's `layerfs-daemon`: `layerfs machine update native --daemon <path>`",
+            self.path.display()
+        )
+    }
+
+    /// `DaemonMismatch`'s message, when its commit differs from `build`'s.
+    pub fn mismatch(&self, build: Build<'_>) -> Option<String> {
+        let theirs = self.stamp.as_ref().map(|(commit, _)| commit.as_str())?;
+        let ours = build.commit?;
+        (self.matches(build) == SdkValue::Bool(false)).then(|| {
+            format!(
+                "the native daemon at {} was built from {}, this build from {}; record this build's daemon with `layerfs machine update native --daemon <path>`",
+                self.path.display(),
+                short(theirs),
+                short(ours)
+            )
+        })
+    }
+}
+
 /// The native machine's daemon (macOS only; null elsewhere): the one its
 /// record names, else the default beside the macOS bundle.
 #[cfg(target_os = "macos")]
 fn daemon_value(home: &Path, build: Build<'_>, warnings: &mut Vec<SdkValue>) -> SdkValue {
-    use layerfs_machine::record::MachineRecord;
-    let recorded = MachineRecord::read(home, "native")
-        .ok()
-        .flatten()
-        .and_then(|r| r.daemon().map(std::path::PathBuf::from));
-    let (path, source) = match recorded {
-        Some(path) => (path, "recorded"),
-        None => match layerfs_machine::bundle_dir("macos") {
-            Ok(dir) => (dir.join("layerfs-daemon"), "default"),
-            Err(_) => return SdkValue::Null,
-        },
+    let Some(daemon) = NativeDaemon::of(home) else {
+        return SdkValue::Null;
     };
-    let stamp = std::fs::read(&path).ok().and_then(|bytes| stamp(&bytes));
-    let present = path.is_file();
-    let (commit, dirty) = match &stamp {
+    if !daemon.present {
+        warnings.push(warning("DaemonMissing", daemon.missing()));
+    }
+    if let Some(message) = daemon.mismatch(build) {
+        warnings.push(warning("DaemonMismatch", message));
+    }
+    let (commit, dirty) = match &daemon.stamp {
         Some((commit, dirty)) => (Some(commit.as_str()), Some(*dirty)),
         None => (None, None),
     };
-    let matched = matches(build, commit, dirty);
-    let shown = path.display().to_string();
-    if !present {
-        warnings.push(warning(
-            "DaemonMissing",
-            format!("no native daemon at {shown}; the native machine needs this build's `layerfs-daemon`: `layerfs machine update native --daemon <path>`"),
-        ));
-    }
-    if let (SdkValue::Bool(false), Some(theirs), Some(ours)) = (&matched, commit, build.commit) {
-        warnings.push(warning(
-            "DaemonMismatch",
-            format!("the native daemon at {shown} was built from {}, this build from {}; record this build's daemon with `layerfs machine update native --daemon <path>`", short(theirs), short(ours)),
-        ));
-    }
     SdkValue::map([
-        ("path", SdkValue::text(shown)),
-        ("source", SdkValue::text(source)),
-        ("present", SdkValue::Bool(present)),
+        ("path", SdkValue::text(daemon.path.display().to_string())),
+        ("source", SdkValue::text(daemon.source)),
+        ("present", SdkValue::Bool(daemon.present)),
         ("commit", optional(commit)),
         ("dirty", dirty.map_or(SdkValue::Null, SdkValue::Bool)),
-        ("matches", matched),
+        ("matches", daemon.matches(build)),
     ])
 }
 

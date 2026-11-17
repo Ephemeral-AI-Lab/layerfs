@@ -137,6 +137,12 @@ pub(super) fn diagnose(home: &Path, name: &str, budget: &Budget, checks: &mut Ch
             "machine.provider",
             "provider runtime is stopped; it was not started",
         ),
+        // a built-in machine that never started has no runtime yet; one that
+        // ran and lost it is an error
+        platform::State::Missing if kind.built_in() && !record.ever_started() => checks.warning(
+            "machine.provider",
+            format!("{name} was never started; Start creates its worker container (`layerfs machine start {name}`)"),
+        ),
         platform::State::Missing => checks.fail(
             "machine.provider",
             "provider holds no runtime with the recorded machine identity",

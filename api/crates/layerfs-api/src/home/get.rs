@@ -23,7 +23,8 @@ pub(crate) const CALL: Call = call(
 const COMMIT: &str = env!("LAYERFS_API_BUILD_COMMIT");
 
 /// The build this library was compiled from, as `home.get` compares the
-/// bundle and the native daemon with.
+/// bundle and the native daemon with, and `doctor`'s `host.native_daemon`
+/// the native daemon.
 pub(crate) fn build() -> Build<'static> {
     Build {
         commit: Some(COMMIT).filter(|commit| !commit.is_empty()),
