@@ -77,14 +77,19 @@ pub(crate) fn sidecar_present(path: &Path) -> Option<PathBuf> {
 /// §7 step 7's fence before the rename: no sidecar, the same `G`, the same
 /// catalog identity and the sealed `(size, mtime, change counter)`.
 pub(crate) fn install_fence(facts: &SealedFacts, tuple: &MarkTuple) -> HistoryResult<()> {
-    // §10: the path must still name the sealed file. A replacement is
-    // `StaleStore` before the rename could install over a different Store.
+    // §7 step 7: the path must still name the sealed file, so the rename
+    // cannot install over a different Store. This is the sealed-state fence,
+    // not the §10 session fence: the writer lane is held across seal and
+    // rename, so a changed identity is a `Conflict` with no writes;
+    // `StaleStore` is for a session that opens or transacts after the install.
     if let Some(sealed) = facts.identity {
         match sealed.names(&facts.path) {
             Ok(true) => {}
-            Ok(false) => return Err(HistoryError::StaleStore),
+            Ok(false) => {
+                return Err(HistoryError::Conflict("the sealed Store identity changed"));
+            }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Err(HistoryError::StaleStore);
+                return Err(HistoryError::Conflict("the sealed Store identity changed"));
             }
             Err(_) => return Err(HistoryError::Integrity("Store identity at install")),
         }

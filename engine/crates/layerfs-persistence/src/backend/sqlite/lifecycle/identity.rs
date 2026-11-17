@@ -6,10 +6,13 @@ use std::path::Path;
 /// The `(device, inode)` pair naming one Store file at one moment (§10).
 ///
 /// A transaction compares the pair recorded at open with the pair the Store
-/// path names now; a replacement or a move is `StaleStore`. Together with the
-/// held writer lane this is the SQLite fence of §10: an admitted writer cannot
-/// be in flight at install, and a connection that bypassed admission is caught
-/// at its next transaction.
+/// path names now; a replacement or a move is `StaleStore`. The install fence
+/// re-applies the same pair to the sealed source (§7 step 7) and answers
+/// `Conflict`, because the writer lane is still held there; only a session
+/// that opens or transacts after the install gets `StaleStore`. Together with
+/// the held writer lane this is the SQLite fence of §10: an admitted writer
+/// cannot be in flight at install, and a connection that bypassed admission is
+/// caught at its next transaction.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct FileIdentity {
     /// The filesystem device holding the file.
