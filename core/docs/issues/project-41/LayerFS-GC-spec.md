@@ -1,11 +1,6 @@
 # LayerFS garbage collection: soft removal and Store compaction
 
 > **Status:** **Frozen for layerfs-project#41 (LayerFS 2.0.0) on 2026-11-15**, approved by the owner on layerfs-project#42. An amendment needs a new #42 decision entry.
->
-> **Baseline.** Commit `ed14ed53b` (LayerFS project main layer
-> `32770a67…`) is the frozen **2.0 GC implementation baseline**. Implementation
-> starts here; residual review items are tracked as implementation/acceptance
-> gaps on layerfs-project#41, not as contract changes.
 
 > **Authority.** This is the only GC design document in the tree. It replaces the
 > six-file set merged by #658 (removed by #671; last text in the #677 branch).
@@ -685,81 +680,106 @@ Runs as one operation on the Store's machine (S6).
    `.compact-visited`, no residue. On `rebuild`, keep the scratch and reuse
    `visited` in step 4; step 2 creates the new file only on this path.
 2. If the path is `rebuild`, create `<store>.compact` beside the Store with a
-   raw connection: attach the sealed Store `immutable=1` as `src`, give the new
-   file the source's `page_size`, `auto_vacuum`, `user_version` and
-   `application_id`, and copy the schema objects verbatim from
-   `src.sqlite_master` (`type, name, sql`, tables first) so the recorded
-   `schema_source`/`schema_definition` stay byte-identical. The bulk load runs
-   with `journal_mode=OFF`, `synchronous=OFF`, `foreign_keys=OFF`,
-   `temp_store=MEMORY` and `cache_size=-262144` (256 MiB). The new file has the
-   source's `(layout, acquisition)` because its schema is the source's:
-   `Monolithic` has `pack.body` and no `pack_unit`; `GroupRows` has
-   `pack_unit`; `GroupRowsIndexed` also has its index; the acquisition tables
-   exist only for a Store that recorded them. `schema_source`/`schema_definition`
-   must be those of that pair, or step 6's `validate` refuses. The session
-   defaults are a 2 MiB cache and no mmap (`session/profile.rs:86-87`).
+   raw connection:
+   `page_size=4096`, the source's `auto_vacuum`, `schema::scripts`,
+   `application_id`, `user_version`. The new file uses the source's
+   `(layout, acquisition)` derived from its `user_version`: `Monolithic` has
+   `pack.body` and no `pack_unit`; `GroupRows` has `pack_unit`;
+   `GroupRowsIndexed` also has its index. `schema_source`/`schema_definition`
+   must be those of that pair, or step 6's `validate` refuses. Give this connection a
+   large `cache_size`, and the attached old file a large `mmap_size`; the
+   session defaults are a 2 MiB cache and no mmap (`session/profile.rs:86-87`).
 3. The old file is already attached `immutable=1` in step 1.5; it stays
    byte-identical.
-4. One `journal_mode=OFF` transaction copies the retained rows in foreign-key
-   order; `foreign_keys=OFF` and step 6's `foreign_key_check` are the guard
-   (D1). The T7.2 mark already resolved every logical reference and delta base,
-   so `visited` is the whole retained object set and `live_pack` the whole
-   retained pack set: the build copies exactly those, with no second payload
-   sweep.
-   - `pack` rows whose `pack_id` is in `live_pack`, whole (pack-as-unit, body
-     and all), then `pack_unit` for the same packs; a `Monolithic` Store has no
-     `pack_unit`.
-   - `object_location` whose `object_id` is in `visited`.
-   - `content_signature` whose object is in `visited`; `file_digest` rows whose
-     root is in `visited`; all `inode_value_block` rows.
-   - History and lineage copied by `kept_node`: `layer_stack`, `layer`,
-     `"commit"`, `branch`, `layer_lineage`, `commit_lineage`, `absorbed` by
-     `run`, and `reach` by its kind-mapped key; the marker tables
-     (`branch_retired`, `layer_stack_retired`, `path_removed`) and
-     `project_epoch` for the rows the closure keeps.
-   - `kept_node` itself (the settle clears it after the install),
-     `scope_allocator` and `store_policy` verbatim (allocators and salt,
-     `INSERT ... SELECT *`), and this run's `gc_intent` row only.
-   - `sqlite_sequence` when the source has it (the acquisition operation
-     counter never falls, §4.1); transient `init_*`/acquisition working rows,
-     `merge_operation`, `merge_record`, `gc_op`, `gc_dead` and the dead packs
+4. `PRAGMA foreign_keys=ON` outside the transaction (inside it the pragma
+   is a no-op), then one rollback-journal transaction, in this order:
+   - Metadata walk (§6.1–§6.2 logical part) into `visited`.
+   - Payload sweep: a worklist of packs to copy, run to empty. Start with the
+     packs the mark marked live; copy each pack once. For every object
+     inserted into `visited` (a base, its references and their bases), run the
+     same `admit` fixpoint, insert each newly discovered object if absent and
+     enqueue **every** newly visited object's locating pack (passed or not);
+     do not follow records whose `object_id` is not in `visited`. A pack
+     reached only by a base is copied whole; `pack_id` is preserved and new `unit_id`s are
+     assigned; the dead set and `deadBytesRefined` are recomputed from the
+     final copied set. A base is not guaranteed to sit in a lower `pack_id`
+     (first-wins locators can move forward,
+     `core/crates/layerfs-storage/src/store/source.rs:9-13`), so the worklist
+     is an indexed table, not an exception path.
+   - `pack_unit` for the copied packs, as a complete unit set
+     (`engine/crates/layerfs-persistence/src/backend/sqlite/objects/units_read.rs:55-75`).
+     A `Monolithic` Store copies `pack` with its body and skips `pack_unit`
+     (the Monolithic decoder is used); `GroupRows` copies both;
+     `GroupRowsIndexed` copies both and the schema creates its unit index
+     (the index is not "copied"). `sqlite_sequence` is copied only when the
+     source has it; `store_totals` is UPDATEd as a whole row (keeps `init_*`)
+     and `store_policy` is `INSERT ... SELECT * FROM old.store_policy`
+     (allocators and salt verbatim); transient `init_*`/acquisition working
+     rows
      are **not** copied, and a live Init op is admitted as `Busy`.
-   - `binding_hint_block` stays empty; `history_meta` keeps
-     `next_history_serial` and records `catalog_incarnation = G + 1`.
-   - Assert the source's `store_totals.logical` equals
-     `SUM(commit.logical) + SUM(layer.logical)` before the copy, copy
-     `store_totals` as a whole row (keeps `init_*`), then one UPDATE sets
-     `logical` to the triggers' value and `canonical`/`stored`/`metadata` to
-     the new sums.
-   - After the bulk load, create the secondary indexes and the
-     immutability/logical triggers (the load then fires no trigger and writes
-     no index page), and check the copied `schema_definition` against the file's
-     own definition.
-5. Switch the new file to WAL on the same raw connection after detaching
-   `src` and `scratch` (the mode switch writes no rollback journal under
-   `journal_mode=OFF`), set the source's `synchronous`, then checkpoint with
-   `wal_checkpoint(TRUNCATE) == 0` and close it. On macOS call
+   - `object_location` by an ordered join with `visited`.
+   - `content_signature` entries that name a copied object; `file_digest`
+     rows whose root is in `visited`; all `inode_value_block` rows; history,
+     lineage (`layer_lineage`, `commit_lineage`) and catalog tables copied by
+     `kept_node`; `absorbed` by `run`; `reach` by its kind-mapped key; with a
+     deleted project's rows left out by the `kept_node`/retired predicate
+     (`removal_*` runs only on the writable new Store in Phase C);
+     `sqlite_sequence`, `store_policy`, `scope_allocator`, the marker tables
+     (`branch_retired`, `layer_stack_retired`, `path_removed`) and
+     `project_epoch` copied for rows the closure keeps;
+     `commit.history_serial`/`layer.history_serial` copied with their rows;
+     `history_meta.next_history_serial` copied unchanged; `binding_hint_block`
+     left empty; `history_meta` with `catalog_incarnation = G + 1`.
+   - `store_totals`: after **all** history copies, one UPDATE sets `logical`
+     to the triggers' value (or `old - dead_logical`), `canonical`/`stored`/
+     `metadata` to the new sums, and `init_*` to the old row; assert
+     `old.logical == SUM(all history.logical)` before the copy. A copy before
+     the history insert would make the AFTER INSERT triggers add the
+     collected rows again (`old + collected`).
+5. Switch the new file to WAL with a raw connection (`temp_store=MEMORY`,
+   `busy_timeout=0`, the source's `synchronous`); on macOS call
    `disable_persistent_wal` before the checkpoint
-   (`snapshot.rs:116`, `seal.rs:31-32`). No Session is opened.
+   (`snapshot.rs:116`, `seal.rs:31-32`); checkpoint with
+   `wal_checkpoint(TRUNCATE) == 0`; close it. No Session is opened.
 6. Verify with an `immutable=1` open (`READ_ONLY|URI`,
    `file:...?immutable=1`, percent-encoded path bytes so `?`/`#`/`%` do not
    misdirect the URI, no profile apply/check, no lane) and run `validate`
    there before the rename:
    `schema::check`,
-   `foreign_key_check`, a cheap `quick_check` (a page scan with no payload
-   readback), row counts against the mark, both `live_heads_digest`
+   `foreign_key_check`, row counts against the mark, both `live_heads_digest`
    values and the catalog allocator/totals checks. No sha256 of either file.
-   Close the reader; the full `integrity_check` and the doctor stay separate
+   Close the reader; `quick_check` and the full doctor stay separate
    commands.
+7. Install: stat both paths for `-wal`/`-shm`/`-journal` and the
+   super-journal (`-mj*`); any sidecar is `Conflict` with no writes. Re-read
+   `G` through a fresh immutable handle and re-stat last; check
+   `(catalog_id, incarnation, dev, ino)` and the sealed `(size, mtime,
+   db-header change counter)`; a change is `Conflict`. `chmod 0600`;
+   `sync_all`; `rename`; fsync the directory; release the guard. A
+   transaction that began before install is caught at its next transaction
+   by the `(dev, ino)` fence, not at commit (documented limit).
+8. A definite failure before the rename (disk full, write refused, sidecar,
+   checkpoint, validate, digest/count/FK, chmod/sync) aborts or rolls back and
+   deletes the artifact set `<store>.compact{,-journal,-wal,-shm,-visited,
+   -visited-journal,-mj*}`; the old Store is unchanged apart from step 1's checkpoint. A
+   failure of the rename/fsync itself is installed-but-uncertain: keep the new
+   Store, settle the op `unknown` and report it; never delete the artifact as
+   if nothing happened. `SQLITE_FULL`/`BackendError::Capacity` is
+   `HistoryError::Capacity`, or the real `Refused { status: "Capacity" }`
+   path; `ENOSPC`/`EDQUOT`/`EFBIG` (`StorageFull`/`QuotaExceeded`/
+   `FileTooLarge`) from chmod/sync/rename also map to `Capacity`, and
+   `SQLITE_FULL`/`SQLITE_TOOBIG`/`SQLITE_NOMEM` are Capacity on SQLite; no
+   `_` arm may turn it into another `Refused` status. `CapacityExceeded` is a
+   codec/canonical bound and is documented as `InvalidInput`/`ProviderFailure`,
+   not disk exhaustion.
 
 The existing transfer pipeline is not reused for this: its `Install` refuses
 an existing Store file and its `Retire` deletes one
 (`control/crates/layerfs-store/src/sqlite/transfer/steps.rs:262-288`).
 
 Cost: read about the live bytes plus the metadata, write about the live
-bytes; peak disk = old Store + the new Store + the visited scratch file. The
-fresh path stages no whole-Store copy, writes no prune journal and opens no
-rewrite temp database.
+bytes; peak disk = old Store + the new Store + the rollback journal/WAL + the
+visited scratch file.
 
 ## 8. PostgreSQL rebuild
 
@@ -924,9 +944,6 @@ reported as `markBytes`; the Phase A table copy itself moves no pack bytes.
   `store.compact` (its artifact and high-water are in `gc_op`); only a live
   owner blocks it. A machine that cannot be reached reports `unknown`, never
   clean.
-- A fresh target is built with `journal_mode=OFF`: a crash leaves a partial
-  `<store>.compact` with no rollback journal, and the settle **deletes** it as
-  the recorded artifact; it never tries to recover it.
 - A file or schema at the staged name that no record names is refused with
   the existing `Exists` and is not deleted.
 - Install is the only irreversible step: the Store is wholly old or wholly new.
@@ -1033,7 +1050,7 @@ returns:
 | `backendReusable` | SQLite: rebuild = the new artifact's `freelist_count * page_size` before the rename (normally 0), none = the live Store's; PostgreSQL: 0 (no in-place reclaim) |
 | `physicalShrink` | SQLite: old file size minus new; PostgreSQL: `pg_total_relation_size` delta |
 | `keptWaste` | object: `{deadInRetainedPacksBytes, deltaBases: {bytes, references: [id]}, inodeBlocksBytes}` |
-| `peakTempBytes` | SQLite: the new Store + the `visited` scratch file (the fresh path stages no whole-Store copy and writes no rollback journal); PostgreSQL: the scratch schema + WAL |
+| `peakTempBytes` | SQLite: the new Store + rollback journal/WAL + the `visited` scratch file and its journals/super-journal; PostgreSQL: the scratch schema + WAL |
 | `residue` | object `{bytes, artifacts}`; a nonzero residue is explained |
 
 The result is `{kind: "Compacted", ...}`. `keptWaste` is

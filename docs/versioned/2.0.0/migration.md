@@ -65,9 +65,10 @@ pip install "$OUT"/layerfs-2.0.0-*.whl
 cargo +1.85.1 build --release --locked -p layerfs-cli    # target/release/layerfs
 ```
 
-The default addon, wheel and command have no PostgreSQL and no TLS; a call
-that needs them is refused `Unsupported`. Each artifact needs the glibc of the
-host that built it (2.39 on the host used). See
+PostgreSQL is built into every artifact, so no build flag selects it; only TLS
+is optional (`--features tls`), and a call that needs an `https://` remote is
+refused `Unsupported` without it. Each artifact needs the glibc of the host
+that built it (2.39 on the host used). See
 [artifact-qualification-2.0.0.md](../../general/artifact-qualification-2.0.0.md).
 
 ## 2. Constructors, settings and entry points

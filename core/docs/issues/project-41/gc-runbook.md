@@ -119,12 +119,14 @@ installed → it records the outcome. A dead owner's op is adopted; only a live 
 - 1.0 Stores convert offline (§4.1); no online migration.
 - **Four SQLite deviations from the frozen text remain** (D1, D3, D4, D5),
   plus the settled D2 build decision; all are recorded in
-  [`gc-42-decisions.md`](gc-42-decisions.md): the fresh bulk load runs with
-  `foreign_keys=OFF`; the rebuild is the fresh-copy build (no whole-Store copy,
-  no `VACUUM`, peak old + new, §8 — it now follows S5); `none` writes only a
-  transient visited scratch and rolls its mark transaction back; the settle
-  records a `cleanup` phase; `store.compact` is local-only, and a Store pushed
-  to another machine is compacted there or pushed back.
+  [`gc-42-decisions.md`](gc-42-decisions.md) and the frozen spec text is
+  unchanged: the fresh bulk load runs with `foreign_keys=OFF`; the rebuild is
+  the fresh-copy build (no whole-Store copy, no `VACUUM`, peak old + new +
+  visited, §8 — it follows S5's fresh-Store sentence but deviates from §7 step
+  4's payload sweep and rollback journal, D2); `none` writes only a transient
+  visited scratch and rolls its mark transaction back; the settle records a
+  `cleanup` phase; `store.compact` is local-only, and a Store pushed to another
+  machine is compacted there or pushed back.
 
 ## 6. First 10 minutes
 
@@ -209,7 +211,9 @@ Store 1,111,203,840 -> 1,111,310,336 B on first open.
 The rebuild writes a fresh Store with only the retained rows
 (S5; decision D2 in [`gc-42-decisions.md`](gc-42-decisions.md)). Peak temp is
 the new file plus the visited scratch; there is no whole-Store staged copy, no
-rollback journal and no `VACUUM` rewrite. Peak disk is therefore
+rollback journal and no `VACUUM` rewrite (the frozen §7 cost sentence includes
+a rollback journal/WAL; D2 records why the fresh path has none). Peak disk is
+therefore
 
     old Store + (retained bytes + visited scratch) + margin
 
@@ -250,14 +254,17 @@ fixture. The gated 50 GB owner-final arm has not been re-run on it.
 ## 9. Implementation notes: deviations and the D2 build decision (D1–D5)
 
 Four frozen sentences still differ (D1, D3, D4, D5); D2 is the settled build
-decision (the fresh-copy rebuild, which now follows the frozen sentence). All
-five are recorded in [`gc-42-decisions.md`](gc-42-decisions.md); none changes
-the artifact set, the op record or the next-call adoption.
+decision, whose fresh-copy rebuild follows S5's fresh-Store sentence but
+deviates from §7 step 4's payload sweep and rollback journal and from §11's
+peak-temp line. All five are recorded in
+[`gc-42-decisions.md`](gc-42-decisions.md), which is the only place they are
+written: the frozen spec file is unchanged. None changes the artifact set, the
+op record or the next-call adoption.
 
 | Entry | Frozen sentence | Implemented |
 |---|---|---|
-| D1 (§7 step 4) | `PRAGMA foreign_keys=ON` outside the transaction | the fresh bulk load runs `foreign_keys=OFF`; the step 6 `foreign_key_check` on the `immutable=1` open is the guard |
-| D2 (S5/§3/§7) | "copies only retained rows into a fresh Store"; peak old + new + visited | fresh-copy build (pack-as-unit, indexes and triggers after the load); peak old + new (§8) — **now matches the frozen sentence** |
+| D1 (§7 step 4) | `PRAGMA foreign_keys=ON` outside the transaction (frozen text, unchanged) | the fresh bulk load runs `foreign_keys=OFF`; the step 6 `foreign_key_check` on the `immutable=1` open is the guard |
+| D2 (S5/§3/§7/§11) | "copies only retained rows into a fresh Store"; §7 step 4's payload sweep and rollback-journal transaction; peak old + new + journal/WAL + visited | fresh-copy build (pack-as-unit, no payload sweep, no rollback journal; indexes and triggers after the load); peak old + new + visited (§8) — a recorded deviation from §7/§11, not an edit to the frozen text |
 | D3 (§3/§7 step 1.5) | `none` writes nothing; delete the scratch and stop | `none` spills the closure to `<store>.compact-visited`, counts it in `peakTempBytes` and deletes it before replying; the mark and its intent are one transaction that is rolled back, so no `kept_node`/`gc_intent` row and no WAL frame survives; no residue survives |
 | D4 (§11) | SQLite phases `mark`, `build`, `verify`, `install` | the settle also writes `cleanup` (§1) |
 | D5 (S6/§7) | "A SQLite Store compacts on the machine where it lives"; §7 "Runs as one operation on the Store's machine (S6)" | `store.compact` is local-only: its `Worker` branch is refused `Unsupported` before the Store is opened; a pushed sqlite Store is compacted after `store.push` back to `native` |

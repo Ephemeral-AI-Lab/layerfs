@@ -43,8 +43,9 @@
 #   LAYERFS_TEST_CARGO_HOME    default $LAYERFS_TEST_TMPDIR/cargo-home
 #   LAYERFS_TEST_CARGO_TARGET_DIR
 #                              default $LAYERFS_TEST_TMPDIR/target
-#   LAYERFS_TEST_POSTGRES_URL  libpq connection string; enables the postgresql
-#                              feature on every suite and the PostgreSQL cases.
+#   LAYERFS_TEST_POSTGRES_URL  libpq connection string; enables the PostgreSQL
+#                              cases. The engine is always built beside SQLite
+#                              (#726): no build feature is involved.
 #                              Full-mode diagnostics need amcheck created in
 #                              that database (see testing.md); the harness
 #                              warns when psql can see that it is missing.

@@ -291,8 +291,8 @@ The workflow's §5 keeps the cache-credit failure these rules came from.
   `nightly.yml` the slow and FUSE mount tests, `format.yml` the Ruff check;
   [tools/ci_tests.py](tools/ci_tests.py) picks the lanes. CI runs for
   `main`: pushes to it and pull requests into it (owner, 2026-11-16), plus the
-  report-only `store-ext4` Store lane for pull requests into any base,
-  including `layerfs_v2_0_0`, the 2.0 release base (owner, 2026-11-16);
+  report-only `store-ext4` Store lane for pull requests into `main` or
+  `layerfs_v2_0_0`, the 2.0 release base (owner, 2026-11-16);
   `layerfs_v2_0_0` and every other branch run no other lane, stacked pull
   requests included. Nothing runs before a push and nothing is required: do not
   wait for CI or treat a green run as verification. Verify the changed scope with

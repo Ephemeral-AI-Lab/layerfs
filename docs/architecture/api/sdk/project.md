@@ -85,7 +85,7 @@ Branch's base) and `root` (that Branch's effective root)
 | `Exists` | the project's record, entry or LayerStack name exists | `project/family.rs`, [`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs) |
 | `Busy` | also when another add's working rows remain in the Store | `identity.rs` `add_failure` |
 | `Capacity` | worker route: the machine's free disk is below the copy plus headroom | `project/send.rs` `room` |
-| `Unsupported` | the kernel guard refuses the Store's directory (non-private mode/owner/type or unsupported filesystem); PostgreSQL in a build without `postgresql` | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
+| `Unsupported` | the kernel guard refuses the Store's directory (non-private mode/owner/type or unsupported filesystem) | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | `NoStore` | no Store file at the Store's path | `identity.rs` |
 | `Failed` | deadline passed, read error or any other engine failure, **including an Init whose outcome is unknown**; the entry this call made is kept | `identity.rs` `add_failure` |
 | `Unknown` | worker route: a stage or the `project.init` answer was lost; the home gains no record, and the worker removes its staged copy when its Init ends | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |

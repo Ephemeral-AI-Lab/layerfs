@@ -44,9 +44,11 @@ pub struct CompactReport {
     /// The same bytes after the payload sweep (§7 step 4). No second sweep
     /// runs, so this equals `dead_bytes_bound` on every path (#42 A10).
     pub dead_bytes_refined: u64,
-    /// The collected history rows' `logical` bytes.
+    /// The canonical bytes of the collected objects, deduplicated by object
+    /// id: not the history rows' `logical` sum (#42 A8).
     pub logical_discarded: u64,
-    /// Free pages × page size: the build's artifact, or the live `none` Store.
+    /// The source Store's pre-mark free pages × page size on a rebuild; the
+    /// live Store's count on `none` (#42 A8).
     pub backend_reusable: u64,
     /// Old file size minus the new one.
     pub physical_shrink: u64,
