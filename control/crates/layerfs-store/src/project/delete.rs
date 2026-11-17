@@ -4,7 +4,7 @@
 //! The marker is the commit point. The caller first saves the legacy
 //! own-project identity, then writes the durable intent
 //! `store/<store>/delete/<project>.json` with
-//! `{store, project, stack_id, deleted_ms, attempt_ms, state}`, then marks the
+//! `{store, project, stack_id, deleted_ms, attempt_ms, state, op_id?}`, then marks the
 //! Stack, then removes only its own home entry and unlinks the intent. A
 //! retry reads the intent by the recorded Stack id, reuses its `deleted_ms`
 //! and finishes the entry: `Marked` means this attempt marked a live Stack,

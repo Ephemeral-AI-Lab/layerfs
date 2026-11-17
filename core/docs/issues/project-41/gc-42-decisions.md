@@ -10,7 +10,7 @@
 **Why.** The #41 implementation and the #711 fix-branch integration need a
 different reading than the frozen sentences in sixteen places: eleven contract
 amendments (A1–A11, mostly refusal detail shapes, one additive sidecar field,
-six `gc_op` columns, the snake_case rendering rule, the one-valued
+seven `gc_op` columns, the snake_case rendering rule, the one-valued
 `deadBytesRefined` and the §10 in-process `Busy` mapping) and five SQLite
 implementation deviations (D1–D5) that the
 frozen text either forbids or does not describe. `gc-spec-gaps.md` (one of the implementation notes moved out of
@@ -20,7 +20,7 @@ complete list, and it changes no product behaviour.
 
 The seven A entries before A8 were written directly into the frozen file
 while #41 was implemented and were backed out before review (commit
-`122a168502`); A8–A11 are added by this note for the same sign-off.
+`122a168502`); A8–A12 are added by this note for the same sign-off.
 The five D entries are present in the shipped SQLite code and are recorded here
 so the contract and the implementation do not drift apart.
 
@@ -31,7 +31,7 @@ frozen whole-lane exclusion; its measurements live under
 
 ---
 
-## A. Contract amendments (11)
+## A. Contract amendments (11) and one reading
 
 ### A1. §4.1 `project.delete` sidecar gains `op_id` (additive)
 
@@ -252,7 +252,7 @@ frozen whole-lane exclusion; its measurements live under
 - **Proposed:** that refusal is `Busy`, naming the Store as `entity` with
   `phase` and `op` null: no operation holds the Store, a call does. The
   cache's own `InUse` is reported by the non-GC calls that close a Store
-  (`store.move`, `store.remove`, `store.disconnect`).
+  (`store.push`, `store.remove`, `store.disconnect`).
 - **Reason:** `store.compact` is a GC call, so its refusals speak the GC
   vocabulary; reporting the open cache's `InUse` from the compaction would put
   a non-GC code on the call that §5's `Busy` and §10's code table govern.
@@ -263,6 +263,28 @@ frozen whole-lane exclusion; its measurements live under
   in `docs/architecture/api/sdk/store.md`, and the frozen spec file, which
   stays byte-identical until sign-off: this entry is the amendment #42
   records, like A8–A10.
+
+### A12. §4.1/§5.1 reading: a rebuild carries the run's own `gc_intent` row
+
+- **Frozen:** §4.1 says `gc_intent` "is the shared Store-side admission table
+  (created empty, never copied)"; §5.1 says compaction "writes its `gc_intent`
+  operation row before its first checkpoint; the row lives in `<store>.compact`
+  during build/verify, moves to the live Store after install, and is cleared
+  at settle."
+- **Reading:** this is a reading, not a twelfth contract amendment; it changes
+  no contract text and the eleven amendments A1–A11 stand. The two sentences
+  agree when "never copied" means no admission row of the sealed Store is
+  carried across a rebuild: the fresh file starts with `gc_intent` empty. The
+  run's own row is not a copy of an existing intent — the compaction writes
+  it, and §5.1 requires it to live in the build artifact. So the rebuild
+  stages the table empty and then inserts exactly the row whose `op_id` is
+  this run's.
+- **Where:** `engine/crates/layerfs-persistence/src/backend/sqlite/compact/build.rs`
+  (`copy_rule` returns `Copy::Empty` for `gc_intent`, and the `copy_rows`
+  special case inserts only `op_id=x'<this run>'`; the `copy_rule` doc comment
+  says it "keeps only this run's admission intent").
+- **No contract change:** neither frozen sentence is edited; the spec stays
+  byte-identical until sign-off, like A8–A11.
 
 ---
 
@@ -514,7 +536,10 @@ rotational (HDD) backing — not NVMe** (88 vCPU across two Xeon E5-2699C v4,
   (a transcribed summary of the T-G61 run: the raw per-run samples were not
   retained); the fresh-copy re-measurement on the same fixture is
   `.../sqlite_compact_capacity_measure.json` (`rebuild` median 118.439584 s,
-  `none` 88.439 s).
+  `none` 88.439 s). That receipt predates #49 round 4: its build path has no
+  256 MiB `src.mmap_size` source window and its verify still runs the
+  `quick_check` page scan, so it is the pre-head8 build/verify path, not a
+  head8 re-measurement.
 - **50 GB is the owner-final arm** (#42 item 44): fixtures 20–50 GB, run once
   at the final identity, one run per path (49.999 GB, 384,850 packs, 8.876%
   dead; `none` 1,633.585 s, `rebuild` 5,131.835 s); receipt
@@ -535,12 +560,17 @@ rotational (HDD) backing — not NVMe** (88 vCPU across two Xeon E5-2699C v4,
   `none` 82.683 s, three runs per arm, warm overlayfs cache); its receipt is
   `engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`.
   It is a different generated fixture from the `capacity_measure` 9.987 GB run,
-  so the two 10 GB numbers are not interchangeable.
+  so the two 10 GB numbers are not interchangeable. That receipt too predates
+  #49 round 4's source mmap window and `quick_check` removal, so its build and
+  verify phases are the pre-head8 path, not a head8 re-measurement; the ~4 s
+  `quick_check` cost is derived, not measured. Treat both 10 GB receipts as
+  pre-head8 until a head8 re-run replaces them.
 
 ## Request
 
-Please record A1–A11 as #42 items (or amend the frozen text) and accept or
-reject D1–D5 individually when the owner signs off, and accept G7 as the
-record of a deferred design (it changes no contract text). Until then the
-implementation follows the frozen text except where A8–A11 and D1–D5 are named,
-and the spec file in this branch is byte-identical to the frozen version.
+Please record A1–A11 as #42 items (or amend the frozen text) and note the A12
+reading (it changes no contract text), and accept or reject D1–D5 individually
+when the owner signs off, and accept G7 as the record of a deferred design (it
+changes no contract text). Until then the implementation follows the frozen
+text except where A8–A12 and D1–D5 are named, and the spec file in this branch
+is byte-identical to the frozen version.
