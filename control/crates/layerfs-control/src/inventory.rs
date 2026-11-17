@@ -193,8 +193,10 @@ pub fn can_change_machine(home: &Path, name: &str) -> Result<()> {
 
 /// `project.delete`: refused `Busy` while a Sandbox of `project`
 /// (`<store>/<project>`) is recorded, so a live Sandbox cannot outlive its
-/// project's Store rows. `detail.related` lists them as `{kind, name}`; an
-/// unreachable Sandbox is still a live user and keeps holding.
+/// project's Store rows. The `detail` is spec §10's `{entity: {kind:
+/// "project", name}, phase: null, op: null}`, and `related` lists the
+/// Sandboxes as `{kind, name}`; an unreachable Sandbox is still a live user
+/// and keeps holding.
 pub fn can_remove_project(home: &Path, project: &str) -> Result<()> {
     let sandboxes = sandboxes_of_project(home, project)?;
     if sandboxes.is_empty() {
@@ -205,7 +207,18 @@ pub fn can_remove_project(home: &Path, project: &str) -> Result<()> {
         many => format!("Sandboxes {} of {project} are running", many.join(", ")),
     };
     let mut refusal = refused("Busy", message);
-    refusal.detail = SdkValue::map([("related", SdkValue::List(related("sandbox", &sandboxes)))]);
+    refusal.detail = SdkValue::map([
+        (
+            "entity",
+            SdkValue::map([
+                ("kind", SdkValue::text("project")),
+                ("name", SdkValue::text(project)),
+            ]),
+        ),
+        ("phase", SdkValue::Null),
+        ("op", SdkValue::Null),
+        ("related", SdkValue::List(related("sandbox", &sandboxes))),
+    ]);
     Err(refusal)
 }
 

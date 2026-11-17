@@ -91,7 +91,7 @@ each old name):
 - **Calls.** 1.1.0's `fs` family is now `file`. The old Store calls, the
   start/get job pairs, the 14 `@layerfs/backend` operator and diagnostic
   calls (including background processes) and the trace subscription are
-  removed (O9, O22, O25, O26). `project.remove`, `workspace.status` and
+  removed (O9, O22, O25, O26). `project.delete`, `workspace.status` and
   `machine.update` are added (O24, O14, O11).
 - **Results.** Result keys are snake_case in every front end (`exit_code`,
   not `exitCode`).

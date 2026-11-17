@@ -181,7 +181,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   <m>`") and nothing is started or resent. A call whose answer is lost
   after it was sent is `Unknown`; it is not resent.
 - The calls that need the machine's worker: Store calls on a sqlite Store
-  there, `project remove`, `sandbox create`, the Workspace calls that change
+  there, `project delete`, `sandbox create`, the Workspace calls that change
   something, `store push`, `store pull`, `store remove` and `backup create`.
   `store push`, `store pull` and `store remove` check their machines before
   they mark the Store.
@@ -503,8 +503,8 @@ layerfs project init pg-main/load ./load
     `container inspect` (192.168.64.1 by default). The server must listen
     on that bridge (`0.0.0.0`, as Docker Desktop publishes a port), not on
     127.0.0.1 alone, and admit connections from it.
-- Not built: `project remove` from a PostgreSQL Store, and backups of
-  PostgreSQL Stores (back it up with PostgreSQL's own tools).
+- Not built: backups of PostgreSQL Stores (back it up with PostgreSQL's own
+  tools).
 - The step 10a and 10b commits record `store connect` and Init into a
   throwaway `postgres:17` container on macOS. Not run for this manual.
 

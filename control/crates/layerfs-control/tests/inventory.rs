@@ -123,6 +123,12 @@ fn relationships_are_read_from_the_records() {
     let refusal = inventory::can_remove_project(&home, "docs/web").unwrap_err();
     assert_eq!(refusal.code, "Busy");
     assert_eq!(refusal.message, "Sandbox b of docs/web is running");
+    // #536 §10: the detail names the entity and phase/op, not only `related`
+    let entity = refusal.detail.get("entity").expect("entity");
+    assert_eq!(entity.get_text("kind"), Some("project"));
+    assert_eq!(entity.get_text("name"), Some("docs/web"));
+    assert_eq!(refusal.detail.get("phase"), Some(&SdkValue::Null));
+    assert_eq!(refusal.detail.get("op"), Some(&SdkValue::Null));
     assert_eq!(
         refusal.detail.get("related"),
         Some(&SdkValue::List(vec![SdkValue::map([
