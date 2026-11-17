@@ -4,7 +4,7 @@ use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use std::{
     io::{self, Read},
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
+    process::{Command, Stdio},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -50,24 +50,36 @@ pub(super) enum Ran {
     Busy(String),
     Failed(String),
     /// Timeout or observation failure after spawn: effects are not known.
-    Interrupted(String),
+    /// The flag says whether the killed helper's exit was then observed: a
+    /// helper still running may still be inside the kernel's unmount.
+    Interrupted(String, bool),
+}
+impl Ran {
+    /// Whether the helper is known to have ended, so no unmount of its own
+    /// is still in progress. On Linux a plain `umount` takes the mount out of
+    /// the table before the superblock shuts down (that shutdown flushes
+    /// through the export), so only an ended helper lets the table witness
+    /// the mount's end.
+    pub fn ended(&self) -> bool {
+        !matches!(self, Ran::Interrupted(_, false))
+    }
 }
 
 /// Retained children are never waited on synchronously or signalled twice.
 /// The retained queue's one background thread reaps their exits and records
 /// their status; its bound is that thread, not time.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(super) struct Helpers {
     retained: Retained,
-    pub helper_wait: Duration,
-    pub reap_wait: Duration,
+    helper_wait: Duration,
+    reap_wait: Duration,
 }
 impl Helpers {
     pub fn new(helper_wait: Duration, reap_wait: Duration) -> Arc<Self> {
         Arc::new(Self {
+            retained: Retained::default(),
             helper_wait,
             reap_wait,
-            ..Self::default()
         })
     }
     pub fn reap(&self) -> bool {
@@ -75,9 +87,6 @@ impl Helpers {
     }
     pub fn reaped(&self) -> Vec<(u32, String)> {
         self.retained.exits()
-    }
-    fn retain(self: &Arc<Self>, child: Child) {
-        self.retained.retain(child)
     }
     pub fn run(self: &Arc<Self>, helper: &Helper, port: u16, directory: &str) -> Ran {
         self.reap();
@@ -152,11 +161,14 @@ impl Helpers {
                         format!("exit reaped ({status})")
                     }
                     None => {
-                        self.retain(child);
+                        self.retained.retain(child);
                         format!("exit not observed after {:?}; helper may remain in kernel wait; child custody retained", self.reap_wait)
                     }
                 };
-                Err(format!("{detail}; pid={pid}; KILL={kill:?}; {disposition}"))
+                Err((
+                    format!("{detail}; pid={pid}; KILL={kill:?}; {disposition}"),
+                    reaped.is_some(),
+                ))
             }
         };
         drain(&mut pipes, &mut output);
@@ -171,7 +183,7 @@ impl Helpers {
                     Ran::Failed(detail)
                 }
             }
-            Err(detail) => Ran::Interrupted(format!("{detail}: {}", output.trim())),
+            Err((detail, ended)) => Ran::Interrupted(format!("{detail}: {}", output.trim()), ended),
         }
     }
 }
@@ -206,22 +218,12 @@ pub(super) fn mounted_under(home: &Path, table: Option<&Path>) -> io::Result<Vec
             .map(PathBuf::from)
             .collect()
     } else {
+        // One bounded listing: a `mount` that waits is killed and read as an
+        // unreadable table, never as "not mounted".
         #[cfg(target_os = "macos")]
-        let points = {
-            let out = Command::new("/sbin/mount")
-                .env("LC_ALL", "C")
-                .stdin(Stdio::null())
-                .output()?;
-            if !out.status.success() {
-                return Err(io::Error::other(format!(
-                    "mount listing failed: {}",
-                    out.status
-                )));
-            }
-            (String::from_utf8_lossy(&out.stdout).lines())
-                .filter_map(|l| Some(PathBuf::from(l.split_once(" on ")?.1.rsplit_once(" (")?.0)))
-                .collect()
-        };
+        let points = (layerfs_bridge::process::mount_table()?.lines())
+            .filter_map(|l| Some(PathBuf::from(l.split_once(" on ")?.1.rsplit_once(" (")?.0)))
+            .collect();
         #[cfg(not(target_os = "macos"))]
         let points = (std::fs::read_to_string("/proc/self/mountinfo")?.lines())
             .filter_map(|line| line.split(' ').nth(4))

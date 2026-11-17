@@ -20,14 +20,8 @@ const UMOUNT: &str = "/sbin/umount";
 const UNMOUNT_WAIT: Duration = Duration::from_secs(60);
 const REAP_WAIT: Duration = Duration::from_secs(5);
 const OUTPUT: usize = 2048;
-/// How long an inspection read waits for `mount` to print the table.
-const TABLE_WAIT: Duration = Duration::from_millis(500);
-/// How long it then waits for a `mount` it killed to end.
-const TABLE_REAP: Duration = Duration::from_millis(500);
-/// The most of the table that is read.
-const TABLE: usize = 1 << 20;
 
-/// Children a `umount` KILL or `mount` timeout did not release. Their exits
+/// Children a `umount` KILL did not release. Their exits
 /// are reaped by the shared retained queue
 /// ([`layerfs_bridge::process::Retained`]), never by a second wait here.
 static RETAINED: LazyLock<Retained> = LazyLock::new(Retained::default);
@@ -69,77 +63,10 @@ pub(crate) fn mount_line(line: &str) -> Option<(PathBuf, String)> {
     Some((PathBuf::from(point), fs.to_owned()))
 }
 
-/// What `mount` prints, for an inspection read: one run with a fixed path,
-/// no environment but the C locale and no input, given [`TABLE_WAIT`] to
-/// end. A run that takes longer is killed and reaped, and is an error, as
-/// is one that fails; the caller then reads without a table. `mount`
-/// lists the kernel's table as it is (`getfsstat` with `MNT_NOWAIT`) and
-/// asks no mounted server, so it is not expected to wait; the deadline is
-/// for a host where it does.
-pub(crate) fn mount_table() -> io::Result<String> {
-    RETAINED.reap();
-    let mut child = Command::new(MOUNT)
-        .env_clear()
-        .env("LC_ALL", "C")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()?;
-    // a pipe that cannot be read without waiting is not read
-    let mut pipe = child.stdout.take().and_then(|pipe| {
-        fcntl(&pipe, FcntlArg::F_SETFL(OFlag::O_NONBLOCK))
-            .ok()
-            .map(|_| pipe)
-    });
-    let mut text = Vec::new();
-    let mut read = |text: &mut Vec<u8>| {
-        let mut bytes = [0; 4096];
-        while let Some(Ok(count @ 1..)) = pipe.as_mut().map(|pipe| pipe.read(&mut bytes)) {
-            text.extend_from_slice(&bytes[..count.min(TABLE.saturating_sub(text.len()))]);
-        }
-    };
-    let deadline = Instant::now() + TABLE_WAIT;
-    let ended = loop {
-        read(&mut text);
-        match child.try_wait() {
-            Ok(Some(status)) => break Ok(status),
-            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(2)),
-            Ok(None) => {
-                break Err(io::Error::new(
-                    io::ErrorKind::TimedOut,
-                    "mount took too long",
-                ))
-            }
-            Err(error) => break Err(error),
-        }
-    };
-    match ended {
-        Ok(status) if status.success() => {
-            read(&mut text);
-            Ok(String::from_utf8_lossy(&text).into_owned())
-        }
-        Ok(status) => Err(io::Error::other(format!("mount listing failed: {status}"))),
-        Err(error) => {
-            let pid = child.id();
-            let _ = child.kill();
-            let deadline = Instant::now() + TABLE_REAP;
-            let reaped = loop {
-                match child.try_wait() {
-                    Ok(Some(status)) => break Some(status),
-                    Ok(None) if Instant::now() < deadline => {
-                        std::thread::sleep(Duration::from_millis(2));
-                    }
-                    Ok(None) | Err(_) => break None,
-                }
-            };
-            match reaped {
-                Some(status) => RETAINED.record(pid, status),
-                None => RETAINED.retain(child),
-            }
-            Err(error)
-        }
-    }
-}
+/// What `mount` prints, for an inspection read: the shared bounded listing
+/// ([`layerfs_bridge::process::mount_table`]). An error means the caller
+/// reads without a table.
+pub(crate) use layerfs_bridge::process::mount_table;
 
 /// Forces the mount at `point` off once; a point no longer mounted is done.
 pub(crate) fn force_unmount(point: &Path) -> io::Result<()> {

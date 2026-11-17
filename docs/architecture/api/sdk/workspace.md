@@ -225,8 +225,9 @@ established without dialling again. The one exception is a record the daemon
 itself answered `Retained` at stage `Detach`: its export is still held and one
 forced client unmount is what finishes it, so `force` may replace that record
 with a forced attempt (the daemon's guard remains the real gate, and `Busy`,
-`Dirty`, or an unsent call restores the earlier record). A `Failed` answer
-without a stage — a send or connect failure, or a refusal before any effect —
+`Dirty`, or a call whose request was never sent restores the earlier record:
+a connect failure, or an exchange that failed before sending was attempted).
+A `Failed` answer without a stage — a send that was attempted, or a refusal —
 and an in-progress, `Unknown`, already-forced, other-stage or pre-`forced`
 record keeps its answer and is not forceable. The record is versioned (`v`):
 version 1 adds `forced` and the daemon's `stage` to version 0's `state`,

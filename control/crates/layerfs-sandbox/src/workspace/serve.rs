@@ -281,17 +281,25 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
         let mut control = crate::daemon::trace::control(&state.controls)?;
         sent = true;
         let mut api = workspace(&mut control);
+        // A request whose sending was never attempted reached no daemon:
+        // the attempt's record is undone like a call that never connected.
+        let mut answered = |failure: Box<crate::OperationFailure>| {
+            if matches!(&failure.cause, OperationCause::Exchange(exchange) if !exchange.attempted) {
+                sent = false;
+            }
+            operation(failure)
+        };
         // Forced: one abort write ends the connection, also after a normal
         // unmount stalled at Join; uncommitted changes are dropped.
         if force {
-            match api.unmount(token, true).map_err(operation)? {
+            match api.unmount(token, true).map_err(&mut answered)? {
                 Some(outcome) => Ok(values::force_unmounted(&outcome)),
                 None => values::unmounted(&Unmounted::Closed),
             }
         } else {
             match api.unmount_checked(token, discard) {
                 Ok(answer) => values::unmounted(&answer),
-                Err(error) => Err(operation(error)),
+                Err(error) => Err(answered(error)),
             }
         }
     })();
