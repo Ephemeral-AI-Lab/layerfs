@@ -176,7 +176,7 @@ drawn once per export; it makes guessing costly and does not authenticate.
 | The refresh never writes into the Workspace and never reverts a mode the install changed | [`refresh.rs`](../../../../engine/crates/layerfs-nfs/src/refresh.rs) |
 | `LAYERFS_NFS_REFRESH=0` leaves the client to `actimeo` and close-to-open | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 
-## AppleDouble files (`apple_double.rs`, `apple_double/edit.rs`, `apple_double_codec.rs`, `apple_double_spill.rs`)
+## AppleDouble files (`apple_double.rs`, `apple_double/edit.rs`, `apple_double/index.rs`, `apple_double/reclaim.rs`, `apple_double_codec.rs`, `apple_double_spill.rs`)
 
 On NFSv3 the macOS client keeps extended attributes and resource forks in
 `._<name>` files (at least one byte after `._`). With `refuse_apple_double`, a
