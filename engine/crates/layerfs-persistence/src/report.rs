@@ -41,7 +41,8 @@ pub struct CompactReport {
     pub generation: CompactGeneration,
     /// Bytes in wholly dead packs after the metadata walk.
     pub dead_bytes_bound: u64,
-    /// The same bytes after the payload sweep.
+    /// The same bytes after the payload sweep (§7 step 4). No second sweep
+    /// runs, so this equals `dead_bytes_bound` on every path (#42 A10).
     pub dead_bytes_refined: u64,
     /// The collected history rows' `logical` bytes.
     pub logical_discarded: u64,

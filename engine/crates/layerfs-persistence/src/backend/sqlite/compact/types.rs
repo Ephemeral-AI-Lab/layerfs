@@ -303,7 +303,9 @@ pub struct CompactReceipt {
     pub generation_after: u64,
     /// Bytes in wholly dead packs after the metadata walk; the path's input.
     pub dead_bytes_bound: u64,
-    /// The same bytes after the payload sweep.
+    /// The same bytes after the payload sweep (§7 step 4). The mark resolves the
+    /// whole retained set and no second sweep runs, so this equals
+    /// `dead_bytes_bound` on every path (#42 A10).
     pub dead_bytes_refined: u64,
     /// Collected history rows' logical bytes.
     pub logical_discarded: u64,

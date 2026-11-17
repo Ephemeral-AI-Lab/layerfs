@@ -231,8 +231,13 @@ ext4): the historical `VACUUM INTO` arm measured mark 17.2 s/live GB, build
 93.0 s/new GB at 50 GB and 10.3 s/new GB at 10 GB, verify 1.87 s/new GB,
 install 7.311 s. The fresh-copy prototype's 10 GiB run measured 32.5 s against
 120.8 s for that build; the 10 GB arm is the agent budget, the 50 GB arm is the
-owner-final measurement (#42 item 44). The alternative build (clone + delete +
-`incremental_vacuum`, below a size threshold on reflink filesystems) is
+owner-final measurement (#42 item 44). Its receipt is
+`engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_50gb.json`
+(`none` 1,633.585 s, `rebuild` 5,131.835 s, one run per path on the superseded
+build), and the whole-Store 10 GB medians are kept in
+`.../sqlite_compact_capacity_measure_whole_store.json` (a transcribed summary:
+the raw per-run samples were not retained). The alternative build (clone +
+delete + `incremental_vacuum`, below a size threshold on reflink filesystems) is
 recorded in D2 and is not adopted.
 
 The per-GB rates above were measured on the earlier whole-file-only fixture
@@ -256,6 +261,11 @@ the artifact set, the op record or the next-call adoption.
 | D3 (§3/§7 step 1.5) | `none` writes nothing; delete the scratch and stop | `none` spills the closure to `<store>.compact-visited`, counts it in `peakTempBytes` and deletes it before replying; the mark and its intent are one transaction that is rolled back, so no `kept_node`/`gc_intent` row and no WAL frame survives; no residue survives |
 | D4 (§11) | SQLite phases `mark`, `build`, `verify`, `install` | the settle also writes `cleanup` (§1) |
 | D5 (S6/§7) | "A SQLite Store compacts on the machine where it lives"; §7 "Runs as one operation on the Store's machine (S6)" | `store.compact` is local-only: its `Worker` branch is refused `Unsupported` before the Store is opened; a pushed sqlite Store is compacted after `store.push` back to `native` |
+
+A10 is an amendment rather than a deviation: it records that
+`deadBytesRefined` equals `deadBytesBound` on every path, because the mark
+leaves no second payload sweep to refine it. A report never names a different
+refined figure on either backend.
 
 Operators do not need to act on D1–D5 during an incident: the artifact set, the
 op record and the next-call adoption are unchanged. They matter when reading

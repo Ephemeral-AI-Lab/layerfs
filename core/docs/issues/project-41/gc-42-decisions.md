@@ -8,20 +8,20 @@
 > table indexes them, and this file is retired.
 
 **Why.** The #41 implementation and the #711 fix-branch integration need a
-different reading than the frozen sentences in fourteen places: nine contract
-amendments (A1–A9, mostly refusal detail shapes, one additive sidecar field,
-four `gc_op` columns and the snake_case rendering rule) and five SQLite
-implementation deviations (D1–D5) that the frozen text either forbids or does
-not describe. `gc-spec-gaps.md` (one of the implementation notes moved out of
+different reading than the frozen sentences in fifteen places: ten contract
+amendments (A1–A10, mostly refusal detail shapes, one additive sidecar field,
+four `gc_op` columns, the snake_case rendering rule and the one-valued
+`deadBytesRefined`) and five SQLite implementation deviations (D1–D5) that the
+frozen text either forbids or does not describe. `gc-spec-gaps.md` (one of the implementation notes moved out of
 the tree; its decisions are folded into these entries where they carry contract
 text) already flagged two of the earlier seven as "#42 correction"; this note is the
 complete list, and it changes no product behaviour.
 
 The seven A entries before A8 were written directly into the frozen file
 while #41 was implemented and were backed out before review (commit
-`122a168502`); A8 and A9 are added by this note for the same sign-off. The five D
-entries are present in the shipped SQLite code and are recorded here so the
-contract and the implementation do not drift apart.
+`122a168502`); A8, A9 and A10 are added by this note for the same sign-off.
+The five D entries are present in the shipped SQLite code and are recorded here
+so the contract and the implementation do not drift apart.
 
 G7 records one **deferred design decision** (the install-only lane). It
 continues the retired G1–G6 series, changes no contract text and keeps the
@@ -30,7 +30,7 @@ frozen whole-lane exclusion; its measurements live under
 
 ---
 
-## A. Contract amendments (9)
+## A. Contract amendments (10)
 
 ### A1. §4.1 `project.delete` sidecar gains `op_id` (additive)
 
@@ -196,6 +196,47 @@ frozen whole-lane exclusion; its measurements live under
   (the retry path).
   `engine/crates/layerfs-persistence/tests/visibility_guard.rs` pins the two
   statements and the statement set.
+
+### A10. §6.4/§11: `deadBytesRefined` equals `deadBytesBound`; there is no second payload sweep
+
+- **Frozen:** §6.4 chooses the path "using the bytes of packs that hold no live
+  object after the metadata walk (an upper bound that §7 step 4 refines)", and
+  §11 samples `deadBytesRefined` as "the same bytes after the payload sweep
+  (§7 step 4)". §11 already states that the value equals `deadBytesBound` on
+  the `none` path and on PostgreSQL, because neither runs a payload sweep there.
+- **Proposed:** the field and its wire key stay; the value is the bound on
+  **every** path and on both backends. §7 step 4 (frozen, unchanged) says the
+  mark already resolved every logical reference and delta base, so `visited` is
+  the whole retained object set and the build "copies exactly those, with no
+  second payload sweep"; §8 Phase M resolves the same closure before the swap.
+  No live object can be discovered after the mark, so no refinement exists to
+  report (`deadBytesRefined == deadBytesBound`, including a SQLite `rebuild`).
+- **Reason:** §6.4's parenthetical and §11's "after the payload sweep" describe
+  a second pass over the live payload that the frozen §7 step 4 explicitly does
+  not run (the walk that refined the bound is the mark itself, so the two
+  numbers cannot differ). Keeping a separate field that promises a value the
+  implementation cannot produce is the drift this note exists to stop; keeping
+  the field at its documented value keeps the §11 shape, the snake_case wire
+  key (A7) and the `bound >= refined` invariant that clients read.
+- **Where:** `engine/crates/layerfs-persistence/src/backend/sqlite/compact/receipt.rs`
+  (`dead_bytes_refined: dead_bytes`, and the `deadBytesRefined` zero reason),
+  `.../backend/postgresql/compact/{run,cleanup}.rs` (both `report(..)` calls pass
+  the bound as `dead_refined`), `.../backend/sqlite/compact/types.rs` (the
+  field's doc comment) and `.../backend/sqlite/compact/mod.rs` (the module doc
+  states the equality). `.../compact_metrics.rs` keeps recording the field, and
+  the capacity receipt
+  `engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure.json`
+  records `deadBytesRefined == deadBytesBound` on both arms.
+- **Alternative recorded, not adopted:** restore a refinement pass, i.e. a second
+  payload scan after the mark that re-derives each pack's dead share from the
+  admitted references. It would need its own op phase and artifact-set entry, it
+  reads up to the live payload a second time under the Disposable profile (§2),
+  and it cannot change the path choice (§3 takes the bound), so it is not built
+  for 2.0.0.
+- **Effect on #52:** AC-52's golden pins both numbers and AC-57's receipts carry
+  them, so the reports stay valid; no acceptance case asks for a value that
+  differs from the bound. The frozen spec file stays byte-identical until
+  sign-off: this entry, like A8 and A9, is the amendment #42 records.
 
 ---
 
@@ -436,11 +477,18 @@ rotational (HDD) backing — not NVMe** (88 vCPU across two Xeon E5-2699C v4,
 
 - **10 GB is the medium arm** every agent can qualify: three runs per path
   (9.987 GB pack bytes; `none` median 149.318 s, `rebuild` median 246.371 s;
-  one `Durable` rebuild 284.078 s as a control).
+  one `Durable` rebuild 284.078 s as a control). The whole-Store build's
+  medians are in
+  `engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`
+  (a transcribed summary of the T-G61 run: the raw per-run samples were not
+  retained); the fresh-copy re-measurement on the same fixture is
+  `.../sqlite_compact_capacity_measure.json` (`rebuild` median 118.439584 s,
+  `none` 88.439 s).
 - **50 GB is the owner-final arm** (#42 item 44): fixtures 20–50 GB, run once
   at the final identity, one run per path (49.999 GB, 384,850 packs, 8.876%
-  dead; `none` 1,633.585 s, `rebuild` 5,131.835 s). It is not part of a normal
-  PR run.
+  dead; `none` 1,633.585 s, `rebuild` 5,131.835 s); receipt
+  `engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_50gb.json`.
+  It is not part of a normal PR run.
 - The 50 GB numbers do **not** scale linearly from the 10 GB ones (the 10 GB
   Store and its artifacts fitted the page cache; the 50 GB one did not), so a
   capacity claim states per-GB rates with its arm and host.
@@ -460,8 +508,8 @@ rotational (HDD) backing — not NVMe** (88 vCPU across two Xeon E5-2699C v4,
 
 ## Request
 
-Please record A1–A9 as #42 items (or amend the frozen text) and accept or
+Please record A1–A10 as #42 items (or amend the frozen text) and accept or
 reject D1–D5 individually when the owner signs off, and accept G7 as the
 record of a deferred design (it changes no contract text). Until then the
-implementation follows the frozen text except where A8, A9 and D1–D5 are named,
+implementation follows the frozen text except where A8–A10 and D1–D5 are named,
 and the spec file in this branch is byte-identical to the frozen version.

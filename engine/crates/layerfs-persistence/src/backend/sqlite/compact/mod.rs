@@ -18,8 +18,9 @@
 //! The T7.2 mark already resolves every logical reference and delta base, so
 //! the bytes of packs that hold no reached object are the refined dead bytes:
 //! §7's step-4 payload sweep cannot discover another live object on SQLite.
-//! `deadBytesRefined` therefore equals `deadBytesBound`, as §11 requires for
-//! the `none` path.
+//! `deadBytesRefined` therefore equals `deadBytesBound` on the `none` path (as
+//! §11 requires) and on a `rebuild` too, because there is no second payload
+//! sweep to refine the bound with (#42 A10).
 //!
 //! The module is split by phase: [`types`] (the §7/§11 shapes), [`op`] (the
 //! `.compact-op` sidecar), [`build`], [`verify`], [`install`], [`receipt`] and
