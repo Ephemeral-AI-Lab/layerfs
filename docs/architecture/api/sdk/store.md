@@ -391,8 +391,10 @@ first checkpoint, verifies the rebuilt Store, and installs it by rename; a
 definite failure before the rename keeps the old Store and the generation `G`,
 while an installed-but-uncertain reply stays at `G + 1` and is reported, never
 deleted. A Store with less than 10% wholly dead packs takes the `none` path:
-it marks only, writes nothing and reports `dead_bytes_refined ==
-dead_bytes_bound`.
+it marks only and writes nothing. `dead_bytes_refined` equals
+`dead_bytes_bound` on every path, not only on `none`: the mark resolves the
+whole retained set and no second payload sweep runs (documented amendment
+#42 A10).
 
 **Local-only route (documented S6 deviation, #42 D5).** A sqlite Store on
 another machine is `Unsupported` and is never sent to that machine's worker:
@@ -418,7 +420,7 @@ with the report's snake_case fields: `dead_bytes_bound`,
 `mark_bytes` is not a result field: PostgreSQL records the §11 `markBytes`
 transfer metric as `compact.mark_bytes` (a #52 measurement: the distinct
 live-pack body extents its Phase M walk reads, each pack counted once), and
-SQLite, whose payload sweep runs in the build copy, reports no value.
+SQLite, whose payload walk runs inside the mark, reports no value.
 
 | Error | When | Source |
 | --- | --- | --- |

@@ -1213,7 +1213,7 @@ const MATRIX: [Row; 60] = [
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_golden.json",
                     "control/crates/layerfs-store/tests/compact_report_status.rs#the_report_wire_is_the_snake_case_contract_shape"],
-        note: "Every section 11 field pinned with units and sampling point (golden) and rendered by the T10 wire-shape test; markBytes is a metric, not a result field, and PostgreSQL records it as `compact.mark_bytes`." },
+        note: "Every section 11 field pinned with units and sampling point (golden) and rendered by the T10 wire-shape test; markBytes is a metric, not a result field, and PostgreSQL records it as `compact.mark_bytes`; `deadBytesRefined` is the bound on every path, because the mark leaves no payload sweep to refine it (#42 A10)." },
     Row { id: "AC-53", backend: Backend::Both, tier: "E2", status: Status::Partial,
         evidence: &["api/crates/layerfs-api/tests/project_export.rs#export_omits_a_path_hidden_by_remove_file",
                     "api/crates/layerfs-api/tests/gc_calls.rs#project_remove_file_checks_its_path_grammar_then_reports_markers"],
@@ -1236,8 +1236,10 @@ const MATRIX: [Row; 60] = [
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_measure.json",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_capacity.rs#capacity_measure",
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure.json",
+                    "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_whole_store.json",
+                    "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_50gb.json",
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json"],
-        note: "The tiny three-run arm is median 32.1 ms. T-G61 measured a real 9.987 GB Store on the whole-Store `VACUUM INTO` build (3 runs per arm): `none` at 8.88% dead median 149.318 s and `rebuild` at 10.00% dead median 246.371 s (mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s), plus a WAL/FULL control at 284.078 s. Re-measured on this branch with the fresh-copy build on the same 9.987 GB fixture: `rebuild` median 118.438 s (mark 74.462-75.704 s / build 18.190-19.209 s / quick-check verify 4.330-4.377 s / install 19.197-23.673 s), peak 9.144 GB; `none` median 88.439 s (82.0-149.9 s; this Sandbox shares the host); profile, host and toolchain are declared in the fixture, and the warm page cache is declared below. The §11 `markBytes` transfer is recorded per PostgreSQL run as `compact.mark_bytes`. The separate gc_bench medium fixture (9.789 GB live / 10.731 GB pack) measured `rebuild` median 133.076 s in three runs (receipt: `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`), a different generated Store from the 9.987 GB capacity_measure fixture; the same-fixture comparison is 246.371 s -> 118.438 s = 2.08x, and the earlier 1.85x (133.076 s against 246.371 s) mixed the two fixtures and is withdrawn. The gc-bench/1 receipt declares the Disposable profile (WAL/OFF, page_size 4096) and the cache, records bytes written as `processIo.writeBytes`, and does not record the SQLite version or WAL bytes (recorded deviation). T-G66 later measured the 50 GB arm once per path (#42 item 44); the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]." },
+        note: "The tiny three-run arm is median 32.1 ms. T-G61 measured a real 9.987 GB Store on the whole-Store `VACUUM INTO` build (3 runs per arm; medians kept in `tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`): `none` at 8.88% dead median 149.318 s and `rebuild` at 10.00% dead median 246.371 s (mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s), plus a WAL/FULL control at 284.078 s. Re-measured on this branch with the fresh-copy build on the same 9.987 GB fixture: `rebuild` median 118.439584 s (mark 74.462-75.704 s / build 18.190-19.209 s / quick-check verify 4.330-4.377 s / install 19.197-23.673 s), peak 9.144 GB; `none` median 88.439 s (82.0-149.9 s; this Sandbox shares the host); profile, host and toolchain are declared in the fixture, and the warm page cache is declared below. The §11 `markBytes` transfer is recorded per PostgreSQL run as `compact.mark_bytes`. The separate gc_bench medium fixture (9.789 GB live / 10.731 GB pack) measured `rebuild` median 133.076 s in three runs (receipt: `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`), a different generated Store from the 9.987 GB capacity_measure fixture; the same-fixture comparison is 246.371 s -> 118.439584 s = 2.08x, and the earlier 1.85x (133.076 s against 246.371 s) mixed the two fixtures and is withdrawn. The gc-bench/1 receipt declares the Disposable profile (WAL/OFF, page_size 4096) and the cache, records bytes written as `processIo.writeBytes`, and does not record the SQLite version or WAL bytes (recorded deviation). T-G66 later measured the 50 GB arm once per path (#42 item 44; receipt `tests/fixtures/sqlite_compact_capacity_measure_50gb.json`, `none` 1,633.585 s and `rebuild` 5,131.835 s); the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]." },
     Row { id: "AC-58", backend: Backend::Sqlite, tier: "E2", status: Status::Covered,
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_before_copy",
@@ -1306,6 +1308,20 @@ fn crash_suite_counts() -> (usize, usize) {
         + sigkill_arms
         + text.matches("fn sigkill_at_failpoint(").count();
     (total, sigkill_arms)
+}
+
+/// The number of `#[test]` functions in one test source. The "Verified here"
+/// list counts test binaries, and a plain file's count is exactly its `#[test]`
+/// attributes; a binary whose tests a macro generates is pinned next to its
+/// line instead. A missing file is a hard failure, so a renamed target cannot
+/// silently leave a stale count behind.
+fn suite_tests(relative: &str) -> usize {
+    let path = repo_root().join(relative);
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|_| panic!("missing {}; the suite the report counts", path.display()));
+    text.lines()
+        .filter(|line| line.trim_start().starts_with("#[test]"))
+        .count()
 }
 
 fn generate_report() -> String {
@@ -1415,16 +1431,30 @@ fn generate_report() -> String {
         "  asserts exists; an `executed` row names an arm this binary really runs."
     )
     .unwrap();
+    let pg_covered: Vec<&str> = MATRIX
+        .iter()
+        .filter(|row| row.backend == Backend::Pg && row.status == Status::Covered)
+        .map(|row| row.id)
+        .collect();
+    let pg_deferred = pg - pg_covered.len();
     writeln!(
         out,
-        "- A cross-backend row records its SQLite half only; every PostgreSQL half"
+        "- A cross-backend row records its SQLite half only; its PostgreSQL half is"
     )
     .unwrap();
     writeln!(
         out,
-        "  and the PostgreSQL-only rows are deferred to T12.3b by name."
+        "  deferred to T12.3b by name. Of the {pg} PostgreSQL-only rows, {pg_deferred}"
     )
     .unwrap();
+    writeln!(
+        out,
+        "  are deferred too and {} (`{}`) is covered here by the `postgresql_compact`",
+        pg_covered.len(),
+        pg_covered.join("`, `")
+    )
+    .unwrap();
+    writeln!(out, "  arms listed under Run environment.").unwrap();
     writeln!(
         out,
         "- **T-G61 capacity_measure run (fixture A: 9.987 GB pack).** The opt-in"
@@ -1437,7 +1467,18 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  real **9.987 GB** Store. On the superseded whole-Store `VACUUM INTO` build:"
+        "  real **9.987 GB** Store. On the superseded whole-Store `VACUUM INTO` build"
+    )
+    .unwrap();
+    writeln!(out, "  (its medians are kept in").unwrap();
+    writeln!(
+        out,
+        "  `tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`, a"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  transcribed summary: that run's raw per-run samples were not retained):"
     )
     .unwrap();
     writeln!(
@@ -1468,7 +1509,7 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  `rebuild` median 118.438 s (mark 74.462-75.704 s, build 18.190-19.209 s,"
+        "  `rebuild` median 118.439584 s (mark 74.462-75.704 s, build 18.190-19.209 s,"
     )
     .unwrap();
     writeln!(
@@ -1503,12 +1544,18 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  The same-fixture comparison is **246.371 s -> 118.438 s = 2.08x**; the"
+        "  The same-fixture comparison is **246.371 s -> 118.439584 s = 2.08x**; the"
+    )
+    .unwrap();
+    writeln!(out, "  fresh-copy medians are in").unwrap();
+    writeln!(
+        out,
+        "  `tests/fixtures/sqlite_compact_capacity_measure.json` and the superseded"
     )
     .unwrap();
     writeln!(
         out,
-        "  numbers are in `tests/fixtures/sqlite_compact_capacity_measure.json`."
+        "  build's in `tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`."
     )
     .unwrap();
     writeln!(
@@ -1554,7 +1601,7 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  side of the 246.371 s -> 118.438 s comparison; the earlier 1.85x mixed the"
+        "  side of the 246.371 s -> 118.439584 s comparison; the earlier 1.85x mixed the"
     )
     .unwrap();
     writeln!(
@@ -1599,14 +1646,20 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "- T-G66 measured the 50 GB arm once per path on the old build (#42 item 44;"
+        "- T-G66 measured the 50 GB arm once per path on the old build (#42 item 44):"
     )
     .unwrap();
     writeln!(
         out,
-        "  see the runbook disk-headroom section); the 30% arm remains [E]."
+        "  `none` 1,633.585 s and `rebuild` 5,131.835 s, receipt"
     )
     .unwrap();
+    writeln!(
+        out,
+        "  `tests/fixtures/sqlite_compact_capacity_measure_50gb.json`; see the runbook"
+    )
+    .unwrap();
+    writeln!(out, "  disk-headroom section. The 30% arm remains [E].").unwrap();
     writeln!(out).unwrap();
     writeln!(out, "## Matrix (SQLite half)").unwrap();
     writeln!(out).unwrap();
@@ -1873,12 +1926,17 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  (`none` 88.439 s median, fresh `rebuild` 118.438 s median; the superseded"
+        "  (`none` 88.439 s median, fresh `rebuild` 118.439584 s median; the superseded"
     )
     .unwrap();
     writeln!(
         out,
-        "  whole-Store build recorded 149.318 s / 246.371 s median on fixture A, so"
+        "  whole-Store build recorded 149.318 s / 246.371 s median on fixture A,"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  receipt `tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`, so"
     )
     .unwrap();
     writeln!(
@@ -2048,48 +2106,111 @@ fn generate_report() -> String {
         "- Verified here: `sqlite_compact_matrix` (1 test); the persistence suites"
     )
     .unwrap();
-    writeln!(out, "  `sqlite_compact` (27), `sqlite_compact_crash` (24),").unwrap();
+    // The counts come from the test sources, so a suite that gains or loses a
+    // test updates this list on the next regeneration instead of going stale.
+    // `sqlite_compact_crash` is the one binary whose tests a macro generates
+    // (`crash_at!`/`sigkill_at!`), so its count stays pinned.
     writeln!(
         out,
-        "  `sqlite_compact_fixtures` (1), `admission` (8), `path_removal` (4),"
+        "  `sqlite_compact` ({}), `sqlite_compact_crash` (24),",
+        suite_tests("engine/crates/layerfs-persistence/tests/sqlite_compact.rs")
     )
     .unwrap();
     writeln!(
         out,
-        "  `branch_removal` (4), `project_delete` (5), `epoch_fence` (7),"
+        "  `sqlite_compact_fixtures` ({}), `admission` ({}), `path_removal` ({}),",
+        suite_tests("engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs"),
+        suite_tests("engine/crates/layerfs-persistence/tests/admission.rs"),
+        suite_tests("engine/crates/layerfs-persistence/tests/path_removal.rs")
     )
     .unwrap();
     writeln!(
         out,
-        "  `gc_backfill` (5), `kept_objects` (6); the Store-service path suites"
+        "  `branch_removal` ({}), `project_delete` ({}), `epoch_fence` ({}),",
+        suite_tests("engine/crates/layerfs-persistence/tests/branch_removal.rs"),
+        suite_tests("engine/crates/layerfs-persistence/tests/project_delete.rs"),
+        suite_tests("engine/crates/layerfs-persistence/tests/epoch_fence.rs")
     )
     .unwrap();
     writeln!(
         out,
-        "  `sdk_path_merge_removal` (6), `sdk_mount_bind_failure` (1),"
+        "  `gc_backfill` ({}), `kept_objects` ({}); the Store-service path suites",
+        suite_tests("engine/crates/layerfs-persistence/tests/gc_backfill.rs"),
+        suite_tests("engine/crates/layerfs-persistence/tests/kept_objects.rs")
     )
     .unwrap();
     writeln!(
         out,
-        "  `sdk_path_whiteouts` (7), `sdk_path_hidden_semantics` (2),"
+        "  `sdk_path_merge_removal` ({}), `sdk_mount_bind_failure` ({}),",
+        suite_tests("engine/crates/layerfs-store-service/tests/sdk_path_merge_removal.rs"),
+        suite_tests("engine/crates/layerfs-store-service/tests/sdk_mount_bind_failure.rs")
     )
     .unwrap();
     writeln!(
         out,
-        "  `sdk_path_removal` (2); and `layerfs-control --features postgresql"
+        "  `sdk_path_whiteouts` ({}), `sdk_path_hidden_semantics` ({}),",
+        suite_tests("engine/crates/layerfs-store-service/tests/sdk_path_whiteouts.rs"),
+        suite_tests("engine/crates/layerfs-store-service/tests/sdk_path_hidden_semantics.rs")
     )
     .unwrap();
     writeln!(
         out,
-        "  project_delete_worker` (6), `layerfs-store --features postgresql"
+        "  `sdk_path_removal` ({}); and `layerfs-control --features postgresql",
+        suite_tests("engine/crates/layerfs-store-service/tests/sdk_path_removal.rs")
     )
     .unwrap();
     writeln!(
         out,
-        "  project_delete` (16) and `compact_report_status` (4)."
+        "  project_delete_worker` ({}), `layerfs-store --features postgresql",
+        suite_tests("control/crates/layerfs-control/tests/project_delete_worker.rs")
     )
     .unwrap();
-    writeln!(out, "  All of those pass on the merged branch.").unwrap();
+    writeln!(
+        out,
+        "  project_delete` ({}), `compact_report_status` ({}) and the",
+        suite_tests("control/crates/layerfs-store/tests/project_delete.rs"),
+        suite_tests("control/crates/layerfs-store/tests/compact_report_status.rs")
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  PostgreSQL AC-44 suite `postgresql_compact` ({} tests; AC-44's six are",
+        suite_tests("engine/crates/layerfs-persistence/tests/postgresql_compact.rs")
+    )
+    .unwrap();
+    writeln!(out, "  `a_fully_privileged_role_compacts`,").unwrap();
+    writeln!(
+        out,
+        "  `a_role_without_create_on_the_database_is_refused_as_unsupported`,"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  `a_role_without_create_on_the_store_schema_is_refused_as_unsupported`,"
+    )
+    .unwrap();
+    writeln!(out, "  `a_role_without_temp_is_refused_as_unsupported`,").unwrap();
+    writeln!(
+        out,
+        "  `a_role_without_pg_read_all_stats_is_refused_as_unsupported` and"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  `a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1`)."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  All of those pass on the merged branch; the `--features postgresql`"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  suites need `LAYERFS_TEST_POSTGRES_URL` and run in the store-ext4"
+    )
+    .unwrap();
+    writeln!(out, "  --full lane.").unwrap();
     writeln!(
         out,
         "- The control `restore_install` arm that opens a Store needs ext4/xfs/btrfs;"

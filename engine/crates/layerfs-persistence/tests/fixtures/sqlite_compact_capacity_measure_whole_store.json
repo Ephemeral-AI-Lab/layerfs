@@ -1,0 +1,41 @@
+{
+  "schema": "t12.3a-sqlite-compact-capacity-whole-store/1",
+  "build": "whole-store VACUUM INTO + prune + VACUUM (superseded by the fresh-copy build; see gc-42-decisions.md D2)",
+  "transcribed": true,
+  "source": "T-G61 capacity run on fixture A, as reported in gc-t12.3a-sqlite-matrix-report.md. The run's raw per-run samples were not retained, so this receipt carries the reported median and the phase medians only; byte totals are the GiB figures the run reported.",
+  "fixture": "A (9.987 GB pack), the same generated Store as sqlite_compact_capacity_measure.json",
+  "actualBytes": 9986795475,
+  "actualGib": "9.987",
+  "deadFractionPermille": 88,
+  "profile": "SqlitePersistenceProfile::Disposable (WAL/OFF)",
+  "durableControl": "SqlitePersistenceProfile::Durable (WAL/FULL), one rebuild",
+  "platform": "linux-x86_64",
+  "rustc": "rustc 1.85.1 (4eb161250 2025-03-15)",
+  "cpus": 88,
+  "memBytes": 135033307136,
+  "none": {
+    "path": "none",
+    "runs": 3,
+    "medianSeconds": 149.318
+  },
+  "rebuild": {
+    "path": "rebuild",
+    "runs": 3,
+    "medianSeconds": 246.371,
+    "deadGib": "1.011",
+    "shrinkGib": "1.017",
+    "peakTempPackedBoundGib": "29.481",
+    "peakTempOldFormulaGib": "9.144",
+    "phasesSeconds": {
+      "mark": 149.089,
+      "build": 94.317,
+      "verify": 0.312,
+      "install": 1.916
+    }
+  },
+  "durableRebuild": {
+    "path": "rebuild",
+    "runs": 1,
+    "medianSeconds": 284.078
+  }
+}
