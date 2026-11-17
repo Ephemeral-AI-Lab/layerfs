@@ -1,7 +1,8 @@
 //! Forced terminal unmount: a before-effect guard, one abort write, the local
 //! drain with its one plain detach, then Revoke and Close. Nothing is repeated.
 //! A normal unmount stalled at Join is forced the same way, its plain detach
-//! counting as the one detach.
+//! counting as the one detach; on the NFS route the one forced client unmount
+//! is the abort.
 #[cfg(target_os = "linux")]
 use super::serving::{stage, work, Attached, Evidence, Leaving};
 use super::{
@@ -51,9 +52,16 @@ pub(super) fn guard(
     relinquish_unknown: bool,
 ) -> Result<CommitKnowledge, Failure> {
     // Stored custody answers first: no second abort or detach ever follows
-    // it. The one exception is a normal unmount stalled at Join, admitted
-    // idle with no Commit custody, whose abort control is still unused.
+    // it. Two shapes are the exception, both admitted with nothing yet
+    // aborted or detached: an export whose client unmount is not established
+    // (`ExportKept` at `Detach`, export still held, see
+    // `ExportKept::forceable`), where the one forced client unmount is the
+    // abort; and a normal unmount stalled at Join, admitted idle with no
+    // Commit custody, whose abort control is still unused.
     if let Kernel::ExportKept(kept) = &value.kernel {
+        if kept.forceable() {
+            return Ok(CommitKnowledge::Absent);
+        }
         return Err(Failure::Retained(Box::new(kept.custody(token))));
     }
     #[cfg(target_os = "linux")]

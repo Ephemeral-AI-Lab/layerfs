@@ -250,15 +250,19 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     let state = sandbox(host)?;
     let path = required(path, "path")?;
     if let Some(value) = crate::unmount_guard::find(&state, path)? {
-        return crate::unmount_guard::repeat(&value);
+        if !(force && crate::unmount_guard::forceable(&value)) {
+            return crate::unmount_guard::repeat(&value);
+        }
     }
     let guard = layerfs_store::project::discovery::guard(&state.directory)?;
     // Another process may have registered while this call waited for the
     // short admission section. Check again before sending anything.
     if let Some(value) = crate::unmount_guard::find(&state, path)? {
-        return crate::unmount_guard::repeat(&value);
+        if !(force && crate::unmount_guard::forceable(&value)) {
+            return crate::unmount_guard::repeat(&value);
+        }
     }
-    let token = state.token(path)?;
+    let token = state.unmount_token(path)?;
     // its running commands (D-10): `Busy`, or with `force` cancelled first
     let wsid = layerfs_bridge::sdk_values::hex(&token.workspace.to_bytes());
     let unreached = &mut crate::exec::cancel::unreached;
@@ -268,7 +272,7 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     // ordinary 60 s control wait running (#540).
     crate::files::refresh_within(&state, UNMOUNT_STATUS_WAIT)?;
     // the daemon's kernel probe answers Busy for a process still holding it
-    let attempt = crate::unmount_guard::begin(&state, token, path)?;
+    let attempt = crate::unmount_guard::begin(&state, token, path, force)?;
     drop(guard);
     // Only this Workspace's lease remains held. Other Workspaces and
     // processes can take Sandbox ownership while the daemon helper waits.
