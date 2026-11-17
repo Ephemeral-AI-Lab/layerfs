@@ -1006,11 +1006,6 @@ reported as `markBytes`; the Phase A table copy itself moves no pack bytes.
 - `MountsActive` carries `detail.holders` (mounts/Sandboxes); `Busy` carries
   `{entity, phase, op}` plus the PostgreSQL holders (`pid`, `client_addr`,
   `backend_start`). `InUse` stays for non-GC calls only.
-- `store.compact`'s open-cache refusal for a call still running on the Store
-  in the same process is therefore `Busy`, naming the Store as `entity` with
-  `phase` and `op` null: no operation holds it, a call does. The cache's own
-  `InUse` is reported by the non-GC calls that close a Store (`store.move`,
-  `store.remove`, `store.disconnect`).
 - `Unresolved` carries `{entity: {kind, name}, phase, op}` and is observed by
   a non-owning call and settled by the owning one: `store.compact` adopts a
   dead compaction op; `project.delete`'s settlement reads the Store by the

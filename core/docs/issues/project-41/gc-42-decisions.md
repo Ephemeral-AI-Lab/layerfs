@@ -30,7 +30,7 @@ frozen whole-lane exclusion; its measurements live under
 
 ---
 
-## A. Contract amendments (10)
+## A. Contract amendments (11)
 
 ### A1. §4.1 `project.delete` sidecar gains `op_id` (additive)
 
@@ -237,6 +237,27 @@ frozen whole-lane exclusion; its measurements live under
   them, so the reports stay valid; no acceptance case asks for a value that
   differs from the bound. The frozen spec file stays byte-identical until
   sign-off: this entry, like A8 and A9, is the amendment #42 records.
+
+### A11. §10: `store.compact`'s in-process call refusal is `Busy`, not `InUse`
+
+- **Frozen:** §10 says `Busy` carries `{entity, phase, op}` plus the
+  PostgreSQL holders and that "`InUse` stays for non-GC calls only". It does
+  not name the code `store.compact` reports when the open cache refuses to
+  close a Store because a call still runs on it in this process.
+- **Proposed:** that refusal is `Busy`, naming the Store as `entity` with
+  `phase` and `op` null: no operation holds the Store, a call does. The
+  cache's own `InUse` is reported by the non-GC calls that close a Store
+  (`store.move`, `store.remove`, `store.disconnect`).
+- **Reason:** `store.compact` is a GC call, so its refusals speak the GC
+  vocabulary; reporting the open cache's `InUse` from the compaction would put
+  a non-GC code on the call that §5's `Busy` and §10's code table govern.
+- **Where:** `control/crates/layerfs-store/src/compact.rs` (`gc_refusal`, the
+  open-cache mapping, with the unit tests
+  `a_running_call_is_busy_for_the_store_not_in_use` and
+  `exactly_the_open_cache_refusal_is_mapped`), the `store.compact` error row
+  in `docs/architecture/api/sdk/store.md`, and the frozen spec file, which
+  stays byte-identical until sign-off: this entry is the amendment #42
+  records, like A8–A10.
 
 ---
 
