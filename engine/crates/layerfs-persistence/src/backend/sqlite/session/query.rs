@@ -294,6 +294,9 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "history_unreachable_count" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/history_unreachable_count.sql"
         )),
+        "history_remove_unreachable_totals" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_totals.sql"
+        )),
         "history_remove_unreachable_commit" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/history_remove_unreachable_commit.sql"
         )),

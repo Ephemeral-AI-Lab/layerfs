@@ -460,6 +460,64 @@ fn retained_history_and_its_objects_survive_a_rebuild() {
 }
 
 #[test]
+fn a_pruned_deleted_project_leaves_clean_totals_and_a_clean_next_rebuild() {
+    let (_temp, handles, path) = create_store();
+    let genesis = filesystem_root(&handles, 1);
+    let committed = filesystem_root(&handles, 2);
+    let stack = initialize(&handles, 1, genesis);
+    let work = support::branch_id(1);
+    fork(&handles, stack.id, work, 1);
+    commit(&handles, work, committed);
+    publish(&handles, stack.id, work);
+
+    // Pruning deletes the project's Commit and Layer rows. Only the AFTER
+    // INSERT triggers maintain `store_totals.logical`, so the prune itself
+    // must retract the bytes those deleted rows contributed.
+    handles.history.mark_stack_deleted(stack.id, 2_000).unwrap();
+    assert_eq!(
+        handles.history.remove_unreachable(stack.id, false).unwrap(),
+        5,
+        "one stack, one branch, two Layers and one Commit"
+    );
+    let sums = "SELECT (SELECT logical FROM store_totals WHERE id=1),\
+(SELECT COALESCE(SUM(logical),0) FROM \"commit\")+\
+(SELECT COALESCE(SUM(logical),0) FROM layer)";
+    let sql = rusqlite::Connection::open(&path).unwrap();
+    let (logical, rows): (i64, i64) = sql
+        .query_row(sums, [], |row| Ok((row.get(0)?, row.get(1)?)))
+        .unwrap();
+    drop(sql);
+    assert_eq!(rows, 0, "the deleted project's history rows are gone");
+    assert_eq!(
+        logical, rows,
+        "the prune retracts exactly the logical bytes it deletes"
+    );
+    // A doctor over the pruned Store must not fail the totals check.
+    clean(&handles);
+
+    // The next rebuild trusts those totals. Before the prune retracted them,
+    // this refused Integrity("Store totals disagree with the history rows"):
+    // the source rows summed to 0 while the totals still said 10.
+    let before = generation(&handles);
+    let receipt = handles.compact(&request(32)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_after, before + 1);
+    let reopened = reopen(&path);
+    assert_eq!(generation(&reopened), before + 1);
+    let sql = rusqlite::Connection::open(&path).unwrap();
+    let (logical, rows): (i64, i64) = sql
+        .query_row(sums, [], |row| Ok((row.get(0)?, row.get(1)?)))
+        .unwrap();
+    drop(sql);
+    assert_eq!(
+        (logical, rows),
+        (0, 0),
+        "the rebuilt Store keeps clean totals"
+    );
+    clean(&reopened);
+}
+
+#[test]
 fn a_stray_staged_name_is_refused_and_not_deleted() {
     let (_temp, handles, path) = create_store();
     let live = filesystem_root(&handles, 1);
