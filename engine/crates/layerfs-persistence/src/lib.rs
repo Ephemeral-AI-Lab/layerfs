@@ -23,7 +23,8 @@ pub use backend::postgresql::status::{
 pub use backend::sqlite::acquisition::AcquisitionProvider;
 pub use backend::sqlite::compact::{
     compact_op_status, CompactFailpoint, CompactKeptWaste, CompactOpStatus, CompactPath,
-    CompactReceipt, CompactRequest, CompactResidue, CompactZeroReason, DELTA_BASE_REFERENCES_CAP,
+    CompactReceipt, CompactRequest, CompactResidue, CompactZeroReason, OwnerLiveness,
+    DELTA_BASE_REFERENCES_CAP,
 };
 pub use backend::sqlite::heads::{heads_digest, read_heads};
 #[cfg(any(target_os = "macos", target_os = "linux"))]

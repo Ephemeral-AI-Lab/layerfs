@@ -55,6 +55,43 @@ pub fn alive(pid: u32) -> bool {
     }
 }
 
+/// This process's PID-namespace inode, when the platform names one. A pid is
+/// meaningful only inside the namespace that recorded it.
+fn pid_namespace() -> Option<u64> {
+    #[cfg(target_os = "linux")]
+    {
+        let target = std::fs::read_link("/proc/self/ns/pid").ok()?;
+        let text = target.to_str()?;
+        text.strip_prefix("pid:[")?.strip_suffix(']')?.parse().ok()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+/// Whether a compaction's recorded owner (`pid`, kernel start time, boot id
+/// and PID namespace) is provably a process this kernel still runs. Every fact
+/// must be recorded and still match: a record from another boot, another PID
+/// namespace or with a missing fact is never *provably* live, so the engine
+/// keeps its dead-owner adoption path.
+pub fn recorded_owner_alive(
+    pid: Option<u32>,
+    start: Option<u64>,
+    boot: Option<u128>,
+    namespace: Option<u64>,
+) -> bool {
+    let (Some(pid), Some(start), Some(boot)) = (pid, start, boot) else {
+        return false;
+    };
+    if let (Some(recorded), Some(here)) = (namespace, pid_namespace()) {
+        if recorded != here {
+            return false;
+        }
+    }
+    alive_as(pid, Some(start), Some(boot))
+}
+
 /// Whether `pid` is alive and, when its start time and boot were recorded,
 /// still the same process.
 pub fn alive_as(pid: u32, start: Option<u64>, boot: Option<u128>) -> bool {

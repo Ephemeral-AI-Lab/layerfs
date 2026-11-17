@@ -6,6 +6,7 @@ use super::op::compact_path;
 use super::op::hex;
 use super::op::op_path;
 use super::op::op_temporary_path;
+use super::op::remove_op_record;
 use super::op::stop_at;
 use super::op::RunOp;
 use super::receipt::RunMetrics;
@@ -15,6 +16,7 @@ use super::types::CompactFailpoint;
 use super::types::CompactRequest;
 use super::types::CompactResidue;
 use super::types::MarkTuple;
+use super::types::OwnerLiveness;
 use super::verify::file_tuple;
 use super::verify::open_immutable;
 use crate::backend::sqlite::lifecycle::seal::SealedFacts;
@@ -178,16 +180,18 @@ pub(crate) fn settle(
     // residue `clear_artifacts` could not remove keeps it, so the next run
     // adopts the recorded leftover instead of refusing the staged name as an
     // unrecorded `Exists`; `abort_before_install` gates the same way.
-    if settled && residue.artifacts.is_empty() && std::fs::symlink_metadata(&record_path).is_ok() {
-        let bytes = std::fs::metadata(&record_path).map_or(0, |metadata| metadata.len());
-        if std::fs::remove_file(&record_path).is_err()
-            && std::fs::symlink_metadata(&record_path).is_ok()
-        {
-            residue.bytes = residue.bytes.saturating_add(bytes);
-            residue.artifacts.push(record_path.file_name().map_or_else(
-                || record_path.display().to_string(),
-                |name| name.to_string_lossy().into_owned(),
-            ));
+    if settled && residue.artifacts.is_empty() {
+        // §9: the record is removed only while it still names this run's
+        // operation, never one another run wrote in the window where this run
+        // no longer holds the writer lane.
+        if remove_op_record(store, &op.op_id).is_err() {
+            if let Ok(metadata) = std::fs::symlink_metadata(&record_path) {
+                residue.bytes = residue.bytes.saturating_add(metadata.len());
+                residue.artifacts.push(record_path.file_name().map_or_else(
+                    || record_path.display().to_string(),
+                    |name| name.to_string_lossy().into_owned(),
+                ));
+            }
         }
     }
     if !settled {
@@ -250,13 +254,16 @@ pub(crate) fn remove_scratch(scratch: &Path) -> HistoryResult<()> {
 /// Drops every artifact and the op record after a definite failure before the
 /// rename; the live Store is unchanged apart from the seal's checkpoint, the
 /// released admission intent and the cleared `kept_node` closure the committed
-/// mark left (§8/§9). `op_id` names the intent to release when the run no
-/// longer holds a session; `None` means the session already released both.
-pub(crate) fn abort_before_install(store: &Path, op_id: Option<&[u8; 16]>) {
-    let released = op_id.is_none_or(|op_id| clear_installed_mark(store, op_id));
+/// mark left (§8/§9). `op_id` names this run's operation; `release_intent`
+/// says whether a committed admission intent is still there to release (the
+/// pre-seal abort does; the rolled-back `none` mark and the already-released
+/// failure before the seal do not).
+pub(crate) fn abort_before_install(store: &Path, op_id: &[u8; 16], release_intent: bool) {
+    let released = !release_intent || clear_installed_mark(store, op_id);
     let residue = clear_artifacts(store);
     if residue.artifacts.is_empty() && released {
-        let _ = std::fs::remove_file(op_path(store));
+        // §9: only this run's record is removed, never one another run wrote.
+        let _ = remove_op_record(store, op_id);
     }
     let _ = sync_directory(store);
 }
@@ -271,7 +278,7 @@ pub(crate) fn abort_run(history: &crate::HistoryProvider, store: &Path, op_id: &
         // The committed mark's closure is transient state: no abort may leave
         // it behind for a later run to mistake for a mark.
         let _ = history.clear_kept_node();
-        abort_before_install(store, None);
+        abort_before_install(store, op_id, false);
     }
 }
 
@@ -283,6 +290,7 @@ pub(crate) fn settle_leftover(
     store: &Path,
     generation: u64,
     metrics: &mut RunMetrics,
+    owner_live: Option<OwnerLiveness>,
 ) -> HistoryResult<()> {
     let Some(op) = RunOp::read(store) else {
         // `.compact-op.tmp` without a record is this Store's own incomplete op
@@ -313,6 +321,15 @@ pub(crate) fn settle_leftover(
     if op.generation > current {
         return Err(HistoryError::Integrity("compaction record generation"));
     }
+    // §9: a leftover is adopted only when its owner is gone. The run releases
+    // the writer lane before its `cleanup` settle, so a second call can hold
+    // the lane while the first run still owns this record; adopting it would
+    // release the first run's intent and clear its `kept_node` closure, its
+    // artifacts and the record itself. A provably live owner keeps its state
+    // and the caller reports it busy.
+    if op.owner_provably_live(owner_live) {
+        return Err(HistoryError::Busy);
+    }
     // Adopt the recorded owner's admission intent before its artifact is gone,
     // and clear the transient §6.1 `kept_node` closure its mark left: the
     // installed Store carries a copy of it, and a pre-install leftover carries
@@ -325,9 +342,9 @@ pub(crate) fn settle_leftover(
             "recorded compaction artifact could not be removed",
         ));
     }
-    if std::fs::symlink_metadata(op_path(store)).is_ok() {
-        std::fs::remove_file(op_path(store)).map_err(io_error)?;
-    }
+    // §9: the record is this run's to remove only while it still names the
+    // operation just adopted.
+    remove_op_record(store, &op.op_id)?;
     metrics.leftover_settled = true;
     Ok(())
 }
