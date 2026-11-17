@@ -17,7 +17,8 @@ use layerfs_storage::{port::PackPersistence, Storage};
 use layerfs_telemetry::timer::Timing;
 use std::sync::Arc;
 use support::pg::{
-    commit, commit_with, counts, project, project_with_genesis, publish, url, Schema, DEFINITION,
+    commit, commit_with, counts, merge_request, project, project_with_genesis, publish, url,
+    Schema, DEFINITION,
 };
 
 const BINDING: &[u8] = b"postgresql-gc-mark";
@@ -332,6 +333,70 @@ fn a_mark_records_the_history_closure_on_postgresql() {
     let again = handles.history.mark_history_closure().unwrap();
     assert_eq!(again, kept);
     assert_eq!(kept_rows(&mut schema.admin()), rows);
+}
+
+/// The closure statement both engines shared. PostgreSQL now runs its own
+/// text, which follows each node's row by primary key instead of joining each
+/// round to every history edge.
+const SHARED_MARK: &str = include_str!("../sql/sqlite/queries/history/kept_node_mark.sql");
+
+#[test]
+fn the_postgresql_closure_keeps_the_nodes_the_shared_statement_keeps() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "mark_variant");
+    let handles = schema.create(BINDING, CURSOR);
+    // A live project with every edge kind this fixture can make: a published
+    // Commit, a fork, a merge whose second parent is a Layer, and a chain of
+    // unpublished Commits that only the Branch head reaches.
+    let (shop, work, genesis) = project(&handles.history, 1);
+    let first = commit(&handles.history, work, 5);
+    publish(&handles.history, shop, work);
+    handles
+        .history
+        .merge_branch(&merge_request(
+            &handles.history,
+            shop,
+            work,
+            first.id,
+            genesis,
+            60,
+        ))
+        .unwrap();
+    let chain: Vec<_> = (10..40)
+        .map(|tag| commit(&handles.history, work, tag).id)
+        .collect();
+    // A deleted project: neither text may keep one of its rows.
+    let (gone, gone_work, _) = project(&handles.history, 3);
+    commit(&handles.history, gone_work, 7);
+    publish(&handles.history, gone, gone_work);
+    handles.history.mark_stack_deleted(gone, 2_000).unwrap();
+
+    let kept = handles.history.mark_history_closure().unwrap();
+    for id in &chain {
+        assert!(kept.contains(KeptNodeId::Commit(*id)), "{id:?} is retained");
+    }
+    let variant = kept_rows(&mut schema.admin());
+    assert_eq!(variant.len(), kept.len());
+    assert!(variant
+        .iter()
+        .all(|(stack, ..)| stack.as_slice() != gone.as_slice()));
+
+    let mut admin = schema.admin();
+    let mut tx = admin.transaction().unwrap();
+    tx.execute("DELETE FROM kept_node", &[]).unwrap();
+    tx.execute(SHARED_MARK, &[]).unwrap();
+    let shared: Vec<(Vec<u8>, String, Vec<u8>, i64)> = tx
+        .query(
+            "SELECT layer_stack_id,kind,node_id,serial FROM kept_node \
+             ORDER BY layer_stack_id,kind,node_id",
+            &[],
+        )
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.get(0), row.get(1), row.get(2), row.get(3)))
+        .collect();
+    tx.rollback().unwrap();
+    assert_eq!(variant, shared);
 }
 
 #[test]
