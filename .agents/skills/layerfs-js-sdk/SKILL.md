@@ -285,11 +285,12 @@ For Rust projects, follow the [Cargo workflow](references/rules/cargo.md).
 
 ## Calls
 
-83 calls in eleven families. Each family's page has arguments, results, refusals
+85 calls in twelve families. Each family's page has arguments, results, refusals
 and examples.
 
 | Family | Calls |
 | --- | --- |
+| home (admin) | `init()`, `get()`: create or convert this home, and read the bundle and daemon this build would use; no skill page yet, see `docs/architecture/api/sdk/home.md` in the repository |
 | [project](references/methods/project.md) | `init(project, folder, { timeout, on_progress })`, `list(store?, { page_size, page_pos })`, `get(project)`, `stats(project, branch?, commit?)`, `export(project, destination, { branch, on_progress })`, `delete(project)`, `remove_file(project, path)` |
 | [branch](references/methods/branch.md) | `list(project, { page_size, page_pos, page })`, `get(project, branch)`, `commits(project, branch, { page, page_size, at_commit, include_storage })`, `get_commit(project, branch, commit)`, `fork(project, name, from_branch, from_commit?)`, `merge(project, name, a, b, { message, units })`, `publish(project, branch, commit?)`, `diff(project, from_branch, to_branch, { paths_only, page_size, page_pos, cursor, page, from_commit, to_commit, path_prefix, include_attribution, continuation })`, `remove(project, branch)` |
 | [commit](references/methods/commit.md) | `list(project, branch, { page_size, page_pos })`, `get(project, branch, commit)`, `diff(project, from_commit, to_commit, { paths_only, page_size, page_pos, cursor })` |

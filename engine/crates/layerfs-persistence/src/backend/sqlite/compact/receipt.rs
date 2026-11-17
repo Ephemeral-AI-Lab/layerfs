@@ -191,9 +191,7 @@ impl RunMetrics {
                         CompactOutcome::Failed
                     },
                     match error {
-                        HistoryError::Busy | HistoryError::BusyOp(_) => {
-                            Some(CompactRefusal::Busy)
-                        }
+                        HistoryError::Busy | HistoryError::BusyOp(_) => Some(CompactRefusal::Busy),
                         HistoryError::Unresolved(_) => Some(CompactRefusal::Unresolved),
                         _ => None,
                     },

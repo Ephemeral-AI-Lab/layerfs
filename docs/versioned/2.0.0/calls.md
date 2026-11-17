@@ -9,7 +9,7 @@ one file per call under its family in
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 83 calls in eleven families. `layerfs help` lists them, and
+There are 85 calls in twelve families. `layerfs help` lists them, and
 `layerfs help <family> [<call>]` prints one family or one call.
 
 ## How a call is written
@@ -76,6 +76,21 @@ Sandbox names (H §7.6).
 ## The calls
 
 `[x]` is an optional positional. Every family's results are snake_case.
+
+### `home` (2)
+
+| Call | Positionals | Options | Does |
+| --- | --- | --- | --- |
+| `init` | — | — | creates this home, converts an older layout to the current one, and leaves a current home as it is |
+| `get` | — | — | the home's state and the Linux bundle and native daemon this build would use; changes nothing |
+
+- Neither call is opened by the dispatcher: `init` opens or creates the home
+  itself, and `get` never opens it. `get` reads `layerfs.json`, the folder's
+  mode, `bundle.json`, the native daemon's record and the daemon file, writes
+  no log line, and is `admin` in the MCP server.
+- `init` returns `{ home, created, converted, layout }`; `get` returns
+  `{ home, bundle, daemon, cache, warnings }`. The home's layout and settings
+  are in [the home](home.md).
 
 ### `project` (7)
 

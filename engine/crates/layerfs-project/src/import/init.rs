@@ -223,7 +223,11 @@ pub fn init_observed(
 
 /// Scans with attributes, constructs each file once, consumes serials and
 /// builds the tree. The returned tree save is unfinished.
+// Eight arguments: the run's op id is already `init_observed`'s, but the
+// `reserve_inodes` failure here needs it for the retained Unknown state
+// (F43R6-1), so it is passed beside the acquisition it names.
 #[cfg(unix)]
+#[allow(clippy::too_many_arguments)]
 fn acquire<'a>(
     store: &'a Storage,
     catalog: &dyn HistoryCatalog,

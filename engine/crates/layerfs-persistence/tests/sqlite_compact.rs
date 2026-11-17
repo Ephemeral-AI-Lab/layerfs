@@ -613,7 +613,10 @@ fn an_installed_but_unsettled_run_is_judged_at_g_plus_one() {
     assert!(!op_path(&path).exists());
     assert!(!compact_path(&path).exists());
     let final_handles = reopen(&path);
-    assert!(!located(&final_handles, dead), "the install collected the dead pack");
+    assert!(
+        !located(&final_handles, dead),
+        "the install collected the dead pack"
+    );
     clean(&final_handles);
 }
 

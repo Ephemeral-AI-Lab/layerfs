@@ -42,7 +42,7 @@ check and proves a missing, renamed or extra call is reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-83 calls in 11 families, counted from the Node table. Calls present: Node 83, Python 83, Python `aio` 83, CLI 83, MCP 76 (38 in `work`, 38 admin only; 6 UI only, in no profile).
+85 calls in 12 families, counted from the Node table. Calls present: Node 85, Python 85, Python `aio` 85, CLI 85, MCP 78 (38 in `work`, 40 admin only; 6 UI only, in no profile).
 
 Argument names that are Python keywords: none.
 
@@ -50,6 +50,8 @@ Front-end problems: none.
 
 | Call | Positionals (`?` optional) | Options (`()` a function) | Node | Python | Python `aio` | CLI | MCP |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| `home.init` | - | - | yes | yes | yes | yes | admin |
+| `home.get` | - | - | yes | yes | yes | yes | admin |
 | `project.init` | project, folder | timeout, on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `project.list` | ?store | page_size, page_pos | yes | yes | yes | yes | yes |
 | `project.get` | project | - | yes | yes | yes | yes | yes |

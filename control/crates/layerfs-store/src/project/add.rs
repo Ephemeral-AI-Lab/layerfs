@@ -280,9 +280,7 @@ pub fn add_failure(error: InitError, entry: Option<&Path>, name: &str, store: &s
                     None,
                 );
             }
-            _ => {
-                return failed(format!("adding project {name} to Store {store}: {error:?}"))
-            }
+            _ => return failed(format!("adding project {name} to Store {store}: {error:?}")),
         },
         _ => return failed(format!("adding project {name} to Store {store}: {error:?}")),
     };
