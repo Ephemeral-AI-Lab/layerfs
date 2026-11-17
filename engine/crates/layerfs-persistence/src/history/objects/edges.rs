@@ -7,10 +7,9 @@
 //! mark costs a few hundred bytes per pack instead of the pack. Compressed
 //! groups and the `Ordinary` lane answer `None` and keep the decoding reader.
 //!
-//! The first read of a wave is one call for the heads of many packs. A pack
-//! whose directory and record headers sit in its head, the common shape of a
-//! pack of large records, costs no statement of its own; only a pack that
-//! needs more is acquired on its own.
+//! Reads are per wave, not per pack: one call for the heads of many packs,
+//! then at most a few calls for whatever ranges those packs still need. A
+//! pack costs no statement and no round trip of its own.
 use super::{storage, ClosureSource};
 use layerfs_content::ObjectId;
 use layerfs_history::error::{HistoryError, HistoryResult};
@@ -19,12 +18,9 @@ use layerfs_storage::{
         has_sparse_edges, sparse_directory, sparse_edge, RecordDirectory, Sparse,
     },
     encoding::delta::read::ChainEdge,
-    location::{ObjectLocation, PackInfo},
+    location::ObjectLocation,
     pack::layout::{self, GroupView, PackHeader},
-    port::{
-        AcquiredPackRead, PackRange, PackReadChoice, PackReadPlan, PersistenceError,
-        PACK_READ_PREFIX_BYTES,
-    },
+    port::{PackRange, PACK_READ_PREFIX_BYTES},
     source::Source,
     StorageError,
 };
@@ -39,9 +35,9 @@ const ROUNDS: usize = 4;
 const HEAD_BYTES: usize = 1024;
 /// Packs whose heads one call reads.
 const HEAD_PACKS: usize = 256;
-/// Ranges one acquisition selects; far below the port's own limits.
+/// Ranges one call asks for, over all its packs.
 const BATCH_RANGES: usize = 1024;
-/// Bytes one acquisition selects.
+/// Bytes one call asks for, over all its packs.
 const BATCH_BYTES: usize = 512 * 1024;
 
 /// The pack bytes held so far, by pack offset.
@@ -159,85 +155,65 @@ fn resolve(
     Ok(merged(needs))
 }
 
-/// One acquisition's ranges, chosen before it starts.
-struct Ranges {
-    pack_id: i64,
-    ranges: Option<Vec<PackRange>>,
-}
+/// One request of a round: the pack, its declared length, and the ranges.
+type Request = (i64, usize, Vec<PackRange>);
 
-impl PackReadPlan for Ranges {
-    fn select(
-        &mut self,
-        info: PackInfo,
-        _prefix: &[u8],
-    ) -> Result<PackReadChoice, PersistenceError> {
-        if info.pack_id != self.pack_id {
-            return Err(PersistenceError::Malformed);
-        }
-        self.ranges
-            .take()
-            .map(PackReadChoice::Ranges)
-            .ok_or(PersistenceError::Malformed)
-    }
-}
-
-/// One acquisition of `ranges`, counted in the mark's bytes.
-fn acquire(
+/// Reads every request's ranges in bounded calls and returns each request's
+/// bytes, range by range.
+fn read_ranges(
     source: &ClosureSource<'_>,
-    pack_id: i64,
-    ranges: Vec<PackRange>,
-) -> HistoryResult<Vec<(PackRange, Vec<u8>)>> {
-    let mut plan = Ranges {
-        pack_id,
-        ranges: Some(ranges),
-    };
-    let read = source
-        .mechanics
-        .read_scoped_pack(pack_id, &mut plan)
-        .map_err(StorageError::from)
-        .map_err(storage)?;
-    let AcquiredPackRead::Units(units) = read else {
-        return Err(HistoryError::Integrity("mark edge acquisition"));
-    };
-    source.note_scoped_body(
-        pack_id,
-        u64::try_from(units.acquired_bytes()).unwrap_or(u64::MAX),
-        u64::try_from(units.info().length).unwrap_or(u64::MAX),
-    );
-    Ok(units.into_parts().2)
-}
-
-/// Acquires `needs`, sorted and disjoint ranges of pack `pack_id`, in bounded
-/// batches, and adds them to `held`.
-fn acquire_all(
-    source: &ClosureSource<'_>,
-    pack_id: i64,
-    needs: Vec<PackRange>,
-    held: &mut Pieces,
-) -> HistoryResult<()> {
-    let mut acquired = Vec::new();
-    let mut flush = |batch: &mut Vec<PackRange>| -> HistoryResult<()> {
-        if batch.is_empty() {
-            return Ok(());
+    requests: &[Request],
+) -> HistoryResult<Vec<Vec<Vec<u8>>>> {
+    let mut bodies: Vec<Vec<Vec<u8>>> = requests.iter().map(|_| Vec::new()).collect();
+    let mut call: Vec<(i64, Vec<PackRange>)> = Vec::new();
+    let mut owners: Vec<usize> = Vec::new();
+    let mut flush =
+        |call: &mut Vec<(i64, Vec<PackRange>)>, owners: &mut Vec<usize>| -> HistoryResult<()> {
+            if call.is_empty() {
+                return Ok(());
+            }
+            let mut read = Vec::with_capacity(call.len());
+            source
+                .mechanics
+                .pack_ranges(call, &mut read)
+                .map_err(StorageError::from)
+                .map_err(storage)?;
+            if read.len() != call.len() {
+                return Err(HistoryError::Integrity("mark range read"));
+            }
+            for ((owner, (_, asked)), got) in owners.drain(..).zip(call.drain(..)).zip(read) {
+                let exact = got.len() == asked.len()
+                    && asked
+                        .iter()
+                        .zip(&got)
+                        .all(|(range, bytes)| bytes.len() == range.length);
+                if !exact {
+                    return Err(HistoryError::Integrity("mark range read"));
+                }
+                bodies[owner].extend(got);
+            }
+            Ok(())
+        };
+    let (mut count, mut bytes) = (0, 0);
+    for (index, (pack_id, _, ranges)) in requests.iter().enumerate() {
+        for range in ranges {
+            if count > 0 && (count == BATCH_RANGES || bytes + range.length > BATCH_BYTES) {
+                flush(&mut call, &mut owners)?;
+                (count, bytes) = (0, 0);
+            }
+            match call.last_mut() {
+                Some((_, list)) if owners.last() == Some(&index) => list.push(*range),
+                _ => {
+                    call.push((*pack_id, vec![*range]));
+                    owners.push(index);
+                }
+            }
+            count += 1;
+            bytes += range.length;
         }
-        acquired.extend(acquire(source, pack_id, std::mem::take(batch))?);
-        Ok(())
-    };
-    let mut batch = Vec::new();
-    let mut bytes = 0;
-    for range in needs {
-        if batch.len() == BATCH_RANGES || bytes + range.length > BATCH_BYTES {
-            flush(&mut batch)?;
-            bytes = 0;
-        }
-        bytes += range.length;
-        batch.push(range);
     }
-    flush(&mut batch)?;
-    for (range, bytes) in acquired {
-        held.add(range.offset, bytes);
-    }
-    Ok(())
+    flush(&mut call, &mut owners)?;
+    Ok(bodies)
 }
 
 /// The record directories of `groups`, uncompressed groups of pack `pack_id`
@@ -264,60 +240,122 @@ pub(super) fn group_directories(
         if needs.is_empty() {
             return Ok(directories);
         }
-        acquire_all(source, pack_id, merged(needs), &mut held)?;
+        let request = [(pack_id, usize::MAX, merged(needs))];
+        let mut read = 0u64;
+        for (range, bytes) in request[0]
+            .2
+            .iter()
+            .zip(read_ranges(source, &request)?.remove(0))
+        {
+            read += bytes.len() as u64;
+            held.add(range.offset, bytes);
+        }
+        source.note_scoped_body(pack_id, read, u64::MAX);
     }
     Err(HistoryError::Integrity("mark group directory"))
 }
 
-/// The edges of `items`, all records of pack `pack_id`, given the pack's
-/// declared length and head: `None` where the record's group is encoded and
-/// must take the decoding reader.
-fn pack_edges(
-    source: &ClosureSource<'_>,
+/// One pack's records in a wave, and what the wave has read of the pack.
+struct PackWork<'a> {
     pack_id: i64,
-    items: &[ObjectLocation],
     length: usize,
-    head: Vec<u8>,
-) -> HistoryResult<Vec<Option<ChainEdge>>> {
-    let control = layout::parse_control_header(&head, length).map_err(storage)?;
-    let head = if head.len() < control.body_offset {
-        source
-            .mechanics
-            .pack_prefix(pack_id, PACK_READ_PREFIX_BYTES)
-            .map_err(StorageError::from)
-            .map_err(storage)?
-            .filter(|(wide, _)| *wide == length)
-            .ok_or(HistoryError::Integrity("mark pack directory"))?
-            .1
-    } else {
-        head
-    };
-    let header = layout::parse_directory_header(&head, length).map_err(storage)?;
-    let views =
-        layout::directory_group_views(&head[..header.body_offset], header).map_err(storage)?;
-    // The head's bytes past the directory are body bytes this mark read.
-    source.note_scoped_body(
-        pack_id,
-        u64::try_from(head.len() - header.body_offset).unwrap_or(u64::MAX),
-        u64::try_from(length).unwrap_or(u64::MAX),
-    );
-    let mut held = Pieces::default();
-    held.add(0, head);
-    let mut answers = vec![Answer::Pending; items.len()];
-    for _ in 0..=ROUNDS {
-        let needs = resolve(header, &views, items, &held, &mut answers).map_err(storage)?;
-        if needs.is_empty() {
-            source.keep_layout(pack_id, views);
-            return answers
-                .into_iter()
-                .map(|answer| match answer {
-                    Answer::Edge(edge) => Ok(Some(edge)),
-                    Answer::Encoded => Ok(None),
-                    Answer::Pending => Err(HistoryError::Integrity("mark edge read")),
-                })
-                .collect();
+    items: &'a [ObjectLocation],
+    header: PackHeader,
+    views: Vec<GroupView>,
+    held: Pieces,
+    answers: Vec<Answer>,
+    settled: bool,
+}
+
+impl<'a> PackWork<'a> {
+    /// The pack's layout from its declared length and head. A directory wider
+    /// than the head is read again, whole.
+    fn open(
+        source: &ClosureSource<'_>,
+        pack_id: i64,
+        items: &'a [ObjectLocation],
+        length: usize,
+        head: Vec<u8>,
+    ) -> HistoryResult<Self> {
+        let control = layout::parse_control_header(&head, length).map_err(storage)?;
+        let head = if head.len() < control.body_offset {
+            source
+                .mechanics
+                .pack_prefix(pack_id, PACK_READ_PREFIX_BYTES)
+                .map_err(StorageError::from)
+                .map_err(storage)?
+                .filter(|(wide, _)| *wide == length)
+                .ok_or(HistoryError::Integrity("mark pack directory"))?
+                .1
+        } else {
+            head
+        };
+        let header = layout::parse_directory_header(&head, length).map_err(storage)?;
+        let views =
+            layout::directory_group_views(&head[..header.body_offset], header).map_err(storage)?;
+        // The head's bytes past the directory are body bytes this mark read.
+        source.note_scoped_body(
+            pack_id,
+            u64::try_from(head.len() - header.body_offset).unwrap_or(u64::MAX),
+            u64::try_from(length).unwrap_or(u64::MAX),
+        );
+        let mut held = Pieces::default();
+        held.add(0, head);
+        Ok(Self {
+            pack_id,
+            length,
+            items,
+            header,
+            views,
+            held,
+            answers: vec![Answer::Pending; items.len()],
+            settled: false,
+        })
+    }
+}
+
+/// Answers every record of `work`: each round resolves what the held bytes
+/// can and reads, in one bounded set of calls, what all the packs still need.
+fn settle(source: &ClosureSource<'_>, work: &mut [PackWork<'_>]) -> HistoryResult<()> {
+    for round in 0..=ROUNDS {
+        let mut requests: Vec<Request> = Vec::new();
+        let mut owners = Vec::new();
+        for (index, pack) in work.iter_mut().enumerate() {
+            if pack.settled {
+                continue;
+            }
+            let needs = resolve(
+                pack.header,
+                &pack.views,
+                pack.items,
+                &pack.held,
+                &mut pack.answers,
+            )
+            .map_err(storage)?;
+            if needs.is_empty() {
+                pack.settled = true;
+            } else {
+                requests.push((pack.pack_id, pack.length, needs));
+                owners.push(index);
+            }
         }
-        acquire_all(source, pack_id, needs, &mut held)?;
+        if requests.is_empty() {
+            return Ok(());
+        }
+        if round == ROUNDS {
+            break;
+        }
+        let bodies = read_ranges(source, &requests)?;
+        for ((owner, (pack_id, length, ranges)), read) in
+            owners.into_iter().zip(requests).zip(bodies)
+        {
+            let mut total = 0u64;
+            for (range, bytes) in ranges.iter().zip(read) {
+                total += bytes.len() as u64;
+                work[owner].held.add(range.offset, bytes);
+            }
+            source.note_scoped_body(pack_id, total, u64::try_from(length).unwrap_or(u64::MAX));
+        }
     }
     Err(HistoryError::Integrity("mark edge read"))
 }
@@ -356,13 +394,22 @@ pub(super) fn wave_edges(
         if heads.len() != batch.len() {
             return Err(HistoryError::Integrity("mark pack heads"));
         }
+        let mut work = Vec::with_capacity(batch.len());
         for ((pack_id, items), (length, head)) in batch.iter().zip(heads) {
-            let answers = pack_edges(source, *pack_id, items, length, head)?;
-            for (item, edge) in items.iter().zip(answers) {
-                if let Some(edge) = edge {
-                    edges.insert(item.object_id, edge);
+            work.push(PackWork::open(source, *pack_id, items, length, head)?);
+        }
+        settle(source, &mut work)?;
+        for pack in work {
+            for (item, answer) in pack.items.iter().zip(pack.answers) {
+                match answer {
+                    Answer::Edge(edge) => {
+                        edges.insert(item.object_id, edge);
+                    }
+                    Answer::Encoded => {}
+                    Answer::Pending => return Err(HistoryError::Integrity("mark edge read")),
                 }
             }
+            source.keep_layout(pack.pack_id, pack.views);
         }
     }
     Ok(edges)

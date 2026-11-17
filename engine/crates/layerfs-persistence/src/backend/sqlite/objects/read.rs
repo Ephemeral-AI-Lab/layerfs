@@ -201,3 +201,60 @@ pub(crate) fn prefixes(
     })();
     closed(tx, blob, read)
 }
+
+/// Selected ranges of several packs through one BLOB handle moved from row
+/// to row. A pack's ranges ascend, so its overflow chain is followed once.
+pub(crate) fn ranges(
+    tx: &Transaction<'_>,
+    requests: &[(i64, Vec<PackRange>)],
+    out: &mut Vec<Vec<Vec<u8>>>,
+) -> Result<(), PersistenceError> {
+    let Some((first, _)) = requests.first() else {
+        return Ok(());
+    };
+    if requests.iter().any(|(id, _)| *id <= 0) {
+        return Err(PersistenceError::Malformed);
+    }
+    tx.work.borrow_mut().blob_open_calls += 1;
+    let mut blob = tx
+        .connection
+        .blob_open("main", "pack", "body", *first, true)
+        .map_err(rows::error)?;
+    let read = (|| {
+        for (index, (id, ranges)) in requests.iter().enumerate() {
+            if index > 0 {
+                tx.work.borrow_mut().blob_reopen_calls += 1;
+                blob.reopen(*id).map_err(rows::error)?;
+            }
+            let mut bodies = Vec::with_capacity(ranges.len());
+            let mut end = 0;
+            for range in ranges {
+                let stop = range
+                    .offset
+                    .checked_add(range.length)
+                    .filter(|stop| range.length > 0 && range.offset >= end && *stop <= blob.len())
+                    .ok_or(PersistenceError::Malformed)?;
+                end = stop;
+                let mut body = vec![0; range.length];
+                {
+                    let mut work = tx.work.borrow_mut();
+                    work.blob_read_calls += 1;
+                    work.blob_requested_bytes += body.len() as u64;
+                }
+                let start = Instant::now();
+                let read = blob
+                    .read_at_exact(&mut body, range.offset)
+                    .map_err(rows::error);
+                let mut work = tx.work.borrow_mut();
+                work.blob_read_ns += start.elapsed().as_nanos() as u64;
+                read?;
+                work.blob_read_bytes += body.len() as u64;
+                drop(work);
+                bodies.push(body);
+            }
+            out.push(bodies);
+        }
+        Ok(())
+    })();
+    closed(tx, blob, read)
+}

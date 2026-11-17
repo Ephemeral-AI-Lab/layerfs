@@ -3,8 +3,11 @@
 use super::records::{BackendError, Param, Record};
 use layerfs_content::ObjectId;
 use layerfs_storage::{
+    location::PackInfo,
     location::{InodeValueRow, LocatedObject, SignatureRow},
-    port::{PersistedPack, PersistenceError},
+    port::{
+        AcquiredPackRead, PackRange, PackReadChoice, PackReadPlan, PersistedPack, PersistenceError,
+    },
     StoragePolicy,
 };
 use std::sync::Arc;
@@ -105,6 +108,18 @@ pub(crate) trait Mechanics {
         }
         Ok(())
     }
+    /// The bytes of selected ranges of several packs in one call: for each
+    /// `(pack, ranges)` of `requests`, in order, the bytes of each range, in
+    /// order. A pack's ranges are sorted and disjoint. The bytes are not
+    /// authenticated; the consumer does that. An engine answers from one
+    /// cursor or one statement; this default acquires each pack on its own.
+    fn pack_ranges(
+        &self,
+        requests: &[(i64, Vec<PackRange>)],
+        out: &mut Vec<Vec<Vec<u8>>>,
+    ) -> Result<(), PersistenceError> {
+        ranges_by_acquisition(self, requests, out)
+    }
     /// One pack through the caller's bounded range plan: only the control
     /// prefix and the selected complete groups are read, never the body behind
     /// them. The storage port owns the plan and the returned units.
@@ -117,4 +132,43 @@ pub(crate) trait Mechanics {
             status: "pack range read".to_owned(),
         })
     }
+}
+
+/// A plan that selects ranges chosen before the acquisition starts.
+struct FixedRanges(Option<Vec<PackRange>>);
+
+impl PackReadPlan for FixedRanges {
+    fn select(
+        &mut self,
+        _info: PackInfo,
+        _prefix: &[u8],
+    ) -> Result<PackReadChoice, PersistenceError> {
+        self.0
+            .take()
+            .map(PackReadChoice::Ranges)
+            .ok_or(PersistenceError::Malformed)
+    }
+}
+
+/// [`Mechanics::pack_ranges`] as one scoped acquisition per pack.
+pub(crate) fn ranges_by_acquisition<M: Mechanics + ?Sized>(
+    mechanics: &M,
+    requests: &[(i64, Vec<PackRange>)],
+    out: &mut Vec<Vec<Vec<u8>>>,
+) -> Result<(), PersistenceError> {
+    for (id, ranges) in requests {
+        let mut plan = FixedRanges(Some(ranges.clone()));
+        let AcquiredPackRead::Units(units) = mechanics.read_scoped_pack(*id, &mut plan)? else {
+            return Err(PersistenceError::Malformed);
+        };
+        out.push(
+            units
+                .into_parts()
+                .2
+                .into_iter()
+                .map(|(_, bytes)| bytes)
+                .collect(),
+        );
+    }
+    Ok(())
 }
