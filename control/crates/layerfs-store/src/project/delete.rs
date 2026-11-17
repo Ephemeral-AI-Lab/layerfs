@@ -10,7 +10,9 @@
 //! and finishes the entry: `Marked` means this attempt marked a live Stack,
 //! `Retired` means the marker was already there (including a hidden Store
 //! project whose home entry is stale), and `Absent` means no live Stack is
-//! there, so the stale entry goes. A lost worker reply is `Unknown`; the
+//! there, so a retry finishing its sidecar removes the stale entry. A fresh
+//! call with no sidecar that meets `Retired` or `Absent` is `NoSuchProject`
+//! and keeps its entry. A lost worker reply is `Unknown`; the
 //! intent stays and the retry classifies the Stack again. A home record whose
 //! Stack differs from the intent is a project made again under the same name:
 //! the stale intent is discarded and this call starts over against the record
@@ -367,10 +369,22 @@ fn mark_and_finish(
     mut current: Intent,
     mut deleted_ms: i64,
     pending_retry: bool,
+    fresh: bool,
     finish: Finish<'_>,
 ) -> Outcome {
     let Finish { effects, admission } = finish;
     let deletion = effects.mark(admission, deleted_ms, pending_retry)?;
+    if fresh && !matches!(deletion, Deletion::Marked { .. }) {
+        // The call had no sidecar, so it had to find a live project, and the
+        // Store says this Stack is already retired (or was never there). A
+        // stale entry is not a project: `NoSuchProject`, with the sidecar
+        // this call wrote removed and the entry left in place (spec §4).
+        Intent::unlink(home, store, project)?;
+        return Err(refused(
+            "NoSuchProject",
+            format!("no project {store}/{project}"),
+        ));
+    }
     deleted_ms = deletion.deleted_ms(deleted_ms);
     current.deleted_ms = deleted_ms;
     current.state = IntentState::Marked;
@@ -400,10 +414,11 @@ fn mark_and_finish(
 
 /// Runs `project.delete` for a home entry whose Store side is `effects`.
 ///
-/// `stack` is the Stack id resolved from the record or the Store listing; a
-/// record without one whose Store does not list it is a stale entry and is
-/// removed without a marker. The same function serves the local and worker
-/// routes, and a fake in tests.
+/// `stack` is the Stack id the Store lists for the project, or the record's
+/// id on a worker route, where the caller cannot list. A fresh call without
+/// one is `NoSuchProject`: only a same-home retry, through its durable
+/// intent, resolves a retired Stack (spec §4, §4.2). The same function serves
+/// the local and worker routes, and a fake in tests.
 ///
 /// The identity save and then the sidecar, naming the admission, precede the
 /// project scope's admission and the marker: a live mount is `MountsActive`
@@ -434,6 +449,10 @@ pub fn delete_with(
         }
     }
 
+    // Whether this call had a durable intent to fall back on. A fresh call
+    // must find a live project; a retry finishes a retired one (spec §4).
+    let fresh = intent.is_none();
+
     // A sidecar read in `pending` was written before an earlier admission: a
     // retry of it redoes the marker but does not finish the entry.
     let pending_retry = intent
@@ -443,21 +462,16 @@ pub fn delete_with(
     let (stack, deleted_ms) = match &intent {
         Some(intent) => (intent.stack, intent.deleted_ms),
         None => {
-            let Some(stack) = stack.or(record_stack) else {
-                if record.is_none() {
-                    return Err(refused(
-                        "NoSuchProject",
-                        format!("no project {store}/{project}"),
-                    ));
-                }
-                // An untracked stale entry: save a legacy identity before it
-                // goes, then remove it. There is no Stack id to mark.
-                effects.prepare()?;
-                let deleted_ms = now_ms();
-                let removed_entry = effects
-                    .remove_entry(&paths::project_dir(home, store, project))
-                    .is_ok();
-                return Ok(removed(store, project, deleted_ms, removed_entry));
+            // A fresh call resolves the project only through the Stack its
+            // Store lists now, never through the home record: a record from
+            // another home may name a retired Stack, and the record's id is
+            // not evidence of a live project (spec §4, §4.2). The exception
+            // is a same-home retry, which has the durable intent read above.
+            let Some(stack) = stack else {
+                return Err(refused(
+                    "NoSuchProject",
+                    format!("no project {store}/{project}"),
+                ));
             };
             (stack, now_ms())
         }
@@ -517,6 +531,7 @@ pub fn delete_with(
         current,
         deleted_ms,
         pending_retry,
+        fresh,
         Finish {
             effects: &mut *effects,
             admission,
@@ -662,10 +677,16 @@ pub fn delete(
             match place::plan(&home, &store_ref)? {
                 Executor::Local => {
                     let open = open_args(&home, store, name, Some(&record))?;
-                    let stack = match stack {
-                        Some(stack) => Some(stack),
-                        None if project_record.is_some() => listed_stack(&open, name)?,
-                        None => None,
+                    // Resolve the project by the Stack its Store lists now,
+                    // never by the home record alone: a fresh delete of a
+                    // retired project is `NoSuchProject`, and a stale record
+                    // from another home is not evidence (spec §4.2). A retry
+                    // resolves itself through its sidecar inside
+                    // `delete_with`.
+                    let stack = if project_record.is_some() {
+                        listed_stack(&open, name)?
+                    } else {
+                        None
                     };
                     let mut effects = Local {
                         home: home.clone(),

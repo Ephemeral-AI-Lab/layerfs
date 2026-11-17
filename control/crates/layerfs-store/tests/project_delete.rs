@@ -424,19 +424,54 @@ fn an_absent_stack_finishes_a_stale_entry() {
 }
 
 #[test]
-fn a_hidden_store_project_still_has_its_stale_entry_removed() {
-    let home = home("hidden");
+fn a_fresh_delete_of_a_retired_project_is_no_such_project() {
+    let home = home("retired-fresh");
     let (store, project, stack) = ("shop", "app", stack(5));
     project_record(&home, store, project, stack);
-    // The Store listing filters the retired project out; the Store side
-    // classifies the retry by the recorded stack id as Retired.
+    // Another home holds the stale record but not the sidecar of the delete
+    // that retired the Stack: the record's Stack id is not a live project.
+    // The local route resolves the Store's listing, so it passes no Stack.
     let mut fake = Fake::new(
         &home,
         store,
         project,
         vec![Deletion::Retired { deleted_ms: 333 }],
     );
-    let outcome = delete_with(&home, store, project, Some(stack), &mut fake).unwrap();
+    let refusal = delete_with(&home, store, project, None, &mut fake).unwrap_err();
+    assert_eq!(refusal.code, "NoSuchProject");
+    assert!(
+        fake.seen.is_empty(),
+        "nothing is marked for a missing project"
+    );
+    assert_eq!(Intent::read(&home, store, project).unwrap(), None);
+    assert!(paths::project_dir(&home, store, project).is_dir());
+
+    // A caller that hands over the record's Stack anyway (a worker route
+    // cannot list) is trusted only by the marker: `Retired` without a
+    // durable intent is the same `NoSuchProject`, with no entry removed.
+    let mut marked = Fake::new(
+        &home,
+        store,
+        project,
+        vec![Deletion::Retired { deleted_ms: 333 }],
+    );
+    let refusal = delete_with(&home, store, project, Some(stack), &mut marked).unwrap_err();
+    assert_eq!(refusal.code, "NoSuchProject");
+    assert_eq!(marked.seen.len(), 1);
+    assert_eq!(marked.seen[0].0, stack);
+    assert_eq!(Intent::read(&home, store, project).unwrap(), None);
+    assert!(paths::project_dir(&home, store, project).is_dir());
+
+    // The same-home retry has the durable sidecar: it still removes the
+    // stale entry of a Store project that no longer lists the name.
+    Intent::write(&home, &intent(&home, store, project, stack, 333)).unwrap();
+    let mut retry = Fake::new(
+        &home,
+        store,
+        project,
+        vec![Deletion::Retired { deleted_ms: 333 }],
+    );
+    let outcome = delete_with(&home, store, project, None, &mut retry).unwrap();
     assert_eq!(outcome.get_int("deleted_ms"), Some(333));
     assert!(outcome.get_bool("home_entry_removed"));
     assert!(!paths::project_dir(&home, store, project).exists());
@@ -546,7 +581,7 @@ fn a_recreated_project_discards_the_stale_intent_and_starts_over() {
 }
 
 #[test]
-fn an_untracked_record_with_no_stack_is_removed_without_a_marker() {
+fn an_untracked_record_with_no_stack_is_no_such_project() {
     let home = home("untracked");
     let (store, project) = ("shop", "app");
     write_record(
@@ -555,16 +590,18 @@ fn an_untracked_record_with_no_stack_is_removed_without_a_marker() {
     )
     .unwrap();
     let mut fake = Fake::new(&home, store, project, Vec::new());
-    let outcome = delete_with(&home, store, project, None, &mut fake).unwrap();
+    // Nothing lists the record and there is no sidecar: no project, and no
+    // legacy identity is saved for one that is gone.
+    let refusal = delete_with(&home, store, project, None, &mut fake).unwrap_err();
+    assert_eq!(refusal.code, "NoSuchProject");
     assert!(fake.seen.is_empty());
-    assert_eq!(fake.prepared, 1, "a legacy identity is saved first");
-    assert!(outcome.get_bool("home_entry_removed"));
-    assert!(!paths::project_dir(&home, store, project).exists());
-    let _ = std::fs::remove_dir_all(&home);
+    assert_eq!(fake.prepared, 0);
+    assert!(paths::project_dir(&home, store, project).is_dir());
 
-    // no record and no intent is NoSuchProject
+    // no record and no intent is NoSuchProject too
     let refusal = delete_with(&home, "shop", "gone", None, &mut fake).unwrap_err();
     assert_eq!(refusal.code, "NoSuchProject");
+    let _ = std::fs::remove_dir_all(&home);
 }
 
 #[test]

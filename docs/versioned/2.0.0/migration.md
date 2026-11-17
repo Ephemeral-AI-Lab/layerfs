@@ -123,7 +123,7 @@ options. The argument lists are in the generated
 | `backend.daemon.workspace.status(ws)` | `workspace.status(ws)` | **Replaced** (O14). |
 | background processes (`process.*` of the backend facade) | none | **Removed** with the backend facade (O25). [Limitations](limitations.md#not-built-refused-as-unsupported) |
 
-Calls with no counterpart in the 1.1.0 method table above: `project.remove`,
+Calls with no counterpart in the 1.1.0 method table above: `project.delete`,
 `commit.get`, and the `machine`, `store` and `backup` families, plus the
 commands `layerfs doctor` and `layerfs import-env`. In all there are 83 calls in
 eleven families ([coverage](../../architecture/api/calls/coverage.md)).
