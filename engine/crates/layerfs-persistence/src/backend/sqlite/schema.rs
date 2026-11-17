@@ -110,6 +110,24 @@ fn kept_node_table() -> &'static str {
     &GC[start..end]
 }
 
+/// The `binding_hint_block` table as `history.sql` writes it.
+fn binding_hint_table() -> &'static str {
+    let start = HISTORY
+        .find("CREATE TABLE binding_hint_block (")
+        .expect("the history schema holds binding_hint_block");
+    let end = start
+        + HISTORY[start..]
+            .find(";\n")
+            .expect("binding_hint_block ends")
+        + 2;
+    &HISTORY[start..end]
+}
+
+/// The query that returns a row when table `name` exists.
+fn has_table(name: &str) -> String {
+    format!("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='{name}'")
+}
+
 /// The `commit` and `layer` position column as `history.sql` writes it; it
 /// appears once in each of the two tables.
 fn history_serial_column() -> &'static str {
@@ -356,323 +374,167 @@ impl super::session::connection::Session {
   })?;
         Ok(())
     }
+    /// One additive migration (REBUILD.md kind 2) in one write transaction.
+    /// A Store that already has it (`present` returns a row), has no
+    /// `history_meta` row, recorded a source other than the accepted ones, or
+    /// whose live schema no longer matches what it recorded is left for
+    /// `validate` to judge. Otherwise `apply` runs and the Store records the
+    /// new source with its new definition. `sources` maps the current source
+    /// to `(accepted earlier sources, source to record)`.
+    fn migrate(
+        &self,
+        present: &str,
+        sources: impl FnOnce(String) -> (Vec<String>, String),
+        apply: impl FnOnce(&Transaction<'_>) -> Result<(), BackendError>,
+    ) -> Result<(), BackendError> {
+        self.run::<_, BackendError>(true, |tx| {
+            if !tx.query(present, vec![])?.is_empty() {
+                return Ok(());
+            }
+            let rows = tx.query(
+                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
+                vec![],
+            )?;
+            let Some(row) = rows.first() else {
+                return Ok(());
+            };
+            let (accepted, record) = sources(source((self.layout, self.acquisition)));
+            if !accepted.contains(&row.get::<String>(0)?)
+                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
+            {
+                return Ok(());
+            }
+            apply(tx)?;
+            let definition = definition(tx.connection, tx.work)?;
+            tx.query(
+                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
+                vec![Param::Text(record), Param::Text(definition)],
+            )?;
+            Ok(())
+        })
+    }
     /// Adds the three position columns T1.2a introduced to a Store written
     /// before them: `commit.history_serial`, `layer.history_serial` (default 0)
-    /// and `store_policy.trace_salt` (32 random bytes). It is an additive
-    /// migration (REBUILD.md kind 2) under the same recorded-schema gate as
-    /// [`Self::add_binding_hints`]; because it runs before the GC tables are
-    /// added, the recorded source it matches is the live one with `GC` stripped.
+    /// and `store_policy.trace_salt` (32 random bytes). Because it runs before
+    /// the GC tables are added, the sources it matches and records are the
+    /// current one with `GC` stripped.
     pub(crate) fn add_gc_columns(&self) -> Result<(), BackendError> {
-        self.run::<_, BackendError>(true, |tx| {
-            let present = tx.query(
-                "SELECT 1 FROM pragma_table_info('commit') WHERE name='history_serial'",
-                vec![],
-            )?;
-            if !present.is_empty() {
-                return Ok(());
-            }
-            let rows = tx.query(
-                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
-                vec![],
-            )?;
-            let Some(row) = rows.first() else {
-                return Ok(());
-            };
-            let current = without_position_columns(source((self.layout, self.acquisition)))
-                .replacen(GC, "", 1);
-            if row.get::<String>(0)? != current
-                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
-            {
-                return Ok(());
-            }
-            add_position_columns(tx)?;
-            let definition = definition(tx.connection, tx.work)?;
-            tx.query(
-                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
-                vec![
-                    Param::Text(source((self.layout, self.acquisition)).replacen(GC, "", 1)),
-                    Param::Text(definition),
-                ],
-            )?;
-            Ok(())
-        })
+        self.migrate(
+            "SELECT 1 FROM pragma_table_info('commit') WHERE name='history_serial'",
+            |current| {
+                let record = current.replacen(GC, "", 1);
+                (vec![without_position_columns(record.clone())], record)
+            },
+            add_position_columns,
+        )
     }
-    /// Adds the binding hint table (#352 `49499abac`, blocks since #91) to a Store written
-    /// before it existed, then records the current schema: an additive
-    /// migration (REBUILD.md kind 2). Only a Store whose recorded schema is
-    /// exactly the earlier one, and whose live schema still matches what it
-    /// recorded, is migrated; any other Store is left for `validate` to judge.
-    /// Saved trees keep no hints, so a difference over them takes the full
-    /// walk; hints are recorded for what is saved from then on.
+    /// Adds the binding hint table (#352 `49499abac`, blocks since #91) to a
+    /// Store written before it existed. Saved trees keep no hints, so a
+    /// difference over them takes the full walk; hints are recorded for what
+    /// is saved from then on. The source it records is the one before the
+    /// lineage, merge, digest and GC tables; later migrations add those.
     pub(crate) fn add_binding_hints(&self) -> Result<(), BackendError> {
-        self.run::<_, BackendError>(true, |tx| {
-            let present = tx.query(
-                "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='binding_hint_block'",
-                vec![],
-            )?;
-            if !present.is_empty() {
-                return Ok(());
-            }
-            let rows = tx.query(
-                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
-                vec![],
-            )?;
-            let Some(row) = rows.first() else {
-                return Ok(());
-            };
-            // The schema this migration records is the one before the
-            // lineage and merge tables; later migrations add those.
-            let current = without_position_columns(source((self.layout, self.acquisition)))
-                .replacen(DIGESTS, "", 1)
-                .replacen(SCRATCH, "", 1)
-                .replacen(LINEAGE, "", 1)
-                .replacen(GC, "", 1);
-            let table = HISTORY
-                .find("CREATE TABLE binding_hint_block (")
-                .and_then(|start| Some((start, start + HISTORY[start..].find(";\n")? + 2)))
-                .map(|(start, end)| &HISTORY[start..end])
-                .ok_or(BackendError::Integrity)?;
-            let earlier = current.replacen(&format!("{table}\n"), "", 1);
-            if row.get::<String>(0)? != earlier
-                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
-            {
-                return Ok(());
-            }
-            tx.bootstrap(table)?;
-            let definition = definition(tx.connection, tx.work)?;
-            tx.query(
-                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
-                vec![Param::Text(current), Param::Text(definition)],
-            )?;
-            Ok(())
-        })
+        self.migrate(
+            &has_table("binding_hint_block"),
+            |current| {
+                let record = without_position_columns(current)
+                    .replacen(DIGESTS, "", 1)
+                    .replacen(SCRATCH, "", 1)
+                    .replacen(LINEAGE, "", 1)
+                    .replacen(GC, "", 1);
+                let table = format!("{}\n", binding_hint_table());
+                (vec![record.replacen(&table, "", 1)], record)
+            },
+            |tx| tx.bootstrap(binding_hint_table()),
+        )
     }
-    /// Adds the lineage tables (#353) to a Store written before them, fills
-    /// them with `backfill` in the same write transaction and records the
-    /// current schema: an additive migration (REBUILD.md kind 2) under the
-    /// same conditions as [`Self::add_binding_hints`].
+    /// Adds the lineage tables (#353) to a Store written before them and
+    /// fills them with `backfill` in the same write transaction.
     pub(crate) fn add_lineage(
         &self,
         backfill: impl FnOnce(&Transaction<'_>) -> Result<(), BackendError>,
     ) -> Result<(), BackendError> {
-        self.run::<_, BackendError>(true, |tx| {
-            let present = tx.query(
-                "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='commit_lineage'",
-                vec![],
-            )?;
-            if !present.is_empty() {
-                return Ok(());
-            }
-            let rows = tx.query(
-                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
-                vec![],
-            )?;
-            let Some(row) = rows.first() else {
-                return Ok(());
-            };
-            let current = without_position_columns(source((self.layout, self.acquisition)))
-                .replacen(DIGESTS, "", 1)
-                .replacen(SCRATCH, "", 1)
-                .replacen(GC, "", 1);
-            if row.get::<String>(0)? != current.replacen(LINEAGE, "", 1)
-                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
-            {
-                return Ok(());
-            }
-            tx.bootstrap(LINEAGE)?;
-            backfill(tx)?;
-            let definition = definition(tx.connection, tx.work)?;
-            tx.query(
-                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
-                vec![Param::Text(current), Param::Text(definition)],
-            )?;
-            Ok(())
-        })
+        self.migrate(
+            &has_table("commit_lineage"),
+            |current| {
+                let record = without_position_columns(current)
+                    .replacen(DIGESTS, "", 1)
+                    .replacen(SCRATCH, "", 1)
+                    .replacen(GC, "", 1);
+                (vec![record.replacen(LINEAGE, "", 1)], record)
+            },
+            |tx| {
+                tx.bootstrap(LINEAGE)?;
+                backfill(tx)
+            },
+        )
     }
-    /// Adds the merge build tables (#355) to a Store written before them and
-    /// records the current schema: an additive migration (REBUILD.md kind 2)
-    /// under the same conditions as [`Self::add_binding_hints`].
+    /// Adds the merge build tables (#355) to a Store written before them.
     pub(crate) fn add_merge_scratch(&self) -> Result<(), BackendError> {
-        self.run::<_, BackendError>(true, |tx| {
-            let present = tx.query(
-                "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='merge_record'",
-                vec![],
-            )?;
-            if !present.is_empty() {
-                return Ok(());
-            }
-            let rows = tx.query(
-                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
-                vec![],
-            )?;
-            let Some(row) = rows.first() else {
-                return Ok(());
-            };
-            let current = without_position_columns(source((self.layout, self.acquisition)))
-                .replacen(DIGESTS, "", 1)
-                .replacen(GC, "", 1);
-            if row.get::<String>(0)? != current.replacen(SCRATCH, "", 1)
-                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
-            {
-                return Ok(());
-            }
-            tx.bootstrap(SCRATCH)?;
-            let definition = definition(tx.connection, tx.work)?;
-            tx.query(
-                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
-                vec![Param::Text(current), Param::Text(definition)],
-            )?;
-            Ok(())
-        })
+        self.migrate(
+            &has_table("merge_record"),
+            |current| {
+                let record = without_position_columns(current)
+                    .replacen(DIGESTS, "", 1)
+                    .replacen(GC, "", 1);
+                (vec![record.replacen(SCRATCH, "", 1)], record)
+            },
+            |tx| tx.bootstrap(SCRATCH),
+        )
     }
-    /// Adds the file digest table (#364) to a Store written before it and
-    /// records the current schema: an additive migration (REBUILD.md kind 2)
-    /// under the same conditions as [`Self::add_binding_hints`]. Saved roots
-    /// keep no digest; a Commit records them for the roots it builds.
+    /// Adds the file digest table (#364) to a Store written before it. Saved
+    /// roots keep no digest; a Commit records them for the roots it builds.
     pub(crate) fn add_file_digests(&self) -> Result<(), BackendError> {
-        self.run::<_, BackendError>(true, |tx| {
-            let present = tx.query(
-                "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='file_digest'",
-                vec![],
-            )?;
-            if !present.is_empty() {
-                return Ok(());
-            }
-            let rows = tx.query(
-                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
-                vec![],
-            )?;
-            let Some(row) = rows.first() else {
-                return Ok(());
-            };
-            let current = without_position_columns(source((self.layout, self.acquisition)))
-                .replacen(GC, "", 1);
-            if row.get::<String>(0)? != current.replacen(DIGESTS, "", 1)
-                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
-            {
-                return Ok(());
-            }
-            tx.bootstrap(DIGESTS)?;
-            let definition = definition(tx.connection, tx.work)?;
-            tx.query(
-                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
-                vec![Param::Text(current), Param::Text(definition)],
-            )?;
-            Ok(())
-        })
+        self.migrate(
+            &has_table("file_digest"),
+            |current| {
+                let record = without_position_columns(current).replacen(GC, "", 1);
+                (vec![record.replacen(DIGESTS, "", 1)], record)
+            },
+            |tx| tx.bootstrap(DIGESTS),
+        )
     }
     /// Adds the GC marker, position and admission tables to a Store written
-    /// before them, then records the current schema: an additive migration
-    /// under the same conditions as [`Self::add_binding_hints`].
+    /// before them.
     pub(crate) fn add_gc(&self) -> Result<(), BackendError> {
-        self.run::<_, BackendError>(true, |tx| {
-            let present = tx.query(
-                "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='gc_intent'",
-                vec![],
-            )?;
-            if !present.is_empty() {
-                return Ok(());
-            }
-            let rows = tx.query(
-                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
-                vec![],
-            )?;
-            let Some(row) = rows.first() else {
-                return Ok(());
-            };
-            let current = source((self.layout, self.acquisition));
-            if row.get::<String>(0)? != current.replacen(GC, "", 1)
-                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
-            {
-                return Ok(());
-            }
-            tx.bootstrap(GC)?;
-            let definition = definition(tx.connection, tx.work)?;
-            tx.query(
-                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
-                vec![Param::Text(current), Param::Text(definition)],
-            )?;
-            Ok(())
-        })
+        self.migrate(
+            &has_table("gc_intent"),
+            |current| (vec![current.replacen(GC, "", 1)], current),
+            |tx| tx.bootstrap(GC),
+        )
     }
     /// Adds the `kept_node` history-closure table (T7.1) to a Store written
-    /// before it, then records the current schema: an additive migration
-    /// (REBUILD.md kind 2) under the same conditions as
-    /// [`Self::add_binding_hints`]. The table is empty until a mark writes it.
+    /// before it, with or without the T1.4 next-serial column. The table is
+    /// empty until a mark writes it.
     pub(crate) fn add_kept_node(&self) -> Result<(), BackendError> {
-        self.run::<_, BackendError>(true, |tx| {
-            let present = tx.query(
-                "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='kept_node'",
-                vec![],
-            )?;
-            if !present.is_empty() {
-                return Ok(());
-            }
-            let rows = tx.query(
-                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
-                vec![],
-            )?;
-            let Some(row) = rows.first() else {
-                return Ok(());
-            };
-            let current = source((self.layout, self.acquisition));
-            let recorded = row.get::<String>(0)?;
-            let without = current.replacen(kept_node_table(), "", 1);
-            let earlier = without.replacen(next_history_serial_column(), "", 1);
-            if (recorded != earlier && recorded != without)
-                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
-            {
-                return Ok(());
-            }
-            tx.bootstrap(kept_node_table())?;
-            let definition = definition(tx.connection, tx.work)?;
-            tx.query(
-                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
-                vec![Param::Text(current), Param::Text(definition)],
-            )?;
-            Ok(())
-        })
+        self.migrate(
+            &has_table("kept_node"),
+            |current| {
+                let without = current.replacen(kept_node_table(), "", 1);
+                let earlier = without.replacen(next_history_serial_column(), "", 1);
+                (vec![earlier, without], current)
+            },
+            |tx| tx.bootstrap(kept_node_table()),
+        )
     }
     /// Adds the position state T1.4 introduced (`history_meta.next_history_serial`,
     /// appended NOT NULL DEFAULT 1) and backfills the `commit`/`layer` serials
-    /// and `project_epoch` rows in the same write transaction: an additive
-    /// migration (REBUILD.md kind 2) under the same recorded-schema gate as
-    /// [`Self::add_gc_columns`]. `recorded == current` also matches a Store an
-    /// earlier step of this same open just brought forward, because those steps
-    /// record the current source before this column is appended.
+    /// and `project_epoch` rows in the same write transaction. A recorded
+    /// source equal to the current one is also accepted: it is a Store an
+    /// earlier step of this same open just brought forward, because those
+    /// steps record the current source before this column is appended.
     pub(crate) fn add_position_state(&self) -> Result<(), BackendError> {
-        self.run::<_, BackendError>(true, |tx| {
-            let present = tx.query(
-                "SELECT 1 FROM pragma_table_info('history_meta') WHERE name='next_history_serial'",
-                vec![],
-            )?;
-            if !present.is_empty() {
-                return Ok(());
-            }
-            let rows = tx.query(
-                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
-                vec![],
-            )?;
-            let Some(row) = rows.first() else {
-                return Ok(());
-            };
-            let current = source((self.layout, self.acquisition));
-            let before = current.replacen(next_history_serial_column(), "", 1);
-            let recorded = row.get::<String>(0)?;
-            if (recorded != before && recorded != current)
-                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
-            {
-                return Ok(());
-            }
-            tx.query(POSITION_COLUMNS[3].2, vec![])?;
-            backfill_position_state(tx)?;
-            let definition = definition(tx.connection, tx.work)?;
-            tx.query(
-                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
-                vec![Param::Text(current), Param::Text(definition)],
-            )?;
-            Ok(())
-        })
+        self.migrate(
+            "SELECT 1 FROM pragma_table_info('history_meta') WHERE name='next_history_serial'",
+            |current| {
+                let before = current.replacen(next_history_serial_column(), "", 1);
+                (vec![before, current.clone()], current)
+            },
+            |tx| {
+                tx.query(POSITION_COLUMNS[3].2, vec![])?;
+                backfill_position_state(tx)
+            },
+        )
     }
     pub(crate) fn validate(
         &self,
