@@ -125,6 +125,7 @@ transaction-pooling proxy never carries one session's settings to another.
 | `Write` | `READ COMMITTED` + `synchronous_commit` + `lock_timeout` | `FOR UPDATE`, unless nested in the held lane | history writes, allocation, acquisition writes |
 | `Stage` | `READ COMMITTED` + `synchronous_commit` | no | schema create, merge records |
 | `Publish` | as `Write` | `FOR UPDATE` after the pack bodies, unless nested | one Save publication, up to 16 MiB − 1 |
+| `Snapshot` | `REPEATABLE READ` + `synchronous_commit` + `jit` off | no | the garbage-collection mark: reads history, locators and packs from one snapshot and writes only `kept_node` |
 | `Immutable` | none; autocommit statements | no | locates, pack reads, inode values |
 | `Statement` | none; exactly one autocommit statement | no | `branch_snapshot`, a Commit or Layer by id, a LayerStack by name, `digest_roots` (up to `FILE_DIGEST_WINDOW` = 1,024 contents) |
 
@@ -134,6 +135,21 @@ A single statement sees one snapshot, so `Statement` reads a Branch and the
 rows it resolves to coherently. Statements outside a transaction name the
 schema (`{s}` in [`queries/history`](../../../../engine/crates/layerfs-persistence/sql/postgresql/queries/history)).
 Writes are never `SERIALIZABLE` and never retried.
+
+The mark runs with the server's JIT compiler off: the planner's estimate for
+the history closure crosses the JIT threshold, and compiling it cost about
+400 ms for a statement that runs in about 10 ms. Inside its snapshot the mark
+also reads ahead, because each statement costs a round trip:
+
+| Read | One statement covers | Bound | Source |
+| --- | --- | --- | --- |
+| Pack heads and record ranges of payload packs | 256 packs; 1,024 ranges or 512 KiB | `HEAD_PACKS`, `BATCH_RANGES`, `BATCH_BYTES` | [`edges.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/edges.rs) |
+| Metadata packs the walk decodes | the next 128 packs of the wave, each up to 32 KiB (a longer pack is read alone) | `AHEAD_PACKS`, `AHEAD_BYTES` | [`objects.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects.rs), [`read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/read.rs) |
+| Inode values of a leaf | the blocks holding up to 4,096 ordinals past the leaf's own; at most 65,536 values kept | `AHEAD_VALUES`, `HELD_VALUES` | [`objects.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects.rs), [`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
+
+A SQLite Store ignores the pack hint and reads no values ahead. Rows read
+ahead are the rows the single reads return, so the mark's result and its
+`mark_bytes` do not change.
 
 ### Generation fence
 

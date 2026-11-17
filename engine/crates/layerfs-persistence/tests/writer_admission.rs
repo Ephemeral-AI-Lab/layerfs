@@ -806,6 +806,40 @@ fn concurrent_open_child() {
     }
 }
 
+/// A seal that is refused returns. Its checkpoint cannot finish while a reader
+/// keeps an older snapshot, so the seal fails `Busy` with its connection still
+/// open; closing that connection is a write that waits for the lane, and the
+/// seal holds the lane. The close must run under the seal's own hold. It used
+/// to wait for it, so the call never came back. The lane is free afterwards:
+/// the next open and write are admitted.
+#[test]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn a_refused_seal_returns_and_frees_the_lane() {
+    let temp = support::Temp::new("wr");
+    let path = temp.join("store.sqlite");
+    let (sender, receiver) = mpsc::channel();
+    let store = path.clone();
+    std::thread::spawn(move || {
+        let handles = create(&store);
+        handles.storage.reserve(reserve()).unwrap();
+        let reader = rusqlite::Connection::open(&store).unwrap();
+        reader
+            .execute_batch("BEGIN; SELECT count(*) FROM sqlite_master;")
+            .unwrap();
+        // Frames the reader's snapshot does not cover: the checkpoint cannot
+        // pass them while that snapshot is held.
+        handles.storage.reserve(reserve()).unwrap();
+        let refused = matches!(handles.seal(), Err(PersistenceError::Busy));
+        drop(reader);
+        let _ = sender.send(refused);
+    });
+    let refused = receiver
+        .recv_timeout(Duration::from_secs(20))
+        .expect("the refused seal returns");
+    assert!(refused, "an obstructed checkpoint refuses the seal Busy");
+    open(&path).storage.reserve(reserve()).unwrap();
+}
+
 /// Three processes open the same Store at once: the open-time lane and the
 /// transaction lane queue them instead of meeting SQLite's Busy, so every
 /// open and every reservation of all three succeeds (#534, #647).

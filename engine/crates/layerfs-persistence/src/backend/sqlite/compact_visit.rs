@@ -87,21 +87,24 @@ BEGIN IMMEDIATE;",
             .map_err(db_error)?
             .execute(params![id.as_bytes().as_slice(), pack_id])
             .map_err(db_error)?;
-        connection
-            .prepare_cached("INSERT OR IGNORE INTO live_pack(pack_id) VALUES(?1)")
-            .map_err(db_error)?
-            .execute(params![pack_id])
-            .map_err(db_error)?;
         Ok(())
     }
 
-    /// Commits the rows, closes the connection and refuses a sidecar.
+    /// Derives the retained packs, commits, closes the connection and refuses
+    /// a sidecar.
     pub(crate) fn finish(mut self) -> HistoryResult<u64> {
         let connection = self
             .connection
             .take()
             .ok_or(HistoryError::Integrity("visited scratch"))?;
-        connection.execute_batch("COMMIT").map_err(db_error)?;
+        // The retained packs are the visited rows' packs: one ordered
+        // statement at the end instead of one insert per reached object.
+        connection
+            .execute_batch(
+                "INSERT INTO live_pack(pack_id) \
+SELECT DISTINCT pack_id FROM visited ORDER BY pack_id; COMMIT",
+            )
+            .map_err(db_error)?;
         connection.close().map_err(|(_, error)| db_error(error))?;
         for sidecar in sidecars(&self.path) {
             if std::fs::symlink_metadata(&sidecar).is_ok() {

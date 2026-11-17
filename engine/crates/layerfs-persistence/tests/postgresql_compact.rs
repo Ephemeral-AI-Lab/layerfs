@@ -2602,3 +2602,53 @@ fn the_collected_projects_lineage_goes_with_the_project() {
     assert_eq!(lineage_orphans(&schema), (0, 0, 0, 0), "no orphan lineage");
     clean(&schema.open());
 }
+
+/// §8 step 3: Phase A copies exactly one location row per visited object. A
+/// second row for a retained object is refused as `Integrity` before the swap:
+/// the Store stays at `G` with its tables untouched, and the op row still
+/// names the scratch schema the failed build left (§9).
+#[test]
+fn a_duplicate_retained_location_row_refuses_the_build() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "duprow");
+    let handles = schema.create();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let dead = whole_file(&handles, b"nobody reaches this object");
+    let before = generation(&handles);
+    let objects = schema.count("object_location");
+    let packs = schema.count("pack");
+    let duplicated = schema
+        .client()
+        .execute(
+            &format!(
+                "INSERT INTO {s}.object_location SELECT * FROM {s}.object_location WHERE object_id=$1",
+                s = schema.selection.schema
+            ),
+            &[&live.as_bytes().as_slice()],
+        )
+        .expect("duplicate one retained location row");
+    assert_eq!(duplicated, 1, "exactly one retained row is duplicated");
+
+    let error = handles.compact(&request(91)).unwrap_err();
+    assert!(
+        matches!(error, layerfs_history::HistoryError::Integrity(_)),
+        "a duplicate location row is an Integrity refusal: {error:?}"
+    );
+    assert_eq!(db_generation(&schema), before, "nothing was installed");
+    assert!(
+        schema.scratch_exists(),
+        "the failed build leaves its scratch"
+    );
+    assert_eq!(
+        schema.count_where(&format!(
+            "SELECT count(*) FROM {{s}}.gc_op WHERE scratch_schema='{}'",
+            schema.scratch()
+        )),
+        1,
+        "the op row names the leftover scratch schema"
+    );
+    assert_eq!(schema.count("object_location"), objects + 1);
+    assert_eq!(schema.count("pack"), packs);
+    assert!(located(&handles, dead), "the dead object is still stored");
+}

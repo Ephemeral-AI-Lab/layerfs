@@ -61,6 +61,26 @@ impl Mechanics for Transaction<'_> {
     ) -> Result<Option<(usize, Vec<u8>)>, PersistenceError> {
         super::objects::read::prefix(self, id, limit)
     }
+    fn pack_prefixes(
+        &self,
+        ids: &[i64],
+        limit: usize,
+        out: &mut Vec<(usize, Vec<u8>)>,
+    ) -> Result<(), PersistenceError> {
+        super::objects::read::prefixes(self, ids, limit, out)
+    }
+    fn pack_ranges(
+        &self,
+        requests: &[(i64, Vec<layerfs_storage::port::PackRange>)],
+        out: &mut Vec<Vec<Vec<u8>>>,
+    ) -> Result<(), PersistenceError> {
+        if self.layout().uses_units() {
+            // Group rows are separate BLOBs: the scoped read maps offsets to
+            // them, one pack at a time.
+            return crate::backend::seam::ranges_by_acquisition(self, requests, out);
+        }
+        super::objects::read::ranges(self, requests, out)
+    }
     fn read_scoped_pack(
         &self,
         id: i64,

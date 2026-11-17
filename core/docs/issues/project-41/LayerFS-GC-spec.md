@@ -602,9 +602,13 @@ finds (`engine/crates/layerfs-persistence/src/diagnostic/history.rs:155-198`).
   (#42 item 36).
 - Window by window, sort lookups by object ID before locating them.
 - Whole files and chunks have no logical references; only their delta base
-  is needed. Reading it still loads and authenticates the whole group
-  (`delta/read.rs:561-571`); on SQLite the payload part of the walk runs
-  inside the copy (§7 step 4), and the PostgreSQL mark reads it in Phase M.
+  is needed. In an uncompressed payload group the mark reads the group's
+  record directory and each record's first bytes (`delta/edge.rs`,
+  `history/objects/edges.rs`), never the payload, so those bytes are not
+  authenticated by the mark; a compressed group and the `Ordinary` lane still
+  load the whole group (`delta/read.rs`). On SQLite the payload part of the
+  walk runs inside the copy (§7 step 4), and the PostgreSQL mark reads it in
+  Phase M.
 
 ### 6.3 Visited set
 
@@ -829,6 +833,17 @@ reported as `markBytes`; the Phase A table copy itself moves no pack bytes.
 4. Build `object_location_prefix` and the foreign key, then `ANALYZE`.
 
 **Phase B — swap (one short transaction).**
+
+> **As built (2026-11-18, `0bb8989529`).** The row counts and sums of step 9
+> are taken at the start of this transaction, before step 5: the transaction
+> first takes `ACCESS EXCLUSIVE` on the two scratch tables (a waiting lock,
+> not `NOWAIT`; nothing else writes them) and counts and sums them in one
+> statement, then takes the Store-wide lock of step 5. The scratch lock is
+> held to COMMIT, so the rows counted are the rows moved, and the Store-wide
+> lock is no longer held across those scans. A count or sum mismatch is
+> therefore reported (`Integrity`) before the tuple re-check of step 6 can
+> report `Conflict`. The fingerprint, trigger and `logical` checks and the
+> single `live_heads_digest` read stay under the Store-wide lock.
 
 5. `LOCK TABLE` every base table of the Store schema (from `pg_class`,
    including `store_lane`, `store_totals`, `history_meta`,

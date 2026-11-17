@@ -28,10 +28,12 @@ use layerfs_history::records::GcIntentKind;
 use layerfs_history::records::GcScopeKind;
 use std::sync::Arc;
 
-/// Phase B: lock every base table, re-check the mark tuple, swap the two
-/// payload tables, bump the generation and drop the scratch schema in one
-/// short transaction. `55P03` is `Busy`; any tuple change is `Conflict` with
-/// no writes.
+/// Phase B: check the scratch tables' rows against the mark, then lock every
+/// base table, re-check the mark tuple, swap the two payload tables, bump the
+/// generation and drop the scratch schema, all in one transaction. The row
+/// checks scan the scratch tables, so they run before the Store-wide lock
+/// and no reader or writer waits for them. `55P03` is `Busy`; any tuple
+/// change is `Conflict` with no writes.
 pub(crate) fn swap(
     _handles: &PostgresHandles,
     session: &Arc<Session>,
@@ -55,6 +57,7 @@ pub(crate) fn swap(
             "SET LOCAL synchronous_commit TO {}",
             sync_name(rank)
         ))?;
+        verify_scratch(tx, &scratch, mark, tuple, &built.dead)?;
         tx.batch(&format!(
             "LOCK TABLE {locked} IN ACCESS EXCLUSIVE MODE NOWAIT"
         ))?;
@@ -64,6 +67,8 @@ pub(crate) fn swap(
         if now != *tuple {
             return Err(HistoryError::Conflict("Store moved after the mark"));
         }
+        // Read once: the lock is held from here to COMMIT, so the heads this
+        // digest covers cannot move again inside this transaction.
         if digest(tx)? != mark.live_heads_digest() {
             return Err(HistoryError::Conflict("live heads moved after the mark"));
         }
@@ -91,14 +96,17 @@ pub(crate) fn swap(
         // The mark recorded both source tables' pg_attribute/attstorage/
         // reloptions/tablespace fingerprint; the moved scratch tables must
         // carry it exactly, or the rebuild silently changed their layout.
-        let recorded: String = tx
-            .query(
-                &format!("SELECT COALESCE(mark_fingerprint,'') FROM {schema}.gc_op WHERE id=1"),
-                Vec::new(),
-            )?
+        let op = tx.query(
+            &format!(
+                "SELECT COALESCE(mark_fingerprint,''),totals_applied FROM {schema}.gc_op WHERE id=1"
+            ),
+            Vec::new(),
+        )?;
+        let op = op
             .first()
-            .ok_or(HistoryError::Integrity("compaction fingerprint row"))?
-            .get(0)?;
+            .ok_or(HistoryError::Integrity("compaction fingerprint row"))?;
+        let recorded: String = op.get(0)?;
+        let applied: i64 = op.get(1)?;
         let moved = format!(
             "{}|{}",
             super::op::table_fingerprint(tx, schema, "pack")?,
@@ -107,7 +115,20 @@ pub(crate) fn swap(
         if recorded != moved {
             return Err(HistoryError::Integrity("compaction table fingerprint"));
         }
-        verify_swap(tx, schema, mark, tuple, &built.dead)?;
+        // `store_totals.logical` equals the mark's under the lock (the tuple
+        // re-check above), so the history rows are summed against that value.
+        let logical = scalar(
+            tx,
+            &format!(
+                "SELECT (SELECT COALESCE(SUM(logical)::bigint,0) FROM {schema}.\"commit\")+(SELECT COALESCE(SUM(logical)::bigint,0) FROM {schema}.layer)"
+            ),
+            Vec::new(),
+        )?;
+        if logical != tuple.logical {
+            return Err(HistoryError::Integrity(
+                "Store totals disagree with the history rows",
+            ));
+        }
         // The trigger and immutable-pack function entries need the
         // Store-schema function, so they are verified here, bounded to the
         // moved table, after the trigger exists.
@@ -117,11 +138,6 @@ pub(crate) fn swap(
         if !failures.is_empty() {
             return Err(HistoryError::Integrity("compaction moved-table contract"));
         }
-        let applied = scalar(
-            tx,
-            &format!("SELECT totals_applied FROM {schema}.gc_op WHERE id=1"),
-            Vec::new(),
-        )?;
         if applied != 0 {
             return Err(HistoryError::Integrity("compaction totals already applied"));
         }
@@ -460,74 +476,54 @@ pub(crate) fn apply_acl(
     Ok(())
 }
 
-pub(crate) fn verify_swap(
+/// §8 step 9's row counts and sums, read from the scratch tables inside the
+/// swap transaction and before the Store-wide lock. The two tables are locked
+/// first, so the rows counted here are the rows `SET SCHEMA` moves; the lock
+/// waits (no `NOWAIT`) because only maintenance on the scratch schema can
+/// hold it, and nothing of the Store is locked yet. Both sides of each
+/// comparison come from the mark, which the tuple re-check then pins.
+pub(crate) fn verify_scratch(
     tx: &Transaction<'_>,
-    schema: &str,
+    scratch: &str,
     mark: &MarkResult,
     tuple: &GcTuple,
     dead: &DeadTotals,
 ) -> HistoryResult<()> {
-    let objects = scalar(
-        tx,
-        &format!("SELECT count(*) FROM {schema}.object_location"),
+    tx.batch(&format!(
+        "LOCK TABLE {scratch}.pack, {scratch}.object_location IN ACCESS EXCLUSIVE MODE"
+    ))?;
+    let rows = tx.query(
+        &format!(
+            "SELECT o.objects,o.distinct_objects,o.canonical,p.packs,p.stored,p.metadata FROM \
+             (SELECT count(*) AS objects,count(DISTINCT object_id) AS distinct_objects,\
+                     COALESCE(SUM(canonical_length)::bigint,0) AS canonical \
+                FROM {scratch}.object_location) o,\
+             (SELECT count(*) AS packs,COALESCE(SUM(length)::bigint,0) AS stored,\
+                     COALESCE(SUM(length) FILTER (WHERE domain=0)::bigint,0) AS metadata \
+                FROM {scratch}.pack) p"
+        ),
         Vec::new(),
     )?;
-    let distinct = scalar(
-        tx,
-        &format!("SELECT count(DISTINCT object_id) FROM {schema}.object_location"),
-        Vec::new(),
-    )?;
-    let packs = scalar(
-        tx,
-        &format!("SELECT count(*) FROM {schema}.pack"),
-        Vec::new(),
-    )?;
+    let row = rows
+        .first()
+        .ok_or(HistoryError::Integrity("compaction scratch counts"))?;
+    let objects: i64 = row.get(0)?;
+    let distinct: i64 = row.get(1)?;
+    let canonical: i64 = row.get(2)?;
+    let packs: i64 = row.get(3)?;
+    let stored: i64 = row.get(4)?;
+    let metadata: i64 = row.get(5)?;
     if objects != mark.objects().len() as i64
         || distinct != objects
         || packs != mark.objects().packs().len() as i64
     {
         return Err(HistoryError::Integrity("compaction swapped count"));
     }
-    let canonical = scalar(
-        tx,
-        &format!("SELECT COALESCE(SUM(canonical_length)::bigint,0) FROM {schema}.object_location"),
-        Vec::new(),
-    )?;
-    let stored = scalar(
-        tx,
-        &format!("SELECT COALESCE(SUM(length)::bigint,0) FROM {schema}.pack"),
-        Vec::new(),
-    )?;
-    let metadata = scalar(
-        tx,
-        &format!("SELECT COALESCE(SUM(length)::bigint,0) FROM {schema}.pack WHERE domain=0"),
-        Vec::new(),
-    )?;
     if canonical != tuple.canonical - dead.canonical
         || stored != tuple.stored - dead.stored
         || metadata != tuple.metadata - dead.metadata
     {
         return Err(HistoryError::Integrity("compaction swapped totals"));
-    }
-    let logical = scalar(
-        tx,
-        &format!("SELECT logical FROM {schema}.store_totals WHERE id=1"),
-        Vec::new(),
-    )?;
-    let sum = scalar(
-        tx,
-        &format!(
-            "SELECT (SELECT COALESCE(SUM(logical)::bigint,0) FROM {schema}.\"commit\")+(SELECT COALESCE(SUM(logical)::bigint,0) FROM {schema}.layer)"
-        ),
-        Vec::new(),
-    )?;
-    if logical != sum {
-        return Err(HistoryError::Integrity(
-            "Store totals disagree with the history rows",
-        ));
-    }
-    if digest(tx)? != mark.live_heads_digest() {
-        return Err(HistoryError::Conflict("live heads moved after the mark"));
     }
     Ok(())
 }

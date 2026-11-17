@@ -333,3 +333,57 @@ This is a measurement harness for the GC section 13 arms, not a new registered
 model asks for, including the E3 median/range for the medium arm. The 50 GB arm
 is a single run per arm, as #42 item 44 specifies, and its result stays
 owner-only until the owner records it.
+
+## Profiling a mark or a compaction
+
+`gc_profile` answers "where does the time go" on a Store `gc_bench` kept. It is
+a diagnostic, not a measurement harness: it has no receipt and claims nothing.
+
+```text
+cargo run -p layerfs-persistence --release --example gc_bench -- --keep --tmpdir DIR
+cargo run -p layerfs-persistence --release --example gc_profile -- DIR/<run>/store.sqlite
+```
+
+- Each mark prints its wall time, this thread's SQL work counters (statements,
+  engine steps, full-scan steps, sorts, rows, BLOB opens, reads and bytes) and
+  the statements that cost the most, by text. `--marks N` repeats it; the
+  second mark shows the warm-cache cost, and the difference from the first is
+  what a cold cache adds.
+- `--compact` then runs one compaction and prints the same for it. The
+  rebuild's copy runs on its own connection, so its statements are not listed.
+- The per-statement list comes from `layerfs_persistence::profile_statements`
+  and `take_statement_profile`: a per-thread profile that is off unless
+  started.
+- For CPU stacks on macOS, run with `--marks 40` and `sample <pid> 2`.
+
+### On PostgreSQL
+
+`gc_bench` and `gc_profile` are SQLite only. `pg_gc_profile` builds a Store in
+a database of its own on the server `LAYERFS_TEST_POSTGRES_URL` names, then
+counts one mark or one whole `store.compact` over a clone of it:
+
+```text
+cargo run -p layerfs-persistence --release --example pg_gc_profile -- build DB
+cargo run -p layerfs-persistence --release --example pg_gc_profile -- mark DB WORK
+cargo run -p layerfs-persistence --release --example pg_gc_profile -- run DB WORK
+cargo run -p layerfs-persistence --release --example pg_gc_profile -- drop DB
+```
+
+- `build` reads the Store's shape from `PROBE_STACKS`, `PROBE_DEAD_STACKS`,
+  `PROBE_LAYERS`, `PROBE_GROUP`, `PROBE_OBJECT_BYTES`, `PROBE_DEAD_OBJECTS`,
+  `PROBE_DIGESTS` and `PROBE_SHARED_DEAD_DIGESTS`; the defaults are in the
+  example's header.
+- `mark` and `run` clone `DB` into `WORK`, so one built database serves any
+  number of runs, and drop the clone afterwards. They print wall time, the
+  compaction's phases and the session's SQL work: statements, round trips,
+  rows and bytes bound.
+- `PROBE_LOG_STATEMENTS=1` turns on the server's per-statement log for the
+  clone; the server log then gives time by statement text.
+- On PostgreSQL the mark's wall time follows round trips more than bytes:
+  count statements first.
+
+What it has shown so far (2026-11-17): a function over a BLOB column, such as
+`substr(body,1,?)`, loads the whole overflow chain, so it reads the pack to
+return a prefix; `length(body)` does not. In the default `Monolithic` layout a
+read at offset X of a pack follows X / 4 KiB overflow pages, so a read deep in
+a large pack costs page loads for everything before it.

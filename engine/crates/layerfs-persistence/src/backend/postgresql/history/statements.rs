@@ -1,6 +1,10 @@
 //! History statement texts on PostgreSQL. The shipped SQLite statements are
 //! portable SQL (positional `$n` parameters, `RETURNING`, `ON CONFLICT`) and
-//! run unchanged; only those using SQLite-only syntax are replaced here.
+//! run unchanged. Those using SQLite-only syntax are replaced here, and so
+//! is the history closure (`kept_node_mark`), whose shared text PostgreSQL
+//! plans as one scan of every edge per recursion round. The replacement
+//! must follow exactly the edges the shared text follows: add an edge to
+//! both files or to neither.
 //! Array forms bind whole columns, so many rows cost one round trip.
 use crate::backend::records::BackendError;
 
@@ -13,8 +17,14 @@ pub(crate) fn statement(key: &str) -> Result<&'static str, BackendError> {
             "../../../../sql/postgresql/queries/history/statistics_totals.sql"
         )),
         "gc_object_locations" => Ok(
-            "SELECT object_id,pack_id,group_number::bigint,record_number::bigint,role::bigint,canonical_length::bigint FROM object_location ORDER BY pack_id,group_number,record_number",
+            "SELECT object_id,pack_id,group_number::bigint,record_number::bigint,role::bigint,canonical_length::bigint FROM object_location",
         ),
+        // The shared closure joins each round's new nodes to every history
+        // edge, so a chain of n unpublished Commits costs n scans of the edge
+        // set. This text follows each new node's own row by primary key.
+        "kept_node_mark" => Ok(include_str!(
+            "../../../../sql/postgresql/queries/history/kept_node_mark.sql"
+        )),
         "gc_epoch_read" => Ok(include_str!(
             "../../../../sql/postgresql/queries/history/gc_epoch_read.sql"
         )),

@@ -434,6 +434,105 @@ fn a_wholly_dead_pack_is_rebuilt_away() {
     clean(&reopened);
 }
 
+/// The pack copy runs one window of retained packs per statement, and a long
+/// run of dead packs ends a window. Retained packs on both sides of such a run
+/// are two windows, and both arrive in the rebuilt Store.
+#[test]
+fn retained_packs_on_both_sides_of_a_long_dead_run_are_all_copied() {
+    use layerfs_persistence::internals::{windows, GAP_BYTES};
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let (_temp, handles, path) = create_store();
+    let early = filesystem_root(&handles, 1);
+    initialize(&handles, 1, early);
+    // More than `GAP_BYTES` of wholly dead packs. The bytes do not compress,
+    // so the stored run is as long as the payload.
+    let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+    let mut dead = Vec::new();
+    for _ in 0..120 {
+        let bytes: Vec<u8> = (0..100_000)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                state.to_le_bytes()[0]
+            })
+            .collect();
+        dead.push(whole_file(&handles, &bytes));
+    }
+    let late = filesystem_root(&handles, 2);
+    initialize(&handles, 2, late);
+    let before = generation(&handles);
+
+    // The plan the build will make: the retained packs are every pack that
+    // holds no dead object, and the dead run splits them into two windows.
+    let (lengths, retained, dead_bytes) = {
+        let connection = rusqlite::Connection::open_with_flags(
+            &path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .unwrap();
+        let mut dead_packs = BTreeSet::new();
+        for id in &dead {
+            let pack: i64 = connection
+                .query_row(
+                    "SELECT pack_id FROM object_location WHERE object_id=?1",
+                    rusqlite::params![id.as_bytes().as_slice()],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            dead_packs.insert(pack);
+        }
+        let mut statement = connection
+            .prepare("SELECT pack_id,length FROM pack ORDER BY pack_id")
+            .unwrap();
+        let lengths: BTreeMap<i64, u64> = statement
+            .query_map([], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)? as u64))
+            })
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        let retained: Vec<i64> = lengths
+            .keys()
+            .copied()
+            .filter(|pack| !dead_packs.contains(pack))
+            .collect();
+        let dead_bytes: u64 = dead_packs.iter().map(|pack| lengths[pack]).sum();
+        (lengths, retained, dead_bytes)
+    };
+    assert!(dead_bytes > GAP_BYTES, "the dead run is {dead_bytes} bytes");
+    let file = std::fs::metadata(&path).unwrap().len();
+    let plan = windows(&lengths, &retained, file).unwrap();
+    assert_eq!(plan.len(), 2, "{plan:?}");
+    assert!(plan[0].last < plan[1].first);
+
+    let receipt = handles.compact(&request(48)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.dead_bytes_bound, dead_bytes);
+    let reopened = reopen(&path);
+    assert_eq!(generation(&reopened), before + 1);
+    for id in [early, late] {
+        assert!(located(&reopened, id), "retained root {id} survives");
+    }
+    for id in &dead {
+        assert!(!located(&reopened, *id), "dead object {id} is collected");
+    }
+    let rebuilt =
+        rusqlite::Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .unwrap();
+    let packs: Vec<i64> = rebuilt
+        .prepare("SELECT pack_id FROM pack ORDER BY pack_id")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(packs, retained, "every retained pack, and only those");
+    drop(rebuilt);
+    clean(&reopened);
+}
+
 #[test]
 fn retained_history_and_its_objects_survive_a_rebuild() {
     let (_temp, handles, path) = create_store();
@@ -1357,6 +1456,77 @@ fn a_live_owners_settle_window_refuses_a_second_compaction() {
     assert_eq!(table_count(&path, "gc_intent"), 0);
     let final_handles = reopen(&path);
     assert_eq!(generation(&final_handles), before + 1);
+    assert!(located(&final_handles, live), "the live root still reads");
+    assert!(
+        !located(&final_handles, dead),
+        "the rebuild collected the dead pack"
+    );
+    clean(&final_handles);
+}
+
+/// When the writer that took the lane in the settle window let go of it.
+static SETTLE_WINDOW_WRITER: std::sync::Mutex<Option<std::thread::JoinHandle<std::time::Instant>>> =
+    std::sync::Mutex::new(None);
+
+/// A writer that takes the Store's lane in the settle window and keeps it for
+/// a while, as a Commit that was waiting for the rebuild would. The lane is
+/// taken here, on the compaction's own thread, so it is held before the settle
+/// starts.
+fn hold_the_lane_past_the_settle(store: &Path) {
+    let directory = std::fs::File::open(store.parent().expect("the Store's directory")).unwrap();
+    let lane = nix::fcntl::Flock::lock(directory, nix::fcntl::FlockArg::LockExclusive)
+        .map_err(|(_, error)| error)
+        .expect("the lane is free after the rename");
+    let writer = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        let released = std::time::Instant::now();
+        drop(lane);
+        released
+    });
+    *SETTLE_WINDOW_WRITER.lock().unwrap() = Some(writer);
+}
+
+/// The settle clears the admission intent and the `kept_node` rows in the
+/// installed Store. That is a write, so it waits for the writers' lane: an
+/// admitted writer has no busy handler, and a settle that wrote beside it left
+/// that writer `Busy` (seen as a Commit that failed right after a rebuild).
+#[test]
+fn the_settle_waits_for_a_writer_that_holds_the_lane() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let dead = whole_file(&handles, b"a pack the settle test collects");
+    let before = generation(&handles);
+    let receipt = handles
+        .compact(&CompactRequest {
+            op_id: [0x7c; 16],
+            before_settle_hook: Some(hold_the_lane_past_the_settle),
+            ..CompactRequest::default()
+        })
+        .expect("the run settles once the lane is free");
+    let returned = std::time::Instant::now();
+    let released = SETTLE_WINDOW_WRITER
+        .lock()
+        .unwrap()
+        .take()
+        .expect("the hook took the lane")
+        .join()
+        .unwrap();
+    assert!(
+        returned >= released,
+        "the settle wrote to the Store while another writer held the lane"
+    );
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_after, before + 1);
+    assert!(
+        receipt.residue.artifacts.is_empty(),
+        "the settle leaves no residue: {:?}",
+        receipt.residue
+    );
+    assert!(compact_op_status(&path).is_none(), "the op record settles");
+    assert_eq!(table_count(&path, "kept_node"), 0);
+    assert_eq!(table_count(&path, "gc_intent"), 0);
+    let final_handles = reopen(&path);
     assert!(located(&final_handles, live), "the live root still reads");
     assert!(
         !located(&final_handles, dead),

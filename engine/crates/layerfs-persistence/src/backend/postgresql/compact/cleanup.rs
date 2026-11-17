@@ -544,29 +544,56 @@ fn delete_dead_signatures(
     }
 }
 
+/// Rows one `file_digest` delete transaction removes.
+const DIGEST_BATCH: i64 = 1000;
+
 /// Deletes the `file_digest` rows whose root object is in the persisted dead
 /// set, in bounded batches. The dead set holds roots, not digests, so a row
-/// with a dead root is removed even when a different digest names it. The
-/// `gc_dead` rows stay until [`settle`], so a crash here resumes them.
+/// with a dead root is removed even when a different digest names it.
+/// `file_digest` has no index on `root`, so one scan first lists the keys of
+/// the rows to delete in a numbered session table; each batch then deletes
+/// its own key range by primary key and checks the root against `gc_dead`
+/// again. The `gc_dead` rows stay until [`settle`], so a crash here resumes
+/// them: the next run lists what is left.
 fn delete_dead_digests(session: &Arc<Session>, schema: &str) -> HistoryResult<()> {
-    loop {
-        let deleted = stage(session, |tx| -> HistoryResult<usize> {
-            let rows = tx.query(
+    let total = stage(session, |tx| -> HistoryResult<i64> {
+        tx.batch(&format!(
+            "DROP TABLE IF EXISTS pg_temp.gc_dead_digest;\
+             CREATE TEMP TABLE gc_dead_digest ON COMMIT PRESERVE ROWS AS \
+               SELECT row_number() OVER () AS n,fd.digest,fd.length \
+                 FROM {schema}.file_digest fd \
+                WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d \
+                               WHERE d.kind='digest' AND d.id=fd.root);\
+             CREATE UNIQUE INDEX gc_dead_digest_n ON pg_temp.gc_dead_digest (n);\
+             ANALYZE pg_temp.gc_dead_digest;"
+        ))?;
+        scalar(
+            tx,
+            "SELECT count(*) FROM pg_temp.gc_dead_digest",
+            Vec::new(),
+        )
+    })?;
+    let mut done = 0;
+    while done < total {
+        stage(session, |tx| {
+            tx.query(
                 &format!(
-                    "WITH batch AS (SELECT d.id FROM {schema}.gc_dead d \
-                                    JOIN {schema}.file_digest fd ON fd.root=d.id \
-                                    WHERE d.kind='digest' ORDER BY d.id LIMIT 1000) \
-                     DELETE FROM {schema}.file_digest fd USING batch b \
-                      WHERE fd.root=b.id RETURNING fd.digest"
+                    "DELETE FROM {schema}.file_digest fd USING pg_temp.gc_dead_digest b \
+                      WHERE b.n > $1 AND b.n <= $2 \
+                        AND fd.digest=b.digest AND fd.length=b.length \
+                        AND EXISTS (SELECT 1 FROM {schema}.gc_dead d \
+                                     WHERE d.kind='digest' AND d.id=fd.root)"
                 ),
-                Vec::new(),
+                vec![Param::I64(done), Param::I64(done + DIGEST_BATCH)],
             )?;
-            Ok(rows.len())
+            Ok(())
         })?;
-        if deleted == 0 {
-            return Ok(());
-        }
+        done += DIGEST_BATCH;
     }
+    stage(session, |tx| {
+        tx.batch("DROP TABLE IF EXISTS pg_temp.gc_dead_digest")?;
+        Ok(())
+    })
 }
 
 /// The final Phase C transaction: clear the Store-global advisory hint block,

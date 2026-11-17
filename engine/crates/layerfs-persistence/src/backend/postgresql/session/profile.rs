@@ -63,10 +63,15 @@ impl Settings {
     /// from one fixed snapshot and writes only `kept_node`; publications into
     /// other tables never overlap it, and a second mark is the only writer
     /// contending for its rows.
+    ///
+    /// The server's JIT compiler is off for this transaction. The planner's
+    /// estimate for the history closure crosses the JIT threshold on any
+    /// Store, and compiling it then costs hundreds of milliseconds for a
+    /// statement that runs in about ten.
     pub(crate) fn snapshot_begin(&self) -> String {
         format!(
             "BEGIN ISOLATION LEVEL REPEATABLE READ; SET LOCAL search_path TO {}; \
-             SET LOCAL synchronous_commit TO {}",
+             SET LOCAL synchronous_commit TO {}; SET LOCAL jit TO off",
             self.schema,
             self.synchronous_commit.setting()
         )

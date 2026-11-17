@@ -36,6 +36,10 @@ pub const fn is_stored(tag: u8) -> bool {
 /// Width of one canonical identity.
 const ID_BYTES: usize = 32;
 
+/// The widest record prefix that carries a payload lane's tag, length fields
+/// and base identity: the framed lane's nine bytes and one identity.
+pub const HEADER_BYTES: usize = 9 + ID_BYTES;
+
 /// One parsed lane record.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ParsedRecord<'a> {
@@ -357,4 +361,60 @@ pub fn stored_base(
         return crate::encoding::pool::branch::stored_base(record);
     }
     Ok(parse(lane, record, canonical_length)?.base)
+}
+
+/// The direct base a payload-lane record names, read from its first bytes.
+///
+/// `header` is the record's first `min(record_length, HEADER_BYTES)` bytes and
+/// `record_length` its complete stored width, which the group directory gives.
+/// This accepts and refuses exactly the records [`stored_base`] does on the
+/// complete record: the tag, the base identity, the length fields and the
+/// non-empty frame are all decided by the header and the width, so only the
+/// frame's own bytes go unread. The `Ordinary` lane has no fixed header (its
+/// groups are compressed and its grammar depends on the role) and is refused.
+pub fn header_base(
+    lane: PackLane,
+    header: &[u8],
+    record_length: usize,
+    canonical_length: usize,
+) -> StorageResult<Option<ObjectId>> {
+    let fixed = match lane {
+        PackLane::WholeFile => 1,
+        PackLane::Chunk => 5,
+        PackLane::Singleton => 9,
+        PackLane::Ordinary => return Err(StorageError::Integrity("ordinary record header")),
+    };
+    if header.len() != record_length.min(HEADER_BYTES) || header.len() < fixed {
+        return Err(StorageError::Integrity("record header width"));
+    }
+    let field = |at: usize| {
+        let mut bytes = [0; 4];
+        bytes.copy_from_slice(&header[at..at + 4]);
+        u32::from_le_bytes(bytes) as usize
+    };
+    let (base, start) = match header[0] {
+        FULL_TAG | STORED_TAG => (None, fixed),
+        PREFIX_TAG => (
+            Some(ObjectId::from_bytes(
+                header
+                    .get(fixed..fixed + ID_BYTES)
+                    .ok_or(StorageError::Integrity("record base identity"))?,
+            )?),
+            fixed + ID_BYTES,
+        ),
+        _ => return Err(StorageError::Integrity("record tag")),
+    };
+    let frame = record_length
+        .checked_sub(start)
+        .filter(|frame| *frame > 0)
+        .ok_or(StorageError::Integrity("record frame"))?;
+    let raw_known = match lane {
+        // The compact lane drops its length fields; the locator carries them.
+        PackLane::WholeFile => canonical_length > crate::policy::WHOLE_FILE_CANONICAL_OVERHEAD,
+        _ => field(1) != 0,
+    };
+    if !raw_known || (lane == PackLane::Singleton && field(5) != frame) {
+        return Err(StorageError::Integrity("record framing"));
+    }
+    Ok(base)
 }

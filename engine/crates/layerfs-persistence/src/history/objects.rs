@@ -2,7 +2,7 @@
 //! digest.
 //!
 //! A mark starts at the roots of every Commit and Layer the §6.1 history
-//! closure retained. Every locator is loaded once, in pack order, and the walk
+//! closure retained. Every locator is loaded once, unsorted, and the walk
 //! follows each object's direct logical references and its record-header delta
 //! base to the fixpoint. The walk is metadata-only: a role that names no other
 //! object costs one header read, not a payload decode, and reference-bearing
@@ -26,23 +26,28 @@ use layerfs_history::records::GcIntent;
 use layerfs_storage::{
     encoding::pool::PoolReader,
     encoding::{
-        delta::read::{locator_key, BodyCaches, ChainBases, ChainCounters, Resolver},
-        framed_record, framed_record_count, DecompressionWorkspace, GroupCache, PackAcquisition,
-        PackCache, PackUnit,
+        delta::{
+            edge::RecordDirectory,
+            read::{locator_key, stored_edge, BodyCaches, ChainCounters, Resolver},
+        },
+        DecompressionWorkspace, GroupCache, PackAcquisition, PackCache, PackUnit,
     },
-    location::{ObjectLocation, PackInfo, SignatureRow},
-    pack::layout::{self, GroupCodec, PackLane},
-    port::{
-        AcquiredPackRead, PackRange, PackReadChoice, PackReadPlan, PersistenceError,
-        PACK_READ_PREFIX_BYTES,
-    },
+    location::{ObjectLocation, SignatureRow},
+    pack::layout::{self, GroupCodec},
+    port::AcquiredPackRead,
     source::Source,
     StorageCapacities, StorageError,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 
+mod edges;
+mod ids;
 mod impls;
+mod plan;
+
+use ids::{IdMap, IdSet};
+use plan::MarkGroups;
 const ROOTS: &str = "gc_kept_roots";
 const LOCATIONS: &str = "gc_object_locations";
 const LIVE_STACKS: &str = "gc_live_stacks";
@@ -249,14 +254,17 @@ fn mark_recorded(
     let history = kept::mark(tx)?;
     let policy = tx.mechanics().policy().map_err(storage)?;
     let capacities = StorageCapacities::from_policy(policy).map_err(storage)?;
-    // Every locator is loaded once, in pack order. The walk's queue and the
-    // kept-waste attribution share that one read, so a mark never asks the
-    // engine for a single object location again.
+    // Every locator is loaded once. The walk's queue and the kept-waste
+    // attribution share that one read, so a mark never asks the engine for a
+    // single object location again.
     let located = locate_all(tx)?;
     let source = ClosureSource {
         mechanics: tx.mechanics(),
         locations: &located.locations,
-        read_bytes: std::cell::RefCell::new(BTreeMap::new()),
+        read_bytes: std::cell::RefCell::new(HashMap::new()),
+        layouts: std::cell::RefCell::new(HashMap::new()),
+        upcoming: std::cell::RefCell::default(),
+        values: std::cell::RefCell::default(),
     };
     let roots = roots(tx)?;
     let closure = walk(&source, &capacities, policy.construction(), roots, visit)?;
@@ -264,7 +272,7 @@ fn mark_recorded(
     let mark_bytes = source.read_bytes();
     let digest = live_heads_digest(tx)?;
     let objects = KeptObjects {
-        objects: closure.visited.keys().copied().collect(),
+        objects: closure.objects(),
         packs: closure.packs(),
         waste,
     };
@@ -286,15 +294,20 @@ fn roots(tx: &Transaction<'_>) -> HistoryResult<Vec<ObjectId>> {
     Ok(roots.into_iter().collect())
 }
 
-/// Every stored locator, read once in pack order.
+/// Every stored locator, read once in the table's own key order.
+///
+/// An object has one locator row (its identity is the table's key), so no
+/// order is needed to pick a winner, and asking for pack order made the
+/// engine sort every row of the table for each mark. Both maps below are
+/// keyed, so they do not need sorted input either.
 ///
 /// `locations` answers the walk; `inventory` answers kept-waste attribution.
 /// They are two views of the same single `gc_object_locations` read, so the
 /// mark no longer loads `object_location` twice (once per object and once for
 /// the waste inventory).
 struct Located {
-    /// The winning locator of every object, keyed by identity.
-    locations: BTreeMap<ObjectId, ObjectLocation>,
+    /// The locator of every object, keyed by identity.
+    locations: IdMap<ObjectLocation>,
     /// pack -> group -> (record, object): the pack/object inventory.
     inventory: BTreeMap<i64, BTreeMap<usize, BTreeMap<usize, ObjectId>>>,
 }
@@ -302,7 +315,7 @@ struct Located {
 fn locate_all(tx: &Transaction<'_>) -> HistoryResult<Located> {
     let rows = tx.query(LOCATIONS, Vec::<Param>::new())?;
     let mut located = Located {
-        locations: BTreeMap::new(),
+        locations: IdMap::with_capacity_and_hasher(rows.len(), ids::IdState::default()),
         inventory: BTreeMap::new(),
     };
     for row in &rows {
@@ -338,19 +351,26 @@ fn locate_all(tx: &Transaction<'_>) -> HistoryResult<Located> {
     Ok(located)
 }
 
-/// The in-memory closure of one mark, before `keptWaste` is attributed./// The in-memory closure of one mark, before `keptWaste` is attributed.
+/// The in-memory closure of one mark, before `keptWaste` is attributed.
 struct Closure {
-    /// Every reached object and its winning locator.
-    visited: BTreeMap<ObjectId, ObjectLocation>,
+    /// Every reached object and its locator.
+    visited: IdMap<ObjectLocation>,
     /// The stored width a read charges each reached object's record.
-    widths: BTreeMap<ObjectId, u64>,
+    widths: IdMap<u64>,
     /// Objects reached as a direct delta base.
-    bases: BTreeSet<ObjectId>,
+    bases: IdSet,
     /// Objects reached as a root or through a logical reference.
-    logical: BTreeSet<ObjectId>,
+    logical: IdSet,
 }
 
 impl Closure {
+    /// Every reached object, in ascending identity order.
+    fn objects(&self) -> Vec<ObjectId> {
+        let mut objects: Vec<ObjectId> = self.visited.keys().copied().collect();
+        objects.sort_unstable();
+        objects
+    }
+
     /// The retained packs: those holding at least one reached object.
     fn packs(&self) -> Vec<i64> {
         self.visited
@@ -366,15 +386,66 @@ impl Closure {
 struct ClosureSource<'a> {
     mechanics: &'a dyn crate::backend::Mechanics,
     /// Every locator, exactly as the one `gc_object_locations` read returned it.
-    locations: &'a BTreeMap<ObjectId, ObjectLocation>,
+    locations: &'a IdMap<ObjectLocation>,
     /// pack -> the body bytes this mark read from it: a whole body, or the
     /// disjoint group extents it acquired. The sum is
     /// [`MarkResult::mark_bytes`]: a pack read in several groups counts each
     /// extent once, and a later whole-body read replaces the partial sum.
-    read_bytes: std::cell::RefCell<BTreeMap<i64, u64>>,
+    read_bytes: std::cell::RefCell<HashMap<i64, u64>>,
+    /// pack -> its group extents, kept from the walk's own read of the pack's
+    /// directory so the kept-waste pass does not read it a second time.
+    layouts: std::cell::RefCell<HashMap<i64, Vec<layout::GroupView>>>,
+    /// The packs the wave being walked decodes metadata from, ascending, and
+    /// how many of them the engine has been told to expect.
+    upcoming: std::cell::RefCell<(Vec<i64>, usize)>,
+    /// Inode values the engine returned ahead of need, by ordinal.
+    values: std::cell::RefCell<HashMap<u32, [u8; INODE_VALUE_BYTES]>>,
 }
 
+/// Packs announced to the engine at a time ([`ClosureSource::announce`]).
+const AHEAD_PACKS: usize = 128;
+/// Ordinals past a leaf's own that one inode value read may bring along.
+const AHEAD_VALUES: u32 = 4096;
+/// Inode values kept between reads; the map is emptied when it would pass this.
+const HELD_VALUES: usize = 65_536;
+
 impl ClosureSource<'_> {
+    /// Notes the packs `wave`, which is in locator order, decodes metadata
+    /// from: the packs the walk reads one scoped acquisition at a time.
+    fn expect_wave(&self, wave: &[ObjectId]) {
+        let mut packs: Vec<i64> = wave
+            .iter()
+            .filter_map(|id| self.locations.get(id))
+            .filter(|location| location.role.has_references())
+            .map(|location| location.pack_id)
+            .collect();
+        packs.dedup();
+        *self.upcoming.borrow_mut() = (packs, 0);
+    }
+
+    /// Before `pack_id` is acquired: tells the engine which of the wave's
+    /// packs follow it, a window at a time, so an engine that pays a round
+    /// trip per pack can read the window in one.
+    fn announce(&self, pack_id: i64) -> Result<(), StorageError> {
+        let mut upcoming = self.upcoming.borrow_mut();
+        let (packs, told) = &mut *upcoming;
+        let Ok(at) = packs.binary_search(&pack_id) else {
+            return Ok(());
+        };
+        if at < *told {
+            return Ok(());
+        }
+        *told = (at + AHEAD_PACKS).min(packs.len());
+        self.mechanics
+            .expect_scoped_packs(&packs[at..*told])
+            .map_err(StorageError::from)
+    }
+
+    /// Keeps the group extents the walk read for `pack_id`.
+    fn keep_layout(&self, pack_id: i64, views: Vec<layout::GroupView>) {
+        self.layouts.borrow_mut().entry(pack_id).or_insert(views);
+    }
+
     /// Records a whole-body read of `pack_id`. The full extent is the pack's
     /// body, so it replaces any group extents already counted for the pack.
     fn note_whole_body(&self, pack_id: i64, bytes: u64) {
@@ -396,68 +467,6 @@ impl ClosureSource<'_> {
     /// The distinct pack body bytes this mark read.
     fn read_bytes(&self) -> u64 {
         self.read_bytes.borrow().values().copied().sum()
-    }
-}
-
-/// The complete encoded groups one mark walk demands from one pack.
-///
-/// A metadata-only walk needs one record header per object and one delta edge
-/// per record, so the demand is sparse; the plan selects those exact group
-/// ranges and the backend reads only them, never the body behind the
-/// directory. A dense demand or a cache that already holds another group of
-/// the pack still materializes the whole body once.
-struct MarkGroups<'a> {
-    pack_id: i64,
-    groups: &'a [usize],
-    whole: bool,
-}
-
-impl PackReadPlan for MarkGroups<'_> {
-    fn select(
-        &mut self,
-        info: PackInfo,
-        prefix: &[u8],
-    ) -> Result<PackReadChoice, PersistenceError> {
-        if info.pack_id != self.pack_id || self.groups.is_empty() {
-            return Err(PersistenceError::Malformed);
-        }
-        let header = layout::parse_directory_header(prefix, info.length)
-            .map_err(|_| PersistenceError::Malformed)?;
-        if self.whole || header.lane == PackLane::Singleton || info.length <= PACK_READ_PREFIX_BYTES
-        {
-            return Ok(PackReadChoice::Whole);
-        }
-        let views = layout::directory_group_views(prefix, header)
-            .map_err(|_| PersistenceError::Malformed)?;
-        let mut ranges: Vec<PackRange> = Vec::new();
-        let mut useful = 0usize;
-        let mut previous = None;
-        for &group in self.groups {
-            if previous.is_some_and(|prior| prior >= group) {
-                return Err(PersistenceError::Malformed);
-            }
-            previous = Some(group);
-            let view = *views.get(group).ok_or(PersistenceError::Malformed)?;
-            useful = useful
-                .checked_add(view.end - view.start)
-                .ok_or(PersistenceError::Malformed)?;
-            if let Some(prior) = ranges
-                .last_mut()
-                .filter(|prior| prior.offset + prior.length == view.start)
-            {
-                prior.length += view.end - view.start;
-            } else {
-                ranges.push(PackRange {
-                    offset: view.start,
-                    length: view.end - view.start,
-                });
-            }
-        }
-        if useful >= info.length.div_ceil(2) || ranges.len() > 4 {
-            Ok(PackReadChoice::Whole)
-        } else {
-            Ok(PackReadChoice::Ranges(ranges))
-        }
     }
 }
 
@@ -503,6 +512,7 @@ impl Source for ClosureSource<'_> {
         groups: &[usize],
         whole_for_reuse: bool,
     ) -> Result<PackAcquisition, StorageError> {
+        self.announce(pack_id)?;
         let mut plan = MarkGroups {
             pack_id,
             groups,
@@ -537,16 +547,25 @@ impl Source for ClosureSource<'_> {
     }
 
     fn inode_values(&self, ordinals: &[u32]) -> Result<Vec<[u8; INODE_VALUE_BYTES]>, StorageError> {
-        let mut rows = Vec::new();
-        self.mechanics
-            .inode_values(ordinals, &mut rows)
-            .map_err(StorageError::from)?;
+        // One keyed map, so a page of many ordinals is not scanned per
+        // ordinal. It also keeps what the engine read ahead: a walk meets
+        // leaves in about the order their values were stored.
+        let mut held = self.values.borrow_mut();
+        if !ordinals.iter().all(|ordinal| held.contains_key(ordinal)) {
+            let mut rows = Vec::new();
+            self.mechanics
+                .inode_values_ahead(ordinals, AHEAD_VALUES, &mut rows)
+                .map_err(StorageError::from)?;
+            if held.len() + rows.len() > HELD_VALUES {
+                held.clear();
+            }
+            held.extend(rows.iter().map(|row| (row.ordinal, row.value)));
+        }
         ordinals
             .iter()
             .map(|ordinal| {
-                rows.iter()
-                    .find(|row| row.ordinal == *ordinal)
-                    .map(|row| row.value)
+                held.get(ordinal)
+                    .copied()
                     .ok_or(StorageError::Integrity("mark inode value"))
             })
             .collect()
@@ -585,23 +604,31 @@ fn walk(
     let mut groups = GroupCache::new();
     let mut workspace = DecompressionWorkspace::new().map_err(storage)?;
     let mut counters = ChainCounters::default();
+    let mut edge_decodes = 0u64;
     let mut closure = Closure {
-        visited: BTreeMap::new(),
-        widths: BTreeMap::new(),
-        bases: BTreeSet::new(),
+        visited: IdMap::default(),
+        widths: IdMap::default(),
+        bases: IdSet::default(),
         logical: roots.iter().copied().collect(),
     };
-    let mut queued: BTreeSet<ObjectId> = roots.iter().copied().collect();
+    // One hash for the whole walk, not one per metadata object.
+    let unscoped = InodeScope::from_object(ObjectId::for_bytes(b"gc.mark/object-closure"));
+    let mut queued: IdSet = roots.iter().copied().collect();
     let mut frontier: Vec<ObjectId> = roots;
     while !frontier.is_empty() {
         // Pack order: one body answers every object of its group, so a wave
         // sorted by locator reads each group once instead of once per identity.
-        frontier.sort_unstable_by_key(|id| {
+        // The key is one locator lookup per object, not one per comparison.
+        frontier.sort_by_cached_key(|id| {
             source
                 .locations
                 .get(id)
                 .map_or((i64::MAX, usize::MAX, usize::MAX), locator_key)
         });
+        source.expect_wave(&frontier);
+        // A file payload's edge is its record header: read just that, a pack
+        // at a time, and leave the payload unread.
+        let mut headers = edges::wave_edges(source, &frontier)?;
         let mut next = Vec::new();
         for id in std::mem::take(&mut frontier) {
             let location = source
@@ -632,7 +659,7 @@ fn walk(
                 } else {
                     // No other admitted role reads the scope; the leaf encoders
                     // that derive references ignore it.
-                    InodeScope::from_object(ObjectId::for_bytes(b"gc.mark/object-closure"))
+                    unscoped
                 };
                 decode_references(role, &canonical, construction, scope)
                     .map_err(|_| HistoryError::Integrity("mark object references"))?
@@ -645,13 +672,21 @@ fn walk(
                     next.push(reference);
                 }
             }
-            // The base identity lives in the record header, so the edge is read
-            // from the header and never by decoding the chain payload.
-            let edge = {
-                let mut chain = ChainBases::new(&mut packs);
-                chain
-                    .edge(source, &mut workspace, &location)
-                    .map_err(storage)?
+            // The base identity lives in the record header. An encoded group
+            // has no header to read on its own, so its edge borrows the group.
+            let edge = match headers.remove(&id) {
+                Some(edge) => edge,
+                // The walk's own decoded-group cache: a compressed group is
+                // decompressed once, not once more for each record's edge.
+                None => stored_edge(
+                    source,
+                    &mut packs,
+                    &mut groups,
+                    &mut workspace,
+                    &mut edge_decodes,
+                    &location,
+                )
+                .map_err(storage)?,
             };
             closure.widths.insert(id, edge.width);
             if let Some(base) = edge.base {
@@ -687,45 +722,52 @@ fn waste(
     closure: &Closure,
 ) -> HistoryResult<KeptWaste> {
     let mut dead_in_retained_packs_bytes = 0u64;
-    for pack_id in closure.packs() {
+    let packs = closure.packs();
+    // Packs the walk did not lay out have their directory prefix read here:
+    // a bounded batch of packs per call, not one call per pack.
+    let mut prefixes = {
+        let layouts = source.layouts.borrow();
+        let unread = packs.iter().filter(|pack| !layouts.contains_key(pack));
+        edges::Prefixes::new(source, unread.copied().collect())
+    };
+    for pack_id in packs {
         let groups = located.inventory.get(&pack_id);
-        // The pack row may reserve more capacity than it uses; the header names
-        // the used length. Everything below parses against `used`, never the
-        // reserved capacity. A prefix that already covers `used` is the body.
-        let Some((capacity, prefix)) = source
-            .pack_prefix(pack_id, PACK_READ_PREFIX_BYTES)
-            .map_err(storage)?
-        else {
-            return Err(HistoryError::Integrity("mark pack directory"));
+        // The walk already read this pack's directory when it read its
+        // record headers; only a pack it reached another way is read here.
+        let kept = source.layouts.borrow().get(&pack_id).cloned();
+        let views = if let Some(views) = kept {
+            views
+        } else {
+            // The pack row may reserve more capacity than it uses; the header names
+            // the used length. Everything below parses against `used`, never the
+            // reserved capacity. A prefix that already covers `used` is the body.
+            let (capacity, prefix) = prefixes.take(pack_id)?;
+            if prefix.len() < layout::USED_OFFSET + 4 {
+                return Err(HistoryError::Integrity("mark pack length"));
+            }
+            let used = {
+                let field = &prefix[layout::USED_OFFSET..layout::USED_OFFSET + 4];
+                u32::from_le_bytes(
+                    field
+                        .try_into()
+                        .map_err(|_| HistoryError::Integrity("mark pack length"))?,
+                ) as usize
+            };
+            if used < layout::HEADER_LEN || used > capacity {
+                return Err(HistoryError::Integrity("mark pack length"));
+            }
+            if prefix.len() >= used {
+                dead_in_retained_packs_bytes = dead_in_retained_packs_bytes
+                    .saturating_add(pack_waste(&prefix[..used], groups, closure)?);
+                continue;
+            }
+            let header = layout::parse_directory_header(&prefix, used).map_err(storage)?;
+            layout::directory_group_views(&prefix, header).map_err(storage)?
         };
-        if prefix.len() < layout::USED_OFFSET + 4 {
-            return Err(HistoryError::Integrity("mark pack length"));
-        }
-        let used = {
-            let field = &prefix[layout::USED_OFFSET..layout::USED_OFFSET + 4];
-            u32::from_le_bytes(
-                field
-                    .try_into()
-                    .map_err(|_| HistoryError::Integrity("mark pack length"))?,
-            ) as usize
-        };
-        if used < layout::HEADER_LEN || used > capacity {
-            return Err(HistoryError::Integrity("mark pack length"));
-        }
-        if prefix.len() >= used {
-            dead_in_retained_packs_bytes = dead_in_retained_packs_bytes.saturating_add(pack_waste(
-                &prefix[..used],
-                groups,
-                closure,
-            )?);
-            continue;
-        }
-        let header = layout::parse_directory_header(&prefix, used).map_err(storage)?;
-        let views = layout::directory_group_views(&prefix, header).map_err(storage)?;
         // A wholly dead group's stored extent is known from the directory. A
         // retained Raw group whose inventory no longer accounts for every
-        // record is read on its own, so its exact per-record split never costs
-        // the whole pack body.
+        // record has its own record directory read, so its exact per-record
+        // split costs neither the pack body nor the group's.
         let mut mixed_raw = Vec::new();
         for (number, view) in views.iter().enumerate() {
             let records = groups.and_then(|groups| groups.get(&number));
@@ -743,29 +785,22 @@ fn waste(
         if mixed_raw.is_empty() {
             continue;
         }
-        let numbers: Vec<usize> = mixed_raw.iter().map(|(number, _)| *number).collect();
-        let mut cache = PackCache::new();
-        cache
-            .acquire_groups(source, pack_id, &numbers)
-            .map_err(storage)?;
-        for (number, view) in mixed_raw {
-            let slice = cache
-                .group(source, pack_id, number)
-                .map_err(storage)?
-                .ok_or(HistoryError::Integrity("mark group acquisition"))?;
-            if slice.view.start != view.start || slice.view.end != view.end {
-                return Err(HistoryError::Integrity("mark group acquisition"));
-            }
-            let records = groups.and_then(|groups| groups.get(&number));
+        // Each record's extent is in the group's directory, so the records
+        // themselves stay unread.
+        let views: Vec<layout::GroupView> = mixed_raw.iter().map(|(_, view)| *view).collect();
+        let directories = edges::group_directories(source, pack_id, &views)?;
+        for ((number, _), directory) in mixed_raw.iter().zip(&directories) {
+            let records = groups.and_then(|groups| groups.get(number));
             dead_in_retained_packs_bytes = dead_in_retained_packs_bytes
-                .saturating_add(dead_raw_record_bytes(slice.bytes, records, closure)?);
+                .saturating_add(dead_raw_record_bytes(directory, records, closure)?);
         }
     }
-    let deltas: Vec<ObjectId> = closure
+    let mut deltas: Vec<ObjectId> = closure
         .bases
         .difference(&closure.logical)
         .copied()
         .collect();
+    deltas.sort_unstable();
     let delta_bases_bytes = deltas.iter().fold(0u64, |total, id| {
         total.saturating_add(closure.widths.get(id).copied().unwrap_or(0))
     });
@@ -816,23 +851,22 @@ fn group_may_hide_dead_records(
 
 /// The framed bytes of every record in a Raw group that no reached object owns,
 /// including a record whose `object_location` row a rebuild did not retain. The
-/// caller passes a group body it already read.
+/// group's directory names every record's extent, so this is one pass over it.
 fn dead_raw_record_bytes(
-    group: &[u8],
+    directory: &RecordDirectory,
     records: Option<&BTreeMap<usize, ObjectId>>,
     closure: &Closure,
 ) -> HistoryResult<u64> {
-    let count = framed_record_count(group).map_err(storage)?;
     let mut dead = 0u64;
-    for record in 0..count {
+    for record in 0..directory.count() {
         let live = records
             .and_then(|records| records.get(&record))
             .is_some_and(|id| closure.visited.contains_key(id));
         if live {
             continue;
         }
-        let framed = framed_record(group, record).map_err(storage)?;
-        dead = dead.saturating_add(u64::try_from(framed.len()).unwrap_or(u64::MAX));
+        let (start, end) = directory.range(record).map_err(storage)?;
+        dead = dead.saturating_add(u64::try_from(end - start).unwrap_or(u64::MAX));
     }
     Ok(dead)
 }
@@ -861,11 +895,8 @@ fn pack_waste(
             // stored uncompressed. A compressed group's bytes cannot be
             // attributed to one record, so a retained group contributes
             // nothing and the error stays conservative.
-            dead = dead.saturating_add(dead_raw_record_bytes(
-                &body[view.start..view.end],
-                records,
-                closure,
-            )?);
+            let directory = RecordDirectory::of(&body[view.start..view.end]).map_err(storage)?;
+            dead = dead.saturating_add(dead_raw_record_bytes(&directory, records, closure)?);
         }
     }
     Ok(dead)

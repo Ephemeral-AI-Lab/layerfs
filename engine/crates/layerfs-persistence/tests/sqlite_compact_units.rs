@@ -184,3 +184,178 @@ fn the_attached_source_gets_a_large_mmap_window() {
         "the applied window reads back"
     );
 }
+
+/// The rebuild sizes the fresh file for the retained payload before the bulk
+/// load (macOS; other platforms leave it to grow) and cuts the closed file
+/// back to the pages its header counts, so a load that writes less than it
+/// was sized for installs no page past the database's own end.
+#[test]
+fn a_sized_fresh_file_loads_and_is_cut_back_to_its_page_count() {
+    use layerfs_persistence::internals::{reserve, trim};
+    use rusqlite::{params, Connection};
+
+    const PAGE: u64 = 4096;
+    let temp = support::Temp::new("compact-space");
+    let staged = temp.join("staged.sqlite");
+    let connection = Connection::open(&staged).unwrap();
+    connection
+        .execute_batch(
+            "PRAGMA page_size=4096; PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; \
+             CREATE TABLE pack(pack_id INTEGER PRIMARY KEY, body BLOB NOT NULL);",
+        )
+        .unwrap();
+    let schema_only = std::fs::metadata(&staged).unwrap().len();
+
+    // Sized for 1 MiB and a part of a page; the load below writes far less.
+    reserve(&staged, 1024 * 1024 + 100, PAGE).unwrap();
+    let sized = std::fs::metadata(&staged).unwrap().len();
+    if cfg!(target_os = "macos") {
+        assert_eq!(sized, 1024 * 1024, "whole pages only");
+    } else {
+        assert_eq!(sized, schema_only, "only macOS sizes the file");
+    }
+    // A size the file already has is never cut.
+    reserve(&staged, PAGE, PAGE).unwrap();
+    assert_eq!(std::fs::metadata(&staged).unwrap().len(), sized);
+
+    connection
+        .execute_batch(
+            "BEGIN IMMEDIATE; \
+             INSERT INTO pack VALUES (1, zeroblob(100000)); \
+             INSERT INTO pack VALUES (2, randomblob(200000)); \
+             COMMIT;",
+        )
+        .unwrap();
+    let pages: i64 = connection
+        .query_row("PRAGMA page_count", params![], |row| row.get(0))
+        .unwrap();
+    let pages = u64::try_from(pages).unwrap();
+    connection.close().unwrap();
+    assert!(
+        pages * PAGE < 1024 * 1024,
+        "the load is smaller than its size"
+    );
+
+    assert_eq!(trim(&staged, pages, PAGE).unwrap(), pages * PAGE);
+    assert_eq!(std::fs::metadata(&staged).unwrap().len(), pages * PAGE);
+    // Nothing to cut the second time, and a count past the file cuts nothing.
+    assert_eq!(trim(&staged, pages, PAGE).unwrap(), pages * PAGE);
+    assert_eq!(trim(&staged, pages + 8, PAGE).unwrap(), pages * PAGE);
+
+    let reopened = Connection::open(&staged).unwrap();
+    let check: String = reopened
+        .query_row("PRAGMA integrity_check", params![], |row| row.get(0))
+        .unwrap();
+    assert_eq!(check, "ok");
+    let lengths: (i64, i64) = reopened
+        .query_row(
+            "SELECT (SELECT length(body) FROM pack WHERE pack_id=1),\
+                    (SELECT length(body) FROM pack WHERE pack_id=2)",
+            params![],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(lengths, (100_000, 200_000));
+    let reread: i64 = reopened
+        .query_row("PRAGMA page_count", params![], |row| row.get(0))
+        .unwrap();
+    assert_eq!(u64::try_from(reread).unwrap(), pages);
+}
+
+/// The pack copy runs one window of retained packs at a time. A window ends
+/// once it holds [`WINDOW_BYTES`] of retained payload or when a run of dead
+/// packs longer than [`GAP_BYTES`] follows it, and its file range is the
+/// payload offsets of its packs plus every byte of the file that is not pack
+/// payload.
+#[test]
+fn the_pack_copy_is_cut_into_windows_in_pack_order() {
+    use layerfs_persistence::internals::{windows, Window, GAP_BYTES, WINDOW_BYTES};
+    use std::collections::BTreeMap;
+
+    const MIB: u64 = 1024 * 1024;
+    let window = std::hint::black_box(WINDOW_BYTES);
+    let gap = std::hint::black_box(GAP_BYTES);
+    assert_eq!((window, gap), (64 * MIB, 8 * MIB));
+
+    // Ten packs of 16 MiB, all retained, in a file with 1 MiB that is not pack
+    // payload: four packs fill a window.
+    let lengths: BTreeMap<i64, u64> = (1..=10).map(|pack| (pack, 16 * MIB)).collect();
+    let retained: Vec<i64> = (1..=10).collect();
+    let file = 160 * MIB + MIB;
+    assert_eq!(
+        windows(&lengths, &retained, file).unwrap(),
+        vec![
+            Window {
+                first: 1,
+                last: 4,
+                offset: 0,
+                bytes: 65 * MIB
+            },
+            Window {
+                first: 5,
+                last: 8,
+                offset: 64 * MIB,
+                bytes: 65 * MIB
+            },
+            Window {
+                first: 9,
+                last: 10,
+                offset: 128 * MIB,
+                bytes: 33 * MIB
+            },
+        ]
+    );
+
+    // A short dead run stays inside its window (the filter skips its rows); a
+    // long one ends the window, so the dead bytes are not read ahead.
+    let lengths: BTreeMap<i64, u64> = [
+        (1, MIB),
+        (2, MIB), // dead, short
+        (3, MIB),
+        (4, 9 * MIB), // dead, longer than the gap
+        (5, MIB),
+        (7, 2 * MIB), // dead, last
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(
+        windows(&lengths, &[1, 3, 5], 15 * MIB).unwrap(),
+        vec![
+            Window {
+                first: 1,
+                last: 3,
+                offset: 0,
+                bytes: 3 * MIB
+            },
+            Window {
+                first: 5,
+                last: 5,
+                offset: 12 * MIB,
+                bytes: MIB
+            },
+        ]
+    );
+
+    // No retained pack is no window; a file shorter than its packs has no
+    // slack to add.
+    assert_eq!(windows(&lengths, &[], 15 * MIB).unwrap(), Vec::new());
+    assert_eq!(
+        windows(&lengths, &[7], MIB).unwrap(),
+        vec![Window {
+            first: 7,
+            last: 7,
+            offset: 13 * MIB,
+            bytes: 2 * MIB
+        }]
+    );
+
+    // A retained pack the Store does not hold, or a mark out of order, is an
+    // integrity failure, never a silently shorter copy.
+    for broken in [&[6][..], &[3, 1][..], &[1, 1][..], &[5, 8][..]] {
+        let error = windows(&lengths, broken, 15 * MIB).unwrap_err();
+        assert!(
+            matches!(error, HistoryError::Integrity("mark pack")),
+            "{broken:?}: {error:?}"
+        );
+    }
+}

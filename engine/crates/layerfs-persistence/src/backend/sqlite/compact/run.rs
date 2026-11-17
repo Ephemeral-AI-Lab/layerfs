@@ -30,9 +30,8 @@ use super::types::CompactPath;
 use super::types::CompactReceipt;
 use super::types::CompactRequest;
 use super::types::CompactResidue;
-use super::verify::immutable_digest;
-use super::verify::immutable_tuple;
 use super::verify::live_tuple;
+use super::verify::sealed_state;
 use super::verify::verify;
 use super::verify::VerifyInput;
 use crate::compact_metrics::CompactPhase;
@@ -278,14 +277,13 @@ impl SqliteHandles {
 
             // §7 step 2: a stop here leaves the open session, the writer lane,
             // the committed intent, the visited scratch and the op record; the
-            // live Store is at `G`.
+            // live Store is at `G`. The admission record already names this
+            // run, its generation and its owner, which is all a later call
+            // judges a leftover by, and `store.status` reads its phase as
+            // `mark`; the mark's tuple and digest go out with the next write.
             op.tuple = tuple.clone();
             op.live_heads_digest = mark.live_heads_digest();
             op.phase = "mark".to_owned();
-            if let Err(error) = op.write(&store) {
-                abort_run(&history, &store, &op_id);
-                return Err(error);
-            }
             // §7 step 1: with the lane held, no writer can append while the
             // intent, the op record and the WAL are settled together.
             if let Err(error) = session.checkpoint_holding() {
@@ -334,8 +332,8 @@ impl SqliteHandles {
 
             // §7 step 1.5's fence: the seal must not have moved the generation
             // or the heads the mark recorded.
-            let sealed_tuple = match immutable_tuple(&facts.path) {
-                Ok(tuple) => tuple,
+            let (sealed_tuple, sealed_digest) = match sealed_state(&facts.path) {
+                Ok(state) => state,
                 Err(error) => {
                     abort_before_install(&store, &op_id, true);
                     return Err(error);
@@ -345,18 +343,11 @@ impl SqliteHandles {
                 abort_before_install(&store, &op_id, true);
                 return Err(HistoryError::Conflict("the Store changed after the mark"));
             }
-            match immutable_digest(&facts.path) {
-                Ok(digest) if digest == mark.live_heads_digest() => {}
-                Ok(_) => {
-                    abort_before_install(&store, &op_id, true);
-                    return Err(HistoryError::Conflict(
-                        "the Store heads changed after the mark",
-                    ));
-                }
-                Err(error) => {
-                    abort_before_install(&store, &op_id, true);
-                    return Err(error);
-                }
+            if sealed_digest != mark.live_heads_digest() {
+                abort_before_install(&store, &op_id, true);
+                return Err(HistoryError::Conflict(
+                    "the Store heads changed after the mark",
+                ));
             }
             stop_at(request, CompactFailpoint::AfterSeal, &op, &store)?;
 
@@ -374,6 +365,9 @@ impl SqliteHandles {
                     facts: &facts,
                     tuple: &tuple,
                     synchronous,
+                    payload_bytes: live_stored,
+                    lengths: &lengths,
+                    retained: mark.objects().packs(),
                 },
                 capacity,
                 request,
@@ -402,12 +396,6 @@ impl SqliteHandles {
                 peak_temp: built.peak_temp_bytes(),
                 total_stored: total,
             });
-            // §7 step 7: every artifact and the op record are durable before
-            // the verification reads them back.
-            if let Err(error) = sync_directory(&store) {
-                abort_before_install(&store, &op_id, true);
-                return Err(error);
-            }
             stop_at(request, CompactFailpoint::AfterBuild, &op, &store)?;
             stop_at(request, CompactFailpoint::AfterWalSwitch, &op, &store)?;
             metrics.end_phase();
@@ -475,7 +463,7 @@ impl SqliteHandles {
             // The writer lane is free from here: a second compaction can take
             // it while this run settles. `settle_leftover` judges that race by
             // the owner the op record names; this test hook only names the
-            // window.
+            // window. The settle takes the lane again for its one write.
             if let Some(hook) = request.before_settle_hook {
                 hook(&store);
             }

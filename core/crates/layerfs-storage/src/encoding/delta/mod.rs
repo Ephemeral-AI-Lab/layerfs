@@ -4,6 +4,7 @@
 
 pub mod branch;
 pub mod candidates;
+pub mod edge;
 pub mod read;
 pub mod record;
 pub mod select;

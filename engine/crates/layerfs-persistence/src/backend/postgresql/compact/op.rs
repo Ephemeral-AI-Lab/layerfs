@@ -23,7 +23,6 @@ use crate::history::GcTuple;
 use crate::MarkResult;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
-use postgres::types::Type;
 use std::sync::Arc;
 use std::time::Instant;
 use std::time::SystemTime;
@@ -304,6 +303,11 @@ pub(crate) fn stop(
     Err(HistoryError::UnknownOutcome)
 }
 
+/// Object ids one statement of [`load_visited`] carries: about 300 KiB.
+const VISITED_IDS: usize = 8192;
+/// Pack ids one statement of [`load_visited`] carries.
+const VISITED_PACKS: usize = 32_768;
+
 /// The set of live object ids and live pack ids, as session temporary tables
 /// the Phase A copy and the dead-set query read.
 pub(crate) fn load_visited(
@@ -311,13 +315,6 @@ pub(crate) fn load_visited(
     schema: &str,
     mark: &MarkResult,
 ) -> HistoryResult<()> {
-    let objects: Vec<Vec<u8>> = mark
-        .objects()
-        .objects()
-        .iter()
-        .map(|id| id.as_bytes().to_vec())
-        .collect();
-    let packs: Vec<i64> = mark.objects().packs().to_vec();
     stage(session, |tx| {
         tx.batch(
             "DROP TABLE IF EXISTS pg_temp.gc_visited;\
@@ -325,30 +322,26 @@ pub(crate) fn load_visited(
              CREATE TEMP TABLE pg_temp.gc_visited(object_id bytea PRIMARY KEY) ON COMMIT PRESERVE ROWS;\
              CREATE TEMP TABLE pg_temp.gc_live_pack(pack_id bigint PRIMARY KEY) ON COMMIT PRESERVE ROWS;",
         )?;
-        // A large visited set is a bulk load, not a parameter array: COPY
-        // streams it without one round trip per row and without SQL text that
-        // grows with the mark. The ids were bound in memory for the array form;
-        // here each row is written straight from the mark.
-        tx.copy_in(
-            "COPY pg_temp.gc_visited(object_id) FROM STDIN (FORMAT binary)",
-            &[Type::BYTEA],
-            |writer| {
-                for id in &objects {
-                    writer.write(&[id])?;
-                }
-                Ok(())
-            },
-        )?;
-        tx.copy_in(
-            "COPY pg_temp.gc_live_pack(pack_id) FROM STDIN (FORMAT binary)",
-            &[Type::INT8],
-            |writer| {
-                for pack in &packs {
-                    writer.write(&[pack])?;
-                }
-                Ok(())
-            },
-        )?;
+        // A large visited set is loaded as arrays of ids, a bounded piece
+        // per statement. A binary COPY was tried first and spent about four
+        // microseconds per row handing rows to the driver one at a time; an
+        // array is encoded once and the server unnests it. The ids are in
+        // ascending order, so the key's index is built by appending.
+        for ids in mark.objects().objects().chunks(VISITED_IDS) {
+            let ids: Vec<&[u8]> = ids.iter().map(|id| id.as_bytes().as_slice()).collect();
+            tx.typed(
+                "INSERT INTO pg_temp.gc_visited(object_id) SELECT unnest($1::bytea[])",
+                &[&ids],
+                ids.len() as u64 * 36,
+            )?;
+        }
+        for packs in mark.objects().packs().chunks(VISITED_PACKS) {
+            tx.typed(
+                "INSERT INTO pg_temp.gc_live_pack(pack_id) SELECT unnest($1::bigint[])",
+                &[&packs],
+                packs.len() as u64 * 8,
+            )?;
+        }
         // The Phase A copy and the dead-set query read both sets; analyze
         // them after the bulk load so the planner sees the real cardinality.
         tx.batch("ANALYZE pg_temp.gc_visited; ANALYZE pg_temp.gc_live_pack;")?;
@@ -365,7 +358,9 @@ pub(crate) fn load_visited(
 /// delete each project closure in its per-project transaction instead of
 /// scanning the derived tables for orphans in the final settle. The
 /// run/depth and key/x primary keys are persisted as the concatenated bytes
-/// run || int8send(depth) and key || int8send(x).
+/// run || int8send(depth) and key || int8send(x). A digest root is recorded
+/// once however many `file_digest` rows name it; every other arm selects its
+/// table's own key.
 pub(crate) fn persist_mark(
     session: &Arc<Session>,
     schema: &str,
@@ -394,7 +389,7 @@ pub(crate) fn persist_mark(
              SELECT 'signature',int8send(cs.slot)||int8send(cs.stamp) FROM {schema}.content_signature cs \
               WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=cs.object_id) \
              UNION ALL \
-             SELECT 'digest',fd.root FROM {schema}.file_digest fd \
+             SELECT DISTINCT 'digest',fd.root FROM {schema}.file_digest fd \
               WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=fd.root) \
              UNION ALL \
              SELECT 'layer_lineage',ll.layer_id FROM {schema}.layer_lineage ll \
