@@ -2,10 +2,16 @@
 use crate::methods::args::{invalid, paging, project, text, Answer};
 use crate::{
     history::{branch, lookup},
+    store::Store,
     StoreService,
 };
-use layerfs_bridge::control::SdkValue;
-use layerfs_history::{PathRemovalKind, PathRemovalRequest};
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_content::compare::TreeTable;
+use layerfs_content::filesystem::FilesystemRootId;
+use layerfs_history::{
+    LayerStackRecord, NodeId, PathRemovalKind, PathRemovalRequest, MAXIMUM_PAGE_RECORDS,
+};
+use std::sync::Arc;
 
 /// `list_branches({ name?, pageSize?, pagePos? })`: every Branch with its id, base and head, and main, in name order.
 pub fn list_branches(service: &StoreService, args: &SdkValue) -> Answer {
@@ -83,6 +89,35 @@ pub fn stats(service: &StoreService, args: &SdkValue) -> Answer {
     )
 }
 
+/// The roots of the trees a read of the project can see: main's head Layer
+/// and every Branch head, deduplicated by root.
+fn visible_trees(
+    store: &Arc<Store>,
+    stack: &LayerStackRecord,
+) -> Result<Vec<layerfs_content::ObjectId>, SdkRefusal> {
+    let mut roots = vec![lookup::root(store, NodeId::Layer(stack.head_layer))?];
+    let mut page = layerfs_history::Page {
+        cursor: None,
+        limit: MAXIMUM_PAGE_RECORDS,
+    };
+    loop {
+        let found = store
+            .published(|history| history.branches(stack.id, &page))
+            .map_err(lookup::published)?;
+        for branch in found.records {
+            let root = lookup::root(store, lookup::branch_node(&branch))?;
+            if !roots.contains(&root) {
+                roots.push(root);
+            }
+        }
+        match found.continuation {
+            Some(cursor) => page.cursor = Some(cursor),
+            None => break,
+        }
+    }
+    Ok(roots)
+}
+
 /// `project.remove_file({ project, path })`: hide one path from every node at
 /// or below the frontier. Visibility only; no byte is freed in 2.0.
 pub fn remove_file(service: &StoreService, args: &SdkValue) -> Answer {
@@ -90,14 +125,17 @@ pub fn remove_file(service: &StoreService, args: &SdkValue) -> Answer {
     let requested = text(args, "path")?;
     let normalized = layerfs_history::path::NormalizedPath::new(requested)
         .map_err(|why| invalid(format!("path: {why}")))?;
-    // A path whose non-final component is a symlink or another non-directory
-    // is ill-typed, not a path to hide: resolve it against the project's
-    // preserved tree (the stack head Layer, which `main` names) and refuse it
-    // before writing a marker. The grammar errors above stay separate.
+    // The marker is project-wide, so the path need not exist on main: it may
+    // exist only on a Branch, or never have existed. Spec 4.3 authorizes one
+    // refusal shape, a name below an intermediate symlink, which is ill-typed
+    // rather than absent; check it against every visible tree. A regular-file
+    // intermediate is not refused: the child is merely absent.
     let reader = crate::read::snapshot::reader(&service.store, &stack);
-    let snap = crate::read::snapshot::resolve(&service.store, &stack, &reader, "main")?;
     let absolute = format!("/{}", normalized.as_str());
-    let _ = crate::read::snapshot::entry(&reader, &snap.tree, &absolute)?;
+    for root in visible_trees(&service.store, &stack)? {
+        let tree = TreeTable::open(&*reader, FilesystemRootId(root)).map_err(lookup::content)?;
+        let _ = crate::read::snapshot::entry(&reader, &tree, &absolute)?;
+    }
     let removed_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| {

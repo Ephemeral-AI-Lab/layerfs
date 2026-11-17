@@ -16,7 +16,7 @@ mod support;
 
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::fs;
-use support::{items, Fixture};
+use support::{items, paths, write, Fixture};
 
 fn text(value: &str) -> SdkValue {
     SdkValue::text(value)
@@ -283,5 +283,71 @@ fn glob_removed_count_counts_the_hidden_results_at_any_depth_on_every_page() {
     let second = paged_glob(&fixture, "/**", 2, 2);
     assert_eq!(matched(&second), vec!["/e/h.txt"], "{second:?}");
     assert_eq!(second.get_int("removed_count"), Some(5), "{second:?}");
+    fixture.cleanup();
+}
+
+/// A marker whose ancestor has since become a non-directory names no entry at
+/// this snapshot: it hides and counts nothing, so a listing or glob pages
+/// normally instead of refusing `InvalidInput`. The marker check is lenient
+/// (`snapshot::find`), not the strict read walk (`snapshot::entry`); reading
+/// the marked-but-absent path is `NoSuchPath`.
+#[test]
+fn a_marker_under_a_replaced_ancestor_hides_nothing_and_pages_normally() {
+    let fixture = Fixture::new("t58-marker-replaced", |source| {
+        fs::create_dir(source.join("d")).unwrap();
+        fs::write(source.join("d/f.txt"), "f\n").unwrap();
+        fs::write(source.join("keep.txt"), "k\n").unwrap();
+        3
+    });
+    fixture.fork("work");
+    remove(&fixture, "/d/f.txt");
+
+    // Replace `/d` with a regular file: move the directory aside, then write
+    // a file over the old name, in one Commit on `work`.
+    fixture.apply(
+        "work",
+        vec![
+            SdkValue::map([
+                ("op", text("mv")),
+                ("from", text("/d")),
+                ("to", text("/d2")),
+            ]),
+            write("/d", "now a file\n"),
+        ],
+    );
+
+    // The marked path has no entry: a read is absent, not `Removed`.
+    let refusal = read(&fixture, "work", "/d/f.txt").expect_err("a marked-but-absent path");
+    assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
+
+    // `list /` pages normally: the marker's parent is `/d`, so it is not a
+    // direct hidden child of `/`, and it names no entry to count.
+    let listed = fixture.call(
+        "fs.list",
+        vec![("branch", text("work")), ("path", text("/"))],
+    );
+    let names = paths(&listed);
+    assert_eq!(names, vec!["/d", "/d2", "/keep.txt"], "{listed:?}");
+    assert_eq!(listed.get_int("removed_count"), Some(0), "{listed:?}");
+
+    // `list /d` reaches a regular file: `NotDirectory`, not the marker's
+    // `InvalidInput`.
+    let refusal = fixture
+        .try_call(
+            "fs.list",
+            vec![("branch", text("work")), ("path", text("/d"))],
+        )
+        .expect_err("listing a regular file");
+    assert_eq!(refusal.code, "NotDirectory", "{refusal:?}");
+
+    // The hidden entry moved with its parent as an absence: the bound view
+    // hid `/d/f.txt`, so the renamed `/d2` does not contain it either. The
+    // marker now names no live path, so it only matters that list and glob
+    // page normally instead of failing `InvalidInput`.
+    let refusal = read(&fixture, "work", "/d2/f.txt").expect_err("the moved hidden entry");
+    assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
+    let all = glob(&fixture, "/**", "/");
+    assert_eq!(matched(&all), vec!["/d", "/d2", "/keep.txt"], "{all:?}");
+    assert_eq!(all.get_int("removed_count"), Some(0), "{all:?}");
     fixture.cleanup();
 }

@@ -107,10 +107,11 @@ pub fn resolve(
 
 /// The entry at a checked absolute path, if any.
 ///
-/// A component before the last that exists but is not a directory (a symlink
-/// or a file) is refused `InvalidInput`: a name below such an entry is
-/// ill-typed, not absent, so `/link/f` must not read as an ordinary missing
-/// path.
+/// Only a component before the last that is a symlink is refused
+/// `InvalidInput` (spec 4.3): a symlink is not followed, so a name below it
+/// is ill-typed, not absent, and `/link/f` must not read as an ordinary
+/// missing path. A regular-file (or removed-file) component cannot contain
+/// the next name, so the path resolves as absent (`NoSuchPath`/`NotFound`).
 pub fn entry(
     reader: &StorePorts,
     tree: &TreeTable,
@@ -130,8 +131,10 @@ pub fn find(
     find_with(reader, tree, path, false)
 }
 
-/// The shared path walk. `strict` refuses a non-directory component before
-/// the last instead of reading past it as an absent path.
+/// The shared path walk. `strict` refuses a symlink component before the last
+/// instead of reading past it as an absent path; any other non-directory
+/// component makes the rest of the walk absent, because it cannot contain the
+/// next name.
 fn find_with(
     reader: &dyn AuthenticatedObjects,
     tree: &TreeTable,
@@ -151,9 +154,13 @@ fn find_with(
                 .value(reader, serial)
                 .map_err(args::content)?
                 .ok_or_else(|| args::failed("bound inode record"))?;
-            if value.kind != InodeKind::Directory {
+            // Spec 4.3: only an intermediate symlink is ill-typed. A regular
+            // file cannot contain the next name either, but that is the
+            // absent path a removed-file child also reports: `lookup` returns
+            // None for a non-directory parent and the walk ends there.
+            if value.kind == InodeKind::Symlink {
                 return Err(invalid(format!(
-                    "`{}` is not a directory; `{path}` cannot be resolved",
+                    "`{}` is a symlink; `{path}` cannot be resolved",
                     name.as_str()
                 )));
             }

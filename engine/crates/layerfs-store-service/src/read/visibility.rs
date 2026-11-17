@@ -158,6 +158,11 @@ impl Visibility {
     /// of them is not a hidden result and is not counted; a glob counts the
     /// matched hidden entries at any depth (`hidden_matches`). Each call
     /// therefore counts exactly the entries its own result would omit.
+    ///
+    /// Marker existence is checked leniently ([`snapshot::find`], not
+    /// [`snapshot::entry`]): a marker whose ancestor has since become a
+    /// regular file or a symlink names no entry at this snapshot, so it hides
+    /// and counts nothing and the listing or glob pages normally.
     pub fn hidden_children(
         &self,
         reader: &StorePorts,
@@ -183,7 +188,7 @@ impl Visibility {
                 continue;
             }
             let full = format!("/{relative}");
-            if snapshot::entry(reader, &snap.tree, &full)?.is_some() && self.hidden(&full).is_some()
+            if snapshot::find(reader, &snap.tree, &full)?.is_some() && self.hidden(&full).is_some()
             {
                 count += 1;
             }
@@ -229,7 +234,7 @@ impl Visibility {
                 continue;
             }
             let full = format!("/{relative}");
-            let Some(entry) = snapshot::entry(reader, &snap.tree, &full)? else {
+            let Some(entry) = snapshot::find(reader, &snap.tree, &full)? else {
                 continue;
             };
             if self.hidden(&full).is_none() {

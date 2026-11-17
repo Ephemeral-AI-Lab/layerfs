@@ -135,7 +135,7 @@ fn the_remove_file_path_grammar_is_refused() {
 }
 
 #[test]
-fn a_non_directory_component_is_refused_while_a_leaf_symlink_is_hidden() {
+fn a_symlink_component_is_refused_while_a_leaf_symlink_is_hidden() {
     let fixture = Fixture::new("sdk-path-symlink", |source| {
         fs::create_dir(source.join("d")).unwrap();
         fs::write(source.join("d/f"), "f\n").unwrap();
@@ -146,9 +146,10 @@ fn a_non_directory_component_is_refused_while_a_leaf_symlink_is_hidden() {
     });
     fixture.fork("work");
 
-    // A component before the last that is not a directory is ill-typed, not a
-    // path to hide: the marker is refused and nothing is written.
-    for path in ["/link/f", "/dlink/f", "/a.txt/f"] {
+    // A symlink before the last component is ill-typed, not a path to hide:
+    // the marker is refused and nothing is written. A regular file there is
+    // not ill-typed (spec 4.3): the path is merely absent.
+    for path in ["/link/f", "/dlink/f"] {
         let refusal = fixture
             .try_call("project.remove_file", vec![("path", text(path))])
             .expect_err("a non-directory component");
@@ -156,13 +157,26 @@ fn a_non_directory_component_is_refused_while_a_leaf_symlink_is_hidden() {
     }
     // Reads and stats through that component answer the same way.
     for method in ["fs.read", "fs.stat"] {
-        for path in ["/link/f", "/dlink/f", "/a.txt/f"] {
+        for path in ["/link/f", "/dlink/f"] {
             let refusal = fixture
                 .try_call(method, vec![("branch", text("work")), ("path", text(path))])
-                .expect_err("a read below a non-directory");
+                .expect_err("a read below a symlink");
             assert_eq!(refusal.code, "InvalidInput", "{method} {path}: {refusal:?}");
         }
     }
+
+    // A regular file in a non-final component is not ill-typed: nothing can
+    // live below it, so the path is absent, and a marker may be planted for
+    // it (only a symlink is refused).
+    let refusal = fixture
+        .try_call(
+            "fs.read",
+            vec![("branch", text("work")), ("path", text("/a.txt/f"))],
+        )
+        .expect_err("a read below a regular file");
+    assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
+    let planted = remove(&fixture, "/a.txt/f");
+    assert_eq!(planted.get_text("kind"), Some("Removed"), "{planted:?}");
 
     // A symlink as the final component is an ordinary entry: it stays
     // visible until it is removed, then it is hidden like any other path.
@@ -190,5 +204,119 @@ fn a_non_directory_component_is_refused_while_a_leaf_symlink_is_hidden() {
     assert!(!names.contains(&"/link"), "{names:?}");
     assert!(names.contains(&"/dlink"), "{names:?}");
     assert_eq!(listed.get_int("removed_count"), Some(1), "{listed:?}");
+    fixture.cleanup();
+}
+
+/// A regular file (or a removed file) in a non-final component is not
+/// ill-typed: the name below it cannot exist, so every read spells it
+/// `NoSuchPath` both while the ancestor is live and after
+/// `project.remove_file` hides it. Only an intermediate symlink is
+/// `InvalidInput` (spec 4.3).
+#[test]
+fn a_file_ancestor_is_absent_before_and_after_remove_file() {
+    let fixture = Fixture::new("sdk-path-file-ancestor", |source| {
+        fs::write(source.join("a.txt"), "a\n").unwrap();
+        fs::write(source.join("b.txt"), "b\n").unwrap();
+        2
+    });
+    fixture.fork("work");
+
+    let assert_absent = |when: &str| {
+        for method in ["fs.read", "fs.stat", "fs.list"] {
+            let refusal = fixture
+                .try_call(
+                    method,
+                    vec![("branch", text("work")), ("path", text("/a.txt/x"))],
+                )
+                .expect_err("a name below a regular file");
+            assert_eq!(refusal.code, "NoSuchPath", "{when} {method}: {refusal:?}");
+        }
+        for method in ["fs.glob", "fs.grep"] {
+            let refusal = fixture
+                .try_call(
+                    method,
+                    vec![
+                        ("branch", text("work")),
+                        ("path", text("/a.txt/x")),
+                        ("pattern", text("a")),
+                    ],
+                )
+                .expect_err("a glob or grep below a regular file");
+            assert_eq!(refusal.code, "NoSuchPath", "{when} {method}: {refusal:?}");
+        }
+        let refusal = fixture
+            .try_call(
+                "fs.diff_files",
+                vec![
+                    ("branch", text("work")),
+                    ("left", SdkValue::map([("path", text("/b.txt"))])),
+                    ("right", SdkValue::map([("path", text("/a.txt/x"))])),
+                ],
+            )
+            .expect_err("a diff side below a regular file");
+        assert_eq!(refusal.code, "NoSuchPath", "{when} diff: {refusal:?}");
+    };
+
+    // Live-file control: absence, never `InvalidInput`.
+    assert_absent("live");
+
+    let removed = remove(&fixture, "/a.txt");
+    assert_eq!(removed.get_text("kind"), Some("Removed"), "{removed:?}");
+    // The exact path is hidden; its would-be child stays absent.
+    let refusal = read(&fixture, "/a.txt").expect_err("the hidden ancestor");
+    assert_eq!(refusal.code, "Removed", "{refusal:?}");
+    assert_absent("removed");
+    fixture.cleanup();
+}
+
+/// The marker is project-wide, so a path that exists only on a Branch is a
+/// valid path to hide: `main` holding a regular file at its ancestor is not
+/// a refusal, and neither is a path that never existed. Only an intermediate
+/// symlink is ill-typed (spec 4.3).
+#[test]
+fn remove_file_accepts_a_path_that_exists_only_on_a_branch() {
+    let fixture = Fixture::new("sdk-path-branch-only", |source| {
+        fs::write(source.join("a"), "a file on main\n").unwrap();
+        1
+    });
+    fixture.fork("work");
+    // On `work`, `/a` becomes a directory holding `/a/b`; main keeps the file.
+    fixture.apply(
+        "work",
+        vec![
+            SdkValue::map([("op", text("rm")), ("path", text("/a"))]),
+            SdkValue::map([("op", text("mkdir")), ("path", text("/a"))]),
+            write("/a/b", "b\n"),
+        ],
+    );
+    let seen = fixture.call(
+        "fs.read",
+        vec![("branch", text("work")), ("path", text("/a/b"))],
+    );
+    assert_eq!(seen.get_text("text"), Some("b\n"), "{seen:?}");
+
+    let removed = remove(&fixture, "/a/b");
+    assert_eq!(removed.get_text("kind"), Some("Removed"), "{removed:?}");
+    assert_eq!(removed.get_text("path"), Some("a/b"), "{removed:?}");
+    let refusal = fixture
+        .try_call(
+            "fs.read",
+            vec![("branch", text("work")), ("path", text("/a/b"))],
+        )
+        .expect_err("the hidden Branch-only path");
+    assert_eq!(refusal.code, "Removed", "{refusal:?}");
+    // main's file ancestor is untouched, and the path is still absent there.
+    let refusal = fixture
+        .try_call(
+            "fs.read",
+            vec![("branch", text("main")), ("path", text("/a/b"))],
+        )
+        .expect_err("a name below main's file");
+    assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
+
+    // A path that exists on no Branch is accepted too: the marker is a
+    // project-wide front, not a test of main's tree.
+    let never = remove(&fixture, "/never/existed");
+    assert_eq!(never.get_text("kind"), Some("Removed"), "{never:?}");
     fixture.cleanup();
 }
