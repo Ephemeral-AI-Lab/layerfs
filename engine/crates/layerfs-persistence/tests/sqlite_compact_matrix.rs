@@ -1541,11 +1541,7 @@ fn generate_report() -> String {
         "  94.317 s superseded-build median, whose per-run samples were not retained,"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  so it has no recorded range);"
-    )
-    .unwrap();
+    writeln!(out, "  so it has no recorded range);").unwrap();
     writeln!(
         out,
         "  the removed `quick_check` page scan cost a measured ~4 s (it is not in §7"

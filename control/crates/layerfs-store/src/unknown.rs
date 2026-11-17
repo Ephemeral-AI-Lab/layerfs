@@ -12,7 +12,8 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 /// fills them. A refusal that already names something, or any other code, is
 /// returned unchanged. `phase` stays null: the lost call did not report one,
 /// and `op` is the durable operation the caller held, if any.
-pub(crate) fn named_unknown(
+#[doc(hidden)]
+pub fn named_unknown(
     mut refusal: SdkRefusal,
     kind: &str,
     name: &str,
@@ -44,77 +45,4 @@ pub(crate) fn named_unknown(
 /// a bare `UnknownOutcome` renders.
 fn no_detail(detail: &SdkValue) -> bool {
     *detail == SdkValue::Null || matches!(detail, SdkValue::Map(fields) if fields.is_empty())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn refused(code: &str, detail: SdkValue) -> SdkRefusal {
-        SdkRefusal {
-            code: code.to_owned(),
-            message: "the worker did not answer".to_owned(),
-            detail,
-        }
-    }
-
-    fn named_store(refusal: &SdkRefusal) {
-        let entity = refusal.detail.get("entity").expect("entity");
-        assert_eq!(entity.get_text("kind"), Some("store"), "{refusal:?}");
-        assert_eq!(entity.get_text("name"), Some("shop"), "{refusal:?}");
-        assert!(
-            refusal.detail.get("phase").expect("phase") == &SdkValue::Null,
-            "{refusal:?}"
-        );
-    }
-
-    #[test]
-    fn a_null_detail_is_filled_with_the_entity() {
-        let refusal = named_unknown(refused("Unknown", SdkValue::Null), "store", "shop", None);
-        assert_eq!(refusal.code, "Unknown");
-        named_store(&refusal);
-        assert!(refusal.detail.get("op").expect("op") == &SdkValue::Null);
-    }
-
-    /// F43R4-1: a bare `UnknownOutcome` renders `SdkValue::map::<0>([])`, not
-    /// `Null`; the caller must fill that shape too.
-    #[test]
-    fn an_empty_map_detail_is_filled_with_the_entity_and_operation() {
-        let op = [0xab; 16];
-        let refusal = named_unknown(
-            refused("Unknown", SdkValue::map::<0>([])),
-            "store",
-            "shop",
-            Some(&op),
-        );
-        assert_eq!(refusal.code, "Unknown");
-        named_store(&refusal);
-        let expected = "ab".repeat(16);
-        assert_eq!(refusal.detail.get_text("op"), Some(expected.as_str()));
-    }
-
-    #[test]
-    fn a_detail_that_already_names_something_is_kept() {
-        let detail = SdkValue::map([(
-            "entity",
-            SdkValue::map([
-                ("kind", SdkValue::text("store")),
-                ("name", SdkValue::text("other")),
-            ]),
-        )]);
-        let refusal = named_unknown(refused("Unknown", detail.clone()), "store", "shop", None);
-        assert_eq!(refusal.detail, detail);
-    }
-
-    #[test]
-    fn a_definite_refusal_is_kept() {
-        let refusal = named_unknown(
-            refused("Busy", SdkValue::map::<0>([])),
-            "store",
-            "shop",
-            None,
-        );
-        assert_eq!(refusal.code, "Busy");
-        assert!(matches!(refusal.detail, SdkValue::Map(fields) if fields.is_empty()));
-    }
 }
