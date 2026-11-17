@@ -138,9 +138,12 @@ fn the_attached_source_gets_a_large_mmap_window() {
     use layerfs_persistence::internals::{source_mmap, SRC_MMAP_BYTES};
     use rusqlite::{params, Connection, OpenFlags};
 
+    // `black_box` keeps this a runtime check: the constant alone would be
+    // folded to `assert!(true)` and is rejected by clippy.
+    let window = std::hint::black_box(SRC_MMAP_BYTES);
     assert!(
-        SRC_MMAP_BYTES >= 256 * 1024 * 1024,
-        "§7 step 2 wants a large source window, got {SRC_MMAP_BYTES}"
+        window >= 256 * 1024 * 1024,
+        "§7 step 2 wants a large source window, got {window}"
     );
     let temp = support::Temp::new("compact-source-mmap");
     let source = temp.join("source.sqlite");
