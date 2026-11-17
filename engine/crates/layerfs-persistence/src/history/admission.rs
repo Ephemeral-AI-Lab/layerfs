@@ -17,6 +17,8 @@
 use super::rows::{cell, one, unsigned};
 use super::transaction::Transaction;
 use super::{branch, layerstack, params, paths, position};
+#[cfg(feature = "postgresql")]
+use crate::backend::records::Param;
 use crate::backend::Engine;
 use crate::history::provider::HistoryProvider;
 use layerfs_history::error::{
@@ -768,6 +770,37 @@ impl StoreClaim<'_> {
 impl Drop for StoreClaim<'_> {
     fn drop(&mut self) {
         self.unlock();
+    }
+}
+
+#[cfg(feature = "postgresql")]
+impl HistoryProvider {
+    /// Whether `pid` holds this Store's exclusive advisory key, as `pg_locks`
+    /// reports it: the §8 lost-`COMMIT` guard. A recorded owner that still
+    /// holds the key is a live compaction, so the next call reports `Busy` and
+    /// never terminates it; one that does not hold it is a lost reply, which
+    /// the recovery may terminate.
+    pub(crate) fn store_key_held_by(&self, pid: i64) -> HistoryResult<bool> {
+        let Engine::Postgres(session) = &self.engine else {
+            return Ok(false);
+        };
+        let key = advisory_key(self.catalog_id, 1, self.catalog_id.as_slice());
+        session.run(false, |tx| {
+            let rows = tx.query(
+                "SELECT (count(*) > 0)::int FROM pg_locks l \
+                  WHERE l.locktype='advisory' AND l.granted AND l.objsubid=1 \
+                    AND l.classid::bigint = (($1::bigint >> 32) & 4294967295) \
+                    AND l.objid::bigint = ($1::bigint & 4294967295) \
+                    AND l.pid=$2",
+                vec![Param::I64(key), Param::I64(pid)],
+            )?;
+            let held = rows
+                .first()
+                .map(|row| row.get::<i64>(0))
+                .transpose()?
+                .unwrap_or(0);
+            Ok(held != 0)
+        })
     }
 }
 

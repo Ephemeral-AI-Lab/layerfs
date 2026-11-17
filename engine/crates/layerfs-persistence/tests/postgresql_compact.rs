@@ -1121,8 +1121,14 @@ fn the_same_session_resumes_an_uncertain_round() {
     clean(&schema.open());
 }
 
+/// F42R2-1 (the terminate arm): the recorded owner is alive and idle but no
+/// longer holds the exclusive Store key, because its call lost the reply and
+/// its error path released the intent. The next round resolves the §8
+/// lost-COMMIT state on a second connection: it terminates exactly the
+/// recorded `(pid, backend_start, usename, datname)`, polls it gone, then
+/// takes the key and adopts the `G` leftover.
 #[test]
-fn an_idle_owner_backend_is_not_terminated_under_the_exclusive_key() {
+fn a_recorded_live_owner_without_the_store_key_is_terminated() {
     let Some(url) = url() else { return };
     let schema = Schema::new(&url, "terminate");
     schema.drop_scratch();
@@ -1138,11 +1144,11 @@ fn an_idle_owner_backend_is_not_terminated_under_the_exclusive_key() {
         error,
         layerfs_history::HistoryError::UnknownOutcome
     ));
-    let pid = schema.scalar("SELECT pid FROM {s}.gc_op WHERE id=1");
+    // `first` is still open, so its backend is alive; it is idle and holds no
+    // Store key (the failpoint path released its intent).
+    let (pid, start, phase) = op_owner(&schema).expect("the op records its owner");
     assert!(pid > 0, "the op records its owner backend");
-    // The recorded owner is alive but idle. The next round takes the exclusive
-    // Store key first, which proves the owner is no longer inside the op, and
-    // adopts the leftover without terminating a healthy connection (§9, §12).
+    assert_eq!(phase, "mark");
     let second = schema.open();
     let receipt = second.compact(&request(10)).unwrap();
     assert_eq!(receipt.path, CompactPath::Rebuild);
@@ -1150,13 +1156,94 @@ fn an_idle_owner_backend_is_not_terminated_under_the_exclusive_key() {
     assert_eq!(receipt.generation_after, before + 1);
     assert_eq!(db_generation(&schema), before + 1);
     assert_settled(&schema, 10);
+    assert_owner_ended(&schema, pid, &start);
+    clean(&schema.open());
+}
+
+/// F42R2-1 (the live-owner guard): a recorded owner that still holds the
+/// Store's exclusive key is a live compaction. It is never terminated; the
+/// claim reports `Busy` instead (the runbook rule, §12).
+#[test]
+fn a_live_key_holding_owner_is_busy_and_not_terminated() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "live_owner");
+    schema.drop_scratch();
+    let setup = schema.create();
+    let live = filesystem_root(&setup, 1);
+    initialize(&setup, 1, live);
+    let _dead = whole_file(&setup, b"a pack the live round collects");
+    let before = generation(&setup);
+
+    // A second session takes the Store's exclusive advisory key, exactly as a
+    // live compaction does, and the op records it as the owner. The recovery
+    // must not terminate a key holder: the exclusive claim is the proof that
+    // it is a live run, and the refusal names it.
+    let catalog = layerfs_history::CatalogId::derive(&schema.binding).unwrap();
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"layerfs/advisory/v1\0");
+    hasher.update(catalog.as_slice());
+    hasher.update(&[1u8]);
+    hasher.update(catalog.as_slice());
+    let digest = hasher.finalize();
+    let key = i64::from_be_bytes(digest.as_bytes()[..8].try_into().unwrap());
+    let mut holder = schema.client();
+    let held: bool = holder
+        .query_one("SELECT pg_try_advisory_lock($1::bigint)", &[&key])
+        .unwrap()
+        .get(0);
+    assert!(held, "the test session holds the Store key");
+    let (pid, start, usename): (i64, String, String) = {
+        let row = holder
+            .query_one(
+                "SELECT pg_backend_pid()::bigint, backend_start::text, current_user::text \
+                   FROM pg_stat_activity WHERE pid=pg_backend_pid()",
+                &[],
+            )
+            .unwrap();
+        (row.get(0), row.get(1), row.get(2))
+    };
+    let before_i = i64::try_from(before).unwrap();
+    let mut admin = schema.client();
+    admin
+        .execute(
+            &format!(
+                "INSERT INTO {}.gc_op \
+                 (id,generation,phase,started_ms,pid,backend_start,usename) \
+                 VALUES (1,$1,'build',$2,$3,$4,$5)",
+                schema.selection.schema
+            ),
+            &[&before_i, &1_700_000_000_000i64, &pid, &start, &usename],
+        )
+        .unwrap();
+
+    let second = schema.open();
+    let error = second.compact(&request(22)).unwrap_err();
+    let layerfs_history::HistoryError::BusyOp(state) = &error else {
+        panic!("a live key holder is Busy, got {error:?}");
+    };
+    assert_eq!(state.entity, "store");
+    assert_eq!(state.pid, Some(pid), "the claim names the live key holder");
     assert_eq!(
         schema.scalar(&format!(
             "SELECT count(*) FROM pg_stat_activity WHERE pid={pid}"
         )),
         1,
-        "the live owner backend is not terminated"
+        "a live key holder is not terminated",
     );
+    assert_eq!(db_generation(&schema), before, "nothing was marked");
+    assert_eq!(schema.count("gc_dead"), 0, "nothing was marked");
+    assert_eq!(schema.count("gc_op"), 1, "the recorded op is untouched");
+
+    // Release the key and the recorded op, then a fresh round is clean.
+    let unlocked: bool = holder
+        .query_one("SELECT pg_advisory_unlock($1::bigint)", &[&key])
+        .unwrap()
+        .get(0);
+    assert!(unlocked, "the test session releases the Store key");
+    let _ = holder.close();
+    admin
+        .batch_execute(&format!("DELETE FROM {}.gc_op", schema.selection.schema))
+        .unwrap();
     clean(&schema.open());
 }
 
@@ -1505,9 +1592,12 @@ fn a_killed_backend_during_phase_c_resumes_at_g_plus_1() {
         "a killed backend loses the reply: {error:?}"
     );
 
-    // Wholly new at `G + 1`, but Phase C rolled back: the committed swap has
-    // already replaced the payload tables (the dead pack is gone), while the
-    // persisted dead history rows, the op row and the old totals remain.
+    // Wholly new at `G + 1`, but Phase C is unfinished: the committed swap has
+    // already replaced the payload tables (the dead pack is gone), and F50R2-2
+    // means the per-project history/lineage batches that ran before the parked
+    // settle already committed too. What the kill rolled back is the final
+    // settle: the `gc_dead` set, the op row and the old totals remain, and
+    // F50R2-3 leaves the op reading its observable `cleanup` phase.
     assert_eq!(db_generation(&schema), before + 1);
     assert_eq!(totals(&schema), totals_before);
     assert!(
@@ -1516,7 +1606,7 @@ fn a_killed_backend_during_phase_c_resumes_at_g_plus_1() {
     );
     assert!(located(&setup, live));
     let (op_pid, op_start, op_phase) = op_owner(&schema).expect("the op row survives the kill");
-    assert_eq!((op_pid, op_phase), (pid, "swap".to_owned()));
+    assert_eq!((op_pid, op_phase), (pid, "cleanup".to_owned()));
     assert_eq!(op_start, start);
     assert!(
         !schema.scratch_exists(),
@@ -1953,6 +2043,66 @@ fn a_fully_privileged_role_compacts() {
     clean(&schema.open());
 }
 
+/// F42R2-1 (the no-privilege arm): a recorded live owner the role may not
+/// signal is `Unsupported` from the second-connection precheck. The role has
+/// every other compaction privilege, the recorded backend is untouched, and
+/// nothing was marked.
+#[test]
+fn a_role_without_pg_signal_backend_is_refused_as_unsupported() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "privilege_signal");
+    let (setup, _live, _dead) = seed_rebuild(&schema);
+    let before = generation(&setup);
+    // A live backend the restricted role does not own: a plain admin
+    // connection, recorded as the op owner with its real tuple.
+    let mut owner = schema.client();
+    let (pid, start, usename): (i64, String, String) = {
+        let row = owner
+            .query_one(
+                "SELECT pg_backend_pid()::bigint, backend_start::text, current_user::text \
+                   FROM pg_stat_activity WHERE pid=pg_backend_pid()",
+                &[],
+            )
+            .unwrap();
+        (row.get(0), row.get(1), row.get(2))
+    };
+    let before_i = i64::try_from(before).unwrap();
+    let mut admin = schema.client();
+    admin
+        .execute(
+            &format!(
+                "INSERT INTO {}.gc_op \
+                 (id,generation,phase,started_ms,pid,backend_start,usename) \
+                 VALUES (1,$1,'build',$2,$3,$4,$5)",
+                schema.selection.schema
+            ),
+            &[&before_i, &1_700_000_000_000i64, &pid, &start, &usename],
+        )
+        .unwrap();
+
+    let role = Role::new(&schema, "no_signal");
+    role.grant_schema_create(&schema);
+    role.grant_database(true, true);
+    role.grant_read_all_stats();
+    let handles = role.open(&schema);
+    let error = handles.compact(&request(61)).unwrap_err();
+    assert!(
+        matches!(&error, layerfs_history::HistoryError::Unsupported(m) if m.contains("pg_signal_backend")),
+        "{error:?}"
+    );
+    assert_eq!(schema.count("gc_dead"), 0, "no dead set was written");
+    assert_eq!(db_generation(&schema), before, "nothing was marked");
+    assert_eq!(schema.count("gc_op"), 1, "the recorded op is untouched");
+    assert_eq!(
+        schema.scalar(&format!(
+            "SELECT count(*) FROM pg_stat_activity WHERE pid={pid}"
+        )),
+        1,
+        "the recorded backend is still alive",
+    );
+    let _ = owner.close();
+}
+
 /// F50-4: the strongest non-owner role (DML and every table privilege with
 /// grant option, plus the five Store-wide privileges) still cannot `DROP` or
 /// `ALTER ... SET SCHEMA` the tables Phase B replaces. The precheck names the
@@ -2256,5 +2406,123 @@ fn phase_c_never_deletes_a_live_init() {
         "the Init released its own record"
     );
     unpark_phase_c(&schema);
+    clean(&schema.open());
+}
+
+/// `(layer_lineage, commit_lineage, absorbed, reach)` rows one project owns.
+fn lineage_counts(schema: &Schema, stack: LayerStackId) -> (i64, i64, i64, i64) {
+    let s = &schema.selection.schema;
+    let mut client = schema.client();
+    let row = client
+        .query_one(
+            &format!(
+                "SELECT \
+                   (SELECT count(*) FROM {s}.layer_lineage ll WHERE ll.layer_stack_id=$1), \
+                   (SELECT count(*) FROM {s}.commit_lineage cl \
+                     JOIN {s}.\"commit\" c ON c.commit_id=cl.commit_id \
+                    WHERE c.layer_stack_id=$1), \
+                   (SELECT count(*) FROM {s}.absorbed a WHERE a.run IN \
+                     (SELECT cl.run FROM {s}.commit_lineage cl \
+                       JOIN {s}.\"commit\" c ON c.commit_id=cl.commit_id \
+                      WHERE c.layer_stack_id=$1)), \
+                   (SELECT count(*) FROM {s}.reach r WHERE r.key=$1 OR r.key IN \
+                     (SELECT cl.run FROM {s}.commit_lineage cl \
+                       JOIN {s}.\"commit\" c ON c.commit_id=cl.commit_id \
+                      WHERE c.layer_stack_id=$1))"
+            ),
+            &[&stack.as_slice()],
+        )
+        .unwrap();
+    (row.get(0), row.get(1), row.get(2), row.get(3))
+}
+
+/// `(layer_lineage, commit_lineage, absorbed, reach)` rows no live row names.
+fn lineage_orphans(schema: &Schema) -> (i64, i64, i64, i64) {
+    let s = &schema.selection.schema;
+    let mut client = schema.client();
+    let row = client
+        .query_one(
+            &format!(
+                "SELECT \
+                   (SELECT count(*) FROM {s}.layer_lineage ll \
+                     WHERE NOT EXISTS (SELECT 1 FROM {s}.layer l WHERE l.layer_id=ll.layer_id)), \
+                   (SELECT count(*) FROM {s}.commit_lineage cl \
+                     WHERE NOT EXISTS (SELECT 1 FROM {s}.\"commit\" c WHERE c.commit_id=cl.commit_id)), \
+                   (SELECT count(*) FROM {s}.absorbed a \
+                     WHERE NOT EXISTS (SELECT 1 FROM {s}.commit_lineage cl WHERE cl.run=a.run)), \
+                   (SELECT count(*) FROM {s}.reach r \
+                     WHERE NOT EXISTS (SELECT 1 FROM {s}.layer_stack st WHERE st.layer_stack_id=r.key) \
+                       AND NOT EXISTS (SELECT 1 FROM {s}.commit_lineage cl WHERE cl.run=r.key))"
+            ),
+            &[],
+        )
+        .unwrap();
+    (row.get(0), row.get(1), row.get(2), row.get(3))
+}
+
+/// F50R2-2: the derived lineage closure is a member of the persisted dead set
+/// and is deleted with its project in the per-project Phase C transaction. A
+/// collected project loses all four kinds; a retained project keeps exactly
+/// the rows it had; no orphan lineage row is left for the final settle.
+#[test]
+fn the_collected_projects_lineage_goes_with_the_project() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "lineage");
+    schema.drop_scratch();
+    let handles = schema.create();
+
+    // A retained project with its own commit/publish lineage.
+    let live_a = filesystem_root(&handles, 1);
+    let stack_a = initialize(&handles, 1, live_a);
+    let branch_a = branch_id(1);
+    fork(&handles, stack_a.id, branch_a, 1);
+    let root_a = filesystem_root(&handles, 2);
+    commit(&handles, branch_a, root_a);
+    publish(&handles, stack_a.id, branch_a);
+
+    // A project deleted whole, with its own commit/publish lineage.
+    let live_b = filesystem_root(&handles, 3);
+    let stack_b = initialize(&handles, 2, live_b);
+    let branch_b = branch_id(2);
+    fork(&handles, stack_b.id, branch_b, 2);
+    let root_b = filesystem_root(&handles, 4);
+    commit(&handles, branch_b, root_b);
+    publish(&handles, stack_b.id, branch_b);
+    handles
+        .history
+        .mark_stack_deleted(stack_b.id, 2_000)
+        .unwrap();
+
+    // Enough wholly dead payload to take the rebuild path (dead >= 10%).
+    for index in 0..8u8 {
+        let _ = whole_file(&handles, &[0xA0u8.wrapping_add(index); 8 * 1024]);
+    }
+
+    let collected = lineage_counts(&schema, stack_b.id);
+    assert!(
+        collected.0 > 0 && collected.1 > 0 && collected.2 > 0 && collected.3 > 0,
+        "the collected project has all four lineage kinds before the run: {collected:?}"
+    );
+    let retained = lineage_counts(&schema, stack_a.id);
+    assert!(
+        retained.0 > 0 && retained.1 > 0 && retained.2 > 0 && retained.3 > 0,
+        "the retained project has all four lineage kinds before the run: {retained:?}"
+    );
+
+    let receipt = handles.compact(&request(81)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_settled(&schema, 81);
+
+    assert_eq!(
+        lineage_counts(&schema, stack_b.id),
+        (0, 0, 0, 0),
+        "the collected project's lineage went with its transaction"
+    );
+    assert_eq!(
+        lineage_counts(&schema, stack_a.id),
+        retained,
+        "the retained project's lineage is untouched"
+    );
+    assert_eq!(lineage_orphans(&schema), (0, 0, 0, 0), "no orphan lineage");
     clean(&schema.open());
 }
