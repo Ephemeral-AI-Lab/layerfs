@@ -1632,6 +1632,131 @@ fn sparse_safety_rejects_oversized_realsize_excess_chunks_size_mismatch_and_malf
 }
 
 #[test]
+fn r2_pax_size_overflow_plain_bad_size_and_order_independent_chunk_cap() {
+    let assert_invalid = |label: &str, tar_bytes: &[u8], needle: &str| {
+        let err = filtered_bytes(tar_bytes).expect_err(label);
+        assert_eq!(
+            err.kind(),
+            std::io::ErrorKind::InvalidData,
+            "{label}: got {err:?}"
+        );
+        assert!(
+            err.to_string().contains(needle),
+            "{label}: expected `{needle}` in `{err}`"
+        );
+    };
+
+    // 1. R2-M1: PAX size = u64::MAX on both plain and sparse entries returns InvalidData without panic.
+    let huge_pax_size = pax_record("size", &u64::MAX.to_string());
+    let plain_u64_max = Tar::new()
+        .raw("PaxHeaders/huge-plain", b'x', 0o644, &huge_pax_size)
+        .file("plain.bin", 0o644, b"RAW")
+        .finish();
+    assert_invalid("plain PAX size=u64::MAX", &plain_u64_max, "overflow");
+
+    let mut sparse_u64_max_pax = pax_record("GNU.sparse.major", "0");
+    sparse_u64_max_pax.extend_from_slice(&pax_record("GNU.sparse.minor", "1"));
+    sparse_u64_max_pax.extend_from_slice(&pax_record("GNU.sparse.realsize", "8192"));
+    sparse_u64_max_pax.extend_from_slice(&pax_record("GNU.sparse.map", "0,1"));
+    sparse_u64_max_pax.extend_from_slice(&huge_pax_size);
+    let sparse_u64_max = Tar::new()
+        .raw("PaxHeaders/huge-sparse", b'x', 0o644, &sparse_u64_max_pax)
+        .file("sparse.bin", 0o644, b"A")
+        .finish();
+    assert_invalid("sparse PAX size=u64::MAX", &sparse_u64_max, "overflow");
+
+    // Ustar/base-256 header size = u64::MAX also returns InvalidData without panic.
+    let mut b256_hdr = [0u8; 512];
+    b256_hdr[..7].copy_from_slice(b"big.bin");
+    b256_hdr[100..108].copy_from_slice(b"0000644\0");
+    b256_hdr[124] = 0x80;
+    b256_hdr[128..136].copy_from_slice(&u64::MAX.to_be_bytes());
+    b256_hdr[156] = b'0';
+    b256_hdr[257..263].copy_from_slice(b"ustar\0");
+    b256_hdr[263..265].copy_from_slice(b"00");
+    b256_hdr[148..156].fill(b' ');
+    let sum: u64 = b256_hdr.iter().map(|b| u64::from(*b)).sum();
+    b256_hdr[148..156].copy_from_slice(format!("{sum:06o}\0 ").as_bytes());
+    assert_invalid("ustar base-256 size=u64::MAX", &b256_hdr, "overflow");
+
+    // 2. R2-M1: Plain file with `12 size=bad\n` and no GNU.sparse.* passes through intact (a5616c8c7 parity).
+    let bad_pax_size = pax_record("size", "bad");
+    assert_eq!(bad_pax_size, b"12 size=bad\n");
+    let plain_bad_size = Tar::new()
+        .raw("PaxHeaders/bad-size", b'x', 0o644, &bad_pax_size)
+        .file("plain.bin", 0o644, b"RAW")
+        .finish();
+    assert_eq!(filtered_bytes(&plain_bad_size).unwrap(), plain_bad_size);
+
+    let mut sparse_bad_size_pax = pax_record("GNU.sparse.major", "0");
+    sparse_bad_size_pax.extend_from_slice(&pax_record("GNU.sparse.minor", "1"));
+    sparse_bad_size_pax.extend_from_slice(&pax_record("GNU.sparse.realsize", "8192"));
+    sparse_bad_size_pax.extend_from_slice(&pax_record("GNU.sparse.map", "0,1"));
+    sparse_bad_size_pax.extend_from_slice(&bad_pax_size);
+    let sparse_bad_size = Tar::new()
+        .raw("PaxHeaders/sparse-bad", b'x', 0o644, &sparse_bad_size_pax)
+        .file("sparse.bin", 0o644, b"A")
+        .finish();
+    assert_invalid("sparse PAX size=bad", &sparse_bad_size, "invalid pax size");
+
+    // 3. R2-M2: Order-independent PAX chunk count cap aborts before trailing invalid descriptors.
+    let map_with_trailing_bad = "0,1,4096,1,8192,1,bad,bad";
+    let chunk_err = "PAX sparse chunk count exceeds entry size or limit";
+
+    // 3a. PAX `size` BEFORE `GNU.sparse.map`.
+    let mut size_before_map = pax_record("GNU.sparse.major", "0");
+    size_before_map.extend_from_slice(&pax_record("size", "2"));
+    size_before_map.extend_from_slice(&pax_record("GNU.sparse.minor", "1"));
+    size_before_map.extend_from_slice(&pax_record("GNU.sparse.realsize", "16384"));
+    size_before_map.extend_from_slice(&pax_record("GNU.sparse.map", map_with_trailing_bad));
+    let tar_before = Tar::new()
+        .raw("PaxHeaders/before", b'x', 0o644, &size_before_map)
+        .file("m1.bin", 0o644, b"AB")
+        .finish();
+    assert_invalid("PAX size before map", &tar_before, chunk_err);
+
+    // 3b. PAX `size` AFTER `GNU.sparse.map`.
+    let mut size_after_map = pax_record("GNU.sparse.major", "0");
+    size_after_map.extend_from_slice(&pax_record("GNU.sparse.minor", "1"));
+    size_after_map.extend_from_slice(&pax_record("GNU.sparse.realsize", "16384"));
+    size_after_map.extend_from_slice(&pax_record("GNU.sparse.map", map_with_trailing_bad));
+    size_after_map.extend_from_slice(&pax_record("size", "2"));
+    let tar_after = Tar::new()
+        .raw("PaxHeaders/after", b'x', 0o644, &size_after_map)
+        .file("m2.bin", 0o644, b"AB")
+        .finish();
+    assert_invalid("PAX size after map", &tar_after, chunk_err);
+
+    // 3c. No PAX `size` (falls back to ustar header size = 2) still aborts before `,bad,bad`.
+    let mut no_pax_size = pax_record("GNU.sparse.major", "0");
+    no_pax_size.extend_from_slice(&pax_record("GNU.sparse.minor", "1"));
+    no_pax_size.extend_from_slice(&pax_record("GNU.sparse.realsize", "16384"));
+    no_pax_size.extend_from_slice(&pax_record("GNU.sparse.map", map_with_trailing_bad));
+    let tar_no_pax_size = Tar::new()
+        .raw("PaxHeaders/nosize", b'x', 0o644, &no_pax_size)
+        .file("m3.bin", 0o644, b"AB")
+        .finish();
+    assert_invalid("PAX no size (ustar fallback)", &tar_no_pax_size, chunk_err);
+
+    // 3d. PAX 0.0 offset/numbytes pairs with `size` AFTER pairs and trailing invalid offset.
+    let mut pax00_size_after = pax_record("GNU.sparse.major", "0");
+    pax00_size_after.extend_from_slice(&pax_record("GNU.sparse.minor", "0"));
+    pax00_size_after.extend_from_slice(&pax_record("GNU.sparse.realsize", "16384"));
+    for i in 0..3u64 {
+        pax00_size_after
+            .extend_from_slice(&pax_record("GNU.sparse.offset", &(i * 4096).to_string()));
+        pax00_size_after.extend_from_slice(&pax_record("GNU.sparse.numbytes", "1"));
+    }
+    pax00_size_after.extend_from_slice(&pax_record("GNU.sparse.offset", "bad"));
+    pax00_size_after.extend_from_slice(&pax_record("size", "2"));
+    let tar_pax00 = Tar::new()
+        .raw("PaxHeaders/pax00", b'x', 0o644, &pax00_size_after)
+        .file("m4.bin", 0o644, b"AB")
+        .finish();
+    assert_invalid("PAX 0.0 size after chunks", &tar_pax00, chunk_err);
+}
+
+#[test]
 fn sparse_expanded_bytes_are_counted_in_load_capacity_check() {
     use std::net::TcpListener;
 

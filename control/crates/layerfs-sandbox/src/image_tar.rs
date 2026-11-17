@@ -23,6 +23,12 @@ fn invalid(msg: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, msg)
 }
 
+fn padded_size(size: u64) -> io::Result<u64> {
+    size.div_ceil(BLOCK as u64)
+        .checked_mul(BLOCK as u64)
+        .ok_or_else(|| invalid("tar entry size overflow"))
+}
+
 fn push_gnu_slot(
     chunks: &mut Vec<(u64, u64)>,
     stored: &mut u64,
@@ -250,8 +256,7 @@ impl<R: Read> Filtered<R> {
         let mut needed_lines: usize = 1;
         loop {
             if raw.len() as u64 + BLOCK as u64 > max_bytes.min(EXTENDED_MAX) {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
+                return Err(invalid(
                     "PAX sparse map exceeds entry size or extended header limit",
                 ));
             }
@@ -265,16 +270,10 @@ impl<R: Read> Filtered<R> {
                     let count: usize = std::str::from_utf8(&raw[..nl])
                         .ok()
                         .and_then(|s| s.trim().parse().ok())
-                        .ok_or_else(|| {
-                            io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                "invalid PAX sparse chunk count",
-                            )
-                        })?;
-                    needed_lines =
-                        1usize.checked_add(count.saturating_mul(2)).ok_or_else(|| {
-                            io::Error::new(io::ErrorKind::InvalidData, "sparse map overflow")
-                        })?;
+                        .ok_or_else(|| invalid("invalid PAX sparse chunk count"))?;
+                    needed_lines = 1usize
+                        .checked_add(count.saturating_mul(2))
+                        .ok_or_else(|| invalid("sparse map overflow"))?;
                     num_chunks = Some(count);
                 }
             }
@@ -293,25 +292,18 @@ impl<R: Read> Filtered<R> {
             .map(|l| std::str::from_utf8(l).map(str::trim));
         let _ = lines.next();
         let mut chunks = Vec::with_capacity(count);
+        let mut next_u64 = |msg: &str| -> io::Result<u64> {
+            lines
+                .next()
+                .transpose()
+                .ok()
+                .flatten()
+                .and_then(|s| s.parse().ok())
+                .ok_or_else(|| invalid(msg))
+        };
         for _ in 0..count {
-            let off: u64 = lines
-                .next()
-                .transpose()
-                .ok()
-                .flatten()
-                .and_then(|s| s.parse().ok())
-                .ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::InvalidData, "invalid PAX sparse offset")
-                })?;
-            let len: u64 = lines
-                .next()
-                .transpose()
-                .ok()
-                .flatten()
-                .and_then(|s| s.parse().ok())
-                .ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::InvalidData, "invalid PAX sparse length")
-                })?;
+            let off = next_u64("invalid PAX sparse offset")?;
+            let len = next_u64("invalid PAX sparse length")?;
             if len > 0 {
                 chunks.push((off, len));
             }
@@ -341,14 +333,11 @@ impl<R: Read> Filtered<R> {
                 return Ok(());
             }
             let size = octal(&header[124..136])?;
-            let padded = size.div_ceil(BLOCK as u64) * BLOCK as u64;
+            let padded = padded_size(size)?;
             let flag = header[156];
             if matches!(flag, b'x' | b'L' | b'K' | b'g') {
                 if padded > EXTENDED_MAX {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "the image tar has an extended header over 1 MiB",
-                    ));
+                    return Err(invalid("the image tar has an extended header over 1 MiB"));
                 }
                 let mut data = vec![0u8; padded as usize];
                 if !self.block(&mut data)? {
@@ -358,17 +347,15 @@ impl<R: Read> Filtered<R> {
                     ));
                 }
                 let body = &data[..size as usize];
-                match flag {
-                    b'x' => pax.parse_into(body)?,
-                    b'L' => long_name = Some(text(body)),
-                    b'K' => long_link = Some(text(body)),
-                    _ => {}
+                if flag == b'L' {
+                    long_name = Some(text(body));
+                } else if flag == b'K' {
+                    long_link = Some(text(body));
                 }
                 pending.push((header, data));
                 continue;
             }
-            let size = pax.pax_size.unwrap_or(size);
-            let padded = size.div_ceil(BLOCK as u64) * BLOCK as u64;
+            let (size, padded) = pax.parse_pending(&pending, size, padded, flag)?;
             let gnu_chunks = if flag == b'S' {
                 Some(self.read_gnu_sparse_map(&header, size)?)
             } else {
@@ -407,10 +394,9 @@ impl<R: Read> Filtered<R> {
                 let target_norm = clean_path(&link_target);
                 if self.dropped_paths.contains(&target_norm) || dropped(&target_norm, b'0') {
                     let entry_norm = clean_path(&path);
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("hardlink `{entry_norm}` points to dropped target `{target_norm}`"),
-                    ));
+                    return Err(invalid(&format!(
+                        "hardlink `{entry_norm}` points to dropped target `{target_norm}`"
+                    )));
                 }
             }
             let is_sparse = flag == b'S' || (matches!(flag, b'0' | b'\0') && pax.has_sparse);
@@ -436,9 +422,6 @@ impl<R: Read> Filtered<R> {
                     } else if let Some(chunks) = gnu_chunks {
                         (chunks, 0)
                     } else {
-                        if (pax.sparse_chunks.len() as u64) > size {
-                            return Err(invalid("PAX sparse chunk count exceeds tar entry size"));
-                        }
                         (pax.sparse_chunks, 0)
                     };
                 let (chunks, stored_bytes) = validate_sparse_chunks(raw_chunks, realsize)?;
@@ -621,7 +604,6 @@ impl<R: Read> Read for Filtered<R> {
 struct PaxMeta {
     path: Option<String>,
     linkpath: Option<String>,
-    pax_size: Option<u64>,
     has_sparse: bool,
     sparse_major: Option<u64>,
     sparse_minor: Option<u64>,
@@ -659,13 +641,9 @@ fn walk_pax_records(
 }
 
 impl PaxMeta {
-    fn push_chunk(&mut self, off: u64, len: u64) -> io::Result<()> {
+    fn push_chunk(&mut self, off: u64, len: u64, entry_size: u64) -> io::Result<()> {
         if len > 0 {
-            let cap = self
-                .pax_size
-                .unwrap_or(u64::MAX)
-                .min(SPARSE_CHUNKS_MAX as u64);
-            if (self.sparse_chunks.len() as u64) >= cap {
+            if (self.sparse_chunks.len() as u64) >= entry_size.min(SPARSE_CHUNKS_MAX as u64) {
                 return Err(invalid(
                     "PAX sparse chunk count exceeds entry size or limit",
                 ));
@@ -675,19 +653,64 @@ impl PaxMeta {
         Ok(())
     }
 
-    fn parse_into(&mut self, body: &[u8]) -> io::Result<()> {
+    fn parse_pending(
+        &mut self,
+        pending: &[([u8; BLOCK], Vec<u8>)],
+        ustar_size: u64,
+        ustar_padded: u64,
+        flag: u8,
+    ) -> io::Result<(u64, u64)> {
+        if !pending.iter().any(|(h, _)| h[156] == b'x') {
+            return Ok((ustar_size, ustar_padded));
+        }
+        let mut pax_size: Option<u64> = None;
+        let mut pax_size_bad = false;
+        let mut has_sparse = false;
+        let mut bodies = Vec::new();
+        for (ext_hdr, ext_data) in pending {
+            if ext_hdr[156] != b'x' {
+                continue;
+            }
+            let ext_size = octal(&ext_hdr[124..136])? as usize;
+            let body = &ext_data[..ext_size.min(ext_data.len())];
+            walk_pax_records(body, |_, key, val| {
+                if key == b"size" {
+                    let parsed = std::str::from_utf8(val)
+                        .ok()
+                        .and_then(|s| s.trim().parse::<u64>().ok());
+                    pax_size = parsed;
+                    pax_size_bad = parsed.is_none();
+                } else if key.starts_with(b"GNU.sparse.") {
+                    has_sparse = true;
+                }
+                Ok(())
+            })?;
+            bodies.push(body);
+        }
+        if pax_size_bad && (flag == b'S' || has_sparse) {
+            return Err(invalid("invalid pax size"));
+        }
+        let size = pax_size.unwrap_or(ustar_size);
+        let padded = padded_size(size)?;
+        for body in bodies {
+            self.parse_into(body, size)?;
+        }
+        Ok((size, padded))
+    }
+
+    fn parse_into(&mut self, body: &[u8], entry_size: u64) -> io::Result<()> {
         let mut pending_offset: Option<u64> = None;
         let complete = walk_pax_records(body, |_, key, val| {
             let val_str = String::from_utf8_lossy(val);
             let parse_u64 = |label: &str| {
-                val_str.trim().parse::<u64>().map_err(|_| {
-                    io::Error::new(io::ErrorKind::InvalidData, format!("invalid pax {label}"))
-                })
+                val_str
+                    .trim()
+                    .parse::<u64>()
+                    .map_err(|_| invalid(&format!("invalid pax {label}")))
             };
             match key {
                 b"path" => self.path = Some(val_str.into_owned()),
                 b"linkpath" => self.linkpath = Some(val_str.into_owned()),
-                b"size" => self.pax_size = Some(parse_u64("size")?),
                 b"GNU.sparse.major" => {
                     self.has_sparse = true;
                     self.sparse_major = Some(parse_u64("GNU.sparse.major")?);
@@ -710,32 +733,28 @@ impl PaxMeta {
                 }
                 b"GNU.sparse.numbytes" => {
                     self.has_sparse = true;
-                    let off = pending_offset.take().ok_or_else(|| {
-                        io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            "GNU.sparse.numbytes without offset",
-                        )
-                    })?;
+                    let off = pending_offset
+                        .take()
+                        .ok_or_else(|| invalid("GNU.sparse.numbytes without offset"))?;
                     let len = parse_u64("GNU.sparse.numbytes")?;
-                    self.push_chunk(off, len)?;
+                    self.push_chunk(off, len, entry_size)?;
                 }
                 b"GNU.sparse.map" => {
                     self.has_sparse = true;
                     let mut parts = val_str.split(',').filter(|s| !s.is_empty());
                     while let Some(o_str) = parts.next() {
-                        let l_str = parts.next().ok_or_else(|| {
-                            io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                "odd item count in GNU.sparse.map",
-                            )
-                        })?;
-                        let off: u64 = o_str.trim().parse().map_err(|_| {
-                            io::Error::new(io::ErrorKind::InvalidData, "invalid sparse map offset")
-                        })?;
-                        let len: u64 = l_str.trim().parse().map_err(|_| {
-                            io::Error::new(io::ErrorKind::InvalidData, "invalid sparse map len")
-                        })?;
-                        self.push_chunk(off, len)?;
+                        let l_str = parts
+                            .next()
+                            .ok_or_else(|| invalid("odd item count in GNU.sparse.map"))?;
+                        let off: u64 = o_str
+                            .trim()
+                            .parse()
+                            .map_err(|_| invalid("invalid sparse map offset"))?;
+                        let len: u64 = l_str
+                            .trim()
+                            .parse()
+                            .map_err(|_| invalid("invalid sparse map len"))?;
+                        self.push_chunk(off, len, entry_size)?;
                     }
                 }
                 _ => {
@@ -765,32 +784,23 @@ fn validate_sparse_chunks(
     let mut valid = Vec::with_capacity(chunks.len());
     for (off, len) in chunks {
         if off > realsize {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "sparse chunk starts past realsize",
-            ));
+            return Err(invalid("sparse chunk starts past realsize"));
         }
         if len == 0 {
             continue;
         }
         if off < prev_end {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "sparse chunks overlap or are out of order",
-            ));
+            return Err(invalid("sparse chunks overlap or are out of order"));
         }
-        let end = off.checked_add(len).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "sparse chunk end overflow")
-        })?;
+        let end = off
+            .checked_add(len)
+            .ok_or_else(|| invalid("sparse chunk end overflow"))?;
         if end > realsize {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "sparse chunk extends past realsize",
-            ));
+            return Err(invalid("sparse chunk extends past realsize"));
         }
-        stored_bytes = stored_bytes.checked_add(len).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "sparse byte count overflow")
-        })?;
+        stored_bytes = stored_bytes
+            .checked_add(len)
+            .ok_or_else(|| invalid("sparse byte count overflow"))?;
         prev_end = end;
         valid.push((off, len));
     }
