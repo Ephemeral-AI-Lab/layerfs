@@ -81,7 +81,7 @@ env:
 jobs:
   quick:
     name: store ext4 (--quick)
-    # The push lane: one or two targets per suite, across the four suites.
+    # The push lane: one or two targets per suite, across the five suites.
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 60

@@ -33,12 +33,14 @@
 #              compact_report_status, store_family, calls_table, gc_calls,
 #              gc_trace, gc, sqlite_compact_process_kill)
 #   --full     every Store suite (the default)
-#   --list     print the cargo commands, run nothing
+#   --list     print the cargo commands and environment, run nothing;
+#              needs no LAYERFS_TEST_TMPDIR
 #   --help     this text
 #
 # Environment
-#   LAYERFS_TEST_TMPDIR        required; must be on ext4, xfs or btrfs (Linux)
-#                              or apfs or hfs (macOS)
+#   LAYERFS_TEST_TMPDIR        required for a run (--list does not check it);
+#                              must be on ext4, xfs or btrfs (Linux) or apfs
+#                              or hfs (macOS)
 #   LAYERFS_TEST_JOBS          cargo -j; default min(nproc, 16)
 #   LAYERFS_TEST_CARGO_HOME    default $LAYERFS_TEST_TMPDIR/cargo-home
 #   LAYERFS_TEST_CARGO_TARGET_DIR
@@ -88,6 +90,17 @@ while [ "$#" -gt 0 ]; do
 done
 
 # ---- The directory and its filesystem -------------------------------------
+#
+# `--list` prints the commands without touching the environment: it needs no
+# LAYERFS_TEST_TMPDIR and checks no filesystem. A real run performs every check
+# below before cargo starts.
+
+if [ "$list_only" -eq 1 ]; then
+  dir=${LAYERFS_TEST_TMPDIR:-(unset)}
+  export TMPDIR='(not checked: --list)'
+  export CARGO_TARGET_DIR='(not checked: --list)'
+  export CARGO_HOME='(not checked: --list)'
+else
 
 dir=${LAYERFS_TEST_TMPDIR:-}
 if [ -z "$dir" ]; then
@@ -216,6 +229,8 @@ fi
 check_supported "$TMPDIR" TMPDIR
 check_supported "$CARGO_TARGET_DIR" CARGO_TARGET_DIR
 
+fi
+
 # The pinned fuser dependency is fetched over git. The git CLI honours the
 # host's proxy and credential configuration where libgit2 does not, and some
 # TLS-inspecting hosts need verification off for that fetch. Scoped to this
@@ -237,7 +252,7 @@ if ! command -v cargo >/dev/null 2>&1; then
     fi
   done
 fi
-if ! command -v cargo >/dev/null 2>&1; then
+if ! command -v cargo >/dev/null 2>&1 && [ "$list_only" -eq 0 ]; then
   refuse "cargo is not installed or not on PATH; install Rust 1.85.1 (rustup) first."
 fi
 
@@ -339,10 +354,16 @@ warn_about_postgresql_prerequisites() {
   return 0
 }
 
+if [ "$list_only" -eq 1 ]; then
+  fs_note=''
+else
+  fs_note=" ($(filesystem_type "$dir"))"
+fi
+
 printf '%s\n' \
   "Store test harness" \
   "  repository:          $root" \
-  "  LAYERFS_TEST_TMPDIR: $dir ($(filesystem_type "$dir"))" \
+  "  LAYERFS_TEST_TMPDIR: $dir$fs_note" \
   "  TMPDIR:              $TMPDIR" \
   "  CARGO_TARGET_DIR:    $CARGO_TARGET_DIR" \
   "  CARGO_HOME:          $CARGO_HOME" \

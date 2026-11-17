@@ -1242,7 +1242,7 @@ const MATRIX: [Row; 60] = [
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_whole_store.json",
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_50gb.json",
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json"],
-        note: "The tiny three-run arm is median 32.1 ms. T-G61 measured a real 9.987 GB Store on the whole-Store `VACUUM INTO` build (3 runs per arm; medians kept in `tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`): `none` at 8.88% dead median 149.318 s and `rebuild` at 10.00% dead median 246.371 s (mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s), plus a WAL/FULL control at 284.078 s. Re-measured on this branch with the fresh-copy build on the same 9.987 GB fixture: `rebuild` median 118.439584 s (mark 74.462-75.704 s / build 18.190-19.209 s / verify 4.330-4.377 s (then with a `quick_check`, removed by #49 round 4) / install 19.197-23.673 s), peak 9.144 GB; `none` median 88.439 s (82.0-149.9 s; this Sandbox shares the host); profile, host and toolchain are declared in the fixture, and the warm page cache is declared below. The §11 `markBytes` transfer is recorded per PostgreSQL run as `compact.mark_bytes`. The separate gc_bench medium fixture (9.789 GB live / 10.731 GB pack) measured `rebuild` median 133.076 s in three runs (receipt: `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`), a different generated Store from the 9.987 GB capacity_measure fixture; the same-fixture comparison is 246.371 s -> 118.439584 s = 2.08x, and the earlier 1.85x (133.076 s against 246.371 s) mixed the two fixtures and is withdrawn. The gc-bench/1 receipt declares the Disposable profile (WAL/OFF, page_size 4096) and the cache, records bytes written as `processIo.writeBytes`, and does not record the SQLite version or WAL bytes (recorded deviation). T-G66 later measured the 50 GB arm once per path (#42 item 44; receipt `tests/fixtures/sqlite_compact_capacity_measure_50gb.json`, `none` 1,633.585 s and `rebuild` 5,131.835 s); the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]." },
+        note: "The tiny three-run arm is median 32.1 ms. T-G61 measured a real 9.987 GB Store on the whole-Store `VACUUM INTO` build (3 runs per arm; medians kept in `tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`): `none` at 8.88% dead median 149.318 s and `rebuild` at 10.00% dead median 246.371 s (mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s; the build phase's per-run samples were not retained, so it records a 94.317 s median only and no range -- a recorded missing-range deviation, see `tools/ci/gc-bench.md` section 13), plus a WAL/FULL control at 284.078 s. Re-measured on this branch with the fresh-copy build on the same 9.987 GB fixture: `rebuild` median 118.439584 s (mark 74.462-75.704 s / build 18.190-19.209 s / verify 4.330-4.377 s (then with a `quick_check`, removed by #49 round 4) / install 19.197-23.673 s), peak 9.144 GB; `none` median 88.439 s (82.0-149.9 s; this Sandbox shares the host); profile, host and toolchain are declared in the fixture, and the warm page cache is declared below. The §11 `markBytes` transfer is recorded per PostgreSQL run as `compact.mark_bytes`. The separate gc_bench medium fixture (9.789 GB live / 10.731 GB pack) measured `rebuild` median 133.076 s in three runs (receipt: `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`), a different generated Store from the 9.987 GB capacity_measure fixture; the same-fixture comparison is 246.371 s -> 118.439584 s = 2.08x, and the earlier 1.85x (133.076 s against 246.371 s) mixed the two fixtures and is withdrawn. The gc-bench/1 receipt declares the Disposable profile (WAL/OFF, page_size 4096) and the cache, records bytes written as `processIo.writeBytes`, and does not record the SQLite version or WAL bytes (recorded deviation). T-G66 later measured the 50 GB arm once per path (#42 item 44; receipt `tests/fixtures/sqlite_compact_capacity_measure_50gb.json`, `none` 1,633.585 s and `rebuild` 5,131.835 s); the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]." },
     Row { id: "AC-58", backend: Backend::Sqlite, tier: "E2", status: Status::Covered,
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_before_copy",
@@ -1533,7 +1533,17 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  runs). The fresh build phase is about 5x shorter (18-19 s against 92-104 s);"
+        "  runs). The fresh build phase is about 5x shorter (18-19 s against the"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  94.317 s superseded-build median, whose per-run samples were not retained,"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  so it has no recorded range);"
     )
     .unwrap();
     writeln!(
