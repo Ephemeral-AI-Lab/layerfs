@@ -88,6 +88,23 @@ pub(crate) trait Mechanics {
     ) -> Result<Option<(usize, Vec<u8>)>, PersistenceError> {
         Ok(None)
     }
+    /// [`Self::pack_prefix`] for several packs in one call, in `ids` order.
+    /// An engine answers from one cursor or one statement, not one per pack;
+    /// a pack that is absent is an error.
+    fn pack_prefixes(
+        &self,
+        ids: &[i64],
+        limit: usize,
+        out: &mut Vec<(usize, Vec<u8>)>,
+    ) -> Result<(), PersistenceError> {
+        for id in ids {
+            out.push(
+                self.pack_prefix(*id, limit)?
+                    .ok_or(PersistenceError::BackendUnavailable)?,
+            );
+        }
+        Ok(())
+    }
     /// One pack through the caller's bounded range plan: only the control
     /// prefix and the selected complete groups are read, never the body behind
     /// them. The storage port owns the plan and the returned units.

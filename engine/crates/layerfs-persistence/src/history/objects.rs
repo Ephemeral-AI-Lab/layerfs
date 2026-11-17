@@ -260,6 +260,7 @@ fn mark_recorded(
         mechanics: tx.mechanics(),
         locations: &located.locations,
         read_bytes: std::cell::RefCell::new(BTreeMap::new()),
+        layouts: std::cell::RefCell::new(BTreeMap::new()),
     };
     let roots = roots(tx)?;
     let closure = walk(&source, &capacities, policy.construction(), roots, visit)?;
@@ -375,9 +376,17 @@ struct ClosureSource<'a> {
     /// [`MarkResult::mark_bytes`]: a pack read in several groups counts each
     /// extent once, and a later whole-body read replaces the partial sum.
     read_bytes: std::cell::RefCell<BTreeMap<i64, u64>>,
+    /// pack -> its group extents, kept from the walk's own read of the pack's
+    /// directory so the kept-waste pass does not read it a second time.
+    layouts: std::cell::RefCell<BTreeMap<i64, Vec<layout::GroupView>>>,
 }
 
 impl ClosureSource<'_> {
+    /// Keeps the group extents the walk read for `pack_id`.
+    fn keep_layout(&self, pack_id: i64, views: Vec<layout::GroupView>) {
+        self.layouts.borrow_mut().entry(pack_id).or_insert(views);
+    }
+
     /// Records a whole-body read of `pack_id`. The full extent is the pack's
     /// body, so it replaces any group extents already counted for the pack.
     fn note_whole_body(&self, pack_id: i64, bytes: u64) {
@@ -598,6 +607,8 @@ fn walk(
         bases: BTreeSet::new(),
         logical: roots.iter().copied().collect(),
     };
+    // One hash for the whole walk, not one per metadata object.
+    let unscoped = InodeScope::from_object(ObjectId::for_bytes(b"gc.mark/object-closure"));
     let mut queued: BTreeSet<ObjectId> = roots.iter().copied().collect();
     let mut frontier: Vec<ObjectId> = roots;
     while !frontier.is_empty() {
@@ -643,7 +654,7 @@ fn walk(
                 } else {
                     // No other admitted role reads the scope; the leaf encoders
                     // that derive references ignore it.
-                    InodeScope::from_object(ObjectId::for_bytes(b"gc.mark/object-closure"))
+                    unscoped
                 };
                 decode_references(role, &canonical, construction, scope)
                     .map_err(|_| HistoryError::Integrity("mark object references"))?
@@ -708,39 +719,43 @@ fn waste(
     let mut dead_in_retained_packs_bytes = 0u64;
     for pack_id in closure.packs() {
         let groups = located.inventory.get(&pack_id);
-        // The pack row may reserve more capacity than it uses; the header names
-        // the used length. Everything below parses against `used`, never the
-        // reserved capacity. A prefix that already covers `used` is the body.
-        let Some((capacity, prefix)) = source
-            .pack_prefix(pack_id, PACK_READ_PREFIX_BYTES)
-            .map_err(storage)?
-        else {
-            return Err(HistoryError::Integrity("mark pack directory"));
+        // The walk already read this pack's directory when it read its
+        // record headers; only a pack it reached another way is read here.
+        let kept = source.layouts.borrow().get(&pack_id).cloned();
+        let views = if let Some(views) = kept {
+            views
+        } else {
+            // The pack row may reserve more capacity than it uses; the header names
+            // the used length. Everything below parses against `used`, never the
+            // reserved capacity. A prefix that already covers `used` is the body.
+            let Some((capacity, prefix)) = source
+                .pack_prefix(pack_id, PACK_READ_PREFIX_BYTES)
+                .map_err(storage)?
+            else {
+                return Err(HistoryError::Integrity("mark pack directory"));
+            };
+            if prefix.len() < layout::USED_OFFSET + 4 {
+                return Err(HistoryError::Integrity("mark pack length"));
+            }
+            let used = {
+                let field = &prefix[layout::USED_OFFSET..layout::USED_OFFSET + 4];
+                u32::from_le_bytes(
+                    field
+                        .try_into()
+                        .map_err(|_| HistoryError::Integrity("mark pack length"))?,
+                ) as usize
+            };
+            if used < layout::HEADER_LEN || used > capacity {
+                return Err(HistoryError::Integrity("mark pack length"));
+            }
+            if prefix.len() >= used {
+                dead_in_retained_packs_bytes = dead_in_retained_packs_bytes
+                    .saturating_add(pack_waste(&prefix[..used], groups, closure)?);
+                continue;
+            }
+            let header = layout::parse_directory_header(&prefix, used).map_err(storage)?;
+            layout::directory_group_views(&prefix, header).map_err(storage)?
         };
-        if prefix.len() < layout::USED_OFFSET + 4 {
-            return Err(HistoryError::Integrity("mark pack length"));
-        }
-        let used = {
-            let field = &prefix[layout::USED_OFFSET..layout::USED_OFFSET + 4];
-            u32::from_le_bytes(
-                field
-                    .try_into()
-                    .map_err(|_| HistoryError::Integrity("mark pack length"))?,
-            ) as usize
-        };
-        if used < layout::HEADER_LEN || used > capacity {
-            return Err(HistoryError::Integrity("mark pack length"));
-        }
-        if prefix.len() >= used {
-            dead_in_retained_packs_bytes = dead_in_retained_packs_bytes.saturating_add(pack_waste(
-                &prefix[..used],
-                groups,
-                closure,
-            )?);
-            continue;
-        }
-        let header = layout::parse_directory_header(&prefix, used).map_err(storage)?;
-        let views = layout::directory_group_views(&prefix, header).map_err(storage)?;
         // A wholly dead group's stored extent is known from the directory. A
         // retained Raw group whose inventory no longer accounts for every
         // record has its own record directory read, so its exact per-record

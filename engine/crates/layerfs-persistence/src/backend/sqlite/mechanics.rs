@@ -61,6 +61,14 @@ impl Mechanics for Transaction<'_> {
     ) -> Result<Option<(usize, Vec<u8>)>, PersistenceError> {
         super::objects::read::prefix(self, id, limit)
     }
+    fn pack_prefixes(
+        &self,
+        ids: &[i64],
+        limit: usize,
+        out: &mut Vec<(usize, Vec<u8>)>,
+    ) -> Result<(), PersistenceError> {
+        super::objects::read::prefixes(self, ids, limit, out)
+    }
     fn read_scoped_pack(
         &self,
         id: i64,

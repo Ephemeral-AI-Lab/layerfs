@@ -6,6 +6,11 @@
 //! its group's directory, so this reads those ranges and never the payload: a
 //! mark costs a few hundred bytes per pack instead of the pack. Compressed
 //! groups and the `Ordinary` lane answer `None` and keep the decoding reader.
+//!
+//! The first read of a wave is one call for the heads of many packs. A pack
+//! whose directory and record headers sit in its head, the common shape of a
+//! pack of large records, costs no statement of its own; only a pack that
+//! needs more is acquired on its own.
 use super::{storage, ClosureSource};
 use layerfs_content::ObjectId;
 use layerfs_history::error::{HistoryError, HistoryResult};
@@ -16,14 +21,24 @@ use layerfs_storage::{
     encoding::delta::read::ChainEdge,
     location::{ObjectLocation, PackInfo},
     pack::layout::{self, GroupView, PackHeader},
-    port::{AcquiredPackRead, PackRange, PackReadChoice, PackReadPlan, PersistenceError},
+    port::{
+        AcquiredPackRead, PackRange, PackReadChoice, PackReadPlan, PersistenceError,
+        PACK_READ_PREFIX_BYTES,
+    },
     source::Source,
     StorageError,
 };
 use std::collections::BTreeMap;
 
-/// Count, then a wider directory, then record headers: no pack needs more.
+/// After the head: a wider directory, then record headers. No pack needs more.
 const ROUNDS: usize = 4;
+/// Bytes of each pack the first read asks for: the directory of a pack of up
+/// to about sixty groups, its first group's record directory and first record
+/// header. Small on purpose: on a cold cache each further page of a pack is
+/// one more random read. A pack with a wider directory is read again.
+const HEAD_BYTES: usize = 1024;
+/// Packs whose heads one call reads.
+const HEAD_PACKS: usize = 256;
 /// Ranges one acquisition selects; far below the port's own limits.
 const BATCH_RANGES: usize = 1024;
 /// Bytes one acquisition selects.
@@ -144,58 +159,41 @@ fn resolve(
     Ok(merged(needs))
 }
 
-/// Selects the ranges a round needs. The first round has no directory yet, so
-/// it derives its ranges from the prefix the acquisition hands it.
-struct EdgeRanges<'a> {
+/// One acquisition's ranges, chosen before it starts.
+struct Ranges {
     pack_id: i64,
-    items: &'a [ObjectLocation],
-    held: &'a Pieces,
-    answers: &'a mut [Answer],
-    layout: Option<(PackHeader, Vec<GroupView>)>,
     ranges: Option<Vec<PackRange>>,
 }
 
-impl PackReadPlan for EdgeRanges<'_> {
+impl PackReadPlan for Ranges {
     fn select(
         &mut self,
         info: PackInfo,
-        prefix: &[u8],
+        _prefix: &[u8],
     ) -> Result<PackReadChoice, PersistenceError> {
         if info.pack_id != self.pack_id {
             return Err(PersistenceError::Malformed);
         }
-        if let Some(ranges) = self.ranges.take() {
-            return Ok(PackReadChoice::Ranges(ranges));
-        }
-        let header = layout::parse_directory_header(prefix, info.length)
-            .map_err(|_| PersistenceError::Malformed)?;
-        let views = layout::directory_group_views(prefix, header)
-            .map_err(|_| PersistenceError::Malformed)?;
-        let mut ranges = resolve(header, &views, self.items, self.held, self.answers)
-            .map_err(|_| PersistenceError::Malformed)?;
-        if ranges.is_empty() {
-            // Every group of this pack is encoded. An acquisition must select
-            // something, and the first body byte always exists.
-            ranges.push(PackRange {
-                offset: header.body_offset,
-                length: 1,
-            });
-        }
-        ranges.truncate(BATCH_RANGES);
-        self.layout = Some((header, views));
-        Ok(PackReadChoice::Ranges(ranges))
+        self.ranges
+            .take()
+            .map(PackReadChoice::Ranges)
+            .ok_or(PersistenceError::Malformed)
     }
 }
 
-/// One acquisition of `plan`'s ranges, added to `held` and to the mark's bytes.
+/// One acquisition of `ranges`, counted in the mark's bytes.
 fn acquire(
     source: &ClosureSource<'_>,
     pack_id: i64,
-    plan: &mut EdgeRanges<'_>,
+    ranges: Vec<PackRange>,
 ) -> HistoryResult<Vec<(PackRange, Vec<u8>)>> {
+    let mut plan = Ranges {
+        pack_id,
+        ranges: Some(ranges),
+    };
     let read = source
         .mechanics
-        .read_scoped_pack(pack_id, plan)
+        .read_scoped_pack(pack_id, &mut plan)
         .map_err(StorageError::from)
         .map_err(storage)?;
     let AcquiredPackRead::Units(units) = read else {
@@ -222,15 +220,7 @@ fn acquire_all(
         if batch.is_empty() {
             return Ok(());
         }
-        let mut plan = EdgeRanges {
-            pack_id,
-            items: &[],
-            held: &Pieces::default(),
-            answers: &mut [],
-            layout: None,
-            ranges: Some(std::mem::take(batch)),
-        };
-        acquired.extend(acquire(source, pack_id, &mut plan)?);
+        acquired.extend(acquire(source, pack_id, std::mem::take(batch))?);
         Ok(())
     };
     let mut batch = Vec::new();
@@ -279,36 +269,45 @@ pub(super) fn group_directories(
     Err(HistoryError::Integrity("mark group directory"))
 }
 
-/// The edges of `items`, all records of pack `pack_id`: `None` where the
-/// record's group is encoded and must take the decoding reader.
+/// The edges of `items`, all records of pack `pack_id`, given the pack's
+/// declared length and head: `None` where the record's group is encoded and
+/// must take the decoding reader.
 fn pack_edges(
     source: &ClosureSource<'_>,
     pack_id: i64,
     items: &[ObjectLocation],
+    length: usize,
+    head: Vec<u8>,
 ) -> HistoryResult<Vec<Option<ChainEdge>>> {
+    let control = layout::parse_control_header(&head, length).map_err(storage)?;
+    let head = if head.len() < control.body_offset {
+        source
+            .mechanics
+            .pack_prefix(pack_id, PACK_READ_PREFIX_BYTES)
+            .map_err(StorageError::from)
+            .map_err(storage)?
+            .filter(|(wide, _)| *wide == length)
+            .ok_or(HistoryError::Integrity("mark pack directory"))?
+            .1
+    } else {
+        head
+    };
+    let header = layout::parse_directory_header(&head, length).map_err(storage)?;
+    let views =
+        layout::directory_group_views(&head[..header.body_offset], header).map_err(storage)?;
+    // The head's bytes past the directory are body bytes this mark read.
+    source.note_scoped_body(
+        pack_id,
+        u64::try_from(head.len() - header.body_offset).unwrap_or(u64::MAX),
+        u64::try_from(length).unwrap_or(u64::MAX),
+    );
     let mut held = Pieces::default();
+    held.add(0, head);
     let mut answers = vec![Answer::Pending; items.len()];
-    let pieces = {
-        let mut plan = EdgeRanges {
-            pack_id,
-            items,
-            held: &held,
-            answers: &mut answers,
-            layout: None,
-            ranges: None,
-        };
-        let pieces = acquire(source, pack_id, &mut plan)?;
-        (plan.layout, pieces)
-    };
-    let (Some((header, views)), first) = pieces else {
-        return Err(HistoryError::Integrity("mark edge directory"));
-    };
-    for (range, bytes) in first {
-        held.add(range.offset, bytes);
-    }
-    for _ in 0..ROUNDS {
+    for _ in 0..=ROUNDS {
         let needs = resolve(header, &views, items, &held, &mut answers).map_err(storage)?;
         if needs.is_empty() {
+            source.keep_layout(pack_id, views);
             return answers
                 .into_iter()
                 .map(|answer| match answer {
@@ -326,27 +325,13 @@ fn pack_edges(
 /// The header-read edges of one wave: every object of `wave` whose role names
 /// no other object and whose record sits in an uncompressed payload group.
 ///
-/// `wave` is in locator order, so each pack's records are adjacent and one
-/// pack is read at a time. An object absent from the result takes the decoding
-/// reader, exactly as before.
+/// `wave` is in locator order, so each pack's records are adjacent. An object
+/// absent from the result takes the decoding reader, exactly as before.
 pub(super) fn wave_edges(
     source: &ClosureSource<'_>,
     wave: &[ObjectId],
 ) -> HistoryResult<BTreeMap<ObjectId, ChainEdge>> {
-    let mut edges = BTreeMap::new();
-    let mut items: Vec<ObjectLocation> = Vec::new();
-    let mut flush = |items: &mut Vec<ObjectLocation>| -> HistoryResult<()> {
-        let Some(first) = items.first() else {
-            return Ok(());
-        };
-        for (item, edge) in items.iter().zip(pack_edges(source, first.pack_id, items)?) {
-            if let Some(edge) = edge {
-                edges.insert(item.object_id, edge);
-            }
-        }
-        items.clear();
-        Ok(())
-    };
+    let mut packs: Vec<(i64, Vec<ObjectLocation>)> = Vec::new();
     for id in wave {
         let Some(location) = source.location(*id, i64::MAX).map_err(storage)? else {
             continue;
@@ -354,14 +339,31 @@ pub(super) fn wave_edges(
         if location.role.has_references() {
             continue;
         }
-        if items
-            .first()
-            .is_some_and(|first| first.pack_id != location.pack_id)
-        {
-            flush(&mut items)?;
+        match packs.last_mut() {
+            Some((pack_id, items)) if *pack_id == location.pack_id => items.push(location),
+            _ => packs.push((location.pack_id, vec![location])),
         }
-        items.push(location);
     }
-    flush(&mut items)?;
+    let mut edges = BTreeMap::new();
+    for batch in packs.chunks(HEAD_PACKS) {
+        let ids: Vec<i64> = batch.iter().map(|(pack_id, _)| *pack_id).collect();
+        let mut heads = Vec::with_capacity(ids.len());
+        source
+            .mechanics
+            .pack_prefixes(&ids, HEAD_BYTES, &mut heads)
+            .map_err(StorageError::from)
+            .map_err(storage)?;
+        if heads.len() != batch.len() {
+            return Err(HistoryError::Integrity("mark pack heads"));
+        }
+        for ((pack_id, items), (length, head)) in batch.iter().zip(heads) {
+            let answers = pack_edges(source, *pack_id, items, length, head)?;
+            for (item, edge) in items.iter().zip(answers) {
+                if let Some(edge) = edge {
+                    edges.insert(item.object_id, edge);
+                }
+            }
+        }
+    }
     Ok(edges)
 }

@@ -118,24 +118,41 @@ pub(crate) fn prefix(
         .connection
         .blob_open("main", "pack", "body", id, true)
         .map_err(rows::error)?;
-    let mut body = vec![0; length.min(limit)];
     let read = if blob.len() != length {
         Err(PersistenceError::Malformed)
     } else {
-        {
-            let mut work = tx.work.borrow_mut();
-            work.blob_read_calls += 1;
-            work.blob_requested_bytes += body.len() as u64;
-        }
-        let start = Instant::now();
-        let read = blob.read_at_exact(&mut body, 0).map_err(rows::error);
-        let mut work = tx.work.borrow_mut();
-        work.blob_read_ns += start.elapsed().as_nanos() as u64;
-        if read.is_ok() {
-            work.blob_read_bytes += body.len() as u64;
-        }
-        read.map_err(Into::into)
+        head(tx, &blob, limit)
     };
+    closed(tx, blob, read).map(|body| Some((length, body)))
+}
+
+/// The first `limit` bytes of the body `blob` is open on.
+fn head(
+    tx: &Transaction<'_>,
+    blob: &rusqlite::blob::Blob<'_>,
+    limit: usize,
+) -> Result<Vec<u8>, PersistenceError> {
+    let mut body = vec![0; blob.len().min(limit)];
+    {
+        let mut work = tx.work.borrow_mut();
+        work.blob_read_calls += 1;
+        work.blob_requested_bytes += body.len() as u64;
+    }
+    let start = Instant::now();
+    let read = blob.read_at_exact(&mut body, 0).map_err(rows::error);
+    let mut work = tx.work.borrow_mut();
+    work.blob_read_ns += start.elapsed().as_nanos() as u64;
+    read?;
+    work.blob_read_bytes += body.len() as u64;
+    Ok(body)
+}
+
+/// Closes `blob` and keeps an unproven outcome ahead of any other failure.
+fn closed<T>(
+    tx: &Transaction<'_>,
+    blob: rusqlite::blob::Blob<'_>,
+    read: Result<T, PersistenceError>,
+) -> Result<T, PersistenceError> {
     tx.work.borrow_mut().blob_close_calls += 1;
     let close: Result<(), PersistenceError> = blob.close().map_err(rows::error).map_err(Into::into);
     match (read, close) {
@@ -143,6 +160,44 @@ pub(crate) fn prefix(
             Err(PersistenceError::Uncertain)
         }
         (Err(error), _) | (_, Err(error)) => Err(error),
-        (Ok(()), Ok(())) => Ok(Some((length, body))),
+        (Ok(value), Ok(())) => Ok(value),
     }
+}
+
+/// The bounded prefixes of several packs, in `ids` order, through one BLOB
+/// handle moved from row to row: no statement and no handle per pack.
+pub(crate) fn prefixes(
+    tx: &Transaction<'_>,
+    ids: &[i64],
+    limit: usize,
+    out: &mut Vec<(usize, Vec<u8>)>,
+) -> Result<(), PersistenceError> {
+    if limit == 0 || ids.iter().any(|id| *id <= 0) {
+        return Err(PersistenceError::Malformed);
+    }
+    let Some(first) = ids.first() else {
+        return Ok(());
+    };
+    if tx.layout().uses_units() {
+        for id in ids {
+            out.push(prefix(tx, *id, limit)?.ok_or(PersistenceError::Missing)?);
+        }
+        return Ok(());
+    }
+    tx.work.borrow_mut().blob_open_calls += 1;
+    let mut blob = tx
+        .connection
+        .blob_open("main", "pack", "body", *first, true)
+        .map_err(rows::error)?;
+    let read = (|| {
+        for (index, id) in ids.iter().enumerate() {
+            if index > 0 {
+                tx.work.borrow_mut().blob_reopen_calls += 1;
+                blob.reopen(*id).map_err(rows::error)?;
+            }
+            out.push((blob.len(), head(tx, &blob, limit)?));
+        }
+        Ok(())
+    })();
+    closed(tx, blob, read)
 }
