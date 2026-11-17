@@ -394,6 +394,13 @@ deleted. A Store with less than 10% wholly dead packs takes the `none` path:
 it marks only, writes nothing and reports `dead_bytes_refined ==
 dead_bytes_bound`.
 
+A `<store>.compact-op` record is a leftover only when its owner is gone: the
+next call reads the recorded pid, kernel start time, boot and PID namespace and
+refuses `Busy` while that process is provably live, so a run that released the
+writer lane just before its `cleanup` settle keeps its intent, `kept_node`
+closure and record. The settle and a pre-install abort remove the record only
+while it still names the operation being settled.
+
 **Local-only route (documented S6 deviation, #42 D5).** A sqlite Store on
 another machine is `Unsupported` and is never sent to that machine's worker:
 spec S6 says compaction runs on the machine that holds the file, but 2.0

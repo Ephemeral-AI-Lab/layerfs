@@ -198,7 +198,7 @@ fn conflict(intent: &GcIntent) -> OpConflict {
 
 /// This process's PID-namespace inode, when the platform names one. A pid
 /// is only meaningful inside the namespace that wrote it.
-fn current_namespace() -> Option<u64> {
+pub(crate) fn current_namespace() -> Option<u64> {
     #[cfg(target_os = "linux")]
     {
         let target = std::fs::read_link("/proc/self/ns/pid").ok()?;

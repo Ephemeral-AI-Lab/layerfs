@@ -146,6 +146,12 @@ impl CompactFailpoint {
     }
 }
 
+/// Reports whether a recorded owner is provably a live process of the
+/// caller's kernel: `(pid, kernel start time, boot id, PID namespace)`. The
+/// caller's platform process facts answer it, because the engine layer holds
+/// no process table.
+pub type OwnerLiveness = fn(Option<u32>, Option<u64>, Option<u128>, Option<u64>) -> bool;
+
 /// Inputs one `store.compact` attempt uses.
 #[derive(Clone, Debug, Default)]
 pub struct CompactRequest {
@@ -163,6 +169,12 @@ pub struct CompactRequest {
     pub owner_pid_start: Option<u64>,
     /// The owner's kernel boot id (the lease's third field).
     pub owner_pid_boot: Option<u128>,
+    /// How this call proves a recorded owner is still live: the engine reads
+    /// the owner a `<store>.compact-op` leftover names and asks this before
+    /// adopting it (§9), so a run that released the writer lane but has not
+    /// settled keeps its state. `None` keeps the dead-owner adoption path for
+    /// a caller that records no owner facts.
+    pub owner_live: Option<OwnerLiveness>,
     /// A test-only stop point; production callers leave it `None`.
     pub failpoint: Option<CompactFailpoint>,
     /// A test-only hook called after verification and immediately before the
@@ -170,6 +182,12 @@ pub struct CompactRequest {
     /// handle. Production callers leave it `None`.
     #[doc(hidden)]
     pub before_install_hook: Option<fn(&Path)>,
+    /// A test-only hook called after the writer lane is released and
+    /// immediately before the §9 settle, so a test can run a second compaction
+    /// in the window where the first run no longer holds the lane. Production
+    /// callers leave it `None`.
+    #[doc(hidden)]
+    pub before_settle_hook: Option<fn(&Path)>,
 }
 
 /// The report keeps at most this many kept-waste delta-base identities (§11,

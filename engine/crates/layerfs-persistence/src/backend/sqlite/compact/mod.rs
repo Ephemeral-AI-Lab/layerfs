@@ -9,7 +9,11 @@
 //! into place at `G → G+1`. The run's phase and mark tuple are kept beside the
 //! Store in `<store>.compact-op`, the SQLite equivalent of the PostgreSQL
 //! `gc_op` row (§11); the next `store.compact` judges a leftover by the Store
-//! generation (§9) and removes the artifact set it names.
+//! generation (§9) and removes the artifact set it names. A record whose owner
+//! is provably live is not a leftover: the next call refuses `Busy` instead of
+//! adopting the state of a run that released the writer lane but has not yet
+//! settled, and a settle removes the record only while it still names the
+//! operation being settled.
 //!
 //! The T7.2 mark already resolves every logical reference and delta base, so
 //! the bytes of packs that hold no reached object are the refined dead bytes:
@@ -36,5 +40,5 @@ pub use types::io_error;
 pub use types::{cap_delta_references, DELTA_BASE_REFERENCES_CAP};
 pub use types::{
     CompactFailpoint, CompactKeptWaste, CompactPath, CompactReceipt, CompactRequest,
-    CompactResidue, CompactZeroReason,
+    CompactResidue, CompactZeroReason, OwnerLiveness,
 };

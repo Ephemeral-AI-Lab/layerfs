@@ -136,6 +136,7 @@ pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
             owner_pid_boot,
             owner_runtime: Some(owner_runtime),
             owner_boot: Some(owner_boot),
+            owner_live: Some(layerfs_home::process::recorded_owner_alive),
             failpoint: crash_failpoint(),
             ..CompactRequest::default()
         })

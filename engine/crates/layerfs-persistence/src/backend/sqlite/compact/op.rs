@@ -4,6 +4,7 @@ use super::types::io_error;
 use super::types::CompactFailpoint;
 use super::types::CompactRequest;
 use super::types::MarkTuple;
+use super::types::OwnerLiveness;
 use super::types::ARTIFACT_SUFFIXES;
 use super::types::COMPACT_SUFFIX;
 use super::types::OP_SUFFIX;
@@ -26,6 +27,10 @@ pub(crate) struct RunOp {
     pub(crate) owner_pid: Option<u32>,
     pub(crate) owner_pid_start: Option<u64>,
     pub(crate) owner_pid_boot: Option<u128>,
+    /// The PID namespace the owner's id is meaningful in, when the kernel
+    /// names one. A record written before this fact was kept leaves it unset
+    /// and is matched by pid, start and boot alone.
+    pub(crate) owner_pid_namespace: Option<u64>,
     pub(crate) tuple: MarkTuple,
     pub(crate) live_heads_digest: [u8; 32],
 }
@@ -34,7 +39,7 @@ impl RunOp {
     pub(crate) fn encode(&self) -> String {
         format!(
             "version=1\nop_id={}\ngeneration={}\nphase={}\nstarted_ms={}\n\
-owner_pid={}\nowner_pid_start={}\nowner_pid_boot={}\n\
+owner_pid={}\nowner_pid_start={}\nowner_pid_boot={}\nowner_pid_namespace={}\n\
 catalog_id={}\nnext_history_serial={}\nnext_pack_id={}\nnext_ordinal={}\n\
 mark_serial={}\nmark_pack_id={}\nmark_digest={}\nmark_totals={},{},{},{}\nmark_stamp={}\nhistory_rows={}\n\
 live_heads_digest={}\n",
@@ -45,6 +50,7 @@ live_heads_digest={}\n",
             self.owner_pid.map_or_else(String::new, |pid| pid.to_string()),
             self.owner_pid_start.map_or_else(String::new, |start| start.to_string()),
             self.owner_pid_boot.map_or_else(String::new, |boot| format!("{boot:032x}")),
+            self.owner_pid_namespace.map_or_else(String::new, |namespace| namespace.to_string()),
             hex(&self.tuple.catalog_id),
             self.tuple.next_history_serial,
             self.tuple.next_pack_id,
@@ -102,6 +108,12 @@ live_heads_digest={}\n",
             .get("owner_pid_boot")
             .filter(|text| !text.is_empty())
             .and_then(|text| u128::from_str_radix(text, 16).ok());
+        // Optional: a record written before the namespace was kept leaves the
+        // key out and is adopted by pid, start and boot alone, as it was then.
+        let owner_pid_namespace = values
+            .get("owner_pid_namespace")
+            .filter(|text| !text.is_empty())
+            .and_then(|text| text.parse().ok());
         let catalog_id = unhex_vec(values.get("catalog_id")?)?;
         let tuple = MarkTuple {
             catalog_id,
@@ -125,10 +137,45 @@ live_heads_digest={}\n",
             owner_pid,
             owner_pid_start,
             owner_pid_boot,
+            owner_pid_namespace,
             tuple,
             live_heads_digest,
         })
     }
+
+    /// True when the caller's process facts prove the recorded owner is still
+    /// live, so this record is an in-flight run's, not a leftover (§9). A
+    /// record with no owner facts, or whose owner is gone, is adoptable as
+    /// before.
+    pub(crate) fn owner_provably_live(&self, owner_live: Option<OwnerLiveness>) -> bool {
+        owner_live.is_some_and(|live| {
+            live(
+                self.owner_pid,
+                self.owner_pid_start,
+                self.owner_pid_boot,
+                self.owner_pid_namespace,
+            )
+        })
+    }
+}
+
+/// True when `<store>.compact-op` still names `op_id`.
+pub(crate) fn op_record_names(store: &Path, op_id: &[u8; 16]) -> bool {
+    RunOp::read(store).is_some_and(|recorded| recorded.op_id == *op_id)
+}
+
+/// Removes `<store>.compact-op` only while it still names `op_id`: a record
+/// another run wrote is never deleted. A record that names `op_id` and cannot
+/// be removed is the `Integrity` refusal a settle or abort reports.
+pub(crate) fn remove_op_record(store: &Path, op_id: &[u8; 16]) -> HistoryResult<()> {
+    if !op_record_names(store, op_id) {
+        return Ok(());
+    }
+    let path = op_path(store);
+    if std::fs::remove_file(&path).is_err() && std::fs::symlink_metadata(&path).is_ok() {
+        return Err(HistoryError::Integrity("compaction record"));
+    }
+    Ok(())
 }
 
 /// The operation a Store's `<store>.compact-op` records, as `store.status`

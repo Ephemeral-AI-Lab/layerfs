@@ -1058,6 +1058,143 @@ mark_stamp=0\nhistory_rows=0\nlive_heads_digest={zeros}\n"
     std::fs::write(op_path(path), text).unwrap();
 }
 
+/// The owner facts the first run records; the oracle accepts only them.
+const OWNER_START: u64 = 7;
+const OWNER_BOOT: u128 = 9;
+
+/// This process's PID-namespace inode, when the platform names one.
+fn this_pid_namespace() -> Option<u64> {
+    #[cfg(target_os = "linux")]
+    {
+        let target = std::fs::read_link("/proc/self/ns/pid").ok()?;
+        let text = target.to_str()?;
+        text.strip_prefix("pid:[")?.strip_suffix(']')?.parse().ok()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+/// The liveness oracle the production caller supplies: only the recorded
+/// owner facts of this live process are accepted.
+fn live_owner(
+    pid: Option<u32>,
+    start: Option<u64>,
+    boot: Option<u128>,
+    namespace: Option<u64>,
+) -> bool {
+    pid == Some(std::process::id())
+        && start == Some(OWNER_START)
+        && boot == Some(OWNER_BOOT)
+        && namespace == this_pid_namespace()
+}
+
+/// The `gc_intent` rows one operation left in the Store at `path`.
+fn intent_count(path: &Path, op_id: &[u8; 16]) -> i64 {
+    let hex: String = op_id.iter().fold(String::new(), |mut text, byte| {
+        use std::fmt::Write as _;
+        let _ = write!(text, "{byte:02x}");
+        text
+    });
+    let connection = rusqlite::Connection::open(path).unwrap();
+    connection
+        .query_row(
+            &format!("SELECT count(*) FROM gc_intent WHERE op_id = x'{hex}'"),
+            [],
+            |row| row.get(0),
+        )
+        .unwrap()
+}
+
+/// The second compaction in the regression: it runs after the first released
+/// the writer lane and before the first settled. The owner the record names is
+/// this live process, so the second must refuse it and change nothing.
+fn refuse_live_owner(store: &Path) {
+    let first = compact_op_status(store).expect("the first run's record");
+    let second = reopen(store);
+    let error = second
+        .compact(&CompactRequest {
+            op_id: [0x7b; 16],
+            owner_live: Some(live_owner),
+            ..CompactRequest::default()
+        })
+        .expect_err("a live owner's record is not adopted");
+    assert!(
+        matches!(error, HistoryError::Busy),
+        "the live owner refuses the second compaction: {error:?}"
+    );
+    let recorded = compact_op_status(store).expect("the first run's record survives");
+    assert_eq!(recorded.op_id, first.op_id, "the first op record is kept");
+    assert_eq!(recorded.phase, "install", "the first phase is unchanged");
+    assert_eq!(recorded.owner_pid, Some(std::process::id()));
+    // The record keeps the namespace this process wrote, so a probe in another
+    // namespace never reads the owner as live.
+    let text = std::fs::read_to_string(op_path(store)).expect("the op record text");
+    let namespace = this_pid_namespace().map_or_else(String::new, |ns| ns.to_string());
+    assert!(
+        text.contains(&format!("owner_pid_namespace={namespace}\n")),
+        "the recorded owner namespace: {text}"
+    );
+    assert!(
+        table_count(store, "kept_node") > 0,
+        "the first run's kept_node closure survives"
+    );
+    assert_eq!(
+        intent_count(store, &first.op_id),
+        1,
+        "the first run's admission intent survives"
+    );
+}
+
+/// #49 round 2: a compaction that released the writer lane but has not yet
+/// settled is not a leftover. A second compaction that takes the lane in that
+/// window must refuse the live owner's record instead of adopting it (which
+/// would release the first run's intent, clear its `kept_node` rows and remove
+/// its record); the first run then settles and leaves the Store clean.
+#[test]
+fn a_live_owners_settle_window_refuses_a_second_compaction() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let dead = whole_file(&handles, b"a pack the two runs would judge");
+    let before = generation(&handles);
+    let receipt = handles
+        .compact(&CompactRequest {
+            op_id: [0x7a; 16],
+            owner_pid: Some(std::process::id()),
+            owner_pid_start: Some(OWNER_START),
+            owner_pid_boot: Some(OWNER_BOOT),
+            owner_live: Some(live_owner),
+            before_settle_hook: Some(refuse_live_owner),
+            ..CompactRequest::default()
+        })
+        .expect("the first run settles");
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_before, before);
+    assert_eq!(receipt.generation_after, before + 1);
+    assert!(
+        receipt.residue.artifacts.is_empty(),
+        "the first run's settle leaves no residue: {:?}",
+        receipt.residue
+    );
+    // The refused second run wrote nothing: no op, no kept_node, no scratch.
+    assert!(compact_op_status(&path).is_none(), "the op record settles");
+    assert!(!op_path(&path).exists());
+    assert!(!compact_path(&path).exists());
+    assert!(!visited_path(&path).exists());
+    assert_eq!(table_count(&path, "kept_node"), 0);
+    assert_eq!(table_count(&path, "gc_intent"), 0);
+    let final_handles = reopen(&path);
+    assert_eq!(generation(&final_handles), before + 1);
+    assert!(located(&final_handles, live), "the live root still reads");
+    assert!(
+        !located(&final_handles, dead),
+        "the rebuild collected the dead pack"
+    );
+    clean(&final_handles);
+}
+
 /// #711 finding 1: a `none` compaction writes nothing into the live Store's
 /// persistent state. The §6.1 closure and the §5.1 admission intent are one
 /// write transaction, and the `none` decision rolls it back: no `kept_node`

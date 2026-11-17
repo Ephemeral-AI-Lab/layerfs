@@ -15,7 +15,7 @@ use super::install::sync_directory;
 use super::install::unfinished_work;
 use super::install::WriterGuard;
 use super::op::now_ms;
-use super::op::op_path;
+use super::op::remove_op_record;
 use super::op::stop_at;
 use super::op::visited_path;
 use super::op::RunOp;
@@ -115,7 +115,7 @@ impl SqliteHandles {
             let generation = u64::try_from(live.generation)
                 .map_err(|_| HistoryError::Integrity("Store generation"))?;
             metrics.generation_before = generation;
-            settle_leftover(&history, &store, generation, metrics)?;
+            settle_leftover(&history, &store, generation, metrics, request.owner_live)?;
             // §11 `backendReusable` is the Store's reusable backend space, not
             // the freshly `VACUUM`ed target's free list (which is empty by
             // construction): measure the source Store before the mark, so a
@@ -152,6 +152,8 @@ impl SqliteHandles {
                 owner_pid: request.owner_pid,
                 owner_pid_start: request.owner_pid_start,
                 owner_pid_boot: request.owner_pid_boot,
+                // This process writes the record, so this is its namespace.
+                owner_pid_namespace: crate::history::admission::current_namespace(),
                 tuple: live.clone(),
                 live_heads_digest: [0u8; 32],
             };
@@ -164,7 +166,7 @@ impl SqliteHandles {
             let lengths = match pack_lengths(&session) {
                 Ok(lengths) => lengths,
                 Err(error) => {
-                    let _ = std::fs::remove_file(op_path(&store));
+                    let _ = remove_op_record(&store, &op_id);
                     return Err(error);
                 }
             };
@@ -187,7 +189,7 @@ impl SqliteHandles {
                     // The rolled-back mark released nothing, and a sink that
                     // already finished leaves its scratch for us to drop.
                     let _ = remove_scratch(&visited_path(&store));
-                    let _ = std::fs::remove_file(op_path(&store));
+                    let _ = remove_op_record(&store, &op_id);
                     return Err(error);
                 }
             };
@@ -218,27 +220,25 @@ impl SqliteHandles {
                 let visited_bytes = match std::fs::metadata(&scratch) {
                     Ok(metadata) => metadata.len(),
                     Err(_) => {
-                        abort_before_install(&store, None);
+                        abort_before_install(&store, &op_id, false);
                         return Err(HistoryError::Integrity("visited scratch"));
                     }
                 };
                 if let Err(error) = remove_scratch(&scratch) {
-                    abort_before_install(&store, None);
+                    abort_before_install(&store, &op_id, false);
                     return Err(error);
                 }
                 let (free, page) = match live_page_metrics(&session) {
                     Ok(metrics) => metrics,
                     Err(error) => {
-                        abort_before_install(&store, None);
+                        abort_before_install(&store, &op_id, false);
                         return Err(error);
                     }
                 };
                 metrics.end_phase();
-                if std::fs::remove_file(op_path(&store)).is_err()
-                    && std::fs::symlink_metadata(op_path(&store)).is_ok()
-                {
-                    abort_before_install(&store, None);
-                    return Err(HistoryError::Integrity("compaction record"));
+                if let Err(error) = remove_op_record(&store, &op_id) {
+                    abort_before_install(&store, &op_id, false);
+                    return Err(error);
                 }
                 let _ = sync_directory(&store);
                 drop(lane);
@@ -293,7 +293,7 @@ impl SqliteHandles {
                     // A definite failure before the seal: the live Store is
                     // unchanged, so its intent is released and the op record
                     // removed. A held clone elsewhere is `Busy`, never unknown.
-                    abort_before_install(&store, Some(&op_id));
+                    abort_before_install(&store, &op_id, true);
                     return Err(HistoryError::Busy);
                 }
             };
@@ -305,7 +305,7 @@ impl SqliteHandles {
                     if !mapped.unknown() {
                         // Definite: nothing was installed, so the run leaves no
                         // op record and no live intent behind.
-                        abort_before_install(&store, Some(&op_id));
+                        abort_before_install(&store, &op_id, true);
                     }
                     return Err(mapped);
                 }
@@ -319,24 +319,24 @@ impl SqliteHandles {
             let sealed_tuple = match immutable_tuple(&facts.path) {
                 Ok(tuple) => tuple,
                 Err(error) => {
-                    abort_before_install(&store, Some(&op_id));
+                    abort_before_install(&store, &op_id, true);
                     return Err(error);
                 }
             };
             if sealed_tuple != tuple {
-                abort_before_install(&store, Some(&op_id));
+                abort_before_install(&store, &op_id, true);
                 return Err(HistoryError::Conflict("the Store changed after the mark"));
             }
             match immutable_digest(&facts.path) {
                 Ok(digest) if digest == mark.live_heads_digest() => {}
                 Ok(_) => {
-                    abort_before_install(&store, Some(&op_id));
+                    abort_before_install(&store, &op_id, true);
                     return Err(HistoryError::Conflict(
                         "the Store heads changed after the mark",
                     ));
                 }
                 Err(error) => {
-                    abort_before_install(&store, Some(&op_id));
+                    abort_before_install(&store, &op_id, true);
                     return Err(error);
                 }
             }
@@ -347,7 +347,7 @@ impl SqliteHandles {
             if let Err(error) = op.write(&store) {
                 // A definite I/O failure after the seal: release the intent and
                 // drop the artifact set, so the next call does not meet BusyOp.
-                abort_before_install(&store, Some(&op_id));
+                abort_before_install(&store, &op_id, true);
                 return Err(error);
             }
             let capacity = request.failpoint == Some(CompactFailpoint::CapacityAtBuild);
@@ -366,14 +366,14 @@ impl SqliteHandles {
                 // an artifact set a recorded run names (§9).
                 Err(HistoryError::UnknownOutcome) => return Err(HistoryError::UnknownOutcome),
                 Err(error) => {
-                    abort_before_install(&store, Some(&op_id));
+                    abort_before_install(&store, &op_id, true);
                     return Err(error);
                 }
             };
             // §7 step 7: every artifact and the op record are durable before
             // the verification reads them back.
             if let Err(error) = sync_directory(&store) {
-                abort_before_install(&store, Some(&op_id));
+                abort_before_install(&store, &op_id, true);
                 return Err(error);
             }
             stop_at(request, CompactFailpoint::AfterBuild, &op, &store)?;
@@ -383,7 +383,7 @@ impl SqliteHandles {
             metrics.begin_phase(CompactPhase::Verify);
             op.phase = "verify".to_owned();
             if let Err(error) = op.write(&store) {
-                abort_before_install(&store, Some(&op_id));
+                abort_before_install(&store, &op_id, true);
                 return Err(error);
             }
             if let Err(error) = verify(
@@ -401,7 +401,7 @@ impl SqliteHandles {
                 if matches!(error, HistoryError::UnknownOutcome) {
                     return Err(error);
                 }
-                abort_before_install(&store, Some(&op_id));
+                abort_before_install(&store, &op_id, true);
                 return Err(error);
             }
             stop_at(request, CompactFailpoint::AfterVerify, &op, &store)?;
@@ -412,11 +412,11 @@ impl SqliteHandles {
                 hook(&facts.path);
             }
             if let Err(error) = install_fence(&facts, &tuple) {
-                abort_before_install(&store, Some(&op_id));
+                abort_before_install(&store, &op_id, true);
                 return Err(error);
             }
             if let Err(error) = prepare_target(&built.target) {
-                abort_before_install(&store, Some(&op_id));
+                abort_before_install(&store, &op_id, true);
                 return Err(error);
             }
             stop_at(request, CompactFailpoint::BeforeInstall, &op, &store)?;
@@ -440,6 +440,13 @@ impl SqliteHandles {
             let _ = op.write(&store);
             stop_at(request, CompactFailpoint::AfterInstall, &op, &store)?;
             guard.release()?;
+            // The writer lane is free from here: a second compaction can take
+            // it while this run settles. `settle_leftover` judges that race by
+            // the owner the op record names; this test hook only names the
+            // window.
+            if let Some(hook) = request.before_settle_hook {
+                hook(&store);
+            }
             let residue = settle(&store, request, &op)?;
             // §11 `logicalDiscarded` is the canonical bytes of the objects the
             // rebuild collects, not the history rows' `logical` sum: a shared
