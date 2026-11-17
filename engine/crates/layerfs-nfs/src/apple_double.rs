@@ -4,7 +4,8 @@
 //! fork in a `._<name>` companion file (see [`crate::names`]). When the export
 //! keeps such names out of the Workspace, a CREATE of one makes a file that
 //! lives only here, under its own serial range: LOOKUP, GETATTR, ACCESS, READ,
-//! WRITE, SETATTR, COMMIT, REMOVE and a RENAME to another AppleDouble name
+//! WRITE, SETATTR, COMMIT, REMOVE, a LINK to another AppleDouble name and a
+//! RENAME to another AppleDouble name
 //! work on it, READDIR does not list it, and no mutation of it ever reaches
 //! the engine, so the Workspace stays clean and no Commit can capture it.
 //! Everything is dropped when the export is released.
@@ -16,36 +17,61 @@
 //! directory it names, so its `wcc_data` answers both halves from the last
 //! facts the export saw for it (see [`Kernel::directory_wcc`]).
 //!
-//! Whenever a write leaves a companion holding a whole AppleDouble image the
-//! client laid out itself (see [`crate::apple_double_codec`]), it is decoded: a
-//! small one keeps only its FinderInfo and attributes in memory (each at most
-//! [`DECODED_ENTRY_BYTES`] counted), and every read synthesizes the same bytes
-//! again. Any other body (a resource fork, another layout, a half-written
-//! image) is kept as the client wrote it.
+//! A companion created while the export knows its main file (`<name>` in the
+//! same directory) belongs to that inode: any name of the inode reaches it, so
+//! hard links share one companion, it follows the inode through RENAME, and it
+//! goes with the inode's last name rather than with one name. Its FinderInfo
+//! and extended attributes are kept under that inode's serial, not under the
+//! `._` name. It may hold several of the inode's `._` names at once (a LINK of
+//! a companion name makes one, and a client that links a file keeps the
+//! attributes aside under each name), and removing one of them leaves the
+//! companion to the inode's other names: only its last name, on an inode with
+//! no other name the export knows, is the client clearing the attributes. Whenever a write leaves such a companion holding a whole
+//! AppleDouble image the client laid out itself (see
+//! [`crate::apple_double_codec`]), it is decoded: a small one keeps only its
+//! FinderInfo and attributes in memory (each at most [`DECODED_ENTRY_BYTES`]
+//! counted), and every read synthesizes the same bytes again. Such a whole
+//! image takes no slot of the index bound. Any other body
+//! (a resource fork, another layout, a half-written image, or a companion whose
+//! main file is unknown) is kept as the client wrote it and takes a slot: the
+//! index bound, the refusal, its rate-limited log and orphan reclamation stay
+//! the fallback for everything decoding does not compress.
 //!
-//! The memory is bounded: [`HELD`] companions of at most [`FILE_BYTES`] each,
-//! and [`RESIDENT_BYTES`] of bodies in all, a body kept as written counted at
-//! its length and a decoded one as [`Image::cost`], so a decoded image is never
-//! memory the budget cannot see. Bodies up to that budget stay in memory; when
-//! a write or resize crosses it, the least recently touched resident bodies are
-//! spilled to the export's own scratch directory (see
-//! [`crate::apple_double_spill`]), and a body that still does not fit is
-//! written out itself. Everything is dropped when the export is released,
-//! which removes that directory too.
+//! Every companion keeps its index entry in memory (at most [`HELD`] of them
+//! not holding a whole image, each companion at most [`FILE_BYTES`]). Bodies up
+//! to [`RESIDENT_BYTES`] in all stay in memory, a body kept as written counted
+//! at its length and a decoded one as [`Image::cost`], so a decoded image is
+//! memory the budget sees. An edit that leaves a body whole decodes it as it
+//! records it rather than asking for room first, so the pool may stand one
+//! decoded body over until the next write or resize needs room; that one then
+//! spills the least recently touched bodies, decoded ones included, to the
+//! export's own scratch directory (see [`crate::apple_double_spill`]). Removing
+//! or replacing a main file drops its paired `._<name>` companion when no main
+//! inode owns it; a companion that belongs to an inode goes with the inode, so
+//! `._<name>` still answers for that inode after the name went, and only the
+//! inode's last name takes the companion and every `._` name it holds. When
+//! [`HELD`] is reached, orphan companions whose main inode or main
+//! file the export no longer knows are reclaimed first, and only if [`HELD`]
+//! live companions still remain does `CREATE` answer `NFS3ERR_NOSPC`.
 use crate::{
     apple_double_codec::Image,
     apple_double_spill::{now, spill_path, touch, unlink_paths, Edit},
     attributes::Status,
     change::{How, Sattr, Tickets, Wcc},
     kernel::Kernel,
+    trace::{self, Route as Trace},
 };
-use layerfs_content::{filesystem::attributes::PortableMetadata, object::inode_leaf::InodeKind};
-use layerfs_workspace::ViewStat;
+use layerfs_content::{
+    filesystem::{attributes::PortableMetadata, PathName},
+    object::inode_leaf::InodeKind,
+};
+use layerfs_workspace::{KernelReadOperation, ViewStat};
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     fs,
     path::PathBuf,
     sync::{atomic::Ordering, Arc, Mutex},
+    time::{Duration, Instant},
 };
 
 mod edit;
@@ -53,16 +79,18 @@ mod edit;
 /// The first serial of the export's own companions, far above any serial the
 /// engine allocates.
 pub const SERIALS: u64 = 1 << 62;
-/// Companion index entries held at once.
-pub const HELD: usize = 4096;
+/// Companion index entries not holding a whole image, held at once.
+pub const HELD: usize = 65_536;
 /// Largest companion kept.
 pub const FILE_BYTES: u64 = 1 << 20;
 /// Companion body bytes kept resident in memory before spilling to disk: a
 /// body kept as written counts its length, a decoded one [`Image::cost`].
 pub const RESIDENT_BYTES: usize = 32 << 20;
-/// Most bytes counted for one decoded companion, [`Image::cost`]; a whole
-/// image costing more keeps its bytes as written, so one companion cannot take
-/// the whole budget.
+/// Most bytes counted for one decoded companion, [`Image::cost`]: a cap on
+/// what one decoded body is charged to [`RESIDENT_BYTES`], not on what a
+/// companion may store. A whole image costing more keeps its bytes as written
+/// and is charged at their length, so one companion cannot take the whole
+/// budget.
 pub const DECODED_ENTRY_BYTES: usize = 128 << 10;
 
 /// A name in one directory: (directory serial, name bytes).
@@ -81,6 +109,15 @@ enum Body {
 struct Companion {
     /// The `._` name it was created or last renamed to.
     named: Named,
+    /// The other `._` names of the same companion, which a LINK made: a client
+    /// that links a file keeps its attributes aside under each of the file's
+    /// names, and every one of them is a name of this one companion.
+    also: Vec<Named>,
+    /// The main inode it belongs to, when the export knew it at creation.
+    inode: Option<u64>,
+    /// Its body is a whole image: any name of the inode reads it, and it takes
+    /// no slot of the index bound.
+    whole: bool,
     len: usize,
     body: Body,
     metadata: PortableMetadata,
@@ -101,14 +138,58 @@ impl Companion {
             Body::Decoded(image) => image.cost(),
         }
     }
+    /// Whether it takes a slot of the index bound.
+    fn slotted(&self) -> bool {
+        !self.whole
+    }
+}
+
+/// A slot of the index the export's own name index cannot reach, and what the
+/// reclaim needs to decide about it.
+struct Orphan {
+    serial: u64,
+    /// The main inode the export knows for it; an inode holding no name in the
+    /// kernel table is gone.
+    inode: Option<u64>,
+    /// Its main file's directory and name when it has no inode: the name index
+    /// is lossy, so only the engine can say whether that file is there.
+    main: Option<Named>,
+}
+
+/// What [`Companions::reserve`] made of a call's claim on a slot of the index
+/// bound.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Slot {
+    /// It took the slot, which it gives back if its commit does not land.
+    Taken,
+    /// It already held a slot (or a reservation for one): nothing was taken.
+    Held,
+    /// The bound has none.
+    Full,
+}
+
+/// What [`Companions::keep_decoded`] made of an edited body.
+pub(crate) enum Decoded {
+    /// The companion holds the body's decoded form.
+    Kept,
+    /// The body decodes, but the resident budget needs this many more bytes
+    /// before the decoded form fits.
+    Room(usize),
+    /// Not a body the export decodes: not a whole image, too large to decode,
+    /// or no main inode.
+    Unchanged,
 }
 
 /// What an export's companion index holds (see [`crate::kernel::Released`]).
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Holding {
     pub held: usize,
+    pub slotted: usize,
     pub resident_bytes: usize,
     pub decoded: usize,
+    /// The companions no name reaches, so that a status read and the release
+    /// line report the same number.
+    pub unreachable: usize,
 }
 
 /// The companions of one export.
@@ -117,6 +198,18 @@ pub(crate) struct Companions {
     tick: u64,
     files: HashMap<u64, Companion>,
     names: HashMap<Named, u64>,
+    /// Main inode serial -> the companion holding its FinderInfo and
+    /// attributes.
+    inodes: HashMap<u64, u64>,
+    /// The serials taking a slot of the index bound, so reclamation walks only
+    /// the [`HELD`]-bounded slots rather than every companion: a whole image
+    /// takes no slot, whether it is decoded or kept as written bytes, so whole
+    /// images add nothing to the walk.
+    slots: HashSet<u64>,
+    /// The serials holding a slot for a commit that is still on its way, whose
+    /// I/O runs outside this lock. A reserved slot counts against the bound, so
+    /// two calls cannot both be told the bound has room for one.
+    reserved: HashSet<u64>,
     /// Every companion holding memory, oldest use first: (used tick, serial).
     /// One tick is one touch and no serial takes two ticks, so the keys are
     /// unique and the oldest entry is the first one.
@@ -125,6 +218,8 @@ pub(crate) struct Companions {
     decoded: usize,
     spill_dir: Option<PathBuf>,
     resident_budget: usize,
+    held_limit: usize,
+    last_refusal_log: Option<Instant>,
 }
 impl Default for Companions {
     fn default() -> Self {
@@ -133,11 +228,16 @@ impl Default for Companions {
             tick: 0,
             files: HashMap::new(),
             names: HashMap::new(),
+            inodes: HashMap::new(),
+            slots: HashSet::new(),
+            reserved: HashSet::new(),
             by_use: BTreeSet::new(),
             resident_bytes: 0,
             decoded: 0,
             spill_dir: None,
             resident_budget: RESIDENT_BYTES,
+            held_limit: HELD,
+            last_refusal_log: None,
         }
     }
 }
@@ -174,8 +274,12 @@ impl Companions {
             subdirs: 0,
         }
     }
-    /// Adds `file` to the index, the byte counts and the eviction order.
+    /// Adds `file` to the index, the slot and byte counts and the eviction
+    /// order.
     fn attach(&mut self, serial: u64, file: Companion) {
+        if file.slotted() {
+            self.slots.insert(serial);
+        }
         if file.resident_cost() > 0 {
             self.by_use.insert((file.used, serial));
         }
@@ -183,61 +287,170 @@ impl Companions {
         self.decoded += usize::from(matches!(file.body, Body::Decoded(_)));
         self.files.insert(serial, file);
     }
-    /// Takes `serial` out of the index and the counts; its name key stays for
+    /// Takes `serial` out of the index and the counts; its name keys stay for
     /// the caller to unindex.
     fn detach(&mut self, serial: u64) -> Option<Companion> {
         let file = self.files.remove(&serial)?;
+        self.slots.remove(&serial);
         self.by_use.remove(&(file.used, serial));
         self.resident_bytes -= file.resident_cost();
         self.decoded -= usize::from(matches!(file.body, Body::Decoded(_)));
         Some(file)
     }
-    /// Replaces `serial`'s body by the decoded form of `bytes`, the caller's
-    /// edited body of `len` bytes, while the resident budget takes it. The
-    /// decoded form is counted as its attributes rather than its image, so a
-    /// body that decodes usually needs much less room than its bytes.
-    fn keep_decoded(&mut self, serial: u64, bytes: &[u8], len: usize) -> bool {
-        let Some(image) = Image::compact(bytes) else {
+    /// Makes every name of `file` and its main inode find `serial`.
+    fn index(&mut self, serial: u64, file: &Companion) {
+        self.names.insert(file.named.clone(), serial);
+        for named in &file.also {
+            self.names.insert(named.clone(), serial);
+        }
+        if let Some(inode) = file.inode {
+            self.inodes.insert(inode, serial);
+        }
+    }
+    /// Drops every name of `file` and its inode key that still find `serial`.
+    fn unindex(&mut self, serial: u64, file: &Companion) {
+        for named in std::iter::once(&file.named).chain(&file.also) {
+            if self.names.get(named) == Some(&serial) {
+                self.names.remove(named);
+            }
+        }
+        if let Some(inode) = file.inode {
+            if self.inodes.get(&inode) == Some(&serial) {
+                self.inodes.remove(&inode);
+            }
+        }
+    }
+    /// Whether `serial` holds a name other than `named`.
+    fn holds_another(&self, serial: u64, named: &Named) -> bool {
+        self.files.get(&serial).is_some_and(|file| {
+            (file.named != *named && self.names.get(&file.named) == Some(&serial))
+                || file.also.iter().any(|also| also != named)
+        })
+    }
+    /// Drops `named`, one of `serial`'s names, and answers whether it held it.
+    /// A companion left with no name is still reached through its main inode,
+    /// so it keeps its record; another held name becomes the one its record
+    /// names, so a later `index` puts back only names it still holds.
+    fn drop_name(&mut self, serial: u64, named: &Named) -> bool {
+        let Some(file) = self.files.get_mut(&serial) else {
             return false;
         };
-        if image.cost() > DECODED_ENTRY_BYTES {
+        let primary = file.named == *named;
+        if !primary && !file.also.iter().any(|also| also == named) {
             return false;
+        }
+        if self.names.get(named) == Some(&serial) {
+            self.names.remove(named);
+        }
+        if primary {
+            if let Some(next) = file.also.pop() {
+                file.named = next;
+            }
+        } else {
+            file.also.retain(|also| also != named);
+        }
+        true
+    }
+    /// The companion `named` reaches when its main file is `main`: the one
+    /// held under that name, unless it belongs to another inode than `main`,
+    /// else the one its main inode already has.
+    fn resolve(&self, named: &Named, main: Option<u64>) -> Option<u64> {
+        self.resolve_route(named, main).0
+    }
+    /// [`Self::resolve`], and which part of the index answered, for the trace.
+    fn resolve_route(&self, named: &Named, main: Option<u64>) -> (Option<u64>, Trace) {
+        if let Some(&serial) = self.names.get(named) {
+            let inode = self.files.get(&serial).and_then(|file| file.inode);
+            if inode.is_none() || main.is_none() || inode == main {
+                return (Some(serial), Trace::Name);
+            }
+        }
+        match main.and_then(|main| self.inodes.get(&main).copied()) {
+            Some(serial) => (Some(serial), Trace::Inode),
+            None => (None, Trace::None),
+        }
+    }
+    /// Replaces `serial`'s body by the decoded form of `bytes`, the caller's
+    /// edited body of `len` bytes, while the resident budget takes it and the
+    /// export knows the companion's main inode. The decoded form is counted as
+    /// its attributes rather than its image, so a body that decodes usually
+    /// needs much less room than its bytes, and the caller is told the room it
+    /// would need instead of spilling a body that fits after one eviction.
+    fn keep_decoded(&mut self, serial: u64, bytes: &[u8], len: usize) -> Decoded {
+        // Only an inode's companion is decoded: one whose main file the export
+        // never saw keeps the client's bytes as written and a slot of the
+        // index bound, so that bound and orphan reclamation still reach it.
+        let Some(file) = self.files.get(&serial) else {
+            return Decoded::Unchanged;
+        };
+        let (inode, before) = (file.inode, file.resident_cost());
+        if inode.is_none() {
+            return Decoded::Unchanged;
+        }
+        let Some(image) = Image::compact(bytes) else {
+            return Decoded::Unchanged;
+        };
+        if image.cost() > DECODED_ENTRY_BYTES {
+            return Decoded::Unchanged;
         }
         let cost = image.cost();
         let tick = self.tick();
         let Some(mut file) = self.detach(serial) else {
-            return false;
+            return Decoded::Unchanged;
         };
         if self.resident_bytes + cost > self.resident_budget {
             self.attach(serial, file);
-            return false;
+            // The body decodes, so the room to ask for is what the decoded
+            // form adds to the count, not the length of the bytes edited.
+            return Decoded::Room(cost.saturating_sub(before));
         }
         file.len = len;
         file.body = Body::Decoded(image);
+        file.whole = true;
         file.used = tick;
         touch(&mut file.metadata);
         self.attach(serial, file);
-        true
+        Decoded::Kept
     }
-    /// Decides whether `file`'s body is a whole image: a resident one is
-    /// decoded when it parses back to the same bytes and [`DECODED_ENTRY_BYTES`]
-    /// takes it. `file` must be detached from the index.
+    /// Decides whether `file`'s body is a whole image: a decoded body of an
+    /// inode's companion always is; a resident body of one is decoded when it
+    /// parses back to the same bytes and [`DECODED_ENTRY_BYTES`] takes it. A
+    /// companion whose main file the export does not know is never a whole
+    /// image: it keeps the client's bytes as written and a slot of the index
+    /// bound, so that bound and orphan reclamation still reach it. `file` must
+    /// be detached from the index.
     fn classify(&self, file: &mut Companion) {
+        if file.inode.is_none() {
+            // Only a decoded body has to become bytes again; a body on disk
+            // keeps its file and takes a slot.
+            if let Body::Decoded(image) = &file.body {
+                file.body = Body::Resident(image.encode());
+            }
+            file.whole = false;
+            return;
+        }
         // A body on disk cannot be decoded here (that reads its file under
         // this lock): it keeps the class the write that spilled it left it.
+        file.whole = match &file.body {
+            Body::Decoded(_) => true,
+            Body::Spilled => file.whole,
+            Body::Resident(_) => false,
+        };
         let Body::Resident(bytes) = &file.body else {
             return;
         };
         let Some(image) = Image::compact(bytes) else {
             return;
         };
+        file.whole = true;
         if image.cost() <= DECODED_ENTRY_BYTES {
             file.body = Body::Decoded(image);
         }
     }
     fn take_serial(&mut self, serial: u64) -> Option<PathBuf> {
+        self.reserved.remove(&serial);
         let file = self.detach(serial)?;
-        self.names.remove(&file.named);
+        self.unindex(serial, &file);
         match file.body {
             Body::Resident(_) | Body::Decoded(_) => None,
             Body::Spilled => (self.spill_dir.as_ref()).map(|dir| spill_path(dir, serial)),
@@ -277,6 +490,9 @@ impl Companions {
             return false;
         }
         file.body = Body::Spilled;
+        // A body written out whole is still a whole image; a shorter file
+        // than the companion had described is not.
+        file.whole &= len <= file.len;
         file.len = file.len.max(len);
         self.attach(serial, file);
         true
@@ -291,12 +507,77 @@ impl Companions {
             .find(|(_, serial)| !skip.contains(serial))
             .map(|(_, serial)| *serial)
     }
+    /// Whether the index takes a companion that takes a slot of the bound: the
+    /// one place the bound is decided. A companion already holding a slot
+    /// keeps it, and a body that takes no slot is always admitted.
+    fn admits(&self, serial: Option<u64>, slotted: bool) -> bool {
+        !slotted
+            || serial.is_some_and(|serial| {
+                self.slots.contains(&serial) || self.reserved.contains(&serial)
+            })
+            || self.slots.len() + self.reserved.len() < self.held_limit
+    }
+    /// Decides whether `serial` may take a slot of the bound and holds it when
+    /// it may, in one step under this lock: a call that needs I/O before its
+    /// commit keeps the slot for the commit, so two calls cannot both be told
+    /// the bound has room for one. [`Slot::Held`] means it already has one
+    /// (or a reservation) and nothing was taken.
+    fn reserve(&mut self, serial: u64) -> Slot {
+        if self.slots.contains(&serial) || self.reserved.contains(&serial) {
+            return Slot::Held;
+        }
+        if self.slots.len() + self.reserved.len() >= self.held_limit {
+            return Slot::Full;
+        }
+        self.reserved.insert(serial);
+        Slot::Taken
+    }
+    /// Gives back a slot reserved for a commit that did not land.
+    fn unreserve(&mut self, serial: u64) {
+        self.reserved.remove(&serial);
+    }
+    /// The companions no name of the export reaches: neither the name it
+    /// records nor another name of its inode finds it. Such a companion holds
+    /// its body with no way for a client to ask for it, which is one of the two
+    /// shapes a lost attribute takes (the other is no companion at all). A
+    /// companion reached only through its main inode - one whose `._` name the
+    /// client removed, or whose main file went under that name - is reachable,
+    /// which is why a name key kept for an inode's companion is not a leak.
+    /// Counted with the other holdings, by who reports them: the release line
+    /// says which shape a loss had, and a status read says so while serving.
+    fn unreachable(&self) -> usize {
+        self.files
+            .iter()
+            .filter(|(serial, file)| {
+                self.names.get(&file.named) != Some(serial)
+                    && !file
+                        .also
+                        .iter()
+                        .any(|also| self.names.get(also) == Some(serial))
+                    && file
+                        .inode
+                        .is_none_or(|inode| self.inodes.get(&inode) != Some(serial))
+            })
+            .count()
+    }
     fn holding(&self) -> Holding {
         Holding {
             held: self.files.len(),
+            slotted: self.slots.len(),
             resident_bytes: self.resident_bytes,
             decoded: self.decoded,
+            unreachable: self.unreachable(),
         }
+    }
+}
+/// How a CREATE that found the companion already held is traced: an UNCHECKED
+/// create with an explicit size truncates the body every name of the inode
+/// shares, and a GUARDED or EXCLUSIVE one is answered `NFS3ERR_EXIST`.
+fn opening(how: &How) -> &'static str {
+    match how {
+        How::Unchecked(sattr) if sattr.size.is_some() => "existing-truncate",
+        How::Unchecked(_) | How::Guarded(_) => "existing",
+        How::Exclusive(_) => "existing-exclusive",
     }
 }
 /// Whether a body a spill wrote out still replaces its companion: only when the
@@ -327,13 +608,159 @@ impl Kernel {
             .lock()
             .unwrap_or_else(|poison| poison.into_inner())
     }
-    pub(crate) fn configure_companions(&self, spill_dir: Option<PathBuf>, resident_budget: usize) {
+    pub(crate) fn configure_companions(
+        &self,
+        spill_dir: Option<PathBuf>,
+        resident_budget: usize,
+        held_limit: usize,
+    ) {
         if let Some(dir) = &spill_dir {
             drop(fs::remove_dir_all(dir));
         }
         let mut companions = self.companions();
         companions.spill_dir = spill_dir;
         companions.resident_budget = resident_budget;
+        companions.held_limit = held_limit.max(1);
+    }
+    /// The main inode `._<name>` in `parent` pairs with, as the export's own
+    /// name index knows it. Takes the kernel table: never call it under the
+    /// companion lock.
+    fn main_of(&self, parent: u64, name: &[u8]) -> Option<u64> {
+        let main = name.strip_prefix(b"._").filter(|main| !main.is_empty())?;
+        self.table().by_name.get(&(parent, main.to_vec())).copied()
+    }
+    /// The companion slots no name reaches any more: one whose main inode
+    /// holds no name in the kernel table, and one whose main file the export
+    /// never observed and whose name its name index does not hold. Taken under
+    /// the kernel table lock and, inside it, the companion lock, so nothing
+    /// here copies the namespace; the caller drops them by serial under the
+    /// companion lock again.
+    fn orphans(&self) -> Vec<Orphan> {
+        let table = self.table();
+        let companions = self.companions();
+        companions
+            .slots
+            .iter()
+            .filter_map(|serial| {
+                let file = companions.files.get(serial)?;
+                if let Some(inode) = file.inode {
+                    let live =
+                        table.names.contains_key(&inode) || table.aliases.contains_key(&inode);
+                    return (!live).then_some(Orphan {
+                        serial: *serial,
+                        inode: Some(inode),
+                        main: None,
+                    });
+                }
+                // A name the index does hold reaches the companion; one it
+                // does not hold only makes it a candidate, since that index is
+                // lossy. Any of the names it holds reaches it, so one whose
+                // main file the export knows keeps it, and the first name whose
+                // main it does not know is the one the lookup asks about.
+                let mut candidate = None;
+                for named in std::iter::once(&file.named).chain(&file.also) {
+                    let Some(main) = named.1.strip_prefix(b"._") else {
+                        continue;
+                    };
+                    let main = (named.0, main.to_vec());
+                    if table.by_name.contains_key(&main) {
+                        return None;
+                    }
+                    candidate.get_or_insert(main);
+                }
+                candidate.map(|main| Orphan {
+                    serial: *serial,
+                    inode: None,
+                    main: Some(main),
+                })
+            })
+            .collect()
+    }
+    /// Drops the companion slots no name reaches any more and answers how many
+    /// it dropped. Takes the kernel table lock and, inside it, the companion
+    /// lock; the files it retires are unlinked afterwards, outside both. Never
+    /// call it under the companion lock.
+    ///
+    /// A companion whose main inode the export does not know is not dropped on
+    /// the name index's word: that index is lossy (its own bound, a name the
+    /// export never looked up, a rename on the client side), so each one costs
+    /// one read-only lookup of its main file in the engine, run outside both
+    /// locks. A main file that is there binds the companion back to its inode,
+    /// which keeps its attributes; only a lookup that answers "no such file",
+    /// or whose parent directory the engine no longer has (so the file cannot
+    /// be there either), makes it an orphan, and one that cannot answer leaves
+    /// it as it is.
+    ///
+    /// A lookup that finds the main file took one engine reference on it, and
+    /// the export keeps exactly one per serial: the visit is the entry's, so it
+    /// is registered as `Kernel::lookup` registers one (`entry_taken` remembers
+    /// the name and forgets a second reference). Without that the name reaches
+    /// the companion nowhere, and the next reclamation would read the bound one
+    /// as an inode holding no name and drop it.
+    fn reclaim_orphans(&self) -> usize {
+        let (bound, dead) = self.orphans().into_iter().fold(
+            (Vec::new(), Vec::new()),
+            |(mut bound, mut dead), orphan| {
+                let Some((parent, main)) = orphan.main else {
+                    dead.push((orphan.serial, orphan.inode));
+                    return (bound, dead);
+                };
+                // A name the engine cannot even take, or a lookup it cannot
+                // answer, leaves the companion as it is.
+                if let Ok(name) = PathName::from_bytes(&main) {
+                    let lookup = KernelReadOperation::Lookup { parent, name };
+                    match self.observe(parent, None, lookup).map_err(|r| r.status) {
+                        Ok(answer) => {
+                            self.entry_taken(&answer.stat, parent, &main);
+                            bound.push((orphan.serial, answer.stat.serial));
+                        }
+                        // A parent directory the engine no longer has cannot
+                        // hold the main file: the companion is an orphan as
+                        // much as one whose file answers "no such file".
+                        // A parent directory the engine no longer has cannot
+                        // hold the main file: the companion is an orphan as
+                        // much as one whose file answers "no such file".
+                        Err(Status::NoEnt | Status::Stale | Status::NotDir) => {
+                            dead.push((orphan.serial, orphan.inode))
+                        }
+                        Err(_) => {}
+                    }
+                }
+                (bound, dead)
+            },
+        );
+        let (reclaimed, spilled) = {
+            let mut companions = self.companions();
+            let mut spilled = Vec::new();
+            let mut reclaimed = 0;
+            for (serial, main) in bound {
+                let Some(mut file) = companions.detach(serial) else {
+                    continue;
+                };
+                if file.inode.is_some() || !file.slotted() {
+                    companions.attach(serial, file);
+                    continue;
+                }
+                // Bound back to the inode the engine found: it keeps the slot it
+                // took, and from here it follows that inode's names.
+                file.inode = Some(main);
+                companions.index(serial, &file);
+                companions.attach(serial, file);
+            }
+            for (serial, inode) in dead {
+                let still_orphan = companions
+                    .files
+                    .get(&serial)
+                    .is_some_and(|file| file.inode == inode && file.slotted());
+                if still_orphan {
+                    reclaimed += 1;
+                    spilled.extend(companions.take_serial(serial));
+                }
+            }
+            (reclaimed, spilled)
+        };
+        unlink_paths(spilled);
+        reclaimed
     }
     /// GETATTR of a companion serial.
     pub(crate) fn companion_stat(&self, serial: u64) -> Result<ViewStat, Status> {
@@ -343,12 +770,28 @@ impl Kernel {
         companions.use_serial(serial);
         Ok(stat)
     }
-    /// LOOKUP of a companion name, if one is held for it.
+    /// LOOKUP of a companion name, if one is held for it or for its main
+    /// inode.
     pub(crate) fn companion_named(&self, parent: u64, name: &[u8]) -> Option<ViewStat> {
+        let main = self.main_of(parent, name);
         let mut companions = self.companions();
-        let serial = *companions.names.get(&(parent, name.to_vec()))?;
-        let stat = Companions::stat(serial, companions.files.get(&serial)?);
-        companions.use_serial(serial);
+        let (serial, route) = companions.resolve_route(&(parent, name.to_vec()), main);
+        if crate::names::apple_double(name) {
+            trace::companion(
+                "LOOKUP",
+                parent,
+                name,
+                main,
+                route,
+                serial,
+                match serial {
+                    Some(_) => "Ok",
+                    None => "NoEnt",
+                },
+            );
+        }
+        let stat = Companions::stat(serial?, companions.files.get(&serial?)?);
+        companions.use_serial(serial?);
         Some(stat)
     }
     /// CREATE of an already-held companion name: UNCHECKED applies its size,
@@ -392,14 +835,50 @@ impl Kernel {
             return Err(Status::NotDir);
         }
         let named = (parent, name.to_vec());
+        let mut main = self.main_of(parent, name);
         let mut companions = self.companions();
-        if let Some(serial) = companions.names.get(&named).copied() {
+        let (held, route) = companions.resolve_route(&named, main);
+        if let Some(serial) = held {
+            trace::companion("CREATE", parent, name, main, route, held, opening(&how));
             return self.companion_open(serial, how, directory, companions, tickets);
         }
-        if companions.files.len() >= HELD {
+        // At the index bound, reclaim the companions no name reaches any more
+        // first, outside this lock.
+        if !companions.admits(None, true) {
             drop(companions);
-            self.names_refused.fetch_add(1, Ordering::Relaxed);
-            return Err(Status::Access);
+            self.reclaim_orphans();
+            // The reclaim held no companion lock, so another CREATE of this
+            // name may have inserted it meanwhile and the main file may have
+            // changed: both are read again, and the name is inserted under the
+            // lock this call now holds without releasing it again.
+            main = self.main_of(parent, name);
+            companions = self.companions();
+            let (held, route) = companions.resolve_route(&named, main);
+            if let Some(serial) = held {
+                trace::companion("CREATE", parent, name, main, route, held, opening(&how));
+                return self.companion_open(serial, how, directory, companions, tickets);
+            }
+        }
+        if !companions.admits(None, true) {
+            let held = companions.slots.len();
+            let limit = companions.held_limit;
+            let log = companions
+                .last_refusal_log
+                .is_none_or(|last| last.elapsed() >= Duration::from_secs(60));
+            let namespace = log.then(|| companions.spill_dir.clone());
+            if log {
+                companions.last_refusal_log = Some(Instant::now());
+            }
+            trace::companion("CREATE", parent, name, main, Trace::None, None, "NoSpc");
+            drop(companions);
+            let refused = self.names_refused.fetch_add(1, Ordering::Relaxed) + 1;
+            if let Some(namespace) = namespace {
+                eprintln!(
+                    "layerfs-nfs: AppleDouble index full: export={:?} namespace={namespace:?} parent={parent} companions={held} limit={limit} names_refused={refused}; NFS3ERR_NOSPC",
+                    self.mount()
+                );
+            }
+            return Err(Status::NoSpc);
         }
         let mut metadata = now();
         if let How::Unchecked(sattr) | How::Guarded(sattr) = how {
@@ -411,7 +890,10 @@ impl Kernel {
         companions.next += 1;
         let used = companions.tick();
         let file = Companion {
-            named: named.clone(),
+            named,
+            also: Vec::new(),
+            inode: main,
+            whole: false,
             len: 0,
             body: Body::Resident(Vec::new()),
             metadata,
@@ -419,7 +901,16 @@ impl Kernel {
             editing: Arc::new(Mutex::new(())),
         };
         let stat = Companions::stat(serial, &file);
-        companions.names.insert(named, serial);
+        trace::companion(
+            "CREATE",
+            parent,
+            name,
+            main,
+            Trace::None,
+            Some(serial),
+            "Ok",
+        );
+        companions.index(serial, &file);
         companions.attach(serial, file);
         drop(companions);
         self.names_detached.fetch_add(1, Ordering::Relaxed);
@@ -427,17 +918,179 @@ impl Kernel {
     }
     /// REMOVE of a companion name, with the directory's `wcc_data`; `None`
     /// when no companion has that name.
+    ///
+    /// A companion the export pairs with a main inode is the inode's, not one
+    /// name's: its FinderInfo and attributes belong to the file, so a client
+    /// that links the file (or removes one of its names) and drops the `._`
+    /// name it no longer uses leaves the companion to the inode's remaining
+    /// names. Only while this name is the companion's last one, and its inode
+    /// has no other name the export knows, is the REMOVE the client clearing
+    /// the attributes, which takes the companion with it. A companion no main
+    /// inode owns has nothing else to go with and always goes.
     pub(crate) fn companion_remove(&self, parent: u64, name: &[u8]) -> Option<Wcc> {
+        let named = (parent, name.to_vec());
+        let main = self.main_of(parent, name);
+        let resolved = {
+            let companions = self.companions();
+            let (serial, route) = companions.resolve_route(&named, main);
+            serial.and_then(|serial| {
+                let file = companions.files.get(&serial)?;
+                Some((
+                    serial,
+                    route,
+                    file.inode,
+                    !companions.holds_another(serial, &named),
+                ))
+            })
+        };
+        let Some((serial, route, inode, one_name)) = resolved else {
+            if crate::names::apple_double(name) {
+                trace::companion("REMOVE", parent, name, main, Trace::None, None, "NoEnt");
+            }
+            return None;
+        };
+        let kept = !one_name || inode.is_some_and(|inode| self.knows_another_name(inode));
+        trace::companion(
+            "REMOVE",
+            parent,
+            name,
+            main,
+            route,
+            Some(serial),
+            match kept {
+                true => "name-dropped",
+                false => "companion-dropped",
+            },
+        );
         let spilled = {
             let mut companions = self.companions();
-            let serial = *companions.names.get(&(parent, name.to_vec()))?;
-            companions.take_serial(serial)
+            if kept {
+                companions.drop_name(serial, &named);
+                Vec::new()
+            } else {
+                companions.take_serial(serial).into_iter().collect()
+            }
         };
         unlink_paths(spilled);
         Some(self.directory_wcc(parent))
     }
+    /// Whether the export's name index knows a name of `inode` beyond the one
+    /// it remembers: a hard link the client made, which the companion of an
+    /// inode follows.
+    fn knows_another_name(&self, inode: u64) -> bool {
+        let table = self.table();
+        let remembered = usize::from(table.names.contains_key(&inode));
+        remembered + table.aliases.get(&inode).map_or(0, Vec::len) > 1
+    }
+    /// The main file `name` in `parent` was removed, silly-renamed or replaced
+    /// by `RENAME`: drops the companion held under `._<name>` when no main
+    /// inode owns it, and leaves an inode's companion to the inode - it goes
+    /// with the inode's last name instead (see
+    /// [`Kernel::companion_drop_inode`]), which is also where the `._` names it
+    /// held go (`Companions::unindex`). A plain non-replacing `RENAME` of a
+    /// main file only cleans the destination name `to/new_name` (via
+    /// `finish_unlink`) and leaves `from/name` alone so a client that renames
+    /// `a -> b` and then renames `._a -> ._b` can still move the companion
+    /// across.
+    ///
+    /// The `._` name stays after its main name for as long as the inode does,
+    /// because the inode's FinderInfo and attributes are the file's: `/rm a`
+    /// on a file `b` still names leaves `._a` answering the companion of the
+    /// inode, rather than reporting attributes that the file `b` still has as
+    /// gone. A new file under that name reaches the old companion nowhere:
+    /// [`Companions::resolve`] takes a name key only for the inode its
+    /// companion belongs to, so the answer falls back to that inode's
+    /// companion, which a new file does not have.
+    pub(crate) fn companion_drop_for(&self, parent: u64, name: &[u8]) {
+        if crate::names::apple_double(name) {
+            return;
+        }
+        let mut paired = Vec::with_capacity(2 + name.len());
+        paired.extend_from_slice(b"._");
+        paired.extend_from_slice(name);
+        let named = (parent, paired);
+        let spilled = {
+            let mut companions = self.companions();
+            let Some(&serial) = companions.names.get(&named) else {
+                return;
+            };
+            let of_inode = companions
+                .files
+                .get(&serial)
+                .is_some_and(|file| file.inode.is_some());
+            trace::companion(
+                "UNPAIR",
+                parent,
+                name,
+                companions.files.get(&serial).and_then(|file| file.inode),
+                Trace::Name,
+                Some(serial),
+                match of_inode {
+                    true => "name-kept",
+                    false => "companion-dropped",
+                },
+            );
+            match of_inode {
+                true => None,
+                false => companions.take_serial(serial),
+            }
+        };
+        unlink_paths(spilled);
+    }
+    /// Drops the companion of inode `main`, whose last name is gone.
+    pub(crate) fn companion_drop_inode(&self, main: u64) {
+        let spilled = {
+            let mut companions = self.companions();
+            let Some(serial) = companions.inodes.get(&main).copied() else {
+                return;
+            };
+            companions.take_serial(serial)
+        };
+        unlink_paths(spilled);
+    }
+    /// LINK of a companion name: the same companion under another AppleDouble
+    /// name, as a client that links a file makes to carry its attributes to
+    /// the new name. The name it names must be free, and a name that is not
+    /// another companion name is refused, so a companion never becomes a file
+    /// of the Workspace.
+    pub(crate) fn companion_link(
+        &self,
+        serial: u64,
+        parent: u64,
+        name: &[u8],
+    ) -> Result<(ViewStat, Wcc), Status> {
+        if !crate::names::apple_double(name) || name.len() > 255 {
+            return Err(Status::Access);
+        }
+        if parent != self.root() && !self.table().parents.contains_key(&parent) {
+            return Err(Status::NotDir);
+        }
+        let named = (parent, name.to_vec());
+        let directory = self.directory_wcc(parent);
+        let main = self.main_of(parent, name);
+        let mut companions = self.companions();
+        if companions.names.contains_key(&named)
+            || companions
+                .resolve(&named, main)
+                .is_some_and(|other| other != serial)
+        {
+            trace::companion("LINK", parent, name, main, Trace::Name, None, "Exist");
+            return Err(Status::Exist);
+        }
+        let Some(mut file) = companions.detach(serial) else {
+            return Err(Status::Stale);
+        };
+        file.also.push(named);
+        file.used = companions.tick();
+        let stat = Companions::stat(serial, &file);
+        trace::companion("LINK", parent, name, main, Trace::None, Some(serial), "Ok");
+        companions.index(serial, &file);
+        companions.attach(serial, file);
+        Ok((stat, directory))
+    }
     /// RENAME of a companion name: only to another AppleDouble name, which it
-    /// replaces when held. `None` when no companion has that name.
+    /// replaces when held. It then belongs to the destination's main inode, or
+    /// to none when that is unknown. `None` when no companion has that name.
     pub(crate) fn companion_rename(
         &self,
         from: u64,
@@ -445,49 +1098,138 @@ impl Kernel {
         to: u64,
         new_name: &[u8],
     ) -> Option<Result<(), Status>> {
+        let from_main = self.main_of(from, name);
+        let to_main = self.main_of(to, new_name);
+        let serial = {
+            let companions = self.companions();
+            companions.resolve(&(from, name.to_vec()), from_main)?
+        };
+        if !crate::names::apple_double(new_name) || new_name.len() > 255 {
+            return Some(Err(Status::Access));
+        }
+        let renamed = self.rename_companion(serial, (to, new_name.to_vec()), to_main);
+        trace::companion(
+            "RENAME",
+            to,
+            new_name,
+            to_main,
+            Trace::None,
+            Some(serial),
+            match &renamed {
+                Ok(()) => "Ok",
+                Err(status) => trace::status(*status),
+            },
+        );
+        Some(renamed)
+    }
+    /// Moves `serial`'s companion to `target`, under `to_main`'s inode.
+    ///
+    /// The body is classified again under the destination, so a whole image
+    /// renamed onto an unknown main is the client's bytes again and takes a
+    /// slot: such a body no longer fits the resident budget as attributes, and
+    /// is written out first (outside the companion lock, with the companion's
+    /// edit gate held), so the rename itself only records a name and a class.
+    /// A companion that needs a new slot of the index bound takes the same
+    /// decision the edit path takes: the orphan slots are reclaimed once and
+    /// the rename is refused if the bound still has none.
+    fn rename_companion(
+        &self,
+        serial: u64,
+        target: Named,
+        to_main: Option<u64>,
+    ) -> Result<(), Status> {
+        let gate = {
+            let companions = self.companions();
+            companions
+                .files
+                .get(&serial)
+                .ok_or(Status::Stale)?
+                .editing
+                .clone()
+        };
+        // Held to the end: the body written out below is the body renamed.
+        let _editing = gate.lock().unwrap_or_else(|poison| poison.into_inner());
+        // A decoded body renamed onto an unknown main would cost its whole
+        // image of the resident budget: write it out instead, which costs none.
+        let leaves_memory = {
+            let companions = self.companions();
+            let file = companions.files.get(&serial).ok_or(Status::Stale)?;
+            match &file.body {
+                Body::Decoded(image) if to_main.is_none() => {
+                    let cost = image.len();
+                    companions
+                        .resident_bytes
+                        .saturating_sub(image.cost())
+                        .saturating_add(cost)
+                        > companions.resident_budget
+                }
+                _ => false,
+            }
+        };
+        if leaves_memory {
+            self.spill_gated(serial, 0)?;
+        }
+        // A companion moved onto an unknown main takes a slot; one already
+        // holding a slot keeps it, and one that stays a whole image keeps its
+        // exemption. The slot is held from here, so the commit below cannot
+        // find another call took the last one while this rename waited.
+        if to_main.is_none() && self.companions().reserve(serial) == Slot::Full {
+            self.reclaim_orphans();
+            if self.companions().reserve(serial) == Slot::Full {
+                return Err(Status::NoSpc);
+            }
+        }
         let mut replaced_path = None;
         {
             let mut companions = self.companions();
-            let serial = *companions.names.get(&(from, name.to_vec()))?;
-            if !crate::names::apple_double(new_name) || new_name.len() > 255 {
-                return Some(Err(Status::Access));
-            }
-            let target = (to, new_name.to_vec());
-            if let Some(replaced) = companions.names.get(&target).copied() {
+            let Some(mut file) = companions.detach(serial) else {
+                companions.unreserve(serial);
+                return Err(Status::Stale);
+            };
+            companions.unindex(serial, &file);
+            if let Some(replaced) = companions.resolve(&target, to_main) {
                 if replaced != serial {
                     replaced_path = companions.take_serial(replaced);
                 }
             }
-            let tick = companions.tick();
-            let mut file = companions.detach(serial)?;
-            companions.names.remove(&file.named);
-            file.named = target.clone();
-            file.used = tick;
-            companions.names.insert(target, serial);
+            file.named = target;
+            file.inode = to_main;
+            file.used = companions.tick();
+            // A client may write a companion under another name first, and a
+            // name it moves onto may belong to another main inode, or to
+            // none: the body is classified again under the destination, so
+            // one whose main file is unknown takes its slot and none keeps a
+            // whole image's exemption.
+            companions.classify(&mut file);
+            companions.index(serial, &file);
             companions.attach(serial, file);
+            companions.unreserve(serial);
         }
         unlink_paths(replaced_path);
-        Some(Ok(()))
+        Ok(())
     }
     /// Drops every companion and removes the export's spill directory; returns
     /// what the index held.
     pub(crate) fn companions_release(&self) -> Holding {
-        let (held, dir) = {
+        let (holding, dir) = {
             let mut companions = self.companions();
+            let holding = companions.holding();
             let dir = companions.spill_dir.take();
-            (std::mem::take(&mut *companions), dir)
+            drop(std::mem::take(&mut *companions));
+            (holding, dir)
         };
         if let Some(dir) = dir {
             drop(fs::remove_dir_all(dir));
         }
-        let holding = held.holding();
         if holding.held > 0 {
             eprintln!(
-                "layerfs-nfs: AppleDouble companions released: export={:?} held={} decoded={} resident_bytes={}",
+                "layerfs-nfs: AppleDouble companions released: export={:?} held={} slotted={} decoded={} resident_bytes={} unreachable={}",
                 self.mount(),
                 holding.held,
+                holding.slotted,
                 holding.decoded,
-                holding.resident_bytes
+                holding.resident_bytes,
+                holding.unreachable
             );
         }
         holding
@@ -495,5 +1237,36 @@ impl Kernel {
     /// What the companion index holds now.
     pub(crate) fn companions_held(&self) -> Holding {
         self.companions().holding()
+    }
+    /// Traces a request about a main file (`op`, its directory and name) when
+    /// the export holds a companion for that inode: these are the requests
+    /// that make a `._` name resolvable (see [`crate::trace`]).
+    pub(crate) fn trace_main_file(
+        &self,
+        op: &str,
+        parent: u64,
+        name: &[u8],
+        inode: u64,
+        status: &str,
+    ) {
+        if !trace::enabled() {
+            return;
+        }
+        let companion = self.companions().inodes.get(&inode).copied();
+        if companion.is_some() {
+            trace::main_file(op, parent, name, Some(inode), companion, status);
+        }
+    }
+    /// Traces a name the export's kernel table bound to `inode` (`alias`: kept
+    /// as another name of it) or dropped from it (`unbound`), when the inode
+    /// has a companion: a `._` name resolves through those names.
+    pub(crate) fn trace_bind(&self, parent: u64, name: &[u8], inode: u64, status: &str) {
+        if !trace::enabled() {
+            return;
+        }
+        let companion = self.companions().inodes.get(&inode).copied();
+        if companion.is_some() {
+            trace::main_file("BIND", parent, name, Some(inode), companion, status);
+        }
     }
 }

@@ -42,6 +42,8 @@ pub struct Rig {
     pub lookups_held: usize,
     /// Resident memory budget for AppleDouble companion bodies.
     pub companion_resident_bytes: usize,
+    /// Maximum AppleDouble companion index entries held at once.
+    pub companions_held: usize,
     /// Optional explicit spill directory override for AppleDouble companions.
     pub companion_spill_dir: Option<PathBuf>,
 }
@@ -147,6 +149,7 @@ impl Rig {
             entries: initialized.entries,
             lookups_held: layerfs_nfs::kernel::LOOKUPS_HELD,
             companion_resident_bytes: layerfs_nfs::apple_double::RESIDENT_BYTES,
+            companions_held: layerfs_nfs::apple_double::HELD,
             companion_spill_dir: None,
         }
     }
@@ -192,6 +195,7 @@ impl Rig {
                 lookups_held: self.lookups_held,
                 companion_spill_dir: Some(self.spill_dir("export")),
                 companion_resident_bytes: self.companion_resident_bytes,
+                companions_held: self.companions_held,
             },
         )
         .unwrap()
@@ -262,6 +266,7 @@ impl Rig {
                 lookups_held: self.lookups_held,
                 companion_spill_dir: Some(self.spill_dir(&format!("view-{}", view.1.owner_id()))),
                 companion_resident_bytes: self.companion_resident_bytes,
+                companions_held: self.companions_held,
             },
         )
         .unwrap()

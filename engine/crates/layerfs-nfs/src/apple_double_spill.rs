@@ -152,4 +152,15 @@ pub(crate) enum Room {
     Spilled,
     /// Resident, but growing it needs this many more budget bytes first.
     Grow(usize),
+    /// The body takes a slot of the index bound and the bound has none.
+    NoSlot,
+}
+
+/// What one application of an edit made of a companion.
+pub(crate) enum Edited {
+    /// It landed; this is the companion's stat afterwards.
+    Done(layerfs_workspace::ViewStat),
+    /// The body would take a slot of the index bound and none is free, so
+    /// nothing was changed.
+    NoSlot,
 }

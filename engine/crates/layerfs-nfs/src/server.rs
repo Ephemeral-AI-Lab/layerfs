@@ -51,6 +51,9 @@ pub struct ExportConfig {
     /// to [`Self::companion_spill_dir`]; [`crate::apple_double::RESIDENT_BYTES`]
     /// by default.
     pub companion_resident_bytes: usize,
+    /// Maximum AppleDouble companion index entries held at once;
+    /// [`crate::apple_double::HELD`] by default.
+    pub companions_held: usize,
 }
 impl ExportConfig {
     /// A writable export of "/" shown as `uid`:`gid`, refusing AppleDouble
@@ -65,6 +68,7 @@ impl ExportConfig {
             lookups_held: crate::kernel::LOOKUPS_HELD,
             companion_spill_dir: None,
             companion_resident_bytes: crate::apple_double::RESIDENT_BYTES,
+            companions_held: crate::apple_double::HELD,
         }
     }
 }
@@ -153,6 +157,7 @@ impl Server {
         kernel.configure_companions(
             config.companion_spill_dir.clone(),
             config.companion_resident_bytes,
+            config.companions_held,
         );
         let shared = Arc::new(Shared {
             kernel,

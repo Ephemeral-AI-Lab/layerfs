@@ -35,7 +35,7 @@ The daemon starts it and has the host's own NFS client mount it.
 | Item | Meaning | Source |
 | --- | --- | --- |
 | `Server::start` | Starts the accept thread; one connection serves one call at a time, in arrival order | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
-| `ExportConfig` | `path` (normally `/`), `uid`/`gid` shown on every inode, `read_only`, `refuse_apple_double`, `lookups_held`, `companion_spill_dir`, `companion_resident_bytes`; `writable(uid, gid)` is the default | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
+| `ExportConfig` | `path` (normally `/`), `uid`/`gid` shown on every inode, `read_only`, `refuse_apple_double`, `lookups_held`, `companion_spill_dir`, `companion_resident_bytes`, `companions_held`; `writable(uid, gid)` is the default | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
 | `Server::stop` | Stop accepting, shut down and join every connection, then `Kernel::release`: descriptors first, then lookup references. The engine mount stays with the caller | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
 | `Kernel` | What a FUSE kernel would hold for a stateless client: one lookup reference per handed-out serial, implicit file and directory descriptors with the facts last published through them, a parent index for `..` | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
 | Verifier | One WRITE/COMMIT verifier per export, from the clock and process id under a random key | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
@@ -179,29 +179,84 @@ drawn once per export; it makes guessing costly and does not authenticate.
 ## AppleDouble files (`apple_double.rs`, `apple_double/edit.rs`, `apple_double_codec.rs`, `apple_double_spill.rs`)
 
 On NFSv3 the macOS client keeps extended attributes and resource forks in
-`._<name>` files. With `refuse_apple_double`, a regular `._` file (at least
-one byte after `._`) lives in export memory only, at serial
-`SERIALS` (2^62) and above: LOOKUP, GETATTR, ACCESS, READ, WRITE, SETATTR,
+`._<name>` files (at least one byte after `._`). With `refuse_apple_double`, a
+regular `._` file lives in export state only (`Companions`, serials
+`SERIALS` = 2^62 and above): LOOKUP, GETATTR, ACCESS, READ, WRITE, SETATTR,
 COMMIT, REMOVE and RENAME to another `._` name are served there, READDIR
 never lists it and the engine is never called. Any other kind is
 `NFS3ERR_ACCES`. `cp`, `copyfile`, `ditto` and `tar` succeed while nothing
-reaches the Workspace or a Commit; everything is dropped with the export.
+reaches the Workspace, SQLite overlay or a Commit; everything is dropped with
+the export.
 
 | Bound | Value | Over the bound | Source |
 | --- | --- | --- | --- |
-| `HELD` | 4,096 companions | CREATE `NFS3ERR_ACCES` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| `HELD` | 65,536 slotted companion entries | `Companions::admits` decides the bound in one place, before anything is committed: CREATE, and a WRITE, SETATTR or RENAME that needs a new slot, first reclaim the orphan slotted companions outside the companion lock, once, and then answer the whole operation `NFS3ERR_NOSPC` with the body, its length and its name as they were (CREATE also increments `names_refused` and logs at most once per 60 s per export). A call whose commit needs I/O in between (`Companions::reserve`) holds the slot from the decision, so the bound holds when calls race for the last one | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 | `FILE_BYTES` | 1 MiB per companion | WRITE / SETATTR `NFS3ERR_FBIG` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
-| `RESIDENT_BYTES` | 32 MiB of companion bodies in all | Spill least recently touched resident bodies to `companion_spill_dir` (`<mounts>/.appledouble/<namespace>/<serial>`); host disk I/O errors map to `NFS3ERR_NOSPC` (`ENOSPC`/`EDQUOT`), `NFS3ERR_FBIG` (`EFBIG`), `NFS3ERR_ACCES` (`EACCES`), `NFS3ERR_PERM` (`EPERM`), `NFS3ERR_ROFS` (`EROFS`) or `NFS3ERR_IO` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs), [`apple_double_spill.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_spill.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
-| `DECODED_ENTRY_BYTES` | 128 KiB counted for one decoded companion | A whole image costing more keeps its bytes as written | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| `RESIDENT_BYTES` | 32 MiB of companion bodies in all: a body kept as written at its length, a decoded one as `Image::cost`; an edit that leaves a body whole decodes it as it records it, so the count may stand one decoded body over until the next edit needs room | Spill the least recently touched bodies, decoded ones included, to `companion_spill_dir` (`<mounts>/.appledouble/<namespace>/<serial>`); host disk I/O errors map to `NFS3ERR_NOSPC` (`ENOSPC`/`EDQUOT`), `NFS3ERR_FBIG` (`EFBIG`), `NFS3ERR_ACCES` (`EACCES`), `NFS3ERR_PERM` (`EPERM`), `NFS3ERR_ROFS` (`EROFS`) or `NFS3ERR_IO` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs), [`apple_double_spill.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_spill.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
+| `DECODED_ENTRY_BYTES` | 128 KiB counted for one decoded companion: a cap on what one decoded body is charged, not on what a companion may store | A whole image costing more keeps its bytes as written, is charged at their length and still takes no `HELD` slot | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 
-A body a write or resize leaves as a complete AppleDouble image that encodes
-back to the exact bytes the companion holds
-([`apple_double_codec.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_codec.rs))
-is kept as its FinderInfo and attributes and counted against `RESIDENT_BYTES`
-as `Image::cost` (its names and values, not its image) rather than at its
-length, so no decoded image is memory the budget cannot see, and every READ
-synthesizes the same bytes again. Partial writes, resource forks and other
-layouts stay as the client wrote them.
+A companion whose main inode the export knows belongs to that inode rather than
+to one name: hard links share it, main-file RENAME keeps it under the new name
+and existing aliases, and only the inode's last name (or its silly rename)
+drops it. A name of the inode that goes does not take its `._` name with it:
+after `rm a` of a file that `b` still names, `._a` still answers the inode's
+companion, because the `._` name key stays until the inode's last name (a
+client whose `actimeo` expired may ask either name). A new file that takes the
+freed name reaches the old companion nowhere: `Companions::resolve` takes a
+name key only for the inode its companion belongs to, so `._a` answers that new
+inode's companion, or `NFS3ERR_NOENT` while it has none. It can hold several of
+the inode's `._` names at once: a LINK of a
+companion name (`._a` to `._b`, which a client that carries the attributes to
+a new name sends) adds one, answering `NFS3ERR_EXIST` for a name already held
+and `NFS3ERR_ACCES` for a name of the Workspace, and a REMOVE of one of those
+names drops only that name while the companion holds another or its inode has
+another name the export knows. The REMOVE of the last name of an inode with one
+name is the client clearing the attributes, which takes the companion with it,
+as does any name of a companion no main inode owns.
+
+When a write leaves an inode-bound companion holding a complete
+AppleDouble image that encodes back to the exact bytes written
+([`apple_double_codec.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_codec.rs)),
+it is marked whole and takes no `HELD` slot: decoded in memory (counted as
+`Image::cost` against `RESIDENT_BYTES`, at most `DECODED_ENTRY_BYTES` each), or
+kept as written bytes, which take the same budget at their length; partial
+writes, resource forks, other layouts and unknown-main companions stay as
+written bytes and occupy a slot. `companion_rename` re-classifies under the
+destination so moving onto an unknown main name takes a slot (a spilled body
+keeps its prior class); a decoded body that would be the client's bytes again
+and does not fit `RESIDENT_BYTES` is written out first, under the companion's
+edit gate and outside the companion lock, so the rename never exceeds the
+budget and only records the new name and class.
+
+`HELD` is the admission limit of this export-local shim, not a Workspace or
+Sandbox capacity: the companions live for one mount, are deleted at release and
+never reach the Workspace, the SQLite overlay or a Commit (owner decision,
+2026-11-14, option C, a scoped waiver). Option A, a per-export SQLite index, is
+deferred until `NFS3ERR_NOSPC` shows up in real use; it would add a `rusqlite`
+dependency edge to `layerfs-nfs`, which the workspace already pins.
+
+`Table::names` and `Table::aliases` index each serial's names so unlink,
+`entry_taken` (when `nlink <= 1`), `renamed` (keeping an overwritten recalled
+name as an alias) and retirement drop only that serial's keys from `by_name`
+without scanning it. At the `HELD` bound, CREATE releases the companion lock to
+collect orphans from `Companions::slots` (walking only slotted entries under
+the table and companion locks, never whole images or `by_name`), then re-acquires
+the lock and re-reads the companion name and main file before inserting, so
+concurrent GUARDED creates of one name yield one serial and one
+`NFS3ERR_EXIST`. The name index is lossy (its own bound, a name never looked
+up, a client-side rename), so a candidate whose main inode the export does not
+know costs one read-only lookup of its main file in the engine, outside both
+locks - and a companion it holds several names of is reached by any of them, so
+one whose name the index holds is no candidate at all: a file that is there binds the companion back to that inode and keeps
+its attributes, `NFS3ERR_NOENT` - or `NFS3ERR_STALE`/`NFS3ERR_NOTDIR`, a main
+file whose directory the engine no longer has, which cannot hold it either -
+makes it an orphan, and a lookup that cannot answer any other way leaves it
+alone. The lookup that finds the main file took one
+engine reference on it, and the export keeps exactly one per serial, so the
+visit registers the name it found the file under (`Kernel::entry_taken`, as
+`Kernel::lookup` does) before the companion is bound: that name is what makes
+the bound companion live for the next reclamation, and its reference is the one
+the export later gives back.
 
 Bodies kept as written and decoded bodies alike, exceeding `RESIDENT_BYTES`
 together, are written to `<serial>.<n>.tmp` (`create_new`, dir `0700`, file
@@ -213,16 +268,59 @@ gate (`Companion::editing`): an edit holds it, and an eviction takes it with
 and one whose file cannot be written out; only a call that finds no room and
 then cannot write out its own body answers its own error. A rename is dropped when
 the body changed since the snapshot (`used` tick), and a spilled body is opened
-by path per `pread`/`pwrite`/`set_len` and never held open. One edit per
-companion runs under `Companion::editing` ([`edit.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/edit.rs)),
+by path per `pread`/`pwrite`/`set_len` and never held open; a `pread` shorter
+than the length the lock saw is a short read, not `NFS3ERR_IO`.
+
+One edit per companion runs under that gate
+([`edit.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/edit.rs)),
 recording length and bytes together and spilling its own body rather than
 failing with `NFS3ERR_IO`. A file operation that fails after the spill put the
 length the companion had back, so a refused write reports neither bytes nor the
 longer file the spill made for it. Eviction follows `Companions::by_use`, the
 `(used tick, serial)` order kept on attach, detach and every use: the victim is
 the first entry (O(log n) per round, no walk of the index), and the rounds end
-when no companion holding memory is left.
-`ExportServing::reclaim` and release delete `<mounts>/.appledouble`.
+when no companion holding memory is left. `ExportServing::reclaim` and release
+delete `<mounts>/.appledouble`.
+
+Release logs one line per export that still holds companions:
+`held= slotted= decoded= resident_bytes= unreachable=`. `unreachable` counts the
+companions no name reaches - neither the name a companion records nor another
+name of its inode finds it - which is the shape a lost attribute takes when the
+body is still held but a client cannot ask for it; a zero beside a client that
+lost attributes says the loss was a missing companion rather than a lost name.
+The same count is in the holdings a status read reports
+(`Released::companions_unreachable`), so the two never disagree; it walks the
+companion index, like the release line and the reclamation walk, and only those
+diagnostics read it.
+
+The requests one real client makes can be read from an optional trace
+([`trace.rs`](../../../../engine/crates/layerfs-nfs/src/trace.rs)): with
+`LAYERFS_NFS_TRACE=1` the export prints, to the daemon's standard error, one
+line for each request that names an AppleDouble companion - the `._` names
+themselves and the main file names of the inodes that hold one - carrying the
+directory serial, the name, the main inode the export's name index gave the
+name, which part of the companion index answered it (`route=name` for the
+companion's own name key, `route=inode` for the main inode, `route=none` when
+neither did), the companion serial a reply carries as its fileid, and the
+status the client is answered. A CREATE that finds the companion already held
+says whether it would truncate it (`existing-truncate`), a SETATTR of a `._`
+file is traced by handle, `BIND` shows a main name the kernel table
+re-attributed to an inode that has a companion (`alias` while that inode keeps
+several names, `unbound` when the one it held is all it has), and `UNPAIR`
+shows what a main name that went left behind: `name-kept` when the companion
+belongs to its inode and keeps the `._` name, `companion-dropped` when the
+companion goes with it. It is off unless
+the variable is exactly `1`, is read once per process, and changes no state;
+the lines are written under the lock the request already holds.
+
+On the `native` route the daemon is started with `env_clear` and an empty
+environment (`control/crates/layerfs-sandbox-backend/src/local/create.rs`), so
+it does not inherit `LAYERFS_NFS_TRACE=1` from the shell that created the
+Sandbox: a trace run there needs `machine update native --daemon` pointed at a
+wrapper that exports the variable and `exec`s the real daemon (measured on
+macOS 27.2 for #636, where the plain variable gave 0 trace lines and the wrapper
+55 and 77 on the two matrices). Other routes start the daemon through a worker
+or container, where the environment is passed differently.
 
 ## Mount (`mount.rs`, daemon `export.rs`)
 
@@ -243,10 +341,14 @@ when no companion holding memory is left.
 | 2 `DUMP`; 3 `UMNT`; 5 `EXPORT` | Empty list; success; one export with no groups |
 
 Client options are the daemon's `Mounter::host`. macOS:
-`vers=3,tcp,port={port},mountport={port},locallocks,nfc,noatime,actimeo=60,rsize=262144,wsize=262144,soft,intr,dumbtimer,timeo=300,retrans=6,mutejukebox,nobrowse`
+`vers=3,tcp,port={port},mountport={port},locallocks,nfc,noatime,actimeo=60,rsize=262144,wsize=262144,soft,intr,dumbtimer,timeo=300,retrans=6,mutejukebox,nobrowse,nordirplus`
 (`rsize`/`wsize` are `TRANSFER_WINDOW`); elsewhere
 `vers=3,proto=tcp,port={port},mountport={port},mountproto=tcp,nolock,actimeo=60`
 ([`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs)).
+`nordirplus` turns READDIRPLUS off: a macOS client holding a directory's
+complete READDIRPLUS listing answers a `._` name absent from it with ENOENT
+and never asks the server, and this export serves AppleDouble companions
+without listing them, so every `._` name has to arrive as a LOOKUP.
 An NFS ready receipt has `abi_major == 0` and its `mount_id` is the port.
 
 ## Application SQLite databases on the NFS route
