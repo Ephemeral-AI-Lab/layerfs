@@ -1,6 +1,10 @@
 //! History statement texts on PostgreSQL. The shipped SQLite statements are
 //! portable SQL (positional `$n` parameters, `RETURNING`, `ON CONFLICT`) and
-//! run unchanged; only those using SQLite-only syntax are replaced here.
+//! run unchanged. Those using SQLite-only syntax are replaced here, and so
+//! is the history closure (`kept_node_mark`), whose shared text PostgreSQL
+//! plans as one scan of every edge per recursion round. The replacement
+//! must follow exactly the edges the shared text follows: add an edge to
+//! both files or to neither.
 //! Array forms bind whole columns, so many rows cost one round trip.
 use crate::backend::records::BackendError;
 

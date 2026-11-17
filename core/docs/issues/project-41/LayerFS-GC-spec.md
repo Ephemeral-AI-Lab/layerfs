@@ -834,6 +834,17 @@ reported as `markBytes`; the Phase A table copy itself moves no pack bytes.
 
 **Phase B — swap (one short transaction).**
 
+> **As built (2026-11-18, `0bb8989529`).** The row counts and sums of step 9
+> are taken at the start of this transaction, before step 5: the transaction
+> first takes `ACCESS EXCLUSIVE` on the two scratch tables (a waiting lock,
+> not `NOWAIT`; nothing else writes them) and counts and sums them in one
+> statement, then takes the Store-wide lock of step 5. The scratch lock is
+> held to COMMIT, so the rows counted are the rows moved, and the Store-wide
+> lock is no longer held across those scans. A count or sum mismatch is
+> therefore reported (`Integrity`) before the tuple re-check of step 6 can
+> report `Conflict`. The fingerprint, trigger and `logical` checks and the
+> single `live_heads_digest` read stay under the Store-wide lock.
+
 5. `LOCK TABLE` every base table of the Store schema (from `pg_class`,
    including `store_lane`, `store_totals`, `history_meta`,
    `content_signature`, the history tables and `gc_intent`/`gc_op`) in one
