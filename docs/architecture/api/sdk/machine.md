@@ -216,12 +216,17 @@ machine's free bytes are checked before anything is created on either side:
 `Capacity` `{needed, free, where}` refuses a machine too small for the copy,
 with no export container, no staged byte and no cache folder, `needed`
 counting the bytes a resumed copy already staged once and `where` the
-filesystem `probe` measured. Only then does the host create the export
-container `layerfs-export-<machine>-<hex>` (one per image and machine,
-removed once the machine publishes the image) and stream `docker export`
-without the init layer's files (`.dockerenv`, `etc/hosts`, `etc/hostname`,
-`etc/resolv.conf`, `etc/mtab`, `dev/*`) and device or FIFO entries in 1 MiB
-`image.artifact` frames to `.recv-<hex>.part`; the machine checks its size and sha256, unpacks it
+filesystem `probe` measured. Only then does the host create an exclusive export
+container `layerfs-export-<home8>-<machine>-<nonce>` (labeled with
+`layerfs.role=image-export`, `layerfs.home`, `layerfs.machine`, `layerfs.image`
+and `layerfs.export.nonce`, removed with its anonymous volumes on exit or
+error, and recoverable under `ImageLock` via `owned_containers` /
+`cleanup_owned` if killed) and stream `docker export` without the init layer's
+files (`.dockerenv`, `etc/hosts`, `etc/hostname`, `etc/resolv.conf`, `etc/mtab`,
+`dev/*`), device or FIFO entries, and with directory modification times
+normalized (header checksum recomputed, so exports separated in time are
+byte-identical for resume) in 1 MiB `image.artifact` frames to `.recv-<hex>.part`;
+the machine checks its size and sha256, unpacks it
 once into `<hex>.2/`, writes the sidecar and deletes the staged tar. A staged
 tar left by a copy that is not running is resumed when its bytes hash as this
 export's prefix, else restarted; `size` is the bytes sent, else the sidecar's,

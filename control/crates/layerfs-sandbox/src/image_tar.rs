@@ -1,9 +1,10 @@
 //! The flat root filesystem tar a Sandbox image is copied as: `docker
 //! export`'s output with the files `docker create`'s init layer adds taken
 //! out (`.dockerenv`, `etc/hosts`, `etc/hostname`, `etc/resolv.conf`,
-//! `etc/mtab`, everything under `dev/`), and every device node and FIFO,
-//! which the unpacker refuses. Those are the bytes that differ between two
-//! exports of one image; what is left is the image's own tree. The filter
+//! `etc/mtab`, everything under `dev/`), every device node and FIFO (which
+//! the unpacker refuses), and directory modification times normalized to 0
+//! with recomputed header checksums. Those are the bytes that differ between
+//! two exports of one image; what is left is the image's own tree. The filter
 //! streams: it holds at most one entry's extended headers, never a file's
 //! bytes.
 use std::io::{self, Read};
@@ -87,7 +88,7 @@ impl<R: Read> Filtered<R> {
     /// Decides the next entry: fills `out` with its headers when it is kept
     /// (its data then follows through `copying`), or skips it.
     fn next_entry(&mut self) -> io::Result<()> {
-        let mut pending: Vec<u8> = Vec::new();
+        let mut pending: Vec<([u8; BLOCK], Vec<u8>)> = Vec::new();
         let mut long_name: Option<String> = None;
         loop {
             let mut header = [0u8; BLOCK];
@@ -127,8 +128,7 @@ impl<R: Read> Filtered<R> {
                     b'L' => long_name = Some(text(body)),
                     _ => {}
                 }
-                pending.extend_from_slice(&header);
-                pending.extend_from_slice(&data);
+                pending.push((header, data));
                 continue;
             }
             let path = long_name.take().unwrap_or_else(|| ustar_name(&header));
@@ -141,7 +141,35 @@ impl<R: Read> Filtered<R> {
             if dropped(&path, flag) {
                 return self.skip(data);
             }
-            self.out.extend_from_slice(&pending);
+            if flag == b'5' {
+                for (mut ext_hdr, ext_data) in pending {
+                    if ext_hdr[156] == b'x' {
+                        if let Some((mut h, d)) = strip_pax_times(ext_hdr, ext_data)? {
+                            h[136..148].copy_from_slice(b"00000000000\0");
+                            recompute_checksum(&mut h);
+                            self.out.extend_from_slice(&h);
+                            self.out.extend_from_slice(&d);
+                        }
+                    } else {
+                        if matches!(ext_hdr[156], b'L' | b'K') {
+                            ext_hdr[136..148].copy_from_slice(b"00000000000\0");
+                            recompute_checksum(&mut ext_hdr);
+                        }
+                        self.out.extend_from_slice(&ext_hdr);
+                        self.out.extend_from_slice(&ext_data);
+                    }
+                }
+                // `docker create`'s init layer touches directories such as `dev/`
+                // and `etc/` at container creation time; normalize every kept
+                // directory's mtime so exports >=2 s apart stay byte-identical.
+                header[136..148].copy_from_slice(b"00000000000\0");
+                recompute_checksum(&mut header);
+            } else {
+                for (ext_hdr, ext_data) in pending {
+                    self.out.extend_from_slice(&ext_hdr);
+                    self.out.extend_from_slice(&ext_data);
+                }
+            }
             self.out.extend_from_slice(&header);
             self.copying = data;
             return Ok(());
@@ -237,4 +265,64 @@ fn octal(field: &[u8]) -> io::Result<u64> {
     }
     u64::from_str_radix(digits, 8)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "tar header number"))
+}
+
+/// Drops `mtime`, `atime`, and `ctime` records from a pax extended header
+/// block (`flag == b'x'`), rebuilding its header and padded body only if any
+/// time record was removed. Returns `None` when no records remain.
+fn strip_pax_times(
+    mut header: [u8; BLOCK],
+    data: Vec<u8>,
+) -> io::Result<Option<([u8; BLOCK], Vec<u8>)>> {
+    let size = octal(&header[124..136])? as usize;
+    let body = &data[..size.min(data.len())];
+    let Some(mut kept) = filter_pax_records(body) else {
+        return Ok(Some((header, data)));
+    };
+    if kept.is_empty() {
+        return Ok(None);
+    }
+    write_octal(&mut header[124..136], kept.len() as u64);
+    recompute_checksum(&mut header);
+    let padded = kept.len().div_ceil(BLOCK) * BLOCK;
+    kept.resize(padded, 0);
+    Ok(Some((header, kept)))
+}
+
+/// Filters `mtime`, `atime`, and `ctime` records out of a pax extended header
+/// body; returns `None` when no time record was present or parsing fails.
+fn filter_pax_records(body: &[u8]) -> Option<Vec<u8>> {
+    let mut kept = Vec::new();
+    let mut changed = false;
+    let mut rest = body;
+    while !rest.is_empty() {
+        let space = rest.iter().position(|b| *b == b' ')?;
+        let length: usize = std::str::from_utf8(&rest[..space]).ok()?.parse().ok()?;
+        if length <= space + 1 || length > rest.len() {
+            return None;
+        }
+        let record = &rest[space + 1..length];
+        let record = record.strip_suffix(b"\n").unwrap_or(record);
+        let key = record.split(|b| *b == b'=').next();
+        if matches!(key, Some(b"mtime" | b"atime" | b"ctime")) {
+            changed = true;
+        } else {
+            kept.extend_from_slice(&rest[..length]);
+        }
+        rest = &rest[length..];
+    }
+    changed.then_some(kept)
+}
+
+fn write_octal(field: &mut [u8], value: u64) {
+    let width = field.len() - 1;
+    let text = format!("{value:0width$o}\0");
+    field.copy_from_slice(&text.as_bytes()[..field.len()]);
+}
+
+fn recompute_checksum(header: &mut [u8; BLOCK]) {
+    header[148..156].fill(b' ');
+    let sum: u64 = header.iter().map(|b| u64::from(*b)).sum();
+    let text = format!("{sum:06o}\0 ");
+    header[148..156].copy_from_slice(text.as_bytes());
 }

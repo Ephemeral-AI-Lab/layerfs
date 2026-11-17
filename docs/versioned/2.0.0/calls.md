@@ -259,8 +259,11 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   `{needed, free, where}` when `2 × size × 1.05`, less the bytes a resumed
   copy already staged, is over the machine's free bytes (`size`: what the
   image's layers unpack to, the sum of `docker history`'s layer sizes),
-  and otherwise exported once (`docker create` + `docker export`, without
-  the init layer's files), sent in 1 MiB frames and unpacked on the
+  and otherwise exported once into an exclusive per-export container (`docker
+  create` + `docker export`, without the init layer's files and with directory
+  mtimes normalized so resume across separate exports sees identical bytes; the
+  container and its anonymous volumes are removed on completion or error), sent
+  in 1 MiB frames and unpacked on the
   machine under `machines/native/run/images/<hex>.2/` with a sidecar
   `<hex>.2.json`; the staged tar is deleted. Docker unreachable is
   `Unavailable` `{what: "docker"}`, the machine stopped `Unavailable`
