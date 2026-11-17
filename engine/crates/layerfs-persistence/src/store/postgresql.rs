@@ -1,7 +1,10 @@
 //! A PostgreSQL Store (#506): explicit creation and open.
 //!
 //! The same shared history and Metadata semantics as the SQLite Store run
-//! over the PostgreSQL engine. Opening never creates or migrates a schema;
+//! over the PostgreSQL engine. Opening never creates a schema; a writable
+//! open adds the GC tables, and the position columns with their serial
+//! backfill, to a Store written before them (additive, as on SQLite), and
+//! every other mismatch is refused.
 //! [`PostgresHandles::create`] makes a new empty one with Init's acquisition
 //! tables (#533 step 10b). Projects reach it only by Init; nothing converts
 //! a SQLite Store (step 10c).
@@ -177,6 +180,12 @@ impl PostgresHandles {
         }
         CatalogId::derive(binding).map_err(|_| PersistenceError::Malformed)?;
         let session = Arc::new(Session::connect(selection, writable)?);
+        if writable {
+            schema::add_gc(&session)?;
+            schema::add_kept_node(&session)?;
+            schema::add_position_state(&session)?;
+            schema::add_position_columns(&session)?;
+        }
         Self::validated(session, selection.check, Some(binding), cursor_key)
             .map(|(_, handles)| handles)
     }
@@ -197,9 +206,15 @@ impl PostgresHandles {
         let catalog_id =
             CatalogId::derive(&checked.binding).map_err(|_| PersistenceError::Malformed)?;
         let digest_floor = checked.policy.small_file_threshold_bytes();
+        let trace_salt = checked.trace_salt;
         let _ = session.policy.set(checked.policy);
         let _ = session.server_version.set(checked.server_version);
         let (incarnation, tables) = (checked.incarnation, checked.acquisition);
+        // Spec §5.2/§10: every write transaction this session runs compares
+        // `history_meta.catalog_incarnation` with the generation the open read.
+        session
+            .incarnation
+            .store(incarnation, std::sync::atomic::Ordering::SeqCst);
         Ok((
             checked.binding,
             Self {
@@ -213,6 +228,7 @@ impl PostgresHandles {
                     incarnation,
                     cursor_key,
                     digest_floor,
+                    trace_salt,
                 },
             },
         ))

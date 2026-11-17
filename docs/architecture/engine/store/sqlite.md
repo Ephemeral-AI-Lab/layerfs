@@ -158,20 +158,26 @@ quarantines the session and keeps the lock
 | macOS extent release | Unused extents past logical EOF move to a same-volume scratch, which is removed; no logical byte is copied or truncated. The one module allowed `unsafe` | [`seal_allocation.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/seal_allocation.rs), [`file_control.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/file_control.rs) |
 | `snapshot` | One read transaction; page size, `auto_vacuum`, `user_version` and `application_id` carry over; destination must not exist; a busy source is `Busy`, never retried; a failed copy may leave a file for the caller to remove | [`snapshot.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/snapshot.rs) |
 | Free-space guard | A pack batch must leave 64 MiB after counting its bytes twice (WAL, then file); metadata-only batches are not guarded | [`headroom.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/headroom.rs) |
-| `reclaim_space(pages)` | `1..=RECLAMATION_PAGE_LIMIT` (512) pages by `incremental_vacuum`, one short write; only Stores created with `auto_vacuum=2` | [`reclamation.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/reclamation.rs) |
+| `reclaim_space(pages)` | `1..=RECLAMATION_PAGE_LIMIT` (512) pages by `incremental_vacuum`, stepped in one short write until the free list is empty or the page budget is spent (SQLite 3.40 removes one page per statement, not `N`); only Stores created with `auto_vacuum=2` | [`reclamation.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/reclamation.rs) |
 
 ## Heads
 
 | Function | Returns | Source |
 | --- | --- | --- |
-| `read_heads(path)` | Sorted lines `stack <name> <head_layer_id>` and `branch <project> <name> <base_layer_id> <head_commit_id or ->`, lowercase hex | [`heads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/heads.rs) |
+| `read_heads(path)` | Sorted lines `stack <name> <head_layer_id>` and `branch <project> <name> <base_layer_id> <head_commit_id or ->` for live rows only, lowercase hex | [`heads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/heads.rs) |
 | `heads_digest(path)` | sha256 of those lines, each ending in `\n` | same |
 
 `read_heads` opens its own read-write but `query_only` connection, because
 SQLite cannot open a WAL file read-only without a `-shm`. A busy Store is
 reported, never waited on. The heads change exactly when history changes, so
 the digest identifies a backup copy
-([Control: Backups](../../control/backups/README.md)).
+([Control: Backups](../../control/backups/README.md)). Both reads are filtered
+by the same §4.2 markers the catalog uses: a row named by `branch_retired`
+leaves no `branch` line, and a row named by `layer_stack_retired` leaves
+neither its `stack` line nor its Branches' lines. A soft removal is a marker,
+not a delete, so the base rows can still be present while the backup digest
+already names the visible history; `visibility_guard` scans inline SQL in
+`src` too, which is what holds `heads.rs` to that filter.
 
 ## Objects
 

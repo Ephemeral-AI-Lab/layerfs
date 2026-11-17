@@ -1,9 +1,10 @@
 //! Host Init and original handoff/failure custody.
 use crate as layerfs_project;
+use crate::init::init_unknown_state;
 use layerfs_bridge::provision::{check_destination, ProviderKind, StoreManifest, StoreProfile};
 use layerfs_history::{
-    BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig,
-    HistoryError, HistoryName, InitStatistics, LayerStackId,
+    error::NameTakenState, BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryCatalog,
+    HistoryCatalogConfig, HistoryError, HistoryName, InitStatistics, LayerStackId,
 };
 use layerfs_persistence::{
     PersistenceConfig, SealedStore, SqliteAcquisitionSchema, SqliteHandles,
@@ -77,9 +78,10 @@ pub enum InitError {
     Project(ProjectError),
     /// First Branch publication.
     History(HistoryError),
-    /// Adding a project (#506): the Store already has a project of that
-    /// name; nothing was written.
-    Exists,
+    /// Adding a project (#506): the Store still holds that project name.
+    /// It is `NameTaken` whether the holder is live, retired or deleted;
+    /// nothing was written.
+    NameTaken(Box<NameTakenState>),
     /// Adding a project (#506): the Store was made without the acquisition
     /// tables (schema versions 16 to 18), refused before anything was
     /// scanned or written. LayerFS adds no tables to an existing Store.
@@ -152,7 +154,11 @@ pub(crate) fn initialize(
                     name: request.branch_name.clone(),
                     source,
                 })
-                .map_err(InitError::History)?,
+                .map_err(|error| {
+                    InitError::History(
+                        error.with_unknown(init_unknown_state(request.stack_name.as_str(), None)),
+                    )
+                })?,
         );
         let totals = handles.history.statistics().map_err(InitError::History)?;
         let counts = counters.read();

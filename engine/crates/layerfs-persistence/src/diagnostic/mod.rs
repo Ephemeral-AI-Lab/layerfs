@@ -6,7 +6,7 @@ mod facts;
 mod history;
 mod lineage;
 mod postgresql;
-mod postgresql_contract;
+pub(crate) mod postgresql_contract;
 mod postgresql_contract_expected;
 mod reader;
 mod scan;

@@ -136,8 +136,10 @@ applies.
 R = required, C = required when the condition holds, — = not needed.
 "Report" means the exact command, its timeout and its outcome. List failures
 one by one, and list tests that already fail on the base against the base.
-Nothing runs on PRs into `layerfs_v2_0_0` automatically, so this evidence is
-the author's word plus whatever the reviewer runs again.
+The report-only `store-ext4` Store lane runs on PRs into `main` or
+`layerfs_v2_0_0` ([AGENTS.md](../../AGENTS.md) §4); no other lane runs on a PR
+into `layerfs_v2_0_0`, so this evidence is otherwise the author's word plus
+whatever the reviewer runs again.
 
 | Evidence | P0 | P1 | P2 | P3 |
 | --- | --- | --- | --- | --- |
@@ -252,8 +254,8 @@ never a public issue.
 
 Each PR and issue carries one priority, one or more topics and one type. The
 author sets them and the reviewer or triager corrects them. They are set by
-hand until a report-only workflow is approved (nothing else runs on PRs into
-`layerfs_v2_0_0`).
+hand until a report-only workflow is approved (no other workflow runs on PRs
+into `layerfs_v2_0_0`; the `store-ext4` Store lane does).
 
 **Priority: exactly one.** On a PR it is the tier; on an issue it is the
 priority from the severity and urgency table. Search separates the two:
@@ -316,7 +318,7 @@ and their new path.
 | `risk:store` | `engine/crates/layerfs-persistence/src/**`, `engine/crates/layerfs-store-service/src/{store,write,history}/**`, `engine/crates/layerfs-workspace/src/construction/**`, `engine/crates/layerfs-project/src/store/**`, `engine/crates/layerfs-daemon/src/install.rs`, `engine/crates/layerfs-overlay/{sql,src/database}/**`, `control/crates/layerfs-store/src/{open,open_args,lease,identity,place}.rs`, `control/crates/layerfs-store/src/{sqlite,postgresql,backup}/**`, `control/crates/layerfs-store/src/project/{init,postgres_init,add}.rs`, `control/crates/layerfs-bucket/src/backup/**`, `control/crates/layerfs-sandbox/src/daemon/**` |
 | `risk:wire` | `engine/crates/layerfs-bridge/src/{wire,daemon_wire,provision_wire,initial_record}.rs`, `engine/crates/layerfs-bridge/src/{control_,sdk_}*.rs`, `engine/crates/layerfs-bridge/src/duplex/**`, `control/crates/layerfs-machine/src/worker/{frame,hello,client}.rs`, `control/crates/layerfs-sandbox/src/host/frame.rs`, `control/crates/layerfs-store/src/project/frame.rs`, `api/crates/layerfs-cli/src/framed.rs` |
 | `risk:kernel` | `engine/crates/layerfs-{fuse,nfs,mount-ports}/**`; the fuser source pin in `Cargo.lock` |
-| `risk:delete` | `tools/cleanup*`, `control/crates/layerfs-store/src/project/remove.rs`, `control/crates/layerfs-machine/src/remove.rs`, `control/crates/layerfs-bucket/src/bucket/**`, `engine/crates/layerfs-overlay/src/maintenance/{garbage,orphan}.rs`, `engine/crates/layerfs-daemon/src/control/cleanup.rs`, `core/crates/layerfs-telemetry/src/output/retention.rs` |
+| `risk:delete` | `tools/cleanup*`, `control/crates/layerfs-store/src/project/delete.rs`, `control/crates/layerfs-machine/src/remove.rs`, `control/crates/layerfs-bucket/src/bucket/**`, `engine/crates/layerfs-overlay/src/maintenance/{garbage,orphan}.rs`, `engine/crates/layerfs-daemon/src/control/cleanup.rs`, `core/crates/layerfs-telemetry/src/output/retention.rs` |
 | `risk:security` | `control/crates/layerfs-home/src/secrets.rs`, `control/crates/layerfs-bucket/src/bucket/{credentials.rs,s3_api/sign.rs}`, `control/crates/layerfs-sandbox-backend/src/postgres_url.rs`, `control/crates/layerfs-sandbox-backend/src/{backend/namespaces,local/os/linux}/**`, `control/crates/layerfs-control/src/{worker_server.rs,worker_server/**}`, `control/crates/layerfs-machine/src/worker/{hello,client}.rs`, `engine/crates/layerfs-bridge/src/{duplex/handshake.rs,process/**}`, `engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/file_control.rs`, `core/crates/layerfs-storage/src/encoding/codec.rs`; new `unsafe` or FFI anywhere (found by the boundary guard and the risky-lines scan, not by path) |
 | `risk:deps` | `Cargo.lock`, `**/package-lock.json`, `.cargo/**`; and dependency, feature or build-flag hunks in any `Cargo.toml`, `package.json` or `pyproject.toml` |
 | `perf` | `core/crates/layerfs-content/src/file/construction/**`, `core/crates/layerfs-storage/src/{encoding,save,pack}/**`, `engine/crates/layerfs-store-service/src/store/commit*.rs`, `engine/crates/layerfs-persistence/src/backend/*/lane/**`, `engine/crates/layerfs-workspace/src/construction/**`, `engine/crates/layerfs-fuse/src/dispatch/**`, `engine/crates/layerfs-overlay/src/payload/**` |

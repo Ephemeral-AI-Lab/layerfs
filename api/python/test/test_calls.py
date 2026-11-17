@@ -35,7 +35,7 @@ else:
     # Load the real aio module with private import stubs, without pretending a
     # native binding is available or exercising native calls against a mock.
     layerfs = None
-    families = ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs"]
+    families = ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs", "doctor"]
     package = types.ModuleType("_layerfs_aio_unit")
     package.__path__ = []
     dependencies = {
@@ -350,7 +350,7 @@ class Calls(unittest.TestCase):
             layerfs.FAMILIES,
             ["home", "project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs", "doctor"],
         )
-        self.assertEqual(len(layerfs.TABLE), 82)
+        self.assertEqual(len(layerfs.TABLE), 85)
         for spec in layerfs.TABLE:
             self.assertTrue(callable(getattr(getattr(layerfs, spec["family"]), spec["call"])))
         # the options the Publish change added are in the table the Python

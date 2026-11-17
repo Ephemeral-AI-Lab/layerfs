@@ -195,9 +195,17 @@ pub fn snapshot(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) ->
     let mut next: Option<LayerId> = Some(stack.head_layer);
     while let Some(id) = next {
         let record = args::layer(store, id)?;
-        let source = record
-            .source_branch
-            .and_then(|branch| names.get(&branch).map(|(name, _)| name.clone()));
+        let source = match record.source_branch {
+            Some(branch) => match names.get(&branch) {
+                Some((name, _)) => Some(name.clone()),
+                None => store
+                    .history()
+                    .branch_any(branch)
+                    .map_err(args::history)?
+                    .map(|record| record.name.as_str().to_owned()),
+            },
+            None => None,
+        };
         let value = layer_value(&record, source.as_deref());
         if layer_spent + cost(&value) > LAYER_BUDGET {
             break;

@@ -15,6 +15,9 @@ impl HistoryStatements for Transaction<'_> {
     fn history(&self, key: &str, params: Vec<Param>) -> Result<Vec<Record>, BackendError> {
         Transaction::history(self, key, params)
     }
+    fn mechanics(&self) -> &dyn Mechanics {
+        self
+    }
 }
 
 impl Mechanics for Transaction<'_> {
@@ -50,5 +53,19 @@ impl Mechanics for Transaction<'_> {
         out: &mut Vec<PersistedPack>,
     ) -> Result<(), PersistenceError> {
         super::objects::read::read(self, ids, out)
+    }
+    fn pack_prefix(
+        &self,
+        id: i64,
+        limit: usize,
+    ) -> Result<Option<(usize, Vec<u8>)>, PersistenceError> {
+        super::objects::read::prefix(self, id, limit)
+    }
+    fn read_scoped_pack(
+        &self,
+        id: i64,
+        plan: &mut dyn layerfs_storage::port::PackReadPlan,
+    ) -> Result<layerfs_storage::port::AcquiredPackRead, PersistenceError> {
+        super::objects::selection::read_scoped(self, id, plan)
     }
 }

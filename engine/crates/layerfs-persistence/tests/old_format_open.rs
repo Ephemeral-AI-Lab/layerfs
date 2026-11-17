@@ -10,6 +10,16 @@ const HISTORY: &str = include_str!("../sql/sqlite/history.sql");
 const LINEAGE: &str = include_str!("../sql/sqlite/lineage.sql");
 const SCRATCH: &str = include_str!("../sql/sqlite/merge_scratch.sql");
 const DIGESTS: &str = include_str!("../sql/sqlite/file_digest.sql");
+const GC: &str = include_str!("../sql/sqlite/gc.sql");
+
+/// The three position columns T1.2a added, as the schemas write them; the old
+/// format this fixture builds lacks them. `trace_salt` was appended as
+/// `store_policy`\s last column, so its line carries the comma that ends
+/// `next_ordinal`: a Store written before it recorded neither line nor comma.
+const HISTORY_SERIAL: &str = "    history_serial INTEGER NOT NULL DEFAULT 0,\n";
+const TRACE_SALT: &str = ",\n trace_salt BLOB NOT NULL DEFAULT (X'0000000000000000000000000000000000000000000000000000000000000000') CHECK(length(trace_salt)=32)";
+/// The `history_meta` next serial column as `history.sql` writes it (T1.4).
+const NEXT_SERIAL: &str = "    next_history_serial INTEGER NOT NULL DEFAULT 1,\n";
 
 /// The table's definition as the history schema writes it, with its trailing
 /// blank line: the text an old Store's recorded schema source lacks.
@@ -32,25 +42,39 @@ fn definition(sql: &rusqlite::Connection) -> String {
 
 /// Rewrites a fresh Store into the format the daemons before `49499abac`
 /// wrote: no `binding_hint` table (nor the later #353 lineage and #355 merge
-/// tables), and the
+/// tables), no position columns (including T1.4's next serial), and the
 /// schema source and definition they recorded.
 fn make_old(path: &std::path::Path) {
     let sql = rusqlite::Connection::open(path).unwrap();
     sql.execute_batch(
-        "DROP TABLE binding_hint_block; DROP TABLE layer_lineage; DROP TABLE commit_lineage; \
+        "ALTER TABLE \"commit\" DROP COLUMN history_serial; \
+         ALTER TABLE layer DROP COLUMN history_serial; \
+         ALTER TABLE store_policy DROP COLUMN trace_salt; \
+         ALTER TABLE history_meta DROP COLUMN next_history_serial; \
+         DROP TABLE binding_hint_block; DROP TABLE layer_lineage; DROP TABLE commit_lineage; \
          DROP TABLE absorbed; DROP TABLE reach; DROP TABLE merge_operation; \
-         DROP TABLE merge_record; DROP TABLE file_digest;",
+         DROP TABLE merge_record; DROP TABLE file_digest; \
+         DROP TABLE branch_retired; DROP TABLE layer_stack_retired; DROP TABLE path_removed; \
+         DROP TABLE project_epoch; DROP TABLE gc_intent; DROP TABLE gc_op; DROP TABLE gc_dead; DROP TABLE kept_node;",
     )
     .unwrap();
     let source: String = sql
         .query_row("SELECT schema_source FROM history_meta", [], |r| r.get(0))
         .unwrap();
     let old = source
+        .replacen(HISTORY_SERIAL, "", 2)
+        .replacen(TRACE_SALT, "", 1)
+        .replacen(NEXT_SERIAL, "", 1)
         .replacen(&hint_table(), "", 1)
         .replacen(LINEAGE, "", 1)
         .replacen(SCRATCH, "", 1)
-        .replacen(DIGESTS, "", 1);
+        .replacen(DIGESTS, "", 1)
+        .replacen(GC, "", 1);
     assert_ne!(old, source, "the history schema holds the table");
+    assert!(
+        old.contains("4294967296)\n) STRICT;"),
+        "a pre-T1.2a Store recorded no comma after the last store_policy column"
+    );
     sql.execute(
         "UPDATE history_meta SET schema_source=?1, schema_definition=?2",
         rusqlite::params![old, definition(&sql)],

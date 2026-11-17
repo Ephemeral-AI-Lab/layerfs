@@ -3,6 +3,7 @@ use super::{
     attribution, compare,
     query::{result_page, MAXIMUM_QUERY_WORK},
     snapshot::{self, Snap},
+    visibility::Visibility,
     walk::Walker,
 };
 use crate::{
@@ -22,17 +23,27 @@ fn walker<'a>(
     snap: &'a Snap,
     path: &str,
     after: Option<&str>,
+    visibility: &Visibility,
 ) -> Result<Option<Walker<'a>>> {
-    if snapshot::entry(reader, &snap.tree, path)?.is_some() {
+    if snapshot::entry(reader, &snap.tree, path)?.is_some() && visibility.hidden(path).is_none() {
         Walker::after(reader, snap, path, after).map(Some)
     } else {
         Ok(None)
     }
 }
-fn next(walk: &mut Option<Walker<'_>>) -> Result<Option<(String, EntryFacts)>> {
-    match walk {
-        Some(walk) => walk.next(),
-        None => Ok(None),
+/// The next entry that is visible at its snapshot; a hidden entry is absent.
+fn next(
+    walk: &mut Option<Walker<'_>>,
+    visibility: &Visibility,
+) -> Result<Option<(String, EntryFacts)>> {
+    loop {
+        let Some(walker) = walk else {
+            return Ok(None);
+        };
+        match walker.next()? {
+            Some((path, _)) if visibility.hidden(&path).is_some() => continue,
+            other => return Ok(other),
+        }
     }
 }
 fn set(item: &mut SdkValue, name: &str, value: SdkValue) {
@@ -96,18 +107,20 @@ pub fn diff(
     let exhausted = left.node == right.node || matches!(cached, Some(None));
     let after = cached.as_ref().and_then(|v| v.as_deref());
     let skip = if cached.is_some() { 0 } else { page.skip };
+    let left_seen = Visibility::for_snap(store, left)?;
+    let right_seen = Visibility::for_snap(store, right)?;
     let mut lw = if exhausted {
         None
     } else {
-        walker(reader, left, &prefix, after)?
+        walker(reader, left, &prefix, after, &left_seen)?
     };
     let mut rw = if exhausted {
         None
     } else {
-        walker(reader, right, &prefix, after)?
+        walker(reader, right, &prefix, after, &right_seen)?
     };
     let mut last = None;
-    let (mut l, mut r) = (next(&mut lw)?, next(&mut rw)?);
+    let (mut l, mut r) = (next(&mut lw, &left_seen)?, next(&mut rw, &right_seen)?);
     let (mut seen, mut examined, mut bytes, mut more) = (0u64, 0u64, 0usize, false);
     let mut items = Vec::new();
     let mut incomplete = false;
@@ -130,19 +143,19 @@ pub fn diff(
         let (path, before, after) = match ordering {
             std::cmp::Ordering::Less => {
                 let (p, e) = l.take().unwrap();
-                l = next(&mut lw)?;
+                l = next(&mut lw, &left_seen)?;
                 (p, Some(e), None)
             }
             std::cmp::Ordering::Greater => {
                 let (p, e) = r.take().unwrap();
-                r = next(&mut rw)?;
+                r = next(&mut rw, &right_seen)?;
                 (p, None, Some(e))
             }
             std::cmp::Ordering::Equal => {
                 let (p, a) = l.take().unwrap();
                 let (_, b) = r.take().unwrap();
-                l = next(&mut lw)?;
-                r = next(&mut rw)?;
+                l = next(&mut lw, &left_seen)?;
+                r = next(&mut rw, &right_seen)?;
                 (p, Some(a), Some(b))
             }
         };

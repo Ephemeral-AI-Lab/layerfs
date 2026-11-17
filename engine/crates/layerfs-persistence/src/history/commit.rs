@@ -88,6 +88,16 @@ pub(crate) fn commit_branch(
     tx: &Transaction<'_>,
     request: &CommitRequest,
 ) -> HistoryResult<CommitOutcome> {
+    // Spec 5: the project epoch is read before the resources the write
+    // depends on. The Branch is read once to learn its project, the fence
+    // opens, and the Branch is read again: a removal that committed before
+    // the fence is visible in the second read (its row is filtered), and one
+    // that commits after it changes the epoch `confirm` re-checks. Reading
+    // the Branch before the fence would let a removal land in that window
+    // unseen and the Commit land on a retired Branch.
+    let probe = super::branch::snapshot_rows(tx, request.branch)?
+        .ok_or(HistoryError::Missing(Missing::Branch))?;
+    let fence = super::epoch::open(tx, probe.branch.stack)?;
     let rows = super::branch::snapshot_rows(tx, request.branch)?
         .ok_or(HistoryError::Missing(Missing::Branch))?;
     let branch = rows.branch.clone();
@@ -162,6 +172,7 @@ pub(crate) fn commit_branch(
     if advanced != 1 {
         return Err(HistoryError::Integrity("Branch advance"));
     }
+    fence.confirm(tx)?;
     let displaced = branch.head_commit.filter(|_| moved);
     Ok(CommitOutcome::Committed {
         record: Box::new(record),
@@ -206,6 +217,8 @@ pub(crate) fn new_commit(
         second_parent,
         meta,
     };
+    // Every new Commit takes the next Store serial in this transaction.
+    let serial = super::position::next_serial(tx)?;
     // The insert names a new identity; an existing one is then verified.
     let inserted = tx
         .execute(
@@ -232,6 +245,7 @@ pub(crate) fn new_commit(
                     .map_err(|_| HistoryError::Capacity("metadata bytes"))?,
                 super::facts::encode(&record.meta.lww, &record.meta.units)?,
                 record.meta.displaced.map(|id| id.to_bytes().to_vec()),
+                i64::try_from(serial).map_err(|_| HistoryError::Capacity("history serials"))?,
             ],
         )
         .map_err(sql)?;

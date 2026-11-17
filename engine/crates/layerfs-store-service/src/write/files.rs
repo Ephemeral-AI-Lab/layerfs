@@ -4,9 +4,13 @@
 //! the StoreService with its failure.
 use super::mutation::Mutation;
 use crate::history::lookup::{self as args, Answer, Arg};
+use crate::read::{snapshot, visibility::Visibility};
 use crate::StoreService;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_content::compare::TreeTable;
+use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_history::{CommitOutcome, CommitVia, WorkspaceId};
+use std::sync::Arc;
 
 pub fn path(value: &str) -> Result<String, SdkRefusal> {
     if value.len() > 4096
@@ -119,6 +123,12 @@ pub fn commit(
                     crate::store::CommitError::History(layerfs_history::HistoryError::Busy) => {
                         "Busy"
                     }
+                    // Spec 5: the project epoch moved (a removal raced this
+                    // write) or is gone after compaction; the Commit is
+                    // refused with the spec's `Conflict`, nothing written.
+                    crate::store::CommitError::History(
+                        layerfs_history::HistoryError::Conflict(_),
+                    ) => "Conflict",
                     crate::store::CommitError::History(
                         layerfs_history::HistoryError::Capacity(_),
                     ) => "Capacity",
@@ -193,16 +203,58 @@ fn change(
     workspace: &crate::store::BoundWorkspace,
     changes: &[Arg<Change<'_>>],
 ) -> Result<Result<(), SdkRefusal>, SdkRefusal> {
+    // The bound node's raw tree and markers: the private Workspace's overlay
+    // already whiteouts a hidden path, so its absence there is ambiguous.
+    // The base view distinguishes a hidden path (a `Removed` refusal for
+    // `edit` and a cp source) from a genuinely absent one (`NoSuchPath`).
+    // `rm` and `mv`-from read only the private overlay, where a hidden path is
+    // already a whiteout, so they report it as absent: `NoSuchPath`, this
+    // method table's wire spelling of §4.3's `NotFound` for those two calls.
+    let base = workspace
+        .snapshot()
+        .map_err(crate::write::mutation::failure)?;
+    let node = crate::removal::node_of(&base);
+    let visibility = Visibility::for_stack(
+        &workspace.store,
+        base.branch.stack,
+        Visibility::node_serial(&workspace.store, node)?,
+    )?;
+    let reader: Arc<crate::store::StorePorts> = workspace.store.ports(base.scope);
+    let tree =
+        TreeTable::open(&*reader, FilesystemRootId(base.effective_root)).map_err(args::content)?;
+    let removed = |path: &str| -> Result<Option<SdkRefusal>, SdkRefusal> {
+        let exists = snapshot::entry(&reader, &tree, path)?.is_some();
+        Ok(exists
+            .then(|| visibility.hidden(path))
+            .flatten()
+            .map(|frontier| Visibility::refusal(path, frontier)))
+    };
     let mut mutation = Mutation::new(workspace)?;
     let mut result = Ok(());
     for (index, change) in changes.iter().enumerate() {
         result = (|| match change.as_ref().map_err(Clone::clone)? {
             Change::Write { path, bytes, mode } => mutation.write(path, bytes, *mode),
-            Change::Edit { path, old, new } => mutation.edit(path, old, new),
+            Change::Edit { path, old, new } => match mutation.edit(path, old, new) {
+                Err(refusal) if refusal.code == "NoSuchPath" => match removed(path)? {
+                    Some(hidden) => Err(hidden),
+                    None => Err(refusal),
+                },
+                other => other,
+            },
             Change::Mkdir { path, mode } => mutation.mkdir(path, *mode),
             Change::Chmod { path, mode } => mutation.chmod(path, *mode),
+            // `rm` treats a hidden path as absent for the same reason.
             Change::Rm { path } => mutation.remove(path),
-            Change::Cp { from, to } => mutation.copy(from, to, index as u64),
+            Change::Cp { from, to } => match mutation.copy(from, to, index as u64) {
+                Err(refusal) if refusal.code == "NoSuchPath" => match removed(from)? {
+                    Some(hidden) => Err(hidden),
+                    None => Err(refusal),
+                },
+                other => other,
+            },
+            // A hidden `from` is absent to the overlay, so `mv`-from answers
+            // `NoSuchPath` (see the `NotFound` mapping above); unlike
+            // `edit`/`cp`-from it does not consult the base view.
             Change::Mv { from, to } => mutation.rename(from, to),
         })()
         .map_err(|mut e| {

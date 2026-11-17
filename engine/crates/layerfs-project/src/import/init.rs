@@ -14,7 +14,10 @@ use crate::{ProjectError, ProjectResult};
 #[cfg(unix)]
 use layerfs_content::filesystem::{profile_id, scope_for_seed, FilesystemObjects};
 use layerfs_content::ObjectId;
-use layerfs_history::{HistoryCatalog, HistoryName, LayerStackId, LayerStackRecord};
+use layerfs_history::records::GcScopeKind;
+use layerfs_history::{
+    HistoryCatalog, HistoryName, LayerStackId, LayerStackRecord, UnknownOutcomeState,
+};
 #[cfg(unix)]
 use layerfs_history::{ReserveRequest, StackInitialization};
 use layerfs_storage::port::acquisition::Acquisition;
@@ -24,7 +27,7 @@ use layerfs_storage::port::acquisition::Begin;
 use layerfs_storage::Save;
 use layerfs_storage::{read::Diagnostics, Storage};
 use layerfs_telemetry::timer::{Active, TimingScope};
-use std::{path::Path, sync::Arc, time::Instant};
+use std::{fmt::Write as _, path::Path, sync::Arc, time::Instant};
 /// Explicit host authority and inputs for one namespace Init.
 pub struct InitRequest<'a> {
     /// Host-visible regular directory, checked before construction.
@@ -97,6 +100,36 @@ pub fn init_observed(
     counters: Arc<InitCounters>,
 ) -> ProjectResult<Initialized> {
     use std::os::unix::fs::MetadataExt;
+    // Admission: an Init shares the project scope with removals and is
+    // visible as a holder until it finishes or fails.
+    let op = admission_op_id(request.stack);
+    let (runtime, boot) = owner_tokens(op);
+    let intent = layerfs_history::records::GcIntent::shared(
+        op,
+        layerfs_history::records::GcIntentKind::Init,
+        layerfs_history::records::GcScopeKind::Project,
+        request.stack.as_slice(),
+    )
+    .named(Some(request.name.as_str()), None)
+    .with_phase(Some("init"))
+    .owned(Some(&runtime), Some(&boot));
+    let admitted = match catalog.gc_register(&intent) {
+        Ok(()) => true,
+        // A catalog without admission cannot exclude a removal; Init still
+        // proceeds, as it did before #41 T6.
+        Err(layerfs_history::HistoryError::Unsupported(_)) => false,
+        Err(error) => {
+            return Err(ProjectError::History(
+                error.with_unknown(init_unknown_state(request.name.as_str(), Some(op))),
+            ))
+        }
+    };
+    let mut admission = InitAdmission {
+        catalog,
+        op_id: op,
+        admitted,
+        released: false,
+    };
     counters.step(InitStep::Scan);
     let mut progress = ImportProgress::observed(request.deadline, counters);
     progress.tick()?;
@@ -118,6 +151,7 @@ pub fn init_observed(
         store,
         catalog,
         &request,
+        op,
         &source,
         &backing,
         &mut progress,
@@ -144,6 +178,10 @@ pub fn init_observed(
         layerfs_content::filesystem::FilesystemRootId(root),
     )
     .map_err(ProjectError::Content)?;
+    // The binding hints, the publication and the release below run after
+    // `request.name` moves into the Stack; name the project and operation now
+    // (F43R4-2, F43R5-1).
+    let unknown = init_unknown_state(request.name.as_str(), Some(op));
     timer.child("history.record_bindings").run(|_| {
         super::hints::record_new_bindings(
             &reader,
@@ -151,6 +189,12 @@ pub fn init_observed(
             None,
             layerfs_content::filesystem::FilesystemRootId(root),
         )
+        .map_err(|error| match error {
+            ProjectError::History(error) => {
+                ProjectError::History(error.with_unknown(unknown.clone()))
+            }
+            other => other,
+        })
     })?;
     let stack = timer.child("history.initialize_layerstack").run(|_| {
         catalog
@@ -162,8 +206,11 @@ pub fn init_observed(
                 genesis_root: root,
                 logical,
             })
-            .map_err(ProjectError::History)
+            .map_err(|error| ProjectError::History(error.with_unknown(unknown.clone())))
     })?;
+    admission
+        .release()
+        .map_err(|error| ProjectError::History(error.with_unknown(unknown)))?;
     Ok(Initialized {
         stack,
         root,
@@ -176,11 +223,16 @@ pub fn init_observed(
 
 /// Scans with attributes, constructs each file once, consumes serials and
 /// builds the tree. The returned tree save is unfinished.
+// Eight arguments: the run's op id is already `init_observed`'s, but the
+// `reserve_inodes` failure here needs it for the retained Unknown state
+// (F43R6-1), so it is passed beside the acquisition it names.
 #[cfg(unix)]
+#[allow(clippy::too_many_arguments)]
 fn acquire<'a>(
     store: &'a Storage,
     catalog: &dyn HistoryCatalog,
     request: &InitRequest<'_>,
+    op: [u8; 16],
     source: &std::fs::Metadata,
     backing: &Backing<'_>,
     progress: &mut ImportProgress,
@@ -220,7 +272,11 @@ fn acquire<'a>(
                 scope: scope.object(),
                 count: scanned.entries,
             })
-            .map_err(ProjectError::History)
+            .map_err(|error| {
+                ProjectError::History(
+                    error.with_unknown(init_unknown_state(request.name.as_str(), Some(op))),
+                )
+            })
     })?;
     let provider = store.reader().map_err(storage)?;
     let (root, save) = timer.child("history.import_tree").run(|_| {
@@ -247,4 +303,113 @@ pub fn init_observed(
     _counters: Arc<InitCounters>,
 ) -> ProjectResult<Initialized> {
     Err(ProjectError::Unsupported)
+}
+
+/// This process's owner evidence for one Init: its pid/start and PID
+/// namespace, and this boot. The boot token carries the operation so two
+/// shared intents of one project from one process stay distinct.
+fn owner_tokens(op: [u8; 16]) -> (String, String) {
+    let pid = std::process::id();
+    let mut suffix = String::with_capacity(op.len() * 2);
+    for byte in op {
+        let _ = write!(suffix, "{byte:02x}");
+    }
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        let start = layerfs_bridge::process::stat(pid)
+            .map(|stat| stat.start)
+            .unwrap_or(0);
+        let boot = layerfs_bridge::process::boot().unwrap_or(0);
+        let namespace = {
+            #[cfg(target_os = "linux")]
+            {
+                std::fs::read_link("/proc/self/ns/pid")
+                    .ok()
+                    .and_then(|target| target.to_str().map(str::to_owned))
+                    .and_then(|text| {
+                        text.strip_prefix("pid:[")
+                            .and_then(|body| body.strip_suffix(']'))
+                            .and_then(|body| body.parse::<u64>().ok())
+                    })
+                    .map(|inode| format!("@ns:{inode}"))
+                    .unwrap_or_default()
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                String::new()
+            }
+        };
+        (
+            format!("pid:{pid}@{start}{namespace}"),
+            format!("boot:{boot:032x}:op:{suffix}"),
+        )
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        (format!("pid:{pid}"), format!("boot:unknown:op:{suffix}"))
+    }
+}
+
+/// One fresh 16-byte Init admission identity.
+fn admission_op_id(stack: LayerStackId) -> [u8; 16] {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos());
+    let mut seed = Vec::with_capacity(56);
+    seed.extend_from_slice(stack.as_slice());
+    seed.extend_from_slice(&std::process::id().to_le_bytes());
+    seed.extend_from_slice(&now.to_le_bytes());
+    seed.extend_from_slice(&NEXT.fetch_add(1, Ordering::Relaxed).to_le_bytes());
+    let identity = ObjectId::for_bytes(&seed);
+    let mut op = [0u8; 16];
+    op.copy_from_slice(&identity.as_bytes()[..16]);
+    op
+}
+
+/// The A6 context of an Init history answer that was lost: the project being
+/// initialized, the Init phase and the durable operation, when one is known.
+pub(crate) fn init_unknown_state(name: &str, op: Option<[u8; 16]>) -> UnknownOutcomeState {
+    UnknownOutcomeState::new(
+        GcScopeKind::Project,
+        name,
+        Some("init".to_owned()),
+        op.as_ref().map(|op| layerfs_bridge::sdk_values::hex(op)),
+    )
+}
+
+/// Releases one Init's admission intent on success, and on drop after a
+/// failure (best effort: the original failure is the reported one).
+struct InitAdmission<'a> {
+    catalog: &'a dyn HistoryCatalog,
+    op_id: [u8; 16],
+    admitted: bool,
+    released: bool,
+}
+
+impl InitAdmission<'_> {
+    fn release(&mut self) -> Result<(), layerfs_history::HistoryError> {
+        self.released = true;
+        if !self.admitted {
+            return Ok(());
+        }
+        match self.catalog.gc_release(&self.op_id) {
+            Ok(()) | Err(layerfs_history::HistoryError::Unsupported(_)) => Ok(()),
+            Err(error) => {
+                // The owner cannot settle its row; mark it uncertain so a
+                // later call reports `Unresolved` and its owner can adopt it.
+                let _ = self.catalog.gc_mark_uncertain(&self.op_id);
+                Err(error)
+            }
+        }
+    }
+}
+
+impl Drop for InitAdmission<'_> {
+    fn drop(&mut self) {
+        if !self.released && self.admitted && self.catalog.gc_release(&self.op_id).is_err() {
+            let _ = self.catalog.gc_mark_uncertain(&self.op_id);
+        }
+    }
 }

@@ -49,12 +49,10 @@ for this manual.
 | A machine, Sandbox or Store call on a removed platform's record (`firecracker`, `ssh`, `microsandbox`) | ``platform `<name>` was removed in LayerFS 2.0``; only `machine list`, `machine get` and `machine remove` (forgets the record) answer |
 | A Sandbox on a platform and Store kind the support table refuses (`layerfs machine platforms`, `control/SUPPORT.json`): docker on Windows | the table's reason, word for word, such as "docker through WSL2 is not designed yet" |
 | A Sandbox on a machine other than its sqlite Store's | names the Store's machine; `store pull` and `store push` move the Store |
-| `project remove` from a PostgreSQL Store | "removing a project from a PostgreSQL Store is not built" |
 | `backup restore` over a Store that is not on `native` | `store pull` it to `native` first |
 | Resizing a VM with `machine update` | "not built yet; nothing was changed" (`InUse` first if Sandboxes run on it) |
 | Creating a machine without the sealed Linux bundle | names the expected folder in `detail.missing` (`bundle:<folder>`); fetching the bundle into the cache is not built, a build places it |
 | A machine kind whose tool is missing | `detail.missing`, such as `tool:limactl` |
-| PostgreSQL calls in a build without the `postgresql` feature | "this LayerFS build has no PostgreSQL engine" |
 | `machine` calls in a build without the `machine` feature (the guest worker's build) | names the #533 step |
 | A `native` Sandbox on Linux started by a non-root user | namespaces need root for FUSE |
 | A Store made without the acquisition tables projects are added through | LayerFS adds no tables to an existing Store |

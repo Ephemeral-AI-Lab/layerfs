@@ -31,7 +31,9 @@ fn supported_amcheck_reports_each_relation_and_missing_extension_is_unknown() {
     assert_eq!(actual, expected);
     drop(reader);
     assert_eq!(before, f.fingerprint());
-    let missing = std::env::var("LAYERFS_TEST_POSTGRES_MISSING_URL").unwrap();
+    let Some(missing) = auxiliary_url("LAYERFS_TEST_POSTGRES_MISSING_URL") else {
+        return;
+    };
     let mut f = Fixture::at("no_extension", missing).unwrap();
     let reader = f.reader();
     let (result, out) = audit(&reader, false);
@@ -106,10 +108,12 @@ fn denied_amcheck_and_non_btree_indexes_leave_explicit_incomplete_coverage() {
 }
 #[test]
 fn physical_standby_uses_supported_online_checks_without_primary_writes() {
+    let Some(url) = auxiliary_url("LAYERFS_TEST_POSTGRES_REPLICA_URL") else {
+        return;
+    };
     let Some(f) = Fixture::new("replica") else {
         return;
     };
-    let url = std::env::var("LAYERFS_TEST_POSTGRES_REPLICA_URL").unwrap();
     let mut monitor = postgres::Client::connect(&url, postgres::NoTls).unwrap();
     assert!(monitor
         .query_one("SELECT pg_is_in_recovery()", &[])
@@ -172,9 +176,7 @@ fn oversized_physical_payloads_are_rejected_before_client_materialization() {
     let port = config.get_ports()[0];
     let proxy = proxy::Proxy::new(port);
     let selected = layerfs_persistence::PostgresSelection::new(
-        f.selection
-            .url
-            .replace(&format!(":{port}/"), &format!(":{}/", proxy.port)),
+        conninfo::with_local_proxy(&f.selection.url, proxy.port),
         &f.selection.schema,
     );
     let reader = PostgresHandles::open_diagnostic(
@@ -188,6 +190,10 @@ fn oversized_physical_payloads_are_rejected_before_client_materialization() {
     let (result, out) = audit(&reader, false);
     result.unwrap();
     assert!(has(&out, "store.packs", Outcome::Fail), "{out:?}");
+    assert!(
+        proxy.bytes() > 0,
+        "the diagnostic bypassed the byte-counting proxy (direct connection?)"
+    );
     assert!(
         proxy.bytes() < 512 * 1024,
         "one-megabyte corrupted body crossed wire: {} bytes",
@@ -376,9 +382,9 @@ fn pinned_catalog_replacement_is_rejected_as_authority_change() {
 fn oversized_authority_and_saved_ddl_stay_on_server_during_admission() {
     use std::str::FromStr;
     for (tag,mutation) in [("binding","ALTER TABLE {s}.history_meta DROP CONSTRAINT history_meta_binding_key_check; UPDATE {s}.history_meta SET binding_key=decode(repeat('00',1048576),'hex')"),("source","UPDATE {s}.history_meta SET schema_source=repeat('x',1048576)"),("definition","UPDATE {s}.history_meta SET schema_definition=repeat('x',1048576)")]{
- let Some(mut f)=Fixture::new(tag)else{return};f.admin.batch_execute(&mutation.replace("{s}",&f.selection.schema)).unwrap();let before=f.fingerprint();let config=postgres::Config::from_str(&f.selection.url).unwrap();let port=config.get_ports()[0];let proxy=proxy::Proxy::new(port);let selection=layerfs_persistence::PostgresSelection::new(f.selection.url.replace(&format!(":{port}/"),&format!(":{}/",proxy.port)),&f.selection.schema);
+ let Some(mut f)=Fixture::new(tag)else{return};f.admin.batch_execute(&mutation.replace("{s}",&f.selection.schema)).unwrap();let before=f.fingerprint();let config=postgres::Config::from_str(&f.selection.url).unwrap();let port=config.get_ports()[0];let proxy=proxy::Proxy::new(port);let selection=layerfs_persistence::PostgresSelection::new(conninfo::with_local_proxy(&f.selection.url,proxy.port),&f.selection.schema);
  if tag=="binding"{let out=connection(&selection,BINDING);assert!(has(&out,"store.connection.identity",Outcome::Fail),"{out:?}");}else{assert!(PostgresHandles::open_diagnostic(&selection,BINDING,[71;32],Some(Instant::now()+Duration::from_secs(5)),&mut resolver).is_err());}
- assert!(proxy.bytes()<512*1024,"oversized metadata crossed wire: {} bytes",proxy.bytes());drop(proxy);assert_eq!(before,f.fingerprint());
+ assert!(proxy.bytes()>0,"oversized metadata bypassed the byte-counting proxy (direct connection?)");assert!(proxy.bytes()<512*1024,"oversized metadata crossed wire: {} bytes",proxy.bytes());drop(proxy);assert_eq!(before,f.fingerprint());
  }
 }
 
@@ -411,9 +417,7 @@ fn oversized_pack_descriptor_digest_is_rejected_before_wire_extraction() {
         .get_ports()[0];
     let proxy = proxy::Proxy::new(port);
     let selected = layerfs_persistence::PostgresSelection::new(
-        f.selection
-            .url
-            .replace(&format!(":{port}/"), &format!(":{}/", proxy.port)),
+        conninfo::with_local_proxy(&f.selection.url, proxy.port),
         &f.selection.schema,
     );
     let reader = PostgresHandles::open_diagnostic(
@@ -430,6 +434,10 @@ fn oversized_pack_descriptor_digest_is_rejected_before_wire_extraction() {
     assert!(
         has(&out, "store.objects", Outcome::Fail),
         "locator must independently reject invalid pack descriptor: {out:?}"
+    );
+    assert!(
+        proxy.bytes() > 0,
+        "the pack descriptor bypassed the byte-counting proxy (direct connection?)"
     );
     assert!(
         proxy.bytes() < 512 * 1024,
@@ -466,15 +474,7 @@ fn altered_numeric_authority_types_do_not_materialize_large_text_values() {
             .get_ports()[0];
         let proxied = |port: u16| {
             layerfs_persistence::PostgresSelection::new(
-                f.selection.url.replace(
-                    &format!(
-                        ":{}/",
-                        postgres::Config::from_str(&f.selection.url)
-                            .unwrap()
-                            .get_ports()[0]
-                    ),
-                    &format!(":{port}/"),
-                ),
+                conninfo::with_local_proxy(&f.selection.url, port),
                 &f.selection.schema,
             )
         };
@@ -484,6 +484,10 @@ fn altered_numeric_authority_types_do_not_materialize_large_text_values() {
             assert!(
                 has(&out, "store.connection.identity", Outcome::Fail),
                 "{out:?}"
+            );
+            assert!(
+                proxy.bytes() > 0,
+                "the preflight scalar bypassed the byte-counting proxy (direct connection?)"
             );
             assert!(
                 proxy.bytes() < 512 * 1024,
@@ -500,6 +504,10 @@ fn altered_numeric_authority_types_do_not_materialize_large_text_values() {
             &mut resolver
         )
         .is_err());
+        assert!(
+            proxy.bytes() > 0,
+            "the admitted-open scalar bypassed the byte-counting proxy (direct connection?)"
+        );
         assert!(
             proxy.bytes() < 512 * 1024,
             "corrupt scalar crossed admitted-open wire"

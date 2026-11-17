@@ -474,8 +474,10 @@ export interface ProjectFamily {
   stats(project: string, branch?: string | null, commit?: string | null, options?: CallOptions): Promise<Result>;
   /** export a project's snapshot from its Store to a local folder */
   export(project: string, destination: string, options?: ProjectExportOptions): Promise<Result>;
-  /** remove one project from its Store */
-  remove(project: string, options?: CallOptions): Promise<Result>;
+  /** retire one project in its Store and remove its home entry */
+  delete(project: string, options?: CallOptions): Promise<Result>;
+  /** hide one absolute path from every node at or below its marker frontier */
+  remove_file(project: string, path: string, options?: CallOptions): Promise<Result>;
 }
 
 export interface BranchFamily {
@@ -497,6 +499,8 @@ export interface BranchFamily {
   publish(project: string, branch: string, commit?: string | null, options?: BranchPublishOptions): Promise<Result>;
   /** files that differ between two Branches' heads */
   diff(project: string, from_branch: string, to_branch: string, options?: BranchDiffOptions): Promise<Result>;
+  /** soft-remove one Branch; its name stays taken until compaction */
+  remove(project: string, branch: string, options?: CallOptions): Promise<Result>;
 }
 
 export interface CommitFamily {
@@ -636,6 +640,8 @@ export interface StoreFamily {
   pull(name: string, options?: StorePullOptions): Promise<Result>;
   /** delete a sqlite Store with every project in it */
   remove(name: string, options?: CallOptions): Promise<Result>;
+  /** reclaim dead bytes from one Store */
+  compact(name: string, options?: CallOptions): Promise<Result>;
   /** forget a PostgreSQL Store; its data stays */
   disconnect(name: string, options?: CallOptions): Promise<Result>;
 }

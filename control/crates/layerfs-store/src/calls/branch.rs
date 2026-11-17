@@ -124,6 +124,15 @@ pub struct BranchPublish {
     pub force: Option<bool>,
 }
 
+/// `branch.remove(project, branch)`.
+#[derive(Clone, Debug, Default)]
+pub struct BranchRemove {
+    /// The project.
+    pub project: String,
+    /// The Branch.
+    pub branch: String,
+}
+
 /// `branch.diff(project, from_branch, to_branch, { paths_only, page_size,
 /// page_pos, cursor })`.
 #[derive(Clone, Debug, Default)]
@@ -185,6 +194,33 @@ pub fn merge(home: &Path, events: &mut Events<'_>, request: &BranchMerge) -> Out
 /// `branch.publish`: a Branch moved to a Commit.
 pub fn publish(home: &Path, events: &mut Events<'_>, request: &BranchPublish) -> Outcome {
     on_project(home, events, &request.project, StoreOp::Publish(request))
+}
+
+/// `branch.remove`: one Branch hidden by its Store marker. The result names
+/// the project as the caller gave it, `<store>/<project>`: the Store sees
+/// only the project's name within it and echoes that alone.
+pub fn remove(home: &Path, events: &mut Events<'_>, request: &BranchRemove) -> Outcome {
+    let value = match on_project(
+        home,
+        events,
+        &request.project,
+        StoreOp::BranchRemove(request),
+    ) {
+        Ok(value) => value,
+        Err(refusal) => {
+            return Err(crate::unknown::named_unknown(
+                refusal,
+                "branch",
+                &request.branch,
+                None,
+            ))
+        }
+    };
+    Ok(layerfs_home::home::with_field(
+        value,
+        "project",
+        SdkValue::text(&request.project),
+    ))
 }
 
 /// `branch.diff`: the changes between two Branches.

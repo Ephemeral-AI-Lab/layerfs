@@ -496,3 +496,43 @@ fn snapshot_checkpoints_an_unheld_leftover_wal_before_pushing_and_pulling() {
     let _ = std::fs::remove_dir_all(root);
     let _ = std::fs::remove_dir_all(folder);
 }
+
+#[test]
+fn compact_of_a_remote_sqlite_store_is_a_documented_local_only_refusal() {
+    let home = tempdir("compact-home");
+    home::open(&home).unwrap();
+    write_record(
+        &paths::store_record(&home, "shop"),
+        &SdkValue::map([
+            ("name", t("shop")),
+            ("kind", t("sqlite")),
+            ("binding", SdkValue::Bytes(vec![7; 16])),
+            ("cursor", SdkValue::Bytes(vec![8; 32])),
+            ("profile", t("disposable")),
+            ("machine", t("box")),
+        ]),
+    )
+    .unwrap();
+    write_record(
+        &paths::machine_record(&home, "box"),
+        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+    )
+    .unwrap();
+    // No worker is recorded for `box`: a call that dialled the machine would
+    // be `Unavailable`. `Unsupported` proves `store.compact` never takes the
+    // worker route: it is the local-only S6 deviation D5 recorded in
+    // `core/docs/issues/project-41/gc-42-decisions.md`.
+    let (code, message) = call(&home, "store.compact", &[("name", t("shop"))]).unwrap_err();
+    assert_eq!(code, "Unsupported", "{message}");
+    assert!(message.contains("local-only"), "{message}");
+    assert!(message.contains("#42 D5"), "{message}");
+    assert!(
+        message.contains("run it on that Store's machine"),
+        "{message}"
+    );
+    assert!(
+        !paths::store_file(&home, "shop").exists(),
+        "the refusal opened no Store"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}

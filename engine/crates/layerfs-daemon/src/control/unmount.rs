@@ -150,6 +150,7 @@ impl Service {
             Err(error) => {
                 let failure = match error {
                     crate::store::CloseError::Owner(cause) => Failure::Owner(cause),
+                    crate::store::CloseError::Intent(cause) => Failure::History(cause),
                     crate::store::CloseError::Reader(cause) => Failure::Workspace(
                         layerfs_workspace::WorkspaceError::Service(Box::new(cause)),
                     ),

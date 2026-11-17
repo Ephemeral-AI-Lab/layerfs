@@ -6,7 +6,8 @@
 //! and what is still held; an unknown outcome leaves everything untouched.
 #![cfg(unix)]
 mod support;
-use layerfs_history::{HistoryCatalog, HistoryName, LayerStackId};
+use layerfs_history::records::GcScopeKind;
+use layerfs_history::{HistoryCatalog, HistoryError, HistoryName, LayerStackId};
 use layerfs_project::{init, InitRequest, Initialized, ProjectError, SourceRefusal};
 use layerfs_storage::port::{
     acquisition::{AcquisitionError, Phase},
@@ -325,4 +326,44 @@ fn a_changed_row_outside_the_window_keeps_the_backing_answer() {
     );
     assert!(acquisition.operations().is_empty());
     assert!(history.layer_stack(stack()).unwrap().is_none());
+}
+
+/// F43R4-2: an Init whose admission registration or release loses its answer
+/// reports `UnknownOutcomeOp` naming the project, the Init phase and the
+/// durable operation, so the control's `project.add` maps it to the standard
+/// `Unknown` refusal instead of flattening it to `Failed`.
+#[test]
+fn a_lost_init_admission_names_the_project_phase_and_operation() {
+    for (register, release) in [(true, false), (false, true)] {
+        let fixture = Fixture::new(1);
+        let mut history = MemoryHistory::default();
+        history.fail_register = register;
+        history.fail_release = release;
+        let acquisition = MemoryAcquisition::default();
+        let error = attempt(&fixture, &acquisition, &history)
+            .expect_err("a lost admission answer is a failure");
+        let ProjectError::History(error) = error else {
+            panic!("register={register} release={release}: {error:?}")
+        };
+        let HistoryError::UnknownOutcomeOp(state) = error else {
+            panic!("register={register} release={release}: {error:?}")
+        };
+        assert_eq!(
+            state.scope_kind,
+            GcScopeKind::Project,
+            "register={register}"
+        );
+        assert_eq!(state.entity, "main", "register={register}");
+        assert_eq!(
+            state.phase.as_deref(),
+            Some("init"),
+            "register={register} release={release}"
+        );
+        let op = state.op.as_deref().expect("the operation identity");
+        assert_eq!(op.len(), 32, "register={register}: {op}");
+        assert!(
+            op.bytes().all(|byte| byte.is_ascii_hexdigit()),
+            "register={register}: {op}"
+        );
+    }
 }

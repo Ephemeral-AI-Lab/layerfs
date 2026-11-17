@@ -187,7 +187,7 @@ reconcile that fails leaves `possible_retained_key` and `owned_version`.
 | Frames | hello and ping 4 KiB (`MAX_HELLO`); diagnostic request and answer frames 64 KiB (`TooLarge`) | [`diagnostic.rs`](../../../../control/crates/layerfs-machine/src/worker/diagnostic.rs) |
 | Daemon registry held | `Busy`, `Changed` or `UnknownMethod` make `sandbox.workspaces` `unknown`; no retry | [`sandbox_channel.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_channel.rs) |
 | Build without `machine` | `machine.platform` `unknown` | [`machine_target.rs`](../../../../control/crates/layerfs-control/src/doctor/machine_target.rs) |
-| Build without `postgresql`; SQLite off this kernel | `Unsupported`, shown as `store.integrity.access` `unknown` | [`diagnostic.rs`](../../../../control/crates/layerfs-store/src/diagnostic.rs) |
+| SQLite off this kernel | `Unsupported`, shown as `store.integrity.access` `unknown` | [`diagnostic.rs`](../../../../control/crates/layerfs-store/src/diagnostic.rs) |
 | Build without `tls` for R2 or `https://` | `backup.configuration` `unknown`; nothing sent | [`backup_target.rs`](../../../../control/crates/layerfs-control/src/doctor/backup_target.rs) |
 | R2 versioning | Not `Enabled` through its S3 API: list checks run, the write test stays unsupported | [`diagnostic.rs`](../../../../control/crates/layerfs-bucket/src/bucket/s3_api/diagnostic.rs) |
 

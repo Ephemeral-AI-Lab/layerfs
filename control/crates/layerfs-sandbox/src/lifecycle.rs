@@ -342,6 +342,14 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
             )]),
         });
     }
+    // §5.1: the daemon unmount transaction releases each mount intent; a
+    // force close drains the Workspaces it is about to kill first, so a
+    // stopped Sandbox leaves no live intent that would refuse a later GC
+    // call. A Workspace the daemon cannot drain is reported as unknown below.
+    drop(_guard);
+    for path in &mounted {
+        let _ = crate::workspace::serve::unmount(host, Some(path), true, true);
+    }
     let value = crate::files::started(&directory)?
         .ok_or_else(|| refused("NoSuchSandbox", format!("Sandbox {id} was closed")))?;
     let mut owner = crate::reopen::recorded(host, &id, &value)?

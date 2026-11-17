@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The `store` calls: create, connect, inspect, move and remove the databases that hold every project's history, within the [SDK](README.md).
+The `store` calls: create, connect, inspect, move, remove and compact the databases that hold every project's history, within the [SDK](README.md).
 
 | | |
 | --- | --- |
@@ -24,6 +24,7 @@ The `store` calls: create, connect, inspect, move and remove the databases that 
         |     (back to native)             detach <machine>
         v                                     v
      remove (file + projects)              disconnect (data stays)
+     compact (reclaim dead bytes)
 ```
 
 | Call | Kind | Returns |
@@ -39,6 +40,7 @@ The `store` calls: create, connect, inspect, move and remove the databases that 
 | [`store.push`](#storepush) | sqlite | `{ store, from, to, bytes, heads }` |
 | [`store.pull`](#storepull) | sqlite | `{ store, from, to, bytes, heads }` |
 | [`store.remove`](#storeremove) | sqlite | `{ removed: name }` |
+| [`store.compact`](#storecompact) | both | `{ kind: "Compacted", ... }`, the §11 report |
 | [`store.disconnect`](#storedisconnect) | PostgreSQL | `{ disconnected: name }` |
 
 A sqlite Store is made with the Disposable profile (WAL,
@@ -61,7 +63,7 @@ shows `cursor`, `binding` or `v`:
 | `incoming_on` | sqlite | a machine a certain-failed push left a partial `.incoming` copy on; the next push or remove deletes it ([`sqlite/transfer/resolve.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/resolve.rs)) |
 | `backups` | sqlite | one link per bucket: the file, its heads, the last `create` or `restore` ([`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs)) |
 | `url`, `schema`, `synchronous_commit`, `password`, `machines` | PostgreSQL | the URL without a password, always `layerfs`, the setting, the password reference, attached machines `{ url?, password?, checked? }` |
-| `op` | both | the recorded intent `{ id, name, phase, started, uncertain }` ([`op.rs`](../../../../control/crates/layerfs-home/src/op.rs)) |
+| `op` | both | the recorded intent `{ id, name, phase, started, uncertain }`; for a compaction `id` is the 16-byte operation id rendered `op-<32 lowercase hex>` ([`op.rs`](../../../../control/crates/layerfs-home/src/op.rs), [`status.rs`](../../../../control/crates/layerfs-store/src/status.rs)) |
 | `projects` | both | the home's project records for this Store, sorted |
 
 | `state` (list, status) | When, first match wins |
@@ -113,7 +115,7 @@ CLI     layerfs store status <name>
 ```
 
 ```text
-{ name, kind, state, holders: [pid], op, down_reason, ... }
+{ name, kind, state, holders: [pid], op, phases, down_reason, ... }
  sqlite:     machine, file: { exists, free, bytes, wal_bytes, incoming_bytes }
                           | { unavailable }
  PostgreSQL: server: { reachable: true, server_version, latency_ms,
@@ -128,7 +130,15 @@ leases are ignored, not removed
 password reference is resolved here and the server dialed once; a
 PostgreSQL Store is never `down` (an unreachable server shows in `server`)
 ([`status.rs`](../../../../control/crates/layerfs-store/src/status.rs)). It is
-the call an `Unresolved` refusal names. Errors: `NotFound`; `InvalidInput` (a
+the call an `Unresolved` refusal names. When a compaction runs on a sqlite
+Store, `op` is read from `<store>.compact-op`; on a PostgreSQL Store it is
+the Store-side `gc_op` row with its `gc_intent`, read by one status query
+with no Store session and no artifact read. Either way `state` is `busy` only
+for an in-flight live owner; it is `unresolved` for a returned run's leftover
+even while its owner pid lives, and once the owner is gone. `uncertain` stays
+the record's own fact, and `phases` names the backend's order (`mark`,
+`build`, `verify`, `install`, `cleanup` on sqlite; `mark`, `build`, `swap`,
+`cleanup` on PostgreSQL), `null` when no compaction record is read. Errors: `NotFound`; `InvalidInput` (a
 record of unknown kind); `Unavailable` (a 1.1.0 Store whose machine is not
 known; `layerfs import-env` fixes it).
 
@@ -250,7 +260,7 @@ A failed check writes nothing; LayerFS never creates or grants roles
 | Error | When |
 | --- | --- |
 | `InvalidInput` | a sqlite Store (names `store push`); a URL holding a password |
-| `Unsupported` | the platform runs no PostgreSQL Sandboxes here; an ssh loopback URL; no `postgresql` engine; a worker bundle without `store.reach` |
+| `Unsupported` | the platform runs no PostgreSQL Sandboxes here; an ssh loopback URL; a worker bundle without `store.reach` |
 | `Unavailable` | the reference does not resolve; the machine is stopped; the server is not reached from it, or its database holds another Store or none (names the machine and host, never the URL) |
 | `Denied` | the server refused the login, or the role lacks a privilege (names the first and how many) |
 | `Conflict` | the Store was disconnected or reconnected elsewhere during the check |
@@ -370,6 +380,67 @@ uncertain. Errors: `InvalidInput` (a sqlite Store; use `store.remove`);
 `InUse` (another process holds its lease, a Sandbox of one of its projects is
 recorded, or a call in this process is running on it,
 [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs)); `Failed`.
+
+### store.compact
+
+Reclaims one Store's dead bytes by rebuilding it from its live history
+(spec §3, §7 on SQLite, §8 on PostgreSQL): the
+only byte-reclaiming call, with no confirm, force or dry
+run and no automatic collection. It writes its operation intent before the
+first checkpoint, verifies the rebuilt Store, and installs it by rename; a
+definite failure before the rename keeps the old Store and the generation `G`,
+while an installed-but-uncertain reply stays at `G + 1` and is reported, never
+deleted. A Store with less than 10% wholly dead packs takes the `none` path:
+it marks only and writes nothing. `dead_bytes_refined` equals
+`dead_bytes_bound` on every path, not only on `none`: the mark resolves the
+whole retained set and no second payload sweep runs (documented amendment
+#42 A10).
+
+A `<store>.compact-op` record belongs to an in-flight run only until that run
+replies: the run marks the record returned before it returns. The next call
+reads the recorded pid, kernel start time, boot and PID namespace and refuses
+`Busy` (as `BusyOp`, naming the record's entity, phase and operation) only
+while that process is provably live and the run has not returned, so a run that
+released the writer lane just before its `cleanup` settle stays protected. A
+returned run's record, whether the run left a residue or an unknown outcome, is
+a leftover the next call adopts and settles even though the owner process is
+alive. The settle and a pre-install abort remove the record only while it still
+names the operation being settled.
+
+**Local-only route (documented S6 deviation, #42 D5).** A sqlite Store on
+another machine is `Unsupported` and is never sent to that machine's worker:
+spec S6 says compaction runs on the machine that holds the file, but 2.0
+implements only `place::plan`'s `Local` route and refuses before it opens the
+Store or dials anything. The worker has no `store.compact` operation. Run the
+call on that machine; the deviation and its owner-sign-off request are in
+[`gc-42-decisions.md`](../../../../core/docs/issues/project-41/gc-42-decisions.md)
+D5, and the control route table names the same exception.
+
+```text
+JS      await layerfs.store.compact(name)
+Python  layerfs.store.compact(name)
+CLI     layerfs store compact <name>
+```
+
+Returns `{ kind: "Compacted", path, generation: {before, after}, ... }`
+with the report's snake_case fields: `dead_bytes_bound`,
+`dead_bytes_refined`, `logical_discarded`, `backend_reusable`,
+`physical_shrink`, `kept_waste {dead_in_retained_packs_bytes, delta_bases
+{bytes, references}, inode_blocks_bytes}`, `peak_temp_bytes`, `residue`,
+`estimate` and `zero_reasons`; `delta_bases.references` is `{value, cap}` when the identity list is cut at `DELTA_BASE_REFERENCES_CAP` (1024).
+`mark_bytes` is not a result field: PostgreSQL records the §11 `markBytes`
+transfer metric as `compact.mark_bytes` (a #52 measurement: the distinct
+live-pack body extents its Phase M walk reads, each pack counted once), and
+SQLite, whose payload walk runs inside the mark, reports no value.
+
+| Error | When | Source |
+| --- | --- | --- |
+| `NoSuchStore`, `Unsupported` | a missing Store; a sqlite Store on another machine, because compaction is local-only by the documented S6 deviation (#42 D5) and never takes the worker route; a non-private Store directory; or an unsupported filesystem | [`compact.rs`](../../../../control/crates/layerfs-store/src/compact.rs) |
+| `MountsActive`, `Busy`, `Unresolved` | a mount, long-lived client or operation holds the Store, or a dead owner left an uncertain one | spec §5 |
+| `Busy` | a call still running on the Store in this process, so the Store cannot be closed for the rebuild: the open cache's refusal is reported as `Busy`, naming the Store as `entity` with `phase` and `op` null | spec §10 |
+| `StaleStore`, `Conflict` | `StaleStore` for a connection that bypassed admission and touches the Store after the install; `Conflict` when the sealed state changed at install (sidecar, `(dev, ino)` identity, or the sealed size/mtime/change counter) | spec §7, §10 |
+| `Capacity` | a real allocation refusal during the rebuild; the old Store is kept | spec §7 |
+| `Unknown` | the reply was lost around install; read `store.status` and the op before any second call | spec §9 |
 
 ## Family errors
 

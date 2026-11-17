@@ -12,6 +12,11 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 pub enum StoreStep {
     /// Whether the file is there, its size and the free bytes.
     Stat,
+    /// The compaction operation recorded beside the Store, for `store.status`.
+    ///
+    /// It reads only `<store>.compact-op`; never the Store database, an
+    /// artifact or a directory listing.
+    CompactOp,
     /// The idle Store's bytes, sha256 and heads.
     Snapshot,
     /// A consistent snapshot of the live Store, staged beside it.
@@ -68,6 +73,7 @@ impl StoreStep {
     pub fn name(&self) -> &'static str {
         match self {
             Self::Stat => "stat",
+            Self::CompactOp => "compact-op",
             Self::Snapshot => "snapshot",
             Self::Stage => "stage",
             Self::Unstage => "unstage",
@@ -161,6 +167,7 @@ impl StepFrame {
         layerfs_home::names::StoreName::parse(store)?;
         let step = match op {
             "stat" => StoreStep::Stat,
+            "compact-op" => StoreStep::CompactOp,
             "snapshot" => StoreStep::Snapshot,
             "stage" => StoreStep::Stage,
             "unstage" => StoreStep::Unstage,

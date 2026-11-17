@@ -43,7 +43,7 @@ The call table and the one dispatcher every front end goes through: what a call 
 
 | Behaviour | Detail | Source |
 | --- | --- | --- |
-| Table | twelve `Family { name, list }`; a `Call` is `{ family, call, args, options, help, run, quiet, opens }`, an `Arg` `{ name, kind, optional }`; 82 calls, help order | [`table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs), [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families` |
+| Table | twelve `Family { name, list }`; a `Call` is `{ family, call, args, options, help, run, quiet, opens }`, an `Arg` `{ name, kind, optional }`; 85 calls, help order | [`table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs), [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families` |
 | JSON form | `table_json()`: `[{ family, call, args: [{ name, kind, optional }], options, help }]`; Node's `table`, Python's `TABLE`; the CLI parser and help read the same `Call` values | `table.rs` `table_json` |
 | Shared options | `PAGE` (`page_size`, `page_pos`), `DIFF` (`paths_only`, `page_size`, `page_pos`, `cursor`), `MESSAGE` (`message`), `PROGRESS` (`on_progress`), `WINDOW` (`cursor`, `before`, `limit`), `FILES` (`depth`, `cursor`, `limit`, `offset`, `length`) | `table.rs` |
 | Kinds | below | `table.rs` `Kind` |
@@ -121,8 +121,14 @@ poll would bury the calls that changed something) and with `LAYERFS_LOGS=0`
 | `tag` | a top-level `log_tag` argument (taken out before the check; no entry declares it), else `LAYERFS_LOGS_TAG`; at most 128 bytes |
 
 Values are cut to 200 characters. Content, JSON, and the `Text` arguments
-`command`, `message`, `old`, `new`, `password` and `url` are logged only as
-`<N bytes>` (`REDACTED`). The line is written after the outcome and never
+`command`, `message`, `old`, `new`, `password`, `url` and every path argument
+(`path`, `left_path`, `right_path`, `from_path`, `to_path`, `path_prefix`)
+are logged only as `<N bytes>` (`REDACTED`), so a `project.remove_file` or
+`file.*` path never enters the log (#41 §4.3). A path counts its normalized
+form, one leading `/` stripped (`/a` and `a` are both `<1 bytes>`); a glob or
+grep `pattern` is not a path and counts its own bytes. A refusal contributes
+only its code: its message and `detail` (which may echo the path, as `Removed`
+does) are never logged. The line is written after the outcome and never
 changes it. Reading and clearing it are the [`logs`](../sdk/logs.md) calls.
 
 ## Invariants
@@ -157,7 +163,7 @@ changes it. Reading and clearing it are the [`logs`](../sdk/logs.md) calls.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host, temporary folders | twelve families and 82 calls; unknown calls and arguments refused before any effect; each family reached; JSON round trips; sizes and keys; a relative home refused; one source file per call |
+| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host, temporary folders | twelve families and 85 calls; unknown calls and arguments refused before any effect; each family reached; JSON round trips; sizes and keys; a relative home refused; one source file per call |
 | [`calls_scope.rs`](../../../../api/crates/layerfs-api/tests/calls_scope.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_scope` | any Unix host | a scope names its project, refuses every call it does not cover, needs a Sandbox of its project, and a scoped `branch.list` reads every page |
 | [`scope_references.rs`](../../../../api/crates/layerfs-api/tests/scope_references.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test scope_references` | any Unix host | fork and publish references outside the namespace refused before any effect; the JSON form refuses the same |
 | [`logs.rs`](../../../../api/crates/layerfs-api/tests/logs.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test logs` | any Unix host | one line per call, rendering and redaction, `logs.list` and `logs.reset` |

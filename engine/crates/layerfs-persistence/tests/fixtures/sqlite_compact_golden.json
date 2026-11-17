@@ -1,0 +1,394 @@
+{
+  "digestVector": {
+    "absentHeadDigest": "6864c4f336ed6ccfb6ea864bd565b23b97fbbff571e6b627d0043bce7218a724",
+    "commit": [
+      "121c28e0f8ea5f06e9f3a5ad08f7f2bd7b2ad1afd677d57099991f41678ab19ec1"
+    ],
+    "retiredBranchDigest": "dafcdd21820991184e6f21e7c80cbdd0f034fdc1d62ebf9502aeae381770c857",
+    "retiredStack": [
+      "3107070707070707070707070707070707"
+    ]
+  },
+  "emptyNone": {
+    "mark": {
+      "liveHeadsDigest": "3556f439f3ea4d21d189c484e3c117492779e5c62249481882cd6011cf1a13a9",
+      "objectCount": 0,
+      "packs": []
+    },
+    "receipt": {
+      "backendReusable": 0,
+      "deadBytesBound": 0,
+      "deadBytesRefined": 0,
+      "estimate": true,
+      "generationAfter": 7,
+      "generationBefore": 7,
+      "keptWaste": {
+        "deadInRetainedPacksBytes": 0,
+        "deltaBases": {
+          "bytes": 0,
+          "references": []
+        },
+        "inodeBlocksBytes": 0
+      },
+      "logicalDiscarded": 0,
+      "path": "none",
+      "peakTempBytes": 12288,
+      "physicalShrink": 0,
+      "residue": {
+        "artifacts": [],
+        "bytes": 0,
+        "reason": null
+      },
+      "zeroReasons": [
+        {
+          "field": "deadBytesBound",
+          "reason": "empty-store"
+        },
+        {
+          "field": "deadBytesRefined",
+          "reason": "empty-store"
+        },
+        {
+          "field": "logicalDiscarded",
+          "reason": "no-history"
+        },
+        {
+          "field": "physicalShrink",
+          "reason": "none-path"
+        },
+        {
+          "field": "backendReusable",
+          "reason": "none-path"
+        },
+        {
+          "field": "keptWaste",
+          "reason": "no-waste"
+        }
+      ]
+    },
+    "totalsAfter": {
+      "canonical": 0,
+      "logical": 0,
+      "metadata": 0,
+      "stored": 0
+    },
+    "totalsBefore": {
+      "canonical": 0,
+      "logical": 0,
+      "metadata": 0,
+      "stored": 0
+    }
+  },
+  "noDeadNone": {
+    "commit": [
+      "120dee8be25262ff5277cf6682a1b66b1157c2f1aa1ed551e3a3c140ec4d41e250"
+    ],
+    "layer": [
+      "3228ecf26544a2fea9ffeecc6829ab584e2a4fa4f5e7be920696d98ed8d843e749"
+    ],
+    "mark": {
+      "liveHeadsDigest": "b04ee485d7c6002f22a8ab6d12c206ad84254435fb1067e952883c8f3012128d",
+      "objectCount": 8,
+      "packs": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    "receipt": {
+      "backendReusable": 32768,
+      "deadBytesBound": 0,
+      "deadBytesRefined": 0,
+      "estimate": true,
+      "generationAfter": 7,
+      "generationBefore": 7,
+      "keptWaste": {
+        "deadInRetainedPacksBytes": 0,
+        "deltaBases": {
+          "bytes": 0,
+          "references": []
+        },
+        "inodeBlocksBytes": 190
+      },
+      "logicalDiscarded": 0,
+      "path": "none",
+      "peakTempBytes": 12288,
+      "physicalShrink": 0,
+      "residue": {
+        "artifacts": [],
+        "bytes": 0,
+        "reason": null
+      },
+      "zeroReasons": [
+        {
+          "field": "deadBytesBound",
+          "reason": "no-waste"
+        },
+        {
+          "field": "deadBytesRefined",
+          "reason": "no-waste"
+        },
+        {
+          "field": "logicalDiscarded",
+          "reason": "none-path"
+        },
+        {
+          "field": "physicalShrink",
+          "reason": "none-path"
+        }
+      ]
+    },
+    "totalsAfter": {
+      "canonical": 890,
+      "logical": 410,
+      "metadata": 808,
+      "stored": 936
+    },
+    "totalsBefore": {
+      "canonical": 890,
+      "logical": 410,
+      "metadata": 808,
+      "stored": 936
+    }
+  },
+  "rebuild": {
+    "after": {
+      "branchRetired": [
+        "1101010101010101010101010101010101"
+      ],
+      "deadPacksGone": true,
+      "fileDigestCollected": false,
+      "fileDigestRetained": true,
+      "fullDoctor": "clean",
+      "layerStackRetired": 0,
+      "liveHeadsDigestUnchanged": true,
+      "liveReadable": true
+    },
+    "fixture": {
+      "branches": {
+        "collected": [
+          "1103030303030303030303030303030303",
+          "1104040404040404040404040404040404"
+        ],
+        "live": [
+          "1102020202020202020202020202020202"
+        ],
+        "retainedRetired": [
+          "1101010101010101010101010101010101"
+        ]
+      },
+      "commits": {
+        "collected": [
+          "12504118308814458073cf694c832277a9a3edf25438d6c29033749d7d4b6851e9",
+          "12f41169281d83c82e136fb7a69850b3d72ea90ef637dd4145bdbf1077cbafbb45"
+        ],
+        "retained": [
+          "12ae744d795440a3f12341548e1f1ae118e384450d2454aa6e1bf952fc5fa5b9e5",
+          "129c35a564ebb33405e16e5ebc548aa5e01640914517db7a7a2948c0c22e8600e6",
+          "128512651dcea9f37272d401d22f19aefcac65d46f4a66dcf9596078ce4f1efb2f"
+        ]
+      },
+      "deadBytesBound": 182635,
+      "deltaBaseReferences": [
+        "d5f0864e883f3636c1d1e60fd9a40c4a7942776d635958b01d89dfe914953d50",
+        "e7069dfd5e4a6720d9e7a8dfb74e3eda95b0cc6c798a8942d0b956ac919e8c85"
+      ],
+      "deltaChainPackIds": [
+        25,
+        26,
+        27
+      ],
+      "inodeBlocksBytes": 665,
+      "layers": {
+        "collected": [
+          "32c89ce4fa2bda2b0fc9ef449faa224fe05895352e5333ec7fe9fb4e35fb8d5409",
+          "32e7c02e338721609c58801a6195a8f9ececb7875b3715a6356f811534f9185dda"
+        ],
+        "retained": [
+          "32e2fce8a15669a223b821c5a12720915f959a3bd8b678843a2d4c836f49973d79",
+          "3228fe19ff26677849bef9617a26fba8c9d70b6bb0f30f4ceb35dac89164bba157",
+          "32219e07e8572a40e056647a2db0febee7cff5e951a91974ce130bf7534d4f5ed9"
+        ]
+      },
+      "objects": {
+        "dead": [
+          "04da3ee0d5c26526b82eaacaa3611fb5ee51b53938b15b9a6e0c2ce23fac79aa",
+          "03cdb1082aefd8630de9ded4491f70107d1194879c3725f47604e61d6ce8464f",
+          "b41d84c180ddbf811874a45b54f6bb5929351b9d922e3eae16030b93ef0c0465",
+          "93934455f81c303589782508b25a6fc6cb5577041d09f9997dbdf9a4443da90e",
+          "1ccae865928d331b9f40f6b9781de1a8f2fc131c79a46b18de977a92e1fc41f6",
+          "d330e6950c00b9c6e5214a911a0b7438590ce84c9f732d9a5dcf0337a3ee3b3c",
+          "9e1ae9f693108d70236c4b834eae7066e95a1c6c88319598521b3a30178b335b",
+          "9b4f54e459f725c48c96be90af12c6918e3135964d38629313fe09fa548c2c63",
+          "c260b43bb74755139dd041a0906db269d0ed8039181fcb0d1ec6226ae1e1638e",
+          "1d0d2e8c5f735a3437e84a60119ae1daa08a34d769969c460a7a7695361bd88b",
+          "aa2d83fe8c3e636f1c8086bcf96bdee0081bd564ed730f627e1bf130d3f6725b",
+          "c7885caa9ac150fca12ca3352cec6e1a9ab8d585332e3def1ccb084cdb710368",
+          "8e65a309ef2a363965849a9b19bb3b005e565d4a678f09893d721a8031d9977e",
+          "cc9d4bace21b47206e4cacdacc1dcce819210b79787c33a71c1bdfd553bca024",
+          "1352f9c655388061372fe949b37530b1284bc50c4cd7f979ff25d848e42a43ac",
+          "968c266c9fd518965edb975d40714441b48b142ea1bef48ad6164da39f307a80",
+          "773f0e9363afec9a9bc0294e492e84e9c2985de50fcb21294b6762774309e5b5",
+          "a96b6772f5b6c00682d3e8545e583c6f99f3e404015efb471a8c5ccb4d42f1e4",
+          "90bd063fc258fce027928d7d05334f076868c9fa5effe998c09a18c79b9b3c1b"
+        ],
+        "live": [
+          "bea0e9f6fdfdb07ff631ac8213c85caf98cba1ff2aeb342fe7f99ff210b1498e",
+          "f7b81686c824c3de2c23077b02f554936618e20621719a0682c9430358290f73",
+          "4ed7a5abe47b79b9c281d7bbd914e858162d5d005c3aff0e05c5b1bf484e3403",
+          "3df6d13237972839afaa61737e92f27e60793cc25d61b7f8515b6f8374d3dc2d",
+          "43652a535c7f61a5caef1d1574a661b4c19b02d848d6463430d933920c148152",
+          "b57fc5ee3a4f8270aecd33c137a39b68336669fa1d06f11acb8f02e6ff6e6849",
+          "e7069dfd5e4a6720d9e7a8dfb74e3eda95b0cc6c798a8942d0b956ac919e8c85",
+          "d5f0864e883f3636c1d1e60fd9a40c4a7942776d635958b01d89dfe914953d50",
+          "3806265ed5cd11005a9918e03c34377954012805cdfe908877678c1395111776",
+          "01fd2163213bdea11e96e3fb9f27ea76a6112497895d7e4751f541509d5b7e25"
+        ]
+      },
+      "packs": {
+        "dead": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          29,
+          30,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52
+        ],
+        "live": [
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          25,
+          26,
+          27,
+          28,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43
+        ],
+        "shared": 28,
+        "sharedDeadGroupBytes": 265,
+        "sharedLength": 562
+      },
+      "stacks": {
+        "collected": [
+          "3102020202020202020202020202020202"
+        ],
+        "live": [
+          "3101010101010101010101010101010101"
+        ]
+      }
+    },
+    "mark": {
+      "liveHeadsDigest": "d3a3eadd25ce23512bc358a91b3195ee8d29ee027f83840d567dc6540f47bab9",
+      "objectCount": 23,
+      "packs": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        25,
+        26,
+        27,
+        28,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43
+      ]
+    },
+    "receipt": {
+      "backendReusable": 32768,
+      "deadBytesBound": 182635,
+      "deadBytesRefined": 182635,
+      "estimate": true,
+      "generationAfter": 8,
+      "generationBefore": 7,
+      "keptWaste": {
+        "deadInRetainedPacksBytes": 265,
+        "deltaBases": {
+          "bytes": 571,
+          "references": [
+            "d5f0864e883f3636c1d1e60fd9a40c4a7942776d635958b01d89dfe914953d50",
+            "e7069dfd5e4a6720d9e7a8dfb74e3eda95b0cc6c798a8942d0b956ac919e8c85"
+          ]
+        },
+        "inodeBlocksBytes": 665
+      },
+      "logicalDiscarded": 182465,
+      "path": "rebuild",
+      "peakTempBytes": 389120,
+      "physicalShrink": 221184,
+      "residue": {
+        "artifacts": [],
+        "bytes": 0,
+        "reason": null
+      },
+      "zeroReasons": []
+    },
+    "totalsAfter": {
+      "canonical": 134988,
+      "logical": 1090,
+      "metadata": 2024,
+      "stored": 134670
+    },
+    "totalsBefore": {
+      "canonical": 317453,
+      "logical": 1250,
+      "metadata": 3644,
+      "stored": 317305
+    }
+  }
+}

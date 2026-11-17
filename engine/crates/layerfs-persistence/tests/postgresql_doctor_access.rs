@@ -51,24 +51,44 @@ fn saved_authority_schema_authentication_tls_and_transport_are_distinct() {
     let out = connection(&restricted, BINDING);
     assert!(has(&out, "store.connection.read", Outcome::Fail), "{out:?}");
     let marker = "wrong-password-never-display-412d";
-    let mut wrong = f.selection.clone();
-    let password = std::env::var("LAYERFS_TEST_POSTGRES_PASSWORD").unwrap();
-    wrong.url = wrong.url.replace(&password, marker);
-    let out = connection(&wrong, BINDING);
-    assert!(
-        has(&out, "store.connection.authentication", Outcome::Fail),
-        "{out:?}"
-    );
-    assert!(!format!("{out:?}").contains(marker));
-    assert!(!format!("{out:?}").contains(&password));
-    let mut tls = f.selection.clone();
-    tls.url = tls.url.replace("sslmode=disable", "sslmode=require");
-    let out = connection(&tls, BINDING);
-    assert!(
-        has(&out, "store.connection.transport", Outcome::Unknown),
-        "self-signed fixture must fail normal trust validation: {out:?}"
-    );
-    no_corruption(&out);
+    match rejected_password(&f.selection.url) {
+        Some(password) => {
+            let mut wrong = f.selection.clone();
+            wrong.url = conninfo::with_option(&wrong.url, "password", marker);
+            let out = connection(&wrong, BINDING);
+            assert!(
+                has(&out, "store.connection.authentication", Outcome::Fail),
+                "{out:?}"
+            );
+            assert!(!format!("{out:?}").contains(marker));
+            assert!(!format!("{out:?}").contains(&password));
+        }
+        None => eprintln!(
+            "NOT_RUN: saved authority/wrong password: the fixture accepts any password \
+             (trust/peer authentication), so no wrong password can be refused; the saved \
+             authority, schema and unreachable-endpoint transport cases still run"
+        ),
+    }
+    if tls_enabled(&mut f.admin) {
+        let mut tls = f.selection.clone();
+        tls.url = if tls.url.contains("sslmode=disable") {
+            tls.url.replace("sslmode=disable", "sslmode=require")
+        } else {
+            conninfo::with_option(&tls.url, "sslmode", "require")
+        };
+        let out = connection(&tls, BINDING);
+        assert!(
+            has(&out, "store.connection.transport", Outcome::Unknown),
+            "self-signed fixture must fail normal trust validation: {out:?}"
+        );
+        no_corruption(&out);
+    } else {
+        eprintln!(
+            "NOT_RUN: saved authority/TLS: the fixture server has ssl=off, so the \
+             self-signed certificate cannot exercise normal trust validation; the \
+             unreachable-endpoint case still checks transport distinctness"
+        );
+    }
     let socket = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = socket.local_addr().unwrap().port();
     drop(socket);
@@ -90,9 +110,7 @@ fn namespace_phase_transport_loss_is_unknown_and_releases_its_snapshot() {
     let before = f.fingerprint();
     let mut selection = f.selection.clone();
     let application = f.selection.schema.clone();
-    selection
-        .url
-        .push_str(&format!("&application_name={application}"));
+    selection.url = conninfo::with_option(&selection.url, "application_name", &application);
     let reader = PostgresHandles::open_diagnostic(
         &selection,
         BINDING,
@@ -221,23 +239,66 @@ fn configured_unix_then_tcp_fallback_preserves_saved_options() {
     };
     let parsed = postgres::Config::from_str(&f.selection.url).unwrap();
     let port = parsed.get_ports()[0];
-    let password = std::env::var("LAYERFS_TEST_POSTGRES_PASSWORD").unwrap();
-    let selection=layerfs_persistence::PostgresSelection::new(format!("host=/tmp/doctor-no-such-unix-socket,127.0.0.1 port={port},{port} user=postgres password={password} dbname=postgres sslmode=disable options='-c application_name=doctor_unix_fallback'"),&f.selection.schema);
+    let mut conninfo = format!(
+        "host=/tmp/doctor-no-such-unix-socket,127.0.0.1 port={port},{port} user={} dbname={} sslmode=disable options='-c application_name=doctor_unix_fallback'",
+        parsed.get_user().unwrap_or("postgres"),
+        parsed.get_dbname().unwrap_or("postgres")
+    );
+    if let Some(password) = parsed
+        .get_password()
+        .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+        .or_else(|| std::env::var("LAYERFS_TEST_POSTGRES_PASSWORD").ok())
+    {
+        conninfo.push_str(&format!(" password={password}"));
+    }
+    let selection = layerfs_persistence::PostgresSelection::new(conninfo, &f.selection.schema);
     let out = connection(&selection, BINDING);
     assert!(
         has(&out, "store.connection.identity", Outcome::Pass),
         "{out:?}"
     );
     let mut random = f.selection.clone();
-    random
-        .url
-        .push_str("&load_balance_hosts=random&host=127.0.0.1,127.0.0.1");
+    random.url = conninfo::with_option(&random.url, "load_balance_hosts", "random");
+    random.url = conninfo::with_option(&random.url, "host", "127.0.0.1,127.0.0.1");
     let out = connection(&random, BINDING);
     assert!(
         has(&out, "store.connection.configuration", Outcome::Unknown),
         "{out:?}"
     );
     no_corruption(&out);
+}
+
+/// The fixture's password when the server refuses a deliberately wrong one.
+/// `None` means the fixture accepts any password (trust or peer
+/// authentication), so a wrong-password connection cannot demonstrate an
+/// authentication failure and that case reports NOT_RUN instead.
+fn rejected_password(url: &str) -> Option<String> {
+    use std::str::FromStr;
+    let mut config = postgres::Config::from_str(url).ok()?;
+    let password = std::env::var("LAYERFS_TEST_POSTGRES_PASSWORD")
+        .ok()
+        .or_else(|| {
+            config
+                .get_password()
+                .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+        })?;
+    config.password("wrong-password-never-display-412d");
+    match config.connect(postgres::NoTls) {
+        Ok(_) => None,
+        Err(error) => {
+            error.code().filter(|code| code.code().starts_with("28"))?;
+            Some(password)
+        }
+    }
+}
+
+/// Whether the fixture server offers TLS, so a self-signed certificate can
+/// exercise the doctor's transport check.
+fn tls_enabled(admin: &mut postgres::Client) -> bool {
+    admin
+        .query_one("SHOW ssl", &[])
+        .ok()
+        .is_some_and(|row| row.get::<_, String>(0) == "on")
 }
 
 #[test]

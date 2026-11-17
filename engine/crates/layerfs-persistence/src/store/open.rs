@@ -95,10 +95,21 @@ impl SqliteHandles {
             config.sqlite_acquisition,
         )?);
         if writable {
+            // A Store at the released 2.0 table set recorded its schema
+            // without the position columns; it gains them before any table
+            // migration runs.
+            session.add_gc_columns()?;
             session.add_binding_hints()?;
             session.add_lineage(crate::history::backfill_lineage)?;
             session.add_merge_scratch()?;
             session.add_file_digests()?;
+            // A Store an earlier migration just brought forward recorded its
+            // source without the position columns, so it gains them here,
+            // before `add_gc` records the full schema.
+            session.add_gc_columns()?;
+            session.add_gc()?;
+            session.add_kept_node()?;
+            session.add_position_state()?;
         }
         let handles = Self::validated(session, directory, binding, cursor_key)?;
         if writable {
@@ -116,7 +127,7 @@ impl SqliteHandles {
             return Err(PersistenceError::Malformed);
         }
         let catalog_id = CatalogId::derive(binding).map_err(|_| PersistenceError::Malformed)?;
-        let (incarnation, digest_floor) = session.validate(catalog_id, binding)?;
+        let (incarnation, digest_floor, trace_salt) = session.validate(catalog_id, binding)?;
         let storage = Arc::new(StorageProvider {
             session: session.clone(),
         });
@@ -129,6 +140,7 @@ impl SqliteHandles {
                 incarnation,
                 cursor_key,
                 digest_floor,
+                trace_salt,
             },
         })
     }

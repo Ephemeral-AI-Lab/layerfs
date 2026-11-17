@@ -74,8 +74,10 @@ runs and how the folder gets there.
 | Carried: kind, permission bits, mtime, link target, file bytes. Not carried: owners, access times, extended attributes, hard links | [`tree.rs`](../../../../control/crates/layerfs-store/src/project/tree.rs) |
 
 Each worker frame (`project.stage`, `project.init`, `project.export`,
-`project.remove`) is decoded once into its typed request; the worker sets
-the home to its own root
+`project.delete`, `project.delete.admit`, `project.delete.entry`,
+`project.delete.release`) is
+decoded once into its typed request; the worker sets the home to its own
+root
 ([`frame.rs`](../../../../control/crates/layerfs-store/src/project/frame.rs)).
 
 ## Export (`export/`)
@@ -104,15 +106,18 @@ process, SQLite behind a worker
 | Bounds | part at most 2 MiB; file piece at most 256 KiB; directory entries read 64 at a time | [`export/walk.rs`](../../../../control/crates/layerfs-store/src/project/export/walk.rs) |
 | Progress | `prepare`, `export`, `finalize`, at most every 200 ms | [`export/writer.rs`](../../../../control/crates/layerfs-store/src/project/export/writer.rs) |
 
-## Remove (`remove.rs`)
+## Delete (`delete/`)
 
-`project.remove` drops the project's Layers, Branches and Commits from its
-Store in one write, here or in the Store's worker, then its record; other
-projects stay. It is refused `InUse` while a Sandbox of the project is
-recorded (`layerfs-control` passes that check in), and `Unsupported` for a
-PostgreSQL Store
+`project.delete(project)` retires project `project` in its Store, here or in
+the Store's worker, and removes only the caller's home entry; other projects
+stay. The Stack's marker (`mark_stack_deleted`) is the commit point, so a
+lost reply is finished by a same-home retry of the durable intent, whose
+Store side classifies the marker as `Marked`, `Retired` or `Absent`. It is
+refused `Busy` while a Sandbox of the project is recorded
+(`layerfs-control` passes that check in), and `MountsActive`/`Busy`/
+`Unresolved` while a live mount or operation holds the project scope
 ([`family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs),
-[`remove.rs`](../../../../control/crates/layerfs-store/src/project/remove.rs),
+[`delete.rs`](../../../../control/crates/layerfs-store/src/project/delete.rs),
 [`layerfs-control/src/project.rs`](../../../../control/crates/layerfs-control/src/project.rs)).
 
 ## Discovery (`discovery.rs`)

@@ -191,6 +191,37 @@ pub fn can_change_machine(home: &Path, name: &str) -> Result<()> {
     ))
 }
 
+/// `project.delete`: refused `Busy` while a Sandbox of `project`
+/// (`<store>/<project>`) is recorded, so a live Sandbox cannot outlive its
+/// project's Store rows. The `detail` is spec §10's `{entity: {kind:
+/// "project", name}, phase: null, op: null}`, and `related` lists the
+/// Sandboxes as `{kind, name}`; an unreachable Sandbox is still a live user
+/// and keeps holding.
+pub fn can_remove_project(home: &Path, project: &str) -> Result<()> {
+    let sandboxes = sandboxes_of_project(home, project)?;
+    if sandboxes.is_empty() {
+        return Ok(());
+    }
+    let message = match sandboxes.as_slice() {
+        [sandbox] => format!("Sandbox {sandbox} of {project} is running"),
+        many => format!("Sandboxes {} of {project} are running", many.join(", ")),
+    };
+    let mut refusal = refused("Busy", message);
+    refusal.detail = SdkValue::map([
+        (
+            "entity",
+            SdkValue::map([
+                ("kind", SdkValue::text("project")),
+                ("name", SdkValue::text(project)),
+            ]),
+        ),
+        ("phase", SdkValue::Null),
+        ("op", SdkValue::Null),
+        ("related", SdkValue::List(related("sandbox", &sandboxes))),
+    ]);
+    Err(refusal)
+}
+
 /// `store.push`, `store.pull`, `store.remove`, `store.disconnect` and
 /// `backup.restore`: refused `InUse` while
 /// another live process holds Store `store` (its lease) or a Sandbox of one
@@ -215,16 +246,4 @@ pub fn store_idle(home: &Path, store: &str) -> Result<()> {
     let mut held = related("lease", &pids);
     held.extend(related("sandbox", &sandboxes));
     Err(in_use(why.join("; "), held))
-}
-
-/// `project.remove`: refused `InUse` while a Sandbox of `project` is
-/// recorded; `detail.related` lists them as `{kind: "sandbox", name}`.
-pub fn can_remove_project(home: &Path, project: &str) -> Result<()> {
-    let sandboxes = sandboxes_of_project(home, project)?;
-    let message = match sandboxes.as_slice() {
-        [] => return Ok(()),
-        [sandbox] => format!("Sandbox {sandbox} of {project} is running"),
-        many => format!("Sandboxes {} of {project} are running", many.join(", ")),
-    };
-    Err(in_use(message, related("sandbox", &sandboxes)))
 }

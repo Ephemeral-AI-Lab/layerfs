@@ -5,25 +5,25 @@
 //! `native` or a PostgreSQL Store, in the machine's worker for a sqlite
 //! Store on any other machine (#536 H11). The folder is always on the
 //! caller's host: for a worker this process copies it to the machine
-//! first (H11a). Records in the home list projects; `remove` drops one
-//! project's history from its Store.
+//! first (H11a). Records in the home list projects.
 use crate::calls::Page;
 use crate::lease;
-use crate::place::{self, Executor};
+use crate::open_args::OpenArgs;
+use crate::place::{self, Executor, Worker};
 use crate::project::add::{add_project, ProjectAdd};
-use crate::project::discovery::home_of;
-use crate::project::frame::{InitFrame, RemoveFrame};
+use crate::project::frame::{InitFrame, ListingFrame, ListingReply};
 use crate::project::postgres_init::PgProjectAdd;
 use crate::project::record::ProjectRecord;
 use crate::record::{StoreRecord, StoreRef};
 use crate::resolve;
+use crate::service;
 use crate::sqlite::family::progress;
-use crate::Related;
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::paths;
 use layerfs_home::names::{ProjectRef, StoreName};
 use layerfs_home::outcome::{failed, refused, Outcome, View};
+use layerfs_store_service::history::lookup;
 use std::path::Path;
 
 /// Default Init time limit: one hour.
@@ -49,6 +49,94 @@ pub struct ProjectInit {
     pub timeout: Option<i64>,
 }
 
+/// One project a Store's filtered listing names: its name and LayerStack.
+struct LiveProject {
+    name: String,
+    stack: Vec<u8>,
+}
+
+/// The live projects Store `store` lists, after the retired/hidden ones are
+/// filtered out (spec §4.2). Every route reads the listing where the
+/// Store's calls run (T4.5c): in this process for a sqlite Store on this
+/// machine and for a PostgreSQL Store, in the machine's worker for a sqlite
+/// Store on another machine. A Store that cannot be listed is `Err`.
+fn live_projects(
+    home: &Path,
+    store: &str,
+    record: &StoreRecord,
+) -> std::result::Result<Vec<LiveProject>, SdkRefusal> {
+    let store_ref = record.store_ref()?;
+    record.unblocked()?;
+    if let Executor::Worker(mut worker) = place::plan(home, store_ref)? {
+        return live_projects_on_worker(&mut worker, store, record);
+    }
+    let (store_path, postgresql) = match store_ref {
+        StoreRef::Postgres { .. } => (
+            record.postgresql_key(home, store),
+            Some(crate::postgresql::connect::selection(record)?),
+        ),
+        StoreRef::Sqlite { .. } => (paths::store_file(home, store), None),
+    };
+    let open = OpenArgs {
+        home: Some(home.to_path_buf()),
+        store: Some(store.to_owned()),
+        store_path: Some(store_path.display().to_string()),
+        store_record: Some(record.to_record().clone()),
+        postgresql,
+        ..OpenArgs::default()
+    };
+    let stacks = service::with_service(&open, |service| {
+        service
+            .store
+            .published(layerfs_project::store::projects)
+            .map_err(lookup::published)
+    })?;
+    Ok(stacks
+        .into_iter()
+        .map(|stack| LiveProject {
+            name: stack.name.as_str().to_owned(),
+            stack: stack.id.to_bytes().to_vec(),
+        })
+        .collect())
+}
+
+/// The listing a worker-backed Store sends (T4.5c): the worker runs the
+/// same `layerfs_project::store::projects` under its own root, so a project
+/// retired in the Store is hidden here as it is for a local one.
+fn live_projects_on_worker(
+    worker: &mut Worker,
+    store: &str,
+    record: &StoreRecord,
+) -> std::result::Result<Vec<LiveProject>, SdkRefusal> {
+    let frame = ListingFrame {
+        store: StoreName::parse(store)?,
+        store_record: Some(record.to_record().clone()),
+    };
+    // A listing whose answer was lost is `Unknown`; name the Store it listed
+    // so the detail carries `{entity: {kind, name}, phase, op}` (spec §10 A6).
+    let answer = worker
+        .call("project.list", frame.encode(), &mut |_| {})
+        .map_err(|refusal| crate::unknown::named_unknown(refusal, "store", store, None))?;
+    let reply = ListingReply::decode(&answer)?;
+    Ok(reply
+        .projects
+        .into_iter()
+        .map(|project| LiveProject {
+            name: project.name,
+            stack: project.stack.to_bytes().to_vec(),
+        })
+        .collect())
+}
+
+/// Whether `project` is in `live`: by the stack id its record holds, or,
+/// for a record without one, by its name (spec §4.2).
+fn listed(project: &ProjectRecord, name: &str, live: &[LiveProject]) -> bool {
+    match project.stack() {
+        Some(stack) => live.iter().any(|item| item.stack == stack),
+        None => live.iter().any(|item| item.name == name),
+    }
+}
+
 /// One project as callers see it; a record that does not read shows no
 /// `created`.
 fn summary(home: &Path, store: &str, name: &str, record: &StoreRecord, view: View) -> SdkValue {
@@ -58,9 +146,18 @@ fn summary(home: &Path, store: &str, name: &str, record: &StoreRecord, view: Vie
     project.to_sdk(view, record)
 }
 
-/// `project.get(project)`: one project's record.
+/// `project.get(project)`: one project's record. A project its Store no
+/// longer lists (retired, or absent) is `NoSuchProject` even when its home
+/// entry remains (spec §4.2).
 pub fn get(home: &Path, project: &ProjectRef) -> Outcome {
     let target = resolve::target(home, &project.to_string())?;
+    let live = live_projects(home, &target.store, &target.record)
+        .map_err(|refusal| crate::unknown::named_unknown(refusal, "store", &target.store, None))?;
+    let record = ProjectRecord::read(home, &target.store, &target.project)?
+        .ok_or_else(|| refused("NoSuchProject", format!("no project {project}")))?;
+    if !listed(&record, &target.project, &live) {
+        return Err(refused("NoSuchProject", format!("no project {project}")));
+    }
     Ok(summary(
         home,
         &target.store,
@@ -72,21 +169,51 @@ pub fn get(home: &Path, project: &ProjectRef) -> Outcome {
 
 /// `project.list(store?, { page_size, page_pos })`, by Store then name.
 pub fn list(home: &Path, request: &ProjectList) -> Outcome {
-    let stores = match &request.store {
+    let stores: Vec<(String, StoreRecord)> = match &request.store {
         Some(store) => {
-            if !paths::store_record(home, store).exists() {
-                return Err(refused("NotFound", format!("no Store named {store}")));
-            }
-            vec![store.to_string()]
+            // A named listing agrees with `project.get` and every other Store
+            // call: a Store the home does not record is `NoSuchStore` (spec
+            // §4.2), never the home-level `NotFound`.
+            let record = StoreRecord::read(home, store)?
+                .ok_or_else(|| refused("NoSuchStore", format!("no Store named {store}")))?;
+            vec![(store.to_string(), record)]
         }
-        None => paths::names(&home.join("store")).map_err(failed)?,
+        None => {
+            let mut records = Vec::new();
+            for store in paths::names(&home.join("store")).map_err(failed)? {
+                if let Some(record) = StoreRecord::read(home, &store)? {
+                    records.push((store, record));
+                }
+            }
+            records
+        }
     };
     let mut items = Vec::new();
-    for store in stores {
-        let Some(record) = StoreRecord::read(home, &store)? else {
-            continue;
+    for (store, record) in stores {
+        // The listing is the Store's own filtered one (spec §4.2), read
+        // where its calls run (T4.5c): a home entry whose project is hidden
+        // or absent is not listed. An all-Stores listing omits a Store it
+        // cannot list; a named one reports the refusal.
+        let live = match live_projects(home, &store, &record) {
+            Ok(live) => live,
+            Err(refusal) => {
+                if request.store.is_some() {
+                    // A named Store it cannot list is `Busy`/`Unknown`,
+                    // naming the Store in the `Unknown` detail (spec §10 A6).
+                    return Err(crate::unknown::named_unknown(
+                        refusal, "store", &store, None,
+                    ));
+                }
+                continue;
+            }
         };
         for name in paths::names(&paths::store_dir(home, &store).join("project")).map_err(failed)? {
+            let Some(project) = ProjectRecord::read(home, &store, &name)? else {
+                continue;
+            };
+            if !listed(&project, &name, &live) {
+                continue;
+            }
             items.push(summary(home, &store, &name, &record, View::List));
         }
     }
@@ -218,10 +345,7 @@ fn init_on_worker(
         timeout,
     } = call;
     if paths::project_record(&home, store, name).exists() {
-        return Err(refused(
-            "Exists",
-            format!("Store {store} already has a project named {name}"),
-        ));
+        return Err(crate::project::add::home_name_taken(store.as_str(), name));
     }
     let total = send::measure(Path::new(folder), name)?;
     let copy = send::Copy {
@@ -249,7 +373,11 @@ fn init_on_worker(
     let sent_ms = layerfs_home::home::now_ms();
     let added = worker.call("project.init", request, &mut |event| events.event(event));
     drop(lease);
-    let added = added.map_err(|mut refusal| {
+    let added = added.map_err(|refusal| {
+        // A lost answer is `Unknown`; name the project it may have
+        // initialized (spec §10 A6), whether the transport lost the reply or
+        // the worker reported a bare `UnknownOutcome` (F43R4-2).
+        let mut refusal = crate::unknown::named_unknown(refusal, "project", name, None);
         if refusal.code == "Unknown" {
             let left = send::left(machine, &copy.id);
             refusal.message = format!(
@@ -302,10 +430,7 @@ fn init_postgresql(
     let home = home.to_path_buf();
     let path = paths::project_record(&home, store, name);
     if path.exists() {
-        return Err(refused(
-            "Exists",
-            format!("Store {store} already has a project named {name}"),
-        ));
+        return Err(crate::project::add::home_name_taken(store.as_str(), name));
     }
     let add = PgProjectAdd {
         add: ProjectAdd {
@@ -328,50 +453,4 @@ fn init_postgresql(
         }
     }
     Ok(out)
-}
-
-/// `project.remove(project)`: drops the project's Layers, Branches and
-/// Commits from its Store in one write, then its record. Its Sandboxes must
-/// be closed first; the other projects stay.
-pub fn remove(
-    home: &Path,
-    events: &mut Events<'_>,
-    project: &ProjectRef,
-    related: Related,
-) -> Outcome {
-    let text = project.to_string();
-    let home = home.to_path_buf();
-    let target = resolve::target(&home, &text)?;
-    target.record.unblocked()?;
-    (related.can_remove_project)(&home, &text)?;
-    let request = RemoveFrame {
-        store: project.store.clone(),
-        project: target.project.clone(),
-        store_record: Some(target.record.to_record().clone()),
-    };
-    if let StoreRef::Postgres { .. } = target.store_ref {
-        return Err(refused(
-            "Unsupported",
-            "removing a project from a PostgreSQL Store is not built",
-        ));
-    }
-    let removed = match place::plan(&home, &target.store_ref)? {
-        Executor::Local => {
-            let _lease = lease::hold(&home, &target.store)?;
-            crate::project::remove::remove_project(&home_of(Some(&home))?, &request)?
-        }
-        Executor::Worker(mut worker) => {
-            let _lease = lease::hold(&home, &target.store)?;
-            worker.call("project.remove", request.encode(), &mut |e| events.event(e))?
-        }
-    };
-    let entry = paths::project_dir(&home, &target.store, &target.project);
-    if entry.exists() {
-        std::fs::remove_dir_all(&entry).map_err(failed)?;
-    }
-    Ok(layerfs_home::home::with_field(
-        removed,
-        "project",
-        SdkValue::text(text),
-    ))
 }

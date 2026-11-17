@@ -6,7 +6,8 @@ CREATE TABLE store_policy (
  chunk_delta_max_depth INTEGER NOT NULL CHECK(chunk_delta_max_depth BETWEEN 0 AND 50),
  metadata_delta_max_depth INTEGER NOT NULL CHECK(metadata_delta_max_depth BETWEEN 0 AND 50),
  next_pack_id INTEGER NOT NULL DEFAULT 1 CHECK(next_pack_id>0),
- next_ordinal INTEGER NOT NULL DEFAULT 1 CHECK(next_ordinal BETWEEN 1 AND 4294967296)
+ next_ordinal INTEGER NOT NULL DEFAULT 1 CHECK(next_ordinal BETWEEN 1 AND 4294967296),
+ trace_salt BLOB NOT NULL DEFAULT (X'0000000000000000000000000000000000000000000000000000000000000000') CHECK(length(trace_salt)=32)
 ) STRICT;
 CREATE TABLE object_location (
  object_id BLOB PRIMARY KEY CHECK(length(object_id)=32),

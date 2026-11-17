@@ -1,4 +1,4 @@
-//! The call table and its dispatcher (#533 step 2): 82 calls in twelve
+//! The call table and its dispatcher (#533 step 2): 85 calls in twelve
 //! families, arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::{families, json, keys, size, Call, Kind};
@@ -51,9 +51,9 @@ fn code(name: &str, args: SdkValue) -> String {
 }
 
 #[test]
-fn the_table_has_twelve_families_and_82_calls() {
+fn the_table_has_twelve_families_and_85_calls() {
     let all: Vec<&Call> = layerfs_api::calls();
-    assert_eq!(all.len(), 82);
+    assert_eq!(all.len(), 85);
     // each family holds only its own calls, and has at least one
     for family in families() {
         assert!(!family.calls().is_empty(), "{}", family.name);
@@ -66,7 +66,7 @@ fn the_table_has_twelve_families_and_82_calls() {
     let mut names: Vec<_> = all.iter().map(|c| c.name()).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 82, "call names are unique");
+    assert_eq!(names.len(), 85, "call names are unique");
     // an optional positional is only ever followed by optional ones (D7)
     for c in &all {
         let first_optional = c.args.iter().position(|a| a.optional);
@@ -75,7 +75,7 @@ fn the_table_has_twelve_families_and_82_calls() {
         }
     }
     let counts: Vec<usize> = families().iter().map(|f| f.calls().len()).collect();
-    assert_eq!(counts, [2, 6, 8, 3, 15, 5, 6, 15, 12, 5, 4, 1]);
+    assert_eq!(counts, [2, 7, 9, 3, 15, 5, 6, 15, 13, 5, 4, 1]);
 }
 
 #[test]
@@ -96,6 +96,17 @@ fn unknown_calls_and_arguments_are_refused_before_any_effect() {
         ])
     )
     .starts_with("InvalidInput"));
+}
+
+#[test]
+fn project_remove_is_retired() {
+    // spec 4: the hard delete leaves the table; a caller gets `InvalidInput`
+    // naming it, never a silent hard delete
+    assert!(layerfs_api::find("project.remove").is_none());
+    assert_eq!(
+        code("project.remove", map(&[("project", t("shop/api"))])),
+        "InvalidInput: no call named `project.remove`"
+    );
 }
 
 #[test]
@@ -552,4 +563,29 @@ fn sandbox_images_are_named_by_the_image_kind() {
     let prune = layerfs_api::find("machine.prune").unwrap();
     assert!(prune.args[1].optional);
     assert_eq!(prune.options[0].name, "unused");
+}
+
+#[test]
+fn the_four_gc_calls_take_only_ids() {
+    // T11.1: the four GC calls, each one resource identifier and no option.
+    use layerfs_api::Kind;
+    let expected: &[(&str, &[(&str, Kind)])] = &[
+        (
+            "branch.remove",
+            &[("project", Kind::Project), ("branch", Kind::Name)],
+        ),
+        ("project.delete", &[("project", Kind::Project)]),
+        (
+            "project.remove_file",
+            &[("project", Kind::Project), ("path", Kind::Text)],
+        ),
+        ("store.compact", &[("name", Kind::Name)]),
+    ];
+    for &(name, args) in expected {
+        let spec = layerfs_api::find(name).unwrap_or_else(|| panic!("{name} is missing"));
+        let given: Vec<(&str, Kind)> = spec.args.iter().map(|arg| (arg.name, arg.kind)).collect();
+        assert_eq!(given.as_slice(), args, "{name}");
+        assert!(spec.args.iter().all(|arg| !arg.optional), "{name}");
+        assert!(spec.options.is_empty(), "{name} takes no option");
+    }
 }

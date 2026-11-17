@@ -25,7 +25,9 @@ on:
       - ".github/workflows/ci.yml"
       - "!**/*.md"
   pull_request:
-    # CI runs only for main: pull requests into any other branch run nothing (owner, 2026-11-16)
+    # Pull requests run only for main, except the store-ext4 lane, which also
+    # runs for layerfs_v2_0_0 (the 2.0 release base); any other branch runs
+    # nothing (owner, 2026-11-16)
     branches: [main]
     paths:
       - "core/**"

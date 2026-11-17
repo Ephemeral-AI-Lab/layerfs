@@ -195,6 +195,11 @@ Source: [`records.rs`](../../../../engine/crates/layerfs-persistence/src/backend
 | [`binding_hint_blocks.rs`](../../../../engine/crates/layerfs-persistence/tests/binding_hint_blocks.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test binding_hint_blocks` | macOS, Linux | Hints merge across blocks without repeats |
 | [`postgresql_acquisition.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_acquisition` | a PostgreSQL server; prints `NOT_RUN` without the variable | Creating a PostgreSQL Store, refusing a second create, and Init's acquisition over it |
 
+The commands above assume the test environment in [Testing](testing.md): `TMPDIR` and
+`CARGO_TARGET_DIR` on ext4, xfs or btrfs (apfs or hfs on macOS).
+[`tools/ci/test_store_ext4.sh`](../../../../tools/ci/test_store_ext4.sh) sets both
+and refuses anything else before cargo starts.
+
 ## Pages
 
 | Page | What it covers |
@@ -202,3 +207,4 @@ Source: [`records.rs`](../../../../engine/crates/layerfs-persistence/src/backend
 | [SQLite](sqlite.md) | The SQLite backend: schema, sessions, lane, profile, checkpoints, seal, snapshot, heads, acquisition and merge records. |
 | [PostgreSQL](postgresql.md) | The PostgreSQL backend: schema, open checks and authority, connections, transactions, publication, acquisition, access and status. |
 | [Diagnostics](diagnostics.md) | Read-only Store audits: observations, the SQLite and PostgreSQL audits, table coverage and the structural fallback. |
+| [Testing](testing.md) | The filesystem the Store suites need, the harness that enforces it, and the PostgreSQL test server. |

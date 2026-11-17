@@ -26,7 +26,9 @@ test("coverage.md is what the front ends' own call lists give", { skip }, () => 
 
 test("a call missing from a front end, or one that differs, is a problem and changes the block", { skip }, () => {
   const { block } = render(view);
-  const nodeSpec = view.node.table[0];
+  // A call with an argument to rename: the table's first entry, `home.init`,
+  // takes none.
+  const nodeSpec = view.node.table.find((spec) => spec.args.length > 0);
   const name = `${nodeSpec.family}.${nodeSpec.call}`;
 
   const noCli = structuredClone(view);
@@ -39,7 +41,8 @@ test("a call missing from a front end, or one that differs, is a problem and cha
   assert.match(render(noAio).problems.join("\n"), new RegExp(`${name}: no aio coroutine`));
 
   const otherArgument = structuredClone(view);
-  otherArgument.python.table[0].args[0].name = "renamed";
+  otherArgument.python.table.find((spec) => `${spec.family}.${spec.call}` === name).args[0].name =
+    "renamed";
   assert.match(render(otherArgument).problems.join("\n"), new RegExp(`${name}: the Python table differs`));
 
   const otherFlag = structuredClone(view);

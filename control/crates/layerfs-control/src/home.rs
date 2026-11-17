@@ -339,7 +339,7 @@ fn daemon_value(home: &Path, build: Build<'_>, warnings: &mut Vec<SdkValue>) -> 
 }
 
 #[cfg(not(target_os = "macos"))]
-fn daemon_value(_home: &Path, _build: Build<'_>, _warnings: &mut Vec<SdkValue>) -> SdkValue {
+fn daemon_value(_home: &Path, _build: Build<'_>, _warnings: &mut [SdkValue]) -> SdkValue {
     SdkValue::Null
 }
 

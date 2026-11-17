@@ -18,6 +18,12 @@ use std::path::Path;
 
 pub use layerfs_store::close_idle;
 
+/// `store.compact`: reclaim one Store's dead bytes, answering the
+/// §11 report.
+pub fn compact(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcome {
+    layerfs_store::compact::compact(home, events, name.as_str())
+}
+
 /// Who uses a Store or a project, read from the Sandbox records.
 pub const RELATED: Related = Related {
     store_idle: inventory::store_idle,

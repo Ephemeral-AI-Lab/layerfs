@@ -3,7 +3,7 @@ use super::{
     schema,
     session::{connection::SqlWork, query, rows, transaction::Transaction},
 };
-use crate::backend::records::{BackendError, Param};
+use crate::backend::records::{BackendError, Param, Record};
 use std::cell::RefCell;
 
 /// The scratch database contains only the finite shipped schema, never Store
@@ -19,25 +19,46 @@ pub(crate) fn check(
         trusted.execute_batch(&script).map_err(rows::error)?;
     }
     let work = RefCell::new(SqlWork::default());
-    let expected = query::run(&trusted,
-        "SELECT type,name,sql FROM sqlite_schema WHERE substr(name,1,7)!='sqlite_' ORDER BY type,name",
-        vec![], &work)?;
-    let mut definition = String::new();
-    for row in &expected {
-        for index in 0..3 {
-            definition.push_str(&row.get::<String>(index)?);
-            definition.push('\n');
-        }
+    let shipped = schema_rows(&trusted, &work)?;
+    let shipped_definition = definition(&shipped)?;
+    // A Store the additive position-column migrations brought forward records
+    // the definition SQLite rewrote: the appended columns end the column list
+    // instead of sitting where the shipped schema declares them. The doctor
+    // admits that rewritten schema as well as the shipped one (REBUILD.md kind
+    // 2), and rejects every other difference.
+    for (table, column, _) in schema::POSITION_COLUMNS {
+        trusted
+            .execute_batch(&format!("ALTER TABLE {table} DROP COLUMN {column}"))
+            .map_err(rows::error)?;
     }
+    for (_, _, alter) in schema::POSITION_COLUMNS {
+        trusted.execute_batch(alter).map_err(rows::error)?;
+    }
+    let migrated = schema_rows(&trusted, &work)?;
+    let migrated_definition = definition(&migrated)?;
     let claims = tx.query(
-        "SELECT count(*) FROM history_meta WHERE id=1 AND typeof(catalog_id)='blob' AND length(catalog_id)=32 AND typeof(catalog_incarnation)='integer' AND typeof(identity_format)='integer' AND typeof(schema_version)='integer' AND typeof(binding_key)='blob' AND length(binding_key) BETWEEN 1 AND 128 AND typeof(schema_source)='text' AND schema_source=?1 AND typeof(schema_definition)='text' AND schema_definition=?2",
-        vec![Param::Text(schema::source(selection)), Param::Text(definition)],
+        "SELECT count(*) FROM history_meta WHERE id=1 AND typeof(catalog_id)='blob' AND length(catalog_id)=32 AND typeof(catalog_incarnation)='integer' AND typeof(identity_format)='integer' AND typeof(schema_version)='integer' AND typeof(binding_key)='blob' AND length(binding_key) BETWEEN 1 AND 128 AND typeof(schema_source)='text' AND schema_source=?1 AND typeof(schema_definition)='text'",
+        vec![Param::Text(schema::source(selection))],
     )?;
     if claims
         .first()
         .ok_or(BackendError::Integrity)?
         .get::<i64>(0)?
         != 1
+    {
+        return Err(BackendError::Integrity);
+    }
+    let recorded = tx.query(
+        "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
+        vec![],
+    )?;
+    let recorded = recorded
+        .first()
+        .filter(|_| recorded.len() == 1)
+        .ok_or(BackendError::Integrity)?;
+    let recorded_definition: String = recorded.get(1)?;
+    if !same_schema(&recorded_definition, &shipped_definition)
+        && !same_schema(&recorded_definition, &migrated_definition)
     {
         return Err(BackendError::Integrity);
     }
@@ -58,27 +79,109 @@ pub(crate) fn check(
         .first()
         .ok_or(BackendError::Integrity)?
         .get::<i64>(0)?
-        != expected.len() as i64
+        != shipped.len() as i64
     {
         return Err(BackendError::Integrity);
     }
-    for row in expected {
-        let matched = tx.query(
-            "SELECT count(*) FROM sqlite_schema WHERE type=?1 AND name=?2 AND sql=?3",
-            (0..3)
-                .map(|index| row.get::<String>(index).map(Param::Text))
-                .collect::<Result<_, _>>()?,
+    for (index, row) in shipped.iter().enumerate() {
+        let kind: String = row.get(0)?;
+        let name: String = row.get(1)?;
+        let live = tx.query(
+            "SELECT sql FROM sqlite_schema WHERE type=?1 AND name=?2",
+            vec![Param::Text(kind), Param::Text(name)],
         )?;
-        if matched
-            .first()
-            .ok_or(BackendError::Integrity)?
-            .get::<i64>(0)?
-            != 1
-        {
+        let live: String = live.first().ok_or(BackendError::Integrity)?.get(0)?;
+        let shipped_sql: String = row.get(2)?;
+        let migrated_sql: String = migrated[index].get(2)?;
+        if !same_schema(&live, &shipped_sql) && !same_schema(&live, &migrated_sql) {
             return Err(BackendError::Integrity);
         }
     }
     Ok(())
+}
+
+/// The schema rows the shipped scripts create, ordered as recorded.
+fn schema_rows(
+    connection: &rusqlite::Connection,
+    work: &RefCell<SqlWork>,
+) -> Result<Vec<Record>, BackendError> {
+    query::run(
+        connection,
+        "SELECT type,name,sql FROM sqlite_schema WHERE substr(name,1,7)!='sqlite_' ORDER BY type,name",
+        vec![],
+        work,
+    )
+}
+
+/// The recorded definition text for one row set.
+fn definition(rows: &[Record]) -> Result<String, BackendError> {
+    let mut definition = String::new();
+    for row in rows {
+        for index in 0..3 {
+            definition.push_str(&row.get::<String>(index)?);
+            definition.push('\n');
+        }
+    }
+    Ok(definition)
+}
+
+/// Whether two schema texts carry the same SQL. SQLite rewrites a table's
+/// stored definition when a column is appended, moving only whitespace and a
+/// separator; every token must still match, so no other schema is admitted.
+fn same_schema(left: &str, right: &str) -> bool {
+    tokens(left) == tokens(right)
+}
+
+/// The SQL tokens of a schema text, with whitespace excluded. A quoted
+/// identifier, string or blob stays one token, as does a run of identifier
+/// characters; every other byte is one token.
+fn tokens(sql: &str) -> Vec<&str> {
+    let bytes = sql.as_bytes();
+    let mut tokens = Vec::new();
+    let mut index = 0;
+    while index < bytes.len() {
+        let start = index;
+        match bytes[index] {
+            byte if byte.is_ascii_whitespace() => {
+                index += 1;
+                continue;
+            }
+            quote @ (b'\'' | b'"' | b'`') => {
+                index += 1;
+                while index < bytes.len() {
+                    if bytes[index] == quote {
+                        index += 1;
+                        if index < bytes.len() && bytes[index] == quote {
+                            index += 1;
+                            continue;
+                        }
+                        break;
+                    }
+                    index += 1;
+                }
+            }
+            b'[' => {
+                index += 1;
+                while index < bytes.len() && bytes[index] != b']' {
+                    index += 1;
+                }
+                index = (index + 1).min(bytes.len());
+            }
+            byte if byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$' => {
+                index += 1;
+                while index < bytes.len()
+                    && (bytes[index].is_ascii_alphanumeric()
+                        || bytes[index] == b'_'
+                        || bytes[index] == b'$')
+                {
+                    index += 1;
+                }
+            }
+            _ => index += 1,
+        }
+        tokens.push(&sql[start..index]);
+    }
+    tokens
 }
 
 /// Derive storage-class checks from trusted declarations. SQLite affinity does

@@ -5,13 +5,16 @@ use crate::{
 };
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::{
-    compare::TreeTable, filesystem::FilesystemRootId, object::inode_leaf::InodeKind,
+    compare::{EntryFacts, TreeTable},
+    filesystem::FilesystemRootId,
+    object::inode_leaf::InodeKind,
 };
 use layerfs_store_service::{
     history::lookup::{self as args, Answer},
     operator::args::{paging, text},
     read::{
         snapshot::{self, Kind, Snap},
+        visibility::Visibility,
         window::Walker,
     },
 };
@@ -79,6 +82,46 @@ impl<'a> Live<'a> {
             return Ok(Some((path, stat)));
         }
         Ok(None)
+    }
+
+    /// The next live entry that is visible at the base node. A path the markers
+    /// hide is absent unless the overlay holds a local inode there: a
+    /// re-creation after the bound node is an ordinary addition, as a Commit's
+    /// is, while an inherited entry of a mount older than the marker is hidden.
+    fn next_visible(&mut self, seen: &Visibility) -> Result<Option<(String, ViewStat)>> {
+        loop {
+            let Some((path, stat)) = self.next()? else {
+                return Ok(None);
+            };
+            if seen.hidden(&path).is_some()
+                && self
+                    .op
+                    .overlay()
+                    .inode(self.view.source(), stat.serial)
+                    .map_err(args::failed)?
+                    .is_none()
+            {
+                continue;
+            }
+            return Ok(Some((path, stat)));
+        }
+    }
+}
+
+/// The base walk, less every path the markers hide at the base node: a removed
+/// path is absent from `changes`, like a read of it, and so is its subtree.
+struct VisibleBase<'a> {
+    walker: Walker<'a>,
+    seen: &'a Visibility,
+}
+impl VisibleBase<'_> {
+    fn next(&mut self) -> Result<Option<(String, EntryFacts)>> {
+        loop {
+            match self.walker.next()? {
+                Some((path, _)) if self.seen.hidden(&path).is_some() => continue,
+                other => return Ok(other),
+            }
+        }
     }
 }
 
@@ -155,24 +198,43 @@ fn scan(
 ) -> Result<()> {
     let binding = workspace.snapshot().map_err(args::failed)?;
     let root = binding.effective_root;
+    let node = binding.branch.head_commit.map_or(
+        layerfs_history::NodeId::Layer(binding.branch.base_layer),
+        layerfs_history::NodeId::Commit,
+    );
+    // The base node `history_serial`, as every `Snap` carries it for the
+    // `remove_file` visibility rule; 0 is the same unknown fallback that
+    // `snapshot::resolve` takes.
+    let serial = match service
+        .store
+        .published(|history| history.node_history_serial(node))
+    {
+        Ok(Some(serial)) => serial,
+        _ => 0,
+    };
     let snap = Snap {
         kind: Kind::Commit,
         label: "Workspace base".into(),
-        node: binding.branch.head_commit.map_or(
-            layerfs_history::NodeId::Layer(binding.branch.base_layer),
-            layerfs_history::NodeId::Commit,
-        ),
+        node,
         root,
         tree: TreeTable::open(op.ports(), FilesystemRootId(root)).map_err(args::content)?,
+        serial,
     };
     let pending = workspace
         .pending_conflicts()
         .map_err(args::failed)?
         .unwrap_or_default();
-    let mut base = Walker::new(op.ports(), &snap, "/")?;
+    // §4.3: the base walk is path-aware, so a path the markers hide at the
+    // base node is absent from `changes` instead of a `Removed` row against
+    // the mount's whiteout. The live side keeps a local re-creation.
+    let seen = Visibility::for_snap(&service.store, &snap)?;
+    let mut base = VisibleBase {
+        walker: Walker::new(op.ports(), &snap, "/")?,
+        seen: &seen,
+    };
     let mut live = Live::new(view, op);
     let mut work = layerfs_content::filesystem::attributes::AttributeReadWork::default();
-    let (mut a, mut b) = (base.next()?, live.next()?);
+    let (mut a, mut b) = (base.next()?, live.next_visible(&seen)?);
     while a.is_some() || b.is_some() {
         let order = match (&a, &b) {
             (Some((a, _)), Some((b, _))) => a.split('/').cmp(b.split('/')),
@@ -187,14 +249,14 @@ fn scan(
             }
             std::cmp::Ordering::Greater => {
                 let (p, e) = b.take().expect("live");
-                b = live.next()?;
+                b = live.next_visible(&seen)?;
                 (p, None, Some(e))
             }
             std::cmp::Ordering::Equal => {
                 let (p, x) = a.take().expect("base");
                 let (_, y) = b.take().expect("live");
                 a = base.next()?;
-                b = live.next()?;
+                b = live.next_visible(&seen)?;
                 (p, Some(x), Some(y))
             }
         };
@@ -247,16 +309,23 @@ fn scan(
             break;
         }
     }
-    let _ = service;
     Ok(())
 }
 
 pub(crate) fn changes(service: &Service, args: &SdkValue) -> Answer {
     let workspace = selected(service, args)?;
+    changes_of(service, &workspace, args)
+}
+
+/// `changes` over an already selected Workspace; a test binds one directly.
+/// The `workspace.changes` walk over one bound Workspace, for the operator
+/// integration test.
+#[doc(hidden)]
+pub fn changes_of(service: &Service, workspace: &BoundWorkspace, args: &SdkValue) -> Answer {
     let (limit, pos) = paging(args)?;
-    with_source(&workspace, |op, view| {
+    with_source(workspace, |op, view| {
         let (mut seen, mut items, mut spent, mut more) = (0u64, Vec::new(), 0, false);
-        scan(service, &workspace, op, view, |path, kind, markers| {
+        scan(service, workspace, op, view, |path, kind, markers| {
             if seen < pos {
                 seen += 1;
                 return Ok(true);

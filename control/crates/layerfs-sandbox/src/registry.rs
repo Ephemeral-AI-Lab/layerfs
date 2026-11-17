@@ -1,6 +1,6 @@
 //! What this process owns: its running Inits and its live Sandboxes. A
-//! project itself is only its home entry, so a project removed there can be
-//! initialized again without a restart.
+//! project itself is only its home entry, so a project deleted there can be
+//! initialized again (under another name, until a compaction frees the name).
 //!
 //! A Sandbox is one daemon process (`runtime`: native, or namespaces with
 //! its init stage), known by its name. Its runtime runs

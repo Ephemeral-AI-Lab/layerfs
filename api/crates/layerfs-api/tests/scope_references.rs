@@ -193,9 +193,15 @@ fn fork_refuses_every_reference_outside_the_namespace_before_any_effect() {
         let mut given = vec![p()];
         given.extend(args.iter().cloned());
         let refused = call(&home, Some(&scoped), "branch.fork", &given).expect_err(what);
-        assert_eq!(refused.0, "InvalidInput", "{what}: {refused:?}");
-        // the two composed Branch names (cases 0 and 3) name no Branch and
-        // are refused by the Store; the others never reach it
+        // The two composed Branch names (cases 0 and 3) are inside the scope's
+        // namespace and name no Branch, so the Store refuses them as
+        // `NoSuchBranch`; the others are refused by the scope before dispatch.
+        let expected = if n == 0 || n == 3 {
+            "NoSuchBranch"
+        } else {
+            "InvalidInput"
+        };
+        assert_eq!(refused.0, expected, "{what}: {refused:?}");
         if n != 0 && n != 3 {
             assert!(
                 refused.1.contains("out of scope: branch"),

@@ -7,7 +7,10 @@
 //! sslmode=disable`). Without it the test reports NOT_RUN and passes nothing.
 #![cfg(unix)]
 use layerfs_content::{filesystem::root::FilesystemRootId, read_all, FilesystemRead, LogicalPath};
-use layerfs_history::{BranchId, HistoryCatalog, HistoryCatalogConfig, HistoryName, LayerStackId};
+use layerfs_history::{
+    error::{HolderKind, HolderState, NameSource},
+    BranchId, HistoryCatalog, HistoryCatalogConfig, HistoryName, LayerStackId,
+};
 use layerfs_persistence::{
     PersistenceConfig, PostgresHandles, PostgresSelection, SqlitePersistenceProfile, StoreSelection,
 };
@@ -176,11 +179,15 @@ fn a_folder_inits_into_postgresql_with_the_root_sqlite_gives() {
     let work = on_postgresql.initialized.namespace_work;
     assert_eq!((work.wide_directories, work.regular_aliases), (1, 2));
 
-    // A taken name is refused before anything is written; another project is added.
-    assert!(matches!(
-        add(postgresql(), &source, "app"),
-        Err(InitError::Exists)
-    ));
+    // A taken name is the typed `NameTaken`; another project is added.
+    let taken = add(postgresql(), &source, "app");
+    let Err(InitError::NameTaken(state)) = taken else {
+        panic!("a held project name is NameTaken: {taken:?}");
+    };
+    assert_eq!(state.holder.kind, HolderKind::Project);
+    assert_eq!(state.holder.name, "app");
+    assert_eq!(state.holder.state, HolderState::Live);
+    assert_eq!(state.source, NameSource::Store);
     let other = scratch.path.join("other");
     fs::create_dir_all(&other).unwrap();
     fs::write(other.join("README"), b"other").unwrap();

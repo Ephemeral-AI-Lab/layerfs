@@ -131,9 +131,9 @@ The relationships no record stores, read when a call needs them
 | `can_stop_machine`, `can_change_machine` | `machine.stop`, `machine.update`: `InUse` while Sandboxes are recorded on it |
 | `store_idle` | `store.push`, `pull`, `remove`, `disconnect`, `backup.restore`: `InUse` while another live process holds a lease or a project's Sandbox is recorded (removes stale leases) |
 | `store_idle_on` | `store.detach`: `InUse` while a Sandbox of the Store is recorded on that machine |
-| `can_remove_project` | `project.remove`: `InUse` while a Sandbox of the project is recorded |
+| `can_remove_project` | `project.delete`: `Busy` while a Sandbox of the project is recorded |
 
-Each `InUse` lists what holds the entity in `detail.related` as
+Each `InUse` or `Busy` lists what holds the entity in `detail.related` as
 `{kind, name}`.
 
 Layout 3 keeps each Sandbox at `sandbox/<name>/`, so a Sandbox by name is

@@ -55,8 +55,10 @@ class ProjectFamily:
         log_tag: str | None = None,
     ) -> Result:
         """export a project's snapshot from its Store to a local folder"""
-    def remove(self, project: str, *, log_tag: str | None = None) -> Result:
-        """remove one project from its Store"""
+    def delete(self, project: str, *, log_tag: str | None = None) -> Result:
+        """retire one project in its Store and remove its home entry"""
+    def remove_file(self, project: str, path: str, *, log_tag: str | None = None) -> Result:
+        """hide one absolute path from every node at or below its marker frontier"""
 
 class BranchFamily:
     def list(
@@ -138,6 +140,8 @@ class BranchFamily:
         log_tag: str | None = None,
     ) -> Result:
         """files that differ between two Branches' heads"""
+    def remove(self, project: str, branch: str, *, log_tag: str | None = None) -> Result:
+        """soft-remove one Branch; its name stays taken until compaction"""
 
 class CommitFamily:
     def list(
@@ -570,6 +574,8 @@ class StoreFamily:
         """bring a sqlite Store from its machine to native"""
     def remove(self, name: str, *, log_tag: str | None = None) -> Result:
         """delete a sqlite Store with every project in it"""
+    def compact(self, name: str, *, log_tag: str | None = None) -> Result:
+        """reclaim dead bytes from one Store"""
     def disconnect(self, name: str, *, log_tag: str | None = None) -> Result:
         """forget a PostgreSQL Store; its data stays"""
 

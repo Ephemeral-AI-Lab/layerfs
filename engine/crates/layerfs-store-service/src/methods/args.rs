@@ -21,13 +21,12 @@ pub fn project(service: &StoreService, args: &SdkValue) -> Result<LayerStackReco
     crate::operator::args::project(&service.store, args)
 }
 
-/// The project's reader and the snapshot a read names (`commit`, else `branch`).
-pub fn snapshot(
+/// The project, its reader and the snapshot a read names, in that order.
+pub fn snapshot_full(
     service: &StoreService,
     args: &SdkValue,
-) -> Result<(Arc<StorePorts>, Snap), SdkRefusal> {
-    let (_, reader, snap) = crate::operator::args::snapshot(&service.store, args)?;
-    Ok((reader, snap))
+) -> Result<(LayerStackRecord, Arc<StorePorts>, Snap), SdkRefusal> {
+    crate::operator::args::snapshot(&service.store, args)
 }
 
 /// The required absolute path argument `name`, checked.

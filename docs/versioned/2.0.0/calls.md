@@ -9,7 +9,7 @@ one file per call under its family in
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 80 calls in eleven families. `layerfs help` lists them, and
+There are 85 calls in twelve families. `layerfs help` lists them, and
 `layerfs help <family> [<call>]` prints one family or one call.
 
 ## How a call is written
@@ -77,15 +77,32 @@ Sandbox names (H §7.6).
 
 `[x]` is an optional positional. Every family's results are snake_case.
 
-### `project` (5)
+### `home` (2)
+
+| Call | Positionals | Options | Does |
+| --- | --- | --- | --- |
+| `init` | — | — | creates this home, converts an older layout to the current one, and leaves a current home as it is |
+| `get` | — | — | the home's state and the Linux bundle and native daemon this build would use; changes nothing |
+
+- Neither call is opened by the dispatcher: `init` opens or creates the home
+  itself, and `get` never opens it. `get` reads `layerfs.json`, the folder's
+  mode, `bundle.json`, the native daemon's record and the daemon file, writes
+  no log line, and is `admin` in the MCP server.
+- `init` returns `{ home, created, converted, layout }`; `get` returns
+  `{ home, bundle, daemon, cache, warnings }`. The home's layout and settings
+  are in [the home](home.md).
+
+### `project` (7)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `init` | `project`, `folder` | `timeout` (ms, default 1 hour), `on_progress` | imports a folder on the caller's host as a new project into an existing Store |
 | `list` | `[store]` | `page_size`, `page_pos` | every project in the home, or one Store's |
 | `get` | `project` | — | a project's record: its Store, kind and machine |
+| `stats` | `project`, `[branch]`, `[commit]` | — | entry counts of one pinned saved tree |
 | `export` | `project`, `destination` | `branch` (default `main`), `on_progress` | exports a pinned committed Branch snapshot to a local directory |
-| `remove` | `project` | — | removes one project from its Store |
+| `delete` | `project` | — | retires one project in its Store and removes its home entry |
+| `remove_file` | `project`, `path` | — | hides one absolute path from every node at or below its marker frontier |
 
 - `init` never creates a Store; a missing one is `NotFound`. `folder` is
   always on the caller's host. Into a sqlite Store on `native` or a
@@ -98,9 +115,11 @@ Sandbox names (H §7.6).
   FIFO or device file, is refused before anything is sent. Run: answers
   `project`, `store`, `name`, `kind`, `machine`, `created`, `layer` and
   `root`.
-- `remove` is refused `InUse` while a Sandbox of the project is recorded
-  (`detail.related` lists each as `{kind: "sandbox", name}`), and is
-  `Unsupported` for a PostgreSQL Store.
+- `delete` is refused `Busy` while a Sandbox of the project is recorded
+  (`detail.related` lists each as `{kind: "sandbox", name}`).
+- `remove_file` is visibility-only in 2.0: it hides the path across the
+  project's history and frees no bytes; the marker frontier governs later
+  re-creations.
 
 `project export` ([reference](../../architecture/api/sdk/project.md#projectexport)) exports a committed Branch snapshot. `destination` is an absolute path
 on the caller’s host, even for a worker Store. It must be absent or an empty
@@ -130,16 +149,19 @@ The final JSON result contains `project`, `store`, `name`, `kind`, `machine`,
 writing and `total: null`; `finalize` is the last event and comes only once the
 folder is in place. Events arrive at most every 200 ms.
 
-### `branch` (6)
+### `branch` (9)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `list` | `project` | `page_size`, `page_pos` | a project's Branches |
 | `get` | `project`, `branch` | — | one Branch and its head Commit |
+| `commits` | `project`, `branch` | `page`, `page_size`, `at_commit`, `include_storage` | a Branch's Commits, newest first |
+| `get_commit` | `project`, `branch`, `commit` | — | one saved Commit or `main` publication |
 | `fork` | `project`, `name`, `from_branch`, `[from_commit]` | — | a new Branch from another Branch's head or Commit |
 | `merge` | `project`, `name`, `a`, `b` | `message`, `units` (JSON) | merges two Branches into a new one |
 | `publish` | `project`, `branch`, `[commit]` | `expected_base`, `expected_head`, `force` | a Branch's head or Commit as `main`'s next Layer, refusing a stale base |
 | `diff` | `project`, `from_branch`, `to_branch` | `paths_only`, `page_size`, `page_pos`, `cursor` | files that differ between two Branches' heads |
+| `remove` | `project`, `branch` | — | soft-removes one Branch; its name stays taken until compaction |
 
 Run: `fork` answers `{kind: "Forked", branch, base, head}`; `publish`
 answers `{kind: "Added", source, published_layer, based_on, overwrote_count,
@@ -164,7 +186,7 @@ A Commit record has `id`, `branch`, `parent`, `second_parent`, `base`,
 `new_canonical`, `new_stored`, `new_metadata`, `displaced`, `lww` and
 `lww_truncated`. `commit.get` accepts an id prefix of 8 or more characters.
 
-### `file` (14)
+### `file` (15)
 
 1.1.0's `fs` family, renamed (O13). Paths are absolute, starting with `/`.
 
@@ -175,6 +197,7 @@ A Commit record has `id`, `branch`, `parent`, `second_parent`, `base`,
 | `list` | `project`, `branch`, `path`, `[commit]` | `page_size`, `page_pos` | a folder's entries |
 | `glob` | `project`, `branch`, `path`, `pattern`, `[commit]` | `page_size`, `page_pos` | paths under `path` matching a glob |
 | `grep` | `project`, `branch`, `path`, `pattern`, `[commit]` | `page_size`, `page_pos` | lines under `path` matching a regular expression |
+| `revision` | `project`, `branch`, `path` | `at_commit`, `traversal`, `page`, `page_size`, `continuation` | the saved changes to one literal path, oldest first |
 | `blame` | `project`, `branch`, `path`, `[commit]` | `from_line` | the Commit of each line |
 | `diff` | `project`, `left_branch`, `left_path`, `right_branch`, `right_path` | `left_commit`, `right_commit` | the difference between two files (O29) |
 | `write` | `project`, `branch`, `path`, `content` | `message`, `mode` | writes a file; one Commit |
@@ -212,7 +235,7 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 {"kind":"Committed","branch":"agent","head":"1271…","commit":{…,"message":"batch",…}}
 ```
 
-### `sandbox` (4)
+### `sandbox` (5)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -220,6 +243,7 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 | `list` | `[project]` | `page_size`, `page_pos`, `live` | every Sandbox in the home, or one project's; with `live`, whether each one's daemon process runs now |
 | `get` | `name` | `page_size`, `page_pos` | a Sandbox and its Workspaces |
 | `close` | `name` | `force` | stops a Sandbox |
+| `files` | `sandbox`, `[path]` | `depth`, `cursor`, `limit`, `offset`, `length` (int) | a Sandbox's roots, one page of a folder, or one window of a file, in its home or (a Sandbox with a root of its own) its root |
 
 - `create` answers the Sandbox's record: `name`, `project`, `machine`,
   `created`, `id` (the Sandbox's name, as its machine knows it),
@@ -605,7 +629,7 @@ $ layerfs machine status native
 See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals.
 
-### `store` (12)
+### `store` (13)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -620,6 +644,7 @@ refusals.
 | `push` | `name`, `machine` | `on_progress` | sends a sqlite Store from `native` to a machine |
 | `pull` | `name` | `on_progress` | brings a sqlite Store from its machine to `native` |
 | `remove` | `name` | — | deletes a sqlite Store with every project in it |
+| `compact` | `name` | — | reclaims the dead bytes of one Store: the `none` path marks only, the `rebuild` path installs a new generation |
 | `disconnect` | `name` | — | forgets a PostgreSQL Store; its data stays |
 
 Run:
@@ -666,15 +691,17 @@ not tell. Not run for this manual (from source and tests).
 
 See [backups](machines-and-stores.md#backups). Not run for this manual.
 
-### `logs`: `machine` and `sandbox`
+### `logs` (4)
 
-Two reads for a UI that shows a log and follows it (layerfs-project#178).
-They are in the `logs` family, which this page's count above predates; the
-whole family is in the
+The home's call log, and two reads for a UI that shows a machine or Sandbox
+log and follows it (layerfs-project#178). The machine and Sandbox reads are
+in the
 [architecture guide](../../architecture/api/sdk/logs.md).
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
+| `list` | — | `op`, `project`, `client`, `tag`, `outcome`, `since`, `cursor`, `limit` | the calls made against this home, newest first |
+| `reset` | — | — | clears this home's call log |
 | `machine` | `machine` | `cursor`, `before`, `limit` (int) | one window of a machine's worker log |
 | `sandbox` | `sandbox` | `cursor`, `before`, `limit` (int) | one window of a Sandbox's daemon log |
 
@@ -691,13 +718,8 @@ this manual on a scratch home: `layerfs logs sandbox s1`, then `--cursor`.
 ### `sandbox`: `files`
 
 One more read for a UI: what is in a Sandbox (layerfs-project#178). It is
-in the `sandbox` family, after `close`; this page's count above predates
-it. The whole call is in the
+in the `sandbox` family, after `close`; the whole call is in the
 [architecture guide](../../architecture/api/sdk/sandbox.md#sandboxfiles).
-
-| Call | Positionals | Options | Does |
-| --- | --- | --- | --- |
-| `files` | `sandbox`, `[path]` | `depth`, `cursor`, `limit`, `offset`, `length` (int) | a Sandbox's roots, one page of a folder, or one window of a file, in its home or (a Sandbox with a root of its own) its root |
 
 ```bash
 layerfs sandbox files s1                       # its roots: Workspaces, home, log, and / where it has one

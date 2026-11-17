@@ -43,10 +43,14 @@ pub(crate) fn error(e: Error) -> BackendError {
             | ErrorCode::DatabaseLocked
             | ErrorCode::FileLockingProtocolFailed => BackendError::Busy,
             ErrorCode::ReadOnly => BackendError::ReadOnly,
-            ErrorCode::DiskFull | ErrorCode::TooBig => BackendError::Capacity,
-            ErrorCode::SystemIoFailure | ErrorCode::CannotOpen | ErrorCode::OutOfMemory => {
-                BackendError::Unknown
+            // §7 step 8: `SQLITE_FULL`, `SQLITE_TOOBIG` and `SQLITE_NOMEM` are
+            // the report's `Capacity` refusal. NOMEM is a definite failure, not
+            // an uncertain outcome: compaction must remove its staged artifact
+            // set rather than keep it as a leftover.
+            ErrorCode::DiskFull | ErrorCode::TooBig | ErrorCode::OutOfMemory => {
+                BackendError::Capacity
             }
+            ErrorCode::SystemIoFailure | ErrorCode::CannotOpen => BackendError::Unknown,
             ErrorCode::ConstraintViolation
             | ErrorCode::TypeMismatch
             | ErrorCode::DatabaseCorrupt

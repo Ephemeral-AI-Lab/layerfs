@@ -2,7 +2,8 @@
 //! counted on the wire by a loopback proxy in front of the server: each
 //! server-to-client flight after a client flight is one round trip the
 //! client waited for (TCP handshakes are not counted). Needs
-//! `LAYERFS_TEST_POSTGRES_URL` with `sslmode=disable`; NOT_RUN without it.
+//! `LAYERFS_TEST_POSTGRES_URL` (a URL or libpq keyword string) with
+//! `sslmode=disable`; NOT_RUN without it.
 use layerfs_history::records::StackInitialization;
 use layerfs_history::{
     BranchId, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryName,
@@ -15,6 +16,9 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
+
+#[path = "../../layerfs-persistence/tests/pg_doctor/conninfo.rs"]
+mod conninfo;
 
 const BINDING: &[u8] = b"store-service-open-cost";
 const CURSOR: [u8; 32] = [43; 32];
@@ -94,15 +98,17 @@ fn proxy(upstream: String, wire: Arc<Wire>) -> u16 {
     port
 }
 
-/// `url` with its `host:port` replaced by the proxy's.
-fn through(url: &str, port: u16) -> (String, String) {
-    let at = url.find('@').unwrap() + 1;
-    let end = at + url[at..].find('/').unwrap();
-    let upstream = url[at..end].to_owned();
-    (
-        format!("{}127.0.0.1:{port}{}", &url[..at], &url[end..]),
-        upstream,
-    )
+/// The `host:port` that `url` names, in either connection-string form, so the
+/// proxy forwards to the server the environment supplied instead of assuming
+/// the URL shape.
+fn upstream(url: &str) -> String {
+    let config: postgres::Config = url.parse().expect("LAYERFS_TEST_POSTGRES_URL");
+    let host = match config.get_hosts().first().expect("a host") {
+        postgres::config::Host::Tcp(host) => host.clone(),
+        other => panic!("the proxy needs a TCP host, not {other:?}"),
+    };
+    let port = config.get_ports().first().copied().unwrap_or(5432);
+    format!("{host}:{port}")
 }
 
 /// Waits until the proxy forwarded the last reply (bounded).
@@ -117,9 +123,11 @@ fn postgresql_open_costs_on_the_wire() {
         return;
     };
     let wire = Arc::new(Wire::default());
-    let (proxied, upstream) = through(&url, 0);
-    let port = proxy(upstream, wire.clone());
-    let proxied = proxied.replace(":0/", &format!(":{port}/"));
+    let port = proxy(upstream(&url), wire.clone());
+    // `with_host` rewrites the endpoint in place in whichever form the
+    // environment supplied: a URL keeps its user information, path and query,
+    // and the keyword form keeps every other keyword.
+    let proxied = conninfo::with_host(&url, "127.0.0.1", port);
     let schema = format!("lfs63_cost_{}", std::process::id());
     let selection = PostgresSelection::new(&proxied, &schema);
     let stack = LayerStackId::from_authority([7; 16]);

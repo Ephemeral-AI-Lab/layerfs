@@ -285,20 +285,23 @@ For Rust projects, follow the [Cargo workflow](references/rules/cargo.md).
 
 ## Calls
 
-61 calls in nine families. Each family's page has arguments, results, refusals
+85 calls in twelve families. Each family's page has arguments, results, refusals
 and examples.
 
 | Family | Calls |
 | --- | --- |
-| [project](references/methods/project.md) | `init(project, folder, { timeout, on_progress })`, `list(store?, { page_size, page_pos })`, `get(project)`, `export(project, destination, { branch, on_progress })`, `remove(project)` |
-| [branch](references/methods/branch.md) | `list(project)`, `get(project, branch)`, `fork(project, name, from_branch, from_commit?)`, `merge(project, name, a, b, { message, units })`, `publish(project, branch, commit?)`, `diff(project, from_branch, to_branch, { paths_only, page_size, page_pos, cursor })` |
-| [commit](references/methods/commit.md) | `list(project, branch)`, `get(project, branch, commit)`, `diff(project, from_commit, to_commit, { paths_only, … })` |
-| [file](references/methods/file.md) | reads `read`, `stat`, `list`, `glob`, `grep`, `blame`, `diff`; writes `write`, `edit`, `rm`, `mkdir`, `mv`, `cp`, `apply` |
-| [sandbox](references/methods/sandbox.md) | `create(project, name, machine?, { image })`, `list(project?, { page_size, page_pos })`, `get(name, { page_size, page_pos })`, `close(name, { force })` |
-| [workspace](references/methods/workspace.md) | `mount(sandbox, branch, { name })`, `exec(ws, command, { message, stream, stdout, stderr })`, `commit(ws, { message, force })`, `unmount(ws, { discard, force })`, `status(ws)` |
-| [machine](references/methods/machine.md) | `list`, `platforms`, `get`, `status`, `start`, `stop`, `create`, `remove`, `update` |
-| [store](references/methods/store.md) | `list`, `get`, `status`, `create`, `connect`, `push`, `pull`, `remove`, `disconnect` |
-| [backup](references/methods/backup.md) | `connect`, `disconnect`, `list`, `create`, `restore` |
+| home (admin) | `init()`, `get()`: create or convert this home, and read the bundle and daemon this build would use; no skill page yet, see `docs/architecture/api/sdk/home.md` in the repository |
+| [project](references/methods/project.md) | `init(project, folder, { timeout, on_progress })`, `list(store?, { page_size, page_pos })`, `get(project)`, `stats(project, branch?, commit?)`, `export(project, destination, { branch, on_progress })`, `delete(project)`, `remove_file(project, path)` |
+| [branch](references/methods/branch.md) | `list(project, { page_size, page_pos, page })`, `get(project, branch)`, `commits(project, branch, { page, page_size, at_commit, include_storage })`, `get_commit(project, branch, commit)`, `fork(project, name, from_branch, from_commit?)`, `merge(project, name, a, b, { message, units })`, `publish(project, branch, commit?)`, `diff(project, from_branch, to_branch, { paths_only, page_size, page_pos, cursor, page, from_commit, to_commit, path_prefix, include_attribution, continuation })`, `remove(project, branch)` |
+| [commit](references/methods/commit.md) | `list(project, branch, { page_size, page_pos })`, `get(project, branch, commit)`, `diff(project, from_commit, to_commit, { paths_only, page_size, page_pos, cursor })` |
+| [file](references/methods/file.md) | reads `read(project, branch, path, commit?, { start_line, end_line })`, `stat(project, branch, path, commit?)`, `list(project, branch, path, commit?, { page_size, page, page_pos })`, `glob(project, branch, path, pattern, commit?, { page_size, page, page_pos })`, `grep(project, branch, path, pattern, commit?, { page_size, page, page_pos })`, `revision(project, branch, path, { at_commit, traversal, page, page_size, continuation })`, `blame(project, branch, path, commit?, { from_line, line_count })`, `diff(project, left_branch, left_path, right_branch, right_path, { left_commit, right_commit, include_attribution, allow_missing, page, page_size })`; writes `write(project, branch, path, content, { message, mode })`, `edit(project, branch, path, { old, new, message })`, `rm(project, branch, path, { message })`, `mkdir(project, branch, path, { message, mode })`, `mv(project, branch, from_path, to_path, { message })`, `cp(project, branch, from_path, to_path, { message })`, `apply(project, branch, changes, { message })` |
+| [sandbox](references/methods/sandbox.md) | `create(project, name, machine?, { image, on_progress })`, `list(project?, { page_size, page_pos })`, `get(name, { page_size, page_pos })`, `close(name, { force })`, `files(sandbox, path?, { depth, cursor, limit, offset, length })` |
+| [workspace](references/methods/workspace.md) | `mount(sandbox, branch, { name })`, `exec(ws, command, { message, stream, stdout, stderr, exec_id, on_progress })`, `exec_cancel(ws, exec_id, { grace_ms })`, `commit(ws, { message, force })`, `unmount(ws, { discard, force })`, `status(ws)` |
+| [machine](references/methods/machine.md) | `list()`, `platforms()`, `get(name)`, `images(name)`, `load(name, image, { on_progress })`, `prune(name, image?, { unused })`, `status(name)`, `stats(machine)`, `space(machine)`, `files(machine, path?, { depth, cursor, limit, offset, length })`, `start(name, { on_progress })`, `stop(name, { force })`, `create(name, platform, { cpus, memory, disk, image, os_image, on_progress })`, `remove(name)`, `update(name, { cpus, memory, image, docker, wsl, daemon })` |
+| [store](references/methods/store.md) | `list()`, `get(name)`, `status(name)`, `stats(name)`, `create(name)`, `connect(name, url, { password, synchronous_commit })`, `attach(name, machine, { url, password })`, `detach(name, machine)`, `push(name, machine, { on_progress })`, `pull(name, { on_progress })`, `remove(name)`, `compact(name)`, `disconnect(name)` |
+| [backup](references/methods/backup.md) | `connect(name, url, { key, region, part_size })`, `disconnect(name)`, `list(bucket?)`, `create(store, bucket, file?, { on_progress })`, `restore(store, bucket, file?, { on_progress })` |
+| [logs](references/methods/logs.md) | `list({ op, project, client, tag, outcome, since, cursor, limit })`, `reset()`, `machine(machine, { cursor, before, limit })`, `sandbox(sandbox, { cursor, before, limit })` |
+| [doctor](references/methods/doctor.md) | `fix(id)` |
 
 One top-level function is outside the families: `doctor({ home })` (shell
 `layerfs doctor [--text]`) reports what is wrong in the home as `{ ok,

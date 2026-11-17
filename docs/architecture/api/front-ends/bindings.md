@@ -70,7 +70,7 @@ links it and holds the build and type scripts.
 
 | Test | Checks |
 | --- | --- |
-| [`calls.mjs`](../../../../api/node/test/calls.mjs) | eleven families, every function; required-argument refusals; a Store, Init with progress, file and Branch calls, bytes, a folder scope; the call log's `client` and `log_tag` |
+| [`calls.mjs`](../../../../api/node/test/calls.mjs) | twelve families, every function; required-argument refusals; a Store, Init with progress, file and Branch calls, bytes, a folder scope; the call log's `client` and `log_tag` |
 | [`shell.mjs`](../../../../api/node/test/shell.mjs) | the command and the package refuse every call alike; a live Store read both ways (needs `target/debug/layerfs`) |
 | [`events.mjs`](../../../../api/node/test/events.mjs), [`progress.mjs`](../../../../api/node/test/progress.mjs) | handler failures, delivery before settling, exec output through functions and `stream: true` (exec half needs `LAYERFS_DAEMON`) |
 | [`values.mjs`](../../../../api/node/test/values.mjs) | exact `bigint`, refused values, bytes and the one-key map |
