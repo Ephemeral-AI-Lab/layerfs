@@ -248,23 +248,23 @@ AC-51 does not depend on the projection alone.
   `/var/tmp`), rustc 1.85.1, `SqlitePersistenceProfile::Disposable`
   (WAL/OFF), `CARGO_TARGET_DIR=/tmp/target-t123c`.
 - Verified here: `sqlite_compact_matrix` (1 test); the persistence suites
-  `sqlite_compact` (29), `sqlite_compact_crash` (24),
+  `sqlite_compact` (30), `sqlite_compact_crash` (24),
   `sqlite_compact_fixtures` (1), `admission` (10), `path_removal` (4),
   `branch_removal` (4), `project_delete` (4), `epoch_fence` (7),
   `gc_backfill` (5), `kept_objects` (7); the Store-service path suites
   `sdk_path_merge_removal` (6), `sdk_mount_bind_failure` (1),
-  `sdk_path_whiteouts` (7), `sdk_path_hidden_semantics` (2),
-  `sdk_path_removal` (3); and `layerfs-control --features postgresql
-  project_delete_worker` (6), `layerfs-store --features postgresql
+  `sdk_path_whiteouts` (7), `sdk_path_hidden_semantics` (3),
+  `sdk_path_removal` (5); and the `layerfs-control
+  project_delete_worker` (6), the `layerfs-store
   project_delete` (16), `compact_report_status` (5) and the
-  PostgreSQL AC-44 suite `postgresql_compact` (26 tests; AC-44's six are
+  PostgreSQL AC-44 suite `postgresql_compact` (29 tests; AC-44's six are
   `a_fully_privileged_role_compacts`,
   `a_role_without_create_on_the_database_is_refused_as_unsupported`,
   `a_role_without_create_on_the_store_schema_is_refused_as_unsupported`,
   `a_role_without_temp_is_refused_as_unsupported`,
   `a_role_without_pg_read_all_stats_is_refused_as_unsupported` and
   `a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1`).
-  All of those pass on the merged branch; the `--features postgresql`
+  All of those pass on the merged branch; the PostgreSQL
   suites need `LAYERFS_TEST_POSTGRES_URL` and run in the store-ext4
   --full lane.
 - The control `restore_install` arm that opens a Store needs ext4/xfs/btrfs;
