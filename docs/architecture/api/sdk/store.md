@@ -432,6 +432,7 @@ SQLite, whose payload walk runs inside the mark, reports no value.
 | --- | --- | --- |
 | `NoSuchStore`, `Unsupported` | a missing Store; a sqlite Store on another machine, because compaction is local-only by the documented S6 deviation (#42 D5) and never takes the worker route; a non-private Store directory; an unsupported filesystem; or a PostgreSQL Store in a build without the `postgresql` feature | [`compact.rs`](../../../../control/crates/layerfs-store/src/compact.rs) |
 | `MountsActive`, `Busy`, `Unresolved` | a mount, long-lived client or operation holds the Store, or a dead owner left an uncertain one | spec §5 |
+| `Busy` | a call still running on the Store in this process, so the Store cannot be closed for the rebuild: the open cache's refusal is reported as `Busy`, naming the Store as `entity` with `phase` and `op` null | spec §10 |
 | `StaleStore`, `Conflict` | a connection bypassed admission, or the sealed identity changed | spec §7, §10 |
 | `Capacity` | a real allocation refusal during the rebuild; the old Store is kept | spec §7 |
 | `Unknown` | the reply was lost around install; read `store.status` and the op before any second call | spec §9 |

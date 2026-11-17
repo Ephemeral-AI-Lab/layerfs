@@ -1168,8 +1168,11 @@ const MATRIX: [Row; 60] = [
                     "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_role_without_create_on_the_store_schema_is_refused_as_unsupported",
                     "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_role_without_temp_is_refused_as_unsupported",
                     "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_role_without_pg_read_all_stats_is_refused_as_unsupported",
-                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1"],
-        note: "PostgreSQL privilege preflight (database/schema CREATE, TEMP, pg_read_all_stats, the fully privileged control) and the lost-COMMIT reply resumed by the next compact; T-G38/T-G54." },
+                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1",
+                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_recorded_live_owner_without_the_store_key_is_terminated",
+                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_live_key_holding_owner_is_busy_and_not_terminated",
+                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_role_without_pg_signal_backend_is_refused_as_unsupported"],
+        note: "PostgreSQL privilege preflight (database/schema CREATE, TEMP, pg_read_all_stats, the fully privileged control, the signal backend), the lost-COMMIT reply resumed by the next compact, an ended owner without the Store key terminated, a live key holder `Busy` and kept, and a role without the signal backend `Unsupported`; T-G38/T-G54." },
     Row { id: "AC-45", backend: Backend::Sqlite, tier: "E1", status: Status::Covered,
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact.rs#group_rows_layout_opens_compacts_and_takes_none",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#group_rows_indexed_layout_opens_compacts_and_takes_none",
@@ -2174,7 +2177,7 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  PostgreSQL AC-44 suite `postgresql_compact` ({} tests; AC-44's six are",
+        "  PostgreSQL AC-44 suite `postgresql_compact` ({} tests; AC-44's nine are",
         suite_tests("engine/crates/layerfs-persistence/tests/postgresql_compact.rs")
     )
     .unwrap();
@@ -2192,12 +2195,27 @@ fn generate_report() -> String {
     writeln!(out, "  `a_role_without_temp_is_refused_as_unsupported`,").unwrap();
     writeln!(
         out,
-        "  `a_role_without_pg_read_all_stats_is_refused_as_unsupported` and"
+        "  `a_role_without_pg_read_all_stats_is_refused_as_unsupported`,"
     )
     .unwrap();
     writeln!(
         out,
-        "  `a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1`)."
+        "  `a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1`,"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  `a_recorded_live_owner_without_the_store_key_is_terminated`,"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  `a_live_key_holding_owner_is_busy_and_not_terminated` and"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  `a_role_without_pg_signal_backend_is_refused_as_unsupported`)."
     )
     .unwrap();
     writeln!(

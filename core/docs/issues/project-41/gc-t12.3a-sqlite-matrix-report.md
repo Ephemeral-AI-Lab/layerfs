@@ -119,7 +119,7 @@
 | AC-41 | PG | E2 | deferred (T12.3b) | - | PostgreSQL Phase M mark transfer: T12.3b. The §11 `markBytes` transfer is measured in the walking mark and recorded as the `compact.mark_bytes` metric (asserted by `postgresql_compact_fixtures.rs`; see AC-52). |
 | AC-42 | PG | E2 | deferred (T12.3b) | - | PostgreSQL reserved pack/Phase B: T12.3b. |
 | AC-43 | PG | E2 | deferred (T12.3b) | - | PostgreSQL Phase C cleanup resume: T12.3b. |
-| AC-44 | PG | E2 | covered | postgresql_compact.rs#a_fully_privileged_role_compacts; postgresql_compact.rs#a_role_without_create_on_the_database_is_refused_as_unsupported; postgresql_compact.rs#a_role_without_create_on_the_store_schema_is_refused_as_unsupported; postgresql_compact.rs#a_role_without_temp_is_refused_as_unsupported; postgresql_compact.rs#a_role_without_pg_read_all_stats_is_refused_as_unsupported; postgresql_compact.rs#a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1 | PostgreSQL privilege preflight (database/schema CREATE, TEMP, pg_read_all_stats, the fully privileged control) and the lost-COMMIT reply resumed by the next compact; T-G38/T-G54. |
+| AC-44 | PG | E2 | covered | postgresql_compact.rs#a_fully_privileged_role_compacts; postgresql_compact.rs#a_role_without_create_on_the_database_is_refused_as_unsupported; postgresql_compact.rs#a_role_without_create_on_the_store_schema_is_refused_as_unsupported; postgresql_compact.rs#a_role_without_temp_is_refused_as_unsupported; postgresql_compact.rs#a_role_without_pg_read_all_stats_is_refused_as_unsupported; postgresql_compact.rs#a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1; postgresql_compact.rs#a_recorded_live_owner_without_the_store_key_is_terminated; postgresql_compact.rs#a_live_key_holding_owner_is_busy_and_not_terminated; postgresql_compact.rs#a_role_without_pg_signal_backend_is_refused_as_unsupported | PostgreSQL privilege preflight (database/schema CREATE, TEMP, pg_read_all_stats, the fully privileged control, the signal backend), the lost-COMMIT reply resumed by the next compact, an ended owner without the Store key terminated, a live key holder `Busy` and kept, and a role without the signal backend `Unsupported`; T-G38/T-G54. |
 | AC-45 | SQLite | E1 | covered | sqlite_compact.rs#group_rows_layout_opens_compacts_and_takes_none; sqlite_compact.rs#group_rows_indexed_layout_opens_compacts_and_takes_none; sqlite_compact.rs#acquisition_layout_opens_compacts_and_clears_working_rows; sqlite_group_rows.rs#explicit_creation_reopens_declared_units_and_keeps_sparse_canonical_order | Monolithic/GroupRows/GroupRowsIndexed and the acquisition variants compact; working rows are cleared. |
 | AC-46 | SQLite | E2 | executed | this runner #arm_sidecar_at_install; sqlite_compact.rs#a_store_replaced_between_seal_and_install_is_stale; sqlite_compact.rs#a_store_replaced_under_an_open_handle_is_stale_at_the_next_transaction | Sealed-state/sidecar change at install gives Conflict with no writes; a replaced Store gives StaleStore. The in-flight-transaction exclusion is a documented lane limit, not probed. |
 | AC-47 | SQLite | E2 | covered | sqlite_compact_crash.rs#crash_during_copy; sqlite_compact_crash.rs#crash_during_settle; sqlite_compact.rs#a_stray_staged_name_is_refused_and_not_deleted; sqlite_compact.rs#the_whole_artifact_set_is_removed_by_the_next_run; sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript | A crash leaves the full set (the fixture now creates .compact-wal, .compact-shm, .compact-visited-journal and a .compact-mj* super-journal too), the next compact removes every one and recovers, none leaves no artifact, a stray name is Exists. |
@@ -257,13 +257,16 @@ AC-51 does not depend on the projection alone.
   `sdk_path_removal` (5); and the `layerfs-control
   project_delete_worker` (6), the `layerfs-store
   project_delete` (16), `compact_report_status` (5) and the
-  PostgreSQL AC-44 suite `postgresql_compact` (29 tests; AC-44's six are
+  PostgreSQL AC-44 suite `postgresql_compact` (29 tests; AC-44's nine are
   `a_fully_privileged_role_compacts`,
   `a_role_without_create_on_the_database_is_refused_as_unsupported`,
   `a_role_without_create_on_the_store_schema_is_refused_as_unsupported`,
   `a_role_without_temp_is_refused_as_unsupported`,
-  `a_role_without_pg_read_all_stats_is_refused_as_unsupported` and
-  `a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1`).
+  `a_role_without_pg_read_all_stats_is_refused_as_unsupported`,
+  `a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1`,
+  `a_recorded_live_owner_without_the_store_key_is_terminated`,
+  `a_live_key_holding_owner_is_busy_and_not_terminated` and
+  `a_role_without_pg_signal_backend_is_refused_as_unsupported`).
   All of those pass on the merged branch; the PostgreSQL
   suites need `LAYERFS_TEST_POSTGRES_URL` and run in the store-ext4
   --full lane.
