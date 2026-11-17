@@ -181,3 +181,44 @@ pub(crate) fn prefix(
     }
     Ok(Some((length, body)))
 }
+
+/// [`prefix`] for several packs in one statement, in `ids` order. A pack that
+/// is absent is an error.
+pub(crate) fn prefixes(
+    tx: &Transaction<'_>,
+    ids: &[i64],
+    limit: usize,
+    out: &mut Vec<(usize, Vec<u8>)>,
+) -> Result<(), PersistenceError> {
+    if limit == 0 || ids.iter().any(|id| *id <= 0) {
+        return Err(PersistenceError::Malformed);
+    }
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let limit = i32::try_from(limit).map_err(|_| PersistenceError::Malformed)?;
+    let ids = ids.to_vec();
+    let rows = tx.typed(
+        &format!(
+            "SELECT p.length,substring(p.body FROM 1 FOR $2) \
+             FROM unnest($1::bigint[]) WITH ORDINALITY AS i(pack_id,n) \
+             JOIN {}.pack p ON p.pack_id=i.pack_id ORDER BY i.n",
+            tx.schema
+        ),
+        &[&ids, &limit],
+        ids.len() as u64 * 8 + 4,
+    )?;
+    if rows.len() != ids.len() {
+        return Err(PersistenceError::Missing);
+    }
+    for row in &rows {
+        let length: i64 = row.try_get(0).map_err(|e| rows::error(&e))?;
+        let body: Vec<u8> = row.try_get(1).map_err(|e| rows::error(&e))?;
+        let length = usize::try_from(length).map_err(|_| PersistenceError::Malformed)?;
+        if body.len() != length.min(limit as usize) {
+            return Err(PersistenceError::Malformed);
+        }
+        out.push((length, body));
+    }
+    Ok(())
+}

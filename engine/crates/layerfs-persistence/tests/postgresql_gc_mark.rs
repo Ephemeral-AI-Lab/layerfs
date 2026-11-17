@@ -384,3 +384,128 @@ fn a_mark_keeps_the_saved_objects_and_reports_the_live_heads_digest() {
     let (commits, _layers) = counts(&mut schema.admin());
     assert_eq!(commits, 1);
 }
+
+/// One Layer's tree in one Save: `files` whole files of 1 KiB under one inode
+/// leaf, its directory and its filesystem root. Returns the root and every
+/// object id of the Save.
+fn save_tree(handles: &PostgresHandles, seed: u32, files: u32) -> (ObjectId, Vec<ObjectId>) {
+    use layerfs_content::filesystem::attributes::PortableMetadata;
+    use layerfs_content::filesystem::directory::{encode_directory_page, DirectoryPage};
+    use layerfs_content::filesystem::inode::{encode_inode_page, InodePage};
+    use layerfs_content::filesystem::root::profile_id;
+    use layerfs_content::filesystem::{scope_for_seed, FilesystemRoot};
+    use layerfs_content::inode_leaf::{InodeKind, InodeMetadata, InodeValue};
+    use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectRole};
+
+    let metadata = |mode| {
+        InodeMetadata::Inline(PortableMetadata {
+            mode,
+            mtime_seconds: i64::from(seed),
+            mtime_nanoseconds: 0,
+        })
+    };
+    let mut objects: Vec<FinalizedObject> = (0..files)
+        .map(|index| {
+            FinalizedObject::new(
+                ObjectRole::WholeFile,
+                encode_whole_file_payload(&bytes(seed.wrapping_mul(1000) + index, 1024)).unwrap(),
+            )
+            .unwrap()
+        })
+        .collect();
+    let directory = FinalizedObject::new(
+        ObjectRole::DirectoryLeaf,
+        encode_directory_page(&DirectoryPage::Leaf {
+            entries: Vec::new(),
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    let mut entries = vec![(
+        1,
+        InodeValue {
+            kind: InodeKind::Directory,
+            namespace_ref_count: 0,
+            content_root: directory.id(),
+            metadata_root: metadata(0o755),
+        },
+    )];
+    let mut references = vec![directory.id()];
+    for (offset, file) in objects.iter().enumerate() {
+        entries.push((
+            offset as u64 + 2,
+            InodeValue {
+                kind: InodeKind::RegularFile,
+                namespace_ref_count: 1,
+                content_root: file.id(),
+                metadata_root: metadata(0o644),
+            },
+        ));
+        references.push(file.id());
+    }
+    let leaf = FinalizedObject::new(
+        ObjectRole::InodeLeaf,
+        encode_inode_page(&InodePage::Leaf { entries }).unwrap(),
+    )
+    .unwrap()
+    .with_references(references);
+    let scope = scope_for_seed([9; 32]);
+    let root = FilesystemRoot::new(profile_id(), scope, 1, leaf.id()).unwrap();
+    let root = FinalizedObject::new(ObjectRole::FilesystemRoot, root.encode().unwrap())
+        .unwrap()
+        .with_references(vec![leaf.id()]);
+    let root_id = root.id();
+    objects.extend([directory, leaf, root]);
+    let ids: Vec<ObjectId> = objects.iter().map(FinalizedObject::id).collect();
+    let storage = Storage::new(handles.storage.clone() as Arc<dyn PackPersistence>).unwrap();
+    let save = storage.begin_save().unwrap();
+    for object in objects {
+        save.accept(object).unwrap();
+    }
+    save.finish().unwrap();
+    (root_id, ids)
+}
+
+/// A mark reads the heads of several packs in one call and then the record
+/// headers of payload packs far larger than a head, so its ranged reads start
+/// past the bytes it already holds. Every object of every tree must still be
+/// reached: heads handed back in another order, or a ranged read served from
+/// the wrong bytes, fail the closure.
+#[test]
+fn a_mark_reaches_every_record_of_payload_packs_larger_than_its_head() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "mark_ranges");
+    let handles: PostgresHandles = schema.create(BINDING, CURSOR);
+    let (genesis_root, mut saved) = save_tree(&handles, 1, 99);
+    let (shop, work, _genesis) = project_with_genesis(&handles.history, 1, genesis_root);
+    for seed in 2..=4u32 {
+        let (root, ids) = save_tree(&handles, seed, 99);
+        commit_with(&handles.history, work, root);
+        publish(&handles.history, shop, work);
+        saved.extend(ids);
+    }
+    let large: i64 = schema
+        .admin()
+        .query_one(
+            "SELECT count(*) FROM pack WHERE domain<>0 AND length>4120",
+            &[],
+        )
+        .unwrap()
+        .get(0);
+    assert!(
+        large >= 4,
+        "each tree has a payload pack past the head: {large}"
+    );
+
+    let mark = handles
+        .history
+        .mark()
+        .expect("the mark reads past the head");
+    for id in &saved {
+        assert!(mark.objects().contains(*id), "a saved object is reached");
+    }
+    let mut distinct = saved.clone();
+    distinct.sort();
+    distinct.dedup();
+    assert_eq!(mark.objects().len(), distinct.len(), "and nothing else");
+}
