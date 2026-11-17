@@ -931,6 +931,30 @@ fn the_receipt_carries_every_section_11_field() {
     );
 }
 
+/// An observed run is told each phase once, in order, as it starts, by the
+/// names `store.status` shows; a run with nothing to rebuild stops at `mark`.
+#[test]
+fn an_observed_run_is_told_each_phase_once_in_order() {
+    let (_temp, handles, _path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let _ = whole_file(&handles, b"dead");
+    let mut phases = Vec::new();
+    let receipt = handles
+        .compact_observed(&request(34), &mut |phase| phases.push(phase))
+        .unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(phases, ["mark", "build", "verify", "install"]);
+
+    let (_temp, handles, _path) = create_store();
+    let mut phases = Vec::new();
+    let receipt = handles
+        .compact_observed(&request(35), &mut |phase| phases.push(phase))
+        .unwrap();
+    assert_eq!(receipt.path, CompactPath::None);
+    assert_eq!(phases, ["mark"]);
+}
+
 #[test]
 fn the_empty_store_report_explains_its_zeros() {
     let (_temp, handles, path) = create_store();

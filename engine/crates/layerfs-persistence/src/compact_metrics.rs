@@ -91,6 +91,20 @@ impl CompactPhase {
             Self::PostgresCleanup => "pg_cleanup",
         }
     }
+
+    /// The phase as `store.status` and a progress event name it (§11): the
+    /// two backends share `mark`, `build` and `cleanup`.
+    #[must_use]
+    pub const fn step(self) -> &'static str {
+        match self {
+            Self::Mark | Self::PostgresMark => "mark",
+            Self::Build | Self::PostgresBuild => "build",
+            Self::Verify => "verify",
+            Self::Install => "install",
+            Self::PostgresSwap => "swap",
+            Self::PostgresCleanup => "cleanup",
+        }
+    }
 }
 
 /// A refusal that stops a compaction before or during its admission.
@@ -596,7 +610,10 @@ impl Drop for CompactMetricsCapture {
 /// The phase clock and §11 values one measured `store.compact` run observes,
 /// on either backend. The SQLite §7 phases and the PostgreSQL `pg_` phases are
 /// distinct [`CompactPhase`] values, so one clock serves both.
-pub(crate) struct RunMetrics {
+pub(crate) struct RunMetrics<'a> {
+    /// Told each phase as it starts, once per change of phase. It observes
+    /// only: it runs on the calling thread, in memory, and writes no record.
+    on_phase: &'a mut dyn FnMut(&'static str),
     pub(crate) started: Instant,
     pub(crate) phase: Option<(CompactPhase, Instant)>,
     pub(crate) phase_nanos: Vec<(CompactPhase, u64)>,
@@ -613,9 +630,13 @@ pub(crate) struct RunMetrics {
     pub(crate) mark_bytes: Option<u64>,
 }
 
-impl RunMetrics {
-    pub(crate) fn start(mark_bytes: Option<u64>) -> Self {
+impl<'a> RunMetrics<'a> {
+    pub(crate) fn start(
+        mark_bytes: Option<u64>,
+        on_phase: &'a mut dyn FnMut(&'static str),
+    ) -> Self {
         Self {
+            on_phase,
             started: Instant::now(),
             phase: None,
             phase_nanos: Vec::new(),
@@ -634,6 +655,9 @@ impl RunMetrics {
     /// time, never an exclusive CPU decomposition.
     pub(crate) fn begin_phase(&mut self, phase: CompactPhase) {
         self.end_phase();
+        if self.phase_nanos.last().map(|(last, _)| *last) != Some(phase) {
+            (self.on_phase)(phase.step());
+        }
         self.phase = Some((phase, Instant::now()));
     }
 

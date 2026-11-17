@@ -128,9 +128,9 @@ over [`Events`](../../../../control/crates/layerfs-home/src/events.rs):
 it came, `output(stream, bytes)` sends `{ stream, bytes }`. Events are sent on
 the call's own thread, before it returns.
 
-Eleven calls declare the shared `PROGRESS` option (`on_progress`; CLI
+Twelve calls declare the shared `PROGRESS` option (`on_progress`; CLI
 `--progress`) in [`calls/table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs):
-`project.init`, `project.export`, `store.push`, `store.pull`,
+`project.init`, `project.export`, `store.push`, `store.pull`, `store.compact`,
 `backup.create`, `backup.restore`, `machine.start`, `machine.create`,
 `machine.load`, `sandbox.create` and `workspace.exec`. `workspace.exec` alone also declares the `stdout` and
 `stderr` functions. A function never crosses into the library:
@@ -139,7 +139,7 @@ refuses one as a value.
 
 | Shape | Calls | Source |
 | --- | --- | --- |
-| `{ phase, done, total }` | `project.init`, `store.push`, `store.pull` | [`sqlite/family.rs`](../../../../control/crates/layerfs-store/src/sqlite/family.rs) `progress` |
+| `{ phase, done, total }` | `project.init`, `store.push`, `store.pull`, `store.compact` | [`sqlite/family.rs`](../../../../control/crates/layerfs-store/src/sqlite/family.rs) `progress` |
 | `{ phase, files, directories, symlinks, bytes, done, total }` | `project.export` | [`project/export/writer.rs`](../../../../control/crates/layerfs-store/src/project/export/writer.rs) `phase_event` |
 | `{ phase, done, total, pieces }` | `backup.create`, `backup.restore` | [`backup/progress.rs`](../../../../control/crates/layerfs-store/src/backup/progress.rs) |
 | `{ exec: { id } }`, once, before the command starts | `workspace.exec` | [`workspace/exec.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/exec.rs) |
@@ -150,6 +150,7 @@ refuses one as a value.
 | --- | --- |
 | `project.init` | `check`, `send` (worker Stores only: first `done` 0, then one per 8 MiB of tree records, last `done == total`), `install`, `record` |
 | `store.push`, `store.pull` | `check`, `snapshot` (marker, then byte counts), `send` (8 MiB chunks, [`steps.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) `CHUNK`), `verify` (marker, then byte counts), `install`, `record`, `retire` |
+| `store.compact` | SQLite: `mark`, `build`, `verify`, `install`; PostgreSQL: `mark`, `build`, `swap`, `cleanup`. One event as each phase starts, with null counts; a run with nothing to rebuild sends `mark` alone. The SQLite settle (`cleanup` in `store.status`) is inside `install` |
 | `project.export` | `prepare`, `export` (first at zero, then at most one per 200 ms, last at the final counts), `finalize` (after the staging folder is renamed onto the destination) |
 | `backup.create` | `check`, `snapshot`, `send` (worker Stores only), `check`, `hash`, `upload` |
 | `backup.restore` | `check`, `download`, `verify`, `install` |

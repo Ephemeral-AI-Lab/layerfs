@@ -92,7 +92,14 @@ fn the_four_gc_calls_take_ids_only() {
         let given: Vec<(&str, Kind)> = spec.args.iter().map(|arg| (arg.name, arg.kind)).collect();
         assert_eq!(given.as_slice(), args, "{name} arguments");
         assert!(spec.args.iter().all(|arg| !arg.optional), "{name} required");
-        assert!(spec.options.is_empty(), "{name} has no options");
+        // ids only: no call takes a data option. `store.compact` alone
+        // declares the shared `on_progress` function (#42 item 45).
+        let options: Vec<(&str, Kind)> = spec.options.iter().map(|o| (o.name, o.kind)).collect();
+        if name == "store.compact" {
+            assert_eq!(options, [("on_progress", Kind::Function)], "{name}");
+        } else {
+            assert!(options.is_empty(), "{name} has no options");
+        }
     }
 }
 
@@ -269,6 +276,42 @@ fn project_init_after_delete_is_nametaken_deleted() {
     assert_eq!(holder.get_text("name"), Some("api"));
     assert_eq!(holder.get_text("state"), Some("deleted"));
     assert_eq!(refusal.detail.get_text("source"), Some("store"));
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(folder);
+}
+
+/// `store.compact` sends each phase as a progress event before it answers:
+/// `{ progress: { phase, done, total } }` with null counts.
+#[test]
+fn store_compact_sends_each_phase_as_a_progress_event() {
+    let (home, folder) = project();
+    let compact = || {
+        let mut phases = Vec::new();
+        let report = layerfs_api::call(
+            Some(&home),
+            "store.compact",
+            map(&[("name", t("shop"))]),
+            &mut |event| {
+                let progress = event.get("progress").expect("a progress event").clone();
+                assert_eq!(progress.get("done"), Some(&SdkValue::Null), "{progress:?}");
+                assert_eq!(progress.get("total"), Some(&SdkValue::Null), "{progress:?}");
+                phases.push(progress.get_text("phase").expect("phase").to_owned());
+            },
+        )
+        .unwrap_or_else(|refusal| panic!("store.compact: {refusal:?}"));
+        (report.get_text("path").expect("path").to_owned(), phases)
+    };
+    // nothing is dead yet: the run stops after its mark
+    let (path, phases) = compact();
+    assert_eq!(
+        (path.as_str(), phases.as_slice()),
+        ("none", ["mark".to_owned()].as_slice())
+    );
+    // a deleted project makes the next run a rebuild, through all four phases
+    ok(&home, "project.delete", &[p()]);
+    let (path, phases) = compact();
+    assert_eq!(path, "rebuild");
+    assert_eq!(phases, ["mark", "build", "verify", "install"]);
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }

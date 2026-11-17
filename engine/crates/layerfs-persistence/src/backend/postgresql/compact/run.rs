@@ -218,7 +218,18 @@ impl PostgresHandles {
     /// deletes only the persisted dead set. The caller keeps its session; the
     /// Store is usable at `G + 1` from the swap on.
     pub fn compact(&self, request: &CompactRequest) -> HistoryResult<CompactReceipt> {
-        let mut metrics = RunMetrics::start(Some(0));
+        self.compact_observed(request, &mut |_| {})
+    }
+
+    /// [`Self::compact`], telling `on_phase` each phase as it starts (`mark`,
+    /// `build`, `swap`, `cleanup`). The observer changes nothing about the
+    /// run; `store.status` stays the record another process reads.
+    pub fn compact_observed(
+        &self,
+        request: &CompactRequest,
+        on_phase: &mut dyn FnMut(&'static str),
+    ) -> HistoryResult<CompactReceipt> {
+        let mut metrics = RunMetrics::start(Some(0), on_phase);
         let result = self.compact_measured(request, &mut metrics);
         metrics.finish(&result);
         result

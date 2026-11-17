@@ -20,6 +20,7 @@ use crate::open_args::OpenArgs;
 use crate::place::{self, Executor};
 use crate::postgresql;
 use crate::record::{StoreRecord, StoreRef};
+use crate::sqlite::family::progress;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::GcScopeKind;
 use layerfs_home::events::Events;
@@ -71,8 +72,10 @@ fn crash_failpoint() -> Option<CompactFailpoint> {
 }
 
 /// `store.compact(name)`: reclaim one Store's dead bytes, answering
-/// the §11 report.
-pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
+/// the §11 report. Each phase is sent to `events` as it starts, as
+/// `{ phase, done, total }` with null counts (the shape `store.push` sends);
+/// the op record `store.status` reads is written by the run, not from here.
+pub fn compact(home: &Path, events: &mut Events<'_>, store: &str) -> Outcome {
     let home = home.to_path_buf();
     // A live operation is `Busy`, a dead owner's record `Unresolved`; the
     // refusal is a bounded metric label and never changes what is returned.
@@ -85,7 +88,7 @@ pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
     };
     let store_ref = record.store_ref()?.clone();
     if matches!(store_ref, StoreRef::Postgres { .. }) {
-        return compact_postgresql(&record, &home, store);
+        return compact_postgresql(&record, &home, events, store);
     }
     match place::plan(&home, &store_ref)? {
         Executor::Local => {}
@@ -133,17 +136,20 @@ pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
         layerfs_bridge::sdk_values::hex(&op_id)
     ));
     let receipt = handles
-        .compact(&CompactRequest {
-            op_id,
-            owner_pid: Some(std::process::id()),
-            owner_pid_start,
-            owner_pid_boot,
-            owner_runtime: Some(owner_runtime),
-            owner_boot: Some(owner_boot),
-            owner_live: Some(layerfs_home::process::recorded_owner_alive),
-            failpoint: crash_failpoint(),
-            ..CompactRequest::default()
-        })
+        .compact_observed(
+            &CompactRequest {
+                op_id,
+                owner_pid: Some(std::process::id()),
+                owner_pid_start,
+                owner_pid_boot,
+                owner_runtime: Some(owner_runtime),
+                owner_boot: Some(owner_boot),
+                owner_live: Some(layerfs_home::process::recorded_owner_alive),
+                failpoint: crash_failpoint(),
+                ..CompactRequest::default()
+            },
+            &mut |phase| progress(events, phase, None),
+        )
         .map_err(|error| {
             lookup::history_in(error, GcScopeKind::Store, store, None, Some(&op_id))
         })?;
@@ -155,7 +161,12 @@ pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
 /// G + 1 from the swap on; a lost reply is judged by the next call (§9).
 ///
 /// The PostgreSQL engine is always built beside SQLite (#726).
-fn compact_postgresql(record: &StoreRecord, home: &Path, store: &str) -> Outcome {
+fn compact_postgresql(
+    record: &StoreRecord,
+    home: &Path,
+    events: &mut Events<'_>,
+    store: &str,
+) -> Outcome {
     let url = crate::record::url(record)?;
     let id = identity::identity(&OpenArgs {
         home: Some(home.to_path_buf()),
@@ -186,15 +197,18 @@ fn compact_postgresql(record: &StoreRecord, home: &Path, store: &str) -> Outcome
         layerfs_bridge::sdk_values::hex(&op_id)
     ));
     let receipt = handles
-        .compact(&CompactRequest {
-            op_id,
-            owner_pid: Some(std::process::id()),
-            owner_pid_start,
-            owner_pid_boot,
-            owner_runtime: Some(owner_runtime),
-            owner_boot: Some(owner_boot),
-            ..CompactRequest::default()
-        })
+        .compact_observed(
+            &CompactRequest {
+                op_id,
+                owner_pid: Some(std::process::id()),
+                owner_pid_start,
+                owner_pid_boot,
+                owner_runtime: Some(owner_runtime),
+                owner_boot: Some(owner_boot),
+                ..CompactRequest::default()
+            },
+            &mut |phase| progress(events, phase, None),
+        )
         .map_err(|error| {
             lookup::history_in(error, GcScopeKind::Store, store, None, Some(&op_id))
         })?;

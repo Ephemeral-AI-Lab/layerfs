@@ -59,8 +59,19 @@ impl SqliteHandles {
     /// directory-fsync failure is installed-but-uncertain: the new file and the
     /// op record are kept for the next `store.compact` to judge (§9).
     pub fn compact(self, request: &CompactRequest) -> HistoryResult<CompactReceipt> {
+        self.compact_observed(request, &mut |_| {})
+    }
+
+    /// [`Self::compact`], telling `on_phase` each phase as it starts (`mark`,
+    /// `build`, `verify`, `install`). The observer changes nothing about the
+    /// run; `store.status` stays the record another process reads.
+    pub fn compact_observed(
+        self,
+        request: &CompactRequest,
+        on_phase: &mut dyn FnMut(&'static str),
+    ) -> HistoryResult<CompactReceipt> {
         let store = self.storage.session.path.clone();
-        let mut metrics = RunMetrics::start(None);
+        let mut metrics = RunMetrics::start(None, on_phase);
         let result = self.compact_measured(request, &mut metrics);
         // §9: the run is replying, so its own record (when it leaves one) is
         // no longer in flight. Mark it before the reply so the next

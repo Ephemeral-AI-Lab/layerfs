@@ -826,6 +826,32 @@ fn a_wholly_dead_pack_is_rebuilt_away_and_totals_settle() {
     clean(&schema.open());
 }
 
+/// An observed run is told each phase once, in order, as it starts, by the
+/// names `store.status` shows; a run with nothing to rebuild stops at `mark`.
+#[test]
+fn an_observed_run_is_told_each_phase_once_in_order() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "observed");
+    let handles = schema.create();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let mut phases = Vec::new();
+    let receipt = handles
+        .compact_observed(&request(77), &mut |phase| phases.push(phase))
+        .unwrap();
+    assert_eq!(receipt.path, CompactPath::None);
+    assert_eq!(phases, ["mark"]);
+
+    let _ = whole_file(&handles, b"nobody reaches this object");
+    let mut phases = Vec::new();
+    let receipt = handles
+        .compact_observed(&request(78), &mut |phase| phases.push(phase))
+        .unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(phases, ["mark", "build", "swap", "cleanup"]);
+    clean(&schema.open());
+}
+
 #[test]
 fn retained_roots_survive_a_rebuild_that_collects_a_deleted_project() {
     let Some(url) = url() else { return };

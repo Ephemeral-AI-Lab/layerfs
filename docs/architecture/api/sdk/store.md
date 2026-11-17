@@ -426,10 +426,17 @@ call on that machine; the deviation and its owner-sign-off request are in
 D5, and the control route table names the same exception.
 
 ```text
-JS      await layerfs.store.compact(name)
-Python  layerfs.store.compact(name)
-CLI     layerfs store compact <name>
+JS      await layerfs.store.compact(name, { on_progress })
+Python  layerfs.store.compact(name, on_progress=None)
+CLI     layerfs store compact <name> [--progress]
 ```
+
+`on_progress` receives `{ phase, done, total }` as each phase starts, with
+null counts: `mark`, `build`, `verify`, `install` on SQLite and `mark`,
+`build`, `swap`, `cleanup` on PostgreSQL; a run that takes the `none` path
+sends `mark` alone. The events are for the caller only and are held in memory:
+the run's op record is what [`store.status`](#storestatus) shows to another
+process and what a later call judges after a crash (#42 A13).
 
 Returns `{ kind: "Compacted", path, generation: {before, after}, ... }`
 with the report's snake_case fields: `dead_bytes_bound`,
