@@ -426,7 +426,7 @@ layerfs project init pg-main/load ./load
   (`password`, `sslpassword`, any case). Give the password as a reference
   with `--password` (`env:NAME` or `file:/absolute/path`). It is resolved on
   each call and never written to the home.
-- `synchronous_commit` is `off` (the default), `local`, `remote_write`,
+- `synchronous_commit` is `off`, `local` (the default), `remote_write`,
   `on` or `remote_apply`.
 - The Store lives in the fixed schema `layerfs`. An empty database gets the
   schema with a new identity. A database that already holds the `layerfs`

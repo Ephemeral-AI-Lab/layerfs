@@ -1,13 +1,15 @@
 //! Explicit backend and local database selection.
 use std::path::PathBuf;
 /// PostgreSQL `synchronous_commit` for every write transaction, applied with
-/// `SET LOCAL`. `Off` is the default (owner, 2026-10-29).
+/// `SET LOCAL`. `Local` is the default (owner, 2026-11-17; it was `Off`
+/// from 2026-10-29): a server crash loses no acknowledged write.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum SynchronousCommit {
-    /// Acknowledge before the WAL record is flushed.
-    #[default]
+    /// Acknowledge before the WAL record is flushed. A server crash can lose
+    /// acknowledged writes; an explicit choice only.
     Off,
     /// Wait for the local WAL flush only.
+    #[default]
     Local,
     /// Wait for standbys to receive the WAL.
     RemoteWrite,
@@ -65,12 +67,12 @@ pub struct PostgresSelection {
     pub check: PostgresCheck,
 }
 impl PostgresSelection {
-    /// A selection with `synchronous_commit=off` and a 30 s lane wait.
+    /// A selection with `synchronous_commit=local` and a 30 s lane wait.
     pub fn new(url: impl Into<String>, schema: impl Into<String>) -> Self {
         Self {
             url: url.into(),
             schema: schema.into(),
-            synchronous_commit: SynchronousCommit::Off,
+            synchronous_commit: SynchronousCommit::Local,
             lock_timeout_ms: 30_000,
             check: PostgresCheck::Full,
         }
@@ -105,7 +107,20 @@ pub enum SqlitePersistenceProfile {
     Durable,
     /// WAL/OFF; survives process termination, without kernel-crash durability.
     /// A kernel or VM crash can corrupt the Store or lose acknowledged data.
+    /// Tests and diagnostics may still select it; the product opens Normal.
     Disposable,
+    /// WAL/NORMAL: the log is synchronized before each checkpoint and after a
+    /// log restart, not at every COMMIT. A kernel or VM crash can lose the
+    /// commits since the last synchronized checkpoint. The profile every
+    /// product opener selects (owner, 2026-11-17).
+    Normal,
+}
+impl SqlitePersistenceProfile {
+    /// Whether a product path may open a Store with this profile: Normal, or
+    /// Disposable for a test or diagnostic. Durable stays disabled.
+    pub const fn permitted(self) -> bool {
+        matches!(self, Self::Normal | Self::Disposable)
+    }
 }
 /// Explicit physical layout for a newly created embedded Store.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

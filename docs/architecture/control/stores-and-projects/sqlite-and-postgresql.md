@@ -77,7 +77,7 @@ another operation holds the Store
 ```text
  store.connect(name, url, {password: "env:PG", synchronous_commit})
    refuse_password(url)       user:pass@ or any *password* param -> InvalidInput
-   synchronous_commit         off (default) | local | remote_write | on
+   synchronous_commit         off | local (default) | remote_write | on
                               | remote_apply, else InvalidInput
    resolve(password)          checked once now
    Exists?                    same name, or same server+database, or

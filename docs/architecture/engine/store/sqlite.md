@@ -28,7 +28,7 @@ The SQLite backend of the [Store](README.md): one WAL file every opener shares t
 | --- | --- | --- |
 | `sqlite_pack_layout` | `Monolithic` (`user_version` 36): whole `pack.body`; `GroupRows` (37): `control` row plus one `pack_unit` row per group; `GroupRowsIndexed` (38): adds index `pack_unit_mapping` | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs), [`objects_units.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/objects_units.sql) |
 | `sqlite_acquisition` | `Absent` (+0) or `Tables` (+6, versions 42–44, created with `auto_vacuum=INCREMENTAL`) | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs), [`acquisition/schema.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/acquisition/schema.sql) |
-| `sqlite_profile` | `Disposable` in every product opener (see [Store](README.md)) | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
+| `sqlite_profile` | `Normal` in every product opener since 2026-11-17 (see [Store](README.md)); a test may select `Disposable` | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
 
 Every table is `STRICT`; history keys are `WITHOUT ROWID` blobs whose first
 byte tags the kind (`0x31` stack, `0x32` Layer, `0x12` Commit, `0x11`
@@ -55,13 +55,13 @@ UPDATE and DELETE on `pack` and `pack_unit`. Open checks `application_id`,
 | Open | `READ_WRITE` or `READ_ONLY`, `NO_MUTEX`; statement cache 64 | [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
 | Guard | `busy_timeout=0`; `SQLITE_DBCONFIG_DEFENSIVE` on | same |
 | Settings | `profile::apply`, then read back into `ConnectionProfile`; a mismatch is `Integrity`; an existing Store not in `wal` mode is refused | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
-| Checkpoint thread | writable Disposable session only: a second connection on its own thread; failure to start it refuses the open | [`background.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/background.rs) |
+| Checkpoint thread | writable Normal or Disposable session only: a second connection on its own thread, opened with the session's `synchronous` value and read back; failure to start it refuses the open | [`background.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/background.rs) |
 | Last close | A writable session's close waits for `Writer::acquire(path)` like any write (or reuses the lane an uncertain transaction already holds), so its close, which may be SQLite's last, checkpoints and removes `-wal`/`-shm` under the lane; a pull's verify close and a restore's in-use check rely on that. If the wait itself fails (interrupted, or the directory cannot be opened), the close sets `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` first, so SQLite takes no exclusive lock, runs no checkpoint and removes nothing; there is no second attempt. If even that setting fails, the connection is kept until process exit. A read-only or diagnostic session cannot checkpoint or remove those files and takes no lane, so it never waits behind a writer kept after an uncertain write. The checkpoint thread's connection closes first and never takes it. One exception: an open whose checkpoint thread fails to start drops its new connection after the open's lane is released | [`lifecycle.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/lifecycle.rs) |
 
-| Setting | Disposable | Source |
+| Setting | Normal (Disposable where it differs) | Source |
 | --- | --- | --- |
-| identity | `sqlite-wal-off-v2` | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
-| `journal_mode`, `synchronous`, `fullfsync` | `wal`, 0 (OFF), 0 | same |
+| identity | `sqlite-wal-normal-v2` (`sqlite-wal-off-v2`) | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
+| `journal_mode`, `synchronous`, `fullfsync` | `wal`, 1 (NORMAL; Disposable 0, OFF), 0 | same |
 | `wal_autocheckpoint` | 0: the session's checkpoint thread copies the log | same |
 | shared | `foreign_keys=1`, `checkpoint_fullfsync=1`, `journal_size_limit=4194304`, `cache_size=-2048`, `mmap_size=0`, `temp_store=2`, `page_size=4096`, `busy_timeout=0` | same |
 

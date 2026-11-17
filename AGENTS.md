@@ -14,7 +14,7 @@ assignment. Earlier wording of these guides is in the
 
 | Rule | Where |
 | --- | --- |
-| Disposable / WAL / synchronous=OFF is the only SQLite Store profile; Durable execution is `NOT_RUN` | [Persistence profile](#active-persistence-profile--owner-direction-2026-10-07) |
+| Normal / WAL / synchronous=NORMAL is the product SQLite Store profile; Durable execution is `NOT_RUN` | [Persistence profile](#active-persistence-profile--owner-direction-2026-11-17) |
 | One attempted operation: no automatic retry, busy handler, refresh or replay | [§4](#4-code-build-and-docs) |
 | Build tests with `--no-run` first; every test command stops at 120 s, and reaching it is a hang | [§4](#4-code-build-and-docs) |
 | CI reports and never gates; verify your own change and report checks and gaps | [§4](#4-code-build-and-docs) |
@@ -98,24 +98,33 @@ assignment. Earlier wording of these guides is in the
   not resume old loops, reopen closed rows or run old campaigns unless the
   task selects that work, and do not choose authority by issue number alone.
 
-## Active persistence profile — owner direction 2026-10-07
+## Active persistence profile — owner direction 2026-11-17
 
-- **Disposable / WAL / synchronous=OFF is the only permitted profile for a
-  SQLite Store.** Durable execution is disabled indefinitely, until the owner
-  explicitly allows it again; this supersedes earlier instructions to exercise
-  both profiles or resume Durable. A milestone, old benchmark selection,
-  default argument or passing build does not reauthorize Durable.
-- Select Disposable explicitly for every new Store, application run, test,
-  diagnostic and measurement; never execute Durable or fall back to it.
-  Retained Durable code may compile; report its execution as
+- **Normal / WAL / synchronous=NORMAL is the profile every product path opens
+  a SQLite Store with** (owner, 2026-11-17; it was Disposable / synchronous=OFF
+  from 2026-10-07). The owner enabled it ahead of its safety and performance
+  gate ([layerfs-project#155](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/155)
+  §7.5 and §7.6), which has **not** been run: claim no power-loss guarantee
+  from it yet. Store files written outside SQLite (install, transfer, restore,
+  snapshot) are still not synchronized (#155 §7.3).
+- Disposable / synchronous=OFF remains selectable, and existing tests,
+  diagnostics and measurements that select it explicitly keep doing so. A
+  Store's manifest and record still carry the `disposable` label; it names the
+  non-durable WAL Store, not the connection's synchronization.
+- Durable execution is disabled indefinitely, until the owner explicitly
+  allows it again. A milestone, old benchmark selection, default argument or
+  passing build does not reauthorize Durable; never execute it or fall back to
+  it. Retained Durable code may compile; report its execution as
   `NOT_RUN — disabled by owner until explicit reauthorization`. Historical
   Durable receipts keep their verdicts. This policy does not claim the Durable
   API was removed.
-- Disposable's COMMIT does not checkpoint (`wal_autocheckpoint=0`); its writing
-  session's own thread checkpoints the WAL off the commit path (owner approval,
-  2026-11-07; [SQLite checkpoints](docs/architecture/engine/store/sqlite.md#checkpoints)).
+- A Normal or Disposable COMMIT does not checkpoint (`wal_autocheckpoint=0`);
+  the writing session's own thread checkpoints the WAL off the commit path
+  with the session's synchronization (owner approval, 2026-11-07;
+  [SQLite checkpoints](docs/architecture/engine/store/sqlite.md#checkpoints)).
 - A PostgreSQL Store has no profile; its write setting is `synchronous_commit`
-  (default `off`), recorded by `store.connect`.
+  (default `local` since 2026-11-17, `off` before), recorded by
+  `store.connect`. A Store connected earlier keeps its recorded value.
 - Each Workspace's daemon overlay is a separate MEMORY/OFF/EXCLUSIVE database
   file.
 

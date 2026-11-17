@@ -109,9 +109,9 @@ pub(crate) fn initialize(
     let mut initialized = None;
     let mut branch = None;
     let result = (|| {
-        if request.store.sqlite_profile != SqlitePersistenceProfile::Disposable {
+        if !request.store.sqlite_profile.permitted() {
             return Err(InitError::Manifest(
-                "explicit Disposable Store profile required",
+                "explicit Normal or Disposable Store profile required",
             ));
         }
         check_destination(
@@ -185,7 +185,9 @@ pub(crate) fn initialize(
                 locator: request.locator.clone(),
                 profile: match request.store.sqlite_profile {
                     SqlitePersistenceProfile::Durable => StoreProfile::Durable,
-                    SqlitePersistenceProfile::Disposable => StoreProfile::Disposable,
+                    SqlitePersistenceProfile::Disposable | SqlitePersistenceProfile::Normal => {
+                        StoreProfile::Disposable
+                    }
                 },
                 binding: request.catalog.binding_key.clone(),
                 cursor_key: request.catalog.cursor_key,

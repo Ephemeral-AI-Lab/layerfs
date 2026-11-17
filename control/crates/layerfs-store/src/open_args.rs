@@ -105,7 +105,7 @@ impl PgSelection {
         schema_of(self.schema.as_deref())
     }
 
-    /// Its `synchronous_commit`, `off` by default.
+    /// Its `synchronous_commit`, `local` by default.
     pub fn setting(&self) -> Result<String> {
         setting_of(self.synchronous_commit.as_deref())
     }

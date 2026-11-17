@@ -60,7 +60,7 @@ pub fn save_entry(
     let project = Project {
         store: SealedStore {
             path: entry.join("sealed.sqlite"),
-            profile: SqlitePersistenceProfile::Disposable,
+            profile: SqlitePersistenceProfile::Normal,
             sqlite_version: manifest.host_sqlite.clone(),
             bytes: manifest.bytes,
         },
@@ -170,7 +170,7 @@ pub fn add_project(request: &ProjectAdd) -> Outcome {
     let request = AddRequest {
         source,
         store: PersistenceConfig::sqlite(&store_file)
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal)
             .into(),
         binding: identity.binding.clone(),
         cursor_key: identity.cursor_key,

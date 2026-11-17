@@ -14,10 +14,11 @@ use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store_service::StoreService;
 use std::path::Path;
 
-/// `synchronous_commit` as the call or record names it: off (default),
-/// local, remote_write, on or remote_apply.
+/// `synchronous_commit` as the call or record names it: off, local (the
+/// default since 2026-11-17), remote_write, on or remote_apply. A record
+/// keeps the value it was connected with.
 pub fn setting_of(given: Option<&str>) -> Result<String, SdkRefusal> {
-    let given = given.unwrap_or("off");
+    let given = given.unwrap_or("local");
     match given {
         "off" | "local" | "remote_write" | "on" | "remote_apply" => Ok(given.to_owned()),
         other => Err(refused(
@@ -63,11 +64,11 @@ pub fn url_of(url: Option<&str>) -> Result<&str, SdkRefusal> {
 pub fn selection(url: &str, schema: &str, sync: &str) -> layerfs_persistence::PostgresSelection {
     use layerfs_persistence::SynchronousCommit as S;
     let setting = match sync {
-        "local" => S::Local,
+        "off" => S::Off,
         "remote_write" => S::RemoteWrite,
         "on" => S::On,
         "remote_apply" => S::RemoteApply,
-        _ => S::Off,
+        _ => S::Local,
     };
     layerfs_persistence::PostgresSelection::new(url, schema).with_synchronous_commit(setting)
 }

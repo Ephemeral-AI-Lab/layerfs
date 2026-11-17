@@ -34,7 +34,12 @@ impl Checkpointer {
     /// session's own connection has already opened in WAL mode, and starts
     /// its thread. Failure refuses the session's open: without it the log
     /// would never be copied while the session lives.
-    pub(crate) fn start(path: &Path) -> Result<Self, BackendError> {
+    ///
+    /// `synchronous` is the session profile's value. A checkpoint copies log
+    /// frames into the database file, so it must synchronize exactly as the
+    /// session does: under NORMAL a pass at 0 would mark frames copied that
+    /// never reached the disk, and the writer would restart the log over them.
+    pub(crate) fn start(path: &Path, synchronous: i64) -> Result<Self, BackendError> {
         let connection = Connection::open_with_flags(
             path,
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -48,11 +53,18 @@ impl Checkpointer {
             .map_err(rows::error)?;
         let work = std::cell::RefCell::new(super::connection::SqlWork::default());
         for pragma in [
-            "PRAGMA synchronous=0",
-            "PRAGMA fullfsync=0",
-            "PRAGMA wal_autocheckpoint=0",
+            format!("PRAGMA synchronous={synchronous}"),
+            "PRAGMA fullfsync=0".to_owned(),
+            "PRAGMA wal_autocheckpoint=0".to_owned(),
         ] {
-            query::run(&connection, pragma, vec![], &work)?;
+            query::run(&connection, &pragma, vec![], &work)?;
+        }
+        let applied = query::run(&connection, "PRAGMA synchronous", vec![], &work)?
+            .first()
+            .ok_or(BackendError::Integrity)?
+            .get::<i64>(0)?;
+        if applied != synchronous {
+            return Err(BackendError::Integrity);
         }
         let mode = query::run(&connection, "PRAGMA journal_mode", vec![], &work)?
             .first()

@@ -520,7 +520,7 @@ impl Application {
             } => Some((
                 layerfs_persistence::StoreSelection::Sqlite(
                     PersistenceConfig::sqlite(locator)
-                        .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+                        .with_sqlite_profile(SqlitePersistenceProfile::Normal),
                 ),
                 m.binding.as_slice(),
                 m.cursor_key,
