@@ -11,6 +11,7 @@
 //! The Store is a SQLite file or a PostgreSQL
 //! schema (#533 step 10b); its selection decides which. The Init
 //! is the same on both: only the opened handles differ.
+use crate::init::init_unknown_state;
 use crate::store::{live_open::Opened, InitError};
 use crate::{InitCounters, InitStep, Initialized, ProjectError};
 use layerfs_history::{
@@ -137,7 +138,11 @@ pub(crate) fn add(
         // a collision that appears meanwhile is refused the same way.
         if let Some(state) = history
             .layer_stack_name_taken(&request.stack_name)
-            .map_err(InitError::History)?
+            .map_err(|error| {
+                InitError::History(
+                    error.with_unknown(init_unknown_state(request.stack_name.as_str(), None)),
+                )
+            })?
         {
             return Err(InitError::NameTaken(Box::new(state)));
         }
@@ -167,7 +172,11 @@ pub(crate) fn add(
                 name: request.branch_name.clone(),
                 source,
             })
-            .map_err(InitError::History)?;
+            .map_err(|error| {
+                InitError::History(
+                    error.with_unknown(init_unknown_state(request.stack_name.as_str(), None)),
+                )
+            })?;
         let sqlite_version = handles.version();
         drop(storage);
         handles.close();

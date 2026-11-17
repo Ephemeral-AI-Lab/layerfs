@@ -137,3 +137,30 @@ fn a_definite_refusal_is_kept() {
     assert_eq!(refusal.code, "Busy");
     assert!(matches!(refusal.detail, SdkValue::Map(fields) if fields.is_empty()));
 }
+
+/// F43R5-1: a bare `UnknownOutcome` from any Init history call (the name
+/// check, the binding hints, the stack publication or the first-Branch fork)
+/// reaches the client as `Unknown` naming the project and the Init phase,
+/// with no durable operation, never as `Unknown {}`.
+#[test]
+fn a_bare_init_unknown_outcome_names_the_project_and_init_phase() {
+    for error in [
+        InitError::Project(ProjectError::History(HistoryError::UnknownOutcome)),
+        InitError::History(HistoryError::UnknownOutcome),
+    ] {
+        let refusal = add_failure(error, None, "shop", "store");
+        assert_eq!(refusal.code, "Unknown", "{refusal:?}");
+        let entity = refusal.detail.get("entity").expect("entity");
+        assert_eq!(entity.get_text("kind"), Some("project"), "{refusal:?}");
+        assert_eq!(entity.get_text("name"), Some("shop"), "{refusal:?}");
+        assert_eq!(
+            refusal.detail.get_text("phase"),
+            Some("init"),
+            "{refusal:?}"
+        );
+        assert!(
+            refusal.detail.get("op").expect("op") == &SdkValue::Null,
+            "{refusal:?}"
+        );
+    }
+}

@@ -203,4 +203,7 @@ pub(super) fn listed_stack(open: &OpenArgs, name: &str) -> Result<Option<LayerSt
             .find(|stack| stack.name.as_str() == name)
             .map(|stack| stack.id))
     })
+    // A listing that cannot be determined still knows the project it asked
+    // about (F43R5-2).
+    .map_err(|refusal| listed_unknown(refusal, name))
 }
