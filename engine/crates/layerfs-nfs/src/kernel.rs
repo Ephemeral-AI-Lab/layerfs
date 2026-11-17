@@ -475,11 +475,9 @@ impl Kernel {
             _ if name.len() > 255 => return Err(Refused::plain(Status::NameTooLong)),
             _ => {}
         }
-        // An AppleDouble companion lives in the export alone, so its reply's
-        // directory half is the facts this export last answered for the
-        // directory: a companion change never touches it.
+        // A companion lives in the export alone: no job read the directory.
         if let Some(stat) = self.companion_named(parent, name) {
-            return Ok((stat, self.directory_wcc(parent).0));
+            return Ok((stat, None));
         }
         if self.refuses_apple_double() && crate::names::apple_double(name) {
             if parent != self.root() && !self.table().parents.contains_key(&parent) {
@@ -495,14 +493,11 @@ impl Kernel {
                 .map_err(Refused::plain);
         }
         let path = PathName::from_bytes(name).map_err(|_| Refused::plain(Status::Inval))?;
-        let answer = self.observe(
-            parent,
-            None,
-            KernelReadOperation::Lookup { parent, name: path },
-        )?;
-        if let Some(directory) = &answer.parent {
-            self.observed(directory);
-        }
+        let lookup = KernelReadOperation::Lookup { parent, name: path };
+        let answer = self.observe(parent, None, lookup).inspect_err(|refused| {
+            refused.directory.iter().for_each(|row| self.observed(row));
+        })?;
+        answer.parent.iter().for_each(|row| self.observed(row));
         // The deciding visit took one engine reference; keep exactly one.
         self.entry_taken(&answer.stat, parent, name);
         self.trace_main_file("LOOKUP", parent, name, answer.stat.serial, "Ok");

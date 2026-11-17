@@ -616,6 +616,53 @@ fn a_listing_spends_one_owner_visit_and_reads_its_window_in_batches() {
 }
 
 #[test]
+fn a_companion_lookup_never_answers_a_stale_directory_observation() {
+    let base = temp("lookup-companion-directory");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let first = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut client = Client::connect(first.local_addr(), UID, GID);
+    let root = client.mnt("/");
+    let made = client.mkdir(&root, b"watched", 0o755).unwrap();
+    client.touch(&made.handle, b"file", 0o644).unwrap();
+    let companion = client.touch(&made.handle, b"._file", 0o644).unwrap();
+    let before = client.getattr(&made.handle).unwrap();
+    assert_eq!(before.nlink, 2, "an empty directory");
+
+    // Another writer adds a child directory; this export observes nothing.
+    let second = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut other = Client::connect(second.local_addr(), UID, GID);
+    let other_root = other.mnt("/");
+    let (target, _) = other.lookup(&other_root, b"watched").unwrap();
+    other.mkdir(&target, b"child", 0o755).unwrap();
+
+    // The export answers a companion alone: no job read the directory, so the
+    // reply carries no directory attributes rather than the last observation.
+    let (status, found, directory) = client.lookup_with_directory(&made.handle, b"._file");
+    assert_eq!(status, 0);
+    assert_eq!(found.map(|(handle, _)| handle), Some(companion.handle));
+    assert_eq!(directory, None, "never the last observation");
+
+    // A failed LOOKUP read the directory's row: the export keeps those facts,
+    // so a companion change's `wcc_data` answers them, not the older ones.
+    let (status, _, directory) = client.lookup_with_directory(&made.handle, b"absent");
+    assert_eq!(status, NOENT);
+    let fresh = directory.expect("the failed LOOKUP's directory row");
+    assert_eq!(fresh.nlink, 3, "the directory gained a child directory");
+    let removed = client.remove(&made.handle, b"._file").unwrap();
+    assert_eq!(removed.after, Some(fresh), "the facts the failed LOOKUP read");
+
+    drop(client);
+    drop(other);
+    let released = first.stop();
+    second.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn a_failed_lookup_answers_fresh_directory_facts_never_a_stale_observation() {
     let base = temp("lookup-directory");
     let tree = base.join("tree");
