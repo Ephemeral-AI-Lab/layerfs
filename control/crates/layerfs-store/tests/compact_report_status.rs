@@ -61,11 +61,13 @@ fn store_home() -> PathBuf {
 }
 
 /// A complete `<store>.compact-op` record, as the persistence layer writes it.
-fn sidecar(home: &Path, phase: &str, owner: u32) -> PathBuf {
+/// `returned` marks a record whose run has already replied to its caller.
+fn sidecar_with(home: &Path, phase: &str, owner: u32, returned: bool) -> PathBuf {
     let mut path = paths::store_file(home, "s").into_os_string();
     path.push(".compact-op");
     let path = PathBuf::from(path);
     let zeros = "00".repeat(32);
+    let marker = if returned { "returned=1\n" } else { "" };
     std::fs::write(
         &path,
         format!(
@@ -73,11 +75,15 @@ fn sidecar(home: &Path, phase: &str, owner: u32) -> PathBuf {
 phase={phase}\nstarted_ms=1234\nowner_pid={owner}\nowner_pid_start=\nowner_pid_boot=\n\
 catalog_id=0102030405060708090a0b0c0d0e0f10\nnext_history_serial=5\nnext_pack_id=6\n\
 next_ordinal=7\nmark_serial=4\nmark_pack_id=6\nmark_digest={zeros}\nmark_totals=1,2,3,4\n\
-mark_stamp=9\nhistory_rows=10\nlive_heads_digest={zeros}\n"
+mark_stamp=9\nhistory_rows=10\nlive_heads_digest={zeros}\n{marker}"
         ),
     )
     .unwrap();
     path
+}
+
+fn sidecar(home: &Path, phase: &str, owner: u32) -> PathBuf {
+    sidecar_with(home, phase, owner, false)
 }
 
 fn receipt() -> CompactReceipt {
@@ -240,6 +246,31 @@ fn status_emits_bounded_busy_and_unresolved_metrics() {
     assert_eq!(value("busy"), 1);
     assert_eq!(value("unresolved"), 1);
     assert_eq!(value("idle"), 0, "an idle status is not a compaction op");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// #49 round 3: a returned run's record names an owner pid that is still
+/// alive, but the run is over. `store.status` must show that leftover as
+/// `unresolved`, never `busy`, and keep its outcome uncertain.
+#[test]
+fn a_returned_leftover_is_unresolved_even_with_a_live_owner_pid() {
+    let home = store_home();
+    let name = StoreName::parse("s").unwrap();
+    let op_path = sidecar_with(&home, "install", std::process::id(), true);
+    let status = layerfs_store::sqlite::family::status(&home, &name).unwrap();
+    assert_eq!(status.get_text("state"), Some("unresolved"));
+    let op = status.get("op").unwrap();
+    assert_eq!(
+        text(op.get("id").unwrap()),
+        "op-00112233445566778899aabbccddeeff"
+    );
+    assert_eq!(text(op.get("phase").unwrap()), "install");
+    assert_eq!(
+        op.get("uncertain"),
+        Some(&SdkValue::Bool(true)),
+        "a returned leftover's outcome is still unknown"
+    );
+    std::fs::remove_file(op_path).unwrap();
     std::fs::remove_dir_all(home).unwrap();
 }
 

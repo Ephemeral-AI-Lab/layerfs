@@ -14,6 +14,7 @@ use super::install::settle_leftover;
 use super::install::sync_directory;
 use super::install::unfinished_work;
 use super::install::WriterGuard;
+use super::op::mark_returned;
 use super::op::now_ms;
 use super::op::remove_op_record;
 use super::op::stop_at;
@@ -58,8 +59,15 @@ impl SqliteHandles {
     /// directory-fsync failure is installed-but-uncertain: the new file and the
     /// op record are kept for the next `store.compact` to judge (§9).
     pub fn compact(self, request: &CompactRequest) -> HistoryResult<CompactReceipt> {
+        let store = self.storage.session.path.clone();
         let mut metrics = RunMetrics::start();
         let result = self.compact_measured(request, &mut metrics);
+        // §9: the run is replying, so its own record (when it leaves one) is
+        // no longer in flight. Mark it before the reply so the next
+        // `store.compact` judges the leftover even while this process is still
+        // alive; the window before this point stays protected by the owner
+        // liveness guard.
+        let _ = mark_returned(&store, &request.op_id);
         metrics.finish(&result);
         result
     }
@@ -156,6 +164,7 @@ impl SqliteHandles {
                 owner_pid_namespace: crate::history::admission::current_namespace(),
                 tuple: live.clone(),
                 live_heads_digest: [0u8; 32],
+                returned: false,
             };
             op.write(&store)?;
 
