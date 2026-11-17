@@ -5,6 +5,48 @@
 
 use super::*;
 
+/// The admission every removal runs before its marker, inside the marker's
+/// own write transaction. On PostgreSQL it takes the Store key shared, the
+/// project key shared too when `hold_project` (a Branch removal), scans once
+/// for a live conflicting intent and then takes the scope's own key
+/// `exclusive` (class, id). On both backends it then holds the project epoch
+/// and scans again, settling the intents dead owners left. `scan` is the
+/// statement and its parameters; a conflict is refused as [`classify`] names
+/// it.
+fn admit(
+    tx: &Transaction<'_>,
+    provider: &HistoryProvider,
+    owners: &OwnerView,
+    stack: LayerStackId,
+    hold_project: bool,
+    exclusive: (u8, &[u8]),
+    scan: (&str, Vec<Param>),
+) -> HistoryResult<()> {
+    let postgres = postgres(provider);
+    let (statement, scope) = scan;
+    if postgres {
+        let catalog = provider.catalog_id;
+        lock_store_shared(tx, catalog)?;
+        if hold_project {
+            lock_scope(tx, catalog, 2, stack.as_slice(), true)?;
+        }
+        let live: Vec<GcIntent> = query(tx, statement, scope.clone())?
+            .into_iter()
+            .filter(|intent| !owners.settleable(intent, postgres))
+            .collect();
+        if !live.is_empty() {
+            return Err(classify(&live));
+        }
+        lock_scope(tx, catalog, exclusive.0, exclusive.1, false)?;
+    }
+    epoch_hold(tx, postgres, stack)?;
+    let found = settle_dead(tx, query(tx, statement, scope)?, postgres, owners)?;
+    if !found.is_empty() {
+        return Err(classify(&found));
+    }
+    Ok(())
+}
+
 /// `branch.remove`: scan the Branch scope and write the marker in one write
 /// transaction.
 pub(crate) fn remove_branch(
@@ -13,51 +55,25 @@ pub(crate) fn remove_branch(
     removed_ms: i64,
     intent: &GcIntent,
 ) -> HistoryResult<()> {
-    let postgres = postgres(provider);
-    let catalog = provider.catalog_id;
-    let _ = catalog;
     provider.write(|tx| {
         let owners = OwnerView::now();
         let record = branch::branch(tx, branch)?.ok_or(HistoryError::Missing(Missing::Branch))?;
-        if postgres {
-            lock_store_shared(tx, catalog)?;
-            lock_scope(tx, catalog, 2, record.stack.as_slice(), true)?;
-            let found = query(
-                tx,
-                ALL_BRANCH,
-                params![
-                    Some(record.stack.as_slice().to_vec()),
-                    branch.as_slice().to_vec(),
-                    intent.op_id.to_vec()
-                ],
-            )?;
-            let found: Vec<GcIntent> = found
-                .into_iter()
-                .filter(|intent| !owners.settleable(intent, postgres))
-                .collect();
-            if !found.is_empty() {
-                return Err(classify(&found));
-            }
-            lock_scope(tx, catalog, 3, branch.as_slice(), false)?;
-        }
-        epoch_hold(tx, postgres, record.stack)?;
-        let found = settle_dead(
+        admit(
             tx,
-            query(
-                tx,
+            provider,
+            &owners,
+            record.stack,
+            true,
+            (3, branch.as_slice()),
+            (
                 ALL_BRANCH,
                 params![
                     Some(record.stack.as_slice().to_vec()),
                     branch.as_slice().to_vec(),
                     intent.op_id.to_vec()
                 ],
-            )?,
-            postgres,
-            &owners,
+            ),
         )?;
-        if !found.is_empty() {
-            return Err(classify(&found));
-        }
         super::super::removal::mark_branch_removed(tx, branch, removed_ms)
     })
 }
@@ -70,9 +86,6 @@ pub(crate) fn delete_stack(
     deleted_ms: i64,
     intent: &GcIntent,
 ) -> HistoryResult<GcDeletion> {
-    let postgres = postgres(provider);
-    let catalog = provider.catalog_id;
-    let _ = catalog;
     provider.write(|tx| {
         let owners = OwnerView::now();
         if let Some(recorded) = layerstack::stack_deleted_ms(tx, stack)? {
@@ -89,44 +102,22 @@ pub(crate) fn delete_stack(
                 None => GcDeletion::Absent,
             });
         };
-        if postgres {
-            lock_store_shared(tx, catalog)?;
-            let found = query(
-                tx,
-                ALL_PROJECT,
-                params![
-                    stack.as_slice().to_vec(),
-                    Some(record.name.as_str().to_owned()),
-                    intent.op_id.to_vec()
-                ],
-            )?;
-            let found: Vec<GcIntent> = found
-                .into_iter()
-                .filter(|intent| !owners.settleable(intent, postgres))
-                .collect();
-            if !found.is_empty() {
-                return Err(classify(&found));
-            }
-            lock_scope(tx, catalog, 2, stack.as_slice(), false)?;
-        }
-        epoch_hold(tx, postgres, stack)?;
-        let found = settle_dead(
+        admit(
             tx,
-            query(
-                tx,
+            provider,
+            &owners,
+            stack,
+            false,
+            (2, stack.as_slice()),
+            (
                 ALL_PROJECT,
                 params![
                     stack.as_slice().to_vec(),
                     Some(record.name.as_str().to_owned()),
                     intent.op_id.to_vec()
                 ],
-            )?,
-            postgres,
-            &owners,
+            ),
         )?;
-        if !found.is_empty() {
-            return Err(classify(&found));
-        }
         layerstack::mark_stack_deleted(tx, stack, deleted_ms)?;
         Ok(GcDeletion::Marked { deleted_ms })
     })
@@ -140,51 +131,27 @@ pub(crate) fn remove_path(
     intent: &GcIntent,
 ) -> HistoryResult<PathRemovalOutcome> {
     let postgres = postgres(provider);
-    let catalog = provider.catalog_id;
-    let _ = catalog;
     provider.write(|tx| {
         let owners = OwnerView::now();
         if layerstack::layer_stack(tx, request.stack)?.is_none() {
             return Err(HistoryError::Missing(Missing::LayerStack));
         }
-        if postgres {
-            lock_store_shared(tx, catalog)?;
-            let found = query(
-                tx,
-                ALL_PROJECT,
-                params![
-                    request.stack.as_slice().to_vec(),
-                    intent.project.clone(),
-                    intent.op_id.to_vec()
-                ],
-            )?;
-            let found: Vec<GcIntent> = found
-                .into_iter()
-                .filter(|intent| !owners.settleable(intent, postgres))
-                .collect();
-            if !found.is_empty() {
-                return Err(classify(&found));
-            }
-            lock_scope(tx, catalog, 2, request.stack.as_slice(), false)?;
-        }
-        epoch_hold(tx, postgres, request.stack)?;
-        let found = settle_dead(
+        admit(
             tx,
-            query(
-                tx,
+            provider,
+            &owners,
+            request.stack,
+            false,
+            (2, request.stack.as_slice()),
+            (
                 ALL_PROJECT,
                 params![
                     request.stack.as_slice().to_vec(),
                     intent.project.clone(),
                     intent.op_id.to_vec()
                 ],
-            )?,
-            postgres,
-            &owners,
+            ),
         )?;
-        if !found.is_empty() {
-            return Err(classify(&found));
-        }
         let key = trace_key(&provider.trace_salt, request.stack, &request.path);
         let stored = one(
             tx,
