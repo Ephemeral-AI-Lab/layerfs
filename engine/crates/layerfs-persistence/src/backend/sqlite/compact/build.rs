@@ -36,6 +36,23 @@ use std::sync::Arc;
 /// memory instead of the default 2 MiB cache.
 const CACHE_KIB: i64 = 262_144;
 
+/// §7 step 2's large window for the attached sealed source. The session default
+/// is no mmap (`session/profile.rs:86-87`), so the bulk copy would page the old
+/// file through the 2 MiB pager cache; a 256 MiB window maps the ordered pack
+/// and location reads instead.
+pub const SRC_MMAP_BYTES: i64 = 268_435_456;
+
+/// Apply §7 step 2's source window and return the size SQLite applied (a build
+/// may cap it). The caller attaches the sealed file as `src` first.
+pub fn source_mmap(connection: &Connection) -> HistoryResult<i64> {
+    connection
+        .execute_batch(&format!("PRAGMA src.mmap_size={SRC_MMAP_BYTES};"))
+        .map_err(db_error)?;
+    connection
+        .query_row("PRAGMA src.mmap_size", params![], |row| row.get(0))
+        .map_err(db_error)
+}
+
 /// §11 peak temporary bytes for a rebuild: the fresh Store and the `visited`
 /// scratch. The fresh path stages no whole-Store copy, writes no prune
 /// journal and opens no rewrite temp database, so it has no other artifact to
@@ -449,6 +466,9 @@ pub(crate) fn build(
     connection
         .execute("ATTACH DATABASE ?1 AS src", params![immutable_uri(store)])
         .map_err(db_error)?;
+    // §7 step 2: the sealed source is mapped, not paged through the default
+    // no-mmap profile.
+    source_mmap(&connection)?;
     connection
         .execute(
             "ATTACH DATABASE ?1 AS scratch",

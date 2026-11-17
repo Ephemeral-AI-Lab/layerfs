@@ -2,6 +2,8 @@
 //! `backend/sqlite/compact/`: product source holds no tests (the
 //! product-boundary guard).
 
+mod support;
+
 use layerfs_history::HistoryError;
 use layerfs_persistence::internals::{io_error, peak_temp_bytes, receipt};
 use layerfs_persistence::{CompactKeptWaste, CompactPath, CompactResidue};
@@ -126,5 +128,56 @@ fn a_rebuild_with_waste_but_no_shrink_explains_no_shrink() {
             .iter()
             .all(|zero| !(zero.field == "physicalShrink" && zero.reason == "no-waste")),
         "a zero delta with dead bytes is not no-waste"
+    );
+}
+
+/// §7 step 2: the rebuild gives the attached sealed source a large `mmap_size`;
+/// the session default is none, so the pragma must visibly apply.
+#[test]
+fn the_attached_source_gets_a_large_mmap_window() {
+    use layerfs_persistence::internals::{source_mmap, SRC_MMAP_BYTES};
+    use rusqlite::{params, Connection, OpenFlags};
+
+    assert!(
+        SRC_MMAP_BYTES >= 256 * 1024 * 1024,
+        "§7 step 2 wants a large source window, got {SRC_MMAP_BYTES}"
+    );
+    let temp = support::Temp::new("compact-source-mmap");
+    let source = temp.join("source.sqlite");
+    Connection::open(&source)
+        .unwrap()
+        .execute_batch(
+            "PRAGMA journal_mode=OFF; \
+             CREATE TABLE pack(pack_id INTEGER PRIMARY KEY, body BLOB NOT NULL); \
+             INSERT INTO pack VALUES (1, x'00');",
+        )
+        .unwrap();
+    let staged = temp.join("staged.sqlite");
+    let connection = Connection::open_with_flags(
+        &staged,
+        OpenFlags::SQLITE_OPEN_READ_WRITE
+            | OpenFlags::SQLITE_OPEN_CREATE
+            | OpenFlags::SQLITE_OPEN_URI
+            | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .unwrap();
+    connection
+        .execute(
+            "ATTACH DATABASE ?1 AS src",
+            params![format!("file:{}?immutable=1", source.display())],
+        )
+        .unwrap();
+    let applied = source_mmap(&connection).unwrap();
+    assert_eq!(
+        applied, SRC_MMAP_BYTES,
+        "§7 step 2 must apply the large source mmap window"
+    );
+    assert_eq!(
+        connection
+            .query_row("PRAGMA src.mmap_size", params![], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        SRC_MMAP_BYTES,
+        "the applied window reads back"
     );
 }

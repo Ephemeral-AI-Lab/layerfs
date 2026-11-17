@@ -34,7 +34,7 @@ mod run;
 mod types;
 mod verify;
 
-pub use build::peak_temp_bytes;
+pub use build::{peak_temp_bytes, source_mmap, SRC_MMAP_BYTES};
 pub use op::{compact_op_status, CompactOpStatus};
 pub use receipt::receipt;
 pub use types::io_error;
