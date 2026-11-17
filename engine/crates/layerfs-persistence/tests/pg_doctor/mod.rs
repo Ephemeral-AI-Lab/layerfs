@@ -42,7 +42,10 @@ impl Fixture {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         );
-        let selection = PostgresSelection::new(url, &schema);
+        // The doctor fixture is a Disposable Store: it selects the commit mode
+        // itself instead of taking the product default, which is `local`.
+        let selection = PostgresSelection::new(url, &schema)
+            .with_synchronous_commit(layerfs_persistence::SynchronousCommit::Off);
         let writer = PostgresHandles::create(
             &selection,
             layerfs_storage::StoragePolicy::frozen_default(),
