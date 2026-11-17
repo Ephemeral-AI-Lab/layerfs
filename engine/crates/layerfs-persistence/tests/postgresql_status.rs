@@ -359,6 +359,100 @@ fn an_in_flight_run_between_transactions_is_busy() {
     owner.close().unwrap();
 }
 
+/// F50R5-3 (§11): `persist_mark` writes `gc_op`, but the run registers its
+/// compaction `gc_intent` before Phase M. A status read in that window must
+/// project the registered intent as a busy `mark` op, never idle. The test
+/// parks the run inside Phase M by holding `gc_dead`, which `persist_mark`
+/// deletes before it inserts the op row.
+#[test]
+fn a_phase_m_run_without_a_gc_op_row_is_busy_marking() {
+    let Some(url) = support::pg::url() else {
+        return;
+    };
+    let schema = Schema::new(url.clone(), "phasem");
+    let handles = schema.create(&binding("phasem"), [71; 32]);
+    let _ = whole_file(&handles, b"content a rebuild would collect");
+
+    let mut blocker = schema.admin();
+    blocker
+        .batch_execute(&format!(
+            "BEGIN; LOCK TABLE {}.gc_dead IN ACCESS EXCLUSIVE MODE",
+            schema.name
+        ))
+        .unwrap();
+
+    let selection = schema.selection();
+    let catalog = binding("phasem");
+    let child = std::thread::spawn(move || {
+        let handles =
+            PostgresHandles::open_writable(&selection, &catalog, [71; 32]).expect("child open");
+        handles.compact(&request(0x74, None))
+    });
+
+    // Wait for the run to reach `persist_mark` and block on `gc_dead`: it has
+    // registered its intent and has not written `gc_op` yet.
+    let pattern = format!("%{}.gc_dead%", schema.name);
+    let mut poller = schema.admin();
+    let mut reached = false;
+    for _ in 0..2400 {
+        let blocked: i64 = poller
+            .query_one(
+                "SELECT count(*) FROM pg_stat_activity \
+                  WHERE datname=current_database() AND state='active' \
+                    AND wait_event_type='Lock' AND query LIKE $1 \
+                    AND pid<>pg_backend_pid()",
+                &[&pattern],
+            )
+            .unwrap()
+            .get(0);
+        if blocked > 0 {
+            reached = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    assert!(reached, "the run never reached Phase M's gc_dead write");
+    let gc_ops: i64 = poller
+        .query_one(&format!("SELECT count(*) FROM {}.gc_op", schema.name), &[])
+        .unwrap()
+        .get(0);
+    assert_eq!(gc_ops, 0, "Phase M has not written the op row yet");
+
+    let op = postgresql_compact_status(&url, &schema.name)
+        .unwrap()
+        .expect("the registered Phase M intent is not idle");
+    assert!(op.intent_only, "no gc_op row names an owner yet");
+    assert!(!op.alive, "an intent-only projection records no owner");
+    assert_eq!(op.op_id, [0x74u8; 16]);
+    assert_eq!(op.phase, "mark");
+    assert!(op.started_ms > 0);
+    assert_eq!(op.intent_state.as_deref(), Some("live"));
+    let projected = op.status();
+    assert_eq!(projected.id, build_op(0x74));
+    assert_eq!(projected.name, "store.compact");
+    assert_eq!(projected.phase, "mark");
+    assert_eq!(projected.state, "busy", "Phase M is in flight, not idle");
+    assert_eq!(projected.started, op.started_ms);
+    assert_eq!(projected.phases, &PHASES[..]);
+    assert!(projected.uncertain);
+
+    blocker.batch_execute("ROLLBACK").unwrap();
+    let receipt = child
+        .join()
+        .expect("the Phase M thread")
+        .expect("the released run completes");
+    assert!(
+        receipt.generation_after > receipt.generation_before,
+        "the released run rebuilt"
+    );
+    assert!(
+        postgresql_compact_status(&url, &schema.name)
+            .unwrap()
+            .is_none(),
+        "a settled run projects no op"
+    );
+}
+
 #[test]
 fn every_postgresql_failpoint_projects_its_phase() {
     let Some(url) = support::pg::url() else {

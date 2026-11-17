@@ -134,6 +134,11 @@ pub struct PostgresCompactOpStatus {
     /// test a resolving compaction applies. Its `idle` state does not make an
     /// in-flight run a leftover: the state below also needs the intent.
     pub alive: bool,
+    /// True when the projection comes from the registered compaction
+    /// `gc_intent` alone: the run is still in Phase M and has not written its
+    /// `gc_op` row, so it records no owner `(pid, backend_start)`. The live
+    /// intent is then the in-flight witness, as SQLite's admission record is.
+    pub intent_only: bool,
 }
 
 impl PostgresCompactOpStatus {
@@ -149,8 +154,10 @@ impl PostgresCompactOpStatus {
     pub fn status(&self) -> CompactStatus {
         // SQLite marks a record `returned` before replying; PostgreSQL
         // releases the intent. Either way the op is in flight only while the
-        // intent is still there *and* the recorded backend still lives.
-        let in_flight = self.intent_state.is_some() && self.alive;
+        // intent is still there *and* its owner still runs it. Before
+        // `persist_mark` there is no `gc_op` row naming an owner yet: the
+        // registered Phase M intent is then the in-flight witness.
+        let in_flight = self.intent_state.is_some() && (self.alive || self.intent_only);
         CompactStatus {
             id: format!("op-{}", hex(&self.op_id)),
             name: "store.compact",
@@ -164,10 +171,12 @@ impl PostgresCompactOpStatus {
 }
 
 /// `gc_op` plus its compaction `gc_intent` and the owner's live state, in one
-/// query on one status connection. Returns `None` when the Store has no
-/// compaction row (idle), or when a Store written before the GC tables has no
-/// `gc_op` at all. No Store open, schema mutation, artifact or scratch read
-/// happens here.
+/// query on one status connection. Returns `None` when the Store has neither a
+/// compaction row nor a registered intent (idle), or when a Store written
+/// before the GC tables has no `gc_op` at all. During Phase M the run has
+/// registered its intent but `persist_mark` has not written `gc_op` yet; that
+/// window projects the intent as an owner-less `mark` op instead of idle. No
+/// Store open, schema mutation, artifact or scratch read happens here.
 pub fn compact_status(
     url: &str,
     schema: &str,
@@ -184,19 +193,25 @@ pub fn compact_status(
         })?;
     let table = quote_ident(schema);
     let sql = format!(
-        "SELECT o.generation,o.phase,o.started_ms,o.pid,o.backend_start,o.artifact,\
+        "SELECT COALESCE(o.generation,i.generation,0),\
+                COALESCE(o.phase,i.phase,'mark'),\
+                COALESCE(o.started_ms,i.updated_ms,0),\
+                o.pid,o.backend_start,COALESCE(o.artifact,i.artifact),\
                 o.mark_serial,o.mark_pack_id,o.mark_digest,\
                 i.op_id,i.owner_runtime,i.owner_boot,i.state,o.usename,\
-                EXISTS (SELECT 1 FROM pg_stat_activity a \
-                         WHERE a.datname=current_database() AND a.pid=o.pid \
-                           AND a.backend_start::text=o.backend_start \
-                           AND (o.usename IS NULL OR a.usename::text=o.usename)), \
-                o.op_id \
-           FROM {table}.gc_op o \
-           LEFT JOIN LATERAL (SELECT op_id,owner_runtime,owner_boot,state \
+                CASE WHEN o.id IS NULL THEN FALSE ELSE EXISTS \
+                  (SELECT 1 FROM pg_stat_activity a \
+                    WHERE a.datname=current_database() AND a.pid=o.pid \
+                      AND a.backend_start::text=o.backend_start \
+                      AND (o.usename IS NULL OR a.usename::text=o.usename)) END, \
+                COALESCE(o.op_id,i.op_id), \
+                o.id IS NOT NULL, i.op_id IS NOT NULL \
+           FROM (SELECT 1 AS id) anchor \
+           LEFT JOIN {table}.gc_op o ON o.id=1 \
+           LEFT JOIN LATERAL (SELECT op_id,owner_runtime,owner_boot,state,\
+                                     phase,generation,artifact,updated_ms \
                                 FROM {table}.gc_intent WHERE kind='compaction' \
-                               ORDER BY updated_ms LIMIT 1) i ON TRUE \
-          WHERE o.id=1"
+                               ORDER BY updated_ms LIMIT 1) i ON TRUE"
     );
     let rows = match client.query(&sql, &[]) {
         Ok(rows) => rows,
@@ -217,6 +232,12 @@ pub fn compact_status(
         return Ok(None);
     };
     let failed = |error: postgres::Error| PostgresStatusError::Failed(error.to_string());
+    let has_op: bool = row.try_get(16).map_err(failed)?;
+    let has_intent: bool = row.try_get(17).map_err(failed)?;
+    if !has_op && !has_intent {
+        let _ = client.close();
+        return Ok(None);
+    }
     let intent: Option<Vec<u8>> = row.try_get(9).map_err(failed)?;
     let artifact: Option<String> = row.try_get(5).map_err(failed)?;
     let recorded: Option<Vec<u8>> = row.try_get(15).map_err(failed)?;
@@ -238,6 +259,7 @@ pub fn compact_status(
         // never inferred from the owner's liveness.
         uncertain: true,
         alive: row.try_get(14).map_err(failed)?,
+        intent_only: !has_op,
     };
     let _ = client.close();
     Ok(Some(op))

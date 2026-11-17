@@ -46,14 +46,14 @@ pub fn effective_rank(server: &str, stored: &str) -> u8 {
 /// §8 step 10: the swap waits iff the effective level is at least
 /// `remote_write` and `synchronous_standby_names` names a quorum. The setting
 /// is parsed as PostgreSQL does: `FIRST n (names)`, `ANY n (names)`, a bare
-/// `names` list (which is `FIRST` with `n` equal to the listed names), and the
+/// legacy `names` list (which PostgreSQL reads as `FIRST 1 (names)`), and the
 /// lone `*` that matches any standby. A matching standby must be streaming
 /// with the `sync_state` that form assigns it, so one of an `ANY 2` pair is
 /// still refused.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct StandbyRequirement {
     /// `FIRST` counts the named standbys in list order; `ANY` counts any
-    /// `count` of them. A bare list is `FIRST`.
+    /// `count` of them. A bare legacy list is `FIRST 1`.
     pub(crate) first: bool,
     pub(crate) count: usize,
     /// The configured standby names, in priority order.
@@ -78,15 +78,17 @@ pub(crate) fn standby_requirement(names: &str) -> Option<StandbyRequirement> {
         (true, names)
     };
     // `FIRST n (list)` / `ANY n (list)`: a leading count, then the list.
-    let (count, list) = match rest.split_once(char::is_whitespace) {
+    // A form with no leading count is PostgreSQL's legacy `standby_name
+    // [, ...]`, which is `FIRST 1`, not one synchronous standby per name.
+    let (explicit_count, count, list) = match rest.split_once(char::is_whitespace) {
         Some((head, tail)) if head.bytes().all(|byte| byte.is_ascii_digit()) => {
             match head.parse::<usize>() {
-                Ok(count) => (count, tail.trim()),
+                Ok(count) => (true, count, tail.trim()),
                 Err(_) => return None,
             }
         }
-        _ if rest.starts_with('(') => (1, rest),
-        _ => (0, rest),
+        _ if rest.starts_with('(') => (true, 1, rest),
+        _ => (false, 1, rest),
     };
     let members: Vec<String> = list
         .trim()
@@ -98,7 +100,7 @@ pub(crate) fn standby_requirement(names: &str) -> Option<StandbyRequirement> {
         .map(|member| member.trim_matches('"').to_owned())
         .collect();
     let any_name = members.len() == 1 && members[0] == "*";
-    let count = if count == 0 { members.len() } else { count };
+    let count = if explicit_count { count } else { 1 };
     Some(StandbyRequirement {
         first,
         count,

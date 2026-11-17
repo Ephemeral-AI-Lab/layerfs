@@ -191,8 +191,11 @@ pub(crate) fn swap(
 }
 
 /// The `Busy` a contended swap reports: the compaction identity with the
-/// backend holding one of the two base tables, read from
-/// `pg_locks`/`pg_stat_activity`.
+/// backend holding any granted table lock on the Store's base tables, in any
+/// mode, read from `pg_locks`/`pg_stat_activity`. A reader's
+/// `AccessShareLock` conflicts with the swap's `ACCESS EXCLUSIVE` lock just
+/// as another writer's does, so filtering on `AccessExclusiveLock` alone
+/// turned a reader-blocked swap into a holder-less `Busy`.
 pub(crate) fn swap_busy(
     session: &Arc<Session>,
     schema: &str,
@@ -208,13 +211,16 @@ pub(crate) fn swap_busy(
     );
     let holder = stage(session, |tx| {
         let rows = tx.query(
+            // 55P03 does not name the blocking mode: an ordinary reader's
+            // granted AccessShareLock blocks the swap exactly as another
+            // writer does, so any granted table lock by another backend is
+            // the holder here.
             "SELECT a.pid::bigint, a.client_addr::text, a.backend_start::text \
                FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid \
                JOIN pg_class c ON c.oid=l.relation \
                JOIN pg_namespace n ON n.oid=c.relnamespace \
               WHERE n.nspname=$1 AND c.relkind='r' \
-                AND l.mode='AccessExclusiveLock' AND l.granted \
-                AND a.pid <> pg_backend_pid() \
+                AND l.granted AND a.pid <> pg_backend_pid() \
               ORDER BY a.backend_start LIMIT 1",
             vec![Param::Text(schema.to_owned())],
         )?;
