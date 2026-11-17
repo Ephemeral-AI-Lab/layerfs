@@ -1015,7 +1015,7 @@ fn thirty_percent_wholly_dead_bytes_rebuild_above_the_threshold() {
 }
 
 #[test]
-fn a_store_replaced_between_seal_and_install_is_stale() {
+fn a_store_replaced_between_seal_and_install_is_conflict() {
     let (_temp, handles, path) = create_store();
     let live = filesystem_root(&handles, 1);
     initialize(&handles, 1, live);
@@ -1034,7 +1034,12 @@ fn a_store_replaced_between_seal_and_install_is_stale() {
         ..CompactRequest::default()
     };
     let error = handles.compact(&request).unwrap_err();
-    assert!(matches!(error, HistoryError::StaleStore), "{error:?}");
+    match error {
+        HistoryError::Conflict(text) => {
+            assert_eq!(text, "the sealed Store identity changed", "{text}");
+        }
+        other => panic!("expected the sealed-state Conflict, got {other:?}"),
+    }
 
     // No install: every artifact is gone and the replacement is untouched.
     assert!(!compact_path(&path).exists());
