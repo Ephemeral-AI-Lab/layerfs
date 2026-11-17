@@ -614,3 +614,76 @@ fn a_mark_sends_the_same_statements_for_twice_the_layers() {
         "a mark's statements do not grow with its Layers: {statements:?}"
     );
 }
+
+const POSTGRESQL_MARK: &str = include_str!("../sql/postgresql/queries/history/kept_node_mark.sql");
+
+/// `(from kind, to kind, column)` of every edge the shared text follows: one
+/// `SELECT '<from>',x.<id>,'<to>',x.<column> FROM ...` arm each.
+fn shared_edges() -> std::collections::BTreeSet<(String, String, String)> {
+    let edges = SHARED_MARK
+        .split("edges(from_kind,from_id,to_kind,to_id) AS (")
+        .nth(1)
+        .and_then(|rest| rest.split("closure(kind,node_id) AS (").next())
+        .expect("the shared text has an edges list");
+    edges
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("SELECT '"))
+        .map(|arm| {
+            let fields: Vec<&str> = arm.split(',').collect();
+            let column = fields[3].split_whitespace().next().unwrap();
+            (
+                fields[0].trim_matches('\'').to_owned(),
+                fields[2].trim_matches('\'').to_owned(),
+                column.split('.').nth(1).unwrap().to_owned(),
+            )
+        })
+        .collect()
+}
+
+/// The same triples from the PostgreSQL text: each `('<to>',x.<column>)` row
+/// of a `VALUES` list belongs to the kind its arm's `WHERE k.kind=` names.
+fn postgresql_edges() -> std::collections::BTreeSet<(String, String, String)> {
+    let mut edges = std::collections::BTreeSet::new();
+    let mut rows: Vec<(String, String)> = Vec::new();
+    for line in POSTGRESQL_MARK.lines().map(str::trim) {
+        if let Some(row) = line.strip_prefix("('") {
+            let (kind, rest) = row.split_once("',").unwrap();
+            let column = rest.split('.').nth(1).unwrap();
+            let column = column.split(')').next().unwrap();
+            rows.push((kind.to_owned(), column.to_owned()));
+        } else if let Some(arm) = line.strip_prefix("WHERE k.kind='") {
+            let from = arm.split('\'').next().unwrap();
+            for (to, column) in rows.drain(..) {
+                edges.insert((from.to_owned(), to, column));
+            }
+        }
+    }
+    assert!(rows.is_empty(), "a VALUES list without its arm: {rows:?}");
+    edges
+}
+
+/// The PostgreSQL closure is a second text of the shared one, so an edge
+/// added to one file and not the other would let a rebuild on that backend
+/// drop history the other keeps. The data test above reaches few of the
+/// edges; this one compares the texts themselves: the same roots, the same
+/// sixteen edges and the same final insert. It needs no server.
+#[test]
+fn the_postgresql_closure_follows_exactly_the_shared_edges() {
+    let shared = shared_edges();
+    assert_eq!(shared.len(), 16, "the shared text's edges: {shared:?}");
+    assert_eq!(postgresql_edges(), shared);
+
+    let squeeze = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let roots = |text: &str, next: &str| squeeze(text.split(next).next().unwrap());
+    assert_eq!(
+        roots(POSTGRESQL_MARK, "closure(kind,node_id) AS ("),
+        roots(SHARED_MARK, "edges(from_kind,from_id,to_kind,to_id) AS ("),
+        "the roots"
+    );
+    let insert = |text: &str| squeeze(&text[text.find("INSERT INTO kept_node").unwrap()..]);
+    assert_eq!(
+        insert(POSTGRESQL_MARK),
+        insert(SHARED_MARK),
+        "the final insert"
+    );
+}
