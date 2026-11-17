@@ -22,10 +22,11 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
 
     const listed = await server.client.listTools();
     assert.equal(listed.tools.length, calls("admin"));
-    // every call but the doctor family's one, which is no tool
-    assert.equal(listed.tools.length, table.length - 1);
+    // the admin profile lists work + admin only: the six monitoring calls a UI
+    // polls and the doctor family's one are no tool in any profile
+    assert.equal(listed.tools.length, table.length - 1 - 6);
     assert.ok(!listed.tools.some((tool) => tool.name.startsWith("doctor_")));
-    assert.equal(new Set(listed.tools.map((tool) => tool.name)).size, table.length - 1);
+    assert.equal(new Set(listed.tools.map((tool) => tool.name)).size, calls("admin"));
     for (const tool of listed.tools) ToolSchema.parse(tool);
 
     const run = async (name, args, options) => value((await call(server.client, name, args, options)).result);
