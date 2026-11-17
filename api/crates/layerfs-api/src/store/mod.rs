@@ -1,10 +1,9 @@
-//! The `store` family: 13 calls, one file each (H1: push and pull replace
-//! move; attach and detach supersede #536 C4).
-mod attach;
+//! The `store` family: 12 calls, one file each (H1: push and pull replace
+//! move; a PostgreSQL Store runs on every machine, #536 C4, and `update`
+//! gives one its own connection, H9).
 mod compact;
 mod connect;
 mod create;
-mod detach;
 mod disconnect;
 mod get;
 mod list;
@@ -13,6 +12,7 @@ mod push;
 mod remove;
 mod stats;
 mod status;
+mod update;
 
 use crate::calls::Calls;
 
@@ -25,8 +25,7 @@ pub(crate) fn calls() -> Calls {
         stats::CALL,
         create::CALL,
         connect::CALL,
-        attach::CALL,
-        detach::CALL,
+        update::CALL,
         push::CALL,
         pull::CALL,
         remove::CALL,

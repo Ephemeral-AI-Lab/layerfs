@@ -37,7 +37,7 @@ Nothing here is published to npm, PyPI or crates.io.
 | Old | 2.0.0 | Status and reason |
 | --- | --- | --- |
 | npm `@layerfs/agent` (`import { LayerFS } from "@layerfs/agent"`) | npm `layerfs`: `import layerfs from "layerfs"` or `import { client, LayerFSError } from "layerfs"`. An ES module for Node 22 or later, MIT | **Replaced.** One package, one native addon. [`api/node/package.json`](../../../api/node/package.json), [Node](../../architecture/api/front-ends/bindings.md#layerfs-node) |
-| npm `@layerfs/cli` (the Node `layerfs` command; #521: 106 commands) | the native `layerfs` command, one Rust binary, 85 calls plus `doctor`, `import-env`, `worker` and `help` | **Replaced.** It is not an npm package: `layerfs-cli` has `publish = false`. The command counts are not comparable (the old ones included the backend and runtime commands). [CLI](../../architecture/api/front-ends/README.md#the-layerfs-command) |
+| npm `@layerfs/cli` (the Node `layerfs` command; #521: 106 commands) | the native `layerfs` command, one Rust binary, 84 calls plus `doctor`, `import-env`, `worker` and `help` | **Replaced.** It is not an npm package: `layerfs-cli` has `publish = false`. The command counts are not comparable (the old ones included the backend and runtime commands). [CLI](../../architecture/api/front-ends/README.md#the-layerfs-command) |
 | npm `@layerfs/backend` (`LayerFSBackend.of(client)`, 14 operator and diagnostic calls) | none, except `layerfs.workspace.status(ws)` | **Removed** (O25). [Limitations](limitations.md#not-built-refused-as-unsupported), [README](README.md#compatibility-with-110) |
 | npm `@layerfs/runtime` (`LayerFSRuntime.open`, worker start and restart, `project.start_init` / `get_init` / `subscribe_init`, Sandbox and volume sweep) | no package. The `machine`, `store`, `project` and `sandbox` families; `project.init` with `on_progress`; `machine start` and `machine stop` by hand (nothing starts a machine on demand, D11) | **Replaced** in part, **Removed** for the job registry (O22) and the sweep. [Machines and Stores](machines-and-stores.md#starting-and-stopping-manual-535-d11), [Node and Python](sdk.md#functions-as-options) |
 | npm `@layerfs/mcp` (#521: 50 tools, stdio) | none | **Removed.** MCP is shelved (O32): 2.0 has no MCP server, and this guide gives no MCP setup. [Coverage](../../architecture/api/calls/coverage.md#outside-the-table) |
@@ -126,7 +126,7 @@ options. The argument lists are in the generated
 
 Calls with no counterpart in the 1.1.0 method table above: `project.delete`,
 `commit.get`, and the `machine`, `store` and `backup` families, plus the
-commands `layerfs doctor` and `layerfs import-env`. In all there are 85 calls in
+commands `layerfs doctor` and `layerfs import-env`. In all there are 84 calls in
 twelve families ([coverage](../../architecture/api/calls/coverage.md)).
 
 ## 4. Folder scope

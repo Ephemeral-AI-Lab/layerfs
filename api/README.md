@@ -10,7 +10,7 @@ CLI package `@layerfs/cli` (in [`cli/`](cli)), the Python package (in
 the private stdio MCP server [`mcp/`](mcp) (`@layerfs/mcp`: one generated tool
 per call, `work` and `admin` profiles). The design is in
 [docs/architecture/api](../docs/architecture/api/README.md). The package is the
-library's call table as twelve families of functions, 85 calls in all:
+library's call table as twelve families of functions, 84 calls in all:
 
 | Family | Calls |
 | --- | --- |
@@ -22,7 +22,7 @@ library's call table as twelve families of functions, 85 calls in all:
 | [`sandbox`](../docs/architecture/api/sdk/sandbox.md) | `create`, `list`, `get`, `close`, `files` |
 | [`workspace`](../docs/architecture/api/sdk/workspace.md) | `mount`, `exec`, `exec_cancel`, `commit`, `unmount`, `status` |
 | [`machine`](../docs/architecture/api/sdk/machine.md) | `list`, `platforms`, `get`, `images`, `load`, `prune`, `status`, `stats`, `space`, `files`, `start`, `stop`, `create`, `remove`, `update` |
-| [`store`](../docs/architecture/api/sdk/store.md) | `list`, `get`, `status`, `stats`, `create`, `connect`, `attach`, `detach`, `push`, `pull`, `remove`, `compact`, `disconnect` |
+| [`store`](../docs/architecture/api/sdk/store.md) | `list`, `get`, `status`, `stats`, `create`, `connect`, `update`, `push`, `pull`, `remove`, `compact`, `disconnect` |
 | [`backup`](../docs/architecture/api/sdk/backup.md) | `connect`, `disconnect`, `list`, `create`, `restore` |
 | [`logs`](../docs/architecture/api/sdk/logs.md) | `list`, `reset`, `machine`, `sandbox` |
 | [`doctor`](../docs/architecture/api/sdk/doctor.md) | `fix` |

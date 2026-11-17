@@ -453,39 +453,42 @@ layerfs project init pg-main/load ./load
   under the Store's lease.
 - PostgreSQL is built into every artifact, so no build flag selects it; the
   Store's connection string decides whether it is used.
-- A PostgreSQL Store's Sandboxes run on the machines it is attached to.
-  `store connect` attaches `native` with the Store's own connection and
-  records its check (`machines.native.checked`) when the role may write;
-  `store attach <store> <machine>` attaches another machine, or attaches
-  one again with a new connection:
+- A PostgreSQL Store is on no machine. Its Sandboxes run on every machine
+  whose platform runs PostgreSQL Sandboxes (`native` on macOS and Linux,
+  `docker`, `lima` and `apple-container`), with no call between `store
+  connect` and `sandbox create`: each machine dials the Store's URL and
+  password (its loopback host rewritten as below), and `sandbox create`
+  checks from the machine that the server answers and holds this Store.
+  `store update` changes the connection:
 
   ```bash
   # not run
-  layerfs store attach pg-main docker
-  layerfs store attach pg-main build-vm --url "postgresql://lfs@10.0.0.5/layerfs" --password file:/run/secrets/pg-vm
-  layerfs store detach pg-main docker
+  layerfs store update pg-main --synchronous-commit off
+  layerfs store update pg-main --url "postgresql://lfs@db.internal/layerfs" --password env:LAYERFS_PG
+  layerfs store update pg-main --machine build-vm --url "postgresql://lfs@10.0.0.5/layerfs" --password file:/run/secrets/pg-vm
+  layerfs store update pg-main --machine build-vm --clear
+  layerfs store status pg-main --machine docker
   ```
 
-  Without `--url` and `--password` the machine dials the Store's URL and
-  password (its loopback host rewritten as below); with either, its own.
-  The check runs from the machine (in this process for `native`, else in
-  the machine's worker, which must be from a bundle with `store.reach`):
-  the server answers, the database holds the `layerfs` schema with the
-  Store's binding (another one is `Unavailable` "holds another Store"),
-  and the role may use the schema, make temporary tables and read and
-  write every LayerFS table and sequence (else `Denied`, naming the first
-  privilege missing). A refused check records nothing; a passed one
-  records the attachment with `checked: {at, server_version,
-  latency_ms}`. The record keeps the URL without a password and the
-  password as a reference, as `store connect` does. The platforms are
-  `native` (macOS and Linux), `docker`, `lima` and `apple-container`; an
-  attach to a machine the support table refuses is `Unsupported` with its
-  reason. `store detach` is `InUse` while a Sandbox of the Store is
-  recorded on that machine. `sandbox create` on a machine the Store is not
-  attached to is `Unsupported`, naming the `store attach` that fixes it;
-  `machine remove` is `InUse` while a PostgreSQL Store is attached to the
-  machine. `machine list` and `machine get` show a machine's attached
-  PostgreSQL Stores as `postgresql`.
+  Without `--machine` it sets the Store's own URL, password reference and
+  `synchronous_commit`; a new URL or password is dialled once from this
+  process and must reach this Store. With `--machine` it gives that machine
+  a connection of its own (`--url`, `--password`, either alone), checked
+  from the machine before it is saved; `--clear` removes it. The check
+  runs in this process for `native`, else in the machine's worker (which
+  must be from a bundle with `store.reach`): the server answers, the
+  database holds the `layerfs` schema with the Store's binding (another
+  one is `Unavailable` "holds another Store"), and the role may use the
+  schema, make temporary tables and read and write every LayerFS table and
+  sequence (else `Denied`, naming the first privilege missing). A refused
+  check saves nothing. `store status --machine <machine>` runs the same
+  check on request and answers it as `check: {machine, host, ok, ..}`; it
+  records nothing. The record keeps the URL without a password and the
+  password as a reference, as `store connect` does, and lists under
+  `machines` only the machines with a connection of their own. A machine
+  the support table refuses is `Unsupported` with its reason. `machine
+  remove` forgets the machine's own connection. A running Sandbox keeps the
+  connection it started with.
 - A Sandbox starts where the machine starts Sandboxes (the daemon and the
   worker always build the PostgreSQL engine). The caller resolves the
   password and rewrites a loopback host for the machine (`docker`:

@@ -3,8 +3,8 @@
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
 The two Store kinds' own calls: a sqlite Store's file created, moved and
-removed across machines, and a PostgreSQL database connected, attached to
-machines and opened, within [Stores and projects](README.md).
+removed across machines, and a PostgreSQL database connected, updated,
+checked from a machine and opened, within [Stores and projects](README.md).
 
 | | |
 | --- | --- |
@@ -84,22 +84,29 @@ another operation holds the Store
                               (once read) same schema binding
    schema `layerfs`           empty database: create it, new binding;
                               existing: read its binding
-   attach native              checked with the Store's connection
    projects in the schema --> project records; record written under
                               the home lock (re-checked)
 ```
 
 | Call | Does | Refusals | Source |
 | --- | --- | --- | --- |
-| `store.connect` | records the database as a Store in the fixed `layerfs` schema: URL without password, schema, `synchronous_commit`, password reference, binding, a cursor key of this home's own, `machines: {native: ..}` | `InvalidInput`, `Exists`, `Unavailable` | [`connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs) |
+| `store.connect` | records the database as a Store in the fixed `layerfs` schema: URL without password, schema, `synchronous_commit`, password reference, binding, a cursor key of this home's own, no machine | `InvalidInput`, `Exists`, `Unavailable` | [`connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs) |
 | `store.disconnect` | forgets the Store; its data stays | `InvalidInput` for sqlite (`store remove`); `InUse` while leased or a Sandbox uses it | same |
-| `store.attach <s> <machine> {url, password}` | the machine's platform must run PostgreSQL Sandboxes (support table); the check runs on the side that dials (this process, or the worker's `store.reach`); records `machines.<m>: {url?, password?, checked: {at, server_version, latency_ms}}` | `Unsupported` (row reason; a worker without `store.reach` names stop and start); `Unavailable` (server not reached, naming the host, never the URL, plus the platform's hint; or another Store's schema); `Denied` (login or privilege); `Conflict` if the record changed meanwhile | [`attach.rs`](../../../../control/crates/layerfs-store/src/postgresql/attach.rs), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) |
-| `store.detach <s> <machine>` | forgets one attachment; data and other machines stay | `InvalidInput` if not attached; `InUse` while a Sandbox of the Store is recorded there | [`attach.rs`](../../../../control/crates/layerfs-store/src/postgresql/attach.rs) |
+| `store.update <s> {url, password, synchronous_commit}` | changes the Store's own connection; a new URL or password is dialled once from here and must hold this Store's binding; this process's open sessions on it are closed | `InvalidInput`; `Exists` (another Store's database); `Unavailable` (not reached, or another Store's schema); `InUse` (a call running here); `Conflict` if the record changed meanwhile | [`update.rs`](../../../../control/crates/layerfs-store/src/postgresql/update.rs) |
+| `store.update <s> --machine <m> {url, password}` | gives one machine a connection of its own, `machines.<m>: {url?, password?}`: the machine's platform must run PostgreSQL Sandboxes (support table); the check runs on the side that dials (this process, or the worker's `store.reach`) before anything is saved. `--clear` removes it and dials nothing | `Unsupported` (row reason; a worker without `store.reach` names stop and start); `Unavailable` (server not reached, naming the host, never the URL, plus the platform's hint; or another Store's schema); `Denied` (login or privilege); `Conflict` if the record changed meanwhile | [`check.rs`](../../../../control/crates/layerfs-store/src/postgresql/check.rs), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) |
+| `store.status <s> --machine <m>` | runs that check now and answers it as `check: {machine, host, ok, ..}`; records nothing | a failed check is `ok: false`, not a refusal | same |
 | Store calls | open the schema in this process with the URL resolved now | — | [`open.rs`](../../../../control/crates/layerfs-store/src/postgresql/open.rs) |
 | Host read session | one read-only session per process for Sandbox host operations: a create's reach check and a status's head read, on every route; opened with the light check on first read, checked with one empty query before each use (a dead one is replaced, not retried), closed after 60 s unused | — | [`reader.rs`](../../../../control/crates/layerfs-store/src/postgresql/reader.rs) |
 
-A record without `machines` (written before attachments) is attached to
-`native` alone. Nothing converts a sqlite Store into PostgreSQL: a project
+A PostgreSQL Store is on no machine. Its Sandboxes run on every machine
+whose platform runs PostgreSQL Sandboxes (#536 C4), and `sandbox.create`
+checks from the machine that it reaches this Store, so no call comes
+between `store.connect` and the first Sandbox. `machines` holds only the
+machines with a connection of their own (H9); an entry without `url` and
+`password` (a record written while machines were attached one by one,
+2026-11-12 to 2026-11-17) is read as none, and its `checked` is dropped at
+the record's next write. `machine.remove` forgets the machine's entry in
+every Store. Nothing converts a sqlite Store into PostgreSQL: a project
 reaches PostgreSQL only by an Init into it.
 
 ### Credentials
