@@ -1,6 +1,4 @@
-SELECT CASE
-  WHEN NOT EXISTS (SELECT 1 FROM kept_node) THEN 0
-  ELSE
+SELECT
     (SELECT COUNT(*) FROM "commit" c
       WHERE c.layer_stack_id = $1
         AND NOT EXISTS (SELECT 1 FROM kept_node k
@@ -16,5 +14,4 @@ SELECT CASE
   + (SELECT COUNT(*) FROM layer_stack s
       WHERE s.layer_stack_id = $1
         AND NOT EXISTS (SELECT 1 FROM kept_node k
-                         WHERE k.kind = 'stack' AND k.node_id = s.layer_stack_id))
-END;
+                         WHERE k.kind = 'stack' AND k.node_id = s.layer_stack_id));

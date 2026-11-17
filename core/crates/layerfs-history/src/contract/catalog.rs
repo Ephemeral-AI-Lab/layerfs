@@ -411,7 +411,12 @@ pub trait HistoryCatalog: Send + Sync {
     }
 
     /// Removes the unreachable history rows of one Stack, or reports how many
-    /// a dry run would remove. The default refuses.
+    /// a dry run would remove. The mark that decides reachability runs in the
+    /// same write transaction as the removal (a dry run runs it too), so a
+    /// node created after an earlier mark is never collected. The returned
+    /// count covers that Stack's Commit, Layer, Branch and LayerStack rows;
+    /// the orphaned lineage rows the cleanup also drops are not included. The
+    /// default refuses.
     ///
     /// # Errors
     ///

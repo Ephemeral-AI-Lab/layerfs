@@ -479,3 +479,130 @@ fn retained_roots_read_the_live_layers_and_removal_follows_the_marked_closure() 
     drop(handles);
     drop(writable(&path).expect("the Store still opens"));
 }
+
+#[test]
+fn a_fork_created_after_a_mark_is_not_collected() {
+    let temp = Temp::new("kept-late-fork");
+    let path = temp.join("store.sqlite");
+    let handles = create(&path);
+    let one = initialize(&handles, 1);
+    let early = branch_id(1);
+    fork(&handles, one.id, early, 1);
+    handles.history.mark_history_closure().unwrap();
+
+    // The mark is older than this Branch: the prune must not trust it.
+    let late = branch_id(2);
+    fork(&handles, one.id, late, 2);
+    assert!(handles.history.branch(late).unwrap().is_some());
+
+    assert_eq!(handles.history.remove_unreachable(one.id, true).unwrap(), 0);
+    assert_eq!(
+        handles.history.remove_unreachable(one.id, false).unwrap(),
+        0
+    );
+    assert!(
+        handles.history.branch(late).unwrap().is_some(),
+        "a live fork is never unreachable"
+    );
+    assert!(handles.history.branch(early).unwrap().is_some());
+}
+
+#[test]
+fn a_project_initialized_after_a_mark_is_not_collected() {
+    let temp = Temp::new("kept-late-project");
+    let path = temp.join("store.sqlite");
+    let handles = create(&path);
+    let one = initialize(&handles, 1);
+    handles.history.mark_history_closure().unwrap();
+
+    // Init commits a new live root after the mark.
+    let two = initialize(&handles, 2);
+    assert_eq!(handles.history.remove_unreachable(two.id, true).unwrap(), 0);
+    assert_eq!(
+        handles.history.remove_unreachable(two.id, false).unwrap(),
+        0
+    );
+    assert!(
+        handles.history.layer_stack(two.id).unwrap().is_some(),
+        "a live project is never unreachable"
+    );
+    assert!(handles.history.layer(two.head_layer).unwrap().is_some());
+    assert!(handles.history.layer_stack(one.id).unwrap().is_some());
+}
+
+#[test]
+fn a_commit_created_after_a_mark_is_kept_not_deleted() {
+    let temp = Temp::new("kept-late-commit");
+    let path = temp.join("store.sqlite");
+    let handles = create(&path);
+    let one = initialize(&handles, 1);
+    let work = branch_id(1);
+    fork(&handles, one.id, work, 1);
+    handles.history.mark_history_closure().unwrap();
+
+    // The mark is older than this Commit.
+    let late = commit(&handles, work, 9);
+    assert_eq!(
+        handles.history.remove_unreachable(one.id, false).unwrap(),
+        0
+    );
+    assert!(
+        handles.history.commit(late.id).unwrap().is_some(),
+        "a live Commit is never deleted"
+    );
+}
+
+#[test]
+fn a_store_whose_only_project_is_deleted_prunes_it_whole() {
+    let temp = Temp::new("kept-only-deleted");
+    let path = temp.join("store.sqlite");
+    let handles = create(&path);
+    let one = initialize(&handles, 1);
+    let work = branch_id(1);
+    fork(&handles, one.id, work, 1);
+    let gone_commit = commit(&handles, work, 9);
+    let gone_layer = publish(&handles, one.id, work);
+
+    handles.history.mark_stack_deleted(one.id, 2_000).unwrap();
+    let kept = handles.history.mark_history_closure().unwrap();
+    assert!(kept.is_empty(), "no live project means an empty closure");
+
+    // An empty closure is a real mark, not the absence of one: the whole
+    // deleted project is counted and removed.
+    let dry = handles.history.remove_unreachable(one.id, true).unwrap();
+    assert_eq!(dry, 5, "one stack, one branch, two Layers and one Commit");
+    assert_eq!(
+        handles.history.remove_unreachable(one.id, false).unwrap(),
+        dry
+    );
+    assert!(handles.history.layer_stack(one.id).unwrap().is_none());
+    assert!(handles.history.commit(gone_commit.id).unwrap().is_none());
+    assert!(handles.history.layer(gone_layer.id).unwrap().is_none());
+    assert!(handles.history.branch(work).unwrap().is_none());
+    drop(handles);
+    drop(writable(&path).expect("the pruned Store still opens"));
+}
+
+#[test]
+fn a_prune_after_a_cleared_mark_prunes_a_deleted_project() {
+    let temp = Temp::new("kept-cleared-mark");
+    let path = temp.join("store.sqlite");
+    let handles = create(&path);
+    let one = initialize(&handles, 1);
+    handles.history.mark_history_closure().unwrap();
+    handles.history.mark_stack_deleted(one.id, 2_000).unwrap();
+
+    // A compaction clears the transient table. The prune must mark afresh
+    // rather than read that empty table as "no mark" and do nothing.
+    handles.history.clear_kept_node().unwrap();
+    let dry = handles.history.remove_unreachable(one.id, true).unwrap();
+    assert!(
+        dry > 0,
+        "a cleared closure still counts the deleted project"
+    );
+    assert_eq!(
+        handles.history.remove_unreachable(one.id, false).unwrap(),
+        dry
+    );
+    assert!(handles.history.layer_stack(one.id).unwrap().is_none());
+}
