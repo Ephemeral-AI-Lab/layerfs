@@ -161,8 +161,10 @@ pub trait RequestServices: Send + Sync {
     /// READDIR's reading visit as one read-only owner job on the open
     /// directory `handle`: the position of the kernel `offset`, one window
     /// of current names (after `after` when it continues an earlier window
-    /// of the same request) and the offsets the reply may hand out. It
-    /// records nothing, so its request holds nothing afterwards.
+    /// of the same request) and the offsets the reply may hand out. When
+    /// `attributes` is set (READDIRPLUS), the visit also answers what memory
+    /// already holds of each entry's facts. It records nothing, so its
+    /// request holds nothing afterwards.
     fn directory_visit(
         &self,
         mount: KernelMount,
@@ -170,6 +172,7 @@ pub trait RequestServices: Send + Sync {
         handle: u64,
         offset: u64,
         after: Option<Vec<u8>>,
+        attributes: bool,
     ) -> ServiceFuture<'_, ServiceReply<Arc<KernelDirectoryWindow>>>;
     /// READDIR's publishing visit, before the reply is sent: exactly the
     /// names the reply buffer accepted become valid offsets, in one

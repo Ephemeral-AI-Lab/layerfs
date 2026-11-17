@@ -40,13 +40,14 @@ use crate::{
     block::wait,
     change::Wcc,
     handle::{HandleError, SqliteHandles},
+    read::{failure, read_failure, Answer, Refused},
 };
 use layerfs_content::{filesystem::PathName, object::inode_leaf::InodeKind};
 use layerfs_mount_ports::{
-    operations::{KernelData, KernelRead, MutationFailure, ReadDataInput, ReadFailure},
-    ports::{Fence, MountServices, RequestServices, ServiceError},
+    operations::{KernelData, KernelRead, MutationFailure, ReadDataInput},
+    ports::{Fence, MountServices, RequestServices},
 };
-use layerfs_overlay::{KernelMount, OverlayError, READ_WINDOW};
+use layerfs_overlay::{KernelMount, READ_WINDOW};
 use layerfs_workspace::{KernelReadOperation, ViewStat};
 use std::{
     collections::{HashMap, HashSet},
@@ -135,7 +136,6 @@ pub(crate) struct OpenFile {
     pub handle: u64,
     pub size: u64,
 }
-
 /// One kernel mount served over NFS: its ports and its synthetic kernel state.
 pub struct Kernel {
     services: Arc<dyn MountServices>,
@@ -285,11 +285,12 @@ impl Kernel {
                     None,
                     KernelReadOperation::Lookup { parent, name: path },
                 )
+                .map_err(|refused| refused.status)
             });
         match found {
-            Ok((stat, _, _)) => {
-                self.entry_taken(&stat, parent, &name);
-                if stat.serial == serial {
+            Ok(answer) => {
+                self.entry_taken(&answer.stat, parent, &name);
+                if answer.stat.serial == serial {
                     self.resolved.fetch_add(1, Ordering::Relaxed);
                     return Ok(());
                 }
@@ -321,21 +322,37 @@ impl Kernel {
         protected: u64,
         handle: Option<u64>,
         operation: KernelReadOperation,
-    ) -> Result<(ViewStat, Option<u64>, Option<u64>), Status> {
-        let (services, request) = self.request()?;
+    ) -> Result<Answer, Refused> {
+        let (services, request) = self.request().map_err(|status| Refused {
+            status,
+            directory: None,
+        })?;
         let found = wait(KernelRead::prepare(
             services, self.mount, request, protected, handle, operation,
         ))
-        .map_err(read_failure)?;
-        let answer = found.value().map(|value| {
-            (
-                value.stat.clone(),
-                value.file.map(|file| file.owner_id()),
-                value.directory.map(|directory| directory.owner_id()),
-            )
-        });
-        wait(found.dispose()).map_err(read_failure)?;
-        answer.map_err(refusal)
+        .map_err(|failure| Refused {
+            status: read_failure(failure),
+            directory: None,
+        })?;
+        let answer = match found.value() {
+            Ok(value) => Ok(Answer {
+                stat: value.stat.clone(),
+                parent: value.parent.clone(),
+                file: value.file.map(|file| file.owner_id()),
+                directory: value.directory.map(|directory| directory.owner_id()),
+            }),
+            // A refusal still carries the directory row its job read, when it
+            // read one: fresh facts, not this export's last observation.
+            Err(status) => Err(Refused {
+                status: refusal(status),
+                directory: found.refused_directory().cloned(),
+            }),
+        };
+        wait(found.dispose()).map_err(|failure| Refused {
+            status: read_failure(failure),
+            directory: None,
+        })?;
+        answer
     }
     /// GETATTR. An inode that lost its last name while a silly name keeps it
     /// is observed through its descriptor; any other inode no name reaches
@@ -354,58 +371,86 @@ impl Kernel {
         };
         let stat = self
             .observe(serial, handle, KernelReadOperation::Getattr { serial })
-            .map(|(stat, _, _)| stat)
-            .map_err(|status| {
-                if status == Status::NoEnt {
-                    Status::Stale
-                } else {
-                    status
-                }
+            .map(|answer| answer.stat)
+            .map_err(|refused| match refused.status {
+                Status::NoEnt => Status::Stale,
+                status => status,
             })?;
         self.observed(&stat);
         Ok(stat)
     }
     /// LOOKUP of `name` in directory `parent`, including `.`, `..` and the
-    /// export's own silly names.
-    pub fn lookup(&self, parent: u64, name: &[u8]) -> Result<ViewStat, Status> {
+    /// export's own silly names. One owner job answers both the entry and,
+    /// when the name resolved, the directory itself: the same job had to read
+    /// the directory's row to resolve it, so the reply's directory attributes
+    /// cost nothing more.
+    ///
+    /// A failure answers the directory's own fresh facts only when the job
+    /// that failed read its row, which is every name this export looked up:
+    /// a name that binds nothing still read the parent's row. `.`, `..`, a
+    /// silly name and a refusal decided before any visit read no directory
+    /// row and answer `None`, so the client falls back to its own `actimeo`
+    /// instead of restarting its timer on facts nothing refreshes.
+    pub fn lookup(
+        &self,
+        parent: u64,
+        name: &[u8],
+    ) -> Result<(ViewStat, Option<ViewStat>), Refused> {
         match name {
-            b"" => return Err(Status::NoEnt),
-            b"." => return self.getattr(parent),
+            b"" => return Err(Refused::plain(Status::NoEnt)),
+            b"." => {
+                return self
+                    .getattr(parent)
+                    .map(|stat| (stat, None))
+                    .map_err(Refused::plain)
+            }
             b".." => {
                 let up = if parent == self.root() {
                     parent
                 } else {
                     let known = self.table().parents.get(&parent).copied();
-                    known.ok_or(Status::NoEnt)?
+                    known.ok_or(Refused::plain(Status::NoEnt))?
                 };
-                self.held_reference(up)?;
-                return self.getattr(up);
+                self.held_reference(up).map_err(Refused::plain)?;
+                return self
+                    .getattr(up)
+                    .map(|stat| (stat, None))
+                    .map_err(Refused::plain);
             }
-            _ if name.len() > 255 => return Err(Status::NameTooLong),
+            _ if name.len() > 255 => return Err(Refused::plain(Status::NameTooLong)),
             _ => {}
         }
+        // An AppleDouble companion lives in the export alone, so its reply's
+        // directory half is the facts this export last answered for the
+        // directory: a companion change never touches it.
         if let Some(stat) = self.companion_named(parent, name) {
-            return Ok(stat);
+            return Ok((stat, self.directory_wcc(parent).0));
         }
         if self.refuses_apple_double() && crate::names::apple_double(name) {
             if parent != self.root() && !self.table().parents.contains_key(&parent) {
-                return Err(Status::NotDir);
+                return Err(Refused::plain(Status::NotDir));
             }
-            return Err(Status::NoEnt);
+            return Err(Refused::plain(Status::NoEnt));
         }
         let silly = self.table().silly.get(&(parent, name.to_vec())).copied();
         if let Some(serial) = silly {
-            return self.getattr(serial);
+            return self
+                .getattr(serial)
+                .map(|stat| (stat, None))
+                .map_err(Refused::plain);
         }
-        let path = PathName::from_bytes(name).map_err(|_| Status::Inval)?;
-        let (stat, _, _) = self.observe(
+        let path = PathName::from_bytes(name).map_err(|_| Refused::plain(Status::Inval))?;
+        let answer = self.observe(
             parent,
             None,
             KernelReadOperation::Lookup { parent, name: path },
         )?;
+        if let Some(directory) = &answer.parent {
+            self.observed(directory);
+        }
         // The deciding visit took one engine reference; keep exactly one.
-        self.entry_taken(&stat, parent, name);
-        Ok(stat)
+        self.entry_taken(&answer.stat, parent, name);
+        Ok((answer.stat, answer.parent))
     }
     /// A visit or mutation that decided `stat` as the entry `name` of
     /// `parent` took one engine lookup reference on it: the export keeps
@@ -611,9 +656,11 @@ impl Kernel {
             }
         }
         let operation = KernelReadOperation::Open { serial, writable };
-        let (stat, file, _) = self.observe(serial, None, operation)?;
-        let handle = file.ok_or(Status::ServerFault)?;
-        Ok(self.file_taken(serial, handle, &stat, writable))
+        let answer = self
+            .observe(serial, None, operation)
+            .map_err(|refused| refused.status)?;
+        let handle = answer.file.ok_or(Status::ServerFault)?;
+        Ok(self.file_taken(serial, handle, &answer.stat, writable))
     }
     /// Records an open file descriptor (from `OPEN` or `CREATE`), evicting
     /// the oldest unpinned descriptor when the bound is reached.
@@ -730,9 +777,13 @@ impl Kernel {
         if crate::apple_double::companion(serial) {
             return Err(Status::NotDir);
         }
-        let (_, _, directory) =
-            self.observe(serial, None, KernelReadOperation::Opendir { serial })?;
-        let handle = directory.ok_or(Status::ServerFault)?;
+        let answer = self
+            .observe(serial, None, KernelReadOperation::Opendir { serial })
+            .map_err(|refused| refused.status)?;
+        let handle = answer.directory.ok_or(Status::ServerFault)?;
+        // The visit read the directory's own row: remember it, so a LOOKUP in
+        // this directory answers its `dir_attributes` from memory.
+        self.observed(&answer.stat);
         let evicted = {
             let mut table = self.table();
             let tick = table.tick();
@@ -933,37 +984,4 @@ pub struct Released {
 }
 fn oldest(entries: impl Iterator<Item = (u64, u64)>) -> Option<u64> {
     entries.min_by_key(|(_, tick)| *tick).map(|(key, _)| key)
-}
-fn stale(error: &(dyn std::error::Error + 'static)) -> bool {
-    let mut current = Some(error);
-    while let Some(error) = current {
-        if matches!(
-            error.downcast_ref::<OverlayError>(),
-            Some(OverlayError::Stale)
-        ) {
-            return true;
-        }
-        current = error.source();
-    }
-    false
-}
-/// Whether a failed step's cause chain holds an engine `Stale`.
-pub(crate) fn failure_is_stale(error: &ServiceError) -> bool {
-    stale(error.as_ref())
-}
-/// A failed port step: an engine `Stale` is the client's stale handle; any
-/// other failure is an I/O error of this request alone.
-pub fn failure(error: ServiceError) -> Status {
-    if stale(error.as_ref()) {
-        Status::Stale
-    } else {
-        Status::Io
-    }
-}
-fn read_failure(failure: ReadFailure) -> Status {
-    if stale(failure.reason.as_ref()) {
-        Status::Stale
-    } else {
-        Status::Io
-    }
 }

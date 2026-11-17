@@ -575,7 +575,12 @@ fn a_visit_that_misses_the_count_is_undecided_writes_nothing_and_decides_once_su
         panic!("the supplied facts did not decide the lookup")
     };
     assert_eq!(
-        (found.serial, found.entries, found.subdirs, found.nlink),
+        (
+            found.inode.serial,
+            found.inode.entries,
+            found.inode.subdirs,
+            found.inode.nlink
+        ),
         (MIXED, 5, 2, 1)
     );
     // Another request, carrying nothing, decides in its one visit: the
@@ -688,7 +693,13 @@ fn remembered_counts_are_bounded_and_an_evicted_one_is_derived_again() {
     let Some(KernelReadDecision::Value(found)) = observe(&b, mount, "d00000", &facts) else {
         panic!("the carried facts did not decide the lookup")
     };
-    assert_eq!((found.serial, found.entries, found.subdirs), (100, 3, 2));
+    assert_eq!(
+        (found.inode.serial, found.inode.entries, found.inode.subdirs),
+        (100, 3, 2)
+    );
+    // The same job answered the directory the name was looked up in, so a
+    // reply that shows the directory's attributes pays no second visit.
+    assert_eq!(found.parent.expect("the lookup's directory").serial, 1);
     assert_eq!(work().directory_count_scans, capacity + 3);
 
     // Both were evicted: each is derived again, correctly, and remembered

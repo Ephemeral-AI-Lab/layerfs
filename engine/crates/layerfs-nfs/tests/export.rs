@@ -9,6 +9,9 @@ mod client;
 #[path = "support/rig.rs"]
 mod rig;
 #[allow(dead_code)]
+#[path = "support/spy.rs"]
+mod spy;
+#[allow(dead_code)]
 #[path = "support/tree.rs"]
 mod tree;
 use client::{Attr, Client, BADHANDLE, BAD_COOKIE, NOENT, ROFS, STALE};
@@ -19,6 +22,7 @@ use std::{
     net::TcpListener,
     os::unix::fs::{MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
+    sync::{atomic::Ordering, Arc},
     time::Duration,
 };
 use tree::{oracle, walk, Node};
@@ -114,7 +118,7 @@ fn readdirplus_lists_a_directory_with_attributes_and_handles() {
     let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, true);
     let mut client = Client::connect(server.local_addr(), UID, GID);
     let root = client.mnt("/");
-    let (src, src_attr) = client.lookup(&root, b"src").unwrap();
+    let (src, _) = client.lookup(&root, b"src").unwrap();
     let held = server.held().lookups;
 
     // One reply lists the whole directory: the window that lists its last
@@ -125,10 +129,12 @@ fn readdirplus_lists_a_directory_with_attributes_and_handles() {
         .unwrap();
     assert_eq!(client.calls - calls, 1, "one READDIRPLUS for the directory");
     assert!(eof, "the reply that lists the last name is the end");
+    // `src` is inherited from the committed base: the window reads no local
+    // row of it, so the reply says nothing about the directory rather than
+    // repeating the facts this export last observed for it.
     assert_eq!(
-        directory,
-        Some(src_attr),
-        "dir_attributes of the listed directory"
+        directory, None,
+        "no dir_attributes for an inherited directory"
     );
     let names: BTreeSet<Vec<u8>> = entries.iter().map(|entry| entry.name.clone()).collect();
     assert_eq!(
@@ -242,6 +248,71 @@ fn readdirplus_reports_a_local_directorys_own_rows() {
     );
     let released = server.stop();
     assert_eq!(released.lookups, held - 1, "every reference given back");
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn an_inherited_directorys_listing_never_answers_a_stale_observation() {
+    let base = temp("inherited");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let first = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut client = Client::connect(first.local_addr(), UID, GID);
+    let root = client.mnt("/");
+    // `many` comes from the committed base: the overlay holds no local row of
+    // it, so no listing visit reads the directory's own row.
+    let (many, _) = client.lookup(&root, b"many").unwrap();
+    let before = client.getattr(&many).unwrap();
+    assert_eq!(before.nlink, 2, "the directory has no child directory");
+
+    // The first reply lists the two dots only, so the descriptor stays open
+    // across the change below and the next reply continues this enumeration.
+    // Its window read no row of `many`, so it carries no attributes of it
+    // rather than the facts the OPENDIR visit observed.
+    let (dots, verifier, eof, directory) = client
+        .readdir_with_directory(&many, 0, 0, 300, true)
+        .unwrap();
+    assert!(!eof, "the enumeration continues after the dots");
+    assert_eq!(
+        directory, None,
+        "an inherited directory's window reads no row to answer"
+    );
+    let cookie = dots.last().expect("the dots").cookie;
+
+    // A second export of the same Workspace adds a child directory to
+    // `many`, which this export does not observe: its last observation of the
+    // directory is now older than the directory's own row, and nothing ages
+    // it.
+    let second = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut other = Client::connect(second.local_addr(), UID, GID);
+    let other_root = other.mnt("/");
+    let (target, _) = other.lookup(&other_root, b"many").unwrap();
+    other.mkdir(&target, b"child", 0o755).unwrap();
+
+    // The continued reply says the directory's current facts or nothing at
+    // all; it never repeats the pre-change observation.
+    let (_, _, _, directory) = client
+        .readdir_with_directory(&many, cookie, verifier, 4096, true)
+        .unwrap();
+    let fresh = client.getattr(&many).unwrap();
+    assert_eq!(fresh.nlink, 3, "the directory gained a child directory");
+    assert_ne!(
+        directory,
+        Some(before),
+        "never the last observation of the directory"
+    );
+    assert!(
+        directory.is_none() || directory == Some(fresh),
+        "the current facts or no attributes at all: {directory:?}"
+    );
+
+    drop(client);
+    drop(other);
+    let released = first.stop();
+    second.stop();
     let (_, outstanding) = rig.stop(released);
     assert_eq!(outstanding, 0);
     fs::remove_dir_all(base).unwrap();
@@ -371,6 +442,245 @@ fn cookies_refusals_and_stale_handles() {
     let released_again = server.stop();
     assert!(released.lookups > 0);
     let (_, outstanding) = rig.stop(released_again);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_lookup_spends_one_owner_visit() {
+    let base = temp("lookup");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let watch = Arc::new(spy::Watch::default());
+    let services = Arc::new(spy::Spy {
+        inner: Arc::new(layerfs_daemon::Mounted(rig.bound.clone())),
+        watch: watch.clone(),
+    });
+    let server = rig.export_services(
+        TcpListener::bind("127.0.0.1:0").unwrap(),
+        services,
+        UID,
+        GID,
+        false,
+    );
+    let mut client = Client::connect(server.local_addr(), UID, GID);
+    let root = client.mnt("/");
+
+    // RFC 1813 answers the entry's attributes and its directory's: the one
+    // visit that resolved the name had to read the directory's row too. The
+    // names are looked up once first, so the visit below is the steady state
+    // and not the mount's first read of a base name.
+    client.lookup(&root, b"src").unwrap();
+    assert_eq!(client.lookup(&root, b"absent").map(|_| ()), Err(NOENT));
+    let root_attr: Attr = client.getattr(&root).unwrap();
+
+    let visits = watch.visits.load(Ordering::Acquire);
+    let (status, found, directory) = client.lookup_with_directory(&root, b"src");
+    assert_eq!(status, 0);
+    let (_, src_attr) = found.clone().expect("the directory's own name");
+    assert_eq!(
+        watch.visits.load(Ordering::Acquire) - visits,
+        1,
+        "one owner visit for a LOOKUP and its directory"
+    );
+    assert_eq!(
+        directory,
+        Some(root_attr.clone()),
+        "the directory it was named in"
+    );
+
+    // A missing name is one visit as well, and answers the directory facts
+    // the export already published for it.
+    let visits = watch.visits.load(Ordering::Acquire);
+    let (status, found, directory) = client.lookup_with_directory(&root, b"absent");
+    assert_eq!((status, found), (NOENT, None));
+    assert_eq!(
+        watch.visits.load(Ordering::Acquire) - visits,
+        1,
+        "one owner visit for a failing LOOKUP"
+    );
+    assert_eq!(directory, Some(root_attr));
+
+    // The name resolved to the same inode a later LOOKUP reports, and the
+    // directory half of the reply is the directory's own facts.
+    let (_, again) = client.lookup(&root, b"src").unwrap();
+    assert_eq!(again.fileid, src_attr.fileid, "the same inode");
+    drop(client);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_listing_spends_one_owner_visit_and_reads_its_window_in_batches() {
+    let base = temp("listing");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let watch = Arc::new(spy::Watch::default());
+    let services = Arc::new(spy::Spy {
+        inner: Arc::new(layerfs_daemon::Mounted(rig.bound.clone())),
+        watch: watch.clone(),
+    });
+    let server = rig.export_services(
+        TcpListener::bind("127.0.0.1:0").unwrap(),
+        services,
+        UID,
+        GID,
+        false,
+    );
+    let mut client = Client::connect(server.local_addr(), UID, GID);
+    let root = client.mnt("/");
+    let (many, _) = client.lookup(&root, b"many").unwrap();
+
+    // A directory of 700 inherited names over several replies: one OPENDIR
+    // visit for the whole enumeration, at most one Store reader per reply,
+    // and never one per listed name — the window's names, kinds and facts
+    // are read in batches outside the owner.
+    let (visits, bases) = (
+        watch.visits.load(Ordering::Acquire),
+        watch.bases.load(Ordering::Acquire),
+    );
+    let (entries, calls) = client.list(&many, 64 * 1024, true);
+    assert!(calls > 1, "a budget spreads one directory over replies");
+    assert_eq!(entries.len(), MANY + 2, "every name, once");
+    for entry in entries
+        .iter()
+        .filter(|entry| entry.name != b"." && entry.name != b"..")
+    {
+        // Every inherited name arrives with both optional fields, so the
+        // client needs no LOOKUP per name on a cold tree.
+        assert!(
+            entry.attr.is_some(),
+            "READDIRPLUS attributes: {:?}",
+            entry.name
+        );
+        assert!(
+            entry.handle.is_some(),
+            "READDIRPLUS handle: {:?}",
+            entry.name
+        );
+    }
+    assert_eq!(
+        watch.visits.load(Ordering::Acquire) - visits,
+        1,
+        "one owner visit for the whole enumeration"
+    );
+    assert!(
+        watch.bases.load(Ordering::Acquire) - bases <= calls,
+        "at most one Store reader per reply, never one per name"
+    );
+    // Each handed-out handle holds one reference, and an identical reply
+    // reuses the published offsets instead of taking more.
+    let held = server.held().lookups;
+    assert_eq!(held, 1 + MANY, "the directory and one reference per entry");
+    let (again, _) = client.list(&many, 64 * 1024, true);
+    assert_eq!(again.len(), entries.len(), "the same names again");
+    assert_eq!(
+        server.held().lookups,
+        held,
+        "no second reference for a listed name"
+    );
+
+    // A directory this export created is answered from the rows its visit
+    // already read: its listing takes no Store reader at all.
+    client.mkdir(&root, b"local", 0o755).unwrap();
+    let (local, _) = client.lookup(&root, b"local").unwrap();
+    client.touch(&local, b"a", 0o644).unwrap();
+    let bases = watch.bases.load(Ordering::Acquire);
+    let (entries, _, _) = client
+        .readdir(&local, 0, 0, 4096, true)
+        .map(|(entries, _, eof)| (entries, eof, ()))
+        .unwrap();
+    let created = entries
+        .iter()
+        .find(|entry| entry.name == b"a")
+        .expect("the created name");
+    assert!(
+        created.attr.is_some() && created.handle.is_some(),
+        "a local row carries its facts and its handle"
+    );
+    assert_eq!(
+        watch.bases.load(Ordering::Acquire),
+        bases,
+        "a local listing takes no Store reader"
+    );
+
+    drop(client);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_failed_lookup_answers_fresh_directory_facts_never_a_stale_observation() {
+    let base = temp("lookup-directory");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let first = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut client = Client::connect(first.local_addr(), UID, GID);
+    let root = client.mnt("/");
+    let made = client.mkdir(&root, b"watched", 0o755).unwrap();
+    let before = client.getattr(&made.handle).unwrap();
+    assert_eq!(before.nlink, 2, "an empty directory");
+
+    // A second engine mount of the same Workspace adds a name to the
+    // directory this export watches. This export observes no publication for
+    // it, which is the install and other-writer case: its last observation of
+    // the directory is now older than the directory's own row.
+    let second = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut other = Client::connect(second.local_addr(), UID, GID);
+    let other_root = other.mnt("/");
+    let (target, _) = other.lookup(&other_root, b"watched").unwrap();
+    other.mkdir(&target, b"child", 0o755).unwrap();
+
+    // The failed LOOKUP answers the directory's current facts: the job that
+    // found no name read the directory's row in the same visit. Nothing may
+    // answer the last observation instead, which no time bound ages.
+    let (status, found, directory) = client.lookup_with_directory(&made.handle, b"absent");
+    assert_eq!((status, found), (NOENT, None));
+    let fresh = client.getattr(&made.handle).unwrap();
+    assert_eq!(fresh.nlink, 3, "the directory gained a child directory");
+    assert_eq!(directory, Some(fresh.clone()), "the current facts");
+    assert_ne!(directory, Some(before), "never the last observation");
+
+    // A name this export decides without an owner job reads no directory row
+    // and answers no directory attributes, so a client falls back to its own
+    // `actimeo` rather than restarting it on facts nothing refreshes.
+    let (status, found, directory) = client.lookup_with_directory(&made.handle, b".");
+    assert_eq!(status, 0);
+    assert!(found.is_some());
+    assert_eq!(directory, None, "no attributes for `.`");
+    let (status, found, directory) = client.lookup_with_directory(&made.handle, b"..");
+    assert_eq!(status, 0);
+    assert!(found.is_some());
+    assert_eq!(directory, None, "no attributes for `..`");
+
+    // A silly name is kept by this export alone; its reply names none either.
+    let open = client.touch(&made.handle, b"open", 0o644).unwrap();
+    client
+        .rename(
+            &made.handle,
+            b"open",
+            &made.handle,
+            b".nfs00000000000012ab00000001",
+        )
+        .unwrap();
+    let (status, found, directory) =
+        client.lookup_with_directory(&made.handle, b".nfs00000000000012ab00000001");
+    assert_eq!(status, 0);
+    assert_eq!(found.map(|(handle, _)| handle), Some(open.handle));
+    assert_eq!(directory, None, "no attributes for a silly name");
+
+    drop(client);
+    drop(other);
+    let released = first.stop();
+    second.stop();
+    let (_, outstanding) = rig.stop(released);
     assert_eq!(outstanding, 0);
     fs::remove_dir_all(base).unwrap();
 }

@@ -14,7 +14,7 @@ and MOUNT are written over `std::net` with no third-party dependency and no
 platform `cfg` ([`lib.rs`](../../../../engine/crates/layerfs-nfs/src/lib.rs)).
 The daemon starts it and has the host's own NFS client mount it.
 
-## Server (`server.rs`, `kernel.rs`, `block.rs`)
+## Server (`server.rs`, `kernel.rs`, `read.rs`, `block.rs`)
 
 ```text
  host NFS client (mount_nfs on macOS)
@@ -108,18 +108,22 @@ drawn once per export; it makes guessing costly and does not authenticate.
 ## Directories (`directory.rs`)
 
 ```text
- READDIR / READDIRPLUS (handle, cookie, cookieverf, budget)
+ READDIR / READDIRPLUS (handle, cookie, cookieverf, maxcount)
    cookie 0  -> open_directory: fresh descriptor; verifier = its id
    cookie >0 -> descriptor (serial, verifier) still open? no: BAD_COOKIE
    cookies: 1 = ".", 2 = "..", then engine-published offsets
-   one reply = at most one engine window; entries that fit the budget
+   one reply = at most one engine window; entries that fit maxcount
    -> publish_cookies(those names); eof only when the window ended and fit
 ```
 
 | Rule | Source |
 | --- | --- |
 | The cookie is the engine's kernel offset on one implicit directory descriptor named by `cookieverf`; a retired offset or a listing continued after an install is `NFS3ERR_BAD_COOKIE`, and the client lists again | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs), [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
-| A READDIRPLUS entry carries the facts its listing already read and its handle; each handle takes its one lookup reference in the publishing visit | [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs), [`kernel_cookie.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/kernel_cookie.rs) |
+| A READDIRPLUS entry carries the facts its window read — a local inode's current row, or an inherited inode's immutable base stat — and the handle of its serial, so the client needs no LOOKUP per name; both are optional in RFC 1813 and this export sends both for every named entry whose offsets the reply publishes, each handle taking its one lookup reference in the publishing visit (reused offset ranges take none) | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs), [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs), [`kernel_cookie.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/kernel_cookie.rs) |
+| A window's inherited inode values cost one batch inode demand for each level of the inode tree the cache does not already answer (`lookup_many` reads a level's pages in one `read_canonical_batch`, resident levels cost none) and its ordinary file lengths one batch length demand (`provide_lengths`) while the cache can remember them (too small for one entry remembers nothing, so each file asks for its own length); entries memory already answers cost no Store reader. Names and kinds come first, the offer then truncates the window to the names the reply publishes, and only those names' facts are read, so a re-sent reply reads nothing for a name it does not send. Test counts where earlier visits warmed upper levels are not a fresh mount's first window | [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs), [`client.rs`](../../../../engine/crates/layerfs-workspace/src/base/client.rs) |
+| Those batches are not everything an entry costs, and this route changes none of the rest: an inherited inode whose metadata is not inline reports one portable-metadata demand per distinct metadata root, a listed subdirectory one listing of that subdirectory for its child-directory count, and a symlink entry one read of its target; only ordinary files with inline metadata pay only those batches (when the cache remembers lengths) | [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs), [`view.rs`](../../../../engine/crates/layerfs-workspace/src/base/view.rs), [`links.rs`](../../../../engine/crates/layerfs-workspace/src/base/links.rs) |
+| READDIR has one count, which bounds the whole reply; READDIRPLUS sends `dircount` before it, and only `maxcount` bounds this reply | [`nfs.rs`](../../../../engine/crates/layerfs-nfs/src/nfs.rs), [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs) |
+| A reply's `dir_attributes` are the facts of the listed directory its window read — a local row, fresh from that visit, costing no extra read. An inherited directory has no local row, so its window reads none and the reply carries no attributes; the client then falls back to its own `actimeo` rather than restarting it on facts nothing refreshes | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs), [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs) |
 | `.` and `..` carry no attributes; `..` comes from the parent recorded at lookup, create, move or listing | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
 | Silly names and AppleDouble companions are never listed | [`names.rs`](../../../../engine/crates/layerfs-nfs/src/names.rs), [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 
@@ -144,6 +148,15 @@ drawn once per export; it makes guessing costly and does not authenticate.
 | A serial whose last name this export removed gives back its reference and descriptor at once | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
 | SETATTR's guard compares a fresh GETATTR ctime, not atomic with the change; access time is dropped | [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |
 | ACCESS grants owner bits to the inode's uid or uid 0, group bits to its group, else other bits; a read-only export grants no change | [`attributes.rs`](../../../../engine/crates/layerfs-nfs/src/attributes.rs) |
+
+## LOOKUP and GETATTR (`nfs.rs`, `kernel.rs`)
+
+| Rule | Source |
+| --- | --- |
+| One owner visit answers a LOOKUP: the job that resolves a name has already read the directory's own row, so the reply's `dir_attributes` cost no second visit | [`nfs.rs`](../../../../engine/crates/layerfs-nfs/src/nfs.rs), [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs), [`kernel_read.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_read.rs) |
+| A LOOKUP that fails answers the directory's own fresh facts whenever the job that failed read its row, which is every name this export looks up: a name that binds nothing still read its parent's row in the same visit. `.`, `..`, a silly name and a refusal decided before any visit read no directory row and send no `dir_attributes`, so the client falls back to its own `actimeo`; RFC 1813 makes both fields optional. No LOOKUP answer repeats the export's last observation of the directory, which nothing ages | [`nfs.rs`](../../../../engine/crates/layerfs-nfs/src/nfs.rs), [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs), [`kernel_read.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_read.rs) |
+| `read.rs` holds what a read answers: the entry, its directory and its descriptors, and the refusal with its status (`NFS3ERR_STALE` for an engine `Stale`, else `NFS3ERR_IO`) and the directory row the job read | [`read.rs`](../../../../engine/crates/layerfs-nfs/src/read.rs) |
+| An export remembers the facts it last published or observed for a directory (LOOKUP, GETATTR, OPENDIR, a publishing change) and answers from them only where no job reads that directory: an AppleDouble companion's `wcc_data`, whose change never touches it. A directory listing is not such a place: its reply says only what its own window read | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs), [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 
 ## Refresh after install (`refresh.rs`, daemon `export.rs`, `invalidate.rs`)
 

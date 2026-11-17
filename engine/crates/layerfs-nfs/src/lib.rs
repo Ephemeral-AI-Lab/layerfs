@@ -27,6 +27,7 @@ pub mod kernel;
 mod mount;
 pub mod names;
 mod nfs;
+pub mod read;
 pub mod refresh;
 pub mod rpc;
 mod server;
