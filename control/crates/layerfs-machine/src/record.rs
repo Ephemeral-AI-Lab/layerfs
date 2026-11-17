@@ -164,11 +164,27 @@ impl MachineRecord {
 
     /// The record with no intent.
     pub fn without_op(self) -> Self {
+        self.without(op::FIELD)
+    }
+
+    /// The record without field `field`.
+    pub fn without(self, field: &str) -> Self {
         let fields = match self.fields {
-            SdkValue::Map(fields) => fields.into_iter().filter(|(n, _)| n != op::FIELD),
+            SdkValue::Map(fields) => fields.into_iter().filter(|(n, _)| n != field),
             other => return Self::from_record(&self.name, other),
         };
         Self::from_record(&self.name, SdkValue::Map(fields.collect()))
+    }
+
+    /// Whether the machine was ever started: a start recorded its lasting
+    /// state (every start that reached its provider writes it), or a state
+    /// only a start or create writes (`running`, `failed`). A `stopped`
+    /// alone is not one: a stop before any start records it too. A
+    /// built-in `docker` that never started has neither (its first record
+    /// names only itself).
+    pub fn ever_started(&self) -> bool {
+        self.field("lasting").is_some()
+            || matches!(self.recorded_state(), Some("running" | "failed"))
     }
 
     /// Whether a create or remove holds the machine:
@@ -204,7 +220,8 @@ impl MachineRecord {
         self.fields.get_text("image")
     }
 
-    /// The docker machine's Docker socket.
+    /// The docker machine's Docker socket; `None` when it has none or
+    /// `--docker ""` cleared it (the field is then null).
     pub fn docker(&self) -> Option<&str> {
         self.fields.get_text("docker")
     }
@@ -353,6 +370,7 @@ impl MachineRecord {
         for extra in ["image", "os_image", "docker", "wsl", "daemon", "error"] {
             if let Some(value) = self
                 .field(extra)
+                .filter(|value| **value != SdkValue::Null)
                 .filter(|_| extra != "error" || error.is_none())
             {
                 fields.push((extra, value.clone()));

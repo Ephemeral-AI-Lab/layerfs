@@ -103,7 +103,10 @@ and stopped by hand. Error: `Failed` (a record names no known platform).
 
 ### machine.platforms
 
-The support table for this host, with a live tool probe per platform.
+The support table for this host, with a live tool probe per platform. It
+describes the host and this build, so it needs no home and never creates or
+converts one (`Call.opens` false); with a home it reads the docker machine's
+recorded socket.
 
 ```text
 JS      await layerfs.machine.platforms()
@@ -116,7 +119,10 @@ CLI     layerfs machine platforms
   platforms: [ { platform, how, backend, kernel, sqlite,
                  postgresql: { store_calls, sandbox, reason },
                  ready, missing: [text], version,
-                 options: [ { name, kind } ], description } ] }
+                 options: [ { name, kind, default } ], description,
+                 // the docker row only:
+                 socket: { path, source, state },
+                 candidates: [ { path, host, source, usable } ] } ] }
 ```
 
 | Field | Meaning | Source |
@@ -125,13 +131,16 @@ CLI     layerfs machine platforms
 | `backend`, `kernel` | `native` or `namespaces`; `fuse` or `nfs`; null when not on this host | [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs) |
 | `sqlite` | where a sqlite Store's calls run: `in_process` or `worker` | same |
 | `postgresql` | `store_calls` (always `in_process`), `sandbox` (bool), `reason` | same |
-| `ready`, `missing`, `version` | the live probe: `tool:<cli>` not on the path, `host:<fact>` lacking; each command bounded at 10 s | [`probe.rs`](../../../../control/crates/layerfs-platform/src/probe.rs) |
-| `options` | what `create` takes for this platform | [`options.rs`](../../../../control/crates/layerfs-platform/src/options.rs) |
+| `ready`, `missing`, `version` | the live probe: `tool:<cli>` not on the path or in the fallback folders, `host:<fact>` lacking (docker: `host:<socket>` when its socket does not answer a ping; `docker version` runs only when it does); each command bounded at 10 s. A platform that runs a worker (`sqlite: "worker"`: docker, lima, apple-container where they run) also needs `bundle:<dir>` when this build's sealed Linux bundle is absent or of another worker protocol, the folder being the one it would use (`LAYERFS_BUNDLE`, else the cache). A bundle from another commit is no need: `home.get` warns `BundleMismatch` | [`probe.rs`](../../../../control/crates/layerfs-platform/src/probe.rs), [`platforms.rs`](../../../../control/crates/layerfs-machine/src/platforms.rs) |
+| `options` | what `create` takes for this platform; `default` is what it takes when the option is absent: `cpus` 2, `memory` 4 GiB and `disk` 20 GiB (bytes), null for the rest | [`options.rs`](../../../../control/crates/layerfs-platform/src/options.rs), `DEFAULT_*` in [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs) |
+| `socket` | the docker machine's Engine socket: `path`; `source`, where it comes from (`recorded`, `legacy` for a machine that ran before sockets were recorded, else the automatic choice, named as `candidates` name the same socket: `env:DOCKER_HOST`, `context:<name>`, `desktop`, `colima`, `orbstack` or `default`); `state`, a ping (`GET /_ping`, 2 s per read and write; the probe's, when it found the Engine's version): `answering`, `absent` (no such file), `denied` (`EACCES`: the docker group fix, not Start) or `silent` (there, no answer) | [`docker_socket.rs`](../../../../control/crates/layerfs-platform/src/docker_socket.rs), `docker_socket` in [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs) |
+| `candidates` | every endpoint the host names, most specific first, each socket once: `DOCKER_HOST`, the current Docker context (`DOCKER_CONTEXT`, else `currentContext` in `config.json` under `DOCKER_CONFIG` or `~/.docker`), the other contexts by name (`contexts/meta/*/meta.json`), Docker Desktop's, colima's and OrbStack's sockets that exist, and `/var/run/docker.sock`. `host` is the endpoint as Docker writes it; one that is not `unix://` has `path: null`, `usable: false` and is never followed. Read from files only | same |
 
 The rows without the live fields are
 [`control/SUPPORT.json`](../../../../control/SUPPORT.json), generated from
 `support.rs`; the per-host matrix is on [platforms](../../control/machines/platforms.md).
-A missing tool is `ready: false`, not an error.
+A missing tool is `ready: false`, not an error. How tools and the docker
+socket are found: [platforms](../../control/machines/platforms.md#tools-and-the-docker-socket).
 
 ### machine.get
 
@@ -580,7 +589,7 @@ CLI     layerfs machine create <name> <platform> [--cpus <cpus>] [--memory <memo
 | `memory` option | Size | default 4 GiB |
 | `disk` option | Size | default 20 GiB, the data disk at `/layerfs/data` |
 | `image` option | Text | the Sandbox image archive or content identity |
-| `os_image` option | Text | the VM's operating-system image (an installed OCI reference for Apple Container, an image location for Lima); default an installed prepared image, else the provider's stock image; recorded and answered as `os_image` |
+| `os_image` option | Text | the VM's operating-system image (an installed OCI reference for Apple Container, an image location for Lima); absent, an installed prepared image, else the provider's stock image; `stock` (`--os-image stock`), the provider's stock image even when a prepared one exists (nothing recorded); recorded and answered as `os_image` |
 | `on_progress` option | Function | the `machine.start` stages, plus `{ phase: "create", machine }` |
 
 The record keeps `vm_name` (`layerfs-<home id prefix>-<name>`, so two homes
@@ -649,7 +658,7 @@ CLI     layerfs machine update <name> [--cpus <cpus>] [--memory <memory>] [--ima
 | Option | Applies to | Rule |
 | --- | --- | --- |
 | `image` | any machine | on `docker`, the worker container's image; an absolute path is the Sandbox image archive |
-| `docker` | built-in only | the Docker socket this home's tools use |
+| `docker` | built-in only | the Docker Engine socket the docker machine and every Docker read of the home use: an absolute path (`unix://` and one is taken); `""` clears it (the record keeps `docker: null`, not shown), so the next start chooses one automatically and records it. Otherwise `InvalidInput`; `InUse` while the machine's worker is recorded running (stop it first) |
 | `wsl` | built-in only, Windows hosts | the WSL distribution |
 | `daemon` | built-in only | the absolute path of an existing file: the daemon its Sandboxes run |
 | `cpus`, `memory` | VM machines | `InvalidInput` on a built-in; on a VM `Unsupported` ("not built yet"), nothing changed |

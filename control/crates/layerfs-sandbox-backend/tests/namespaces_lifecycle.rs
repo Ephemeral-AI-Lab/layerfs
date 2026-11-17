@@ -1081,9 +1081,18 @@ fn a_sandbox_group_gives_its_workspaces_memory_and_pids() {
         }
     }
     if has.split_whitespace().any(|c| c == "pids") {
-        let total: u64 = read(&sandbox_group.join("pids.current")).trim().parse().unwrap();
-        let ours: u64 = read(&workspace.join("pids.current")).trim().parse().unwrap();
-        assert!(total > ours, "the Sandbox counts {total}, its Workspace {ours}");
+        let total: u64 = read(&sandbox_group.join("pids.current"))
+            .trim()
+            .parse()
+            .unwrap();
+        let ours: u64 = read(&workspace.join("pids.current"))
+            .trim()
+            .parse()
+            .unwrap();
+        assert!(
+            total > ours,
+            "the Sandbox counts {total}, its Workspace {ours}"
+        );
     }
     assert_eq!(
         cancel(&stop, Duration::from_secs(5)).unwrap(),
@@ -1116,7 +1125,10 @@ fn a_command_and_its_helper_are_created_in_their_groups() {
     // a command with no group of its own is in the Sandbox's leaf
     let (code, out, _) = run(&sandbox, &["/bin/cat", "/proc/self/cgroup"], &[]);
     assert_eq!(code, 0);
-    assert!(out.trim_end().ends_with(&format!("/layerfs/{id}/init")), "{out}");
+    assert!(
+        out.trim_end().ends_with(&format!("/layerfs/{id}/init")),
+        "{out}"
+    );
     // one process, the shell replaced by sleep: a shell that forks while
     // the cancel's one SIGTERM pass reads the group would leave its new
     // child to the kill after the grace

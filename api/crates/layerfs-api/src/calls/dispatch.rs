@@ -212,15 +212,17 @@ fn scoped(
     }
     let home = home(home_path)?;
     super::platform_policy::check(&home, name, &args)?;
-    let id = layerfs_control::migrate::open(&home)
-        .inspect_err(|refusal| layerfs_control::migrate::note_failure(&home, refusal))?
-        .id;
-    // `machine/native/` and `machine/docker/` exist from the first call;
-    // checked once per process for each home (R6)
-    #[cfg(feature = "machine")]
-    layerfs_machine::ensure_built_ins(&home, &id)?;
-    #[cfg(not(feature = "machine"))]
-    let _ = id;
+    if spec.opens {
+        let id = layerfs_control::migrate::open(&home)
+            .inspect_err(|refusal| layerfs_control::migrate::note_failure(&home, refusal))?
+            .id;
+        // `machine/native/` and `machine/docker/` exist from the first call;
+        // checked once per process for each home (R6)
+        #[cfg(feature = "machine")]
+        layerfs_machine::ensure_built_ins(&home, &id)?;
+        #[cfg(not(feature = "machine"))]
+        let _ = id;
+    }
     if let Some(scope) = scope {
         scope.owns(&home, name, &args)?;
     }

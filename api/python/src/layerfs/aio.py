@@ -112,6 +112,7 @@ def client(home=None, scope=None):
 
 
 _default = AsyncClient()
+home = _default.home
 project = _default.project
 branch = _default.branch
 commit = _default.commit

@@ -181,7 +181,6 @@ ${spec.options.map((opt) => option(spec, opt)).join("\n")}
     out.push(`export interface ${pascal(family)}Family {\n${members.join("\n")}\n}\n`);
   }
   out.push(`export interface Client {
-  readonly home: string | undefined;
   readonly scope: Scope | undefined;
 ${families.map((family) => `  readonly ${family}: ${pascal(family)}Family;`).join("\n")}
 }

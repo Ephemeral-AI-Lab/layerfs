@@ -47,7 +47,9 @@ pub fn doctor_target(home: &Path, request: &DoctorRequest) -> Outcome {
     let budget = Budget::new(timeout);
     let mut checks = Checks::new(kind, name);
     match &request.target {
-        DoctorTarget::Host => super::host_target::diagnose(home, &budget, &mut checks),
+        DoctorTarget::Host => {
+            super::host_target::diagnose(home, request.build, &budget, &mut checks)
+        }
         DoctorTarget::Machine(name) => {
             super::machine_target::diagnose(home, name, &budget, &mut checks)
         }

@@ -73,20 +73,60 @@ pub struct NameLimit {
 /// How the host reaches its tools.
 #[derive(Clone, Debug)]
 pub struct Tools {
-    /// The search path for provider CLIs (`limactl`, `ssh`, `tar`, ...).
+    /// The search path for provider CLIs (`limactl`, `ssh`, `tar`, ...),
+    /// and the `PATH` every provider command runs with.
     pub path: OsString,
     /// The Docker Engine socket the `docker` CLI is pointed at.
     pub docker_socket: PathBuf,
 }
 
+/// The folders searched after `PATH` on macOS, where an app started from the
+/// Dock or by launchd has a short `PATH` without Homebrew's or Docker
+/// Desktop's: so `docker`, `limactl` and `container` are found there too.
+const MACOS_FALLBACKS: [&str; 3] = [
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "/Applications/Docker.app/Contents/Resources/bin",
+];
+
 impl Tools {
-    /// This process's `PATH` and Docker's usual socket.
+    /// This process's `PATH` with the [`tool_fallbacks`] after it, and
+    /// Docker's default socket (the caller sets the one a machine uses).
     pub fn from_env() -> Self {
         Self {
-            path: std::env::var_os("PATH").unwrap_or_default(),
-            docker_socket: PathBuf::from("/var/run/docker.sock"),
+            path: search_path(
+                &std::env::var_os("PATH").unwrap_or_default(),
+                &tool_fallbacks(),
+            ),
+            docker_socket: PathBuf::from(crate::docker_socket::DEFAULT_DOCKER_SOCKET),
         }
     }
+}
+
+/// The folders searched for tools after `PATH`: `LAYERFS_TOOL_FALLBACKS`
+/// when it is set (a `PATH`-style list; empty for none), else on macOS
+/// Homebrew's, `/usr/local/bin` and Docker Desktop's, and none elsewhere.
+pub fn tool_fallbacks() -> Vec<PathBuf> {
+    match std::env::var_os("LAYERFS_TOOL_FALLBACKS") {
+        Some(list) => std::env::split_paths(&list)
+            .filter(|dir| !dir.as_os_str().is_empty())
+            .collect(),
+        None if cfg!(target_os = "macos") => MACOS_FALLBACKS.iter().map(PathBuf::from).collect(),
+        None => Vec::new(),
+    }
+}
+
+/// `path` with each of `fallbacks` it does not hold already after it.
+pub fn search_path(path: &OsString, fallbacks: &[PathBuf]) -> OsString {
+    let mut dirs: Vec<PathBuf> = std::env::split_paths(path)
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .collect();
+    for dir in fallbacks {
+        if !dirs.contains(dir) {
+            dirs.push(dir.clone());
+        }
+    }
+    std::env::join_paths(&dirs).unwrap_or_else(|_| path.clone())
 }
 
 /// A machine's worker as the host reaches it.

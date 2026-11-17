@@ -6,6 +6,12 @@ from os import PathLike
 from ._values import JSON, Content, Output, Progress, Result, Scope, Size
 from ._errors import LayerFSError as LayerFSError
 
+class AsyncHomeFamily:
+    async def init(self, *, log_tag: str | None = None) -> Result:
+        """create this home, or convert an older one; a current home is left as it is"""
+    async def get(self, *, log_tag: str | None = None) -> Result:
+        """the home's state, and the Linux bundle and daemon this build would use; changes nothing"""
+
 class AsyncProjectFamily:
     async def init(
         self,
@@ -468,6 +474,8 @@ class AsyncMachineFamily:
         """a machine's live state, free disk and tool version"""
     async def stats(self, machine: str, *, log_tag: str | None = None) -> Result:
         """a machine's observed processors, memory and data disk, its Stores' sizes and live Sandboxes"""
+    async def space(self, machine: str, *, log_tag: str | None = None) -> Result:
+        """where a machine's data disk goes: its Stores, Sandboxes, images and logs, and what is not LayerFS's"""
     async def files(
         self,
         machine: str,
@@ -656,6 +664,7 @@ class AsyncDoctorFamily:
         """remove one leftover `layerfs doctor` listed, under its guard"""
 
 class AsyncClient:
+    home: AsyncHomeFamily
     project: AsyncProjectFamily
     branch: AsyncBranchFamily
     commit: AsyncCommitFamily
@@ -671,6 +680,7 @@ class AsyncClient:
 
 def client(home: str | PathLike[str] | None = None, scope: Scope | Mapping[str, str | None] | None = None) -> AsyncClient: ...
 
+home: AsyncHomeFamily
 project: AsyncProjectFamily
 branch: AsyncBranchFamily
 commit: AsyncCommitFamily
@@ -683,4 +693,4 @@ backup: AsyncBackupFamily
 logs: AsyncLogsFamily
 doctor: AsyncDoctorFamily
 
-__all__ = ['AsyncClient', 'LayerFSError', 'client', 'project', 'branch', 'commit', 'file', 'sandbox', 'workspace', 'machine', 'store', 'backup', 'logs', 'doctor']
+__all__ = ['AsyncClient', 'LayerFSError', 'client', 'home', 'project', 'branch', 'commit', 'file', 'sandbox', 'workspace', 'machine', 'store', 'backup', 'logs', 'doctor']

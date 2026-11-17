@@ -131,6 +131,12 @@ pub(super) fn convert(home: &Path, file: &HomeFile) -> Result<HomeFile> {
 
 /// Finishes a conversion that stopped after its flip: the layout 2 paths it
 /// had not deleted yet. Cheap when there is none (one look at the marker).
+/// Whether a conversion to layout 3 started and has not finished: the next
+/// opening of the home finishes it ([`finish`]). Read only.
+pub(crate) fn pending(home: &Path) -> bool {
+    paths::log_dir(home).join(PENDING).exists()
+}
+
 pub(super) fn finish(home: &Path) -> Result<()> {
     let marker = paths::log_dir(home).join(PENDING);
     if !marker.exists() {

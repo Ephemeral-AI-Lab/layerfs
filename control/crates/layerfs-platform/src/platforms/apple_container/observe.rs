@@ -115,7 +115,7 @@ pub(super) fn host_check(spec: &Spec) -> Result<(), MachineError> {
 
 pub(crate) fn status(spec: &Spec) -> Result<Status, MachineError> {
     let version = tool::lookup(&spec.tools, CLI)
-        .and_then(|p| first_line(tool::command(&p, ["--version"]), false));
+        .and_then(|p| first_line(tool::command(&spec.tools, &p, ["--version"]), false));
     let kernel = observe(spec)?;
     let free = (kernel == State::Running)
         .then(|| worker::free_disk(spec, &guest(spec)))

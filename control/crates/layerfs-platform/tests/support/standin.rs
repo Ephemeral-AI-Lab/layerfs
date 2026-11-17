@@ -43,11 +43,13 @@ impl Scratch {
     }
 
     /// A stand-in `name` whose body runs after it logs `name args...`.
-    /// `$SCRATCH` is the scratch folder.
+    /// `$SCRATCH` is the scratch folder. A provider command runs with the
+    /// tools' search path as its `PATH` (only the stand-ins here), so the
+    /// body also finds the system's own commands (`sleep`, `cat`).
     pub fn tool(&self, name: &str, body: &str) {
         let path = self.bin().join(name);
         let script = format!(
-            "#!/bin/sh\nSCRATCH='{}'\necho \"{name} $*\" >> \"$SCRATCH/calls.log\"\n{body}\n",
+            "#!/bin/sh\nPATH=\"$PATH:/usr/bin:/bin\"\nSCRATCH='{}'\necho \"{name} $*\" >> \"$SCRATCH/calls.log\"\n{body}\n",
             self.dir.display()
         );
         fs::write(&path, script).unwrap();

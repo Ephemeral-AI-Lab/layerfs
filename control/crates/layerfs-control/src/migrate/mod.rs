@@ -12,3 +12,4 @@ mod volume;
 pub use import_env::import_env;
 pub use open::{note_failure, open, open_from};
 pub(crate) use v2::blockers as layout_2_blockers;
+pub(crate) use v2::pending as layout_3_pending;

@@ -92,8 +92,9 @@ def classes(entries, prefix):
 
 def client(entries, prefix):
     fields = "".join(f"    {name}: {prefix}{name.capitalize()}Family\n" for name in family_names(entries))
-    # the async client wraps a sync one and does not expose its home or scope
-    plain = "" if prefix else f"    home: str | None\n    scope: {OPEN_SCOPE}\n"
+    # the home is no field (`home` is a family); the async client wraps a
+    # sync one and does not expose its scope either
+    plain = "" if prefix else f"    scope: {OPEN_SCOPE}\n"
     return (
         f"class {prefix}Client:\n"
         f"{plain}"
