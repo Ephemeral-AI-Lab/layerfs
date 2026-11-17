@@ -275,11 +275,9 @@ impl HistoryCatalog for HistoryProvider {
     }
 
     fn remove_unreachable(&self, stack: LayerStackId, dry_run: bool) -> HistoryResult<u64> {
-        if dry_run {
-            self.read(|tx| super::kept::unreachable_count(tx, stack))
-        } else {
-            self.write(|tx| super::kept::remove_unreachable(tx, stack))
-        }
+        // The mark and the prune share one write transaction and one lane:
+        // reachability can never be older than the rows it is about to delete.
+        self.write(|tx| super::kept::remove_unreachable(tx, stack, dry_run))
     }
 
     fn gc_register(&self, intent: &GcIntent) -> HistoryResult<()> {

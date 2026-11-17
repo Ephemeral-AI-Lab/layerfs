@@ -242,9 +242,9 @@ fn roots(rows: &[Record]) -> HistoryResult<Vec<NodeId>> {
         .collect()
 }
 
-/// How many history rows of one Stack the last mark did not retain. It is
-/// zero before any mark, when the closure that decides reachability is not
-/// recorded yet.
+/// How many history rows of one Stack a mark did not retain. The caller runs
+/// the mark in the same write transaction, so an empty `kept_node` is a real
+/// empty closure, never the absence of a mark.
 pub(super) fn unreachable_count(tx: &Transaction<'_>, stack: LayerStackId) -> HistoryResult<u64> {
     let rows = tx.query(UNREACHABLE, params![stack.as_slice()])?;
     let count: i64 = cell(
@@ -255,14 +255,27 @@ pub(super) fn unreachable_count(tx: &Transaction<'_>, stack: LayerStackId) -> Hi
     u64::try_from(count).map_err(|_| HistoryError::Integrity("unreachable count"))
 }
 
-/// Removes one Stack's unreachable history rows (the rows the last mark did
-/// not retain), returning how many were removed. Reachability is the
-/// kept_node closure a mark wrote; the same set a rebuild copies and a
-/// compaction collects. It runs in one write transaction.
-pub(super) fn remove_unreachable(tx: &Transaction<'_>, stack: LayerStackId) -> HistoryResult<u64> {
+/// Removes one Stack's unreachable history rows, returning how many of that
+/// Stack's Commit, Layer, Branch and LayerStack rows it removed (the cleanup
+/// also drops the orphaned lineage and reach rows those deletes leave behind;
+/// they are not in the count).
+///
+/// The mark that decides reachability runs in this same write transaction,
+/// immediately before the deletes, so the closure is never older than the
+/// history it prunes: a Branch forked, a Commit written or a project
+/// initialized after an earlier mark is retained, not collected. A dry run
+/// runs the same fresh mark and reports the count without deleting, and an
+/// empty closure over a Store with no live project still counts that Store's
+/// rows as unreachable.
+pub(super) fn remove_unreachable(
+    tx: &Transaction<'_>,
+    stack: LayerStackId,
+    dry_run: bool,
+) -> HistoryResult<u64> {
+    mark(tx)?;
     let count = unreachable_count(tx, stack)?;
-    if count == 0 {
-        return Ok(0);
+    if dry_run || count == 0 {
+        return Ok(count);
     }
     for key in &UNREACHABLE_DELETES[..5] {
         tx.execute(key, params![stack.as_slice()])?;
