@@ -259,7 +259,7 @@ A failed check writes nothing; LayerFS never creates or grants roles
 | Error | When |
 | --- | --- |
 | `InvalidInput` | a sqlite Store (names `store push`); a URL holding a password |
-| `Unsupported` | the platform runs no PostgreSQL Sandboxes here; an ssh loopback URL; no `postgresql` engine; a worker bundle without `store.reach` |
+| `Unsupported` | the platform runs no PostgreSQL Sandboxes here; an ssh loopback URL; a worker bundle without `store.reach` |
 | `Unavailable` | the reference does not resolve; the machine is stopped; the server is not reached from it, or its database holds another Store or none (names the machine and host, never the URL) |
 | `Denied` | the server refused the login, or the role lacks a privilege (names the first and how many) |
 | `Conflict` | the Store was disconnected or reconnected elsewhere during the check |
@@ -383,7 +383,7 @@ recorded, or a call in this process is running on it,
 ### store.compact
 
 Reclaims one Store's dead bytes by rebuilding it from its live history
-(spec §3, §7 on SQLite, §8 on PostgreSQL with the `postgresql` feature): the
+(spec §3, §7 on SQLite, §8 on PostgreSQL): the
 only byte-reclaiming call, with no confirm, force or dry
 run and no automatic collection. It writes its operation intent before the
 first checkpoint, verifies the rebuilt Store, and installs it by rename; a
@@ -430,7 +430,7 @@ SQLite, whose payload walk runs inside the mark, reports no value.
 
 | Error | When | Source |
 | --- | --- | --- |
-| `NoSuchStore`, `Unsupported` | a missing Store; a sqlite Store on another machine, because compaction is local-only by the documented S6 deviation (#42 D5) and never takes the worker route; a non-private Store directory; an unsupported filesystem; or a PostgreSQL Store in a build without the `postgresql` feature | [`compact.rs`](../../../../control/crates/layerfs-store/src/compact.rs) |
+| `NoSuchStore`, `Unsupported` | a missing Store; a sqlite Store on another machine, because compaction is local-only by the documented S6 deviation (#42 D5) and never takes the worker route; a non-private Store directory; or an unsupported filesystem | [`compact.rs`](../../../../control/crates/layerfs-store/src/compact.rs) |
 | `MountsActive`, `Busy`, `Unresolved` | a mount, long-lived client or operation holds the Store, or a dead owner left an uncertain one | spec §5 |
 | `StaleStore`, `Conflict` | a connection bypassed admission, or the sealed identity changed | spec §7, §10 |
 | `Capacity` | a real allocation refusal during the rebuild; the old Store is kept | spec §7 |

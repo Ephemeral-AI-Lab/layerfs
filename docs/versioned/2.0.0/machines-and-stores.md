@@ -451,8 +451,8 @@ layerfs project init pg-main/load ./load
   `{kind: "sandbox", name}`, as for a push.
 - `project init` into a PostgreSQL Store runs in the caller's process,
   under the Store's lease.
-- PostgreSQL needs a build with the `postgresql` feature; without it these
-  calls are `Unsupported`.
+- PostgreSQL is built into every artifact, so no build flag selects it; the
+  Store's connection string decides whether it is used.
 - A PostgreSQL Store's Sandboxes run on the machines it is attached to.
   `store connect` attaches `native` with the Store's own connection and
   records its check (`machines.native.checked`) when the role may write;
@@ -487,8 +487,8 @@ layerfs project init pg-main/load ./load
   machine. `machine list` and `machine get` show a machine's attached
   PostgreSQL Stores as `postgresql`.
 - A Sandbox starts where the machine starts Sandboxes (the daemon and the
-  worker are built with `postgresql`). The caller resolves the password and
-  rewrites a loopback host for the machine (`docker`:
+  worker always build the PostgreSQL engine). The caller resolves the
+  password and rewrites a loopback host for the machine (`docker`:
   `host.docker.internal`, given to the worker container on a Linux Engine
   as its `host-gateway`); the URL travels only in that one request.
   `sandbox create` checks again, from the machine, that the server

@@ -1,6 +1,12 @@
 # LayerFS 2.0.0 artifact qualification (Linux x64)
 
 > **Status:** Current general guide; a dated evidence record, not a release receipt. Nothing here was published.
+>
+> **Update (#726).** The `postgresql` Cargo feature no longer exists: every
+> build now includes the PostgreSQL engine, and a Store's connection string
+> selects the kind. The `--features postgresql` rows and the "default builds
+> have no PostgreSQL engine" results below are the pre-#726 evidence they
+> measured; they stay as history, not as current behaviour.
 
 What was built and installed outside a source checkout on one host, what ran
 from the installed files, and what did not run. Issue #39 (parent #30). Raw

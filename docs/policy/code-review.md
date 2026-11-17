@@ -136,10 +136,10 @@ applies.
 R = required, C = required when the condition holds, — = not needed.
 "Report" means the exact command, its timeout and its outcome. List failures
 one by one, and list tests that already fail on the base against the base.
-The report-only `store-ext4` Store lane runs on PRs into any base,
-including `layerfs_v2_0_0` ([AGENTS.md](../../AGENTS.md) §4); no other lane
-does, so this evidence is otherwise the author's word plus whatever the
-reviewer runs again.
+The report-only `store-ext4` Store lane runs on PRs into `main` or
+`layerfs_v2_0_0` ([AGENTS.md](../../AGENTS.md) §4); no other lane runs on a PR
+into `layerfs_v2_0_0`, so this evidence is otherwise the author's word plus
+whatever the reviewer runs again.
 
 | Evidence | P0 | P1 | P2 | P3 |
 | --- | --- | --- | --- | --- |

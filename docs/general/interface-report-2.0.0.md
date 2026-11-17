@@ -1,6 +1,10 @@
 # LayerFS 2.0.0 interface report
 
 > **Status:** Current general guide; a dated evidence record, not a release receipt. Nothing here was published.
+>
+> **Update (#726).** PostgreSQL is built into every artifact now; only TLS
+> remains a build feature. The PostgreSQL/TLS gap in the table below and the
+> "default artifacts refuse it" note are the pre-#726 record they measured.
 
 What the 2.0.0 interface offers (the call table and its three front ends: Node,
 Python, the `layerfs` command), what changed from the earlier surfaces, what is

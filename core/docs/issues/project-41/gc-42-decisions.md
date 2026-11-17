@@ -205,16 +205,16 @@ frozen whole-lane exclusion; its measurements live under
   (§7 step 4)". §11 already states that the value equals `deadBytesBound` on
   the `none` path and on PostgreSQL, because neither runs a payload sweep there.
 - **Proposed:** the field and its wire key stay; the value is the bound on
-  **every** path and on both backends. §7 step 4 (frozen, unchanged) says the
-  mark already resolved every logical reference and delta base, so `visited` is
-  the whole retained object set and the build "copies exactly those, with no
-  second payload sweep"; §8 Phase M resolves the same closure before the swap.
-  No live object can be discovered after the mark, so no refinement exists to
-  report (`deadBytesRefined == deadBytesBound`, including a SQLite `rebuild`).
+  **every** path and on both backends. The mark resolves every logical reference
+  and delta base, so `visited` is the whole retained object set and the build
+  copies exactly those, with no second payload sweep; §8 Phase M resolves the
+  same closure before the swap. No live object can be discovered after the
+  mark, so no refinement exists to report (`deadBytesRefined ==
+  deadBytesBound`, including a SQLite `rebuild`).
 - **Reason:** §6.4's parenthetical and §11's "after the payload sweep" describe
-  a second pass over the live payload that the frozen §7 step 4 explicitly does
-  not run (the walk that refined the bound is the mark itself, so the two
-  numbers cannot differ). Keeping a separate field that promises a value the
+  a second pass over the live payload that the implementation does not run (the
+  walk that refined the bound is the mark itself, so the two numbers cannot
+  differ). Keeping a separate field that promises a value the
   implementation cannot produce is the drift this note exists to stop; keeping
   the field at its documented value keeps the §11 shape, the snake_case wire
   key (A7) and the `bound >= refined` invariant that clients read.
@@ -244,10 +244,11 @@ frozen whole-lane exclusion; its measurements live under
 
 This section keeps five records. D1, D3, D4 and D5 are deviations from the
 frozen text that the shipped code still carries. D2 is the build decision that
-replaced the whole-Store copy: the fresh-copy rebuild now follows S5's "fresh
-Store" sentence, and the earlier `VACUUM INTO` + delete + `VACUUM` build is
-historical. Each paragraph states the frozen sentence, the behavior and the
-decision. The code in
+replaced the whole-Store copy: the fresh-copy rebuild follows S5's "fresh
+Store" sentence but deviates from §7 step 4's payload sweep and rollback
+journal and from §11's peak-temp line, and the earlier `VACUUM INTO` + delete +
+`VACUUM` build is historical. Each paragraph states the frozen sentence, the
+behavior and the decision. The code in
 `engine/crates/layerfs-persistence/src/backend/sqlite/compact/` is the
 measured implementation of this branch.
 
@@ -267,12 +268,14 @@ measured implementation of this branch.
   the post-load check is the guard) or require enforcement during the copy.
   The current code is the tested, reproduced behavior.
 
-### D2. S5/§3/§7: the rebuild is the fresh-copy build; peak is old + the new Store
+### D2. S5/§3/§7: the rebuild is the fresh-copy build; peak is old + the new Store + the visited scratch
 
 - **Frozen:** S5 says "A rebuild copies only retained rows into a fresh Store";
-  §7 step 4 describes the payload sweep; §3 says a rebuild copies at least
-  nine live bytes per byte freed below the 10% threshold; §7's cost sentence
-  bounds peak disk as old Store + new Store + visited.
+  §7 step 4 describes the payload sweep and one rollback-journal transaction
+  with `foreign_keys=ON`; §3 says a rebuild copies at least nine live bytes per
+  byte freed below the 10% threshold; §7's cost sentence bounds peak disk as
+  old Store + the new Store + the rollback journal/WAL + the visited scratch
+  file.
 - **Implemented (superseding the earlier whole-Store copy):** the build
   creates `<store>.compact` with the sealed Store's schema, copies only the
   rows the mark retained (pack-as-unit), builds the secondary indexes and
@@ -280,7 +283,9 @@ measured implementation of this branch.
   stages no whole-Store copy, writes no prune journal and runs no `VACUUM`.
   The earlier `VACUUM INTO` + delete + `VACUUM` build wrote the retained bytes
   about four times over and needed a ~2.9× peak; §11's `peakTempBytes` for
-  SQLite is now the new Store plus the visited scratch.
+  SQLite is now the new Store plus the visited scratch, because the fresh path
+  stages no whole-Store copy and writes no rollback journal (a deviation from
+  the frozen §11 line, recorded here).
 - **Measured:** the validated prototype (`tools/bench/freshcopy/`, branch
   `val-freshcopy`) on a 10 GiB store-shaped fixture: fresh 32.5 s, 1.007× live
   written, peak 1.003× `(old + live)`; the old build 120.8 s, 4.03× written,
