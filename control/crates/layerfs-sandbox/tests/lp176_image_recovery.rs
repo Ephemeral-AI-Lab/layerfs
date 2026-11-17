@@ -14,7 +14,7 @@ use layerfs_machine::worker::{read_frame, read_frame_within, write_frame, MAX_HE
 use layerfs_sandbox::docker::Docker;
 use layerfs_sandbox::image_artifact::{self as cache, architecture, Sidecar, CHUNK};
 use layerfs_sandbox::image_load::{load, ImageLock, Loaded, Target};
-use layerfs_sandbox::image_tar::{Filtered, TarReport, SPARSE_MAX};
+use layerfs_sandbox::image_tar::{Filtered, TarReport, EXTENDED_TOTAL_MAX, SPARSE_MAX};
 use layerfs_sandbox::images;
 use layerfs_sandbox_backend::{rootfs, Image};
 use layerfs_store::place::{self, Executor};
@@ -1699,8 +1699,10 @@ fn r2_pax_size_overflow_plain_bad_size_and_order_independent_chunk_cap() {
         .finish();
     assert_invalid("sparse PAX size=bad", &sparse_bad_size, "invalid pax size");
 
-    // 3. R2-M2: Order-independent PAX chunk count cap aborts before trailing invalid descriptors.
-    let map_with_trailing_bad = "0,1,4096,1,8192,1,bad,bad";
+    // 3. R2-M2 + R3: Order-independent PAX chunk count cap aborts in Stage 2 before
+    //    `validate_sparse_chunks` would hit `"sparse chunk starts past realsize"`, while
+    //    Stage-1 syntax errors (like `,bad,bad`) abort even earlier while scanning `x`.
+    let map_with_trailing_past_realsize = "0,1,4096,1,8192,1,32768,1";
     let chunk_err = "PAX sparse chunk count exceeds entry size or limit";
 
     // 3a. PAX `size` BEFORE `GNU.sparse.map`.
@@ -1708,7 +1710,10 @@ fn r2_pax_size_overflow_plain_bad_size_and_order_independent_chunk_cap() {
     size_before_map.extend_from_slice(&pax_record("size", "2"));
     size_before_map.extend_from_slice(&pax_record("GNU.sparse.minor", "1"));
     size_before_map.extend_from_slice(&pax_record("GNU.sparse.realsize", "16384"));
-    size_before_map.extend_from_slice(&pax_record("GNU.sparse.map", map_with_trailing_bad));
+    size_before_map.extend_from_slice(&pax_record(
+        "GNU.sparse.map",
+        map_with_trailing_past_realsize,
+    ));
     let tar_before = Tar::new()
         .raw("PaxHeaders/before", b'x', 0o644, &size_before_map)
         .file("m1.bin", 0o644, b"AB")
@@ -1719,7 +1724,10 @@ fn r2_pax_size_overflow_plain_bad_size_and_order_independent_chunk_cap() {
     let mut size_after_map = pax_record("GNU.sparse.major", "0");
     size_after_map.extend_from_slice(&pax_record("GNU.sparse.minor", "1"));
     size_after_map.extend_from_slice(&pax_record("GNU.sparse.realsize", "16384"));
-    size_after_map.extend_from_slice(&pax_record("GNU.sparse.map", map_with_trailing_bad));
+    size_after_map.extend_from_slice(&pax_record(
+        "GNU.sparse.map",
+        map_with_trailing_past_realsize,
+    ));
     size_after_map.extend_from_slice(&pax_record("size", "2"));
     let tar_after = Tar::new()
         .raw("PaxHeaders/after", b'x', 0o644, &size_after_map)
@@ -1727,33 +1735,60 @@ fn r2_pax_size_overflow_plain_bad_size_and_order_independent_chunk_cap() {
         .finish();
     assert_invalid("PAX size after map", &tar_after, chunk_err);
 
-    // 3c. No PAX `size` (falls back to ustar header size = 2) still aborts before `,bad,bad`.
+    // 3c. No PAX `size` (falls back to ustar header size = 2) still aborts before
+    //     `validate_sparse_chunks` sees `(32768, 1)` past `realsize=16384`.
     let mut no_pax_size = pax_record("GNU.sparse.major", "0");
     no_pax_size.extend_from_slice(&pax_record("GNU.sparse.minor", "1"));
     no_pax_size.extend_from_slice(&pax_record("GNU.sparse.realsize", "16384"));
-    no_pax_size.extend_from_slice(&pax_record("GNU.sparse.map", map_with_trailing_bad));
+    no_pax_size.extend_from_slice(&pax_record(
+        "GNU.sparse.map",
+        map_with_trailing_past_realsize,
+    ));
     let tar_no_pax_size = Tar::new()
         .raw("PaxHeaders/nosize", b'x', 0o644, &no_pax_size)
         .file("m3.bin", 0o644, b"AB")
         .finish();
     assert_invalid("PAX no size (ustar fallback)", &tar_no_pax_size, chunk_err);
 
-    // 3d. PAX 0.0 offset/numbytes pairs with `size` AFTER pairs and trailing invalid offset.
+    // 3d. PAX 0.0 offset/numbytes pairs with `size` AFTER pairs and trailing chunk past realsize.
     let mut pax00_size_after = pax_record("GNU.sparse.major", "0");
     pax00_size_after.extend_from_slice(&pax_record("GNU.sparse.minor", "0"));
     pax00_size_after.extend_from_slice(&pax_record("GNU.sparse.realsize", "16384"));
-    for i in 0..3u64 {
-        pax00_size_after
-            .extend_from_slice(&pax_record("GNU.sparse.offset", &(i * 4096).to_string()));
+    for off in [0u64, 4096, 8192, 32768] {
+        pax00_size_after.extend_from_slice(&pax_record("GNU.sparse.offset", &off.to_string()));
         pax00_size_after.extend_from_slice(&pax_record("GNU.sparse.numbytes", "1"));
     }
-    pax00_size_after.extend_from_slice(&pax_record("GNU.sparse.offset", "bad"));
     pax00_size_after.extend_from_slice(&pax_record("size", "2"));
     let tar_pax00 = Tar::new()
         .raw("PaxHeaders/pax00", b'x', 0o644, &pax00_size_after)
         .file("m4.bin", 0o644, b"AB")
         .finish();
     assert_invalid("PAX 0.0 size after chunks", &tar_pax00, chunk_err);
+
+    // 3e. Stage-1 syntax/numeric validation rejects malformed sparse map/offset immediately.
+    let mut stage1_bad_map = pax_record("GNU.sparse.major", "0");
+    stage1_bad_map.extend_from_slice(&pax_record("GNU.sparse.map", "0,1,4096,1,8192,1,bad,bad"));
+    let tar_stage1_map = Tar::new()
+        .raw("PaxHeaders/s1-map", b'x', 0o644, &stage1_bad_map)
+        .file("m5.bin", 0o644, b"AB")
+        .finish();
+    assert_invalid(
+        "Stage 1 bad sparse map syntax",
+        &tar_stage1_map,
+        "invalid sparse map offset",
+    );
+
+    let mut stage1_bad_off = pax_record("GNU.sparse.major", "0");
+    stage1_bad_off.extend_from_slice(&pax_record("GNU.sparse.offset", "bad"));
+    let tar_stage1_off = Tar::new()
+        .raw("PaxHeaders/s1-off", b'x', 0o644, &stage1_bad_off)
+        .file("m6.bin", 0o644, b"AB")
+        .finish();
+    assert_invalid(
+        "Stage 1 bad sparse offset",
+        &tar_stage1_off,
+        "invalid pax GNU.sparse.offset",
+    );
 }
 
 #[test]
@@ -1889,6 +1924,413 @@ esac
     assert_eq!(
         writes, 0,
         "capacity check must reject expanded frame before writing it"
+    );
+}
+
+#[test]
+fn r3_bad_sparse_eof_cross_header_caps_and_xattr_headroom() {
+    assert_eq!(EXTENDED_TOTAL_MAX, 16 << 20);
+    fn make_raw_header(name: &str, flag: u8, size: u64) -> [u8; 512] {
+        let mut hdr = [0u8; 512];
+        hdr[..name.len()].copy_from_slice(name.as_bytes());
+        let oct = |f: &mut [u8], v: u64| {
+            let w = f.len() - 1;
+            let t = format!("{v:0w$o}\0");
+            f.copy_from_slice(&t.as_bytes()[..f.len()]);
+        };
+        oct(&mut hdr[100..108], 0o644);
+        oct(&mut hdr[108..116], 0);
+        oct(&mut hdr[116..124], 0);
+        oct(&mut hdr[124..136], size);
+        oct(&mut hdr[136..148], 0);
+        hdr[156] = flag;
+        hdr[257..263].copy_from_slice(b"ustar\0");
+        hdr[263..265].copy_from_slice(b"00");
+        hdr[148..156].fill(b' ');
+        let sum: u64 = hdr.iter().map(|b| u64::from(*b)).sum();
+        hdr[148..156].copy_from_slice(format!("{sum:06o}\0 ").as_bytes());
+        hdr
+    }
+
+    fn append_raw_entry(buf: &mut Vec<u8>, name: &str, flag: u8, body: &[u8]) {
+        buf.extend_from_slice(&make_raw_header(name, flag, body.len() as u64));
+        buf.extend_from_slice(body);
+        let pad = (512 - body.len() % 512) % 512;
+        buf.resize(buf.len() + pad, 0);
+    }
+
+    let assert_invalid = |label: &str, input: Vec<u8>, needle: &str| {
+        let err = filtered_bytes(&input).expect_err(label);
+        assert_eq!(
+            err.kind(),
+            std::io::ErrorKind::InvalidData,
+            "{label}: got {err:?}"
+        );
+        assert!(
+            err.to_string().contains(needle),
+            "{label}: expected `{needle}` in `{err}`"
+        );
+    };
+
+    // 1. Bad sparse PAX metadata followed by zero end blocks OR clean EOF must fail immediately.
+    let mut bad_after_sparse = pax_record("GNU.sparse.major", "0");
+    bad_after_sparse.extend_from_slice(b"999 bad=record\n");
+    let mut bad_sparse_size = pax_record("GNU.sparse.major", "0");
+    bad_sparse_size.extend_from_slice(&pax_record("size", "bad"));
+
+    let bad_sparse_cases: [(&str, Vec<u8>, &str); 8] = [
+        (
+            "bad major",
+            pax_record("GNU.sparse.major", "bad"),
+            "invalid pax GNU.sparse.major",
+        ),
+        (
+            "bad realsize",
+            pax_record("GNU.sparse.realsize", "bad"),
+            "invalid pax GNU.sparse.realsize",
+        ),
+        (
+            "bad map item",
+            pax_record("GNU.sparse.map", "0,1,bad,1"),
+            "invalid sparse map offset",
+        ),
+        (
+            "odd map item",
+            pax_record("GNU.sparse.map", "0,1,4096"),
+            "odd item count in GNU.sparse.map",
+        ),
+        (
+            "unpaired offset",
+            pax_record("GNU.sparse.offset", "0"),
+            "GNU.sparse.offset without numbytes",
+        ),
+        (
+            "unpaired numbytes",
+            pax_record("GNU.sparse.numbytes", "4"),
+            "GNU.sparse.numbytes without offset",
+        ),
+        (
+            "malformed after sparse",
+            bad_after_sparse,
+            "malformed PAX record after GNU.sparse.*",
+        ),
+        (
+            "bad pax size with sparse",
+            bad_sparse_size,
+            "invalid pax size",
+        ),
+    ];
+
+    for (label, body, needle) in bad_sparse_cases {
+        let mut with_end_blocks = Vec::new();
+        append_raw_entry(&mut with_end_blocks, "PaxHeaders/bad", b'x', &body);
+        with_end_blocks.resize(with_end_blocks.len() + 1024, 0);
+        assert_invalid(&format!("{label} + zero blocks"), with_end_blocks, needle);
+
+        let mut clean_eof = Vec::new();
+        append_raw_entry(&mut clean_eof, "PaxHeaders/bad", b'x', &body);
+        assert_invalid(&format!("{label} + clean EOF"), clean_eof, needle);
+    }
+
+    // Plain trailing PAX headers followed by end blocks or clean EOF stay tolerated (a5616c8c7 parity).
+    for (label, body) in [
+        ("plain mtime", pax_record("mtime", "1700000000")),
+        ("plain bad size", pax_record("size", "bad")),
+    ] {
+        let mut with_end_blocks = Vec::new();
+        append_raw_entry(&mut with_end_blocks, "PaxHeaders/plain", b'x', &body);
+        with_end_blocks.resize(with_end_blocks.len() + 1024, 0);
+        assert_eq!(
+            filtered_bytes(&with_end_blocks).expect(label),
+            vec![0u8; 1024],
+            "{label} + zero blocks"
+        );
+
+        let mut clean_eof = Vec::new();
+        append_raw_entry(&mut clean_eof, "PaxHeaders/plain", b'x', &body);
+        assert_eq!(
+            filtered_bytes(&clean_eof).expect(label),
+            vec![0u8; 1024],
+            "{label} + clean EOF"
+        );
+    }
+
+    // 2. On-demand Reader: consecutive `x` headers exceeding SPARSE_CHUNKS_MAX (1,048,576)
+    //    must fail before reading a trailing malformed header (distinct error).
+    enum StreamKind {
+        SparseChunks,
+        ExtendedTotal,
+        BadSparseThenMore,
+    }
+
+    struct OnDemandFloodReader {
+        kind: StreamKind,
+        index: usize,
+        cur: Vec<u8>,
+        pos: usize,
+        headers_emitted: usize,
+        illegal_tail_read: bool,
+    }
+
+    impl OnDemandFloodReader {
+        fn new(kind: StreamKind) -> Self {
+            Self {
+                kind,
+                index: 0,
+                cur: Vec::new(),
+                pos: 0,
+                headers_emitted: 0,
+                illegal_tail_read: false,
+            }
+        }
+
+        fn refill(&mut self) -> bool {
+            use std::cmp::Ordering;
+            self.cur.clear();
+            self.pos = 0;
+            match self.kind {
+                StreamKind::SparseChunks => {
+                    // 17 headers * 65,536 chunks = 1,114,112 > SPARSE_CHUNKS_MAX (1,048,576),
+                    // with ~600 KiB per header (< 1 MiB) and ~10.3 MiB total (< 16 MiB).
+                    match self.index.cmp(&17) {
+                        Ordering::Less => {
+                            let mut map = String::new();
+                            let base = (self.index as u64) * 65_536;
+                            for j in 0..65_536u64 {
+                                if j > 0 {
+                                    map.push(',');
+                                }
+                                use std::fmt::Write as _;
+                                let _ = write!(map, "{},1", (base + j) * 2);
+                            }
+                            let mut body = pax_record("GNU.sparse.major", "0");
+                            body.extend_from_slice(&pax_record("GNU.sparse.minor", "1"));
+                            body.extend_from_slice(&pax_record("GNU.sparse.map", &map));
+                            append_raw_entry(&mut self.cur, "PaxHeaders/flood", b'x', &body);
+                            self.index += 1;
+                            self.headers_emitted += 1;
+                            true
+                        }
+                        Ordering::Equal => {
+                            self.illegal_tail_read = true;
+                            let mut bad = [0u8; 512];
+                            bad[..8].copy_from_slice(b"tail.bin");
+                            bad[124..136].copy_from_slice(b"zzzzzzzzzzz\0");
+                            bad[156] = b'0';
+                            self.cur.extend_from_slice(&bad);
+                            self.index += 1;
+                            true
+                        }
+                        Ordering::Greater => false,
+                    }
+                }
+                StreamKind::ExtendedTotal => {
+                    // 35 headers * ~512.5 KiB > 16 MiB extended header total limit.
+                    match self.index.cmp(&35) {
+                        Ordering::Less => {
+                            let blob = "x".repeat(512 * 1024);
+                            let body = pax_record("SCHILY.xattr.user.pad", &blob);
+                            append_raw_entry(&mut self.cur, "PaxHeaders/xattr-flood", b'x', &body);
+                            self.index += 1;
+                            self.headers_emitted += 1;
+                            true
+                        }
+                        Ordering::Equal => {
+                            self.illegal_tail_read = true;
+                            let mut bad = [0u8; 512];
+                            bad[..8].copy_from_slice(b"tail.bin");
+                            bad[124..136].copy_from_slice(b"zzzzzzzzzzz\0");
+                            bad[156] = b'0';
+                            self.cur.extend_from_slice(&bad);
+                            self.index += 1;
+                            true
+                        }
+                        Ordering::Greater => false,
+                    }
+                }
+                StreamKind::BadSparseThenMore => {
+                    if self.index == 0 {
+                        let body = pax_record("GNU.sparse.major", "bad");
+                        append_raw_entry(&mut self.cur, "PaxHeaders/bad", b'x', &body);
+                        self.index += 1;
+                        self.headers_emitted += 1;
+                        true
+                    } else if self.index < 10 {
+                        self.illegal_tail_read = true;
+                        let body = pax_record("mtime", "1700000000");
+                        append_raw_entry(&mut self.cur, "PaxHeaders/next", b'x', &body);
+                        self.index += 1;
+                        self.headers_emitted += 1;
+                        true
+                    } else {
+                        false
+                    }
+                }
+            }
+        }
+    }
+
+    impl Read for OnDemandFloodReader {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.pos >= self.cur.len() && !self.refill() {
+                return Ok(0);
+            }
+            let n = (self.cur.len() - self.pos).min(buf.len());
+            buf[..n].copy_from_slice(&self.cur[self.pos..self.pos + n]);
+            self.pos += n;
+            Ok(n)
+        }
+    }
+
+    let mut chunk_flood_reader = OnDemandFloodReader::new(StreamKind::SparseChunks);
+    let mut chunk_flood_filtered = Filtered::new(&mut chunk_flood_reader);
+    let err = chunk_flood_filtered
+        .read_to_end(&mut Vec::new())
+        .expect_err("consecutive x headers exceeding SPARSE_CHUNKS_MAX must fail");
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    assert!(
+        err.to_string()
+            .contains("PAX sparse chunk count exceeds entry size or limit"),
+        "expected hard chunk cap error, got: {err}"
+    );
+    assert!(
+        !chunk_flood_reader.illegal_tail_read,
+        "must hit SPARSE_CHUNKS_MAX before reading trailing illegal header"
+    );
+    assert_eq!(chunk_flood_reader.headers_emitted, 17);
+
+    let mut bad_first_reader = OnDemandFloodReader::new(StreamKind::BadSparseThenMore);
+    let mut bad_first_filtered = Filtered::new(&mut bad_first_reader);
+    let err = bad_first_filtered
+        .read_to_end(&mut Vec::new())
+        .expect_err("bad sparse x header must abort before buffering trailing headers");
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    assert!(err.to_string().contains("invalid pax GNU.sparse.major"));
+    assert!(
+        !bad_first_reader.illegal_tail_read,
+        "must reject on first bad sparse x header without reading second header"
+    );
+
+    // 3. Per-entry extended header total byte cap (16 MiB) catches both multi-header xattr floods
+    //    and zero-length empty `x` header floods without unbounded buffering.
+    let mut ext_flood_reader = OnDemandFloodReader::new(StreamKind::ExtendedTotal);
+    let mut ext_flood_filtered = Filtered::new(&mut ext_flood_reader);
+    let err = ext_flood_filtered
+        .read_to_end(&mut Vec::new())
+        .expect_err("extended headers exceeding 16 MiB must fail");
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    assert!(
+        err.to_string().contains("extended headers exceed"),
+        "unexpected error for extended total cap: {err}"
+    );
+    assert!(
+        !ext_flood_reader.illegal_tail_read,
+        "must hit extended total cap before reading trailing illegal header"
+    );
+
+    struct EmptyHeaderFlood {
+        emitted: usize,
+        offset: usize,
+    }
+    impl Read for EmptyHeaderFlood {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            // Each zero-length `x` header adds 512 bytes to total extended budget ->
+            // > 32,768 headers exceeds 16 MiB.
+            let hdr = make_raw_header("PaxHeaders/empty", b'x', 0);
+            let mut n = 0;
+            while n < buf.len() && self.emitted < 40_000 {
+                let take = (512 - self.offset).min(buf.len() - n);
+                buf[n..n + take].copy_from_slice(&hdr[self.offset..self.offset + take]);
+                n += take;
+                self.offset += take;
+                if self.offset == 512 {
+                    self.offset = 0;
+                    self.emitted += 1;
+                }
+            }
+            Ok(n)
+        }
+    }
+    let mut empty_flood = EmptyHeaderFlood {
+        emitted: 0,
+        offset: 0,
+    };
+    let err = Filtered::new(&mut empty_flood)
+        .read_to_end(&mut Vec::new())
+        .expect_err("empty extended header flood must hit total cap");
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    assert!(err.to_string().contains("extended headers exceed"));
+    assert!(
+        empty_flood.emitted <= 32_769,
+        "emitted {} empty headers",
+        empty_flood.emitted
+    );
+
+    // 4. Realistic container entry with long path/linkpath and heavy SCHILY.xattr.* set passes
+    //    both filtering and rootfs::ensure_flat without being rejected.
+    let long_file_path = format!(
+        "var/lib/containers/storage/overlay/{}/{}/diff/usr/libexec/app",
+        "p".repeat(130),
+        "q".repeat(130)
+    );
+    let long_link_path = format!(
+        "var/lib/containers/storage/overlay/{}/{}/diff/usr/bin/app-link",
+        "l".repeat(130),
+        "m".repeat(130)
+    );
+    let long_link_target = format!("../libexec/{}/{}/app", "t".repeat(120), "u".repeat(120));
+    let mut xattrs_a = pax_record("path", &long_file_path);
+    xattrs_a.extend_from_slice(&pax_record("mtime", "1700000123.5"));
+    xattrs_a.extend_from_slice(&pax_record(
+        "SCHILY.xattr.security.capability",
+        "cap_net_bind",
+    ));
+    xattrs_a.extend_from_slice(&pax_record(
+        "SCHILY.xattr.security.selinux",
+        "system_u:object_r:container_file_t:s0:c123,c456",
+    ));
+    let mut xattrs_b = Vec::new();
+    let xattr_val = "v".repeat(600);
+    for i in 0..200 {
+        xattrs_b.extend_from_slice(&pax_record(
+            &format!("SCHILY.xattr.user.attr_{i:03}"),
+            &xattr_val,
+        ));
+    }
+    assert!(xattrs_a.len() + xattrs_b.len() > 120_000);
+    let g_hdr = pax_record("comment", "oci-export");
+    let mut x_sym = pax_record("path", &long_link_path);
+    x_sym.extend_from_slice(&pax_record("linkpath", &long_link_target));
+
+    let realistic_tar = Tar::new()
+        .raw("PaxHeaders/global", b'g', 0o644, &g_hdr)
+        .raw("PaxHeaders/x1", b'x', 0o644, &xattrs_a)
+        .raw("PaxHeaders/x2", b'x', 0o644, &xattrs_b)
+        .file("placeholder-bin", 0o755, b"ELF-mock-binary\n")
+        .raw("PaxHeaders/sym", b'x', 0o644, &x_sym)
+        .symlink("placeholder-sym", "target")
+        .finish();
+    let filtered_realistic = filtered_bytes(&realistic_tar).expect("realistic xattr entry allowed");
+    assert_eq!(filtered_realistic, realistic_tar);
+
+    let scratch = Scratch::new("lp176-r3-xattr-headroom");
+    let tar_path = scratch.base.join("realistic.tar");
+    fs::write(&tar_path, &filtered_realistic).unwrap();
+    let (root, _) = rootfs::ensure_flat(
+        &tar_path,
+        &Image::parse(&format!("sha256:{}", "e".repeat(64))).unwrap(),
+        &scratch.cache,
+    )
+    .unwrap();
+    assert_eq!(
+        fs::read(root.directory().join(&long_file_path)).unwrap(),
+        b"ELF-mock-binary\n"
+    );
+    assert_eq!(
+        fs::read_link(root.directory().join(&long_link_path))
+            .unwrap()
+            .to_string_lossy(),
+        long_link_target
     );
 }
 

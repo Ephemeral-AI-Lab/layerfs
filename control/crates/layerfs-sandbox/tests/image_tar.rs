@@ -189,3 +189,143 @@ fn pax_time_stripping_handles_empty_malformed_xattr_and_all_time_blocks_byte_for
         .finish();
     assert_eq!(filtered(&input_mixed), expected_mixed);
 }
+
+#[test]
+fn consecutive_pax_x_interleaved_g_long_paths_and_dir_times_match_baseline() {
+    let long_gnu_name = format!("gnu/long/{}/dir/", "a".repeat(120));
+    let long_dir_1 = format!("var/tmp/{}/", "b".repeat(120));
+    let long_dir_2 = format!("opt/data/{}/", "c".repeat(135));
+    let long_sym_path = format!("usr/local/share/{}/link", "d".repeat(125));
+    let long_sym_target = format!("/opt/targets/{}/real-bin", "e".repeat(130));
+    let long_keep_file = format!("srv/app/{}/keep.bin", "f".repeat(120));
+    let long_hl_path = format!("srv/app/{}/keep.hardlink", "h".repeat(120));
+
+    let g1 = pax_record("comment", "global-1");
+    let g2 = pax_record("hdrcharset", "ISO-IR 10646 2000");
+
+    let mut x_dir_1 = pax_record("path", &long_dir_1);
+    x_dir_1.extend_from_slice(&pax_record("mtime", "1700000100.5"));
+    x_dir_1.extend_from_slice(&pax_record("atime", "1700000200.5"));
+    x_dir_1.extend_from_slice(&pax_record("SCHILY.xattr.user.k1", "v1"));
+
+    let mut x_dir_1_expected = pax_record("path", &long_dir_1);
+    x_dir_1_expected.extend_from_slice(&pax_record("SCHILY.xattr.user.k1", "v1"));
+
+    let mut x_dir_2 = pax_record("path", &long_dir_2);
+    x_dir_2.extend_from_slice(&pax_record("ctime", "1700000300.5"));
+    x_dir_2.extend_from_slice(&pax_record(
+        "SCHILY.xattr.security.capability",
+        "cap_net_admin",
+    ));
+
+    let mut x_dir_2_expected = pax_record("path", &long_dir_2);
+    x_dir_2_expected.extend_from_slice(&pax_record(
+        "SCHILY.xattr.security.capability",
+        "cap_net_admin",
+    ));
+
+    let mut x_dir_only_times = pax_record("mtime", "1700000400.1");
+    x_dir_only_times.extend_from_slice(&pax_record("ctime", "1700000500.2"));
+
+    let mut x_sym = pax_record("path", &long_sym_path);
+    x_sym.extend_from_slice(&pax_record("linkpath", &long_sym_target));
+    x_sym.extend_from_slice(&pax_record("mtime", "1700000600.25"));
+
+    let mut x_hl = pax_record("path", &long_hl_path);
+    x_hl.extend_from_slice(&pax_record("linkpath", &long_keep_file));
+
+    let input = Tar::new()
+        .at(1_700_000_111)
+        .raw("PaxHeaders/global-1", b'g', 0o644, &g1)
+        .raw("././@LongLink", b'L', 0o644, long_gnu_name.as_bytes())
+        .raw("PaxHeaders/dir-1", b'x', 0o644, &x_dir_1)
+        .raw("PaxHeaders/global-2", b'g', 0o644, &g2)
+        .raw("PaxHeaders/dir-2", b'x', 0o644, &x_dir_2)
+        .raw("PaxHeaders/dir-3", b'x', 0o644, &x_dir_only_times)
+        .directory("placeholder-dir", 0o755)
+        .at(1_700_000_222)
+        .raw(
+            "PaxHeaders/override-keep-1",
+            b'x',
+            0o644,
+            &pax_record("path", "etc/hosts"),
+        )
+        .raw(
+            "PaxHeaders/override-keep-2",
+            b'x',
+            0o644,
+            &pax_record("path", "etc/hosts.allow"),
+        )
+        .file("placeholder-keep", 0o644, b"allow-me\n")
+        .raw(
+            "PaxHeaders/override-drop-1",
+            b'x',
+            0o644,
+            &pax_record("path", "usr/keep.txt"),
+        )
+        .raw(
+            "PaxHeaders/override-drop-2",
+            b'x',
+            0o644,
+            &pax_record("path", "./etc/hosts"),
+        )
+        .file("placeholder-drop", 0o644, b"dropped\n")
+        .raw("PaxHeaders/global-3", b'g', 0o644, &g1)
+        .raw("././@LongLink", b'K', 0o644, b"ignored-gnu-link-target\0")
+        .raw("PaxHeaders/sym", b'x', 0o644, &x_sym)
+        .symlink("placeholder-sym", "placeholder-target")
+        .raw(
+            "PaxHeaders/keep-file",
+            b'x',
+            0o644,
+            &pax_record("path", &long_keep_file),
+        )
+        .file("placeholder-file", 0o644, b"payload\n")
+        .raw("PaxHeaders/global-4", b'g', 0o644, &g2)
+        .raw("PaxHeaders/hl", b'x', 0o644, &x_hl)
+        .hard_link("placeholder-hl", "placeholder-hl-target")
+        .finish();
+
+    let expected = Tar::new()
+        .at(1_700_000_111)
+        .raw("PaxHeaders/global-1", b'g', 0o644, &g1)
+        .at(0)
+        .raw("././@LongLink", b'L', 0o644, long_gnu_name.as_bytes())
+        .raw("PaxHeaders/dir-1", b'x', 0o644, &x_dir_1_expected)
+        .at(1_700_000_111)
+        .raw("PaxHeaders/global-2", b'g', 0o644, &g2)
+        .at(0)
+        .raw("PaxHeaders/dir-2", b'x', 0o644, &x_dir_2_expected)
+        .directory("placeholder-dir", 0o755)
+        .at(1_700_000_222)
+        .raw(
+            "PaxHeaders/override-keep-1",
+            b'x',
+            0o644,
+            &pax_record("path", "etc/hosts"),
+        )
+        .raw(
+            "PaxHeaders/override-keep-2",
+            b'x',
+            0o644,
+            &pax_record("path", "etc/hosts.allow"),
+        )
+        .file("placeholder-keep", 0o644, b"allow-me\n")
+        .raw("PaxHeaders/global-3", b'g', 0o644, &g1)
+        .raw("././@LongLink", b'K', 0o644, b"ignored-gnu-link-target\0")
+        .raw("PaxHeaders/sym", b'x', 0o644, &x_sym)
+        .symlink("placeholder-sym", "placeholder-target")
+        .raw(
+            "PaxHeaders/keep-file",
+            b'x',
+            0o644,
+            &pax_record("path", &long_keep_file),
+        )
+        .file("placeholder-file", 0o644, b"payload\n")
+        .raw("PaxHeaders/global-4", b'g', 0o644, &g2)
+        .raw("PaxHeaders/hl", b'x', 0o644, &x_hl)
+        .hard_link("placeholder-hl", "placeholder-hl-target")
+        .finish();
+
+    assert_eq!(filtered(&input), expected);
+}
