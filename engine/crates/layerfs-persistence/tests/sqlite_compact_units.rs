@@ -184,3 +184,80 @@ fn the_attached_source_gets_a_large_mmap_window() {
         "the applied window reads back"
     );
 }
+
+/// The rebuild sizes the fresh file for the retained payload before the bulk
+/// load (macOS; other platforms leave it to grow) and cuts the closed file
+/// back to the pages its header counts, so a load that writes less than it
+/// was sized for installs no page past the database's own end.
+#[test]
+fn a_sized_fresh_file_loads_and_is_cut_back_to_its_page_count() {
+    use layerfs_persistence::internals::{reserve, trim};
+    use rusqlite::{params, Connection};
+
+    const PAGE: u64 = 4096;
+    let temp = support::Temp::new("compact-space");
+    let staged = temp.join("staged.sqlite");
+    let connection = Connection::open(&staged).unwrap();
+    connection
+        .execute_batch(
+            "PRAGMA page_size=4096; PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; \
+             CREATE TABLE pack(pack_id INTEGER PRIMARY KEY, body BLOB NOT NULL);",
+        )
+        .unwrap();
+    let schema_only = std::fs::metadata(&staged).unwrap().len();
+
+    // Sized for 1 MiB and a part of a page; the load below writes far less.
+    reserve(&staged, 1024 * 1024 + 100, PAGE).unwrap();
+    let sized = std::fs::metadata(&staged).unwrap().len();
+    if cfg!(target_os = "macos") {
+        assert_eq!(sized, 1024 * 1024, "whole pages only");
+    } else {
+        assert_eq!(sized, schema_only, "only macOS sizes the file");
+    }
+    // A size the file already has is never cut.
+    reserve(&staged, PAGE, PAGE).unwrap();
+    assert_eq!(std::fs::metadata(&staged).unwrap().len(), sized);
+
+    connection
+        .execute_batch(
+            "BEGIN IMMEDIATE; \
+             INSERT INTO pack VALUES (1, zeroblob(100000)); \
+             INSERT INTO pack VALUES (2, randomblob(200000)); \
+             COMMIT;",
+        )
+        .unwrap();
+    let pages: i64 = connection
+        .query_row("PRAGMA page_count", params![], |row| row.get(0))
+        .unwrap();
+    let pages = u64::try_from(pages).unwrap();
+    connection.close().unwrap();
+    assert!(
+        pages * PAGE < 1024 * 1024,
+        "the load is smaller than its size"
+    );
+
+    assert_eq!(trim(&staged, pages, PAGE).unwrap(), pages * PAGE);
+    assert_eq!(std::fs::metadata(&staged).unwrap().len(), pages * PAGE);
+    // Nothing to cut the second time, and a count past the file cuts nothing.
+    assert_eq!(trim(&staged, pages, PAGE).unwrap(), pages * PAGE);
+    assert_eq!(trim(&staged, pages + 8, PAGE).unwrap(), pages * PAGE);
+
+    let reopened = Connection::open(&staged).unwrap();
+    let check: String = reopened
+        .query_row("PRAGMA integrity_check", params![], |row| row.get(0))
+        .unwrap();
+    assert_eq!(check, "ok");
+    let lengths: (i64, i64) = reopened
+        .query_row(
+            "SELECT (SELECT length(body) FROM pack WHERE pack_id=1),\
+                    (SELECT length(body) FROM pack WHERE pack_id=2)",
+            params![],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(lengths, (100_000, 200_000));
+    let reread: i64 = reopened
+        .query_row("PRAGMA page_count", params![], |row| row.get(0))
+        .unwrap();
+    assert_eq!(u64::try_from(reread).unwrap(), pages);
+}

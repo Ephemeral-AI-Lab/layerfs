@@ -13,6 +13,7 @@ use super::op::hex;
 use super::op::stop_at;
 use super::op::visited_path;
 use super::op::RunOp;
+use super::space;
 use super::types::db_error;
 use super::types::io_error;
 use super::types::CompactFailpoint;
@@ -132,6 +133,9 @@ pub(crate) struct BuildInput<'a> {
     pub(crate) facts: &'a SealedFacts,
     pub(crate) tuple: &'a MarkTuple,
     pub(crate) synchronous: i64,
+    /// The stored bytes of the packs the mark retains: what the bulk load is
+    /// about to write, known before the fresh file holds a row.
+    pub(crate) payload_bytes: u64,
 }
 
 /// How one table's rows enter the fresh file.
@@ -421,6 +425,7 @@ pub(crate) fn build(
         facts,
         tuple,
         synchronous,
+        payload_bytes,
     } = input;
     let store = &facts.path;
     let target = compact_path(store);
@@ -509,6 +514,10 @@ PRAGMA user_version={user_version};PRAGMA application_id={application_id};"
     // inside the bulk load leaves (the in-process arm tears this file, and the
     // next run removes the whole recorded set instead of trusting it).
     stop_at(request, CompactFailpoint::DuringCopy, op, store)?;
+    // The load appends the retained payload: size the file for it once, so
+    // its page writes land inside the file instead of each moving its end.
+    let page_bytes = u64::try_from(page_size).unwrap_or(0);
+    space::reserve(&target, payload_bytes, page_bytes)?;
     let target_tables = main_tables(&connection)?;
     copy_rows(&connection, op, tuple.generation + 1, &target_tables)?;
 
@@ -562,6 +571,11 @@ WHERE sql IS NOT NULL AND substr(name,1,7)!='sqlite_' ORDER BY type,name",
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .map_err(db_error)?;
+    // The schema is complete, so the header's page count is final: the file
+    // ends there, whatever the load was sized for.
+    let pages: i64 = connection
+        .query_row("PRAGMA main.page_count", params![], |row| row.get(0))
+        .map_err(db_error)?;
     // §7 step 5: the same raw connection switches the fresh file to WAL, so the
     // mode switch runs under `journal_mode=OFF` and writes no rollback journal
     // beside the staged name; then checkpoint and leave no sidecar.
@@ -599,7 +613,7 @@ WHERE sql IS NOT NULL AND substr(name,1,7)!='sqlite_' ORDER BY type,name",
             return Err(HistoryError::Integrity("staged Store sidecar"));
         }
     }
-    let target_bytes = std::fs::metadata(&target).map_err(io_error)?.len();
+    let target_bytes = space::trim(&target, u64::try_from(pages).unwrap_or(0), page_bytes)?;
     Ok(Built {
         target,
         target_bytes,

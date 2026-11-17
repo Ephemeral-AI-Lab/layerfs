@@ -10,6 +10,6 @@ pub use crate::backend::postgresql::compact::{
 pub use crate::backend::postgresql::session::rows::sqlstate;
 pub use crate::backend::records::BackendError;
 pub use crate::backend::sqlite::compact::{
-    cap_delta_references, io_error, peak_temp_bytes, receipt, source_mmap,
+    cap_delta_references, io_error, peak_temp_bytes, receipt, reserve, source_mmap, trim,
     DELTA_BASE_REFERENCES_CAP, SRC_MMAP_BYTES,
 };

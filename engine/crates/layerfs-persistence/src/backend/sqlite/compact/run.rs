@@ -374,6 +374,7 @@ impl SqliteHandles {
                     facts: &facts,
                     tuple: &tuple,
                     synchronous,
+                    payload_bytes: live_stored,
                 },
                 capacity,
                 request,
