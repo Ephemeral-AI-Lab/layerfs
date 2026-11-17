@@ -1,7 +1,7 @@
 //! The companion index of one export: its names, main inodes, slots of the
 //! index bound, resident budget and eviction order.
 use super::{
-    spill_applies, Body, Companion, Companions, Decoded, Holding, Named, Slot,
+    spill_applies, Body, Companion, Companions, Decoded, Holding, Named, Orphan, Slot,
     DECODED_ENTRY_BYTES,
 };
 use crate::{
@@ -332,6 +332,13 @@ impl Companions {
                         .is_none_or(|inode| self.inodes.get(&inode) != Some(serial))
             })
             .count()
+    }
+    /// Whether `orphan` is still the slot reclamation found: the same main
+    /// inode, still taking a slot, and not used by any call since.
+    pub(super) fn unchanged(&self, orphan: &Orphan) -> bool {
+        self.files.get(&orphan.serial).is_some_and(|file| {
+            file.inode == orphan.inode && file.slotted() && file.used == orphan.used
+        })
     }
     pub(super) fn holding(&self) -> Holding {
         Holding {

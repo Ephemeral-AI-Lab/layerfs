@@ -26,6 +26,7 @@ impl Kernel {
                         serial: *serial,
                         inode: Some(inode),
                         main: None,
+                        used: file.used,
                     });
                 }
                 // A name the index does hold reaches the companion; one it
@@ -48,6 +49,7 @@ impl Kernel {
                     serial: *serial,
                     inode: None,
                     main: Some(main),
+                    used: file.used,
                 })
             })
             .collect()
@@ -77,30 +79,33 @@ impl Kernel {
         let (bound, dead) = self.orphans().into_iter().fold(
             (Vec::new(), Vec::new()),
             |(mut bound, mut dead), orphan| {
-                let Some((parent, main)) = orphan.main else {
-                    dead.push((orphan.serial, orphan.inode));
+                let Some((parent, main)) = orphan.main.clone() else {
+                    dead.push(orphan);
                     return (bound, dead);
                 };
-                // A name the engine cannot even take, or a lookup it cannot
-                // answer, leaves the companion as it is.
-                if let Ok(name) = PathName::from_bytes(&main) {
-                    let lookup = KernelReadOperation::Lookup { parent, name };
-                    match self.observe(parent, None, lookup).map_err(|r| r.status) {
-                        Ok(answer) => {
-                            self.entry_taken(&answer.stat, parent, &main);
-                            bound.push((orphan.serial, answer.stat.serial));
-                        }
-                        // A parent directory the engine no longer has cannot
-                        // hold the main file: the companion is an orphan as
-                        // much as one whose file answers "no such file".
-                        // A parent directory the engine no longer has cannot
-                        // hold the main file: the companion is an orphan as
-                        // much as one whose file answers "no such file".
-                        Err(Status::NoEnt | Status::Stale | Status::NotDir) => {
-                            dead.push((orphan.serial, orphan.inode))
-                        }
-                        Err(_) => {}
+                // A name the engine cannot take, or a lookup it cannot answer,
+                // leaves the companion as it is. The engine answers a lookup in
+                // a directory whose reference the export collected as well.
+                let Ok(name) = PathName::from_bytes(&main) else {
+                    return (bound, dead);
+                };
+                let lookup = KernelReadOperation::Lookup { parent, name };
+                match self.observe(parent, None, lookup) {
+                    Ok(answer) => {
+                        self.entry_taken(&answer.stat, parent, &main);
+                        bound.push((orphan, answer.stat.serial));
                     }
+                    // A directory that no longer holds the main file, or that
+                    // is gone itself, makes the companion an orphan.
+                    Err(refused)
+                        if matches!(
+                            refused.status,
+                            Status::NoEnt | Status::Stale | Status::NotDir
+                        ) =>
+                    {
+                        dead.push(orphan)
+                    }
+                    Err(_) => {}
                 }
                 (bound, dead)
             },
@@ -109,28 +114,25 @@ impl Kernel {
             let mut companions = self.companions();
             let mut spilled = Vec::new();
             let mut reclaimed = 0;
-            for (serial, main) in bound {
-                let Some(mut file) = companions.detach(serial) else {
-                    continue;
-                };
-                if file.inode.is_some() || !file.slotted() {
-                    companions.attach(serial, file);
+            for (orphan, main) in bound {
+                // Bound back to the inode the engine found, unless a call used
+                // it meanwhile or that inode already has its companion: it
+                // keeps the slot it took and follows that inode's names.
+                if !companions.unchanged(&orphan) || companions.inodes.contains_key(&main) {
                     continue;
                 }
-                // Bound back to the inode the engine found: it keeps the slot it
-                // took, and from here it follows that inode's names.
-                file.inode = Some(main);
-                companions.index(serial, &file);
-                companions.attach(serial, file);
+                if let Some(mut file) = companions.detach(orphan.serial) {
+                    file.inode = Some(main);
+                    companions.index(orphan.serial, &file);
+                    companions.attach(orphan.serial, file);
+                }
             }
-            for (serial, inode) in dead {
-                let still_orphan = companions
-                    .files
-                    .get(&serial)
-                    .is_some_and(|file| file.inode == inode && file.slotted());
-                if still_orphan {
+            // A call that used a companion after the decision (a READ, a
+            // WRITE, a LINK or RENAME of one of its names) keeps it.
+            for orphan in dead {
+                if companions.unchanged(&orphan) {
                     reclaimed += 1;
-                    spilled.extend(companions.take_serial(serial));
+                    spilled.extend(companions.take_serial(orphan.serial));
                 }
             }
             (reclaimed, spilled)

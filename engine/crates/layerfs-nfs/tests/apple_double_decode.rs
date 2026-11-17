@@ -1692,6 +1692,56 @@ fn a_companion_of_a_removed_directory_is_reclaimed() {
 }
 
 #[test]
+fn a_companion_in_a_collected_directory_is_kept_while_its_main_file_is_there() {
+    let base = temp("orphan-collected-dir");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    rig.companions_held = 1;
+    rig.lookups_held = 8;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    let kept = c.mkdir(&root, b"kept", 0o755).unwrap().handle;
+    // Nothing names `x` yet, so the companion takes the one slot with no main
+    // inode.
+    let held = c.touch(&kept, b"._x", 0o644).unwrap();
+    let body = pattern(83, 64);
+    c.write(&held.handle, 0, &body).unwrap();
+    assert_eq!(server.held().companions_slotted, 1);
+
+    // Enough other names that the export collects its reference to `kept`.
+    let names = layerfs_nfs::kernel::RECENT_KEPT as usize + 32;
+    for index in 0..names {
+        let name = format!("f{index}");
+        c.touch(&root, name.as_bytes(), 0o644)
+            .unwrap_or_else(|status| panic!("{name}: {status}"));
+    }
+    assert!(server.held().collected > 0, "{:?}", server.held());
+
+    // Another writer makes the main file; this export never looks it up.
+    let second = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut other = Client::connect(second.local_addr(), UID, GID);
+    let other_root = other.mnt("/");
+    let (other_kept, _) = other.lookup(&other_root, b"kept").unwrap();
+    other.touch(&other_kept, b"x", 0o644).unwrap();
+
+    // The CREATE at the bound asks the engine about `kept/x` through the
+    // directory resolved again, finds it and keeps the companion: the bound
+    // stays full and the companion keeps its bytes.
+    assert_eq!(c.touch(&root, b"._y", 0o644).map(|_| ()), Err(NOSPC));
+    assert_eq!(c.read_all(&held.handle, 4096), body);
+
+    drop(c);
+    drop(other);
+    let released = server.stop();
+    second.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn a_companion_reached_by_one_of_its_names_is_not_an_orphan() {
     let base = temp("orphan-alias");
     let tree = base.join("tree");

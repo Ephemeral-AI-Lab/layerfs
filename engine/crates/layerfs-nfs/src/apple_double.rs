@@ -145,6 +145,7 @@ impl Companion {
 
 /// A slot of the index the export's own name index cannot reach, and what the
 /// reclaim needs to decide about it.
+#[derive(Clone)]
 struct Orphan {
     serial: u64,
     /// The main inode the export knows for it; an inode holding no name in the
@@ -153,6 +154,8 @@ struct Orphan {
     /// Its main file's directory and name when it has no inode: the name index
     /// is lossy, so only the engine can say whether that file is there.
     main: Option<Named>,
+    /// Its last use when it was found: a companion used since keeps itself.
+    used: u64,
 }
 
 /// What [`Companions::reserve`] made of a call's claim on a slot of the index
