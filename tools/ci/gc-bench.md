@@ -333,3 +333,31 @@ This is a measurement harness for the GC section 13 arms, not a new registered
 model asks for, including the E3 median/range for the medium arm. The 50 GB arm
 is a single run per arm, as #42 item 44 specifies, and its result stays
 owner-only until the owner records it.
+
+## Profiling a mark or a compaction
+
+`gc_profile` answers "where does the time go" on a Store `gc_bench` kept. It is
+a diagnostic, not a measurement harness: it has no receipt and claims nothing.
+
+```text
+cargo run -p layerfs-persistence --release --example gc_bench -- --keep --tmpdir DIR
+cargo run -p layerfs-persistence --release --example gc_profile -- DIR/<run>/store.sqlite
+```
+
+- Each mark prints its wall time, this thread's SQL work counters (statements,
+  engine steps, full-scan steps, sorts, rows, BLOB opens, reads and bytes) and
+  the statements that cost the most, by text. `--marks N` repeats it; the
+  second mark shows the warm-cache cost, and the difference from the first is
+  what a cold cache adds.
+- `--compact` then runs one compaction and prints the same for it. The
+  rebuild's copy runs on its own connection, so its statements are not listed.
+- The per-statement list comes from `layerfs_persistence::profile_statements`
+  and `take_statement_profile`: a per-thread profile that is off unless
+  started.
+- For CPU stacks on macOS, run with `--marks 40` and `sample <pid> 2`.
+
+What it has shown so far (2026-11-17): a function over a BLOB column, such as
+`substr(body,1,?)`, loads the whole overflow chain, so it reads the pack to
+return a prefix; `length(body)` does not. In the default `Monolithic` layout a
+read at offset X of a pack follows X / 4 KiB overflow pages, so a read deep in
+a large pack costs page loads for everything before it.

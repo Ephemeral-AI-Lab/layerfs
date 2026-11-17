@@ -30,7 +30,9 @@ pub use backend::sqlite::lifecycle::headroom::STORE_HEADROOM_BYTES;
 pub use backend::sqlite::lifecycle::reclamation::{SpaceReclamation, RECLAMATION_PAGE_LIMIT};
 pub use backend::sqlite::session::connection::{ConnectionProfile, SqlWork};
 pub use backend::sqlite::session::statement_work::StatementPhaseWork;
-pub use backend::sqlite::session::thread_work::thread_work;
+pub use backend::sqlite::session::thread_work::{
+    profile_statements, take_statement_profile, thread_work, StatementCost,
+};
 pub use backend::sqlite::storage::merge_records::{
     MergeRecords, MergeRecordsWork, MergeScratch, BUFFER_BYTES, MERGE_LEASE, RESIDENT_BYTES,
 };
