@@ -1820,6 +1820,49 @@ fn two_digest_rows_of_one_dead_root_are_both_collected() {
     assert_phase_c_settled(schema, 0x41);
 }
 
+/// Phase C deletes dead digest rows in batches of 1,000 by a numbered key
+/// list. More dead rows than two batches hold, with one retained row among
+/// them: every dead row goes, across the batch boundaries, and the retained
+/// row stays.
+#[test]
+fn dead_digest_rows_beyond_one_batch_are_all_collected() {
+    let Some(url) = url() else { return };
+    let f = Fixture::new(&url, "digests");
+    let content = whole_file(&f, b"digests live content");
+    let live = tree(&f, content, 1);
+    let _stack = initialize(&f.handles, 1, live);
+    let kept = *blake3::hash(b"a digest of retained content").as_bytes();
+    let mut rows = vec![FileDigest {
+        root: *content.as_bytes(),
+        length: 131_072,
+        digest: kept,
+    }];
+    // Roots no object carries: unvisited, so each row is a dead-set member.
+    rows.extend((0..2_500u32).map(|index| FileDigest {
+        root: *blake3::hash(&[b"dead root".as_slice(), &index.to_le_bytes()].concat()).as_bytes(),
+        length: 131_072 + u64::from(index),
+        digest:
+            *blake3::hash(&[b"dead digest".as_slice(), &index.to_le_bytes()].concat()).as_bytes(),
+    }));
+    f.handles.history.record_file_digests(&rows).unwrap();
+    let _dead = saved_whole_file(&f.handles, b"a pack the rebuild drops");
+    let schema = &f.schema;
+    assert_eq!(schema.count("file_digest"), 2_501);
+    let before = generation(&f.handles);
+
+    let receipt = f.handles.compact(&request(0x42)).unwrap();
+
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_after, before + 1);
+    assert_eq!(
+        schema.count("file_digest"),
+        1,
+        "only the retained row is left"
+    );
+    assert_eq!(digest_rows(schema, &kept), 1);
+    assert_phase_c_settled(schema, 0x42);
+}
+
 /// AC-21, AC-24, AC-39: the PostgreSQL `project_epoch` fence. Commits and
 /// Layers leave it alone; a marker write bumps it once; a repeated marker is
 /// `UpToDate` and does not bump it; compact copies it; a missing row refuses
