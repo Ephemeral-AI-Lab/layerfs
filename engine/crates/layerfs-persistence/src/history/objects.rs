@@ -34,7 +34,7 @@ use layerfs_storage::{
     },
     location::{ObjectLocation, SignatureRow},
     pack::layout::{self, GroupCodec},
-    port::{AcquiredPackRead, PACK_READ_PREFIX_BYTES},
+    port::AcquiredPackRead,
     source::Source,
     StorageCapacities, StorageError,
 };
@@ -669,7 +669,15 @@ fn waste(
     closure: &Closure,
 ) -> HistoryResult<KeptWaste> {
     let mut dead_in_retained_packs_bytes = 0u64;
-    for pack_id in closure.packs() {
+    let packs = closure.packs();
+    // Packs the walk did not lay out have their directory prefix read here:
+    // a bounded batch of packs per call, not one call per pack.
+    let mut prefixes = {
+        let layouts = source.layouts.borrow();
+        let unread = packs.iter().filter(|pack| !layouts.contains_key(pack));
+        edges::Prefixes::new(source, unread.copied().collect())
+    };
+    for pack_id in packs {
         let groups = located.inventory.get(&pack_id);
         // The walk already read this pack's directory when it read its
         // record headers; only a pack it reached another way is read here.
@@ -680,12 +688,7 @@ fn waste(
             // The pack row may reserve more capacity than it uses; the header names
             // the used length. Everything below parses against `used`, never the
             // reserved capacity. A prefix that already covers `used` is the body.
-            let Some((capacity, prefix)) = source
-                .pack_prefix(pack_id, PACK_READ_PREFIX_BYTES)
-                .map_err(storage)?
-            else {
-                return Err(HistoryError::Integrity("mark pack directory"));
-            };
+            let (capacity, prefix) = prefixes.take(pack_id)?;
             if prefix.len() < layout::USED_OFFSET + 4 {
                 return Err(HistoryError::Integrity("mark pack length"));
             }

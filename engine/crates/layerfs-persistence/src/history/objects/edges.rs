@@ -25,7 +25,7 @@ use layerfs_storage::{
     source::Source,
     StorageError,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
 /// After the head: a wider directory, then record headers. No pack needs more.
 const ROUNDS: usize = 4;
@@ -421,4 +421,50 @@ pub(super) fn wave_edges(
         }
     }
     Ok(edges)
+}
+
+/// The directory prefixes of the packs a kept-waste pass still has to read,
+/// handed out in pack order and read a bounded batch of packs per call.
+pub(super) struct Prefixes<'a, 'b> {
+    source: &'a ClosureSource<'b>,
+    packs: Vec<i64>,
+    next: usize,
+    held: VecDeque<(usize, Vec<u8>)>,
+}
+
+impl<'a, 'b> Prefixes<'a, 'b> {
+    /// `packs` in the order [`Self::take`] will be asked for them.
+    pub(super) fn new(source: &'a ClosureSource<'b>, packs: Vec<i64>) -> Self {
+        Self {
+            source,
+            packs,
+            next: 0,
+            held: VecDeque::new(),
+        }
+    }
+
+    /// The declared length and directory prefix of `pack_id`, which must be
+    /// the next pack of the list.
+    pub(super) fn take(&mut self, pack_id: i64) -> HistoryResult<(usize, Vec<u8>)> {
+        if self.packs.get(self.next) != Some(&pack_id) {
+            return Err(HistoryError::Integrity("mark pack directory"));
+        }
+        if self.held.is_empty() {
+            let batch = &self.packs[self.next..(self.next + HEAD_PACKS).min(self.packs.len())];
+            let mut read = Vec::with_capacity(batch.len());
+            self.source
+                .mechanics
+                .pack_prefixes(batch, PACK_READ_PREFIX_BYTES, &mut read)
+                .map_err(StorageError::from)
+                .map_err(storage)?;
+            if read.len() != batch.len() {
+                return Err(HistoryError::Integrity("mark pack directory"));
+            }
+            self.held = read.into();
+        }
+        self.next += 1;
+        self.held
+            .pop_front()
+            .ok_or(HistoryError::Integrity("mark pack directory"))
+    }
 }
