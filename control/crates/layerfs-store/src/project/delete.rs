@@ -81,18 +81,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 mod remote;
+pub use remote::listed_unknown;
 use remote::{listed_stack, open_args, Remote};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
-
-/// Names the project in a `project.delete` Store-listing refusal whose detail
-/// is empty: `Unknown` from a bare `UnknownOutcome` or a poisoned Store
-/// object, rather than `Unknown {}` (F43R5-2). The listing itself
-/// (`remote::listed_stack`) wraps both callers' failures with this.
-#[doc(hidden)]
-pub fn listed_unknown(refusal: SdkRefusal, name: &str) -> SdkRefusal {
-    crate::unknown::named_unknown(refusal, "project", name, None)
-}
 
 /// The state the durable intent records (`pending`, `marked`, `done`).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

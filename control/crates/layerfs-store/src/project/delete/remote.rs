@@ -190,6 +190,14 @@ pub(super) fn open_args(
     })
 }
 
+/// Names the project in a `project.delete` Store-listing refusal whose detail
+/// is empty: `Unknown` from a bare `UnknownOutcome` or a poisoned Store
+/// object, rather than `Unknown {}` (F43R5-2). `listed_stack` wraps both
+/// callers' failures with this.
+pub fn listed_unknown(refusal: SdkRefusal, name: &str) -> SdkRefusal {
+    crate::unknown::named_unknown(refusal, "project", name, None)
+}
+
 /// The Stack id a Store lists for project `name`, for a record that does
 /// not name one (spec §4.2 fills it from the filtered listing by name).
 pub(super) fn listed_stack(open: &OpenArgs, name: &str) -> Result<Option<LayerStackId>> {
