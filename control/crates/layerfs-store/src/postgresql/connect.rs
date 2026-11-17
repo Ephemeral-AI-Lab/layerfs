@@ -195,7 +195,7 @@ pub fn connect(home: &Path, request: &StoreConnect) -> Outcome {
     let name = request.name.as_str();
     let given = request.url.as_str();
     refuse_password(given)?;
-    let sync = request.synchronous_commit.as_deref().unwrap_or("off");
+    let sync = request.synchronous_commit.as_deref().unwrap_or("local");
     if !matches!(
         sync,
         "off" | "local" | "remote_write" | "on" | "remote_apply"

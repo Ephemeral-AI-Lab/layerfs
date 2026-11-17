@@ -1,7 +1,7 @@
-//! A Disposable session's checkpoint thread (owner approval, 2026-11-07):
-//! COMMIT does not checkpoint (`wal_autocheckpoint=0`); a log longer than
-//! 4 MiB is copied into the Store file while the session stays open, with
-//! no idle checkpoint, seal or close.
+//! A Normal or Disposable session's checkpoint thread (owner approval,
+//! 2026-11-07; Normal since 2026-11-17): COMMIT does not checkpoint
+//! (`wal_autocheckpoint=0`); a log longer than 4 MiB is copied into the Store
+//! file while the session stays open, with no idle checkpoint, seal or close.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 mod support;
 
@@ -16,9 +16,9 @@ use support::Temp;
 
 const BYTES: usize = 24 << 20;
 
-fn create(path: &Path) -> SqliteHandles {
+fn create(path: &Path, profile: SqlitePersistenceProfile) -> SqliteHandles {
     SqliteHandles::create(
-        PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        PersistenceConfig::sqlite(path).with_sqlite_profile(profile),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
             binding_key: b"background-checkpoint".to_vec(),
@@ -49,9 +49,24 @@ fn size(path: &Path) -> u64 {
 
 #[test]
 fn a_long_log_is_copied_into_the_store_while_the_session_stays_open() {
+    copied(SqlitePersistenceProfile::Disposable, 0);
+}
+
+/// The product profile: the session and its checkpoint thread run at
+/// `synchronous=1` (NORMAL), and the log is still copied off the commit path.
+#[test]
+fn a_normal_session_copies_its_log_with_normal_synchronization() {
+    copied(SqlitePersistenceProfile::Normal, 1);
+}
+
+fn copied(profile: SqlitePersistenceProfile, synchronous: i64) {
     let temp = Temp::new("background-checkpoint");
     let path = temp.join("store.sqlite");
-    let handles = create(&path);
+    let handles = create(&path, profile);
+    assert_eq!(handles.profile().persistence, profile);
+    assert_eq!(handles.profile().journal_mode, "wal");
+    assert_eq!(handles.profile().synchronous, synchronous);
+    assert_eq!(handles.profile().fullfsync, 0);
     assert_eq!(handles.profile().wal_autocheckpoint, 0);
     let storage = Storage::new(handles.storage.clone()).unwrap();
     let bytes = random(BYTES);

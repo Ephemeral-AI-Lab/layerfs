@@ -255,7 +255,7 @@ fn create_empty(
         let sealed = ProjectApi::new()
             .create_store(CreateRequest {
                 store: PersistenceConfig::sqlite(&temporary)
-                    .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+                    .with_sqlite_profile(SqlitePersistenceProfile::Normal)
                     .into(),
                 policy,
                 catalog: HistoryCatalogConfig {

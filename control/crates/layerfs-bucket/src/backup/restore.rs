@@ -240,7 +240,7 @@ fn fetch(
         progress::begin("verify", None);
         let opened = open_store_observed(
             PersistenceConfig::sqlite(&temporary)
-                .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+                .with_sqlite_profile(SqlitePersistenceProfile::Normal),
             &binding,
             cursor_key,
             1,

@@ -332,8 +332,8 @@ impl Session {
             writer.release().map_err(|_| BackendError::Unknown)?;
         }
         super::thread_work::add(&work.borrow());
-        let background = (writable && selected == SqlitePersistenceProfile::Disposable)
-            .then(|| super::background::Checkpointer::start(path))
+        let background = (writable && selected.background_checkpoint())
+            .then(|| super::background::Checkpointer::start(path, selected.synchronous()))
             .transpose()?;
         // §10: the record every later transaction is fenced against.
         let identity = FileIdentity::capture(path).map_err(|_| BackendError::Integrity)?;

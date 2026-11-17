@@ -106,8 +106,7 @@ impl StoreService {
             )));
         }
         let opened = open_store_observed(
-            PersistenceConfig::sqlite(store)
-                .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            PersistenceConfig::sqlite(store).with_sqlite_profile(SqlitePersistenceProfile::Normal),
             binding,
             cursor_key,
             CALLS,

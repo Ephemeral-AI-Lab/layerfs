@@ -232,7 +232,7 @@ pub fn install_local(
         left.temporary = Some(target.clone());
         let opened = open_store_observed(
             PersistenceConfig::sqlite(&target)
-                .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+                .with_sqlite_profile(SqlitePersistenceProfile::Normal),
             &manifest.binding,
             manifest.cursor_key,
             1,

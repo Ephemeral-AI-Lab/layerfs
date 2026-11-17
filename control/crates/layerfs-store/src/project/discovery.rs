@@ -291,7 +291,7 @@ pub fn project(home: Option<&Path>, store: Option<&str>, name: Option<&str>) -> 
     Ok(Project {
         store: SealedStore {
             path: path.join("sealed.sqlite"),
-            profile: SqlitePersistenceProfile::Disposable,
+            profile: SqlitePersistenceProfile::Normal,
             sqlite_version: manifest.host_sqlite.clone(),
             bytes: manifest.bytes,
         },

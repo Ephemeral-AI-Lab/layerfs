@@ -88,7 +88,7 @@ fn checkpoint_leftover_wal(file: &Path, frame: &StepFrame) -> Result<(), SdkRefu
     let identity = crate::identity::identity_of(record)?;
     if let Ok(handles) = layerfs_persistence::SqliteHandles::open_writable(
         layerfs_persistence::PersistenceConfig::sqlite(file)
-            .with_sqlite_profile(layerfs_persistence::SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(layerfs_persistence::SqlitePersistenceProfile::Normal),
         &identity.binding,
         identity.cursor_key,
     ) {

@@ -18,9 +18,7 @@ use layerfs_history::{
     BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig,
     HistoryError, HistoryName, HistoryResult, LayerStackId, LayerStackRecord, Page,
 };
-use layerfs_persistence::{
-    SealedStore, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile, StoreSelection,
-};
+use layerfs_persistence::{SealedStore, SqliteAcquisitionSchema, SqliteHandles, StoreSelection};
 use layerfs_storage::port::{acquisition::AcquisitionError, PersistenceError};
 use layerfs_storage::{Storage, StoragePolicy};
 use layerfs_telemetry::timer::{Active, TimingScope};
@@ -96,15 +94,15 @@ impl std::fmt::Display for AddFailure {
 }
 impl std::error::Error for AddFailure {}
 
-/// The Disposable profile rule applies to a SQLite Store only; a PostgreSQL
-/// Store has no SQLite profile and passes.
+/// The profile rule (Normal, or Disposable in a test) applies to a SQLite
+/// Store only; a PostgreSQL Store has no SQLite profile and passes.
 fn disposable(store: &StoreSelection) -> Result<(), InitError> {
     let StoreSelection::Sqlite(store) = store else {
         return Ok(());
     };
-    if store.sqlite_profile != SqlitePersistenceProfile::Disposable {
+    if !store.sqlite_profile.permitted() {
         return Err(InitError::Manifest(
-            "explicit Disposable Store profile required",
+            "explicit Normal or Disposable Store profile required",
         ));
     }
     Ok(())

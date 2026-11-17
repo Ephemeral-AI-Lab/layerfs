@@ -214,7 +214,7 @@ CLI     layerfs store connect <name> <url> [--password <password>] [--synchronou
 | --- | --- | --- |
 | `url` | Text | `postgresql://` or `postgres://`, holding no password (no `user:pass@`, no query parameter whose name contains `password`); names its user when `password` is given |
 | `password` option | Text | a reference, `env:NAME` or `file:/absolute/path` (trailing newline dropped), never the password; it must resolve now and is resolved again in the caller on every later call ([`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs)) |
-| `synchronous_commit` option | Text | `off` (default), `local`, `remote_write`, `on` or `remote_apply`; applied to the Store's write transactions |
+| `synchronous_commit` option | Text | `off`, `local` (default), `remote_write`, `on` or `remote_apply`; applied to the Store's write transactions |
 
 ```text
 { name, kind: "postgresql", schema: "layerfs", synchronous_commit,
