@@ -21,6 +21,7 @@ The SQLite backend of the [Store](README.md): one WAL file every opener shares t
  store_totals  id=1                       file_digest
  lineage:  layer_lineage, commit_lineage, absorbed, reach
  merge:    merge_operation, merge_record
+ export:   change_state, change_log   (export base only)
  Init:     init_operation, init_entry, init_host_file   (42-44 only)
 ```
 
@@ -202,6 +203,53 @@ The import algorithm is in [Project Init](../project-init/README.md).
 | Resident first | Records stay in memory up to `RESIDENT_BYTES` (8 MiB) with no statement | same |
 | Spilled | Then a write-back buffer of `BUFFER_BYTES` (256 KiB), flushed in one write | same |
 | Lease | `MERGE_LEASE` 600 s; writable open sweeps expired owners | same |
+
+## Change export
+
+```text
+ closed Store              live Store (writers continue)       offline replica
+   mark_base(path)           export_changes(path, cursor,        apply_changes(
+   -> base cursor              bundle) -> next cursor              replica, bundle)
+   copy = replica              one read snapshot, no lane          one transaction
+                             trim_changes(path, oldest)
+                             unmark_base(path)
+```
+
+Only an export base has a change log. `mark_base` adds `change_state`,
+`change_log` and one trigger per logged table and write kind, and records the
+schema with them; `unmark_base` drops them and records the schema of a Store
+that was never marked, which a build without this module opens. A Store that
+was never marked has that schema, runs no trigger and logs nothing. The
+triggers cover every physical and history table except `merge_*` and `init_*`
+(19 tables in layouts 37–38, 18 without `pack_unit`) and log each inserted,
+updated or deleted row's key in the single writer's commit order; `pack` and
+`pack_unit` log inserts only.
+
+| Function | What it does | Source |
+| --- | --- | --- |
+| `mark_base(path, token)` | Starts a chain on an offline Store: adds the change log when the Store has none, records a fresh state and the current sequence; a copy of the closed file is a replica at the returned cursor. Refuses a Store whose recorded schema is not this build's | [`base.rs`](../../../../engine/crates/layerfs-persistence/src/replication/base.rs), [`log.rs`](../../../../engine/crates/layerfs-persistence/src/replication/log.rs) |
+| `export_changes(path, after, bundle)` | Writes every row changed after `after`, at its current value, the deleted keys and the identity of the Store's schema into a new bundle file (SQLite, the logged tables' exact definitions); written under a temporary name and linked into place | [`export.rs`](../../../../engine/crates/layerfs-persistence/src/replication/export.rs) |
+| `apply_changes(replica, bundle)` | Checks the bundle's meta, schema identity, table definitions, starting state, digest and ending state, then installs it in one transaction with foreign keys checked at commit; rows it installs are not logged on the replica | [`apply.rs`](../../../../engine/crates/layerfs-persistence/src/replication/apply.rs) |
+| `trim_changes(path, oldest)` | Moves the base forward to the cursor of the least advanced replica still followed and deletes the log up to it; later exports from an earlier cursor are refused | [`base.rs`](../../../../engine/crates/layerfs-persistence/src/replication/base.rs) |
+| `unmark_base(path)` | Ends the chain: drops the change log and its triggers | same |
+
+While a Store is a base, every write appends to its log, which grows until
+`trim_changes` or `unmark_base`. A copy of a base, such as a backup or a Store
+restored from one, is itself a base and logs every write until it is unmarked.
+The schema identity covers `user_version` and every table, index and trigger
+definition, so a replica migrated on one side only refuses a bundle with
+`Schema` before installing a row.
+
+`mark_base`, `apply_changes`, `trim_changes` and `unmark_base` take the
+Store's writer lane in one non-blocking attempt and return `Busy` while another
+writer holds it; a connection that bypasses the lane and holds SQLite's write
+lock also makes them `Busy`. `export_changes` reads one snapshot and takes no
+lane. Each bundle's ending state derives from its starting state and its
+digest, so a bundle applies only to the state it was exported from, and two
+replicas that diverge never share a later state. The digest detects damage and
+misordering; it is not a signature. `mark_base` and `apply_changes` checkpoint
+after they commit and return `NotCheckpointed` when another reader blocks it;
+`trim_changes` and `unmark_base` commit without a checkpoint.
 
 ## Related
 

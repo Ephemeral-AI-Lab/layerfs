@@ -14,10 +14,22 @@ pub(crate) fn check(
     acquisition: crate::SqliteAcquisitionSchema,
 ) -> Result<(), BackendError> {
     let selection = (tx.layout(), acquisition);
-    let trusted = rusqlite::Connection::open_in_memory().map_err(rows::error)?;
-    for script in schema::scripts(selection) {
-        trusted.execute_batch(&script).map_err(rows::error)?;
-    }
+    // A Store marked as an export base also carries the change log: both of
+    // its tables, or neither. The count selects the shipped schema to compare.
+    let logged = match tx
+        .query(
+            "SELECT count(*) FROM sqlite_schema WHERE type='table' AND name IN ('change_log','change_state')",
+            vec![],
+        )?
+        .first()
+        .ok_or(BackendError::Integrity)?
+        .get::<i64>(0)?
+    {
+        0 => false,
+        2 => true,
+        _ => return Err(BackendError::Integrity),
+    };
+    let trusted = shipped(selection, logged)?;
     let work = RefCell::new(SqlWork::default());
     let expected = query::run(&trusted,
         "SELECT type,name,sql FROM sqlite_schema WHERE substr(name,1,7)!='sqlite_' ORDER BY type,name",
@@ -31,7 +43,10 @@ pub(crate) fn check(
     }
     let claims = tx.query(
         "SELECT count(*) FROM history_meta WHERE id=1 AND typeof(catalog_id)='blob' AND length(catalog_id)=32 AND typeof(catalog_incarnation)='integer' AND typeof(identity_format)='integer' AND typeof(schema_version)='integer' AND typeof(binding_key)='blob' AND length(binding_key) BETWEEN 1 AND 128 AND typeof(schema_source)='text' AND schema_source=?1 AND typeof(schema_definition)='text' AND schema_definition=?2",
-        vec![Param::Text(schema::source(selection)), Param::Text(definition)],
+        vec![
+            Param::Text(schema::recorded_source(selection, logged)),
+            Param::Text(definition),
+        ],
     )?;
     if claims
         .first()
@@ -87,11 +102,9 @@ pub(crate) fn check(
 pub(crate) fn type_checks(
     layout: crate::SqlitePackLayout,
     acquisition: crate::SqliteAcquisitionSchema,
+    logged: bool,
 ) -> Result<Vec<(String, String)>, BackendError> {
-    let trusted = rusqlite::Connection::open_in_memory().map_err(rows::error)?;
-    for script in schema::scripts((layout, acquisition)) {
-        trusted.execute_batch(&script).map_err(rows::error)?;
-    }
+    let trusted = shipped((layout, acquisition), logged)?;
     let work = RefCell::new(SqlWork::default());
     let tables = query::run(&trusted, "SELECT name FROM sqlite_schema WHERE type='table' AND substr(name,1,7)!='sqlite_' ORDER BY name", vec![], &work)?;
     let quote = |name: &str| format!("\"{}\"", name.replace('"', "\"\""));
@@ -111,6 +124,9 @@ pub(crate) fn type_checks(
                 "INTEGER" => "integer",
                 "TEXT" => "text",
                 "BLOB" => "blob",
+                // A STRICT table's `ANY` column (the change log's keys)
+                // declares no storage class to check.
+                "ANY" => continue,
                 _ => return Err(BackendError::Integrity),
             };
             let non_null: i64 = column.get(3)?;
@@ -133,4 +149,22 @@ pub(crate) fn type_checks(
         result.push(("sqlite_sequence".to_owned(), "SELECT EXISTS(SELECT 1 FROM sqlite_sequence WHERE typeof(name)!='text' OR typeof(seq)!='integer' LIMIT 1)".to_owned()));
     }
     Ok(result)
+}
+
+/// An in-memory database holding only the shipped schema of `selection`, with
+/// the change log when `logged`.
+fn shipped(
+    selection: schema::Selection,
+    logged: bool,
+) -> Result<rusqlite::Connection, BackendError> {
+    let trusted = rusqlite::Connection::open_in_memory().map_err(rows::error)?;
+    for script in schema::scripts(selection) {
+        trusted.execute_batch(&script).map_err(rows::error)?;
+    }
+    if logged {
+        trusted
+            .execute_batch(&schema::changes(selection.0))
+            .map_err(rows::error)?;
+    }
+    Ok(trusted)
 }
