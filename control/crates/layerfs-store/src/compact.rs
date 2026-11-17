@@ -3,7 +3,8 @@
 //!
 //! The call takes the Store's lease, so a move or remove cannot start, and
 //! closes the Store this process holds open: a call still running on it is
-//! `InUse`, before any effect. It then opens the Store's own session, runs
+//! `Busy` in the GC vocabulary (§10 keeps `InUse` for non-GC calls), before
+//! any effect. It then opens the Store's own session, runs
 //! the §7 (SQLite) or §8 (PostgreSQL) compaction and answers the §11 report.
 //! A SQLite Store on another machine is `Unsupported` and is never sent to
 //! that machine's worker. Spec S6 says the rebuild runs on the machine that
@@ -19,7 +20,7 @@ use crate::open_args::OpenArgs;
 use crate::place::{self, Executor};
 use crate::postgresql;
 use crate::record::{StoreRecord, StoreRef};
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::GcScopeKind;
 use layerfs_home::events::Events;
 use layerfs_home::home::paths;
@@ -99,9 +100,15 @@ pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
         }
     }
     let path = paths::store_file(&home, store);
-    // A cached open in this process must end first; a call running on it is
-    // `InUse`, before any effect.
-    close(&path)?;
+    // A cached open in this process must end first. A call still running on
+    // it keeps the Store open and is `Busy` in the GC vocabulary (§10 keeps
+    // `InUse` for non-GC calls), naming the Store with no phase or op: no
+    // operation holds it, a call does.
+    if let Err(refusal) = close(&path) {
+        let refusal = gc_refusal(store, refusal);
+        note_refusal(&refusal);
+        return Err(refusal);
+    }
     let args = OpenArgs {
         home: Some(home),
         store: Some(store.to_owned()),
@@ -220,5 +227,91 @@ fn note_refusal(refusal: &SdkRefusal) {
         "Busy" => compact_metrics::record_refusal(CompactRefusal::Busy),
         "Unresolved" => compact_metrics::record_refusal(CompactRefusal::Unresolved),
         _ => {}
+    }
+}
+
+/// Maps the open cache's refusal into the GC vocabulary (§10): a call still
+/// running on the Store in this process keeps it open and is `Busy`, naming
+/// the Store as the entity with a null `phase` and `op` because no operation
+/// holds it; everything else is returned unchanged. The cache's own `InUse`
+/// stays for the non-GC calls (`store.move`, `store.remove`) that close it.
+fn gc_refusal(store: &str, refusal: SdkRefusal) -> SdkRefusal {
+    if refusal.code != "InUse" {
+        return refusal;
+    }
+    let mut busy = refused(
+        "Busy",
+        format!(
+            "Store {store} is busy: a call is running on it in this process; retry \
+             `store.compact` after that call ends"
+        ),
+    );
+    busy.detail = SdkValue::map([
+        (
+            "entity",
+            SdkValue::map([
+                ("kind", SdkValue::text("store")),
+                ("name", SdkValue::text(store)),
+            ]),
+        ),
+        ("phase", SdkValue::Null),
+        ("op", SdkValue::Null),
+    ]);
+    busy
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn in_use() -> SdkRefusal {
+        refused("InUse", "a call is running on the Store in this process")
+    }
+
+    fn field<'a>(detail: &'a SdkValue, name: &str) -> &'a SdkValue {
+        let SdkValue::Map(fields) = detail else {
+            panic!("detail is not a map: {detail:?}");
+        };
+        fields
+            .iter()
+            .find(|(field, _)| field == name)
+            .map(|(_, value)| value)
+            .unwrap_or_else(|| panic!("detail has no `{name}`: {detail:?}"))
+    }
+
+    /// F51R3-1: a call running on the Store in this process is `Busy`, never
+    /// `InUse`, and names the Store with no phase or op.
+    #[test]
+    fn a_running_call_is_busy_for_the_store_not_in_use() {
+        let busy = gc_refusal("shop", in_use());
+        assert_eq!(busy.code, "Busy", "{busy:?}");
+        assert!(
+            busy.message.contains("Store shop is busy"),
+            "{}",
+            busy.message
+        );
+        assert!(!busy.message.contains("InUse"), "{}", busy.message);
+        assert_eq!(
+            field(&busy.detail, "entity"),
+            &SdkValue::map([
+                ("kind", SdkValue::text("store")),
+                ("name", SdkValue::text("shop")),
+            ])
+        );
+        assert_eq!(field(&busy.detail, "phase"), &SdkValue::Null);
+        assert_eq!(field(&busy.detail, "op"), &SdkValue::Null);
+    }
+
+    /// The mapping touches only the open cache's `InUse`; every other refusal
+    /// is what it was, so `Busy`, `Failed` and the rest keep their detail.
+    #[test]
+    fn exactly_the_open_cache_refusal_is_mapped() {
+        for (code, message) in [
+            ("Failed", "the open cache failed"),
+            ("Busy", "the Store is held by another writer"),
+        ] {
+            let original = refused(code, message);
+            assert_eq!(gc_refusal("shop", original.clone()), original);
+        }
     }
 }
