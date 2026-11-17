@@ -167,6 +167,7 @@ job.
 | --- | --- | --- |
 | Offset from before the handle was last listed from 0 | `rewound()`: lists nothing | [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs) |
 | Window of whiteouts only | Empty with a continuation; the request reads the next window | same |
+| READDIRPLUS reply | Names and kinds come first (batched per inode-tree level), the reply's offer truncates the window to the names it publishes, and only those names' facts are read outside the owner: a re-sent reply reads nothing for a name it does not send | [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs) |
 | Names the kernel buffer accepted | Become resume cookies; nothing is held between the two visits or after the reply | same |
 
 ## Kernel mutations

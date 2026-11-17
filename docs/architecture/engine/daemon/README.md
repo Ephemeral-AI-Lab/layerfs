@@ -62,7 +62,7 @@ layerfs-daemon --config <file>
 | Takes a fresh incarnation | `generate_keypair()`; the public half is `DaemonStatus.instance` | [`application/owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs) |
 | Opens the Store | An installed SQLite file with the `Disposable` profile, or PostgreSQL; `Sqlite { install: None }` waits for an install | [`application/owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs), [`Cargo.toml`](../../../../engine/crates/layerfs-daemon/Cargo.toml) |
 | Starts FUSE serving (Linux) | `/dev/fuse` to `0600`, checks the mount home, mounts a private `fusectl` tree for abort controls; if that fails, writes `LAYERFS_DAEMON_ABORT_UNBOUND` and starts without forced unmount | [`application/filesystem.rs`](../../../../engine/crates/layerfs-daemon/src/application/filesystem.rs) |
-| Starts NFS serving | `ExportServing`; force-unmounts client mounts a previous daemon left (`LAYERFS_NFS_RECLAIM` lines); helper overrides `LAYERFS_NFS_MOUNT`, `_UNMOUNT`, `_FORCE`, `_FLUSH` | [`application/filesystem.rs`](../../../../engine/crates/layerfs-daemon/src/application/filesystem.rs) |
+| Starts NFS serving | `ExportServing`; force-unmounts client mounts a previous daemon left (`LAYERFS_NFS_RECLAIM` lines); the same reclaim deletes `<mounts>/.appledouble`, the AppleDouble companions' disposable scratch area (directories `0700`, files `0600`, no fsync, no space reserved ahead), and touches nothing else under the mount home; helper overrides `LAYERFS_NFS_MOUNT`, `_UNMOUNT`, `_FORCE`, `_FLUSH` | [`application/filesystem.rs`](../../../../engine/crates/layerfs-daemon/src/application/filesystem.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 
 ### Phases and Hello
 

@@ -68,7 +68,7 @@ macro_rules! forward {
 }
 impl RequestServices for ObserveRequest {
     forward! {
-        directory_visit(mount:KernelMount,serial:u64,handle:u64,offset:u64,after:Option<Vec<u8>>) -> ServiceReply<Arc<KernelDirectoryWindow>>;
+        directory_visit(mount:KernelMount,serial:u64,handle:u64,offset:u64,after:Option<Vec<u8>>,attributes:bool) -> ServiceReply<Arc<KernelDirectoryWindow>>;
         publish_cookies(offer:KernelCookieOffer,names:Vec<Vec<u8>>) -> ServiceReply<()>;
         close_directory(mount:KernelMount,serial:u64,handle:u64) -> ServiceReply<()>;
         read_visit(mount:KernelMount,serial:u64,handle:Option<u64>,offset:u64,length:u32) -> ServiceReply<Arc<KernelWindow>>;

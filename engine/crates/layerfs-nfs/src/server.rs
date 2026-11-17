@@ -43,6 +43,17 @@ pub struct ExportConfig {
     /// Lookup references kept before the least recently used are collected
     /// (see [`crate::kernel`]); [`crate::kernel::LOOKUPS_HELD`] by default.
     pub lookups_held: usize,
+    /// Scratch directory where AppleDouble companion bodies spill when resident
+    /// bytes exceed [`Self::companion_resident_bytes`]. Removed when set and
+    /// when the export releases.
+    pub companion_spill_dir: Option<std::path::PathBuf>,
+    /// Resident memory budget for AppleDouble companion bodies before spilling
+    /// to [`Self::companion_spill_dir`]; [`crate::apple_double::RESIDENT_BYTES`]
+    /// by default.
+    pub companion_resident_bytes: usize,
+    /// Maximum AppleDouble companion index entries held at once;
+    /// [`crate::apple_double::HELD`] by default.
+    pub companions_held: usize,
 }
 impl ExportConfig {
     /// A writable export of "/" shown as `uid`:`gid`, refusing AppleDouble
@@ -55,6 +66,9 @@ impl ExportConfig {
             read_only: false,
             refuse_apple_double: true,
             lookups_held: crate::kernel::LOOKUPS_HELD,
+            companion_spill_dir: None,
+            companion_resident_bytes: crate::apple_double::RESIDENT_BYTES,
+            companions_held: crate::apple_double::HELD,
         }
     }
 }
@@ -137,10 +151,16 @@ impl Server {
         config: ExportConfig,
     ) -> io::Result<Self> {
         let address = listener.local_addr()?;
+        let kernel = Kernel::new(services, mount, config.uid, config.gid)
+            .refusing_apple_double(config.refuse_apple_double)
+            .holding(config.lookups_held);
+        kernel.configure_companions(
+            config.companion_spill_dir.clone(),
+            config.companion_resident_bytes,
+            config.companions_held,
+        );
         let shared = Arc::new(Shared {
-            kernel: Kernel::new(services, mount, config.uid, config.gid)
-                .refusing_apple_double(config.refuse_apple_double)
-                .holding(config.lookups_held),
+            kernel,
             verifier: fresh_verifier(),
             config,
             counters: Counters::default(),

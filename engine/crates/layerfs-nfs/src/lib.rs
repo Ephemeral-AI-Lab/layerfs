@@ -17,6 +17,8 @@
 #![forbid(unsafe_code)]
 
 pub mod apple_double;
+pub mod apple_double_codec;
+mod apple_double_spill;
 pub mod attributes;
 mod block;
 pub mod change;
@@ -27,9 +29,11 @@ pub mod kernel;
 mod mount;
 pub mod names;
 mod nfs;
+pub mod read;
 pub mod refresh;
 pub mod rpc;
 mod server;
+mod trace;
 pub mod xdr;
 
 pub use kernel::Released;
