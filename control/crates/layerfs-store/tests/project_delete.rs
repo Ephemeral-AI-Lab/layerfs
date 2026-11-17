@@ -727,3 +727,36 @@ fn a_worker_reply_names_the_stack_and_deleted_ms() {
     };
     assert_ne!(DeleteReply::decode(&other.encode()).unwrap().stack, first);
 }
+
+/// F43R5-2: `project.delete` resolves a missing Stack id from the Store's
+/// listing. A listing that cannot be determined is a bare `UnknownOutcome`
+/// (empty-map detail) or a poisoned Store object (null detail); both must
+/// name the project, never stay a bare `Unknown {}`.
+#[test]
+fn a_listing_unknown_names_the_project() {
+    use layerfs_history::HistoryError;
+    use layerfs_store::project::delete::listed_unknown;
+    use layerfs_store_service::history::lookup::published;
+    use layerfs_store_service::store::PortError;
+    use std::sync::Arc;
+
+    for refusal in [
+        published(Arc::new(PortError::History(HistoryError::UnknownOutcome))),
+        published(Arc::new(PortError::Poisoned)),
+    ] {
+        assert_eq!(refusal.code, "Unknown", "{refusal:?}");
+        let refusal = listed_unknown(refusal, "shop");
+        assert_eq!(refusal.code, "Unknown", "{refusal:?}");
+        let entity = refusal.detail.get("entity").expect("entity");
+        assert_eq!(entity.get_text("kind"), Some("project"), "{refusal:?}");
+        assert_eq!(entity.get_text("name"), Some("shop"), "{refusal:?}");
+        assert!(
+            refusal.detail.get("phase").expect("phase") == &SdkValue::Null,
+            "{refusal:?}"
+        );
+        assert!(
+            refusal.detail.get("op").expect("op") == &SdkValue::Null,
+            "{refusal:?}"
+        );
+    }
+}

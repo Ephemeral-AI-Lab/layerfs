@@ -14,11 +14,12 @@ use crate::{ProjectError, ProjectResult};
 #[cfg(unix)]
 use layerfs_content::filesystem::{profile_id, scope_for_seed, FilesystemObjects};
 use layerfs_content::ObjectId;
-#[cfg(unix)]
 use layerfs_history::records::GcScopeKind;
-use layerfs_history::{HistoryCatalog, HistoryName, LayerStackId, LayerStackRecord};
+use layerfs_history::{
+    HistoryCatalog, HistoryName, LayerStackId, LayerStackRecord, UnknownOutcomeState,
+};
 #[cfg(unix)]
-use layerfs_history::{ReserveRequest, StackInitialization, UnknownOutcomeState};
+use layerfs_history::{ReserveRequest, StackInitialization};
 use layerfs_storage::port::acquisition::Acquisition;
 #[cfg(unix)]
 use layerfs_storage::port::acquisition::Begin;
@@ -119,7 +120,7 @@ pub fn init_observed(
         Err(layerfs_history::HistoryError::Unsupported(_)) => false,
         Err(error) => {
             return Err(ProjectError::History(
-                error.with_unknown(init_unknown_state(&request, op)),
+                error.with_unknown(init_unknown_state(request.name.as_str(), Some(op))),
             ))
         }
     };
@@ -176,6 +177,10 @@ pub fn init_observed(
         layerfs_content::filesystem::FilesystemRootId(root),
     )
     .map_err(ProjectError::Content)?;
+    // The binding hints, the publication and the release below run after
+    // `request.name` moves into the Stack; name the project and operation now
+    // (F43R4-2, F43R5-1).
+    let unknown = init_unknown_state(request.name.as_str(), Some(op));
     timer.child("history.record_bindings").run(|_| {
         super::hints::record_new_bindings(
             &reader,
@@ -183,10 +188,13 @@ pub fn init_observed(
             None,
             layerfs_content::filesystem::FilesystemRootId(root),
         )
+        .map_err(|error| match error {
+            ProjectError::History(error) => {
+                ProjectError::History(error.with_unknown(unknown.clone()))
+            }
+            other => other,
+        })
     })?;
-    // The release below runs after `request.name` moves into the Stack; name
-    // the project and operation now (F43R4-2).
-    let unknown = init_unknown_state(&request, op);
     let stack = timer.child("history.initialize_layerstack").run(|_| {
         catalog
             .initialize_layerstack(&StackInitialization {
@@ -197,7 +205,7 @@ pub fn init_observed(
                 genesis_root: root,
                 logical,
             })
-            .map_err(ProjectError::History)
+            .map_err(|error| ProjectError::History(error.with_unknown(unknown.clone())))
     })?;
     admission
         .release()
@@ -350,15 +358,14 @@ fn admission_op_id(stack: LayerStackId) -> [u8; 16] {
     op
 }
 
-/// The A6 context of an Init admission answer that was lost: the project
-/// being initialized, the Init phase and its durable operation.
-#[cfg(unix)]
-fn init_unknown_state(request: &InitRequest<'_>, op: [u8; 16]) -> UnknownOutcomeState {
+/// The A6 context of an Init history answer that was lost: the project being
+/// initialized, the Init phase and the durable operation, when one is known.
+pub(crate) fn init_unknown_state(name: &str, op: Option<[u8; 16]>) -> UnknownOutcomeState {
     UnknownOutcomeState::new(
         GcScopeKind::Project,
-        request.name.as_str(),
+        name,
         Some("init".to_owned()),
-        Some(layerfs_bridge::sdk_values::hex(&op)),
+        op.as_ref().map(|op| layerfs_bridge::sdk_values::hex(op)),
     )
 }
 

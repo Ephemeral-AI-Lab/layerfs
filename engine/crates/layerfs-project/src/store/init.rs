@@ -1,5 +1,6 @@
 //! Host Init and original handoff/failure custody.
 use crate as layerfs_project;
+use crate::init::init_unknown_state;
 use layerfs_bridge::provision::{check_destination, ProviderKind, StoreManifest, StoreProfile};
 use layerfs_history::{
     error::NameTakenState, BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryCatalog,
@@ -153,7 +154,11 @@ pub(crate) fn initialize(
                     name: request.branch_name.clone(),
                     source,
                 })
-                .map_err(InitError::History)?,
+                .map_err(|error| {
+                    InitError::History(
+                        error.with_unknown(init_unknown_state(request.stack_name.as_str(), None)),
+                    )
+                })?,
         );
         let totals = handles.history.statistics().map_err(InitError::History)?;
         let counts = counters.read();

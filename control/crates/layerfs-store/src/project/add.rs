@@ -8,6 +8,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_history::error::{HolderKind, HolderState, NameHolder, NameSource, NameTakenState};
+use layerfs_history::records::GcScopeKind;
 use layerfs_history::{BranchId, HistoryName, LayerStackId};
 use layerfs_home::helpers::random;
 use layerfs_home::home::paths;
@@ -253,7 +254,16 @@ pub fn add_failure(error: InitError, entry: Option<&Path>, name: &str, store: &s
         // lie behind a project the Store already holds, so it stays for the
         // retry or for diagnosis.
         InitError::Project(ProjectError::History(error)) | InitError::History(error) => {
-            return lookup::history(error.clone())
+            // A bare `UnknownOutcome` from a history call that did not attach
+            // its context still knows the call: name the project and Init
+            // phase, with no durable operation (F43R5-1).
+            return lookup::history_in(
+                error.clone(),
+                GcScopeKind::Project,
+                name,
+                Some("init"),
+                None,
+            );
         }
         _ => return failed(format!("adding project {name} to Store {store}: {error:?}")),
     };
