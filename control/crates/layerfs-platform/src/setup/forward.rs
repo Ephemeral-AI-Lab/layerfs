@@ -2,10 +2,16 @@
 //! daemon's port to the host (`lima`; #535 G4). It is started detached so it
 //! outlives one CLI call; its pid goes into the [`Forward`].
 //! `ExitOnForwardFailure` makes a busy port fail at once.
+//!
+//! A machine's forwards share one log, `forward.log` in its folder, each
+//! appending its `ssh`'s messages. Before a forward starts, a log past
+//! 16 MiB is copied to `forward.1.log` and emptied in place
+//! (layerfs-project#180): it is never renamed, since the machine's other
+//! forwards hold it open and would go on writing into the renamed file.
 use crate::error::{Code, MachineError};
 use crate::setup::{tool, worker};
 use crate::spec::{Forward, Spec};
-use std::path::Path;
+use layerfs_bridge::log_file;
 use std::thread;
 use std::time::Duration;
 
@@ -41,12 +47,17 @@ fn open(
         MachineError::new(Code::Failed, format!("{}: {e}", spec.work_dir.display()))
     })?;
     let log = spec.work_dir.join("forward.log");
+    // a rotation that fails changes no outcome: the forward appends anyway
+    let _ = log_file::rotate_in_place(&log, log_file::ROTATE_AT);
     let pid = tool::detach(&spec.tools, &ssh, &args, &log)?;
     thread::sleep(SETTLE);
     if !tool::alive(&spec.tools, pid, &marker(port)) {
         return Err(MachineError::new(
             Code::Failed,
-            format!("ssh -L 127.0.0.1:{port} ended at once: {}", tail(&log)),
+            format!(
+                "ssh -L 127.0.0.1:{port} ended at once: {}",
+                tool::tail(&log, 3)
+            ),
         ));
     }
     Ok(pid)
@@ -92,15 +103,4 @@ pub(crate) fn refuse(spec: &Spec, code: Code, why: &str) -> MachineError {
 /// Ends the forward `pid` on `port`, if it is still that forward.
 pub(crate) fn end(spec: &Spec, pid: u32, port: u16) {
     tool::end(&spec.tools, pid, &marker(port));
-}
-
-fn tail(log: &Path) -> String {
-    let text = std::fs::read_to_string(log).unwrap_or_default();
-    let lines: Vec<&str> = text.trim().lines().collect();
-    let said = lines[lines.len().saturating_sub(3)..].join("; ");
-    if said.is_empty() {
-        "no reason given".into()
-    } else {
-        said
-    }
 }

@@ -230,8 +230,9 @@ before relying on the window.
 - Linux x64 with glibc older than 2.39: installs, then the addon fails to
   load; npm can check the libc family but not its version.
 - Durable Stores: disabled by the owner; only Disposable/WAL runs.
-- PostgreSQL and TLS: not in the default build; such a call is refused
-  `Unsupported`. They need `--features postgresql,tls` at build time.
+- TLS: not in the default build; an `https://` remote is refused
+  `Unsupported`. It needs `--features tls` at build time. PostgreSQL Stores
+  are always built in.
 - The `layerfs` command and the Python wheel: separate artifacts, not in this
   tarball; the Python package is not on PyPI.
 - An MCP server: not built.

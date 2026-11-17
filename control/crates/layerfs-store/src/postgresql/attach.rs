@@ -46,7 +46,6 @@ pub const ANOTHER_STORE: &str = "the PostgreSQL server holds another Store than"
 /// `Denied`, another Store's schema `Unavailable` naming it, and a build
 /// without the PostgreSQL engine `Unsupported`.
 pub fn check(record: &StoreRecord, postgresql: &PgSelection) -> Result<SdkValue> {
-    #[cfg(feature = "postgresql")]
     {
         use layerfs_persistence::PostgresStatusError as E;
         let access =
@@ -90,14 +89,6 @@ pub fn check(record: &StoreRecord, postgresql: &PgSelection) -> Result<SdkValue>
                 SdkValue::Int(i64::try_from(access.latency.as_millis()).unwrap_or(i64::MAX)),
             ),
         ]))
-    }
-    #[cfg(not(feature = "postgresql"))]
-    {
-        let _ = (record, postgresql, SCHEMA);
-        Err(refused(
-            "Unsupported",
-            "this LayerFS build has no PostgreSQL engine; build the binding with --features postgresql",
-        ))
     }
 }
 

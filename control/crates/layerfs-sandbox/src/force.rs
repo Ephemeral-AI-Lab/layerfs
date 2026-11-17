@@ -12,6 +12,7 @@ use std::path::Path;
 /// The host operation's view of `native` Sandbox `sandbox` from its own
 /// records alone: no Store, project or daemon is resolved.
 pub fn native_host(home: &Path, sandbox: &str) -> Result<Host, SdkRefusal> {
+    let id = home::opened(home)?.id;
     Ok(Host {
         home: home.to_path_buf(),
         store: String::new(),
@@ -21,7 +22,10 @@ pub fn native_host(home: &Path, sandbox: &str) -> Result<Host, SdkRefusal> {
         store_path: None,
         deploy: Some(Deploy {
             local_dir: Some(paths::run_root(home).display().to_string()),
-            container_prefix: Some(format!("lfs-{}-", &home::opened(home)?.id[..8])),
+            // a Sandbox made before layerfs-project#180 is found by the
+            // earlier prefix its record keeps
+            container_prefix: Some(layerfs_home::names::provider_prefix(&id)),
+            legacy_prefix: Some(layerfs_home::names::legacy_provider_prefix(&id)),
             ..Deploy::default()
         }),
         postgresql: None,
@@ -48,7 +52,8 @@ pub fn native_free(home: &Path) -> Result<(), SdkRefusal> {
 
 /// Forced `sandbox.close` of the Sandbox `host` names, on this process's
 /// kernel: no daemon control call, Store open, active-Workspace refusal or
-/// retry. The backend's Stop checks the runtime identity and ends its
+/// retry. Its running commands are cancelled first, as every forced close
+/// does (`crate::exec::cancel::settle`). The backend's Stop checks the runtime identity and ends its
 /// mounts and processes; its Delete independently checks the physical
 /// detach before the runtime goes. Answers each recorded or `held`
 /// Workspace as `unknown`: its uncommitted changes end with the Sandbox.
@@ -72,6 +77,10 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
             unknown.push(path.to_owned());
         }
     }
+    // its running commands are each marked and cancelled first (D-10), so
+    // they answer `cancelled`, not the exit of the runtime's kill
+    let unreached = &mut crate::exec::cancel::unreached;
+    crate::exec::cancel::settle(&directory, &id, None, true, unreached)?;
     crate::reopen::recorded(host, &id, &value)?.stop_now()?;
     // The runtime is confirmed stopped from here on: a later failure says so,
     // so the record shows it stopped instead of as it was.
@@ -84,9 +93,10 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
         .stopped()
         .delete()
         .map_err(|error| after_stop(failed(error)))?;
+    // the table is whole after a holder's panic (layerfs-project#177)
     crate::registry::SANDBOXES
         .lock()
-        .map_err(|_| after_stop(refused("Failed", "the Sandbox table's lock was poisoned")))?
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
         .remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(|error| after_stop(failed(error)))?;
     Ok(SdkValue::map([

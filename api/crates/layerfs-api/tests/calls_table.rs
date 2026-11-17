@@ -1,4 +1,4 @@
-//! The call table and its dispatcher (#533 step 2): 73 calls in ten
+//! The call table and its dispatcher (#533 step 2): 80 calls in eleven
 //! families, arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::{families, json, keys, size, Call, Kind};
@@ -51,9 +51,9 @@ fn code(name: &str, args: SdkValue) -> String {
 }
 
 #[test]
-fn the_table_has_ten_families_and_73_calls() {
+fn the_table_has_eleven_families_and_80_calls() {
     let all: Vec<&Call> = layerfs_api::calls();
-    assert_eq!(all.len(), 73);
+    assert_eq!(all.len(), 80);
     // each family holds only its own calls, and has at least one
     for family in families() {
         assert!(!family.calls().is_empty(), "{}", family.name);
@@ -66,7 +66,7 @@ fn the_table_has_ten_families_and_73_calls() {
     let mut names: Vec<_> = all.iter().map(|c| c.name()).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 73, "call names are unique");
+    assert_eq!(names.len(), 80, "call names are unique");
     // an optional positional is only ever followed by optional ones (D7)
     for c in &all {
         let first_optional = c.args.iter().position(|a| a.optional);
@@ -75,7 +75,7 @@ fn the_table_has_ten_families_and_73_calls() {
         }
     }
     let counts: Vec<usize> = families().iter().map(|f| f.calls().len()).collect();
-    assert_eq!(counts, [6, 8, 3, 15, 4, 6, 12, 12, 5, 2]);
+    assert_eq!(counts, [6, 8, 3, 15, 5, 6, 15, 12, 5, 4, 1]);
 }
 
 #[test]
@@ -134,6 +134,97 @@ fn branch_family() {
             ("project", t("shop/api")),
             ("name", t("fix")),
             ("from_branch", t("main")),
+        ]),
+    );
+    assert!(!reached.starts_with("InvalidInput"), "{reached}");
+}
+
+#[test]
+fn branch_publish_declares_its_expected_base_options() {
+    // The shell, Node and Python front ends build their arguments from this
+    // table, so these options (and their shapes) are the CLI's and SDK's.
+    let call = layerfs_api::calls()
+        .into_iter()
+        .find(|call| call.family == "branch" && call.call == "publish")
+        .expect("branch.publish is in the table");
+    let declared: Vec<(&str, Kind, bool)> = call
+        .options
+        .iter()
+        .map(|option| (option.name, option.kind, option.optional))
+        .collect();
+    assert_eq!(
+        declared,
+        vec![
+            ("expected_base", Kind::Name, true),
+            ("expected_head", Kind::Name, true),
+            ("force", Kind::Bool, true),
+        ]
+    );
+    assert_eq!(
+        call.help,
+        "a Branch's head or Commit as main's next Layer, refusing a stale base"
+    );
+}
+
+#[test]
+fn branch_publish_expectations_are_plumbed() {
+    for (name, value, why) in [
+        (
+            "expected_base",
+            SdkValue::Int(1),
+            "`expected_base` must be text",
+        ),
+        (
+            "expected_base",
+            SdkValue::Bool(true),
+            "`expected_base` must be text",
+        ),
+        (
+            "expected_head",
+            SdkValue::Bool(true),
+            "`expected_head` must be text",
+        ),
+        (
+            "expected_head",
+            SdkValue::Int(1),
+            "`expected_head` must be text",
+        ),
+        ("force", t("yes"), "`force` must be true or false"),
+        ("force", SdkValue::Int(1), "`force` must be true or false"),
+    ] {
+        let refused = code(
+            "branch.publish",
+            map(&[
+                ("project", t("shop/api")),
+                ("branch", t("work")),
+                (name, value),
+            ]),
+        );
+        assert!(refused.contains(why), "{name}: {refused}");
+    }
+    // A misspelled option is not read as an argument of the call.
+    let typo = code(
+        "branch.publish",
+        map(&[
+            ("project", t("shop/api")),
+            ("branch", t("work")),
+            ("expectedBase", t("00")),
+        ]),
+    );
+    assert!(
+        typo.starts_with("InvalidInput: branch.publish: unknown argument `expectedBase`"),
+        "{typo}"
+    );
+    // A well-shaped expectation reaches the call instead of being refused by
+    // argument checking.
+    let reached = code(
+        "branch.publish",
+        map(&[
+            ("project", t("shop/api")),
+            ("branch", t("work")),
+            ("expected_base", t("00")),
+            ("expected_head", t("00")),
+            ("force", SdkValue::Bool(true)),
         ]),
     );
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
@@ -352,6 +443,24 @@ fn sizes_and_keys() {
 }
 
 #[test]
+fn doctor_family() {
+    assert!(code("doctor.fix", SdkValue::Null).contains("`id` is required"));
+    assert!(code(
+        "doctor.fix",
+        map(&[("id", t("native:image-part:00")), ("path", t("/etc"))])
+    )
+    .starts_with("InvalidInput: doctor.fix: unknown argument `path`"));
+    // reached: an id that names nothing is not found, and one of a kind
+    // that is only counted is refused
+    let reached = code("doctor.fix", map(&[("id", t("native:run-folder:../x"))]));
+    assert!(reached.starts_with("NotFound: "), "{reached}");
+    let lock = format!("native:image-lock:{}.2", "ab".repeat(32));
+    let reached = code("doctor.fix", map(&[("id", t(&lock))]));
+    assert!(reached.starts_with("InvalidInput: "), "{reached}");
+    assert!(reached.contains("only reported"), "{reached}");
+}
+
+#[test]
 fn an_explicit_home_must_be_absolute() {
     let mut events = Vec::new();
     let refused = layerfs_api::call(
@@ -381,14 +490,8 @@ fn the_source_is_one_file_per_call_under_its_family() {
     let mut expected: Vec<String> = families().iter().map(|f| f.name.to_owned()).collect();
     expected.push("lib.rs".to_owned());
     expected.push("calls".to_owned());
-    // Explicit doctor stays outside the normal table/home dispatcher.
-    expected.push("doctor".to_owned());
     expected.sort();
     assert_eq!(names(&src), expected);
-    assert_eq!(
-        names(&src.join("doctor")),
-        ["mod.rs", "options.rs", "run.rs"]
-    );
     for family in families() {
         let mut files: Vec<String> = family
             .calls()
@@ -396,6 +499,12 @@ fn the_source_is_one_file_per_call_under_its_family() {
             .map(|c| format!("{}.rs", c.call))
             .collect();
         files.push("mod.rs".to_owned());
+        if family.name == "doctor" {
+            // the report itself (explicit options and its run) stays
+            // outside the table and the home dispatcher, beside the family's
+            // one call
+            files.extend(["options.rs".to_owned(), "run.rs".to_owned()]);
+        }
         files.sort();
         assert_eq!(names(&src.join(family.name)), files, "{}", family.name);
     }

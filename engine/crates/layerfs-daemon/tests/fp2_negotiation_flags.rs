@@ -11,8 +11,9 @@
 //!   cannot be removed". Every other flag the pinned library knows is asserted
 //!   absent by name, and the twelve flags section 8.1 forbids are asserted
 //!   absent one by one. The names and bit values below are those of
-//!   `engine/vendor/fuser-0.18.0/src/ll/flags/init_flags.rs`; the daemon package
-//!   has no direct dependency on that library, so they are written here.
+//!   `src/ll/flags/init_flags.rs` at the pinned Ephemeral-AI-Lab/fuser revision
+//!   in layerfs-fuse/Cargo.toml; the daemon package has no direct dependency
+//!   on that library, so they are written here.
 //! - The receipt's limits are section 8.1's: `max_write` and `max_readahead`
 //!   131072, `max_background` 1, congestion threshold 1.
 //! - The kernel's own mount-table row of the mount (`/proc/self/mountinfo`)

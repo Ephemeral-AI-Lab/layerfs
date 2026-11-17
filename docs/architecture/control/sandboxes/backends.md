@@ -50,7 +50,16 @@ different string and is not what records store.
 | Launch options | `ProviderLaunchOptions::Local` | `::Namespaces` (identity, environment, image digest, archive) |
 | Record | `SandboxRecord::Local` | `SandboxRecord::Namespaces` (local facts + image) |
 | Process boundary | named process groups | cgroup v2 directory |
+| Kernel requirements | none | cgroup v2 with `cgroup.kill` (Linux 5.14), and `clone3` with `CLONE_INTO_CGROUP` allowed (Linux 5.7; not answered `ENOSYS` or `EPERM` by a seccomp filter around the worker): every command is created inside its cgroup, with no fallback |
 | Source | [`host_process/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/adapter.rs) | [`namespaces/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/adapter.rs) |
+
+Neither backend isolates the network (layerfs-project#164, #551): a
+`native` Sandbox's commands use this host's network, and a `namespaces`
+Sandbox unshares mount, pid and IPC namespaces but no network namespace, so
+its commands use the network of the kernel that runs it (the VM, or the
+`docker` machine's container). No call option, record or answer has an
+`isolation` or `scheduling` field; `isolation` above is this in-memory
+capability only.
 
 Capabilities "describe support, not qualification"
 ([`types/capabilities.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/capabilities.rs)).
@@ -104,9 +113,12 @@ not prove descendants ended.
    config/daemon.setup         0600  in a 0700 dir; written once
    config/helper.spec          0600  namespaces only
    overlay/overlay.sqlite            in a 0700 dir (daemon's template)
+   overlay/<namespace>.sqlite        one per mounted Workspace
    overlay/upper/  work/       0700  namespaces only: root's writable layer
+   owner                       0600  real path of the record's folder
    workspaces/                       Workspace mounts
-   daemon.log                  0600  daemon stdout + stderr
+   daemon.log                  0600  daemon stdout + stderr; new with the
+                                     directory, never rotated (below)
    tmp/                        1777  commands' scratch and HOME
    groups/                     0700  native: one empty file per group
    bin/layerfs-daemon, layerfs-sandbox-helper   namespaces only, 0755
@@ -126,8 +138,44 @@ not prove descendants ended.
 | --- | --- | --- |
 | Root | Absolute, this user's, not group or other writable, `o+x`. `Local::new` (namespaces) also needs every ancestor `o+x`, since commands run as another identity; `Local::native` does not (a macOS home is 0750). | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs) |
 | Process identity | `LocalProcess { pid, start, boot }`: all three must match to count as alive; it lives in the bridge's `process` module. | [`process/identity.rs`](../../../../engine/crates/layerfs-bridge/src/process/identity.rs) |
+| `daemon.log` | Made new (`O_EXCL`) with the Sandbox's directory by each start, which refuses a directory that exists, and removed with it at close: a daemon never opens a log an earlier one wrote, so there is no `daemon.1.log`. Nothing rotates it while the daemon runs (a rename would not move the daemon's descriptor, and its launcher waits for the listener line from the file's start); it grows until the Sandbox closes. With tracing off the daemon writes one line for each control connection that ends without `EndSession` (a caller that closes it) and for each reclaimed slot or expired request, none for a mount, exec or Commit itself. Rotating it while the daemon runs is not built in 2.0 (layerfs-project#180, live writers). | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs), [`backend/namespaces/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/create.rs) |
 | Search path | Linux: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`. macOS: this process's `PATH`, else that plus `/opt/homebrew/bin`. | [`local/search.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/search.rs) |
 | OS facts | `local/os/linux`: `mountinfo`, lazy `MNT_DETACH`, the seccomp filter. `local/os/macos`: the `mount` table, `umount -f`. `seccomp.rs` is the crate's only `unsafe`. | [`local/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/mod.rs), [`lib.rs`](../../../../control/crates/layerfs-sandbox-backend/src/lib.rs) |
+
+### The run folder
+
+`<root>` is the run root, `machine/native/run/` of the home or of a worker's
+root, and `<name>` the Sandbox's run folder name
+([Home: names outside the records](../home/README.md#names-outside-the-records)).
+A `native` Sandbox's entries are this user's; a `namespaces` Sandbox's are
+root's, and its commands run as another, nonroot identity. Everything in
+the folder goes with it: `delete` removes it whole after a known stop, at
+`sandbox.close` or when a start fails
+([Stop and delete](#stop-and-delete)).
+
+| Entry | Written by | Read by | Source |
+| --- | --- | --- | --- |
+| `<name>/` | the launcher, one `mkdir` | anyone may pass and list it (0755) | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs) `create` |
+| `config/daemon.setup` | the launcher, once, before the spawn: the daemon's private key, its caller's public key and the Store, a PostgreSQL URL with its password included | the daemon (`--config`). A `namespaces` command cannot read it; a macOS `native` command, running as the user who owns it, can | same, `prepare`; [`store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs) `DaemonStore` |
+| `config/helper.spec` | the launcher, once: absolute paths and binds, no secret | the helper's init stage, and a reopen | [`namespaces/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/create.rs) `prepare`, [`helper_spec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/helper_spec.rs) |
+| `overlay/overlay.sqlite`, `overlay/<namespace>.sqlite` | the daemon: its template before readiness, then one copy per mounted Workspace, named by the `namespace` of the Workspace's record and deleted at its terminal unmount | the daemon only; an inspection reads their sizes and never opens them | [`workspaces.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/workspaces.rs), [Inspection](inspect.md#what-is-kept-private) |
+| `overlay/upper/`, `overlay/work/` | made empty by the launcher; then whatever a command writes outside its Workspaces, through the Sandbox's `/` | commands, through that overlay only | [`namespaces/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/create.rs), [`helper mounts.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/mounts.rs) |
+| `workspaces/` | made by the daemon (`native`) or the launcher (`namespaces`); the daemon mounts each Workspace in it | commands, as the mounts allow | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs) `LocalPaths` |
+| `daemon.log` | the daemon's stdout and stderr, into the file the launcher made | the launcher (the listener line), `log_tail` and the inspect route; a macOS `native` command can read it too | same; [Inspection](inspect.md) |
+| `tmp/` | commands: it is their `HOME` and scratch directory | anyone who can reach it (1777) | [`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs), [`runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs) `scratch_directory` |
+| `groups/` | each `native` command's start: one empty file per process group, removed once the group has no member | the caller's side only | [`local/groups.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/groups.rs) |
+| `bin/`, `runtime/` | the launcher: copies of the daemon, the helper and the runtime layer | anyone may read and run them; only root may change them | [`namespaces/paths.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/paths.rs) |
+| `owner` | the caller's side, once, after the daemon started | a reopen with no `deploy.localDir`, and `doctor`'s leftover walk and fix | [`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `mark_owner`, `owned` |
+| `<root>/<name>.root/` | the launcher makes it empty; the init stage mounts the Sandbox's root on it inside the Sandbox's own mount namespace, so from outside it stays empty | nothing outside the Sandbox | [`namespaces/paths.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/paths.rs); `delete` removes it with `rmdir` |
+| `<root>/images/` | the first Sandbox that needs a digest unpacks it once, under that digest's `<64 hex>.2.lock`, beside its sidecar `<64 hex>.2.json` | every Sandbox built on it, read-only; it is not removed with a Sandbox, and the lock files stay | [`rootfs/cache.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/cache.rs), [`image_artifact.rs`](../../../../control/crates/layerfs-sandbox/src/image_artifact.rs) |
+
+`tmp/` (the commands' `HOME`), the root's writable layer and the
+Workspaces' overlay databases are plain folders and files of the run root,
+on the filesystem of the home or of the machine's data root, which also
+holds that side's sqlite Stores. Nothing gives a Sandbox a quota or
+reserves space for it (`supports_resource_limits` is false for both
+backends): what a command writes to its `HOME` takes space from the
+Stores' disk. A `namespaces` Sandbox's `/tmp` is a tmpfs, in memory.
 
 ## `backend/host_process/`: native
 
@@ -136,6 +184,17 @@ processes, network, users and filesystem. `HostProcessProvider::launch`
 accepts only `Local` options whose identity is this process's own uid and gid
 and whose environment has no `PATH`
 ([`host_process/provider.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/provider.rs)).
+
+This backend isolates nothing. A command is an ordinary process of the
+calling user: it starts in the Workspace's directory with `HOME` set to the
+Sandbox's `tmp/`, and from there reads and writes every file that user can,
+on the host's own filesystem, including the LayerFS home and this
+Sandbox's `daemon.setup`, and uses the host's network. It gets this
+process's search path and, when present, the user's `RUSTUP_HOME`,
+`CARGO_HOME` and `GIT_CONFIG_GLOBAL`, and nothing else of the caller's
+environment
+([`host_process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/exec.rs),
+[`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `start_named`).
 
 | Rule | Source |
 | --- | --- |
@@ -155,8 +214,12 @@ and whose environment has no `PATH`
    prepare: Local parts + copied daemon, helper and runtime layer + spec
             + upper/work
    cgroup::create /sys/fs/cgroup/layerfs/<id>  (needs cgroup.kill)
+     layerfs/ gives its children +memory +pids, those its parent lists
+     (give_controllers; a failed write is one log line, not a failure)
+     split: makes the leaf <id>/init, then <id> gives its children the
+     same controllers it has (a failed write is one log line)
    spawn: helper init --spec <spec>
-            joins the cgroup; unshare(NEWNS | NEWPID | NEWIPC); private
+            joins <id>/init; unshare(NEWNS | NEWPID | NEWIPC); private
             v
           helper init-inner --spec <spec>          PID 1 of the namespace
             overlay(lower = image, upper/work = the Sandbox's), /proc,
@@ -178,9 +241,10 @@ and whose environment has no `PATH`
 | Image | `sha256:<64 hex>`, the archive's config digest; a `docker save` archive with uncompressed layers (gzip or zstd layers refused); unpacked once per digest under `<root>/images` and shared read-only. A reopen unpacks nothing: an image gone is refused. | [`rootfs/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/mod.rs), [`types/image.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/image.rs), [`namespaces/provider.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/provider.rs) |
 | Helper | `LAYERFS_SANDBOX_HELPER`, else beside the daemon or this executable; copied into the Sandbox's `bin/`, which a reopen uses. | `namespaces/provider.rs` |
 | Runtime layer | `runtime/` beside the daemon (the sealed bundle's, R5), when it holds this architecture's loader; else none, and the daemon runs on the image's own loader and libraries as before. Copied into the Sandbox's `runtime/` (regular files of `lib/` and `bin/` only; anything else refused; the loader and programs 0755, the libraries 0644), so a bundle replaced under a running Sandbox changes nothing. The init stage binds it read-only, nosuid and nodev at `/.layerfs/runtime`, refusing an image whose `/.layerfs` or `/.layerfs/runtime` is not a plain directory, and starts the daemon through its loader (`--inhibit-cache --library-path /.layerfs/runtime/lib`) with `LAYERFS_SANDBOX_RUNTIME=/.layerfs/runtime` and no `LD_*` variable: the image's loader, libraries and `/etc/ld.so.cache` are never used, so an image with an older glibc, musl or no libc starts it. The image's `/etc/ld.so.preload` is still read by the loader. Its files are unmodified Debian binaries (glibc's loader and libraries, `libgcc_s`, OpenSSL, `getent`, `bash-static`, `busybox-static`), several GPL or LGPL: the bundle's `licenses/` holds each package's copyright file and `SOURCES`, the written source offer naming every file's Debian source package, version and snapshot.debian.org page (`sandbox_runtime.sources` in `bundle.json`); `tools/linux_bundle.py sources` downloads exactly those sources to publish beside a release. | `namespaces/provider.rs`, `namespaces/create.rs`, [`helper mounts.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/mounts.rs), [`helper init.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/init.rs), [`sandbox_runtime.rs`](../../../../engine/crates/layerfs-bridge/src/sandbox_runtime.rs) |
-| Commands | `helper exec --init <pid> --cgroup <dir> [--command-cgroup <dir>] [--runtime <dir>] --uid --gid --cwd -- <argv>`: joins the cgroup, enters the namespaces, becomes uid:gid with no capabilities and no-new-privs, installs the filter below, execs. `--runtime /.layerfs/runtime` (a Sandbox with the runtime layer) appends `/.layerfs/runtime/bin` to the end of the command's `PATH` once; `argv[0]` (`bash`) is looked up on it inside the Sandbox, so the image's own `bash` wins and an image with none runs the runtime's static one. That directory holds only `bash`, `busybox` (no applet links) and `getent`. | [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs), [`helper exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/exec.rs) |
-| Command cgroup | With an exec slot, the command (never the helper) moves into `ws-<workspace>/exec-<exec>` just before exec; the helper then writes one byte on a socket it was given as stdin, and only then is the stop handle told. A command that cannot join never runs. | `namespaces/exec.rs`, [`namespaces/cgroup.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/cgroup.rs) |
-| End | One `cgroup.kill` ends everything the Sandbox started, whatever session it left; `track` is a no-op. Reopen checks the recorded init and its cgroup membership. | `namespaces/cgroup.rs`, [`namespaces/host.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/host.rs) `in_cgroup` |
+| Commands | `helper exec --init <pid> --cgroup <dir> [--command-cgroup <dir>] [--runtime <dir>] --uid --gid --cwd -- <argv>`: forks itself into the Sandbox's leaf group `<id>/init` (or `<id>` for a Sandbox an earlier build started, which has no leaf; `helper_group`) (`clone3` with `CLONE_INTO_CGROUP`; the parent, outside it, waits and ends as its child did, a signal included), the child enters the namespaces, becomes uid:gid with no capabilities and no-new-privs, installs the filter below, execs. `--runtime /.layerfs/runtime` (a Sandbox with the runtime layer) appends `/.layerfs/runtime/bin` to the end of the command's `PATH` once; `argv[0]` (`bash`) is looked up on it inside the Sandbox, so the image's own `bash` wins and an image with none runs the runtime's static one. That directory holds only `bash`, `busybox` (no applet links) and `getent`. | [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs), [`helper exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/exec.rs) |
+| Command cgroup | With an exec slot, the command (never the helper) is created inside `ws-<workspace>/exec-<exec>` (`clone3` with `CLONE_INTO_CGROUP`), without one inside the helper's (the leaf); once its exec succeeded the helper writes one byte on a socket it was given as stdin, and only then is the stop handle told. A command that cannot be created there never runs. No exec moves a process between groups: a write to `cgroup.procs` waits for an RCU grace period (5–28 ms after an idle spell), which every command paid before. Only the init stage joins its group, once per Sandbox. | `namespaces/exec.rs`, [`namespaces/cgroup.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/cgroup.rs) |
+| Sandbox group layout | The Sandbox's group `<id>` holds no process: its init stages, daemon, command helpers and commands with no exec slot are in its leaf `<id>/init`, commands with one in `ws-<workspace>/exec-<exec>`. cgroup v2's no-internal-process rule allows only such a group to enable controllers for its children, so `create` splits it before any process joins and gives `init` and each `ws-<workspace>` the memory and pids controllers it has: a Workspace's memory, processes and OOM kills can be read ([`sandbox.get`](../../api/sdk/sandbox.md#sandboxget) `workspaces[].usage`), and `<id>`'s own files still count everything. `ws-<workspace>` enables nothing for its command groups. No limit is ever written. A Sandbox an earlier build started keeps its processes in `<id>`, gives its Workspaces no memory or pids controller, and still runs commands. | `namespaces/cgroup.rs` `create`, `split`, `leaf`, `helper_group` |
+| End | One `cgroup.kill` on `<id>` ends everything the Sandbox started, its leaf and Workspace groups included, whatever session it left; `track` is a no-op. Reopen checks the recorded init and its membership of the leaf (or of `<id>` for a Sandbox an earlier build started). | `namespaces/cgroup.rs`, [`namespaces/host.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/host.rs) `in_cgroup` |
 
 A command that made a user namespace could hold its own copy of a Workspace
 mount outside the daemon's unmount. Two guards stop it:

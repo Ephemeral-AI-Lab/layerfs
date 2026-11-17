@@ -52,6 +52,23 @@ jobs:
           # shellcheck disable=SC2086 # one --test flag per word
           timeout 120 cargo +1.85.1 nextest run --manifest-path Cargo.toml --locked \
             --workspace --exclude layerfs-node $targets --profile ci -E "$filter"
+      # Targets that are empty without a cargo feature of their package (the
+      # worker's fault switches, `worker-fault`). Each group is built and run
+      # alone with -p, so the feature reaches no other package's binaries.
+      - name: Run feature-gated tests (each group capped at 120 s)
+        if: ${{ !cancelled() }}
+        run: |
+          python3 -B tools/ci_tests.py featured > "$RUNNER_TEMP/featured.tsv"
+          status=0
+          while IFS="$(printf '\t')" read -r package feature targets; do
+            # shellcheck disable=SC2086 # one --test flag per word
+            cargo +1.85.1 test --manifest-path Cargo.toml --locked \
+              -p "$package" --features "$feature" $targets --no-run || status=1
+            # shellcheck disable=SC2086 # one --test flag per word
+            timeout 120 cargo +1.85.1 nextest run --manifest-path Cargo.toml --locked \
+              -p "$package" --features "$feature" $targets --profile ci || status=1
+          done < "$RUNNER_TEMP/featured.tsv"
+          exit "$status"
 
   mount:
     runs-on: ubuntu-24.04

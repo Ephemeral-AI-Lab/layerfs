@@ -17,21 +17,20 @@ layerfs-sandbox-backend = { path = "../layerfs-sandbox-backend" }
 layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
 # Store backup to a bucket (#535).
 layerfs-bucket = { path = "../layerfs-bucket" }
+# The errno names of the worker's accept loop (constants only).
+libc = "=0.2.189"
 
 [features]
-# PostgreSQL Stores (#506, #533): open, attach, create and Init.
-# Off by default; the sealed Linux build the worker runs turns it on.
-postgresql = [
-    "layerfs-store/postgresql",
-    "layerfs-project/postgresql",
-    "layerfs-store-service/postgresql",
-]
 # https:// remotes: Cloudflare R2, MinIO behind TLS. Off by default; the
 # sealed Linux build the worker runs turns it on.
 tls = ["layerfs-store/tls", "layerfs-bucket/tls"]
 # The machine calls (2.0, #533): host builds only. The guest worker is built
 # without it, so no machine adapter runs inside a machine.
 machine = ["layerfs-machine/machine", "layerfs-sandbox/machine"]
+# The worker's fault switches and shorter waits, for its tests only
+# (layerfs-project#177, #179 E): `worker_server::fault`. Never a default
+# feature, never named by another manifest; the boundary guard checks both.
+worker-fault = []
 
 [dev-dependencies]
 layerfs-content = { path = "../../../core/crates/layerfs-content" }

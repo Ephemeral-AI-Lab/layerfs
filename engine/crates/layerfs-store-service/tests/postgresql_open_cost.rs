@@ -3,7 +3,6 @@
 //! server-to-client flight after a client flight is one round trip the
 //! client waited for (TCP handshakes are not counted). Needs
 //! `LAYERFS_TEST_POSTGRES_URL` with `sslmode=disable`; NOT_RUN without it.
-#![cfg(feature = "postgresql")]
 use layerfs_history::records::StackInitialization;
 use layerfs_history::{
     BranchId, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryName,

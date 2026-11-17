@@ -1,5 +1,9 @@
 //! The report: `{ ok, findings: [{ severity, entity: { kind, name },
-//! message, fix }] }`, `ok` false when any finding is an error.
+//! message, fix }], leftovers }`, `ok` false when any finding is an error.
+//! A finding of something an interrupted operation left also holds
+//! `leftover` (`leftover_report`), and `leftovers` lists each machine whose
+//! folders were walked for them; a report with no machine walked (a home
+//! that does not exist yet) has no `leftovers`.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{detect, Layout};
 use layerfs_home::json;
@@ -22,11 +26,15 @@ struct Finding {
     name: String,
     message: String,
     fix: String,
+    /// What a leftover's finding adds: its machine, kind, path, bytes, age
+    /// and fix id.
+    leftover: Option<SdkValue>,
 }
 
-/// The findings so far, in the order the checks made them.
+/// The findings so far, in the order the checks made them, and the
+/// machines walked for leftovers.
 #[derive(Default)]
-pub(super) struct Findings(Vec<Finding>);
+pub(super) struct Findings(Vec<Finding>, Vec<SdkValue>);
 
 impl Findings {
     /// Adds a finding on entity `kind` `name`.
@@ -43,7 +51,29 @@ impl Findings {
             name: name.to_owned(),
             message,
             fix,
+            leftover: None,
         });
+    }
+
+    /// A warning on entity `kind` `name` for something an interrupted
+    /// operation left, with its `leftover` fields.
+    pub(super) fn leftover(
+        &mut self,
+        entity: (&str, &str),
+        message: String,
+        fix: String,
+        leftover: SdkValue,
+    ) {
+        self.warning(entity, message, fix);
+        if let Some(finding) = self.0.last_mut() {
+            finding.leftover = Some(leftover);
+        }
+    }
+
+    /// One machine walked for leftovers: its row of the report's
+    /// `leftovers`.
+    pub(super) fn walked(&mut self, machine: SdkValue) {
+        self.1.push(machine);
     }
 
     /// An error on entity `kind` `name`.
@@ -63,7 +93,7 @@ impl Findings {
                 Severity::Error => "error",
                 Severity::Warning => "warning",
             };
-            SdkValue::map([
+            let mut fields = vec![
                 ("severity", SdkValue::text(severity)),
                 (
                     "entity",
@@ -74,12 +104,24 @@ impl Findings {
                 ),
                 ("message", SdkValue::text(&finding.message)),
                 ("fix", SdkValue::text(&finding.fix)),
-            ])
+            ];
+            fields.extend(finding.leftover.clone().map(|left| ("leftover", left)));
+            SdkValue::Map(
+                (fields.into_iter())
+                    .map(|(field, value)| (field.to_owned(), value))
+                    .collect(),
+            )
         });
-        SdkValue::map([
-            ("ok", SdkValue::Bool(ok)),
-            ("findings", SdkValue::List(findings.collect())),
-        ])
+        let mut report = vec![
+            ("ok".to_owned(), SdkValue::Bool(ok)),
+            ("findings".to_owned(), SdkValue::List(findings.collect())),
+        ];
+        // only a home whose folders were walked has the rows: a home that
+        // does not exist yet answers `{ ok, findings }` as before
+        if !self.1.is_empty() {
+            report.push(("leftovers".to_owned(), SdkValue::List(self.1.clone())));
+        }
+        SdkValue::Map(report)
     }
 }
 
@@ -111,6 +153,7 @@ pub fn doctor(home: &Path) -> Outcome {
             super::checks::check(home, &scanned, &mut findings)?;
             super::capacity::check(home, &scanned, &mut findings);
             super::workers::check(home, &scanned, &mut findings);
+            super::leftover_report::check(home, &scanned, &mut findings);
         }
     }
     Ok(findings.to_sdk())

@@ -43,6 +43,35 @@ fn every_refusal_is_the_rows_reason() {
     }
 }
 
+/// A machine's `supports.log` (layerfs-project#178): true where its calls
+/// go to a worker this build starts, so a worker log exists to read. Never
+/// on `native`, Windows included (its WSL2 worker is not designed), and
+/// never for a platform that is not on the host.
+#[test]
+fn a_worker_log_is_supported_where_this_build_starts_the_worker() {
+    let log = |platform, host| support(platform, host).supports().log;
+    for host in HostOs::NAMED.into_iter().chain([HostOs::Other]) {
+        assert!(!log(Platform::Native, host), "native on {host:?}");
+        for row in platforms(host) {
+            let worker = row.sqlite == Some(CallSite::Worker);
+            let allowed = sandbox_allowed(row.platform, host, StoreKind::Sqlite).is_ok();
+            assert_eq!(row.supports().log, worker && allowed, "{row:?}");
+        }
+    }
+    for platform in [Platform::Docker, Platform::Lima, Platform::AppleContainer] {
+        assert!(log(platform, HostOs::Macos), "{platform:?} on macOS");
+        assert!(!log(platform, HostOs::Windows), "{platform:?} on Windows");
+        assert!(!log(platform, HostOs::Other), "{platform:?} elsewhere");
+    }
+    assert!(log(Platform::Docker, HostOs::Linux));
+    assert!(!log(Platform::Lima, HostOs::Linux));
+    assert!(!log(Platform::AppleContainer, HostOs::Linux));
+    // Windows `native` names a worker as its call site, and still has none
+    let windows = support(Platform::Native, HostOs::Windows);
+    assert_eq!(windows.sqlite, Some(CallSite::Worker));
+    assert!(!windows.supports().log);
+}
+
 /// #535 §7.3: PostgreSQL Sandboxes run on native (macOS, and Linux
 /// namespaces with no bind; phase 5a), docker, and since the G7 live
 /// receipts on lima and apple-container, on every host each is on.

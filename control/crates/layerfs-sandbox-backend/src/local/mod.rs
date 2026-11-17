@@ -4,7 +4,9 @@
 //! `umount -f`; `linux` supplies the `mountinfo` table and a lazy
 //! `MNT_DETACH`. Process identity (`LocalProcess`) is
 //! `layerfs_bridge::process` (layerfs-project#112). The host_process and
-//! namespaces backends build on it.
+//! namespaces backends build on it. `confined` is what an inspection read
+//! uses of the filesystem (layerfs-project#178).
+pub mod confined;
 mod create;
 pub(crate) mod groups;
 pub(crate) mod listener;
@@ -16,6 +18,15 @@ pub use create::{Local, LocalCreateFailure, LocalPaths, LocalPhase};
 #[cfg(target_os = "linux")]
 pub(crate) use os_impl::linux as os;
 #[cfg(target_os = "linux")]
-pub use os_impl::linux::seccomp::{deny_user_namespaces, start_in_cgroup};
+pub use os_impl::linux::seccomp::{deny_user_namespaces, OneThread};
 #[cfg(target_os = "macos")]
 pub(crate) use os_impl::macos as os;
+
+/// The mount points at or under `directory` in this process's mount table,
+/// deepest first (`mountinfo` on Linux, `mount`'s listing on macOS). Nothing
+/// under `directory` is opened or `stat`ed, so a dead mount cannot hold the
+/// caller: what a removal asks before it deletes a Sandbox's folder
+/// (layerfs-project#180).
+pub fn mounts_under(directory: &std::path::Path) -> std::io::Result<Vec<std::path::PathBuf>> {
+    os::mounts::under(directory)
+}

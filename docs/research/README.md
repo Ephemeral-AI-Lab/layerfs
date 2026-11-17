@@ -16,6 +16,7 @@ here is supporting context.
 - [AI-native filesystem vision](vision/README.md)
 - [Historical V2 replacement work](history/v2-replacement/README.md)
 - [Historical V3 engineering work](history/v3/README.md)
+- [Agent guide history](history/agents-guides/README.md): status text moved out of the agent guides (2026-11-16)
 
 Historical paths are retained for design context and source-seal interpretation;
 they do not define the current product or roadmap.

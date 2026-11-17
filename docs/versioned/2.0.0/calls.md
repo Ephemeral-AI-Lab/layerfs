@@ -9,7 +9,7 @@ one file per call under its family in
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 61 calls in nine families. `layerfs help` lists them, and
+There are 80 calls in eleven families. `layerfs help` lists them, and
 `layerfs help <family> [<call>]` prints one family or one call.
 
 ## How a call is written
@@ -73,7 +73,7 @@ Sandbox names (H §7.6).
 | size | bytes as a number, or text with `K`, `M` or `G` (`512M`, `8G`) | a word |
 | function | a callback (Node, Python only) | — |
 
-## The 61 calls
+## The calls
 
 `[x]` is an optional positional. Every family's results are snake_case.
 
@@ -138,14 +138,18 @@ folder is in place. Events arrive at most every 200 ms.
 | `get` | `project`, `branch` | — | one Branch and its head Commit |
 | `fork` | `project`, `name`, `from_branch`, `[from_commit]` | — | a new Branch from another Branch's head or Commit |
 | `merge` | `project`, `name`, `a`, `b` | `message`, `units` (JSON) | merges two Branches into a new one |
-| `publish` | `project`, `branch`, `[commit]` | — | a Branch's head or Commit as `main`'s next Layer |
+| `publish` | `project`, `branch`, `[commit]` | `expected_base`, `expected_head`, `force` | a Branch's head or Commit as `main`'s next Layer, refusing a stale base |
 | `diff` | `project`, `from_branch`, `to_branch` | `paths_only`, `page_size`, `page_pos`, `cursor` | files that differ between two Branches' heads |
 
 Run: `fork` answers `{kind: "Forked", branch, base, head}`; `publish`
 answers `{kind: "Added", source, published_layer, based_on, overwrote_count,
 overwrote, overwrote_has_more}`; `merge` answers `{kind: "Merged",
 fast_forward, branch, head, root, sources, merge_base, conflicts, lww,
-units, …}`.
+units, …}`. `publish` is refused `HeadMoved` when `main` gained a Layer since
+the Branch forked (merge with `main` into a new Branch and publish that), or
+when `main` or the Branch head is not the `expected_base` or `expected_head`
+given; `force` overwrites instead. A Commit already published answers
+`UpToDate`, and a tree `main` already holds answers `NoChanges`.
 
 ### `commit` (3)
 
@@ -213,7 +217,7 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `create` | `project`, `name`, `machine` (optional) | `image` | starts a named Sandbox of a project on a machine; with none, its sqlite Store's machine, or `native` for a PostgreSQL Store |
-| `list` | `[project]` | `page_size`, `page_pos` | every Sandbox in the home, or one project's |
+| `list` | `[project]` | `page_size`, `page_pos`, `live` | every Sandbox in the home, or one project's; with `live`, whether each one's daemon process runs now |
 | `get` | `name` | `page_size`, `page_pos` | a Sandbox and its Workspaces |
 | `close` | `name` | `force` | stops a Sandbox |
 
@@ -279,6 +283,75 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   Sandbox with no id. Each Workspace carries `ws`
   (`<sandbox>:<name>` when named, else `<sandbox>:<path>`), `name` (or
   `null`) and `path`, beside the daemon's fields.
+- `get` also answers `workspace_capacity`, how many Workspaces one Sandbox
+  holds at once (16), whatever the Sandbox's state, and for each Workspace:
+  - `running`: the commands running in it now, oldest first, whichever
+    client started them: `[{exec_id, started, tag, program}]`. `started`
+    is ms since the epoch; `tag` is the log tag of the `workspace exec`
+    call that started it (`log_tag`, else `LAYERFS_LOGS_TAG`) or `null`;
+    `program` is the command's first word that is not a `NAME=value`
+    assignment, or `null`. No argument and no environment value is shown.
+    A command that ended is not listed, nor is one whose client is gone
+    (the next cancel, unmount or close ends that one). `null` when the
+    command records could not be read.
+  - `overlay_bytes`: the size of the Workspace's overlay file, read from
+    its folder entry (the file is not opened). It includes the size of
+    the empty overlay and only grows until the Workspace is unmounted.
+    `null` when it could not be read. For a Sandbox on a `lima` machine
+    whose daemon this host reaches directly, the sizes are read by that
+    machine's worker, and are `null` when it does not answer.
+  - `usage`: what the Workspace's commands have used, in the shape of the
+    Sandbox's `usage` below, from the Workspace's own cgroup in a
+    `namespaces` Sandbox (the Sandbox's own processes are in a leaf group,
+    so its Workspace groups get the memory and pids controllers it has).
+    `null` with `usage_reason` `no_command` when no command runs in the
+    Workspace, and with the Sandbox's own reason when none of its
+    Workspaces can have a cgroup; a Sandbox an earlier build started keeps
+    only `cpu_usec` per Workspace (`no_controller`).
+  They come from files, with no daemon call. A machine whose worker runs
+  an earlier build answers Workspaces without these fields.
+  ```text
+  {"name":"s1","project":"shop/api","machine":"native",…,"state":"running","workspaces":[{"workspace":"5f…","namespace":1,"branch":"dev",…,"path":"/…/workspaces/1","name":"w","ws":"s1:w","running":[{"exec_id":"exec-9c0f6f0d2a1b4e77","started":1794000000000,"tag":"dsh:s9:t1","program":"npm"}],"overlay_bytes":188416}],"daemon_capacity":{…},"workspace_capacity":16,"next_page_pos":null}
+  ```
+- `get` also answers the Sandbox's daemon process and what its cgroup has
+  used (#164), read with `overlay_bytes` on the side that runs the Sandbox,
+  with no daemon call and no further round trip:
+  - `daemon`: `{pid, started_at}` of the process the Sandbox's record
+    names (the daemon of a `native` Sandbox; the supervisor a
+    `namespaces` Sandbox's daemon runs under), with `started_at` in ms
+    since the epoch, to about a second, while the process runs and
+    `null` once it has ended; `null`
+    when its machine did not answer.
+  - `usage`: `{cpu_usec, memory_current, memory_peak, memory_file, pids,
+    oom_kills}` of the Sandbox's own cgroup, the daemon and every command
+    in it (`memory_file`: file cache and tmpfs, inside `memory_current`;
+    `oom_kills`: out-of-memory kills in it and its Workspace and command
+    groups; #182); a value the
+    kernel does not keep there is `null`, and when that is the memory
+    or the process count `usage_reason` is `no_controller` (where the
+    machine gives Sandboxes no memory or pids controller; docker, Lima and
+    Apple Container machines of this build give both). `usage` is
+    `null`, with `usage_reason`, for a `native` Sandbox, which is a plain process
+    (`host_process`), for a runtime this build reads no usage of
+    (`not_supported`), on a machine without cgroup v2 (`cgroup_v1`), when
+    the cgroup is not there (`no_cgroup`) and when the machine did not
+    answer (`not_observed`).
+  ```text
+  {"name":"s1",…,"state":"running","workspaces":[],"daemon_capacity":{…},"workspace_capacity":16,"daemon":{"pid":37823,"started_at":1794776690403},"usage":null,"usage_reason":"host_process","next_page_pos":null}
+  ```
+- `list --live` adds `live` to each Sandbox of the page (#164): `true`
+  when the process its daemon record names still runs, `false` when it has
+  ended, `null` with `live_reason` when that is not known
+  (`machine_stopped`, `deadline`, or the refusal its machine's request
+  met, as `unavailable`). `state` is unchanged: it comes from records, so
+  a Sandbox whose daemon died reads `state: "running"`, `live: false`
+  until `get` or `close`. Each machine among the page's Sandboxes is asked
+  once; a machine that does not answer fails no list. Without `--live`
+  the answer has no such field.
+  ```text
+  $ layerfs sandbox list --live
+  {"items":[{"name":"s1","project":"shop/api","machine":"native",…,"state":"running","live":true}],"next_page_pos":null}
+  ```
 - `list` and `get` start no machine (#535 P4). `get` on a Sandbox whose
   machine is down answers its record with `workspaces: []` and
   `down_reason`, the reason its worker was not reached.
@@ -385,17 +458,20 @@ form.
   Routes.
 - Not run for this manual.
 
-### `machine` (12)
+### `machine` (15)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `list` | — | — | every machine, with what it supports (`supports`) |
+| `list` | — | — | every machine, with what it supports (`supports`: `sqlite`, `postgresql_sandbox`, `reason`, and `log`, whether it has a worker whose log can be read; never on `native`) |
 | `platforms` | — | — | the platforms this host and build support: backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox runs and why not, readiness and options (#535; the rows of `control/SUPPORT.json`) |
 | `get` | `name` | — | a machine's record |
 | `images` | `name` | — | the Sandbox images the machine holds (`images`: `id`, `refs`, `size`, `architecture`, `source` `bundle`/`machine`/`imported`, `sandboxes`, `last_used`), its `default`, `free` bytes and `architecture`; and the host's tagged Docker images it could copy (`docker`, `available`: `id`, `refs`, `size`, `os`, `architecture`, `usable`, `reason`, `need`, `fits`). macOS `native` answers `mode: "host"` with none. Never starts a machine |
 | `load` | `name`, `image` | `on_progress` | copies an image to the machine as `sandbox create --image` does, without a Sandbox: `{id, refs, size, reused}` |
 | `prune` | `name`, `image`? | `unused` | removes one unpacked image, or with `unused` every one no Sandbox uses but the machine's default: `{removed, freed}` (`freed` measured on the filesystem); an image in use is `InUse` |
 | `status` | `name` | — | a machine's live state, free disk and tool version; `op` while a create or remove holds it (#536 H6) |
+| `stats` | `machine` | — | what a machine has and uses now: processors, memory and data disk, each sqlite Store's size, how many of its Sandboxes have a running daemon (#164). For a UI that polls: it writes no call-log line |
+| `space` | `machine` | — | where a machine's data disk goes: each Store, each Sandbox's run folder, the image cache and LayerFS's logs, and what the disk uses that is not LayerFS's. For a UI: it writes no call-log line |
+| `files` | `machine`, `[path]` | `depth`, `cursor`, `limit`, `offset`, `length` (int) | a machine's LayerFS folders by role, one page of a folder, or one window of a file (#178). For a UI that shows a tree: it writes no call-log line |
 | `start` | `name` | — | starts a stopped machine and its worker and waits until ready; a running one, and `native`, answer at once (#535 P1) |
 | `stop` | `name` | — | stops a machine's worker and, where it has one, its VM; disks stay; `InUse` while Sandboxes run on it (#535 P1) |
 | `create` | `name`, `platform` | `cpus`, `memory` (size), `disk` (size), `image` | creates an enabled VM machine (`apple-container`, `lima`) |
@@ -406,7 +482,7 @@ Run:
 
 ```console
 $ layerfs machine list
-{"machines":[{"name":"docker","platform":"docker","backend":"namespaces","state":"ready","cpus":null,"memory":null,"disk":null,"supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"stores":[],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","state":"ready",…,"stores":["shop"],"sandboxes":[]}]}
+{"machines":[{"name":"docker","platform":"docker","backend":"namespaces","state":"ready","cpus":null,"memory":null,"disk":null,"supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null,"log":true},"stores":[],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","state":"ready",…,"stores":["shop"],"sandboxes":[]}]}
 
 $ layerfs machine platforms
 {"host":"macos","platforms":[{"platform":"native","how":"built_in","backend":"native","kernel":"nfs","sqlite":"in_process","postgresql":{"store_calls":"in_process","sandbox":true,"reason":null},"ready":true,"missing":[],"version":null,"options":[],"description":"…"},…,{"platform":"lima","how":"created","backend":"namespaces","kernel":"fuse","sqlite":"worker","postgresql":{"store_calls":"in_process","sandbox":true,"reason":null},"ready":true,"missing":[],"version":"limactl version 2.2.1","options":[{"name":"cpus","kind":"int"},…],"description":"…"},…]}
@@ -415,6 +491,103 @@ $ layerfs machine status native
 {"name":"native","platform":"native","state":"running","free_disk":null,"tool_version":null,"down_reason":null,"stores":["shop"]}
 ```
 
+- `stats` answers `{machine, platform, observed_at, worker, resources,
+  data_disk, stores, sandboxes, complete}` (#164, #182). It answers the
+  present only; a client keeps its own history:
+  - `worker`: the machine's worker process, `{version, pid, started_at,
+    protocol, bundle}`; `null` on `native`, whose calls run in the caller.
+  - `resources`: `{cpus, memory_total, memory_used, disk_total,
+    disk_used, disk_free, cpu_busy_usec, cpu_total_usec, scope}`, sizes in
+    bytes, observed now. `cpu_busy_usec` and `cpu_total_usec` are the
+    machine's processor time since boot in microseconds (`/proc/stat`;
+    steal counts as busy); the processor share between two reads is
+    Δbusy / Δtotal. They are `null` on macOS (`cpu_unsupported`). `scope`
+    says whose processors and memory they are: `host` (`native`), `vm`
+    (`lima`, `apple-container`) or `engine_host` (`docker`: the Docker
+    Engine's kernel, a VM on macOS and Windows). A value that was not read
+    is `null` and `reason` names it: `memory_not_read` (`memory_*`),
+    `disk_not_read` (`disk_*`), `cpu_unsupported` or `cpu_not_read`
+    (`cpu_*`), joined by `, `.
+  - `data_disk`: `{path, fs, scope, volume, inodes_free}`, the filesystem
+    the `disk_*` values measure: `host_fs` (`native`, and `docker` on
+    Linux), `vm_disk` (`docker` on macOS and Windows, one disk every
+    image and volume shares) or `volume` (a VM machine's own disk), with
+    the provider's name of it.
+  - `stores`: `[{name, bytes, allocated}]` of the machine's sqlite
+    Stores, the length and the blocks of `store.sqlite` and its `-wal`.
+    The files are not opened.
+  - `sandboxes`: `{recorded, live, items}`: the Sandboxes recorded on the
+    machine, how many have a running daemon, and one row per recorded
+    Sandbox, `{name, live, live_reason?, started_at, usage,
+    usage_reason?}`, with `usage` as `sandbox get`'s. A row the 4 s budget
+    did not reach is kept, `null` with `deadline`. A worker of an older
+    build answers no `items`.
+  - `complete`: `false`, with `reason: "deadline"`, when the Stores or
+    Sandboxes were not all read within 4 s; the rest is answered.
+  It starts nothing and takes no lock: a stopped machine is `Unavailable`
+  and a machine an operation holds is still answered.
+  ```text
+  $ layerfs machine stats native
+  {"machine":"native","platform":"native","observed_at":1794776707857,"worker":null,"resources":{"cpus":14,"memory_total":38654705664,"memory_used":31340068864,"disk_total":994662584320,"disk_used":641705943040,"disk_free":352956641280,"cpu_busy_usec":null,"cpu_total_usec":null,"scope":"host","reason":"cpu_unsupported"},"data_disk":{"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs","volume":null,"inodes_free":3446842200},"stores":[{"name":"shop","bytes":217088,"allocated":217088}],"sandboxes":{"recorded":1,"live":1,"items":[{"name":"web","live":true,"started_at":1794776100211,"usage":null,"usage_reason":"host_process"}]},"complete":true}
+  ```
+- `space` answers `{machine, platform, observed_at, disk, layerfs,
+  outside, parts, stores, sandboxes, unreadable, complete}`: one bounded
+  walk of LayerFS's own folders where the machine's data is, every size the
+  blocks it takes (a file with several names once).
+  - `disk`: `{total, used, free, path, fs, scope}`, the filesystem `stats`
+    measures. `layerfs` is the sum of `parts`, and `outside` is `used` less
+    `layerfs`: what the disk holds that is not LayerFS's (on `vm_disk`,
+    Docker's images, build cache and other volumes). It is `null` unless
+    the walk finished.
+  - `parts`: `{stores, sandboxes, images, other_runs, logs, other}`: the
+    Store folders, the Sandboxes' run folders, the image cache, run folders
+    no recorded Sandbox names, `log/` and `trace/`, and the records.
+  - `stores`: `[{name, bytes}]`; `sandboxes`: one row per recorded Sandbox,
+    `{name, bytes, overlays, writes, home, log, runtime}`: its Workspaces'
+    overlay databases, its own writable layer (what its commands wrote
+    outside Workspaces), its `HOME`, its daemon log and its copies of the
+    daemon and runtime. A row whose run folder was not measured has `null`
+    sizes and `reason` (`no_run_folder`, `outside_run_root`,
+    `record_unreadable`, `deadline`); a row the bound ended inside keeps
+    what it counted, with `deadline`.
+  - `complete`: `false`, with `reason: "deadline"`, when the walk stopped at
+    250,000 entries or 4 s; every number is then a lower bound. `unreadable`
+    counts folders it could not list (`reason` adds `unreadable`).
+  A Workspace mount point and a private root are never entered or
+  `stat`ed, no file is opened and the home itself is never listed. It
+  starts nothing and takes no lock.
+  ```text
+  $ layerfs machine space native
+  {"machine":"native","platform":"native","observed_at":1794817324800,"disk":{"total":994662584320,"used":677787914240,"free":316874670080,"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs"},"layerfs":14168064,"outside":677773746176,"parts":{"stores":2277376,"sandboxes":11833344,"images":0,"other_runs":0,"logs":8192,"other":49152},"stores":[{"name":"shop","bytes":2277376}],"sandboxes":[{"name":"web","bytes":11833344,"overlays":8675328,"writes":0,"home":3145728,"log":4096,"runtime":8192}],"unreadable":0,"complete":true}
+  ```
+- `files` reads what is on a machine (#178); its options, pages and file
+  windows are those of [`sandbox files`](#sandbox-files), and the whole call
+  is in the
+  [architecture guide](../../architecture/api/sdk/machine.md#machinefiles).
+  - With no path it answers the machine's roots, each a folder with a
+    `role`, in the order a client shows them: `data` (the worker's root
+    `/layerfs/data`, with `free_bytes`), `stores`, `sandbox_records`,
+    `run_folders`, `images`, `staging`, `logs`, then `state`, `bundle`,
+    `image`, and last `/` with role `machine`. Only folders that are there
+    are listed. On `native` the roots are the home's `store`, `sandbox`,
+    `machine/native/run` and `log`, and there is no `/`: a path outside
+    them is `InvalidInput`.
+  - In a LayerFS folder no link is followed and no mount entered, and what
+    LayerFS keeps private is `restricted`: listed with its size, never
+    read (`store.sqlite*`, a run folder's `config/` and `overlay/`,
+    `control.json`, `worker.json`, locks and leases, the worker's
+    `secret`). A run folder's `workspaces/` entries are `mount`, with the
+    Workspace's id, and are never touched.
+  - From `/`, `/proc`, `/sys`, `/dev` and `/run` are `system`; a mount is
+    entered only when it is a local disk or memory (`ext4`, `xfs`, `btrfs`,
+    `zfs`, `f2fs`, `overlay`, `tmpfs`), else it is `mount` with its `fs`;
+    and only what every user of the machine may read is opened, the rest
+    is `unreadable` (`/etc/shadow`, `/root`). A link on the way resolves
+    inside the machine (`/lib/...` opens on a merged-`/usr` system).
+  ```text
+  $ layerfs machine files native
+  {"kind":"folder","entries":[{"path":"/Users/me/.layerfs/store","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"stores"},{"path":"/Users/me/.layerfs/sandbox","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"sandbox_records"},{"path":"/Users/me/.layerfs/machine/native/run","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"run_folders"},{"path":"/Users/me/.layerfs/log","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"logs"}],"next":null,"has_more":false}
+  ```
 - `start` and `stop` answer the machine's summary as `get` does. They are
   the only lifecycle calls (#535 D11): no other call starts a machine, and
   nothing stops one when it is unused. `stop` is refused `InUse` while
@@ -493,6 +666,96 @@ not tell. Not run for this manual (from source and tests).
 
 See [backups](machines-and-stores.md#backups). Not run for this manual.
 
+### `logs`: `machine` and `sandbox`
+
+Two reads for a UI that shows a log and follows it (layerfs-project#178).
+They are in the `logs` family, which this page's count above predates; the
+whole family is in the
+[architecture guide](../../architecture/api/sdk/logs.md).
+
+| Call | Positionals | Options | Does |
+| --- | --- | --- | --- |
+| `machine` | `machine` | `cursor`, `before`, `limit` (int) | one window of a machine's worker log |
+| `sandbox` | `sandbox` | `cursor`, `before`, `limit` (int) | one window of a Sandbox's daemon log |
+
+Each answers `{ lines: [{ text, continued? }], cursor, before?, has_more }`:
+with no option the last `limit` lines (200 by default, 1000 at most), with
+`cursor` the lines written after it, with `before` the lines before it.
+Control characters in `text` are escaped (`\u{1b}`). They take no lock,
+start nothing, write nothing and add no line to the call log; at most two
+run on a machine at a time (`Busy`), and a machine that is stopped or does
+not answer within 8 s is `Unavailable`. `logs machine` on a machine with no
+worker (`native`) is `Unsupported`. The MCP server lists neither. Run for
+this manual on a scratch home: `layerfs logs sandbox s1`, then `--cursor`.
+
+### `sandbox`: `files`
+
+One more read for a UI: what is in a Sandbox (layerfs-project#178). It is
+in the `sandbox` family, after `close`; this page's count above predates
+it. The whole call is in the
+[architecture guide](../../architecture/api/sdk/sandbox.md#sandboxfiles).
+
+| Call | Positionals | Options | Does |
+| --- | --- | --- | --- |
+| `files` | `sandbox`, `[path]` | `depth`, `cursor`, `limit`, `offset`, `length` (int) | a Sandbox's roots, one page of a folder, or one window of a file, in its home or (a Sandbox with a root of its own) its root |
+
+```bash
+layerfs sandbox files s1                       # its roots: Workspaces, home, log, and / where it has one
+layerfs sandbox files s1 "$HOME_PATH" --depth 2 --limit 100
+layerfs sandbox files s1 "$HOME_PATH/notes.txt" --offset 0 --length 4096
+```
+
+- With no path it answers the Sandbox's roots, each with a `role`: one
+  `workspace` per mounted Workspace (kind `mount`, with the Workspace's id
+  in `workspace`; taken from the Workspace records and never opened),
+  `home` (the folder that is `HOME` for its commands), `log` (its
+  daemon's log, which `logs sandbox` reads) and, for a Sandbox with a root
+  of its own (every one but a native macOS Sandbox), `/` with role `root`.
+  ```text
+  {"kind":"folder","entries":[{"path":"/…/workspaces/1","depth":1,"kind":"mount","size":null,"mode":null,"mtime":null,"role":"workspace","workspace":"5f…"},{"path":"/…/tmp","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794000000000,"role":"home"},{"path":"/…/daemon.log","depth":1,"kind":"file","size":10,"mode":420,"mtime":1794000000000,"role":"log"}],"next":null,"has_more":false}
+  ```
+- With the path of a folder it answers one page of its entries: names in
+  byte order, a folder's entries after it, down `depth` levels (1 by
+  default, 32 at most), at most `limit` entries (500 by default, 1000 at
+  most). `next` is the path of the page's last entry; while `has_more`,
+  pass it as `cursor` for the entries after it. `reason` says why a page
+  ended early: `limit`, or `deadline` when the read used its four seconds.
+  An entry's `kind` is `file`, `folder`, `symlink` (with its `target`,
+  never followed), `mount`, `restricted` or `other`; `size` (regular files
+  only), `mode` (permission bits) and `mtime` (milliseconds) come from the
+  entry's own `stat`.
+- With the path of a file it answers one window: `{kind: "file", size,
+  offset, content, binary, next}`, 256 KiB from `offset` by default,
+  `length` at most 1 MiB. `content` is text: bytes that are not UTF-8 are
+  U+FFFD and control characters other than line breaks and tabs are escaped
+  (`\u{1b}`). `binary` is true when the window holds a NUL byte; `content`
+  is then empty. `next` is the next window's offset, `null` at the end.
+- A path is absolute, as the Sandbox's commands see it. Under the
+  Sandbox's home no link is followed and no mount entered. Refused
+  `InvalidInput` there: a path with `..`, a symbolic link on the way or at
+  the end, a FIFO, a socket, a device, a mount point, a file LayerFS keeps
+  private (`store.sqlite*`) and a file with several names that the
+  Sandbox's commands do not own. A path that is not there is `NotFound`.
+- A path outside the home is read in the Sandbox's root, when its roots
+  offer `/`: what its commands see, read through the root of the Sandbox's
+  init process on its machine. A link on the way resolves inside the root
+  (`/lib/...` opens in a merged-`/usr` image) and the last name is never
+  followed; `/proc`, `/sys` and `/dev` are `system`; a mount is entered
+  only when it is a local disk or memory, so a Workspace mount is `mount`
+  (with the Workspace's id) and is never entered; the run folder's
+  `config/` and `overlay/` and a bound Store's `store.sqlite` are
+  `restricted`, by their own path or through a link. A Sandbox that has
+  stopped answers `Unavailable` for its root and still reads its home. A
+  kernel without `openat2`, or a reader that is not root (a native Linux
+  home), answers `Unsupported` with its reason. A Sandbox with no root of
+  its own (native macOS) refuses a path outside its home `InvalidInput`.
+- It takes no lock, asks no daemon, starts nothing and writes nothing, the
+  call log included; a Sandbox whose daemon has ended keeps its home
+  readable. At most two inspection reads run on a machine at a time
+  (`Busy`); a machine that is stopped or does not answer within 8 s is
+  `Unavailable`. The MCP server does not list it. Run for this manual on a
+  scratch home: the three commands above.
+
 ## `layerfs doctor`
 
 A top-level command beside `import-env`, outside the call table (#536 H7);
@@ -529,9 +792,50 @@ layerfs doctor --text     # a count line, then each finding and its fix
   start`, a worker that does not answer one naming `machine start`).
 - Not checked: partial copies and leftover layout 2 folders on other
   machines (no worker operation reports them).
+- It also lists what interrupted operations left on disk, on `native` and
+  on each running machine (one bounded walk each: 20,000 entries or 2 s; a
+  stopped machine is not asked). Each is a warning on its machine whose
+  finding also holds `leftover: { machine, kind, path, bytes, age, id,
+  fixable }` (`age` in seconds since it last changed; `bytes` null when the
+  walk's bound ended first), and the report's `leftovers` has one row per
+  machine walked: `{ machine, complete, image_locks, unmount_markers }`. The
+  kinds: `run-folder` (a Sandbox run folder no Sandbox record names),
+  `empty-root` (an empty `<name>.root` whose run folder is gone),
+  `init-copy` (a `project init` folder copy, `incoming/init-*`),
+  `backup-staging` (`backup.staging`, `store.sqlite.backup`), `image-tmp`
+  and `image-part` (an interrupted image unpack or load). Image lock files
+  and unmount markers are only counted: LayerFS keeps them.
 - Exit 0 once the report is made, whatever it finds; 2 for any argument
   but `--text`; 125 when the home cannot be named (`LAYERFS_HOME` not
   absolute).
+
+### `layerfs doctor fix <id>`
+
+The one `doctor` command that changes something, and a call of the table
+(`doctor.fix`; `layerfs.doctor.fix(id)` in Node and Python). It removes the
+one leftover whose `id` the report gave (`<machine>:<kind>:<name>`, never a
+path), once, on that machine, under that kind's guard:
+
+```bash
+layerfs doctor fix native:image-part:<64 hex>
+# {"kind":"image-part","path":"…/machine/native/run/images/.recv-<64 hex>.part","removed":true,"bytes":50,"machine":"native","id":"native:image-part:<64 hex>"}
+```
+
+| Kind | Removed when (else `InUse`, nothing removed) |
+| --- | --- |
+| `run-folder` | no Sandbox record names it, its `owner` marker is there and older than a minute, no daemon of it runs and nothing is mounted at or under it or its `.root` |
+| `empty-root` | its run folder is gone and it is not a mount point; `rmdir` only |
+| `init-copy` | a line of `log/uncertain.jsonl` names the machine and the copy, and its deadline (when the lost request went out, plus the Init's `timeoutMs`) passed more than an hour ago; a copy no line names is only reported (`InvalidInput`) |
+| `backup-staging` | no `backup create` of that Store is running (its `backup.lock` is taken for the removal) |
+| `image-tmp` | no unpack of that image is running (its lock is taken; the lock file stays) |
+| `image-part` | it has not been written for an hour |
+
+Other refusals: `NotFound` (no leftover has that id now), `InvalidInput`
+(an image lock or an unmount marker, which are never removed), `Unavailable`
+(the machine is stopped) and `Unknown` (the worker's answer was lost: run
+`layerfs doctor` again to see). The MCP server has no tool for it. Run on
+macOS `native` against leftovers made by hand; not run on a VM machine for
+this manual.
 
 ## Results
 

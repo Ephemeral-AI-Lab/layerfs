@@ -7,13 +7,13 @@ The `machine` calls: list, inspect, create, start, stop, update and remove the m
 | | |
 | --- | --- |
 | Source | [`api/crates/layerfs-api/src/machine`](../../../../api/crates/layerfs-api/src/machine), [`layerfs-control/src/machine.rs`](../../../../control/crates/layerfs-control/src/machine.rs), [`layerfs-machine/src`](../../../../control/crates/layerfs-machine/src), [`layerfs-platform/src`](../../../../control/crates/layerfs-platform/src) |
-| Runs by default | every call in the caller's process, through the platform adapter (provider CLI or Docker); none is sent to a worker. The guest worker is built without the `machine` feature, so there every machine call is `Unsupported` before any effect |
+| Runs by default | every call in the caller's process, through the platform adapter (provider CLI or Docker); none is sent to a worker but the three reads `stats`, `space` and `files`, each one inspect request served where the machine's data is. The guest worker is built without the `machine` feature, so there every machine call is `Unsupported` before any effect |
 | Design | [Machines](../../control/machines/README.md), [platforms](../../control/machines/platforms.md), [workers and reach](../../control/machines/workers-and-reach.md) |
 
 ## Calls
 
 ```text
- reads (start nothing):  list   platforms   get   status   images
+ reads (start nothing):  list   platforms   get   status   stats   space   files   images
  Sandbox images:         load (copy from the host's Docker)   prune
 
  built in: native, docker ---------------------- update (image, docker,
@@ -36,6 +36,9 @@ The `machine` calls: list, inspect, create, start, stop, update and remove the m
 | [`machine.load`](#machineload) | `{ id, refs, size, reused }` |
 | [`machine.prune`](#machineprune) | `{ removed: [id], freed }` |
 | [`machine.status`](#machinestatus) | `{ name, platform, state, free_disk, tool_version, down_reason, stores, op? }` |
+| [`machine.stats`](#machinestats) | `{ machine, platform, observed_at, worker, resources, data_disk, stores, sandboxes, complete, reason? }` |
+| [`machine.space`](#machinespace) | `{ machine, platform, observed_at, disk, layerfs, outside, parts, stores, sandboxes, unreadable, complete, reason? }` |
+| [`machine.files`](#machinefiles) | `{ kind: "folder", entries, next, has_more, reason? }` or `{ kind: "file", size, offset, content, binary, next }` |
 | [`machine.start`](#machinestart) | summary, once the worker answers |
 | [`machine.stop`](#machinestop) | summary, `state: "stopped"`; with `force`, also `forced`, `stopped_sandboxes`, `unknown` |
 | [`machine.create`](#machinecreate) | summary, `state: "running"` |
@@ -46,7 +49,7 @@ The **summary** is `MachineRecord::to_sdk`
 ([`record.rs`](../../../../control/crates/layerfs-machine/src/record.rs)):
 
 ```text
-{ name, platform, backend, supports: { sqlite, postgresql_sandbox, reason },
+{ name, platform, backend, supports: { sqlite, postgresql_sandbox, reason, log },
   state, cpus, memory, disk, stores: [name], postgresql: [name],
   sandboxes: [name], image?, docker?, wsl?, daemon?, os_image?, error?,
   ssh?, host?, vm_name? }
@@ -57,6 +60,7 @@ The **summary** is `MachineRecord::to_sdk`
 | `platform` | `native`, `docker`, `apple-container` or `lima`; an older home's record may still name the removed `firecracker`, `microsandbox` or `ssh` |
 | `backend` | the Sandbox backend on this host: `native`, `namespaces` (also on `docker`), or `-` (always for a removed platform) |
 | `supports` | the platform's support row on this host; a removed platform supports nothing, with the removal as `reason` |
+| `supports.log` | whether the machine has a worker log to read (layerfs-project#178): its calls go to a worker and the support table refuses it nothing on this host, so it is a worker this build starts. True for `docker`, `lima` and `apple-container` where they run; false on every `native` (its calls run in the caller's process; on Windows its WSL2 worker is not designed) and for a removed platform. Clients read this field and never test platform names (`Supports::log`, [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs)) |
 | `cpus`, `memory`, `disk` | the recorded size (bytes for memory and disk); null on a built-in machine |
 | `stores`, `postgresql`, `sandboxes` | sqlite Stores on it, PostgreSQL Stores attached to it, Sandboxes recorded on it ([`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs)) |
 | `error` | the probe's reason when `unknown`; the removal for a removed platform; a failed create's error |
@@ -266,6 +270,209 @@ failed probe is the call's error: `Unavailable`, `Denied`, `Failed`, or
 ([`setup/tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs));
 a read changes nothing. An `unresolved` machine is cleared by `machine.remove`.
 
+### machine.stats
+
+What a machine has and uses now: its processors, memory and data disk, each
+sqlite Store's size, how many of its Sandboxes have a running daemon and what
+each of them uses (layerfs-project#164, #182). It answers the present only:
+processor values are counters, and a client keeps its own history and turns
+two reads into a rate. A monitoring read for a UI that polls: it is in the
+MCP server's `ui` bucket, not in an agent profile, and writes no call-log
+line.
+
+```text
+JS      await layerfs.machine.stats(machine)
+Python  layerfs.machine.stats(machine)
+CLI     layerfs machine stats <machine>
+```
+
+```text
+{ machine, platform, observed_at,
+  worker: { version, pid, started_at, protocol, bundle } | null,
+  resources: { cpus, memory_total, memory_used,
+               disk_total, disk_used, disk_free,
+               cpu_busy_usec, cpu_total_usec, scope, reason? },
+  data_disk: { path, fs, scope, volume, inodes_free },
+  stores: [ { name, bytes, allocated } ],
+  sandboxes: { recorded, live,
+               items: [ { name, live, live_reason?, started_at,
+                          usage, usage_reason? } ] },
+  complete, reason? }
+```
+
+| Field | Meaning | Source |
+| --- | --- | --- |
+| `observed_at` | ms since the epoch on the side that answered | [`inspect/stats.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/stats.rs) `serve` |
+| `worker` | the machine's worker process: its build's `version`, `pid`, `started_at` (ms since the epoch, when it began to serve), worker `protocol` and the `bundle` it was installed from. `null` on a machine whose calls run in the caller's process (`native`) | [`worker_server/ops.rs`](../../../../control/crates/layerfs-control/src/worker_server/ops.rs) `about` |
+| `resources.cpus` | the processors the answering process may run on: where the worker runs in a container with a processor quota (`apple-container`), the quota, which can be less than the processors the guest kernel lists | [`inspect/host.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/host.rs) |
+| `resources.memory_total`, `memory_used` | bytes. Linux: `MemTotal` and `MemTotal - MemAvailable` of `/proc/meminfo`. macOS: `hw.memsize`, and that less the free, file-backed and purgeable pages, from one run of `/usr/sbin/sysctl` | `host.rs` |
+| `resources.disk_total`, `disk_used`, `disk_free` | one `statvfs` of the filesystem that holds the machine's data. `disk_used` is the total less every free block; `disk_free` is what the answering process may use, so the two can sum to less than the total where blocks are reserved. On a machine whose data is on its own volume or disk (`lima`, `apple-container`) these are that volume's sizes, not the whole VM's | [`home/capacity.rs`](../../../../control/crates/layerfs-home/src/home/capacity.rs) `filesystem` |
+| `resources.cpu_busy_usec`, `cpu_total_usec` | the machine's processor time since boot, in microseconds, from the first `cpu` line of `/proc/stat` (one read, which also gives the boot time every row's `started_at` uses): busy is user + nice + system + irq + softirq + steal, total is busy + idle + iowait, each in ticks of 1/100 s × 10,000. Guest time is inside user and nice already. Steal counts as busy: on a VM it is time the host took from it. The machine's processor share between two reads is Δbusy / Δtotal, which needs neither `cpus` nor a clock; it is of the kernel `scope` names, so on `docker` the whole Engine VM even where `cpus` is a container's quota, and on `apple-container` the whole guest, whose kernel can list more processors than the worker's quota `cpus` (seen: 3 online, quota 2): a guest busy on its whole quota then reads about 2/3. `null` on macOS (`cpu_unsupported`: its only source, `host_statistics`, needs `unsafe` code this crate forbids) and when the read failed (`cpu_not_read`) | `host.rs` `cpu`, [`inspect/process.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/process.rs) `KernelStat` |
+| `resources.scope` | whose processors and memory they are: `host` (`native`), `vm` (`lima`, `apple-container`), `engine_host` (`docker`: the kernel the Engine runs on, a VM on macOS and Windows) | `stats.rs` `scopes` |
+| `resources.reason` | which values are null and why, joined by `, `; absent when all were read. Each word names its fields: `memory_not_read` → `memory_*`; `disk_not_read` → `disk_*`; `cpu_unsupported`, `cpu_not_read` → `cpu_*`. A client shows a word it does not know as it is | `stats.rs` |
+| `data_disk.path`, `fs` | the folder whose filesystem was measured, as the answering side names it (the home, or the worker's root), and its type (`apfs`, `ext4`, `xfs`, `btrfs`, `overlay`, ..., else the magic number in hex) | `capacity.rs` |
+| `data_disk.scope` | what that filesystem is: `host_fs` (`native`; `docker` on a Linux host, where a volume is a folder of the host's filesystem), `vm_disk` (`docker` on macOS and Windows: the Engine VM's one disk, shared with every image and volume), `volume` (`lima`, `apple-container`: the machine's own disk) | `stats.rs` `scopes` |
+| `data_disk.volume` | the provider's name of the volume or disk, from the machine's record; `null` on `native` | [`adapter.rs`](../../../../control/crates/layerfs-platform/src/adapter.rs) `data_volume` |
+| `data_disk.inodes_free` | file slots free; `null` where the filesystem counts none | `capacity.rs` |
+| `stores[]` | the sqlite Stores the home records on the machine: `bytes` is the length of `store.sqlite` plus its `-wal`, `allocated` their blocks, each from one `lstat`; no Store file is opened. A sparse file shows in the difference; a clone counts in full. Both `null` when the file is not there, or when the deadline came first | `stats.rs` `store_bytes` |
+| `sandboxes.recorded`, `live` | the Sandboxes the home records on the machine, and how many of them have a daemon process that still runs (the check of `sandbox.list`'s `live`); `live` is `null` when the deadline came first | [`inspect/live.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/live.rs) |
+| `sandboxes.items[]` | one row per recorded Sandbox, in the home's order, read by the side that runs it from its own daemon record, `/proc` and the Sandbox's cgroup (a forwarded Lima Sandbox by the machine's worker; no daemon is dialed): `live` and `live_reason` as `sandbox.list`'s `live`; `started_at`, ms since the epoch when its daemon record's process started (`null` when it is gone); `usage` and `usage_reason` exactly as [`sandbox.get`](sandbox.md#sandboxget)'s. With no daemon record read, `started_at` and `usage` are `null` and `usage_reason` is `not_observed`, or the row's own reason (`record_unreadable`). A row whose daemon process is gone (`live: false`) still reads its cgroup while the group is there (something it started may still run in it), with no `usage_reason`; `sandbox.get` of the same Sandbox, which reads beside its daemon's Workspace list, answers `usage: null` with `not_observed` when that list was not answered. A row the soft budget did not reach stays, `live: null, live_reason: "deadline", usage: null, usage_reason: "deadline"`: an absent row would read as a closed Sandbox. A worker of an older build answers no `items`, and the field is absent | `stats.rs` `item`, `live.rs` `checked` |
+| `complete`, `reason` | `false` with `reason: "deadline"` when the request's soft budget (4 s) ended the Store or Sandbox part early; what was read is answered | `stats.rs` |
+
+It is one [inspect](../../control/sandboxes/inspect.md) request, kind
+`machine_stats`: in this process on `native`, else one request to the
+machine's worker. It takes no lock or lease, opens no Store, asks no daemon
+and no provider tool, starts nothing and writes nothing. PostgreSQL Stores
+are not listed: their data is not on a machine.
+
+```text
+$ layerfs machine stats native
+{"machine":"native","platform":"native","observed_at":1794776707857,"worker":null,"resources":{"cpus":14,"memory_total":38654705664,"memory_used":31340068864,"disk_total":994662584320,"disk_used":641705943040,"disk_free":352956641280,"cpu_busy_usec":null,"cpu_total_usec":null,"scope":"host","reason":"cpu_unsupported"},"data_disk":{"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs","volume":null,"inodes_free":3446842200},"stores":[{"name":"shop","bytes":217088,"allocated":217088}],"sandboxes":{"recorded":1,"live":1,"items":[{"name":"web","live":true,"started_at":1794776100211,"usage":null,"usage_reason":"host_process"}]},"complete":true}
+```
+
+Errors: `NotFound` (no such machine); `Unavailable` (the machine is stopped or its worker
+did not answer within 8 s; nothing starts it); `Busy` (two inspect requests
+already run in that process); `InvalidInput` (a worker of a build without
+the kind, or over 4096 Stores or Sandboxes on one machine).
+
+### machine.space
+
+Where a machine's data disk goes: how much of it each part of LayerFS's
+own data takes, and how much of what the filesystem uses is not
+LayerFS's. One bounded walk of LayerFS's folders, read where the data is,
+for a UI that warns before a disk fills.
+
+```text
+JS      await layerfs.machine.space(machine)
+Python  layerfs.machine.space(machine)
+CLI     layerfs machine space <machine>
+```
+
+```text
+{ machine, platform, observed_at,
+  disk: { total, used, free, path, fs, scope },
+  layerfs, outside,
+  parts: { stores, sandboxes, images, other_runs, logs, other },
+  stores: [ { name, bytes } ],
+  sandboxes: [ { name, bytes, overlays, writes, home, log, runtime, reason? } ],
+  unreadable, complete, reason? }
+```
+
+Every size is the blocks a part takes (`st_blocks` × 512), so a sparse file
+counts what it holds and a file with several names counts once; a clone
+counts in full, since `stat` cannot see sharing.
+
+| Field | Meaning | Source |
+| --- | --- | --- |
+| `disk` | the filesystem [`machine.stats`](#machinestats) measures (`total`, `used`, `free` from one `statvfs`, the folder measured, its type) and its `scope` (`host_fs`, `vm_disk`, `volume`, as `data_disk.scope`); `null` values with `disk_not_read` | [`inspect/space.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/space.rs) `serve` |
+| `layerfs` | the sum of `parts` | `space.rs` |
+| `outside` | `disk.used` less `layerfs`, never below 0: what the filesystem uses that is not LayerFS's data. On a `vm_disk` (docker on macOS and Windows) that is Docker's images, build cache and other volumes; on `native` the rest of the host's disk, a VM machine's own disk image included. `null` unless the walk and the disk read are both complete | `space.rs` |
+| `parts.stores` | the folders of the sqlite Stores the home records on the machine (`store/<name>/`: the Store file, its `-wal`, staged snapshots and records) | `space.rs` |
+| `parts.sandboxes` | the run folders of the Sandboxes the home records on the machine, the sum of `sandboxes[].bytes` | `space.rs` `sandbox` |
+| `parts.images` | the Sandbox image cache, `machine/native/run/images/` (unpacked images, archives, parts) | `space.rs` |
+| `parts.other_runs` | the run root's other entries: run folders no listed Sandbox names (a create in flight, or what `layerfs doctor` reports as a leftover) | `space.rs` `other_runs` |
+| `parts.logs` | `log/` (the worker log, command records) and `trace/` (the call log) | `space.rs` |
+| `parts.other` | `incoming/` (folder copies of `project.init`), `backup/` and `sandbox/` (records) | `space.rs` |
+| `stores[]` | one row per Store in `parts.stores`, `bytes` its folder | `space.rs` |
+| `sandboxes[]` | one row per recorded Sandbox, from the run folder its daemon record names on the side that runs it: `overlays` (its Workspaces' overlay databases in `overlay/`), `writes` (its own writable layer `overlay/upper` and `work`: what its commands wrote outside Workspaces), `home` (`tmp/`, `HOME` for its commands), `log` (`daemon.log*`), `runtime` (its copies of the daemon, helper and runtime layer, its config, the folder itself). With no run folder measured the sizes are `null` and `reason` says why: `no_run_folder` (no daemon record or folder on that side), `outside_run_root` (the record names a folder elsewhere; it is not read), `record_unreadable`, `deadline`. A row the walk's bound ended inside keeps what it counted, with `reason: "deadline"` | `space.rs` `sandbox` |
+| `unreadable` | folders that could not be listed; what is under them is not in the numbers | `space.rs` |
+| `complete`, `reason` | `complete: false` when the walk stopped at 250,000 entries or the request's soft budget (4 s): every number is then at least what was counted, a part not reached is `null`, and `outside` is `null`. `reason` joins `deadline`, `unreadable`, `disk_not_read` | `space.rs` |
+
+It is one [inspect](../../control/sandboxes/inspect.md) request, kind
+`machine_space`: in this process on `native`, else one request to the
+machine's worker. The walk takes no lock or lease and dials no daemon; it
+opens no file (each size is one `lstat`, each folder one listing), follows
+no link and enters no other device. A run folder's `workspaces/` (its
+Workspace mount points) and a private root `<name>.root` are neither
+entered nor `stat`ed, so a stopped daemon cannot hang it, and the home
+itself is never listed: what an integration keeps there (`runtime/`,
+`secret/`, ...) is not counted. It writes nothing, the call log included.
+A Sandbox's `/tmp` and `/dev/shm` are memory, not disk: they show in
+[`sandbox.get`](sandbox.md#sandboxget) `usage.memory_file`.
+
+```text
+$ layerfs machine space native
+{"machine":"native","platform":"native","observed_at":1794817324800,"disk":{"total":994662584320,"used":677787914240,"free":316874670080,"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs"},"layerfs":14168064,"outside":677773746176,"parts":{"stores":2277376,"sandboxes":11833344,"images":0,"other_runs":0,"logs":8192,"other":49152},"stores":[{"name":"shop","bytes":2277376}],"sandboxes":[{"name":"web","bytes":11833344,"overlays":8675328,"writes":0,"home":3145728,"log":4096,"runtime":8192}],"unreadable":0,"complete":true}
+```
+
+Errors: as [`machine.stats`](#machinestats): `NotFound`, `Unavailable`,
+`Busy`, and `InvalidInput` (a worker of a build without the kind, or over
+4096 Stores or Sandboxes on one machine).
+
+### machine.files
+
+Reads what is on a machine: its LayerFS folders, one page of a folder or one
+window of a file (layerfs-project#178). A read for a UI that shows a tree:
+no lock, no lease, no daemon call, nothing written, no call-log line (the
+call is `quiet`), and the MCP server does not list it. Its options, a folder
+page, a file window and their fields are those of
+[`sandbox.files`](sandbox.md#sandboxfiles); what differs is where a path may
+lead.
+
+```text
+JS      await layerfs.machine.files(machine, path?, { depth, cursor, limit, offset, length })
+Python  layerfs.machine.files(machine, path=None, *, depth=None, cursor=None, limit=None, offset=None, length=None)
+CLI     layerfs machine files <machine> [<path>] [--depth <depth>] [--cursor <cursor>] [--limit <limit>] [--offset <offset>] [--length <length>]
+```
+
+**The roots** (no `path`): a folder page that is never continued. Each entry
+is a folder with a `role`, in this order; a folder that is not there is left
+out. LayerFS owns the order and the paths, so a client shows roles and never
+writes a path of its own.
+
+| `role` | Folder on docker, Lima and Apple Container | Folder on `native` |
+| --- | --- | --- |
+| `data` | `/layerfs/data`, the worker's root, with `free_bytes`: what its filesystem has left | — |
+| `stores` | `/layerfs/data/store` | `<home>/store` |
+| `sandbox_records` | `/layerfs/data/sandbox` | `<home>/sandbox` |
+| `run_folders` | `/layerfs/data/machine/native/run`: one folder per Sandbox | `<home>/machine/native/run` |
+| `images` | `/layerfs/data/machine/native/run/images`: the Sandbox image cache | — (inside `run_folders`) |
+| `staging` | `/layerfs/data/incoming`: folder copies of a `project.init` | — |
+| `logs` | `/layerfs/data/log` | `<home>/log` |
+| `state` | `/layerfs/state`: the worker's pid and secret | — |
+| `bundle` | `/layerfs/bundle`: the installed build | — |
+| `image` | `/layerfs/image`: a custom Sandbox image copied in (never on docker) | — |
+| `machine` | `/`: the whole machine | — |
+
+A client offers a second view ("whole filesystem") only when the answer has
+the `machine` root. `native` has none: that machine is its owner's own
+computer, and a path outside its LayerFS folders is `InvalidInput`.
+
+**A path** is absolute, with no `..`, and is read in one of two views
+([`inspect/machine.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/machine.rs)):
+
+| | In a LayerFS folder (`data`, `state`, `bundle`, `image`; on `native` its four) | Anywhere else, from `/` |
+| --- | --- | --- |
+| Links | none is followed, on the way or at the end | one on the way resolves inside the machine's root (`/lib` of a merged-`/usr` system); the last name is never followed |
+| Mounts | none is entered: `mount` | entered when its type is `ext4`, `xfs`, `btrfs`, `zfs`, `f2fs`, `overlay` or `tmpfs`; any other (`fuse.*`, `nfs`, `cifs`, `9p`, `virtiofs`, `fakeowner`, `sshfs`, an unknown one) is `mount` with its `fs`, never `stat`ed or entered |
+| What is opened | everything but what LayerFS keeps private | a file others may read (`o+r`) and a folder others may list and search (`o+rx`), under folders that are so too; the rest is `unreadable` |
+| `system` | — | `/proc`, `/sys`, `/dev`, `/run`: listed, never `stat`ed or entered |
+| `restricted` | `store.sqlite*`; a run folder's `config/` and `overlay/`; `control.json`, `worker.json`; `lock`, `*.lock`; a Store's `open/`; `/layerfs/state/secret` | `store.sqlite*` |
+| LayerFS folders | listed with their `role` | listed with their `role` and not entered: each is read by its own path, whatever filesystem it is on |
+| Workspace mounts | an entry of a run folder's `workspaces/` is `mount`, with `workspace` (its id) from the Workspace records; never `stat`ed | — |
+
+`worker.log`, `worker.1.log` and a run folder's `daemon.log` are listed as
+files with `role: "log"` and read with the [`logs`](logs.md) calls.
+
+```text
+$ layerfs machine files native
+{"kind":"folder","entries":[{"path":"/Users/me/.layerfs/store","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"stores"},{"path":"/Users/me/.layerfs/sandbox","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"sandbox_records"},{"path":"/Users/me/.layerfs/machine/native/run","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"run_folders"},{"path":"/Users/me/.layerfs/log","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"logs"}],"next":null,"has_more":false}
+```
+
+| Error | When |
+| --- | --- |
+| `InvalidInput` | an option outside its range; a `cursor` with no `path`, or not an entry of the folder; a path that is not absolute or holds a `..`; on `native`, a path outside the LayerFS folders; a `restricted`, `unreadable`, `system` or `mount` entry, or a path in one; a link at the end, or, in a LayerFS folder, on the way; a FIFO, socket or device; a path a link leads into a mount that is not entered; a file or folder the system refuses to open (its permissions, or a link another user made in a shared folder such as `/tmp`) |
+| `NotFound` | no machine of that name; nothing is at the path |
+| `Unavailable` | the machine is stopped, or its worker did not greet in 2 s or answer in 8 s; the read ran past 6 s. Nothing starts a machine |
+| `Busy` | two inspection reads already run on that machine; read again |
+| `Unsupported` | a Linux kernel before 5.6 (no `openat2`), or before 5.8 for a path read from `/` (no mount id in `statx`); nothing else is tried |
+
+It is one [inspect](../../control/sandboxes/inspect.md#files) request, kind
+`machine_files`: in this process on `native`, else one request to the
+machine's worker, which runs as root on Lima and Apple Container and in the
+worker container on docker; the world-readable rule makes the answer the
+same whoever it runs as.
+
 ### machine.start
 
 Starts a stopped machine and its `layerfs worker`, waits until the worker
@@ -376,9 +583,21 @@ CLI     layerfs machine create <name> <platform> [--cpus <cpus>] [--memory <memo
 | `os_image` option | Text | the VM's operating-system image (an installed OCI reference for Apple Container, an image location for Lima); default an installed prepared image, else the provider's stock image; recorded and answered as `os_image` |
 | `on_progress` option | Function | the `machine.start` stages, plus `{ phase: "create", machine }` |
 
-The record keeps `vm_name` (`lfs-<home id prefix>-<name>`, so two homes
-never share a VM). The name is claimed with an `op` `create` under the home
-lock; the boot runs under `start.lock` only.
+The record keeps `vm_name` (`layerfs-<home id prefix>-<name>`, so two homes
+never share a VM; every character of the name that is not a letter or digit
+becomes `-`). The built-in `docker` machine's record keeps one too, from a
+new home's first call. A record without `vm_name` (an existing home's
+`docker`) means `lfs-<home id prefix>-<name>`, the formula before
+layerfs-project#180, so it keeps its container and volume. Under the home
+lock a create refuses `InvalidInput` a name longer than 46 characters (a VM
+name is at most 63, the prefix takes 17), then a name whose VM name is
+longer than the platform's provider takes on this host
+(`layerfs_platform::name_limit`, the adapters' `name_limit`: only `lima` has
+one, since `limactl create` refuses an instance whose
+`<Lima home>/<VM name>/ssh.sock.<16 digits>` reaches 104 characters; the
+message states the longest name that fits), and `Exists` a name whose VM name,
+under either formula, is another machine's. The name is claimed with an
+`op` `create` under the home lock; the boot runs under `start.lock` only.
 
 | Adapter outcome | Record afterwards |
 | --- | --- |

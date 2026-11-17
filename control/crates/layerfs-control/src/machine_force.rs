@@ -80,6 +80,14 @@ pub(crate) fn stop(home: &Path, name: &MachineName) -> Outcome {
                     Native::NeverStarted => continue,
                     Native::Stopped => {}
                     Native::Stop(mut runtime) => {
+                        // its running commands are each marked and cancelled
+                        // first (D-10), as a forced close does, so they answer
+                        // `cancelled`, not the exit of the runtime's kill
+                        if let Err(refusal) = settle(&home, sandbox) {
+                            skipped.push(sandbox.name().to_owned());
+                            first_refusal.get_or_insert(refusal);
+                            continue;
+                        }
                         native_attempt = Some(sandbox);
                         runtime.stop(0).map_err(failed)?;
                     }
@@ -281,6 +289,14 @@ fn native_runtime(home: &Path, sandbox: &SandboxRecord) -> Result<Native> {
             None => Native::Stopped,
         },
     )
+}
+
+/// Cancels each running command of native Sandbox `sandbox` before its
+/// runtime stops (`exec::cancel::settle` with `force`); stale records are
+/// ended and logged. A refusal still precedes the stop's signal.
+fn settle(home: &Path, sandbox: &SandboxRecord) -> Result<()> {
+    let unreached = &mut layerfs_sandbox::exec::cancel::unreached;
+    layerfs_sandbox::exec::cancel::settle(&sandbox.dir(home), sandbox.name(), None, true, unreached)
 }
 
 /// These are lost/unknown uncommitted frontiers, never manufactured commits.

@@ -10,7 +10,7 @@ CLI package `@layerfs/cli` (in [`cli/`](cli)), the Python package (in
 the private stdio MCP server [`mcp/`](mcp) (`@layerfs/mcp`: one generated tool
 per call, `work` and `admin` profiles). The design is in
 [docs/architecture/api](../docs/architecture/api/README.md). The package is the
-library's call table as ten families of functions, 73 calls in all:
+library's call table as eleven families of functions, 79 calls in all:
 
 | Family | Calls |
 | --- | --- |
@@ -23,7 +23,7 @@ library's call table as ten families of functions, 73 calls in all:
 | [`machine`](../docs/architecture/api/sdk/machine.md) | `list`, `platforms`, `get`, `status`, `start`, `stop`, `create`, `remove`, `update` |
 | [`store`](../docs/architecture/api/sdk/store.md) | `list`, `get`, `status`, `stats`, `create`, `connect`, `attach`, `detach`, `push`, `pull`, `remove`, `disconnect` |
 | [`backup`](../docs/architecture/api/sdk/backup.md) | `connect`, `disconnect`, `list`, `create`, `restore` |
-| [`logs`](../docs/architecture/api/sdk/logs.md) | `list`, `reset` |
+| [`logs`](../docs/architecture/api/sdk/logs.md) | `list`, `reset`, `machine`, `sandbox` |
 
 `layerfs.table` lists every call with its arguments and options; it is the
 source for the list above, for the `layerfs` command (`layerfs help`) and for
@@ -91,16 +91,16 @@ its addon. `node/package.json` declares `os: ["linux"]`, `cpu: ["x64"]` and
 `libc: ["glibc"]`, so npm refuses another platform with `EBADPLATFORM`; npm
 cannot check the glibc version, so an older glibc installs and fails to load.
 macOS, Windows, Linux arm64 and musl need a per-platform prebuild scheme that
-is not built; [`node/README.md`](node/README.md) is the npm page. The default
-addon, wheel and command have no PostgreSQL and no TLS:
-a call that needs them is refused `Unsupported` ("this LayerFS build has no
-PostgreSQL engine"). Both are opt-in at build time (`tls` uses the system's
-TLS library through `native-tls`):
+is not built; [`node/README.md`](node/README.md) is the npm page. Every
+addon, wheel and command is built with both Store engines, SQLite and
+PostgreSQL; PostgreSQL links the system's TLS library through `native-tls`, so
+a Linux build needs the OpenSSL development files. TLS for `https://` remotes
+is opt-in at build time; without it such a call is refused `Unsupported`:
 
 ```bash
-npm --prefix api run build:native -- --features postgresql     # or tls, or postgresql,tls
-(cd api/python && maturin build --release --locked --features postgresql -o "$OUT")
-cargo +1.85.1 build --release --locked -p layerfs-cli --features postgresql
+npm --prefix api run build:native -- --features tls
+(cd api/python && maturin build --release --locked --features tls -o "$OUT")
+cargo +1.85.1 build --release --locked -p layerfs-cli --features tls
 ```
 
 

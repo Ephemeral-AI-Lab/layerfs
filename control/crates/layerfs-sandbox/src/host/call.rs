@@ -63,6 +63,14 @@ impl Op {
             .find(|(op, _)| *op == self)
             .map_or("", |(_, name)| name)
     }
+
+    /// Whether it only asks the Sandbox's daemon, as `sandbox.get`'s two
+    /// reads do (its Workspace list and its capacity model): such an
+    /// operation takes no Store lease, opens no Store and writes no record
+    /// or folder on the side that runs it (layerfs-project#181).
+    pub fn asks_daemon_only(self) -> bool {
+        matches!(self, Self::ListWorkspaces | Self::Capacity)
+    }
 }
 
 /// A Commit `message` as a request carries it. The untyped request checked
@@ -115,7 +123,8 @@ pub enum Call {
     /// `workspace.exec(path, command, { exec_id })`; `directory` and the
     /// Workspace's id (`workspace`) from a caller that keeps the
     /// Workspace's record and the command's (#535 G4); `spool` sends every
-    /// non-empty stream to its file.
+    /// non-empty stream to its file; `tag` is the log tag of the call that
+    /// asked for it, kept in the command's record (layerfs-project#178).
     Exec {
         path: Option<String>,
         directory: Option<String>,
@@ -123,6 +132,7 @@ pub enum Call {
         spool: bool,
         exec_id: Option<String>,
         workspace: Option<String>,
+        tag: Option<String>,
     },
     /// `workspace.exec_cancel(path, exec_id, { grace_ms })`; the
     /// Workspace's id (`workspace`) from a caller that keeps the command's
@@ -203,8 +213,12 @@ pub struct Deploy {
     pub sandbox: Option<String>,
     /// The local runtime's root (`machine/native/run`).
     pub local_dir: Option<String>,
-    /// The Sandbox directory prefix, `lfs-<home id prefix>-`.
+    /// The Sandbox directory prefix, `layerfs-<home id prefix>-`: a new
+    /// Sandbox's run folder is `<prefix><name>`.
     pub container_prefix: Option<String>,
+    /// The prefix before layerfs-project#180, `lfs-<home id prefix>-`: a
+    /// Sandbox recorded under it is reopened by that name; none is made.
+    pub legacy_prefix: Option<String>,
     /// The daemon executable.
     pub daemon: Option<String>,
     /// A namespaces Sandbox's image archive.

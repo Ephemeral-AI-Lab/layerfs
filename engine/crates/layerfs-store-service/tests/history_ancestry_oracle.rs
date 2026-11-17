@@ -226,7 +226,12 @@ fn random_history(seed: u64) {
                 continue;
             }
             let branch = pool[rng.below(pool.len())].clone();
-            fixture.call("branch.publish", vec![("branch", text(&branch))]);
+            // Any Branch may publish next: the oracle explores the overwrite
+            // topology, which is explicit now (#691).
+            fixture.call(
+                "branch.publish",
+                vec![("branch", text(&branch)), ("force", SdkValue::Bool(true))],
+            );
             publishes += 1;
         }
     }

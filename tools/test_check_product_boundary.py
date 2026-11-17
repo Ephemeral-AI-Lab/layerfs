@@ -1,17 +1,21 @@
 import os
+import tomllib
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from check_product_boundary import (
+    FUSER_GIT,
     RETIRED_PACKAGES,
     crate_directories,
     dependency_violations,
+    fuser_source_violations,
     layer_violations,
     production_files,
     test_path_violations,
     unsafe_violations,
     violations,
+    worker_fault_violations,
 )
 
 
@@ -41,6 +45,45 @@ class ProductBoundaryTests(unittest.TestCase):
                 '[package]\nname="layerfs-daemon"\n[dependencies]\nlayerfs-fuse={path="../layerfs-fuse"}'
             )
         )
+
+    def test_worker_fault_feature_stays_in_the_worker_server_and_off(self):
+        base = Path("control/crates/layerfs-control/src")
+        switch = '#[cfg(feature = "worker-fault")]\npub mod fault;'
+        for relative in ("worker_server.rs", "worker_server/connection.rs", "worker_server/fault.rs"):
+            self.assertFalse(violations(base / relative, switch), relative)
+            self.assertFalse(violations(base / relative, '#[cfg(not(feature = "worker-fault"))]\nmod plain;'))
+        # no other file of the crate, and no other crate, may name it
+        for path in (
+            base / "store.rs",
+            base / "doctor/checks.rs",
+            Path("control/crates/layerfs-sandbox/src/worker_server.rs"),
+            Path("api/crates/layerfs-api/src/worker_server/fault.rs"),
+        ):
+            self.assertTrue(violations(path, switch), path)
+        # it excuses no other test-only predicate, feature or attribute
+        server = base / "worker_server.rs"
+        for source in (
+            '#[cfg(any(test, feature = "worker-fault"))]\nmod fault;',
+            '#[cfg(feature = "worker-faults")]\nmod fault;',
+            '#[cfg(all(feature = "worker-fault", feature = "mock"))]\nmod fault;',
+            '#[cfg_attr(feature = "worker-fault", test)]\nfn check() {}',
+            "#[cfg(test)]\nmod tests;",
+            "#[test]\nfn check() {}",
+        ):
+            self.assertTrue(violations(server, source), source)
+        self.assertTrue(violations(server, 'fn f() -> bool { cfg!(feature = "worker-fault") }'))
+
+        owner = '[package]\nname="layerfs-control"\n[features]\nworker-fault=[]\n'
+        self.assertFalse(worker_fault_violations(owner))
+        self.assertTrue(worker_fault_violations(owner + 'default=["worker-fault"]\n'))
+        self.assertTrue(worker_fault_violations(owner + 'machine=["worker-fault"]\n'))
+        user = '[package]\nname="layerfs-api"\n'
+        edge = 'layerfs-control={path="../c",features=["worker-fault"]}\n'
+        self.assertFalse(worker_fault_violations(user + '[dependencies]\nlayerfs-control={path="../c"}\n'))
+        for table in ("dependencies", "dev-dependencies", "target.'cfg(unix)'.dependencies"):
+            self.assertTrue(worker_fault_violations(f"{user}[{table}]\n{edge}"), table)
+        self.assertTrue(worker_fault_violations(user + '[features]\nfault=["layerfs-control/worker-fault"]\n'))
+        self.assertTrue(worker_fault_violations(user + "[features]\nworker-fault=[]\n"))
 
     def test_overlay_terminology_distinguishes_records_from_temporary_buffers(self):
         path = Path("engine/crates/layerfs-overlay/src/contract/types.rs")
@@ -696,6 +739,54 @@ class DurablePersistenceEdges(unittest.TestCase):
                 '[package]\nname="layerfs-persistence"\n[dependencies]\nlayerfs-storage={path="../layerfs-storage"}\nlayerfs-history={path="../layerfs-history"}\n'
             )
         )
+
+
+class FuserSourcePin(unittest.TestCase):
+    REV = "7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4"
+    MANIFEST = "engine/crates/layerfs-fuse/Cargo.toml"
+
+    def check(self, spec, root=None, lock_source=None, config=None):
+        manifests = {
+            self.MANIFEST: {"target": {'cfg(target_os = "linux")': {"dependencies": {"fuser": spec}}}},
+            "Cargo.toml": root or {},
+        }
+        source = lock_source or f"git+{FUSER_GIT}?rev={self.REV}#{self.REV}"
+        return fuser_source_violations(manifests, {"package": [{"name": "fuser", "source": source}]}, config or {})
+
+    def test_pinned_fork_revision_passes(self):
+        self.assertFalse(self.check({"version": "=0.18.0", "git": FUSER_GIT, "rev": self.REV}))
+
+    def test_floating_local_registry_or_other_sources_are_refused(self):
+        for spec in [
+            "=0.18.0",
+            {"version": "=0.18.0"},
+            {"git": FUSER_GIT, "branch": "fuser-0.18.0"},
+            {"git": FUSER_GIT, "tag": "v0.18.0-layerfs.1"},
+            {"git": FUSER_GIT, "rev": self.REV[:12]},
+            {"git": "https://github.com/cberner/fuser.git", "rev": self.REV},
+            {"path": "../fuser", "git": FUSER_GIT, "rev": self.REV},
+        ]:
+            self.assertTrue(self.check(spec), spec)
+
+    def test_overrides_and_lock_drift_are_refused(self):
+        spec = {"git": FUSER_GIT, "rev": self.REV}
+        self.assertTrue(self.check(spec, root={"patch": {FUSER_GIT: {"fuser": {"path": "../fuser"}}}}))
+        self.assertTrue(self.check(spec, root={"patch": {"crates-io": {"alias": {"package": "fuser", "path": "x"}}}}))
+        self.assertTrue(self.check(spec, root={"replace": {"fuser:0.18.0": {"path": "../fuser"}}}))
+        self.assertTrue(self.check(spec, config={"paths": ["../fuser"]}))
+        self.assertTrue(self.check(spec, config={"source": {"fork": {"git": FUSER_GIT, "replace-with": "local"}}}))
+        self.assertTrue(self.check(spec, config={"patch": {FUSER_GIT: {"fuser": {"path": "../fuser"}}}}))
+        self.assertTrue(self.check(spec, lock_source=f"git+{FUSER_GIT}?branch=fuser-0.18.0#{self.REV}"))
+        self.assertTrue(self.check(spec, lock_source="registry+https://github.com/rust-lang/crates.io-index"))
+        other = {"dependencies": {"fuser": {"git": FUSER_GIT, "rev": "0" * 40}}}
+        self.assertTrue(self.check(spec, root=other))
+
+    def test_repository_pin_passes(self):
+        repository = Path(__file__).resolve().parents[1]
+        manifests = {name: tomllib.loads((repository / name).read_text()) for name in ("Cargo.toml", self.MANIFEST)}
+        lock = tomllib.loads((repository / "Cargo.lock").read_text())
+        config = tomllib.loads((repository / ".cargo/config.toml").read_text())
+        self.assertFalse(fuser_source_violations(manifests, lock, config))
 
 
 if __name__ == "__main__":

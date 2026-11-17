@@ -49,8 +49,9 @@ call's events.
 
 Entries outside the table: `doctor` in every front end (report-only,
 [Doctor](../../control/doctor/README.md)); `close` in Node and Python
-(`close_idle(0)`: close this process's idle Stores and drop their leases; the
-CLI does it after every call); in the CLI only, `worker`, `import-env`,
+(`close_idle(0)`: close this process's idle Stores and drop their leases, then
+`end_idle_sessions`: end its idle Sandbox daemon sessions inside 250 ms; the
+CLI does both after every call); in the CLI only, `worker`, `import-env`,
 `help` and `--version`.
 
 ### The layerfs command
@@ -65,6 +66,7 @@ layerfs <family> <call> <positionals...> [--options] [switches]
   doctor [target ...]        -> doctor::main                (outside table)
   <family> <call>            -> find -> parse -> Scope::parse
                                 -> call_scoped once -> close_idle(0)
+                                -> end_idle_sessions(250 ms)
                                 -> print result or refusal
 ```
 
@@ -133,6 +135,7 @@ write none.
 | Functions (`on_progress`, `stdout`, `stderr`) never cross into the library | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs) |
 | LayerFS reads `LAYERFS_*` settings only and names no plugin | [`dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home`, [`worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
 | The CLI closes the Stores a call opened before it exits, so a sqlite Store leaves no write-ahead log | `close_idle(Duration::ZERO)` in [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) |
+| A one-shot process ends its idle Sandbox daemon sessions before it exits, so its exit is not a dropped connection in the daemon's log (layerfs-project#181). Best effort inside 250 ms in all (`SESSION_END`), sent once, after the call's result is ready; a lent or failed connection, or a daemon that does not answer in time, is dropped as before. The daemon's side is in [the daemon channel](../../control/sandboxes/daemon-channel-and-exec.md) | `end_idle_sessions` in [`registry.rs`](../../../../control/crates/layerfs-sandbox/src/registry.rs), `Controls::end_idle` in [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
 
 ## Limits and failures
 
@@ -142,7 +145,7 @@ write none.
 | stdout cannot be written after the call | 125; the call was made and its effects stay; nothing is repeated | [`output.rs`](../../../../api/crates/layerfs-cli/src/output.rs), [`framed.rs`](../../../../api/crates/layerfs-cli/src/framed.rs) |
 | stderr cannot be written | the line is lost; the exit stays the outcome's | [`output.rs`](../../../../api/crates/layerfs-cli/src/output.rs) `diagnostic` |
 | `--stream`: a command exiting 2 or 125 | same exit as a usage error or refusal; stderr tells them apart | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) |
-| Cargo features | Node: `machine` always, `postgresql`/`tls` opt-in; Python and CLI: `machine` by default; without `postgresql`/`tls` such a call is `Unsupported` | the three crates' `Cargo.toml` |
+| Cargo features | Node: `machine` always, `tls` opt-in; Python and CLI: `machine` by default; without `tls` an `https://` remote is `Unsupported`. PostgreSQL is always built | the three crates' `Cargo.toml` |
 | Durable Stores | `NOT_RUN — disabled by owner until explicit reauthorization`; every build runs Disposable/WAL only | [store family](../sdk/store.md) |
 
 ## Packaging and release

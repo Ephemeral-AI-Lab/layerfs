@@ -162,10 +162,14 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
 /// One create of a Store at a time in a home, since each stages its snapshot
 /// at the same path: an `flock` on `store/<s>/backup.lock`, taken without
 /// waiting and held until the create ends (a killed create's goes with it).
-struct Creating(std::fs::File);
+///
+/// `doctor.fix` takes it the same way before it removes a staged snapshot an
+/// interrupted create left (layerfs-project#180).
+pub struct Creating(std::fs::File);
 
 impl Creating {
-    fn take(home: &Path, store: &str) -> Result<Self> {
+    /// Takes the lock without waiting; `Busy` while a create holds it.
+    pub fn take(home: &Path, store: &str) -> Result<Self> {
         use std::os::unix::fs::OpenOptionsExt;
         let file = std::fs::OpenOptions::new()
             .write(true)

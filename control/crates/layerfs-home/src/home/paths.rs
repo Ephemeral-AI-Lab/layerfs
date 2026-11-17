@@ -85,9 +85,27 @@ pub fn run_root(root: &Path) -> PathBuf {
     machine_dir(root, "native").join("run")
 }
 
-/// `log/`: init-failures.jsonl, uncertain.jsonl.
+/// `log/`: `uncertain.jsonl` (never rotated) and the logs that rotate
+/// once to `<name>.1.jsonl`: `leases`, `migration-failures`, `import-env`
+/// and, on the side that keeps a Sandbox's command records, `exec`.
+/// `init-failures` has no writer in 2.0: it is only copied from a 1.1.0
+/// home.
 pub fn log_dir(home: &Path) -> PathBuf {
     home.join("log")
+}
+
+/// `log/rotate.lock`: a rotation of a `log/*.jsonl` file takes it, as
+/// `trace/calls.lock` (layerfs-project#180).
+pub fn log_rotate_lock(home: &Path) -> PathBuf {
+    log_dir(home).join("rotate.lock")
+}
+
+/// `log/worker.log` under a worker's root: the worker's output on every
+/// machine kind, `/layerfs/data/log/worker.log` in the machine (0600). Its
+/// launcher appends to it and rotates it once to `worker.1.log` when a
+/// start finds it past 16 MiB (layerfs-project#178 step 0).
+pub fn worker_log(root: &Path) -> PathBuf {
+    log_dir(root).join("worker.log")
 }
 
 /// `trace/`.

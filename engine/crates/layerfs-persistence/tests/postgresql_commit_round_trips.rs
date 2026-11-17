@@ -6,7 +6,6 @@
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL` for the PostgreSQL half; NOT_RUN
 //! without it.
-#![cfg(feature = "postgresql")]
 mod support;
 
 use layerfs_content::{construct_bytes, ObjectId};

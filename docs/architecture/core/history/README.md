@@ -75,7 +75,7 @@ or any process, memory, socket or stdout/stderr state.
 | Create a project | `initialize_layerstack` | [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/layerstack.rs) |
 | Fork | `fork(ForkRequest)`: from `Layer(id)` (no head) or `Commit { branch, commit }`, which must be in that Branch's ancestry, else `NotInHistory` | [`branch.rs`](../../../../engine/crates/layerfs-persistence/src/history/branch.rs) |
 | Commit | `commit_branch(CommitRequest)` against the expected head and base | [`commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
-| Publish | `add_layer`: the Commit's root becomes the stack head (overwrite-only); Layers it does not contain are counted in `overwrote_count` and paged by `overwritten` | [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/layerstack.rs) |
+| Publish | `add_layer`: the Commit's root becomes the stack head (overwrite-only at this level; the SDK's `branch.publish` refuses a stale base first unless `force`); Layers it does not contain are counted in `overwrote_count` and paged by `overwritten` | [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/layerstack.rs) |
 | Merge | `merge_branch`: a new Branch whose first state is a node (fast-forward) or a two-parent Commit | [`merge.rs`](../../../../engine/crates/layerfs-persistence/src/history/merge.rs) |
 | Remove | `remove_layerstack`: the one removal; packs, objects, file digests and the allocation scope stay | [`removal.rs`](../../../../engine/crates/layerfs-persistence/src/history/removal.rs) |
 
@@ -112,7 +112,7 @@ database. `HistoryCatalogConfig` holds `binding_key` (1–128 bytes, hashed into
 
 | Kind | Methods |
 | --- | --- |
-| Point reads | `layer_stack[_named]`, `branch[_named]`, `branch_snapshot`, `commit`, `layer` |
+| Point reads | `layer_stack[_named]`, `branch[_named]`, `branch_snapshot`, `commit`, `layer`, `published_layer` (the Layer a Branch's Commit was published as) |
 | Paged reads | `layer_stacks`, `branches`, `commit_history`, `layer_history`, `overwritten` |
 | Ancestry | `merge_base`, `is_ancestor` |
 | Writes | `initialize_layerstack`, `fork`, `commit_branch`, `add_layer`, `merge_branch`, `remove_layerstack`, `reserve_inodes` |
@@ -219,6 +219,6 @@ most 120 s.
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
 | [`heads.rs`](../../../../engine/crates/layerfs-persistence/tests/heads.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test heads` | Linux, macOS (no-sidecar check Linux only) | Init, fork and Commit move the recorded heads exactly; a snapshot copy has equal heads |
-| [`layerstack_removal.rs`](../../../../engine/crates/layerfs-persistence/tests/layerstack_removal.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test layerstack_removal` | any; the PostgreSQL case needs `--features postgresql` and `LAYERFS_TEST_POSTGRES_URL`, else prints `NOT_RUN` | Removing one project leaves the other whole and frees the name |
+| [`layerstack_removal.rs`](../../../../engine/crates/layerfs-persistence/tests/layerstack_removal.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test layerstack_removal` | any; the PostgreSQL case needs `LAYERFS_TEST_POSTGRES_URL`, else prints `NOT_RUN` | Removing one project leaves the other whole and frees the name |
 | [`history_allocation.rs`](../../../../engine/crates/layerfs-persistence/tests/history_allocation.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test history_allocation` | any | Reservations are half-open, per scope, consumed on failure and refused at the end |
 | [`query_authenticator.rs`](../../../../core/crates/layerfs-history/tests/query_authenticator.rs) | `cargo +1.85.1 test --locked -p layerfs-history --test query_authenticator` | any | Every bound identity (catalog, incarnation) and payload byte changes the authenticator |

@@ -55,16 +55,29 @@ runs `namespaces` Sandboxes inside it, as a VM's worker does.
    docker run -d --pull never --name <vm> --init --privileged
      --cgroupns private --label layerfs.role=machine-worker
      --label layerfs.bundle=<hash>
+     --log-driver local --log-opt max-size=16m --log-opt max-file=2
      macOS: -p 127.0.0.1::7070            LISTEN 0.0.0.0:7070
      Linux: --network host --add-host host.docker.internal:host-gateway
                                           LISTEN 127.0.0.1:<free port>
      -v <vm>-data:/layerfs/data -v <bundle>:/layerfs/bundle:ro
-     --tmpfs /layerfs/state:mode=0700 --entrypoint sh <image> -c ENTRY
-   ENTRY: mkdir /layerfs/data/{store,sandbox} 0755; wait <= 60 s for
-          the secret; exec /layerfs/bundle/layerfs worker
+     --tmpfs /layerfs/state:mode=0700
+     -e LAYERFS_WORKER_LOG=/layerfs/data/log/worker.log
+     --entrypoint sh <image> -c ENTRY
+   ENTRY: mkdir /layerfs/data/{store,sandbox} 0755; the log's folder and
+          its one rotation; CGROUP_LEAF (every process of the namespace's
+          cgroup root into /sys/fs/cgroup/layerfs-worker, then
+          "+memory +pids" to the root's cgroup.subtree_control);
+          echo $$ > /layerfs/state/worker.pid; wait
+          <= 60 s for the secret;
+          exec /layerfs/bundle/layerfs worker >> "$LAYERFS_WORKER_LOG" 2>&1
    macOS: docker port <vm> 7070/tcp -> host port
    docker exec: write /layerfs/state/secret (0600, stdin); ready <= 60 s
+   a worker that ended (container exited): docker cp its worker.log out
 ```
+
+The worker's output goes to `/layerfs/data/log/worker.log` on the data
+volume, not to `docker logs`
+([the worker's log](workers-and-reach.md#the-workers-log)).
 
 | Call | Answer |
 | --- | --- |
@@ -79,7 +92,13 @@ runs `namespaces` Sandboxes inside it, as a VM's worker does.
 The secret goes into a private tmpfs after start, so it is in no command
 line or container config. The container is privileged in its own cgroup
 namespace so its worker has root, `/dev/fuse` and a writable cgroup v2 tree
-with `cgroup.kill`. It never writes `user.max_user_namespaces` (that would
+with `cgroup.kill`. Its cgroup root holds processes, and a cgroup that
+holds processes cannot give its children controllers (only the real root is
+exempt), so the entry moves them to a leaf first and the root then gives
+Sandbox groups memory and pids ([`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs)
+`CGROUP_LEAF`, layerfs-project#182 L4); `docker exec` then joins the leaf.
+The VM launcher runs the same lines, which act only at a namespace root (an
+Apple Container guest), never at a VM's real root (Lima). It never writes `user.max_user_namespaces` (that would
 change the whole Docker host); Sandbox commands rely on the seccomp
 filter. `machine update docker --docker <socket>` points the platform's own
 `docker` calls at another Engine; the socket is never mounted. A Sandbox
@@ -201,7 +220,10 @@ Windows column is table data, not a built host (`#![cfg(unix)]`).
 `machine create` and `sandbox create` refuse `Unsupported` with the row's
 reason; `sandbox create` wraps it as "a Sandbox of <kind> Store <s> cannot
 run on machine <m> (<platform>): <reason>". `machine.list` and `get` give
-each machine its row's `supports: {sqlite, postgresql_sandbox, reason}`.
+each machine its row's `supports: {sqlite, postgresql_sandbox, reason, log}`;
+`log` is true where the row's sqlite call site is a worker and the table
+refuses the platform nothing on the host (a worker this build starts, so a
+worker log exists), false on every `native`.
 
 ### SUPPORT.json
 

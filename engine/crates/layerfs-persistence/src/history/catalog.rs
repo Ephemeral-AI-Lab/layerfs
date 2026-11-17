@@ -136,6 +136,14 @@ impl HistoryCatalog for HistoryProvider {
         self.read(|tx| super::lineage::overwritten(tx, layer, position, usize::from(limit)))
     }
 
+    fn published_layer(
+        &self,
+        branch: BranchId,
+        commit: CommitId,
+    ) -> HistoryResult<Option<LayerId>> {
+        self.read_statement(|tx| layerstack::published_source(tx, branch, commit))
+    }
+
     fn layer_history(
         &self,
         request: &LayerHistoryRequest,
@@ -179,7 +187,6 @@ impl HistoryCatalog for HistoryProvider {
             crate::backend::Engine::Sqlite(session) => {
                 Ok(PublishLane::new(Box::new(session.hold_lane()?)))
             }
-            #[cfg(feature = "postgresql")]
             crate::backend::Engine::Postgres(session) => {
                 Ok(PublishLane::new(Box::new(session.hold_lane()?)))
             }

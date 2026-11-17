@@ -2,12 +2,29 @@
 //! write to `cgroup.kill`, and nothing it started can leave that group, so a
 //! process that left its process group still ends with it. The hierarchy is
 //! the host's unified one; there is no second, nested controller setup.
+//!
+//! The `layerfs` directory gives each Sandbox's group the memory and pids
+//! controllers its parent lets it have ([`give_controllers`],
+//! layerfs-project#182 L4), so a Sandbox's memory and processes can be read.
+//! No limit is ever set. Its parent (the hierarchy's root) is enabled by
+//! whoever owns it before anything runs there: the real root is exempt from
+//! the no-internal-process rule; a container's cgroup namespace root is
+//! enabled by its launcher (the docker machine's entry script).
+//!
+//! A Sandbox's own group holds no process ([`create`]): its init stages,
+//! daemon, command helpers and the commands with no exec id run in its leaf
+//! group `init` ([`leaf`]), and the commands with an exec id in their
+//! Workspace's `ws-<workspace>/exec-<exec>` group. So cgroup v2's
+//! no-internal-process rule lets it give the leaf and its Workspace groups
+//! the memory and pids controllers it has, and a Workspace's memory and
+//! processes can be read; its own files still count all of them.
 use crate::ContainerId;
 use std::{
     fs,
     io::{self, Write},
     os::unix::fs::DirBuilderExt,
     path::{Path, PathBuf},
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 /// This host's unified cgroup v2 hierarchy.
@@ -20,14 +37,105 @@ pub(crate) fn path(id: &ContainerId) -> PathBuf {
     Path::new(ROOT).join(GROUP).join(id.as_str())
 }
 
+/// The controllers a Sandbox's group is given, when its parent has them.
+const CONTROLLERS: [&str; 2] = ["memory", "pids"];
+
+/// Whether this process already said that the controllers were not given.
+static TOLD: AtomicBool = AtomicBool::new(false);
+/// Whether it already said so of a Sandbox's Workspace groups.
+static TOLD_WORKSPACES: AtomicBool = AtomicBool::new(false);
+
+/// The name of a Sandbox group's leaf group ([`leaf`]).
+const LEAF: &str = "init";
+
+/// The leaf group below Sandbox group `sandbox` that holds every process of
+/// the Sandbox outside a command group: its two init stages and daemon
+/// (the helper spec's `cgroup`), each command's helper, and the commands
+/// with no exec id. One `cgroup.kill` on `sandbox` still ends them all.
+pub fn leaf(sandbox: &Path) -> PathBuf {
+    sandbox.join(LEAF)
+}
+
+/// The group a command's helper of Sandbox group `sandbox` is created in:
+/// its [`leaf`], or `sandbox` itself for a Sandbox an earlier build started,
+/// whose processes are in its own group and which has no leaf.
+pub fn helper_group(sandbox: &Path) -> PathBuf {
+    let leaf = leaf(sandbox);
+    if leaf.is_dir() {
+        leaf
+    } else {
+        sandbox.to_owned()
+    }
+}
+
+/// Makes new Sandbox group `sandbox`'s [`leaf`], then, while no process is
+/// in either, gives the groups below `sandbox` the controllers it has
+/// ([`give_controllers`]). A failed leaf is an error; a failed give is not:
+/// the Workspaces' memory and process values stay unread, and the
+/// process's log says why once.
+pub fn split(sandbox: &Path) -> io::Result<()> {
+    fs::DirBuilder::new().mode(0o755).create(leaf(sandbox))?;
+    if let Err(error) = give_controllers(sandbox) {
+        if !TOLD_WORKSPACES.swap(true, Ordering::Relaxed) {
+            eprintln!(
+                "layerfs: Workspace groups get no memory or pids controller \
+                 (writing {} failed: {error}); their memory and process values stay null",
+                sandbox.join("cgroup.subtree_control").display()
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Gives the groups under `group` the controllers of [`CONTROLLERS`] that
+/// `group` has (listed in its `cgroup.controllers`) and does not give yet
+/// (not in its `cgroup.subtree_control`): one write of `+memory +pids`, or
+/// of the one listed, to its `cgroup.subtree_control`. Nothing is written
+/// when there is nothing to give. It never writes a limit and never writes
+/// above `group`.
+pub fn give_controllers(group: &Path) -> io::Result<()> {
+    let listed = |file: &str| -> io::Result<Vec<String>> {
+        let text = fs::read_to_string(group.join(file))?;
+        Ok(text.split_whitespace().map(str::to_owned).collect())
+    };
+    let (has, given) = (
+        listed("cgroup.controllers")?,
+        listed("cgroup.subtree_control")?,
+    );
+    let wanted: Vec<String> = (CONTROLLERS.iter())
+        .filter(|name| has.iter().any(|c| c == *name) && !given.iter().any(|c| c == *name))
+        .map(|name| format!("+{name}"))
+        .collect();
+    if wanted.is_empty() {
+        return Ok(());
+    }
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .open(group.join("cgroup.subtree_control"))?;
+    file.write_all(wanted.join(" ").as_bytes())
+}
+
 /// Makes this runtime's own directory once (idempotent) and returns Sandbox
-/// `id`'s directory, made here and empty, with the files this runtime needs.
+/// `id`'s directory, made here with its [`leaf`] and no process, with the
+/// files this runtime needs ([`split`]). The directory gives Sandbox groups
+/// the controllers it can ([`give_controllers`]); a failed write does not
+/// fail the Sandbox: its memory and process values stay unread, and the
+/// process's log (the worker's) says why once.
 pub(crate) fn create(id: &ContainerId) -> io::Result<PathBuf> {
     let parent = Path::new(ROOT).join(GROUP);
     match fs::DirBuilder::new().mode(0o755).create(&parent) {
         Ok(()) => {}
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
         Err(error) => return Err(error),
+    }
+    if let Err(error) = give_controllers(&parent) {
+        if !TOLD.swap(true, Ordering::Relaxed) {
+            eprintln!(
+                "layerfs: Sandbox groups get no memory or pids controller \
+                 (writing {} failed: {error}); their memory and process values stay null",
+                parent.join("cgroup.subtree_control").display()
+            );
+        }
     }
     let directory = path(id);
     fs::DirBuilder::new().mode(0o755).create(&directory)?;
@@ -38,6 +146,10 @@ pub(crate) fn create(id: &ContainerId) -> io::Result<PathBuf> {
             io::ErrorKind::Unsupported,
             "this kernel's cgroup v2 has no cgroup.kill",
         ));
+    }
+    if let Err(error) = split(&directory) {
+        let _ = fs::remove_dir(&directory);
+        return Err(error);
     }
     Ok(directory)
 }
@@ -64,8 +176,8 @@ pub(crate) fn populated(directory: &Path) -> io::Result<u64> {
     count.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "cgroup.events populated"))
 }
 
-/// Removes the Sandbox's directory once nothing is in it, with the
-/// Workspace and command groups below it. A group that still has processes
+/// Removes the Sandbox's directory once nothing is in it, with its leaf and
+/// the Workspace and command groups below it. A group that still has processes
 /// is refused rather than reported as gone.
 pub(crate) fn remove(directory: &Path) -> io::Result<()> {
     match populated(directory) {

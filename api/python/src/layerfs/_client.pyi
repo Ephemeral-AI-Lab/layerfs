@@ -101,8 +101,18 @@ class BranchFamily:
         log_tag: str | None = None,
     ) -> Result:
         """merge two Branches into a new one"""
-    def publish(self, project: str, branch: str, commit: str | None = None, *, log_tag: str | None = None) -> Result:
-        """a Branch's head or Commit as main's next Layer"""
+    def publish(
+        self,
+        project: str,
+        branch: str,
+        commit: str | None = None,
+        *,
+        expected_base: str | None = None,
+        expected_head: str | None = None,
+        force: bool | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a Branch's head or Commit as main's next Layer, refusing a stale base"""
     def diff(
         self,
         project: str,
@@ -353,6 +363,7 @@ class SandboxFamily:
         *,
         page_size: int | None = None,
         page_pos: int | None = None,
+        live: bool | None = None,
         log_tag: str | None = None,
     ) -> Result:
         """every Sandbox in the home, or one project's"""
@@ -367,6 +378,19 @@ class SandboxFamily:
         """a Sandbox and its Workspaces"""
     def close(self, name: str, *, force: bool | None = None, log_tag: str | None = None) -> Result:
         """stop a Sandbox"""
+    def files(
+        self,
+        sandbox: str,
+        path: str | None = None,
+        *,
+        depth: int | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        length: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a Sandbox's files: its roots, or a folder or file under its home or in its root"""
 
 class WorkspaceFamily:
     def mount(self, sandbox: str, branch: str, *, name: str | None = None, log_tag: str | None = None) -> Result:
@@ -437,6 +461,21 @@ class MachineFamily:
         """remove a Sandbox image from a machine, or every unused one"""
     def status(self, name: str, *, log_tag: str | None = None) -> Result:
         """a machine's live state, free disk and tool version"""
+    def stats(self, machine: str, *, log_tag: str | None = None) -> Result:
+        """a machine's observed processors, memory and data disk, its Stores' sizes and live Sandboxes"""
+    def files(
+        self,
+        machine: str,
+        path: str | None = None,
+        *,
+        depth: int | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        length: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a machine's files: its LayerFS folders by role, or a folder or file of the machine"""
     def start(
         self,
         name: str,
@@ -445,7 +484,7 @@ class MachineFamily:
         log_tag: str | None = None,
     ) -> Result:
         """start a stopped machine and its worker; a running one answers at once"""
-    def stop(self, name: str, *, log_tag: str | None = None) -> Result:
+    def stop(self, name: str, *, force: bool | None = None, log_tag: str | None = None) -> Result:
         """stop a machine's worker and VM; its disks stay"""
     def create(
         self,
@@ -580,6 +619,30 @@ class LogsFamily:
         """the calls made against this home, newest first"""
     def reset(self, *, log_tag: str | None = None) -> Result:
         """clear this home's call log"""
+    def machine(
+        self,
+        machine: str,
+        *,
+        cursor: str | None = None,
+        before: str | None = None,
+        limit: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a machine's worker log: its last lines, or the lines after or before a cursor"""
+    def sandbox(
+        self,
+        sandbox: str,
+        *,
+        cursor: str | None = None,
+        before: str | None = None,
+        limit: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a Sandbox's daemon log: its last lines, or the lines after or before a cursor"""
+
+class DoctorFamily:
+    def fix(self, id: str, *, log_tag: str | None = None) -> Result:
+        """remove one leftover `layerfs doctor` listed, under its guard"""
 
 class Client:
     home: str | None
@@ -594,6 +657,7 @@ class Client:
     store: StoreFamily
     backup: BackupFamily
     logs: LogsFamily
+    doctor: DoctorFamily
     def __init__(self, home: str | PathLike[str] | None = None, scope: Scope | Mapping[str, str | None] | None = None) -> None: ...
 
 def client(home: str | PathLike[str] | None = None, scope: Scope | Mapping[str, str | None] | None = None) -> Client: ...

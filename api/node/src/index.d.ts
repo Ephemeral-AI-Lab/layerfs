@@ -88,7 +88,24 @@ export interface DoctorReport {
   mode?: "full" | "quick" | "observation" | "write-test";
   observed_at_ms?: number;
   duration_ms?: number;
-  findings: { severity: string; entity: { kind: string; name: string }; message: string; fix: string | null }[];
+  findings: { severity: string; entity: { kind: string; name: string }; message: string; fix: string | null; leftover?: DoctorLeftover }[];
+  /** The legacy report: each machine walked for leftovers. */
+  leftovers?: { machine: string; complete: boolean; image_locks: number; unmount_markers: number }[];
+}
+/** What an interrupted operation left, on a finding of the legacy report;
+ * `doctor.fix(id)` removes it when `fixable`. */
+export interface DoctorLeftover {
+  machine: string;
+  kind: "run-folder" | "empty-root" | "init-copy" | "backup-staging" | "image-tmp" | "image-part";
+  path: string;
+  /** null when the walk's bound ended before it was measured */
+  bytes: number | null;
+  /** seconds since it last changed */
+  age: number;
+  id: string;
+  fixable: boolean;
+  /** a folder copy: ms since the epoch from which `doctor.fix` removes it */
+  not_before?: number;
 }
 
 
@@ -129,6 +146,13 @@ export interface BranchCommitsOptions extends CallOptions {
 export interface BranchMergeOptions extends CallOptions {
   message?: string;
   units?: Value;
+}
+
+/** Options of `branch.publish`; an unknown option is refused. */
+export interface BranchPublishOptions extends CallOptions {
+  expected_base?: string;
+  expected_head?: string;
+  force?: boolean;
 }
 
 /** Options of `branch.diff`; an unknown option is refused. */
@@ -260,6 +284,7 @@ export interface SandboxCreateOptions extends CallOptions {
 export interface SandboxListOptions extends CallOptions {
   page_size?: WholeNumber;
   page_pos?: WholeNumber;
+  live?: boolean;
 }
 
 /** Options of `sandbox.get`; an unknown option is refused. */
@@ -271,6 +296,15 @@ export interface SandboxGetOptions extends CallOptions {
 /** Options of `sandbox.close`; an unknown option is refused. */
 export interface SandboxCloseOptions extends CallOptions {
   force?: boolean;
+}
+
+/** Options of `sandbox.files`; an unknown option is refused. */
+export interface SandboxFilesOptions extends CallOptions {
+  depth?: WholeNumber;
+  cursor?: string;
+  limit?: WholeNumber;
+  offset?: WholeNumber;
+  length?: WholeNumber;
 }
 
 /** Options of `workspace.mount`; an unknown option is refused. */
@@ -315,9 +349,23 @@ export interface MachinePruneOptions extends CallOptions {
   unused?: boolean;
 }
 
+/** Options of `machine.files`; an unknown option is refused. */
+export interface MachineFilesOptions extends CallOptions {
+  depth?: WholeNumber;
+  cursor?: string;
+  limit?: WholeNumber;
+  offset?: WholeNumber;
+  length?: WholeNumber;
+}
+
 /** Options of `machine.start`; an unknown option is refused. */
 export interface MachineStartOptions extends CallOptions {
   on_progress?: ProgressHandler;
+}
+
+/** Options of `machine.stop`; an unknown option is refused. */
+export interface MachineStopOptions extends CallOptions {
+  force?: boolean;
 }
 
 /** Options of `machine.create`; an unknown option is refused. */
@@ -391,6 +439,20 @@ export interface LogsListOptions extends CallOptions {
   limit?: WholeNumber;
 }
 
+/** Options of `logs.machine`; an unknown option is refused. */
+export interface LogsMachineOptions extends CallOptions {
+  cursor?: string;
+  before?: string;
+  limit?: WholeNumber;
+}
+
+/** Options of `logs.sandbox`; an unknown option is refused. */
+export interface LogsSandboxOptions extends CallOptions {
+  cursor?: string;
+  before?: string;
+  limit?: WholeNumber;
+}
+
 export interface ProjectFamily {
   /** import a host folder as a new project into an existing Store */
   init(project: string, folder: string, options?: ProjectInitOptions): Promise<Result>;
@@ -423,9 +485,9 @@ export interface BranchFamily {
   fork(project: string, name: string, from_branch: string, from_commit?: string | null, options?: CallOptions): Promise<Result>;
   /** merge two Branches into a new one */
   merge(project: string, name: string, a: string, b: string, options?: BranchMergeOptions): Promise<Result>;
-  /** a Branch's head or Commit as main's next Layer */
-  publish(project: string, branch: string, options: CallOptions): Promise<Result>;
-  publish(project: string, branch: string, commit?: string | null, options?: CallOptions): Promise<Result>;
+  /** a Branch's head or Commit as main's next Layer, refusing a stale base */
+  publish(project: string, branch: string, options: BranchPublishOptions): Promise<Result>;
+  publish(project: string, branch: string, commit?: string | null, options?: BranchPublishOptions): Promise<Result>;
   /** files that differ between two Branches' heads */
   diff(project: string, from_branch: string, to_branch: string, options?: BranchDiffOptions): Promise<Result>;
 }
@@ -489,6 +551,9 @@ export interface SandboxFamily {
   get(name: string, options?: SandboxGetOptions): Promise<Result>;
   /** stop a Sandbox */
   close(name: string, options?: SandboxCloseOptions): Promise<Result>;
+  /** a Sandbox's files: its roots, or a folder or file under its home or in its root */
+  files(sandbox: string, options: SandboxFilesOptions): Promise<Result>;
+  files(sandbox: string, path?: string | null, options?: SandboxFilesOptions): Promise<Result>;
 }
 
 export interface WorkspaceFamily {
@@ -522,10 +587,15 @@ export interface MachineFamily {
   prune(name: string, image?: string | null, options?: MachinePruneOptions): Promise<Result>;
   /** a machine's live state, free disk and tool version */
   status(name: string, options?: CallOptions): Promise<Result>;
+  /** a machine's observed processors, memory and data disk, its Stores' sizes and live Sandboxes */
+  stats(machine: string, options?: CallOptions): Promise<Result>;
+  /** a machine's files: its LayerFS folders by role, or a folder or file of the machine */
+  files(machine: string, options: MachineFilesOptions): Promise<Result>;
+  files(machine: string, path?: string | null, options?: MachineFilesOptions): Promise<Result>;
   /** start a stopped machine and its worker; a running one answers at once */
   start(name: string, options?: MachineStartOptions): Promise<Result>;
   /** stop a machine's worker and VM; its disks stay */
-  stop(name: string, options?: CallOptions): Promise<Result>;
+  stop(name: string, options?: MachineStopOptions): Promise<Result>;
   /** create an enabled VM machine (apple-container, lima) */
   create(name: string, platform: string, options?: MachineCreateOptions): Promise<Result>;
   /** delete a VM machine and its disk; one of a removed platform is only forgotten */
@@ -582,6 +652,15 @@ export interface LogsFamily {
   list(options?: LogsListOptions): Promise<Result>;
   /** clear this home's call log */
   reset(options?: CallOptions): Promise<Result>;
+  /** a machine's worker log: its last lines, or the lines after or before a cursor */
+  machine(machine: string, options?: LogsMachineOptions): Promise<Result>;
+  /** a Sandbox's daemon log: its last lines, or the lines after or before a cursor */
+  sandbox(sandbox: string, options?: LogsSandboxOptions): Promise<Result>;
+}
+
+export interface DoctorFamily {
+  /** remove one leftover `layerfs doctor` listed, under its guard */
+  fix(id: string, options?: CallOptions): Promise<Result>;
 }
 
 export interface Client {
@@ -597,6 +676,7 @@ export interface Client {
   readonly store: StoreFamily;
   readonly backup: BackupFamily;
   readonly logs: LogsFamily;
+  readonly doctor: DoctorFamily;
 }
 
 /** The call table: one entry per call. */
@@ -608,6 +688,10 @@ export const families: readonly string[];
 export function client(options?: ClientOptions): Client;
 /** Diagnoses without LayerFS state changes; explicit backup write_test uses its own temporary S3 version. */
 export function doctor(options?: DoctorOptions): Promise<DoctorReport>;
+/** The `doctor` family's calls, on the package's report function. */
+export namespace doctor {
+  const fix: DoctorFamily["fix"];
+}
 /** Closes every Store this process holds open with no call running; answers how many. Outside the call table. */
 export function close(): number;
 

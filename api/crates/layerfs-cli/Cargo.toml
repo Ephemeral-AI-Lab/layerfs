@@ -20,7 +20,6 @@ default = ["machine"]
 # The machine calls run on a host. The guest bundle's `layerfs worker` is
 # built with --no-default-features, so no machine adapter runs in a machine.
 machine = ["layerfs-api/machine"]
-postgresql = ["layerfs-api/postgresql"]
 tls = ["layerfs-api/tls"]
 
 [dependencies]

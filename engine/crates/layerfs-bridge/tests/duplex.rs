@@ -237,26 +237,17 @@ fn corrupted_authenticated_record_retains_the_crypto_failure_without_replay() {
 }
 
 #[test]
-fn terminal_reply_retains_eof_and_original_platform_fence_outcome() {
+fn terminal_reply_retains_eof_and_fences_on_every_platform() {
     let (mut client, mut server, _raw) = pair();
     server.send.send(b"final acknowledgement").unwrap();
     assert_eq!(client.receive.receive().unwrap(), b"final acknowledgement");
     let worker = thread::spawn(move || {
-        match server.receive.wait_peer_end() {
-            Ok(()) => println!("DUPLEX_END peer_eof=true fence=OK"),
-            Err(failure) => {
-                assert!(
-                    cfg!(target_os = "macos"),
-                    "unexpected terminal failure: {failure:?}"
-                );
-                assert_eq!(failure.phase, layerfs_bridge::duplex::PeerEndPhase::Fence);
-                assert!(failure.fence_attempted && failure.received.is_none());
-                assert!(
-                    matches!(&failure.cause,ChannelError::Io(error) if error.kind()==std::io::ErrorKind::NotConnected)
-                );
-                println!("DUPLEX_END peer_eof=true original_fence_failure={failure:?}");
-            }
-        }
+        // macOS answers the fence of a socket whose peer has ended
+        // NotConnected; that is the fence having nothing left to close
+        server
+            .receive
+            .wait_peer_end()
+            .expect("the peer's end is not a fence failure");
         let work = server.receive.work();
         assert_eq!(work.io_attempts, 1);
         assert_eq!(work.wire_bytes, 0);

@@ -175,6 +175,93 @@ fn the_other_platforms_refuse_before_any_tool_runs() {
     assert!(scratch.log().is_empty(), "{}", scratch.log());
 }
 
+/// A stand-in forward that says so on its stderr (the machine's
+/// `forward.log`) when it starts and again at each `USR1`.
+const TALKING: &str = r#"[ "$1" = -V ] && exit 0
+echo "forward up" >&2
+trap 'echo "forward still here" >&2' USR1
+trap 'kill $! 2>/dev/null; exit 0' TERM
+sleep 60 &
+while kill -0 $! 2>/dev/null; do wait; done"#;
+
+/// The text of `log` once it holds `part` (a bounded wait, at most 5 s:
+/// a detached stand-in writes on its own time).
+fn holding(log: &std::path::Path, part: &str) -> String {
+    let until = Instant::now() + Duration::from_secs(5);
+    loop {
+        let text = String::from_utf8_lossy(&std::fs::read(log).unwrap()).into_owned();
+        if text.contains(part) || Instant::now() >= until {
+            return text;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// layerfs-project#180: a machine's forwards share `forward.log`. A
+/// forward that starts past 16 MiB rotates it once to `forward.1.log`,
+/// and a forward already running keeps writing into `forward.log` itself:
+/// the log is emptied in place, never renamed under it.
+#[test]
+fn a_forward_start_rotates_the_shared_log_in_place_under_a_running_forward() {
+    use std::os::unix::fs::MetadataExt;
+    const SIZE: u64 = 16 << 20;
+    let scratch = Scratch::new("forward-log");
+    scratch.tool("ssh", TALKING);
+    warm(&scratch);
+    let spec = lima_spec(&scratch, "Running");
+    let log = spec.work_dir.join("forward.log");
+    let rotated = spec.work_dir.join("forward.1.log");
+    let sized = |size: u64| {
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&log)
+            .unwrap();
+        file.set_len(size).unwrap();
+    };
+    // a log at the size is appended to, not rotated
+    sized(SIZE);
+    let first = machine::forward(&spec, 40007).unwrap();
+    let (_, first_pid) = opened(&first, 40007);
+    assert!(holding(&log, "forward up").ends_with("forward up\n"));
+    assert!(!rotated.exists());
+    let held = std::fs::metadata(&log).unwrap().ino();
+    let past = std::fs::metadata(&log).unwrap().len();
+    assert!(past > SIZE);
+    // the second forward starts past the size, while the first holds the log
+    std::fs::write(&rotated, "the oldest\n").unwrap();
+    let second = machine::forward(&spec, 40008).unwrap();
+    opened(&second, 40008);
+    assert_eq!(std::fs::metadata(&rotated).unwrap().len(), past);
+    assert_eq!(holding(&log, "forward up"), "forward up\n");
+    assert_eq!(
+        std::fs::metadata(&log).unwrap().ino(),
+        held,
+        "emptied in place, never renamed"
+    );
+    // the running forward's next line lands in the log, not the rotated file
+    Command::new("kill")
+        .args(["-USR1", &first_pid.to_string()])
+        .status()
+        .unwrap();
+    assert_eq!(
+        holding(&log, "still here"),
+        "forward up\nforward still here\n"
+    );
+    assert_eq!(std::fs::metadata(&rotated).unwrap().len(), past);
+    // once: a third start below the size leaves the rotated file
+    let third = machine::forward(&spec, 40009).unwrap();
+    assert_eq!(
+        holding(&log, "here\nforward up"),
+        "forward up\nforward still here\nforward up\n"
+    );
+    assert_eq!(std::fs::metadata(&rotated).unwrap().len(), past);
+    for forward in [first, second, third] {
+        machine::forward_close(&spec, &forward);
+    }
+}
+
 #[test]
 fn port_zero_is_refused_before_any_tool_runs() {
     let scratch = Scratch::new("forward-zero");

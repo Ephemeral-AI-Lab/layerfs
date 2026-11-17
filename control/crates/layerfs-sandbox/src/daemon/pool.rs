@@ -313,8 +313,10 @@ impl Controls {
     /// wait and reports the exact refusal (#540).
     pub fn lend_within(&self, wait: Duration) -> Result<(Lease<'_>, Duration), SdkRefusal> {
         let started = Instant::now();
-        let poisoned = || refused("Failed", "binding state poisoned");
-        let mut pool = self.pool.lock().map_err(|_| poisoned())?;
+        // the pool is two counts and a list, each changed in one step, so
+        // it is whole after a holder's panic: its guard is taken back
+        // (layerfs-project#177), as `Lease`'s drop takes it
+        let mut pool = self.held();
         loop {
             if let Some(control) = pool.idle.pop() {
                 return Ok((self.lease(control), started.elapsed()));
@@ -329,7 +331,7 @@ impl Controls {
                 } else {
                     self.dial.open()
                 };
-                pool = self.pool.lock().map_err(|_| poisoned())?;
+                pool = self.held();
                 match opened {
                     Ok(control) => return Ok((self.lease(control), started.elapsed())),
                     Err(refusal) => {
@@ -357,9 +359,51 @@ impl Controls {
             pool = self
                 .freed
                 .wait_timeout(pool, remaining)
-                .map_err(|_| poisoned())?
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .0;
         }
+    }
+
+    /// Ends the session of every connection that is idle now, for a process
+    /// about to exit (layerfs-project#181): a pooled connection that is only
+    /// dropped leaves the daemon reading a closed socket, which it logs and
+    /// retains as a connection failure, one per process. Best effort, sent
+    /// once: each idle connection is taken out of the pool, asked to end its
+    /// session and closed, and every one is fenced at `deadline`, so a daemon
+    /// that does not answer is dropped as it was before. A lent connection
+    /// stays with its call, and a later call opens a connection again.
+    /// Answers how many sessions the daemon ended.
+    pub fn end_idle(&self, deadline: Instant) -> usize {
+        let idle = {
+            let mut pool = self.held();
+            let idle = std::mem::take(&mut pool.idle);
+            pool.open -= idle.len();
+            idle
+        };
+        // the pool has room again: a waiting call may open its own
+        self.freed.notify_all();
+        let mut ended = 0;
+        for mut control in idle {
+            if control.is_failed() || Instant::now() >= deadline {
+                continue;
+            }
+            // an idle connection has no I/O waits, so the fence is its bound
+            let Ok(handle) = control.close_handle() else {
+                continue;
+            };
+            let fence = Fence::channel(handle, deadline);
+            if matches!(control.call(Request::EndSession), Ok(Reply::SessionEnded)) {
+                ended += 1;
+            }
+            drop(fence);
+        }
+        ended
+    }
+
+    fn held(&self) -> std::sync::MutexGuard<'_, Pool> {
+        self.pool
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     fn lease(&self, control: Control) -> Lease<'_> {
@@ -375,20 +419,19 @@ impl Drop for Lease<'_> {
         let Some(control) = self.control.take() else {
             return;
         };
-        let mut pool = self
-            .controls
-            .pool
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if control.is_failed() {
-            // Quarantined: its own failure or its channel's fence ended it,
-            // and a later call may open another.
+        let mut pool = self.controls.held();
+        // Quarantined when failed: its own failure or its channel's fence
+        // ended it, and a later call may open another. It is closed after
+        // the pool's lock is released.
+        let failed = if control.is_failed() {
             pool.open -= 1;
-            drop(control);
+            Some(control)
         } else {
             pool.idle.push(control);
-        }
+            None
+        };
         drop(pool);
+        drop(failed);
         self.controls.freed.notify_one();
     }
 }

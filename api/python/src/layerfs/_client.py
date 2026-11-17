@@ -1,4 +1,4 @@
-"""One client per home (and optional folder scope, O32): ten families
+"""One client per home (and optional folder scope, O32): eleven families
 built from the library's call table. Each function takes its positionals
 in the table's order; optional positionals and options may be keywords.
 Any call also takes ``log_tag=``, the tag of its call log line (#659).
@@ -12,7 +12,7 @@ from ._values import decode, encode, path_text
 
 #: The table: ``[{family, call, args, options, help}]``.
 TABLE = decode(_native.table())
-#: The ten families, in help order.
+#: The eleven families, in help order.
 FAMILIES = list(dict.fromkeys(spec["family"] for spec in TABLE))
 
 _FUNCTION = "function"

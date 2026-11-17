@@ -28,7 +28,6 @@ class WorktreeTests(unittest.TestCase):
         self.repo.mkdir()
         for folder in (
             "core/crates/example/src",
-            "engine/vendor",
             "engine/crates/example/src",
             "api/crates/layerfs-api/src",
             ".cargo",
@@ -197,9 +196,9 @@ class WorktreeTests(unittest.TestCase):
             builds.verify_bundle(bundle)
 
     def test_build_features_reach_cargo_and_the_manifest(self):
-        bundle = self.build_bundle(features="layerfs-node/postgresql")
+        bundle = self.build_bundle(features="layerfs-node/tls")
         command = builds.verify_bundle(bundle)["command"]
-        self.assertEqual(command[command.index("--features") + 1], "layerfs-node/postgresql")
+        self.assertEqual(command[command.index("--features") + 1], "layerfs-node/tls")
 
     def test_changed_build_source_cannot_publish_sealed_bundle(self):
         with self.assertRaises(Refused):

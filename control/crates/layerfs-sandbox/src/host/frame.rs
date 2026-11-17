@@ -94,6 +94,7 @@ fn fields(call: &Call, sent: &Message, sandbox: Option<&str>) -> Vec<(&'static s
             spool,
             exec_id,
             workspace,
+            tag,
         } => {
             fields.push(("path", opt(path)));
             fields.extend(directory.as_deref().map(|d| ("directory", text(d))));
@@ -105,6 +106,7 @@ fn fields(call: &Call, sent: &Message, sandbox: Option<&str>) -> Vec<(&'static s
             }
             fields.extend(exec_id.as_deref().map(|id| ("execId", text(id))));
             fields.extend(workspace.as_deref().map(|w| ("workspace", text(w))));
+            fields.extend(tag.as_deref().map(|t| ("tag", text(t))));
         }
         Call::ExecCancel {
             path,
@@ -262,6 +264,7 @@ fn call(op: Op, more: &SdkValue) -> Call {
             spool: more.get_bool("spool"),
             exec_id: text("execId"),
             workspace: text("workspace"),
+            tag: text("tag"),
         },
         Op::ExecCancel => Call::ExecCancel {
             path: text("path"),

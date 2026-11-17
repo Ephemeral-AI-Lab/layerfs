@@ -14,15 +14,10 @@ use layerfs_home::outcome::{refused, Outcome};
 use std::path::Path;
 use std::sync::Arc;
 
-#[cfg(not(feature = "postgresql"))]
-const UNBUILT: &str =
-    "this LayerFS build has no PostgreSQL engine; build it with --features postgresql";
-
 /// Makes the schema `postgresql` names as an empty Store with
 /// `identity`'s binding and cursor key. `Ok(false)` when the schema
 /// exists already (nothing written).
 pub fn create_schema(postgresql: &PgSelection, identity: &Identity) -> Result<bool, SdkRefusal> {
-    #[cfg(feature = "postgresql")]
     {
         use crate::postgresql::open::selection;
         use layerfs_history::HistoryCatalogConfig;
@@ -58,11 +53,6 @@ pub fn create_schema(postgresql: &PgSelection, identity: &Identity) -> Result<bo
                 format!("making the PostgreSQL Store: {error:?}"),
             )),
         }
-    }
-    #[cfg(not(feature = "postgresql"))]
-    {
-        let _ = (postgresql, identity);
-        Err(refused("Unsupported", UNBUILT))
     }
 }
 
@@ -114,7 +104,6 @@ fn run(
     deadline: std::time::Instant,
     counters: Arc<layerfs_project::InitCounters>,
 ) -> Result<(Added, Vec<u8>), SdkRefusal> {
-    #[cfg(feature = "postgresql")]
     {
         use crate::postgresql::open::selection;
         use layerfs_history::{BranchId, HistoryName, LayerStackId};
@@ -142,12 +131,5 @@ fn run(
             ProjectApi::new().add_project(request, timer, counters)
         });
         Ok((added, stack.to_bytes().to_vec()))
-    }
-    #[cfg(not(feature = "postgresql"))]
-    {
-        let _ = (
-            source, postgresql, identity, name, deadline, counters, random,
-        );
-        Err(refused("Unsupported", UNBUILT))
     }
 }

@@ -46,7 +46,6 @@ pub fn postgresql(
     connection_only: bool,
     observer: &mut dyn FnMut(Observation),
 ) -> Result<(), SdkRefusal> {
-    #[cfg(feature = "postgresql")]
     {
         let selected = crate::postgresql::connect::selection(record)?;
         let selection = crate::postgresql::open::selection(
@@ -124,13 +123,5 @@ pub fn postgresql(
             )
         })?;
         handles.diagnose(options,observer).map_err(|_|refused("Unavailable","PostgreSQL Store integrity diagnosis did not complete; credentials and driver error text omitted"))
-    }
-    #[cfg(not(feature = "postgresql"))]
-    {
-        let _ = (record, identity, options, connection_only, observer);
-        Err(refused(
-            "Unsupported",
-            "this build has no PostgreSQL engine",
-        ))
     }
 }

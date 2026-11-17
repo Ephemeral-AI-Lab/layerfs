@@ -251,12 +251,76 @@ fn remove_temporaries(cache: &Path, image: &Image) -> Result<(), RuntimeError> {
         if !text.starts_with(&prefix) {
             continue;
         }
-        let path = entry.path();
-        if fs::symlink_metadata(&path)?.file_type().is_dir() {
-            fs::remove_dir_all(&path)?;
-        } else {
-            fs::remove_file(&path)?;
-        }
+        remove_entry(&entry.path())?;
     }
     Ok(())
+}
+
+/// Removes one temporary entry, a directory with all it holds or a file,
+/// through no link.
+fn remove_entry(path: &Path) -> io::Result<()> {
+    if fs::symlink_metadata(path)?.file_type().is_dir() {
+        fs::remove_dir_all(path)
+    } else {
+        fs::remove_file(path)
+    }
+}
+
+/// What [`remove_temporary`] found.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Temporary {
+    /// The entry was there and is removed.
+    Removed,
+    /// No such entry.
+    Absent,
+    /// Another process holds the digest's lock (an unpack running now):
+    /// nothing was removed.
+    Held,
+}
+
+/// The digest (64 hex digits) a temporary entry `.tmp-<64 hex>.2-<id>` of
+/// the cache belongs to; `None` for any other name.
+pub fn temporary_digest(entry: &str) -> Option<&str> {
+    let rest = entry.strip_prefix(".tmp-")?;
+    let (hex, tail) = (rest.get(..64)?, rest.get(64..)?);
+    let id = tail.strip_prefix(LAYOUT)?.strip_prefix('-')?;
+    let lower_hex = |text: &str| {
+        text.bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    };
+    (lower_hex(hex) && !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric()))
+        .then_some(hex)
+}
+
+/// Removes the one temporary entry `entry` (`.tmp-<64 hex>.2-<id>`) a crashed
+/// unpack left in `cache`, under its digest's lock taken without waiting
+/// (layerfs-project#180): an unpack of that digest running now holds the
+/// lock, and nothing is removed then. The lock file stays on disk, as after
+/// every unpack: another process may be waiting on it.
+pub fn remove_temporary(cache: &Path, entry: &str) -> Result<Temporary, RuntimeError> {
+    let hex = temporary_digest(entry).ok_or(RuntimeError::Protocol("image temporary name"))?;
+    match fs::symlink_metadata(cache) {
+        Ok(metadata) if metadata.is_dir() => {}
+        Ok(_) => return Err(RuntimeError::Protocol("image cache is not a directory")),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Temporary::Absent),
+        Err(error) => return Err(error.into()),
+    }
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .custom_flags(nix::fcntl::OFlag::O_NOFOLLOW.bits())
+        .open(cache.join(format!("{hex}{LAYOUT}.lock")))?;
+    let _lock = match Flock::lock(file, FlockArg::LockExclusiveNonblock) {
+        Ok(lock) => lock,
+        Err((_, nix::errno::Errno::EWOULDBLOCK)) => return Ok(Temporary::Held),
+        Err((_, error)) => return Err(RuntimeError::Io(error.into())),
+    };
+    match remove_entry(&cache.join(entry)) {
+        Ok(()) => Ok(Temporary::Removed),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Temporary::Absent),
+        Err(error) => Err(error.into()),
+    }
 }

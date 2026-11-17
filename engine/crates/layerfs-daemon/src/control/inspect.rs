@@ -16,7 +16,10 @@ pub(super) fn activity(value: Activity) -> &'static str {
 }
 
 impl Service {
-    /// `inspect.snapshot`: history from the Store, Workspaces from here.
+    /// `inspect.snapshot`: history from the Store, Workspaces from here. A
+    /// caller that sends `history: false` gets the Workspaces alone, with no
+    /// history read (layerfs-project#181); a daemon from before that option
+    /// ignores it and answers the whole model, which holds the same list.
     pub(crate) fn inspect(&self, call: &SdkCall) -> Reply {
         let copies = match self.entries.lock() {
             Ok(entries) => entries
@@ -65,7 +68,11 @@ impl Service {
                 }
             })
             .collect::<Vec<_>>();
-        match operator::snapshot(&self.store, &call.args, &views) {
+        let answer = match call.args.get("history") {
+            Some(SdkValue::Bool(false)) => operator::workspaces(&self.store, &call.args, &views),
+            _ => operator::snapshot(&self.store, &call.args, &views),
+        };
+        match answer {
             Ok(value) => Reply::Sdk(value),
             Err(refusal) => Reply::SdkRefused(refusal),
         }
