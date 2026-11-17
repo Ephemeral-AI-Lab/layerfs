@@ -32,20 +32,22 @@ use layerfs_storage::{
         },
         DecompressionWorkspace, GroupCache, PackAcquisition, PackCache, PackUnit,
     },
-    location::{ObjectLocation, PackInfo, SignatureRow},
-    pack::layout::{self, GroupCodec, PackLane},
-    port::{
-        AcquiredPackRead, PackRange, PackReadChoice, PackReadPlan, PersistenceError,
-        PACK_READ_PREFIX_BYTES,
-    },
+    location::{ObjectLocation, SignatureRow},
+    pack::layout::{self, GroupCodec},
+    port::{AcquiredPackRead, PACK_READ_PREFIX_BYTES},
     source::Source,
     StorageCapacities, StorageError,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 
 mod edges;
+mod ids;
 mod impls;
+mod plan;
+
+use ids::{IdMap, IdSet};
+use plan::MarkGroups;
 const ROOTS: &str = "gc_kept_roots";
 const LOCATIONS: &str = "gc_object_locations";
 const LIVE_STACKS: &str = "gc_live_stacks";
@@ -259,8 +261,8 @@ fn mark_recorded(
     let source = ClosureSource {
         mechanics: tx.mechanics(),
         locations: &located.locations,
-        read_bytes: std::cell::RefCell::new(BTreeMap::new()),
-        layouts: std::cell::RefCell::new(BTreeMap::new()),
+        read_bytes: std::cell::RefCell::new(HashMap::new()),
+        layouts: std::cell::RefCell::new(HashMap::new()),
     };
     let roots = roots(tx)?;
     let closure = walk(&source, &capacities, policy.construction(), roots, visit)?;
@@ -268,7 +270,7 @@ fn mark_recorded(
     let mark_bytes = source.read_bytes();
     let digest = live_heads_digest(tx)?;
     let objects = KeptObjects {
-        objects: closure.visited.keys().copied().collect(),
+        objects: closure.objects(),
         packs: closure.packs(),
         waste,
     };
@@ -302,8 +304,8 @@ fn roots(tx: &Transaction<'_>) -> HistoryResult<Vec<ObjectId>> {
 /// mark no longer loads `object_location` twice (once per object and once for
 /// the waste inventory).
 struct Located {
-    /// The winning locator of every object, keyed by identity.
-    locations: BTreeMap<ObjectId, ObjectLocation>,
+    /// The locator of every object, keyed by identity.
+    locations: IdMap<ObjectLocation>,
     /// pack -> group -> (record, object): the pack/object inventory.
     inventory: BTreeMap<i64, BTreeMap<usize, BTreeMap<usize, ObjectId>>>,
 }
@@ -311,7 +313,7 @@ struct Located {
 fn locate_all(tx: &Transaction<'_>) -> HistoryResult<Located> {
     let rows = tx.query(LOCATIONS, Vec::<Param>::new())?;
     let mut located = Located {
-        locations: BTreeMap::new(),
+        locations: IdMap::with_capacity_and_hasher(rows.len(), ids::IdState::default()),
         inventory: BTreeMap::new(),
     };
     for row in &rows {
@@ -349,17 +351,24 @@ fn locate_all(tx: &Transaction<'_>) -> HistoryResult<Located> {
 
 /// The in-memory closure of one mark, before `keptWaste` is attributed.
 struct Closure {
-    /// Every reached object and its winning locator.
-    visited: BTreeMap<ObjectId, ObjectLocation>,
+    /// Every reached object and its locator.
+    visited: IdMap<ObjectLocation>,
     /// The stored width a read charges each reached object's record.
-    widths: BTreeMap<ObjectId, u64>,
+    widths: IdMap<u64>,
     /// Objects reached as a direct delta base.
-    bases: BTreeSet<ObjectId>,
+    bases: IdSet,
     /// Objects reached as a root or through a logical reference.
-    logical: BTreeSet<ObjectId>,
+    logical: IdSet,
 }
 
 impl Closure {
+    /// Every reached object, in ascending identity order.
+    fn objects(&self) -> Vec<ObjectId> {
+        let mut objects: Vec<ObjectId> = self.visited.keys().copied().collect();
+        objects.sort_unstable();
+        objects
+    }
+
     /// The retained packs: those holding at least one reached object.
     fn packs(&self) -> Vec<i64> {
         self.visited
@@ -375,15 +384,15 @@ impl Closure {
 struct ClosureSource<'a> {
     mechanics: &'a dyn crate::backend::Mechanics,
     /// Every locator, exactly as the one `gc_object_locations` read returned it.
-    locations: &'a BTreeMap<ObjectId, ObjectLocation>,
+    locations: &'a IdMap<ObjectLocation>,
     /// pack -> the body bytes this mark read from it: a whole body, or the
     /// disjoint group extents it acquired. The sum is
     /// [`MarkResult::mark_bytes`]: a pack read in several groups counts each
     /// extent once, and a later whole-body read replaces the partial sum.
-    read_bytes: std::cell::RefCell<BTreeMap<i64, u64>>,
+    read_bytes: std::cell::RefCell<HashMap<i64, u64>>,
     /// pack -> its group extents, kept from the walk's own read of the pack's
     /// directory so the kept-waste pass does not read it a second time.
-    layouts: std::cell::RefCell<BTreeMap<i64, Vec<layout::GroupView>>>,
+    layouts: std::cell::RefCell<HashMap<i64, Vec<layout::GroupView>>>,
 }
 
 impl ClosureSource<'_> {
@@ -413,68 +422,6 @@ impl ClosureSource<'_> {
     /// The distinct pack body bytes this mark read.
     fn read_bytes(&self) -> u64 {
         self.read_bytes.borrow().values().copied().sum()
-    }
-}
-
-/// The complete encoded groups one mark walk demands from one pack.
-///
-/// A metadata-only walk needs one record header per object and one delta edge
-/// per record, so the demand is sparse; the plan selects those exact group
-/// ranges and the backend reads only them, never the body behind the
-/// directory. A dense demand or a cache that already holds another group of
-/// the pack still materializes the whole body once.
-struct MarkGroups<'a> {
-    pack_id: i64,
-    groups: &'a [usize],
-    whole: bool,
-}
-
-impl PackReadPlan for MarkGroups<'_> {
-    fn select(
-        &mut self,
-        info: PackInfo,
-        prefix: &[u8],
-    ) -> Result<PackReadChoice, PersistenceError> {
-        if info.pack_id != self.pack_id || self.groups.is_empty() {
-            return Err(PersistenceError::Malformed);
-        }
-        let header = layout::parse_directory_header(prefix, info.length)
-            .map_err(|_| PersistenceError::Malformed)?;
-        if self.whole || header.lane == PackLane::Singleton || info.length <= PACK_READ_PREFIX_BYTES
-        {
-            return Ok(PackReadChoice::Whole);
-        }
-        let views = layout::directory_group_views(prefix, header)
-            .map_err(|_| PersistenceError::Malformed)?;
-        let mut ranges: Vec<PackRange> = Vec::new();
-        let mut useful = 0usize;
-        let mut previous = None;
-        for &group in self.groups {
-            if previous.is_some_and(|prior| prior >= group) {
-                return Err(PersistenceError::Malformed);
-            }
-            previous = Some(group);
-            let view = *views.get(group).ok_or(PersistenceError::Malformed)?;
-            useful = useful
-                .checked_add(view.end - view.start)
-                .ok_or(PersistenceError::Malformed)?;
-            if let Some(prior) = ranges
-                .last_mut()
-                .filter(|prior| prior.offset + prior.length == view.start)
-            {
-                prior.length += view.end - view.start;
-            } else {
-                ranges.push(PackRange {
-                    offset: view.start,
-                    length: view.end - view.start,
-                });
-            }
-        }
-        if useful >= info.length.div_ceil(2) || ranges.len() > 4 {
-            Ok(PackReadChoice::Whole)
-        } else {
-            Ok(PackReadChoice::Ranges(ranges))
-        }
     }
 }
 
@@ -607,14 +554,14 @@ fn walk(
     let mut counters = ChainCounters::default();
     let mut edge_decodes = 0u64;
     let mut closure = Closure {
-        visited: BTreeMap::new(),
-        widths: BTreeMap::new(),
-        bases: BTreeSet::new(),
+        visited: IdMap::default(),
+        widths: IdMap::default(),
+        bases: IdSet::default(),
         logical: roots.iter().copied().collect(),
     };
     // One hash for the whole walk, not one per metadata object.
     let unscoped = InodeScope::from_object(ObjectId::for_bytes(b"gc.mark/object-closure"));
-    let mut queued: BTreeSet<ObjectId> = roots.iter().copied().collect();
+    let mut queued: IdSet = roots.iter().copied().collect();
     let mut frontier: Vec<ObjectId> = roots;
     while !frontier.is_empty() {
         // Pack order: one body answers every object of its group, so a wave
@@ -792,11 +739,12 @@ fn waste(
                 .saturating_add(dead_raw_record_bytes(directory, records, closure)?);
         }
     }
-    let deltas: Vec<ObjectId> = closure
+    let mut deltas: Vec<ObjectId> = closure
         .bases
         .difference(&closure.logical)
         .copied()
         .collect();
+    deltas.sort_unstable();
     let delta_bases_bytes = deltas.iter().fold(0u64, |total, id| {
         total.saturating_add(closure.widths.get(id).copied().unwrap_or(0))
     });

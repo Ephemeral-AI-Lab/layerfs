@@ -10,6 +10,7 @@
 //! Reads are per wave, not per pack: one call for the heads of many packs,
 //! then at most a few calls for whatever ranges those packs still need. A
 //! pack costs no statement and no round trip of its own.
+use super::ids::IdMap;
 use super::{storage, ClosureSource};
 use layerfs_content::ObjectId;
 use layerfs_history::error::{HistoryError, HistoryResult};
@@ -375,7 +376,7 @@ fn settle(source: &ClosureSource<'_>, work: &mut [PackWork<'_>]) -> HistoryResul
 pub(super) fn wave_edges(
     source: &ClosureSource<'_>,
     wave: &[ObjectId],
-) -> HistoryResult<BTreeMap<ObjectId, ChainEdge>> {
+) -> HistoryResult<IdMap<ChainEdge>> {
     let mut packs: Vec<(i64, Vec<ObjectLocation>)> = Vec::new();
     for id in wave {
         let Some(location) = source.location(*id, i64::MAX).map_err(storage)? else {
@@ -389,7 +390,7 @@ pub(super) fn wave_edges(
             _ => packs.push((location.pack_id, vec![location])),
         }
     }
-    let mut edges = BTreeMap::new();
+    let mut edges = IdMap::default();
     for batch in packs.chunks(HEAD_PACKS) {
         let ids: Vec<i64> = batch.iter().map(|(pack_id, _)| *pack_id).collect();
         let mut heads = Vec::with_capacity(ids.len());
