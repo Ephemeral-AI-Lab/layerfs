@@ -14,8 +14,9 @@
 //! Every arm reopens the Store through the CLI and asserts the §9 crash state:
 //! wholly old at `G` or wholly new at `G + 1`, the exact artifact set, the
 //! sidecars a killed session leaves, the `store.status` projection (phase,
-//! `uncertain`, `unresolved`), the next `store.compact` settling the leftover,
-//! the retained layer still readable, and a clean `doctor`. The `G` baseline
+//! `uncertain`, `unresolved`), the next `store.compact` settling the leftover
+//! (an installed `G + 1` answers the recorded `Rebuild` report, F41-1), the
+//! retained layer still readable, and a clean `doctor`. The `G` baseline
 //! is the §3 `none` run before the dead pack exists, so the crash arms start
 //! from a Store with exactly one wholly dead pack.
 //!
@@ -266,22 +267,22 @@ fn exercise(arm: Arm) {
         "{observed:?}"
     );
 
-    // The next run judges the leftover: a rebuild from `G` before install, a
-    // settle at `G + 1` after it, and no residue either way.
+    // The next run judges the leftover: a rebuild from `G` before install, and
+    // the recorded `Rebuild` G -> G + 1 report after it (F41-1: an installed
+    // `G + 1` answers that report instead of re-deciding to `none` on the
+    // already rebuilt Store), and no residue either way.
     let recovered = compact(&home);
+    assert_eq!(recovered.get_text("path"), Some("rebuild"), "{recovered:?}");
+    assert_eq!(
+        generations(&recovered),
+        (generation, generation + 1),
+        "{recovered:?}"
+    );
     if arm.installed {
-        assert_eq!(recovered.get_text("path"), Some("none"), "{recovered:?}");
-        assert_eq!(
-            generations(&recovered),
-            (generation + 1, generation + 1),
-            "{recovered:?}"
-        );
-    } else {
-        assert_eq!(recovered.get_text("path"), Some("rebuild"), "{recovered:?}");
-        assert_eq!(
-            generations(&recovered),
-            (generation, generation + 1),
-            "{recovered:?}"
+        assert!(
+            recovered.get_int("dead_bytes_bound").unwrap_or(0) > 0,
+            "the adopted report keeps the collected bytes at {}: {recovered:?}",
+            arm.failpoint
         );
     }
     let residue = recovered.get("residue").expect("the residue");
