@@ -160,6 +160,24 @@ quarantines the session and keeps the lock
 | Free-space guard | A pack batch must leave 64 MiB after counting its bytes twice (WAL, then file); metadata-only batches are not guarded | [`headroom.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/headroom.rs) |
 | `reclaim_space(pages)` | `1..=RECLAMATION_PAGE_LIMIT` (512) pages by `incremental_vacuum`, stepped in one short write until the free list is empty or the page budget is spent (SQLite 3.40 removes one page per statement, not `N`); only Stores created with `auto_vacuum=2` | [`reclamation.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/reclamation.rs) |
 
+## Compaction rebuild
+
+`SqliteHandles::compact` marks under the writer lane, seals the file, builds
+`<store>.compact` beside it from the retained rows, checks it through an
+`immutable=1` reader and renames it into place. The build's cost is the copy
+of the retained packs, so its steps are shaped around that copy.
+
+| Step | Rule | Source |
+| --- | --- | --- |
+| Op record | `<store>.compact-op` is rewritten by rename at admission and at the build, verify, install and cleanup phases. The admission record stands through the mark: a later call judges a leftover by the run, generation and owner it names, and `store.status` reads its phase as `mark` | [`op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/op.rs), [`run.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/run.rs) |
+| Fresh file | The sealed Store's tables, then the rows, then its indexes and triggers; `journal_mode=OFF` and `synchronous=OFF` while loading, then WAL. The sealed file is attached `immutable=1` with a 256 MiB `mmap_size` | [`build.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/build.rs) |
+| File size | macOS sizes the fresh file for the retained pack bytes before the load (one advisory `F_PREALLOCATE`, one `set_len`), because on APFS a page write that also moves the end of the file costs about four times one inside a sized file. The closed file is cut to the pages its header counts. Linux leaves the file to grow | [`space.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/space.rs) |
+| Pack copy | The table that holds the pack payload (`pack`, or `pack_unit` in the group-row layouts) is copied one window per statement: `WINDOW_BYTES` (64 MiB) of retained payload, ended early by a dead run longer than `GAP_BYTES` (8 MiB). Every other table is one statement | [`window.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/window.rs), [`build.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/build.rs) |
+| Read-ahead | Before each window the sealed file's matching range is asked for once, through a second read-only descriptor: `F_RDADVISE` on macOS, `POSIX_FADV_WILLNEED` in 128 KiB steps on Linux. Without it a source that is not in memory is read one pack per device round trip. The range assumes packs lie in the file in id order; a hint only, so another layout loses the benefit and nothing else | [`window.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/window.rs) |
+| Visited scratch | The mark writes one `visited` row per reached object into `<store>.compact-visited`; the retained packs (`live_pack`) are derived from those rows in one statement when the mark finishes | [`compact_visit.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact_visit.rs) |
+| Verification | One `immutable=1` reader of the fresh file: the schema check, one statement that reads the row counts and recomputed sums with one pass per table, the live-heads digest and the tuple. The sealed file's tuple and digest are read back through one reader as well | [`verify.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/verify.rs) |
+| Synchronization | Follows the Store's profile. Normal: the op record (file and directory) at each write, the fresh file before the rename and the directory after it. Disposable (`synchronous=OFF`) claims nothing after a power loss, so its compaction asks for no fsync: the record is still written by rename and the install is still one rename, which is what survives a process crash | [`op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/op.rs), [`install.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/install.rs), [`run.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/run.rs) |
+
 ## Heads
 
 | Function | Returns | Source |

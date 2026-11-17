@@ -13,12 +13,16 @@ use super::op::hex;
 use super::op::stop_at;
 use super::op::visited_path;
 use super::op::RunOp;
+use super::space;
 use super::types::db_error;
 use super::types::io_error;
 use super::types::CompactFailpoint;
 use super::types::CompactRequest;
 use super::types::MarkTuple;
 use super::verify::immutable_uri;
+use super::window::windows;
+use super::window::ReadAhead;
+use super::window::Window;
 use crate::backend::records::BackendError;
 use crate::backend::sqlite::lifecycle::seal::SealedFacts;
 use crate::backend::sqlite::session::connection::Session;
@@ -132,6 +136,13 @@ pub(crate) struct BuildInput<'a> {
     pub(crate) facts: &'a SealedFacts,
     pub(crate) tuple: &'a MarkTuple,
     pub(crate) synchronous: i64,
+    /// The stored bytes of the packs the mark retains: what the bulk load is
+    /// about to write, known before the fresh file holds a row.
+    pub(crate) payload_bytes: u64,
+    /// Every pack of the sealed Store and its stored length.
+    pub(crate) lengths: &'a BTreeMap<i64, u64>,
+    /// The packs the mark retains, ascending.
+    pub(crate) retained: &'a [i64],
 }
 
 /// How one table's rows enter the fresh file.
@@ -155,10 +166,8 @@ enum Copy {
 /// admission intent, so the installed Store carries the row the settle clears.
 fn copy_rule(table: &str) -> Copy {
     match table {
-        "pack" | "pack_unit" => {
-            // A pack is one unit: a pack with any live object is copied whole.
-            Copy::Where("pack_id IN (SELECT pack_id FROM scratch.live_pack)")
-        }
+        // A pack is one unit: a pack with any live object is copied whole.
+        "pack" | "pack_unit" => Copy::Where(RETAINED_PACK),
         "object_location" | "content_signature" => {
             Copy::Where("object_id IN (SELECT object_id FROM scratch.visited)")
         }
@@ -203,6 +212,35 @@ UNION SELECT run FROM src.commit_lineage WHERE commit_id IN \
         | "init_entry" | "init_host_file" | "binding_hint_block" => Copy::Empty,
         _ => Copy::All,
     }
+}
+
+/// The filter that keeps a retained pack's rows.
+const RETAINED_PACK: &str = "pack_id IN (SELECT pack_id FROM scratch.live_pack)";
+
+/// The pack copy: the rows of the table that holds the pack payload, one
+/// window of retained packs per statement. Before each window the sealed file
+/// is asked for the part the window reads, so a source that is not in memory
+/// arrives in sequential requests instead of one pack per round trip.
+fn copy_packs(
+    connection: &Connection,
+    table: &str,
+    plan: &[Window],
+    sealed: &mut ReadAhead,
+) -> HistoryResult<()> {
+    let name = identifier(table);
+    let mut statement = connection
+        .prepare(&format!(
+            "INSERT INTO main.{name} SELECT * FROM src.{name} \
+WHERE pack_id BETWEEN ?1 AND ?2 AND {RETAINED_PACK}"
+        ))
+        .map_err(db_error)?;
+    for window in plan {
+        sealed.ask(window);
+        statement
+            .execute(params![window.first, window.last])
+            .map_err(db_error)?;
+    }
+    Ok(())
 }
 
 /// The `store_policy` columns the rebuild copies, named explicitly: the fresh
@@ -290,7 +328,16 @@ fn copy_rows(
     op: &RunOp,
     generation: i64,
     target_tables: &BTreeSet<String>,
+    plan: &[Window],
+    sealed: &mut ReadAhead,
 ) -> HistoryResult<()> {
+    // The pack payload is `pack.body` in a Monolithic Store and the
+    // `pack_unit` rows otherwise; that table is copied window by window.
+    let payload = if target_tables.contains("pack_unit") {
+        "pack_unit"
+    } else {
+        "pack"
+    };
     connection
         .execute_batch("BEGIN IMMEDIATE")
         .map_err(db_error)?;
@@ -313,6 +360,10 @@ fn copy_rows(
         }
         for table in COPY_ORDER {
             if !target_tables.contains(table) {
+                continue;
+            }
+            if table == payload {
+                copy_packs(connection, table, plan, sealed)?;
                 continue;
             }
             let name = identifier(table);
@@ -364,8 +415,8 @@ SELECT name,seq FROM src.sqlite_sequence",
 logical=(SELECT COALESCE(SUM(logical),0) FROM main.\"commit\")+\
 (SELECT COALESCE(SUM(logical),0) FROM main.layer),\
 canonical=(SELECT COALESCE(SUM(canonical_length),0) FROM main.object_location),\
-stored=(SELECT COALESCE(SUM(length),0) FROM main.pack),\
-metadata=(SELECT COALESCE(SUM(length),0) FROM main.pack WHERE domain=0) WHERE id=1;\
+(stored,metadata)=(SELECT COALESCE(SUM(length),0),\
+COALESCE(SUM(CASE WHEN domain=0 THEN length ELSE 0 END),0) FROM main.pack) WHERE id=1;\
 UPDATE main.history_meta SET catalog_incarnation={generation} WHERE id=1;"
             ))
             .map_err(db_error)?;
@@ -421,6 +472,9 @@ pub(crate) fn build(
         facts,
         tuple,
         synchronous,
+        payload_bytes,
+        lengths,
+        retained,
     } = input;
     let store = &facts.path;
     let target = compact_path(store);
@@ -509,8 +563,22 @@ PRAGMA user_version={user_version};PRAGMA application_id={application_id};"
     // inside the bulk load leaves (the in-process arm tears this file, and the
     // next run removes the whole recorded set instead of trusting it).
     stop_at(request, CompactFailpoint::DuringCopy, op, store)?;
+    // The load appends the retained payload: size the file for it once, so
+    // its page writes land inside the file instead of each moving its end.
+    let page_bytes = u64::try_from(page_size).unwrap_or(0);
+    space::reserve(&target, payload_bytes, page_bytes)?;
     let target_tables = main_tables(&connection)?;
-    copy_rows(&connection, op, tuple.generation + 1, &target_tables)?;
+    let plan = windows(lengths, retained, facts.bytes)?;
+    let mut sealed = ReadAhead::open(store)?;
+    copy_rows(
+        &connection,
+        op,
+        tuple.generation + 1,
+        &target_tables,
+        &plan,
+        &mut sealed,
+    )?;
+    drop(sealed);
 
     // §7 step 4: the secondary indexes and the immutability/logical triggers
     // are built after the bulk load, so the load writes no index page and fires
@@ -562,6 +630,11 @@ WHERE sql IS NOT NULL AND substr(name,1,7)!='sqlite_' ORDER BY type,name",
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .map_err(db_error)?;
+    // The schema is complete, so the header's page count is final: the file
+    // ends there, whatever the load was sized for.
+    let pages: i64 = connection
+        .query_row("PRAGMA main.page_count", params![], |row| row.get(0))
+        .map_err(db_error)?;
     // §7 step 5: the same raw connection switches the fresh file to WAL, so the
     // mode switch runs under `journal_mode=OFF` and writes no rollback journal
     // beside the staged name; then checkpoint and leave no sidecar.
@@ -599,7 +672,7 @@ WHERE sql IS NOT NULL AND substr(name,1,7)!='sqlite_' ORDER BY type,name",
             return Err(HistoryError::Integrity("staged Store sidecar"));
         }
     }
-    let target_bytes = std::fs::metadata(&target).map_err(io_error)?.len();
+    let target_bytes = space::trim(&target, u64::try_from(pages).unwrap_or(0), page_bytes)?;
     Ok(Built {
         target,
         target_bytes,

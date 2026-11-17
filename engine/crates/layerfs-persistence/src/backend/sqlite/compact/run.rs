@@ -30,9 +30,8 @@ use super::types::CompactPath;
 use super::types::CompactReceipt;
 use super::types::CompactRequest;
 use super::types::CompactResidue;
-use super::verify::immutable_digest;
-use super::verify::immutable_tuple;
 use super::verify::live_tuple;
+use super::verify::sealed_state;
 use super::verify::verify;
 use super::verify::VerifyInput;
 use crate::compact_metrics::CompactPhase;
@@ -61,6 +60,7 @@ impl SqliteHandles {
     /// op record are kept for the next `store.compact` to judge (§9).
     pub fn compact(self, request: &CompactRequest) -> HistoryResult<CompactReceipt> {
         let store = self.storage.session.path.clone();
+        let durable = self.storage.session.profile.synchronous != 0;
         let mut metrics = RunMetrics::start();
         let result = self.compact_measured(request, &mut metrics);
         // §9: the run is replying, so its own record (when it leaves one) is
@@ -68,7 +68,7 @@ impl SqliteHandles {
         // `store.compact` judges the leftover even while this process is still
         // alive; the window before this point stays protected by the owner
         // liveness guard.
-        let _ = mark_returned(&store, &request.op_id);
+        let _ = mark_returned(&store, &request.op_id, durable);
         metrics.finish(&result);
         result
     }
@@ -98,6 +98,11 @@ impl SqliteHandles {
             let layout = session.layout;
             let acquisition_schema = session.acquisition;
             let synchronous = profile.synchronous;
+            // The run synchronizes what the Store's profile does: a
+            // Disposable Store (`synchronous=OFF`) claims nothing after a
+            // power loss, so its compaction asks for no fsync of the op
+            // record, the fresh file or the directory.
+            let durable = synchronous != 0;
 
             // §5.1/§7 admission: a client that holds the Store keeps its
             // sidecars, and the seal cannot remove one its owner keeps: it
@@ -158,8 +163,8 @@ impl SqliteHandles {
             // The op record is written before the mark so a crash inside the
             // mark transaction (which creates the §6.3 visited scratch before
             // it decides) leaves a *recorded* run for the next call to adopt,
-            // never an unrecorded staged name (§9). The mark phase overwrites
-            // it once the mark's tuple and digest are known.
+            // never an unrecorded staged name (§9). It stands through the
+            // mark; the build's write carries the mark's tuple and digest.
             let mut op = RunOp {
                 op_id,
                 generation: live.generation,
@@ -174,6 +179,7 @@ impl SqliteHandles {
                 live_heads_digest: [0u8; 32],
                 returned: false,
                 installed: None,
+                durable,
             };
             op.write(&store)?;
 
@@ -258,7 +264,9 @@ impl SqliteHandles {
                     abort_before_install(&store, &op_id, false);
                     return Err(error);
                 }
-                let _ = sync_directory(&store);
+                if durable {
+                    let _ = sync_directory(&store);
+                }
                 drop(lane);
                 return Ok(receipt(
                     CompactPath::None,
@@ -278,14 +286,13 @@ impl SqliteHandles {
 
             // §7 step 2: a stop here leaves the open session, the writer lane,
             // the committed intent, the visited scratch and the op record; the
-            // live Store is at `G`.
+            // live Store is at `G`. The admission record already names this
+            // run, its generation and its owner, which is all a later call
+            // judges a leftover by, and `store.status` reads its phase as
+            // `mark`; the mark's tuple and digest go out with the next write.
             op.tuple = tuple.clone();
             op.live_heads_digest = mark.live_heads_digest();
             op.phase = "mark".to_owned();
-            if let Err(error) = op.write(&store) {
-                abort_run(&history, &store, &op_id);
-                return Err(error);
-            }
             // §7 step 1: with the lane held, no writer can append while the
             // intent, the op record and the WAL are settled together.
             if let Err(error) = session.checkpoint_holding() {
@@ -334,8 +341,8 @@ impl SqliteHandles {
 
             // §7 step 1.5's fence: the seal must not have moved the generation
             // or the heads the mark recorded.
-            let sealed_tuple = match immutable_tuple(&facts.path) {
-                Ok(tuple) => tuple,
+            let (sealed_tuple, sealed_digest) = match sealed_state(&facts.path) {
+                Ok(state) => state,
                 Err(error) => {
                     abort_before_install(&store, &op_id, true);
                     return Err(error);
@@ -345,18 +352,11 @@ impl SqliteHandles {
                 abort_before_install(&store, &op_id, true);
                 return Err(HistoryError::Conflict("the Store changed after the mark"));
             }
-            match immutable_digest(&facts.path) {
-                Ok(digest) if digest == mark.live_heads_digest() => {}
-                Ok(_) => {
-                    abort_before_install(&store, &op_id, true);
-                    return Err(HistoryError::Conflict(
-                        "the Store heads changed after the mark",
-                    ));
-                }
-                Err(error) => {
-                    abort_before_install(&store, &op_id, true);
-                    return Err(error);
-                }
+            if sealed_digest != mark.live_heads_digest() {
+                abort_before_install(&store, &op_id, true);
+                return Err(HistoryError::Conflict(
+                    "the Store heads changed after the mark",
+                ));
             }
             stop_at(request, CompactFailpoint::AfterSeal, &op, &store)?;
 
@@ -374,6 +374,9 @@ impl SqliteHandles {
                     facts: &facts,
                     tuple: &tuple,
                     synchronous,
+                    payload_bytes: live_stored,
+                    lengths: &lengths,
+                    retained: mark.objects().packs(),
                 },
                 capacity,
                 request,
@@ -402,12 +405,6 @@ impl SqliteHandles {
                 peak_temp: built.peak_temp_bytes(),
                 total_stored: total,
             });
-            // §7 step 7: every artifact and the op record are durable before
-            // the verification reads them back.
-            if let Err(error) = sync_directory(&store) {
-                abort_before_install(&store, &op_id, true);
-                return Err(error);
-            }
             stop_at(request, CompactFailpoint::AfterBuild, &op, &store)?;
             stop_at(request, CompactFailpoint::AfterWalSwitch, &op, &store)?;
             metrics.end_phase();
@@ -447,7 +444,7 @@ impl SqliteHandles {
                 abort_before_install(&store, &op_id, true);
                 return Err(error);
             }
-            if let Err(error) = prepare_target(&built.target) {
+            if let Err(error) = prepare_target(&built.target, durable) {
                 abort_before_install(&store, &op_id, true);
                 return Err(error);
             }
@@ -463,7 +460,7 @@ impl SqliteHandles {
             // §7 step 7: the rename happened; a crash before the directory
             // fsync leaves an installed-but-uncertain `G + 1`.
             stop_at(request, CompactFailpoint::DuringRename, &op, &store)?;
-            if let Err(_error) = sync_directory(&facts.path) {
+            if durable && sync_directory(&facts.path).is_err() {
                 op.phase = "install".to_owned();
                 let _ = op.write(&store);
                 return Err(HistoryError::UnknownOutcome);

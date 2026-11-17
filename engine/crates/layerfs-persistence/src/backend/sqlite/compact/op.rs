@@ -121,6 +121,12 @@ pub(crate) struct RunOp {
     /// The §11 totals once the rebuild's target is built; `None` before any
     /// report value exists and in a record written before they were kept.
     pub(crate) installed: Option<InstalledReport>,
+    /// Whether this run synchronizes what it writes beside the Store. It is
+    /// the Store's own profile, not part of the record: a Disposable Store
+    /// (`synchronous=OFF`) survives a process crash and claims nothing after
+    /// a power loss, so its compaction asks for no fsync either. A record
+    /// read back from disk is written synchronized.
+    pub(crate) durable: bool,
 }
 
 impl RunOp {
@@ -165,12 +171,16 @@ live_heads_digest={}\nreturned={}\n",
         let path = op_path(store);
         let temporary = op_temporary_path(store);
         std::fs::write(&temporary, self.encode()).map_err(io_error)?;
-        if let Ok(file) = std::fs::File::open(&temporary) {
-            let _ = file.sync_all();
+        if self.durable {
+            if let Ok(file) = std::fs::File::open(&temporary) {
+                let _ = file.sync_all();
+            }
         }
         std::fs::rename(&temporary, &path).map_err(io_error)?;
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::File::open(parent).and_then(|directory| directory.sync_all());
+        if self.durable {
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::File::open(parent).and_then(|directory| directory.sync_all());
+            }
         }
         Ok(())
     }
@@ -238,6 +248,7 @@ live_heads_digest={}\nreturned={}\n",
             live_heads_digest,
             returned,
             installed: InstalledReport::read(&values),
+            durable: true,
         })
     }
 
@@ -283,7 +294,7 @@ pub(crate) fn remove_op_record(store: &Path, op_id: &[u8; 16]) -> HistoryResult<
 /// so the next `store.compact` judges a leftover even though the owner pid is
 /// still alive (§9). Only the run's own record is marked: a record another run
 /// wrote in the settle window is never touched.
-pub(crate) fn mark_returned(store: &Path, op_id: &[u8; 16]) -> HistoryResult<()> {
+pub(crate) fn mark_returned(store: &Path, op_id: &[u8; 16], durable: bool) -> HistoryResult<()> {
     let Some(mut op) = RunOp::read(store) else {
         return Ok(());
     };
@@ -291,6 +302,7 @@ pub(crate) fn mark_returned(store: &Path, op_id: &[u8; 16]) -> HistoryResult<()>
         return Ok(());
     }
     op.returned = true;
+    op.durable = durable;
     op.write(store)
 }
 

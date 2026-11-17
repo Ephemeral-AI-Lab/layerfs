@@ -434,6 +434,105 @@ fn a_wholly_dead_pack_is_rebuilt_away() {
     clean(&reopened);
 }
 
+/// The pack copy runs one window of retained packs per statement, and a long
+/// run of dead packs ends a window. Retained packs on both sides of such a run
+/// are two windows, and both arrive in the rebuilt Store.
+#[test]
+fn retained_packs_on_both_sides_of_a_long_dead_run_are_all_copied() {
+    use layerfs_persistence::internals::{windows, GAP_BYTES};
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let (_temp, handles, path) = create_store();
+    let early = filesystem_root(&handles, 1);
+    initialize(&handles, 1, early);
+    // More than `GAP_BYTES` of wholly dead packs. The bytes do not compress,
+    // so the stored run is as long as the payload.
+    let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+    let mut dead = Vec::new();
+    for _ in 0..120 {
+        let bytes: Vec<u8> = (0..100_000)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                state.to_le_bytes()[0]
+            })
+            .collect();
+        dead.push(whole_file(&handles, &bytes));
+    }
+    let late = filesystem_root(&handles, 2);
+    initialize(&handles, 2, late);
+    let before = generation(&handles);
+
+    // The plan the build will make: the retained packs are every pack that
+    // holds no dead object, and the dead run splits them into two windows.
+    let (lengths, retained, dead_bytes) = {
+        let connection = rusqlite::Connection::open_with_flags(
+            &path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .unwrap();
+        let mut dead_packs = BTreeSet::new();
+        for id in &dead {
+            let pack: i64 = connection
+                .query_row(
+                    "SELECT pack_id FROM object_location WHERE object_id=?1",
+                    rusqlite::params![id.as_bytes().as_slice()],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            dead_packs.insert(pack);
+        }
+        let mut statement = connection
+            .prepare("SELECT pack_id,length FROM pack ORDER BY pack_id")
+            .unwrap();
+        let lengths: BTreeMap<i64, u64> = statement
+            .query_map([], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)? as u64))
+            })
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        let retained: Vec<i64> = lengths
+            .keys()
+            .copied()
+            .filter(|pack| !dead_packs.contains(pack))
+            .collect();
+        let dead_bytes: u64 = dead_packs.iter().map(|pack| lengths[pack]).sum();
+        (lengths, retained, dead_bytes)
+    };
+    assert!(dead_bytes > GAP_BYTES, "the dead run is {dead_bytes} bytes");
+    let file = std::fs::metadata(&path).unwrap().len();
+    let plan = windows(&lengths, &retained, file).unwrap();
+    assert_eq!(plan.len(), 2, "{plan:?}");
+    assert!(plan[0].last < plan[1].first);
+
+    let receipt = handles.compact(&request(48)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.dead_bytes_bound, dead_bytes);
+    let reopened = reopen(&path);
+    assert_eq!(generation(&reopened), before + 1);
+    for id in [early, late] {
+        assert!(located(&reopened, id), "retained root {id} survives");
+    }
+    for id in &dead {
+        assert!(!located(&reopened, *id), "dead object {id} is collected");
+    }
+    let rebuilt =
+        rusqlite::Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .unwrap();
+    let packs: Vec<i64> = rebuilt
+        .prepare("SELECT pack_id FROM pack ORDER BY pack_id")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(packs, retained, "every retained pack, and only those");
+    drop(rebuilt);
+    clean(&reopened);
+}
+
 #[test]
 fn retained_history_and_its_objects_survive_a_rebuild() {
     let (_temp, handles, path) = create_store();
