@@ -271,8 +271,8 @@ AC-51 does not depend on the projection alone.
   `sdk_path_whiteouts` (7), `sdk_path_hidden_semantics` (3),
   `sdk_path_removal` (5); and the `layerfs-control
   project_delete_worker` (8), the `layerfs-store
-  project_delete` (17), `compact_report_status` (6) and the
-  PostgreSQL AC-44 suite `postgresql_compact` (29 tests; AC-44's nine are
+  project_delete` (18), `compact_report_status` (6) and the
+  PostgreSQL AC-44 suite `postgresql_compact` (30 tests; AC-44's nine are
   `a_fully_privileged_role_compacts`,
   `a_role_without_create_on_the_database_is_refused_as_unsupported`,
   `a_role_without_create_on_the_store_schema_is_refused_as_unsupported`,
