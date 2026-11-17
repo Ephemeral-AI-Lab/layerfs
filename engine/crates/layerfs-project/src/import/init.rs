@@ -14,9 +14,11 @@ use crate::{ProjectError, ProjectResult};
 #[cfg(unix)]
 use layerfs_content::filesystem::{profile_id, scope_for_seed, FilesystemObjects};
 use layerfs_content::ObjectId;
+#[cfg(unix)]
+use layerfs_history::records::GcScopeKind;
 use layerfs_history::{HistoryCatalog, HistoryName, LayerStackId, LayerStackRecord};
 #[cfg(unix)]
-use layerfs_history::{ReserveRequest, StackInitialization};
+use layerfs_history::{ReserveRequest, StackInitialization, UnknownOutcomeState};
 use layerfs_storage::port::acquisition::Acquisition;
 #[cfg(unix)]
 use layerfs_storage::port::acquisition::Begin;
@@ -115,7 +117,11 @@ pub fn init_observed(
         // A catalog without admission cannot exclude a removal; Init still
         // proceeds, as it did before #41 T6.
         Err(layerfs_history::HistoryError::Unsupported(_)) => false,
-        Err(error) => return Err(ProjectError::History(error)),
+        Err(error) => {
+            return Err(ProjectError::History(
+                error.with_unknown(init_unknown_state(&request, op)),
+            ))
+        }
     };
     let mut admission = InitAdmission {
         catalog,
@@ -178,6 +184,9 @@ pub fn init_observed(
             layerfs_content::filesystem::FilesystemRootId(root),
         )
     })?;
+    // The release below runs after `request.name` moves into the Stack; name
+    // the project and operation now (F43R4-2).
+    let unknown = init_unknown_state(&request, op);
     let stack = timer.child("history.initialize_layerstack").run(|_| {
         catalog
             .initialize_layerstack(&StackInitialization {
@@ -190,7 +199,9 @@ pub fn init_observed(
             })
             .map_err(ProjectError::History)
     })?;
-    admission.release().map_err(ProjectError::History)?;
+    admission
+        .release()
+        .map_err(|error| ProjectError::History(error.with_unknown(unknown)))?;
     Ok(Initialized {
         stack,
         root,
@@ -337,6 +348,18 @@ fn admission_op_id(stack: LayerStackId) -> [u8; 16] {
     let mut op = [0u8; 16];
     op.copy_from_slice(&identity.as_bytes()[..16]);
     op
+}
+
+/// The A6 context of an Init admission answer that was lost: the project
+/// being initialized, the Init phase and its durable operation.
+#[cfg(unix)]
+fn init_unknown_state(request: &InitRequest<'_>, op: [u8; 16]) -> UnknownOutcomeState {
+    UnknownOutcomeState::new(
+        GcScopeKind::Project,
+        request.name.as_str(),
+        Some("init".to_owned()),
+        Some(layerfs_bridge::sdk_values::hex(&op)),
+    )
 }
 
 /// Releases one Init's admission intent on success, and on drop after a

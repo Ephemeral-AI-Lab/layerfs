@@ -237,3 +237,12 @@ fn a_published_refusal_keeps_its_history_code() {
     let poisoned = published(Arc::new(PortError::Poisoned));
     assert_eq!(poisoned.code, "Unknown", "{poisoned:?}");
 }
+
+/// F43R4-1: a bare `UnknownOutcome` renders the empty-map "no detail" (spec
+/// gap G1), the shape `named_unknown` must fill with the entity it knows.
+#[test]
+fn a_bare_unknown_outcome_renders_the_empty_map_detail() {
+    let refused = history(HistoryError::UnknownOutcome);
+    assert_eq!(refused.code, "Unknown");
+    assert!(empty(&refused.detail), "{refused:?}");
+}

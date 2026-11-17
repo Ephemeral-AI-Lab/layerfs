@@ -6,6 +6,10 @@ pub struct MemoryHistory {
     stacks: Mutex<BTreeMap<LayerStackId, LayerStackRecord>>,
     layers: Mutex<BTreeMap<LayerId, LayerRecord>>,
     highwater: Mutex<BTreeMap<layerfs_content::ObjectId, u64>>,
+    /// The `gc_register` answer is lost when set (F43R4-2).
+    pub fail_register: bool,
+    /// The `gc_release` answer is lost when set (F43R4-2).
+    pub fail_release: bool,
 }
 impl HistoryCatalog for MemoryHistory {
     fn catalog_id(&self) -> CatalogId {
@@ -13,6 +17,20 @@ impl HistoryCatalog for MemoryHistory {
     }
     fn incarnation(&self) -> u64 {
         1
+    }
+    fn gc_register(&self, _intent: &GcIntent) -> HistoryResult<()> {
+        if self.fail_register {
+            Err(HistoryError::UnknownOutcome)
+        } else {
+            Ok(())
+        }
+    }
+    fn gc_release(&self, _op_id: &[u8; 16]) -> HistoryResult<()> {
+        if self.fail_release {
+            Err(HistoryError::UnknownOutcome)
+        } else {
+            Ok(())
+        }
     }
     fn initialize_layerstack(&self, r: &StackInitialization) -> HistoryResult<LayerStackRecord> {
         let mut stacks = self.stacks.lock().unwrap();

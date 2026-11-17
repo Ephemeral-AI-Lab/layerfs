@@ -866,3 +866,35 @@ fn sent_op_ref(request: &SdkValue) -> &str {
         .get_text("op_id")
         .expect("the frame names its admission")
 }
+
+/// F43R4-1: the worker's `project.delete.release` can answer `Unknown` with
+/// the bare empty-map detail (a quarantined session); the caller still names
+/// the project and the admission it held (spec §10 A6).
+#[test]
+fn a_fake_workers_empty_unknown_release_names_the_project_and_op() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let stack = LayerStackId::from_authority([0x1a; 16]);
+    let home = caller_home("fake-release-empty-unknown", &address, stack);
+    let seen = fake_worker(listener, move |request| match op_of(request) {
+        "project.delete.admit" => admitted_for(stack),
+        "project.delete" => removed_for(stack, 42, false),
+        "project.delete.release" => refused("Unknown", SdkValue::map::<0>([])),
+        other => panic!("unexpected op {other}"),
+    });
+
+    let refusal = remove(&home).expect_err("the release answer was lost");
+    assert_eq!(refusal.code, "Unknown", "{refusal:?}");
+    let entity = refusal.detail.get("entity").expect("entity detail");
+    assert_eq!(entity.get_text("kind"), Some("project"), "{refusal:?}");
+    assert_eq!(entity.get_text("name"), Some("app"), "{refusal:?}");
+    assert!(
+        refusal.detail.get("phase").expect("phase") == &SdkValue::Null,
+        "a lost release has no phase"
+    );
+    let op = refusal.detail.get_text("op").expect("the admission");
+    let requests = seen.lock().unwrap();
+    assert_eq!(sent_op(&requests[2]), op, "{requests:?}");
+    drop(requests);
+    let _ = std::fs::remove_dir_all(home);
+}
