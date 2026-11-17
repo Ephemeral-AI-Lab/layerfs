@@ -8,10 +8,10 @@ The PostgreSQL backend of the [Store](README.md): one schema in a PostgreSQL dat
 | --- | --- |
 | Source | [`backend/postgresql/`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql), [`store/postgresql.rs`](../../../../engine/crates/layerfs-persistence/src/store/postgresql.rs), [`sql/postgresql/`](../../../../engine/crates/layerfs-persistence/sql/postgresql) |
 
-The backend is compiled only with the cargo feature `postgresql`, which adds
-the `postgres`, `postgres-native-tls` and `native-tls` dependencies
+The backend is always compiled beside SQLite; it adds the `postgres`,
+`postgres-native-tls` and `native-tls` dependencies
 ([`Cargo.toml`](../../../../engine/crates/layerfs-persistence/Cargo.toml)).
-Without it, selecting a PostgreSQL Store fails `BackendUnavailable`.
+There is no `postgresql` cargo feature: every build serves both Store kinds.
 
 ## Schema
 
@@ -229,8 +229,8 @@ reuses an operation id
 
 | Test | Command | Shows |
 | --- | --- | --- |
-| [`postgresql_open_check.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_open_check.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --features postgresql --test postgresql_open_check` | `Full` and `Light` refusals |
-| [`postgresql_acquisition_compaction.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_compaction.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --features postgresql --test postgresql_acquisition_compaction` | Compaction after the last release, never touching a live operation |
+| [`postgresql_open_check.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_open_check.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_open_check` | `Full` and `Light` refusals |
+| [`postgresql_acquisition_compaction.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_compaction.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_acquisition_compaction` | Compaction after the last release, never touching a live operation |
 
 Without `LAYERFS_TEST_POSTGRES_URL` these tests print `NOT_RUN` and check
 nothing.

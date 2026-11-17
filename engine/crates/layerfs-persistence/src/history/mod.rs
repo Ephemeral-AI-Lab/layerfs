@@ -23,7 +23,6 @@ mod rows;
 mod transaction;
 pub use kept::{KeptHistory, KeptNode, KeptNodeId};
 pub(crate) use lineage_backfill::backfill_lineage;
-#[cfg(feature = "postgresql")]
 pub use objects::GcTuple;
 pub use objects::{KeptObjects, KeptWaste, MarkResult};
 pub use provider::HistoryProvider;

@@ -122,7 +122,6 @@ impl StoreService {
     /// the overlay template at `template`. No kernel guard runs: the Store
     /// is no file shared through one kernel but a server every opener
     /// reaches over its own connection.
-    #[cfg(feature = "postgresql")]
     pub fn open_postgres(
         selection: &layerfs_persistence::PostgresSelection,
         binding: &[u8],

@@ -5,8 +5,10 @@
 //! in its machine).
 //!
 //! One read per Sandbox ([`read`]) answers one map,
-//! `{ overlay_sizes: [{ namespace, bytes }], daemon, usage, usage_reason? }`.
-//! [`merged`] puts the sizes on the listed Workspaces as `overlay_bytes`
+//! `{ overlay_sizes: [{ namespace, bytes }], daemon, usage, usage_reason?,
+//! workspace_usage, workspace_usage_reason? }`.
+//! [`merged`] puts the sizes on the listed Workspaces as `overlay_bytes`,
+//! each Workspace's cgroup usage on it as `usage` (with `usage_reason`),
 //! and the daemon process fields (layerfs-project#164) on the listing
 //! itself, where `sandbox.get` takes them. Another datum of the same
 //! folder is one more field of that map, read in the same call. Everything is
@@ -45,7 +47,8 @@ pub fn read(directory: &Path, namespaces: &[i64]) -> Option<SdkValue> {
 /// The whole read of the Sandbox `daemon` records, whose run folder is
 /// `run`: [`sizes`], and what this kernel says of the daemon process
 /// ([`process::observed`]: `daemon`, `usage` and, when that is null,
-/// `usage_reason`; layerfs-project#164). Also what the inspect kind
+/// `usage_reason`; layerfs-project#164), and what its Workspaces' groups
+/// have used ([`process::workspaces`]). Also what the inspect kind
 /// `overlay_sizes` answers.
 pub(crate) fn observed(daemon: &DaemonRecord, run: &Path, namespaces: &[i64]) -> SdkValue {
     let mut fields = match sizes(run, namespaces) {
@@ -53,6 +56,7 @@ pub(crate) fn observed(daemon: &DaemonRecord, run: &Path, namespaces: &[i64]) ->
         _ => Vec::new(),
     };
     fields.extend(process::observed(daemon));
+    fields.extend(process::workspaces(daemon, Path::new(process::CGROUP_ROOT)));
     SdkValue::Map(fields)
 }
 
@@ -103,6 +107,11 @@ fn overlay_bytes(run: &Path, namespace: i64) -> SdkValue {
 /// (`None`). The daemon process fields `read` holds (`daemon`, `usage`,
 /// `usage_reason`) become fields of the listing; a `read` without them
 /// (a worker of an earlier build) adds none.
+///
+/// Each Workspace also gets `usage`, what its own cgroup has used, in the
+/// shape of the Sandbox's (`{ cpu_usec, memory_current, memory_peak,
+/// memory_file, pids, oom_kills }`), with `usage_reason` when it or one of
+/// its values is null ([`workspace_usage`]).
 pub fn merged(listed: SdkValue, read: Option<&SdkValue>) -> SdkValue {
     let sizes = match read.and_then(|read| read.get("overlay_sizes")) {
         Some(SdkValue::List(sizes)) => sizes.as_slice(),
@@ -120,7 +129,14 @@ pub fn merged(listed: SdkValue, read: Option<&SdkValue>) -> SdkValue {
     };
     let sized = |item: SdkValue| {
         let bytes = bytes_of(&item);
-        with_field(item, "overlay_bytes", bytes)
+        let (usage, reason) = workspace_usage(read, item.get_text("workspace"));
+        let reason = reason.map(SdkValue::text);
+        let item = with_field(item, "overlay_bytes", bytes);
+        let item = with_field(item, "usage", usage);
+        match reason {
+            Some(reason) => with_field(item, "usage_reason", reason),
+            None => item,
+        }
     };
     let merged = SdkValue::Map(
         (fields.into_iter())
@@ -137,4 +153,33 @@ pub fn merged(listed: SdkValue, read: Option<&SdkValue>) -> SdkValue {
     (seen.into_iter()).fold(merged, |merged, (field, value)| {
         with_field(merged, &field, value)
     })
+}
+
+/// The `usage` of the Workspace with daemon id `workspace` that `read`
+/// holds ([`process::workspaces`]), with its `usage_reason`: its group's,
+/// or null with [`process::NO_COMMAND`] when the Sandbox's group has none
+/// for it, or null with the Sandbox's `workspace_usage_reason` when no
+/// Workspace of it has a group (`host_process`, `no_cgroup`, ...). Null
+/// with [`process::NOT_OBSERVED`] when the side that runs the Sandbox did
+/// not answer (`None`) or answered without these fields (a worker of an
+/// earlier build).
+pub fn workspace_usage<'a>(
+    read: Option<&'a SdkValue>,
+    workspace: Option<&str>,
+) -> (SdkValue, Option<&'a str>) {
+    let Some(read) = read else {
+        return (SdkValue::Null, Some(process::NOT_OBSERVED));
+    };
+    match read.get("workspace_usage") {
+        Some(SdkValue::List(groups)) => (groups.iter())
+            .find(|group| workspace.is_some() && group.get_text("workspace") == workspace)
+            .map_or((SdkValue::Null, Some(process::NO_COMMAND)), |group| {
+                let usage = group.get("usage").cloned().unwrap_or_default();
+                (usage, group.get_text("usage_reason"))
+            }),
+        _ => (
+            SdkValue::Null,
+            Some((read.get_text("workspace_usage_reason")).unwrap_or(process::NOT_OBSERVED)),
+        ),
+    }
 }

@@ -21,7 +21,8 @@ const MOST: usize = 1024;
 /// The overlay file sizes of the Workspaces with `namespaces` (each
 /// Workspace record's `namespace`) of Sandbox `sandbox` on machine
 /// `machine`, read where its run folder is: `{ overlay_sizes: [{
-/// namespace, bytes }], daemon, usage, usage_reason? }`, `bytes` null for
+/// namespace, bytes }], daemon, usage, usage_reason?, workspace_usage,
+/// workspace_usage_reason? }`, `bytes` null for
 /// a Workspace that has no overlay file there, with what that side sees
 /// of the Sandbox's daemon process (layerfs-project#164;
 /// [`crate::run_folder::observed`]). `namespaces` may be empty. Refusals

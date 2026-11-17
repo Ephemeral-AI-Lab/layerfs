@@ -12,13 +12,11 @@
 //! `core/docs/issues/project-41/gc-42-decisions.md` (with the API and control
 //! docs); run the call on that machine.
 use crate::identity;
-#[cfg(feature = "postgresql")]
 use crate::identity::Kind;
 use crate::lease;
 use crate::open::close;
 use crate::open_args::OpenArgs;
 use crate::place::{self, Executor};
-#[cfg(feature = "postgresql")]
 use crate::postgresql;
 use crate::record::{StoreRecord, StoreRef};
 use layerfs_bridge::control::SdkRefusal;
@@ -27,7 +25,6 @@ use layerfs_home::events::Events;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_persistence::compact_metrics::{self, CompactRefusal};
-#[cfg(feature = "postgresql")]
 use layerfs_persistence::PostgresHandles;
 use layerfs_persistence::{
     CompactFailpoint, CompactReport, CompactRequest, PersistenceConfig, SqliteHandles,
@@ -149,23 +146,11 @@ pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
     Ok(crate::report::compact_report(&CompactReport::from(receipt)))
 }
 
-/// `store.compact` of a PostgreSQL Store in a build without the `postgresql`
-/// feature: no engine is linked, so the call is `Unsupported`.
-#[cfg(not(feature = "postgresql"))]
-fn compact_postgresql(_record: &StoreRecord, _home: &Path, _store: &str) -> Outcome {
-    Err(refused(
-        "Unsupported",
-        "this LayerFS build has no PostgreSQL engine; build the binding with --features postgresql",
-    ))
-}
-
 /// The §8 PostgreSQL path: dial the Store's recorded URL, open its schema as
 /// this home's authority, and run Phase M/A/B/C. The Store is usable at
 /// G + 1 from the swap on; a lost reply is judged by the next call (§9).
 ///
-/// Only built with the `postgresql` feature; the stub above answers
-/// `Unsupported` without it.
-#[cfg(feature = "postgresql")]
+/// The PostgreSQL engine is always built beside SQLite (#726).
 fn compact_postgresql(record: &StoreRecord, home: &Path, store: &str) -> Outcome {
     let url = crate::record::url(record)?;
     let id = identity::identity(&OpenArgs {

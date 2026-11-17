@@ -17,14 +17,12 @@
 use super::rows::{cell, one, unsigned};
 use super::transaction::Transaction;
 use super::{branch, layerstack, params, paths, position};
-#[cfg(feature = "postgresql")]
 use crate::backend::records::Param;
 use crate::backend::Engine;
 use crate::history::provider::HistoryProvider;
 use layerfs_history::error::{
     GcHolder, HistoryError, HistoryResult, Missing, MountHolders, OpConflict,
 };
-#[cfg(feature = "postgresql")]
 use layerfs_history::identity::CatalogId;
 use layerfs_history::identity::{BranchId, LayerStackId};
 use layerfs_history::path::trace_key;
@@ -38,7 +36,6 @@ mod removal;
 pub(crate) use removal::{delete_stack, intents, remove_branch, remove_path};
 
 const INSERT: &str = "gc_intent_insert";
-#[cfg(feature = "postgresql")]
 const GET: &str = "gc_intent_get";
 const RELEASE: &str = "gc_intent_release";
 const UNCERTAIN: &str = "gc_intent_uncertain";
@@ -49,34 +46,18 @@ const OPS_STORE: &str = "gc_intent_ops_store";
 const ALL_BRANCH: &str = "gc_intent_all_branch";
 const ALL_PROJECT: &str = "gc_intent_all_project";
 const ALL_STORE: &str = "gc_intent_all_store";
-#[cfg(feature = "postgresql")]
 const BRANCH_STACK: &str = "gc_branch_stack_any";
 const EPOCH_LOCK: &str = "gc_epoch_lock";
-
-#[cfg(feature = "postgresql")]
 const LOCK_XACT_SHARED: &str = "gc_lock_xact_shared";
-#[cfg(feature = "postgresql")]
 const LOCK_XACT_EXCLUSIVE: &str = "gc_lock_xact_exclusive";
-#[cfg(feature = "postgresql")]
 const LOCK_SESSION_SHARED: &str = "gc_lock_session_shared";
-#[cfg(feature = "postgresql")]
 const LOCK_SESSION_EXCLUSIVE: &str = "gc_lock_session_exclusive";
-#[cfg(feature = "postgresql")]
 const UNLOCK_SESSION_SHARED: &str = "gc_unlock_session_shared";
-#[cfg(feature = "postgresql")]
 const UNLOCK_SESSION_EXCLUSIVE: &str = "gc_unlock_session_exclusive";
 
 /// True when this provider is backed by PostgreSQL.
 fn postgres(provider: &HistoryProvider) -> bool {
-    #[cfg(feature = "postgresql")]
-    {
-        matches!(provider.engine, Engine::Postgres(_))
-    }
-    #[cfg(not(feature = "postgresql"))]
-    {
-        let _ = provider;
-        false
-    }
+    matches!(provider.engine, Engine::Postgres(_))
 }
 
 fn now_ms() -> i64 {
@@ -497,7 +478,6 @@ pub(super) fn register_in(
 /// A Branch-scoped removal keeps the project key shared and takes only the
 /// Branch key exclusively; a project-scoped one takes the project key
 /// exclusively.
-#[cfg(feature = "postgresql")]
 fn advisory_keys(catalog: CatalogId, intent: &GcIntent) -> Vec<(u8, Vec<u8>, bool)> {
     let scope_shared = intent.kind.shared();
     let store_shared = intent.scope_kind != GcScopeKind::Store || scope_shared;
@@ -515,8 +495,6 @@ fn advisory_keys(catalog: CatalogId, intent: &GcIntent) -> Vec<(u8, Vec<u8>, boo
     }
     keys
 }
-
-#[cfg(feature = "postgresql")]
 fn advisory_key(catalog: CatalogId, kind: u8, id: &[u8]) -> i64 {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"layerfs/advisory/v1\0");
@@ -528,11 +506,7 @@ fn advisory_key(catalog: CatalogId, kind: u8, id: &[u8]) -> i64 {
     head.copy_from_slice(&digest.as_bytes()[..8]);
     i64::from_be_bytes(head)
 }
-
-#[cfg(feature = "postgresql")]
 const EMPTY_OP: [u8; 16] = [0u8; 16];
-
-#[cfg(feature = "postgresql")]
 fn xact_lock(tx: &Transaction<'_>, key: i64, shared: bool) -> HistoryResult<()> {
     let found = tx.query(
         if shared {
@@ -554,7 +528,6 @@ fn xact_lock(tx: &Transaction<'_>, key: i64, shared: bool) -> HistoryResult<()> 
 
 /// The intents one advisory-key scope names, in the vocabulary the shared
 /// lock failure needs to report a holder.
-#[cfg(feature = "postgresql")]
 fn scope_intents(tx: &Transaction<'_>, kind: u8, id: &[u8]) -> HistoryResult<Vec<GcIntent>> {
     match kind {
         1 => query(tx, ALL_STORE, params![EMPTY_OP.to_vec()]),
@@ -574,11 +547,9 @@ fn scope_intents(tx: &Transaction<'_>, kind: u8, id: &[u8]) -> HistoryResult<Vec
 
 /// One live advisory-key holder as `pg_locks`/`pg_stat_activity` report it:
 /// pid, `client_addr` and `backend_start`.
-#[cfg(feature = "postgresql")]
 type AdvisoryHolder = (i64, Option<String>, Option<String>);
 
 /// The live session holding one advisory key.
-#[cfg(feature = "postgresql")]
 fn advisory_holder(tx: &Transaction<'_>, key: i64) -> HistoryResult<Option<AdvisoryHolder>> {
     // PostgreSQL-only text: `statement()` resolves it through the PG set.
     let rows = tx.query("gc_advisory_holder", params![key])?;
@@ -595,7 +566,6 @@ fn advisory_holder(tx: &Transaction<'_>, key: i64) -> HistoryResult<Option<Advis
 /// The refusal a named lock reports: the live intents at that scope (a mount
 /// is `MountsActive`, any other operation `Busy` with `{entity,phase,op}`),
 /// or, when no row exists, the backend the server names.
-#[cfg(feature = "postgresql")]
 fn lock_refusal(
     tx: &Transaction<'_>,
     kind: u8,
@@ -634,7 +604,6 @@ fn lock_refusal(
 }
 
 /// PostgreSQL: the Store key a removal shares with every mount, taken first.
-#[cfg(feature = "postgresql")]
 fn lock_store_shared(tx: &Transaction<'_>, catalog: CatalogId) -> HistoryResult<()> {
     let key = advisory_key(catalog, 1, catalog.as_slice());
     match xact_lock(tx, key, true) {
@@ -644,7 +613,6 @@ fn lock_store_shared(tx: &Transaction<'_>, catalog: CatalogId) -> HistoryResult<
 }
 
 /// PostgreSQL: one project or Branch key.
-#[cfg(feature = "postgresql")]
 fn lock_scope(
     tx: &Transaction<'_>,
     catalog: CatalogId,
@@ -690,20 +658,15 @@ fn uncertain_in(tx: &Transaction<'_>, op_id: &[u8; 16]) -> HistoryResult<()> {
     tx.execute(UNCERTAIN, params![now_ms(), op_id.as_slice()])?;
     Ok(())
 }
-
-#[cfg(feature = "postgresql")]
 fn get_in(tx: &Transaction<'_>, op_id: &[u8; 16]) -> HistoryResult<Option<GcIntent>> {
     one(tx, GET, [op_id.as_slice()], intent_row)
 }
 
 /// The PostgreSQL advisory keys one release unlocks, each with the mode it
 /// was taken in.
-#[cfg(feature = "postgresql")]
 struct ReleaseKeys {
     keys: Vec<(u8, Vec<u8>, bool)>,
 }
-
-#[cfg(feature = "postgresql")]
 fn keys_for_release(
     tx: &Transaction<'_>,
     catalog: CatalogId,
@@ -725,13 +688,10 @@ fn keys_for_release(
 /// registration that follows takes its own key level; dropping the claim
 /// leaves that one held for `gc_release`. On SQLite this is a no-op: the lane
 /// and the single write transaction are the exclusion.
-#[cfg(feature = "postgresql")]
 pub(crate) struct StoreClaim<'a> {
     provider: &'a HistoryProvider,
     held: bool,
 }
-
-#[cfg(feature = "postgresql")]
 impl HistoryProvider {
     /// Takes this Store's exclusive advisory key without registering an intent
     /// row, so a compaction can settle a leftover op under the key.
@@ -750,8 +710,6 @@ impl HistoryProvider {
         })
     }
 }
-
-#[cfg(feature = "postgresql")]
 impl StoreClaim<'_> {
     /// Releases the claim's one key level, leaving the level a registration
     /// took in the meantime held.
@@ -765,15 +723,11 @@ impl StoreClaim<'_> {
         self.held = false;
     }
 }
-
-#[cfg(feature = "postgresql")]
 impl Drop for StoreClaim<'_> {
     fn drop(&mut self) {
         self.unlock();
     }
 }
-
-#[cfg(feature = "postgresql")]
 impl HistoryProvider {
     /// Whether `pid` holds this Store's exclusive advisory key, as `pg_locks`
     /// reports it: the §8 lost-`COMMIT` guard. A recorded owner that still
@@ -809,7 +763,6 @@ impl HistoryProvider {
 pub(crate) fn register(provider: &HistoryProvider, intent: &GcIntent) -> HistoryResult<()> {
     match &provider.engine {
         Engine::Sqlite(_) => provider.write(|tx| register_in(tx, intent, false)),
-        #[cfg(feature = "postgresql")]
         Engine::Postgres(session) => {
             let keys = advisory_keys(provider.catalog_id, intent);
             session_lock(session, provider.catalog_id, &keys)?;
@@ -828,7 +781,6 @@ pub(crate) fn register(provider: &HistoryProvider, intent: &GcIntent) -> History
 pub(crate) fn release(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryResult<()> {
     match &provider.engine {
         Engine::Sqlite(_) => provider.write(|tx| release_in(tx, op_id)),
-        #[cfg(feature = "postgresql")]
         Engine::Postgres(session) => {
             let found = provider.write(|tx| {
                 let Some(intent) = get_in(tx, op_id)? else {
@@ -851,10 +803,7 @@ pub(crate) fn mark_uncertain(provider: &HistoryProvider, op_id: &[u8; 16]) -> Hi
 }
 
 /// The refusal a transaction-pooled connection gets for a session lock.
-#[cfg(feature = "postgresql")]
 const POOLED: &str = "transaction-pooled PostgreSQL connection";
-
-#[cfg(feature = "postgresql")]
 fn session_lock(
     session: &std::sync::Arc<crate::backend::postgresql::session::connection::Session>,
     catalog: CatalogId,
@@ -894,7 +843,6 @@ fn session_lock(
 /// The refusal a failed session key reports: the intents at its scope, or the
 /// backend the server names; never a holderless `MountsActive`/`Busy` when a
 /// holder is available.
-#[cfg(feature = "postgresql")]
 fn session_lock_refusal(
     session: &std::sync::Arc<crate::backend::postgresql::session::connection::Session>,
     kind: u8,
@@ -943,8 +891,6 @@ fn session_lock_refusal(
     }
     Ok(HistoryError::BusyOp(Box::new(conflict)))
 }
-
-#[cfg(feature = "postgresql")]
 fn session_unlock(
     session: &std::sync::Arc<crate::backend::postgresql::session::connection::Session>,
     catalog: CatalogId,

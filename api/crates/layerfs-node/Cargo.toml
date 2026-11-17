@@ -13,8 +13,6 @@ crate-type = ["cdylib"]
 path = "src/lib.rs"
 
 [features]
-# PostgreSQL Stores (#506). Off by default.
-postgresql = ["layerfs-api/postgresql"]
 # https:// buckets: Cloudflare R2, MinIO behind TLS. Off by default.
 tls = ["layerfs-api/tls"]
 

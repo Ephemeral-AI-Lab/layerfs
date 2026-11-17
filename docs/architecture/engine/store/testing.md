@@ -92,7 +92,7 @@ here.
 | `-j` | `min(nproc, 16)` by default | keeps rustc within memory on a many-core host |
 | `CARGO_NET_GIT_FETCH_WITH_CLI` | `true` | fetches the pinned `fuser` git dependency with the git CLI, which honours the host's proxy and credentials |
 | `GIT_SSL_NO_VERIFY` | `true` | lets that one git fetch complete through TLS inspection; scoped to this process, not a production setting |
-| `--features postgresql` | added to every suite when `LAYERFS_TEST_POSTGRES_URL` is set | the PostgreSQL test files are `#![cfg(feature = "postgresql")]` |
+| `LAYERFS_TEST_POSTGRES_URL` | passed to the suites as-is | enables the PostgreSQL cases; the engine is always built beside SQLite (#726), so no feature flag is added |
 
 The `TMPDIR` wrapper exists because a Sandbox run directory is long: a test that
 binds a Unix-domain socket under `TMPDIR` otherwise fails with `path must be

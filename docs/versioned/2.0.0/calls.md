@@ -309,8 +309,16 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
     `null` when it could not be read. For a Sandbox on a `lima` machine
     whose daemon this host reaches directly, the sizes are read by that
     machine's worker, and are `null` when it does not answer.
-  Both come from files, with no daemon call. A machine whose worker runs
-  an earlier build answers Workspaces without these two fields.
+  - `usage`: what the Workspace's commands have used, in the shape of the
+    Sandbox's `usage` below, from the Workspace's own cgroup in a
+    `namespaces` Sandbox (the Sandbox's own processes are in a leaf group,
+    so its Workspace groups get the memory and pids controllers it has).
+    `null` with `usage_reason` `no_command` when no command runs in the
+    Workspace, and with the Sandbox's own reason when none of its
+    Workspaces can have a cgroup; a Sandbox an earlier build started keeps
+    only `cpu_usec` per Workspace (`no_controller`).
+  They come from files, with no daemon call. A machine whose worker runs
+  an earlier build answers Workspaces without these fields.
   ```text
   {"name":"s1","project":"shop/api","machine":"native",…,"state":"running","workspaces":[{"workspace":"5f…","namespace":1,"branch":"dev",…,"path":"/…/workspaces/1","name":"w","ws":"s1:w","running":[{"exec_id":"exec-9c0f6f0d2a1b4e77","started":1794000000000,"tag":"dsh:s9:t1","program":"npm"}],"overlay_bytes":188416}],"daemon_capacity":{…},"workspace_capacity":16,"next_page_pos":null}
   ```

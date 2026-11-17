@@ -145,7 +145,7 @@ write none.
 | stdout cannot be written after the call | 125; the call was made and its effects stay; nothing is repeated | [`output.rs`](../../../../api/crates/layerfs-cli/src/output.rs), [`framed.rs`](../../../../api/crates/layerfs-cli/src/framed.rs) |
 | stderr cannot be written | the line is lost; the exit stays the outcome's | [`output.rs`](../../../../api/crates/layerfs-cli/src/output.rs) `diagnostic` |
 | `--stream`: a command exiting 2 or 125 | same exit as a usage error or refusal; stderr tells them apart | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) |
-| Cargo features | Node: `machine` always, `postgresql`/`tls` opt-in; Python and CLI: `machine` by default; without `postgresql`/`tls` such a call is `Unsupported` | the three crates' `Cargo.toml` |
+| Cargo features | Node: `machine` always, `tls` opt-in; Python and CLI: `machine` by default; without `tls` an `https://` remote is `Unsupported`. PostgreSQL is always built | the three crates' `Cargo.toml` |
 | Durable Stores | `NOT_RUN — disabled by owner until explicit reauthorization`; every build runs Disposable/WAL only | [store family](../sdk/store.md) |
 
 ## Packaging and release

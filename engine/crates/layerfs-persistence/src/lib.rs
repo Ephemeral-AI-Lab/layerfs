@@ -1,5 +1,5 @@
 //! The global Store: embedded SQLite (explicit Durable and disk-backed
-//! Disposable profiles) or, with the `postgresql` feature, PostgreSQL (#506).
+//! Disposable profiles) or PostgreSQL (#506).
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
 mod backend;
@@ -13,9 +13,7 @@ mod store;
 pub(crate) use store::config;
 mod history;
 mod report;
-#[cfg(feature = "postgresql")]
 pub use backend::postgresql::access::{access as postgresql_access, PostgresAccess};
-#[cfg(feature = "postgresql")]
 pub use backend::postgresql::status::{
     compact_status as postgresql_compact_status, status as postgresql_status,
     PostgresCompactOpStatus, PostgresStatus, PostgresStatusError,
@@ -51,7 +49,6 @@ pub(crate) use storage::provider as storage_provider;
 pub(crate) use storage::publication;
 pub use storage_provider::StorageProvider;
 pub use store::handles::SqliteHandles;
-#[cfg(feature = "postgresql")]
 pub use store::postgresql::{
     PostgresAcquisition, PostgresHandles, PostgresLaneHold, PostgresStorage,
 };

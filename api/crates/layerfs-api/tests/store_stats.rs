@@ -147,7 +147,6 @@ fn native_sqlite_and_worker_statistics_use_the_same_counters() {
 }
 
 #[test]
-#[cfg(feature = "postgresql")]
 fn postgresql_statistics_have_null_free_and_count_publications() {
     let Ok(url) = std::env::var("LAYERFS_TEST_POSTGRES_URL") else {
         eprintln!("NOT_RUN: LAYERFS_TEST_POSTGRES_URL unset");

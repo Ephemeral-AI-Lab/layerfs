@@ -21,8 +21,6 @@
 //! The test creates and drops its own database, because `store.status` reads
 //! the one schema a 2.0 PostgreSQL Store uses (`layerfs`); a shared schema
 //! would collide with another run. Without the variable it reports NOT_RUN.
-#![cfg(feature = "postgresql")]
-
 use layerfs_bridge::control::SdkValue;
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_home::home;

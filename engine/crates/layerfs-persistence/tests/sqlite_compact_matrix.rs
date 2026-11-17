@@ -2155,13 +2155,13 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  `sdk_path_removal` ({}); and `layerfs-control --features postgresql",
+        "  `sdk_path_removal` ({}); and the `layerfs-control",
         suite_tests("engine/crates/layerfs-store-service/tests/sdk_path_removal.rs")
     )
     .unwrap();
     writeln!(
         out,
-        "  project_delete_worker` ({}), `layerfs-store --features postgresql",
+        "  project_delete_worker` ({}), the `layerfs-store",
         suite_tests("control/crates/layerfs-control/tests/project_delete_worker.rs")
     )
     .unwrap();
@@ -2202,7 +2202,7 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  All of those pass on the merged branch; the `--features postgresql`"
+        "  All of those pass on the merged branch; the PostgreSQL"
     )
     .unwrap();
     writeln!(

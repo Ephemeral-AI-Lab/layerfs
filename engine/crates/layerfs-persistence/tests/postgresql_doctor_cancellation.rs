@@ -1,5 +1,4 @@
 //! Cancellation signals interrupt actual connection/preflight work, without sleeps.
-#![cfg(feature = "postgresql")]
 mod pg_doctor;
 use layerfs_persistence::{
     diagnostic::{Options, Outcome},

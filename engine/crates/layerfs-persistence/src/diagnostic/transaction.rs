@@ -26,7 +26,6 @@ impl View for crate::backend::Transaction<'_> {
     }
 }
 
-#[cfg(feature = "postgresql")]
 impl View for crate::backend::postgresql::session::transaction::Transaction<'_> {
     fn has_table(&self, name: &str) -> Result<bool, BackendError> {
         Ok(self.query("SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relname=$1 AND c.relkind IN ('r','p')",vec![Param::Text(name.to_owned())])?.first().ok_or(BackendError::Integrity)?.get::<i64>(0)?!=0)

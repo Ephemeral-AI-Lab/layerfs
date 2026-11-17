@@ -273,9 +273,6 @@ run_cargo() {
   local package=$1
   shift
   local -a cmd=( "${cargo_cmd[@]}" test --locked -j "$jobs" -p "$package" )
-  if [ -n "${LAYERFS_TEST_POSTGRES_URL:-}" ]; then
-    cmd+=( --features postgresql )
-  fi
   cmd+=( "$@" )
   if [ "${#passthrough[@]}" -gt 0 ]; then
     cmd+=( -- "${passthrough[@]}" )

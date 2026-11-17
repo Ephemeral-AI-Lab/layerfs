@@ -8,7 +8,6 @@
 //! re-read runs; a deleted epoch row stands in for a compacted-away project.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#![cfg(feature = "postgresql")]
 mod support;
 
 use layerfs_history::error::{HistoryError, Missing};

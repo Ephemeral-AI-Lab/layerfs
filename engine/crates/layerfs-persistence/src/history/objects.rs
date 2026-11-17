@@ -193,7 +193,6 @@ impl HistoryProvider {
                 sink.finish()?;
                 Ok(mark)
             }),
-            #[cfg(feature = "postgresql")]
             crate::backend::Engine::Postgres(_) => self.write_snapshot(mark),
         }
     }
@@ -230,7 +229,6 @@ impl HistoryProvider {
                 };
                 Ok(((mark, keep), completion))
             }),
-            #[cfg(feature = "postgresql")]
             crate::backend::Engine::Postgres(_) => {
                 let mark = self.write_snapshot(mark)?;
                 let keep = decide(&mark)?;

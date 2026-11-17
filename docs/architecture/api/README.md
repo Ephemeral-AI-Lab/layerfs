@@ -40,7 +40,7 @@ The public surface: the `layerfs-api` call table with its one dispatcher, and th
 | `doctor/` | explicit diagnostics outside the call table (`layerfs doctor`) | [`doctor/mod.rs`](../../../api/crates/layerfs-api/src/doctor/mod.rs) |
 | Entry points | `calls()`, `find`, `table_json`, `call`, `call_scoped`, `call_json` | [`lib.rs`](../../../api/crates/layerfs-api/src/lib.rs) |
 | Re-exports | the control-crate paths the front ends need (`home`, `worker`, `daemon`, `ProjectApi`, `WorkspaceApi`, doctor), so front ends reach control through this crate | [`lib.rs`](../../../api/crates/layerfs-api/src/lib.rs) |
-| Features | `machine` (machine calls; host builds only, not the guest worker), `postgresql` (PostgreSQL Stores), `tls` (`https://` remotes); the latter two are on in the sealed Linux worker build | [`Cargo.toml`](../../../api/crates/layerfs-api/Cargo.toml) |
+| Features | `machine` (machine calls; host builds only, not the guest worker), `tls` (`https://` remotes), on in the sealed Linux worker build; PostgreSQL Stores are always built, no feature | [`Cargo.toml`](../../../api/crates/layerfs-api/Cargo.toml) |
 
 ## Calling conventions
 

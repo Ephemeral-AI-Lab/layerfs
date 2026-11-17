@@ -308,7 +308,8 @@ pub fn host(home: &Path, record: &SandboxRecord, target: &Target, message: Messa
 /// The commands `running` in each Workspace come from this home's exec
 /// records. Each `overlay_bytes` comes from the Sandbox's machine, where
 /// its run folder is, and so do the daemon process fields (`daemon`,
-/// `usage`, `usage_reason`; layerfs-project#164): one bounded inspect
+/// `usage`, `usage_reason`; layerfs-project#164) and each Workspace's
+/// cgroup `usage`: one bounded inspect
 /// request to that machine's worker ([`crate::inspect::overlay_sizes`], no
 /// lease, no daemon), sent for a Sandbox with no Workspace too, put on the
 /// list with [`crate::run_folder::merged`]. A worker that refuses or does

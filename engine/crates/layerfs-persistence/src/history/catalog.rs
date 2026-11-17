@@ -208,7 +208,6 @@ impl HistoryCatalog for HistoryProvider {
             crate::backend::Engine::Sqlite(session) => {
                 Ok(PublishLane::new(Box::new(session.hold_lane()?)))
             }
-            #[cfg(feature = "postgresql")]
             crate::backend::Engine::Postgres(session) => {
                 Ok(PublishLane::new(Box::new(session.hold_lane()?)))
             }

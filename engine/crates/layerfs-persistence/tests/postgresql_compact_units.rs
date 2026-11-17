@@ -1,8 +1,6 @@
 //! §8 step 10 unit checks for the PostgreSQL rebuild, moved out of
 //! `backend/postgresql/compact/`: product source holds no tests (the
 //! product-boundary guard).
-#![cfg(feature = "postgresql")]
-
 use layerfs_persistence::internals::{
     decode_kept_waste, effective_rank, encode_kept_waste, report, standby_satisfied, sync_name,
     sync_rank, takes_rebuild_path, Replica,

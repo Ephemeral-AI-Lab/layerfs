@@ -127,8 +127,8 @@ jobs:
       # A libpq connection string, not a URL (testing.md). A service
       # container's published port is 127.0.0.1 on the runner. The server is
       # scratch -- each PostgreSQL test creates and drops its own schema -- and
-      # lives only for this job. Setting this adds `--features postgresql` to
-      # every suite in the harness.
+      # lives only for this job. The PostgreSQL engine is always built beside
+      # SQLite (#726), so setting this only enables the PostgreSQL cases.
       LAYERFS_TEST_POSTGRES_URL: host=127.0.0.1 port=5432 user=postgres dbname=postgres sslmode=disable
       # The full-mode doctor calls amcheck's verify_heapam and bt_index_check;
       # the step below creates it in this database. The physical doctor's two

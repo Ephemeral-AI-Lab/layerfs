@@ -19,7 +19,6 @@
 //! Needs a writable PostgreSQL server: set `LAYERFS_TEST_POSTGRES_URL` (for
 //! example `host=127.0.0.1 port=55432 user=postgres dbname=postgres
 //! sslmode=disable`). Without it each test reports NOT_RUN.
-#![cfg(feature = "postgresql")]
 mod support;
 
 use layerfs_content::{

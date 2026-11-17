@@ -39,7 +39,6 @@ impl HistoryProvider {
     ) -> HistoryResult<T> {
         match &self.engine {
             Engine::Sqlite(session) => session.run(false, |b| f(&Transaction { backend: b })),
-            #[cfg(feature = "postgresql")]
             Engine::Postgres(session) => session.run(false, |b| f(&Transaction { backend: b })),
         }
     }
@@ -53,7 +52,6 @@ impl HistoryProvider {
     ) -> HistoryResult<T> {
         match &self.engine {
             Engine::Sqlite(session) => session.run(false, |b| f(&Transaction { backend: b })),
-            #[cfg(feature = "postgresql")]
             Engine::Postgres(session) => session.read_statement(|b| f(&Transaction { backend: b })),
         }
     }
@@ -63,7 +61,6 @@ impl HistoryProvider {
     ) -> HistoryResult<T> {
         match &self.engine {
             Engine::Sqlite(session) => session.run(true, |b| f(&Transaction { backend: b })),
-            #[cfg(feature = "postgresql")]
             Engine::Postgres(session) => session.run(true, |b| f(&Transaction { backend: b })),
         }
     }
@@ -78,7 +75,6 @@ impl HistoryProvider {
     ) -> HistoryResult<T> {
         match &self.engine {
             Engine::Sqlite(session) => session.run(true, |b| f(&Transaction { backend: b })),
-            #[cfg(feature = "postgresql")]
             Engine::Postgres(session) => session.run_snapshot(|b| f(&Transaction { backend: b })),
         }
     }

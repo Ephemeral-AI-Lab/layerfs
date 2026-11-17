@@ -159,7 +159,6 @@ fn sqlite_counts_links_empty_trees_and_immutable_commit_and_layer_pins() {
     std::fs::remove_dir_all(home).unwrap();
 }
 #[test]
-#[cfg(feature = "postgresql")]
 fn postgresql_counts_the_same_saved_tree_definition() {
     let Ok(url) = std::env::var("LAYERFS_TEST_POSTGRES_URL") else {
         eprintln!("NOT_RUN: LAYERFS_TEST_POSTGRES_URL unset");

@@ -1,5 +1,5 @@
 //! Saved PostgreSQL integrity admission through the actual Control family.
-#![cfg(all(unix, feature = "postgresql"))]
+#![cfg(unix)]
 use layerfs_bridge::control::SdkValue;
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_home::home::{self, paths};

@@ -1,8 +1,6 @@
 //! The PostgreSQL SQLSTATE classifier (#42 F42-1). `Capacity` is only the
 //! definite insufficient-resource code: class 53 also carries the transient
 //! connection shortage, and class 54 carries statement-complexity refusals.
-#![cfg(feature = "postgresql")]
-
 use layerfs_persistence::internals::{sqlstate, BackendError};
 
 #[test]

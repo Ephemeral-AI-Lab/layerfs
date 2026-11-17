@@ -8,7 +8,6 @@
 //! release before the feature wrote them, then opens it writable.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#![cfg(feature = "postgresql")]
 mod support;
 
 use layerfs_content::{construct_bytes, read_range, ObjectId};

@@ -19,7 +19,6 @@ pub(crate) fn remove_branch(
     provider.write(|tx| {
         let owners = OwnerView::now();
         let record = branch::branch(tx, branch)?.ok_or(HistoryError::Missing(Missing::Branch))?;
-        #[cfg(feature = "postgresql")]
         if postgres {
             lock_store_shared(tx, catalog)?;
             lock_scope(tx, catalog, 2, record.stack.as_slice(), true)?;
@@ -90,7 +89,6 @@ pub(crate) fn delete_stack(
                 None => GcDeletion::Absent,
             });
         };
-        #[cfg(feature = "postgresql")]
         if postgres {
             lock_store_shared(tx, catalog)?;
             let found = query(
@@ -149,7 +147,6 @@ pub(crate) fn remove_path(
         if layerstack::layer_stack(tx, request.stack)?.is_none() {
             return Err(HistoryError::Missing(Missing::LayerStack));
         }
-        #[cfg(feature = "postgresql")]
         if postgres {
             lock_store_shared(tx, catalog)?;
             let found = query(

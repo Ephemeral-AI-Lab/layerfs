@@ -5,7 +5,6 @@
 //! left alone, the salt is never replaced, a recorded serial is never lowered
 //! and a recorded source no release wrote is refused.
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#![cfg(feature = "postgresql")]
 mod support;
 
 use layerfs_history::{

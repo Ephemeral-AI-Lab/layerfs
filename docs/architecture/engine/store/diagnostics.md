@@ -151,7 +151,7 @@ graphs block it explicitly
 | [`store_diagnostic.rs`](../../../../engine/crates/layerfs-persistence/tests/store_diagnostic.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test store_diagnostic` | Audits of real Disposable Stores with live WAL; damage found in full mode and named as excluded in quick mode |
 | [`diagnostic_overwrite.rs`](../../../../engine/crates/layerfs-persistence/tests/diagnostic_overwrite.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test diagnostic_overwrite` | Exact overwrite reconstruction, including late publication and retained forks |
 | [`sqlite_structure_diagnostic.rs`](../../../../engine/crates/layerfs-persistence/tests/sqlite_structure_diagnostic.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test sqlite_structure_diagnostic` | Raw structural errors stay distinct from unsupported schemas |
-| [`postgresql_doctor_physical.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_doctor_physical.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --features postgresql --test postgresql_doctor_physical` | Per-relation amcheck coverage; a missing extension is `Unknown` |
+| [`postgresql_doctor_physical.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_doctor_physical.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_doctor_physical` | Per-relation amcheck coverage; a missing extension is `Unknown` |
 
 The `diagnostic_*.rs` tests beside them damage one table family each
 (framing, dependencies, content, namespace, history, facts, inventory) and

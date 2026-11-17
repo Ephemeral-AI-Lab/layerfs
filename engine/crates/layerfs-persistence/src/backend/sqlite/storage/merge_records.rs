@@ -122,7 +122,6 @@ pub(crate) enum Scratch {
     /// The SQLite Store file's `merge_*` tables.
     Sqlite(Arc<Session>),
     /// A PostgreSQL writer connection's temporary tables (#506 d).
-    #[cfg(feature = "postgresql")]
     Postgres(Arc<crate::backend::postgresql::session::connection::Session>),
 }
 
@@ -377,7 +376,6 @@ impl Scratch {
     fn register(&self) -> Result<(i64, Vec<u8>), PersistenceError> {
         let session = match self {
             Self::Sqlite(session) => session,
-            #[cfg(feature = "postgresql")]
             Self::Postgres(session) => {
                 return crate::backend::postgresql::merge_records::register(session)
             }
@@ -411,7 +409,6 @@ impl Scratch {
     fn remove(&self, operation: i64, token: &[u8]) -> Result<i64, PersistenceError> {
         let session = match self {
             Self::Sqlite(session) => session,
-            #[cfg(feature = "postgresql")]
             Self::Postgres(session) => {
                 return crate::backend::postgresql::merge_records::remove(session, operation, token)
             }
@@ -435,7 +432,6 @@ impl Scratch {
     fn refresh(&self, operation: i64, token: &[u8]) -> Result<(), PersistenceError> {
         let session = match self {
             Self::Sqlite(session) => session,
-            #[cfg(feature = "postgresql")]
             Self::Postgres(session) => {
                 return crate::backend::postgresql::merge_records::refresh(
                     session, operation, token,
@@ -465,7 +461,6 @@ impl Scratch {
     ) -> Result<Vec<Option<Vec<u8>>>, PersistenceError> {
         let session = match self {
             Self::Sqlite(session) => session,
-            #[cfg(feature = "postgresql")]
             Self::Postgres(session) => {
                 return crate::backend::postgresql::merge_records::keys(
                     session, operation, token, window, kind, bound,
@@ -495,7 +490,6 @@ impl Scratch {
     ) -> Result<Vec<Option<Vec<u8>>>, PersistenceError> {
         let session = match self {
             Self::Sqlite(session) => session,
-            #[cfg(feature = "postgresql")]
             Self::Postgres(session) => {
                 return crate::backend::postgresql::merge_records::stored(
                     session, operation, token, keys,
@@ -536,7 +530,6 @@ impl Scratch {
     ) -> Result<(), PersistenceError> {
         let session = match self {
             Self::Sqlite(session) => session,
-            #[cfg(feature = "postgresql")]
             Self::Postgres(session) => {
                 return crate::backend::postgresql::merge_records::flush(
                     session, operation, token, pending,
