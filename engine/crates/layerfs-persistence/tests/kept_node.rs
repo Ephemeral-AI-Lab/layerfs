@@ -470,6 +470,17 @@ fn retained_roots_read_the_live_layers_and_removal_follows_the_marked_closure() 
         "its Layers are gone"
     );
     drop(sql);
+    let sql = rusqlite::Connection::open(&path).unwrap();
+    let logical_after: i64 = sql
+        .query_row("SELECT logical FROM store_totals WHERE id=1", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    drop(sql);
+    assert_eq!(
+        logical_after, 10,
+        "pruning the deleted project retracts only its own logical bytes"
+    );
 
     // The live project and its history are untouched.
     assert!(handles.history.layer_stack(one.id).unwrap().is_some());
@@ -567,6 +578,20 @@ fn a_store_whose_only_project_is_deleted_prunes_it_whole() {
     let kept = handles.history.mark_history_closure().unwrap();
     assert!(kept.is_empty(), "no live project means an empty closure");
 
+    // The two Layers account for all ten logical bytes; only the AFTER INSERT
+    // triggers maintain the total, so the prune must retract it itself.
+    let sql = rusqlite::Connection::open(&path).unwrap();
+    let logical_before: i64 = sql
+        .query_row("SELECT logical FROM store_totals WHERE id=1", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    drop(sql);
+    assert_eq!(
+        logical_before, 10,
+        "the deleted project's bytes are accounted"
+    );
+
     // An empty closure is a real mark, not the absence of one: the whole
     // deleted project is counted and removed.
     let dry = handles.history.remove_unreachable(one.id, true).unwrap();
@@ -579,6 +604,17 @@ fn a_store_whose_only_project_is_deleted_prunes_it_whole() {
     assert!(handles.history.commit(gone_commit.id).unwrap().is_none());
     assert!(handles.history.layer(gone_layer.id).unwrap().is_none());
     assert!(handles.history.branch(work).unwrap().is_none());
+    let sql = rusqlite::Connection::open(&path).unwrap();
+    let logical_after: i64 = sql
+        .query_row("SELECT logical FROM store_totals WHERE id=1", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    drop(sql);
+    assert_eq!(
+        logical_after, 0,
+        "pruning the only project retracts its logical bytes from store_totals"
+    );
     drop(handles);
     drop(writable(&path).expect("the pruned Store still opens"));
 }

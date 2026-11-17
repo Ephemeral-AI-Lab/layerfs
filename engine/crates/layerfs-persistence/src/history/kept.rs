@@ -20,6 +20,10 @@ const CLEAR: &str = "kept_node_clear";
 const ROOTS: &str = "kept_node_roots";
 const KEPT_ROOTS: &str = "kept_node_kept_roots";
 const UNREACHABLE: &str = "history_unreachable_count";
+/// The accounting statement the prune runs while the rows still exist:
+/// `store_totals` is maintained by AFTER INSERT triggers alone, so a
+/// delete does not retract what the deleted Layer and Commit rows held.
+const TOTALS: &str = "history_remove_unreachable_totals";
 /// The statements that remove one Stack's unreachable history rows, in the
 /// order the deferred foreign keys need: children before their parents.
 const UNREACHABLE_DELETES: [&str; 8] = [
@@ -266,7 +270,9 @@ pub(super) fn unreachable_count(tx: &Transaction<'_>, stack: LayerStackId) -> Hi
 /// initialized after an earlier mark is retained, not collected. A dry run
 /// runs the same fresh mark and reports the count without deleting, and an
 /// empty closure over a Store with no live project still counts that Store's
-/// rows as unreachable.
+/// rows as unreachable. The logical bytes those rows contributed are
+/// retracted from `store_totals` in the same transaction, while the rows the
+/// statement reads still exist.
 pub(super) fn remove_unreachable(
     tx: &Transaction<'_>,
     stack: LayerStackId,
@@ -277,6 +283,10 @@ pub(super) fn remove_unreachable(
     if dry_run || count == 0 {
         return Ok(count);
     }
+    // The rows still exist here, so the statement reads exactly what the
+    // deletes below take away. It subtracts only this Stack's unreachable
+    // rows: a live Stack keeps the rows the mark retained.
+    tx.execute(TOTALS, params![stack.as_slice()])?;
     for key in &UNREACHABLE_DELETES[..5] {
         tx.execute(key, params![stack.as_slice()])?;
     }
