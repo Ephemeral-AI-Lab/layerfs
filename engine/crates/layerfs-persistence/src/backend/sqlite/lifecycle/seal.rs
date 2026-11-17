@@ -92,11 +92,17 @@ impl Session {
         }
         // The checkpoint thread ends and closes its connection first.
         drop(self.background.take());
-        let mut state = self
-            .state
-            .into_inner()
-            .map_err(|_| PersistenceError::Uncertain)?;
-        if state.quarantined || !state.connection.is_autocommit() {
+        let (mut state, poisoned) = match self.state.into_inner() {
+            Ok(state) => (state, false),
+            Err(error) => (error.into_inner(), true),
+        };
+        // The caller's lane becomes this connection's owner while it is open.
+        // An error exit below drops `state`, and a writable close waits for
+        // the lane like any write: left with the caller, the lane would be
+        // waited for by the very call that holds it, and the seal would never
+        // return. Owned here, that close runs under it and then lets it go.
+        state.writer_hold = Some(writer);
+        if poisoned || state.quarantined || !state.connection.is_autocommit() {
             return Err(PersistenceError::Uncertain);
         }
         #[cfg(target_os = "macos")]
@@ -118,6 +124,11 @@ impl Session {
             state.connection.restore(connection);
             return Err(rows::error(error).into());
         }
+        // The connection is closed; the lane goes back to the caller.
+        let writer = state
+            .writer_hold
+            .take()
+            .ok_or(PersistenceError::Uncertain)?;
         // SQLite has checked-closed before advisory ownership is released.
         // Earlier error exits drop State.connection before its retained owner.
         // The sidecar check below runs while the lane is still held: an opener
