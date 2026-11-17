@@ -16,10 +16,7 @@
 //! Needs a PostgreSQL server: set `LAYERFS_TEST_POSTGRES_URL` (for example
 //! `host=127.0.0.1 port=5432 user=layerfs password=… dbname=layerfs_test
 //! sslmode=disable`). Without it the two PostgreSQL cases report NOT_RUN and
-//! assert nothing, while the SQLite cases still run. The whole file is behind
-//! `#![cfg(feature = "postgresql")]`, so a build without that feature runs
-//! none of them.
-#![cfg(feature = "postgresql")]
+//! assert nothing, while the SQLite cases still run.
 #[path = "support/installed_store.rs"]
 #[allow(dead_code)]
 mod installed;

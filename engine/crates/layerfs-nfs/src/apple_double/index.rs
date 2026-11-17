@@ -1,8 +1,7 @@
 //! The companion index of one export: its names, main inodes, slots of the
 //! index bound, resident budget and eviction order.
 use super::{
-    Body, Companion, Companions, Decoded, Holding, Named, Orphan, Slot,
-    DECODED_ENTRY_BYTES,
+    Body, Companion, Companions, Decoded, Holding, Named, Orphan, Slot, DECODED_ENTRY_BYTES,
 };
 use crate::{
     apple_double_codec::Image,
@@ -235,7 +234,11 @@ impl Companions {
     /// can be replaced). The caller renames its file to that path itself,
     /// outside this lock, and then commits the body with
     /// [`Self::commit_spilled`].
-    pub(super) fn spill_target(&self, serial: u64, used: Option<u64>) -> Result<Option<PathBuf>, Status> {
+    pub(super) fn spill_target(
+        &self,
+        serial: u64,
+        used: Option<u64>,
+    ) -> Result<Option<PathBuf>, Status> {
         let file = self.files.get(&serial).ok_or(Status::Stale)?;
         // A body already on disk is never replaced: its file is the body.
         if matches!(file.body, Body::Spilled) || used.is_some_and(|used| used != file.used) {

@@ -651,7 +651,11 @@ fn a_companion_lookup_never_answers_a_stale_directory_observation() {
     let fresh = directory.expect("the failed LOOKUP's directory row");
     assert_eq!(fresh.nlink, 3, "the directory gained a child directory");
     let removed = client.remove(&made.handle, b"._file").unwrap();
-    assert_eq!(removed.after, Some(fresh), "the facts the failed LOOKUP read");
+    assert_eq!(
+        removed.after,
+        Some(fresh),
+        "the facts the failed LOOKUP read"
+    );
 
     drop(client);
     drop(other);

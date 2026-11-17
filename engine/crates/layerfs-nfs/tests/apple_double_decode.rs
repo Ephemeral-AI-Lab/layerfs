@@ -68,11 +68,18 @@ fn an_image_whose_attributes_cost_more_than_its_bytes_is_kept_as_written() {
     // Many one-byte names with empty values: a whole image the client could
     // write, whose decoded attributes would be counted at several times its
     // bytes.
-    let names: Vec<[u8; 2]> = (0..600u16).map(|n| [b'a' + (n % 26) as u8, (n / 26) as u8 + b'a']).collect();
+    let names: Vec<[u8; 2]> = (0..600u16)
+        .map(|n| [b'a' + (n % 26) as u8, (n / 26) as u8 + b'a'])
+        .collect();
     let attrs: Vec<(&[u8], Vec<u8>)> = names.iter().map(|name| (&name[..], Vec::new())).collect();
     let bytes = image([0x22; 32], &attrs);
     let decoded = Image::compact(&bytes).expect("a whole image");
-    assert!(decoded.cost() > bytes.len(), "{} <= {}", decoded.cost(), bytes.len());
+    assert!(
+        decoded.cost() > bytes.len(),
+        "{} <= {}",
+        decoded.cost(),
+        bytes.len()
+    );
     c.write(&ad.handle, 0, &bytes).unwrap();
     let held = server.held();
     assert_eq!((held.companions, held.companions_decoded), (1, 0));
