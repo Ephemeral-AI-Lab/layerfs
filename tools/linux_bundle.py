@@ -499,7 +499,7 @@ def seal(record, profile, image, dest, timeout):
             "runtime": bundle_hash({f: files[f] for f in BINARIES}),
             "sandbox_runtime": sandbox_runtime,
             "saved_from": image,
-            "source": {"head": now["head"], "sha256": now["sha256"]},
+            "source": {"head": now["head"], "dirty": now["dirty"], "sha256": now["sha256"]},
             "toolchain": TOOLCHAIN,
             "files": files,
             "at": timestamp(),

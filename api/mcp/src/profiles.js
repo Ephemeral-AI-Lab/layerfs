@@ -7,8 +7,8 @@
 //   work   the families an agent works in (branch, commit, file, workspace)
 //          plus the read-only project and Sandbox calls named below
 //   admin  every other call an agent may make: project create/remove,
-//          Sandbox create/close, and the machine, store, backup and logs
-//          families
+//          Sandbox create/close, and the home, machine, store, backup and
+//          logs families
 //   ui     the monitoring calls a UI polls (layerfs-project#178 D2, #164): in no
 //          profile, so no agent is offered them
 //   none   the doctor family: like `layerfs doctor` itself, which is no
@@ -32,13 +32,14 @@ const ADMIN_CALLS = new Set(["project.init", "project.remove", "sandbox.create",
 const UI_CALLS = new Set(["machine.stats", "machine.space", "machine.files", "logs.machine", "logs.sandbox", "sandbox.files"]);
 
 /** Families whose every call belongs to the `admin` profile. */
-const ADMIN_FAMILIES = new Set(["machine", "store", "backup", "logs"]);
+const ADMIN_FAMILIES = new Set(["home", "machine", "store", "backup", "logs"]);
 
 /** Families that are no MCP tool in any profile. */
 const NO_TOOL_FAMILIES = new Set(["doctor"]);
 
 /** Why a family's calls sit where they do; one line per family, in the doc. */
 const WHY = {
+  home: "set the home up and read what this build would use with it; administration",
   project: "read a project's record or its entry counts, or export one (work); importing and removing a project are administration",
   branch: "work on Branches: list, read, fork, merge, publish and diff",
   commit: "read a Branch's Commit history",

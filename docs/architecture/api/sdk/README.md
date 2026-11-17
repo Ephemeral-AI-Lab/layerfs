@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Every call a program can make: **80 calls in 11 families**, the same names and arguments in JavaScript, Python and the `layerfs` command, one page per family.
+Every call a program can make: **82 calls in 12 families**, the same names and arguments in JavaScript, Python and the `layerfs` command, one page per family.
 
 | | |
 | --- | --- |
@@ -13,7 +13,7 @@ Every call a program can make: **80 calls in 11 families**, the same names and a
 | Used by | [Front ends](../front-ends/README.md) |
 | Flows | [A call, end to end](../../flows/call.md) |
 
-The count is `layerfs_api::calls()`: eleven `Family` entries in
+The count is `layerfs_api::calls()`: twelve `Family` entries in
 [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families`, each
 listing its calls in its `mod.rs`. The guard
 [`inventory.mjs`](../../../../api/node/test/branch-file/inventory.mjs) checks
@@ -50,6 +50,7 @@ built table.
 
 | Family | Calls, in help order | Runs by default | Source |
 | --- | --- | --- | --- |
+| [`home`](home.md) | [`init`](home.md#homeinit), [`get`](home.md#homeget) | the caller's process; `get` reads files only and never opens the home | [`home/`](../../../../api/crates/layerfs-api/src/home) |
 | [`project`](project.md) | [`init`](project.md#projectinit), [`list`](project.md#projectlist), [`get`](project.md#projectget), [`stats`](project.md#projectstats), [`export`](project.md#projectexport), [`remove`](project.md#projectremove) | `list`, `get`: home records; the rest where the Store's calls run | [`project/`](../../../../api/crates/layerfs-api/src/project) |
 | [`branch`](branch.md) | [`list`](branch.md#branchlist), [`get`](branch.md#branchget), [`commits`](branch.md#branchcommits), [`get_commit`](branch.md#branchget_commit), [`fork`](branch.md#branchfork), [`merge`](branch.md#branchmerge), [`publish`](branch.md#branchpublish), [`diff`](branch.md#branchdiff) | where the Store's calls run | [`branch/`](../../../../api/crates/layerfs-api/src/branch) |
 | [`commit`](commit.md) | [`list`](commit.md#commitlist), [`get`](commit.md#commitget), [`diff`](commit.md#commitdiff) | where the Store's calls run | [`commit/`](../../../../api/crates/layerfs-api/src/commit) |

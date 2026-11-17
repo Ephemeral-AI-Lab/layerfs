@@ -335,12 +335,22 @@ class Calls(unittest.TestCase):
         self.assertEqual(lfs.logs.reset(), {"kind": "Reset", "removed": 3})
         shutil.rmtree(home)
 
+    def test_client_home_is_the_home_family_and_the_client_calls_its_home(self):
+        parent = temp("home")
+        home = os.path.join(parent, "made")
+        lfs = layerfs.client(home=home)
+        self.assertEqual(lfs.home.get()["home"]["state"], "missing")
+        made = lfs.home.init()
+        self.assertEqual((made["home"], made["created"]), (home, True))
+        self.assertEqual(lfs.home.get()["home"]["state"], "current")
+        shutil.rmtree(parent)
+
     def test_the_table(self):
         self.assertEqual(
             layerfs.FAMILIES,
-            ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs", "doctor"],
+            ["home", "project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs", "doctor"],
         )
-        self.assertEqual(len(layerfs.TABLE), 80)
+        self.assertEqual(len(layerfs.TABLE), 82)
         for spec in layerfs.TABLE:
             self.assertTrue(callable(getattr(getattr(layerfs, spec["family"]), spec["call"])))
         # the options the Publish change added are in the table the Python

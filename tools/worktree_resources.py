@@ -263,6 +263,7 @@ def inputs(record):
     encoded = json.dumps(result, sort_keys=True).encode()
     return {
         "head": git(root, "rev-parse", "HEAD").decode().strip(),
+        "dirty": bool(git(root, "status", "--porcelain", "--", *selected)),
         "files": result,
         "sha256": hashlib.sha256(encoded).hexdigest(),
     }

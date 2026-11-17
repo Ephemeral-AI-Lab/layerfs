@@ -70,6 +70,10 @@ pub struct Call {
     /// polls (`sandbox.files`, `machine.files`), which would fill the log and writes
     /// nothing else either (layerfs-project#178, #179 B.1).
     pub quiet: bool,
+    /// Whether the dispatcher opens (creates or converts) the home before
+    /// it runs: every call but `home.init`, which opens it itself to say
+    /// what it did, and `home.get`, which reads a home without changing it.
+    pub opens: bool,
 }
 
 impl Call {
@@ -82,6 +86,14 @@ impl Call {
     pub const fn quiet(self) -> Self {
         Call {
             quiet: true,
+            ..self
+        }
+    }
+
+    /// This call, run without the dispatcher opening the home first.
+    pub const fn unopened(self) -> Self {
+        Call {
+            opens: false,
             ..self
         }
     }
@@ -185,6 +197,7 @@ pub const fn call(
         help,
         run,
         quiet: false,
+        opens: true,
     }
 }
 

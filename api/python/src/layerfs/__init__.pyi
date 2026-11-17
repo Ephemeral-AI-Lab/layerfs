@@ -7,6 +7,7 @@ from ._client import (
     TABLE as TABLE,
     Client as Client,
     client as client,
+    HomeFamily,
     ProjectFamily,
     BranchFamily,
     CommitFamily,
@@ -40,6 +41,7 @@ doctor: _Doctor
 def close() -> int:
     """Closes every Store this process holds open with no call running."""
 
+home: HomeFamily
 project: ProjectFamily
 branch: BranchFamily
 commit: CommitFamily
@@ -51,4 +53,4 @@ store: StoreFamily
 backup: BackupFamily
 logs: LogsFamily
 
-__all__ = ['FAMILIES', 'TABLE', 'Client', 'LayerFSError', 'backup', 'branch', 'client', 'close', 'commit', 'doctor', 'file', 'logs', 'machine', 'project', 'sandbox', 'store', 'workspace']
+__all__ = ['FAMILIES', 'TABLE', 'Client', 'LayerFSError', 'backup', 'branch', 'client', 'close', 'commit', 'doctor', 'file', 'home', 'logs', 'machine', 'project', 'sandbox', 'store', 'workspace']

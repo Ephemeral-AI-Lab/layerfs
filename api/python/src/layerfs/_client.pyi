@@ -8,6 +8,12 @@ from ._values import JSON, Content, Output, Progress, Result, Scope, Size
 TABLE: list[dict[str, object]]
 FAMILIES: list[str]
 
+class HomeFamily:
+    def init(self, *, log_tag: str | None = None) -> Result:
+        """create this home, or convert an older one; a current home is left as it is"""
+    def get(self, *, log_tag: str | None = None) -> Result:
+        """the home's state, and the Linux bundle and daemon this build would use; changes nothing"""
+
 class ProjectFamily:
     def init(
         self,
@@ -463,6 +469,8 @@ class MachineFamily:
         """a machine's live state, free disk and tool version"""
     def stats(self, machine: str, *, log_tag: str | None = None) -> Result:
         """a machine's observed processors, memory and data disk, its Stores' sizes and live Sandboxes"""
+    def space(self, machine: str, *, log_tag: str | None = None) -> Result:
+        """where a machine's data disk goes: its Stores, Sandboxes, images and logs, and what is not LayerFS's"""
     def files(
         self,
         machine: str,
@@ -645,8 +653,8 @@ class DoctorFamily:
         """remove one leftover `layerfs doctor` listed, under its guard"""
 
 class Client:
-    home: str | None
     scope: Scope | Mapping[str, str | None] | None
+    home: HomeFamily
     project: ProjectFamily
     branch: BranchFamily
     commit: CommitFamily
