@@ -265,6 +265,73 @@ fn insert_intent(schema: &Schema, op_id: [u8; 16], generation: i64, phase: &str)
         .unwrap();
 }
 
+/// The `(owner_runtime, owner_boot)` tokens a process records: its start
+/// time and this boot's id, plus this PID namespace. `pid` may be a process
+/// that never existed, which is how a provably dead owner is written.
+fn owner_tokens(pid: u32) -> (String, String) {
+    let start = std::fs::read_to_string(format!("/proc/{pid}/stat"))
+        .ok()
+        .and_then(|text| {
+            let rest = text.rsplit_once(')')?.1.trim_start();
+            rest.split_whitespace().nth(19)?.parse::<u64>().ok()
+        })
+        .unwrap_or(0);
+    let namespace = std::fs::read_link("/proc/self/ns/pid")
+        .ok()
+        .and_then(|target| {
+            let text = target.to_str()?;
+            text.strip_prefix("pid:[")?
+                .strip_suffix(']')?
+                .parse::<u64>()
+                .ok()
+        })
+        .map(|namespace| format!("@ns:{namespace}"))
+        .unwrap_or_default();
+    let boot = std::fs::read_to_string("/proc/sys/kernel/random/boot_id")
+        .ok()
+        .and_then(|text| u128::from_str_radix(text.trim().replace('-', "").as_str(), 16).ok())
+        .unwrap_or(0);
+    (
+        format!("pid:{pid}@{start}{namespace}"),
+        format!("boot:{boot:032x}:f50r6"),
+    )
+}
+
+/// Inserts only the compaction `gc_intent`: the Phase M window before
+/// `persist_mark` writes `gc_op`, with the recorded state and owner tokens.
+fn insert_intent_only(
+    schema: &Schema,
+    op_id: [u8; 16],
+    phase: &str,
+    state: &str,
+    owner_runtime: &str,
+    owner_boot: &str,
+) {
+    let s = &schema.name;
+    let artifact = format!("lfs_gc_{}", hex(&op_id));
+    let uncertain = state == "uncertain";
+    schema
+        .admin()
+        .execute(
+            &format!(
+                "INSERT INTO {s}.gc_intent \
+                 (op_id,kind,scope_kind,owner_runtime,owner_boot,state,uncertain,phase,\
+                  generation,artifact,updated_ms) \
+                 VALUES ($1,'compaction','store',$2,$3,$4,$5,$6,7,$7,1700000000000)"
+            ),
+            &[
+                &op_id.to_vec(),
+                &owner_runtime,
+                &owner_boot,
+                &state,
+                &uncertain,
+                &phase,
+                &artifact,
+            ],
+        )
+        .unwrap();
+}
+
 fn owner_backend(owner: &mut postgres::Client) -> (i32, String) {
     let row = owner
         .query_one(
@@ -451,6 +518,86 @@ fn a_phase_m_run_without_a_gc_op_row_is_busy_marking() {
             .is_none(),
         "a settled run projects no op"
     );
+}
+
+/// F50R6-1 (§11): an intent-only Phase-M run whose recorded process owner is
+/// provably gone cannot still be in flight. `alive` is always false without a
+/// `gc_op` row, so `busy` here would have ignored the intent's owner tokens.
+#[test]
+fn a_phase_m_intent_only_run_with_a_dead_owner_is_unresolved() {
+    let Some(url) = support::pg::url() else {
+        return;
+    };
+    if !cfg!(target_os = "linux") {
+        eprintln!("NOT_RUN: /proc owner evidence needs Linux");
+        return;
+    }
+    let schema = Schema::new(url.clone(), "deadm");
+    let _handles = schema.create(&binding("deadm"), [71; 32]);
+
+    // A pid no process can hold, on this boot and in this PID namespace, is
+    // provably gone: a shared Store must not treat it as conservatively live.
+    let (runtime, boot) = owner_tokens(999_999_999);
+    let op_id = [0xd1u8; 16];
+    insert_intent_only(&schema, op_id, "mark", "live", &runtime, &boot);
+
+    let recorded = postgresql_compact_status(&url, &schema.name)
+        .unwrap()
+        .expect("the registered Phase M intent is not idle");
+    assert!(
+        recorded.intent_only,
+        "no gc_op row names a backend owner yet"
+    );
+    assert!(
+        !recorded.alive,
+        "an intent-only projection records no backend"
+    );
+    assert_eq!(recorded.intent_state.as_deref(), Some("live"));
+    assert!(recorded.uncertain);
+    let projected = recorded.status();
+    assert_eq!(
+        projected.state, "unresolved",
+        "a provably dead process owner is not in flight"
+    );
+    assert_eq!(projected.phase, "mark");
+    assert_eq!(projected.id, build_op(0xd1));
+}
+
+/// F50R6-1 (§11): an `uncertain` intent records that the outcome is unknown;
+/// it is not a witness that the run continues. Even with a live owner and no
+/// `gc_op` row, the projection is `unresolved`, not `busy`.
+#[test]
+fn a_phase_m_intent_only_run_marked_uncertain_is_unresolved() {
+    let Some(url) = support::pg::url() else {
+        return;
+    };
+    if !cfg!(target_os = "linux") {
+        eprintln!("NOT_RUN: /proc owner evidence needs Linux");
+        return;
+    }
+    let schema = Schema::new(url.clone(), "uncm");
+    let _handles = schema.create(&binding("uncm"), [71; 32]);
+
+    let (runtime, boot) = owner_tokens(std::process::id());
+    let op_id = [0xd2u8; 16];
+    insert_intent_only(&schema, op_id, "mark", "uncertain", &runtime, &boot);
+
+    let recorded = postgresql_compact_status(&url, &schema.name)
+        .unwrap()
+        .expect("the registered Phase M intent is not idle");
+    assert!(
+        recorded.intent_only,
+        "no gc_op row names a backend owner yet"
+    );
+    assert_eq!(recorded.intent_state.as_deref(), Some("uncertain"));
+    assert!(recorded.uncertain);
+    let projected = recorded.status();
+    assert_eq!(
+        projected.state, "unresolved",
+        "an uncertain intent says the outcome is unknown, not in flight"
+    );
+    assert_eq!(projected.phase, "mark");
+    assert_eq!(projected.id, build_op(0xd2));
 }
 
 #[test]

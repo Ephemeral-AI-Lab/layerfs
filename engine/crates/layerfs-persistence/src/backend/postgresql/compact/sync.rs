@@ -69,21 +69,30 @@ pub(crate) fn standby_requirement(names: &str) -> Option<StandbyRequirement> {
     if names.is_empty() {
         return None;
     }
+    // `FIRST`/`ANY` is a keyword only as a whole token: the character after
+    // it must be whitespace or `(`. A name such as `first_standby` or
+    // `anybody` is one legacy standby name, not a keyword and a remainder.
+    let boundary = |after: &str| match after.as_bytes().first() {
+        Some(byte) => byte.is_ascii_whitespace() || *byte == b'(',
+        None => true,
+    };
     let lower = names.to_ascii_lowercase();
-    let (first, rest) = if lower.starts_with("first") {
-        (true, names.get(5..).unwrap_or("").trim())
-    } else if lower.starts_with("any") {
-        (false, names.get(3..).unwrap_or("").trim())
+    let (first, rest) = if lower.starts_with("first") && boundary(&names["first".len()..]) {
+        (true, names["first".len()..].trim())
+    } else if lower.starts_with("any") && boundary(&names["any".len()..]) {
+        (false, names["any".len()..].trim())
     } else {
         (true, names)
     };
-    // `FIRST n (list)` / `ANY n (list)`: a leading count, then the list.
+    // `FIRST n (list)` / `ANY n (list)`, with PostgreSQL's token spacing: the
+    // list's `(` may follow the count with no whitespace (`FIRST 2(s1,s2)`).
     // A form with no leading count is PostgreSQL's legacy `standby_name
     // [, ...]`, which is `FIRST 1`, not one synchronous standby per name.
-    let (explicit_count, count, list) = match rest.split_once(char::is_whitespace) {
-        Some((head, tail)) if head.bytes().all(|byte| byte.is_ascii_digit()) => {
-            match head.parse::<usize>() {
-                Ok(count) => (true, count, tail.trim()),
+    let rest = rest.trim();
+    let (explicit_count, count, list) = match rest.find(|c: char| !c.is_ascii_digit()) {
+        Some(at) if at > 0 && rest[at..].trim_start().starts_with('(') => {
+            match rest[..at].parse::<usize>() {
+                Ok(count) => (true, count, rest[at..].trim()),
                 Err(_) => return None,
             }
         }

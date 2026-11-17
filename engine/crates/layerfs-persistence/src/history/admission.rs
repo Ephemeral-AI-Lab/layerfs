@@ -279,10 +279,24 @@ impl OwnerView {
     ///   its owner releases it or an operator settles it with
     ///   `gc_mark_uncertain` and `gc_release`.
     fn dead(&self, intent: &GcIntent, shared_store: bool) -> bool {
-        let (Some(runtime), Some(boot)) = (
+        self.owner_dead(
             intent.owner_runtime.as_deref(),
             intent.owner_boot.as_deref(),
-        ) else {
+            shared_store,
+        )
+    }
+
+    /// True only when this process can prove the owner named by the recorded
+    /// `runtime` and `boot` tokens is gone. `dead` applies the same rule to an
+    /// intent; a shared Store's conservative treatment of another boot or
+    /// PID namespace is described there.
+    pub(crate) fn owner_dead(
+        &self,
+        runtime: Option<&str>,
+        boot: Option<&str>,
+        shared_store: bool,
+    ) -> bool {
+        let (Some(runtime), Some(boot)) = (runtime, boot) else {
             return false;
         };
         let Some((pid, start, Some(namespace))) = parse_runtime(runtime) else {
