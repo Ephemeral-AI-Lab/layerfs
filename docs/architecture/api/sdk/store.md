@@ -399,8 +399,15 @@ run and no automatic collection. It writes its operation intent before the
 first checkpoint, verifies the rebuilt Store, and installs it by rename; a
 definite failure before the rename keeps the old Store and the generation `G`,
 while an installed-but-uncertain reply stays at `G + 1` and is reported, never
-deleted. A Store with less than 10% wholly dead packs takes the `none` path:
-it marks only and writes nothing. `dead_bytes_refined` equals
+deleted. A Store with less than 10% dead bytes takes the `none` path:
+it marks only and writes nothing. On PostgreSQL the dead bytes are those of
+wholly dead packs and a retained pack is copied whole. On SQLite they also
+include the dead records the mark found inside retained packs, and the rebuild
+writes each such pack again without them: the pack keeps its id and gets a new
+digest and length, and `kept_waste.dead_in_retained_packs_bytes` reports only
+what the rebuild still kept (a prototype awaiting an owner decision,
+[`gc-42-decisions.md`](../../../../core/docs/issues/project-41/gc-42-decisions.md)
+D6). `dead_bytes_refined` equals
 `dead_bytes_bound` on every path, not only on `none`: the mark resolves the
 whole retained set and no second payload sweep runs (documented amendment
 #42 A10).

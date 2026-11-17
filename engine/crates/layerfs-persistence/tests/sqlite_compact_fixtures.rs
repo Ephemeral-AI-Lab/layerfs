@@ -1383,8 +1383,8 @@ fn rebuild_case() -> Json {
     assert!(receipt.peak_temp_bytes > 0);
     assert!(receipt.estimate);
     assert_eq!(
-        receipt.kept_waste.dead_in_retained_packs_bytes,
-        ids.shared_dead_group
+        receipt.kept_waste.dead_in_retained_packs_bytes, 0,
+        "the rebuild writes the shared pack again without its unreached group"
     );
     assert_eq!(receipt.kept_waste.inode_blocks_bytes, inode_blocks);
     assert_eq!(receipt.kept_waste.delta_base_references, expected_bases);
@@ -1435,11 +1435,16 @@ fn rebuild_case() -> Json {
         assert_eq!(pack_row(&path, *pack), 1, "live pack {pack} stays");
     }
 
-    // The retained pack keeps the unreached group: repacking is out of 2.0.
+    // The retained pack is written again without the unreached group: its
+    // body and its whole-file directory entry are gone, and the pack keeps
+    // its id.
     assert_eq!(pack_of(&path, ids.live_group), Some(ids.shared_pack));
     assert_eq!(object_count(&path, ids.live_group), 1);
     assert_eq!(object_count(&path, ids.dead_group), 0);
-    assert_eq!(pack_length(&path, ids.shared_pack), ids.shared_pack_length);
+    assert_eq!(
+        pack_length(&path, ids.shared_pack),
+        ids.shared_pack_length - ids.shared_dead_group - layout::WHOLE_FILE_ENTRY_LEN as u64
+    );
     // AC-17: a copied pack keeps its identity.
     for (id, pack) in &ids.delta_chain {
         assert_eq!(

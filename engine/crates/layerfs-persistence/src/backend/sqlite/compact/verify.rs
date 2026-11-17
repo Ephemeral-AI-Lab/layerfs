@@ -250,6 +250,7 @@ pub(crate) fn verify(
     if counted(scanned.packs)? != mark.objects().packs().len() as u64 {
         return Err(HistoryError::Integrity("staged Store pack count"));
     }
+    super::repack::verify(&connection, &built.repacked)?;
     if counted(scanned.history)? != mark.history().len() as u64 {
         return Err(HistoryError::Integrity("staged Store history count"));
     }

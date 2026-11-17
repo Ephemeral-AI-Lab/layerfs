@@ -24,14 +24,16 @@
 //!
 //! The module is split by phase: [`types`] (the §7/§11 shapes), [`op`] (the
 //! `.compact-op` sidecar), [`build`] with [`space`] (the fresh file's size
-//! during the load) and [`window`] (the pack copy's windows and the sealed
-//! file's read-ahead), [`verify`], [`install`], [`receipt`] and [`run`] (the
+//! during the load), [`window`] (the pack copy's windows and the sealed
+//! file's read-ahead) and [`repack`] (retained packs written again without
+//! their dead records), [`verify`], [`install`], [`receipt`] and [`run`] (the
 //! orchestration on `SqliteHandles`).
 
 mod build;
 mod install;
 mod op;
 mod receipt;
+mod repack;
 mod run;
 mod space;
 mod types;

@@ -323,8 +323,9 @@ frozen whole-lane exclusion; its measurements live under
 
 ## D. SQLite implementation notes: four deviations and the D2 build decision
 
-This section keeps five records. D1, D3, D4 and D5 are deviations from the
-frozen text that the shipped code still carries. D2 is the build decision that
+This section keeps six records. D1, D3, D4 and D5 are deviations from the
+frozen text that the shipped code still carries; D6 is a prototype that
+awaits an owner decision. D2 is the build decision that
 replaced the whole-Store copy: the fresh-copy rebuild follows S5's "fresh
 Store" sentence but deviates from §7 step 4's payload sweep and rollback
 journal and from §11's peak-temp line, and the earlier `VACUUM INTO` + delete +
@@ -447,6 +448,63 @@ measured implementation of this branch.
   refused before any effect. `api/crates/layerfs-api/tests/store_family.rs`
   `compact_of_a_remote_sqlite_store_is_a_documented_local_only_refusal` pins
   it.
+
+### D6. S5/§2/§3/§6.4: the SQLite rebuild writes partly dead packs again, and the 10% counts their dead records
+
+- **Status:** prototype on branch `claude/gc-opt-repack` (2026-11-18), not a
+  frozen-text change. It needs an owner decision before it is contract.
+- **Frozen:** S5 "The unit that frees bytes is the pack"; §2 lists
+  "repacking partly dead packs (reported, not performed)" as out of the
+  release; §3 takes the numerator of the 10% test over wholly dead packs only;
+  §7 step 4 copies a retained pack whole.
+- **Implemented (SQLite only):** the mark names every retained pack in which
+  it found a record no reached object owns (`KeptObjects::partly_dead_packs`).
+  The rebuild takes those packs out of the whole-pack copy and writes each one
+  again from the records the visited set keeps, which includes records kept
+  only as delta bases. The bytes are built by `layerfs-storage`
+  (`pack::repack::retain_records`): a group that keeps every record is
+  carried over as stored, a group that keeps none is left out, a group that
+  keeps some is framed again, and a compressed ordinary group is decoded and
+  compressed again. The pack keeps its `pack_id`; it gets a new SHA-256 and
+  length; the kept objects' `object_location` rows move to the new group and
+  record numbers. Singleton packs are never rewritten. Everything is written
+  to `<store>.compact`, so the old Store is unchanged until the rename, as
+  before.
+- **Threshold:** `rebuild iff total > 0 AND (dead + deadInRetained) * 10 >=
+  total`, where `dead` is the bytes of wholly dead packs and `deadInRetained`
+  is the mark's `keptWaste.deadInRetainedPacksBytes`. The 10% value and the
+  denominator are unchanged. A compressed group that mixes live and dead
+  records still counts 0 here (its bytes cannot be attributed without
+  decoding it), although the rebuild does rewrite it.
+- **Report:** `deadBytesBound` and `deadBytesRefined` stay the bytes of wholly
+  dead packs. After a rebuild `keptWaste.deadInRetainedPacksBytes` is the
+  mark's value minus the share of the packs written again (0 when all were).
+  A rebuild chosen only by in-pack dead bytes reports `deadBytesBound = 0`
+  with `zeroReason: "no-waste"` and a non-zero `physicalShrink`; a field for
+  the in-pack bytes freed is not added here.
+- **Verification (§7 step 6):** besides the existing counts, each rewritten
+  pack's row must carry the digest and length the build computed, and its
+  locators must name each of its records exactly once. The rebuilt bytes are
+  checked when they are built: the pack must parse and validate like any
+  stored pack and every kept record must be byte-identical to its source,
+  whose own SHA-256 is checked first. Payload is not read back from the
+  staged file; the full doctor still owns that.
+- **Not changed:** PostgreSQL (it still copies packs whole and decides on
+  wholly dead packs only), `remove_file` (visibility-only, §6.2), the
+  `inode_value_block` rows (#42 item 37) and delta-base-only records, which
+  stay because a live record needs them.
+- **Measured (one sample each, macOS host, load about 5):** on the scenario
+  matrix the nine rows with dead records in retained packs end within eight
+  4 KiB pages of their control Store's used pages (for example S8c 1,990,656
+  → 495,616 bytes, control 479,232; S9a 2,490,368 → 1,421,312, control
+  1,404,928; S8e 573,440 → 372,736, control 339,968), and four of them
+  previously took `none`. Their pack bytes end within 500 bytes of control;
+  the rest is `inode_value_block` rows of the removed history and page
+  rounding over more, smaller packs. A 1.16 GB Store with half of every pack dead
+  rebuilds to 580,763,648 bytes in 2.05 s (build 1.68 s); copying the same
+  packs whole takes 1.91 s (build 1.52 s) and frees 0.9 MB.
+- **Decision requested:** accept repacking and the widened numerator for
+  SQLite in 2.0, or keep the frozen pack-as-unit rebuild.
 
 ## G. Deferred design decision (1)
 

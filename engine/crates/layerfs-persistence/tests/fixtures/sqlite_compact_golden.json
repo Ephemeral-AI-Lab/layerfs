@@ -357,7 +357,7 @@
       "generationAfter": 8,
       "generationBefore": 7,
       "keptWaste": {
-        "deadInRetainedPacksBytes": 265,
+        "deadInRetainedPacksBytes": 0,
         "deltaBases": {
           "bytes": 571,
           "references": [
@@ -382,7 +382,7 @@
       "canonical": 134988,
       "logical": 1090,
       "metadata": 2024,
-      "stored": 134670
+      "stored": 134401
     },
     "totalsBefore": {
       "canonical": 317453,

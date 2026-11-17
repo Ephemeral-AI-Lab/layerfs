@@ -13,6 +13,7 @@ use super::op::hex;
 use super::op::stop_at;
 use super::op::visited_path;
 use super::op::RunOp;
+use super::repack::Repacked;
 use super::space;
 use super::types::db_error;
 use super::types::io_error;
@@ -107,6 +108,8 @@ pub(crate) struct Built {
     pub(crate) canonical: u64,
     pub(crate) stored: u64,
     pub(crate) metadata: u64,
+    /// The retained packs this build wrote again without their dead records.
+    pub(crate) repacked: Repacked,
 }
 
 impl Built {
@@ -143,6 +146,8 @@ pub(crate) struct BuildInput<'a> {
     pub(crate) lengths: &'a BTreeMap<i64, u64>,
     /// The packs the mark retains, ascending.
     pub(crate) retained: &'a [i64],
+    /// The mark's retained packs that hold dead records, for [`super::repack`].
+    pub(crate) partly_dead: &'a [(i64, u64)],
 }
 
 /// How one table's rows enter the fresh file.
@@ -166,7 +171,9 @@ enum Copy {
 /// admission intent, so the installed Store carries the row the settle clears.
 fn copy_rule(table: &str) -> Copy {
     match table {
-        // A pack is one unit: a pack with any live object is copied whole.
+        // A pack with any live object is copied whole, unless `repack::plan`
+        // took it out of `live_pack` to write it again without its dead
+        // records.
         "pack" | "pack_unit" => Copy::Where(RETAINED_PACK),
         "object_location" | "content_signature" => {
             Copy::Where("object_id IN (SELECT object_id FROM scratch.visited)")
@@ -333,7 +340,8 @@ fn copy_rows(
     target_tables: &BTreeSet<String>,
     plan: &[Window],
     sealed: &mut ReadAhead,
-) -> HistoryResult<()> {
+    partly_dead: &[(i64, u64)],
+) -> HistoryResult<Repacked> {
     // The pack payload is `pack.body` in a Monolithic Store and the
     // `pack_unit` rows otherwise; that table is copied window by window.
     let payload = if target_tables.contains("pack_unit") {
@@ -344,7 +352,10 @@ fn copy_rows(
     connection
         .execute_batch("BEGIN IMMEDIATE")
         .map_err(db_error)?;
-    let copied = (|| -> HistoryResult<()> {
+    let copied = (|| -> HistoryResult<Repacked> {
+        // Packs that hold dead records leave the whole-pack copy here and are
+        // written again, without those records, once the tables are copied.
+        let repack = super::repack::plan(connection, partly_dead)?;
         // §7 step 4: the totals trigger invariant holds before the copy. The
         // rewrite of `store_totals` below trusts it.
         let before: (i64, i64) = connection
@@ -410,6 +421,8 @@ SELECT name,seq FROM src.sqlite_sequence",
                     .map_err(db_error)?;
             }
         }
+        let repacked =
+            super::repack::apply(connection, &repack, target_tables.contains("pack_unit"))?;
         // §7 step 4: `store_totals` is a whole row, so the `init_*` columns
         // keep the source values; only the four derived sums are rewritten.
         connection
@@ -423,10 +436,13 @@ COALESCE(SUM(CASE WHEN domain=0 THEN length ELSE 0 END),0) FROM main.pack) WHERE
 UPDATE main.history_meta SET catalog_incarnation={generation} WHERE id=1;"
             ))
             .map_err(db_error)?;
-        Ok(())
+        Ok(repacked)
     })();
     match copied {
-        Ok(()) => connection.execute_batch("COMMIT").map_err(db_error),
+        Ok(repacked) => {
+            connection.execute_batch("COMMIT").map_err(db_error)?;
+            Ok(repacked)
+        }
         Err(error) => {
             let _ = connection.execute_batch("ROLLBACK");
             Err(error)
@@ -478,6 +494,7 @@ pub(crate) fn build(
         payload_bytes,
         lengths,
         retained,
+        partly_dead,
     } = input;
     let store = &facts.path;
     let target = compact_path(store);
@@ -573,13 +590,14 @@ PRAGMA user_version={user_version};PRAGMA application_id={application_id};"
     let target_tables = main_tables(&connection)?;
     let plan = windows(lengths, retained, facts.bytes)?;
     let mut sealed = ReadAhead::open(store)?;
-    copy_rows(
+    let repacked = copy_rows(
         &connection,
         op,
         tuple.generation + 1,
         &target_tables,
         &plan,
         &mut sealed,
+        partly_dead,
     )?;
     drop(sealed);
 
@@ -684,5 +702,6 @@ WHERE sql IS NOT NULL AND substr(name,1,7)!='sqlite_' ORDER BY type,name",
         canonical: u64::try_from(totals.1).unwrap_or(0),
         stored: u64::try_from(totals.2).unwrap_or(0),
         metadata: u64::try_from(totals.3).unwrap_or(0),
+        repacked,
     })
 }

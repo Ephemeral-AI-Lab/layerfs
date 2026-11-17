@@ -201,7 +201,12 @@ impl SqliteHandles {
             let total = lengths.values().copied().fold(0u64, u64::saturating_add);
             let decide = |mark: &MarkResult| -> HistoryResult<bool> {
                 let live_stored = live_stored_bytes(&lengths, mark)?;
-                let dead = total.saturating_sub(live_stored);
+                // A rebuild frees the wholly dead packs and, since it writes
+                // partly dead packs again, the dead records the mark found
+                // inside retained ones: both count towards the 10%.
+                let dead = total
+                    .saturating_sub(live_stored)
+                    .saturating_add(mark.objects().waste().dead_in_retained_packs_bytes());
                 Ok(total > 0 && dead.saturating_mul(10) >= total)
             };
             // §5.1/§6.3/§8: the registration, the §6.1 closure and the §6.2
@@ -236,7 +241,7 @@ impl SqliteHandles {
                 }
             };
             let dead = total.saturating_sub(live_stored);
-            let kept_waste = CompactKeptWaste::from_waste(mark.objects().waste());
+            let mut kept_waste = CompactKeptWaste::from_waste(mark.objects().waste());
             let history_rows = u64::try_from(tuple.history_rows).unwrap_or(0);
 
             if !rebuild {
@@ -379,6 +384,7 @@ impl SqliteHandles {
                     payload_bytes: live_stored,
                     lengths: &lengths,
                     retained: mark.objects().packs(),
+                    partly_dead: mark.objects().partly_dead_packs(),
                 },
                 capacity,
                 request,
@@ -393,6 +399,11 @@ impl SqliteHandles {
                     return Err(error);
                 }
             };
+            // §11 `keptWaste`: the dead records of the packs this build wrote
+            // again are gone from the new Store, so they are no longer kept.
+            kept_waste.dead_in_retained_packs_bytes = kept_waste
+                .dead_in_retained_packs_bytes
+                .saturating_sub(built.repacked.marked_dead);
             // §9/§11: record the installed outcome's totals now that the build
             // produced them, so a crash after the rename still lets the next
             // call answer the original report instead of re-deciding.

@@ -5,6 +5,7 @@
 pub mod assemble;
 pub mod audit;
 pub mod layout;
+pub mod repack;
 
 pub use assemble::{
     assemble, assemble_consuming, body_bytes, build_group, control_area, directory_entries,

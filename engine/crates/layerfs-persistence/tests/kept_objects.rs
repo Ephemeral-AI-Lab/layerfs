@@ -308,12 +308,11 @@ fn a_dead_record_in_a_retained_raw_group_is_exact_kept_waste() {
     );
 }
 
-/// A rebuild copies a retained pack whole but keeps `object_location` only for
-/// the reached records. The next mark must still attribute the dead record in
-/// the retained Raw group from the pack's own frames, not from a row a rebuild
-/// did not carry.
+/// A rebuild writes a retained pack again without the records nothing
+/// reaches. The mark before it attributes the dead record in the retained Raw
+/// group and names the pack; the mark after it finds no dead record there.
 #[test]
-fn a_dead_record_in_a_retained_raw_group_survives_a_rebuild() {
+fn a_dead_record_in_a_retained_raw_group_is_dropped_by_a_rebuild() {
     let f = Fixture::new();
     let live = FinalizedObject::new(
         ObjectRole::WholeFile,
@@ -345,6 +344,11 @@ fn a_dead_record_in_a_retained_raw_group_survives_a_rebuild() {
         expected,
         "the dead record is kept waste before the rebuild"
     );
+    assert_eq!(
+        before.objects().partly_dead_packs(),
+        &[(pack, expected)],
+        "the mark names the pack that holds the dead record"
+    );
 
     let store = f.temp.join("store.sqlite");
     let receipt = f.handles.compact(&request(0x91)).unwrap();
@@ -352,10 +356,15 @@ fn a_dead_record_in_a_retained_raw_group_survives_a_rebuild() {
     let reopened = reopen(&store);
     let after = reopened.history.mark().unwrap();
     assert_eq!(
-        after.objects().waste().dead_in_retained_packs_bytes(),
-        expected,
-        "the rebuilt Store no longer names the dead record, but its frames still count"
+        receipt.kept_waste.dead_in_retained_packs_bytes, 0,
+        "the report no longer keeps the dead record"
     );
+    assert_eq!(
+        after.objects().waste().dead_in_retained_packs_bytes(),
+        0,
+        "the rebuilt pack holds only the reached record"
+    );
+    assert!(after.objects().partly_dead_packs().is_empty());
     assert!(
         after.objects().contains(live.id()),
         "the reached record survives the rebuild"
