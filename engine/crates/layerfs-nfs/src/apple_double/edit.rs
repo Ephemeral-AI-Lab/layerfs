@@ -335,6 +335,9 @@ impl Kernel {
     fn record_edit(&self, serial: u64, edit: &Edit<'_>) -> Result<ViewStat, Status> {
         let mut companions = self.companions();
         let tick = companions.tick();
+        // The slot held for this commit is given back whether or not the
+        // companion is still there to take it.
+        companions.unreserve(serial);
         let mut file = companions.detach(serial).ok_or(Status::Stale)?;
         record(edit, &mut file);
         file.used = tick;
@@ -342,7 +345,6 @@ impl Kernel {
         touch(&mut file.metadata);
         let stat = Companions::stat(serial, &file);
         companions.attach(serial, file);
-        companions.unreserve(serial);
         Ok(stat)
     }
     /// Spills the least recently used bodies to disk (outside the companion

@@ -295,7 +295,12 @@ impl Companions {
     /// the bound has room for one. [`Slot::Held`] means it already has one
     /// (or a reservation) and nothing was taken.
     pub(super) fn reserve(&mut self, serial: u64) -> Slot {
-        if self.slots.contains(&serial) || self.reserved.contains(&serial) {
+        // A companion another call removed takes nothing: its commit finds it
+        // gone, and a reservation left for it would shrink the bound for good.
+        if self.slots.contains(&serial)
+            || self.reserved.contains(&serial)
+            || !self.files.contains_key(&serial)
+        {
             return Slot::Held;
         }
         if self.slots.len() + self.reserved.len() >= self.held_limit {

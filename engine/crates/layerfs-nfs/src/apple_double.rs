@@ -165,7 +165,8 @@ struct Orphan {
 pub(crate) enum Slot {
     /// It took the slot, which it gives back if its commit does not land.
     Taken,
-    /// It already held a slot (or a reservation for one): nothing was taken.
+    /// It already held a slot (or a reservation for one), or the companion
+    /// is gone: nothing was taken.
     Held,
     /// The bound has none.
     Full,
@@ -642,7 +643,8 @@ impl Kernel {
         if !crate::names::apple_double(new_name) || new_name.len() > 255 {
             return Some(Err(Status::Access));
         }
-        let renamed = self.rename_companion(serial, (to, new_name.to_vec()), to_main);
+        let source = (from, name.to_vec());
+        let renamed = self.rename_companion(serial, &source, (to, new_name.to_vec()), to_main);
         trace::companion(
             "RENAME",
             to,
@@ -657,7 +659,10 @@ impl Kernel {
         );
         Some(renamed)
     }
-    /// Moves `serial`'s companion to `target`, under `to_main`'s inode.
+    /// Moves `serial`'s companion from its name `source` to `target`, under
+    /// `to_main`'s inode. Only `source` is replaced: its other names (a LINK
+    /// made them) stay, and a companion reached only through its inode keeps
+    /// every name it holds and gains `target`.
     ///
     /// The body is classified again under the destination, so a whole image
     /// renamed onto an unknown main is the client's bytes again and takes a
@@ -670,6 +675,7 @@ impl Kernel {
     fn rename_companion(
         &self,
         serial: u64,
+        source: &Named,
         target: Named,
         to_main: Option<u64>,
     ) -> Result<(), Status> {
@@ -727,7 +733,15 @@ impl Kernel {
                     replaced_path = companions.take_serial(replaced);
                 }
             }
-            file.named = target;
+            if file.named == *source {
+                file.named = target.clone();
+            } else if let Some(named) = file.also.iter_mut().find(|named| **named == *source) {
+                *named = target.clone();
+            } else if file.named != target {
+                file.also.push(target.clone());
+            }
+            file.also.retain(|named| *named != file.named);
+            file.also.dedup();
             file.inode = to_main;
             file.used = companions.tick();
             // A client may write a companion under another name first, and a

@@ -1596,6 +1596,43 @@ fn a_linked_companion_name_is_another_name_of_the_same_companion() {
 }
 
 #[test]
+fn renaming_one_linked_companion_name_moves_only_that_name() {
+    let base = temp("companion-link-rename");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    let a = c.touch(&root, b"a", 0o644).unwrap();
+    c.write(&a.handle, 0, b"the data file").unwrap();
+    let ad = c.touch(&root, b"._a", 0o644).unwrap();
+    let whole = image([0x63; 32], &[(b"user.kept", pattern(13, 80))]);
+    c.write(&ad.handle, 0, &whole).unwrap();
+    // `ln a b` with the attributes carried to the new name.
+    c.link(&a.handle, &root, b"b").unwrap();
+    c.link(&ad.handle, &root, b"._b").unwrap();
+
+    // `mv b c`: the main name, then its companion name.
+    c.rename(&root, b"b", &root, b"c").unwrap();
+    c.rename(&root, b"._b", &root, b"._c").unwrap();
+
+    // Only `._b` moved: `._a` still names the companion, `._c` is the new
+    // name, and `._b` names nothing any more.
+    assert_eq!(c.lookup(&root, b"._a").unwrap().0, ad.handle);
+    assert_eq!(c.lookup(&root, b"._c").unwrap().0, ad.handle);
+    assert_eq!(c.lookup(&root, b"._b").map(|_| ()), Err(NOENT));
+    assert_eq!(c.read_all(&ad.handle, 64 * 1024), whole);
+    assert_eq!(server.held().companions, 1);
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn the_slot_bound_holds_when_writes_claim_the_last_slot_together() {
     const WRITERS: usize = 8;
     let base = temp("slot-race");
