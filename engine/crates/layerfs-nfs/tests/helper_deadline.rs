@@ -357,7 +357,9 @@ fn timed_out_helper_when_mount_already_gone_completes_teardown() {
             },
         );
         config.helper_wait = Duration::from_millis(100);
-        config.reap_wait = Duration::ZERO;
+        // The KILL ends the helper within the window: its exit is observed,
+        // so no unmount of its own is still in progress.
+        config.reap_wait = Duration::from_secs(2);
         config.mount_table = Some(table);
         let export = Arc::new(ExportServing::start(config));
         let service = rig.service(export.clone());
@@ -381,7 +383,8 @@ fn timed_out_helper_when_mount_already_gone_completes_teardown() {
             other => panic!("{other:?}"),
         };
 
-        // Helper timed out, but mount table confirms the mount is gone: teardown completes.
+        // Helper timed out and ended, and the mount table confirms the mount
+        // is gone: teardown completes.
         let reply = service
             .execute_control(&Request::Unmount(UnmountControl {
                 token,
@@ -413,6 +416,97 @@ fn timed_out_helper_when_mount_already_gone_completes_teardown() {
         assert!(!status.is_empty());
         assert_not_zombie(pid);
 
+        drop(service);
+        drop(rig);
+        fs::remove_dir_all(base).unwrap();
+        let _ = send.send(());
+    });
+    receive
+        .recv_timeout(Duration::from_secs(10))
+        .expect("bounded test timed out");
+    worker.join().unwrap();
+}
+
+#[test]
+fn a_helper_still_running_never_proves_a_vanished_mount_gone() {
+    // A plain Linux `umount` drops the table entry before the superblock's
+    // shutdown, which flushes the client's writes through the export. While
+    // the killed helper's exit is not observed, the vanished entry is no
+    // proof: the export is kept at Detach, and Force finishes it.
+    let (send, receive) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let base = base("helper-running");
+        drop(fs::remove_dir_all(&base));
+        fs::create_dir_all(base.join("src")).unwrap();
+        fs::create_dir_all(base.join("mounts")).unwrap();
+        fs::write(base.join("src/file"), b"fixture").unwrap();
+        let table = base.join("mount.table");
+        let rig = rig::Rig::new(
+            &base.join("src"),
+            &base.join("work"),
+            Duration::from_secs(5),
+        );
+        let mut config = ExportServingConfig::new(
+            base.join("mounts"),
+            501,
+            20,
+            Mounter {
+                mount: Helper(vec![
+                    "sh".into(),
+                    "-c".into(),
+                    format!("echo '{{dir}}' > {}", table.display()),
+                ]),
+                unmount: Helper(vec![
+                    "sh".into(),
+                    "-c".into(),
+                    format!("rm -f {}; sleep 5", table.display()),
+                ]),
+                force: Helper::words("true").unwrap(),
+                flush: None,
+            },
+        );
+        config.helper_wait = Duration::from_millis(100);
+        config.reap_wait = Duration::ZERO;
+        config.mount_table = Some(table);
+        let service = rig.service(Arc::new(ExportServing::start(config)));
+        let token = match service
+            .execute_control(&Request::Mount {
+                workspace: WorkspaceId::from_authority([39; 32]).unwrap(),
+                branch: rig.branch,
+            })
+            .unwrap()
+            .reply
+        {
+            Reply::Bound { token, .. } => token,
+            other => panic!("{other:?}"),
+        };
+        service.execute_control(&Request::Attach(token)).unwrap();
+        match service
+            .execute_control(&Request::Unmount(UnmountControl {
+                token,
+                discard: true,
+            }))
+            .unwrap_err()
+        {
+            Failure::Retained(custody) => {
+                assert_eq!(custody.stage, TeardownStage::Detach);
+                assert!(!custody.detached);
+            }
+            other => panic!("expected Retained, got {other:?}"),
+        }
+        match service
+            .execute_control(&Request::ForceUnmount {
+                token,
+                relinquish_unknown: false,
+            })
+            .unwrap()
+            .reply
+        {
+            Reply::ForceUnmounted(done) => {
+                assert_eq!(done.outcome.facts.detach, DetachDisposition::Detached);
+            }
+            other => panic!("expected ForceUnmounted, got {other:?}"),
+        }
         drop(service);
         drop(rig);
         fs::remove_dir_all(base).unwrap();

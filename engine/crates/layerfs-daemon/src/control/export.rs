@@ -247,7 +247,7 @@ impl ExportServing {
             let text = point.display().to_string();
             match self.helpers.run(&self.config.mounter.force, 0, &text) {
                 Ran::Done => format!("forced off {text}"),
-                Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail) => {
+                Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail, _) => {
                     format!("left {text}: {detail}")
                 }
             }
@@ -477,7 +477,7 @@ impl Service {
         let port = server.local_addr().port();
         match serving.helpers.run(&config.mounter.mount, port, &text) {
             Ran::Done => {}
-            Ran::Interrupted(detail) => {
+            Ran::Interrupted(detail, _) => {
                 // The mount helper may have reached the kernel before its
                 // deadline. Keep the export alive and do not revoke/delete
                 // through a possibly mounted directory.
@@ -567,7 +567,7 @@ impl Service {
                     .run(helper, server.local_addr().port(), &directory)
                 {
                     Ran::Done => {}
-                    Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail) => {
+                    Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail, _) => {
                         return Err(kernel_failure(ControlCode::Failed, "commit:flush", detail))
                     }
                 }
@@ -658,9 +658,9 @@ impl Service {
                     format!("client reported the mount busy; no terminal effect: {detail}"),
                 ));
             }
-            Ran::Failed(_) | Ran::Interrupted(_)
-                if self.detached_export(&exported, helper.as_ref()) => {}
-            Ran::Failed(detail) | Ran::Interrupted(detail) => {
+            Ran::Failed(_) | Ran::Interrupted(..)
+                if self.detached_export(&exported, helper.as_ref(), &ran) => {}
+            Ran::Failed(detail) | Ran::Interrupted(detail, _) => {
                 return Err(self.keep_export(
                     token,
                     TeardownStage::Detach,
@@ -675,11 +675,15 @@ impl Service {
     }
     /// Whether a failed or timed-out helper proves the client mount is gone:
     /// Attach saw the mount listed (`tracked`), the helper cannot detach
-    /// lazily, and the host's table does not list it now. A lazy detach
-    /// (`umount -l`, the Linux force helper) removes the table entry while the
-    /// kernel still holds the superblock, so it is never proof.
-    fn detached_export(&self, exported: &Exported, helper: Option<&Helper>) -> bool {
+    /// lazily, the helper has ended, and the host's table does not list it
+    /// now. A lazy detach (`umount -l`, the Linux force helper) removes the
+    /// table entry while the kernel still holds the superblock, so it is
+    /// never proof. Neither is a plain Linux `umount` still running: it drops
+    /// the table entry before the superblock's shutdown, which flushes the
+    /// client's writes through this export ([`Ran::ended`]).
+    fn detached_export(&self, exported: &Exported, helper: Option<&Helper>, ran: &Ran) -> bool {
         !helper.is_some_and(Helper::lazy)
+            && ran.ended()
             && exported.tracked
             && (self.export.as_ref())
                 .is_some_and(|s| matches!(s.is_mounted(&exported.ready.directory), Ok(false)))
@@ -853,9 +857,9 @@ impl Service {
             };
         match ran {
             Ran::Done => {}
-            Ran::Busy(_) | Ran::Failed(_) | Ran::Interrupted(_)
-                if self.detached_export(&exported, helper.as_ref()) => {}
-            Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail) => {
+            Ran::Busy(_) | Ran::Failed(_) | Ran::Interrupted(..)
+                if self.detached_export(&exported, helper.as_ref(), &ran) => {}
+            Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail, _) => {
                 facts.detach = DetachDisposition::Failed;
                 return Err(self.keep_export(
                     token,
