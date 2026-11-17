@@ -145,9 +145,10 @@ frozen whole-lane exclusion; its measurements live under
   `physical_before BIGINT NOT NULL DEFAULT 0`,
   `physical_after BIGINT NOT NULL DEFAULT 0` and
   `peak_temp BIGINT NOT NULL DEFAULT 0`, so a resumed rebuild reports the
-  swap's measured shrink (both relation sizes sampled in the swap transaction),
-  peak temp and the mark's retained waste instead of zero placeholders; a save
-  between the swap and Phase C cannot inflate the resumed shrink. 2.0.0 is
+  swap's measured shrink (the before size sampled before the swap
+  transaction opens, the after size sampled inside it), peak temp and the
+  mark's retained waste instead of zero placeholders; a save between the swap
+  and Phase C cannot inflate the resumed shrink. 2.0.0 is
   unreleased, so the columns go into the 2.0 schema creation in place: there
   is **no additive open-time step** (`add_*`) and no compatibility arm for a
   2.0 `gc_op` created before them (the Disposable profile, §2, and item 42).

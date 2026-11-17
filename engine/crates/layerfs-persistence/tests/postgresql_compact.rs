@@ -1277,6 +1277,66 @@ fn an_exclusive_table_lock_makes_the_swap_busy() {
     );
 }
 
+/// F50R5-2 (§8 step 5): an ordinary reader's granted `AccessShareLock`
+/// conflicts with the swap's `ACCESS EXCLUSIVE` lock exactly as another
+/// writer's does. The 55P03 `Busy` must name that reader (pid, client_addr,
+/// backend_start), not report a holder-less Busy because no
+/// `AccessExclusiveLock` row exists yet.
+#[test]
+fn an_access_share_reader_makes_the_swap_busy_and_is_named() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "reader_busy");
+    schema.drop_scratch();
+    let handles = schema.create();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let _dead = whole_file(&handles, b"a pack the rebuild would collect");
+    let before = generation(&handles);
+    // An ordinary SELECT inside an open transaction holds only an
+    // AccessShareLock on the base table it reads, which is enough to block
+    // the swap's ACCESS EXCLUSIVE NOWAIT.
+    let mut reader = schema.client();
+    reader
+        .batch_execute(&format!(
+            "BEGIN; SELECT count(*) FROM {}.binding_hint_block;",
+            schema.selection.schema
+        ))
+        .unwrap();
+    let (pid, start, client_addr): (i32, String, Option<String>) = {
+        let row = reader
+            .query_one(
+                "SELECT pg_backend_pid(),backend_start::text,client_addr::text \
+                   FROM pg_stat_activity WHERE pid=pg_backend_pid()",
+                &[],
+            )
+            .unwrap();
+        (row.get(0), row.get(1), row.get(2))
+    };
+    let error = handles.compact(&request(8)).unwrap_err();
+    reader.batch_execute("ROLLBACK").unwrap();
+    let layerfs_history::HistoryError::BusyOp(state) = &error else {
+        panic!("an AccessShare reader at the swap is a typed Busy, got {error:?}");
+    };
+    assert_eq!(state.entity, "store");
+    assert_eq!(state.phase.as_deref(), Some("swap"));
+    assert_eq!(
+        state.pid,
+        Some(i64::from(pid)),
+        "the ordinary reader is named: {state:?}"
+    );
+    assert_eq!(
+        state.backend_start.as_deref(),
+        Some(start.as_str()),
+        "the holder's backend_start is reported"
+    );
+    assert_eq!(
+        state.client_addr.as_deref(),
+        client_addr.as_deref(),
+        "the holder's client_addr is reported"
+    );
+    assert_eq!(db_generation(&schema), before, "nothing was swapped");
+}
+
 // --- AC-44: a killed backend and the lost COMMIT reply ---------------------
 //
 // The failpoints above stop a live session and return `UnknownOutcome`: the

@@ -43,6 +43,19 @@ fn the_standby_predicate_waits_only_for_a_named_standby() {
     ));
 }
 
+/// F50R5-1 (§8 step 10): PostgreSQL's legacy bare `synchronous_standby_names`
+/// list is `FIRST 1 (names)`, not one synchronous standby per listed name. One
+/// streaming sync standby satisfies `s1, s2`; the second name is priority, not
+/// a second required standby.
+#[test]
+fn a_legacy_bare_standby_list_is_first_one() {
+    assert!(standby_satisfied(2, "s1, s2", &[replica("s1", "sync")]));
+    assert!(standby_satisfied(2, "s1, s2", &[replica("s2", "sync")]));
+    assert!(!standby_satisfied(2, "s1, s2", &[]));
+    assert!(standby_satisfied(2, "s1", &[replica("s1", "sync")]));
+    assert!(!standby_satisfied(2, "s1", &[]));
+}
+
 #[test]
 fn synchronous_commit_strength_is_the_spec_order() {
     assert_eq!(sync_rank("off"), 0);
