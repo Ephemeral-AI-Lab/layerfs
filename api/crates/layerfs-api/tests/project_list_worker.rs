@@ -384,3 +384,54 @@ fn a_lost_worker_answer_names_the_store_in_the_unknown_detail() {
     drop(requests);
     let _ = std::fs::remove_dir_all(home);
 }
+
+/// F43R4-1: a worker that refuses with the bare empty-map `Unknown` detail (a
+/// Store listing that could not be read) still names the Store in the
+/// `Unknown` detail, exactly as a lost answer does.
+#[test]
+fn a_worker_unknown_with_the_empty_map_detail_names_the_store() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let home = shop_on_box("fake-empty-unknown", &listener, None);
+    let _seen = fake_worker(listener, |_| {
+        SdkValue::map([(
+            "refused",
+            SdkValue::map([
+                ("code", t("Unknown")),
+                ("message", t("the Store's listing did not answer")),
+                ("detail", SdkValue::map::<0>([])),
+            ]),
+        )])
+    });
+
+    for (method, args) in [
+        ("project.get", vec![("project", t("shop/live"))]),
+        ("project.list", vec![("store", t("shop"))]),
+    ] {
+        let refused = refusal(&home, method, &args);
+        assert_eq!(refused.code, "Unknown", "{method}: {refused:?}");
+        let entity = refused.detail.get("entity").expect("entity detail");
+        assert_eq!(
+            entity.get_text("kind"),
+            Some("store"),
+            "{method}: {entity:?}"
+        );
+        assert_eq!(
+            entity.get_text("name"),
+            Some("shop"),
+            "{method}: {entity:?}"
+        );
+        assert!(
+            refused.detail.get("phase").expect("phase") == &SdkValue::Null,
+            "{method}: a listing has no phase"
+        );
+        assert!(
+            refused.detail.get("op").expect("op") == &SdkValue::Null,
+            "{method}: a listing holds no durable operation"
+        );
+    }
+
+    // The all-Stores listing omits a Store it cannot list.
+    let list = ok(&home, "project.list", &[]);
+    assert!(names(&list).is_empty(), "{list:?}");
+    let _ = std::fs::remove_dir_all(home);
+}

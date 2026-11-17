@@ -373,7 +373,11 @@ fn init_on_worker(
     let sent_ms = layerfs_home::home::now_ms();
     let added = worker.call("project.init", request, &mut |event| events.event(event));
     drop(lease);
-    let added = added.map_err(|mut refusal| {
+    let added = added.map_err(|refusal| {
+        // A lost answer is `Unknown`; name the project it may have
+        // initialized (spec §10 A6), whether the transport lost the reply or
+        // the worker reported a bare `UnknownOutcome` (F43R4-2).
+        let mut refusal = crate::unknown::named_unknown(refusal, "project", name, None);
         if refusal.code == "Unknown" {
             let left = send::left(machine, &copy.id);
             refusal.message = format!(
