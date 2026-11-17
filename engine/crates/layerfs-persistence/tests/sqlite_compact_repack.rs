@@ -747,3 +747,61 @@ fn a_run_stopped_before_the_rename_leaves_the_old_store_valid() {
         clean(&rebuilt);
     }
 }
+
+/// One artifact of a run beside the Store file.
+fn artifact(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path.as_os_str().to_os_string();
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
+#[test]
+fn the_working_tables_live_in_the_visited_scratch_and_count_as_temp_bytes() {
+    // A run stopped after the build leaves its artifacts to look at.
+    let (_stopped_temp, stopped, stopped_path) = create(SqlitePackLayout::Monolithic);
+    let fixture = mixed_store(&stopped);
+    let halted = stopped.compact(&CompactRequest {
+        op_id: [0x51; 16],
+        failpoint: Some(CompactFailpoint::AfterBuild),
+        ..CompactRequest::default()
+    });
+    assert!(halted.is_err());
+    let staged = artifact(&stopped_path, ".compact");
+    let scratch_path = artifact(&stopped_path, ".compact-visited");
+    let scratch = rusqlite::Connection::open(&scratch_path).unwrap();
+    let count = |sql: &str| -> i64 { scratch.query_row(sql, [], |row| row.get(0)).unwrap() };
+    assert_eq!(
+        count("SELECT count(*) FROM repack"),
+        fixture.packs.len() as i64,
+        "the scratch lists the packs written again"
+    );
+    assert_eq!(
+        count("SELECT count(*) FROM live_pack WHERE pack_id IN (SELECT pack_id FROM repack)"),
+        0,
+        "and the whole-pack copy no longer selects them"
+    );
+    assert_eq!(
+        count("SELECT count(*) FROM repack_kept"),
+        count("SELECT count(*) FROM visited WHERE pack_id IN (SELECT pack_id FROM repack)"),
+        "with one kept locator per reached object in them"
+    );
+    drop(scratch);
+    let temp_bytes =
+        std::fs::metadata(&staged).unwrap().len() + std::fs::metadata(&scratch_path).unwrap().len();
+    for suffix in ["-journal", "-wal", "-shm"] {
+        assert!(
+            !artifact(&scratch_path, suffix).exists(),
+            "the scratch has no {suffix} sidecar"
+        );
+    }
+
+    // The same Store compacted to the end reports those two files.
+    let (_temp, handles, _path) = create(SqlitePackLayout::Monolithic);
+    mixed_store(&handles);
+    let receipt = handles.compact(&request(0x52)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(
+        receipt.peak_temp_bytes, temp_bytes,
+        "peakTempBytes is the fresh file plus the scratch with its working tables"
+    );
+}

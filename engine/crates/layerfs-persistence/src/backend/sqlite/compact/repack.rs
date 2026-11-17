@@ -13,15 +13,24 @@
 //! length, and moves the kept objects' locators to their new group and record
 //! numbers.
 //!
-//! Everything is written to the fresh `<store>.compact` file. The sealed Store
-//! is attached `immutable=1` and never changes, so a failure or a crash at any
-//! point leaves it as it was, exactly as for the whole-pack copy.
+//! Two files are written, both artifacts of this run that a failed or crashed
+//! run leaves for the next call to remove. The new packs and the moved
+//! locators go to the fresh `<store>.compact` file. The working set goes to
+//! the mark's visited scratch, `<store>.compact-visited`: [`plan`] adds the
+//! tables `repack` and `repack_kept` there and deletes the planned packs from
+//! its `live_pack`. The sealed Store is attached `immutable=1` and never
+//! changes, so a failure or a crash at any point leaves it as it was, exactly
+//! as for the whole-pack copy.
 //!
 //! The run is two steps around the bulk copy, because the copy appends in key
 //! order and the rewritten rows must not be copied whole first: [`plan`] names
 //! the packs and removes them from `scratch.live_pack`, the set the bulk copy
 //! of `pack` and `pack_unit` selects from; [`apply`] runs after the table copy
 //! and before the totals are summed.
+//!
+//! The kept locators are put in pack order by the scratch table's own key,
+//! on disk, and read back one pack at a time, so the rewrite holds one pack's
+//! locators and bytes in memory, never the whole kept set.
 
 use super::types::db_error;
 use layerfs_history::error::{HistoryError, HistoryResult};
@@ -31,14 +40,32 @@ use layerfs_storage::pack::repack::retain_records;
 use layerfs_storage::port::ObjectKey;
 use rusqlite::{params, Connection};
 
-/// The locators of every kept object in a pack being rewritten, one pack after
-/// another, in group and record order. `visited` holds the mark's whole §6.2
-/// closure, so a record reached only as a delta base is in this set.
-const KEPT: &str = "SELECT v.pack_id,l.group_number,l.record_number,v.object_id \
-FROM scratch.visited v JOIN src.object_location l \
+/// The working tables in the visited scratch: the packs to write again, and
+/// the locator of every kept object in them, keyed in the order [`apply`]
+/// reads it. The object is part of the key, so a damaged Store in which two
+/// objects name one record keeps both rows.
+const TABLES: &str = "CREATE TABLE scratch.repack (pack_id INTEGER PRIMARY KEY) \
+STRICT, WITHOUT ROWID;\
+CREATE TABLE scratch.repack_kept (\
+ pack_id INTEGER NOT NULL, group_number INTEGER NOT NULL, record_number INTEGER NOT NULL,\
+ object_id BLOB NOT NULL,\
+ PRIMARY KEY(pack_id,group_number,record_number,object_id)\
+) STRICT, WITHOUT ROWID;";
+
+/// Fills `repack_kept`: one pass over the visited set (`CROSS JOIN` fixes
+/// that order), a key lookup per row in the planned packs and in the sealed
+/// locators, and an insert into the keyed scratch table. `visited` holds the mark's whole §6.2 closure, so a record
+/// reached only as a delta base is in this set.
+const FILL: &str = "INSERT INTO scratch.repack_kept(pack_id,group_number,record_number,object_id) \
+SELECT v.pack_id,l.group_number,l.record_number,v.object_id \
+FROM scratch.visited v CROSS JOIN src.object_location l \
 ON l.object_id=v.object_id AND l.pack_id=v.pack_id \
-WHERE v.pack_id IN (SELECT pack_id FROM scratch.repack) \
-ORDER BY v.pack_id,l.group_number,l.record_number";
+WHERE v.pack_id IN (SELECT pack_id FROM scratch.repack)";
+
+/// The kept locators, one pack after another, in group and record order: a
+/// scan of `repack_kept` in its key order.
+const KEPT: &str = "SELECT pack_id,group_number,record_number,object_id \
+FROM scratch.repack_kept ORDER BY pack_id,group_number,record_number,object_id";
 
 /// One pack this rebuild wrote again.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -77,14 +104,11 @@ pub(crate) fn plan(connection: &Connection, partly_dead: &[(i64, u64)]) -> Histo
     if partly_dead.is_empty() {
         return Ok(Plan { packs: Vec::new() });
     }
-    // The list lives in the visited scratch, beside the set it edits: a temp
-    // table would open the connection's temp database, which the build's
-    // later WAL checkpoint cannot pass.
-    connection
-        .execute_batch(
-            "CREATE TABLE scratch.repack (pack_id INTEGER PRIMARY KEY) STRICT, WITHOUT ROWID",
-        )
-        .map_err(db_error)?;
+    // The working tables live in the visited scratch, beside the set this
+    // edits: a temp table would open the connection's temp database, which the
+    // build's later WAL checkpoint cannot pass, and would sit outside the
+    // run's artifact set.
+    connection.execute_batch(TABLES).map_err(db_error)?;
     {
         let mut insert = connection
             .prepare("INSERT INTO scratch.repack(pack_id) VALUES(?1)")
@@ -102,6 +126,7 @@ pub(crate) fn plan(connection: &Connection, partly_dead: &[(i64, u64)]) -> Histo
     if removed != partly_dead.len() {
         return Err(HistoryError::Integrity("repack names a pack not retained"));
     }
+    connection.execute(FILL, params![]).map_err(db_error)?;
     Ok(Plan {
         packs: partly_dead.to_vec(),
     })

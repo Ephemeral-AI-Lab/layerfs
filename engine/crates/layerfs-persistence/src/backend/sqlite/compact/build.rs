@@ -600,6 +600,10 @@ PRAGMA user_version={user_version};PRAGMA application_id={application_id};"
         partly_dead,
     )?;
     drop(sealed);
+    // §11 `peakTempBytes`: the repack step added its working tables to the
+    // visited scratch, so the scratch is measured again after the load.
+    let visited_bytes = std::fs::metadata(&visited)
+        .map_or(visited_bytes, |scratch| visited_bytes.max(scratch.len()));
 
     // §7 step 4: the secondary indexes and the immutability/logical triggers
     // are built after the bulk load, so the load writes no index page and fires

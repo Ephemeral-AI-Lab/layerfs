@@ -369,7 +369,7 @@
       },
       "logicalDiscarded": 182465,
       "path": "rebuild",
-      "peakTempBytes": 389120,
+      "peakTempBytes": 397312,
       "physicalShrink": 221184,
       "residue": {
         "artifacts": [],

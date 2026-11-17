@@ -467,9 +467,13 @@ measured implementation of this branch.
   keeps some is framed again, and a compressed ordinary group is decoded and
   compressed again. The pack keeps its `pack_id`; it gets a new SHA-256 and
   length; the kept objects' `object_location` rows move to the new group and
-  record numbers. Singleton packs are never rewritten. Everything is written
-  to `<store>.compact`, so the old Store is unchanged until the rename, as
-  before.
+  record numbers. Singleton packs are never rewritten. The new packs are
+  written to `<store>.compact`, and the step's working tables (`repack`,
+  `repack_kept`) to the mark's visited scratch `<store>.compact-visited`,
+  whose size `peakTempBytes` counts; both are artifacts of the run, so the
+  old Store is unchanged until the rename, as before. The kept locators are
+  ordered by the scratch table's key, on disk, and read one pack at a
+  time, not sorted in memory.
 - **Threshold:** `rebuild iff total > 0 AND (dead + deadInRetained) * 10 >=
   total`, where `dead` is the bytes of wholly dead packs and `deadInRetained`
   is the mark's `keptWaste.deadInRetainedPacksBytes`. The 10% value and the
