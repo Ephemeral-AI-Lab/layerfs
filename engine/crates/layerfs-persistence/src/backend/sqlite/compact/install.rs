@@ -116,20 +116,25 @@ pub(crate) fn install_fence(facts: &SealedFacts, tuple: &MarkTuple) -> HistoryRe
     Ok(())
 }
 
-/// §7 step 7: `chmod 0600` and `sync_all` before the rename.
-pub(crate) fn prepare_target(target: &Path) -> HistoryResult<()> {
+/// §7 step 7: `chmod 0600` and `sync_all` before the rename. A Store whose
+/// profile synchronizes nothing (`durable` false) skips the `sync_all`: the
+/// rename then installs a file that is complete in the page cache, which is
+/// all that profile promises of the Store itself.
+pub(crate) fn prepare_target(target: &Path, durable: bool) -> HistoryResult<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(target, std::fs::Permissions::from_mode(0o600))
             .map_err(io_error)?;
     }
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(target)
-        .map_err(io_error)?;
-    file.sync_all().map_err(io_error)?;
+    if durable {
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(target)
+            .map_err(io_error)?;
+        file.sync_all().map_err(io_error)?;
+    }
     Ok(())
 }
 
@@ -212,7 +217,9 @@ pub(crate) fn settle(
             |name| name.to_string_lossy().into_owned(),
         ));
     }
-    let _ = sync_directory(store);
+    if op.durable {
+        let _ = sync_directory(store);
+    }
     if !residue.artifacts.is_empty() && residue.reason.is_none() {
         residue.reason = Some("the artifact set could not be removed".to_owned());
     }
