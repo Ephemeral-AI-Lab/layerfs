@@ -149,6 +149,8 @@ fn list_and_get_answer_the_live_state() {
     std::fs::write(&limactl, STAND_IN).unwrap();
     std::fs::set_permissions(&limactl, std::fs::Permissions::from_mode(0o755)).unwrap();
     std::env::set_var("PATH", &tools);
+    // only the stand-ins: no fallback folder after PATH
+    std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");
     let home = tempdir("home");
     call(&home, "machine.list", &[]); // makes the home and its built-ins
     for name in ["quiet", "slow", "fwd", "up"] {

@@ -72,7 +72,7 @@ pub(crate) fn tool_version(
     missing: &mut Vec<String>,
 ) -> Option<String> {
     match tool::lookup(tools, name) {
-        Some(path) => first_line(tool::command(&path, args), false),
+        Some(path) => first_line(tool::command(tools, &path, args), false),
         None => {
             missing.push(format!("tool:{name}"));
             None

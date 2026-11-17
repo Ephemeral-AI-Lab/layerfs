@@ -22,11 +22,16 @@ pub(crate) const CALL: Call = call(
 /// when the build named none.
 const COMMIT: &str = env!("LAYERFS_API_BUILD_COMMIT");
 
+/// The build this library was compiled from, as `home.get` compares the
+/// bundle and the native daemon with.
+pub(crate) fn build() -> Build<'static> {
+    Build {
+        commit: Some(COMMIT).filter(|commit| !commit.is_empty()),
+        dirty: env!("LAYERFS_API_BUILD_DIRTY") == "true",
+    }
+}
+
 /// Runs `home.get`.
 fn run(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
-    let build = Build {
-        commit: (!COMMIT.is_empty()).then_some(COMMIT),
-        dirty: env!("LAYERFS_API_BUILD_DIRTY") == "true",
-    };
-    layerfs_control::home::get(&context.home, build)
+    layerfs_control::home::get(&context.home, build())
 }

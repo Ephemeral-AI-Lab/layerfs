@@ -128,6 +128,8 @@ fn provider_names_and_their_refusals() {
         std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
     std::env::set_var("PATH", &tools);
+    // only the stand-ins: no fallback folder after PATH
+    std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");
     let bundle = tempdir("bundle");
     for name in ["layerfs", "layerfs-daemon", "layerfs-sandbox-helper"] {
         std::fs::write(bundle.join(name), b"").unwrap();

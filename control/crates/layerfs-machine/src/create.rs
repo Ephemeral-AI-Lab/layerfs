@@ -112,6 +112,10 @@ fn provider_room(kind: Platform, vm: &str, name: &str) -> Result<()> {
     ))
 }
 
+/// The `os_image` that asks for the provider's stock image: the machine
+/// records none, as one created before prepared images existed.
+pub const STOCK: &str = "stock";
+
 /// A `machine.create` request. The name stays text: it is checked under the
 /// home lock, after the platform and the host's tools.
 pub struct MachineCreate {
@@ -127,7 +131,9 @@ pub struct MachineCreate {
     pub disk: Option<i64>,
     /// Its image.
     pub image: Option<String>,
-    /// The VM OS image or prepared machine image, separate from its Sandbox image.
+    /// The VM OS image or prepared machine image, separate from its Sandbox
+    /// image; [`STOCK`] for the provider's own, absent for the prepared one
+    /// when there is one.
     pub os_image: Option<String>,
 }
 
@@ -163,8 +169,11 @@ pub fn create(
         )));
     }
     let bundle = crate::progress::stage(events, "bundle-validation", bundle)?;
-    let os_image = match &request.os_image {
-        Some(image) => Some(image.clone()),
+    // `stock` is the provider's own image even when a prepared one exists;
+    // absent, the prepared image when there is one, else the stock one
+    let os_image = match request.os_image.as_deref() {
+        Some(STOCK) => None,
+        Some(image) => Some(image.to_owned()),
         None => super::bundle::prepared_os_image(kind, &bundle)?,
     };
     let id = home_id(&home)?;

@@ -377,6 +377,8 @@ class Calls(unittest.TestCase):
     def test_every_call_is_refused_as_the_command_refuses_it(self):
         home = temp("refused")
         lfs = layerfs.client(home=home)
+        # home.init would say `created` only to the first front end
+        lfs.home.init()
         for spec in layerfs.TABLE:
             # the shell's reset already cleared what the Python one would count
             if f"{spec['family']}.{spec['call']}" == "logs.reset":

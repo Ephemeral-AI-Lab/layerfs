@@ -13,3 +13,4 @@ pub use calls::{
     name_limit, provider_within, reach, remove, start, status, status_within, stop, stop_force,
     State, Status,
 };
+pub use tool::find_tool;

@@ -31,6 +31,8 @@ impl Fixture {
         let id = home::ensure(&home).unwrap().id;
         let previous = std::env::var_os("PATH");
         std::env::set_var("PATH", root.join("bin"));
+        // only the stand-ins: no fallback folder after PATH
+        std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");
         Self {
             root,
             home,

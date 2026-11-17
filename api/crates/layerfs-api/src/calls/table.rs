@@ -72,7 +72,8 @@ pub struct Call {
     pub quiet: bool,
     /// Whether the dispatcher opens (creates or converts) the home before
     /// it runs: every call but `home.init`, which opens it itself to say
-    /// what it did, and `home.get`, which reads a home without changing it.
+    /// what it did, and `home.get` and `machine.platforms`, which read a
+    /// home without changing it (and answer without one).
     pub opens: bool,
 }
 

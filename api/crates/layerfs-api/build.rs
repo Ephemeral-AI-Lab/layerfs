@@ -11,7 +11,7 @@ fn main() {
         .ok()
         .filter(|c| c.len() == 40 && c.bytes().all(|b| b.is_ascii_hexdigit()))
         .unwrap_or_default();
-    let dirty = std::env::var("LAYERFS_BUILD_DIRTY").map_or(false, |d| d == "true");
+    let dirty = std::env::var("LAYERFS_BUILD_DIRTY").is_ok_and(|d| d == "true");
     println!("cargo:rustc-env=LAYERFS_API_BUILD_COMMIT={commit}");
     println!("cargo:rustc-env=LAYERFS_API_BUILD_DIRTY={dirty}");
 }

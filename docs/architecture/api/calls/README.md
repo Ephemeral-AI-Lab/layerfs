@@ -26,7 +26,8 @@ The call table and the one dispatcher every front end goes through: what a call 
  call_scoped(home, scope, name, args, events, client)    dispatch.rs
    take log_tag --> find --> check --> render argv --> scope.apply
    --> home --> platform_policy --> migrate::open --> ensure_built_ins
-       (skipped for a call whose entry has opens false: home.init, home.get)
+       (skipped for a call whose entry has opens false: home.init, home.get,
+       machine.platforms)
    --> scope.owns --> Call.run(Context{home, events}) --> keys::snake
    --> one line in <home>/trace/calls.jsonl
      |

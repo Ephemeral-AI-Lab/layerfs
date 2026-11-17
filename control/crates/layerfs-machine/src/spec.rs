@@ -7,7 +7,9 @@ use super::record::MachineRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::outcome::refused;
-use layerfs_platform::{Endpoint, HostOs, Lasting, MachineError, Platform, Running, Spec, Tools};
+use layerfs_platform::{
+    self as adapters, Endpoint, HostOs, Lasting, MachineError, Platform, Running, Spec, Tools,
+};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -78,15 +80,40 @@ fn int(record: &MachineRecord, name: &str, default: i64) -> i64 {
     record.int(name).unwrap_or(default)
 }
 
-/// How this process reaches its tools, with the docker machine's socket.
+/// How this process reaches its tools, with the docker machine's socket
+/// ([`docker_socket`]).
 pub fn tools(home: &Path) -> Result<Tools> {
     let mut tools = Tools::from_env();
-    if let Some(record) = MachineRecord::read(home, "docker")? {
-        if let Some(socket) = record.docker() {
-            tools.docker_socket = PathBuf::from(socket);
-        }
-    }
+    tools.docker_socket = docker_socket(home)?.0;
     Ok(tools)
+}
+
+/// The Docker Engine socket the docker machine uses and where it comes from,
+/// for the machine and for every Docker read of the home's (one choice): the
+/// socket its record holds (`recorded`; `machine update docker --docker`, or
+/// its first start), else, for a machine that already ran before sockets
+/// were recorded (it ran, or its record predates `vm_name`, so an older
+/// build used it), Docker's default socket it ran on (`legacy`; recorded
+/// at its next start), else the host's automatic choice
+/// ([`adapters::docker_automatic`]: `env:DOCKER_HOST`, `context:<name>`,
+/// `desktop`, `colima`, `orbstack` or `default`). `--docker ""` leaves the
+/// field null: automatic again, ran or not.
+pub fn docker_socket(home: &Path) -> Result<(PathBuf, String)> {
+    let record = MachineRecord::read(home, "docker")?;
+    if let Some(socket) = record.as_ref().and_then(MachineRecord::docker) {
+        return Ok((PathBuf::from(socket), "recorded".to_owned()));
+    }
+    let cleared = record.as_ref().is_some_and(|r| r.field("docker").is_some());
+    let older = |r: &MachineRecord| r.ever_started() || r.text("vm_name").is_none();
+    if !cleared && record.as_ref().is_some_and(older) {
+        let socket = PathBuf::from(adapters::DEFAULT_DOCKER_SOCKET);
+        return Ok((socket, "legacy".to_owned()));
+    }
+    let chosen = adapters::docker_automatic(&adapters::DockerEnv::current());
+    let path = chosen
+        .path
+        .unwrap_or_else(|| PathBuf::from(adapters::DEFAULT_DOCKER_SOCKET));
+    Ok((path, chosen.source))
 }
 
 /// The adapters' description of the machine `record` describes.

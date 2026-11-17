@@ -7,7 +7,7 @@ may run, and how to add one, within [Machines](README.md).
 
 | | |
 | --- | --- |
-| Source | [`platforms/`](../../../../control/crates/layerfs-platform/src/platforms), [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs), [`control/SUPPORT.json`](../../../../control/SUPPORT.json), [`platform_policy.rs`](../../../../control/crates/layerfs-sandbox-backend/src/platform_policy.rs) |
+| Source | [`platforms/`](../../../../control/crates/layerfs-platform/src/platforms), [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs), [`control/SUPPORT.json`](../../../../control/SUPPORT.json), [`platform_policy.rs`](../../../../control/crates/layerfs-sandbox-backend/src/platform_policy.rs), [`docker_socket.rs`](../../../../control/crates/layerfs-platform/src/docker_socket.rs) |
 
 ## Profiles (`platforms/<p>/profile.rs`)
 
@@ -25,7 +25,21 @@ maps the bundle's Sandbox image to one (an incompatible or unsanitized
 mapping is `Unavailable`; a missing prepared Lima file `Unsupported`, both
 naming `tools/machine_image.py`), else the provider's stock image
 ([`bundle.rs`](../../../../control/crates/layerfs-machine/src/bundle.rs)
-`prepared_os_image`).
+`prepared_os_image`). `os_image: "stock"` takes the stock image even when a
+prepared one exists and records none
+([`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs) `STOCK`).
+`machine.platforms` gives each size option its `default` (`DEFAULT_CPUS`,
+`DEFAULT_MEMORY`, `DEFAULT_DISK` in `layerfs-machine` `spec.rs`).
+
+## Tools and the docker socket
+
+| What | Rule | Source |
+| --- | --- | --- |
+| Tool lookup | `Tools.path` is this process's `PATH`, then the fallback folders not already on it: on macOS `/opt/homebrew/bin`, `/usr/local/bin`, `/Applications/Docker.app/Contents/Resources/bin` (an app started from the Dock has a short `PATH`), none elsewhere; `LAYERFS_TOOL_FALLBACKS` (a `PATH`-style list, empty for none) replaces them, which tests use. Every provider command runs with `Tools.path` as its `PATH`. The Sandbox code's own Docker reads find `docker` the same way (`find_tool`) | [`spec.rs`](../../../../control/crates/layerfs-platform/src/spec.rs) `Tools::from_env`, `tool_fallbacks`; [`setup/tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs) `command`, `find_tool` |
+| Socket candidates | read from files and variables only: `DOCKER_HOST`, the current context (`DOCKER_CONTEXT`, else `currentContext` in `config.json` under `DOCKER_CONFIG` or `~/.docker`) and the other contexts' `contexts/meta/*/meta.json`, Docker Desktop's `~/.docker/run/docker.sock`, colima's `~/.colima/default/docker.sock` and OrbStack's `~/.orbstack/run/docker.sock` when they exist, and `/var/run/docker.sock`; deduplicated by path; a non-`unix://` endpoint is listed `usable: false`, never followed | [`docker_socket.rs`](../../../../control/crates/layerfs-platform/src/docker_socket.rs) `docker_candidates` |
+| Automatic choice | `DOCKER_HOST` when `unix://`, else the current context's endpoint when `unix://`, else the first of Docker Desktop's, colima's and OrbStack's sockets that exists, else `/var/run/docker.sock` | same, `docker_automatic` |
+| The docker machine's socket | its record's `docker` (`machine update docker --docker`, or written by its first start: under the home lock once the socket answers a ping, before an image is loaded or anything is made in that Engine, and again once the provider started, so it never moves to another Engine, where its data volume and loaded image are not; a start whose Engine does not answer pins nothing); for a record that ran before sockets were recorded (it has `lasting` or a `running`/`failed` state, or no `vm_name`, so an older build used it) and has no `docker` field, `/var/run/docker.sock` (source `legacy`), which its next start records; else the automatic choice. `--docker ""` writes `docker: null`: automatic again until the next start records one. Changing it is refused `InUse` while the machine's worker is recorded running. The machine's adapter and the Sandbox code's Docker reads (`machine.images`, image copies) use this one choice | [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs) `docker_socket`, [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) `record_socket`, [`docker.rs`](../../../../control/crates/layerfs-sandbox/src/docker.rs) `Docker::of` |
+| Socket state | one connect (non-blocking on Linux, where a full backlog would hold a blocking one) and `GET /_ping` (2 s per read and write): `answering`, `absent` (no such file), `denied` (`EACCES`) or `silent`. The docker probe runs `docker version` only for an answering socket; `machine.platforms` pings again for `socket.state` only when the probe found no version. The automatic choice is named as the candidates name its socket | `docker_socket.rs` `socket_state`, [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
 
 ## native (`platforms/native/`)
 
@@ -101,7 +115,8 @@ The VM launcher runs the same lines, which act only at a namespace root (an
 Apple Container guest), never at a VM's real root (Lima). It never writes `user.max_user_namespaces` (that would
 change the whole Docker host); Sandbox commands rely on the seccomp
 filter. `machine update docker --docker <socket>` points the platform's own
-`docker` calls at another Engine; the socket is never mounted. A Sandbox
+`docker` calls at another Engine; the socket is never mounted (how the
+socket is chosen: [Tools and the docker socket](#tools-and-the-docker-socket)). A Sandbox
 recorded under the retired docker backend is refused, asking to recreate
 it ([Sandboxes: backends](../sandboxes/backends.md)).
 
@@ -178,7 +193,8 @@ One Lima instance (`vmType: vz`, macOS), made from a template written to
 | --- | --- | --- |
 | `missing: host:root`, `host:/dev/fuse`, `host:cgroup2` | `native` on Linux without root, FUSE or cgroup v2 | [`probe.rs`](../../../../control/crates/layerfs-platform/src/probe.rs) `native_missing` |
 | `missing: host:macos-or-linux` | `native` on Windows or another host | same |
-| `missing: tool:docker`, `host:<socket>`, `host:wsl2` | no `docker` CLI; the Engine does not answer; a Windows host | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
+| `missing: tool:docker`, `host:<socket>`, `host:wsl2` | no `docker` CLI on `PATH` or in the fallback folders; the socket does not answer a ping (its `state` says why); a Windows host | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
+| `missing: bundle:<dir>` | a platform that runs a worker, and this build's sealed Linux bundle is absent there or of another worker protocol | [`platforms.rs`](../../../../control/crates/layerfs-machine/src/platforms.rs) |
 | docker `start` `Exists`: "… is not a LayerFS worker; it is left alone" | a container of that name without the worker label | [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
 | docker `start` `Failed` | image not in the Engine (`--pull never`), or no published port (macOS) | same |
 | `missing: host:macos`, `host:apple-silicon`, `tool:container` | not a Mac, not `aarch64`, no `container` CLI | [`apple_container/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/adapter.rs) |

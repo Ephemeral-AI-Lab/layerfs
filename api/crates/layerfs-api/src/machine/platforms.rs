@@ -4,7 +4,9 @@ use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 
-/// Its table entry.
+/// Its table entry: it describes the host and the build, so it never
+/// opens (creates or converts) the home; with one it reads the docker
+/// machine's recorded socket.
 pub(crate) const CALL: Call = call(
     "machine",
     "platforms",
@@ -12,7 +14,8 @@ pub(crate) const CALL: Call = call(
     &[],
     "the platforms this host and build support, and what each is missing",
     run,
-);
+)
+.unopened();
 
 /// Runs `machine.platforms`.
 #[cfg(feature = "machine")]

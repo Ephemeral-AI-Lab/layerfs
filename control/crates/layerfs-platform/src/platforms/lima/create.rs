@@ -32,6 +32,7 @@ pub(crate) fn create(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErr
         CALL,
     )?;
     let command = tool::command(
+        &spec.tools,
         &tool::find(&spec.tools, CLI)?,
         ["create", "--name", &spec.vm_name, "--tty=false", "-"],
     );
