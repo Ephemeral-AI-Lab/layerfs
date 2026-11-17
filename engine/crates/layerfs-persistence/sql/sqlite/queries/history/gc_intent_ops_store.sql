@@ -3,4 +3,4 @@ SELECT op_id, kind, scope_kind, scope_id, workspace, sandbox, machine, project, 
 FROM gc_intent
 WHERE state <> 'done'
   AND op_id <> $1
-  AND kind IN ('removal', 'compaction');
+  AND kind IN ('init', 'merge', 'removal', 'compaction');

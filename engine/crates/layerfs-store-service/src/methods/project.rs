@@ -115,7 +115,11 @@ pub fn remove_file(service: &StoreService, args: &SdkValue) -> Answer {
             },
             &intent,
         )
-        .map_err(lookup::history)?;
+        .map_err(|error| {
+            // A remove_file writes its marker in one transaction and takes
+            // no durable op of its own, so phase and op are null.
+            lookup::history_in(error, intent.scope_kind, stack.name.as_str(), None, None)
+        })?;
     Ok(SdkValue::map([
         (
             "kind",

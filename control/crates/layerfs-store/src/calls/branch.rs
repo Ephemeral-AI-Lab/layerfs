@@ -200,12 +200,22 @@ pub fn publish(home: &Path, events: &mut Events<'_>, request: &BranchPublish) ->
 /// the project as the caller gave it, `<store>/<project>`: the Store sees
 /// only the project's name within it and echoes that alone.
 pub fn remove(home: &Path, events: &mut Events<'_>, request: &BranchRemove) -> Outcome {
-    let value = on_project(
+    let value = match on_project(
         home,
         events,
         &request.project,
         StoreOp::BranchRemove(request),
-    )?;
+    ) {
+        Ok(value) => value,
+        Err(refusal) => {
+            return Err(crate::unknown::named_unknown(
+                refusal,
+                "branch",
+                &request.branch,
+                None,
+            ))
+        }
+    };
     Ok(layerfs_home::home::with_field(
         value,
         "project",

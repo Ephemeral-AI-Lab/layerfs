@@ -195,13 +195,34 @@ pub enum HistoryError {
     /// Persistence did not answer; the outcome of the attempted statement set
     /// is unknown and nothing may be replayed, discarded or rolled back on a guess.
     UnknownOutcome,
+    /// The same unknown outcome, named by the service or control call that
+    /// held the operation: spec §10 A6 reports `{entity: {kind, name}, phase,
+    /// op}` and leaves `phase` and `op` null when no durable operation is
+    /// known. Persistence itself constructs the bare [`Self::UnknownOutcome`];
+    /// a call that knows its entity attaches this context at the boundary.
+    UnknownOutcomeOp(Box<UnknownOutcomeState>),
 }
 
 impl HistoryError {
     /// True when the attempted mutation's persistence outcome is unknown.
     #[must_use]
     pub fn unknown(&self) -> bool {
-        matches!(self.cause(), Self::UnknownOutcome)
+        matches!(
+            self.cause(),
+            Self::UnknownOutcome | Self::UnknownOutcomeOp(_)
+        )
+    }
+
+    /// Names the operation this call held when persistence did not answer,
+    /// for the §10 A6 `Unknown` detail. Any other failure is returned
+    /// unchanged, so a call can attach its context to a whole `Result`
+    /// without rewriting a definite refusal.
+    #[must_use]
+    pub fn with_unknown(self, state: UnknownOutcomeState) -> Self {
+        match self {
+            Self::UnknownOutcome => Self::UnknownOutcomeOp(Box::new(state)),
+            other => other,
+        }
     }
 
     /// The typed failure itself; kept for callers that match through it.
@@ -255,7 +276,9 @@ impl std::fmt::Display for HistoryError {
                 write!(formatter, "stack moved: {expected} -> {actual}")
             }
             Self::ContinuityUnavailable => formatter.write_str("continuity unavailable"),
-            Self::UnknownOutcome => formatter.write_str("unknown outcome"),
+            Self::UnknownOutcome | Self::UnknownOutcomeOp(_) => {
+                formatter.write_str("unknown outcome")
+            }
         }
     }
 }
@@ -410,5 +433,42 @@ impl OpConflict {
         self.client_addr = client_addr;
         self.backend_start = backend_start;
         self
+    }
+}
+
+/// The operation a call held when persistence did not answer (spec §10 A6).
+///
+/// `phase` and `op` are `None` when no durable operation is known; the wire
+/// detail then carries them as null. A later release may add a field, so the
+/// struct is non-exhaustive: callers read it, and construction belongs to
+/// this crate.
+#[non_exhaustive]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UnknownOutcomeState {
+    /// The resource scope kind the call names: store, project or Branch.
+    pub scope_kind: GcScopeKind,
+    /// The Store, project or Branch name.
+    pub entity: String,
+    /// The phase the operation was in, when known.
+    pub phase: Option<String>,
+    /// The durable operation identity, hex encoded, when one is known.
+    pub op: Option<String>,
+}
+
+impl UnknownOutcomeState {
+    /// Builds the context of an `UnknownOutcome` refusal.
+    #[must_use]
+    pub fn new(
+        scope_kind: GcScopeKind,
+        entity: impl Into<String>,
+        phase: Option<String>,
+        op: Option<String>,
+    ) -> Self {
+        Self {
+            scope_kind,
+            entity: entity.into(),
+            phase,
+            op,
+        }
     }
 }

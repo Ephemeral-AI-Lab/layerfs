@@ -8,7 +8,7 @@ use layerfs_history::error::{
     NameTakenState, OpConflict, RemovedPath, RemovedState,
 };
 use layerfs_history::records::{GcIntentKind, GcScopeKind};
-use layerfs_history::{CommitId, HistoryError, LayerId};
+use layerfs_history::{CommitId, HistoryError, LayerId, UnknownOutcomeState};
 use layerfs_store_service::history::lookup::history;
 
 fn layer(tag: u8) -> LayerId {
@@ -48,7 +48,6 @@ fn every_history_error_maps_to_its_spec_10_wire_code() {
         (HistoryError::NotInHistory("other stack"), "NotInHistory"),
         (HistoryError::OwnershipUnavailable, "Failed"),
         (HistoryError::ContinuityUnavailable, "Failed"),
-        (HistoryError::UnknownOutcome, "Unknown"),
     ];
     for (error, code) in cases {
         let refused = history(error);
@@ -177,4 +176,47 @@ fn busy_and_unresolved_report_the_resource_scope_and_holder() {
     assert!(refused.detail.get("pid").expect("pid") == &SdkValue::Null);
     assert!(refused.detail.get("client_addr").expect("addr") == &SdkValue::Null);
     assert!(refused.detail.get("backend_start").expect("start") == &SdkValue::Null);
+}
+
+/// Spec §10 A6: an `UnknownOutcome` a call can name reports
+/// `{entity: {kind, name}, phase, op}`. The bare persistence error has no
+/// entity yet, so a service call attaches one with `with_unknown`.
+#[test]
+fn unknown_reports_the_entity_and_the_durable_operation() {
+    let state = UnknownOutcomeState::new(
+        GcScopeKind::Project,
+        "shop",
+        Some("init".to_owned()),
+        Some("00ff".to_owned()),
+    );
+    let refused = history(HistoryError::UnknownOutcome.with_unknown(state));
+    assert_eq!(refused.code, "Unknown");
+    let entity = refused.detail.get("entity").expect("entity");
+    assert_eq!(entity.get_text("kind"), Some("project"));
+    assert_eq!(entity.get_text("name"), Some("shop"));
+    assert_eq!(refused.detail.get_text("phase"), Some("init"));
+    assert_eq!(refused.detail.get_text("op"), Some("00ff"));
+}
+
+/// Both `phase` and `op` are null when no durable operation is known; the
+/// entity is still named. A definite failure keeps its own code and detail.
+#[test]
+fn unknown_without_a_durable_operation_nulls_phase_and_op() {
+    let state = UnknownOutcomeState::new(GcScopeKind::Store, "store", None, None);
+    let refused = history(HistoryError::UnknownOutcome.with_unknown(state));
+    assert_eq!(refused.code, "Unknown");
+    let entity = refused.detail.get("entity").expect("entity");
+    assert_eq!(entity.get_text("kind"), Some("store"));
+    assert_eq!(entity.get_text("name"), Some("store"));
+    assert!(refused.detail.get("phase").expect("phase") == &SdkValue::Null);
+    assert!(refused.detail.get("op").expect("op") == &SdkValue::Null);
+
+    let busy = history(HistoryError::Busy.with_unknown(UnknownOutcomeState::new(
+        GcScopeKind::Branch,
+        "work",
+        None,
+        None,
+    )));
+    assert_eq!(busy.code, "Busy");
+    assert!(empty(&busy.detail), "a definite refusal keeps its detail");
 }

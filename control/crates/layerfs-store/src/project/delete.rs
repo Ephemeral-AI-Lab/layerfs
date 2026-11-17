@@ -52,7 +52,7 @@ use crate::{identity, lease, service};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::StoreManifest;
 use layerfs_bridge::sdk_values::{hex, unhex};
-use layerfs_history::{HistoryCatalog, HistoryError, LayerStackId};
+use layerfs_history::{GcScopeKind, HistoryCatalog, HistoryError, LayerStackId};
 use layerfs_home::events::Events;
 use layerfs_home::home::{now_ms, paths};
 use layerfs_home::names::{ProjectRef, StoreName};
@@ -578,18 +578,31 @@ impl Effects for Local {
                 // A provider without admission cannot exclude a removal; the
                 // marker's own admission still runs, as it did before T6.
                 Err(HistoryError::Unsupported(_)) => Ok(Admission::new(stack, op)),
-                Err(error) => Err(lookup::history(error)),
+                Err(error) => Err(lookup::history_in(
+                    error,
+                    GcScopeKind::Project,
+                    project,
+                    None,
+                    Some(&op),
+                )),
             }
         })
     }
 
     fn release(&mut self, admission: Admission) -> Result<()> {
+        let project = self.project.clone();
         service::with_service(
             &self.open,
             |service| match store_admission::release_or_mark(service.store.history(), &admission.op)
             {
                 Ok(()) | Err(HistoryError::Unsupported(_)) => Ok(()),
-                Err(error) => Err(lookup::history(error)),
+                Err(error) => Err(lookup::history_in(
+                    error,
+                    GcScopeKind::Project,
+                    &project,
+                    None,
+                    Some(&admission.op),
+                )),
             },
         )
     }
@@ -781,7 +794,16 @@ pub fn admit_project(root: &Path, frame: &DeleteAdmitFrame) -> Outcome {
             // A provider without admission cannot exclude a removal; the
             // marker still admits, as it did before T6.
             Err(HistoryError::Unsupported(_)) => Ok(admitted(frame.stack)),
-            Err(error) => Err(lookup::history(error)),
+            Err(error) => {
+                let entity = project.unwrap_or_else(|| hex(frame.stack.as_slice()));
+                Err(lookup::history_in(
+                    error,
+                    GcScopeKind::Project,
+                    &entity,
+                    None,
+                    Some(&frame.op),
+                ))
+            }
         }
     })
 }

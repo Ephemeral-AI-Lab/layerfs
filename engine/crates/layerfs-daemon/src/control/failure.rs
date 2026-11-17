@@ -162,7 +162,9 @@ fn history(error: &HistoryError) -> (ControlCode, Option<MovedState>) {
         HistoryError::MountsActive(_) | HistoryError::BusyOp(_) => (ControlCode::Busy, None),
         HistoryError::Unresolved(_) => (ControlCode::Unknown, None),
         HistoryError::HeadMoved(value) => (ControlCode::HeadMoved, Some(**value)),
-        HistoryError::UnknownOutcome => (ControlCode::Unknown, None),
+        HistoryError::UnknownOutcome | HistoryError::UnknownOutcomeOp(_) => {
+            (ControlCode::Unknown, None)
+        }
         HistoryError::Missing(_) => (ControlCode::Missing, None),
         HistoryError::InvalidInput(_) => (ControlCode::Invalid, None),
         HistoryError::Capacity(_) => (ControlCode::Capacity, None),
