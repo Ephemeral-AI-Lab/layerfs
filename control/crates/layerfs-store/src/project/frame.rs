@@ -443,6 +443,86 @@ impl DeleteReply {
     }
 }
 
+/// `project.delete.entry`: remove the worker's own home entry for a Stack
+/// whose marker is already durable (a `marked` sidecar retry, T4.5b). The
+/// frame is `{store, stack_id, project?}`; it opens no Store, so it carries
+/// no Store record.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DeleteEntryFrame {
+    /// The Store.
+    pub store: StoreName,
+    /// The LayerStack whose entry goes.
+    pub stack: LayerStackId,
+    /// The project's name, when the caller knows it.
+    pub project: Option<String>,
+}
+
+/// `project.delete.entry` worker reply: `{kind: "Removed", project,
+/// stack_id}`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DeleteEntryReply {
+    /// The project its entry named (or the Store name).
+    pub project: String,
+    /// The LayerStack the removal named.
+    pub stack: LayerStackId,
+}
+
+impl DeleteEntryFrame {
+    /// The frame: `{store, stack_id, project?}`, with `project` sent when the
+    /// caller knows it.
+    pub fn encode(&self) -> SdkValue {
+        let mut fields = vec![
+            ("store", SdkValue::text(self.store.as_str())),
+            ("stack_id", SdkValue::text(hex(&self.stack.to_bytes()))),
+        ];
+        fields.extend(
+            self.project
+                .as_deref()
+                .map(|project| ("project", SdkValue::text(project))),
+        );
+        map(fields)
+    }
+
+    /// A `project.delete.entry` frame: its Store and Stack are required and
+    /// checked; an absent `project` is an unnamed caller.
+    pub fn decode(frame: &SdkValue) -> Result<Self> {
+        let store = StoreName::parse(required(frame.get_text("store"), "store")?)?;
+        let stack = stack_id(required(frame.get_text("stack_id"), "stack_id")?)?;
+        Ok(Self {
+            store,
+            stack,
+            project: frame.get_text("project").map(str::to_owned),
+        })
+    }
+}
+
+impl DeleteEntryReply {
+    /// The reply a worker sends.
+    pub fn encode(&self) -> SdkValue {
+        SdkValue::map([
+            ("kind", SdkValue::text("Removed")),
+            ("project", SdkValue::text(&self.project)),
+            ("stack_id", SdkValue::text(hex(&self.stack.to_bytes()))),
+        ])
+    }
+
+    /// The reply fields; `kind` must be `Removed`.
+    pub fn decode(frame: &SdkValue) -> Result<Self> {
+        if frame.get_text("kind") != Some("Removed") {
+            return Err(refused(
+                "Failed",
+                "the worker project.delete entry reply is not `Removed`",
+            ));
+        }
+        let project = frame
+            .get_text("project")
+            .ok_or_else(|| refused("InvalidInput", "reply has no `project`"))?
+            .to_owned();
+        let stack = stack_id(required(frame.get_text("stack_id"), "stack_id")?)?;
+        Ok(Self { project, stack })
+    }
+}
+
 /// `project.list` in a worker (T4.5c): Store `store`'s filtered project
 /// listing, the same `layerfs_project::store::projects` a local or
 /// PostgreSQL Store is read with, so a project retired in the Store is

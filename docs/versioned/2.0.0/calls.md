@@ -100,7 +100,7 @@ Sandbox names (H §7.6).
   FIFO or device file, is refused before anything is sent. Run: answers
   `project`, `store`, `name`, `kind`, `machine`, `created`, `layer` and
   `root`.
-- `delete` is refused `InUse` while a Sandbox of the project is recorded
+- `delete` is refused `Busy` while a Sandbox of the project is recorded
   (`detail.related` lists each as `{kind: "sandbox", name}`).
 - `remove_file` is visibility-only in 2.0: it hides the path across the
   project's history and frees no bytes; the marker frontier governs later
