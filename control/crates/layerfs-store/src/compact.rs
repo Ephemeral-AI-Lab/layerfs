@@ -22,6 +22,7 @@ use crate::place::{self, Executor};
 use crate::postgresql;
 use crate::record::{StoreRecord, StoreRef};
 use layerfs_bridge::control::SdkRefusal;
+use layerfs_history::GcScopeKind;
 use layerfs_home::events::Events;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused, Outcome};
@@ -139,7 +140,9 @@ pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
             failpoint: crash_failpoint(),
             ..CompactRequest::default()
         })
-        .map_err(lookup::history)?;
+        .map_err(|error| {
+            lookup::history_in(error, GcScopeKind::Store, store, None, Some(&op_id))
+        })?;
     // One serializer for the shared §11 report: the SQLite receipt projects
     // into `CompactReport`, and T9's PostgreSQL receipt will do the same.
     Ok(crate::report::compact_report(&CompactReport::from(receipt)))
@@ -202,7 +205,9 @@ fn compact_postgresql(record: &StoreRecord, home: &Path, store: &str) -> Outcome
             owner_boot: Some(owner_boot),
             ..CompactRequest::default()
         })
-        .map_err(lookup::history)?;
+        .map_err(|error| {
+            lookup::history_in(error, GcScopeKind::Store, store, None, Some(&op_id))
+        })?;
     Ok(crate::report::compact_report(&CompactReport::from(receipt)))
 }
 

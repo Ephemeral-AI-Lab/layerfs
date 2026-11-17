@@ -38,7 +38,12 @@ impl Effects for Remote {
                 if refusal.code == "Unknown" {
                     let _ = self.release(Admission::new(stack, op));
                 }
-                return Err(refusal);
+                return Err(crate::unknown::named_unknown(
+                    refusal,
+                    "project",
+                    &self.project,
+                    Some(&op),
+                ));
             }
         };
         if let Err(refusal) = admit_reply(&answer, stack) {
@@ -55,7 +60,15 @@ impl Effects for Remote {
             store_record: Some(self.store_record.clone()),
         };
         self.worker
-            .call("project.delete.release", frame.encode(), &mut |_| {})?;
+            .call("project.delete.release", frame.encode(), &mut |_| {})
+            .map_err(|refusal| {
+                crate::unknown::named_unknown(
+                    refusal,
+                    "project",
+                    &self.project,
+                    Some(&admission.op),
+                )
+            })?;
         Ok(())
     }
 
@@ -76,7 +89,15 @@ impl Effects for Remote {
         };
         let answer = self
             .worker
-            .call("project.delete", frame.encode(), &mut |_| {})?;
+            .call("project.delete", frame.encode(), &mut |_| {})
+            .map_err(|refusal| {
+                crate::unknown::named_unknown(
+                    refusal,
+                    "project",
+                    &self.project,
+                    Some(&admission.op),
+                )
+            })?;
         let reply = DeleteReply::decode(&answer)?;
         if reply.stack != admission.stack {
             return Err(refused(

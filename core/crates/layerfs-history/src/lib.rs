@@ -26,7 +26,9 @@ pub use contract::query;
 pub use contract::records;
 
 pub use catalog::{HistoryCatalog, HistoryCatalogConfig, NamedSnapshot, PublishLane};
-pub use error::{GcHolder, HistoryError, HistoryResult, MountHolders, OpConflict};
+pub use error::{
+    GcHolder, HistoryError, HistoryResult, MountHolders, OpConflict, UnknownOutcomeState,
+};
 pub use identity::{
     BranchId, CatalogId, CommitId, HistoryName, LayerId, LayerStackId, NodeId, WorkspaceId,
 };

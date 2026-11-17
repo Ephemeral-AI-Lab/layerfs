@@ -38,7 +38,21 @@ pub fn stats(home: &Path, events: &mut Events<'_>, request: &ProjectStats) -> Ou
 /// its marker frontier. The result names the project as the caller gave it,
 /// `<store>/<project>`.
 pub fn remove_file(home: &Path, events: &mut Events<'_>, request: &ProjectRemoveFile) -> Outcome {
-    let value = on_project(home, events, &request.project, StoreOp::RemoveFile(request))?;
+    let value = match on_project(home, events, &request.project, StoreOp::RemoveFile(request)) {
+        Ok(value) => value,
+        Err(refusal) => {
+            // The detail names the project inside its Store, as the Store
+            // does; the result below keeps the caller's `<store>/<project>`
+            // spelling.
+            let project = request
+                .project
+                .rsplit_once('/')
+                .map_or(request.project.as_str(), |(_, project)| project);
+            return Err(crate::unknown::named_unknown(
+                refusal, "project", project, None,
+            ));
+        }
+    };
     Ok(layerfs_home::home::with_field(
         value,
         "project",

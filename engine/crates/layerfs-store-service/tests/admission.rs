@@ -131,3 +131,75 @@ fn a_mount_refuses_every_removal_through_the_service() {
         .expect("release the mount");
     removal::remove(&fixture.service.store, &stack, "work").expect("remove after release");
 }
+
+/// F43R2-2 (§5.1): a mount checks every scope it names for a live operation,
+/// so a live Init or merge row at the Branch's project refuses it `Busy` with
+/// the operation's entity, phase and op. Two mounts of one Branch still share
+/// the scope, so neither refuses the other.
+#[test]
+fn a_mount_sees_a_live_init_or_merge_but_shares_with_another_mount() {
+    let fixture = Fixture::new("admission-init-mount", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    fixture.fork("work");
+    let stack = lookup::project(&fixture.service.store, "installed").expect("project");
+    let branch = lookup::branch(&fixture.service.store, &stack, "work").expect("branch");
+    let history = fixture.service.store.history();
+    let snapshot = history
+        .branch_snapshot(branch.id)
+        .expect("snapshot")
+        .expect("the Branch");
+    let place = layerfs_bridge::control::MountPlace::new(Some("sandbox-7"), Some("machine-7"));
+    let mount = |tag: u8| {
+        admission::mount_intent(
+            WorkspaceId::from_authority([tag; 32]).expect("workspace"),
+            &snapshot,
+            &place,
+        )
+    };
+
+    // A live Init or merge is an operation at project scope; a mount of the
+    // project's Branch must see it and be refused with its phase and op.
+    for (index, (kind, phase)) in [(GcIntentKind::Init, "init"), (GcIntentKind::Merge, "merge")]
+        .into_iter()
+        .enumerate()
+    {
+        let op = [0x40 + index as u8; 16];
+        let operation = GcIntent::shared(op, kind, GcScopeKind::Project, stack.id.as_slice())
+            .named(Some("installed"), None)
+            .with_phase(Some(phase));
+        history
+            .gc_register(&operation)
+            .expect("admit the Init/merge");
+
+        let refused = history
+            .gc_register(&mount(0x70 + index as u8))
+            .expect_err("the live operation holds the project");
+        let refused = lookup::history(refused);
+        assert_eq!(refused.code, "Busy", "{refused:?}");
+        let entity = refused.detail.get("entity").expect("entity detail");
+        assert_eq!(entity.get_text("kind"), Some("project"), "{entity:?}");
+        assert_eq!(entity.get_text("name"), Some("installed"), "{entity:?}");
+        assert_eq!(refused.detail.get_text("phase"), Some(phase));
+        assert_eq!(
+            refused.detail.get_text("op"),
+            Some(lookup::hex(&op).as_str())
+        );
+
+        history.gc_release(&op).expect("release the Init/merge");
+        history.gc_release(&mount(0x70 + index as u8).op_id).ok();
+    }
+
+    // Mounts are shared: two live mounts of the Branch do not refuse each
+    // other, so the OPS scan must keep `mount` out of its kind filter.
+    let first = mount(0x81);
+    let second = mount(0x82);
+    history.gc_register(&first).expect("the first mount");
+    history.gc_register(&second).expect("the second mount");
+    history.gc_release(&first.op_id).expect("release the first");
+    history
+        .gc_release(&second.op_id)
+        .expect("release the second");
+    fixture.cleanup();
+}

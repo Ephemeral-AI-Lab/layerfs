@@ -47,7 +47,7 @@ front ends carry it unchanged.
 | `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
 | `StaleSandbox`, `NoStore`, `Unauthorized`, `UnknownMethod` | a saved daemon not ready; a Store file missing where it should be; a Sandbox record not owned by this user or not private; an operation no one serves | [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs), [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs), [`files.rs`](../../../../control/crates/layerfs-sandbox/src/files.rs) |
 | `Failed` | tried and did not happen, or no code of its own (`outcome::failed`); whatever exists is kept | [`outcome.rs`](../../../../control/crates/layerfs-home/src/outcome.rs) |
-| `Unknown` | the outcome is not known | [Uncertain outcomes](#uncertain-outcomes) |
+| `Unknown` | the outcome is not known; a GC call names its durable operation (`detail {entity, phase, op}`, with `phase`/`op` null when none is known) | [Uncertain outcomes](#uncertain-outcomes) |
 
 A daemon refusal of a Workspace call carries the daemon's `ControlCode` as
 its code (`Busy`, `HeadMoved`, `Missing`, `Capacity`, `Invalid`, `Failed`,
@@ -98,7 +98,7 @@ The CLI refuses a wrong command line itself, with exit 2, before any call
 
 | Code | Outcome | Source |
 | --- | --- | --- |
-| `Unknown` | may have happened. Every call is one attempt; nothing is resent. Read state with `list`, `get` or `status` before acting again | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `lost`, `answer`; [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) `retain`; [`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) |
+| `Unknown` | may have happened. Every call is one attempt; nothing is resent. A GC call's detail names its entity and, when one is known, its durable op. Read state with `list`, `get` or `status` before acting again | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `lost`, `answer`; [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) `retain`; [`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) |
 | `Unresolved` | an earlier `Unknown` on this entity stands; this call did nothing | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) `blocks` |
 | daemon `Unknown` | a Workspace operation's outcome is uncertain at the daemon | [`control_types.rs`](../../../../engine/crates/layerfs-bridge/src/control_types.rs) `ControlCode::Unknown` |
 | `Failed` with `attempted: true` after a daemon exchange | uncertain, though the code is `Failed`: a lost daemon reply is not mapped to `Unknown` | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `operation` |

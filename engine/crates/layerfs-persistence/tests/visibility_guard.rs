@@ -94,8 +94,9 @@ const ALLOWED: &[Allow] = &[
         file: "gc_intent_ops_project.sql",
         markers: &[],
         returns_state: false,
-        reason: "§5.1/§8 compaction admission: the removal/compaction subset of \
-                 gc_intent_all_project, with the same retired-Branch coverage",
+        reason: "§5.1/§8 admission: the operation subset of gc_intent_all_project \
+                 (Init, merge, removal and compaction, but not another mount), with the \
+                 same retired-Branch coverage",
     },
     Allow {
         file: "history_remove_unreachable_reach.sql",

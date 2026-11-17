@@ -9,8 +9,9 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::{ContentError, ObjectId};
 use layerfs_history::{
     error::{HolderKind, HolderState, Missing, NameSource, NameTakenState, RemovedState},
+    records::GcScopeKind,
     BranchRecord, CommitId, CommitRecord, HistoryError, HistoryName, LayerId, LayerRecord,
-    LayerStackRecord, NodeId,
+    LayerStackRecord, NodeId, UnknownOutcomeState,
 };
 use std::sync::Arc;
 
@@ -60,7 +61,7 @@ pub fn history(error: HistoryError) -> SdkRefusal {
         HistoryError::Exists(_) => "Exists",
         HistoryError::StaleStore => "StaleStore",
         HistoryError::Unsupported(_) => "Unsupported",
-        HistoryError::UnknownOutcome => "Unknown",
+        HistoryError::UnknownOutcome | HistoryError::UnknownOutcomeOp(_) => "Unknown",
         _ => "Failed",
     };
     let detail = match error.cause() {
@@ -68,11 +69,31 @@ pub fn history(error: HistoryError) -> SdkRefusal {
         HistoryError::Removed(state) => removed_detail(state),
         HistoryError::MountsActive(state) => mounts_detail(state),
         HistoryError::BusyOp(state) | HistoryError::Unresolved(state) => op_detail(state),
+        HistoryError::UnknownOutcomeOp(state) => unknown_detail(state),
         // A code with no spec'd detail carries an empty detail (spec gaps
         // G1), never a null a client would have to special-case.
         _ => SdkValue::map::<0>([]),
     };
     refuse(code, message, detail)
+}
+
+/// [`history`] with this call's entity, for a `UnknownOutcome` the call can
+/// name: spec §10 A6 makes the `Unknown` detail `{entity: {kind, name},
+/// phase, op}`, with `phase` and `op` null when no durable operation is
+/// known. A definite refusal keeps its own wire detail.
+pub fn history_in(
+    error: HistoryError,
+    scope_kind: GcScopeKind,
+    entity: &str,
+    phase: Option<&str>,
+    op: Option<&[u8; 16]>,
+) -> SdkRefusal {
+    history(error.with_unknown(UnknownOutcomeState::new(
+        scope_kind,
+        entity,
+        phase.map(str::to_owned),
+        op.map(|op| hex(op)),
+    )))
 }
 
 /// The `NameTaken` detail: the holder and where it is held.
@@ -152,6 +173,32 @@ fn mounts_detail(state: &layerfs_history::MountHolders) -> SdkValue {
         })
         .collect();
     SdkValue::map([("holders", SdkValue::List(holders))])
+}
+
+/// The §10 A6 `Unknown` detail: the entity the call names and, when a
+/// durable operation is known, its phase and identity. Both are null when the
+/// call recorded none.
+fn unknown_detail(state: &layerfs_history::UnknownOutcomeState) -> SdkValue {
+    SdkValue::map([
+        (
+            "entity",
+            SdkValue::map([
+                ("kind", SdkValue::text(state.scope_kind.as_str())),
+                ("name", SdkValue::text(&state.entity)),
+            ]),
+        ),
+        (
+            "phase",
+            state
+                .phase
+                .as_deref()
+                .map_or(SdkValue::Null, SdkValue::text),
+        ),
+        (
+            "op",
+            state.op.as_deref().map_or(SdkValue::Null, SdkValue::text),
+        ),
+    ])
 }
 
 fn op_detail(state: &layerfs_history::OpConflict) -> SdkValue {

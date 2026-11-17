@@ -52,7 +52,7 @@ pub fn delete_stack(
     deleted_ms: i64,
 ) -> Result<Deletion, SdkRefusal> {
     let intent = crate::history::admission::project_removal_from_id(stack);
-    delete_stack_with(store, stack, deleted_ms, &intent)
+    mark(store, stack, deleted_ms, &intent, false)
 }
 
 /// [`delete_stack`] under an admission intent the caller already registered.
@@ -65,11 +65,35 @@ pub fn delete_stack_with(
     deleted_ms: i64,
     intent: &GcIntent,
 ) -> Result<Deletion, SdkRefusal> {
+    // `delete_stack_with` runs under the caller's already-registered row; the
+    // plain `delete_stack` helper registers none, so its outcome names no
+    // durable operation.
+    mark(store, stack, deleted_ms, intent, true)
+}
+
+fn mark(
+    store: &Arc<Store>,
+    stack: LayerStackId,
+    deleted_ms: i64,
+    intent: &GcIntent,
+    durable: bool,
+) -> Result<Deletion, SdkRefusal> {
     let history = store.history();
     match history
         .gc_delete_stack(stack, deleted_ms, intent)
-        .map_err(lookup::history)?
-    {
+        .map_err(|error| {
+            let entity = intent
+                .project
+                .clone()
+                .unwrap_or_else(|| lookup::hex(stack.as_slice()));
+            lookup::history_in(
+                error,
+                intent.scope_kind,
+                &entity,
+                intent.phase.as_deref(),
+                durable.then_some(&intent.op_id),
+            )
+        })? {
         GcDeletion::Retired { deleted_ms } => Ok(Deletion::Retired { deleted_ms }),
         GcDeletion::Marked { deleted_ms } => Ok(Deletion::Marked { deleted_ms }),
         GcDeletion::Absent => Ok(Deletion::Absent),
