@@ -463,7 +463,7 @@ impl SqliteHandles {
             // The writer lane is free from here: a second compaction can take
             // it while this run settles. `settle_leftover` judges that race by
             // the owner the op record names; this test hook only names the
-            // window.
+            // window. The settle takes the lane again for its one write.
             if let Some(hook) = request.before_settle_hook {
                 hook(&store);
             }

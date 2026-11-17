@@ -22,6 +22,7 @@ use super::types::MarkTuple;
 use super::types::OwnerLiveness;
 use super::verify::file_tuple;
 use super::verify::open_immutable;
+use crate::backend::sqlite::lane::writer_admission::Writer;
 use crate::backend::sqlite::lifecycle::seal::SealedFacts;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
@@ -186,7 +187,19 @@ pub(crate) fn settle(
     // leaves the installed `G + 1` and the record for the next run.
     stop_at(request, CompactFailpoint::DuringSettle, op, store)?;
     let record_path = op_path(store);
-    let settled = clear_installed_mark(store, &op.op_id);
+    // §10: this is a write to the installed Store, so it takes the writers'
+    // lane like every other. An admitted writer has no busy handler: if this
+    // transaction ran beside it, that writer would fail `Busy`. The run let
+    // go of its own hold after the rename, so this one queues behind whoever
+    // took the lane since. A lane that cannot be taken leaves the record for
+    // the next run, like a Store that could not be cleared.
+    let settled = match Writer::acquire(store) {
+        Ok(writer) => {
+            let cleared = clear_installed_mark(store, &op.op_id);
+            writer.release().is_ok() && cleared
+        }
+        Err(_) => false,
+    };
     // §9/§11: the record settles only after the whole artifact set is gone. A
     // residue `clear_artifacts` could not remove keeps it, so the next run
     // adopts the recorded leftover instead of refusing the staged name as an
@@ -221,8 +234,9 @@ pub(crate) fn settle(
 
 /// Clears the installed Store's admission intent and the transient §6.1
 /// `kept_node` rows in one raw transaction. After the seal the run holds no
-/// session, so this is the only handle on the Store; the writer lane is already
-/// released, and a busy Store keeps the op record for the next run instead.
+/// session, so this is the only handle on the Store. The caller holds the
+/// writer lane: the run's own before the rename, a fresh hold in [`settle`]
+/// after it. A busy Store keeps the op record for the next run instead.
 pub(crate) fn clear_installed_mark(store: &Path, op_id: &[u8; 16]) -> bool {
     let Ok(connection) = Connection::open_with_flags(
         store,
@@ -442,18 +456,18 @@ pub(crate) fn unfinished_work(store: &Path) -> HistoryResult<bool> {
 }
 
 /// A writer held across the seal, install and settle, released on every exit.
-pub(crate) struct WriterGuard(Option<crate::backend::sqlite::lane::writer_admission::Writer>);
+pub(crate) struct WriterGuard(Option<Writer>);
 
 impl WriterGuard {
-    pub(crate) fn new(writer: crate::backend::sqlite::lane::writer_admission::Writer) -> Self {
+    pub(crate) fn new(writer: Writer) -> Self {
         Self(Some(writer))
     }
 
-    pub(crate) fn take(&mut self) -> crate::backend::sqlite::lane::writer_admission::Writer {
+    pub(crate) fn take(&mut self) -> Writer {
         self.0.take().expect("a compaction holds its writer")
     }
 
-    pub(crate) fn put(&mut self, writer: crate::backend::sqlite::lane::writer_admission::Writer) {
+    pub(crate) fn put(&mut self, writer: Writer) {
         self.0 = Some(writer);
     }
 

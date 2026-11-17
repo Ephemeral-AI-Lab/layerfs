@@ -1464,6 +1464,77 @@ fn a_live_owners_settle_window_refuses_a_second_compaction() {
     clean(&final_handles);
 }
 
+/// When the writer that took the lane in the settle window let go of it.
+static SETTLE_WINDOW_WRITER: std::sync::Mutex<Option<std::thread::JoinHandle<std::time::Instant>>> =
+    std::sync::Mutex::new(None);
+
+/// A writer that takes the Store's lane in the settle window and keeps it for
+/// a while, as a Commit that was waiting for the rebuild would. The lane is
+/// taken here, on the compaction's own thread, so it is held before the settle
+/// starts.
+fn hold_the_lane_past_the_settle(store: &Path) {
+    let directory = std::fs::File::open(store.parent().expect("the Store's directory")).unwrap();
+    let lane = nix::fcntl::Flock::lock(directory, nix::fcntl::FlockArg::LockExclusive)
+        .map_err(|(_, error)| error)
+        .expect("the lane is free after the rename");
+    let writer = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        let released = std::time::Instant::now();
+        drop(lane);
+        released
+    });
+    *SETTLE_WINDOW_WRITER.lock().unwrap() = Some(writer);
+}
+
+/// The settle clears the admission intent and the `kept_node` rows in the
+/// installed Store. That is a write, so it waits for the writers' lane: an
+/// admitted writer has no busy handler, and a settle that wrote beside it left
+/// that writer `Busy` (seen as a Commit that failed right after a rebuild).
+#[test]
+fn the_settle_waits_for_a_writer_that_holds_the_lane() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let dead = whole_file(&handles, b"a pack the settle test collects");
+    let before = generation(&handles);
+    let receipt = handles
+        .compact(&CompactRequest {
+            op_id: [0x7c; 16],
+            before_settle_hook: Some(hold_the_lane_past_the_settle),
+            ..CompactRequest::default()
+        })
+        .expect("the run settles once the lane is free");
+    let returned = std::time::Instant::now();
+    let released = SETTLE_WINDOW_WRITER
+        .lock()
+        .unwrap()
+        .take()
+        .expect("the hook took the lane")
+        .join()
+        .unwrap();
+    assert!(
+        returned >= released,
+        "the settle wrote to the Store while another writer held the lane"
+    );
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_after, before + 1);
+    assert!(
+        receipt.residue.artifacts.is_empty(),
+        "the settle leaves no residue: {:?}",
+        receipt.residue
+    );
+    assert!(compact_op_status(&path).is_none(), "the op record settles");
+    assert_eq!(table_count(&path, "kept_node"), 0);
+    assert_eq!(table_count(&path, "gc_intent"), 0);
+    let final_handles = reopen(&path);
+    assert!(located(&final_handles, live), "the live root still reads");
+    assert!(
+        !located(&final_handles, dead),
+        "the rebuild collected the dead pack"
+    );
+    clean(&final_handles);
+}
+
 /// #49 round 3: a run that returns with `UnknownOutcome` leaves its record
 /// behind while its owner pid (this live process) is still alive. That record
 /// belongs to a returned run, not an in-flight one: the next call with the

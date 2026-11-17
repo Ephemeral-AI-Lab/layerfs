@@ -177,6 +177,7 @@ of the retained packs, so its steps are shaped around that copy.
 | Visited scratch | The mark writes one `visited` row per reached object into `<store>.compact-visited`; the retained packs (`live_pack`) are derived from those rows in one statement when the mark finishes | [`compact_visit.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact_visit.rs) |
 | Verification | One `immutable=1` reader of the fresh file: the schema check, one statement that reads the row counts and recomputed sums with one pass per table, the live-heads digest and the tuple. The sealed file's tuple and digest are read back through one reader as well | [`verify.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/verify.rs) |
 | Synchronization | The op record is synchronized at each write, the fresh file before the rename and the directory after it | [`op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/op.rs), [`install.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/install.rs) |
+| Settle | The run lets go of the writer lane after the rename, removes its artifacts, then takes the lane again for the one transaction that clears its admission intent and the `kept_node` rows in the installed Store. A writer has no busy handler, so a settle that wrote beside one would leave it `Busy`; the settle waits its turn instead. The op record is removed last | [`install.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/install.rs) |
 
 ## Heads
 

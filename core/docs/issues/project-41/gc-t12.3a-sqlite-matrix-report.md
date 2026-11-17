@@ -263,7 +263,7 @@ AC-51 does not depend on the projection alone.
   `/var/tmp`), rustc 1.85.1, `SqlitePersistenceProfile::Disposable`
   (WAL/OFF), `CARGO_TARGET_DIR=/tmp/target-t123c`.
 - Verified here: `sqlite_compact_matrix` (1 test); the persistence suites
-  `sqlite_compact` (35), `sqlite_compact_crash` (24),
+  `sqlite_compact` (36), `sqlite_compact_crash` (24),
   `sqlite_compact_fixtures` (1), `admission` (10), `path_removal` (4),
   `branch_removal` (4), `project_delete` (4), `epoch_fence` (7),
   `gc_backfill` (5), `kept_objects` (7); the Store-service path suites
@@ -272,7 +272,7 @@ AC-51 does not depend on the projection alone.
   `sdk_path_removal` (5); and the `layerfs-control
   project_delete_worker` (8), the `layerfs-store
   project_delete` (18), `compact_report_status` (6) and the
-  PostgreSQL AC-44 suite `postgresql_compact` (30 tests; AC-44's nine are
+  PostgreSQL AC-44 suite `postgresql_compact` (31 tests; AC-44's nine are
   `a_fully_privileged_role_compacts`,
   `a_role_without_create_on_the_database_is_refused_as_unsupported`,
   `a_role_without_create_on_the_store_schema_is_refused_as_unsupported`,
