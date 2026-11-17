@@ -36,7 +36,16 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "Cargo.toml"
 LINUX_ONLY = '#![cfg(target_os = "linux")]'
 MOUNT_PACKAGE = "layerfs-daemon"
-API_MOUNT_TARGETS = {"kernel_mount_routes", "kernel_application", "observed_application", "r5_1_actual_daemon_commit"}
+# SDK mount targets mount a real kernel Workspace: the fast lane leaves them out
+# like the daemon ones, and the mount lane runs each in its own container.
+API_MOUNT_TARGETS = {
+    "kernel_mount_routes",
+    "kernel_application",
+    "observed_application",
+    "r5_1_actual_daemon_commit",
+    # Binds and unmounts a Workspace through the actual daemon (#2).
+    "unmount_observability",
+}
 
 # (package, test target): run seconds on the macOS host, 2026-10-23.
 SLOW = {

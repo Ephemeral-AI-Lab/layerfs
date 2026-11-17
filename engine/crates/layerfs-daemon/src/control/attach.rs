@@ -187,6 +187,7 @@ impl Service {
                         observer: Some(session.observer()),
                         evidence: Evidence::Other(Box::new(session)),
                         forced: None,
+                        abort: None,
                     }))),
                 };
             }
@@ -208,6 +209,7 @@ impl Service {
                 observer,
                 evidence: Evidence::Other(Box::new((failure, mount))),
                 forced: None,
+                abort: None,
             })));
         }
         let phase = if failure.mounted {
@@ -239,6 +241,7 @@ impl Service {
                 observer: None,
                 evidence: Evidence::Other(Box::new((failure, mount, other))),
                 forced: None,
+                abort: None,
             })),
         }
     }

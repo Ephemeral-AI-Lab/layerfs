@@ -5,19 +5,23 @@
 use super::{
     kernel::Kernel,
     registry::bound_mut,
-    serving::{stage, Attached, Evidence, Kept, Leaving},
-    Failure, Service, Success,
+    serving::{stage, work, Attached, Evidence, Kept, Leaving, Stop},
+    Failure, Service, Success, UnmountAbort,
 };
 use crate::store::BoundWorkspace;
 use layerfs_bridge::control::{
     AbortDisposition, Activity, CommitKnowledge, ControlCode, DetachDisposition, ForcedFacts,
-    MountPhase, TeardownStage, WorkspaceToken,
+    MountPhase, MountWork, TeardownStage, WorkspaceToken,
 };
 use layerfs_fuse::{
     mount::AbortWrite,
-    session::{Detach, DrainStage, Forced, SessionObserver},
+    session::{Detach, DrainStage, Forced},
 };
-use std::{fmt, sync::Arc};
+use std::{
+    fmt,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 /// Abort effects after normal admission, which established no Commit custody
 /// and completed the one plain detach before attempting the write.
@@ -32,6 +36,36 @@ pub(super) fn detached_abort_facts(forced: Option<Forced>) -> Option<ForcedFacts
         commit: CommitKnowledge::Absent,
         fenced: forced.terminal_replies,
     })
+}
+
+/// The abort path's observation, when the session made its one abort write.
+/// A stall the session could not abort leaves `forced` absent and no
+/// observation: no abort was attempted, so none is reported.
+fn abort_observation(
+    token: WorkspaceToken,
+    stage: TeardownStage,
+    forced: Option<Forced>,
+    detached: bool,
+    work: MountWork,
+    waited: Duration,
+) -> Option<Box<UnmountAbort>> {
+    let forced = forced?;
+    Some(Box::new(UnmountAbort {
+        token,
+        stage,
+        abort: forced.abort,
+        detached,
+        work,
+        waited,
+    }))
+}
+
+/// One structured stderr line for the abort path, on success and on a stop.
+/// It is the only line this path writes and nothing is logged per request.
+fn warn(abort: &Option<Box<UnmountAbort>>) {
+    if let Some(abort) = abort {
+        eprintln!("{}", crate::telemetry::unmount_abort_line(abort));
+    }
 }
 
 /// Terminal admission over a connection-owning entry. No daemon-side request
@@ -95,26 +129,46 @@ impl Service {
             Err(errno) => {
                 return Err(self.retain(
                     token,
-                    TeardownStage::Detach,
-                    format!("plain detach: {errno}"),
-                    Some(observer),
+                    Stop {
+                        stage: TeardownStage::Detach,
+                        detail: format!("plain detach: {errno}"),
+                        observer: Some(observer),
+                        forced: None,
+                        abort: None,
+                    },
                     Box::new(session),
-                    None,
                 ))
             }
         }
         self.leaving(token, MountPhase::Draining);
-        let drained = match session.drain() {
-            Ok(drained) => drained,
+        // The stall this unmount waits out, from the connection drain to the
+        // end of the abort path; reported as `unmount.waited_ms` when the path
+        // ran, and as nothing when it did not.
+        let draining = Instant::now();
+        let (drained, mut abort) = match session.drain() {
+            Ok(drained) => (drained, None),
             // Detached yet unjoined: the connection outlived its mount because
             // another mount namespace holds a copy of it (an engine or VM agent
             // outside the Sandbox). Make the same one abort write a forced
             // unmount makes, then drain again; a connection whose control is
             // unusable, or one that still stops, keeps its custody (#426, #460).
             Err(undrained) => match undrained.end_stalled() {
-                Ok(drained) => drained,
+                Ok(drained) => {
+                    let observed = observer.facts();
+                    let abort = abort_observation(
+                        token,
+                        TeardownStage::Join,
+                        drained.forced,
+                        observed.detached,
+                        work(&observed),
+                        draining.elapsed(),
+                    );
+                    warn(&abort);
+                    (drained, abort)
+                }
                 Err(undrained) => {
                     let facts = detached_abort_facts(undrained.forced);
+                    let observed = observer.facts();
                     let (stopped, detail) = match undrained.forced.map(|forced| forced.abort) {
                         Some(AbortWrite::Failed(errno)) => (
                             TeardownStage::Abort,
@@ -128,16 +182,35 @@ impl Service {
                             stage(undrained.stage),
                             format!(
                                 "connection drain stopped at {:?}: abort {abort:?}, abort_bound {}, loops {:?}, work {:?}",
-                                undrained.stage, observer.facts().abort_bound,
+                                undrained.stage, observed.abort_bound,
                                 undrained.loops, undrained.work
                             ),
                         ),
                     };
+                    let abort = abort_observation(
+                        token,
+                        stopped,
+                        undrained.forced,
+                        observed.detached,
+                        work(&observed),
+                        draining.elapsed(),
+                    );
+                    warn(&abort);
                     let evidence = match undrained.stage {
                         DrainStage::Join => Evidence::Stalled(undrained),
                         _ => Evidence::Other(undrained),
                     };
-                    return Err(self.keep(token, stopped, detail, Some(observer), evidence, facts));
+                    return Err(self.keep(
+                        token,
+                        Stop {
+                            stage: stopped,
+                            detail,
+                            observer: Some(observer),
+                            forced: facts,
+                            abort,
+                        },
+                        evidence,
+                    ));
                 }
             },
         };
@@ -149,17 +222,23 @@ impl Service {
         ) {
             Ok(()) => {}
             Err(failure) => {
+                if let Some(abort) = abort.as_mut() {
+                    abort.stage = TeardownStage::Revoke;
+                }
                 return Err(self.retain(
                     token,
-                    TeardownStage::Revoke,
-                    failure.wire().detail,
-                    Some(observer),
+                    Stop {
+                        stage: TeardownStage::Revoke,
+                        detail: failure.wire().detail,
+                        observer: Some(observer),
+                        forced: facts,
+                        abort,
+                    },
                     Box::new((failure, drained)),
-                    facts,
                 ));
             }
         };
-        self.close(token, &workspace, Some(drained))
+        self.close(token, &workspace, Some(drained), abort)
     }
     /// Describes the exact retained kernel owner for an operator. Observation
     /// only: nothing is transferred, released, retried or settled.
@@ -194,33 +273,22 @@ impl Service {
     pub(super) fn retain(
         &self,
         token: WorkspaceToken,
-        stage: TeardownStage,
-        detail: String,
-        observer: Option<SessionObserver>,
+        stop: Stop,
         evidence: Box<dyn fmt::Debug + Send>,
-        forced: Option<ForcedFacts>,
     ) -> Failure {
-        let evidence = Evidence::Other(evidence);
-        self.keep(token, stage, detail, observer, evidence, forced)
+        self.keep(token, stop, Evidence::Other(evidence))
     }
     /// The same, with the owner already sorted into its kind.
-    pub(super) fn keep(
-        &self,
-        token: WorkspaceToken,
-        stage: TeardownStage,
-        detail: String,
-        observer: Option<SessionObserver>,
-        evidence: Evidence,
-        forced: Option<ForcedFacts>,
-    ) -> Failure {
+    pub(super) fn keep(&self, token: WorkspaceToken, stop: Stop, evidence: Evidence) -> Failure {
         let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
         let mut kept = Kept {
             ready: None,
-            stage,
-            detail,
-            observer,
+            stage: stop.stage,
+            detail: stop.detail,
+            observer: stop.observer,
             evidence,
-            forced,
+            forced: stop.forced,
+            abort: stop.abort,
         };
         let mut binding = bound_mut(&mut entries, token).ok();
         if let Some(Kernel::Leaving(leaving)) = binding.as_ref().map(|binding| &binding.kernel) {

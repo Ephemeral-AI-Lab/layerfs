@@ -315,6 +315,17 @@ impl Application {
             rows.finish()
         })();
         let diagnostic = resources.into_diagnostic_error(result.err());
+        // A normal unmount that took its abort path reports it with the reply,
+        // on success and on a retained stop; a later stop reads the
+        // observation the entry kept.
+        let abort = match &outcome {
+            Ok(success) => success.abort.clone(),
+            Err(Failure::Retained(custody)) => service
+                .as_ref()
+                .and_then(|service| service.retained_abort(custody.token)),
+            Err(Failure::After { original, .. }) => original.abort.clone(),
+            Err(_) => None,
+        };
         match reports {
             // The SDK trace route reports a failed diagnostic write beside
             // the reply and keeps its connection.
@@ -335,6 +346,7 @@ impl Application {
                     &outcome,
                     diagnostic.as_ref(),
                     [sql, delta, fuse],
+                    abort,
                 );
                 (outcome, None, Some(telemetry))
             }

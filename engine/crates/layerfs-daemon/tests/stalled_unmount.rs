@@ -152,6 +152,20 @@ fn a_normal_unmount_stalled_at_join_ends_itself_with_one_abort_write() {
         forced.detach,
         layerfs_fuse::session::DetachAttempt::Detached
     );
+    // The same abort path is attached to the successful reply (#2).
+    let abort = done.abort.as_deref().expect("abort-path observation");
+    assert_eq!(abort.stage, TeardownStage::Join);
+    assert_eq!(abort.abort, layerfs_fuse::mount::AbortWrite::Written);
+    assert!(abort.detached);
+    assert!(abort.work.loops_configured > 1, "{:?}", abort.work);
+    assert_eq!(abort.work.loops_exited, abort.work.loops_joined);
+    assert_eq!(abort.work.loops_joined, abort.work.loops_configured);
+    assert_eq!((abort.work.active, abort.work.retained), (0, 0));
+    assert!(
+        abort.waited <= Duration::from_secs(60),
+        "{:?}",
+        abort.waited
+    );
     assert!(
         mount_entry(&ready.directory).is_none(),
         "the daemon's mount row remains"
@@ -212,6 +226,12 @@ fn rejected_abort(errno: Option<u32>, disposition: AbortDisposition, detail: &st
     let again = rig.harness.try_unmount(token);
     let forced = rig.harness.try_force(token, false);
     let evidence = rig.harness.service.retained_kernel(token).unwrap().unwrap();
+    // The retained entry keeps the observation for a later reply (#2).
+    let observed = rig
+        .harness
+        .service
+        .retained_abort(token)
+        .expect("retained abort observation");
     assert!(copy.leave());
     drop(copy);
     until("retained connection loops joined", || {
@@ -235,6 +255,17 @@ fn rejected_abort(errno: Option<u32>, disposition: AbortDisposition, detail: &st
     assert_eq!(facts.fenced, 0);
     assert!(custody.detail.contains(detail), "{custody:?}");
     assert!(evidence.contains("forced: Some(Forced"), "{evidence}");
+    assert_eq!(observed.stage, stage);
+    assert!(observed.detached);
+    assert_eq!(
+        observed.abort,
+        match errno {
+            Some(0) => layerfs_fuse::mount::AbortWrite::Short(0),
+            Some(errno) =>
+                layerfs_fuse::mount::AbortWrite::Failed(nix::errno::Errno::from_raw(errno as i32)),
+            None => layerfs_fuse::mount::AbortWrite::Written,
+        }
+    );
     for result in [again, forced] {
         let Err(Failure::Retained(later)) = result else {
             panic!("retained custody changed: {result:?}");
@@ -289,6 +320,11 @@ fn later_failure(stage: TeardownStage) {
     }
     drop(operation);
     let result = rig.harness.try_unmount(token);
+    let observed = rig
+        .harness
+        .service
+        .retained_abort(token)
+        .expect("retained abort observation");
     let again = rig.harness.try_force(token, false);
     assert!(copy.leave());
     drop(copy);
@@ -301,6 +337,10 @@ fn later_failure(stage: TeardownStage) {
     assert_eq!(custody.stage, stage, "{custody:?}");
     let facts = custody.forced.as_ref().expect("successful abort facts");
     assert_eq!(facts.abort, AbortDisposition::Written);
+    // A stop after the abort keeps the observation and its later boundary.
+    assert_eq!(observed.stage, stage);
+    assert!(observed.detached);
+    assert_eq!(observed.abort, layerfs_fuse::mount::AbortWrite::Written);
     assert_eq!(facts.detach, DetachDisposition::Detached);
     assert_eq!(facts.commit, CommitKnowledge::Absent);
     let Err(Failure::Retained(later)) = again else {

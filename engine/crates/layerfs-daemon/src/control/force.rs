@@ -3,7 +3,7 @@
 //! A normal unmount stalled at Join is forced the same way, its plain detach
 //! counting as the one detach.
 #[cfg(target_os = "linux")]
-use super::serving::{stage, work, Attached, Evidence, Leaving};
+use super::serving::{stage, work, Attached, Evidence, Leaving, Stop};
 use super::{
     kernel::Kernel,
     registry::{bound_mut, Binding},
@@ -269,11 +269,14 @@ impl Service {
             Err(refusal) if stalled => {
                 return Err(self.retain(
                     token,
-                    TeardownStage::Join,
-                    format!("abort refused before any effect: {refusal:?}"),
-                    Some(observer),
+                    Stop {
+                        stage: TeardownStage::Join,
+                        detail: format!("abort refused before any effect: {refusal:?}"),
+                        observer: Some(observer),
+                        forced: None,
+                        abort: None,
+                    },
                     Box::new(session),
-                    None,
                 ))
             }
             Err(refusal) => {
@@ -308,11 +311,14 @@ impl Service {
             facts.abort = abort;
             return Err(self.retain(
                 token,
-                TeardownStage::Abort,
-                detail,
-                Some(observer),
+                Stop {
+                    stage: TeardownStage::Abort,
+                    detail,
+                    observer: Some(observer),
+                    forced: Some(facts),
+                    abort: None,
+                },
                 Box::new(session),
-                Some(facts),
             ));
         }
         let drained = match session.force_drain() {
@@ -325,14 +331,17 @@ impl Service {
                 facts.fenced = undrained.forced.map_or(0, |forced| forced.terminal_replies);
                 return Err(self.retain(
                     token,
-                    stage(undrained.stage),
-                    format!(
-                        "forced drain stopped at {:?}: detach {attempt:?}, loops {:?}, work {:?}",
-                        undrained.stage, undrained.loops, undrained.work
-                    ),
-                    Some(observer),
+                    Stop {
+                        stage: stage(undrained.stage),
+                        detail: format!(
+                            "forced drain stopped at {:?}: detach {attempt:?}, loops {:?}, work {:?}",
+                            undrained.stage, undrained.loops, undrained.work
+                        ),
+                        observer: Some(observer),
+                        forced: Some(facts),
+                        abort: None,
+                    },
                     undrained,
-                    Some(facts),
                 ));
             }
         };
@@ -354,15 +363,18 @@ impl Service {
             Err(failure) => {
                 return Err(self.retain(
                     token,
-                    TeardownStage::Revoke,
-                    failure.wire().detail,
-                    Some(observer),
+                    Stop {
+                        stage: TeardownStage::Revoke,
+                        detail: failure.wire().detail,
+                        observer: Some(observer),
+                        forced: Some(facts),
+                        abort: None,
+                    },
                     Box::new((failure, drained)),
-                    Some(facts),
                 ));
             }
         }
-        let kernel = self.closed(token, &workspace, Some(drained), Some(facts.clone()))?;
+        let kernel = self.closed(token, &workspace, Some(drained), Some(facts.clone()), None)?;
         // One observation of the closed namespace; a failed one claims no
         // state. Its completion is read and dropped here.
         let (cleanup, observation_failure) = match self
@@ -396,6 +408,7 @@ impl Service {
                 commit: None,
                 observation_failure,
                 kernel,
+                abort: None,
             },
         )
     }

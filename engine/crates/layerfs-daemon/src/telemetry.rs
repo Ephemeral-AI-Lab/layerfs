@@ -1,7 +1,7 @@
 //! The daemon's half of a traced reply: Commit storage and construction
 //! receipts and kernel opcode counts. Phase timing and SQL work are the Store
 //! service's ([`layerfs_store_service::telemetry`]).
-use crate::control::{Failure, Success};
+use crate::control::{Failure, Success, UnmountAbort};
 use layerfs_bridge::control::SdkValue;
 pub(crate) use layerfs_store_service::telemetry::{delta, sql, sql_values};
 use layerfs_store_service::telemetry::{named, timing};
@@ -9,19 +9,26 @@ pub use layerfs_store_service::telemetry::{phase, recording, timed, Recording};
 use layerfs_telemetry::timer::TimingReport;
 
 /// The telemetry of one traced request: its timing, its Store SQL work, the
-/// Workspace's kernel opcode counts when given, the Commit's storage
-/// diagnostics and construction receipt when it committed, and the failed
-/// diagnostic write, if any.
+/// Workspace's kernel opcode counts when given, the normal unmount's abort
+/// path when it took one, the Commit's storage diagnostics and construction
+/// receipt when it committed, and the failed diagnostic write, if any.
 pub(crate) fn value(
     reports: Vec<TimingReport>,
     outcome: &Result<Success, Failure>,
     diagnostic: Option<&std::io::Error>,
     [sql, delta, fuse]: [Option<SdkValue>; 3],
+    abort: Option<Box<UnmountAbort>>,
 ) -> SdkValue {
     let mut fields = vec![("timing".to_owned(), timing(&reports))];
     for (name, value) in [("sql", sql), ("delta", delta), ("fuse", fuse)] {
         fields.extend(value.map(|value| (name.to_owned(), value)));
     }
+    #[cfg(target_os = "linux")]
+    if let Some(abort) = abort {
+        fields.push(("unmount".to_owned(), unmount_abort(&abort)));
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = abort;
     let (namespace, storage) = crate::application::commit_parts(outcome);
     if let Some(storage) = storage {
         fields.push((
@@ -45,6 +52,103 @@ pub(crate) fn value(
         fields.push(("diagnosticError".to_owned(), error_value(error)));
     }
     SdkValue::Map(fields)
+}
+
+/// The `unmount` telemetry section of a normal unmount that took the abort
+/// path (issue #2), on success and on a stop. Its stable keys, in order, are
+/// `stage`, `abort`, `bytes` when the write was short or `errno` when it
+/// failed, `detached`, `loops_exited`, `loops_joined`, `active`, `retained`
+/// and `waited_ms`.
+#[cfg(target_os = "linux")]
+pub fn unmount_abort(abort: &UnmountAbort) -> SdkValue {
+    SdkValue::Map(unmount_abort_fields(abort))
+}
+
+/// The same facts as one `LAYERFS_DAEMON_UNMOUNT_ABORT` stderr line. The
+/// daemon writes it once per abort path, on success and on a stop; it is not
+/// per-request logging.
+#[cfg(target_os = "linux")]
+pub fn unmount_abort_line(abort: &UnmountAbort) -> String {
+    let mut line = format!(
+        "LAYERFS_DAEMON_UNMOUNT_ABORT workspace={} namespace={}",
+        hex(abort.token.workspace.as_slice()),
+        abort.token.namespace
+    );
+    for (name, value) in unmount_abort_fields(abort) {
+        line.push(' ');
+        line.push_str(&name);
+        line.push('=');
+        match value {
+            SdkValue::Bool(flag) => line.push_str(if flag { "true" } else { "false" }),
+            SdkValue::Int(number) => line.push_str(&number.to_string()),
+            SdkValue::Text(text) => line.push_str(&text),
+            _ => {}
+        }
+    }
+    line
+}
+
+/// The observation's fields, in one order for both forms.
+#[cfg(target_os = "linux")]
+fn unmount_abort_fields(abort: &UnmountAbort) -> Vec<(String, SdkValue)> {
+    use layerfs_fuse::mount::AbortWrite;
+    let named = |name: &str, value: SdkValue| (name.to_owned(), value);
+    let mut fields = vec![
+        named("stage", SdkValue::text(format!("{:?}", abort.stage))),
+        named("abort", SdkValue::text(abort_disposition(abort.abort))),
+    ];
+    match abort.abort {
+        AbortWrite::Short(bytes) => fields.push(named(
+            "bytes",
+            SdkValue::Int(i64::try_from(bytes).unwrap_or(i64::MAX)),
+        )),
+        AbortWrite::Failed(errno) => {
+            fields.push(named("errno", SdkValue::text(format!("{errno:?}"))))
+        }
+        AbortWrite::Written => {}
+    }
+    fields.extend([
+        named("detached", SdkValue::Bool(abort.detached)),
+        named(
+            "loops_exited",
+            SdkValue::Int(i64::from(abort.work.loops_exited)),
+        ),
+        named(
+            "loops_joined",
+            SdkValue::Int(i64::from(abort.work.loops_joined)),
+        ),
+        named("active", SdkValue::Int(i64::from(abort.work.active))),
+        named("retained", SdkValue::Int(i64::from(abort.work.retained))),
+        named("waited_ms", SdkValue::Int(waited_ms(abort.waited))),
+    ]);
+    fields
+}
+
+#[cfg(target_os = "linux")]
+fn abort_disposition(write: layerfs_fuse::mount::AbortWrite) -> &'static str {
+    use layerfs_fuse::mount::AbortWrite;
+    match write {
+        AbortWrite::Written => "Written",
+        AbortWrite::Short(_) => "Short",
+        AbortWrite::Failed(_) => "Failed",
+    }
+}
+
+/// Milliseconds, saturated; the observation is diagnostic, never a budget.
+#[cfg(target_os = "linux")]
+fn waited_ms(waited: std::time::Duration) -> i64 {
+    i64::try_from(waited.as_millis()).unwrap_or(i64::MAX)
+}
+
+#[cfg(target_os = "linux")]
+fn hex(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+    bytes
+        .iter()
+        .fold(String::with_capacity(bytes.len() * 2), |mut text, byte| {
+            let _ = write!(text, "{byte:02x}");
+            text
+        })
 }
 
 /// The Workspace's kernel opcode counts, frame dispositions, largest request

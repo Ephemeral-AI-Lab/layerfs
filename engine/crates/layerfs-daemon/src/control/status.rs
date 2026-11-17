@@ -84,6 +84,7 @@ impl Service {
             commit: None,
             observation_failure,
             kernel: None,
+            abort: None,
         })
     }
 }
