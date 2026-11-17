@@ -602,9 +602,13 @@ finds (`engine/crates/layerfs-persistence/src/diagnostic/history.rs:155-198`).
   (#42 item 36).
 - Window by window, sort lookups by object ID before locating them.
 - Whole files and chunks have no logical references; only their delta base
-  is needed. Reading it still loads and authenticates the whole group
-  (`delta/read.rs:561-571`); on SQLite the payload part of the walk runs
-  inside the copy (§7 step 4), and the PostgreSQL mark reads it in Phase M.
+  is needed. In an uncompressed payload group the mark reads the group's
+  record directory and each record's first bytes (`delta/edge.rs`,
+  `history/objects/edges.rs`), never the payload, so those bytes are not
+  authenticated by the mark; a compressed group and the `Ordinary` lane still
+  load the whole group (`delta/read.rs`). On SQLite the payload part of the
+  walk runs inside the copy (§7 step 4), and the PostgreSQL mark reads it in
+  Phase M.
 
 ### 6.3 Visited set
 

@@ -1,4 +1,5 @@
 //! Read budgets are checked before any BLOB is acquired into the result buffer.
+use crate::backend::sqlite::session::rows;
 use crate::{
     backend::metadata_locations::info,
     backend::{
@@ -8,6 +9,7 @@ use crate::{
 };
 use layerfs_storage::{policy, port::*};
 use std::collections::BTreeSet;
+use std::time::Instant;
 pub(crate) fn read(
     tx: &Transaction<'_>,
     ids: &[i64],
@@ -99,21 +101,48 @@ pub(crate) fn prefix(
         }
         return Ok(Some((length, control)));
     }
-    let limit = i64::try_from(limit).map_err(|_| PersistenceError::Malformed)?;
+    // Incremental BLOB I/O, not `substr(body,1,?)`: SQLite loads a column's
+    // whole overflow chain before a function sees it, so that statement read
+    // every pack body to return its first bytes.
     let mut rows = tx.query(
-        "SELECT length,substr(body,1,?) FROM pack WHERE pack_id=?",
-        vec![Param::I64(limit), Param::I64(id)],
+        "SELECT length FROM pack WHERE pack_id=?",
+        vec![Param::I64(id)],
     )?;
     let Some(row) = rows.pop() else {
         return Ok(None);
     };
     let length = row.get::<i64>(0).map_err(|_| PersistenceError::Malformed)?;
-    let body = row
-        .get::<Vec<u8>>(1)
-        .map_err(|_| PersistenceError::Malformed)?;
     let length = usize::try_from(length).map_err(|_| PersistenceError::Malformed)?;
-    if body.len() != length.min(limit as usize) {
-        return Err(PersistenceError::Malformed);
+    tx.work.borrow_mut().blob_open_calls += 1;
+    let blob = tx
+        .connection
+        .blob_open("main", "pack", "body", id, true)
+        .map_err(rows::error)?;
+    let mut body = vec![0; length.min(limit)];
+    let read = if blob.len() != length {
+        Err(PersistenceError::Malformed)
+    } else {
+        {
+            let mut work = tx.work.borrow_mut();
+            work.blob_read_calls += 1;
+            work.blob_requested_bytes += body.len() as u64;
+        }
+        let start = Instant::now();
+        let read = blob.read_at_exact(&mut body, 0).map_err(rows::error);
+        let mut work = tx.work.borrow_mut();
+        work.blob_read_ns += start.elapsed().as_nanos() as u64;
+        if read.is_ok() {
+            work.blob_read_bytes += body.len() as u64;
+        }
+        read.map_err(Into::into)
+    };
+    tx.work.borrow_mut().blob_close_calls += 1;
+    let close: Result<(), PersistenceError> = blob.close().map_err(rows::error).map_err(Into::into);
+    match (read, close) {
+        (Err(PersistenceError::Uncertain), _) | (_, Err(PersistenceError::Uncertain)) => {
+            Err(PersistenceError::Uncertain)
+        }
+        (Err(error), _) | (_, Err(error)) => Err(error),
+        (Ok(()), Ok(())) => Ok(Some((length, body))),
     }
-    Ok(Some((length, body)))
 }

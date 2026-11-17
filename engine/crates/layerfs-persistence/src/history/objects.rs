@@ -26,9 +26,11 @@ use layerfs_history::records::GcIntent;
 use layerfs_storage::{
     encoding::pool::PoolReader,
     encoding::{
-        delta::read::{locator_key, BodyCaches, ChainBases, ChainCounters, Resolver},
-        framed_record, framed_record_count, DecompressionWorkspace, GroupCache, PackAcquisition,
-        PackCache, PackUnit,
+        delta::{
+            edge::RecordDirectory,
+            read::{locator_key, stored_edge, BodyCaches, ChainCounters, Resolver},
+        },
+        DecompressionWorkspace, GroupCache, PackAcquisition, PackCache, PackUnit,
     },
     location::{ObjectLocation, PackInfo, SignatureRow},
     pack::layout::{self, GroupCodec, PackLane},
@@ -42,6 +44,7 @@ use layerfs_storage::{
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+mod edges;
 mod impls;
 const ROOTS: &str = "gc_kept_roots";
 const LOCATIONS: &str = "gc_object_locations";
@@ -541,12 +544,15 @@ impl Source for ClosureSource<'_> {
         self.mechanics
             .inode_values(ordinals, &mut rows)
             .map_err(StorageError::from)?;
+        // One ordered map, so a page of many ordinals is not scanned per ordinal.
+        let values: BTreeMap<u32, [u8; INODE_VALUE_BYTES]> =
+            rows.iter().map(|row| (row.ordinal, row.value)).collect();
         ordinals
             .iter()
             .map(|ordinal| {
-                rows.iter()
-                    .find(|row| row.ordinal == *ordinal)
-                    .map(|row| row.value)
+                values
+                    .get(ordinal)
+                    .copied()
                     .ok_or(StorageError::Integrity("mark inode value"))
             })
             .collect()
@@ -585,6 +591,7 @@ fn walk(
     let mut groups = GroupCache::new();
     let mut workspace = DecompressionWorkspace::new().map_err(storage)?;
     let mut counters = ChainCounters::default();
+    let mut edge_decodes = 0u64;
     let mut closure = Closure {
         visited: BTreeMap::new(),
         widths: BTreeMap::new(),
@@ -596,12 +603,16 @@ fn walk(
     while !frontier.is_empty() {
         // Pack order: one body answers every object of its group, so a wave
         // sorted by locator reads each group once instead of once per identity.
-        frontier.sort_unstable_by_key(|id| {
+        // The key is one locator lookup per object, not one per comparison.
+        frontier.sort_by_cached_key(|id| {
             source
                 .locations
                 .get(id)
                 .map_or((i64::MAX, usize::MAX, usize::MAX), locator_key)
         });
+        // A file payload's edge is its record header: read just that, a pack
+        // at a time, and leave the payload unread.
+        let mut headers = edges::wave_edges(source, &frontier)?;
         let mut next = Vec::new();
         for id in std::mem::take(&mut frontier) {
             let location = source
@@ -645,13 +656,21 @@ fn walk(
                     next.push(reference);
                 }
             }
-            // The base identity lives in the record header, so the edge is read
-            // from the header and never by decoding the chain payload.
-            let edge = {
-                let mut chain = ChainBases::new(&mut packs);
-                chain
-                    .edge(source, &mut workspace, &location)
-                    .map_err(storage)?
+            // The base identity lives in the record header. An encoded group
+            // has no header to read on its own, so its edge borrows the group.
+            let edge = match headers.remove(&id) {
+                Some(edge) => edge,
+                // The walk's own decoded-group cache: a compressed group is
+                // decompressed once, not once more for each record's edge.
+                None => stored_edge(
+                    source,
+                    &mut packs,
+                    &mut groups,
+                    &mut workspace,
+                    &mut edge_decodes,
+                    &location,
+                )
+                .map_err(storage)?,
             };
             closure.widths.insert(id, edge.width);
             if let Some(base) = edge.base {
@@ -724,8 +743,8 @@ fn waste(
         let views = layout::directory_group_views(&prefix, header).map_err(storage)?;
         // A wholly dead group's stored extent is known from the directory. A
         // retained Raw group whose inventory no longer accounts for every
-        // record is read on its own, so its exact per-record split never costs
-        // the whole pack body.
+        // record has its own record directory read, so its exact per-record
+        // split costs neither the pack body nor the group's.
         let mut mixed_raw = Vec::new();
         for (number, view) in views.iter().enumerate() {
             let records = groups.and_then(|groups| groups.get(&number));
@@ -743,22 +762,14 @@ fn waste(
         if mixed_raw.is_empty() {
             continue;
         }
-        let numbers: Vec<usize> = mixed_raw.iter().map(|(number, _)| *number).collect();
-        let mut cache = PackCache::new();
-        cache
-            .acquire_groups(source, pack_id, &numbers)
-            .map_err(storage)?;
-        for (number, view) in mixed_raw {
-            let slice = cache
-                .group(source, pack_id, number)
-                .map_err(storage)?
-                .ok_or(HistoryError::Integrity("mark group acquisition"))?;
-            if slice.view.start != view.start || slice.view.end != view.end {
-                return Err(HistoryError::Integrity("mark group acquisition"));
-            }
-            let records = groups.and_then(|groups| groups.get(&number));
+        // Each record's extent is in the group's directory, so the records
+        // themselves stay unread.
+        let views: Vec<layout::GroupView> = mixed_raw.iter().map(|(_, view)| *view).collect();
+        let directories = edges::group_directories(source, pack_id, &views)?;
+        for ((number, _), directory) in mixed_raw.iter().zip(&directories) {
+            let records = groups.and_then(|groups| groups.get(number));
             dead_in_retained_packs_bytes = dead_in_retained_packs_bytes
-                .saturating_add(dead_raw_record_bytes(slice.bytes, records, closure)?);
+                .saturating_add(dead_raw_record_bytes(directory, records, closure)?);
         }
     }
     let deltas: Vec<ObjectId> = closure
@@ -816,23 +827,22 @@ fn group_may_hide_dead_records(
 
 /// The framed bytes of every record in a Raw group that no reached object owns,
 /// including a record whose `object_location` row a rebuild did not retain. The
-/// caller passes a group body it already read.
+/// group's directory names every record's extent, so this is one pass over it.
 fn dead_raw_record_bytes(
-    group: &[u8],
+    directory: &RecordDirectory,
     records: Option<&BTreeMap<usize, ObjectId>>,
     closure: &Closure,
 ) -> HistoryResult<u64> {
-    let count = framed_record_count(group).map_err(storage)?;
     let mut dead = 0u64;
-    for record in 0..count {
+    for record in 0..directory.count() {
         let live = records
             .and_then(|records| records.get(&record))
             .is_some_and(|id| closure.visited.contains_key(id));
         if live {
             continue;
         }
-        let framed = framed_record(group, record).map_err(storage)?;
-        dead = dead.saturating_add(u64::try_from(framed.len()).unwrap_or(u64::MAX));
+        let (start, end) = directory.range(record).map_err(storage)?;
+        dead = dead.saturating_add(u64::try_from(end - start).unwrap_or(u64::MAX));
     }
     Ok(dead)
 }
@@ -861,11 +871,8 @@ fn pack_waste(
             // stored uncompressed. A compressed group's bytes cannot be
             // attributed to one record, so a retained group contributes
             // nothing and the error stays conservative.
-            dead = dead.saturating_add(dead_raw_record_bytes(
-                &body[view.start..view.end],
-                records,
-                closure,
-            )?);
+            let directory = RecordDirectory::of(&body[view.start..view.end]).map_err(storage)?;
+            dead = dead.saturating_add(dead_raw_record_bytes(&directory, records, closure)?);
         }
     }
     Ok(dead)

@@ -440,13 +440,43 @@ impl<'a> ChainBases<'a> {
         workspace: &mut DecompressionWorkspace,
         location: &ObjectLocation,
     ) -> StorageResult<ChainEdge> {
-        let base = self.base_of(connection, workspace, location)?;
-        let (selected, _) = group_of(self.packs, connection, location)?;
-        Ok(ChainEdge {
-            base,
-            width: selected_record_width(selected, location)?,
-        })
+        stored_edge(
+            connection,
+            self.packs,
+            &mut self.groups,
+            workspace,
+            &mut self.group_decodes,
+            location,
+        )
     }
+}
+
+/// [`ChainBases::edge`] over caches the caller owns.
+///
+/// A walk that also decodes passes its own decoded-group cache, so a
+/// compressed group it already decoded, or whose other records it asks about,
+/// is decompressed once and not once per record.
+pub fn stored_edge(
+    connection: &dyn Source,
+    packs: &mut crate::encoding::PackCache,
+    groups: &mut GroupCache,
+    workspace: &mut DecompressionWorkspace,
+    group_decodes: &mut u64,
+    location: &ObjectLocation,
+) -> StorageResult<ChainEdge> {
+    let base = stored_base(
+        connection,
+        packs,
+        groups,
+        workspace,
+        group_decodes,
+        location,
+    )?;
+    let (selected, _) = group_of(packs, connection, location)?;
+    Ok(ChainEdge {
+        base,
+        width: selected_record_width(selected, location)?,
+    })
 }
 
 /// One stored record of a chain, as a cost walk meets it.
