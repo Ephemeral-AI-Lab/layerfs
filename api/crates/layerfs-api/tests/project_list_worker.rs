@@ -5,7 +5,7 @@
 //! project.get; a live project still lists and gets, and a worker's refusal
 //! is the call's.
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_history::LayerStackId;
 use layerfs_machine::worker::{self, read_frame, read_frame_within, write_frame, Hello, MAX_HELLO};
@@ -48,6 +48,16 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
     call(home, name, args).unwrap_or_else(|e| panic!("{name}: {e:?}"))
+}
+
+/// The whole refusal, so a test can read its `detail`.
+fn refusal(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkRefusal {
+    let args = SdkValue::Map(
+        args.iter()
+            .map(|(n, v)| ((*n).to_owned(), v.clone()))
+            .collect(),
+    );
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).expect_err("the call is refused")
 }
 
 fn names(list: &SdkValue) -> Vec<String> {
@@ -151,6 +161,36 @@ fn shop_on_box(tag: &str, listener: &TcpListener, root: Option<&Path>) -> PathBu
 }
 
 type Seen = Arc<Mutex<Vec<SdkValue>>>;
+
+/// A fake worker that completes the greeting and reads the request, then
+/// drops the connection without an answer: the request may have run and the
+/// caller cannot know the outcome.
+fn fake_lost_worker(listener: TcpListener) -> Seen {
+    let seen: Seen = Arc::default();
+    let requests = seen.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else {
+                return;
+            };
+            let Some(_hello) = read_frame_within(&mut stream, MAX_HELLO).ok().flatten() else {
+                continue;
+            };
+            let ready = Hello {
+                protocol: Some(worker::PROTOCOL),
+                bundle: None,
+            };
+            if write_frame(&mut stream, &ready.to_frame()).is_err() {
+                continue;
+            }
+            if let Some(request) = read_frame(&mut stream).ok().flatten() {
+                requests.lock().unwrap().push(request);
+            }
+            // No answer: the caller's request may have run.
+        }
+    });
+    seen
+}
 
 /// A fake worker: answers its secret, reads each request and answers
 /// `reply`'s frame; the requests it read are shared back.
@@ -293,4 +333,54 @@ fn a_worker_store_lists_only_its_live_projects() {
     assert!(paths::project_record(&home, "shop", "retired").exists());
     let _ = std::fs::remove_dir_all(home);
     let _ = std::fs::remove_dir_all(root);
+}
+
+/// F43R3-1: a stale worker's lost listing answer is `Unknown`, and the call
+/// names the Store it listed: `{entity: {kind, name}, phase, op}` (spec
+/// §10 A6), not a null detail.
+#[test]
+fn a_lost_worker_answer_names_the_store_in_the_unknown_detail() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let home = shop_on_box("fake-lost", &listener, None);
+    let seen = fake_lost_worker(listener);
+
+    for (method, args) in [
+        ("project.get", vec![("project", t("shop/live"))]),
+        ("project.list", vec![("store", t("shop"))]),
+    ] {
+        let refused = refusal(&home, method, &args);
+        assert_eq!(refused.code, "Unknown", "{method}: {refused:?}");
+        let entity = refused.detail.get("entity").expect("entity detail");
+        assert_eq!(
+            entity.get_text("kind"),
+            Some("store"),
+            "{method}: {entity:?}"
+        );
+        assert_eq!(
+            entity.get_text("name"),
+            Some("shop"),
+            "{method}: {entity:?}"
+        );
+        assert!(
+            refused.detail.get("phase").expect("phase") == &SdkValue::Null,
+            "{method}: a lost listing has no phase"
+        );
+        assert!(
+            refused.detail.get("op").expect("op") == &SdkValue::Null,
+            "{method}: a listing holds no durable operation"
+        );
+    }
+
+    // The all-Stores listing omits a Store it cannot list.
+    let list = ok(&home, "project.list", &[]);
+    assert!(names(&list).is_empty(), "{list:?}");
+
+    // Every read went to the worker as the Store listing's own frame.
+    let requests = seen.lock().unwrap();
+    assert_eq!(requests.len(), 3, "{requests:?}");
+    for request in requests.iter() {
+        assert_eq!(request.get_text("op"), Some("project.list"));
+    }
+    drop(requests);
+    let _ = std::fs::remove_dir_all(home);
 }

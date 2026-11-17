@@ -7,7 +7,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::WorkspaceId;
 use layerfs_store_service::history::{admission, deletion, lookup, removal};
@@ -201,5 +201,116 @@ fn a_mount_sees_a_live_init_or_merge_but_shares_with_another_mount() {
     history
         .gc_release(&second.op_id)
         .expect("release the second");
+    fixture.cleanup();
+}
+
+/// A catalog that answers from `inner` but loses one admission write's
+/// answer, as persistence does at a lost reply.
+mod fault {
+    use layerfs_history::records::GcIntent;
+    use layerfs_history::*;
+
+    pub struct Faulty<'a> {
+        pub inner: &'a dyn HistoryCatalog,
+        pub fail_register: bool,
+        pub fail_release: bool,
+    }
+
+    macro_rules! forward {
+        ($($name:ident($($arg:ident: $ty:ty),*) -> $out:ty;)*) => {$(
+            fn $name(&self, $($arg: $ty),*) -> $out { self.inner.$name($($arg),*) }
+        )*};
+    }
+
+    impl HistoryCatalog for Faulty<'_> {
+        forward! {
+            catalog_id() -> CatalogId;
+            incarnation() -> u64;
+            layer_stack(id: LayerStackId) -> HistoryResult<Option<LayerStackRecord>>;
+            layer_stacks(page: &Page) -> HistoryResult<PageResult<LayerStackRecord>>;
+            branch(id: BranchId) -> HistoryResult<Option<BranchRecord>>;
+            branch_named(stack: LayerStackId, name: &HistoryName) -> HistoryResult<Option<BranchRecord>>;
+            branch_snapshot(id: BranchId) -> HistoryResult<Option<BranchSnapshot>>;
+            branches(stack: LayerStackId, page: &Page) -> HistoryResult<PageResult<BranchRecord>>;
+            commit(id: CommitId) -> HistoryResult<Option<CommitRecord>>;
+            layer(id: LayerId) -> HistoryResult<Option<LayerRecord>>;
+            commit_history(request: &CommitHistoryRequest) -> HistoryResult<PageResult<CommitRecord>>;
+            layer_history(request: &LayerHistoryRequest) -> HistoryResult<PageResult<LayerRecord>>;
+            initialize_layerstack(request: &StackInitialization) -> HistoryResult<LayerStackRecord>;
+            fork(request: &ForkRequest) -> HistoryResult<BranchSnapshot>;
+            merge_base(left: NodeId, right: NodeId) -> HistoryResult<Option<NodeId>>;
+            is_ancestor(ancestor: NodeId, descendant: NodeId) -> HistoryResult<bool>;
+            commit_branch(request: &CommitRequest) -> HistoryResult<CommitOutcome>;
+            add_layer(request: &AddLayerRequest) -> HistoryResult<AddLayerOutcome>;
+            merge_branch(request: &BranchMergeRequest) -> HistoryResult<BranchSnapshot>;
+            reserve_inodes(request: &ReserveRequest) -> HistoryResult<Reservation>;
+        }
+
+        fn gc_register(&self, intent: &GcIntent) -> HistoryResult<()> {
+            if self.fail_register {
+                return Err(HistoryError::UnknownOutcome);
+            }
+            self.inner.gc_register(intent)
+        }
+
+        fn gc_release(&self, op_id: &[u8; 16]) -> HistoryResult<()> {
+            if self.fail_release {
+                return Err(HistoryError::UnknownOutcome);
+            }
+            self.inner.gc_release(op_id)
+        }
+    }
+}
+
+fn unknown_names(refused: &SdkRefusal, phase: &str) {
+    assert_eq!(refused.code, "Unknown", "{refused:?}");
+    let entity = refused.detail.get("entity").expect("entity");
+    assert_eq!(entity.get_text("kind"), Some("project"), "{entity:?}");
+    assert_eq!(entity.get_text("name"), Some("installed"), "{entity:?}");
+    assert_eq!(refused.detail.get_text("phase"), Some(phase));
+    let op = refused.detail.get_text("op").expect("the operation");
+    assert_eq!(op.len(), 32, "{op}");
+    assert!(op.bytes().all(|byte| byte.is_ascii_hexdigit()), "{op}");
+}
+
+/// F43R3-2: a shared Init/merge intent whose registration or release loses
+/// its answer is `Unknown` naming the project, phase and operation it held
+/// (spec §10 A6), never the bare `{}` persistence detail.
+#[test]
+fn a_shared_intent_unknown_outcome_names_its_project_phase_and_op() {
+    let fixture = Fixture::new("admission-shared-unknown", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    let stack = lookup::project(&fixture.service.store, "installed").expect("project");
+    let catalog = fixture.service.store.history();
+
+    let lost = fault::Faulty {
+        inner: catalog,
+        fail_register: true,
+        fail_release: false,
+    };
+    let refused = admission::SharedIntent::begin(&lost, GcIntentKind::Merge, &stack, Some("work"))
+        .err()
+        .expect("a lost registration is refused");
+    unknown_names(&refused, "merge");
+
+    let lost = fault::Faulty {
+        inner: catalog,
+        fail_register: false,
+        fail_release: true,
+    };
+    let intent = admission::SharedIntent::begin(&lost, GcIntentKind::Init, &stack, None)
+        .expect("a registration that answers");
+    let refused = intent.release().expect_err("a lost release is refused");
+    unknown_names(&refused, "init");
+    // The refused release left the row live; settle it through the real
+    // catalog so the fixture ends clean.
+    for intent in catalog
+        .gc_intents(GcScopeKind::Project, stack.id.as_slice())
+        .expect("intents")
+    {
+        catalog.gc_release(&intent.op_id).expect("settle the row");
+    }
     fixture.cleanup();
 }

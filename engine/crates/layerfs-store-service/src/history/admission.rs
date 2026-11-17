@@ -205,6 +205,9 @@ pub fn release_or_mark(
 pub struct SharedIntent<'a> {
     catalog: &'a dyn HistoryCatalog,
     op_id: [u8; 16],
+    scope_kind: GcScopeKind,
+    entity: String,
+    phase: String,
     admitted: bool,
     released: bool,
 }
@@ -218,18 +221,34 @@ impl<'a> SharedIntent<'a> {
         branch: Option<&str>,
     ) -> Result<Self, SdkRefusal> {
         let op = op_id();
-        let intent = GcIntent::shared(op, kind, GcScopeKind::Project, stack.id.as_slice())
+        // The call knows the scope, project, phase and operation it held, so
+        // a lost registration is `Unknown` naming them (spec §10 A6).
+        let scope_kind = GcScopeKind::Project;
+        let entity = stack.name.as_str().to_owned();
+        let phase = kind.as_str().to_owned();
+        let intent = GcIntent::shared(op, kind, scope_kind, stack.id.as_slice())
             .named(Some(stack.name.as_str()), branch)
-            .with_phase(Some(kind.as_str()));
+            .with_phase(Some(&phase));
         let intent = owned(intent, op);
         let admitted = match catalog.gc_register(&intent) {
             Ok(()) => true,
             Err(layerfs_history::HistoryError::Unsupported(_)) => false,
-            Err(error) => return Err(lookup::history(error)),
+            Err(error) => {
+                return Err(lookup::history_in(
+                    error,
+                    scope_kind,
+                    &entity,
+                    Some(&phase),
+                    Some(&op),
+                ))
+            }
         };
         Ok(Self {
             catalog,
             op_id: op,
+            scope_kind,
+            entity,
+            phase,
             admitted,
             released: false,
         })
@@ -243,7 +262,13 @@ impl<'a> SharedIntent<'a> {
         }
         match self.catalog.gc_release(&self.op_id) {
             Ok(()) | Err(layerfs_history::HistoryError::Unsupported(_)) => Ok(()),
-            Err(error) => Err(lookup::history(error)),
+            Err(error) => Err(lookup::history_in(
+                error,
+                self.scope_kind,
+                &self.entity,
+                Some(&self.phase),
+                Some(&self.op_id),
+            )),
         }
     }
 }

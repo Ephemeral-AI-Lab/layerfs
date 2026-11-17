@@ -111,7 +111,11 @@ fn live_projects_on_worker(
         store: StoreName::parse(store)?,
         store_record: Some(record.to_record().clone()),
     };
-    let answer = worker.call("project.list", frame.encode(), &mut |_| {})?;
+    // A listing whose answer was lost is `Unknown`; name the Store it listed
+    // so the detail carries `{entity: {kind, name}, phase, op}` (spec §10 A6).
+    let answer = worker
+        .call("project.list", frame.encode(), &mut |_| {})
+        .map_err(|refusal| crate::unknown::named_unknown(refusal, "store", store, None))?;
     let reply = ListingReply::decode(&answer)?;
     Ok(reply
         .projects
@@ -146,7 +150,8 @@ fn summary(home: &Path, store: &str, name: &str, record: &StoreRecord, view: Vie
 /// entry remains (spec §4.2).
 pub fn get(home: &Path, project: &ProjectRef) -> Outcome {
     let target = resolve::target(home, &project.to_string())?;
-    let live = live_projects(home, &target.store, &target.record)?;
+    let live = live_projects(home, &target.store, &target.record)
+        .map_err(|refusal| crate::unknown::named_unknown(refusal, "store", &target.store, None))?;
     let record = ProjectRecord::read(home, &target.store, &target.project)?
         .ok_or_else(|| refused("NoSuchProject", format!("no project {project}")))?;
     if !listed(&record, &target.project, &live) {
@@ -192,7 +197,11 @@ pub fn list(home: &Path, request: &ProjectList) -> Outcome {
             Ok(live) => live,
             Err(refusal) => {
                 if request.store.is_some() {
-                    return Err(refusal);
+                    // A named Store it cannot list is `Busy`/`Unknown`,
+                    // naming the Store in the `Unknown` detail (spec §10 A6).
+                    return Err(crate::unknown::named_unknown(
+                        refusal, "store", &store, None,
+                    ));
                 }
                 continue;
             }
