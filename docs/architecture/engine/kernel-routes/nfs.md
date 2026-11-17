@@ -276,9 +276,12 @@ One edit per companion runs under that gate
 recording length and bytes together and spilling its own body rather than
 failing with `NFS3ERR_IO`. A SETATTR is one such edit from its guard to its
 mode and time, and a WRITE reads its pre-op attributes under the gate, so a
-guarded SETATTR checks the very body its size change applies to. A file operation that fails after the spill put the
-length the companion had back, so a refused write reports neither bytes nor the
-longer file the spill made for it. Eviction follows `Companions::by_use`, the
+guarded SETATTR checks the very body its size change applies to. A body is written out at the length it has and the
+edit grows its file itself; the recorded length moves only once the edit's bytes
+are in the file, so no GETATTR or READ sees a length whose bytes are not there,
+and a refused write leaves the length it had. A spill never replaces a body that
+is already on disk. With no spill directory, a body that does not fit evicts
+nothing. Eviction follows `Companions::by_use`, the
 `(used tick, serial)` order kept on attach, detach and every use: the victim is
 the first entry (O(log n) per round, no walk of the index), and the rounds end
 when no companion holding memory is left. `ExportServing::reclaim` and release

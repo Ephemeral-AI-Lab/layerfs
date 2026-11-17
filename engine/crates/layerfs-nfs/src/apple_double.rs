@@ -254,12 +254,6 @@ fn opening(how: &How) -> &'static str {
         How::Exclusive(_) => "existing-exclusive",
     }
 }
-/// Whether a body a spill wrote out still replaces its companion: only when the
-/// companion is the one the snapshot saw (`used` is the tick read then) and its
-/// body is still in memory, so no call wrote to it while the file was written.
-pub fn spill_applies(used: u64, file_used: u64, resident: bool) -> bool {
-    used == file_used && resident
-}
 /// The body length `edit` leaves on a body that had `len` bytes.
 fn edited_len(edit: &Edit<'_>, len: usize) -> usize {
     match edit {

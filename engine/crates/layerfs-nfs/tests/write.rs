@@ -1001,19 +1001,6 @@ fn a_companion_survives_reclaim_after_its_main_file_gains_a_second_name() {
     fs::remove_dir_all(base).unwrap();
 }
 
-#[test]
-fn a_spill_replaces_a_companion_body_only_when_no_call_changed_it() {
-    use layerfs_nfs::apple_double::spill_applies;
-    // The companion the body was written from, still resident and untouched:
-    // the spilled file replaces it.
-    assert!(spill_applies(7, 7, true));
-    // Another call wrote to the companion while its body was being written out:
-    // that newer body stays and the file just written is dropped.
-    assert!(!spill_applies(7, 8, true));
-    // Another call spilled the body first: its file stays.
-    assert!(!spill_applies(7, 7, false));
-}
-
 /// The process's soft and hard `RLIMIT_NOFILE`.
 fn nofile_limits() -> (libc::rlim_t, libc::rlim_t) {
     let mut limit = libc::rlimit {
@@ -1133,14 +1120,29 @@ const FD_LIMIT_CHILD: &str = "LAYERFS_NFS_FD_LIMIT_CHILD";
 /// holds) can neither reach nor be reached by the tests running in parallel in
 /// this one. `name` is selected with `--exact`, so exactly that test runs.
 fn run_alone(marker: &str, name: &str) {
+    // Bounded: a child that hangs is killed and fails this test, so it never
+    // outlives the parent holding its server and spill directory.
+    const DEADLINE: Duration = Duration::from_secs(90);
     let exe = std::env::current_exe().expect("the test binary's own path");
-    let status = std::process::Command::new(exe)
+    let mut child = std::process::Command::new(exe)
         .arg("--exact")
         .arg(name)
         .arg("--test-threads=1")
         .env(marker, "1")
-        .status()
+        .spawn()
         .expect("the test binary starts again");
+    let started = std::time::Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("the child's status") {
+            break status;
+        }
+        if started.elapsed() >= DEADLINE {
+            drop(child.kill());
+            drop(child.wait());
+            panic!("{name} did not finish within {DEADLINE:?} in its own process");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
     assert!(status.success(), "{name} failed in its own process");
 }
 

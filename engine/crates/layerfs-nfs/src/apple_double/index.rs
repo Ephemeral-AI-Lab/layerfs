@@ -1,7 +1,7 @@
 //! The companion index of one export: its names, main inodes, slots of the
 //! index bound, resident budget and eviction order.
 use super::{
-    spill_applies, Body, Companion, Companions, Decoded, Holding, Named, Orphan, Slot,
+    Body, Companion, Companions, Decoded, Holding, Named, Orphan, Slot,
     DECODED_ENTRY_BYTES,
 };
 use crate::{
@@ -237,10 +237,9 @@ impl Companions {
     /// [`Self::commit_spilled`].
     pub(super) fn spill_target(&self, serial: u64, used: Option<u64>) -> Result<Option<PathBuf>, Status> {
         let file = self.files.get(&serial).ok_or(Status::Stale)?;
-        if let Some(used) = used {
-            if !spill_applies(used, file.used, !matches!(file.body, Body::Spilled)) {
-                return Ok(None);
-            }
+        // A body already on disk is never replaced: its file is the body.
+        if matches!(file.body, Body::Spilled) || used.is_some_and(|used| used != file.used) {
+            return Ok(None);
         }
         let dir = self.spill_dir.as_ref().ok_or(Status::NoSpc)?;
         Ok(Some(spill_path(dir, serial)))

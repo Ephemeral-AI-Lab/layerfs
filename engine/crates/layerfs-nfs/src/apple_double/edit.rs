@@ -233,33 +233,20 @@ impl Kernel {
         if self.companions().reserve(serial) == Slot::Full {
             return Ok(Edited::NoSlot);
         }
-        // A failed file operation leaves the length the companion had: the
-        // spill may have grown its file to the length this edit wanted, and a
-        // refused edit must not report it.
-        let before = self
-            .companions()
-            .files
-            .get(&serial)
-            .map(|file| file.len)
-            .ok_or(Status::Stale)?;
-        let written = self.spill_gated(serial, target).and_then(|()| {
+        // The body is written out at the length it has, and the edit grows
+        // its file itself: the companion's recorded length moves only once
+        // the edit's bytes are in the file, so no GETATTR or READ meanwhile
+        // sees a length whose bytes are not there, and a failed file
+        // operation leaves the length it had.
+        let written = self.spill_gated(serial, 0).and_then(|()| {
             let file = self.spill_file(serial, true)?;
             edit.disk(&file)
         });
         if let Err(status) = written {
-            self.restore_len(serial, before);
             self.companions().unreserve(serial);
             return Err(status);
         }
         self.record_edit(serial, edit).map(Edited::Done)
-    }
-    /// Puts back the length `serial` had before an edit whose file operation
-    /// failed.
-    fn restore_len(&self, serial: u64, len: usize) {
-        let mut companions = self.companions();
-        if let Some(file) = companions.files.get_mut(&serial) {
-            file.len = len;
-        }
     }
     /// Applies `edit` to `serial`'s body in memory while the budget holds it
     /// (a decoded body is encoded first), recording its length, recency and
@@ -380,6 +367,10 @@ impl Kernel {
                 let companions = self.companions();
                 if companions.resident_bytes + need <= companions.resident_budget {
                     return Ok(true);
+                }
+                // With nowhere to spill to, no victim can give memory back.
+                if companions.spill_dir.is_none() {
+                    return Ok(false);
                 }
                 companions.oldest_resident(&skip)
             };
