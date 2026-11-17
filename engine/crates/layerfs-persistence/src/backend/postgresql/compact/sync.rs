@@ -35,10 +35,12 @@ pub fn sync_name(rank: u8) -> &'static str {
     }
 }
 
-/// The swap's effective strength (§8 step 11): the server's setting or the
-/// Store's frozen setting, whichever is stronger, but never below `local`.
+/// The swap's effective strength (§8 step 10): the server's setting or the
+/// Store's frozen setting, whichever is stronger. There is no floor: two
+/// `off` settings stay `off`, because neither is lowered and neither is
+/// raised above the other.
 pub fn effective_rank(server: &str, stored: &str) -> u8 {
-    sync_rank(server).max(sync_rank(stored)).max(1)
+    sync_rank(server).max(sync_rank(stored))
 }
 
 /// §8 step 10: the swap waits iff the effective level is at least

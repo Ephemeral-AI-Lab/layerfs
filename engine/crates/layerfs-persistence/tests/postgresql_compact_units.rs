@@ -56,8 +56,9 @@ fn synchronous_commit_strength_is_the_spec_order() {
 
 #[test]
 fn the_effective_sync_floor_is_local() {
-    // Both `off` still commits at `local`: the spec's floor (§8 step 11).
-    assert_eq!(effective_rank("off", "off"), 1);
+    // The effective level is the stronger of the two; there is no floor, so
+    // two `off` settings stay `off` (§8 step 10).
+    assert_eq!(effective_rank("off", "off"), 0);
     assert_eq!(effective_rank("local", "off"), 1);
     assert_eq!(effective_rank("off", "remote_apply"), 4);
     assert_eq!(effective_rank("on", "off"), 3);

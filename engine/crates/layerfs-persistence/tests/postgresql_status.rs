@@ -4,10 +4,12 @@
 //! `gc_intent` in one status query — no Store open, schema mutation or
 //! artifact read — and projects the same shape as the SQLite sidecar: the op
 //! `{id, name, phase, started, uncertain}` from the row, `state` from the
-//! owner's liveness, and PostgreSQL's `mark`/`build`/`swap`/`cleanup` phases.
-//! An idle Store (no row, or a run that settled and removed it) projects
-//! `None`. The record's own fact `uncertain` stays true for every remaining
-//! row; `state` is what separates a busy run from a leftover.
+//! compaction intent and the owner's liveness — in flight only while the
+//! intent is present and the recorded backend still lives — and PostgreSQL's
+//! `mark`/`build`/`swap`/`cleanup` phases. An idle Store (no row, or a run that
+//! settled and removed it) projects `None`. The record's own fact `uncertain`
+//! stays true for every remaining row; `state` is what separates a busy run
+//! from a returned run's or a gone owner's leftover.
 //!
 //! Needs a writable PostgreSQL server: set `LAYERFS_TEST_POSTGRES_URL` (for
 //! example `host=127.0.0.1 port=55432 user=postgres dbname=lfs_t105
@@ -196,6 +198,169 @@ fn build_op(byte: u8) -> String {
     format!("op-{}", format!("{byte:02x}").repeat(16))
 }
 
+/// Inserts one `gc_op` row owned by `(pid, backend_start)` with the given
+/// generation and phase, naming `op_id`.
+fn insert_op(
+    schema: &Schema,
+    op_id: [u8; 16],
+    generation: i64,
+    phase: &str,
+    pid: i32,
+    start: &str,
+) {
+    let s = &schema.name;
+    let artifact = format!(
+        "lfs_gc_{}",
+        op_id
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    );
+    schema
+        .admin()
+        .execute(
+            &format!(
+                "INSERT INTO {s}.gc_op \
+                 (id,generation,phase,scratch_schema,started_ms,artifact,pid,backend_start,op_id) \
+                 VALUES (1,$1,$2,$3,1700000000000,$3,$4,$5,$6)"
+            ),
+            &[
+                &generation,
+                &phase,
+                &artifact,
+                &i64::from(pid),
+                &start,
+                &op_id.to_vec(),
+            ],
+        )
+        .unwrap();
+}
+
+/// Inserts the live compaction intent one in-flight run registers.
+fn insert_intent(schema: &Schema, op_id: [u8; 16], generation: i64, phase: &str) {
+    let s = &schema.name;
+    let artifact = format!(
+        "lfs_gc_{}",
+        op_id
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    );
+    schema
+        .admin()
+        .execute(
+            &format!(
+                "INSERT INTO {s}.gc_intent \
+                 (op_id,kind,scope_kind,owner_runtime,owner_boot,state,uncertain,phase,\
+                  generation,artifact,updated_ms) \
+                 VALUES ($1,'compaction','store',$2,$3,'live',FALSE,$4,$5,$6,1700000000000)"
+            ),
+            &[
+                &op_id.to_vec(),
+                &"runtime-f50r4-1",
+                &"boot-f50r4-1",
+                &phase,
+                &generation,
+                &artifact,
+            ],
+        )
+        .unwrap();
+}
+
+fn owner_backend(owner: &mut postgres::Client) -> (i32, String) {
+    let row = owner
+        .query_one(
+            "SELECT pg_backend_pid(),backend_start::text FROM pg_stat_activity \
+              WHERE pid=pg_backend_pid()",
+            &[],
+        )
+        .unwrap();
+    (row.get(0), row.get(1))
+}
+
+/// F50R4-1: a returned run released its compaction `gc_intent`, but its owner
+/// backend is still alive and non-idle. The remaining `gc_op` row is a
+/// leftover, so `store.status` must project `unresolved`, not `busy`.
+#[test]
+fn a_returned_run_with_a_live_owner_is_unresolved() {
+    let Some(url) = support::pg::url() else {
+        return;
+    };
+    let schema = Schema::new(url.clone(), "ret");
+    let _handles = schema.create(&binding("ret"), [71; 32]);
+
+    // A live, non-idle owner: the §9 liveness test the leftover rule applies.
+    let mut owner = postgres::Client::connect(&url, postgres::NoTls).unwrap();
+    owner.batch_execute("BEGIN; SELECT 1").unwrap();
+    let (pid, start) = owner_backend(&mut owner);
+
+    let op_id = [0xc1u8; 16];
+    insert_op(&schema, op_id, 5, "build", pid, &start);
+    // No `gc_intent`: the run returned and released it.
+
+    let recorded = postgresql_compact_status(&url, &schema.name)
+        .unwrap()
+        .expect("the row remains");
+    assert!(recorded.alive, "the owner backend is alive");
+    assert!(
+        recorded.intent_state.is_none(),
+        "the released intent is what marks the run returned"
+    );
+    assert!(recorded.uncertain);
+    let projected = recorded.status();
+    assert_eq!(
+        projected.state, "unresolved",
+        "a returned run is a leftover even while its owner lives"
+    );
+    assert_eq!(projected.phase, "build");
+    owner.close().unwrap();
+}
+
+/// F50R4-1: an in-flight run between two of its transactions has an `idle`
+/// owner backend, but its compaction `gc_intent` is still registered. The old
+/// non-idle-only liveness test read that as gone; the intent keeps it `busy`.
+#[test]
+fn an_in_flight_run_between_transactions_is_busy() {
+    let Some(url) = support::pg::url() else {
+        return;
+    };
+    let schema = Schema::new(url.clone(), "idleop");
+    let _handles = schema.create(&binding("idleop"), [71; 32]);
+
+    let mut owner = postgres::Client::connect(&url, postgres::NoTls).unwrap();
+    let (pid, start) = owner_backend(&mut owner);
+    // No transaction open: PostgreSQL reports this backend `idle`.
+    let state: String = schema
+        .admin()
+        .query_one(
+            "SELECT state::text FROM pg_stat_activity \
+              WHERE pid=$1 AND backend_start::text=$2",
+            &[&pid, &start],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(state, "idle");
+
+    let op_id = [0xc2u8; 16];
+    insert_op(&schema, op_id, 6, "build", pid, &start);
+    insert_intent(&schema, op_id, 6, "build");
+
+    let recorded = postgresql_compact_status(&url, &schema.name)
+        .unwrap()
+        .expect("a live op is projected");
+    assert!(recorded.alive, "an idle backend is still alive");
+    assert_eq!(recorded.intent_state.as_deref(), Some("live"));
+    assert!(recorded.uncertain);
+    let projected = recorded.status();
+    assert_eq!(
+        projected.state, "busy",
+        "the intent keeps the between-transactions run in flight"
+    );
+    assert_eq!(projected.phase, "build");
+    assert_eq!(projected.id, build_op(0xc2));
+    owner.close().unwrap();
+}
+
 #[test]
 fn every_postgresql_failpoint_projects_its_phase() {
     let Some(url) = support::pg::url() else {
@@ -227,8 +392,12 @@ fn every_postgresql_failpoint_projects_its_phase() {
         // `op_id` carries the identity the projection shows.
         assert_eq!(status.op_id, [op; 16], "{tag}: the op row names the op");
         assert!(
-            !status.alive,
-            "{tag}: the failed owner is not running the op"
+            status.alive,
+            "{tag}: the owner backend is alive while its idle session runs the test"
+        );
+        assert!(
+            status.intent_state.is_none(),
+            "{tag}: the returned run released its compaction intent"
         );
         assert!(status.uncertain, "{tag}: a failed run stays uncertain");
         let projected = status.status();

@@ -54,23 +54,32 @@ pub(crate) fn relation_bytes(
     schema: &str,
     names: &[&str],
 ) -> HistoryResult<u64> {
+    stage(session, |tx| relation_bytes_tx(tx, schema, names))
+}
+
+/// [`relation_bytes`] on an open transaction, so the swap can measure the
+/// relation size it just made live inside the same transaction that records
+/// it.
+pub(crate) fn relation_bytes_tx(
+    tx: &Transaction<'_>,
+    schema: &str,
+    names: &[&str],
+) -> HistoryResult<u64> {
     let list = names
         .iter()
         .map(|name| format!("'{name}'"))
         .collect::<Vec<_>>()
         .join(",");
-    stage(session, |tx| {
-        let rows = tx.query(
-            &format!(
-                "SELECT COALESCE(SUM(pg_total_relation_size(c.oid))::bigint,0) FROM pg_class c \
-                 JOIN pg_namespace n ON n.oid=c.relnamespace \
-                 WHERE n.nspname=$1 AND c.relname IN ({list})"
-            ),
-            vec![Param::Text(schema.to_owned())],
-        )?;
-        let value: i64 = rows[0].get(0)?;
-        Ok(u64::try_from(value).unwrap_or(0))
-    })
+    let rows = tx.query(
+        &format!(
+            "SELECT COALESCE(SUM(pg_total_relation_size(c.oid))::bigint,0) FROM pg_class c \
+             JOIN pg_namespace n ON n.oid=c.relnamespace \
+             WHERE n.nspname=$1 AND c.relname IN ({list})"
+        ),
+        vec![Param::Text(schema.to_owned())],
+    )?;
+    let value: i64 = rows[0].get(0)?;
+    Ok(u64::try_from(value).unwrap_or(0))
 }
 
 pub(crate) fn table_storage(

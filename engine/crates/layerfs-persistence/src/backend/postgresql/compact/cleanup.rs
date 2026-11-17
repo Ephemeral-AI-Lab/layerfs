@@ -1,6 +1,5 @@
 //! §8 Phase C: cleanup, the owner guards and §9 leftover settling.
 
-use super::build::relation_bytes;
 use super::op::clear_round;
 use super::op::hex;
 use super::op::history_rows;
@@ -318,11 +317,9 @@ pub(crate) fn settle_leftover(
     }
     metrics.begin_phase(CompactPhase::PostgresCleanup);
     let op_id = compaction_intent(session, schema)?;
-    // §11: Phase C deletes history, signature and digest rows but no `pack` or
-    // `object_location` row, so the relation size read before the resumed
-    // cleanup is the swap's `physical_after` the original reply would have
-    // measured. The op carries the rest of the original report.
-    let physical_after = relation_bytes(session, schema, &["pack", "object_location"])?;
+    // §11: the swap persisted its own `physical_after`, so a save that lands
+    // after the swap (AC-28) does not inflate the resumed `G + 1` report's
+    // `physicalShrink`. The op carries the rest of the original report too.
     let rows = history_rows(session, schema)?;
     cleanup(handles, session, schema, op.dead, op.totals_applied, op_id)?;
     metrics.end_phase();
@@ -336,7 +333,7 @@ pub(crate) fn settle_leftover(
         dead_bytes,
         u64::try_from(op.dead.canonical).unwrap_or(0),
         0,
-        op.physical_before.saturating_sub(physical_after),
+        op.physical_before.saturating_sub(op.physical_after),
         op.kept_waste.clone(),
         op.peak_temp,
         CompactResidue::default(),

@@ -42,6 +42,9 @@ pub(crate) struct OpRow {
     /// `pg_total_relation_size(pack,object_location)` before the swap, so a
     /// resumed `G + 1` report can still answer `physicalShrink`.
     pub(crate) physical_before: u64,
+    /// The same measurement after the swap, taken inside the swap transaction
+    /// so a later save (AC-28) cannot inflate the resumed report's shrink.
+    pub(crate) physical_after: u64,
     /// The scratch schema's extent at the end of Phase A, the run's peak temp.
     pub(crate) peak_temp: u64,
     /// The mark's kept-waste accounting, for a resumed `G + 1` report.

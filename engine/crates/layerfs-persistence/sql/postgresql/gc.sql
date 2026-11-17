@@ -68,6 +68,7 @@ CREATE TABLE gc_op (
     dead_metadata BIGINT NOT NULL DEFAULT 0,
     dead_logical BIGINT NOT NULL DEFAULT 0,
     physical_before BIGINT NOT NULL DEFAULT 0,
+    physical_after BIGINT NOT NULL DEFAULT 0,
     peak_temp BIGINT NOT NULL DEFAULT 0,
     kept_waste BYTEA,
     totals_applied BOOLEAN NOT NULL DEFAULT FALSE,

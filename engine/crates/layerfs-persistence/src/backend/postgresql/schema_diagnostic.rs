@@ -83,6 +83,7 @@ gc_op dead_stored bigint NO
 gc_op dead_metadata bigint NO
 gc_op dead_logical bigint NO
 gc_op physical_before bigint NO
+gc_op physical_after bigint NO
 gc_op peak_temp bigint NO
 gc_op kept_waste bytea YES
 gc_op totals_applied boolean NO
