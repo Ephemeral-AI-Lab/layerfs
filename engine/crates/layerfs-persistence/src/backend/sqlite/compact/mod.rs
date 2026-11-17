@@ -24,7 +24,8 @@
 //!
 //! The module is split by phase: [`types`] (the §7/§11 shapes), [`op`] (the
 //! `.compact-op` sidecar), [`build`] with [`space`] (the fresh file's size
-//! during the load), [`verify`], [`install`], [`receipt`] and [`run`] (the
+//! during the load) and [`window`] (the pack copy's windows and the sealed
+//! file's read-ahead), [`verify`], [`install`], [`receipt`] and [`run`] (the
 //! orchestration on `SqliteHandles`).
 
 mod build;
@@ -35,6 +36,7 @@ mod run;
 mod space;
 mod types;
 mod verify;
+mod window;
 
 pub use build::{peak_temp_bytes, source_mmap, SRC_MMAP_BYTES};
 pub use op::{compact_op_status, CompactOpStatus};
@@ -46,3 +48,4 @@ pub use types::{
     CompactFailpoint, CompactKeptWaste, CompactPath, CompactReceipt, CompactRequest,
     CompactResidue, CompactZeroReason, OwnerLiveness,
 };
+pub use window::{windows, Window, GAP_BYTES, WINDOW_BYTES};

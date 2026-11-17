@@ -261,3 +261,101 @@ fn a_sized_fresh_file_loads_and_is_cut_back_to_its_page_count() {
         .unwrap();
     assert_eq!(u64::try_from(reread).unwrap(), pages);
 }
+
+/// The pack copy runs one window of retained packs at a time. A window ends
+/// once it holds [`WINDOW_BYTES`] of retained payload or when a run of dead
+/// packs longer than [`GAP_BYTES`] follows it, and its file range is the
+/// payload offsets of its packs plus every byte of the file that is not pack
+/// payload.
+#[test]
+fn the_pack_copy_is_cut_into_windows_in_pack_order() {
+    use layerfs_persistence::internals::{windows, Window, GAP_BYTES, WINDOW_BYTES};
+    use std::collections::BTreeMap;
+
+    const MIB: u64 = 1024 * 1024;
+    let window = std::hint::black_box(WINDOW_BYTES);
+    let gap = std::hint::black_box(GAP_BYTES);
+    assert_eq!((window, gap), (64 * MIB, 8 * MIB));
+
+    // Ten packs of 16 MiB, all retained, in a file with 1 MiB that is not pack
+    // payload: four packs fill a window.
+    let lengths: BTreeMap<i64, u64> = (1..=10).map(|pack| (pack, 16 * MIB)).collect();
+    let retained: Vec<i64> = (1..=10).collect();
+    let file = 160 * MIB + MIB;
+    assert_eq!(
+        windows(&lengths, &retained, file).unwrap(),
+        vec![
+            Window {
+                first: 1,
+                last: 4,
+                offset: 0,
+                bytes: 65 * MIB
+            },
+            Window {
+                first: 5,
+                last: 8,
+                offset: 64 * MIB,
+                bytes: 65 * MIB
+            },
+            Window {
+                first: 9,
+                last: 10,
+                offset: 128 * MIB,
+                bytes: 33 * MIB
+            },
+        ]
+    );
+
+    // A short dead run stays inside its window (the filter skips its rows); a
+    // long one ends the window, so the dead bytes are not read ahead.
+    let lengths: BTreeMap<i64, u64> = [
+        (1, MIB),
+        (2, MIB), // dead, short
+        (3, MIB),
+        (4, 9 * MIB), // dead, longer than the gap
+        (5, MIB),
+        (7, 2 * MIB), // dead, last
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(
+        windows(&lengths, &[1, 3, 5], 15 * MIB).unwrap(),
+        vec![
+            Window {
+                first: 1,
+                last: 3,
+                offset: 0,
+                bytes: 3 * MIB
+            },
+            Window {
+                first: 5,
+                last: 5,
+                offset: 12 * MIB,
+                bytes: MIB
+            },
+        ]
+    );
+
+    // No retained pack is no window; a file shorter than its packs has no
+    // slack to add.
+    assert_eq!(windows(&lengths, &[], 15 * MIB).unwrap(), Vec::new());
+    assert_eq!(
+        windows(&lengths, &[7], MIB).unwrap(),
+        vec![Window {
+            first: 7,
+            last: 7,
+            offset: 13 * MIB,
+            bytes: 2 * MIB
+        }]
+    );
+
+    // A retained pack the Store does not hold, or a mark out of order, is an
+    // integrity failure, never a silently shorter copy.
+    for broken in [&[6][..], &[3, 1][..], &[1, 1][..], &[5, 8][..]] {
+        let error = windows(&lengths, broken, 15 * MIB).unwrap_err();
+        assert!(
+            matches!(error, HistoryError::Integrity("mark pack")),
+            "{broken:?}: {error:?}"
+        );
+    }
+}

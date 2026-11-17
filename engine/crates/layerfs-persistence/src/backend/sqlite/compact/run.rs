@@ -375,6 +375,8 @@ impl SqliteHandles {
                     tuple: &tuple,
                     synchronous,
                     payload_bytes: live_stored,
+                    lengths: &lengths,
+                    retained: mark.objects().packs(),
                 },
                 capacity,
                 request,
