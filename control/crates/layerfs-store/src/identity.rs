@@ -18,6 +18,7 @@ use layerfs_history::{HistoryCatalogConfig, HistoryName};
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_persistence::{PersistenceConfig, SealedStore, SqlitePersistenceProfile};
 use layerfs_project::store::{CreateRequest, ProjectApi};
+use layerfs_store_service::history::lookup;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -284,7 +285,7 @@ pub fn list_projects(open: &OpenArgs) -> Outcome {
         let stacks = service
             .store
             .published(layerfs_project::store::projects)
-            .map_err(failed)?;
+            .map_err(lookup::published)?;
         Ok(SdkValue::List(
             stacks
                 .into_iter()

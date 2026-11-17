@@ -7,10 +7,12 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_history::LayerStackId;
 use layerfs_home::home::{paths, write_record};
+use layerfs_home::names::StoreName;
 use layerfs_home::outcome::{failed, refused};
 use layerfs_store::project::delete::{
-    delete_with, remove_worker_entry, Admission, Effects, Intent, IntentState,
+    delete_with, remove_project_entry, remove_worker_entry, Admission, Effects, Intent, IntentState,
 };
+use layerfs_store::project::frame::DeleteEntryFrame;
 use layerfs_store_service::history::deletion::Deletion;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -83,6 +85,8 @@ struct Fake {
     released: Vec<Admission>,
     /// The `pending_retry` flag each marker attempt carried, in order.
     pending_retries: Vec<bool>,
+    /// The Stacks whose worker-side entry a `marked` sidecar asked to remove.
+    settled: Vec<LayerStackId>,
 }
 
 impl Fake {
@@ -102,6 +106,7 @@ impl Fake {
             projects: Vec::new(),
             released: Vec::new(),
             pending_retries: Vec::new(),
+            settled: Vec::new(),
         }
     }
 
@@ -182,6 +187,11 @@ impl Effects for Fake {
             .outcomes
             .pop_front()
             .expect("one fake outcome per marker attempt"))
+    }
+
+    fn settle(&mut self, stack: LayerStackId) -> Result<(), SdkRefusal> {
+        self.settled.push(stack);
+        Ok(())
     }
 
     fn remove_entry(&mut self, entry: &Path) -> Result<(), SdkRefusal> {
@@ -391,15 +401,16 @@ fn a_live_row_with_a_pending_intent_settles_the_marker_and_keeps_the_entry() {
     assert_eq!(settled.state, IntentState::Marked);
     assert_eq!(settled.deleted_ms, 111);
 
-    // The marker is confirmed now: the next call finishes the entry.
-    let mut finish = Fake::new(
-        &home,
-        store,
-        project,
-        vec![Deletion::Retired { deleted_ms: 111 }],
-    );
+    // The marker is confirmed now: the next call finds a `marked` sidecar,
+    // takes no admission and writes no marker, and only finishes the entry.
+    let mut finish = Fake::new(&home, store, project, Vec::new());
     let outcome = delete_with(&home, store, project, Some(stack), &mut finish).unwrap();
-    assert_eq!(finish.pending_retries, [false]);
+    assert!(finish.seen.is_empty(), "a marked sidecar marks nothing");
+    assert!(
+        finish.admitted.is_empty(),
+        "a marked sidecar admits nothing"
+    );
+    assert_eq!(finish.settled, [stack]);
     assert_eq!(outcome.get_int("deleted_ms"), Some(111));
     assert!(outcome.get_bool("home_entry_removed"));
     assert!(!paths::project_dir(&home, store, project).exists());
@@ -501,16 +512,13 @@ fn a_home_removal_failure_is_success_false_and_leaves_a_marked_intent() {
     assert_eq!(left.state, IntentState::Marked);
     assert_eq!(left.deleted_ms, 44);
 
-    // a same-home retry reuses the stored ms, finishes the entry and returns
-    // `home_entry_removed: true`
-    let mut retry = Fake::new(
-        &home,
-        store,
-        project,
-        vec![Deletion::Retired { deleted_ms: 44 }],
-    );
+    // a same-home retry of the marked sidecar takes no admission and writes
+    // no marker: it removes the entry and returns `home_entry_removed: true`
+    let mut retry = Fake::new(&home, store, project, Vec::new());
     let outcome = delete_with(&home, store, project, Some(stack), &mut retry).unwrap();
-    assert_eq!(retry.seen, [(stack, 44)]);
+    assert!(retry.seen.is_empty(), "a marked sidecar marks nothing");
+    assert!(retry.admitted.is_empty(), "a marked sidecar admits nothing");
+    assert_eq!(retry.settled, [stack], "the worker entry is settled once");
     assert_eq!(outcome.get_int("deleted_ms"), Some(44));
     assert!(outcome.get_bool("home_entry_removed"));
     assert!(!paths::project_dir(&home, store, project).exists());
@@ -529,6 +537,7 @@ fn a_done_intent_settles_the_entry_without_a_second_marker() {
     let mut fake = Fake::new(&home, store, project, Vec::new());
     let outcome = delete_with(&home, store, project, Some(stack), &mut fake).unwrap();
     assert!(fake.seen.is_empty(), "a done intent marks nothing");
+    assert!(fake.settled.is_empty(), "a done intent makes no Store call");
     assert_eq!(outcome.get_int("deleted_ms"), Some(44));
     assert!(outcome.get_bool("home_entry_removed"));
     assert_eq!(Intent::read(&home, store, project).unwrap(), None);
@@ -541,41 +550,41 @@ fn a_stale_intent_does_not_delete_a_project_the_listing_names_again() {
     let (store, project, old, new) = ("shop", "app", stack(8), stack(9));
     // The re-created project has no readable home record yet (a partial
     // creation or a stale entry), but its Store lists the new Stack: the
-    // listing is enough to see that the sidecar is stale.
+    // listing is enough to see that the sidecar is stale. The stale intent
+    // goes, and the call is `NoSuchProject`: the re-created project is not
+    // deleted by it.
     Intent::write(&home, &intent(&home, store, project, old, 111)).unwrap();
-    let mut fake = Fake::new(
-        &home,
-        store,
-        project,
-        vec![Deletion::Marked { deleted_ms: 555 }],
+    let mut fake = Fake::new(&home, store, project, Vec::new());
+    let refusal = delete_with(&home, store, project, Some(new), &mut fake).unwrap_err();
+    assert_eq!(refusal.code, "NoSuchProject", "{refusal:?}");
+    assert!(fake.seen.is_empty(), "a stale intent marks nothing");
+    assert!(fake.admitted.is_empty(), "a stale intent admits nothing");
+    assert_eq!(
+        fake.prepared, 0,
+        "nothing of the re-created project is touched"
     );
-    let outcome = delete_with(&home, store, project, Some(new), &mut fake).unwrap();
-    assert_eq!(fake.seen.len(), 1);
-    assert_eq!(fake.seen[0].0, new, "the listing's Stack wins");
-    assert_ne!(fake.seen[0].1, 111, "the stale deleted_ms is not reused");
-    assert_eq!(outcome.get_int("deleted_ms"), Some(555));
     assert_eq!(Intent::read(&home, store, project).unwrap(), None);
     let _ = std::fs::remove_dir_all(&home);
 }
 
 #[test]
-fn a_recreated_project_discards_the_stale_intent_and_starts_over() {
+fn a_recreated_project_discards_the_stale_intent_and_keeps_its_entry() {
     let home = home("recreated");
     let (store, project, old, new) = ("shop", "app", stack(8), stack(9));
     project_record(&home, store, project, new);
     Intent::write(&home, &intent(&home, store, project, old, 111)).unwrap();
-    let mut fake = Fake::new(
-        &home,
-        store,
-        project,
-        vec![Deletion::Marked { deleted_ms: 555 }],
+    let mut fake = Fake::new(&home, store, project, Vec::new());
+    let refusal = delete_with(&home, store, project, Some(new), &mut fake).unwrap_err();
+    assert_eq!(refusal.code, "NoSuchProject", "{refusal:?}");
+    assert!(
+        fake.seen.is_empty(),
+        "the record that is there now is not marked"
     );
-    let outcome = delete_with(&home, store, project, Some(new), &mut fake).unwrap();
-    assert_eq!(fake.seen.len(), 1);
-    assert_eq!(fake.seen[0].0, new, "the record that is there now wins");
-    assert_ne!(fake.seen[0].1, 111, "the stale deleted_ms is not reused");
-    assert_eq!(outcome.get_int("deleted_ms"), Some(555));
-    assert!(outcome.get_bool("home_entry_removed"));
+    assert!(fake.admitted.is_empty());
+    assert!(
+        paths::project_dir(&home, store, project).is_dir(),
+        "the re-created project's entry stays"
+    );
     assert_eq!(Intent::read(&home, store, project).unwrap(), None);
     let _ = std::fs::remove_dir_all(&home);
 }
@@ -643,6 +652,32 @@ fn the_intent_moves_pending_marked_done_and_unlinks() {
     // unlinking an absent intent is not an error
     Intent::unlink(&home, store, project).unwrap();
     let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn the_entry_frame_removes_only_the_recorded_entry() {
+    let root = home("worker-entry-frame");
+    let (store, first) = ("shop", stack(13));
+    project_record(&root, store, "app", first);
+    project_record(&root, store, "other", stack(14));
+    let frame = DeleteEntryFrame {
+        store: StoreName::parse(store).unwrap(),
+        stack: first,
+        project: Some("app".to_owned()),
+    };
+    let answer = remove_project_entry(&root, &frame).unwrap();
+    assert_eq!(answer.get_text("kind"), Some("Removed"));
+    assert_eq!(answer.get_text("project"), Some("app"));
+    assert!(!paths::project_dir(&root, store, "app").exists());
+    assert!(paths::project_dir(&root, store, "other").is_dir());
+    // a retry finds the entry gone and answers the same, idempotently
+    let answer = remove_project_entry(&root, &frame).unwrap();
+    assert_eq!(answer.get_text("project"), Some("app"));
+    assert!(
+        paths::project_dir(&root, store, "other").is_dir(),
+        "the other entry is untouched"
+    );
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]

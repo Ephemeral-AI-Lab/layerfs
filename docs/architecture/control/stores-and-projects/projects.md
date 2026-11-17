@@ -74,7 +74,8 @@ runs and how the folder gets there.
 | Carried: kind, permission bits, mtime, link target, file bytes. Not carried: owners, access times, extended attributes, hard links | [`tree.rs`](../../../../control/crates/layerfs-store/src/project/tree.rs) |
 
 Each worker frame (`project.stage`, `project.init`, `project.export`,
-`project.delete`, `project.delete.admit`, `project.delete.release`) is
+`project.delete`, `project.delete.admit`, `project.delete.entry`,
+`project.delete.release`) is
 decoded once into its typed request; the worker sets the home to its own
 root
 ([`frame.rs`](../../../../control/crates/layerfs-store/src/project/frame.rs)).
@@ -112,7 +113,7 @@ the Store's worker, and removes only the caller's home entry; other projects
 stay. The Stack's marker (`mark_stack_deleted`) is the commit point, so a
 lost reply is finished by a same-home retry of the durable intent, whose
 Store side classifies the marker as `Marked`, `Retired` or `Absent`. It is
-refused `InUse` while a Sandbox of the project is recorded
+refused `Busy` while a Sandbox of the project is recorded
 (`layerfs-control` passes that check in), and `MountsActive`/`Busy`/
 `Unresolved` while a live mount or operation holds the project scope
 ([`family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs),

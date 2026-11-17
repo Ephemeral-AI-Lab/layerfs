@@ -116,6 +116,29 @@ impl Effects for Remote {
         })
     }
 
+    fn settle(&mut self, stack: LayerStackId) -> Result<()> {
+        let frame = DeleteEntryFrame {
+            store: StoreName::parse(&self.store)?,
+            stack,
+            project: Some(self.project.clone()),
+        };
+        let answer = self
+            .worker
+            .call("project.delete.entry", frame.encode(), &mut |_| {})
+            .map_err(|refusal| {
+                // no admission identity is held on this path
+                crate::unknown::named_unknown(refusal, "project", &self.project, None)
+            })?;
+        let reply = DeleteEntryReply::decode(&answer)?;
+        if reply.stack != stack {
+            return Err(refused(
+                "Failed",
+                "the worker answered for another LayerStack",
+            ));
+        }
+        Ok(())
+    }
+
     fn remove_entry(&mut self, entry: &Path) -> Result<()> {
         remove_tree(entry)
     }
@@ -174,7 +197,7 @@ pub(super) fn listed_stack(open: &OpenArgs, name: &str) -> Result<Option<LayerSt
         let stacks = service
             .store
             .published(layerfs_project::store::projects)
-            .map_err(failed)?;
+            .map_err(lookup::published)?;
         Ok(stacks
             .into_iter()
             .find(|stack| stack.name.as_str() == name)

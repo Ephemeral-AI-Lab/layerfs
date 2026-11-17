@@ -1,6 +1,6 @@
 //! The relationships no record stores (#536 §5, §9.2): which Stores and
 //! Sandboxes a machine holds, which Sandboxes a Store or a project has, and
-//! the `InUse` refusals built from them, with their texts. Layout 3: a
+//! the `InUse`/`Busy` refusals built from them, with their texts. Layout 3: a
 //! Sandbox is read from `sandbox/<name>/` alone; a layout 2 folder under a
 //! machine is never read.
 use layerfs_bridge::control::SdkValue;

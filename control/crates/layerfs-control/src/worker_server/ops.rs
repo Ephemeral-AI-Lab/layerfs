@@ -3,12 +3,14 @@
 use super::Server;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
-use layerfs_store::project::delete::{admit_project, delete_project, release_project};
+use layerfs_store::project::delete::{
+    admit_project, delete_project, release_project, remove_project_entry,
+};
 use layerfs_store::project::discovery::home_of;
 use layerfs_store::project::export::in_worker as export_in_worker;
 use layerfs_store::project::frame::{
-    DeleteAdmitFrame, DeleteFrame, DeleteReleaseFrame, ExportFrame, InitFrame, ListingFrame,
-    StageFrame,
+    DeleteAdmitFrame, DeleteEntryFrame, DeleteFrame, DeleteReleaseFrame, ExportFrame, InitFrame,
+    ListingFrame, StageFrame,
 };
 use layerfs_store::project::listing::list_projects;
 use layerfs_store::project::{init::in_worker, staged};
@@ -179,6 +181,13 @@ pub(super) fn run(
         "project.delete.release" => {
             let root = home_of(Some(root))?;
             release_project(&root, &DeleteReleaseFrame::decode(&args)?)
+        }
+        // removes only the worker's own entry for a `marked` sidecar whose
+        // marker is already durable (2.0, T4.5b): `{ store, stack_id,
+        // project? }`
+        "project.delete.entry" => {
+            let root = home_of(Some(root))?;
+            remove_project_entry(&root, &DeleteEntryFrame::decode(&args)?)
         }
         // reads the Store's own filtered project listing under this worker
         // root, the same `layerfs_project::store::projects` a local Store

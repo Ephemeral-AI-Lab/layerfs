@@ -13,14 +13,17 @@
 //! there, so a retry finishing its sidecar removes the stale entry. A fresh
 //! call with no sidecar that meets `Retired` or `Absent` is `NoSuchProject`
 //! and keeps its entry. A lost worker reply is `Unknown`; the
-//! intent stays and the retry classifies the Stack again. A home record whose
-//! Stack differs from the intent is a project made again under the same name:
-//! the stale intent is discarded and this call starts over against the record
-//! that is there now.
+//! intent stays and the retry classifies the Stack again. A home record or
+//! listing whose Stack differs from the intent is a project made again under
+//! the same name: the stale intent is discarded and the call is
+//! `NoSuchProject`, so the re-created project and its entry are left alone
+//! (spec §4).
 //!
 //! The worker op is `project.delete`; its frame is
 //! `{store, stack_id, deleted_ms?, project?, op_id?, pending_retry?,
-//! store_record?}`. The two optional context fields are the ones the retired
+//! store_record?}`, and `project.delete.entry` removes only the worker's own
+//! entry for a `marked` sidecar (frame `{store, stack_id, project?}`). The two
+//! optional context fields are the ones the retired
 //! `project.remove` call sent: the worker opens the Store under its own root
 //! with the caller's `store_record`, and the project name lets its reply and
 //! its own home entry name the project. The worker saves the legacy
@@ -35,6 +38,12 @@
 //! confirmed and finishes the entries. The normal delete and a retry whose
 //! marker was already there remove the entries in the same call.
 //!
+//! A sidecar in `marked` is past the marker: only the entries remain. Its
+//! retry takes no admission and writes no marker; it removes the worker's own
+//! entry (through `project.delete.entry` when the Store runs there) and then
+//! its home entry, and records `done` (spec §5.1). A `done` sidecar likewise
+//! needs no Store call and only finishes its entry.
+//!
 //! The sidecar is written with its admission identity *before* the home path
 //! admits the project scope (T4.6, `project.delete.admit` on the worker
 //! route): a crash between the registered row and its reply then leaves the
@@ -47,7 +56,10 @@
 //! failed call leaves no admission row behind.
 use crate::open_args::OpenArgs;
 use crate::place::{self, Executor, Worker};
-use crate::project::frame::{DeleteAdmitFrame, DeleteFrame, DeleteReleaseFrame, DeleteReply};
+use crate::project::frame::{
+    DeleteAdmitFrame, DeleteEntryFrame, DeleteEntryReply, DeleteFrame, DeleteReleaseFrame,
+    DeleteReply,
+};
 use crate::project::record::ProjectRecord;
 use crate::record::{StoreRecord, StoreRef};
 use crate::{identity, lease, service};
@@ -314,6 +326,15 @@ pub trait Effects {
         pending_retry: bool,
     ) -> Result<Deletion>;
 
+    /// Removes the Store-side home entry a `marked` sidecar still names: the
+    /// worker's own entry when the Store runs there, nothing on the local
+    /// route, where that entry is the caller's home entry. The marker is
+    /// already durable, so this takes no admission and writes no marker
+    /// (spec §5.1).
+    fn settle(&mut self, _stack: LayerStackId) -> Result<()> {
+        Ok(())
+    }
+
     /// Removes the caller's home entry; `Ok(())` when nothing remains.
     fn remove_entry(&mut self, entry: &Path) -> Result<()>;
 }
@@ -423,8 +444,11 @@ fn mark_and_finish(
 /// `stack` is the Stack id the Store lists for the project, or the record's
 /// id on a worker route, where the caller cannot list. A fresh call without
 /// one is `NoSuchProject`: only a same-home retry, through its durable
-/// intent, resolves a retired Stack (spec §4, §4.2). The same function serves
-/// the local and worker routes, and a fake in tests.
+/// intent, resolves a retired Stack (spec §4, §4.2). A listing or record that
+/// names a different Stack than the sidecar is a re-created project: the
+/// sidecar is discarded and the call is `NoSuchProject`, so that project's
+/// entry is never touched. The same function serves the local and worker
+/// routes, and a fake in tests.
 ///
 /// The identity save and then the sidecar, naming the admission, precede the
 /// project scope's admission and the marker: a live mount is `MountsActive`
@@ -439,19 +463,22 @@ pub fn delete_with(
 ) -> Outcome {
     let record = ProjectRecord::read(home, store, project)?;
     let record_stack = record.as_ref().and_then(stack_of);
-    let mut intent = Intent::read(home, store, project)?;
+    let intent = Intent::read(home, store, project)?;
 
     // The Stack the name resolves to now: the caller's listing first, then
     // the record. A different Stack id for the same name is a project made
     // again: the stale intent must not touch its entry, so it is discarded
-    // and this call starts over against the Stack that is there now. The
-    // listing is checked too: a re-created project whose home record is
-    // missing or names no Stack must not be deleted by an older intent.
+    // and the call is `NoSuchProject` (spec §4). The listing is checked too:
+    // a re-created project whose home record is missing or names no Stack
+    // must not be deleted by an older intent.
     let current_stack = stack.or(record_stack);
     if let (Some(stale), Some(current)) = (&intent, current_stack) {
         if stale.stack != current {
             Intent::discard(home, store, project)?;
-            intent = None;
+            return Err(refused(
+                "NoSuchProject",
+                format!("no project {store}/{project}"),
+            ));
         }
     }
 
@@ -483,17 +510,36 @@ pub fn delete_with(
         }
     };
 
-    if let Some(done) = &intent {
-        if done.state == IntentState::Done {
-            // The retired-row entry-removal retry needs no admission: the
-            // marker is already there and only the home entry is removed.
+    if let Some(settled) = &intent {
+        if settled.state == IntentState::Marked {
+            // The marker is durable and only the entries remain: no
+            // admission and no second marker (spec §5.1). The worker's own
+            // entry goes first, then the caller's home entry; a failed home
+            // removal leaves the sidecar `marked` for the next retry.
+            effects.prepare()?;
+            effects.settle(stack)?;
+            let removed_entry = effects
+                .remove_entry(&paths::project_dir(home, store, project))
+                .is_ok();
+            if removed_entry {
+                let mut done = settled.clone();
+                done.state = IntentState::Done;
+                done.attempt_ms = now_ms();
+                Intent::write(home, &done)?;
+                Intent::unlink(home, store, project)?;
+            }
+            return Ok(removed(store, project, deleted_ms, removed_entry));
+        }
+        if settled.state == IntentState::Done {
+            // The done sidecar needs no Store call: the marker is already
+            // there and only the home entry is removed.
             effects.prepare()?;
             let removed_entry = effects
                 .remove_entry(&paths::project_dir(home, store, project))
                 .is_ok();
-            let mut settled = done.clone();
-            settled.attempt_ms = now_ms();
-            let _ = Intent::write(home, &settled);
+            let mut done = settled.clone();
+            done.attempt_ms = now_ms();
+            let _ = Intent::write(home, &done);
             let _ = Intent::unlink(home, store, project);
             return Ok(removed(store, project, deleted_ms, removed_entry));
         }
@@ -900,6 +946,22 @@ pub fn delete_project(root: &Path, frame: &DeleteFrame) -> Outcome {
         stack: frame.stack,
         deleted_ms,
         retired: Some(retired),
+    }
+    .encode())
+}
+
+/// The worker's `project.delete.entry`: removes the worker's own home entry
+/// for a Stack whose marker is already durable, answering
+/// `{kind: "Removed", project, stack_id}`. It opens no Store and writes no
+/// marker (spec §5.1).
+pub fn remove_project_entry(root: &Path, frame: &DeleteEntryFrame) -> Outcome {
+    let store = frame.store.as_str();
+    let project = remove_worker_entry(root, store, frame.stack, frame.project.as_deref())?
+        .or_else(|| frame.project.clone())
+        .unwrap_or_else(|| store.to_owned());
+    Ok(DeleteEntryReply {
+        project,
+        stack: frame.stack,
     }
     .encode())
 }

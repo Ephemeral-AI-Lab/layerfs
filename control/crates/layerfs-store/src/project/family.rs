@@ -23,6 +23,7 @@ use layerfs_home::events::Events;
 use layerfs_home::home::paths;
 use layerfs_home::names::{ProjectRef, StoreName};
 use layerfs_home::outcome::{failed, refused, Outcome, View};
+use layerfs_store_service::history::lookup;
 use std::path::Path;
 
 /// Default Init time limit: one hour.
@@ -88,7 +89,7 @@ fn live_projects(
         service
             .store
             .published(layerfs_project::store::projects)
-            .map_err(failed)
+            .map_err(lookup::published)
     })?;
     Ok(stacks
         .into_iter()

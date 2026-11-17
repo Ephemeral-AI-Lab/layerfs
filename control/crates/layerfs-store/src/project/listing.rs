@@ -6,7 +6,8 @@ use crate::open_args::OpenArgs;
 use crate::project::frame::{ListedProject, ListingFrame, ListingReply};
 use crate::service;
 use layerfs_home::home::paths;
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::outcome::{refused, Outcome};
+use layerfs_store_service::history::lookup;
 use std::path::Path;
 
 /// The `project.list` worker op: Store `store`'s live projects, in name
@@ -30,7 +31,7 @@ pub fn list_projects(root: &Path, frame: &ListingFrame) -> Outcome {
         service
             .store
             .published(layerfs_project::store::projects)
-            .map_err(failed)
+            .map_err(lookup::published)
     })?;
     Ok(ListingReply {
         projects: stacks

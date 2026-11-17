@@ -5,10 +5,10 @@
 use layerfs_bridge::control::SdkRefusal;
 use std::path::Path;
 
-/// An `InUse` check on the Store or project `name` in home `home`.
+/// A related-use check on the Store or project `name` in home `home`.
 type Check = fn(home: &Path, name: &str) -> Result<(), SdkRefusal>;
 
-/// The `InUse` checks over a Store's users.
+/// The checks over a Store's users.
 #[derive(Clone, Copy)]
 pub struct Related {
     /// `store.push`, `store.pull`, `store.remove`, `store.disconnect` and

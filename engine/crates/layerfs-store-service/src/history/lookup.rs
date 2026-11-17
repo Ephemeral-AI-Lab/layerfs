@@ -270,7 +270,10 @@ pub fn content(error: ContentError) -> SdkRefusal {
 }
 
 /// A failed published-history lookup: its history error, else the reader's.
-pub(crate) fn published(error: Arc<PortError>) -> SdkRefusal {
+/// Callers that read published history (every project listing) use this so a
+/// `Busy`, `UnknownOutcome` or other history refusal keeps its own code
+/// instead of being flattened to `Failed`.
+pub fn published(error: Arc<PortError>) -> SdkRefusal {
     match error.as_ref() {
         PortError::History(error) => history(error.clone()),
         other => refuse("Unknown", other.to_string(), SdkValue::Null),
@@ -408,5 +411,22 @@ pub fn next_page(pos: u64, count: usize, more: bool) -> SdkValue {
         SdkValue::Int((pos + count as u64) as i64)
     } else {
         SdkValue::Null
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    #[test]
+    fn a_published_refusal_keeps_its_history_code() {
+        let busy = published(Arc::new(PortError::History(HistoryError::Busy)));
+        assert_eq!(busy.code, "Busy", "{busy:?}");
+        let unknown = published(Arc::new(PortError::History(HistoryError::UnknownOutcome)));
+        assert_eq!(unknown.code, "Unknown", "{unknown:?}");
+        // a reader or storage failure is not known to be a history refusal
+        let poisoned = published(Arc::new(PortError::Poisoned));
+        assert_eq!(poisoned.code, "Unknown", "{poisoned:?}");
     }
 }

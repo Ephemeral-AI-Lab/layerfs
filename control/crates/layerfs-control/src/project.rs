@@ -7,7 +7,7 @@ use layerfs_home::names::ProjectRef;
 use layerfs_home::outcome::Outcome;
 use std::path::Path;
 
-/// The project-scope `InUse` checks `project.delete` takes from this layer.
+/// The project-scope `Busy` checks `project.delete` takes from this layer.
 pub const PROJECT_RELATED: layerfs_store::Related = layerfs_store::Related {
     store_idle: inventory::store_idle,
     can_remove_project: inventory::can_remove_project,

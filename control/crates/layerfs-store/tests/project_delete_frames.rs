@@ -5,7 +5,8 @@ use layerfs_bridge::sdk_values::hex;
 use layerfs_history::LayerStackId;
 use layerfs_home::names::StoreName;
 use layerfs_store::project::frame::{
-    DeleteAdmitFrame, DeleteFrame, DeleteReleaseFrame, DeleteReply,
+    DeleteAdmitFrame, DeleteEntryFrame, DeleteEntryReply, DeleteFrame, DeleteReleaseFrame,
+    DeleteReply,
 };
 
 fn t(text: &str) -> SdkValue {
@@ -175,6 +176,55 @@ fn the_worker_refuses_a_bad_frame_in_order() {
     assert_eq!(
         decode(vec![("store", t("shop")), ("stack_id", t("ab"))]),
         "`stack_id` must be a LayerStack identity (17 bytes)"
+    );
+}
+
+#[test]
+fn the_entry_frame_and_reply_round_trip() {
+    let stack = stack(7);
+    let frame = DeleteEntryFrame {
+        store: StoreName::parse("shop").unwrap(),
+        stack,
+        project: Some("app".to_owned()),
+    };
+    let encoded = frame.encode();
+    assert_eq!(
+        encoded,
+        map(vec![
+            ("store", t("shop")),
+            ("stack_id", t(&hex(&stack.to_bytes()))),
+            ("project", t("app")),
+        ])
+    );
+    assert_eq!(DeleteEntryFrame::decode(&encoded).unwrap(), frame);
+    // an unnamed caller omits `project`, and the encode leaves it out
+    let unnamed = map(vec![
+        ("store", t("shop")),
+        ("stack_id", t(&hex(&stack.to_bytes()))),
+    ]);
+    let decoded = DeleteEntryFrame::decode(&unnamed).unwrap();
+    assert_eq!(decoded.project, None);
+    assert_eq!(decoded.stack, stack);
+    assert_eq!(decoded.encode(), unnamed);
+
+    let reply = DeleteEntryReply {
+        project: "app".to_owned(),
+        stack,
+    };
+    let encoded = reply.encode();
+    assert_eq!(
+        encoded,
+        map(vec![
+            ("kind", t("Removed")),
+            ("project", t("app")),
+            ("stack_id", t(&hex(&stack.to_bytes()))),
+        ])
+    );
+    assert_eq!(DeleteEntryReply::decode(&encoded).unwrap(), reply);
+    let other = map(vec![("kind", t("UpToDate"))]);
+    assert_eq!(
+        DeleteEntryReply::decode(&other).unwrap_err().message,
+        "the worker project.delete entry reply is not `Removed`"
     );
 }
 
