@@ -36,3 +36,9 @@ nix = { version = "=0.31.3", default-features = false, features = ["fs", "pthrea
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 rusqlite = { version = "=0.40.2", features = ["bundled"] }
+
+# The harness self-checks its host JSON block, so its regression test needs a
+# test harness: `cargo test -p layerfs-persistence --example gc_bench`.
+[[example]]
+name = "gc_bench"
+test = true
