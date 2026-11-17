@@ -9,8 +9,8 @@ mod support;
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::{
     AddLayerOutcome, AddLayerRequest, BranchId, CommitId, CommitMeta, CommitOutcome, CommitRequest,
-    CommitVia, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryError,
-    LayerStackId, LayerStackRecord, StackInitialization,
+    CommitVia, ForkRequest, ForkSource, GcIntentKind, GcScopeKind, HistoryCatalog,
+    HistoryCatalogConfig, HistoryError, LayerStackId, LayerStackRecord, StackInitialization,
 };
 use layerfs_persistence::{
     compact_op_status, CompactFailpoint, CompactPath, CompactReport, CompactReportSource,
@@ -750,24 +750,30 @@ fn a_leftover_op_reports_its_phase_and_state() {
     assert_eq!(op.phase, "build");
     assert_eq!(op.owner_pid, Some(std::process::id()));
     assert!(op.started_ms > 0);
+    assert!(
+        op.returned,
+        "the call returned, so the record is no longer in flight"
+    );
 
-    let busy = op.status(true);
-    assert_eq!(busy.id, "op-15151515151515151515151515151515");
-    assert_eq!(busy.name, "store.compact");
-    assert_eq!(busy.phase, "build");
-    assert_eq!(busy.started, op.started_ms);
-    assert!(busy.uncertain, "an unsettled record is uncertain");
-    assert_eq!(busy.state, "busy");
+    // A returned run's record is a leftover: even its still-live owner pid
+    // does not make it `busy`, and its outcome stays uncertain.
+    let leftover = op.status(true);
+    assert_eq!(leftover.id, "op-15151515151515151515151515151515");
+    assert_eq!(leftover.name, "store.compact");
+    assert_eq!(leftover.phase, "build");
+    assert_eq!(leftover.started, op.started_ms);
+    assert!(leftover.uncertain, "an unsettled record is uncertain");
+    assert_eq!(leftover.state, "unresolved");
     assert_eq!(
-        busy.phases,
+        leftover.phases,
         &["mark", "build", "verify", "install", "cleanup"][..],
         "the SQLite phase order, including the cleanup settle"
     );
 
-    let leftover = op.status(false);
-    assert!(leftover.uncertain);
-    assert_eq!(leftover.state, "unresolved");
-    assert_eq!(leftover.phase, "build");
+    let gone = op.status(false);
+    assert!(gone.uncertain);
+    assert_eq!(gone.state, "unresolved");
+    assert_eq!(gone.phase, "build");
 
     // The next run settles the recorded leftover: artifact, intent and op go.
     let reopened = reopen(&path);
@@ -1107,6 +1113,17 @@ fn intent_count(path: &Path, op_id: &[u8; 16]) -> i64 {
         .unwrap()
 }
 
+/// The lower-case hex text of a 16-byte operation identity.
+fn hex16(bytes: &[u8; 16]) -> String {
+    bytes
+        .iter()
+        .fold(String::with_capacity(32), |mut text, byte| {
+            use std::fmt::Write as _;
+            let _ = write!(text, "{byte:02x}");
+            text
+        })
+}
+
 /// The second compaction in the regression: it runs after the first released
 /// the writer lane and before the first settled. The owner the record names is
 /// this live process, so the second must refuse it and change nothing.
@@ -1120,10 +1137,17 @@ fn refuse_live_owner(store: &Path) {
             ..CompactRequest::default()
         })
         .expect_err("a live owner's record is not adopted");
-    assert!(
-        matches!(error, HistoryError::Busy),
-        "the live owner refuses the second compaction: {error:?}"
-    );
+    match error {
+        HistoryError::BusyOp(state) => {
+            assert_eq!(state.kind, GcIntentKind::Compaction);
+            assert_eq!(state.scope_kind, GcScopeKind::Store);
+            assert_eq!(state.entity, "store");
+            assert_eq!(state.phase.as_deref(), Some("install"));
+            assert_eq!(state.op, hex16(&first.op_id));
+            assert!(!state.uncertain);
+        }
+        other => panic!("the live owner refuses the second compaction with BusyOp: {other:?}"),
+    }
     let recorded = compact_op_status(store).expect("the first run's record survives");
     assert_eq!(recorded.op_id, first.op_id, "the first op record is kept");
     assert_eq!(recorded.phase, "install", "the first phase is unchanged");
@@ -1191,6 +1215,144 @@ fn a_live_owners_settle_window_refuses_a_second_compaction() {
     assert!(
         !located(&final_handles, dead),
         "the rebuild collected the dead pack"
+    );
+    clean(&final_handles);
+}
+
+/// #49 round 3: a run that returns with `UnknownOutcome` leaves its record
+/// behind while its owner pid (this live process) is still alive. That record
+/// belongs to a returned run, not an in-flight one: the next call with the
+/// production liveness oracle must adopt and settle it instead of returning
+/// `Busy` forever (§9). The in-flight window is still covered by
+/// `a_live_owners_settle_window_refuses_a_second_compaction`.
+#[test]
+fn a_returned_unknown_outcome_is_judged_by_the_next_run() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let dead = whole_file(&handles, b"a pack the next run would judge");
+    let before = generation(&handles);
+    let error = handles
+        .compact(&CompactRequest {
+            op_id: [0x6c; 16],
+            owner_pid: Some(std::process::id()),
+            owner_pid_start: Some(OWNER_START),
+            owner_pid_boot: Some(OWNER_BOOT),
+            owner_live: Some(live_owner),
+            failpoint: Some(CompactFailpoint::AfterBuild),
+            ..CompactRequest::default()
+        })
+        .unwrap_err();
+    assert!(matches!(error, HistoryError::UnknownOutcome), "{error:?}");
+    let returned = compact_op_status(&path).expect("the returned run's record");
+    assert!(
+        returned.returned,
+        "the record is marked returned once the call replies"
+    );
+    assert_eq!(
+        returned.owner_pid,
+        Some(std::process::id()),
+        "the owner pid is still this live process"
+    );
+    assert_eq!(
+        returned.status(true).state,
+        "unresolved",
+        "a returned run's leftover is not busy"
+    );
+
+    // The next run takes the lane with the production oracle; the record's
+    // owner pid is still live, but the run returned, so it is a leftover.
+    let reopened = reopen(&path);
+    let receipt = reopened
+        .compact(&CompactRequest {
+            op_id: [0x6d; 16],
+            owner_live: Some(live_owner),
+            ..CompactRequest::default()
+        })
+        .expect("the returned run's leftover is judged, not refused");
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_before, before);
+    assert_eq!(receipt.generation_after, before + 1);
+    assert!(
+        compact_op_status(&path).is_none(),
+        "the leftover is settled"
+    );
+    assert!(!compact_path(&path).exists());
+    assert!(!visited_path(&path).exists());
+    let final_handles = reopen(&path);
+    assert!(!located(&final_handles, dead), "the dead pack is collected");
+    clean(&final_handles);
+}
+
+/// #49 round 3: a run that returns with a settle residue also returns to its
+/// caller. Its record stays as the next run's breadcrumb, but it is a
+/// leftover, not an in-flight run: the next call with the production oracle
+/// adopts it instead of refusing `Busy` while the owner pid lives.
+#[test]
+fn a_returned_residue_is_judged_by_the_next_run() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let dead = whole_file(&handles, b"a pack the next run would judge");
+    let before = generation(&handles);
+    let receipt = handles
+        .compact(&CompactRequest {
+            op_id: [0x6e; 16],
+            owner_pid: Some(std::process::id()),
+            owner_pid_start: Some(OWNER_START),
+            owner_pid_boot: Some(OWNER_BOOT),
+            owner_live: Some(live_owner),
+            before_install_hook: Some(stage_stuck_artifact),
+            ..CompactRequest::default()
+        })
+        .expect("the rebuild installs and leaves a residue");
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert!(
+        !receipt.residue.artifacts.is_empty(),
+        "the settle reports the stuck artifact: {:?}",
+        receipt.residue
+    );
+    let returned = compact_op_status(&path).expect("the returned residue's record");
+    assert!(returned.returned, "the record is marked returned");
+    assert_eq!(returned.status(true).state, "unresolved");
+
+    // The recorded leftover is not refused `Busy` while the artifact cannot be
+    // removed: the next run adopts it and reports the `Integrity` residue.
+    let stuck = stuck_artifact(&path);
+    let reopened = reopen(&path);
+    let error = reopened
+        .compact(&CompactRequest {
+            op_id: [0x6f; 16],
+            owner_live: Some(live_owner),
+            ..CompactRequest::default()
+        })
+        .unwrap_err();
+    assert!(
+        matches!(error, HistoryError::Integrity(_)),
+        "the returned residue is adopted, not refused Busy: {error:?}"
+    );
+    assert!(
+        compact_op_status(&path).is_some(),
+        "the record survives the adopted residue"
+    );
+
+    // The artifact removable, the same oracle settles the returned leftover.
+    std::fs::remove_dir(&stuck).expect("clear the stuck artifact");
+    let receipt = reopen(&path)
+        .compact(&CompactRequest {
+            op_id: [0x70; 16],
+            owner_live: Some(live_owner),
+            ..CompactRequest::default()
+        })
+        .expect("the returned residue is settled");
+    assert_eq!(receipt.path, CompactPath::None);
+    assert_eq!(receipt.generation_before, before + 1);
+    assert_eq!(receipt.generation_after, before + 1);
+    assert!(compact_op_status(&path).is_none(), "the record settles");
+    let final_handles = reopen(&path);
+    assert!(
+        !located(&final_handles, dead),
+        "the first run collected the dead pack"
     );
     clean(&final_handles);
 }

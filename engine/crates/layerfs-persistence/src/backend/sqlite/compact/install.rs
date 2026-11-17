@@ -22,6 +22,9 @@ use super::verify::open_immutable;
 use crate::backend::sqlite::lifecycle::seal::SealedFacts;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
+use layerfs_history::error::OpConflict;
+use layerfs_history::records::GcIntentKind;
+use layerfs_history::records::GcScopeKind;
 use layerfs_history::HistoryCatalog;
 use rusqlite::params;
 use rusqlite::Connection;
@@ -328,7 +331,17 @@ pub(crate) fn settle_leftover(
     // artifacts and the record itself. A provably live owner keeps its state
     // and the caller reports it busy.
     if op.owner_provably_live(owner_live) {
-        return Err(HistoryError::Busy);
+        // §10: the refusal names what holds the Store. A plain `Busy` would
+        // carry an empty detail; the record already knows the entity, its
+        // phase and its operation identity.
+        return Err(HistoryError::BusyOp(Box::new(OpConflict::new(
+            GcIntentKind::Compaction,
+            GcScopeKind::Store,
+            "store",
+            Some(op.phase.clone()),
+            hex(&op.op_id),
+            false,
+        ))));
     }
     // Adopt the recorded owner's admission intent before its artifact is gone,
     // and clear the transient §6.1 `kept_node` closure its mark left: the

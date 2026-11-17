@@ -133,8 +133,9 @@ PostgreSQL Store is never `down` (an unreachable server shows in `server`)
 the call an `Unresolved` refusal names. When a compaction runs on a sqlite
 Store, `op` is read from `<store>.compact-op`; on a PostgreSQL Store it is
 the Store-side `gc_op` row with its `gc_intent`, read by one status query
-with no Store session and no artifact read. Either way `state` is `busy`
-while the owner lives and `unresolved` once it is gone, `uncertain` stays
+with no Store session and no artifact read. Either way `state` is `busy` only
+for an in-flight live owner; it is `unresolved` for a returned run's leftover
+even while its owner pid lives, and once the owner is gone. `uncertain` stays
 the record's own fact, and `phases` names the backend's order (`mark`,
 `build`, `verify`, `install`, `cleanup` on sqlite; `mark`, `build`, `swap`,
 `cleanup` on PostgreSQL), `null` when no compaction record is read. Errors: `NotFound`; `InvalidInput` (a
@@ -395,12 +396,16 @@ it marks only and writes nothing. `dead_bytes_refined` equals
 whole retained set and no second payload sweep runs (documented amendment
 #42 A10).
 
-A `<store>.compact-op` record is a leftover only when its owner is gone: the
-next call reads the recorded pid, kernel start time, boot and PID namespace and
-refuses `Busy` while that process is provably live, so a run that released the
-writer lane just before its `cleanup` settle keeps its intent, `kept_node`
-closure and record. The settle and a pre-install abort remove the record only
-while it still names the operation being settled.
+A `<store>.compact-op` record belongs to an in-flight run only until that run
+replies: the run marks the record returned before it returns. The next call
+reads the recorded pid, kernel start time, boot and PID namespace and refuses
+`Busy` (as `BusyOp`, naming the record's entity, phase and operation) only
+while that process is provably live and the run has not returned, so a run that
+released the writer lane just before its `cleanup` settle stays protected. A
+returned run's record, whether the run left a residue or an unknown outcome, is
+a leftover the next call adopts and settles even though the owner process is
+alive. The settle and a pre-install abort remove the record only while it still
+names the operation being settled.
 
 **Local-only route (documented S6 deviation, #42 D5).** A sqlite Store on
 another machine is `Unsupported` and is never sent to that machine's worker:

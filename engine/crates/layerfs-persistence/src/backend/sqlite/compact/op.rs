@@ -33,6 +33,10 @@ pub(crate) struct RunOp {
     pub(crate) owner_pid_namespace: Option<u64>,
     pub(crate) tuple: MarkTuple,
     pub(crate) live_heads_digest: [u8; 32],
+    /// True when the run that wrote this record has returned to its caller.
+    /// Such a record is a leftover the next run judges, never an in-flight
+    /// operation, even while the owner pid is still alive (§9).
+    pub(crate) returned: bool,
 }
 
 impl RunOp {
@@ -42,7 +46,7 @@ impl RunOp {
 owner_pid={}\nowner_pid_start={}\nowner_pid_boot={}\nowner_pid_namespace={}\n\
 catalog_id={}\nnext_history_serial={}\nnext_pack_id={}\nnext_ordinal={}\n\
 mark_serial={}\nmark_pack_id={}\nmark_digest={}\nmark_totals={},{},{},{}\nmark_stamp={}\nhistory_rows={}\n\
-live_heads_digest={}\n",
+live_heads_digest={}\nreturned={}\n",
             hex(&self.op_id),
             self.generation,
             self.phase,
@@ -65,6 +69,7 @@ live_heads_digest={}\n",
             self.tuple.stamp,
             self.tuple.history_rows,
             hex(&self.live_heads_digest),
+            u8::from(self.returned),
         )
     }
 
@@ -129,6 +134,9 @@ live_heads_digest={}\n",
             history_rows: values.get("history_rows")?.parse().ok()?,
         };
         let live_heads_digest = unhex::<32>(values.get("live_heads_digest")?)?;
+        // Optional: a record written before this marker existed stays an
+        // in-flight run's until its owner is gone, as it was then.
+        let returned = values.get("returned").is_some_and(|value| *value == "1");
         Some(Self {
             op_id,
             generation,
@@ -140,22 +148,26 @@ live_heads_digest={}\n",
             owner_pid_namespace,
             tuple,
             live_heads_digest,
+            returned,
         })
     }
 
     /// True when the caller's process facts prove the recorded owner is still
-    /// live, so this record is an in-flight run's, not a leftover (§9). A
-    /// record with no owner facts, or whose owner is gone, is adoptable as
-    /// before.
+    /// live *and* the run has not returned, so this record is an in-flight
+    /// run's, not a leftover (§9). A returned run's record stays a leftover
+    /// the next call judges even while the owner pid lives: the run released
+    /// the writer lane and left its state behind. A record with no owner
+    /// facts, or whose owner is gone, is adoptable as before.
     pub(crate) fn owner_provably_live(&self, owner_live: Option<OwnerLiveness>) -> bool {
-        owner_live.is_some_and(|live| {
-            live(
-                self.owner_pid,
-                self.owner_pid_start,
-                self.owner_pid_boot,
-                self.owner_pid_namespace,
-            )
-        })
+        !self.returned
+            && owner_live.is_some_and(|live| {
+                live(
+                    self.owner_pid,
+                    self.owner_pid_start,
+                    self.owner_pid_boot,
+                    self.owner_pid_namespace,
+                )
+            })
     }
 }
 
@@ -176,6 +188,21 @@ pub(crate) fn remove_op_record(store: &Path, op_id: &[u8; 16]) -> HistoryResult<
         return Err(HistoryError::Integrity("compaction record"));
     }
     Ok(())
+}
+
+/// Marks this run's record as returned to its caller before the call replies,
+/// so the next `store.compact` judges a leftover even though the owner pid is
+/// still alive (§9). Only the run's own record is marked: a record another run
+/// wrote in the settle window is never touched.
+pub(crate) fn mark_returned(store: &Path, op_id: &[u8; 16]) -> HistoryResult<()> {
+    let Some(mut op) = RunOp::read(store) else {
+        return Ok(());
+    };
+    if op.op_id != *op_id || op.returned {
+        return Ok(());
+    }
+    op.returned = true;
+    op.write(store)
 }
 
 /// The operation a Store's `<store>.compact-op` records, as `store.status`
@@ -200,16 +227,21 @@ pub struct CompactOpStatus {
     /// The owner's kernel boot id, when recorded.
     pub owner_pid_boot: Option<u128>,
     /// True while the record remains: the run did not settle, so its outcome
-    /// is unknown. `store.status` reports `busy` while the owner lives and
-    /// `unresolved` once it is gone.
+    /// is unknown. `store.status` reports `busy` while an in-flight owner
+    /// lives and `unresolved` for a returned run's leftover or a gone owner.
     pub uncertain: bool,
+    /// True when the run that wrote the record returned to its caller. A
+    /// returned record is a leftover, so its state is `unresolved`, never
+    /// `busy`, even while its owner pid is alive.
+    pub returned: bool,
 }
 
 impl CompactOpStatus {
     /// The `store.status` projection of this operation; `alive` says whether
-    /// the owning process is still running. A live owner is `busy`, a gone one
-    /// left an uncertain `unresolved` outcome. `uncertain` stays the record's
-    /// own fact: it is true for every unsettled run, live or leftover.
+    /// the owning process is still running. An in-flight live owner is `busy`;
+    /// a returned run's leftover is `unresolved` even while its owner pid
+    /// lives, and so is a gone owner's. `uncertain` stays the record's own
+    /// fact: it is true for every unsettled run, live or leftover.
     #[must_use]
     pub fn status(&self, alive: bool) -> crate::report::CompactStatus {
         // A read in the admission window still projects a §11 phase: the run
@@ -225,7 +257,11 @@ impl CompactOpStatus {
             phase,
             started: self.started_ms,
             uncertain: self.uncertain,
-            state: if alive { "busy" } else { "unresolved" },
+            state: if alive && !self.returned {
+                "busy"
+            } else {
+                "unresolved"
+            },
             phases: &crate::report::SQLITE_COMPACT_PHASES,
         }
     }
@@ -247,6 +283,7 @@ pub fn compact_op_status(store: &Path) -> Option<CompactOpStatus> {
         owner_pid_start: op.owner_pid_start,
         owner_pid_boot: op.owner_pid_boot,
         uncertain: true,
+        returned: op.returned,
     })
 }
 
