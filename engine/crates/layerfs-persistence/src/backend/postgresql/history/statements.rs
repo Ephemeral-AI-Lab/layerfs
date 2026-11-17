@@ -51,8 +51,13 @@ pub(crate) fn statement(key: &str) -> Result<&'static str, BackendError> {
 
 /// Statements that name the Store's schema (`{s}`), so each also runs alone
 /// outside a transaction: one statement, one snapshot, no `BEGIN`/`COMMIT`.
+/// Every key a `read_statement` body sends must be here or in [`arrays`]: the
+/// `postgresql_statement_schema` guard pins each one-statement read.
 pub(crate) fn qualified(key: &str) -> Option<&'static str> {
     match key {
+        "branch_branch_by_id_any" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/branch_branch_by_id_any.sql"
+        )),
         "branch_snapshot" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/branch_snapshot.sql"
         )),
@@ -65,8 +70,14 @@ pub(crate) fn qualified(key: &str) -> Option<&'static str> {
         "layerstack_layer_by_id" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/layerstack_layer_by_id.sql"
         )),
+        "layerstack_layer_by_source" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/layerstack_layer_by_source.sql"
+        )),
         "layerstack_stack_by_name" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/layerstack_stack_by_name.sql"
+        )),
+        "position_node_serial" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/position_node_serial.sql"
         )),
         _ => None,
     }
