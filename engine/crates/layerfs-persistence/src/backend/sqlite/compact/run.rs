@@ -60,7 +60,6 @@ impl SqliteHandles {
     /// op record are kept for the next `store.compact` to judge (§9).
     pub fn compact(self, request: &CompactRequest) -> HistoryResult<CompactReceipt> {
         let store = self.storage.session.path.clone();
-        let durable = self.storage.session.profile.synchronous != 0;
         let mut metrics = RunMetrics::start();
         let result = self.compact_measured(request, &mut metrics);
         // §9: the run is replying, so its own record (when it leaves one) is
@@ -68,7 +67,7 @@ impl SqliteHandles {
         // `store.compact` judges the leftover even while this process is still
         // alive; the window before this point stays protected by the owner
         // liveness guard.
-        let _ = mark_returned(&store, &request.op_id, durable);
+        let _ = mark_returned(&store, &request.op_id);
         metrics.finish(&result);
         result
     }
@@ -98,11 +97,6 @@ impl SqliteHandles {
             let layout = session.layout;
             let acquisition_schema = session.acquisition;
             let synchronous = profile.synchronous;
-            // The run synchronizes what the Store's profile does: a
-            // Disposable Store (`synchronous=OFF`) claims nothing after a
-            // power loss, so its compaction asks for no fsync of the op
-            // record, the fresh file or the directory.
-            let durable = synchronous != 0;
 
             // §5.1/§7 admission: a client that holds the Store keeps its
             // sidecars, and the seal cannot remove one its owner keeps: it
@@ -163,8 +157,8 @@ impl SqliteHandles {
             // The op record is written before the mark so a crash inside the
             // mark transaction (which creates the §6.3 visited scratch before
             // it decides) leaves a *recorded* run for the next call to adopt,
-            // never an unrecorded staged name (§9). It stands through the
-            // mark; the build's write carries the mark's tuple and digest.
+            // never an unrecorded staged name (§9). The mark phase overwrites
+            // it once the mark's tuple and digest are known.
             let mut op = RunOp {
                 op_id,
                 generation: live.generation,
@@ -179,7 +173,6 @@ impl SqliteHandles {
                 live_heads_digest: [0u8; 32],
                 returned: false,
                 installed: None,
-                durable,
             };
             op.write(&store)?;
 
@@ -264,9 +257,7 @@ impl SqliteHandles {
                     abort_before_install(&store, &op_id, false);
                     return Err(error);
                 }
-                if durable {
-                    let _ = sync_directory(&store);
-                }
+                let _ = sync_directory(&store);
                 drop(lane);
                 return Ok(receipt(
                     CompactPath::None,
@@ -444,7 +435,7 @@ impl SqliteHandles {
                 abort_before_install(&store, &op_id, true);
                 return Err(error);
             }
-            if let Err(error) = prepare_target(&built.target, durable) {
+            if let Err(error) = prepare_target(&built.target) {
                 abort_before_install(&store, &op_id, true);
                 return Err(error);
             }
@@ -460,7 +451,7 @@ impl SqliteHandles {
             // §7 step 7: the rename happened; a crash before the directory
             // fsync leaves an installed-but-uncertain `G + 1`.
             stop_at(request, CompactFailpoint::DuringRename, &op, &store)?;
-            if durable && sync_directory(&facts.path).is_err() {
+            if let Err(_error) = sync_directory(&facts.path) {
                 op.phase = "install".to_owned();
                 let _ = op.write(&store);
                 return Err(HistoryError::UnknownOutcome);
