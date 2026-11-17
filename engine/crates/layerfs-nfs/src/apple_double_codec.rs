@@ -288,7 +288,10 @@ impl Image {
         let data_len = get32(image, ATTR_AT + 16)? as usize;
         let count = get16(image, ATTR_AT + 34)?;
         let (mut entry, mut value_at) = (ENTRIES_AT, data_start);
-        let mut attrs = Vec::with_capacity(usize::from(count));
+        // Each entry takes more than its fixed part, so the image bounds the
+        // count a client may claim before any entry is read.
+        let fits = (len - ENTRIES_AT) / (ENTRY_FIXED + 1);
+        let mut attrs = Vec::with_capacity(usize::from(count).min(fits));
         for _ in 0..count {
             let value_len = get32(image, entry + 4)? as usize;
             let name_len = usize::from(*image.get(entry + 10)?);

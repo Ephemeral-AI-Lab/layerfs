@@ -105,14 +105,12 @@ impl Kernel {
         if end > FILE_BYTES {
             return Err(Status::FBig);
         }
+        let gate = self.edit_gate(serial)?;
+        // Held to the end: the reply's before is the body this edit changes.
+        let _editing = gate.lock().unwrap_or_else(|poison| poison.into_inner());
         let before = self.companion_stat(serial)?;
-        let after = self.edit_companion(
-            serial,
-            Edit::Write {
-                offset: offset as usize,
-                data,
-            },
-        )?;
+        let offset = offset as usize;
+        let after = self.edit_gated(serial, Edit::Write { offset, data })?;
         Ok((data.len() as u32, (Some(before), Some(after))))
     }
     /// SETATTR of a companion: mode, size and modification time; the
@@ -130,6 +128,10 @@ impl Kernel {
         {
             return Err(Status::Perm);
         }
+        // One SETATTR runs as one edit: the guard is checked against the body
+        // its size change then applies to, with no WRITE in between.
+        let gate = self.edit_gate(serial)?;
+        let _editing = gate.lock().unwrap_or_else(|poison| poison.into_inner());
         let before = {
             let companions = self.companions();
             let file = companions.files.get(&serial).ok_or(Status::Stale)?;
@@ -148,7 +150,7 @@ impl Kernel {
             if crate::trace::enabled() {
                 crate::trace::handle("SETATTR", serial, &format!("size={size}"));
             }
-            self.edit_companion(serial, Edit::Size(size as usize))?;
+            self.edit_gated(serial, Edit::Size(size as usize))?;
         }
         let mut companions = self.companions();
         if !companions.files.contains_key(&serial) {
@@ -171,22 +173,18 @@ impl Kernel {
         let after = Companions::stat(serial, file);
         Ok((after.clone(), (Some(before), Some(after))))
     }
+    /// `serial`'s edit gate: whoever holds it is the companion's one edit.
+    fn edit_gate(&self, serial: u64) -> Result<std::sync::Arc<std::sync::Mutex<()>>, Status> {
+        let companions = self.companions();
+        let file = companions.files.get(&serial).ok_or(Status::Stale)?;
+        Ok(file.editing.clone())
+    }
     /// Applies `edit` to `serial` and answers its stat afterwards: in the
     /// resident body while the budget holds it, else in its spilled file
-    /// outside the companion lock. This companion's gate makes the edit run
-    /// alone, so the length recorded is the one its own bytes leave.
-    fn edit_companion(&self, serial: u64, edit: Edit<'_>) -> Result<ViewStat, Status> {
-        let gate = {
-            let companions = self.companions();
-            companions
-                .files
-                .get(&serial)
-                .ok_or(Status::Stale)?
-                .editing
-                .clone()
-        };
-        // Held to the end: no other edit of this companion runs meanwhile.
-        let _editing = gate.lock().unwrap_or_else(|poison| poison.into_inner());
+    /// outside the companion lock. The caller holds this companion's gate, so
+    /// the edit runs alone and the length recorded is the one its own bytes
+    /// leave.
+    fn edit_gated(&self, serial: u64, edit: Edit<'_>) -> Result<ViewStat, Status> {
         match self.apply_edit(serial, &edit)? {
             Edited::Done(stat) => Ok(stat),
             Edited::NoSlot => {
@@ -276,7 +274,8 @@ impl Kernel {
         let need = match &file.body {
             Body::Spilled => return Ok(Room::Spilled),
             Body::Resident(bytes) => target.saturating_sub(bytes.len()),
-            Body::Decoded(image) => edited_len(edit, image.len()),
+            // The decoded form's own charge comes back when it becomes bytes.
+            Body::Decoded(image) => edited_len(edit, image.len()).saturating_sub(image.cost()),
         };
         if need > avail {
             // The body does not fit the resident budget, but the edit may

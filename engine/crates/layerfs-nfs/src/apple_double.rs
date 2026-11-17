@@ -28,9 +28,10 @@
 //! companion to the inode's other names: only its last name, on an inode with
 //! no other name the export knows, is the client clearing the attributes. Whenever a write leaves such a companion holding a whole
 //! AppleDouble image the client laid out itself (see
-//! [`crate::apple_double_codec`]), it is decoded: a small one keeps only its
-//! FinderInfo and attributes in memory (each at most [`DECODED_ENTRY_BYTES`]
-//! counted), and every read synthesizes the same bytes again. Such a whole
+//! [`crate::apple_double_codec`]), it is decoded: one whose attributes cost
+//! less than its bytes keeps only its FinderInfo and attributes in memory
+//! (each at most [`DECODED_ENTRY_BYTES`] counted), and every read synthesizes
+//! the same bytes again. Such a whole
 //! image takes no slot of the index bound. Any other body
 //! (a resource fork, another layout, a half-written image, or a companion whose
 //! main file is unknown) is kept as the client wrote it and takes a slot: the

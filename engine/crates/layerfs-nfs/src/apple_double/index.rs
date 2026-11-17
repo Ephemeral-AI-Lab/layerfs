@@ -163,7 +163,7 @@ impl Companions {
         let Some(image) = Image::compact(bytes) else {
             return Decoded::Unchanged;
         };
-        if image.cost() > DECODED_ENTRY_BYTES {
+        if !worth_decoding(&image, bytes.len()) {
             return Decoded::Unchanged;
         }
         let cost = image.cost();
@@ -216,7 +216,7 @@ impl Companions {
             return;
         };
         file.whole = true;
-        if image.cost() <= DECODED_ENTRY_BYTES {
+        if worth_decoding(&image, bytes.len()) {
             file.body = Body::Decoded(image);
         }
     }
@@ -349,4 +349,11 @@ impl Companions {
             unreachable: self.unreachable(),
         }
     }
+}
+/// Whether a whole image of `len` bytes is kept decoded: only when its decoded
+/// form costs less than the bytes it replaces, and at most
+/// [`DECODED_ENTRY_BYTES`]. Many small attributes cost more decoded than as
+/// written, and such an image is kept as the client wrote it.
+fn worth_decoding(image: &Image, len: usize) -> bool {
+    image.cost() <= DECODED_ENTRY_BYTES && image.cost() < len
 }

@@ -55,6 +55,38 @@ fn image(finder: [u8; 32], attrs: &[(&[u8], Vec<u8>)]) -> Vec<u8> {
 }
 
 #[test]
+fn an_image_whose_attributes_cost_more_than_its_bytes_is_kept_as_written() {
+    let base = temp("decode-costly");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    c.touch(&root, b"f", 0o644).unwrap();
+    let ad = c.touch(&root, b"._f", 0o644).unwrap();
+    // Many one-byte names with empty values: a whole image the client could
+    // write, whose decoded attributes would be counted at several times its
+    // bytes.
+    let names: Vec<[u8; 2]> = (0..600u16).map(|n| [b'a' + (n % 26) as u8, (n / 26) as u8 + b'a']).collect();
+    let attrs: Vec<(&[u8], Vec<u8>)> = names.iter().map(|name| (&name[..], Vec::new())).collect();
+    let bytes = image([0x22; 32], &attrs);
+    let decoded = Image::compact(&bytes).expect("a whole image");
+    assert!(decoded.cost() > bytes.len(), "{} <= {}", decoded.cost(), bytes.len());
+    c.write(&ad.handle, 0, &bytes).unwrap();
+    let held = server.held();
+    assert_eq!((held.companions, held.companions_decoded), (1, 0));
+    assert_eq!(held.companion_bytes, bytes.len(), "charged at its length");
+    assert_eq!(c.read_all(&ad.handle, 64 * 1024), bytes);
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn a_whole_image_is_read_back_as_written_from_every_name_of_the_inode() {
     let base = temp("decode");
     let tree = base.join("tree");

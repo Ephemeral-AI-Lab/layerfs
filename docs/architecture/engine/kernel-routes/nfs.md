@@ -193,7 +193,7 @@ the export.
 | `HELD` | 65,536 slotted companion entries | `Companions::admits` decides the bound in one place, before anything is committed: CREATE, and a WRITE, SETATTR or RENAME that needs a new slot, first reclaim the orphan slotted companions outside the companion lock, once, and then answer the whole operation `NFS3ERR_NOSPC` with the body, its length and its name as they were (CREATE also increments `names_refused` and logs at most once per 60 s per export). A call whose commit needs I/O in between (`Companions::reserve`) holds the slot from the decision, so the bound holds when calls race for the last one | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 | `FILE_BYTES` | 1 MiB per companion | WRITE / SETATTR `NFS3ERR_FBIG` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 | `RESIDENT_BYTES` | 32 MiB of companion bodies in all: a body kept as written at its length, a decoded one as `Image::cost`; an edit that leaves a body whole decodes it as it records it, so the count may stand one decoded body over until the next edit needs room | Spill the least recently touched bodies, decoded ones included, to `companion_spill_dir` (`<mounts>/.appledouble/<namespace>/<serial>`); host disk I/O errors map to `NFS3ERR_NOSPC` (`ENOSPC`/`EDQUOT`), `NFS3ERR_FBIG` (`EFBIG`), `NFS3ERR_ACCES` (`EACCES`), `NFS3ERR_PERM` (`EPERM`), `NFS3ERR_ROFS` (`EROFS`) or `NFS3ERR_IO` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs), [`apple_double_spill.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_spill.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
-| `DECODED_ENTRY_BYTES` | 128 KiB counted for one decoded companion: a cap on what one decoded body is charged, not on what a companion may store | A whole image costing more keeps its bytes as written, is charged at their length and still takes no `HELD` slot | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| `DECODED_ENTRY_BYTES` | 128 KiB counted for one decoded companion: a cap on what one decoded body is charged, not on what a companion may store | A whole image costing more, or costing at least its own length (many small attributes), keeps its bytes as written, is charged at their length and still takes no `HELD` slot | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 
 A companion whose main inode the export knows belongs to that inode rather than
 to one name: hard links share it, main-file RENAME keeps it under the new name
@@ -274,7 +274,9 @@ than the length the lock saw is a short read, not `NFS3ERR_IO`.
 One edit per companion runs under that gate
 ([`edit.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/edit.rs)),
 recording length and bytes together and spilling its own body rather than
-failing with `NFS3ERR_IO`. A file operation that fails after the spill put the
+failing with `NFS3ERR_IO`. A SETATTR is one such edit from its guard to its
+mode and time, and a WRITE reads its pre-op attributes under the gate, so a
+guarded SETATTR checks the very body its size change applies to. A file operation that fails after the spill put the
 length the companion had back, so a refused write reports neither bytes nor the
 longer file the spill made for it. Eviction follows `Companions::by_use`, the
 `(used tick, serial)` order kept on attach, detach and every use: the victim is
