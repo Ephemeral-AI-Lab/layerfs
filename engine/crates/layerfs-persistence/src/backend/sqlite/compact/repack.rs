@@ -28,6 +28,14 @@
 //! of `pack` and `pack_unit` selects from; [`apply`] runs after the table copy
 //! and before the totals are summed.
 //!
+//! A pack this step cannot rewrite is copied whole, exactly as every rebuild
+//! copied it before: one whose stored bytes are not the ones its row
+//! describes (rewriting it would give damaged bytes a fresh, matching
+//! digest), one whose kept locators disagree with it (two objects on one
+//! record, or a record the pack does not hold), and one the core rebuild
+//! refuses for any other reason. Its locators stay as they were, and its dead
+//! bytes stay in the report's `keptWaste.deadInRetainedPacksBytes`.
+//!
 //! The kept locators are put in pack order by the scratch table's own key,
 //! on disk, and read back one pack at a time, so the rewrite holds one pack's
 //! locators and bytes in memory, never the whole kept set. No statement here
@@ -93,6 +101,9 @@ pub(crate) struct Repacked {
     /// The mark's `deadInRetainedPacksBytes` share of the packs written again:
     /// the part of that kept waste this rebuild no longer keeps.
     pub(crate) marked_dead: u64,
+    /// Planned packs copied whole instead, because their stored bytes or
+    /// their locators did not allow a rewrite.
+    pub(crate) copied_whole: u64,
 }
 
 /// The packs one rebuild writes again, with the mark's dead bytes for each.
@@ -259,8 +270,9 @@ VALUES(?1,?2,?3,?4,?5)",
     Ok(())
 }
 
-/// Copies one pack whole: the mark named it, and its bytes hold nothing to
-/// drop after all. New unit rows take new ids, like the rewritten ones.
+/// Copies one pack whole: the mark named it, and it holds nothing to drop
+/// after all or cannot be rewritten. New unit rows take new ids, like the
+/// rewritten ones.
 fn copy_whole(connection: &Connection, pack_id: i64, units: bool) -> HistoryResult<()> {
     connection
         .prepare_cached("INSERT INTO main.pack SELECT * FROM src.pack WHERE pack_id=?1")
@@ -288,7 +300,8 @@ struct Codecs {
 }
 
 /// Writes one pack again from its kept `(group, record, object)` locators and
-/// moves those locators to the new ordinals.
+/// moves those locators to the new ordinals. A pack that cannot be rewritten
+/// is copied whole and counted in [`Repacked::copied_whole`].
 fn rewrite(
     connection: &Connection,
     pack_id: i64,
@@ -297,25 +310,26 @@ fn rewrite(
     codecs: &mut Codecs,
     done: &mut Repacked,
 ) -> HistoryResult<()> {
-    // A damaged pack is refused here and never rebuilt into a pack with a
-    // fresh, matching digest.
-    let source = read(connection, "src", pack_id, units)?
-        .ok_or(HistoryError::Integrity("repack source pack digest"))?;
-    let header = layout::parse_header(&source.body).map_err(storage)?;
-    let mut keep = vec![Vec::new(); header.group_count];
-    for (group, record, _) in kept {
-        keep.get_mut(*group)
-            .ok_or(HistoryError::Integrity("repack locator group"))?
-            .push(*record);
-    }
-    let rebuilt = retain_records(
-        &source.body,
-        &keep,
-        &mut codecs.compression,
-        &mut codecs.decompression,
-    )
-    .map_err(storage)?;
-    let Some(rebuilt) = rebuilt else {
+    // The rewrite needs the pack's own bytes and a kept set the pack can
+    // satisfy. `retain_records` refuses a record named twice (two objects on
+    // one record arrive as neighbours in key order) or not held, and a pack
+    // it cannot parse or decode.
+    let rebuilt = read(connection, "src", pack_id, units)?.and_then(|source| {
+        let header = layout::parse_header(&source.body).ok()?;
+        let mut keep = vec![Vec::new(); header.group_count];
+        for (group, record, _) in kept {
+            keep.get_mut(*group)?.push(*record);
+        }
+        let rebuilt = retain_records(
+            &source.body,
+            &keep,
+            &mut codecs.compression,
+            &mut codecs.decompression,
+        );
+        Some((source, rebuilt.ok()??))
+    });
+    let Some((source, rebuilt)) = rebuilt else {
+        done.copied_whole += 1;
         return copy_whole(connection, pack_id, units);
     };
     let digest = *ObjectKey::for_bytes(&rebuilt.body).as_bytes();

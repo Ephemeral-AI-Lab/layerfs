@@ -937,3 +937,136 @@ WHERE pack_id={pack}"
     assert!(verify_repacked(&connection, &wrong).is_err());
     assert!(verify_repacked(&connection, &packs).is_ok());
 }
+
+/// Runs one statement batch against the Store file while no session is open.
+fn raw(path: &Path, sql: &str) {
+    let connection = rusqlite::Connection::open(path).unwrap();
+    connection.execute_batch(sql).unwrap();
+}
+
+fn hex(id: ObjectId) -> String {
+    use std::fmt::Write as _;
+    id.as_bytes().iter().fold(String::new(), |mut text, byte| {
+        let _ = write!(text, "{byte:02x}");
+        text
+    })
+}
+
+/// A damaged Store must not turn a compaction that used to succeed into one
+/// that fails: a pack this rebuild cannot rewrite is copied whole, as before.
+#[test]
+fn a_pack_two_objects_name_one_record_in_is_copied_whole() {
+    let (_temp, handles, path) = create(SqlitePackLayout::Monolithic);
+    let fixture = mixed_store(&handles);
+    drop(handles);
+    // The whole-file pack keeps records 0 and 2 of its first group. The
+    // second live file's locator now names the first one's record.
+    let (first, second) = (fixture.live[0].id(), fixture.live[1].id());
+    raw(
+        &path,
+        &format!(
+            "UPDATE object_location SET record_number=\
+(SELECT record_number FROM object_location WHERE object_id=x'{}') WHERE object_id=x'{}'",
+            hex(first),
+            hex(second)
+        ),
+    );
+    let before = pack_rows(&path);
+    let damaged = fixture.packs[0];
+    let old_body = pack_body(&path, damaged, SqlitePackLayout::Monolithic);
+
+    let handles = reopen(&path, SqlitePackLayout::Monolithic);
+    let receipt = handles.compact(&request(0x71)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert!(
+        receipt.kept_waste.dead_in_retained_packs_bytes > 0,
+        "the pack copied whole still holds its dead records, and the report says so"
+    );
+    let after = pack_rows(&path);
+    for (old, new) in before.iter().zip(&after) {
+        assert_eq!(old.0, new.0);
+        if old.0 == damaged {
+            assert_eq!(old, new, "the pack is copied whole");
+        } else if fixture.packs.contains(&old.0) {
+            assert!(new.1 < old.1, "pack {} is still written again", old.0);
+        }
+    }
+    assert_eq!(
+        pack_body(&path, damaged, SqlitePackLayout::Monolithic),
+        old_body
+    );
+    let reopened = reopen(&path, SqlitePackLayout::Monolithic);
+    for object in fixture.live.iter().filter(|object| object.id() != second) {
+        assert_eq!(object_bytes(&reopened, object.id()), object.canonical());
+    }
+    // Both locators cross the rebuild as they were.
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let sharing: i64 = connection
+        .query_row(
+            &format!(
+                "SELECT count(*) FROM object_location a JOIN object_location b \
+ON a.pack_id=b.pack_id AND a.group_number=b.group_number AND a.record_number=b.record_number \
+WHERE a.object_id=x'{}' AND b.object_id=x'{}'",
+                hex(first),
+                hex(second)
+            ),
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(sharing, 1);
+}
+
+#[test]
+fn a_pack_whose_bytes_do_not_match_its_digest_is_copied_whole() {
+    let (_temp, handles, path) = create(SqlitePackLayout::Monolithic);
+    let fixture = mixed_store(&handles);
+    drop(handles);
+    // The chunk pack's last byte is payload of its last record: the mark,
+    // which reads record headers, does not meet it.
+    let damaged = fixture.packs[1];
+    let trigger: String = rusqlite::Connection::open(&path)
+        .unwrap()
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE name='pack_immutable_update'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    raw(
+        &path,
+        &format!(
+            "DROP TRIGGER pack_immutable_update;\
+UPDATE pack SET body=CAST(substr(body,1,length(body)-1)||\
+(CASE WHEN substr(body,length(body))=x'00' THEN x'01' ELSE x'00' END) AS BLOB) \
+WHERE pack_id={damaged};{trigger};"
+        ),
+    );
+    let before = pack_rows(&path);
+    let old_body = pack_body(&path, damaged, SqlitePackLayout::Monolithic);
+    assert_ne!(
+        ObjectKey::for_bytes(&old_body).as_bytes().as_slice(),
+        before.iter().find(|row| row.0 == damaged).unwrap().2,
+        "the stored bytes no longer match the row's digest"
+    );
+
+    let handles = reopen(&path, SqlitePackLayout::Monolithic);
+    let receipt = handles.compact(&request(0x72)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    let after = pack_rows(&path);
+    assert_eq!(
+        before.iter().find(|row| row.0 == damaged),
+        after.iter().find(|row| row.0 == damaged),
+        "the damaged pack keeps its row: no fresh digest is computed over damaged bytes"
+    );
+    assert_eq!(
+        pack_body(&path, damaged, SqlitePackLayout::Monolithic),
+        old_body,
+        "and its bytes, for the doctor to find"
+    );
+    for pack in [fixture.packs[0], fixture.packs[2]] {
+        let old = before.iter().find(|row| row.0 == pack).unwrap();
+        let new = after.iter().find(|row| row.0 == pack).unwrap();
+        assert!(new.1 < old.1, "pack {pack} is still written again");
+    }
+}

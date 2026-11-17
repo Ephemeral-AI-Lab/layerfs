@@ -474,6 +474,19 @@ measured implementation of this branch.
   old Store is unchanged until the rename, as before. The kept locators are
   ordered by the scratch table's key, on disk, and read one pack at a
   time, not sorted in memory.
+- **A pack that cannot be rewritten is copied whole**, exactly as every
+  rebuild copied it before, so a damaged Store does not turn a compaction
+  that used to succeed into one that fails: a pack whose stored bytes are
+  not the ones its row's SHA-256 and length describe (a rewrite would give
+  damaged bytes a fresh, matching digest), a pack whose kept locators
+  disagree with it (two objects on one record, or a record the pack does not
+  hold), and a pack the core rebuild refuses for any other reason. Its
+  locators stay as they were and its dead bytes stay in
+  `keptWaste.deadInRetainedPacksBytes` after the rebuild, which is the only
+  place the report shows the condition; there is no separate field or log
+  line. Such a pack still counts towards the 10%, so a Store whose in-pack
+  dead bytes sit mostly in packs like this rebuilds on every call instead of
+  taking `none`.
 - **Threshold:** `rebuild iff total > 0 AND (dead + deadInRetained) * 10 >=
   total`, where `dead` is the bytes of wholly dead packs and `deadInRetained`
   is the mark's `keptWaste.deadInRetainedPacksBytes`. The 10% value and the
