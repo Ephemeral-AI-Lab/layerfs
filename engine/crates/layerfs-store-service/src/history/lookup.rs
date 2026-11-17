@@ -413,20 +413,3 @@ pub fn next_page(pos: u64, count: usize, more: bool) -> SdkValue {
         SdkValue::Null
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::Arc;
-
-    #[test]
-    fn a_published_refusal_keeps_its_history_code() {
-        let busy = published(Arc::new(PortError::History(HistoryError::Busy)));
-        assert_eq!(busy.code, "Busy", "{busy:?}");
-        let unknown = published(Arc::new(PortError::History(HistoryError::UnknownOutcome)));
-        assert_eq!(unknown.code, "Unknown", "{unknown:?}");
-        // a reader or storage failure is not known to be a history refusal
-        let poisoned = published(Arc::new(PortError::Poisoned));
-        assert_eq!(poisoned.code, "Unknown", "{poisoned:?}");
-    }
-}

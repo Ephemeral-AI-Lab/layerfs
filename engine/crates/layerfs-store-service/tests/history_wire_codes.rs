@@ -220,3 +220,20 @@ fn unknown_without_a_durable_operation_nulls_phase_and_op() {
     assert_eq!(busy.code, "Busy");
     assert!(empty(&busy.detail), "a definite refusal keeps its detail");
 }
+
+/// A published history refusal keeps its own wire code: `Busy` and
+/// `UnknownOutcome` stay themselves, and a reader or storage failure is not
+/// known to be a history refusal, so it is `Unknown` (#45 Round 3).
+#[test]
+fn a_published_refusal_keeps_its_history_code() {
+    use layerfs_store_service::history::lookup::published;
+    use layerfs_store_service::store::PortError;
+    use std::sync::Arc;
+
+    let busy = published(Arc::new(PortError::History(HistoryError::Busy)));
+    assert_eq!(busy.code, "Busy", "{busy:?}");
+    let unknown = published(Arc::new(PortError::History(HistoryError::UnknownOutcome)));
+    assert_eq!(unknown.code, "Unknown", "{unknown:?}");
+    let poisoned = published(Arc::new(PortError::Poisoned));
+    assert_eq!(poisoned.code, "Unknown", "{poisoned:?}");
+}

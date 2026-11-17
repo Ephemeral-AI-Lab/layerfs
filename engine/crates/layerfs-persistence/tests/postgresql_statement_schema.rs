@@ -202,7 +202,10 @@ fn constants(source: &str) -> BTreeMap<String, String> {
     let mut rest = source;
     while let Some(at) = rest.find("const ") {
         let tail = &rest[at + "const ".len()..];
-        let ident: String = tail.chars().take_while(|character| is_ident(*character)).collect();
+        let ident: String = tail
+            .chars()
+            .take_while(|character| is_ident(*character))
+            .collect();
         if let Some(equals) = tail.find("= \"") {
             let value = &tail[equals + 3..];
             if let Some(end) = value.find('"') {
@@ -220,13 +223,17 @@ fn called(argument: &str) -> String {
         Some(at) => &argument[at + 2..],
         None => argument,
     };
-    let text = after.trim_start_matches(|character: char| character.is_whitespace() || character == '{');
+    let text =
+        after.trim_start_matches(|character: char| character.is_whitespace() || character == '{');
     let chain: String = text
         .chars()
         .take_while(|character| is_ident(*character) || *character == ':')
         .collect();
     let chain = chain.trim_end_matches(':');
-    assert!(!chain.is_empty(), "no call in the closure argument {argument:?}");
+    assert!(
+        !chain.is_empty(),
+        "no call in the closure argument {argument:?}"
+    );
     chain.to_owned()
 }
 
@@ -313,7 +320,8 @@ fn entries(source: &str, function: &str, directory: &Path) -> BTreeMap<String, S
 
 /// The pinned, non-PostgreSQL-only keys, in source order.
 fn pinned_keys() -> BTreeSet<&'static str> {
-    READS.iter()
+    READS
+        .iter()
         .filter(|read| !read.pg_only)
         .flat_map(|read| read.keys.iter().copied())
         .collect()
@@ -342,13 +350,16 @@ fn every_one_statement_read_names_the_schema() {
     // a column-batched read whose array form names the schema.
     for read in READS.iter().filter(|read| !read.pg_only) {
         for key in read.keys {
-            let sql = qualified.get(*key).or_else(|| arrays.get(*key)).unwrap_or_else(|| {
-                panic!(
+            let sql = qualified
+                .get(*key)
+                .or_else(|| arrays.get(*key))
+                .unwrap_or_else(|| {
+                    panic!(
                     "`{}` runs `{key}` in one statement, but statements.rs has no `{{s}}` body for \
                      it: add sql/postgresql/queries/history/{key}.sql and a `qualified` entry",
                     read.called
                 )
-            });
+                });
             assert!(
                 sql.contains("{s}."),
                 "the PostgreSQL body of `{key}` names no schema: it must read `{{s}}.table`"
