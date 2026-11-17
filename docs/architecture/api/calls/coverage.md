@@ -42,7 +42,7 @@ check and proves a missing, renamed or extra call is reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-85 calls in 12 families, counted from the Node table. Calls present: Node 85, Python 85, Python `aio` 85, CLI 85, MCP 78 (38 in `work`, 40 admin only; 6 UI only, in no profile).
+84 calls in 12 families, counted from the Node table. Calls present: Node 84, Python 84, Python `aio` 84, CLI 84, MCP 77 (38 in `work`, 39 admin only; 6 UI only, in no profile).
 
 Argument names that are Python keywords: none.
 
@@ -114,12 +114,11 @@ Front-end problems: none.
 | `machine.update` | name | cpus, memory, image, docker, wsl, daemon | yes | yes | yes | yes | admin |
 | `store.list` | - | - | yes | yes | yes | yes | admin |
 | `store.get` | name | - | yes | yes | yes | yes | admin |
-| `store.status` | name | - | yes | yes | yes | yes | admin |
+| `store.status` | name | machine | yes | yes | yes | yes | admin |
 | `store.stats` | name | - | yes | yes | yes | yes | admin |
 | `store.create` | name | - | yes | yes | yes | yes | admin |
 | `store.connect` | name, url | password, synchronous_commit | yes | yes | yes | yes | admin |
-| `store.attach` | name, machine | url, password | yes | yes | yes | yes | admin |
-| `store.detach` | name, machine | - | yes | yes | yes | yes | admin |
+| `store.update` | name | machine, url, password, synchronous_commit, clear | yes | yes | yes | yes | admin |
 | `store.push` | name, machine | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `store.pull` | name | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `store.remove` | name | - | yes | yes | yes | yes | admin |

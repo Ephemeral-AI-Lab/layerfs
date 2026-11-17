@@ -256,4 +256,4 @@ nothing.
 - [Store](README.md): the seam, admission, history calls and errors.
 - [SQLite](sqlite.md): the tables these mirror.
 - [Diagnostics](diagnostics.md): the PostgreSQL audit and its physical checks.
-- [Control: Stores and projects](../../control/stores-and-projects/sqlite-and-postgresql.md): how a home connects and attaches a PostgreSQL Store.
+- [Control: Stores and projects](../../control/stores-and-projects/sqlite-and-postgresql.md): how a home connects, updates and checks a PostgreSQL Store.

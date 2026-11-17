@@ -125,12 +125,11 @@ The relationships no record stores, read when a call needs them
 
 | Read or check | Answers |
 | --- | --- |
-| `machines`, `stores_on`, `postgresql_on`, `sandboxes_on`, `hosted_on` | every machine record; the sqlite Stores, attached PostgreSQL Stores and Sandboxes of a machine; old Firecracker records a Lima machine hosted |
+| `machines`, `stores_on`, `sandboxes_on`, `hosted_on` | every machine record; the sqlite Stores and Sandboxes of a machine; old Firecracker records a Lima machine hosted |
 | `sandboxes_of_store`, `sandboxes_of_project` | the Sandboxes of a Store or project |
 | `can_remove_machine` | `machine.remove`: `InUse` while it holds Stores, attached PostgreSQL Stores, Sandboxes or hosted Firecracker records |
 | `can_stop_machine`, `can_change_machine` | `machine.stop`, `machine.update`: `InUse` while Sandboxes are recorded on it |
 | `store_idle` | `store.push`, `pull`, `remove`, `disconnect`, `backup.restore`: `InUse` while another live process holds a lease or a project's Sandbox is recorded (removes stale leases) |
-| `store_idle_on` | `store.detach`: `InUse` while a Sandbox of the Store is recorded on that machine |
 | `can_remove_project` | `project.delete`: `Busy` while a Sandbox of the project is recorded |
 
 Each `InUse` or `Busy` lists what holds the entity in `detail.related` as

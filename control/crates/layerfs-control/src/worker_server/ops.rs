@@ -110,8 +110,9 @@ pub(super) fn run(
         // removes one leftover under this root, under its guard (#180)
         "doctor.fix" => crate::doctor::leftover_fix::fix_in_worker(root, &args),
         "store.diagnose" => crate::doctor::diagnose_store_in_worker(root, args, events),
-        // `store.attach`'s check of this machine's connection to a
-        // PostgreSQL Store: the caller sends the record and what it dials
+        // the check of this machine's connection to a PostgreSQL Store
+        // (`store.update`, `store.status`): the caller sends the record and
+        // what it dials
         "store.reach" => crate::store::reach_in_worker(&args),
         // one Store call, on the Store file under this worker's root (2.0)
         "store.call" => {

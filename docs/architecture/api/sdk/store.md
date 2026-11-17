@@ -2,13 +2,13 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The `store` calls: create, connect, inspect, move, remove and compact the databases that hold every project's history, within the [SDK](README.md).
+The `store` calls: create, connect, update, inspect, move, remove and compact the databases that hold every project's history, within the [SDK](README.md).
 
 | | |
 | --- | --- |
 | Source | [`api/crates/layerfs-api/src/store`](../../../../api/crates/layerfs-api/src/store), [`layerfs-store/src`](../../../../control/crates/layerfs-store/src) (`sqlite/`, `postgresql/`, `list.rs`, `status.rs`, `stats.rs`), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) |
 | Runs by default | the caller's process (records, locks, leases, PostgreSQL connections); a sqlite Store's file steps run in its machine's worker (`store.file`) when it is not on a locally executing machine |
-| Design | [Stores and projects](../../control/stores-and-projects/README.md) (records, placement, leases), [SQLite and PostgreSQL](../../control/stores-and-projects/sqlite-and-postgresql.md) (transfer phases, connect and attach), [Engine: Store](../../engine/store/README.md) |
+| Design | [Stores and projects](../../control/stores-and-projects/README.md) (records, placement, leases), [SQLite and PostgreSQL](../../control/stores-and-projects/sqlite-and-postgresql.md) (transfer phases, connect, update and the check), [Engine: Store](../../engine/store/README.md) |
 
 ## Calls
 
@@ -18,11 +18,11 @@ The `store` calls: create, connect, inspect, move, remove and compact the databa
      sqlite              |                 PostgreSQL
      ------              |                 ----------
      create (on native)  |                 connect (url, password ref)
-        |                |                    |  attached to native
+        |                |                    |  runs on every machine
         v                |                    v
-     push --> on <machine> --> pull        attach <machine> [url, password]
-        |     (back to native)             detach <machine>
-        v                                     v
+     push --> on <machine> --> pull        update [url, password, sync]
+        |     (back to native)             update --machine <m> (its own
+        v                                     v            connection)
      remove (file + projects)              disconnect (data stays)
      compact (reclaim dead bytes)
 ```
@@ -31,12 +31,11 @@ The `store` calls: create, connect, inspect, move, remove and compact the databa
 | --- | --- | --- |
 | [`store.list`](#storelist) | both | `{ items: [record + projects + state] }` |
 | [`store.get`](#storeget) | both | the record with `projects` |
-| [`store.status`](#storestatus) | both | `{ name, kind, state, holders, op, down_reason, machine/file \| server }` |
+| [`store.status`](#storestatus) | both | `{ name, kind, state, holders, op, down_reason, machine/file \| server, check? }` |
 | [`store.stats`](#storestats) | both | publication and allocation counters |
 | [`store.create`](#storecreate) | sqlite | the new record |
-| [`store.connect`](#storeconnect) | PostgreSQL | `{ name, kind, schema, synchronous_commit, machines, projects }` |
-| [`store.attach`](#storeattach) | PostgreSQL | the Store as `get` shows it |
-| [`store.detach`](#storedetach) | PostgreSQL | the Store as `get` shows it |
+| [`store.connect`](#storeconnect) | PostgreSQL | `{ name, kind, schema, synchronous_commit, projects }` |
+| [`store.update`](#storeupdate) | PostgreSQL | the Store as `get` shows it |
 | [`store.push`](#storepush) | sqlite | `{ store, from, to, bytes, heads }` |
 | [`store.pull`](#storepull) | sqlite | `{ store, from, to, bytes, heads }` |
 | [`store.remove`](#storeremove) | sqlite | `{ removed: name }` |
@@ -62,7 +61,8 @@ shows `cursor`, `binding` or `v`:
 | `last_transfer` | sqlite | the last push or pull `{ call, from, to, at, bytes, sha256, heads, retired }`; `retired: false` means the source copy is not yet deleted |
 | `incoming_on` | sqlite | a machine a certain-failed push left a partial `.incoming` copy on; the next push or remove deletes it ([`sqlite/transfer/resolve.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/resolve.rs)) |
 | `backups` | sqlite | one link per bucket: the file, its heads, the last `create` or `restore` ([`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs)) |
-| `url`, `schema`, `synchronous_commit`, `password`, `machines` | PostgreSQL | the URL without a password, always `layerfs`, the setting, the password reference, attached machines `{ url?, password?, checked? }` |
+| `url`, `schema`, `synchronous_commit`, `password` | PostgreSQL | the URL without a password, always `layerfs`, the setting, the password reference |
+| `machines` | PostgreSQL | only the machines with a connection of their own, `{ <machine>: { url?, password? } }`; absent when none has one. Every other machine dials the Store's |
 | `op` | both | the recorded intent `{ id, name, phase, started, uncertain }`; for a compaction `id` is the 16-byte operation id rendered `op-<32 lowercase hex>` ([`op.rs`](../../../../control/crates/layerfs-home/src/op.rs), [`status.rs`](../../../../control/crates/layerfs-store/src/status.rs)) |
 | `projects` | both | the home's project records for this Store, sorted |
 
@@ -106,12 +106,13 @@ Errors: `NotFound`, `Failed` (the record cannot be read).
 ### store.status
 
 One Store's live state: who holds it, the operation on it, and its file or
-server. Changes nothing.
+server. With `machine`, also whether that machine reaches a PostgreSQL
+Store. Changes nothing.
 
 ```text
-JS      await layerfs.store.status(name)
-Python  layerfs.store.status(name)
-CLI     layerfs store status <name>
+JS      await layerfs.store.status(name, { machine })
+Python  layerfs.store.status(name, *, machine=None)
+CLI     layerfs store status <name> [--machine <machine>]
 ```
 
 ```text
@@ -122,7 +123,22 @@ CLI     layerfs store status <name>
                        latency_us, schemas: { layerfs: <bytes> | null } }
                    | { reachable: false, error: { code, message } }
                    | { unavailable }
+ --machine:  check: { machine, host, ok: true, at, server_version, latency_ms }
+                  | { machine, host, ok: false, error: { code, message } }
 ```
+
+`check` is the check of one machine's connection (its own where it has
+one, else the Store's), run from that machine now: in this process, or in
+its worker as `store.reach`. It reads the server version, the role, the
+`layerfs` schema and its binding, `USAGE` on the schema, `TEMP` on the
+database, `SELECT`/`INSERT`/`UPDATE`/`DELETE` on each table and `USAGE` on
+each sequence ([`access.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/access.rs),
+[`postgresql/check.rs`](../../../../control/crates/layerfs-store/src/postgresql/check.rs)).
+A check that fails is `ok: false` in a successful answer, with the refusal
+`store.update --machine` would give (`Unavailable`: not reached, or the
+database holds another Store; `Denied`: the login or a privilege; a stopped
+machine). Nothing is recorded. `host` is null when the URL the machine
+dials could not be built ([`store.rs`](../../../../control/crates/layerfs-control/src/store.rs) `status`).
 
 `holders` are live processes other than this one holding its lease; stale
 leases are ignored, not removed
@@ -130,7 +146,9 @@ leases are ignored, not removed
 password reference is resolved here and the server dialed once; a
 PostgreSQL Store is never `down` (an unreachable server shows in `server`)
 ([`status.rs`](../../../../control/crates/layerfs-store/src/status.rs)). It is
-the call an `Unresolved` refusal names. When a compaction runs on a sqlite
+the call an `Unresolved` refusal names. With `machine`: `InvalidInput` (a
+sqlite Store), `NotFound` (no such machine), `Unsupported` (its platform
+runs no PostgreSQL Sandboxes here). When a compaction runs on a sqlite
 Store, `op` is read from `<store>.compact-op`; on a PostgreSQL Store it is
 the Store-side `gc_op` row with its `gc_intent`, read by one status query
 with no Store session and no artifact read. Either way `state` is `busy` only
@@ -200,9 +218,10 @@ user, is a symlink, or has group/other access instead of `0700`);
 
 ### store.connect
 
-Attaches a PostgreSQL database as a Store: an empty database gets the
+Connects a PostgreSQL database as a Store: an empty database gets the
 `layerfs` schema; an existing one keeps its data and its projects become this
-home's project records.
+home's project records. Its Sandboxes then run on every machine whose
+platform runs PostgreSQL Sandboxes, with no further step.
 
 ```text
 JS      await layerfs.store.connect(name, url, { password, synchronous_commit })
@@ -218,13 +237,14 @@ CLI     layerfs store connect <name> <url> [--password <password>] [--synchronou
 
 ```text
 { name, kind: "postgresql", schema: "layerfs", synchronous_commit,
-  machines: { native: { checked? } }, projects: [name] }
+  projects: [name] }
 ```
 
-`native` is attached with the Store's own connection; `checked` is present
-when the `store.attach` check passed. The schema is made before any record is
-written, so a refusal after it leaves an empty schema and no record; connecting
-again keeps its binding
+No machine is recorded: each machine dials the Store's connection (a
+loopback host rewritten for it, [Reach](../../control/machines/workers-and-reach.md#reach-reachrs)),
+and `sandbox.create` checks from the machine that it reaches this Store.
+The schema is made before any record is written, so a refusal after it
+leaves an empty schema and no record; connecting again keeps its binding
 ([`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs)).
 
 | Error | When |
@@ -233,54 +253,43 @@ again keeps its binding
 | `Unavailable` | the reference does not resolve; no session (no database, wrong user or password); a lock held 120 s |
 | `Exists` | the name is taken, or another PostgreSQL Store of this home connects the same database (by URL, or by binding once read) |
 
-### store.attach
+### store.update
 
-Lets a machine run Sandboxes of a PostgreSQL Store, after checking from that
-machine that it reaches the database and its role may write there.
+Changes a PostgreSQL Store's connection, or gives one machine a connection
+of its own.
 
 ```text
-JS      await layerfs.store.attach(name, machine, { url, password })
-Python  layerfs.store.attach(name, machine, *, url=None, password=None)
-CLI     layerfs store attach <name> <machine> [--url <url>] [--password <password>]
+JS      await layerfs.store.update(name, { machine, url, password, synchronous_commit, clear })
+Python  layerfs.store.update(name, *, machine=None, url=None, password=None, synchronous_commit=None, clear=None)
+CLI     layerfs store update <name> [--machine <machine>] [--url <url>] [--password <password>] [--synchronous-commit <synchronous-commit>] [--clear]
 ```
 
-`machine` must be a platform that runs PostgreSQL Sandboxes on this host (the
-support table, as `sandbox.create`). `url` and `password` replace the Store's
-for that machine, under `store.connect`'s rules; either may be given alone.
-On an attached machine it checks the new connection and replaces the old one;
-with no options it checks the current one again. The check runs where the
-machine's Sandbox calls run (here, or the worker as `store.reach`): server
-version, role, the `layerfs` schema, `USAGE` on it, `TEMP` on the database,
-`SELECT`/`INSERT`/`UPDATE`/`DELETE` on each table and `USAGE` on each
-sequence ([`access.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/access.rs)).
-A failed check writes nothing; LayerFS never creates or grants roles
-([`store.rs`](../../../../control/crates/layerfs-control/src/store.rs),
-[`postgresql/attach.rs`](../../../../control/crates/layerfs-store/src/postgresql/attach.rs)).
+| Form | Does |
+| --- | --- |
+| no `machine` | sets the Store's `url`, `password` reference and `synchronous_commit` (any of them). A new URL or password is dialled once from this process and must reach this Store: the same binding. `synchronous_commit` alone dials nothing |
+| `machine` with `url` and/or `password` | sets the connection that machine alone dials, in place of the Store's; a field not given keeps the machine's own, else the Store's. Checked from the machine first, as [`store.status --machine`](#storestatus) checks it |
+| `machine` with `clear` | removes the machine's own connection; it dials the Store's again. Dials nothing |
+
+`url` and `password` follow `store.connect`'s rules. Every refusal of the
+input comes before any connection, and a failed check saves nothing. The
+record is written under the home lock and the Store's; this process's open
+sessions on the Store are closed. A running Sandbox keeps the connection it
+started with. LayerFS never creates or grants roles. Removing a machine
+forgets its own connection in every Store
+([`postgresql/update.rs`](../../../../control/crates/layerfs-store/src/postgresql/update.rs),
+[`postgresql/check.rs`](../../../../control/crates/layerfs-store/src/postgresql/check.rs),
+[`store.rs`](../../../../control/crates/layerfs-control/src/store.rs)).
 
 | Error | When |
 | --- | --- |
-| `InvalidInput` | a sqlite Store (names `store push`); a URL holding a password |
-| `Unsupported` | the platform runs no PostgreSQL Sandboxes here; an ssh loopback URL; a worker bundle without `store.reach` |
-| `Unavailable` | the reference does not resolve; the machine is stopped; the server is not reached from it, or its database holds another Store or none (names the machine and host, never the URL) |
-| `Denied` | the server refused the login, or the role lacks a privilege (names the first and how many) |
+| `InvalidInput` | a sqlite Store; nothing to update; a URL holding a password; a bad `synchronous_commit`; `synchronous_commit` with `machine`; `clear` without `machine`, with `url` or `password`, or for a machine with no connection of its own |
+| `NotFound` | no such Store or machine |
+| `Unsupported` | the machine's platform runs no PostgreSQL Sandboxes here; a URL the platform cannot rewrite for the machine; a worker bundle without `store.reach` |
+| `Unavailable` | the reference does not resolve; the machine is stopped; the server is not reached, or its database holds another Store or none (names the machine and host, never the URL) |
+| `Denied` | for a machine: the server refused the login, or the role lacks a privilege (names the first and how many) |
+| `Exists` | the new URL names a database another Store of this home connects |
+| `InUse` | a call of this process is running on the Store |
 | `Conflict` | the Store was disconnected or reconnected elsewhere during the check |
-
-### store.detach
-
-Stops a machine running Sandboxes of a PostgreSQL Store. The database and
-the Store's other machines are untouched.
-
-```text
-JS      await layerfs.store.detach(name, machine)
-Python  layerfs.store.detach(name, machine)
-CLI     layerfs store detach <name> <machine>
-```
-
-Dials nothing. Detaching `native` is allowed: Store calls still run in the
-caller with the Store's connection; only Sandboxes on `native` are refused
-afterwards. Errors: `InvalidInput` (a sqlite Store, or not attached there);
-`InUse` (a Sandbox of the Store is recorded on the machine, `detail.related`,
-[`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle_on`).
 
 ### store.push
 

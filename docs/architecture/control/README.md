@@ -74,9 +74,9 @@ machine's worker, or in a Sandbox's daemon.
 | `store.remove` | records, locks | `store.file` `remove` | — | [`sqlite/remove.rs`](../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
 | `store.status`, `store.list` | records, leases | `store.file` `stat`, when reached | — | [`status.rs`](../../../control/crates/layerfs-store/src/status.rs), [`list.rs`](../../../control/crates/layerfs-store/src/list.rs) |
 | `store.compact` | all of it on the Store's own machine: PostgreSQL dials its URL, a sqlite file here rebuilds in this process | —: never forwarded (a remote sqlite Store is `Unsupported`, the documented S6 deviation #42 D5) | — | [`compact.rs`](../../../control/crates/layerfs-store/src/compact.rs) |
-| `store.attach` | records; dials itself for `native` | `store.reach`: the machine's own check | — | [`layerfs-control/src/store.rs`](../../../control/crates/layerfs-control/src/store.rs) |
+| `store.update`, `store.status --machine` | records; a Store's own connection and a `native` check are dialled here | `store.reach`: the machine's own check | — | [`layerfs-control/src/store.rs`](../../../control/crates/layerfs-control/src/store.rs) |
 | `backup.create` | uploads to the bucket | `store.file` `stage`, `read`, `unstage` | — | [`backup/create.rs`](../../../control/crates/layerfs-store/src/backup/create.rs) |
-| `machine.*`, `store.create`, `store.connect`, `store.disconnect`, `store.detach`, `backup.connect`, `backup.disconnect`, `backup.list`, `backup.restore` | all of it | — | — | [Machines](machines/README.md), [Backups](backups/README.md) |
+| `machine.*`, `store.create`, `store.connect`, `store.disconnect`, `backup.connect`, `backup.disconnect`, `backup.list`, `backup.restore` | all of it | — | — | [Machines](machines/README.md), [Backups](backups/README.md) |
 | `sandbox.create`, `sandbox.close` | records, intent | `sandbox.host` (the worker runs the same host code on its `native`) | started, stopped | [`route.rs`](../../../control/crates/layerfs-sandbox/src/route.rs) |
 | `workspace.mount`, `commit`, `unmount`, `status` on a forwarded Sandbox | dials the daemon directly | — | serves it | [`direct.rs`](../../../control/crates/layerfs-sandbox/src/direct.rs) |
 | the same, not forwarded | — (local machine: dials the daemon) | `sandbox.host`; the worker dials the daemon | serves it | `route.rs` |
@@ -125,7 +125,7 @@ kind or kernel route is an engine change.
 
 | Rule | Enforced by |
 | --- | --- |
-| sqlite Store calls run in a process on the Store's kernel (the caller on a local `native`, else that machine's worker); PostgreSQL Store calls and bucket I/O run in the caller's process; a sqlite Store is on exactly one machine; a PostgreSQL Store's Sandboxes run on the machines it is attached to | [`place.rs`](../../../control/crates/layerfs-store/src/place.rs), [`support.rs`](../../../control/crates/layerfs-platform/src/support.rs) |
+| sqlite Store calls run in a process on the Store's kernel (the caller on a local `native`, else that machine's worker); PostgreSQL Store calls and bucket I/O run in the caller's process; a sqlite Store is on exactly one machine; a PostgreSQL Store is on no machine: its Sandboxes run on every machine whose platform runs them | [`place.rs`](../../../control/crates/layerfs-store/src/place.rs), [`support.rs`](../../../control/crates/layerfs-platform/src/support.rs) |
 | Workers listen on loopback behind a secret; one attempt per call, no retry, no replay; an uncertain outcome is reported, never resent | [`worker/client.rs`](../../../control/crates/layerfs-machine/src/worker/client.rs) |
 | A PostgreSQL password is resolved only in the caller, travels only in one worker request and the Sandbox's private daemon setup file, and is never written to a record, log, trace or `Debug` output | [`secrets.rs`](../../../control/crates/layerfs-home/src/secrets.rs), [SQLite and PostgreSQL](stores-and-projects/sqlite-and-postgresql.md#credentials) |
 | Drivers know nothing of the home and write no records | [`layerfs-platform/src/lib.rs`](../../../control/crates/layerfs-platform/src/lib.rs) |
