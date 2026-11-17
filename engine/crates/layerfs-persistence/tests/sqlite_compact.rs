@@ -573,7 +573,7 @@ fn an_installed_but_unsettled_run_is_judged_at_g_plus_one() {
     let (_temp, handles, path) = create_store();
     let live = filesystem_root(&handles, 1);
     initialize(&handles, 1, live);
-    let _ = whole_file(&handles, b"dead");
+    let dead = whole_file(&handles, b"dead");
     let before = generation(&handles);
     let error = handles
         .compact(&request_at(8, CompactFailpoint::AfterInstall))
@@ -589,10 +589,81 @@ fn an_installed_but_unsettled_run_is_judged_at_g_plus_one() {
         before + 1,
         "the new Store is already installed"
     );
+    // §9/§11 F41-1: an installed leftover (`G + 1`) reports the original
+    // rebuild, `G -> G+1`, with the totals the record saved at the build; it
+    // does not re-run the §3 decision on the already rebuilt Store.
     let receipt = reopened.compact(&request(9)).unwrap();
-    assert_eq!(receipt.generation_before, before + 1);
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_before, before);
+    assert_eq!(receipt.generation_after, before + 1);
+    assert!(
+        receipt.dead_bytes_bound > 0,
+        "the adopted report keeps the collected bytes: {receipt:?}"
+    );
+    assert_eq!(receipt.dead_bytes_refined, receipt.dead_bytes_bound);
+    assert!(
+        receipt.logical_discarded > 0,
+        "the adopted report keeps the collected canonical bytes: {receipt:?}"
+    );
+    assert_eq!(
+        receipt.residue.artifacts,
+        Vec::<String>::new(),
+        "the settle leaves no residue"
+    );
     assert!(!op_path(&path).exists());
     assert!(!compact_path(&path).exists());
+    let final_handles = reopen(&path);
+    assert!(!located(&final_handles, dead), "the install collected the dead pack");
+    clean(&final_handles);
+}
+
+/// F41-1: a crash-resumed installed compaction answers the same §11 `Rebuild`
+/// report a completed run returns: `G -> G+1` with the collected totals, not
+/// a `none` decision at `G + 1` with zeros. SQLite and PostgreSQL resumes now
+/// agree on the report items (§9, §11, §12).
+#[test]
+fn an_installed_leftover_reports_the_same_rebuild_as_a_completed_run() {
+    // The completed control run.
+    let (_control_temp, control, control_path) = create_store();
+    let control_live = filesystem_root(&control, 1);
+    initialize(&control, 1, control_live);
+    let _control_dead = whole_file(&control, b"a pack the parity runs collect");
+    let control_before = generation(&control);
+    let expected = control.compact(&request(0x7e)).unwrap();
+    assert_eq!(expected.path, CompactPath::Rebuild);
+    assert_eq!(expected.generation_before, control_before);
+    assert_eq!(expected.generation_after, control_before + 1);
+    assert!(expected.dead_bytes_bound > 0);
+    clean(&reopen(&control_path));
+
+    // The crashed run leaves the same rebuild installed but unsettled.
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let dead = whole_file(&handles, b"a pack the parity runs collect");
+    let before = generation(&handles);
+    let error = handles
+        .compact(&request_at(0x7f, CompactFailpoint::DuringSettle))
+        .unwrap_err();
+    assert!(
+        matches!(error, layerfs_history::HistoryError::UnknownOutcome),
+        "{error:?}"
+    );
+    let adopted = reopen(&path)
+        .compact(&request(0x80))
+        .expect("the installed leftover is settled");
+    assert_eq!(adopted.path, expected.path);
+    assert_eq!(adopted.generation_before, expected.generation_before);
+    assert_eq!(adopted.generation_after, expected.generation_after);
+    assert_eq!(adopted.dead_bytes_bound, expected.dead_bytes_bound);
+    assert_eq!(adopted.dead_bytes_refined, expected.dead_bytes_refined);
+    assert_eq!(adopted.logical_discarded, expected.logical_discarded);
+    assert_eq!(adopted.physical_shrink, expected.physical_shrink);
+    assert_eq!(adopted.backend_reusable, expected.backend_reusable);
+    assert_eq!(adopted.kept_waste, expected.kept_waste);
+    assert_eq!(adopted.residue.artifacts, expected.residue.artifacts);
+    assert_eq!(before, control_before, "the fixtures are identical");
+    assert!(!located(&reopen(&path), dead));
 }
 
 /// The staged artifact name the tests below make non-removable: a directory,
@@ -630,6 +701,8 @@ fn a_settle_residue_keeps_the_op_record_recoverable() {
 
     let receipt = handles.compact(&staged).unwrap();
     assert_eq!(receipt.path, CompactPath::Rebuild);
+    let collected = receipt.dead_bytes_bound;
+    assert!(collected > 0, "the rebuild collected the dead pack");
     let stuck = stuck_artifact(&path);
     assert_eq!(
         receipt.residue.artifacts,
@@ -665,9 +738,16 @@ fn a_settle_residue_keeps_the_op_record_recoverable() {
     std::fs::remove_dir(&stuck).expect("clear the stuck artifact");
     let reopened = reopen(&path);
     let receipt = reopened.compact(&request(26)).unwrap();
-    assert_eq!(receipt.path, CompactPath::None);
-    assert_eq!(receipt.generation_before, before + 1);
+    // F41-1: the installed leftover answers the original `Rebuild` G -> G+1
+    // report from its op record, not a fresh `none` decision at G+1.
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_before, before);
     assert_eq!(receipt.generation_after, before + 1);
+    assert_eq!(
+        receipt.dead_bytes_bound, collected,
+        "the adopted report keeps the collected bytes"
+    );
+    assert_eq!(receipt.dead_bytes_refined, collected);
     assert!(
         receipt.residue.artifacts.is_empty(),
         "residue after recovery: {:?}",
@@ -1408,9 +1488,13 @@ fn a_returned_residue_is_judged_by_the_next_run() {
             ..CompactRequest::default()
         })
         .expect("the returned residue is settled");
-    assert_eq!(receipt.path, CompactPath::None);
-    assert_eq!(receipt.generation_before, before + 1);
+    // F41-1: the returned residue was an installed `G + 1`, so the settle
+    // answers the first run's `Rebuild` report from the record.
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_before, before);
     assert_eq!(receipt.generation_after, before + 1);
+    assert!(receipt.dead_bytes_bound > 0);
+    assert_eq!(receipt.dead_bytes_refined, receipt.dead_bytes_bound);
     assert!(compact_op_status(&path).is_none(), "the record settles");
     let final_handles = reopen(&path);
     assert!(

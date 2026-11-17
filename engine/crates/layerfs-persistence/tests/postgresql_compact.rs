@@ -1770,6 +1770,17 @@ fn a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1() {
     assert_eq!(receipt.path, CompactPath::Rebuild);
     assert_eq!(receipt.generation_before, before);
     assert_eq!(receipt.generation_after, before + 1);
+    // F41-1 parity: the resumed report keeps the collected totals, the same
+    // report items the SQLite installed-leftover resume now answers.
+    assert!(
+        receipt.dead_bytes_bound > 0,
+        "the resumed report keeps the collected bytes: {receipt:?}"
+    );
+    assert_eq!(receipt.dead_bytes_refined, receipt.dead_bytes_bound);
+    assert!(
+        receipt.logical_discarded > 0,
+        "the resumed report keeps the collected canonical bytes: {receipt:?}"
+    );
     assert_settled(&schema, 46);
     assert_eq!(db_generation(&schema), before + 1);
     assert!(

@@ -166,6 +166,9 @@ impl RunMetrics {
         let total_nanos = u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
         let (outcome, refusal) = match result {
             Ok(receipt) => {
+                // A resumed `G + 1` round reports the original run's
+                // generation, so the receipt is the authority here.
+                self.generation_before = receipt.generation_before;
                 self.generation_after = receipt.generation_after;
                 self.dead_bytes_bound = receipt.dead_bytes_bound;
                 self.dead_bytes_refined = receipt.dead_bytes_refined;
@@ -188,7 +191,9 @@ impl RunMetrics {
                         CompactOutcome::Failed
                     },
                     match error {
-                        HistoryError::Busy => Some(CompactRefusal::Busy),
+                        HistoryError::Busy | HistoryError::BusyOp(_) => {
+                            Some(CompactRefusal::Busy)
+                        }
                         HistoryError::Unresolved(_) => Some(CompactRefusal::Unresolved),
                         _ => None,
                     },

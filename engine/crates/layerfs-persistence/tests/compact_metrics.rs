@@ -7,6 +7,7 @@
 mod support;
 
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectId, ObjectRole};
+use layerfs_history::HistoryCatalog;
 use layerfs_history::HistoryError;
 use layerfs_persistence::compact_metrics::CompactMetricsCapture;
 use layerfs_persistence::{
@@ -66,6 +67,41 @@ fn compact_path(store: &Path) -> PathBuf {
     let mut name = store.as_os_str().to_os_string();
     name.push(".compact");
     PathBuf::from(name)
+}
+
+fn op_path(store: &Path) -> PathBuf {
+    let mut name = store.as_os_str().to_os_string();
+    name.push(".compact-op");
+    PathBuf::from(name)
+}
+
+fn generation(handles: &SqliteHandles) -> u64 {
+    handles.history.incarnation()
+}
+
+/// Every recorded owner is live: the record's owner facts are irrelevant to the
+/// refusal this test provokes.
+fn always_live(
+    _pid: Option<u32>,
+    _start: Option<u64>,
+    _boot: Option<u128>,
+    _namespace: Option<u64>,
+) -> bool {
+    true
+}
+
+/// Writes a complete `<store>.compact-op` record the way `RunOp` does, so
+/// `settle_leftover` judges a recorded in-flight run.
+fn write_busy_op_record(path: &Path, generation: u64) {
+    let zeros = "00".repeat(32);
+    let text = format!(
+        "version=1\nop_id=00112233445566778899aabbccddeeff\ngeneration={generation}\n\
+phase=mark\nstarted_ms=1\nowner_pid=\nowner_pid_start=\nowner_pid_boot=\n\
+catalog_id=0102030405060708090a0b0c0d0e0f10\nnext_history_serial=1\nnext_pack_id=1\n\
+next_ordinal=1\nmark_serial=0\nmark_pack_id=1\nmark_digest={zeros}\nmark_totals=0,0,0,0\n\
+mark_stamp=0\nhistory_rows=0\nlive_heads_digest={zeros}\n"
+    );
+    std::fs::write(op_path(path), text).unwrap();
 }
 
 fn whole_file(handles: &SqliteHandles, bytes: &[u8]) -> ObjectId {
@@ -320,6 +356,41 @@ fn a_stopped_run_then_the_leftover_settle_emits_failure_retry_and_settle_metrics
 
     let final_handles = reopen(&path);
     clean(&final_handles);
+}
+
+/// F41-3: SQLite maps `HistoryError::BusyOp` to `CompactRefusal::Busy`, the
+/// same as PostgreSQL (`Busy | BusyOp(_)`) — the metrics parity test for the
+/// admission refusal the two backends record.
+#[test]
+fn a_busy_op_records_a_failed_outcome_and_a_busy_refusal() {
+    let (_temp, handles, path) = create_store();
+    write_busy_op_record(&path, generation(&handles));
+    let capture = CompactMetricsCapture::start();
+    let error = handles
+        .compact(&CompactRequest {
+            op_id: [0x7c; 16],
+            owner_live: Some(always_live),
+            ..CompactRequest::default()
+        })
+        .unwrap_err();
+    let metrics = capture.finish();
+    assert!(matches!(error, HistoryError::BusyOp(_)), "{error:?}");
+    assert_bounded(&metrics);
+    assert_eq!(value(&metrics, "compact.runs", &[]), 1);
+    assert_eq!(
+        value(&metrics, "compact.operations", &[("outcome", "failed")]),
+        1
+    );
+    assert_eq!(value(&metrics, "compact.refusals", &[("code", "busy")]), 1);
+    assert!(
+        op_path(&path).exists(),
+        "the live owner's record survives the refusal"
+    );
+    assert_eq!(
+        metric(&metrics, "compact.generation", &[("which", "after")]),
+        None,
+        "a refusal publishes no report gauge"
+    );
 }
 
 #[test]

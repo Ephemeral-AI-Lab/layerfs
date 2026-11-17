@@ -460,12 +460,33 @@ fn assert_recovery(recovery: Recovery<'_>) {
     }
 
     // The next run judges the leftover and reaches a clean state: a rebuild
-    // from `G` before install, a settle at `G + 1` after it.
+    // from `G` before install, and the recorded `Rebuild` G -> G+1 report
+    // after it (F41-1). An installed `G + 1` must not re-decide to `none`.
     let receipt = reopened.compact(&request(42)).unwrap();
     if case.installed {
-        assert_eq!(receipt.path, CompactPath::None, "settle at {case:?}");
-        assert_eq!(receipt.generation_before, before + 1);
-        assert_eq!(receipt.generation_after, before + 1);
+        assert_eq!(
+            receipt.path,
+            CompactPath::Rebuild,
+            "resumed rebuild at {case:?}"
+        );
+        assert_eq!(
+            receipt.generation_before, before,
+            "the recorded generation at {case:?}"
+        );
+        assert_eq!(
+            receipt.generation_after,
+            before + 1,
+            "the installed successor at {case:?}"
+        );
+        assert!(
+            receipt.dead_bytes_bound > 0,
+            "the adopted report keeps the collected bytes at {case:?}: {receipt:?}"
+        );
+        assert!(
+            receipt.logical_discarded > 0,
+            "the adopted report keeps the collected canonical bytes at {case:?}: {receipt:?}"
+        );
+        assert_eq!(receipt.dead_bytes_refined, receipt.dead_bytes_bound);
     } else {
         assert_eq!(receipt.path, CompactPath::Rebuild, "rebuild at {case:?}");
         assert_eq!(receipt.generation_before, before);

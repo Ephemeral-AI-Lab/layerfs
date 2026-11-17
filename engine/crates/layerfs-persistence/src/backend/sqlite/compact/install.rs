@@ -9,10 +9,13 @@ use super::op::op_temporary_path;
 use super::op::remove_op_record;
 use super::op::stop_at;
 use super::op::RunOp;
+use super::receipt::receipt;
 use super::receipt::RunMetrics;
 use super::types::db_error;
 use super::types::io_error;
 use super::types::CompactFailpoint;
+use super::types::CompactPath;
+use super::types::CompactReceipt;
 use super::types::CompactRequest;
 use super::types::CompactResidue;
 use super::types::MarkTuple;
@@ -293,13 +296,19 @@ pub(crate) fn abort_run(history: &crate::HistoryProvider, store: &Path, op_id: &
 /// Judges and removes a leftover an earlier run recorded (§9): the artifact set
 /// it names and the admission intent it took. The caller already holds the
 /// writer lane, so a leftover owner is gone.
+///
+/// `None` means there was nothing to resume (or the leftover was at `G`, so the
+/// caller decides on the still-live Store). `Some` is the installed `G + 1`
+/// outcome the record kept: the rename installed the build and only its settle
+/// was lost, so the original §11 report is answered from the record instead of
+/// re-running the §3 decision on the already rebuilt Store.
 pub(crate) fn settle_leftover(
     history: &crate::HistoryProvider,
     store: &Path,
     generation: u64,
     metrics: &mut RunMetrics,
     owner_live: Option<OwnerLiveness>,
-) -> HistoryResult<()> {
+) -> HistoryResult<Option<CompactReceipt>> {
     let Some(op) = RunOp::read(store) else {
         // `.compact-op.tmp` without a record is this Store's own incomplete op
         // write: the run died inside `RunOp::write`, before any artifact. It is
@@ -316,7 +325,7 @@ pub(crate) fn settle_leftover(
         if std::fs::symlink_metadata(&incomplete).is_ok() {
             std::fs::remove_file(&incomplete).map_err(io_error)?;
         }
-        return Ok(());
+        return Ok(None);
     };
     // §9: the record names `G`. A Store still at `G` was never installed, so
     // its artifact set is removed and the run is settled. At `G+1` (or a
@@ -364,7 +373,31 @@ pub(crate) fn settle_leftover(
     // operation just adopted.
     remove_op_record(store, &op.op_id)?;
     metrics.leftover_settled = true;
-    Ok(())
+    // §9: `G + 1` means the rename installed the build. The record's own §11
+    // totals answer the original outcome, so a resumed install reports the
+    // same `Rebuild` report the interrupted run would have. A record written
+    // before the totals were kept falls back to the pre-install resume: the
+    // caller decides on the installed Store.
+    let generation_before = u64::try_from(op.generation).unwrap_or(0);
+    if generation == generation_before.saturating_add(1) {
+        if let Some(installed) = op.installed {
+            return Ok(Some(receipt(
+                CompactPath::Rebuild,
+                generation_before,
+                generation,
+                installed.dead_bytes,
+                installed.logical_discarded,
+                installed.backend_reusable,
+                installed.physical_shrink,
+                installed.kept_waste,
+                installed.peak_temp,
+                CompactResidue::default(),
+                installed.total_stored,
+                u64::try_from(op.tuple.history_rows).unwrap_or(0),
+            )));
+        }
+    }
+    Ok(None)
 }
 
 /// True while the Store holds an Init or merge working row. Admission

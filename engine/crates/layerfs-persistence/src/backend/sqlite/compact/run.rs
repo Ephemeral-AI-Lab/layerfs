@@ -15,6 +15,7 @@ use super::install::sync_directory;
 use super::install::unfinished_work;
 use super::install::WriterGuard;
 use super::op::mark_returned;
+use super::op::InstalledReport;
 use super::op::now_ms;
 use super::op::remove_op_record;
 use super::op::stop_at;
@@ -123,7 +124,14 @@ impl SqliteHandles {
             let generation = u64::try_from(live.generation)
                 .map_err(|_| HistoryError::Integrity("Store generation"))?;
             metrics.generation_before = generation;
-            settle_leftover(&history, &store, generation, metrics, request.owner_live)?;
+            if let Some(installed) =
+                settle_leftover(&history, &store, generation, metrics, request.owner_live)?
+            {
+                // §9: a leftover judged at `G + 1` was installed; the record
+                // answered its §11 report, so this call returns it rather than
+                // re-deciding on the already rebuilt Store.
+                return Ok(installed);
+            }
             // §11 `backendReusable` is the Store's reusable backend space, not
             // the freshly `VACUUM`ed target's free list (which is empty by
             // construction): measure the source Store before the mark, so a
@@ -165,6 +173,7 @@ impl SqliteHandles {
                 tuple: live.clone(),
                 live_heads_digest: [0u8; 32],
                 returned: false,
+                installed: None,
             };
             op.write(&store)?;
 
@@ -379,6 +388,20 @@ impl SqliteHandles {
                     return Err(error);
                 }
             };
+            // §9/§11: record the installed outcome's totals now that the build
+            // produced them, so a crash after the rename still lets the next
+            // call answer the original report instead of re-deciding.
+            op.installed = Some(InstalledReport {
+                dead_bytes: dead,
+                logical_discarded: u64::try_from(tuple.canonical)
+                    .unwrap_or(0)
+                    .saturating_sub(built.canonical),
+                backend_reusable: source_reusable,
+                physical_shrink: facts.bytes.saturating_sub(built.target_bytes),
+                kept_waste: kept_waste.clone(),
+                peak_temp: built.peak_temp_bytes(),
+                total_stored: total,
+            });
             // §7 step 7: every artifact and the op record are durable before
             // the verification reads them back.
             if let Err(error) = sync_directory(&store) {

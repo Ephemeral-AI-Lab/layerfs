@@ -2,6 +2,7 @@
 
 use super::types::io_error;
 use super::types::CompactFailpoint;
+use super::types::CompactKeptWaste;
 use super::types::CompactRequest;
 use super::types::MarkTuple;
 use super::types::OwnerLiveness;
@@ -16,6 +17,86 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+
+/// The §11 totals a rebuild recorded once it built the installed Store, so a
+/// later call that adopts an installed `G + 1` leftover answers the original
+/// outcome instead of re-running the decision on the already rebuilt Store.
+#[derive(Clone, Debug)]
+pub(crate) struct InstalledReport {
+    pub(crate) dead_bytes: u64,
+    pub(crate) logical_discarded: u64,
+    pub(crate) backend_reusable: u64,
+    pub(crate) physical_shrink: u64,
+    pub(crate) kept_waste: CompactKeptWaste,
+    pub(crate) peak_temp: u64,
+    pub(crate) total_stored: u64,
+}
+
+impl InstalledReport {
+    /// The record's `installed_*` block; appended after the base fields so a
+    /// record written before these existed still reads as uninstalled data.
+    fn encode(&self) -> String {
+        let references = self
+            .kept_waste
+            .delta_base_references
+            .iter()
+            .map(|reference| hex(reference))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!(
+            "installed=1\ninstalled_dead={}\ninstalled_logical={}\n\
+             installed_reusable={}\ninstalled_shrink={}\ninstalled_peak_temp={}\n\
+             installed_total={}\ninstalled_kept_dead={}\ninstalled_kept_delta={}\n\
+             installed_kept_inode={}\ninstalled_kept_capped={}\ninstalled_kept_refs={}\n",
+            self.dead_bytes,
+            self.logical_discarded,
+            self.backend_reusable,
+            self.physical_shrink,
+            self.peak_temp,
+            self.total_stored,
+            self.kept_waste.dead_in_retained_packs_bytes,
+            self.kept_waste.delta_bases_bytes,
+            self.kept_waste.inode_blocks_bytes,
+            u8::from(self.kept_waste.delta_base_references_capped),
+            references,
+        )
+    }
+
+    /// Reads the `installed_*` block; `None` when it is absent or unreadable,
+    /// so a record written before it keeps the pre-install resume path.
+    fn read(values: &BTreeMap<&str, &str>) -> Option<Self> {
+        if values.get("installed") != Some(&"1") {
+            return None;
+        }
+        let number = |key: &str| -> Option<u64> { values.get(key)?.parse().ok() };
+        let references = values
+            .get("installed_kept_refs")
+            .filter(|text| !text.is_empty())
+            .map(|text| {
+                text.split(',')
+                    .map(unhex::<32>)
+                    .collect::<Option<Vec<[u8; 32]>>>()
+            })
+            .unwrap_or(Some(Vec::new()))?;
+        Some(Self {
+            dead_bytes: number("installed_dead")?,
+            logical_discarded: number("installed_logical")?,
+            backend_reusable: number("installed_reusable")?,
+            physical_shrink: number("installed_shrink")?,
+            kept_waste: CompactKeptWaste {
+                dead_in_retained_packs_bytes: number("installed_kept_dead")?,
+                delta_bases_bytes: number("installed_kept_delta")?,
+                delta_base_references: references,
+                delta_base_references_capped: values
+                    .get("installed_kept_capped")
+                    .is_some_and(|value| *value == "1"),
+                inode_blocks_bytes: number("installed_kept_inode")?,
+            },
+            peak_temp: number("installed_peak_temp")?,
+            total_stored: number("installed_total")?,
+        })
+    }
+}
 
 /// One recorded compaction run beside the Store.
 #[derive(Clone, Debug)]
@@ -37,11 +118,14 @@ pub(crate) struct RunOp {
     /// Such a record is a leftover the next run judges, never an in-flight
     /// operation, even while the owner pid is still alive (§9).
     pub(crate) returned: bool,
+    /// The §11 totals once the rebuild's target is built; `None` before any
+    /// report value exists and in a record written before they were kept.
+    pub(crate) installed: Option<InstalledReport>,
 }
 
 impl RunOp {
     pub(crate) fn encode(&self) -> String {
-        format!(
+        let mut text = format!(
             "version=1\nop_id={}\ngeneration={}\nphase={}\nstarted_ms={}\n\
 owner_pid={}\nowner_pid_start={}\nowner_pid_boot={}\nowner_pid_namespace={}\n\
 catalog_id={}\nnext_history_serial={}\nnext_pack_id={}\nnext_ordinal={}\n\
@@ -70,7 +154,11 @@ live_heads_digest={}\nreturned={}\n",
             self.tuple.history_rows,
             hex(&self.live_heads_digest),
             u8::from(self.returned),
-        )
+        );
+        if let Some(installed) = &self.installed {
+            text.push_str(&installed.encode());
+        }
+        text
     }
 
     pub(crate) fn write(&self, store: &Path) -> HistoryResult<()> {
@@ -149,6 +237,7 @@ live_heads_digest={}\nreturned={}\n",
             tuple,
             live_heads_digest,
             returned,
+            installed: InstalledReport::read(&values),
         })
     }
 

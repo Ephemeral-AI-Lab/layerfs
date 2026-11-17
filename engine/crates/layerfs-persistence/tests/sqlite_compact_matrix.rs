@@ -372,13 +372,16 @@ fn arm_status_phases() {
         assert!(status.uncertain, "an unfinished run is uncertain");
         seen.insert(status.phase.clone());
 
-        // A pre-install stop rebuilds at G + 1; an installed one settles.
+        // F41-1: both arms answer the rebuild report. A pre-install stop
+        // rebuilds at G + 1; an installed one answers its recorded G -> G+1.
         let reopened = reopen(&path);
         let receipt = reopened.compact(&request(op[0].wrapping_add(20))).unwrap();
         if *installed {
-            assert_eq!(receipt.path, CompactPath::None);
-            assert_eq!(receipt.generation_before, before + 1);
+            assert_eq!(receipt.path, CompactPath::Rebuild);
+            assert_eq!(receipt.generation_before, before);
             assert_eq!(receipt.generation_after, before + 1);
+            assert!(receipt.dead_bytes_bound > 0);
+            assert_eq!(receipt.dead_bytes_refined, receipt.dead_bytes_bound);
         } else {
             assert_eq!(receipt.path, CompactPath::Rebuild);
             assert_eq!(receipt.generation_before, before);
@@ -1189,8 +1192,9 @@ const MATRIX: [Row; 60] = [
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_during_settle",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#a_stray_staged_name_is_refused_and_not_deleted",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#the_whole_artifact_set_is_removed_by_the_next_run",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#an_installed_leftover_reports_the_same_rebuild_as_a_completed_run",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript"],
-        note: "A crash leaves the full set (the fixture now creates .compact-wal, .compact-shm, .compact-visited-journal and a .compact-mj* super-journal too), the next compact removes every one and recovers, none leaves no artifact, a stray name is Exists." },
+        note: "A crash leaves the full set (the fixture now creates .compact-wal, .compact-shm, .compact-visited-journal and a .compact-mj* super-journal too), the next compact removes every one and recovers, none leaves no artifact, a stray name is Exists; an installed leftover answers its recorded Rebuild G->G+1 report with the collected totals instead of re-deciding to none (F41-1)." },
     Row { id: "AC-48", backend: Backend::Both, tier: "E2", status: Status::Covered,
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact.rs#nine_percent_wholly_dead_bytes_take_the_none_path",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#ten_percent_wholly_dead_bytes_rebuild_at_the_threshold",
