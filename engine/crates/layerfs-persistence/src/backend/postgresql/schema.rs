@@ -228,18 +228,25 @@ fn pre_kept_node_source(acquisition: bool) -> String {
     source(acquisition).replacen(kept_node_table(), "", 1)
 }
 
-/// Adds the `kept_node` history-closure table (T7.1) to a Store written
-/// before it, then records the current schema: an additive migration under
-/// the same conditions as [`add_gc`]. A schema that already has the table is
-/// left alone; a recorded source or definition that is not an earlier
-/// revision of the current one is refused, never migrated. The table is empty
-/// until a mark writes it.
-pub(crate) fn add_kept_node(session: &Session) -> Result<(), PersistenceError> {
-    // A Store that already has the table is left alone: one statement, no
-    // transaction and no lane wait.
+/// One additive migration of an existing Store schema. `probe` is the
+/// `information_schema` relation and condition that finds what the migration
+/// adds; a schema that already has it is left alone, first in one statement
+/// with no transaction and no lane wait, then again under the lane, because
+/// another process may have migrated first. `earlier` gives the source a Store
+/// recorded before the migration, without and with the acquisition tables.
+/// A recorded source that is not a revision of one of those
+/// ([`is_earlier_source`]), or a recorded definition that is not the live one,
+/// is refused with `Integrity`, never migrated. Otherwise `apply` runs and the
+/// Store records the current source and its new definition.
+fn migrate(
+    session: &Session,
+    probe: &str,
+    earlier: fn(bool) -> String,
+    apply: impl FnOnce(&Transaction<'_>, bool) -> Result<(), PersistenceError>,
+) -> Result<(), PersistenceError> {
     let present = session.run_as::<_, BackendError>(Mode::Statement, |tx| {
         let sql = format!(
-            "SELECT 1 FROM information_schema.tables WHERE table_schema='{}' AND table_name='kept_node' AND table_type='BASE TABLE'",
+            "SELECT 1 FROM information_schema.{probe} AND table_schema='{}'",
             tx.schema
         );
         Ok(!tx.query(&sql, vec![])?.is_empty())
@@ -248,12 +255,9 @@ pub(crate) fn add_kept_node(session: &Session) -> Result<(), PersistenceError> {
         return Ok(());
     }
     session.run_as(Mode::Write, |tx| -> Result<(), PersistenceError> {
-        // Re-check under the lane: another process may have migrated first.
-        let present = tx.query(
-            "SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='kept_node' AND table_type='BASE TABLE'",
-            vec![],
-        )?;
-        if !present.is_empty() {
+        let sql =
+            format!("SELECT 1 FROM information_schema.{probe} AND table_schema=current_schema()");
+        if !tx.query(&sql, vec![])?.is_empty() {
             return Ok(());
         }
         let rows = tx.query(
@@ -263,18 +267,17 @@ pub(crate) fn add_kept_node(session: &Session) -> Result<(), PersistenceError> {
         let [row] = rows.as_slice() else {
             return Err(BackendError::Integrity.into());
         };
-        let recorded_source: String = row.get(0)?;
-        let acquisition = if is_earlier_source(&recorded_source, pre_kept_node_source(false)) {
-            false
-        } else if is_earlier_source(&recorded_source, pre_kept_node_source(true)) {
-            true
-        } else {
+        let recorded: String = row.get(0)?;
+        let Some(acquisition) = [false, true]
+            .into_iter()
+            .find(|&acquisition| is_earlier_source(&recorded, earlier(acquisition)))
+        else {
             return Err(BackendError::Integrity.into());
         };
         if row.get::<String>(1)? != definition(tx)? {
             return Err(BackendError::Integrity.into());
         }
-        tx.batch(kept_node_table())?;
+        apply(tx, acquisition)?;
         let definition = definition(tx)?;
         tx.query(
             "UPDATE history_meta SET schema_source=$1,schema_definition=$2 WHERE id=1",
@@ -282,132 +285,58 @@ pub(crate) fn add_kept_node(session: &Session) -> Result<(), PersistenceError> {
         )?;
         Ok(())
     })
+}
+
+/// Adds the `kept_node` history-closure table (T7.1) to a Store written
+/// before it. The table is empty until a mark writes it.
+pub(crate) fn add_kept_node(session: &Session) -> Result<(), PersistenceError> {
+    migrate(
+        session,
+        "tables WHERE table_name='kept_node' AND table_type='BASE TABLE'",
+        pre_kept_node_source,
+        |tx, _| Ok(tx.batch(kept_node_table())?),
+    )
 }
 
 /// Adds the GC marker, position and admission tables to a Store written
-/// before them, then records the current schema: an additive migration under
-/// the same conditions as the SQLite Store's `add_gc`. A schema that already
-/// has `gc_intent` is left alone; a recorded source, table set or definition
-/// that is not the pre-GC schema is refused, never migrated.
+/// before them. A table set that is not the pre-GC one is refused too.
 pub(crate) fn add_gc(session: &Session) -> Result<(), PersistenceError> {
-    // A Store that already has the GC tables is left alone: one statement,
-    // no transaction and no lane wait.
-    let present = session.run_as::<_, BackendError>(Mode::Statement, |tx| {
-        let sql = format!(
-            "SELECT 1 FROM information_schema.tables WHERE table_schema='{}' AND table_name='gc_intent' AND table_type='BASE TABLE'",
-            tx.schema
-        );
-        Ok(!tx.query(&sql, vec![])?.is_empty())
-    })?;
-    if present {
-        return Ok(());
-    }
-    session.run_as(Mode::Write, |tx| -> Result<(), PersistenceError> {
-        // Re-check under the lane: another process may have migrated first.
-        let present = tx.query(
-            "SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='gc_intent' AND table_type='BASE TABLE'",
-            vec![],
-        )?;
-        if !present.is_empty() {
-            return Ok(());
-        }
-        let rows = tx.query(
-            "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
-            vec![],
-        )?;
-        let [row] = rows.as_slice() else {
-            return Err(BackendError::Integrity.into());
-        };
-        let recorded_source: String = row.get(0)?;
-        let acquisition = if is_earlier_source(&recorded_source, pre_gc_source(false)) {
-            false
-        } else if is_earlier_source(&recorded_source, pre_gc_source(true)) {
-            true
-        } else {
-            return Err(BackendError::Integrity.into());
-        };
-        let tables = tx.query(TABLE_NAMES, vec![])?;
-        let actual: Vec<String> = tables.iter().map(|r| r.get(0)).collect::<Result<_, _>>()?;
-        let mut expected = PRE_GC_TABLES.to_vec();
-        if acquisition {
-            expected.extend(ACQUISITION_TABLES);
-        }
-        expected.sort_unstable();
-        if !actual.iter().map(String::as_str).eq(expected) {
-            return Err(BackendError::Integrity.into());
-        }
-        if row.get::<String>(1)? != definition(tx)? {
-            return Err(BackendError::Integrity.into());
-        }
-        tx.batch(GC)?;
-        let definition = definition(tx)?;
-        tx.query(
-            "UPDATE history_meta SET schema_source=$1,schema_definition=$2 WHERE id=1",
-            vec![Param::Text(source(acquisition)), Param::Text(definition)],
-        )?;
-        Ok(())
-    })
+    migrate(
+        session,
+        "tables WHERE table_name='gc_intent' AND table_type='BASE TABLE'",
+        pre_gc_source,
+        |tx, acquisition| {
+            let tables = tx.query(TABLE_NAMES, vec![])?;
+            let actual: Vec<String> = tables.iter().map(|r| r.get(0)).collect::<Result<_, _>>()?;
+            let mut expected = PRE_GC_TABLES.to_vec();
+            if acquisition {
+                expected.extend(ACQUISITION_TABLES);
+            }
+            expected.sort_unstable();
+            if !actual.iter().map(String::as_str).eq(expected) {
+                return Err(BackendError::Integrity.into());
+            }
+            Ok(tx.batch(GC)?)
+        },
+    )
 }
 
-/// Adds the position column `history_meta.next_history_serial` (T1.4) to a
-/// Store written before it, then records the current schema: an additive
-/// migration under the same conditions as [`add_gc`]. A schema that already
-/// has the column is left alone; a recorded source or definition that is not
-/// an earlier revision of the current one is refused, never migrated. The
+/// Adds the position column `history_meta.next_history_serial` (T1.4) and one
+/// `project_epoch` row per project to a Store written before them. The
 /// `commit`/`layer` serial columns and their backfill follow in
-/// [`add_position_columns`], the next step of the same open; only the column
-/// and one `project_epoch` row per project are recorded here.
+/// [`add_position_columns`], the next step of the same open.
 pub(crate) fn add_position_state(session: &Session) -> Result<(), PersistenceError> {
-    // A Store that already has the column is left alone: one statement, no
-    // transaction and no lane wait.
-    let present = session.run_as::<_, BackendError>(Mode::Statement, |tx| {
-        let sql = format!(
-            "SELECT 1 FROM information_schema.columns WHERE table_schema='{}' AND table_name='history_meta' AND column_name='next_history_serial'",
-            tx.schema
-        );
-        Ok(!tx.query(&sql, vec![])?.is_empty())
-    })?;
-    if present {
-        return Ok(());
-    }
-    session.run_as(Mode::Write, |tx| -> Result<(), PersistenceError> {
-        // Re-check under the lane: another process may have migrated first.
-        let present = tx.query(
-            "SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='history_meta' AND column_name='next_history_serial'",
-            vec![],
-        )?;
-        if !present.is_empty() {
-            return Ok(());
-        }
-        let rows = tx.query(
-            "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
-            vec![],
-        )?;
-        let [row] = rows.as_slice() else {
-            return Err(BackendError::Integrity.into());
-        };
-        let recorded_source: String = row.get(0)?;
-        let acquisition = if is_earlier_source(&recorded_source, source(false)) {
-            false
-        } else if is_earlier_source(&recorded_source, source(true)) {
-            true
-        } else {
-            return Err(BackendError::Integrity.into());
-        };
-        if row.get::<String>(1)? != definition(tx)? {
-            return Err(BackendError::Integrity.into());
-        }
-        tx.batch("ALTER TABLE history_meta ADD COLUMN next_history_serial bigint NOT NULL DEFAULT 1;")?;
-        tx.batch(
-            "INSERT INTO project_epoch(layer_stack_id, epoch) SELECT s.layer_stack_id, 0 FROM layer_stack s WHERE NOT EXISTS (SELECT 1 FROM project_epoch e WHERE e.layer_stack_id = s.layer_stack_id);",
-        )?;
-        let definition = definition(tx)?;
-        tx.query(
-            "UPDATE history_meta SET schema_source=$1,schema_definition=$2 WHERE id=1",
-            vec![Param::Text(source(acquisition)), Param::Text(definition)],
-        )?;
-        Ok(())
-    })
+    migrate(
+        session,
+        "columns WHERE table_name='history_meta' AND column_name='next_history_serial'",
+        source,
+        |tx, _| {
+            tx.batch("ALTER TABLE history_meta ADD COLUMN next_history_serial bigint NOT NULL DEFAULT 1;")?;
+            Ok(tx.batch(
+                "INSERT INTO project_epoch(layer_stack_id, epoch) SELECT s.layer_stack_id, 0 FROM layer_stack s WHERE NOT EXISTS (SELECT 1 FROM project_epoch e WHERE e.layer_stack_id = s.layer_stack_id);",
+            )?)
+        },
+    )
 }
 
 /// The ALTERs an old Store needs for the position columns, the one random
@@ -428,60 +357,17 @@ const POSITION_COLUMNS: &str = concat!(
 /// Adds the position columns T1.2c introduced to a Store written before them:
 /// `commit.history_serial` and `layer.history_serial` (default 0) and
 /// `store_policy.trace_salt` (32 random bytes), then backfills the serials
-/// with T1.4's semantics in the same transaction. An additive migration under
-/// the same conditions as [`add_gc`]: a schema that already has
-/// `commit.history_serial` is left alone, and a recorded source or definition
-/// that is not an earlier revision of the current one is refused, never
-/// migrated.
+/// with T1.4's semantics in the same transaction.
 pub(crate) fn add_position_columns(session: &Session) -> Result<(), PersistenceError> {
-    // A Store that already has the columns is left alone: one statement, no
-    // transaction and no lane wait.
-    let present = session.run_as::<_, BackendError>(Mode::Statement, |tx| {
-        let sql = format!(
-            "SELECT 1 FROM information_schema.columns WHERE table_schema='{}' AND table_name='commit' AND column_name='history_serial'",
-            tx.schema
-        );
-        Ok(!tx.query(&sql, vec![])?.is_empty())
-    })?;
-    if present {
-        return Ok(());
-    }
-    session.run_as(Mode::Write, |tx| -> Result<(), PersistenceError> {
-        // Re-check under the lane: another process may have migrated first.
-        let present = tx.query(
-            "SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='commit' AND column_name='history_serial'",
-            vec![],
-        )?;
-        if !present.is_empty() {
-            return Ok(());
-        }
-        let rows = tx.query(
-            "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
-            vec![],
-        )?;
-        let [row] = rows.as_slice() else {
-            return Err(BackendError::Integrity.into());
-        };
-        let recorded_source: String = row.get(0)?;
-        let acquisition = if is_earlier_source(&recorded_source, source(false)) {
-            false
-        } else if is_earlier_source(&recorded_source, source(true)) {
-            true
-        } else {
-            return Err(BackendError::Integrity.into());
-        };
-        if row.get::<String>(1)? != definition(tx)? {
-            return Err(BackendError::Integrity.into());
-        }
-        tx.batch(POSITION_COLUMNS)?;
-        backfill_position_serials(tx)?;
-        let definition = definition(tx)?;
-        tx.query(
-            "UPDATE history_meta SET schema_source=$1,schema_definition=$2 WHERE id=1",
-            vec![Param::Text(source(acquisition)), Param::Text(definition)],
-        )?;
-        Ok(())
-    })
+    migrate(
+        session,
+        "columns WHERE table_name='commit' AND column_name='history_serial'",
+        source,
+        |tx, _| {
+            tx.batch(POSITION_COLUMNS)?;
+            Ok(backfill_position_serials(tx)?)
+        },
+    )
 }
 
 /// The T1.4 serial backfill: Commits take the next Store serials in
