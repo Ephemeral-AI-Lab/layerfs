@@ -8,8 +8,8 @@
 //! never seals or replaces the Store. Init statistics are recorded once per
 //! Store, by its first Init, so an added project records none.
 //!
-//! The Store is a SQLite file or, with the `postgresql` feature, a
-//! PostgreSQL schema (#533 step 10b); its selection decides which. The Init
+//! The Store is a SQLite file or a PostgreSQL
+//! schema (#533 step 10b); its selection decides which. The Init
 //! is the same on both: only the opened handles differ.
 use crate::store::{live_open::Opened, InitError};
 use crate::{InitCounters, InitStep, Initialized, ProjectError};

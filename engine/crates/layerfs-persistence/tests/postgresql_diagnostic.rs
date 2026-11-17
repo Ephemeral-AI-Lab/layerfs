@@ -1,5 +1,4 @@
 //! Real PostgreSQL audits and actual stalled-handshake cancellation.
-#![cfg(feature = "postgresql")]
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{

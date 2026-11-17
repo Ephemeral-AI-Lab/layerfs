@@ -84,10 +84,10 @@ ARCHIVE = "sandbox-image.tar"
 BINARIES = ("layerfs", "layerfs-daemon", "layerfs-sandbox-helper")
 STEPS = {
     # the daemon serves sqlite and PostgreSQL Stores in a Sandbox
-    "daemon": ["-p", "layerfs-daemon", "--features", "layerfs-daemon/postgresql", "--bin", "layerfs-daemon"],
+    "daemon": ["-p", "layerfs-daemon", "--bin", "layerfs-daemon"],
     # the guest's `layerfs worker`: no machine adapter runs inside a machine;
     # it reads a PostgreSQL Store's schema binding in sandbox.create (#535 G3)
-    "worker": ["-p", "layerfs-cli", "--no-default-features", "--features", "postgresql", "--bin", "layerfs"],
+    "worker": ["-p", "layerfs-cli", "--no-default-features", "--bin", "layerfs"],
     # the namespaces Sandbox backend runs it beside the daemon
     "helper": ["-p", "layerfs-sandbox-backend", "--bin", "layerfs-sandbox-helper"],
 }

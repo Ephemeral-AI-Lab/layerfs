@@ -324,7 +324,6 @@ fn every_platform_refusal_is_the_support_table_s() {
     std::fs::remove_dir_all(&home).unwrap();
 }
 
-#[cfg(feature = "postgresql")]
 #[test]
 fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
     let (Some(url), Some(_), Some(daemon)) = (
@@ -433,7 +432,6 @@ fn remove_worker(id: &str) {
     }
 }
 
-#[cfg(feature = "postgresql")]
 fn walk(dir: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
@@ -640,7 +638,7 @@ fn a_sandbox_with_no_machine_runs_on_its_store_s() {
     // engine says so instead of "cannot reach", and a server that takes
     // no connection is said to, not shown as an engine status
     let (code, message) = refused;
-    if cfg!(feature = "postgresql") {
+    if true {
         assert_eq!(code, "Unavailable", "{message}");
         assert!(
             message.starts_with("machine native cannot reach PostgreSQL Store pg's server at 127.0.0.1: no connection to the server was made"),

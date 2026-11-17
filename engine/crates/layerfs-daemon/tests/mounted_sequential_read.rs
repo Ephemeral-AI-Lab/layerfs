@@ -4,7 +4,7 @@
 //! operation client, so the stream a sequential read continues must outlive
 //! that client. Prints `MOUNTED_READ <json>` with the read's Store demands
 //! and SQL statements; SQLite always, PostgreSQL when
-//! `LAYERFS_TEST_POSTGRES_URL` is set and the `postgresql` feature is on.
+//! `LAYERFS_TEST_POSTGRES_URL` is set.
 //! The line also carries the resident set when the read starts and the
 //! process's resident peak during it (the daemon serves in this process).
 //! Disposable profile; the daemon's 64 MiB object cache.
@@ -137,7 +137,6 @@ fn a_mounted_sequential_read_reads_ahead_on_sqlite() {
     fixture.cleanup();
 }
 
-#[cfg(feature = "postgresql")]
 #[test]
 fn a_mounted_sequential_read_reads_ahead_on_postgresql() {
     use layerfs_history::{

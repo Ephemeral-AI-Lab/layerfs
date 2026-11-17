@@ -16,7 +16,7 @@ fn strings(values: impl IntoIterator<Item = impl AsRef<str>>) -> SdkValue {
 pub fn version() -> ExitCode {
     let features = [
         ("machine", cfg!(feature = "machine")),
-        ("postgresql", cfg!(feature = "postgresql")),
+        ("postgresql", true),
         ("tls", cfg!(feature = "tls")),
         // R5: a namespaces Sandbox runs its daemon through the bundle's
         // runtime layer (its loader and libraries, a static bash), so an

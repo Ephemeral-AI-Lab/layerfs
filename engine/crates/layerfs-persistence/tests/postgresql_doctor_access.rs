@@ -1,5 +1,4 @@
 //! Actual isolated PostgreSQL authority, privilege, transport and loss matrix.
-#![cfg(feature = "postgresql")]
 mod pg_doctor;
 use layerfs_persistence::{
     diagnostic::{Options, Outcome},

@@ -116,7 +116,6 @@ fn disconnect_refuses_a_postgresql_store_another_process_holds() {
 
 /// A Store call on a PostgreSQL Store holds its lease while it runs: the
 /// "server" accepts and answers nothing until the lease is seen.
-#[cfg(feature = "postgresql")]
 #[test]
 fn a_postgresql_store_call_holds_the_stores_lease() {
     use std::time::{Duration, Instant};

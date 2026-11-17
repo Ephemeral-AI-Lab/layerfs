@@ -195,7 +195,7 @@ def build(args):
             "-j",
             str(args.jobs),
         ]
-        # e.g. layerfs-node/postgresql for the worker's PostgreSQL Stores (#506)
+        # e.g. layerfs-node/tls for https:// remotes
         features = getattr(args, "features", None)
         if features:
             command += ["--features", features]

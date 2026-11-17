@@ -28,7 +28,6 @@
 //! queries between steps). `CONNECT <json>` lines time one connection's
 //! parts. Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it. Run with
 //! `--test-threads=1 --nocapture`.
-#![cfg(feature = "postgresql")]
 use layerfs_history::{
     BranchId, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryName,
     LayerStackId, WorkspaceId,

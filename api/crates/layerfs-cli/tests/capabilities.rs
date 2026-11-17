@@ -26,10 +26,7 @@ fn version_identifies_source_and_features_without_a_home() {
     let Some(SdkValue::List(features)) = value.get("features") else {
         panic!("features list");
     };
-    assert_eq!(
-        features.contains(&SdkValue::text("postgresql")),
-        cfg!(feature = "postgresql")
-    );
+    assert!(features.contains(&SdkValue::text("postgresql")));
     assert_eq!(
         features.contains(&SdkValue::text("machine")),
         cfg!(feature = "machine")
