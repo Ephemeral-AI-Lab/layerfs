@@ -12,6 +12,7 @@
 //! staged file's age.
 use crate::deploy::{self, Side};
 use crate::host::Deploy;
+use crate::images::{lowers, refused_with};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
@@ -45,18 +46,32 @@ pub fn cache(root: &Path) -> PathBuf {
     rootfs::cache(&paths::run_root(root))
 }
 
-/// Whether `deploy`'s runtime root already holds `image` unpacked: an image
-/// copied from Docker needs no archive then.
+/// Whether `deploy`'s runtime root already holds `image` unpacked and published
+/// (both `<hex>.2` and its sidecar `<hex>.2.json`): an image copied from
+/// Docker needs no archive then, and an interrupted unpack without a sidecar is
+/// not treated as ready.
 pub fn unpacked(deploy: &Deploy, image: &Image) -> bool {
     deploy.local_dir.as_deref().is_some_and(|dir| {
-        rootfs::cache(Path::new(dir))
-            .join(format!("{}.2", image.hex()))
-            .is_dir()
+        let cache = rootfs::cache(Path::new(dir));
+        let hex = image.hex();
+        cache.join(format!("{hex}.2")).is_dir() && matches!(Sidecar::read(&cache, hex), Ok(Some(_)))
     })
 }
 
+/// Whether `value` is a 64-character lowercase SHA-256 hex digest.
+pub fn is_hex(value: &str) -> bool {
+    hex(value)
+}
+
+/// The 64-character lowercase digest hex of a staged part filename
+/// (`.recv-<hex>.part`).
+pub fn part_hex(name: &str) -> Option<&str> {
+    let digest_hex = name.strip_prefix(".recv-")?.strip_suffix(".part")?;
+    hex(digest_hex).then_some(digest_hex)
+}
+
 /// The staged tar of image `hex` while it is received.
-fn part(cache: &Path, hex: &str) -> PathBuf {
+pub fn part(cache: &Path, hex: &str) -> PathBuf {
     cache.join(format!(".recv-{hex}.part"))
 }
 
@@ -151,6 +166,43 @@ impl Sidecar {
     }
 }
 
+/// Extended sidecar record keeping optional `variant` alongside [`Sidecar`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct SidecarInfo {
+    /// Core sidecar metadata stored in `<hex>.2.json`.
+    pub sidecar: Sidecar,
+    /// Image variant (`v8`, ...), recorded only and never applied.
+    pub variant: Option<String>,
+}
+
+impl SidecarInfo {
+    /// Its JSON record, including optional `variant` and `config`.
+    pub fn to_value(&self) -> SdkValue {
+        let opt_text = |v: &Option<String>| v.clone().map_or(SdkValue::Null, SdkValue::Text);
+        home::with_field(self.sidecar.to_value(), "variant", opt_text(&self.variant))
+    }
+
+    /// Reads one from its JSON record; `None` when it names no valid Id.
+    pub fn from_value(value: &SdkValue) -> Option<Self> {
+        let sidecar = Sidecar::from_value(value)?;
+        let variant = value.get_text("variant").map(str::to_owned);
+        Some(Self { sidecar, variant })
+    }
+
+    /// The extended sidecar of image `hex` in `cache`, if there is one.
+    pub fn read(cache: &Path, hex: &str) -> Result<Option<Self>, SdkRefusal> {
+        Ok(home::read_record(&sidecar_path(cache, hex))?
+            .as_ref()
+            .and_then(Self::from_value))
+    }
+
+    /// Writes it beside its image's directory (one rename).
+    pub fn write(&self, cache: &Path) -> Result<(), SdkRefusal> {
+        let hex = &self.sidecar.id["sha256:".len()..];
+        home::write_record(&sidecar_path(cache, hex), &self.to_value())
+    }
+}
+
 /// The text items of a list value.
 pub fn texts(value: Option<&SdkValue>) -> Vec<String> {
     match value {
@@ -202,20 +254,23 @@ pub fn touch(side: &Side<'_>, archive: Option<&str>, image: &str) -> Result<(), 
     if !cache.join(format!("{hex}.2")).is_dir() {
         return Ok(());
     }
-    let mut sidecar = match Sidecar::read(&cache, hex)? {
-        Some(sidecar) => sidecar,
-        None => from_archive(side, archive, image)?.unwrap_or(Sidecar {
-            id: image.to_owned(),
-            refs: Vec::new(),
-            size: None,
-            architecture: None,
-            source: "bundle".to_owned(),
-            config: SdkValue::Null,
-            last_used: None,
-        }),
+    let mut info = match SidecarInfo::read(&cache, hex)? {
+        Some(info) => info,
+        None => SidecarInfo {
+            sidecar: from_archive(side, archive, image)?.unwrap_or(Sidecar {
+                id: image.to_owned(),
+                refs: Vec::new(),
+                size: None,
+                architecture: None,
+                source: "bundle".to_owned(),
+                config: SdkValue::Null,
+                last_used: None,
+            }),
+            variant: None,
+        },
     };
-    sidecar.last_used = Some(utc(home::now_ms()));
-    sidecar.write(&cache)
+    info.sidecar.last_used = Some(utc(home::now_ms()));
+    info.write(&cache)
 }
 
 /// What the archive a Sandbox of `side` reads (`archive`, the machine's own,
@@ -342,17 +397,33 @@ fn probe(side: &Side<'_>, cache: &Path, id: Option<&str>, args: &SdkValue) -> Ou
         return Ok(SdkValue::Map(out));
     };
     let hex = &id["sha256:".len()..];
+    let dir_ready = cache.join(format!("{hex}.2")).is_dir();
+    let info = SidecarInfo::read(cache, hex)?;
     // an archive that cannot be found or read holds nothing
-    let present = cache.join(format!("{hex}.2")).is_dir()
-        || deploy::archive(side, args.get_text("archive"))
-            .ok()
-            .and_then(|archive| rootfs::images(&archive).ok())
-            .is_some_and(|entries| entries.iter().any(|e| e.digest.as_str() == id));
+    let in_archive = deploy::archive(side, args.get_text("archive"))
+        .ok()
+        .and_then(|archive| rootfs::images(&archive).ok())
+        .is_some_and(|entries| entries.iter().any(|e| e.digest.as_str() == id));
+    // Interrupted publish (renamed `<hex>.2` without `<hex>.2.json`, and not from
+    // an archive) stays unpublished so recovery removes the stranded dir and
+    // republishes cleanly under lock.
+    let present = (dir_ready && info.is_some()) || in_archive;
     out.push(("id".to_owned(), SdkValue::text(&id)));
     out.push(("present".to_owned(), SdkValue::Bool(present)));
+    if dir_ready && info.is_none() && !in_archive {
+        out.push(("stranded".to_owned(), SdkValue::Bool(true)));
+    }
     // the size `machine.images` lists, so a reused load answers the same
-    if let Some(size) = Sidecar::read(cache, hex)?.and_then(|sidecar| sidecar.size) {
-        out.push(("size".to_owned(), SdkValue::Int(size as i64)));
+    if let Some(info) = info {
+        if let Some(size) = info.sidecar.size {
+            out.push(("size".to_owned(), SdkValue::Int(size as i64)));
+        }
+        if let Some(variant) = info.variant {
+            out.push(("variant".to_owned(), SdkValue::text(variant)));
+        }
+        if !matches!(info.sidecar.config, SdkValue::Null) {
+            out.push(("config".to_owned(), info.sidecar.config));
+        }
     }
     let staged = part(cache, hex);
     if let Ok(meta) = fs::symlink_metadata(&staged) {
@@ -367,16 +438,39 @@ fn probe(side: &Side<'_>, cache: &Path, id: Option<&str>, args: &SdkValue) -> Ou
     Ok(SdkValue::Map(out))
 }
 
-/// The image whose sidecar lists `reference` among its refs.
+/// The image whose sidecar lists `reference` among its refs; refuses when
+/// multiple cached images claim the same reference.
 fn named(cache: &Path, reference: &str) -> Result<Option<String>, SdkRefusal> {
-    Ok(sidecars(cache)?
+    let mut matches: Vec<String> = sidecars(cache)?
         .into_iter()
-        .find(|s| s.refs.iter().any(|r| r == reference))
-        .map(|s| s.id))
+        .filter(|s| s.refs.iter().any(|r| r == reference))
+        .map(|s| s.id)
+        .collect();
+    matches.sort();
+    matches.dedup();
+    match matches.len() {
+        0 => Ok(None),
+        1 => Ok(Some(matches.remove(0))),
+        _ => Err(refused_with(
+            "InvalidInput",
+            format!(
+                "image reference `{reference}` is ambiguous across cached images: {}",
+                matches.join(", ")
+            ),
+            SdkValue::map([
+                ("reason", SdkValue::text("ambiguous")),
+                ("ref", SdkValue::text(reference)),
+                (
+                    "ids",
+                    SdkValue::List(matches.into_iter().map(SdkValue::Text).collect()),
+                ),
+            ]),
+        )),
+    }
 }
 
-/// Every sidecar in `cache` whose image is unpacked there.
-pub fn sidecars(cache: &Path) -> Result<Vec<Sidecar>, SdkRefusal> {
+/// Every extended sidecar in `cache` whose image directory `<hex>.2` exists.
+pub fn sidecar_infos(cache: &Path) -> Result<Vec<SidecarInfo>, SdkRefusal> {
     let mut found = Vec::new();
     let entries = match fs::read_dir(cache) {
         Ok(entries) => entries,
@@ -391,12 +485,20 @@ pub fn sidecars(cache: &Path) -> Result<Vec<Sidecar>, SdkRefusal> {
         if !(self::hex(hex) && cache.join(format!("{hex}.2")).is_dir()) {
             continue;
         }
-        if let Some(sidecar) = Sidecar::read(cache, hex)? {
-            found.push(sidecar);
+        if let Some(info) = SidecarInfo::read(cache, hex)? {
+            found.push(info);
         }
     }
-    found.sort_by(|a, b| a.id.cmp(&b.id));
+    found.sort_by(|a, b| a.sidecar.id.cmp(&b.sidecar.id));
     Ok(found)
+}
+
+/// Every sidecar in `cache` whose image is unpacked there.
+pub fn sidecars(cache: &Path) -> Result<Vec<Sidecar>, SdkRefusal> {
+    Ok(sidecar_infos(cache)?
+        .into_iter()
+        .map(|info| info.sidecar)
+        .collect())
 }
 
 /// Appends one frame at `offset` to image `hex`'s staged tar; offset 0
@@ -460,23 +562,100 @@ fn publish(cache: &Path, id: &str, args: &SdkValue) -> Outcome {
         ));
     }
     let image = Image::parse(id).map_err(|e| refused("InvalidInput", e.to_string()))?;
+    let old = SidecarInfo::read(cache, hex)?;
+    // Option B interrupted-publish recovery: `<hex>.2` without `<hex>.2.json`
+    // means an earlier publish stopped after rename; remove the stranded tree
+    // (unless in use) so `ensure_flat` unpacks cleanly before committing the sidecar.
+    if old.is_none() && cache.join(format!("{hex}.2")).is_dir() {
+        let users = lowers(cache.parent().unwrap_or(cache))?;
+        let removed = rootfs::remove(&image, cache, |path| users.iter().any(|l| l == path))
+            .map_err(failed)?;
+        if !removed {
+            let dir_path = cache.join(format!("{hex}.2"));
+            let count = users.iter().filter(|l| **l == dir_path).count().max(1);
+            return Err(refused_with(
+                "InUse",
+                format!("image {id} has a stranded directory in use on this machine"),
+                SdkValue::map([("count", SdkValue::Int(count as i64))]),
+            ));
+        }
+    }
     let (_, unpacked) = rootfs::ensure_flat(&staged, &image, cache)
         .map_err(|e| refused("InvalidInput", format!("image {id}: {e}")))?;
-    let old = Sidecar::read(cache, hex)?;
     let mut refs = texts(args.get("refs"));
-    refs.extend(old.iter().flat_map(|s| s.refs.clone()));
+    refs.extend(old.iter().flat_map(|s| s.sidecar.refs.clone()));
     refs.sort();
     refs.dedup();
-    Sidecar {
-        id: id.to_owned(),
-        refs,
-        size: Some(size),
-        architecture: args.get_text("architecture").map(str::to_owned),
-        source: "imported".to_owned(),
-        config: args.get("config").cloned().unwrap_or(SdkValue::Null),
-        last_used: old.and_then(|s| s.last_used),
+    let variant = args
+        .get_text("variant")
+        .map(str::to_owned)
+        .or_else(|| old.as_ref().and_then(|s| s.variant.clone()));
+    let config = match args.get("config") {
+        Some(c) if !matches!(c, SdkValue::Null) => c.clone(),
+        _ => old
+            .as_ref()
+            .map(|s| s.sidecar.config.clone())
+            .unwrap_or(SdkValue::Null),
+    };
+    strip_moved_refs(cache, hex, &refs)?;
+    SidecarInfo {
+        sidecar: Sidecar {
+            id: id.to_owned(),
+            refs,
+            size: Some(size),
+            architecture: args.get_text("architecture").map(str::to_owned),
+            source: "imported".to_owned(),
+            config: config.clone(),
+            last_used: old.and_then(|s| s.sidecar.last_used),
+        },
+        variant: variant.clone(),
     }
     .write(cache)?;
     fs::remove_file(&staged).map_err(failed)?;
-    Ok(SdkValue::map([("unpacked", SdkValue::Bool(unpacked))]))
+    let mut out = vec![("unpacked".to_owned(), SdkValue::Bool(unpacked))];
+    if let Some(variant) = variant {
+        out.push(("variant".to_owned(), SdkValue::text(variant)));
+    }
+    if !matches!(config, SdkValue::Null) {
+        out.push(("config".to_owned(), config));
+    }
+    Ok(SdkValue::Map(out))
+}
+
+/// Removes any ref in `claimed` from other sidecars in `cache` so moved tags
+/// never stay bound to stale images.
+fn strip_moved_refs(
+    cache: &Path,
+    published_hex: &str,
+    claimed: &[String],
+) -> Result<(), SdkRefusal> {
+    if claimed.is_empty() {
+        return Ok(());
+    }
+    let entries = match fs::read_dir(cache) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(failed(e)),
+    };
+    for entry in entries {
+        let name = entry.map_err(failed)?.file_name();
+        let Some(other_hex) = name.to_str().and_then(|n| n.strip_suffix(".2.json")) else {
+            continue;
+        };
+        if !hex(other_hex) || other_hex == published_hex {
+            continue;
+        }
+        let Some(mut other) = SidecarInfo::read(cache, other_hex)? else {
+            continue;
+        };
+        let before = other.sidecar.refs.len();
+        other
+            .sidecar
+            .refs
+            .retain(|r| !claimed.iter().any(|c| c == r));
+        if other.sidecar.refs.len() != before {
+            other.write(cache)?;
+        }
+    }
+    Ok(())
 }

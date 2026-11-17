@@ -1,0 +1,1390 @@
+//! Image parts enumeration, lock- & InUse-safe prune, interrupted publish
+//! recovery, moved/ambiguous ref handling, sparse tar expansion, hardlink to
+//! dropped target refusal, declared-loss metadata/SHA verification, and
+//! record-only variant/config (#176 I03).
+#[allow(dead_code)]
+#[path = "../../layerfs-sandbox-backend/tests/support/image.rs"]
+mod fixture;
+use fixture::{pax_record, Scratch, Tar};
+use layerfs_bridge::control::SdkValue;
+use layerfs_home::events::Events;
+use layerfs_home::home;
+use layerfs_home::names::MachineName;
+use layerfs_sandbox::docker::Docker;
+use layerfs_sandbox::image_artifact::{self as cache, architecture, Sidecar, CHUNK};
+use layerfs_sandbox::image_load::{load, ImageLock, Loaded, Target};
+use layerfs_sandbox::image_tar::{Filtered, TarReport};
+use layerfs_sandbox::images;
+use layerfs_sandbox_backend::{rootfs, Image};
+use sha2::{Digest, Sha256};
+use std::collections::BTreeSet;
+use std::fs;
+use std::io::Read;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant, UNIX_EPOCH};
+
+static SEQ: AtomicU64 = AtomicU64::new(0);
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    layerfs_bridge::sdk_values::hex(&Sha256::digest(bytes))
+}
+
+fn docker_available() -> bool {
+    Command::new("docker")
+        .arg("info")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
+fn real_docker() -> Docker {
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let program = std::env::split_paths(&path)
+        .filter(|d| !d.as_os_str().is_empty())
+        .map(|d| d.join("docker"))
+        .find(|p| p.is_file());
+    Docker::at(program, None)
+}
+
+fn wait_for(what: &str, done: impl Fn() -> bool) {
+    let start = Instant::now();
+    while !done() {
+        assert!(
+            start.elapsed() < Duration::from_secs(30),
+            "timed out waiting for {what}"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+fn containers_for_home(home_id: &str) -> Vec<String> {
+    let Ok(out) = Command::new("docker")
+        .args([
+            "ps",
+            "-a",
+            "--filter",
+            &format!("label=layerfs.home={home_id}"),
+            "--format",
+            "{{.Names}}",
+        ])
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+fn container_volumes(container: &str) -> Vec<String> {
+    let Ok(out) = Command::new("docker")
+        .args([
+            "container",
+            "inspect",
+            "--format",
+            "{{range .Mounts}}{{if eq .Type \"volume\"}}{{.Name}}{{\"\\n\"}}{{end}}{{end}}",
+            container,
+        ])
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Manages real-Docker test images/tags/containers and cleans up only its own
+/// resources on Drop.
+struct DockerGuard {
+    tags: Vec<String>,
+    homes: Vec<String>,
+    scratch: Scratch,
+}
+
+impl DockerGuard {
+    fn new(name: &str) -> Self {
+        Self {
+            tags: Vec::new(),
+            homes: Vec::new(),
+            scratch: Scratch::new(name),
+        }
+    }
+
+    fn make_home(&mut self, name: &str) -> (PathBuf, String) {
+        let home = self.scratch.base.join(name);
+        fs::create_dir_all(&home).unwrap();
+        let id = home::ensure(&home).unwrap().id;
+        self.homes.push(id.clone());
+        (home, id)
+    }
+
+    fn import_tar(&mut self, tag: &str, tar: &[u8]) -> String {
+        use std::io::Write;
+        let mut child = Command::new("docker")
+            .args(["import", "-", tag])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn docker import");
+        child.stdin.take().unwrap().write_all(tar).unwrap();
+        let out = child.wait_with_output().unwrap();
+        assert!(
+            out.status.success(),
+            "docker import failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        self.tags.push(tag.to_owned());
+        self.inspect_id(tag)
+    }
+
+    fn build_dockerfile(&mut self, tag: &str, dockerfile: &str) -> String {
+        let dir = self
+            .scratch
+            .base
+            .join(format!("df-{}", SEQ.fetch_add(1, Ordering::Relaxed)));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("Dockerfile"), dockerfile).unwrap();
+        let out = Command::new("docker")
+            .args([
+                "build",
+                "--pull=false",
+                "-q",
+                "-t",
+                tag,
+                dir.to_str().unwrap(),
+            ])
+            .output()
+            .expect("docker build");
+        assert!(
+            out.status.success(),
+            "docker build failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        self.tags.push(tag.to_owned());
+        self.inspect_id(tag)
+    }
+
+    fn retag(&mut self, src: &str, dst: &str) {
+        let out = Command::new("docker")
+            .args(["tag", src, dst])
+            .output()
+            .expect("docker tag");
+        assert!(
+            out.status.success(),
+            "docker tag failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        if !self.tags.iter().any(|t| t == dst) {
+            self.tags.push(dst.to_owned());
+        }
+    }
+
+    fn inspect_id(&self, ref_or_id: &str) -> String {
+        let inspect = Command::new("docker")
+            .args(["image", "inspect", "--format", "{{.Id}}", ref_or_id])
+            .output()
+            .expect("docker image inspect");
+        assert!(inspect.status.success());
+        String::from_utf8_lossy(&inspect.stdout).trim().to_owned()
+    }
+}
+
+impl Drop for DockerGuard {
+    fn drop(&mut self) {
+        let mut cnames = BTreeSet::new();
+        for home_id in &self.homes {
+            cnames.extend(containers_for_home(home_id));
+        }
+        for cname in cnames {
+            let vols = container_volumes(&cname);
+            let _ = Command::new("docker")
+                .args(["rm", "-f", "-v", &cname])
+                .output();
+            for v in vols {
+                let _ = Command::new("docker").args(["volume", "rm", &v]).output();
+            }
+        }
+        for tag in self.tags.iter().rev() {
+            let _ = Command::new("docker").args(["rmi", "-f", tag]).output();
+        }
+    }
+}
+
+fn filtered_with_report(bytes: &[u8]) -> std::io::Result<(Vec<u8>, TarReport)> {
+    let mut out = Vec::new();
+    let mut reader = Filtered::new(bytes);
+    reader.read_to_end(&mut out)?;
+    Ok((out, reader.into_report()))
+}
+
+fn filtered_bytes(bytes: &[u8]) -> std::io::Result<Vec<u8>> {
+    filtered_with_report(bytes).map(|(out, _)| out)
+}
+
+struct ChildGuard(Option<std::process::Child>);
+
+impl ChildGuard {
+    fn new(child: std::process::Child) -> Self {
+        Self(Some(child))
+    }
+
+    fn kill_and_wait(&mut self) {
+        if let Some(mut child) = self.0.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+impl Drop for ChildGuard {
+    fn drop(&mut self) {
+        self.kill_and_wait();
+    }
+}
+
+fn run_load(
+    docker: &Docker,
+    home: &Path,
+    machine: &str,
+    image: &str,
+) -> Result<Loaded, layerfs_bridge::control::SdkRefusal> {
+    let mut sink = |_: SdkValue| {};
+    let mut events = Events::new(&mut sink);
+    load(
+        docker,
+        &mut events,
+        &mut Target::local(home, machine),
+        None,
+        image,
+    )
+}
+
+fn native_name() -> MachineName {
+    MachineName::parse("native").unwrap()
+}
+
+fn image_rows(home: &Path) -> Vec<SdkValue> {
+    let out = images::list(home, &native_name()).unwrap();
+    match out.get("images") {
+        Some(SdkValue::List(rows)) => rows.clone(),
+        other => panic!("unexpected images field: {other:?}"),
+    }
+}
+
+fn step(home: &Path, args: SdkValue) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+    cache::step(&layerfs_sandbox::deploy::Side::Home(home), &args)
+}
+
+/// Builds a GNU oldgnu sparse (`b'S'`) tar entry with arbitrary chunks (supports >4 chunks).
+fn build_gnu_sparse_tar(
+    path: &str,
+    mode: u32,
+    mtime: u64,
+    realsize: u64,
+    chunks: &[(u64, &[u8])],
+) -> Vec<u8> {
+    let stored_size: u64 = chunks.iter().map(|(_, d)| d.len() as u64).sum();
+    let mut hdr = [0u8; 512];
+    hdr[..path.len()].copy_from_slice(path.as_bytes());
+    let oct = |f: &mut [u8], v: u64| {
+        let w = f.len() - 1;
+        let t = format!("{v:0w$o}\0");
+        f.copy_from_slice(&t.as_bytes()[..f.len()]);
+    };
+    oct(&mut hdr[100..108], u64::from(mode));
+    oct(&mut hdr[108..116], 0);
+    oct(&mut hdr[116..124], 0);
+    oct(&mut hdr[124..136], stored_size);
+    oct(&mut hdr[136..148], mtime);
+    hdr[156] = b'S';
+    hdr[257..263].copy_from_slice(b"ustar ");
+    hdr[263..265].copy_from_slice(b" \0");
+
+    for (i, (off, data)) in chunks.iter().take(4).enumerate() {
+        let base = 386 + i * 24;
+        oct(&mut hdr[base..base + 12], *off);
+        oct(&mut hdr[base + 12..base + 24], data.len() as u64);
+    }
+    let has_ext = chunks.len() > 4;
+    hdr[482] = u8::from(has_ext);
+    oct(&mut hdr[483..495], realsize);
+    hdr[148..156].fill(b' ');
+    let sum: u64 = hdr.iter().map(|b| u64::from(*b)).sum();
+    hdr[148..156].copy_from_slice(format!("{sum:06o}\0 ").as_bytes());
+
+    let mut out = Vec::new();
+    out.extend_from_slice(&hdr);
+
+    let mut idx = 4;
+    while idx < chunks.len() {
+        let mut ext = [0u8; 512];
+        for (slot, (off, data)) in chunks[idx..].iter().take(21).enumerate() {
+            let base = slot * 24;
+            oct(&mut ext[base..base + 12], *off);
+            oct(&mut ext[base + 12..base + 24], data.len() as u64);
+        }
+        idx += 21;
+        ext[504] = u8::from(idx < chunks.len());
+        out.extend_from_slice(&ext);
+    }
+
+    for (_, data) in chunks {
+        out.extend_from_slice(data);
+    }
+    let rem = out.len() % 512;
+    if rem != 0 {
+        out.resize(out.len() + (512 - rem), 0);
+    }
+    out.resize(out.len() + 1024, 0);
+    out
+}
+
+#[test]
+fn real_docker_tag_move_leaves_enumerable_part_and_clears_stale_ref_on_publish() {
+    if !docker_available() {
+        eprintln!("NOT_RUN: docker unavailable");
+        return;
+    }
+    let mut guard = DockerGuard::new("lp176-rec-tagmove");
+    let pid = std::process::id();
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    let repo_tag = format!("layerfs-lp176-rec-app-{pid}-{seq}:latest");
+    let v1_base = format!("layerfs-lp176-rec-v1b-{pid}-{seq}:test");
+    let v2_base = format!("layerfs-lp176-rec-v2b-{pid}-{seq}:test");
+    let v2_tag = format!("layerfs-lp176-rec-v2-{pid}-{seq}:test");
+
+    let tar1 = Tar::new()
+        .at(1_700_000_000)
+        .directory("etc/", 0o755)
+        .file("etc/ver", 0o644, b"v1\n")
+        .file("usr/bin/blob1", 0o755, &vec![0x11; CHUNK + 65_536])
+        .finish();
+    let v1_id = guard.import_tar(&v1_base, &tar1);
+    let v1_hex = v1_id.strip_prefix("sha256:").unwrap().to_owned();
+    guard.retag(&v1_base, &repo_tag);
+
+    let tar2 = Tar::new()
+        .at(1_700_000_000)
+        .directory("etc/", 0o755)
+        .file("etc/ver", 0o644, b"v2\n")
+        .file("usr/bin/blob2", 0o755, &vec![0x22; CHUNK + 131_072])
+        .finish();
+    guard.import_tar(&v2_base, &tar2);
+    let v2_id = guard.build_dockerfile(
+        &v2_tag,
+        &format!("FROM {v2_base}\nENV APP_MODE=prod\nWORKDIR /app\nUSER 1000:1000\n"),
+    );
+    let v2_hex = v2_id.strip_prefix("sha256:").unwrap().to_owned();
+
+    let (home, _) = guard.make_home("home");
+    let docker = real_docker();
+
+    // 1. Load V1 under repo_tag.
+    let loaded1 = run_load(&docker, &home, "native", &repo_tag).unwrap();
+    assert_eq!(loaded1.id, v1_id);
+    assert!(!loaded1.reused);
+
+    // 2. Move repo_tag in Docker to V2, start loading repo_tag, and kill mid-send.
+    guard.retag(&v2_tag, &repo_tag);
+    let mut child = ChildGuard::new(
+        Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "helper_pause_load", "--nocapture"])
+            .env("LP176_REC_PAUSE_HOME", &home)
+            .env("LP176_REC_PAUSE_MACHINE", "native")
+            .env("LP176_REC_PAUSE_IMAGE", &repo_tag)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap(),
+    );
+    wait_for("child pauses with staged part", || {
+        home.join("paused").exists()
+    });
+    child.kill_and_wait();
+
+    // 3. machine.images must enumerate both V1 (unpacked) and V2's staged part!
+    let rows = image_rows(&home);
+    let v1_row = rows
+        .iter()
+        .find(|r| r.get_text("id") == Some(v1_id.as_str()) && !r.get_bool("staged"))
+        .expect("V1 published row");
+    assert!(cache::texts(v1_row.get("refs")).contains(&repo_tag));
+
+    let v2_part = rows
+        .iter()
+        .find(|r| r.get_text("id") == Some(v2_id.as_str()) && r.get_bool("staged"))
+        .unwrap_or_else(|| panic!("missing staged part row for V2 in machine.images: {rows:?}"));
+    let part_len = fs::symlink_metadata(cache::cache(&home).join(format!(".recv-{v2_hex}.part")))
+        .unwrap()
+        .len();
+    assert_eq!(v2_part.get_int("size"), Some(part_len as i64));
+    assert!(v2_part.get_int("age").is_some_and(|a| a >= 0));
+    assert!(v2_part.get_bool("resumable"));
+
+    // 4. Finish loading repo_tag: V2 publishes, clears stale repo_tag from V1 sidecar, records config.
+    std::thread::sleep(Duration::from_millis(2200));
+    let loaded2 = run_load(&docker, &home, "native", &repo_tag).unwrap();
+    assert_eq!(loaded2.id, v2_id);
+    assert!(!loaded2.reused);
+
+    let v1_sidecar = Sidecar::read(&cache::cache(&home), &v1_hex)
+        .unwrap()
+        .unwrap();
+    assert!(
+        !v1_sidecar.refs.contains(&repo_tag),
+        "stale ref {repo_tag} must be removed from V1 sidecar: {v1_sidecar:?}"
+    );
+    let v2_sidecar = Sidecar::read(&cache::cache(&home), &v2_hex)
+        .unwrap()
+        .unwrap();
+    assert!(v2_sidecar.refs.contains(&repo_tag));
+
+    // Offline ref probe must resolve to V2, never V1.
+    let probe_by_ref = step(
+        &home,
+        SdkValue::map([
+            ("step", SdkValue::text("probe")),
+            ("ref", SdkValue::text(&repo_tag)),
+        ]),
+    )
+    .unwrap();
+    assert_eq!(probe_by_ref.get_text("id"), Some(v2_id.as_str()));
+
+    let rows_after = image_rows(&home);
+    assert!(!rows_after.iter().any(|r| r.get_bool("staged")));
+    let v2_row = rows_after
+        .iter()
+        .find(|r| r.get_text("id") == Some(v2_id.as_str()))
+        .unwrap();
+    let cfg = v2_row
+        .get("config")
+        .expect("config visible in machine.images");
+    assert_eq!(cfg.get_text("WorkingDir"), Some("/app"));
+    assert_eq!(cfg.get_text("User"), Some("1000:1000"));
+}
+
+#[test]
+fn prune_reclaims_parts_temps_and_stranded_while_protecting_live_locks_and_in_use() {
+    let scratch = Scratch::new("lp176-rec-prune");
+    let home = scratch.base.join("home");
+    fs::create_dir_all(&home).unwrap();
+    home::ensure(&home).unwrap();
+    let cache_dir = cache::cache(&home);
+    fs::create_dir_all(&cache_dir).unwrap();
+
+    let hex_unheld = "1".repeat(64);
+    let hex_stranded = "2".repeat(64);
+    let hex_dangling = "3".repeat(64);
+    let hex_locked = "4".repeat(64);
+    let id_locked = format!("sha256:{hex_locked}");
+    let hex_inuse = "5".repeat(64);
+    let id_inuse = format!("sha256:{hex_inuse}");
+    let hex_held = "6".repeat(64);
+    let id_held = format!("sha256:{hex_held}");
+
+    // 1. Unheld part + temp dir.
+    cache::write(&cache_dir, &hex_unheld, 0, b"partial-tar-bytes").unwrap();
+    fs::create_dir_all(cache_dir.join(format!(".tmp-{hex_unheld}.2-ab12/usr"))).unwrap();
+
+    // 2. Stranded unpacked dir (no .2.json) + dangling sidecar (no .2 dir).
+    let flat_tar = scratch.base.join("flat.tar");
+    let small_tar = filtered_bytes(&Tar::new().file("etc/a", 0o644, b"a").finish()).unwrap();
+    fs::write(&flat_tar, &small_tar).unwrap();
+    rootfs::ensure_flat(
+        &flat_tar,
+        &Image::parse(&format!("sha256:{hex_stranded}")).unwrap(),
+        &cache_dir,
+    )
+    .unwrap();
+    Sidecar {
+        id: format!("sha256:{hex_dangling}"),
+        refs: vec!["dangling:1".to_owned()],
+        size: Some(10),
+        architecture: Some(architecture().to_owned()),
+        source: "imported".to_owned(),
+        config: SdkValue::Null,
+        last_used: None,
+    }
+    .write(&cache_dir)
+    .unwrap();
+
+    // 3. Live-locked part + temp dir (held by child process).
+    cache::write(&cache_dir, &hex_locked, 0, b"locked-partial-bytes").unwrap();
+    fs::create_dir_all(cache_dir.join(format!(".tmp-{hex_locked}.2-cd34/bin"))).unwrap();
+    let mut lock_child = ChildGuard::new(
+        Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "helper_hold_image_lock", "--nocapture"])
+            .env("LP176_REC_LOCK_HOME", &home)
+            .env("LP176_REC_LOCK_MACHINE", "native")
+            .env("LP176_REC_LOCK_IMAGE", &id_locked)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap(),
+    );
+    wait_for("lock child holds ImageLock", || {
+        home.join("lock-held").exists()
+    });
+
+    // 4. InUse image via helper.spec lower= (with an extra part + temp dir too) and ImageHold.
+    rootfs::ensure_flat(&flat_tar, &Image::parse(&id_inuse).unwrap(), &cache_dir).unwrap();
+    Sidecar {
+        id: id_inuse.clone(),
+        refs: vec!["inuse:1".to_owned()],
+        size: Some(small_tar.len() as u64),
+        architecture: Some(architecture().to_owned()),
+        source: "imported".to_owned(),
+        config: SdkValue::Null,
+        last_used: None,
+    }
+    .write(&cache_dir)
+    .unwrap();
+    cache::write(&cache_dir, &hex_inuse, 0, b"inuse-part").unwrap();
+    let spec_dir = cache_dir.parent().unwrap().join("sb-active/config");
+    fs::create_dir_all(&spec_dir).unwrap();
+    fs::write(
+        spec_dir.join("helper.spec"),
+        format!(
+            "root=/x\nlower={}\n",
+            cache_dir.join(format!("{hex_inuse}.2")).display()
+        ),
+    )
+    .unwrap();
+    rootfs::ensure_flat(&flat_tar, &Image::parse(&id_held).unwrap(), &cache_dir).unwrap();
+    Sidecar {
+        id: id_held.clone(),
+        refs: vec!["held:1".to_owned()],
+        size: Some(small_tar.len() as u64),
+        architecture: Some(architecture().to_owned()),
+        source: "imported".to_owned(),
+        config: SdkValue::Null,
+        last_used: None,
+    }
+    .write(&cache_dir)
+    .unwrap();
+    let (_, hold) =
+        rootfs::ensure_held(&flat_tar, &Image::parse(&id_held).unwrap(), &cache_dir).unwrap();
+
+    // Verify machine.images shows unheld part as resumable=true and locked part as resumable=false.
+    let rows = image_rows(&home);
+    let r_unheld = rows
+        .iter()
+        .find(|r| r.get_text("id") == Some(&format!("sha256:{hex_unheld}")) && r.get_bool("staged"))
+        .expect("unheld staged part listed");
+    assert!(r_unheld.get_bool("resumable"));
+    let r_locked = rows
+        .iter()
+        .find(|r| r.get_text("id") == Some(&id_locked) && r.get_bool("staged"))
+        .expect("locked staged part listed");
+    assert!(
+        !r_locked.get_bool("resumable"),
+        "live-locked part must not be resumable: {r_locked:?}"
+    );
+
+    // Targeted prune on live-locked or InUse must refuse InUse.
+    assert_eq!(
+        images::prune(&home, &native_name(), Some(&id_locked), false)
+            .unwrap_err()
+            .code,
+        "InUse"
+    );
+    assert_eq!(
+        images::prune(&home, &native_name(), Some(&id_inuse), false)
+            .unwrap_err()
+            .code,
+        "InUse"
+    );
+
+    // Unused prune must clean unheld part, unheld temp, stranded image, and dangling sidecar,
+    // while leaving live-locked and InUse artifacts untouched.
+    images::prune(&home, &native_name(), None, true).unwrap();
+
+    assert!(!cache_dir.join(format!(".recv-{hex_unheld}.part")).exists());
+    assert!(!cache_dir.join(format!(".tmp-{hex_unheld}.2-ab12")).exists());
+    assert!(!cache_dir.join(format!("{hex_stranded}.2")).exists());
+    assert!(!cache_dir.join(format!("{hex_dangling}.2.json")).exists());
+
+    assert!(cache_dir.join(format!(".recv-{hex_locked}.part")).exists());
+    assert!(cache_dir.join(format!(".tmp-{hex_locked}.2-cd34")).exists());
+    assert!(cache_dir.join(format!("{hex_inuse}.2")).exists());
+    assert!(cache_dir.join(format!("{hex_inuse}.2.json")).exists());
+    assert!(cache_dir.join(format!(".recv-{hex_inuse}.part")).exists());
+    assert!(cache_dir.join(format!("{hex_held}.2")).exists());
+
+    // Release locks and InUse, then prune locked part explicitly by target id before unused sweep.
+    lock_child.kill_and_wait();
+    drop(hold);
+    fs::remove_dir_all(cache_dir.parent().unwrap().join("sb-active")).unwrap();
+
+    // Targeted prune can remove a part-only digest and then reports NotFound once gone.
+    let single = images::prune(&home, &native_name(), Some(&id_locked), false).unwrap();
+    assert_eq!(
+        single.get("removed"),
+        Some(&SdkValue::List(vec![SdkValue::text(&id_locked)]))
+    );
+    assert_eq!(
+        images::prune(&home, &native_name(), Some(&id_locked), false)
+            .unwrap_err()
+            .code,
+        "NotFound"
+    );
+
+    images::prune(&home, &native_name(), None, true).unwrap();
+    let leftovers: Vec<String> = fs::read_dir(&cache_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| !n.ends_with(".lock"))
+        .collect();
+    assert!(
+        leftovers.is_empty(),
+        "expected clean cache after prune, left: {leftovers:?}"
+    );
+}
+
+#[test]
+fn interrupted_publish_with_renamed_dir_and_missing_sidecar_recovers_and_prunes() {
+    let scratch = Scratch::new("lp176-rec-publish");
+    let home = scratch.base.join("home");
+    fs::create_dir_all(&home).unwrap();
+    home::ensure(&home).unwrap();
+    let cache_dir = cache::cache(&home);
+    fs::create_dir_all(&cache_dir).unwrap();
+
+    let hex = "7".repeat(64);
+    let id = format!("sha256:{hex}");
+    let tar_bytes = filtered_bytes(
+        &Tar::new()
+            .directory("etc/", 0o755)
+            .file("etc/hello", 0o644, b"world\n")
+            .finish(),
+    )
+    .unwrap();
+
+    // Stage part and simulate crash right after ensure_flat renamed `<hex>.2` before Sidecar::write.
+    cache::write(&cache_dir, &hex, 0, &tar_bytes).unwrap();
+    let part_path = cache_dir.join(format!(".recv-{hex}.part"));
+    rootfs::ensure_flat(&part_path, &Image::parse(&id).unwrap(), &cache_dir).unwrap();
+    assert!(cache_dir.join(format!("{hex}.2")).is_dir());
+    assert!(!cache_dir.join(format!("{hex}.2.json")).exists());
+
+    // probe must NOT claim an unpublished directory without sidecar is present.
+    let probed = step(
+        &home,
+        SdkValue::map([
+            ("step", SdkValue::text("probe")),
+            ("id", SdkValue::text(&id)),
+        ]),
+    )
+    .unwrap();
+    assert!(
+        !probed.get_bool("present"),
+        "dir without sidecar must not be treated as published: {probed:?}"
+    );
+    assert!(probed.get_bool("stranded"));
+    assert_eq!(probed.get_int("offset"), Some(tar_bytes.len() as i64));
+    let deploy = layerfs_sandbox::host::Deploy {
+        sandbox: Some("namespaces".to_owned()),
+        local_dir: cache::cache(&home)
+            .parent()
+            .unwrap()
+            .to_str()
+            .map(str::to_owned),
+        container_prefix: None,
+        legacy_prefix: None,
+        daemon: None,
+        image_archive: None,
+        image: Some(id.clone()),
+        platform: None,
+    };
+    assert!(!cache::unpacked(&deploy, &Image::parse(&id).unwrap()));
+    let rows_before = image_rows(&home);
+    assert!(rows_before
+        .iter()
+        .any(|r| r.get_text("id") == Some(id.as_str()) && r.get_bool("stranded")));
+
+    // Stand-in Docker recovery load completes publish, writes sidecar, deletes .part.
+    let standin_dir = scratch.base.join("standin");
+    fs::create_dir_all(standin_dir.join("images")).unwrap();
+    let script = r#"#!/bin/sh
+D="$(dirname "$0")"
+key() { printf '%s' "$1" | tr '/:' '__'; }
+case "$1 $2" in
+  "image inspect")
+    shift 4
+    cat "$D/images/$(key "$1").json"; echo; exit 0 ;;
+  "container inspect")
+    if [ "$3" = "--size" ]; then echo 0; exit 0; fi
+    if [ -f "$D/containers/$5" ]; then echo id; exit 0; fi
+    echo "No such object" >&2; exit 1 ;;
+esac
+case "$1" in
+  create) mkdir -p "$D/containers"; while [ $# -gt 0 ]; do case "$1" in --name) n="$2"; shift 2;; *) shift;; esac; done; : > "$D/containers/$n"; echo id ;;
+  export) cat "$D/export.tar" ;;
+  history) echo 0 ;;
+  rm) shift; [ "$1" = "-f" ] && shift; [ "$1" = "-v" ] && shift; rm -f "$D/containers/$1" ;;
+  ps) ;;
+esac
+"#;
+    let dbin = standin_dir.join("docker");
+    fs::write(&dbin, script).unwrap();
+    fs::set_permissions(&dbin, fs::Permissions::from_mode(0o755)).unwrap();
+    let json = format!(
+        r#"{{"Id":"{id}","RepoTags":["rec/app:1"],"Os":"linux","Architecture":"{}","Size":100,"Config":{{"Env":["A=1"],"WorkingDir":"/srv","User":"app"}}}}"#,
+        architecture()
+    );
+    for k in ["rec/app:1", &id] {
+        fs::write(
+            standin_dir
+                .join("images")
+                .join(format!("{}.json", k.replace(['/', ':'], "_"))),
+            &json,
+        )
+        .unwrap();
+    }
+    fs::write(standin_dir.join("export.tar"), &tar_bytes).unwrap();
+
+    let docker = Docker::at(Some(dbin), None);
+    let loaded = run_load(&docker, &home, "native", "rec/app:1").unwrap();
+    assert_eq!(loaded.id, id);
+    assert!(!loaded.reused);
+    assert!(Sidecar::read(&cache_dir, &hex).unwrap().is_some());
+    assert!(!part_path.exists());
+
+    // Subsequent probe sees present=true, and cache::unpacked sees true.
+    assert!(cache::unpacked(&deploy, &Image::parse(&id).unwrap()));
+    let probed2 = step(
+        &home,
+        SdkValue::map([
+            ("step", SdkValue::text("probe")),
+            ("id", SdkValue::text(&id)),
+        ]),
+    )
+    .unwrap();
+    assert!(probed2.get_bool("present"));
+    assert!(!probed2.get_bool("stranded"));
+}
+
+#[test]
+fn ambiguous_ref_is_refused_and_moved_ref_never_selects_old_image() {
+    let scratch = Scratch::new("lp176-rec-refs");
+    let home = scratch.base.join("home");
+    fs::create_dir_all(&home).unwrap();
+    let cache_dir = cache::cache(&home);
+    fs::create_dir_all(&cache_dir).unwrap();
+    let tar_bytes = filtered_bytes(&Tar::new().file("f", 0o644, b"x").finish()).unwrap();
+    let sha = sha256_hex(&tar_bytes);
+
+    let hex1 = "8".repeat(64);
+    let id1 = format!("sha256:{hex1}");
+    let hex2 = "9".repeat(64);
+    let id2 = format!("sha256:{hex2}");
+
+    // Two images both claiming "shared/app:latest" -> ambiguous ref must be refused naming the ref.
+    cache::write(&cache_dir, &hex1, 0, &tar_bytes).unwrap();
+    step(
+        &home,
+        SdkValue::map([
+            ("step", SdkValue::text("publish")),
+            ("id", SdkValue::text(&id1)),
+            ("size", SdkValue::Int(tar_bytes.len() as i64)),
+            ("sha256", SdkValue::text(&sha)),
+            (
+                "refs",
+                SdkValue::List(vec![SdkValue::text("shared/app:latest")]),
+            ),
+        ]),
+    )
+    .unwrap();
+
+    cache::write(&cache_dir, &hex2, 0, &tar_bytes).unwrap();
+    let flat2 = scratch.base.join("flat2.tar");
+    fs::write(&flat2, &tar_bytes).unwrap();
+    rootfs::ensure_flat(&flat2, &Image::parse(&id2).unwrap(), &cache_dir).unwrap();
+    Sidecar {
+        id: id2.clone(),
+        refs: vec!["shared/app:latest".to_owned()],
+        size: Some(tar_bytes.len() as u64),
+        architecture: Some(architecture().to_owned()),
+        source: "imported".to_owned(),
+        config: SdkValue::Null,
+        last_used: None,
+    }
+    .write(&cache_dir)
+    .unwrap();
+
+    let err = step(
+        &home,
+        SdkValue::map([
+            ("step", SdkValue::text("probe")),
+            ("ref", SdkValue::text("shared/app:latest")),
+        ]),
+    )
+    .unwrap_err();
+    assert_eq!(err.code, "InvalidInput", "{err:?}");
+    assert!(
+        err.message.contains("shared/app:latest"),
+        "ambiguous ref error must name the ref: {}",
+        err.message
+    );
+
+    let offline = Docker::at(None, None);
+    let load_err = run_load(&offline, &home, "native", "shared/app:latest").unwrap_err();
+    assert!(
+        load_err.message.contains("shared/app:latest"),
+        "{load_err:?}"
+    );
+
+    // Publish id2 with "moved/app:latest" after id1 had ["moved/app:latest", "moved/app:v1"]:
+    // id1 must lose "moved/app:latest" and keep "moved/app:v1".
+    let hex_old = "a".repeat(64);
+    let id_old = format!("sha256:{hex_old}");
+    let hex_new = "b".repeat(64);
+    let id_new = format!("sha256:{hex_new}");
+    cache::write(&cache_dir, &hex_old, 0, &tar_bytes).unwrap();
+    step(
+        &home,
+        SdkValue::map([
+            ("step", SdkValue::text("publish")),
+            ("id", SdkValue::text(&id_old)),
+            ("size", SdkValue::Int(tar_bytes.len() as i64)),
+            ("sha256", SdkValue::text(&sha)),
+            (
+                "refs",
+                SdkValue::List(vec![
+                    SdkValue::text("moved/app:latest"),
+                    SdkValue::text("moved/app:v1"),
+                ]),
+            ),
+        ]),
+    )
+    .unwrap();
+
+    cache::write(&cache_dir, &hex_new, 0, &tar_bytes).unwrap();
+    step(
+        &home,
+        SdkValue::map([
+            ("step", SdkValue::text("publish")),
+            ("id", SdkValue::text(&id_new)),
+            ("size", SdkValue::Int(tar_bytes.len() as i64)),
+            ("sha256", SdkValue::text(&sha)),
+            (
+                "refs",
+                SdkValue::List(vec![SdkValue::text("moved/app:latest")]),
+            ),
+        ]),
+    )
+    .unwrap();
+
+    let old_sidecar = Sidecar::read(&cache_dir, &hex_old).unwrap().unwrap();
+    assert_eq!(old_sidecar.refs, vec!["moved/app:v1".to_owned()]);
+    let p_latest = step(
+        &home,
+        SdkValue::map([
+            ("step", SdkValue::text("probe")),
+            ("ref", SdkValue::text("moved/app:latest")),
+        ]),
+    )
+    .unwrap();
+    assert_eq!(p_latest.get_text("id"), Some(id_new.as_str()));
+    let p_v1 = step(
+        &home,
+        SdkValue::map([
+            ("step", SdkValue::text("probe")),
+            ("ref", SdkValue::text("moved/app:v1")),
+        ]),
+    )
+    .unwrap();
+    assert_eq!(p_v1.get_text("id"), Some(id_old.as_str()));
+}
+
+#[test]
+fn sparse_files_expand_with_exact_bytes_and_hardlink_to_dropped_target_fails() {
+    let scratch = Scratch::new("lp176-rec-sparse-hl");
+
+    // 1. GNU oldgnu sparse file with 5 chunks (exercises extended sparse header block) + trailing hole.
+    let mut expected_gnu = vec![0u8; 32 * 1024];
+    expected_gnu[0..4].copy_from_slice(b"C000");
+    expected_gnu[4096..4100].copy_from_slice(b"C001");
+    expected_gnu[8192..8196].copy_from_slice(b"C002");
+    expected_gnu[16384..16388].copy_from_slice(b"C003");
+    expected_gnu[24576..24581].copy_from_slice(b"C004!");
+    let gnu_tar = build_gnu_sparse_tar(
+        "var/big.bin",
+        0o640,
+        1_700_000_222,
+        expected_gnu.len() as u64,
+        &[
+            (0, b"C000"),
+            (4096, b"C001"),
+            (8192, b"C002"),
+            (16384, b"C003"),
+            (24576, b"C004!"),
+        ],
+    );
+    let (filtered_gnu, report_gnu) = filtered_with_report(&gnu_tar).expect("filter GNU sparse tar");
+    assert_eq!(report_gnu.sparse_files.len(), 1);
+    assert_eq!(report_gnu.sparse_files[0].path, "var/big.bin");
+    assert_eq!(report_gnu.sparse_files[0].expanded_bytes, 32 * 1024);
+    assert_eq!(report_gnu.sparse_files[0].stored_bytes, 21);
+    assert_eq!(report_gnu.sparse_expanded_bytes, 32 * 1024);
+    let gnu_path = scratch.base.join("gnu.tar");
+    fs::write(&gnu_path, &filtered_gnu).unwrap();
+    let (root1, _) = rootfs::ensure_flat(
+        &gnu_path,
+        &Image::parse(&format!("sha256:{}", "c".repeat(64))).unwrap(),
+        &scratch.cache,
+    )
+    .unwrap();
+    let unpacked_gnu = fs::read(root1.directory().join("var/big.bin")).unwrap();
+    assert_eq!(sha256_hex(&unpacked_gnu), sha256_hex(&expected_gnu));
+    let meta_gnu = fs::symlink_metadata(root1.directory().join("var/big.bin")).unwrap();
+    assert_eq!(meta_gnu.permissions().mode() & 0o777, 0o640);
+    assert_eq!(
+        meta_gnu
+            .modified()
+            .unwrap()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+        1_700_000_222
+    );
+
+    // 2. PAX 1.0 sparse file (real GNU tar --format=posix --sparse).
+    let pax_src = scratch.base.join("pax_src");
+    fs::create_dir_all(&pax_src).unwrap();
+    let sp_file = pax_src.join("pax.bin");
+    {
+        use std::io::{Seek, SeekFrom, Write};
+        let mut f = fs::File::create(&sp_file).unwrap();
+        f.write_all(b"HEAD").unwrap();
+        f.seek(SeekFrom::Start(65_536)).unwrap();
+        f.write_all(b"TAIL").unwrap();
+        f.set_len(131_072).unwrap();
+    }
+    let expected_pax = fs::read(&sp_file).unwrap();
+    let pax_tar = Command::new("tar")
+        .args(["--format=posix", "--sparse", "-cf", "-", "-C"])
+        .arg(&pax_src)
+        .arg("pax.bin")
+        .output()
+        .unwrap();
+    assert!(pax_tar.status.success());
+    let (filtered_pax, report_pax) =
+        filtered_with_report(&pax_tar.stdout).expect("filter PAX sparse tar");
+    assert_eq!(report_pax.sparse_files.len(), 1);
+    assert_eq!(report_pax.sparse_files[0].path, "pax.bin");
+    assert_eq!(report_pax.sparse_files[0].expanded_bytes, 131_072);
+    assert_eq!(report_pax.sparse_expanded_bytes, 131_072);
+    let pax_path = scratch.base.join("pax.tar");
+    fs::write(&pax_path, &filtered_pax).unwrap();
+    let (root2, _) = rootfs::ensure_flat(
+        &pax_path,
+        &Image::parse(&format!("sha256:{}", "d".repeat(64))).unwrap(),
+        &scratch.cache,
+    )
+    .unwrap();
+    let unpacked_pax = fs::read(root2.directory().join("pax.bin")).unwrap();
+    assert_eq!(sha256_hex(&unpacked_pax), sha256_hex(&expected_pax));
+
+    // 2b. PAX 0.1 sparse entry (`GNU.sparse.map`) and PAX 0.0 (`offset`/`numbytes`).
+    let mut pax01_meta = pax_record("GNU.sparse.major", "0");
+    pax01_meta.extend_from_slice(&pax_record("GNU.sparse.minor", "1"));
+    pax01_meta.extend_from_slice(&pax_record("GNU.sparse.name", "opt/sp01.bin"));
+    pax01_meta.extend_from_slice(&pax_record("GNU.sparse.realsize", "16384"));
+    pax01_meta.extend_from_slice(&pax_record("GNU.sparse.map", "0,4,8192,4"));
+    let mut pax00_meta = pax_record("GNU.sparse.major", "0");
+    pax00_meta.extend_from_slice(&pax_record("GNU.sparse.minor", "0"));
+    pax00_meta.extend_from_slice(&pax_record("GNU.sparse.name", "opt/sp00.bin"));
+    pax00_meta.extend_from_slice(&pax_record("GNU.sparse.realsize", "8192"));
+    pax00_meta.extend_from_slice(&pax_record("GNU.sparse.offset", "4096"));
+    pax00_meta.extend_from_slice(&pax_record("GNU.sparse.numbytes", "5"));
+    let pax0x_tar = Tar::new()
+        .directory("opt/", 0o755)
+        .raw("PaxHeaders/sp01", b'x', 0o644, &pax01_meta)
+        .file("opt/sp01.bin", 0o644, b"ABCDWXYZ")
+        .raw("PaxHeaders/sp00", b'x', 0o644, &pax00_meta)
+        .file("opt/sp00.bin", 0o644, b"12345")
+        .finish();
+    let (filtered_0x, report_0x) =
+        filtered_with_report(&pax0x_tar).expect("filter PAX 0.x sparse tar");
+    assert_eq!(report_0x.sparse_files.len(), 2);
+    assert_eq!(report_0x.sparse_expanded_bytes, 16_384 + 8_192);
+    let pax0x_path = scratch.base.join("pax0x.tar");
+    fs::write(&pax0x_path, &filtered_0x).unwrap();
+    let (root2b, _) = rootfs::ensure_flat(
+        &pax0x_path,
+        &Image::parse(&format!("sha256:{}", "0".repeat(64))).unwrap(),
+        &scratch.cache,
+    )
+    .unwrap();
+    let mut expected_01 = vec![0u8; 16_384];
+    expected_01[..4].copy_from_slice(b"ABCD");
+    expected_01[8192..8196].copy_from_slice(b"WXYZ");
+    assert_eq!(
+        fs::read(root2b.directory().join("opt/sp01.bin")).unwrap(),
+        expected_01
+    );
+    let mut expected_00 = vec![0u8; 8_192];
+    expected_00[4096..4101].copy_from_slice(b"12345");
+    assert_eq!(
+        fs::read(root2b.directory().join("opt/sp00.bin")).unwrap(),
+        expected_00
+    );
+
+    // 3. Hardlinks pointing to dropped targets must produce a clear error.
+    let bad_init = Tar::new()
+        .file("etc/hosts", 0o644, b"127.0.0.1 localhost\n")
+        .hard_link("app/hosts-alias", "etc/hosts")
+        .finish();
+    let err_init = filtered_bytes(&bad_init).unwrap_err();
+    let msg_init = err_init.to_string();
+    assert!(
+        msg_init.contains("etc/hosts") && msg_init.contains("app/hosts-alias"),
+        "hardlink->dropped init error unclear: {msg_init}"
+    );
+
+    let bad_fifo = Tar::new()
+        .raw("var/run/pipe", b'6', 0o644, b"")
+        .hard_link("app/pipe-alias", "var/run/pipe")
+        .finish();
+    let err_fifo = filtered_bytes(&bad_fifo).unwrap_err();
+    let msg_fifo = err_fifo.to_string();
+    assert!(
+        msg_fifo.contains("var/run/pipe") && msg_fifo.contains("app/pipe-alias"),
+        "hardlink->dropped fifo error unclear: {msg_fifo}"
+    );
+
+    let bad_dev = Tar::new()
+        .raw("tmp/null", b'3', 0o666, b"")
+        .hard_link("app/null-alias", "tmp/null")
+        .finish();
+    let err_dev = filtered_bytes(&bad_dev).unwrap_err();
+    let msg_dev = err_dev.to_string();
+    assert!(
+        msg_dev.contains("tmp/null") && msg_dev.contains("app/null-alias"),
+        "hardlink->dropped device error unclear: {msg_dev}"
+    );
+
+    // 4. Hardlink to a kept file succeeds and preserves shared inode.
+    let good_hl = Tar::new()
+        .directory("usr/", 0o755)
+        .file("usr/orig", 0o644, b"shared-bytes\n")
+        .hard_link("usr/alias", "usr/orig")
+        .finish();
+    let filtered_hl = filtered_bytes(&good_hl).unwrap();
+    let hl_path = scratch.base.join("hl.tar");
+    fs::write(&hl_path, &filtered_hl).unwrap();
+    let (root3, _) = rootfs::ensure_flat(
+        &hl_path,
+        &Image::parse(&format!("sha256:{}", "e".repeat(64))).unwrap(),
+        &scratch.cache,
+    )
+    .unwrap();
+    assert_eq!(
+        fs::symlink_metadata(root3.directory().join("usr/orig"))
+            .unwrap()
+            .ino(),
+        fs::symlink_metadata(root3.directory().join("usr/alias"))
+            .unwrap()
+            .ino()
+    );
+}
+
+#[test]
+fn real_docker_and_small_tar_preserve_mtime_mode_sha_and_record_config() {
+    let scratch = Scratch::new("lp176-rec-meta");
+    let home = scratch.base.join("home");
+    fs::create_dir_all(&home).unwrap();
+    let cache_dir = cache::cache(&home);
+    fs::create_dir_all(&cache_dir).unwrap();
+
+    // Verify small tar mtime, mode, sha, symlink, hardlink vs declared drops (FIFO, dev, init, dir mtime=0).
+    let mut pax_link = pax_record("mtime", "1700000777.25");
+    pax_link.extend_from_slice(&pax_record("linkpath", "/etc/app.conf"));
+    let input = Tar::new()
+        .at(1_700_000_111)
+        .file(".dockerenv", 0o755, b"")
+        .directory("dev/", 0o755)
+        .file("dev/console", 0o600, b"")
+        .directory("etc/", 0o750)
+        .file("etc/hosts", 0o644, b"127.0.0.1\n")
+        .file("etc/app.conf", 0o640, b"secret-config\n")
+        .raw("PaxHeaders/etc/link", b'x', 0o644, &pax_link)
+        .symlink("etc/link", "")
+        .at(1_700_000_333)
+        .file("etc/exec.sh", 0o755, b"#!/bin/sh\n")
+        .hard_link("etc/exec_hl.sh", "etc/exec.sh")
+        .raw("var/fifo", b'6', 0o644, b"")
+        .raw("var/chr", b'3', 0o660, b"")
+        .finish();
+    let (filtered, report) = filtered_with_report(&input).unwrap();
+    assert_eq!(report.fifo_count(), 1);
+    assert_eq!(report.fifos, vec!["var/fifo"]);
+    assert_eq!(report.device_count(), 1);
+    assert_eq!(report.devices, vec!["var/chr"]);
+    assert_eq!(report.init_count(), 3);
+    assert_eq!(report.init, vec![".dockerenv", "dev/console", "etc/hosts"]);
+    let tar_path = scratch.base.join("meta.tar");
+    fs::write(&tar_path, &filtered).unwrap();
+    let hex = "f".repeat(64);
+    let id = format!("sha256:{hex}");
+    let (root, _) =
+        rootfs::ensure_flat(&tar_path, &Image::parse(&id).unwrap(), &cache_dir).unwrap();
+    let r = root.directory();
+
+    // Declared losses: init, dev/*, FIFO, device are dropped; directory mtime is normalized to 0.
+    assert!(!r.join(".dockerenv").exists());
+    assert!(!r.join("dev/console").exists());
+    assert!(!r.join("etc/hosts").exists());
+    assert!(!r.join("var/fifo").exists());
+    assert!(!r.join("var/chr").exists());
+    assert!(r.join("dev").is_dir());
+    assert_eq!(
+        fs::symlink_metadata(r.join("etc"))
+            .unwrap()
+            .modified()
+            .unwrap()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+        0
+    );
+
+    // Non-lost attributes must be preserved.
+    assert_eq!(
+        sha256_hex(&fs::read(r.join("etc/app.conf")).unwrap()),
+        sha256_hex(b"secret-config\n")
+    );
+    assert_eq!(
+        fs::symlink_metadata(r.join("etc"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o750
+    );
+    assert_eq!(
+        fs::symlink_metadata(r.join("etc/app.conf"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o640
+    );
+    assert_eq!(
+        fs::symlink_metadata(r.join("etc/exec.sh"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o755
+    );
+    assert_eq!(
+        fs::symlink_metadata(r.join("etc/app.conf"))
+            .unwrap()
+            .modified()
+            .unwrap()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+        1_700_000_111
+    );
+    assert_eq!(
+        fs::symlink_metadata(r.join("etc/exec.sh"))
+            .unwrap()
+            .modified()
+            .unwrap()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+        1_700_000_333
+    );
+    assert_eq!(
+        fs::symlink_metadata(r.join("etc/link"))
+            .unwrap()
+            .modified()
+            .unwrap()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+        1_700_000_777
+    );
+    assert_eq!(
+        fs::symlink_metadata(r.join("etc/exec.sh")).unwrap().ino(),
+        fs::symlink_metadata(r.join("etc/exec_hl.sh"))
+            .unwrap()
+            .ino()
+    );
+
+    // Publish with variant + config (Env, WorkingDir, User) and verify publish/probe/touch/machine.images
+    // preserve them without applying them.
+    let sha = sha256_hex(&filtered);
+    cache::write(&cache_dir, &hex, 0, &filtered).unwrap();
+    let cfg = SdkValue::map([
+        (
+            "Env",
+            SdkValue::List(vec![SdkValue::text("LP176_TEST_VAR=recorded_only")]),
+        ),
+        ("WorkingDir", SdkValue::text("/srv/work")),
+        ("User", SdkValue::text("nobody")),
+    ]);
+    let pub_out = step(
+        &home,
+        SdkValue::map([
+            ("step", SdkValue::text("publish")),
+            ("id", SdkValue::text(&id)),
+            ("size", SdkValue::Int(filtered.len() as i64)),
+            ("sha256", SdkValue::text(&sha)),
+            ("refs", SdkValue::List(vec![SdkValue::text("meta/app:1")])),
+            ("architecture", SdkValue::text(architecture())),
+            ("variant", SdkValue::text("v8")),
+            ("config", cfg.clone()),
+        ]),
+    )
+    .unwrap();
+    assert_eq!(pub_out.get_text("variant"), Some("v8"));
+    assert_eq!(pub_out.get("config"), Some(&cfg));
+    assert!(std::env::var_os("LP176_TEST_VAR").is_none());
+    let probed = step(
+        &home,
+        SdkValue::map([
+            ("step", SdkValue::text("probe")),
+            ("id", SdkValue::text(&id)),
+        ]),
+    )
+    .unwrap();
+    assert_eq!(probed.get_text("variant"), Some("v8"));
+    assert_eq!(probed.get("config"), Some(&cfg));
+    cache::touch(&layerfs_sandbox::deploy::Side::Home(&home), None, &id).unwrap();
+    let rows = image_rows(&home);
+    let row = rows
+        .iter()
+        .find(|r| r.get_text("id") == Some(id.as_str()))
+        .unwrap();
+    assert_eq!(row.get_text("variant"), Some("v8"));
+    assert_eq!(
+        row.get("config"),
+        Some(&cfg),
+        "config must be visible in machine.images: {row:?}"
+    );
+
+    // Also test real Docker image with ENV/WORKDIR/USER/FIFO/mode/mtime.
+    if docker_available() {
+        let mut guard = DockerGuard::new("lp176-rec-docker-meta");
+        let pid = std::process::id();
+        let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+        let base_tag = format!("layerfs-lp176-rec-mbase-{pid}-{seq}:test");
+        let final_tag = format!("layerfs-lp176-rec-mfinal-{pid}-{seq}:test");
+        let dtar = Tar::new()
+            .at(1_700_000_500)
+            .directory("app/", 0o755)
+            .file("app/run.sh", 0o750, b"#!/bin/sh\necho ok\n")
+            .symlink("app/run.link", "/app/run.sh")
+            .raw("app/p.fifo", b'6', 0o644, b"")
+            .file("app/blob", 0o644, &vec![0x33; CHUNK + 1024])
+            .finish();
+        guard.import_tar(&base_tag, &dtar);
+        let did = guard.build_dockerfile(
+            &final_tag,
+            &format!("FROM {base_tag}\nENV LP176_DOCKER_ENV=yes\nWORKDIR /app\nUSER 1001:1001\n"),
+        );
+        let dhex = did.strip_prefix("sha256:").unwrap().to_owned();
+        let (dhome, _) = guard.make_home("dhome");
+        let docker = real_docker();
+        run_load(&docker, &dhome, "native", &final_tag).unwrap();
+        let droot = cache::cache(&dhome).join(format!("{dhex}.2"));
+        assert!(!droot.join("app/p.fifo").exists());
+        assert_eq!(
+            fs::symlink_metadata(droot.join("app/run.sh"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o750
+        );
+        assert_eq!(
+            sha256_hex(&fs::read(droot.join("app/run.sh")).unwrap()),
+            sha256_hex(b"#!/bin/sh\necho ok\n")
+        );
+        let drows = image_rows(&dhome);
+        let drow = drows
+            .iter()
+            .find(|r| r.get_text("id") == Some(did.as_str()))
+            .unwrap();
+        let dcfg = drow
+            .get("config")
+            .expect("real Docker config visible in machine.images");
+        assert_eq!(dcfg.get_text("WorkingDir"), Some("/app"));
+        assert_eq!(dcfg.get_text("User"), Some("1001:1001"));
+    }
+}
+
+#[test]
+fn helper_pause_load() {
+    let Ok(home) = std::env::var("LP176_REC_PAUSE_HOME") else {
+        return;
+    };
+    let home = PathBuf::from(home);
+    let machine = std::env::var("LP176_REC_PAUSE_MACHINE").unwrap();
+    let image = std::env::var("LP176_REC_PAUSE_IMAGE").unwrap();
+    let docker = real_docker();
+    let mut paused = false;
+    let mut sink = |event: SdkValue| {
+        if !paused {
+            if let Some(p) = event.get("progress") {
+                if p.get_text("phase") == Some("send")
+                    && p.get_int("done").unwrap_or(0) >= CHUNK as i64
+                {
+                    paused = true;
+                    fs::write(home.join("paused"), b"").unwrap();
+                    while !home.join("proceed").exists() {
+                        std::thread::sleep(Duration::from_millis(20));
+                    }
+                }
+            }
+        }
+    };
+    let mut events = Events::new(&mut sink);
+    let _ = load(
+        &docker,
+        &mut events,
+        &mut Target::local(&home, &machine),
+        None,
+        &image,
+    );
+}
+
+#[test]
+fn helper_hold_image_lock() {
+    let Ok(home) = std::env::var("LP176_REC_LOCK_HOME") else {
+        return;
+    };
+    let home = PathBuf::from(home);
+    let machine = std::env::var("LP176_REC_LOCK_MACHINE").unwrap();
+    let image = std::env::var("LP176_REC_LOCK_IMAGE").unwrap();
+    let mut sink = |_: SdkValue| {};
+    let _held = ImageLock::take(&home, &machine, &image, &mut Events::new(&mut sink)).unwrap();
+    fs::write(home.join("lock-held"), b"").unwrap();
+    for _ in 0..120 {
+        std::thread::sleep(Duration::from_secs(1));
+    }
+}

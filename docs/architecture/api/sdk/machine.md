@@ -163,24 +163,31 @@ CLI     layerfs machine images <name>
 
 ```text
 { machine, mode: "images" | "host", architecture, default, free,
-  images: [{ id, refs, size, architecture, source, sandboxes, last_used }],
+  images: [{ id, refs, size, architecture, source, variant, config, sandboxes, last_used, staged, stranded?, age?, resumable? }],
   docker: null | { available: true }
         | { available: false, reason: "not-installed" | "not-running" | "error", message },
   available: [{ id, refs, size, os, architecture, usable, reason?, need, fits }] }
 ```
 
-`images` are the unpacked images with their sidecars
+`images` lists published unpacked images with their sidecars
 (`machines/native/run/images/<hex>.2.json`: `source: "imported"` for one
-copied from Docker) and what the archives its Sandboxes read still hold
-(`bundle`, `machine`), unpacked or not. `id` is the Docker image Id for an
+copied from Docker, `staged: false`), what the archives its Sandboxes read
+still hold (`bundle`, `machine`, `staged: false`), staged partial downloads
+(`.recv-<hex>.part`: `source: "staged"`, `staged: true`, received `size`, `age`
+in seconds, and `resumable` true only when a non-empty regular file is not yet
+published and not held by a live `ImageLock` or `.2.lock`), and any stranded
+unpacked directories left without a sidecar (`source: "stranded"`,
+`staged: false`, `stranded: true`). `variant` and `config` (such as `Env`,
+`WorkingDir`, `User`) are recorded on import/publish and surfaced without
+being applied. `id` is the Docker image Id for an
 imported image and the config digest for an archive's. `sandboxes` counts
 the Sandbox records on this machine naming that `id`; `last_used` is the
 last create's time (RFC 3339) or null. `default` is the record's image, else
 the archive's only one. `free` is the image cache's free bytes. `available`
 lists the host's tagged Docker images (one `docker image ls`, one batched
 `docker image inspect`, 10 s each) through the `docker` machine's socket,
-else Docker's default context, minus any whose id or refs `images` already
-has (the bundle's image in Docker, `layerfs-cache/sandbox:<hex>`, included).
+else Docker's default context, minus any published id or refs (`images` entries
+with `!staged && !stranded`, the bundle's image in Docker, `layerfs-cache/sandbox:<hex>`, included).
 A row for another OS or architecture is `usable: false` with `reason {kind:
 "os" | "arch", value}`. `size` is what the image's layers unpack to: the
 sum of `docker history`'s layer sizes (one call per image, eight at a time,
@@ -227,12 +234,23 @@ legacy `layerfs-export-<machine>-<hex>` containers labeled
 `layerfs.export.started` are no longer swept automatically and require manual
 `docker rm`) and stream `docker export` without the init layer's
 files (`.dockerenv`, `etc/hosts`, `etc/hostname`, `etc/resolv.conf`, `etc/mtab`,
-`dev/*`), device or FIFO entries, and with directory modification times
-normalized to epoch 0 (`1970-01-01T00:00:00Z`, PAX time records stripped and
+`dev/*`), device or FIFO entries, refuses hardlinks whose targets were dropped,
+expands GNU oldgnu (`S`) and PAX (`0.0`, `0.1`, `1.0`) sparse entries while
+streaming (`image_tar::TarReport` records dropped counts/paths and expanded
+sparse bytes), and normalizes directory modification times
+to epoch 0 (`1970-01-01T00:00:00Z`, PAX time records stripped and
 header checksum recomputed, so exports separated in time are byte-identical for
 resume) in 1 MiB `image.artifact` frames to `.recv-<hex>.part`;
 the machine checks its size and sha256, unpacks it
-once into `<hex>.2/`, writes the sidecar and deletes the staged tar. A staged
+once into `<hex>.2/`, strips the newly claimed `refs` from other cached
+sidecars so moved tags cannot select stale images, writes the sidecar (keeping
+`variant` and `config` recorded-only), and deletes the staged tar.
+`<hex>.2.json` is the publication commit point (Option B interrupted-publish
+recovery): a read-only `probe` treats an un-sidecared `<hex>.2/` outside a
+sealed archive as `present: false, stranded: true` instead of backfilling
+incomplete `refs`/`config`/`variant` without a lock, while `publish` removes
+any non-in-use stranded `<hex>.2/` under `ImageLock` before re-unpacking, and
+`probe` refuses ambiguous `ref` lookups matching multiple cached images. A staged
 tar left by a copy that is not running is resumed when its bytes hash as this
 export's prefix, else restarted; `size` is the bytes sent, else the sidecar's,
 else the layers' unpacked size, and the export container's `SizeRootFs` only
@@ -257,12 +275,17 @@ CLI     layerfs machine prune <name> [<image>] [--unused]
 ```
 
 An image is in use while a Sandbox directory's `config/helper.spec`
-`lower=` names it, or while a create holds its lock between its unpack and
-its spec: a named one is refused `InUse` (`detail.count`), `unused` skips
-it. Naming the default removes it; the next create unpacks it again from
+`lower=` names it, while a create holds `.2.lock`, or while a live process
+holds `ImageLock` (`<home>/run/image-lock/<machine>/<hex>.lock`): a named one
+is refused `InUse` (`detail.count`), and `unused` leaves its artifacts
+untouched. Otherwise `prune` removes unpacked directories (including stranded
+`<hex>.2` without `<hex>.2.json`), dangling `<hex>.2.json` sidecars, unheld
+`.recv-<hex>.part` staged files, and temporary `.tmp-<hex>.2-*` unpack
+directories (`unused` keeps valid unpacked copies of the machine's default).
+Naming the default removes it; the next create unpacks it again from
 its archive. `freed` is the free bytes after minus before. Errors:
 `InvalidInput` (neither an image nor `unused`, or not an id), `NotFound`
-(not unpacked here), `InUse`, `Unsupported` `{reason: "host"}`.
+(no matching artifact here), `InUse`, `Unsupported` `{reason: "host"}`.
 
 ### machine.status
 
