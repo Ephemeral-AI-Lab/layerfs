@@ -617,6 +617,7 @@ fn real_docker_killed_load_enumerates_and_recovers_under_lock() {
         Cleanup {
             removed: Vec::new(),
             active: vec![c1.name.clone()],
+            failed: Vec::new(),
         }
     );
     assert!(container_exists(&c1.name));
@@ -634,6 +635,7 @@ fn real_docker_killed_load_enumerates_and_recovers_under_lock() {
         Cleanup {
             removed: vec![c1.name.clone()],
             active: Vec::new(),
+            failed: Vec::new(),
         }
     );
     assert!(!container_exists(&c1.name));
@@ -760,9 +762,180 @@ fn real_docker_different_homes_do_not_collide_or_delete_each_other() {
     // and their anonymous volumes.
     let cleaned = cleanup_owned(&docker, &home1, None, None).unwrap();
     assert_eq!(cleaned.removed.len(), 2);
+    assert!(cleaned.failed.is_empty());
     assert!(!container_exists(&c1));
     assert!(!volume_exists(&v1));
     assert!(!container_exists(&aged_c1));
+}
+
+#[test]
+fn real_docker_load_reclaims_killed_other_image_and_machine_without_touching_active() {
+    if !docker_available() {
+        eprintln!("NOT_RUN: docker unavailable");
+        return;
+    }
+    let mut img_killed = TestImage::build("m1-killed", true);
+    let mut img_active = TestImage::build("m1-active", true);
+    let mut img_next = TestImage::build("m1-next", false);
+    let (home, _) = img_killed.make_home("home-m1");
+    let home_id = home::ensure(&home).unwrap().id;
+    img_active.homes.push(home_id.clone());
+    img_next.homes.push(home_id);
+    let docker = real_docker();
+
+    // 1. SIGKILL a load on (machine="docker", img_killed), leaving container + anonymous volume.
+    let mut killed_child = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "helper_load_with_pause", "--nocapture"])
+        .env("LP176_PAUSE_HOME", &home)
+        .env("LP176_PAUSE_MACHINE", "docker")
+        .env("LP176_PAUSE_IMAGE", &img_killed.tag)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    wait_for("killed-to-be load pauses in send", || {
+        home.join("paused").exists()
+    });
+    let killed_owned = owned_containers(&docker, &home).unwrap();
+    assert_eq!(killed_owned.len(), 1);
+    let c_killed = killed_owned[0].clone();
+    let v_killed = container_volumes(&c_killed.name)[0].clone();
+    assert!(volume_exists(&v_killed));
+    killed_child.kill().unwrap();
+    killed_child.wait().unwrap();
+    fs::remove_file(home.join("paused")).unwrap();
+
+    // 2. Keep a second load actively paused on (machine="lima", img_active).
+    let active_child = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "helper_load_with_pause", "--nocapture"])
+        .env("LP176_PAUSE_HOME", &home)
+        .env("LP176_PAUSE_MACHINE", "lima")
+        .env("LP176_PAUSE_IMAGE", &img_active.tag)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    wait_for("active load pauses in send", || {
+        home.join("paused").exists()
+    });
+    let c_active = owned_containers(&docker, &home)
+        .unwrap()
+        .into_iter()
+        .find(|c| c.image == img_active.id)
+        .expect("active container present");
+    let v_active = container_volumes(&c_active.name)[0].clone();
+
+    // 3. Run a normal load on a DIFFERENT image and machine ("native", img_next):
+    //    it must automatically reclaim c_killed + v_killed while leaving c_active + v_active intact.
+    let (loaded, _) = run_load(&docker, &home, "native", &img_next.tag);
+    assert!(!loaded.unwrap().reused);
+    assert!(
+        !container_exists(&c_killed.name),
+        "load() must reclaim killed container {} from other image/machine",
+        c_killed.name
+    );
+    assert!(
+        !volume_exists(&v_killed),
+        "load() must reclaim anonymous volume {v_killed} of killed container"
+    );
+    assert!(
+        container_exists(&c_active.name),
+        "load() must not delete active container {}",
+        c_active.name
+    );
+    assert!(
+        volume_exists(&v_active),
+        "load() must not delete active volume {v_active}"
+    );
+    assert_eq!(
+        owned_containers(&docker, &home).unwrap(),
+        vec![c_active.clone()]
+    );
+
+    // 4. Let active_child finish and verify full cleanup.
+    fs::write(home.join("proceed"), b"").unwrap();
+    let out = active_child.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "active load child failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!container_exists(&c_active.name));
+    assert!(!volume_exists(&v_active));
+    assert!(owned_containers(&docker, &home).unwrap().is_empty());
+}
+
+#[test]
+fn cleanup_owned_reports_failed_when_removal_fails() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let scratch = Scratch::new("lp176-cleanup-fail");
+    let home = scratch.base.join("home");
+    fs::create_dir_all(&home).unwrap();
+    let home_id = home::ensure(&home).unwrap().id;
+    let cname = format!("layerfs-export-{}-docker-deadbeef00000001", &home_id[..8]);
+    let img_id = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
+    let vol_id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    // Case 1: `rm -v` and `rm -f` both fail while `container inspect` confirms container remains.
+    let bin_rm_fail = scratch.base.join("docker-rm-fail");
+    let script_rm_fail = format!(
+        "#!/bin/sh\n\
+         case \"$1 $2\" in\n\
+           \"ps -a\") printf '%s\\t%s\\tdocker\\t%s\\tdeadbeef00000001\\n' '{cname}' '{home_id}' '{img_id}'; exit 0 ;;\n\
+           \"container inspect\")\n\
+             case \"$*\" in\n\
+               *Mounts*) exit 0 ;;\n\
+               *) echo id; exit 0 ;;\n\
+             esac ;;\n\
+         esac\n\
+         case \"$1\" in\n\
+           rm) echo 'permission denied' >&2; exit 1 ;;\n\
+           *) exit 2 ;;\n\
+         esac\n"
+    );
+    fs::write(&bin_rm_fail, script_rm_fail).unwrap();
+    fs::set_permissions(&bin_rm_fail, fs::Permissions::from_mode(0o755)).unwrap();
+    let res1 = cleanup_owned(&Docker::at(Some(bin_rm_fail), None), &home, None, None).unwrap();
+    assert_eq!(
+        res1,
+        Cleanup {
+            removed: Vec::new(),
+            active: Vec::new(),
+            failed: vec![cname.clone()],
+        }
+    );
+
+    // Case 2: `rm -v` fails, `rm -f` succeeds, but `volume rm` fails on an anonymous volume.
+    let bin_vol_fail = scratch.base.join("docker-vol-fail");
+    let script_vol_fail = format!(
+        "#!/bin/sh\n\
+         case \"$1 $2\" in\n\
+           \"ps -a\") printf '%s\\t%s\\tdocker\\t%s\\tdeadbeef00000001\\n' '{cname}' '{home_id}' '{img_id}'; exit 0 ;;\n\
+           \"container inspect\")\n\
+             case \"$*\" in\n\
+               *Mounts*) echo '{vol_id}'; exit 0 ;;\n\
+               *) echo id; exit 0 ;;\n\
+             esac ;;\n\
+           \"volume rm\") echo 'volume in use' >&2; exit 1 ;;\n\
+         esac\n\
+         case \"$1 $2\" in\n\
+           \"rm -v\") echo 'cannot remove volume' >&2; exit 1 ;;\n\
+           \"rm -f\") exit 0 ;;\n\
+         esac\n\
+         exit 2\n"
+    );
+    fs::write(&bin_vol_fail, script_vol_fail).unwrap();
+    fs::set_permissions(&bin_vol_fail, fs::Permissions::from_mode(0o755)).unwrap();
+    let res2 = cleanup_owned(&Docker::at(Some(bin_vol_fail), None), &home, None, None).unwrap();
+    assert_eq!(
+        res2,
+        Cleanup {
+            removed: Vec::new(),
+            active: Vec::new(),
+            failed: vec![cname],
+        }
+    );
 }
 
 /// Helper process used by the kill/volume tests: runs real `load()`, signals

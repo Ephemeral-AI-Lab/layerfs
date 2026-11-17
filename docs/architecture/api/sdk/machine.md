@@ -220,12 +220,17 @@ filesystem `probe` measured. Only then does the host create an exclusive export
 container `layerfs-export-<home8>-<machine>-<nonce>` (labeled with
 `layerfs.role=image-export`, `layerfs.home`, `layerfs.machine`, `layerfs.image`
 and `layerfs.export.nonce`, removed with its anonymous volumes on exit or
-error, and recoverable under `ImageLock` via `owned_containers` /
-`cleanup_owned` if killed) and stream `docker export` without the init layer's
+error; any residual containers left by a `SIGKILL`ed copy are reclaimed under
+`ImageLock` on the next `load` in the same home via `cleanup_owned` without
+waiting on active locks, and can also be enumerated via `owned_containers`;
+legacy `layerfs-export-<machine>-<hex>` containers labeled
+`layerfs.export.started` are no longer swept automatically and require manual
+`docker rm`) and stream `docker export` without the init layer's
 files (`.dockerenv`, `etc/hosts`, `etc/hostname`, `etc/resolv.conf`, `etc/mtab`,
 `dev/*`), device or FIFO entries, and with directory modification times
-normalized (header checksum recomputed, so exports separated in time are
-byte-identical for resume) in 1 MiB `image.artifact` frames to `.recv-<hex>.part`;
+normalized to epoch 0 (`1970-01-01T00:00:00Z`, PAX time records stripped and
+header checksum recomputed, so exports separated in time are byte-identical for
+resume) in 1 MiB `image.artifact` frames to `.recv-<hex>.part`;
 the machine checks its size and sha256, unpacks it
 once into `<hex>.2/`, writes the sidecar and deletes the staged tar. A staged
 tar left by a copy that is not running is resumed when its bytes hash as this

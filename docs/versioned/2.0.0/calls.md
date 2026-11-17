@@ -261,9 +261,13 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   image's layers unpack to, the sum of `docker history`'s layer sizes),
   and otherwise exported once into an exclusive per-export container (`docker
   create` + `docker export`, without the init layer's files and with directory
-  mtimes normalized so resume across separate exports sees identical bytes; the
-  container and its anonymous volumes are removed on completion or error), sent
-  in 1 MiB frames and unpacked on the
+  mtimes normalized to epoch 0 (`1970-01-01`) so resume across separate exports
+  sees identical bytes; the container and its anonymous volumes are removed on
+  completion or error, and any residual containers left after `SIGKILL` are
+  reclaimed under `ImageLock` on the next `load` in the same home without
+  waiting on active locks; legacy `layerfs-export-<machine>-<hex>` containers
+  labeled `layerfs.export.started` are no longer swept and require manual
+  `docker rm`), sent in 1 MiB frames and unpacked on the
   machine under `machines/native/run/images/<hex>.2/` with a sidecar
   `<hex>.2.json`; the staged tar is deleted. Docker unreachable is
   `Unavailable` `{what: "docker"}`, the machine stopped `Unavailable`

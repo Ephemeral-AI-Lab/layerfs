@@ -95,3 +95,97 @@ fn two_exports_differing_only_in_the_init_layer_filter_to_the_same_bytes() {
     };
     assert_eq!(filtered(&base(b"abc\n")), filtered(&base(b"defg\n")));
 }
+
+#[test]
+fn pax_time_stripping_handles_empty_malformed_xattr_and_all_time_blocks_byte_for_byte() {
+    // 1. Empty PAX `x` block: kept intact (header mtime zeroed on directories, untouched on files).
+    let empty_pax_dir = Tar::new()
+        .at(1_700_000_123)
+        .raw("PaxHeaders/empty", b'x', 0o644, b"")
+        .directory("dir/", 0o755)
+        .raw("PaxHeaders/emptyf", b'x', 0o644, b"")
+        .file("file.txt", 0o644, b"ok")
+        .finish();
+    let expected_empty_pax = Tar::new()
+        .at(0)
+        .raw("PaxHeaders/empty", b'x', 0o644, b"")
+        .directory("dir/", 0o755)
+        .at(1_700_000_123)
+        .raw("PaxHeaders/emptyf", b'x', 0o644, b"")
+        .file("file.txt", 0o644, b"ok")
+        .finish();
+    assert_eq!(filtered(&empty_pax_dir), expected_empty_pax);
+
+    // 2. Malformed PAX length fields: missing space, non-numeric, length <= space + 1, length > rest.len().
+    for malformed in [
+        b"mtime=1700000000\n".as_slice(),
+        b"abc mtime=1700000000\n".as_slice(),
+        b"2 mtime=1\n".as_slice(),
+        b"0 a=b\n".as_slice(),
+        b"999 mtime=1700000000\n".as_slice(),
+    ] {
+        let input = Tar::new()
+            .at(1_700_000_456)
+            .raw("PaxHeaders/bad", b'x', 0o644, malformed)
+            .directory("dir/", 0o755)
+            .finish();
+        let expected = Tar::new()
+            .at(0)
+            .raw("PaxHeaders/bad", b'x', 0o644, malformed)
+            .directory("dir/", 0o755)
+            .finish();
+        assert_eq!(filtered(&input), expected);
+    }
+
+    // 3. PAX `x` block with only time records (mtime, atime, ctime) becomes empty -> entire `x` block dropped.
+    let mut only_times = pax_record("mtime", "1700000001.1");
+    only_times.extend_from_slice(&pax_record("atime", "1700000002.2"));
+    only_times.extend_from_slice(&pax_record("ctime", "1700000003.3"));
+    let input_only_times = Tar::new()
+        .at(1_700_000_789)
+        .raw("PaxHeaders/times", b'x', 0o644, &only_times)
+        .directory("dir/", 0o755)
+        .finish();
+    let expected_only_times = Tar::new().at(0).directory("dir/", 0o755).finish();
+    assert_eq!(filtered(&input_only_times), expected_only_times);
+
+    // 4. PAX `x` block mixing times with SCHILY.xattr.* (and path): only time records are stripped on
+    //    directories while SCHILY.xattr.* stays intact; regular files keep all PAX records untouched.
+    let xattr_cap = pax_record("SCHILY.xattr.security.capability", "cap_net_bind");
+    let xattr_user = pax_record("SCHILY.xattr.user.note", "kept-value");
+    let dir_path = pax_record("path", "var/with-xattr/");
+
+    let mut mixed_dir_pax = Vec::new();
+    mixed_dir_pax.extend_from_slice(&dir_path);
+    mixed_dir_pax.extend_from_slice(&pax_record("mtime", "1700000100.5"));
+    mixed_dir_pax.extend_from_slice(&xattr_cap);
+    mixed_dir_pax.extend_from_slice(&pax_record("atime", "1700000200.5"));
+    mixed_dir_pax.extend_from_slice(&pax_record("ctime", "1700000300.5"));
+    mixed_dir_pax.extend_from_slice(&xattr_user);
+
+    let mut expected_dir_pax = Vec::new();
+    expected_dir_pax.extend_from_slice(&dir_path);
+    expected_dir_pax.extend_from_slice(&xattr_cap);
+    expected_dir_pax.extend_from_slice(&xattr_user);
+
+    let mut mixed_file_pax = pax_record("mtime", "1700000555.25");
+    mixed_file_pax.extend_from_slice(&xattr_user);
+
+    let input_mixed = Tar::new()
+        .at(1_700_000_111)
+        .raw("PaxHeaders/mixed_dir", b'x', 0o644, &mixed_dir_pax)
+        .directory("placeholder-dir", 0o755)
+        .at(1_700_000_222)
+        .raw("PaxHeaders/mixed_file", b'x', 0o644, &mixed_file_pax)
+        .file("usr/bin/app", 0o755, b"elf")
+        .finish();
+    let expected_mixed = Tar::new()
+        .at(0)
+        .raw("PaxHeaders/mixed_dir", b'x', 0o644, &expected_dir_pax)
+        .directory("placeholder-dir", 0o755)
+        .at(1_700_000_222)
+        .raw("PaxHeaders/mixed_file", b'x', 0o644, &mixed_file_pax)
+        .file("usr/bin/app", 0o755, b"elf")
+        .finish();
+    assert_eq!(filtered(&input_mixed), expected_mixed);
+}

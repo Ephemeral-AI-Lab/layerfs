@@ -2,8 +2,8 @@
 //! `machine.load`; R1, R3): the image named by digest, Docker Id or Docker
 //! reference is resolved, and when the machine does not hold it yet, it is
 //! exported from the host's Docker as one flat root filesystem tar
-//! ([`crate::image_tar`], with directory mtimes normalized so exports >=2 s
-//! apart are byte-identical for resume), sent in 1 MiB frames and unpacked
+//! ([`crate::image_tar`], with directory mtimes normalized to epoch 0 so exports
+//! >=2 s apart are byte-identical for resume), sent in 1 MiB frames and unpacked
 //! once there ([`crate::image_artifact`]). The machine is asked first, so an
 //! image it holds needs neither Docker nor a byte sent. One copy per image and
 //! machine at a time: the second one waits in [`ImageLock`], and a copy whose
@@ -11,8 +11,8 @@
 //! container (`layerfs-export-<home8>-<machine>-<nonce>`) labeled with the
 //! home, machine, image and nonce, and removes only that container and its
 //! anonymous volumes on exit or error; residual containers of this home left
-//! by killed copies can be enumerated ([`owned_containers`]) and removed
-//! under [`ImageLock`] ([`cleanup_owned`]). Progress phases are `inspect`,
+//! by killed copies can be enumerated ([`owned_containers`]) and are reclaimed
+//! under [`ImageLock`] via [`cleanup_owned`] on subsequent loads in that home. Progress phases are `inspect`,
 //! `lock` (`waiting: "lock"` while another copy holds it), `export`, `send`
 //! (`done`/`total` bytes) and `unpack`.
 use crate::deploy::Side;
@@ -243,6 +243,10 @@ pub fn load(
                 remove_container(docker, &entry.name);
             }
         }
+        // Reclaim any other unheld residual export containers in this home
+        // (such as killed loads for other images or machines) without waiting
+        // on another copy's lock.
+        let _ = cleanup_owned(docker, target.home(), None, None);
     }
     probe = target.probe(Some(id), None, archive)?;
     if held(&probe) {
@@ -482,6 +486,8 @@ pub struct Cleanup {
     pub removed: Vec<String>,
     /// Container names left alone because a live copy holds their [`ImageLock`].
     pub active: Vec<String>,
+    /// Container names (or their anonymous volumes) that failed to be removed.
+    pub failed: Vec<String>,
 }
 
 /// Reads `home`'s 32-hex id without creating files when `home` is empty.
@@ -620,8 +626,11 @@ pub fn cleanup_owned(
         match ImageLock::try_take(home, &m, &img)? {
             Some(_lock) => {
                 for name in names {
-                    remove_container(docker, &name);
-                    out.removed.push(name);
+                    if remove_container(docker, &name) {
+                        out.removed.push(name);
+                    } else {
+                        out.failed.push(name);
+                    }
                 }
             }
             None => out.active.extend(names),
@@ -752,44 +761,67 @@ fn create_container(
     result.map(drop).map_err(|f| f.refusal(id))
 }
 
-fn remove_container(docker: &Docker, name: &str) {
+fn is_missing_error(err: &Failure) -> bool {
+    if matches!(err, Failure::Missing(_)) {
+        return true;
+    }
+    let lower = err.message().to_lowercase();
+    lower.contains("no such container") || lower.contains("no such volume")
+}
+
+fn remove_container(docker: &Docker, name: &str) -> bool {
     // Remove the created export container together with its anonymous volumes.
     let _ = docker.read(&["rm", "-v", name], docker::READ);
     // If still present (for instance with a stand-in `docker` that only handles
     // `rm -f <name>`, or a container requiring force), clean volumes then `-f`.
-    if docker
-        .read(
-            &["container", "inspect", "--format", "{{.Id}}", name],
-            docker::READ,
-        )
-        .is_ok()
-    {
-        let volumes = anonymous_volumes(docker, name);
+    match docker.read(
+        &["container", "inspect", "--format", "{{.Id}}", name],
+        docker::READ,
+    ) {
+        Err(err) if is_missing_error(&err) => return true,
+        Err(_) => return false,
+        Ok(_) => {}
+    }
+    let Some(volumes) = anonymous_volumes(docker, name) else {
         let _ = docker.read(&["rm", "-f", name], docker::READ);
-        for volume in volumes {
-            let _ = docker.read(&["volume", "rm", &volume], docker::READ);
+        return false;
+    };
+    if let Err(err) = docker.read(&["rm", "-f", name], docker::READ) {
+        if !is_missing_error(&err) {
+            return false;
         }
     }
+    let mut removed = true;
+    for volume in volumes {
+        if let Err(err) = docker.read(&["volume", "rm", &volume], docker::READ) {
+            if !is_missing_error(&err) {
+                removed = false;
+            }
+        }
+    }
+    removed
 }
 
-fn anonymous_volumes(docker: &Docker, name: &str) -> Vec<String> {
-    let Ok(out) = docker.read(
-        &[
-            "container",
-            "inspect",
-            "--format",
-            "{{range .Mounts}}{{if eq .Type \"volume\"}}{{.Name}}{{\"\\n\"}}{{end}}{{end}}",
-            name,
-        ],
-        docker::READ,
-    ) else {
-        return Vec::new();
-    };
-    out.lines()
-        .map(str::trim)
-        .filter(|v| v.len() == 64 && v.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
-        .map(str::to_owned)
-        .collect()
+fn anonymous_volumes(docker: &Docker, name: &str) -> Option<Vec<String>> {
+    let out = docker
+        .read(
+            &[
+                "container",
+                "inspect",
+                "--format",
+                "{{range .Mounts}}{{if eq .Type \"volume\"}}{{.Name}}{{\"\\n\"}}{{end}}{{end}}",
+                name,
+            ],
+            docker::READ,
+        )
+        .ok()?;
+    Some(
+        out.lines()
+            .map(str::trim)
+            .filter(|v| v.len() == 64 && v.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
+            .map(str::to_owned)
+            .collect(),
+    )
 }
 
 struct ExportChild(Option<Child>);
