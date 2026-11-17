@@ -94,6 +94,43 @@ type OffsetRead<'a> = dyn FnMut(usize, &mut [u8]) -> Result<(), PersistenceError
 /// arrives complete in that one statement.
 const HEAD_BYTES: i32 = policy::PACK_LIMIT as i32;
 
+/// A pack's descriptor and the head of its body, `$2` bytes long.
+const HEAD_COLUMNS: &str = "p.pack_id,p.domain,CASE WHEN octet_length(p.digest)=32 THEN p.digest END,p.length,CASE WHEN octet_length(p.body)=p.length THEN substring(p.body FROM 1 FOR $2) END";
+
+/// Packs one [`expect`] reads ahead, and the longest body it takes: the rows
+/// held between two calls stay within their product, 8 MiB.
+const AHEAD_PACKS: usize = 256;
+const AHEAD_BYTES: i64 = 32 * 1024;
+
+/// Reads ahead, in one statement, the rows that scoped reads of `ids` would
+/// each fetch on their own, for the packs short enough to arrive whole.
+///
+/// The rows replace any still held from the call before. A longer pack, or
+/// one this call was not told about, is read by its own statement as before,
+/// so the hint changes round trips and nothing else. Inside a transaction
+/// only: an autocommit statement carries a generation fence this one lacks.
+pub(crate) fn expect(tx: &Transaction<'_>, ids: &[i64]) -> Result<(), PersistenceError> {
+    tx.ahead.borrow_mut().clear();
+    if ids.is_empty() || !tx.unfenced() {
+        return Ok(());
+    }
+    let ids = &ids[..ids.len().min(AHEAD_PACKS)];
+    let rows = tx.typed(
+        &format!(
+            "SELECT {HEAD_COLUMNS} FROM {}.pack p WHERE p.pack_id = ANY($1::bigint[]) AND p.length <= $3::bigint",
+            tx.schema
+        ),
+        &[&ids, &HEAD_BYTES, &AHEAD_BYTES],
+        ids.len() as u64 * 8 + 12,
+    )?;
+    let mut ahead = tx.ahead.borrow_mut();
+    for row in rows {
+        let id: i64 = row.try_get(0).map_err(|e| rows::error(&e))?;
+        ahead.insert(id, row);
+    }
+    Ok(())
+}
+
 /// Exact ranges of one body: the body is stored uncompressed out of line
 /// (`STORAGE EXTERNAL`), so `substring` fetches only the chunks it covers.
 /// The descriptor and the body's head come in one statement; a read the
@@ -106,17 +143,27 @@ fn read_with<T>(
     if id <= 0 {
         return Err(PersistenceError::Malformed);
     }
-    let found = tx.typed(
-        &format!(
-            "SELECT pack_id,domain,CASE WHEN octet_length(digest)=32 THEN digest END,length,CASE WHEN octet_length(body)=length THEN substring(body FROM 1 FOR $2) END FROM {}.pack WHERE pack_id=$1",
-            tx.schema
-        ),
-        &[&id, &HEAD_BYTES],
-        12,
-    )?;
-    let row = found.first().ok_or(PersistenceError::Missing)?;
-    let descriptor = info(&rows::record_first(row, 4)?)?;
-    if found.len() != 1 || descriptor.pack_id != id {
+    // A row read ahead for this pack is the row the statement below returns.
+    let ahead = tx.ahead.borrow_mut().remove(&id);
+    let row = match ahead {
+        Some(row) => row,
+        None => {
+            let mut found = tx.typed(
+                &format!(
+                    "SELECT {HEAD_COLUMNS} FROM {}.pack p WHERE p.pack_id=$1",
+                    tx.schema
+                ),
+                &[&id, &HEAD_BYTES],
+                12,
+            )?;
+            if found.len() > 1 {
+                return Err(PersistenceError::Malformed);
+            }
+            found.pop().ok_or(PersistenceError::Missing)?
+        }
+    };
+    let descriptor = info(&rows::record_first(&row, 4)?)?;
+    if descriptor.pack_id != id {
         return Err(PersistenceError::Malformed);
     }
     let head: Vec<u8> = row.try_get(4).map_err(|e| rows::error(&e))?;

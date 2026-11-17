@@ -574,3 +574,43 @@ fn a_mark_reaches_every_record_of_payload_packs_larger_than_its_head() {
     distinct.dedup();
     assert_eq!(mark.objects().len(), distinct.len(), "and nothing else");
 }
+
+/// A mark's walk decodes one metadata pack and one inode leaf per Layer. It
+/// announces a wave's packs so the server sends them in one statement, and
+/// keeps the inode values a read brought along for the next leaves, so twice
+/// the Layers cost the same statements. Reading a pack or a leaf's values per
+/// round trip again adds statements with every Layer and fails here. Every
+/// object must still be reached: a pack row or a value kept for the wrong
+/// key fails the closure.
+#[test]
+fn a_mark_sends_the_same_statements_for_twice_the_layers() {
+    let Some(url) = url() else { return };
+    let mut statements = Vec::new();
+    for (tag, layers) in [("mark_ahead_8", 8u32), ("mark_ahead_16", 16)] {
+        let schema = Schema::new(url.clone(), tag);
+        let handles: PostgresHandles = schema.create(BINDING, CURSOR);
+        let (genesis_root, mut saved) = save_tree(&handles, 1, 20);
+        let (shop, work, _genesis) = project_with_genesis(&handles.history, 1, genesis_root);
+        for seed in 2..=layers {
+            let (root, ids) = save_tree(&handles, seed, 20);
+            commit_with(&handles.history, work, root);
+            publish(&handles.history, shop, work);
+            saved.extend(ids);
+        }
+        let before = handles.diagnostics().unwrap();
+        let mark = handles.history.mark().expect("the mark");
+        let sent = handles.diagnostics().unwrap().since(&before);
+        for id in &saved {
+            assert!(mark.objects().contains(*id), "a saved object is reached");
+        }
+        let mut distinct = saved.clone();
+        distinct.sort();
+        distinct.dedup();
+        assert_eq!(mark.objects().len(), distinct.len(), "and nothing else");
+        statements.push(sent.statements);
+    }
+    assert_eq!(
+        statements[0], statements[1],
+        "a mark's statements do not grow with its Layers: {statements:?}"
+    );
+}

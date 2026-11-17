@@ -120,6 +120,26 @@ pub(crate) trait Mechanics {
     ) -> Result<(), PersistenceError> {
         ranges_by_acquisition(self, requests, out)
     }
+    /// A hint that each pack of `ids` is about to be asked through
+    /// [`Self::read_scoped_pack`], in this order, inside this transaction.
+    /// An engine that pays a round trip per pack may read the small ones
+    /// ahead in one; every answer is the same with or without the hint.
+    fn expect_scoped_packs(&self, _ids: &[i64]) -> Result<(), PersistenceError> {
+        Ok(())
+    }
+    /// [`Self::inode_values`], and at the engine's choice also the values of
+    /// the blocks holding up to `ahead` ordinals past the last one asked, so
+    /// a caller that reads leaves in ordinal order can keep them for its next
+    /// calls. Rows come in ascending ordinal order; the extra ones are any
+    /// rows of `out` the caller did not ask for.
+    fn inode_values_ahead(
+        &self,
+        ordinals: &[u32],
+        _ahead: u32,
+        out: &mut Vec<InodeValueRow>,
+    ) -> Result<(), PersistenceError> {
+        self.inode_values(ordinals, out)
+    }
     /// One pack through the caller's bounded range plan: only the control
     /// prefix and the selected complete groups are read, never the body behind
     /// them. The storage port owns the plan and the returned units.

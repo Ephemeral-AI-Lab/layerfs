@@ -263,6 +263,8 @@ fn mark_recorded(
         locations: &located.locations,
         read_bytes: std::cell::RefCell::new(HashMap::new()),
         layouts: std::cell::RefCell::new(HashMap::new()),
+        upcoming: std::cell::RefCell::default(),
+        values: std::cell::RefCell::default(),
     };
     let roots = roots(tx)?;
     let closure = walk(&source, &capacities, policy.construction(), roots, visit)?;
@@ -393,9 +395,52 @@ struct ClosureSource<'a> {
     /// pack -> its group extents, kept from the walk's own read of the pack's
     /// directory so the kept-waste pass does not read it a second time.
     layouts: std::cell::RefCell<HashMap<i64, Vec<layout::GroupView>>>,
+    /// The packs the wave being walked decodes metadata from, ascending, and
+    /// how many of them the engine has been told to expect.
+    upcoming: std::cell::RefCell<(Vec<i64>, usize)>,
+    /// Inode values the engine returned ahead of need, by ordinal.
+    values: std::cell::RefCell<HashMap<u32, [u8; INODE_VALUE_BYTES]>>,
 }
 
+/// Packs announced to the engine at a time ([`ClosureSource::announce`]).
+const AHEAD_PACKS: usize = 128;
+/// Ordinals past a leaf's own that one inode value read may bring along.
+const AHEAD_VALUES: u32 = 4096;
+/// Inode values kept between reads; the map is emptied when it would pass this.
+const HELD_VALUES: usize = 65_536;
+
 impl ClosureSource<'_> {
+    /// Notes the packs `wave`, which is in locator order, decodes metadata
+    /// from: the packs the walk reads one scoped acquisition at a time.
+    fn expect_wave(&self, wave: &[ObjectId]) {
+        let mut packs: Vec<i64> = wave
+            .iter()
+            .filter_map(|id| self.locations.get(id))
+            .filter(|location| location.role.has_references())
+            .map(|location| location.pack_id)
+            .collect();
+        packs.dedup();
+        *self.upcoming.borrow_mut() = (packs, 0);
+    }
+
+    /// Before `pack_id` is acquired: tells the engine which of the wave's
+    /// packs follow it, a window at a time, so an engine that pays a round
+    /// trip per pack can read the window in one.
+    fn announce(&self, pack_id: i64) -> Result<(), StorageError> {
+        let mut upcoming = self.upcoming.borrow_mut();
+        let (packs, told) = &mut *upcoming;
+        let Ok(at) = packs.binary_search(&pack_id) else {
+            return Ok(());
+        };
+        if at < *told {
+            return Ok(());
+        }
+        *told = (at + AHEAD_PACKS).min(packs.len());
+        self.mechanics
+            .expect_scoped_packs(&packs[at..*told])
+            .map_err(StorageError::from)
+    }
+
     /// Keeps the group extents the walk read for `pack_id`.
     fn keep_layout(&self, pack_id: i64, views: Vec<layout::GroupView>) {
         self.layouts.borrow_mut().entry(pack_id).or_insert(views);
@@ -467,6 +512,7 @@ impl Source for ClosureSource<'_> {
         groups: &[usize],
         whole_for_reuse: bool,
     ) -> Result<PackAcquisition, StorageError> {
+        self.announce(pack_id)?;
         let mut plan = MarkGroups {
             pack_id,
             groups,
@@ -501,18 +547,24 @@ impl Source for ClosureSource<'_> {
     }
 
     fn inode_values(&self, ordinals: &[u32]) -> Result<Vec<[u8; INODE_VALUE_BYTES]>, StorageError> {
-        let mut rows = Vec::new();
-        self.mechanics
-            .inode_values(ordinals, &mut rows)
-            .map_err(StorageError::from)?;
-        // One ordered map, so a page of many ordinals is not scanned per ordinal.
-        let values: BTreeMap<u32, [u8; INODE_VALUE_BYTES]> =
-            rows.iter().map(|row| (row.ordinal, row.value)).collect();
+        // One keyed map, so a page of many ordinals is not scanned per
+        // ordinal. It also keeps what the engine read ahead: a walk meets
+        // leaves in about the order their values were stored.
+        let mut held = self.values.borrow_mut();
+        if !ordinals.iter().all(|ordinal| held.contains_key(ordinal)) {
+            let mut rows = Vec::new();
+            self.mechanics
+                .inode_values_ahead(ordinals, AHEAD_VALUES, &mut rows)
+                .map_err(StorageError::from)?;
+            if held.len() + rows.len() > HELD_VALUES {
+                held.clear();
+            }
+            held.extend(rows.iter().map(|row| (row.ordinal, row.value)));
+        }
         ordinals
             .iter()
             .map(|ordinal| {
-                values
-                    .get(ordinal)
+                held.get(ordinal)
                     .copied()
                     .ok_or(StorageError::Integrity("mark inode value"))
             })
@@ -573,6 +625,7 @@ fn walk(
                 .get(id)
                 .map_or((i64::MAX, usize::MAX, usize::MAX), locator_key)
         });
+        source.expect_wave(&frontier);
         // A file payload's edge is its record header: read just that, a pack
         // at a time, and leave the payload unread.
         let mut headers = edges::wave_edges(source, &frontier)?;

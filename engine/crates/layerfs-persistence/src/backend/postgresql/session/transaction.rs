@@ -58,9 +58,18 @@ pub(crate) struct Transaction<'a> {
     fence: Option<u64>,
     /// The Store's checked schema, for statements that name it.
     pub(crate) schema: &'a str,
+    /// Pack rows read ahead of the scoped reads a caller announced
+    /// (`objects::read::expect`), by pack. Each is used once.
+    pub(crate) ahead: RefCell<std::collections::HashMap<i64, Row>>,
 }
 
 impl Transaction<'_> {
+    /// Whether statements run as written, with no generation fence wrapped
+    /// around them: true inside a transaction.
+    pub(crate) fn unfenced(&self) -> bool {
+        self.fence.is_none()
+    }
+
     /// Online engine check preserving the server's concrete corruption verdict.
     /// Other refusals (including permissions) retain ordinary typed custody.
     pub(crate) fn engine_check(
@@ -398,6 +407,7 @@ impl Session {
                     lane: Cell::new(mode == Mode::Publish && !turn.nested),
                     fence: None,
                     schema,
+                    ahead: RefCell::default(),
                 };
                 let result = body(&tx);
                 let uncertain = tx.uncertain.get()
@@ -531,6 +541,7 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
             lane: Cell::new(false),
             fence,
             schema,
+            ahead: RefCell::default(),
         };
         let result = body(&tx);
         let uncertain = tx.uncertain.get();

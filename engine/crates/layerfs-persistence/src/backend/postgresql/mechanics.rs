@@ -122,4 +122,15 @@ impl Mechanics for Transaction<'_> {
     ) -> Result<layerfs_storage::port::AcquiredPackRead, PersistenceError> {
         objects::read::scoped(self, id, plan)
     }
+    fn expect_scoped_packs(&self, ids: &[i64]) -> Result<(), PersistenceError> {
+        objects::read::expect(self, ids)
+    }
+    fn inode_values_ahead(
+        &self,
+        ordinals: &[u32],
+        ahead: u32,
+        out: &mut Vec<InodeValueRow>,
+    ) -> Result<(), PersistenceError> {
+        metadata::reads::inode_values_ahead(self, ordinals, ahead, out)
+    }
 }
