@@ -8,9 +8,9 @@
 > table indexes them, and this file is retired.
 
 **Why.** The #41 implementation and the #711 fix-branch integration need a
-different reading than the frozen sentences in fifteen places: eleven contract
+different reading than the frozen sentences in sixteen places: eleven contract
 amendments (A1–A11, mostly refusal detail shapes, one additive sidecar field,
-four `gc_op` columns, the snake_case rendering rule, the one-valued
+six `gc_op` columns, the snake_case rendering rule, the one-valued
 `deadBytesRefined` and the §10 in-process `Busy` mapping) and five SQLite
 implementation deviations (D1–D5) that the
 frozen text either forbids or does not describe. `gc-spec-gaps.md` (one of the implementation notes moved out of
@@ -20,7 +20,7 @@ complete list, and it changes no product behaviour.
 
 The seven A entries before A8 were written directly into the frozen file
 while #41 was implemented and were backed out before review (commit
-`122a168502`); A8, A9 and A10 are added by this note for the same sign-off.
+`122a168502`); A8–A11 are added by this note for the same sign-off.
 The five D entries are present in the shipped SQLite code and are recorded here
 so the contract and the implementation do not drift apart.
 
@@ -135,19 +135,20 @@ frozen whole-lane exclusion; its measurements live under
     `physicalShrink = 0`, as a resumed `G + 1` run can). Neither is
     explained as `no-waste`.
 - **Schema (pre-release):** PostgreSQL's `gc_op` also carries six columns.
-  The mark writes `op_id BYTEA` (the project op the round runs under, so a
-  retry that loses its reply can name that op), `mark_fingerprint TEXT` (the
-  `pack`/`object_location` `pg_attribute`/storage/tablespace fingerprint
-  Phase B re-checks against the scratch tables) and `mark_visited BIGINT`
-  (the mark's visited-object count, the exact retained set Phase C asserts).
-  The swap writes `physical_before BIGINT NOT NULL DEFAULT 0`,
-  `peak_temp BIGINT NOT NULL DEFAULT 0` and `kept_waste BYTEA`, so a
-  resumed rebuild reports the swap's measured shrink, peak temp and retained
-  waste instead of zero placeholders. 2.0.0 is unreleased, so the columns go
-  into the 2.0 schema creation in place: there is **no additive open-time
-  step** (`add_*`) and no compatibility arm for a 2.0 `gc_op` created
-  before them (the Disposable profile, §2, and item 42). `kept_waste` is a
-  versioned
+  The mark (Phase M, `persist_mark`) writes `op_id BYTEA` (the project op
+  the round runs under, so a retry that loses its reply can name that op),
+  `mark_fingerprint TEXT` (the `pack`/`object_location`
+  `pg_attribute`/storage/tablespace fingerprint Phase B re-checks against the
+  scratch tables), `mark_visited BIGINT` (the mark's visited-object count, the
+  exact retained set Phase C asserts) and `kept_waste BYTEA` (the retained
+  waste the mark counts, encoded as below). The swap writes
+  `physical_before BIGINT NOT NULL DEFAULT 0` and
+  `peak_temp BIGINT NOT NULL DEFAULT 0`, so a resumed rebuild reports the
+  swap's measured shrink and peak temp, and the mark's retained waste,
+  instead of zero placeholders. 2.0.0 is unreleased, so the columns go into
+  the 2.0 schema creation in place: there is **no additive open-time step**
+  (`add_*`) and no compatibility arm for a 2.0 `gc_op` created before them
+  (the Disposable profile, §2, and item 42). `kept_waste` is a versioned
   encoding of the §11 `keptWaste`: one version byte (1), three big-endian
   `u64` byte totals, the capped flag, a big-endian `u32` reference count
   and the identity bytes.
@@ -253,8 +254,8 @@ frozen whole-lane exclusion; its measurements live under
   vocabulary; reporting the open cache's `InUse` from the compaction would put
   a non-GC code on the call that §5's `Busy` and §10's code table govern.
 - **Where:** `control/crates/layerfs-store/src/compact.rs` (`gc_refusal`, the
-  open-cache mapping, with the unit tests
-  `a_running_call_is_busy_for_the_store_not_in_use` and
+  open-cache mapping), `control/crates/layerfs-store/tests/compact_in_process_call.rs`
+  (`a_running_call_is_busy_for_the_store_not_in_use` and
   `exactly_the_open_cache_refusal_is_mapped`), the `store.compact` error row
   in `docs/architecture/api/sdk/store.md`, and the frozen spec file, which
   stays byte-identical until sign-off: this entry is the amendment #42

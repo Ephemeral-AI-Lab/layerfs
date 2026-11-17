@@ -299,6 +299,13 @@ are declared from the creation profile rather than sampled with `PRAGMA` at
 run time. A receipt for a capacity claim must add those four fields; the
 fixture-A `capacity_measure` JSON has the same gap.
 
+**Missing-range deviation.** The superseded whole-Store fixture-A receipt
+(`engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`)
+records only the build-phase median (94.317 s): the run's three per-run build
+samples were not retained, so no build-phase min/max range is available and
+none is claimed. The earlier `92-104 s` range is withdrawn; a receipt that
+needs a build-phase range must retain and publish the three samples.
+
 ## Not a registered benchmark family
 
 This is a measurement harness for the GC section 13 arms, not a new registered

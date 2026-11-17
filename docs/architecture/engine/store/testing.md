@@ -49,9 +49,11 @@ not a product failure. Tests that must prove the refusal on purpose use
 
 ## Run the suites
 
-The harness requires `LAYERFS_TEST_TMPDIR` on a supported filesystem, refuses
-anything else with exit 2 before cargo starts, and points `TMPDIR` (through a
-short symlink), `CARGO_TARGET_DIR` and `CARGO_HOME` at it.
+For a run, the harness requires `LAYERFS_TEST_TMPDIR` on a supported
+filesystem, refuses anything else with exit 2 before cargo starts, and points
+`TMPDIR` (through a short symlink), `CARGO_TARGET_DIR` and `CARGO_HOME` at it.
+`--list` prints the same cargo commands and environment without touching the
+filesystem, so it needs no `LAYERFS_TEST_TMPDIR`.
 
 ```bash
 # A cross-crate subset: the first build is the cost, then minutes.
@@ -61,6 +63,7 @@ LAYERFS_TEST_TMPDIR=/mnt/ext4/layerfs-store-tests tools/ci/test_store_ext4.sh --
 LAYERFS_TEST_TMPDIR=/mnt/ext4/layerfs-store-tests tools/ci/test_store_ext4.sh
 
 # Print the cargo commands and the environment, run nothing.
+# --list needs no LAYERFS_TEST_TMPDIR: it prints the commands and exits.
 tools/ci/test_store_ext4.sh --list
 ```
 
@@ -85,7 +88,7 @@ here.
 
 | Variable | Value | Why |
 | --- | --- | --- |
-| `LAYERFS_TEST_TMPDIR` | required, validated | the supported filesystem the run may use |
+| `LAYERFS_TEST_TMPDIR` | required for a run, validated; `--list` does not check it | the supported filesystem the run may use |
 | `TMPDIR` | a short private wrapper under the system temporary directory, whose `tmp` entry links to `$LAYERFS_TEST_TMPDIR/tmp` | `std::env::temp_dir()` in the tests; Unix-domain socket paths are limited to about 108 bytes |
 | `CARGO_TARGET_DIR` | `$LAYERFS_TEST_TMPDIR/target` | build output, and `CARGO_TARGET_TMPDIR` for the tests |
 | `CARGO_HOME` | `$LAYERFS_TEST_TMPDIR/cargo-home` | the registry and git checkouts stay with the run, off the checkout's overlay |
