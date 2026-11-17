@@ -198,6 +198,16 @@ fn build_op(byte: u8) -> String {
     format!("op-{}", format!("{byte:02x}").repeat(16))
 }
 
+/// Lowercase-hex text of `bytes` (the `gc_op` artifact and intent ids).
+fn hex(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+    let mut text = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        write!(text, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    text
+}
+
 /// Inserts one `gc_op` row owned by `(pid, backend_start)` with the given
 /// generation and phase, naming `op_id`.
 fn insert_op(
@@ -209,13 +219,7 @@ fn insert_op(
     start: &str,
 ) {
     let s = &schema.name;
-    let artifact = format!(
-        "lfs_gc_{}",
-        op_id
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>()
-    );
+    let artifact = format!("lfs_gc_{}", hex(&op_id));
     schema
         .admin()
         .execute(
@@ -239,13 +243,7 @@ fn insert_op(
 /// Inserts the live compaction intent one in-flight run registers.
 fn insert_intent(schema: &Schema, op_id: [u8; 16], generation: i64, phase: &str) {
     let s = &schema.name;
-    let artifact = format!(
-        "lfs_gc_{}",
-        op_id
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>()
-    );
+    let artifact = format!("lfs_gc_{}", hex(&op_id));
     schema
         .admin()
         .execute(
