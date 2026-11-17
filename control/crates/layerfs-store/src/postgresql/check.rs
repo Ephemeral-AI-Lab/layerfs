@@ -1,15 +1,15 @@
-//! A PostgreSQL Store's machines (supersedes #536 C4, takes up H9): each
-//! machine that may run its Sandboxes is attached in the Store's record,
-//! with the Store's connection or one of its own (a URL without a password
-//! and a password reference). `store connect` attaches `native`;
-//! `store attach` checks a machine's connection from that machine before
-//! it records it, and `store detach` forgets it. This module is the
-//! Store's part: the check run on the side that dials, and the record
-//! writes. Which side dials, and the URL a machine dials, are the caller's
-//! (`layerfs-control`, through the Sandbox route).
+//! A PostgreSQL Store's connection, checked from the side that dials it.
+//! A Store's Sandboxes run on any machine whose platform runs PostgreSQL
+//! Sandboxes (supersedes the per-machine attachments of 2026-11-12; #536
+//! C4 again): each dials the Store's connection, or its own where
+//! `store.update --machine` gave it one (H9), kept in the Store's record as
+//! `machines.<machine>`. This module is the Store's part: the check run on
+//! the side that dials, and the record writes. Which side dials, and the
+//! URL a machine dials, are the caller's (`layerfs-control`, through the
+//! Sandbox route).
 use crate::open_args::PgSelection;
 use crate::postgresql::connect::SCHEMA;
-use crate::record::{Attachment, StoreKind, StoreRecord};
+use crate::record::{OwnConnection, StoreKind, StoreRecord};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home;
 use layerfs_home::names::StoreName;
@@ -18,18 +18,17 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// An `InUse` check on Store `store`'s Sandboxes on machine `machine`.
-pub type MachineIdle = fn(home: &Path, store: &str, machine: &str) -> Result<()>;
-
 /// The PostgreSQL Store `name`'s record: `NotFound` when there is none,
-/// `InvalidInput` naming `store push` for a sqlite Store.
+/// `InvalidInput` for a sqlite Store, which has no connection.
 pub fn postgresql_record(home: &Path, name: &str) -> Result<StoreRecord> {
     let record = StoreRecord::of(home, name)?;
     match record.kind()? {
         StoreKind::Postgresql => Ok(record),
         StoreKind::Sqlite => Err(refused(
             "InvalidInput",
-            format!("Store {name} is a sqlite Store; `store push {name} <machine>` places it"),
+            format!(
+                "Store {name} is a sqlite Store, which has no connection; `store push {name} <machine>` places it"
+            ),
         )),
     }
 }
@@ -92,15 +91,29 @@ pub fn check(record: &StoreRecord, postgresql: &PgSelection) -> Result<SdkValue>
     }
 }
 
-/// Records Store `name`'s attachment to `machine` once its check passed,
-/// under the home lock and the Store's: `Conflict` when the Store was
+/// The light check of a connection the Store's own calls use: the server
+/// at `postgresql` is reached and its schema holds Store `record`'s
+/// binding. A role that may only read passes, as it does `store.connect`.
+pub fn same_store(record: &StoreRecord, postgresql: &PgSelection) -> Result<()> {
+    let binding = crate::postgresql::open::read_binding(postgresql)?;
+    if record.binding() != Some(binding.as_slice()) {
+        return Err(refused(
+            "Unavailable",
+            format!("{ANOTHER_STORE} {}", record.name()),
+        ));
+    }
+    Ok(())
+}
+
+/// Saves `machine`'s own connection to Store `name` (an empty one removes
+/// it), under the home lock and the Store's: `Conflict` when the Store was
 /// disconnected, or connected again to another database (`binding`
-/// differs), since the check.
-pub fn record(
+/// differs), since it was read.
+pub fn save_own(
     home_dir: &Path,
     name: &StoreName,
     machine: &str,
-    attachment: &Attachment,
+    own: &OwnConnection,
     binding: Option<&[u8]>,
 ) -> Result<()> {
     let _lock = home::lock::take(home_dir)?;
@@ -109,26 +122,23 @@ pub fn record(
     let Some(record) = record else {
         return Err(refused(
             "Conflict",
-            format!("Store {name} changed while machine {machine} was checked; attach it again"),
+            format!("Store {name} changed while machine {machine} was checked; update it again"),
         ));
     };
-    record.with_attachment(machine, attachment).write(home_dir)
+    record.with_own_connection(machine, own).write(home_dir)
 }
 
-/// `store.detach`: forgets Store `name`'s attachment to `machine`, under
-/// the home lock and the Store's. `InvalidInput` when it is not attached
-/// there; `InUse` (from `idle`) while a Sandbox of the Store is recorded on
-/// that machine. Its data and its other machines stay.
-pub fn detach(home_dir: &Path, name: &StoreName, machine: &str, idle: MachineIdle) -> Result<()> {
+/// Forgets machine `machine`'s own connection in every PostgreSQL Store of
+/// the home (its `machine.remove`): a later machine of the same name dials
+/// each Store's connection. Under the home lock and each Store's.
+pub fn forget_machine(home_dir: &Path, machine: &str) -> Result<()> {
     let _lock = home::lock::take(home_dir)?;
-    let _store = crate::record::lock(home_dir, name)?;
-    let record = postgresql_record(home_dir, name)?;
-    if record.attachment(machine).is_none() {
-        return Err(refused(
-            "InvalidInput",
-            format!("Store {name} is not attached to machine {machine}"),
-        ));
+    for record in crate::record::stores(home_dir)? {
+        if record.own_connection(machine).is_none() {
+            continue;
+        }
+        let _store = crate::record::lock(home_dir, record.name())?;
+        record.without_own_connection(machine).write(home_dir)?;
     }
-    idle(home_dir, name, machine)?;
-    record.without_attachment(machine).write(home_dir)
+    Ok(())
 }

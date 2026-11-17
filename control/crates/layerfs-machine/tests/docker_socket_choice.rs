@@ -30,7 +30,6 @@ fn free(_: &Path, _: &str) -> Result<(), SdkRefusal> {
 
 const RELATED: Related = Related {
     stores_on: none,
-    postgresql_on: none,
     sandboxes_on: none,
     can_remove: free,
     can_stop: free,

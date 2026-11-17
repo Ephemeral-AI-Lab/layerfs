@@ -50,7 +50,7 @@ The **summary** is `MachineRecord::to_sdk`
 
 ```text
 { name, platform, backend, supports: { sqlite, postgresql_sandbox, reason, log },
-  state, cpus, memory, disk, stores: [name], postgresql: [name],
+  state, cpus, memory, disk, stores: [name],
   sandboxes: [name], image?, docker?, wsl?, daemon?, os_image?, error?,
   ssh?, host?, vm_name? }
 ```
@@ -62,7 +62,7 @@ The **summary** is `MachineRecord::to_sdk`
 | `supports` | the platform's support row on this host; a removed platform supports nothing, with the removal as `reason` |
 | `supports.log` | whether the machine has a worker log to read (layerfs-project#178): its calls go to a worker and the support table refuses it nothing on this host, so it is a worker this build starts. True for `docker`, `lima` and `apple-container` where they run; false on every `native` (its calls run in the caller's process; on Windows its WSL2 worker is not designed) and for a removed platform. Clients read this field and never test platform names (`Supports::log`, [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs)) |
 | `cpus`, `memory`, `disk` | the recorded size (bytes for memory and disk); null on a built-in machine |
-| `stores`, `postgresql`, `sandboxes` | sqlite Stores on it, PostgreSQL Stores attached to it, Sandboxes recorded on it ([`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs)) |
+| `stores`, `sandboxes` | sqlite Stores on it, Sandboxes recorded on it (a PostgreSQL Store is on no machine) ([`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs)) |
 | `error` | the probe's reason when `unknown`; the removal for a removed platform; a failed create's error |
 
 | `state` | When |
@@ -641,7 +641,7 @@ in its Lima host) ([`remove.rs`](../../../../control/crates/layerfs-machine/src/
 | Error | When |
 | --- | --- |
 | `Busy` | a live process's create or remove holds it (a gone process's uncertain intent does not refuse) |
-| `InUse` | sqlite Stores, attached PostgreSQL Stores, Sandboxes or old Firecracker records it hosted are on it (`detail.related`, `can_remove_machine`) |
+| `InUse` | sqlite Stores, Sandboxes or old Firecracker records it hosted are on it (`detail.related`, `can_remove_machine`) |
 | `Unavailable`, `Failed` | the provider refused or failed; the record is put back |
 | `Unknown` | the provider timed out: `op` kept, uncertain; read `machine.status`, then remove again |
 

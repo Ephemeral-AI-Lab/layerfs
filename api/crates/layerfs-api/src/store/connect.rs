@@ -1,4 +1,4 @@
-//! `store.connect`: attach a PostgreSQL database as a Store.
+//! `store.connect`: connect a PostgreSQL database as a Store.
 use crate::calls::table::Kind::{Name, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
@@ -13,7 +13,7 @@ pub(crate) const CALL: Call = call(
     "connect",
     &[a("name", Name), a("url", Text)],
     &[opt("password", Text), opt("synchronous_commit", Text)],
-    "attach a PostgreSQL database as a Store",
+    "connect a PostgreSQL database as a Store",
     run,
 );
 

@@ -9,7 +9,7 @@ one file per call under its family in
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 85 calls in twelve families. `layerfs help` lists them, and
+There are 84 calls in twelve families. `layerfs help` lists them, and
 `layerfs help <family> [<call>]` prints one family or one call.
 
 ## How a call is written
@@ -629,18 +629,17 @@ $ layerfs machine status native
 See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals.
 
-### `store` (13)
+### `store` (12)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `list` | — | — | every Store, from the home's records, each with its `state` |
 | `get` | `name` | — | a Store's record |
-| `status` | `name` | — | a Store's live state |
+| `status` | `name` | `machine` | a Store's live state; with `machine`, whether that machine reaches a PostgreSQL Store (`check`) |
 | `stats` | `name` | — | Store-wide publication and allocation counters |
 | `create` | `name` | — | an empty sqlite Store on `native` |
-| `connect` | `name`, `url` | `password`, `synchronous_commit` | attaches a PostgreSQL database as a Store, attached to `native` |
-| `attach` | `name`, `machine` | `url`, `password` | lets a machine run Sandboxes of a PostgreSQL Store, after checking from that machine that it reaches the Store's database and may write it |
-| `detach` | `name`, `machine` | — | stops a machine running Sandboxes of a PostgreSQL Store; refused while one runs there |
+| `connect` | `name`, `url` | `password`, `synchronous_commit` | connects a PostgreSQL database as a Store; its Sandboxes run on every machine that supports them |
+| `update` | `name` | `machine`, `url`, `password`, `synchronous_commit`, `clear` | changes a PostgreSQL Store's connection; with `machine`, gives that machine a connection of its own (checked from it first), or removes it with `clear` |
 | `push` | `name`, `machine` | `on_progress` | sends a sqlite Store from `native` to a machine |
 | `pull` | `name` | `on_progress` | brings a sqlite Store from its machine to `native` |
 | `remove` | `name` | — | deletes a sqlite Store with every project in it |

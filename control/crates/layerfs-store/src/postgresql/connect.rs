@@ -150,9 +150,22 @@ pub fn target(url: &str) -> Result<(String, String, String)> {
     Ok((decode(&host).to_ascii_lowercase(), port, database))
 }
 
+/// Refuses a `synchronous_commit` that is not one of PostgreSQL's five.
+pub fn synchronous_commit(sync: &str) -> Result<()> {
+    if matches!(
+        sync,
+        "off" | "local" | "remote_write" | "on" | "remote_apply"
+    ) {
+        return Ok(());
+    }
+    Err(refused(
+        "InvalidInput",
+        format!("synchronous_commit is off, local, remote_write, on or remote_apply, not {sync}"),
+    ))
+}
+
 /// Refuses `Exists` when a Store is named `name`, or when another
-/// PostgreSQL Store of this home holds the same data: the same server and
-/// database by its URL, or, once read, the same schema binding.
+/// PostgreSQL Store of this home holds the same data.
 fn unclaimed(
     home: &Path,
     name: &str,
@@ -162,7 +175,22 @@ fn unclaimed(
     if paths::store_record(home, name).exists() {
         return Err(refused("Exists", format!("a Store named {name} exists")));
     }
+    unclaimed_by_others(home, name, target_of, binding)
+}
+
+/// Refuses `Exists` when a PostgreSQL Store of this home other than `name`
+/// holds the same data: the same server and database by its URL, or, once
+/// read, the same schema binding.
+pub fn unclaimed_by_others(
+    home: &Path,
+    name: &str,
+    target_of: &(String, String, String),
+    binding: Option<&[u8]>,
+) -> Result<()> {
     for other in paths::names(&home.join("store")).map_err(failed)? {
+        if other == name {
+            continue;
+        }
         let Some(record) = StoreRecord::read(home, &other)? else {
             continue;
         };
@@ -187,7 +215,7 @@ fn unclaimed(
     Ok(())
 }
 
-/// `store.connect`: attach a PostgreSQL database as a Store. Every
+/// `store.connect`: record a PostgreSQL database as a Store. Every
 /// refusal of its input comes before any effect. The server's schema and
 /// projects are read before the home lock; the lock covers the re-checks
 /// and the record writes only.
@@ -196,17 +224,7 @@ pub fn connect(home: &Path, request: &StoreConnect) -> Outcome {
     let given = request.url.as_str();
     refuse_password(given)?;
     let sync = request.synchronous_commit.as_deref().unwrap_or("local");
-    if !matches!(
-        sync,
-        "off" | "local" | "remote_write" | "on" | "remote_apply"
-    ) {
-        return Err(refused(
-            "InvalidInput",
-            format!(
-                "synchronous_commit is off, local, remote_write, on or remote_apply, not {sync}"
-            ),
-        ));
-    }
+    synchronous_commit(sync)?;
     let password = request.password.as_deref();
     if let Some(password) = password {
         resolve(password)?;
@@ -233,15 +251,6 @@ pub fn connect(home: &Path, request: &StoreConnect) -> Outcome {
     };
     let record = record.with("binding", SdkValue::Bytes(binding.clone()));
     let record = record.with("cursor", SdkValue::Bytes(fresh.cursor_key.to_vec()));
-    // `native` is attached with the Store's connection: this process dials
-    // as its Sandboxes do. Its check is recorded when it passes; a role
-    // that may not write leaves it unchecked (`store attach <name> native`
-    // checks it again and names what is missing)
-    let native = crate::record::Attachment {
-        checked: crate::postgresql::attach::check(&record, &probe).ok(),
-        ..Default::default()
-    };
-    let record = record.with_attachment("native", &native);
     let directory = paths::store_dir(home, name);
     // the projects the schema holds become this home's project records; a
     // schema that does not open is not connected
@@ -272,10 +281,6 @@ pub fn connect(home: &Path, request: &StoreConnect) -> Outcome {
         ("kind", SdkValue::text("postgresql")),
         ("schema", SdkValue::text(SCHEMA)),
         ("synchronous_commit", SdkValue::text(sync)),
-        (
-            "machines",
-            record.field("machines").cloned().unwrap_or_default(),
-        ),
         ("projects", SdkValue::List(projects)),
     ]))
 }

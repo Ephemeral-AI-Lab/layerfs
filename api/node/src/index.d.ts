@@ -388,16 +388,24 @@ export interface MachineUpdateOptions extends CallOptions {
   daemon?: string;
 }
 
+/** Options of `store.status`; an unknown option is refused. */
+export interface StoreStatusOptions extends CallOptions {
+  machine?: string;
+}
+
 /** Options of `store.connect`; an unknown option is refused. */
 export interface StoreConnectOptions extends CallOptions {
   password?: string;
   synchronous_commit?: string;
 }
 
-/** Options of `store.attach`; an unknown option is refused. */
-export interface StoreAttachOptions extends CallOptions {
+/** Options of `store.update`; an unknown option is refused. */
+export interface StoreUpdateOptions extends CallOptions {
+  machine?: string;
   url?: string;
   password?: string;
+  synchronous_commit?: string;
+  clear?: boolean;
 }
 
 /** Options of `store.push`; an unknown option is refused. */
@@ -622,18 +630,16 @@ export interface StoreFamily {
   list(options?: CallOptions): Promise<Result>;
   /** a Store's record */
   get(name: string, options?: CallOptions): Promise<Result>;
-  /** a Store's live state */
-  status(name: string, options?: CallOptions): Promise<Result>;
+  /** a Store's live state; with a machine, whether it reaches a PostgreSQL Store */
+  status(name: string, options?: StoreStatusOptions): Promise<Result>;
   /** Store-wide publication and allocation counters */
   stats(name: string, options?: CallOptions): Promise<Result>;
   /** an empty sqlite Store on native */
   create(name: string, options?: CallOptions): Promise<Result>;
-  /** attach a PostgreSQL database as a Store */
+  /** connect a PostgreSQL database as a Store */
   connect(name: string, url: string, options?: StoreConnectOptions): Promise<Result>;
-  /** let a machine run Sandboxes of a PostgreSQL Store, after checking it reaches the server */
-  attach(name: string, machine: string, options?: StoreAttachOptions): Promise<Result>;
-  /** stop a machine running Sandboxes of a PostgreSQL Store */
-  detach(name: string, machine: string, options?: CallOptions): Promise<Result>;
+  /** change a PostgreSQL Store's connection, or the one a machine alone dials */
+  update(name: string, options?: StoreUpdateOptions): Promise<Result>;
   /** send a sqlite Store from native to a machine */
   push(name: string, machine: string, options?: StorePushOptions): Promise<Result>;
   /** bring a sqlite Store from its machine to native */

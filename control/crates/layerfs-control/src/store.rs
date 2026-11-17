@@ -1,8 +1,9 @@
 //! The Store calls whose checks read who uses a Store (layerfs-project#105):
 //! each runs `layerfs-store`'s call with the checks from
 //! [`crate::inventory`]. The Store calls proper (`branch`, `commit`, `file`)
-//! and the rest are `layerfs-store`'s own. `store.attach` also reads the
-//! machine and reaches it as a Sandbox call would.
+//! and the rest are `layerfs-store`'s own. `store.update --machine` and
+//! `store.status --machine` also read the machine and reach it as a Sandbox
+//! call would.
 use crate::inventory;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
@@ -10,8 +11,8 @@ use layerfs_home::names::{MachineName, StoreName};
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::Unreached;
 use layerfs_store::place::{self, Executor};
-use layerfs_store::postgresql::{attach, connect};
-use layerfs_store::record::{Attachment, StoreKind};
+use layerfs_store::postgresql::{check, connect, update as store_update};
+use layerfs_store::record::{OwnConnection, StoreKind, StoreRecord};
 use layerfs_store::sqlite::family::StorePush;
 use layerfs_store::Related;
 use std::path::Path;
@@ -50,18 +51,23 @@ pub fn disconnect(home: &Path, name: &StoreName) -> Outcome {
     layerfs_store::postgresql::connect::disconnect(home, name, RELATED)
 }
 
-/// `store.attach(name, machine, { url, password })`. No `Debug`: it names a
-/// password reference.
+/// `store.update(name, { machine, url, password, synchronous_commit,
+/// clear })`. No `Debug`: it names a password reference.
 #[derive(Clone)]
-pub struct StoreAttach {
+pub struct StoreUpdate {
     /// The PostgreSQL Store.
     pub name: StoreName,
-    /// The machine that may run its Sandboxes.
-    pub machine: MachineName,
-    /// The URL the machine dials (no password), when not the Store's.
+    /// The machine whose own connection is set or cleared; none for the
+    /// Store's own.
+    pub machine: Option<MachineName>,
+    /// The new URL (no password).
     pub url: Option<String>,
-    /// The password's reference, when not the Store's.
+    /// The password's new reference.
     pub password: Option<String>,
+    /// The Store's new `synchronous_commit`.
+    pub synchronous_commit: Option<String>,
+    /// Remove the machine's own connection.
+    pub clear: bool,
 }
 
 /// Refused unless machine `machine` exists and its platform runs
@@ -107,10 +113,10 @@ fn from_machine(
         "InvalidInput" if message.contains("no operation store.reach") => refused(
             "Unsupported",
             format!(
-                "machine {machine}'s worker predates store.attach; `layerfs machine stop {machine}` and `layerfs machine start {machine}` update it"
+                "machine {machine}'s worker predates this check; `layerfs machine stop {machine}` and `layerfs machine start {machine}` update it"
             ),
         ),
-        "Unavailable" if !message.starts_with(attach::ANOTHER_STORE) => {
+        "Unavailable" if !message.starts_with(check::ANOTHER_STORE) => {
             let hint = hint.map(|hint| format!("; {hint}")).unwrap_or_default();
             refused(
                 "Unavailable",
@@ -126,15 +132,115 @@ fn from_machine(
     }
 }
 
-/// `store.attach`: checks machine `machine`'s connection to PostgreSQL
-/// Store `name` from that machine (in this process, or in its worker), then
-/// records the attachment; on a machine already attached it checks the new
-/// connection and replaces the old one. Every refusal of the input comes
-/// before any connection; a failed check records nothing. Answers the
-/// Store as `store.get` shows it.
-pub fn attach(home: &Path, events: &mut Events<'_>, request: &StoreAttach) -> Outcome {
-    let (name, machine) = (&request.name, request.machine.as_str());
-    let record = attach::postgresql_record(home, name)?;
+/// The check of machine `machine`'s connection to PostgreSQL Store
+/// `record` (its own connection where the record names one, else the
+/// Store's), run from that machine: in this process, or in its worker as
+/// `store.reach`. The URL is built as the machine's Sandboxes' calls build
+/// it. Answers the check, `{ at, server_version, latency_ms }`, or its
+/// refusal; either way with the host it dialled, once known.
+fn check_from(
+    home: &Path,
+    events: &mut Events<'_>,
+    record: &StoreRecord,
+    machine: &str,
+) -> (Option<String>, Result<SdkValue, SdkRefusal>) {
+    let name = record.name();
+    let (postgresql, hint) = match layerfs_sandbox::route::reached(home, machine, record) {
+        Ok(reached) => reached,
+        Err(refusal) => return (None, Err(refusal)),
+    };
+    let host = match postgresql.url().and_then(connect::target) {
+        Ok((host, _, _)) => host,
+        Err(refusal) => return (None, Err(refusal)),
+    };
+    let executor = match place::on_machine(home, machine) {
+        Ok(executor) => executor,
+        Err(refusal) => return (Some(host), Err(refusal)),
+    };
+    let checked = match executor {
+        Executor::Local => check::check(record, &postgresql),
+        Executor::Worker(mut worker) => {
+            let request = SdkValue::map([
+                ("store", SdkValue::text(name)),
+                ("store_record", record.to_record().clone()),
+                ("postgresql", postgresql.encode()),
+            ]);
+            let mut sink = |event| events.event(event);
+            match worker.attempt("store.reach", request, &mut sink) {
+                Ok(outcome) => outcome,
+                // the machine's worker was not reached: its own refusal,
+                // which names the start, not a server the check never dialled
+                Err(Unreached(refusal)) => return (Some(host), Err(refusal)),
+            }
+        }
+    };
+    let checked = checked.map_err(|refusal| from_machine(refusal, (name, machine, &host), hint));
+    (Some(host), checked)
+}
+
+/// `store.update`: changes PostgreSQL Store `name`'s own connection
+/// (`layerfs-store`'s part), or with `machine` the connection that machine
+/// alone dials: `url` and `password` replace the ones it has (either may
+/// be given alone), checked from that machine before they are saved, and
+/// `clear` removes its own connection, dialling nothing. Every refusal of
+/// the input comes before any connection; a failed check saves nothing.
+/// Answers the Store as `store.get` shows it.
+pub fn update(home: &Path, events: &mut Events<'_>, request: &StoreUpdate) -> Outcome {
+    let name = &request.name;
+    let Some(machine) = request.machine.as_ref().map(|m| m.as_str()) else {
+        if request.clear {
+            return Err(refused(
+                "InvalidInput",
+                "--clear removes a machine's own connection; name it with --machine",
+            ));
+        }
+        return store_update::update(
+            home,
+            &store_update::StoreUpdate {
+                name: name.clone(),
+                url: request.url.clone(),
+                password: request.password.clone(),
+                synchronous_commit: request.synchronous_commit.clone(),
+            },
+        );
+    };
+    let record = check::postgresql_record(home, name)?;
+    if request.synchronous_commit.is_some() {
+        return Err(refused(
+            "InvalidInput",
+            "synchronous_commit is the Store's setting; update it without --machine",
+        ));
+    }
+    let given = request.url.is_some() || request.password.is_some();
+    let current = record.own_connection(machine);
+    if request.clear {
+        if given {
+            return Err(refused(
+                "InvalidInput",
+                "--clear takes no --url or --password",
+            ));
+        }
+        if current.is_none() {
+            return Err(refused(
+                "InvalidInput",
+                format!("machine {machine} has no connection of its own to Store {name}"),
+            ));
+        }
+        check::save_own(
+            home,
+            name,
+            machine,
+            &OwnConnection::default(),
+            record.binding(),
+        )?;
+        return layerfs_store::sqlite::family::get(home, name);
+    }
+    if !given {
+        return Err(refused(
+            "InvalidInput",
+            "nothing to update: give --url or --password for the machine, or --clear",
+        ));
+    }
     runs_postgresql_sandboxes(home, name, machine)?;
     if let Some(url) = &request.url {
         connect::refuse_password(url)?;
@@ -143,49 +249,71 @@ pub fn attach(home: &Path, events: &mut Events<'_>, request: &StoreAttach) -> Ou
     if let Some(password) = &request.password {
         layerfs_home::secrets::resolve(password)?;
     }
-    let attachment = Attachment {
-        url: request.url.clone(),
-        password: request.password.clone(),
-        checked: None,
+    let current = current.unwrap_or_default();
+    let own = OwnConnection {
+        url: request.url.clone().or(current.url),
+        password: request.password.clone().or(current.password),
     };
-    // the URL the machine dials, built as its Sandboxes' calls build it
-    let trial = record.clone().with_attachment(machine, &attachment);
-    let (postgresql, hint) = layerfs_sandbox::route::reached(home, machine, &trial)?;
-    let (host, _, _) = connect::target(postgresql.url()?)?;
-    let checked = match place::on_machine(home, machine)? {
-        Executor::Local => attach::check(&record, &postgresql),
-        Executor::Worker(mut worker) => {
-            let request = SdkValue::map([
-                ("store", SdkValue::text(name.as_str())),
-                ("store_record", record.to_record().clone()),
-                ("postgresql", postgresql.encode()),
-            ]);
-            let mut sink = |event| events.event(event);
-            match worker.attempt("store.reach", request, &mut sink) {
-                Ok(outcome) => outcome,
-                Err(Unreached(refusal)) => Err(refusal),
-            }
-        }
-    }
-    .map_err(|refusal| from_machine(refusal, (name, machine, &host), hint))?;
-    let attachment = Attachment {
-        checked: Some(checked),
-        ..attachment
-    };
-    attach::record(home, name, machine, &attachment, record.binding())?;
+    let trial = record.clone().with_own_connection(machine, &own);
+    check_from(home, events, &trial, machine).1?;
+    check::save_own(home, name, machine, &own, record.binding())?;
     layerfs_store::sqlite::family::get(home, name)
+}
+
+/// `store.status`: a Store's live state; with `machine`, also the check of
+/// that machine's connection to a PostgreSQL Store, run from the machine
+/// now and recorded nowhere: `check: { machine, host, ok: true, at,
+/// server_version, latency_ms }`, or `ok: false` with the refusal as
+/// `error: { code, message }`. A sqlite Store, an unknown machine or a
+/// platform that runs no PostgreSQL Sandboxes refuses the call.
+pub fn status(
+    home: &Path,
+    events: &mut Events<'_>,
+    name: &StoreName,
+    machine: Option<&MachineName>,
+) -> Outcome {
+    let Some(machine) = machine.map(|m| m.as_str()) else {
+        return layerfs_store::sqlite::family::status(home, name);
+    };
+    let record = check::postgresql_record(home, name)?;
+    runs_postgresql_sandboxes(home, name, machine)?;
+    let status = layerfs_store::sqlite::family::status(home, name)?;
+    let (host, checked) = check_from(home, events, &record, machine);
+    let mut fields = vec![
+        ("machine".to_owned(), SdkValue::text(machine)),
+        (
+            "host".to_owned(),
+            host.map(SdkValue::Text).unwrap_or_default(),
+        ),
+        ("ok".to_owned(), SdkValue::Bool(checked.is_ok())),
+    ];
+    match checked {
+        Ok(SdkValue::Map(checked)) => fields.extend(checked),
+        Ok(_) => {}
+        Err(refusal) => fields.push((
+            "error".to_owned(),
+            SdkValue::map([
+                ("code", SdkValue::Text(refusal.code)),
+                ("message", SdkValue::Text(refusal.message)),
+            ]),
+        )),
+    }
+    let SdkValue::Map(mut out) = status else {
+        return Ok(status);
+    };
+    out.push(("check".to_owned(), SdkValue::Map(fields)));
+    Ok(SdkValue::Map(out))
 }
 
 /// `store.reach` in a machine's worker: `{ store, store_record, postgresql }`
 /// from the caller, which resolved the password and the URL this machine
-/// dials. Answers the check `store.attach` records.
+/// dials. Answers the check `store.update --machine` and `store.status
+/// --machine` ask for.
 pub fn reach_in_worker(args: &SdkValue) -> Outcome {
     let store = args.get_text("store").unwrap_or("");
     StoreName::parse(store)?;
-    let record = layerfs_store::record::StoreRecord::from_record(
-        store,
-        args.get("store_record").cloned().unwrap_or_default(),
-    );
+    let record =
+        StoreRecord::from_record(store, args.get("store_record").cloned().unwrap_or_default());
     if record.kind()? != StoreKind::Postgresql {
         return Err(refused(
             "InvalidInput",
@@ -201,13 +329,5 @@ pub fn reach_in_worker(args: &SdkValue) -> Outcome {
                 "store.reach carries the resolved postgresql value",
             )
         })?;
-    attach::check(&record, &postgresql)
-}
-
-/// `store.detach`: forgets PostgreSQL Store `name`'s attachment to
-/// `machine`; refused `InUse` while a Sandbox of the Store is recorded
-/// there. Answers the Store as `store.get` shows it.
-pub fn detach(home: &Path, name: &StoreName, machine: &MachineName) -> Outcome {
-    attach::detach(home, name, machine.as_str(), inventory::store_idle_on)?;
-    layerfs_store::sqlite::family::get(home, name)
+    check::check(&record, &postgresql)
 }

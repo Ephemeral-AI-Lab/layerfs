@@ -533,8 +533,8 @@ class StoreFamily:
         """every Store, from the home's records"""
     def get(self, name: str, *, log_tag: str | None = None) -> Result:
         """a Store's record"""
-    def status(self, name: str, *, log_tag: str | None = None) -> Result:
-        """a Store's live state"""
+    def status(self, name: str, *, machine: str | None = None, log_tag: str | None = None) -> Result:
+        """a Store's live state; with a machine, whether it reaches a PostgreSQL Store"""
     def stats(self, name: str, *, log_tag: str | None = None) -> Result:
         """Store-wide publication and allocation counters"""
     def create(self, name: str, *, log_tag: str | None = None) -> Result:
@@ -548,19 +548,19 @@ class StoreFamily:
         synchronous_commit: str | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """attach a PostgreSQL database as a Store"""
-    def attach(
+        """connect a PostgreSQL database as a Store"""
+    def update(
         self,
         name: str,
-        machine: str,
         *,
+        machine: str | None = None,
         url: str | None = None,
         password: str | None = None,
+        synchronous_commit: str | None = None,
+        clear: bool | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """let a machine run Sandboxes of a PostgreSQL Store, after checking it reaches the server"""
-    def detach(self, name: str, machine: str, *, log_tag: str | None = None) -> Result:
-        """stop a machine running Sandboxes of a PostgreSQL Store"""
+        """change a PostgreSQL Store's connection, or the one a machine alone dials"""
     def push(
         self,
         name: str,

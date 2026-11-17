@@ -1,4 +1,4 @@
-//! What a role may do in a Store's schema, for `store.attach`'s check of a
+//! What a role may do in a Store's schema, for the check of a
 //! machine's connection and for a PostgreSQL compaction's preflight: the
 //! server's version, one round trip's latency, the role, and each privilege
 //! the Store's writes and compaction need that it lacks. One connection

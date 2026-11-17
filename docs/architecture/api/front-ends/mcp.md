@@ -115,7 +115,7 @@ built addon).
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
-85 calls: 38 in `work`, 40 in `admin` only, 6 in no profile (`ui`), 1 no tool; `--profile admin` lists 78.
+84 calls: 38 in `work`, 39 in `admin` only, 6 in no profile (`ui`), 1 no tool; `--profile admin` lists 77.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
@@ -187,8 +187,7 @@ built addon).
 | `store.stats` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.create` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.connect` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.attach` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.detach` | admin | admin | create, connect, transfer and remove Stores; administration |
+| `store.update` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.push` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.pull` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.remove` | admin | admin | create, connect, transfer and remove Stores; administration |
