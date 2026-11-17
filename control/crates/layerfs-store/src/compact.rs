@@ -234,7 +234,8 @@ fn note_refusal(refusal: &SdkRefusal) {
 /// running on the Store in this process keeps it open and is `Busy`, naming
 /// the Store as the entity with a null `phase` and `op` because no operation
 /// holds it; everything else is returned unchanged. The cache's own `InUse`
-/// stays for the non-GC calls (`store.push`, `store.remove`, `store.disconnect`) that close it.
+/// stays for the non-GC calls (`store.push`, `store.pull`, `store.remove`,
+/// `store.disconnect`, `backup.restore`) that close it.
 #[doc(hidden)]
 pub fn gc_refusal(store: &str, refusal: SdkRefusal) -> SdkRefusal {
     if refusal.code != "InUse" {

@@ -135,8 +135,10 @@ frozen whole-lane exclusion; its measurements live under
     `physicalShrink = 0`, as a resumed `G + 1` run can). Neither is
     explained as `no-waste`.
 - **Schema (pre-release):** PostgreSQL's `gc_op` also carries seven columns.
-  The mark (Phase M, `persist_mark`) writes `op_id BYTEA` (the project op
-  the round runs under, so a retry that loses its reply can name that op),
+  The mark (Phase M, `persist_mark`) writes `op_id BYTEA` (the Store
+  compaction op the round runs under — `GcIntentKind::Compaction` with
+  `GcScopeKind::Store` in `.../postgresql/compact/run.rs` — so a retry that
+  loses its reply can name that op),
   `mark_fingerprint TEXT` (the `pack`/`object_location`
   `pg_attribute`/storage/tablespace fingerprint Phase B re-checks against the
   scratch tables), `mark_visited BIGINT` (the mark's visited-object count, the
@@ -252,8 +254,10 @@ frozen whole-lane exclusion; its measurements live under
   close a Store because a call still runs on it in this process.
 - **Proposed:** that refusal is `Busy`, naming the Store as `entity` with
   `phase` and `op` null: no operation holds the Store, a call does. The
-  cache's own `InUse` is reported by the non-GC calls that close a Store
-  (`store.push`, `store.remove`, `store.disconnect`).
+  cache's own `InUse` is reported by the non-GC calls that close a Store:
+  `store.push` and `store.pull` (through the shared transfer's `settle`),
+  `store.remove`, `store.disconnect` and `backup.restore`. The list is
+  illustrative, not exhaustive.
 - **Reason:** `store.compact` is a GC call, so its refusals speak the GC
   vocabulary; reporting the open cache's `InUse` from the compaction would put
   a non-GC code on the call that §5's `Busy` and §10's code table govern.
