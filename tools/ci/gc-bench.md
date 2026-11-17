@@ -260,7 +260,11 @@ interchangeable:
   `engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`
   (a transcribed summary: the raw per-run samples were not retained). The
   fresh-copy build on the same fixture A is 118.439584 s median (`none`
-  88.439 s). The same-fixture comparison is **2.08x**. The owner-final 50 GB
+  88.439 s). The same-fixture comparison is **2.08x**. The receipt predates #49
+  round 4: its build path has no 256 MiB `src.mmap_size` source window and its
+  verify still runs the `quick_check` page scan, so it records the pre-head8
+  build/verify path, not this branch's (see
+  [Section 13 measurement fields](#section-13-measurement-fields)). The owner-final 50 GB
   arm on that build is
   `engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_50gb.json`
   (`none` 1,633.585 s, `rebuild` 5,131.835 s, one run per path).
@@ -274,7 +278,8 @@ interchangeable:
   different synthetic Store from fixture A, so 133.076 s is **not** the other
   side of the 246.371 s -> 118.439584 s comparison. An earlier PR body divided
   246.371 s by 133.076 s and called it 1.85x; that mixed the two fixtures and
-  is withdrawn.
+  is withdrawn. It too predates #49 round 4's build and verify change, so its
+  build (23.469 s) and verify (6.060 s) phases are the older path.
 
 The [validation run](#validation-run-not-a-capacity-claim) table above was an
 earlier harness exercise on the same fixture-B shape but a different host and
@@ -298,6 +303,21 @@ record the SQLite version or WAL bytes, and `page_size`/`synchronous_commit`
 are declared from the creation profile rather than sampled with `PRAGMA` at
 run time. A receipt for a capacity claim must add those four fields; the
 fixture-A `capacity_measure` JSON has the same gap.
+
+**Receipt vintage (the #49 round 4 build/verify path).** Both 10 GB receipts
+predate #49 round 4: they were measured before §7 step 2 added the 256 MiB
+`src.mmap_size` window for the attached sealed source
+(`src/backend/sqlite/compact/build.rs`) and before verify dropped the
+`quick_check` page scan (`src/backend/sqlite/compact/verify.rs`). Fixture A's
+build 18.190-19.209 s and verify 4.330-4.377 s and fixture B's build 23.469 s
+and verify 6.060 s are therefore the older build and verify path, not this
+branch's, and the §13 numbers above are the pre-head8 receipt, not a head8
+re-measurement. Neither receipt records a verify without the `quick_check`
+scan, so the report's ~4 s `quick_check` cost is a derived estimate (the
+pre-removal verify minus a scan-free figure) rather than a measurement; the
+only scan-free verify figure on record is the different whole-Store build's
+0.312 s. Treat both 10 GB receipts as pre-head8 until a head8 re-run replaces
+them.
 
 **Missing-range deviation.** The superseded whole-Store fixture-A receipt
 (`engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`)

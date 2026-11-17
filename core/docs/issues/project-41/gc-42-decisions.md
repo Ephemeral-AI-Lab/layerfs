@@ -10,7 +10,7 @@
 **Why.** The #41 implementation and the #711 fix-branch integration need a
 different reading than the frozen sentences in sixteen places: eleven contract
 amendments (A1–A11, mostly refusal detail shapes, one additive sidecar field,
-six `gc_op` columns, the snake_case rendering rule, the one-valued
+seven `gc_op` columns, the snake_case rendering rule, the one-valued
 `deadBytesRefined` and the §10 in-process `Busy` mapping) and five SQLite
 implementation deviations (D1–D5) that the
 frozen text either forbids or does not describe. `gc-spec-gaps.md` (one of the implementation notes moved out of
