@@ -28,8 +28,7 @@ use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_persistence::compact_metrics::{self, CompactRefusal};
 use layerfs_persistence::PostgresHandles;
 use layerfs_persistence::{
-    CompactFailpoint, CompactReport, CompactRequest, PersistenceConfig, SqliteHandles,
-    SqlitePersistenceProfile,
+    CompactFailpoint, CompactRequest, PersistenceConfig, SqliteHandles, SqlitePersistenceProfile,
 };
 use layerfs_store_service::history::{admission, lookup};
 use std::path::Path;
@@ -148,9 +147,7 @@ pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
         .map_err(|error| {
             lookup::history_in(error, GcScopeKind::Store, store, None, Some(&op_id))
         })?;
-    // One serializer for the shared §11 report: the SQLite receipt projects
-    // into `CompactReport`, and T9's PostgreSQL receipt will do the same.
-    Ok(crate::report::compact_report(&CompactReport::from(receipt)))
+    Ok(crate::report::compact_report(&receipt))
 }
 
 /// The §8 PostgreSQL path: dial the Store's recorded URL, open its schema as
@@ -201,7 +198,7 @@ fn compact_postgresql(record: &StoreRecord, home: &Path, store: &str) -> Outcome
         .map_err(|error| {
             lookup::history_in(error, GcScopeKind::Store, store, None, Some(&op_id))
         })?;
-    Ok(crate::report::compact_report(&CompactReport::from(receipt)))
+    Ok(crate::report::compact_report(&receipt))
 }
 
 /// An open refusal before the run: `Busy` is definite, everything else a

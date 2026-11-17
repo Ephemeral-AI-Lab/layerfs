@@ -1,17 +1,17 @@
 //! The wire rendering of the §11 compaction report and the `store.status`
 //! compaction projection (T10).
 //!
-//! One serializer renders the shared [`CompactReport`], so the SQLite path and
-//! T9's PostgreSQL path cannot disagree on a key: every key is snake_case (§10;
+//! One serializer renders the [`CompactReceipt`] both backends return, so the
+//! SQLite and PostgreSQL paths cannot disagree on a key: every key is snake_case (§10;
 //! §11 names are logical), a zero field is named by its wire key, and
 //! `residue.reason` appears only when something remains.
 use layerfs_bridge::control::SdkValue;
-use layerfs_persistence::{CompactReport, CompactStatus};
+use layerfs_persistence::{CompactReceipt, CompactStatus};
 
 /// The §11 report as `store.compact` returns it:
 /// `{kind: "Compacted", path, generation {before, after}, ...}`.
 #[must_use]
-pub fn compact_report(report: &CompactReport) -> SdkValue {
+pub fn compact_report(report: &CompactReceipt) -> SdkValue {
     let int = |value: u64| SdkValue::Int(i64::try_from(value).unwrap_or(i64::MAX));
     let references: Vec<SdkValue> = report
         .kept_waste
@@ -66,8 +66,8 @@ pub fn compact_report(report: &CompactReport) -> SdkValue {
             (
                 "generation",
                 SdkValue::map([
-                    ("before", int(report.generation.before)),
-                    ("after", int(report.generation.after)),
+                    ("before", int(report.generation_before)),
+                    ("after", int(report.generation_after)),
                 ]),
             ),
             ("dead_bytes_bound", int(report.dead_bytes_bound)),
