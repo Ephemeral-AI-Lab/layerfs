@@ -4,7 +4,10 @@ use crate::backend::records::{pack_info, BackendError, Param, Record};
 use layerfs_storage::{
     location::PackInfo,
     policy,
-    port::{AcquiredPackRead, PackReadPlan, PersistedPack, PersistedPackRead, PersistenceError},
+    port::{
+        AcquiredPackRead, PackRange, PackReadPlan, PersistedPack, PersistedPackRead,
+        PersistenceError,
+    },
 };
 
 fn info(r: &Record) -> Result<PackInfo, BackendError> {
@@ -219,6 +222,70 @@ pub(crate) fn prefixes(
             return Err(PersistenceError::Malformed);
         }
         out.push((length, body));
+    }
+    Ok(())
+}
+
+/// The bytes of selected ranges of several packs in one statement: for each
+/// `(pack, ranges)` of `requests`, in order, the bytes of each range, in
+/// order. A pack's ranges are sorted and disjoint. The body is stored
+/// uncompressed out of line, so each `substring` fetches only the chunks it
+/// covers. A pack that is absent is `Missing`; a range that reaches past its
+/// body comes back short and is `Malformed`.
+pub(crate) fn ranges(
+    tx: &Transaction<'_>,
+    requests: &[(i64, Vec<PackRange>)],
+    out: &mut Vec<Vec<Vec<u8>>>,
+) -> Result<(), PersistenceError> {
+    let total = requests.iter().map(|(_, ranges)| ranges.len()).sum();
+    let mut ids = Vec::with_capacity(total);
+    let mut from = Vec::with_capacity(total);
+    let mut count = Vec::with_capacity(total);
+    for (id, ranges) in requests {
+        if *id <= 0 {
+            return Err(PersistenceError::Malformed);
+        }
+        let mut end = 0;
+        for range in ranges {
+            let stop = range
+                .offset
+                .checked_add(range.length)
+                .filter(|_| range.length > 0 && range.offset >= end)
+                .ok_or(PersistenceError::Malformed)?;
+            end = stop;
+            ids.push(*id);
+            from.push(i32::try_from(range.offset + 1).map_err(|_| PersistenceError::Malformed)?);
+            count.push(i32::try_from(range.length).map_err(|_| PersistenceError::Malformed)?);
+        }
+    }
+    let rows = if total == 0 {
+        Vec::new()
+    } else {
+        tx.typed(
+            &format!(
+                "SELECT substring(p.body FROM r.o FOR r.l) \
+                 FROM unnest($1::bigint[],$2::int4[],$3::int4[]) WITH ORDINALITY AS r(pack_id,o,l,n) \
+                 JOIN {}.pack p ON p.pack_id=r.pack_id ORDER BY r.n",
+                tx.schema
+            ),
+            &[&ids, &from, &count],
+            total as u64 * 16,
+        )?
+    };
+    if rows.len() != total {
+        return Err(PersistenceError::Missing);
+    }
+    let mut rows = rows.iter();
+    for (_, ranges) in requests {
+        let mut bodies = Vec::with_capacity(ranges.len());
+        for (range, row) in ranges.iter().zip(rows.by_ref()) {
+            let body: Vec<u8> = row.try_get(0).map_err(|e| rows::error(&e))?;
+            if body.len() != range.length {
+                return Err(PersistenceError::Malformed);
+            }
+            bodies.push(body);
+        }
+        out.push(bodies);
     }
     Ok(())
 }
