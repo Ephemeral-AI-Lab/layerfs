@@ -8,10 +8,11 @@
 > table indexes them, and this file is retired.
 
 **Why.** The #41 implementation and the #711 fix-branch integration need a
-different reading than the frozen sentences in fifteen places: ten contract
-amendments (A1–A10, mostly refusal detail shapes, one additive sidecar field,
-four `gc_op` columns, the snake_case rendering rule and the one-valued
-`deadBytesRefined`) and five SQLite implementation deviations (D1–D5) that the
+different reading than the frozen sentences in fifteen places: eleven contract
+amendments (A1–A11, mostly refusal detail shapes, one additive sidecar field,
+four `gc_op` columns, the snake_case rendering rule, the one-valued
+`deadBytesRefined` and the §10 in-process `Busy` mapping) and five SQLite
+implementation deviations (D1–D5) that the
 frozen text either forbids or does not describe. `gc-spec-gaps.md` (one of the implementation notes moved out of
 the tree; its decisions are folded into these entries where they carry contract
 text) already flagged two of the earlier seven as "#42 correction"; this note is the
@@ -534,8 +535,8 @@ rotational (HDD) backing — not NVMe** (88 vCPU across two Xeon E5-2699C v4,
 
 ## Request
 
-Please record A1–A10 as #42 items (or amend the frozen text) and accept or
+Please record A1–A11 as #42 items (or amend the frozen text) and accept or
 reject D1–D5 individually when the owner signs off, and accept G7 as the
 record of a deferred design (it changes no contract text). Until then the
-implementation follows the frozen text except where A8–A10 and D1–D5 are named,
+implementation follows the frozen text except where A8–A11 and D1–D5 are named,
 and the spec file in this branch is byte-identical to the frozen version.
