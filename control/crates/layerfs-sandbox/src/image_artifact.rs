@@ -454,7 +454,7 @@ fn named(cache: &Path, reference: &str) -> Result<Option<String>, SdkRefusal> {
         _ => Err(refused_with(
             "InvalidInput",
             format!(
-                "image reference `{reference}` is ambiguous across cached images: {}",
+                "image reference `{reference}` is ambiguous across cached images: {}; remove one with `machine.prune`",
                 matches.join(", ")
             ),
             SdkValue::map([
@@ -645,7 +645,7 @@ fn strip_moved_refs(
         if !hex(other_hex) || other_hex == published_hex {
             continue;
         }
-        let Some(mut other) = SidecarInfo::read(cache, other_hex)? else {
+        let Ok(Some(mut other)) = SidecarInfo::read(cache, other_hex) else {
             continue;
         };
         let before = other.sidecar.refs.len();

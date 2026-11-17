@@ -8,14 +8,16 @@ mod fixture;
 use fixture::{pax_record, Scratch, Tar};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::events::Events;
-use layerfs_home::home;
+use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::names::MachineName;
+use layerfs_machine::worker::{read_frame, read_frame_within, write_frame, MAX_HELLO, PROTOCOL};
 use layerfs_sandbox::docker::Docker;
 use layerfs_sandbox::image_artifact::{self as cache, architecture, Sidecar, CHUNK};
 use layerfs_sandbox::image_load::{load, ImageLock, Loaded, Target};
-use layerfs_sandbox::image_tar::{Filtered, TarReport};
+use layerfs_sandbox::image_tar::{Filtered, TarReport, SPARSE_MAX};
 use layerfs_sandbox::images;
 use layerfs_sandbox_backend::{rootfs, Image};
+use layerfs_store::place::{self, Executor};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::fs;
@@ -841,8 +843,8 @@ fn ambiguous_ref_is_refused_and_moved_ref_never_selects_old_image() {
     .unwrap_err();
     assert_eq!(err.code, "InvalidInput", "{err:?}");
     assert!(
-        err.message.contains("shared/app:latest"),
-        "ambiguous ref error must name the ref: {}",
+        err.message.contains("shared/app:latest") && err.message.contains("machine.prune"),
+        "ambiguous ref error must name the ref and suggest machine.prune: {}",
         err.message
     );
 
@@ -1336,6 +1338,433 @@ fn real_docker_and_small_tar_preserve_mtime_mode_sha_and_record_config() {
         assert_eq!(dcfg.get_text("WorkingDir"), Some("/app"));
         assert_eq!(dcfg.get_text("User"), Some("1001:1001"));
     }
+}
+
+struct ModeGuard(PathBuf, u32);
+impl Drop for ModeGuard {
+    fn drop(&mut self) {
+        let _ = fs::set_permissions(&self.0, fs::Permissions::from_mode(self.1));
+    }
+}
+
+#[test]
+fn prune_skips_unwritable_lock_dir_and_bad_lock_symlinks_while_reclaiming_others() {
+    use std::os::unix::fs::symlink;
+
+    // 1. Unwritable lock dir (simulates ENOSPC / EACCES for record/file creation):
+    //    pre-existing `.lock` is still guarded via try_hold (no .json written) and reclaimed,
+    //    while a hex needing a new `.lock` is skipped with a reason rather than aborting prune.
+    let scratch1 = Scratch::new("lp176-r1-lock-ro");
+    let home1 = scratch1.base.join("home");
+    fs::create_dir_all(&home1).unwrap();
+    home::ensure(&home1).unwrap();
+    let cache1 = cache::cache(&home1);
+    fs::create_dir_all(&cache1).unwrap();
+
+    let hex_existing = "1".repeat(64);
+    let id_existing = format!("sha256:{hex_existing}");
+    let hex_new = "2".repeat(64);
+    let id_new = format!("sha256:{hex_new}");
+
+    cache::write(&cache1, &hex_existing, 0, b"part-existing").unwrap();
+    cache::write(&cache1, &hex_new, 0, b"part-new").unwrap();
+    drop(
+        ImageLock::try_take(&home1, "native", &id_existing)
+            .unwrap()
+            .unwrap(),
+    );
+    assert!(ImageLock::path(&home1, "native", &hex_existing).is_file());
+
+    let lock_dir1 = ImageLock::dir(&home1, "native");
+    let _mode_guard = ModeGuard(lock_dir1.clone(), 0o700);
+    fs::set_permissions(&lock_dir1, fs::Permissions::from_mode(0o555)).unwrap();
+
+    let out1 = images::prune(&home1, &native_name(), None, true).unwrap();
+    let removed1 = cache::texts(out1.get("removed"));
+    assert_eq!(removed1, vec![id_existing.clone()], "{out1:?}");
+    assert!(!cache1.join(format!(".recv-{hex_existing}.part")).exists());
+    assert!(cache1.join(format!(".recv-{hex_new}.part")).exists());
+    let skipped1 = match out1.get("skipped") {
+        Some(SdkValue::List(items)) => items.clone(),
+        other => panic!("expected skipped entry for unwritable lock dir: {other:?}"),
+    };
+    assert!(
+        skipped1.iter().any(|s| s.get_text("id") == Some(&id_new)
+            && s.get_text("reason").is_some_and(|r| !r.is_empty())),
+        "expected skip reason for {id_new}: {skipped1:?}"
+    );
+    drop(_mode_guard);
+
+    // 2. Bad `.lock` symlinks (in ImageLock dir and in cache `.2.lock`) must not abort
+    //    `prune --unused` or targeted prune of unrelated hexes, while targeted prune on the
+    //    bad-lock hex returns an error.
+    let scratch2 = Scratch::new("lp176-r1-lock-symlink");
+    let home2 = scratch2.base.join("home");
+    fs::create_dir_all(&home2).unwrap();
+    home::ensure(&home2).unwrap();
+    let cache2 = cache::cache(&home2);
+    fs::create_dir_all(&cache2).unwrap();
+    let lock_dir2 = ImageLock::dir(&home2, "native");
+    fs::create_dir_all(&lock_dir2).unwrap();
+
+    let hex_good_unused = "3".repeat(64);
+    let id_good_unused = format!("sha256:{hex_good_unused}");
+    let hex_good_target = "4".repeat(64);
+    let id_good_target = format!("sha256:{hex_good_target}");
+    let hex_bad_lock = "5".repeat(64);
+    let id_bad_lock = format!("sha256:{hex_bad_lock}");
+    let hex_bad_hold = "6".repeat(64);
+    let id_bad_hold = format!("sha256:{hex_bad_hold}");
+
+    cache::write(&cache2, &hex_good_unused, 0, b"good-unused").unwrap();
+    cache::write(&cache2, &hex_good_target, 0, b"good-target").unwrap();
+    cache::write(&cache2, &hex_bad_lock, 0, b"bad-lock").unwrap();
+    cache::write(&cache2, &hex_bad_hold, 0, b"bad-hold").unwrap();
+
+    let dummy_target = scratch2.base.join("dummy");
+    fs::write(&dummy_target, b"x").unwrap();
+    symlink(
+        &dummy_target,
+        ImageLock::path(&home2, "native", &hex_bad_lock),
+    )
+    .unwrap();
+    symlink(&dummy_target, cache2.join(format!("{hex_bad_hold}.2.lock"))).unwrap();
+
+    // Targeted prune of an unrelated healthy hex succeeds despite bad sibling locks.
+    let targeted = images::prune(&home2, &native_name(), Some(&id_good_target), false).unwrap();
+    assert_eq!(
+        cache::texts(targeted.get("removed")),
+        vec![id_good_target.clone()]
+    );
+    assert!(!cache2
+        .join(format!(".recv-{hex_good_target}.part"))
+        .exists());
+
+    // Targeted prune of the bad-lock hexes returns an error.
+    assert!(images::prune(&home2, &native_name(), Some(&id_bad_lock), false).is_err());
+    assert!(images::prune(&home2, &native_name(), Some(&id_bad_hold), false).is_err());
+
+    // Unused prune reclaims healthy hex and records skip reasons for both bad-lock hexes.
+    let out2 = images::prune(&home2, &native_name(), None, true).unwrap();
+    assert_eq!(
+        cache::texts(out2.get("removed")),
+        vec![id_good_unused.clone()],
+        "{out2:?}"
+    );
+    assert!(!cache2
+        .join(format!(".recv-{hex_good_unused}.part"))
+        .exists());
+    assert!(cache2.join(format!(".recv-{hex_bad_lock}.part")).exists());
+    assert!(cache2.join(format!(".recv-{hex_bad_hold}.part")).exists());
+    let skipped2 = match out2.get("skipped") {
+        Some(SdkValue::List(items)) => items.clone(),
+        other => panic!("expected skipped entries for bad symlinks: {other:?}"),
+    };
+    for bad_id in [&id_bad_lock, &id_bad_hold] {
+        assert!(
+            skipped2.iter().any(|s| s.get_text("id") == Some(bad_id)
+                && s.get_text("reason").is_some_and(|r| !r.is_empty())),
+            "missing skip reason for {bad_id}: {skipped2:?}"
+        );
+    }
+}
+
+#[test]
+fn publish_skips_corrupt_unrelated_sidecar() {
+    let scratch = Scratch::new("lp176-r1-corrupt-sidecar");
+    let home = scratch.base.join("home");
+    fs::create_dir_all(&home).unwrap();
+    let cache_dir = cache::cache(&home);
+    fs::create_dir_all(&cache_dir).unwrap();
+
+    let hex_bad = "7".repeat(64);
+    fs::create_dir_all(cache_dir.join(format!("{hex_bad}.2"))).unwrap();
+    let bad_sidecar_path = cache::sidecar_path(&cache_dir, &hex_bad);
+    fs::write(&bad_sidecar_path, b"{not valid json").unwrap();
+
+    let hex_good = "8".repeat(64);
+    let id_good = format!("sha256:{hex_good}");
+    let tar_bytes = filtered_bytes(&Tar::new().file("etc/ok", 0o644, b"ok\n").finish()).unwrap();
+    let sha = sha256_hex(&tar_bytes);
+    cache::write(&cache_dir, &hex_good, 0, &tar_bytes).unwrap();
+
+    let out = step(
+        &home,
+        SdkValue::map([
+            ("step", SdkValue::text("publish")),
+            ("id", SdkValue::text(&id_good)),
+            ("size", SdkValue::Int(tar_bytes.len() as i64)),
+            ("sha256", SdkValue::text(&sha)),
+            (
+                "refs",
+                SdkValue::List(vec![SdkValue::text("r1/app:latest")]),
+            ),
+        ]),
+    )
+    .unwrap();
+    assert!(out.get_bool("unpacked"));
+    let good_sidecar = Sidecar::read(&cache_dir, &hex_good).unwrap().unwrap();
+    assert_eq!(good_sidecar.refs, vec!["r1/app:latest".to_owned()]);
+    assert_eq!(fs::read(&bad_sidecar_path).unwrap(), b"{not valid json");
+}
+
+#[test]
+fn sparse_safety_rejects_oversized_realsize_excess_chunks_size_mismatch_and_malformed_pax() {
+    let assert_invalid_data = |label: &str, tar_bytes: Vec<u8>| {
+        let err = filtered_bytes(&tar_bytes).expect_err(label);
+        assert_eq!(
+            err.kind(),
+            std::io::ErrorKind::InvalidData,
+            "{label}: got {err:?}"
+        );
+    };
+
+    // 1. N5: realsize exceeding SPARSE_MAX (oldgnu and PAX 0.1).
+    let huge_gnu = build_gnu_sparse_tar("big.bin", 0o644, 0, SPARSE_MAX + 1, &[(0, b"A")]);
+    assert_invalid_data("oldgnu realsize > SPARSE_MAX", huge_gnu);
+
+    let mut huge_pax = pax_record("GNU.sparse.major", "0");
+    huge_pax.extend_from_slice(&pax_record("GNU.sparse.minor", "1"));
+    huge_pax.extend_from_slice(&pax_record("GNU.sparse.name", "big_pax.bin"));
+    huge_pax.extend_from_slice(&pax_record(
+        "GNU.sparse.realsize",
+        &(SPARSE_MAX + 1).to_string(),
+    ));
+    huge_pax.extend_from_slice(&pax_record("GNU.sparse.map", "0,1"));
+    let huge_pax_tar = Tar::new()
+        .raw("PaxHeaders/big", b'x', 0o644, &huge_pax)
+        .file("big_pax.bin", 0o644, b"A")
+        .finish();
+    assert_invalid_data("PAX 0.1 realsize > SPARSE_MAX", huge_pax_tar);
+
+    // 2. N6: oldgnu extended block chain exceeding entry `size` (aborts before EOF/extra blocks).
+    let mut gnu_hdr = [0u8; 512];
+    gnu_hdr[..7].copy_from_slice(b"bad.bin");
+    let oct = |f: &mut [u8], v: u64| {
+        let w = f.len() - 1;
+        let t = format!("{v:0w$o}\0");
+        f.copy_from_slice(&t.as_bytes()[..f.len()]);
+    };
+    oct(&mut gnu_hdr[100..108], 0o644);
+    oct(&mut gnu_hdr[124..136], 3); // entry size = 3 => at most 3 chunks
+    gnu_hdr[156] = b'S';
+    gnu_hdr[257..263].copy_from_slice(b"ustar ");
+    gnu_hdr[263..265].copy_from_slice(b" \0");
+    for i in 0..4 {
+        let base = 386 + i * 24;
+        oct(&mut gnu_hdr[base..base + 12], (i as u64) * 4096);
+        oct(&mut gnu_hdr[base + 12..base + 24], 1); // 4th chunk already exceeds size=3!
+    }
+    gnu_hdr[482] = 1; // claims an extended block follows (intentionally absent!)
+    oct(&mut gnu_hdr[483..495], 65_536);
+    gnu_hdr[148..156].fill(b' ');
+    let sum: u64 = gnu_hdr.iter().map(|b| u64::from(*b)).sum();
+    gnu_hdr[148..156].copy_from_slice(format!("{sum:06o}\0 ").as_bytes());
+    assert_invalid_data(
+        "oldgnu chunk count > size before extended block",
+        gnu_hdr.to_vec(),
+    );
+
+    // 3. N6: PAX 0.x GNU.sparse.map with chunk count > entry `size` (both PAX `size` and ustar `size`).
+    let mut pax_chunks_over_pax_size = pax_record("GNU.sparse.major", "0");
+    pax_chunks_over_pax_size.extend_from_slice(&pax_record("size", "2"));
+    pax_chunks_over_pax_size.extend_from_slice(&pax_record("GNU.sparse.minor", "1"));
+    pax_chunks_over_pax_size.extend_from_slice(&pax_record("GNU.sparse.name", "m.bin"));
+    pax_chunks_over_pax_size.extend_from_slice(&pax_record("GNU.sparse.realsize", "16384"));
+    pax_chunks_over_pax_size.extend_from_slice(&pax_record("GNU.sparse.map", "0,1,4096,1,8192,1"));
+    let tar_over_pax_size = Tar::new()
+        .raw("PaxHeaders/m", b'x', 0o644, &pax_chunks_over_pax_size)
+        .file("m.bin", 0o644, b"AB")
+        .finish();
+    assert_invalid_data("PAX 0.1 chunk count > PAX size", tar_over_pax_size);
+
+    let mut pax_chunks_over_hdr_size = pax_record("GNU.sparse.major", "0");
+    pax_chunks_over_hdr_size.extend_from_slice(&pax_record("GNU.sparse.minor", "1"));
+    pax_chunks_over_hdr_size.extend_from_slice(&pax_record("GNU.sparse.name", "m2.bin"));
+    pax_chunks_over_hdr_size.extend_from_slice(&pax_record("GNU.sparse.realsize", "16384"));
+    pax_chunks_over_hdr_size.extend_from_slice(&pax_record("GNU.sparse.map", "0,1,4096,1,8192,1"));
+    let tar_over_hdr_size = Tar::new()
+        .raw("PaxHeaders/m2", b'x', 0o644, &pax_chunks_over_hdr_size)
+        .file("m2.bin", 0o644, b"AB")
+        .finish();
+    assert_invalid_data("PAX 0.1 chunk count > ustar size", tar_over_hdr_size);
+
+    // 4. Item 5a: payload_needed != size (extra trailing bytes inside tar entry) for oldgnu, PAX 0.1, PAX 1.0.
+    let mut bad_size_gnu = build_gnu_sparse_tar("pad.bin", 0o644, 0, 8192, &[(0, b"ABCD")]);
+    oct(&mut bad_size_gnu[124..136], 100); // stored=4 != size=100
+    bad_size_gnu[148..156].fill(b' ');
+    let sum2: u64 = bad_size_gnu[..512].iter().map(|b| u64::from(*b)).sum();
+    bad_size_gnu[148..156].copy_from_slice(format!("{sum2:06o}\0 ").as_bytes());
+    assert_invalid_data("oldgnu payload_needed != size", bad_size_gnu);
+
+    let mut pax01_mismatch = pax_record("GNU.sparse.major", "0");
+    pax01_mismatch.extend_from_slice(&pax_record("GNU.sparse.minor", "1"));
+    pax01_mismatch.extend_from_slice(&pax_record("GNU.sparse.name", "s01.bin"));
+    pax01_mismatch.extend_from_slice(&pax_record("GNU.sparse.realsize", "8192"));
+    pax01_mismatch.extend_from_slice(&pax_record("GNU.sparse.map", "0,4"));
+    let pax01_mismatch_tar = Tar::new()
+        .raw("PaxHeaders/s01", b'x', 0o644, &pax01_mismatch)
+        .file("s01.bin", 0o644, b"ABCDEXTRA") // stored=4 != size=9
+        .finish();
+    assert_invalid_data("PAX 0.1 payload_needed != size", pax01_mismatch_tar);
+
+    let mut pax10_mismatch = pax_record("GNU.sparse.major", "1");
+    pax10_mismatch.extend_from_slice(&pax_record("GNU.sparse.minor", "0"));
+    pax10_mismatch.extend_from_slice(&pax_record("GNU.sparse.name", "s10.bin"));
+    pax10_mismatch.extend_from_slice(&pax_record("GNU.sparse.realsize", "8192"));
+    let mut pax10_payload = b"1\n0\n4\n".to_vec();
+    pax10_payload.resize(512, 0); // 1-block sparse map
+    pax10_payload.extend_from_slice(b"ABCDEXTRA"); // 512 + 4 != 512 + 9
+    let pax10_mismatch_tar = Tar::new()
+        .raw("PaxHeaders/s10", b'x', 0o644, &pax10_mismatch)
+        .file("s10.bin", 0o644, &pax10_payload)
+        .finish();
+    assert_invalid_data("PAX 1.0 payload_needed != size", pax10_mismatch_tar);
+
+    // 5. Item 5b: malformed PAX record after GNU.sparse.* key must return InvalidData.
+    let mut malformed_after_sparse = pax_record("GNU.sparse.major", "0");
+    malformed_after_sparse.extend_from_slice(b"999 bad=record\n");
+    let malformed_pax_tar = Tar::new()
+        .raw("PaxHeaders/bad", b'x', 0o644, &malformed_after_sparse)
+        .file("plain.bin", 0o644, b"RAW")
+        .finish();
+    assert_invalid_data("malformed PAX after GNU.sparse.*", malformed_pax_tar);
+}
+
+#[test]
+fn sparse_expanded_bytes_are_counted_in_load_capacity_check() {
+    use std::net::TcpListener;
+
+    let scratch = Scratch::new("lp176-r1-sparse-cap");
+    let home = scratch.base.join("home");
+    fs::create_dir_all(&home).unwrap();
+    home::ensure(&home).unwrap();
+
+    // Stand-in Docker reports small inspected.size (64 KiB) so initial capacity() passes,
+    // but streams a sparse file expanding to 512 KiB (docker::need(512 KiB) > 512 KiB free).
+    let standin = scratch.base.join("standin");
+    fs::create_dir_all(standin.join("images")).unwrap();
+    let id = format!("sha256:{}", "9".repeat(64));
+    let sparse_tar = build_gnu_sparse_tar("big.bin", 0o644, 0, 512 * 1024, &[(0, b"HEAD")]);
+    fs::write(standin.join("export.tar"), &sparse_tar).unwrap();
+    let img_json = format!(
+        r#"{{"Id":"{id}","RepoTags":["cap/sparse:1"],"Os":"linux","Architecture":"{}","Size":65536,"Config":{{}}}}"#,
+        architecture()
+    );
+    fs::write(standin.join("images/cap_sparse_1.json"), &img_json).unwrap();
+    let dbin = standin.join("docker");
+    fs::write(
+        &dbin,
+        r#"#!/bin/sh
+D="$(dirname "$0")"
+case "$1 $2" in
+  "image inspect") cat "$D/images/cap_sparse_1.json"; echo; exit 0 ;;
+  "container inspect")
+    if [ "$3" = "--size" ]; then echo 65536; exit 0; fi
+    echo "No such object" >&2; exit 1 ;;
+esac
+case "$1" in
+  create) echo id ;;
+  export) cat "$D/export.tar" ;;
+  history) echo 65536 ;;
+  rm|ps) ;;
+esac
+"#,
+    )
+    .unwrap();
+    fs::set_permissions(&dbin, fs::Permissions::from_mode(0o755)).unwrap();
+
+    // Mock worker reporting 512 KiB free so initial 64 KiB check passes,
+    // then expanded streaming bytes hit Capacity during send().
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    write_record(
+        &paths::machine_record(&home, "vm1"),
+        &SdkValue::map([
+            ("name", SdkValue::text("vm1")),
+            ("platform", SdkValue::text("lima")),
+        ]),
+    )
+    .unwrap();
+    write_record(
+        &paths::worker_record(&home, "vm1"),
+        &SdkValue::map([
+            ("address", SdkValue::text(addr.to_string())),
+            ("secret", SdkValue::text("k")),
+        ]),
+    )
+    .unwrap();
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
+    let server = std::thread::spawn(move || {
+        let mut writes = 0usize;
+        while let Ok((mut stream, _)) = listener.accept() {
+            if done_rx.try_recv().is_ok() {
+                break;
+            }
+            if read_frame_within(&mut stream, MAX_HELLO)
+                .ok()
+                .flatten()
+                .is_none()
+            {
+                continue;
+            }
+            write_frame(
+                &mut stream,
+                &SdkValue::map([
+                    ("ready", SdkValue::Bool(true)),
+                    ("protocol", SdkValue::Int(PROTOCOL)),
+                ]),
+            )
+            .unwrap();
+            while let Ok(Some(req)) = read_frame(&mut stream) {
+                let args = req.get("args").cloned().unwrap_or(SdkValue::Null);
+                let step = args.get_text("step").unwrap_or("");
+                if step == "write" {
+                    writes += 1;
+                }
+                let value = match step {
+                    "probe" => SdkValue::map([
+                        ("architecture", SdkValue::text(architecture())),
+                        ("free", SdkValue::Int(512 * 1024)),
+                        (
+                            "root",
+                            SdkValue::text("/layerfs/data/machine/native/run/images"),
+                        ),
+                        ("present", SdkValue::Bool(false)),
+                    ]),
+                    _ => SdkValue::Null,
+                };
+                write_frame(&mut stream, &SdkValue::map([("value", value)])).unwrap();
+            }
+            if done_rx.try_recv().is_ok() {
+                break;
+            }
+        }
+        writes
+    });
+
+    let Executor::Worker(mut worker) = place::on_machine(&home, "vm1").unwrap() else {
+        panic!("expected worker executor");
+    };
+    let docker = Docker::at(Some(dbin), None);
+    let mut sink = |_: SdkValue| {};
+    let mut events = Events::new(&mut sink);
+    let err = load(
+        &docker,
+        &mut events,
+        &mut Target::worker(&home, "vm1", &mut worker),
+        None,
+        "cap/sparse:1",
+    )
+    .unwrap_err();
+    assert_eq!(err.code, "Capacity", "{err:?}");
+    let _ = done_tx.send(());
+    let _ = std::net::TcpStream::connect(addr);
+    let writes = server.join().unwrap();
+    assert_eq!(
+        writes, 0,
+        "capacity check must reject expanded frame before writing it"
+    );
 }
 
 #[test]

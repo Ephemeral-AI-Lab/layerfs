@@ -321,8 +321,11 @@ pub fn prune(home: &Path, name: &MachineName, image: Option<&str>, unused: bool)
     if host_mode(&executor) {
         return Err(host_only(machine));
     }
-    let locked = locked_image_ids(&ImageLock::dir(home, machine))?;
+    let (locked, lock_errors) = scan_image_locks(&ImageLock::dir(home, machine))?;
     let _target_lock = if let Some(target) = image {
+        if let Some(reason) = lock_errors.get(target) {
+            return Err(refused("Failed", reason.clone()));
+        }
         if locked.contains(target) {
             return Err(refused_with(
                 "InUse",
@@ -330,7 +333,7 @@ pub fn prune(home: &Path, name: &MachineName, image: Option<&str>, unused: bool)
                 SdkValue::map([("count", SdkValue::Int(1))]),
             ));
         }
-        Some(ImageLock::try_take(home, machine, target)?.ok_or_else(|| {
+        Some(ImageLock::try_hold(home, machine, target)?.ok_or_else(|| {
             refused_with(
                 "InUse",
                 format!("image {target} has an active copy lock on this machine"),
@@ -348,6 +351,23 @@ pub fn prune(home: &Path, name: &MachineName, image: Option<&str>, unused: bool)
         "locked",
         SdkValue::List(locked.into_iter().map(SdkValue::Text).collect()),
     );
+    if !lock_errors.is_empty() {
+        args = home::with_field(
+            args,
+            "lock_errors",
+            SdkValue::List(
+                lock_errors
+                    .into_iter()
+                    .map(|(id, reason)| {
+                        SdkValue::map([
+                            ("id", SdkValue::text(id)),
+                            ("reason", SdkValue::text(reason)),
+                        ])
+                    })
+                    .collect(),
+            ),
+        );
+    }
     if image.is_some() {
         args = home::with_field(args, "target_guarded", SdkValue::Bool(true));
     }
@@ -388,10 +408,28 @@ fn pruning(side: &Side<'_>, args: &SdkValue) -> Outcome {
     let unused = args.get_bool("unused");
     let target_guarded = args.get_bool("target_guarded");
     let mut locked: BTreeSet<String> = cache::texts(args.get("locked")).into_iter().collect();
+    let mut lock_errors: BTreeMap<String, String> = match args.get("lock_errors") {
+        Some(SdkValue::List(items)) => items
+            .iter()
+            .filter_map(|item| {
+                Some((
+                    item.get_text("id")?.to_owned(),
+                    item.get_text("reason")?.to_owned(),
+                ))
+            })
+            .collect(),
+        _ => BTreeMap::new(),
+    };
     if !machine.is_empty() {
-        for id in locked_image_ids(&ImageLock::dir(root, machine))? {
+        let (local_locked, local_errors) = scan_image_locks(&ImageLock::dir(root, machine))?;
+        for id in local_locked {
             if !(target_guarded && target == Some(id.as_str())) {
                 locked.insert(id);
+            }
+        }
+        for (id, reason) in local_errors {
+            if !(target_guarded && target == Some(id.as_str())) {
+                lock_errors.insert(id, reason);
             }
         }
     }
@@ -414,12 +452,35 @@ fn pruning(side: &Side<'_>, args: &SdkValue) -> Outcome {
     }
     let lowers = lowers(dir.parent().unwrap_or(&dir))?;
     let mut removed = Vec::new();
+    let mut skipped = Vec::new();
     for (hex, item) in entries {
         let id = format!("sha256:{hex}");
+        if let Some(reason) = lock_errors.get(&id) {
+            if target.is_some() {
+                return Err(refused("Failed", reason.clone()));
+            }
+            skipped.push(SdkValue::map([
+                ("id", SdkValue::text(&id)),
+                ("reason", SdkValue::text(reason)),
+            ]));
+            continue;
+        }
         let held = [dir.join(format!("{hex}.2")), dir.join(&hex)];
         let lower_users = lowers.iter().filter(|l| held.contains(l)).count();
         let img_locked = locked.contains(&id);
-        let hold_locked = is_flock_held(&dir.join(format!("{hex}.2.lock")))?;
+        let hold_locked = match is_flock_held(&dir.join(format!("{hex}.2.lock"))) {
+            Ok(held) => held,
+            Err(err) => {
+                if target.is_some() {
+                    return Err(err);
+                }
+                skipped.push(SdkValue::map([
+                    ("id", SdkValue::text(&id)),
+                    ("reason", SdkValue::text(err.message)),
+                ]));
+                continue;
+            }
+        };
         if img_locked || lower_users > 0 || hold_locked {
             if target.is_some() {
                 let count = lower_users.max(1);
@@ -439,9 +500,16 @@ fn pruning(side: &Side<'_>, args: &SdkValue) -> Outcome {
             && !machine.is_empty()
             && ImageLock::dir(root, machine).is_dir()
         {
-            match ImageLock::try_take(root, machine, &id)? {
-                Some(guard) => Some(guard),
-                None => continue,
+            match ImageLock::try_hold(root, machine, &id) {
+                Ok(Some(guard)) => Some(guard),
+                Ok(None) => continue,
+                Err(err) => {
+                    skipped.push(SdkValue::map([
+                        ("id", SdkValue::text(&id)),
+                        ("reason", SdkValue::text(err.message)),
+                    ]));
+                    continue;
+                }
             }
         } else {
             None
@@ -509,10 +577,14 @@ fn pruning(side: &Side<'_>, args: &SdkValue) -> Outcome {
         (Some(before), Some(after)) => after.saturating_sub(before) as i64,
         _ => 0,
     };
-    Ok(SdkValue::map([
-        ("removed", SdkValue::List(removed)),
-        ("freed", SdkValue::Int(freed)),
-    ]))
+    let mut out = vec![
+        ("removed".to_owned(), SdkValue::List(removed)),
+        ("freed".to_owned(), SdkValue::Int(freed)),
+    ];
+    if !skipped.is_empty() {
+        out.push(("skipped".to_owned(), SdkValue::List(skipped)));
+    }
+    Ok(SdkValue::Map(out))
 }
 
 /// Scans `dir` for unpacked images, sidecars, staged `.part` files, and temporary
@@ -589,13 +661,14 @@ fn is_flock_held(path: &Path) -> Result<bool> {
     }
 }
 
-/// Every `sha256:<hex>` image digest whose `ImageLock` file in `lock_dir` is
-/// held by a live process or open file description.
-fn locked_image_ids(lock_dir: &Path) -> Result<BTreeSet<String>> {
+/// Scans `lock_dir` for `ImageLock` files held by live processes and per-image
+/// lock probe errors (e.g. a symlink or unreadable `.lock` file).
+fn scan_image_locks(lock_dir: &Path) -> Result<(BTreeSet<String>, BTreeMap<String, String>)> {
     let mut locked = BTreeSet::new();
+    let mut errors = BTreeMap::new();
     let entries = match std::fs::read_dir(lock_dir) {
         Ok(entries) => entries,
-        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(locked),
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok((locked, errors)),
         Err(e) => return Err(failed(e)),
     };
     for entry in entries {
@@ -605,11 +678,18 @@ fn locked_image_ids(lock_dir: &Path) -> Result<BTreeSet<String>> {
         let Some(hex) = name.strip_suffix(".lock").filter(|h| cache::is_hex(h)) else {
             continue;
         };
-        if is_flock_held(&entry.path())? {
-            locked.insert(format!("sha256:{hex}"));
+        let id = format!("sha256:{hex}");
+        match is_flock_held(&entry.path()) {
+            Ok(true) => {
+                locked.insert(id);
+            }
+            Ok(false) => {}
+            Err(err) => {
+                errors.insert(id, err.message);
+            }
         }
     }
-    Ok(locked)
+    Ok((locked, errors))
 }
 
 /// The image directories the Sandboxes under runtime root `run` are built on:

@@ -236,21 +236,34 @@ legacy `layerfs-export-<machine>-<hex>` containers labeled
 files (`.dockerenv`, `etc/hosts`, `etc/hostname`, `etc/resolv.conf`, `etc/mtab`,
 `dev/*`), device or FIFO entries, refuses hardlinks whose targets were dropped,
 expands GNU oldgnu (`S`) and PAX (`0.0`, `0.1`, `1.0`) sparse entries while
-streaming (`image_tar::TarReport` records dropped counts/paths and expanded
-sparse bytes), and normalizes directory modification times
+streaming (enforcing `image_tar::SPARSE_MAX` on per-entry `realsize` and
+cumulative expanded bytes, bounding oldgnu/PAX `0.x` chunk counts by entry
+`size`, requiring `payload_needed == size` after padding, refusing malformed PAX
+records after `GNU.sparse.*` keys with `InvalidData`, counting expanded bytes
+written to `.part` against `Capacity`, and recording dropped counts/paths and
+expanded sparse bytes in `image_tar::TarReport`), and normalizes directory
+modification times
 to epoch 0 (`1970-01-01T00:00:00Z`, PAX time records stripped and
 header checksum recomputed, so exports separated in time are byte-identical for
 resume) in 1 MiB `image.artifact` frames to `.recv-<hex>.part`;
 the machine checks its size and sha256, unpacks it
 once into `<hex>.2/`, strips the newly claimed `refs` from other cached
-sidecars so moved tags cannot select stale images, writes the sidecar (keeping
+sidecars (skipping corrupt unrelated sidecars) so moved tags cannot select stale
+images, writes the sidecar (keeping
 `variant` and `config` recorded-only), and deletes the staged tar.
 `<hex>.2.json` is the publication commit point (Option B interrupted-publish
 recovery): a read-only `probe` treats an un-sidecared `<hex>.2/` outside a
 sealed archive as `present: false, stranded: true` instead of backfilling
 incomplete `refs`/`config`/`variant` without a lock, while `publish` removes
 any non-in-use stranded `<hex>.2/` under `ImageLock` before re-unpacking, and
-`probe` refuses ambiguous `ref` lookups matching multiple cached images. A staged
+`probe` refuses ambiguous `ref` lookups matching multiple cached images
+(`InvalidInput`, suggesting `machine.prune` to remove one).
+
+Known limitations of `load` ref maintenance:
+- `strip_moved_refs` reads and rewrites other sidecars without a cross-file lock; in a narrow concurrent window between `publish` stripping a moved ref and a simultaneous `touch()` (Sandbox creation) on the older image, the stripped ref can reappear on the older sidecar and cause an ambiguous-ref refusal until one image is removed with `machine.prune`.
+- When the target digest is already cached on the machine, `load` returns `reused: true` early without calling `publish`, so moving a tag in Docker onto an already-cached target does not strip that tag from an older cached sidecar; if two sidecars claim the same ref, use `machine.prune` on one of them.
+
+A staged
 tar left by a copy that is not running is resumed when its bytes hash as this
 export's prefix, else restarted; `size` is the bytes sent, else the sidecar's,
 else the layers' unpacked size, and the export container's `SizeRootFs` only
@@ -278,7 +291,17 @@ An image is in use while a Sandbox directory's `config/helper.spec`
 `lower=` names it, while a create holds `.2.lock`, or while a live process
 holds `ImageLock` (`<home>/run/image-lock/<machine>/<hex>.lock`): a named one
 is refused `InUse` (`detail.count`), and `unused` leaves its artifacts
-untouched. Otherwise `prune` removes unpacked directories (including stranded
+untouched. On `native`, `unused` guards each candidate hex with `ImageLock::try_hold`
+(taking `flock` without writing an owner record so disk-full cleanups still
+proceed), and if probing or guarding a single hex fails (for example an
+unwritable lock directory or a bad `.lock` file), `unused` skips that hex,
+continues cleaning the rest, and returns `skipped: [{ id, reason }]` when any
+were skipped (naming that image directly returns the error). On worker routes
+(`lima`, `apple-container`), `prune` skips images based on the `ImageLock`
+snapshot taken at the start of the call; a concurrent `load` that starts after
+that snapshot may have its `.part` or un-sidecared `<hex>.2/` removed and fail
+(`write` offset mismatch or missing data, without corrupting cached data).
+Otherwise `prune` removes unpacked directories (including stranded
 `<hex>.2` without `<hex>.2.json`), dangling `<hex>.2.json` sidecars, unheld
 `.recv-<hex>.part` staged files, and temporary `.tmp-<hex>.2-*` unpack
 directories (`unused` keeps valid unpacked copies of the machine's default).

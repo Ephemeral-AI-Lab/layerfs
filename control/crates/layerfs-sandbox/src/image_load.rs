@@ -256,7 +256,8 @@ pub fn load(
     // capacity before the first effect on the machine (#175 R03): no export
     // container, no staged byte and no cache folder; a resumed copy counts
     // the bytes it already staged once
-    capacity(&machine, &probe, id, inspected.size)?;
+    let staged = probe.get_int("offset").unwrap_or(0).max(0) as u64;
+    capacity(&machine, &probe, id, inspected.size, staged)?;
     let home_id = ensure_home_id(target.home())?;
     phase(events, "export", None);
     let container = ExportContainer::create(docker, &home_id, &machine, id)?;
@@ -278,14 +279,13 @@ pub fn load(
     // the container's root refines the progress estimate only: the capacity
     // decision above is taken before anything is created
     let estimate = Some(unpacked.unwrap_or(0).max(inspected.size)).filter(|n| *n > 0);
-    let staged = probe.get_int("offset").unwrap_or(0).max(0) as u64;
     let prefix = probe.get_text("prefix_sha256").map(str::to_owned);
     let (sent, sha256) = match send(
         docker,
         events,
         target,
-        container.name(),
-        id,
+        (&probe, inspected.size),
+        (container.name(), id),
         (staged, prefix),
         estimate,
     )? {
@@ -295,8 +295,8 @@ pub fn load(
             docker,
             events,
             target,
-            container.name(),
-            id,
+            (&probe, inspected.size),
+            (container.name(), id),
             (0, None),
             estimate,
         )?
@@ -350,14 +350,16 @@ fn reused(id: &str, refs: Vec<String>, size: Option<u64>) -> Loaded {
 /// copy replaces; a wait a shared Cancel can end is X01's, not this card's.
 pub struct ImageLock {
     file: File,
-    record: PathBuf,
+    record: Option<PathBuf>,
 }
 
 impl Drop for ImageLock {
     fn drop(&mut self) {
         // the copy is over; a copy that died left its record behind for the
         // next owner to replace
-        let _ = std::fs::remove_file(&self.record);
+        if let Some(record) = &self.record {
+            let _ = std::fs::remove_file(record);
+        }
         layerfs_home::home::flock::unlock(&self.file);
     }
 }
@@ -392,20 +394,30 @@ impl ImageLock {
             .map_err(failed)
     }
 
-    /// Takes the lock of image `id` on `machine` without waiting; returns
-    /// `Ok(None)` when another live copy currently holds it.
-    pub fn try_take(home: &Path, machine: &str, id: &str) -> Result<Option<Self>> {
+    /// Opens `<hex>.lock` and tries an exclusive `flock` without waiting.
+    fn try_lock_file(home: &Path, machine: &str, id: &str) -> Result<Option<(File, String)>> {
         let hex = hex_of(id).ok_or_else(|| refused("InvalidInput", "image id"))?;
         let file = Self::open_file(home, machine, hex)?;
         if !layerfs_home::home::flock::try_lock(&file, true).map_err(failed)? {
             return Ok(None);
         }
-        let lock = Self {
-            file,
-            record: Self::record_path(home, machine, hex),
+        Ok(Some((file, hex.to_owned())))
+    }
+
+    /// Takes the lock of image `id` on `machine` without waiting or writing an
+    /// owner record (`machine.prune` guard); returns `Ok(None)` when another
+    /// live owner currently holds it.
+    pub fn try_hold(home: &Path, machine: &str, id: &str) -> Result<Option<Self>> {
+        Ok(Self::try_lock_file(home, machine, id)?.map(|(file, _)| Self { file, record: None }))
+    }
+
+    /// Takes the lock of image `id` on `machine` without waiting; returns
+    /// `Ok(None)` when another live copy currently holds it.
+    pub fn try_take(home: &Path, machine: &str, id: &str) -> Result<Option<Self>> {
+        let Some((file, hex)) = Self::try_lock_file(home, machine, id)? else {
+            return Ok(None);
         };
-        lock.record(machine, id)?;
-        Ok(Some(lock))
+        Self::with_record(file, home, machine, &hex, id).map(Some)
     }
 
     /// Takes the lock of image `id` on `machine`, waiting while a live copy
@@ -436,16 +448,12 @@ impl ImageLock {
             }
             std::thread::sleep(LOCK_POLL);
         }
-        let lock = Self {
-            file,
-            record: Self::record_path(home, machine, hex),
-        };
-        lock.record(machine, id)?;
-        Ok(lock)
+        Self::with_record(file, home, machine, hex, id)
     }
 
-    /// Records this copy as the lock's owner before it does anything else.
-    fn record(&self, machine: &str, id: &str) -> Result<()> {
+    /// Wraps `file` with its owner record path and writes the owner record.
+    fn with_record(file: File, home: &Path, machine: &str, hex: &str, id: &str) -> Result<Self> {
+        let path = Self::record_path(home, machine, hex);
         let now = home::now_ms();
         let mut fields = process::identity();
         fields.extend([
@@ -460,7 +468,11 @@ impl ImageLock {
                 .map(|(name, value)| (name.to_owned(), value))
                 .collect(),
         );
-        write_record(&self.record, &record)
+        write_record(&path, &record)?;
+        Ok(Self {
+            file,
+            record: Some(path),
+        })
     }
 }
 
@@ -649,12 +661,11 @@ fn hex_of(id: &str) -> Option<&str> {
 /// — the bytes already staged for a resumed copy are on the machine's
 /// filesystem and are counted once — `free` is what it has, and `where` names
 /// the filesystem that was measured.
-fn capacity(machine: &str, probe: &SdkValue, id: &str, size: u64) -> Result<()> {
+fn capacity(machine: &str, probe: &SdkValue, id: &str, size: u64, staged: u64) -> Result<()> {
     // a machine that does not say how much room it has cannot be refused
     let Some(free) = probe.get_int("free").map(|n| n.max(0) as u64) else {
         return Ok(());
     };
-    let staged = probe.get_int("offset").unwrap_or(0).max(0) as u64;
     let needed = docker::need(size).saturating_sub(staged);
     if needed <= free {
         return Ok(());
@@ -842,8 +853,8 @@ fn send(
     docker: &Docker,
     events: &mut Events<'_>,
     target: &mut Target<'_>,
-    container: &str,
-    id: &str,
+    (probe, checked): (&SdkValue, u64),
+    (container, id): (&str, &str),
     (staged, prefix): (u64, Option<String>),
     total: Option<u64>,
 ) -> Result<Option<(u64, String)>> {
@@ -892,6 +903,10 @@ fn send(
         if n == 0 {
             break;
         }
+        let next = offset + n as u64;
+        if next > checked {
+            capacity(target.machine(), probe, id, next, staged)?;
+        }
         whole.update(&buffer[..n]);
         target.step(SdkValue::map([
             ("step", SdkValue::text("write")),
@@ -899,7 +914,7 @@ fn send(
             ("offset", SdkValue::Int(offset as i64)),
             ("bytes", SdkValue::Bytes(buffer[..n].to_vec())),
         ]))?;
-        offset += n as u64;
+        offset = next;
         if last.elapsed() >= Duration::from_millis(200) {
             phase(events, "send", shown(offset));
             last = Instant::now();
