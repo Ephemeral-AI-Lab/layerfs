@@ -230,8 +230,11 @@ fn copy_packs(
     let name = identifier(table);
     let mut statement = connection
         .prepare(&format!(
-            "INSERT INTO main.{name} SELECT * FROM src.{name} \
-WHERE pack_id BETWEEN ?1 AND ?2 AND {RETAINED_PACK}"
+            // The range goes inside the subquery: SQLite drives this loop
+            // from `live_pack`, so a range on the outer table alone would
+            // seek every retained pack of the Store once per window.
+            "INSERT INTO main.{name} SELECT * FROM src.{name} WHERE pack_id IN \
+(SELECT pack_id FROM scratch.live_pack WHERE pack_id BETWEEN ?1 AND ?2)"
         ))
         .map_err(db_error)?;
     for window in plan {
