@@ -8,7 +8,8 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::records::{GcIntentKind, GcScopeKind};
 use layerfs_history::{HistoryError, OpConflict, UnknownOutcomeState};
 use layerfs_project::store::InitError;
-use layerfs_project::ProjectError;
+use layerfs_project::{ProjectError, RetainedAcquisition};
+use layerfs_storage::port::acquisition::Owner;
 use layerfs_store::project::add::add_failure;
 use layerfs_store::unknown::named_unknown;
 
@@ -163,4 +164,53 @@ fn a_bare_init_unknown_outcome_names_the_project_and_init_phase() {
             "{refusal:?}"
         );
     }
+}
+
+fn uncertain(cause: ProjectError) -> InitError {
+    InitError::Project(ProjectError::Uncertain {
+        cause: Box::new(cause),
+        retained: RetainedAcquisition {
+            owner: Owner {
+                operation: 1,
+                epoch: 2,
+            },
+            work: None,
+        },
+    })
+}
+
+/// F43R6-1: `init.rs`'s `reserve_inodes` failure carries an `UnknownOutcome`
+/// whose context `backing.settle` retains as `ProjectError::Uncertain { cause }`;
+/// `add_failure` still reaches the client as `Unknown` naming the project,
+/// the Init phase and the durable operation, never `Failed` with a null
+/// detail.
+#[test]
+fn a_lost_reserve_inodes_is_unknown_through_uncertain() {
+    let error = uncertain(ProjectError::History(
+        HistoryError::UnknownOutcome.with_unknown(unknown_state()),
+    ));
+    let refusal = add_failure(error, None, "shop", "store");
+    assert_unknown_names_shop(&refusal);
+}
+
+/// The new `Uncertain` arm keeps a definite history cause's own code: it does
+/// not become `Unknown` merely because the acquisition retained it.
+#[test]
+fn a_definite_history_cause_in_uncertain_keeps_its_code() {
+    let conflict = OpConflict::new(
+        GcIntentKind::Compaction,
+        GcScopeKind::Store,
+        "store",
+        Some("compact".to_owned()),
+        "aa".repeat(8),
+        false,
+    );
+    let error = uncertain(ProjectError::History(HistoryError::BusyOp(Box::new(
+        conflict,
+    ))));
+    let refusal = add_failure(error, None, "shop", "store");
+    assert_eq!(refusal.code, "Busy", "{refusal:?}");
+    let entity = refusal.detail.get("entity").expect("entity");
+    assert_eq!(entity.get_text("kind"), Some("store"));
+    assert_eq!(entity.get_text("name"), Some("store"));
 }
