@@ -42,7 +42,7 @@ pub(crate) fn call(
     args: &[&str],
     timeout: Duration,
 ) -> Result<Output, MachineError> {
-    let command = tool::command(&tool::find(&spec.tools, cli)?, args);
+    let command = tool::command(&spec.tools, &tool::find(&spec.tools, cli)?, args);
     tool::run(
         command,
         None,

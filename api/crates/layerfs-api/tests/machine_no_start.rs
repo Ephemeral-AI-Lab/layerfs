@@ -148,6 +148,8 @@ fn no_list_get_or_status_call_starts_a_machine() {
     std::fs::write(&limactl, STAND_IN).unwrap();
     std::fs::set_permissions(&limactl, std::fs::Permissions::from_mode(0o755)).unwrap();
     std::env::set_var("PATH", &tools);
+    // only the stand-ins: no fallback folder after PATH
+    std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");
     let cache = tempdir("cache");
     std::env::set_var("XDG_CACHE_HOME", &cache);
     std::env::remove_var("LAYERFS_BUNDLE");

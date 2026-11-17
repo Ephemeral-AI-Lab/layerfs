@@ -1,8 +1,9 @@
-//! The host's Docker, as the image copies read it (D3): the `docker` CLI on
-//! this process's search path, pointed at the `docker` machine record's
-//! socket (`machine update docker --docker`), else Docker's default context,
-//! whatever machine an image is going to. Reads have a deadline; nothing
-//! here pulls or builds an image.
+//! The host's Docker, as the image copies read it (D3): the `docker` CLI the
+//! machines find (`PATH`, then the fallback folders), pointed at the socket
+//! the `docker` machine uses (its recorded one, else the host's automatic
+//! choice: `layerfs_machine::docker_socket`), whatever machine an image is
+//! going to, so the machine and its images are in one Engine. Reads have a
+//! deadline; nothing here pulls or builds an image.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::refused;
 use std::io::Read;
@@ -18,8 +19,10 @@ pub const READ: Duration = Duration::from_secs(10);
 pub struct Docker {
     /// The `docker` executable, or `None` when it is not installed.
     program: Option<PathBuf>,
-    /// The `-H` argument, when the docker machine records a socket.
+    /// The `-H` argument.
     host: Option<String>,
+    /// The `PATH` it runs with: the machines' tool search path.
+    path: Option<std::ffi::OsString>,
 }
 
 /// Why a Docker read failed.
@@ -48,7 +51,9 @@ impl Failure {
     /// Its message for people.
     pub fn message(&self) -> String {
         match self {
-            Failure::NotInstalled => "docker is not on the search path".to_owned(),
+            Failure::NotInstalled => {
+                "docker is not on the search path or in the fallback folders".to_owned()
+            }
             Failure::NotRunning(m) | Failure::Missing(m) | Failure::Error(m) => m.clone(),
         }
     }
@@ -71,7 +76,22 @@ impl Failure {
 }
 
 impl Docker {
-    /// The Docker the home's `docker` machine names.
+    /// The Docker the home's `docker` machine uses: the `docker` its
+    /// adapter finds, on the socket it starts on.
+    #[cfg(feature = "machine")]
+    pub fn of(home: &Path) -> Result<Self, SdkRefusal> {
+        let tools = layerfs_machine::machine_tools(home)?;
+        let program = layerfs_machine::platform::find_tool(&tools, "docker");
+        let host = format!("unix://{}", tools.docker_socket.display());
+        Ok(Self {
+            path: Some(tools.path),
+            ..Self::at(program, Some(host))
+        })
+    }
+
+    /// Without the machine adapters (a worker's build): the `docker` on
+    /// `PATH`, on the socket the `docker` record names, else its default.
+    #[cfg(not(feature = "machine"))]
     pub fn of(home: &Path) -> Result<Self, SdkRefusal> {
         let socket = layerfs_machine::record::MachineRecord::read(home, "docker")?
             .and_then(|r| r.docker().map(str::to_owned));
@@ -85,13 +105,20 @@ impl Docker {
 
     /// A Docker CLI at `program`, pointed at `host` (tests use a stand-in).
     pub fn at(program: Option<PathBuf>, host: Option<String>) -> Self {
-        Self { program, host }
+        Self {
+            program,
+            host,
+            path: None,
+        }
     }
 
     /// `docker [-H host] args...`.
     pub fn command(&self, args: &[&str]) -> Result<Command, Failure> {
         let program = self.program.as_ref().ok_or(Failure::NotInstalled)?;
         let mut command = Command::new(program);
+        if let Some(path) = &self.path {
+            command.env("PATH", path);
+        }
         if let Some(host) = &self.host {
             command.arg("-H").arg(host);
         }

@@ -115,10 +115,12 @@ built addon).
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
-83 calls: 38 in `work`, 38 in `admin` only, 6 in no profile (`ui`), 1 no tool; `--profile admin` lists 76.
+85 calls: 38 in `work`, 40 in `admin` only, 6 in no profile (`ui`), 1 no tool; `--profile admin` lists 78.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
+| `home.init` | admin | admin | set the home up and read what this build would use with it; administration |
+| `home.get` | admin | admin | set the home up and read what this build would use with it; administration |
 | `project.init` | admin | admin | import a host folder into a Store; administration |
 | `project.list` | work | work, admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
 | `project.get` | work | work, admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |

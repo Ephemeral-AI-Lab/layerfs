@@ -140,7 +140,7 @@ pub(super) fn disk_exists(spec: &Spec, disk: &str) -> Result<bool, MachineError>
 
 pub(crate) fn status(spec: &Spec) -> Result<Status, MachineError> {
     let version = tool::lookup(&spec.tools, CLI)
-        .and_then(|p| first_line(tool::command(&p, ["--version"]), false));
+        .and_then(|p| first_line(tool::command(&spec.tools, &p, ["--version"]), false));
     let (kernel, dir) = observe(spec)?;
     let free = match (kernel, dir) {
         (State::Running, Some(dir)) => worker::free_disk(

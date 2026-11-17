@@ -49,6 +49,9 @@ pub struct DoctorRequest {
     pub quick: bool,
     /// Explicit temporary backup object round trip.
     pub write_test: bool,
+    /// The build making the call, which `host.native_daemon` compares the
+    /// native daemon's stamp with (`Build::default()`: unknown).
+    pub build: crate::home::Build<'static>,
 }
 
 /// A monotonic overall work budget. Probes must bound their real work by it.

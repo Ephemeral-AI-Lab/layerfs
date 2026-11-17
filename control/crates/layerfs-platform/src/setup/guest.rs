@@ -36,7 +36,7 @@ impl Guest {
     ) -> Result<Command, MachineError> {
         Ok(match self {
             Self::Lima { dir, vm } => {
-                let mut c = tool::command(&tool::find(tools, "ssh")?, ["-F"]);
+                let mut c = tool::command(tools, &tool::find(tools, "ssh")?, ["-F"]);
                 c.arg(dir.join("ssh.config"))
                     .arg(format!("lima-{vm}"))
                     .arg("--");
@@ -49,7 +49,7 @@ impl Guest {
                 c
             }
             Self::AppleContainer { vm } => {
-                let mut c = tool::command(&tool::find(tools, "container")?, ["exec"]);
+                let mut c = tool::command(tools, &tool::find(tools, "container")?, ["exec"]);
                 if stdin {
                     c.arg("-i");
                 }
@@ -58,7 +58,7 @@ impl Guest {
             }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Docker { socket, container } => {
-                let mut c = tool::command(&tool::find(tools, "docker")?, ["-H"]);
+                let mut c = tool::command(tools, &tool::find(tools, "docker")?, ["-H"]);
                 c.arg(format!("unix://{}", socket.display())).arg("exec");
                 if stdin {
                     c.arg("-i");
@@ -148,7 +148,7 @@ impl Guest {
         destination: &str,
     ) -> Result<(), MachineError> {
         let what = format!("copying {} into the guest's {destination}", dir.display());
-        let mut pack = tool::command(&tool::find(tools, "tar")?, ["-C"]);
+        let mut pack = tool::command(tools, &tool::find(tools, "tar")?, ["-C"]);
         pack.arg(dir);
         pack.args(["-cf", "-", entry.unwrap_or(".")])
             .env("COPYFILE_DISABLE", "1")

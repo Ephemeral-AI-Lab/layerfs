@@ -128,11 +128,11 @@ over [`Events`](../../../../control/crates/layerfs-home/src/events.rs):
 it came, `output(stream, bytes)` sends `{ stream, bytes }`. Events are sent on
 the call's own thread, before it returns.
 
-Nine calls declare the shared `PROGRESS` option (`on_progress`; CLI
+Eleven calls declare the shared `PROGRESS` option (`on_progress`; CLI
 `--progress`) in [`calls/table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs):
 `project.init`, `project.export`, `store.push`, `store.pull`,
-`backup.create`, `backup.restore`, `machine.start`, `machine.create` and
-`workspace.exec`. `workspace.exec` alone also declares the `stdout` and
+`backup.create`, `backup.restore`, `machine.start`, `machine.create`,
+`machine.load`, `sandbox.create` and `workspace.exec`. `workspace.exec` alone also declares the `stdout` and
 `stderr` functions. A function never crosses into the library:
 [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs)
 refuses one as a value.

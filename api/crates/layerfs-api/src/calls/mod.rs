@@ -2,7 +2,7 @@
 //! table's shape, argument checks, folder scope, result keys and the one
 //! dispatcher with its call log line (`render`, #659); moved back from
 //! `layerfs-control` by layerfs-project#107.
-//! The 83 entries in eleven families live beside it, one folder per family and
+//! The 85 entries in twelve families live beside it, one folder per family and
 //! one file per call; each function here that needs them takes that list.
 mod check;
 mod context;

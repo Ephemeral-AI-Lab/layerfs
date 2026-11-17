@@ -13,6 +13,8 @@ use std::collections::BTreeMap;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 struct Fixture {
@@ -21,6 +23,10 @@ struct Fixture {
     /// The home's id, which a built-in machine's first record is made with.
     id: String,
     path: Option<std::ffi::OsString>,
+    /// A stand-in Engine socket that answers pings, named by DOCKER_HOST,
+    /// so the docker probe never reaches this host's own Docker.
+    engine: Option<(Arc<AtomicBool>, std::thread::JoinHandle<()>)>,
+    docker_host: Option<std::ffi::OsString>,
 }
 impl Fixture {
     fn new() -> Self {
@@ -31,15 +37,50 @@ impl Fixture {
         let id = home::ensure(&home).unwrap().id;
         let previous = std::env::var_os("PATH");
         std::env::set_var("PATH", root.join("bin"));
+        // only the stand-ins: no fallback folder after PATH
+        std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");
+        let socket = root.join("e.sock");
+        let _ = std::fs::remove_file(&socket);
+        let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopping = Arc::clone(&stop);
+        let engine = std::thread::spawn(move || {
+            use std::io::{Read, Write};
+            let until = Instant::now() + Duration::from_secs(90);
+            while !stopping.load(Ordering::Relaxed) && Instant::now() < until {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        stream.set_nonblocking(false).unwrap();
+                        let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
+                        let mut request = [0u8; 256];
+                        let _ = stream.read(&mut request);
+                        let _ = stream.write_all(b"HTTP/1.1 200 OK\r\n\r\nOK");
+                    }
+                    Err(_) => std::thread::sleep(Duration::from_millis(1)),
+                }
+            }
+        });
+        let docker_host = std::env::var_os("DOCKER_HOST");
+        std::env::set_var("DOCKER_HOST", format!("unix://{}", socket.display()));
         Self {
             root,
             home,
             id,
             path: previous,
+            engine: Some((stop, engine)),
+            docker_host,
         }
     }
     fn provider(&self, state: &str) {
         let script = format!("#!/bin/sh\necho \"$*\" >> '{}'/calls\ncase \"$*\" in *version*) echo 29.0;; *inspect*) printf '{}\\tmachine-worker\\n';; *) exit 71;; esac\n", self.root.display(), state);
+        let file = self.root.join("bin/docker");
+        std::fs::write(&file, script).unwrap();
+        std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    /// A provider whose Engine answers and holds no worker container.
+    fn provider_missing(&self) {
+        let script = format!("#!/bin/sh\necho \"$*\" >> '{}'/calls\ncase \"$*\" in *version*) echo 29.0;; *inspect*) echo 'Error: No such object' >&2; exit 1;; *) exit 71;; esac\n", self.root.display());
         let file = self.root.join("bin/docker");
         std::fs::write(&file, script).unwrap();
         std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -63,6 +104,14 @@ impl Fixture {
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
+        if let Some((stop, engine)) = self.engine.take() {
+            stop.store(true, Ordering::Relaxed);
+            let _ = engine.join();
+        }
+        match &self.docker_host {
+            Some(host) => std::env::set_var("DOCKER_HOST", host),
+            None => std::env::remove_var("DOCKER_HOST"),
+        }
         match &self.path {
             Some(path) => std::env::set_var("PATH", path),
             None => std::env::remove_var("PATH"),
@@ -125,6 +174,50 @@ fn machine_target_reports_dependencies_and_preserves_home() {
         "machine.provider",
         "fail",
     );
+    // no worker container: a warning while docker never started (a stop
+    // before any start included), an error once it ran
+    f.provider_missing();
+    for record in [
+        MachineRecord::built_in("docker", &f.id),
+        MachineRecord::built_in("docker", &f.id).with("state", SdkValue::text("stopped")),
+    ] {
+        record.write(&f.home).unwrap();
+        let never = f.report("docker", Duration::from_secs(1));
+        outcome(&never, "machine.provider", "fail");
+        assert_eq!(
+            check(&never, "machine.provider").get_text("severity"),
+            Some("warning")
+        );
+        assert_eq!(
+            check(&never, "machine.provider").get_text("message"),
+            Some("docker was never started; Start creates its worker container (`layerfs machine start docker`)")
+        );
+        outcome(&never, "machine.worker.auth", "skipped");
+    }
+    // it ran: its recorded socket is the stand-in Engine's (a machine that
+    // ran with none recorded would use Docker's default socket)
+    MachineRecord::built_in("docker", &f.id)
+        .with("state", SdkValue::text("stopped"))
+        .with("lasting", SdkValue::map([]))
+        .with(
+            "docker",
+            SdkValue::text(f.root.join("e.sock").to_str().unwrap()),
+        )
+        .write(&f.home)
+        .unwrap();
+    let lost = f.report("docker", Duration::from_secs(1));
+    outcome(&lost, "machine.provider", "fail");
+    assert_eq!(
+        check(&lost, "machine.provider").get_text("severity"),
+        Some("error")
+    );
+    assert_eq!(
+        check(&lost, "machine.provider").get_text("message"),
+        Some("provider holds no runtime with the recorded machine identity")
+    );
+    MachineRecord::built_in("docker", &f.id)
+        .write(&f.home)
+        .unwrap();
     f.provider("exited");
     let stopped = f.report("docker", Duration::from_secs(1));
     outcome(&stopped, "machine.worker.auth", "skipped");

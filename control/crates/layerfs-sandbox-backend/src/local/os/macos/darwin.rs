@@ -5,12 +5,13 @@
 //! deadline (layerfs-project#178 security rule 8).
 //! The process facts (`proc_pidinfo`, `sysctl`) are `layerfs_bridge::process`
 //! (layerfs-project#112), below the drivers and the home.
+use layerfs_bridge::process::Retained;
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use std::{
     io::{self, Read},
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
-    sync::Mutex,
+    process::{Command, Stdio},
+    sync::LazyLock,
     time::{Duration, Instant},
 };
 
@@ -26,22 +27,10 @@ const TABLE_REAP: Duration = Duration::from_millis(500);
 /// The most of the table that is read.
 const TABLE: usize = 1 << 20;
 
-/// Children that were killed and whose exit was not seen in time: kept, so
-/// a later call can reap them.
-static RETAINED: Mutex<Vec<Child>> = Mutex::new(Vec::new());
-
-/// Reaps the retained children that have ended since.
-fn reap_retained() {
-    let mut held = RETAINED.lock().unwrap_or_else(|error| error.into_inner());
-    held.retain_mut(|child| !matches!(child.try_wait(), Ok(Some(_))));
-}
-
-fn retain(child: Child) {
-    RETAINED
-        .lock()
-        .unwrap_or_else(|error| error.into_inner())
-        .push(child);
-}
+/// Children a `umount` KILL or `mount` timeout did not release. Their exits
+/// are reaped by the shared retained queue
+/// ([`layerfs_bridge::process::Retained`]), never by a second wait here.
+static RETAINED: LazyLock<Retained> = LazyLock::new(Retained::default);
 
 /// One tool's standard output, or its failure with what it said.
 fn output(program: &str, args: &[&str]) -> io::Result<(bool, String)> {
@@ -88,7 +77,7 @@ pub(crate) fn mount_line(line: &str) -> Option<(PathBuf, String)> {
 /// asks no mounted server, so it is not expected to wait; the deadline is
 /// for a host where it does.
 pub(crate) fn mount_table() -> io::Result<String> {
-    reap_retained();
+    RETAINED.reap();
     let mut child = Command::new(MOUNT)
         .env_clear()
         .env("LC_ALL", "C")
@@ -131,14 +120,21 @@ pub(crate) fn mount_table() -> io::Result<String> {
         }
         Ok(status) => Err(io::Error::other(format!("mount listing failed: {status}"))),
         Err(error) => {
+            let pid = child.id();
             let _ = child.kill();
             let deadline = Instant::now() + TABLE_REAP;
-            while !matches!(child.try_wait(), Ok(Some(_))) {
-                if Instant::now() >= deadline {
-                    retain(child);
-                    break;
+            let reaped = loop {
+                match child.try_wait() {
+                    Ok(Some(status)) => break Some(status),
+                    Ok(None) if Instant::now() < deadline => {
+                        std::thread::sleep(Duration::from_millis(2));
+                    }
+                    Ok(None) | Err(_) => break None,
                 }
-                std::thread::sleep(Duration::from_millis(2));
+            };
+            match reaped {
+                Some(status) => RETAINED.record(pid, status),
+                None => RETAINED.retain(child),
             }
             Err(error)
         }
@@ -147,7 +143,7 @@ pub(crate) fn mount_table() -> io::Result<String> {
 
 /// Forces the mount at `point` off once; a point no longer mounted is done.
 pub(crate) fn force_unmount(point: &Path) -> io::Result<()> {
-    reap_retained();
+    RETAINED.reap();
     let mut child = Command::new(UMOUNT)
         .arg("-f")
         .arg(point)
@@ -191,18 +187,23 @@ pub(crate) fn force_unmount(point: &Path) -> io::Result<()> {
             let reaped = loop {
                 unmount_output(&mut stderr, &mut output);
                 match child.try_wait() {
-                    Ok(Some(_)) => break true,
+                    Ok(Some(status)) => break Some(status),
                     Ok(None) if Instant::now() < deadline => {
                         std::thread::sleep(Duration::from_millis(5));
                     }
-                    Ok(None) | Err(_) => break false,
+                    Ok(None) | Err(_) => break None,
                 }
             };
-            let disposition = if reaped {
-                "exit reaped"
-            } else {
-                retain(child);
-                "exit not observed after 5s; child custody retained (possible kernel wait)"
+            let disposition = match reaped {
+                Some(status) => {
+                    RETAINED.record(pid, status);
+                    format!("exit reaped ({status})")
+                }
+                None => {
+                    RETAINED.retain(child);
+                    "exit not observed after 5s; child custody retained (possible kernel wait)"
+                        .into()
+                }
             };
             return Err(io::Error::new(
                 error.kind(),

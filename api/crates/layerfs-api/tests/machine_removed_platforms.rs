@@ -59,6 +59,8 @@ fn a_removed_platform_is_shown_refused_and_forgotten() {
     // the built-in docker machine is probed by `machine.list`: no tool is found
     let empty = tempdir("path");
     std::env::set_var("PATH", &empty);
+    // only the stand-ins: no fallback folder after PATH
+    std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");
     std::env::set_var("HOME", &empty);
     let home = tempdir("home");
     layerfs_api::home::open(&home).unwrap();

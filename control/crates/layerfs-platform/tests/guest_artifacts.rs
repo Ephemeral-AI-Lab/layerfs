@@ -17,6 +17,8 @@ fn setup(s: &Scratch) {
         r##"#!/usr/bin/python3
 import os, shlex, subprocess, sys
 root = {root:?}
+# it runs with the tools' search path (the stand-ins); the guest has the system's
+os.environ["PATH"] += ":/usr/bin:/bin"
 args = shlex.split(" ".join(sys.argv[sys.argv.index("--") + 1:]))[3:]
 body = args[2] if len(args) > 2 else ""
 if "findmnt" in body: sys.exit(0)

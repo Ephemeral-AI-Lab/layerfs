@@ -8,6 +8,12 @@ from ._values import JSON, Content, Output, Progress, Result, Scope, Size
 TABLE: list[dict[str, object]]
 FAMILIES: list[str]
 
+class HomeFamily:
+    def init(self, *, log_tag: str | None = None) -> Result:
+        """create this home, or convert an older one; a current home is left as it is"""
+    def get(self, *, log_tag: str | None = None) -> Result:
+        """the home's state, and the Linux bundle and daemon this build would use; changes nothing"""
+
 class ProjectFamily:
     def init(
         self,
@@ -653,8 +659,8 @@ class DoctorFamily:
         """remove one leftover `layerfs doctor` listed, under its guard"""
 
 class Client:
-    home: str | None
     scope: Scope | Mapping[str, str | None] | None
+    home: HomeFamily
     project: ProjectFamily
     branch: BranchFamily
     commit: CommitFamily

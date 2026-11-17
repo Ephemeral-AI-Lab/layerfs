@@ -35,7 +35,7 @@ How the first call on a home creates it or converts an older layout, within
 | Previous (2) | `layerfs.json` with `layout: 2` | same, `PREVIOUS_LAYOUT` |
 | Current (3) | `layerfs.json` with `layout: 3` and a 32-hex `id` | same, `LAYOUT_VERSION` |
 
-Every call opens the home through `open`
+Every call but `home.get` opens the home through `open` (`home.init` calls it itself, to say what it did)
 ([`migrate/open.rs`](../../../../control/crates/layerfs-control/src/migrate/open.rs));
 a current home costs one read of `layerfs.json` and one look for the
 pending marker.

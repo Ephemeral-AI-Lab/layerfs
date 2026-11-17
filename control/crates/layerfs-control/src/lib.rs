@@ -8,6 +8,7 @@
 
 pub mod backup;
 pub mod doctor;
+pub mod home;
 #[doc(hidden)]
 pub mod inventory;
 #[cfg(feature = "machine")]

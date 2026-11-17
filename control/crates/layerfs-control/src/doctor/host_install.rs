@@ -1,6 +1,8 @@
 //! Local executable and applicable bundle checks, without deployment.
 use super::super::scan::Scanned;
 use super::{executable, Budget, Checks};
+use crate::home::{Build, NativeDaemon};
+use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::read_record;
 use layerfs_machine::{bundle_dir, IMAGE_ARCHIVE};
 use std::path::Path;
@@ -39,7 +41,8 @@ pub(super) fn identity(checks: &mut Checks) {
 }
 
 pub(super) fn artifacts(records: &Scanned, budget: &Budget, checks: &mut Checks) {
-    for machine in &records.machines {
+    // the native machine's daemon is `host.native_daemon`'s
+    for machine in records.machines.iter().filter(|m| m.name() != "native") {
         if budget.expired() {
             checks.unknown(
                 "host.artifacts",
@@ -63,13 +66,6 @@ pub(super) fn artifacts(records: &Scanned, budget: &Budget, checks: &mut Checks)
                 );
             }
         }
-    }
-    let native_override = records
-        .machines
-        .iter()
-        .any(|m| m.name() == "native" && m.daemon().is_some());
-    if !native_override {
-        default_native(checks);
     }
     let remote = records.machines.iter().any(|m| m.name() != "native")
         || records.sandboxes.iter().any(|s| s.machine() != "native")
@@ -121,7 +117,6 @@ pub(super) fn artifacts(records: &Scanned, budget: &Budget, checks: &mut Checks)
 
 /// Installation observations independent of an initialized current-layout home.
 pub(super) fn without_inventory(checks: &mut Checks, blocked: bool) {
-    default_native(checks);
     if blocked {
         checks.blocked(
             "host.artifacts",
@@ -142,9 +137,55 @@ pub(super) fn without_inventory(checks: &mut Checks, blocked: bool) {
     }
 }
 
-fn default_native(checks: &mut Checks) {
-    match bundle_dir(std::env::consts::OS) {
-        Ok(dir) if executable(&dir.join("layerfs-daemon")) => checks.pass("host.native_daemon", "Default native daemon is executable"),
-        _ => checks.warning("host.native_daemon", "Default native daemon is unavailable; configured overrides or remote operations may still be usable"),
+/// The daemon the native machine runs (its recorded one, else the default
+/// beside this host's bundle) and whether it is this build's, in
+/// `home.get`'s words: missing is an error when recorded and a warning for
+/// the default (remote machines may still be usable); another commit is a
+/// warning (`DaemonMismatch`); a commit it cannot compare passes, saying so.
+pub(super) fn native_daemon(home: &Path, build: Build<'_>, checks: &mut Checks) {
+    const ID: &str = "host.native_daemon";
+    let Some(daemon) = NativeDaemon::of(home) else {
+        checks.unknown(ID, "the native daemon's location could not be resolved");
+        return;
+    };
+    let shown = daemon.path.display().to_string();
+    let matched = daemon.matches(build);
+    let (commit, dirty) = match &daemon.stamp {
+        Some((commit, dirty)) => (SdkValue::text(commit), SdkValue::Bool(*dirty)),
+        None => (SdkValue::Null, SdkValue::Null),
+    };
+    let evidence = SdkValue::map([
+        ("path", SdkValue::text(&shown)),
+        ("source", SdkValue::text(daemon.source)),
+        ("commit", commit),
+        ("dirty", dirty),
+        ("matches", matched.clone()),
+    ]);
+    if daemon.present && !executable(&daemon.path) {
+        let message = format!(
+            "the native daemon at {shown} is not executable; `chmod +x` it or record another: `layerfs machine update native --daemon <path>`"
+        );
+        match daemon.source {
+            "recorded" => checks.fail(ID, message),
+            _ => checks.warning(ID, message),
+        }
+    } else if !daemon.present {
+        match daemon.source {
+            "recorded" => checks.fail(
+                ID,
+                layerfs_sandbox::deploy::missing_daemon("native", &shown),
+            ),
+            _ => checks.warning(ID, daemon.missing()),
+        }
+    } else if let Some(message) = daemon.mismatch(build) {
+        checks.warning(ID, message);
+    } else if matched == SdkValue::Bool(true) {
+        checks.pass(ID, format!("the native daemon at {shown} is this build's"));
+    } else {
+        checks.pass(
+            ID,
+            format!("the native daemon at {shown} is executable; its build cannot be compared with this one (a commit unknown or a tree dirty)"),
+        );
     }
+    checks.evidence(ID, evidence);
 }

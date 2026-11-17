@@ -96,7 +96,7 @@ class LinuxBundleTests(unittest.TestCase):
             "worktree": str(self.worktree),
             "images": {"build": "sha256:b", "sandbox": "sha256:s"},
         }
-        self.source = {"head": "abc", "sha256": "src1", "files": {}}
+        self.source = {"head": "abc", "dirty": False, "sha256": "src1", "files": {}}
         self.commands = []
         protocol = self.worktree / "control/crates/layerfs-machine/src/worker/hello.rs"
         protocol.parent.mkdir(parents=True)
@@ -186,7 +186,7 @@ class LinuxBundleTests(unittest.TestCase):
             bundle.seal(self.record, "debug", None, dest, 120)
         bundle.build(self.record, "worker", "debug", 120)
         bundle.build(self.record, "helper", "debug", 120)
-        self.source = {"head": "abc", "sha256": "src2", "files": {}}
+        self.source = {"head": "abc", "dirty": False, "sha256": "src2", "files": {}}
         with self.assertRaisesRegex(Refused, "daemon, worker, helper"):
             bundle.seal(self.record, "debug", None, dest, 120)
         self.assertFalse(dest.exists() and any(dest.rglob("*")), "nothing placed")
@@ -242,6 +242,7 @@ class LinuxBundleTests(unittest.TestCase):
         self.assertEqual((final / "runtime/lib/ld-linux-aarch64.so.1").stat().st_mode & 0o777, 0o755)
         self.assertEqual(sorted(p.name for p in final.iterdir() if p.name.startswith(".")), [])
         self.assertEqual(manifest["protocol"], 3)
+        self.assertEqual(manifest["source"], {"head": "abc", "dirty": False, "sha256": "src1"})
         self.assertEqual(manifest["runtime"], bundle.bundle_hash({n: files[n] for n in bundle.BINARIES}))
         # the namespaces backend's shape: uncompressed layers, config named by its digest
         with tarfile.open(final / bundle.ARCHIVE) as tar:

@@ -95,6 +95,13 @@ pub(crate) fn find(tools: &Tools, name: &str) -> Result<PathBuf, MachineError> {
     })
 }
 
+/// The full path of tool `name` on the tools' search path (`PATH`, then the
+/// fallback folders), if it is there: how every caller outside the adapters
+/// finds `docker` too, so both find the same one.
+pub fn find_tool(tools: &Tools, name: &str) -> Option<PathBuf> {
+    lookup(tools, name)
+}
+
 pub(crate) fn lookup(tools: &Tools, name: &str) -> Option<PathBuf> {
     std::env::split_paths(&tools.path)
         .filter(|dir| !dir.as_os_str().is_empty())
@@ -260,9 +267,8 @@ pub(crate) fn detach(
     log: &Path,
 ) -> Result<u32, MachineError> {
     let sh = find(tools, "sh")?;
-    let mut command = Command::new(sh);
+    let mut command = self::command(tools, &sh, ["-c"]);
     command
-        .arg("-c")
         .arg("log=$1; shift; \"$@\" </dev/null >/dev/null 2>>\"$log\" & echo $!")
         .arg("sh")
         .arg(log)
@@ -319,8 +325,8 @@ pub(crate) fn alive(tools: &Tools, pid: u32, marker: &str) -> bool {
     let Ok(ps) = find(tools, "ps") else {
         return true;
     };
-    let mut command = Command::new(ps);
-    command.args(["-o", "command=", "-p"]).arg(pid.to_string());
+    let mut command = self::command(tools, &ps, ["-o", "command=", "-p"]);
+    command.arg(pid.to_string());
     run(command, None, Duration::from_secs(10), "ps")
         .is_ok_and(|out| out.ok() && out.stdout.contains(marker))
 }
@@ -363,13 +369,18 @@ pub(crate) fn secret() -> Result<String, MachineError> {
     }))
 }
 
-/// `program args...` as a command.
-pub(crate) fn command<I, S>(program: &Path, args: I) -> Command
+/// `program args...` as a command, run with the tools' search path as its
+/// `PATH`, so a provider CLI finds its own helpers where LayerFS found it.
+pub(crate) fn command<I, S>(tools: &Tools, program: &Path, args: I) -> Command
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
     let mut command = Command::new(program);
     command.args(args);
+    // an empty search path leaves the command the system's default one
+    if !tools.path.is_empty() {
+        command.env("PATH", &tools.path);
+    }
     command
 }

@@ -26,6 +26,8 @@ The call table and the one dispatcher every front end goes through: what a call 
  call_scoped(home, scope, name, args, events, client)    dispatch.rs
    take log_tag --> find --> check --> render argv --> scope.apply
    --> home --> platform_policy --> migrate::open --> ensure_built_ins
+       (skipped for a call whose entry has opens false: home.init, home.get,
+       machine.platforms)
    --> scope.owns --> Call.run(Context{home, events}) --> keys::snake
    --> one line in <home>/trace/calls.jsonl
      |
@@ -41,7 +43,7 @@ The call table and the one dispatcher every front end goes through: what a call 
 
 | Behaviour | Detail | Source |
 | --- | --- | --- |
-| Table | eleven `Family { name, list }`; a `Call` is `{ family, call, args, options, help, run, quiet }`, an `Arg` `{ name, kind, optional }`; 83 calls, help order | [`table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs), [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families` |
+| Table | twelve `Family { name, list }`; a `Call` is `{ family, call, args, options, help, run, quiet, opens }`, an `Arg` `{ name, kind, optional }`; 85 calls, help order | [`table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs), [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families` |
 | JSON form | `table_json()`: `[{ family, call, args: [{ name, kind, optional }], options, help }]`; Node's `table`, Python's `TABLE`; the CLI parser and help read the same `Call` values | `table.rs` `table_json` |
 | Shared options | `PAGE` (`page_size`, `page_pos`), `DIFF` (`paths_only`, `page_size`, `page_pos`, `cursor`), `MESSAGE` (`message`), `PROGRESS` (`on_progress`), `WINDOW` (`cursor`, `before`, `limit`), `FILES` (`depth`, `cursor`, `limit`, `offset`, `length`) | `table.rs` |
 | Kinds | below | `table.rs` `Kind` |
@@ -104,7 +106,7 @@ anywhere in the mounted tree.
 
 Every call made through `call_scoped` (and `call_json`, which uses it) ends
 with one line in `<home>/trace/calls.jsonl`, except the `logs` calls, a call
-whose entry is `quiet` (`sandbox.files`, `machine.files`, `machine.stats`, `machine.space`: a client polls them, and a line per
+whose entry is `quiet` (`sandbox.files`, `machine.files`, `machine.stats`, `machine.space`, `home.get`: a client polls them, and a line per
 poll would bury the calls that changed something) and with `LAYERFS_LOGS=0`
 ([`dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs),
 [`render.rs`](../../../../api/crates/layerfs-api/src/calls/render.rs)):
@@ -161,7 +163,7 @@ changes it. Reading and clearing it are the [`logs`](../sdk/logs.md) calls.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host, temporary folders | eleven families and 83 calls; unknown calls and arguments refused before any effect; each family reached; JSON round trips; sizes and keys; a relative home refused; one source file per call |
+| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host, temporary folders | twelve families and 85 calls; unknown calls and arguments refused before any effect; each family reached; JSON round trips; sizes and keys; a relative home refused; one source file per call |
 | [`calls_scope.rs`](../../../../api/crates/layerfs-api/tests/calls_scope.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_scope` | any Unix host | a scope names its project, refuses every call it does not cover, needs a Sandbox of its project, and a scoped `branch.list` reads every page |
 | [`scope_references.rs`](../../../../api/crates/layerfs-api/tests/scope_references.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test scope_references` | any Unix host | fork and publish references outside the namespace refused before any effect; the JSON form refuses the same |
 | [`logs.rs`](../../../../api/crates/layerfs-api/tests/logs.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test logs` | any Unix host | one line per call, rendering and redaction, `logs.list` and `logs.reset` |

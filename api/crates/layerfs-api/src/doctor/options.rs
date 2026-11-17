@@ -101,6 +101,7 @@ pub fn doctor_request(options: &SdkValue) -> Result<Option<DoctorRequest>, SdkRe
         timeout,
         quick,
         write_test,
+        build: crate::home_family::build(),
     }))
 }
 fn invalid(message: &str) -> SdkRefusal {

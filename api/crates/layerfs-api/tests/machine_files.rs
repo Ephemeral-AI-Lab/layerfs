@@ -347,6 +347,7 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
             "prune",
             "status",
             "stats",
+            "space",
             "files",
             "start",
             "stop",

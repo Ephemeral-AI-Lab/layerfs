@@ -453,6 +453,13 @@ export interface LogsSandboxOptions extends CallOptions {
   limit?: WholeNumber;
 }
 
+export interface HomeFamily {
+  /** create this home, or convert an older one; a current home is left as it is */
+  init(options?: CallOptions): Promise<Result>;
+  /** the home's state, and the Linux bundle and daemon this build would use; changes nothing */
+  get(options?: CallOptions): Promise<Result>;
+}
+
 export interface ProjectFamily {
   /** import a host folder as a new project into an existing Store */
   init(project: string, folder: string, options?: ProjectInitOptions): Promise<Result>;
@@ -672,8 +679,8 @@ export interface DoctorFamily {
 }
 
 export interface Client {
-  readonly home: string | undefined;
   readonly scope: Scope | undefined;
+  readonly home: HomeFamily;
   readonly project: ProjectFamily;
   readonly branch: BranchFamily;
   readonly commit: CommitFamily;
@@ -703,6 +710,7 @@ export namespace doctor {
 /** Closes every Store this process holds open with no call running; answers how many. Outside the call table. */
 export function close(): number;
 
+export const home: HomeFamily;
 export const project: ProjectFamily;
 export const branch: BranchFamily;
 export const commit: CommitFamily;

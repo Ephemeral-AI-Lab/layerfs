@@ -11,10 +11,10 @@ const root = fileURLToPath(new URL("../../../../", import.meta.url));
 const command = process.env.LAYERFS_CLI ?? join(root, "target/debug/layerfs");
 const docs = join(root, "docs/architecture/api/sdk");
 
-test("the SDK pages name all 83 current calls, one `### family.call` heading each", () => {
-  assert.equal(table.length, 83);
+test("the SDK pages name all 85 current calls, one `### family.call` heading each", () => {
+  assert.equal(table.length, 85);
   const families = [...new Set(table.map((spec) => spec.family))];
-  assert.equal(families.length, 11);
+  assert.equal(families.length, 12);
   const index = readFileSync(join(docs, "README.md"), "utf8");
   assert.ok(index.includes(`**${table.length} calls in ${families.length} families**`), "the SDK index states the count once");
   for (const family of families) {

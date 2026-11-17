@@ -41,6 +41,8 @@ fn machines_over_records() {
     // Tools are found on PATH, so it and HOME point at an empty folder.
     let empty = tempdir("path");
     std::env::set_var("PATH", &empty);
+    // only the stand-ins: no fallback folder after PATH
+    std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");
     std::env::set_var("HOME", &empty);
     std::env::set_var("LAYERFS_BUNDLE", empty.join("missing"));
     let home = tempdir("home");
