@@ -108,11 +108,16 @@ installed → it records the outcome. A dead owner's op is adopted; only a live 
 
 ## 5. Known gaps at this baseline
 
-- **PG existing-Store additive (T1.3b):** new PG Stores get the GC tables from `schema.sql`;
-  an existing 2.0 PG Store needs the additive step at open. Until then open/compact refuses; don't hand-create tables (§4.1).
-- **Old-Store column ALTER (T1.2b):** new SQLite Stores get `commit.history_serial`,
-  `layer.history_serial`, `store_policy.trace_salt`; older Stores lack them until T1.2b's
-  ALTER + definition gate. GC refuses; don't hand-ALTER (§4.1).
+- **Pre-GC Store upgrade (current, both backends):** a Store written before the GC
+  tables, the `kept_node` closure or the position columns gains them at its first
+  writable open — SQLite runs `add_gc`/`add_kept_node`/`add_position_state` (plus the
+  definition gate), PostgreSQL runs `add_gc`/`add_kept_node`/`add_position_state`/
+  `add_position_columns`. Open and `store.compact` therefore accept a pre-GC Store
+  instead of refusing it; a schema whose recorded source/definition matches no known
+  earlier step is still refused and is never migrated by hand (§4.1).
+  *Historical:* the earlier notes here (T1.3b "PG existing-Store additive", T1.2b
+  "old-Store column ALTER") described the baseline `a6d84131b`, before those open
+  steps landed.
 - **`remove_file` is visibility-only in 2.0:** it hides reads/listings/mounts/merges/publishes
   and frees no bytes; objects reachable only via the path are retained (§6.2, decisions 16/35).
 - **No path-level physical reclaim:** path-aware walk and per-entry page pruning are follow-ups; `keptWaste` has no page component (§6.2).
