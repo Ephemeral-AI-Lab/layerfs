@@ -17,6 +17,7 @@
 #![forbid(unsafe_code)]
 
 pub mod apple_double;
+pub mod apple_double_codec;
 pub mod attributes;
 mod block;
 pub mod change;

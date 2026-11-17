@@ -176,7 +176,7 @@ drawn once per export; it makes guessing costly and does not authenticate.
 | The refresh never writes into the Workspace and never reverts a mode the install changed | [`refresh.rs`](../../../../engine/crates/layerfs-nfs/src/refresh.rs) |
 | `LAYERFS_NFS_REFRESH=0` leaves the client to `actimeo` and close-to-open | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 
-## AppleDouble files (`apple_double.rs`)
+## AppleDouble files (`apple_double.rs`, `apple_double_codec.rs`)
 
 On NFSv3 the macOS client keeps extended attributes and resource forks in
 `._<name>` files. With `refuse_apple_double`, a regular `._` file (at least
@@ -187,11 +187,22 @@ never lists it and the engine is never called. Any other kind is
 `NFS3ERR_ACCES`. `cp`, `copyfile`, `ditto` and `tar` succeed while nothing
 reaches the Workspace or a Commit; everything is dropped with the export.
 
-| Bound | Value | Over the bound |
-| --- | --- | --- |
-| `HELD` | 4,096 companions | CREATE `NFS3ERR_ACCES` |
-| `FILE_BYTES` | 1 MiB per companion | WRITE `NFS3ERR_FBIG` |
-| `TOTAL_BYTES` | 64 MiB in all | WRITE `NFS3ERR_NOSPC` |
+| Bound | Value | Over the bound | Source |
+| --- | --- | --- | --- |
+| `HELD` | 4,096 companions | CREATE `NFS3ERR_ACCES` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| `FILE_BYTES` | 1 MiB per companion | WRITE / SETATTR `NFS3ERR_FBIG` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| `RESIDENT_BYTES` | 32 MiB of companion bodies in all | WRITE / SETATTR `NFS3ERR_NOSPC` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| `DECODED_ENTRY_BYTES` | 128 KiB counted for one decoded companion | A whole image costing more keeps its bytes as written | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+
+A body a write or resize leaves as a complete AppleDouble image that encodes
+back to the exact bytes the companion holds
+([`apple_double_codec.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_codec.rs))
+is kept as its FinderInfo and attributes, and every READ synthesizes the same
+bytes again. It takes the same `RESIDENT_BYTES` budget as a body kept as
+written, counted as `Image::cost` (its names and values, not its image), so no
+decoded image is memory the budget cannot see. Partial writes, resource forks
+and other layouts stay as the client wrote them, and a body the budget does not
+take leaves the companion as it was.
 
 ## Mount (`mount.rs`, daemon `export.rs`)
 
