@@ -487,12 +487,19 @@ measured implementation of this branch.
   with `zeroReason: "no-waste"` and a non-zero `physicalShrink`; a field for
   the in-pack bytes freed is not added here.
 - **Verification (§7 step 6):** besides the existing counts, each rewritten
-  pack's row must carry the digest and length the build computed, and its
-  locators must name each of its records exactly once. The rebuilt bytes are
-  checked when they are built: the pack must parse and validate like any
-  stored pack and every kept record must be byte-identical to its source,
-  whose own SHA-256 is checked first. Payload is not read back from the
-  staged file; the full doctor still owns that.
+  pack is read back whole from the staged file and hashed: its bytes must
+  carry the SHA-256 and length of its row, and both must be the ones the
+  build computed. The pack's own directories then state how many records
+  each group holds (a compressed group is decoded for its count; the pack
+  directory records only its extent and decoded length), and the staged
+  locators that name the pack must be exactly those records: each `(group,
+  record)` in range and named once, none unnamed. The locators come from one
+  plain scan of `object_location`, which has no index by pack; no statement
+  sorts or groups in a temporary b-tree. Which object a record belongs to is
+  not re-proved here: the build compares every kept record byte for byte with
+  its source, whose own SHA-256 it checks first, and reading objects back by
+  identity stays with the full doctor. Cost: about 0.65 ms per rewritten
+  megabyte (577 MB read back and hashed in 0.37 s, one sample).
 - **Not changed:** PostgreSQL (it still copies packs whole and decides on
   wholly dead packs only), `remove_file` (visibility-only, §6.2), the
   `inode_value_block` rows (#42 item 37) and delta-base-only records, which

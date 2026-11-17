@@ -201,7 +201,9 @@ pub(crate) struct VerifyInput<'a> {
 /// The §7 step 6 verification through an `immutable=1` reader: schema identity,
 /// foreign keys, row counts against the mark, both live-heads digests, the
 /// allocator tuple and the recomputed totals. `quick_check` and the full
-/// doctor stay separate commands (§7 step 6), so this pass reads no payload.
+/// doctor stay separate commands (§7 step 6), so this pass reads no payload
+/// except the packs the build wrote again, which [`super::repack::verify`]
+/// reads back and hashes.
 pub(crate) fn verify(
     input: VerifyInput<'_>,
     request: &CompactRequest,
@@ -250,7 +252,7 @@ pub(crate) fn verify(
     if counted(scanned.packs)? != mark.objects().packs().len() as u64 {
         return Err(HistoryError::Integrity("staged Store pack count"));
     }
-    super::repack::verify(&connection, &built.repacked)?;
+    super::repack::verify(&connection, &built.repacked.packs)?;
     if counted(scanned.history)? != mark.history().len() as u64 {
         return Err(HistoryError::Integrity("staged Store history count"));
     }

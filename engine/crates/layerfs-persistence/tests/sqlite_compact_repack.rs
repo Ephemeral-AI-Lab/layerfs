@@ -18,7 +18,8 @@ use layerfs_content::{
     inode_leaf::{InodeKind, InodeMetadata, InodeValue},
     FinalizedObject, ObjectId, ObjectRole,
 };
-use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, StackInitialization};
+use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, HistoryError, StackInitialization};
+use layerfs_persistence::internals::{verify_repacked, Rewritten};
 use layerfs_persistence::{
     CompactFailpoint, CompactPath, CompactRequest, PersistenceConfig, SqliteAcquisitionSchema,
     SqliteHandles, SqlitePackLayout, SqlitePersistenceProfile,
@@ -804,4 +805,135 @@ fn the_working_tables_live_in_the_visited_scratch_and_count_as_temp_bytes() {
         receipt.peak_temp_bytes, temp_bytes,
         "peakTempBytes is the fresh file plus the scratch with its working tables"
     );
+}
+
+/// What a build reports for the packs it wrote again, read here from a staged
+/// file that is known to be good.
+fn rewritten(staged: &rusqlite::Connection, packs: &[i64]) -> Vec<Rewritten> {
+    packs
+        .iter()
+        .map(|pack_id| {
+            let (digest, length): (Vec<u8>, i64) = staged
+                .query_row(
+                    "SELECT digest,length FROM pack WHERE pack_id=?1",
+                    [pack_id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .unwrap();
+            let records: i64 = staged
+                .query_row(
+                    "SELECT count(*) FROM object_location WHERE pack_id=?1",
+                    [pack_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            Rewritten {
+                pack_id: *pack_id,
+                digest: digest.try_into().unwrap(),
+                length: length as u64,
+                records: records as u64,
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn verification_reads_the_staged_packs_back_and_matches_their_locators() {
+    let (temp, handles, path) = create(SqlitePackLayout::Monolithic);
+    let fixture = mixed_store(&handles);
+    let halted = handles.compact(&CompactRequest {
+        op_id: [0x61; 16],
+        failpoint: Some(CompactFailpoint::AfterBuild),
+        ..CompactRequest::default()
+    });
+    assert!(halted.is_err());
+    let staged = artifact(&path, ".compact");
+    let good = rusqlite::Connection::open(&staged).unwrap();
+    let packs = rewritten(&good, &fixture.packs);
+    drop(good);
+
+    // A copy of the staged file, changed by one statement, then verified.
+    let mut case = 0u8;
+    let mut tampered = |change: &str| -> Result<(), HistoryError> {
+        case += 1;
+        let copy = temp.path().join(format!("tampered-{case}.sqlite"));
+        std::fs::copy(&staged, &copy).unwrap();
+        let connection = rusqlite::Connection::open(&copy).unwrap();
+        connection
+            .execute_batch(&format!(
+                "PRAGMA journal_mode=DELETE;DROP TRIGGER pack_immutable_update;{change}"
+            ))
+            .unwrap();
+        verify_repacked(&connection, &packs)
+    };
+    let pack = fixture.packs[0];
+    // One locator of the pack, and the last record of its group.
+    let one = format!(
+        "(SELECT object_id FROM object_location WHERE pack_id={pack} \
+ORDER BY group_number,record_number LIMIT 1)"
+    );
+    assert!(tampered("SELECT 1").is_ok(), "the staged file as built");
+    for (what, change) in [
+        (
+            "a locator past its group's records",
+            format!(
+                "UPDATE object_location SET record_number=record_number+4000 WHERE object_id={one}"
+            ),
+        ),
+        (
+            "a locator in a group the pack lacks",
+            format!("UPDATE object_location SET group_number=200 WHERE object_id={one}"),
+        ),
+        (
+            "two locators on one record",
+            format!(
+                "UPDATE object_location SET (group_number,record_number)=\
+(SELECT group_number,record_number FROM object_location WHERE pack_id={pack} \
+ORDER BY group_number DESC,record_number DESC LIMIT 1) WHERE object_id={one}"
+            ),
+        ),
+        (
+            "a record no locator names",
+            format!("DELETE FROM object_location WHERE object_id={one}"),
+        ),
+        (
+            "a locator the pack does not hold",
+            format!(
+                "INSERT INTO object_location \
+SELECT x'{}',role,canonical_length,pack_id,group_number,record_number \
+FROM object_location WHERE object_id={one}",
+                "ab".repeat(32)
+            ),
+        ),
+        (
+            "a stored byte that differs from the digest",
+            format!(
+                "UPDATE pack SET body=CAST(substr(body,1,length(body)-1)||\
+(CASE WHEN substr(body,length(body))=x'00' THEN x'01' ELSE x'00' END) AS BLOB) \
+WHERE pack_id={pack}"
+            ),
+        ),
+        (
+            "a digest that is not the one the build computed",
+            format!(
+                "UPDATE pack SET digest=x'{}' WHERE pack_id={pack}",
+                "cd".repeat(32)
+            ),
+        ),
+    ] {
+        let result = tampered(&change);
+        assert!(
+            matches!(result, Err(HistoryError::Integrity(_))),
+            "{what}: {result:?}"
+        );
+    }
+    // The build's own numbers are checked against the file, too.
+    let mut wrong = packs.clone();
+    wrong[0].records += 1;
+    let connection = rusqlite::Connection::open(&staged).unwrap();
+    assert!(verify_repacked(&connection, &wrong).is_err());
+    let mut wrong = packs.clone();
+    wrong[0].length -= 1;
+    assert!(verify_repacked(&connection, &wrong).is_err());
+    assert!(verify_repacked(&connection, &packs).is_ok());
 }

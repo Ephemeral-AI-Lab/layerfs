@@ -30,13 +30,14 @@
 //!
 //! The kept locators are put in pack order by the scratch table's own key,
 //! on disk, and read back one pack at a time, so the rewrite holds one pack's
-//! locators and bytes in memory, never the whole kept set.
+//! locators and bytes in memory, never the whole kept set. No statement here
+//! sorts or groups in a temporary b-tree.
 
 use super::types::db_error;
 use layerfs_history::error::{HistoryError, HistoryResult};
 use layerfs_storage::encoding::{CompressionWorkspace, DecompressionWorkspace};
 use layerfs_storage::pack::layout;
-use layerfs_storage::pack::repack::retain_records;
+use layerfs_storage::pack::repack::{record_counts, retain_records};
 use layerfs_storage::port::ObjectKey;
 use rusqlite::{params, Connection};
 
@@ -67,13 +68,17 @@ WHERE v.pack_id IN (SELECT pack_id FROM scratch.repack)";
 const KEPT: &str = "SELECT pack_id,group_number,record_number,object_id \
 FROM scratch.repack_kept ORDER BY pack_id,group_number,record_number,object_id";
 
-/// One pack this rebuild wrote again.
+/// One pack this rebuild wrote again, as the build computed it.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct Rewritten {
-    pub(crate) pack_id: i64,
-    pub(crate) digest: [u8; 32],
-    pub(crate) length: u64,
-    pub(crate) records: u64,
+pub struct Rewritten {
+    /// The pack's id, unchanged by the rewrite.
+    pub pack_id: i64,
+    /// The SHA-256 of the new pack bytes.
+    pub digest: [u8; 32],
+    /// Their length.
+    pub length: u64,
+    /// The records the new pack holds.
+    pub records: u64,
 }
 
 /// What a rebuild's repack step did, for the report and the verification.
@@ -132,20 +137,26 @@ pub(crate) fn plan(connection: &Connection, partly_dead: &[(i64, u64)]) -> Histo
     })
 }
 
-/// One pack row of the sealed Store, with its complete body.
+/// One stored pack row with its complete body.
 struct Source {
     domain: i64,
+    digest: Vec<u8>,
     body: Vec<u8>,
 }
 
-/// Reads one pack of the sealed Store whole and checks it against the length
-/// and SHA-256 its row records, so a damaged pack is refused here and never
-/// rebuilt into a pack with a fresh, matching digest.
-fn read(connection: &Connection, pack_id: i64, units: bool) -> HistoryResult<Source> {
+/// Reads one pack whole from `schema` (`src`, the sealed Store, or `main`, a
+/// staged file) and checks it against the length and SHA-256 its row records.
+/// `None` is a pack whose stored bytes are not the ones its row describes.
+fn read(
+    connection: &Connection,
+    schema: &str,
+    pack_id: i64,
+    units: bool,
+) -> HistoryResult<Option<Source>> {
     let column = if units { "control" } else { "body" };
     let (domain, digest, length, mut body): (i64, Vec<u8>, i64, Vec<u8>) = connection
         .prepare_cached(&format!(
-            "SELECT domain,digest,length,{column} FROM src.pack WHERE pack_id=?1"
+            "SELECT domain,digest,length,{column} FROM {schema}.pack WHERE pack_id=?1"
         ))
         .map_err(db_error)?
         .query_row(params![pack_id], |row| {
@@ -154,10 +165,10 @@ fn read(connection: &Connection, pack_id: i64, units: bool) -> HistoryResult<Sou
         .map_err(db_error)?;
     if units {
         let mut statement = connection
-            .prepare_cached(
-                "SELECT group_number,offset,body FROM src.pack_unit WHERE pack_id=?1 \
-ORDER BY group_number",
-            )
+            .prepare_cached(&format!(
+                "SELECT group_number,offset,body FROM {schema}.pack_unit WHERE pack_id=?1 \
+ORDER BY group_number"
+            ))
             .map_err(db_error)?;
         let mut rows = statement.query(params![pack_id]).map_err(db_error)?;
         let mut expected = 0i64;
@@ -165,11 +176,11 @@ ORDER BY group_number",
             let group: i64 = row.get(0).map_err(db_error)?;
             let offset: i64 = row.get(1).map_err(db_error)?;
             let unit = row.get_ref(2).map_err(db_error)?;
-            let unit = unit
-                .as_blob()
-                .map_err(|_| HistoryError::Integrity("repack pack unit"))?;
+            let Ok(unit) = unit.as_blob() else {
+                return Ok(None);
+            };
             if group != expected || usize::try_from(offset).ok() != Some(body.len()) {
-                return Err(HistoryError::Integrity("repack pack unit order"));
+                return Ok(None);
             }
             body.extend_from_slice(unit);
             expected += 1;
@@ -178,13 +189,19 @@ ORDER BY group_number",
     if usize::try_from(length).ok() != Some(body.len())
         || ObjectKey::for_bytes(&body).as_bytes().as_slice() != digest.as_slice()
     {
-        return Err(HistoryError::Integrity("repack source pack digest"));
+        return Ok(None);
     }
     // A row may hold more bytes than the pack declares; the pack is what its
     // own control area says it is.
-    let used = layout::declared_length(&body).map_err(storage)?;
+    let Ok(used) = layout::declared_length(&body) else {
+        return Ok(None);
+    };
     body.truncate(used);
-    Ok(Source { domain, body })
+    Ok(Some(Source {
+        domain,
+        digest,
+        body,
+    }))
 }
 
 /// Stores one rebuilt pack in the fresh file, in the Store's own pack layout.
@@ -280,7 +297,10 @@ fn rewrite(
     codecs: &mut Codecs,
     done: &mut Repacked,
 ) -> HistoryResult<()> {
-    let source = read(connection, pack_id, units)?;
+    // A damaged pack is refused here and never rebuilt into a pack with a
+    // fresh, matching digest.
+    let source = read(connection, "src", pack_id, units)?
+        .ok_or(HistoryError::Integrity("repack source pack digest"))?;
     let header = layout::parse_header(&source.body).map_err(storage)?;
     let mut keep = vec![Vec::new(); header.group_count];
     for (group, record, _) in kept {
@@ -407,54 +427,110 @@ pub(crate) fn apply(connection: &Connection, plan: &Plan, units: bool) -> Histor
     Ok(done)
 }
 
-/// §7 step 6 for the packs written again: each one's row carries the digest
-/// and length this run computed, and its locators name every record it holds
-/// exactly once. The full doctor still owns reading the payload back.
-pub(crate) fn verify(connection: &Connection, repacked: &Repacked) -> HistoryResult<()> {
-    if repacked.packs.is_empty() {
-        return Ok(());
-    }
-    let mut descriptor = connection
-        .prepare("SELECT digest,length FROM pack WHERE pack_id=?1")
-        .map_err(db_error)?;
-    for pack in &repacked.packs {
-        let (digest, length): (Vec<u8>, i64) = descriptor
-            .query_row(params![pack.pack_id], |row| Ok((row.get(0)?, row.get(1)?)))
-            .map_err(db_error)?;
-        if digest.as_slice() != pack.digest.as_slice()
-            || u64::try_from(length).ok() != Some(pack.length)
-        {
-            return Err(HistoryError::Integrity("staged Store repacked pack"));
-        }
-    }
-    let mut statement = connection
-        .prepare(
-            "SELECT pack_id,count(*),count(DISTINCT group_number*8192+record_number) \
-FROM object_location GROUP BY pack_id",
+/// Whether the staged file keeps pack payload in `pack_unit` rows.
+fn unit_layout(connection: &Connection) -> HistoryResult<bool> {
+    let tables: i64 = connection
+        .query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='pack_unit'",
+            params![],
+            |row| row.get(0),
         )
         .map_err(db_error)?;
-    let mut rows = statement.query(params![]).map_err(db_error)?;
-    let mut matched = 0usize;
+    Ok(tables == 1)
+}
+
+/// A staged pack or locator that is not what the build wrote.
+const STAGED_PACK: HistoryError = HistoryError::Integrity("staged Store repacked pack");
+const STAGED_LOCATOR: HistoryError = HistoryError::Integrity("staged Store repacked locators");
+
+/// §7 step 6 for the packs written again, read back from the staged file.
+///
+/// Each pack's stored bytes are read whole and hashed: they must carry the
+/// SHA-256 and length of their row, and both must be the ones the build
+/// computed. The pack's own directories then state how many records each
+/// group holds (a compressed group is decoded for its count), and the staged
+/// locators that name the pack must be exactly those records: every
+/// `(group, record)` in range and named once, none left unnamed.
+///
+/// The locators are read in one plain scan of `object_location`, which has no
+/// index by pack; the scan keeps no SQLite temporary structure. This pass
+/// holds one pack body at a time, and for all rewritten packs together one
+/// count per group and one bit per record.
+///
+/// `packs` ascends by pack id, as [`apply`] reports it.
+pub fn verify(connection: &Connection, packs: &[Rewritten]) -> HistoryResult<()> {
+    let (Some(first), Some(last)) = (packs.first(), packs.last()) else {
+        return Ok(());
+    };
+    let units = unit_layout(connection)?;
+    let mut decompression = DecompressionWorkspace::new().map_err(storage)?;
+    // Per pack, where its groups start in `ends`; per group, the records the
+    // pack holds up to and including it. A record's bit is its pack's first
+    // bit plus the records before its group plus its own number.
+    let mut slots: Vec<(usize, usize)> = Vec::with_capacity(packs.len());
+    let mut ends: Vec<u32> = Vec::new();
+    let mut records = 0usize;
+    for pack in packs {
+        let stored = read(connection, "main", pack.pack_id, units)?.ok_or(STAGED_PACK)?;
+        if stored.digest.as_slice() != pack.digest.as_slice()
+            || stored.body.len() as u64 != pack.length
+        {
+            return Err(STAGED_PACK);
+        }
+        let counts = record_counts(&stored.body, &mut decompression).map_err(|_| STAGED_PACK)?;
+        slots.push((ends.len(), records));
+        let mut held = 0usize;
+        for count in counts {
+            held += count;
+            ends.push(u32::try_from(held).map_err(|_| STAGED_PACK)?);
+        }
+        if held as u64 != pack.records {
+            return Err(STAGED_PACK);
+        }
+        records += held;
+    }
+    slots.push((ends.len(), records));
+    let mut named = vec![0u64; records.div_ceil(64)];
+    let mut seen = 0usize;
+    let mut statement = connection
+        .prepare(
+            "SELECT pack_id,group_number,record_number FROM object_location \
+WHERE pack_id BETWEEN ?1 AND ?2",
+        )
+        .map_err(db_error)?;
+    let mut rows = statement
+        .query(params![first.pack_id, last.pack_id])
+        .map_err(db_error)?;
     while let Some(row) = rows.next().map_err(db_error)? {
         let pack_id: i64 = row.get(0).map_err(db_error)?;
-        let Ok(at) = repacked
-            .packs
-            .binary_search_by_key(&pack_id, |pack| pack.pack_id)
-        else {
+        let Ok(at) = packs.binary_search_by_key(&pack_id, |pack| pack.pack_id) else {
             continue;
         };
-        let located: i64 = row.get(1).map_err(db_error)?;
-        let distinct: i64 = row.get(2).map_err(db_error)?;
-        let records = repacked.packs[at].records;
-        if u64::try_from(located).ok() != Some(records)
-            || u64::try_from(distinct).ok() != Some(records)
-        {
-            return Err(HistoryError::Integrity("staged Store repacked locators"));
+        let group = usize::try_from(row.get::<_, i64>(1).map_err(db_error)?);
+        let record = usize::try_from(row.get::<_, i64>(2).map_err(db_error)?);
+        let (Ok(group), Ok(record)) = (group, record) else {
+            return Err(STAGED_LOCATOR);
+        };
+        let (groups_at, first_bit) = slots[at];
+        let groups = &ends[groups_at..slots[at + 1].0];
+        let end = *groups.get(group).ok_or(STAGED_LOCATOR)? as usize;
+        let start = if group == 0 {
+            0
+        } else {
+            groups[group - 1] as usize
+        };
+        if record >= end - start {
+            return Err(STAGED_LOCATOR);
         }
-        matched += 1;
+        let bit = first_bit + start + record;
+        if named[bit / 64] & (1 << (bit % 64)) != 0 {
+            return Err(STAGED_LOCATOR);
+        }
+        named[bit / 64] |= 1 << (bit % 64);
+        seen += 1;
     }
-    if matched != repacked.packs.len() {
-        return Err(HistoryError::Integrity("staged Store repacked pack count"));
+    if seen != records {
+        return Err(STAGED_LOCATOR);
     }
     Ok(())
 }

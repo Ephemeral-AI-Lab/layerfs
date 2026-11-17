@@ -147,6 +147,36 @@ pub fn retain_records(
     }))
 }
 
+/// The number of records each group of a sealed pack holds, read from the
+/// pack's own bytes.
+///
+/// A group states its record count in its own directory, at the head of its
+/// decoded body: an uncompressed group answers from that directory, and a
+/// compressed one has to be decoded first, because the pack directory records
+/// only a group's extent, codec and decoded length. Every group's directory is
+/// validated whole on the way.
+pub fn record_counts(
+    body: &[u8],
+    decompression: &mut DecompressionWorkspace,
+) -> StorageResult<Vec<usize>> {
+    let header = parse_header(body)?;
+    let mut counts = Vec::with_capacity(header.group_count);
+    for number in 0..header.group_count {
+        let view = group_view(body, header, number)?;
+        let stored = body
+            .get(view.start..view.end)
+            .ok_or(StorageError::Integrity("pack group extent"))?;
+        counts.push(match view.codec {
+            GroupCodec::Raw => RecordDirectory::of(stored)?.count(),
+            GroupCodec::Zstandard => {
+                let decoded = decompression.decompress_group(stored, view.decoded_length)?;
+                RecordDirectory::of(&decoded)?.count()
+            }
+        });
+    }
+    Ok(counts)
+}
+
 /// Frames records that a group of `lane` already stores into a new group.
 ///
 /// The ordinary and chunk lanes store a record exactly as a Save hands it to

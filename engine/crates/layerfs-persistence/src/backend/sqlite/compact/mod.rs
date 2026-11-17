@@ -43,6 +43,7 @@ mod window;
 pub use build::{peak_temp_bytes, source_mmap, SRC_MMAP_BYTES};
 pub use op::{compact_op_status, CompactOpStatus};
 pub use receipt::receipt;
+pub use repack::{verify as verify_repacked, Rewritten};
 pub use space::{reserve, trim};
 pub use types::io_error;
 pub use types::{cap_delta_references, DELTA_BASE_REFERENCES_CAP};

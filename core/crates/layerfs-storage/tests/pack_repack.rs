@@ -9,7 +9,7 @@ use layerfs_storage::encoding::{
 };
 use layerfs_storage::pack::audit::validate_records;
 use layerfs_storage::pack::layout::{group_view, parse_header, GroupCodec, PackLane};
-use layerfs_storage::pack::repack::retain_records;
+use layerfs_storage::pack::repack::{record_counts, retain_records};
 use layerfs_storage::pack::{assemble, build_group};
 use layerfs_storage::save::SaveProfile;
 use layerfs_storage::{StorageCapacities, StoragePolicy};
@@ -241,4 +241,37 @@ fn a_kept_set_the_pack_cannot_satisfy_is_refused() {
         refuse(&[vec![0], vec![0], vec![0]]),
         "a group the pack lacks"
     );
+}
+
+#[test]
+fn record_counts_are_read_from_the_pack_itself_in_every_lane() {
+    let mut workspace = DecompressionWorkspace::new().unwrap();
+    for lane in [PackLane::WholeFile, PackLane::Chunk, PackLane::Ordinary] {
+        let (body, _) = pack(lane, &[5, 3, 12, 2]);
+        assert_eq!(
+            record_counts(&body, &mut workspace).unwrap(),
+            vec![5, 3, 12, 2],
+            "{lane:?}"
+        );
+        let repacked = retain(&body, &[vec![1, 3, 4], vec![], vec![0, 5, 11], vec![1]]).unwrap();
+        assert_eq!(
+            record_counts(&repacked.body, &mut workspace).unwrap(),
+            vec![3, 3, 1],
+            "{lane:?}: the rebuilt pack states the kept records, group by group"
+        );
+    }
+    let (compressed, _) = pack(PackLane::Ordinary, &[12]);
+    let header = parse_header(&compressed).unwrap();
+    assert_eq!(
+        group_view(&compressed, header, 0).unwrap().codec,
+        GroupCodec::Zstandard
+    );
+    assert_eq!(
+        record_counts(&compressed, &mut workspace).unwrap(),
+        vec![12]
+    );
+    let (singleton, _) = pack(PackLane::Singleton, &[1]);
+    assert_eq!(record_counts(&singleton, &mut workspace).unwrap(), vec![1]);
+    // A pack cut short is refused, not counted.
+    assert!(record_counts(&compressed[..compressed.len() - 1], &mut workspace).is_err());
 }
