@@ -23,7 +23,6 @@ use crate::history::GcTuple;
 use crate::MarkResult;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
-use postgres::types::Type;
 use std::sync::Arc;
 use std::time::Instant;
 use std::time::SystemTime;
@@ -304,6 +303,11 @@ pub(crate) fn stop(
     Err(HistoryError::UnknownOutcome)
 }
 
+/// Object ids one statement of [`load_visited`] carries: about 300 KiB.
+const VISITED_IDS: usize = 8192;
+/// Pack ids one statement of [`load_visited`] carries.
+const VISITED_PACKS: usize = 32_768;
+
 /// The set of live object ids and live pack ids, as session temporary tables
 /// the Phase A copy and the dead-set query read.
 pub(crate) fn load_visited(
@@ -318,31 +322,26 @@ pub(crate) fn load_visited(
              CREATE TEMP TABLE pg_temp.gc_visited(object_id bytea PRIMARY KEY) ON COMMIT PRESERVE ROWS;\
              CREATE TEMP TABLE pg_temp.gc_live_pack(pack_id bigint PRIMARY KEY) ON COMMIT PRESERVE ROWS;",
         )?;
-        // A large visited set is a bulk load, not a parameter array: COPY
-        // streams it without one round trip per row and without SQL text that
-        // grows with the mark. Each row is written straight from the mark's
-        // own ids, so the load holds no second copy of the set.
-        tx.copy_in(
-            "COPY pg_temp.gc_visited(object_id) FROM STDIN (FORMAT binary)",
-            &[Type::BYTEA],
-            |writer| {
-                for id in mark.objects().objects() {
-                    let id: &[u8] = id.as_bytes();
-                    writer.write(&[&id])?;
-                }
-                Ok(())
-            },
-        )?;
-        tx.copy_in(
-            "COPY pg_temp.gc_live_pack(pack_id) FROM STDIN (FORMAT binary)",
-            &[Type::INT8],
-            |writer| {
-                for pack in mark.objects().packs() {
-                    writer.write(&[pack])?;
-                }
-                Ok(())
-            },
-        )?;
+        // A large visited set is loaded as arrays of ids, a bounded piece
+        // per statement. A binary COPY was tried first and spent about four
+        // microseconds per row handing rows to the driver one at a time; an
+        // array is encoded once and the server unnests it. The ids are in
+        // ascending order, so the key's index is built by appending.
+        for ids in mark.objects().objects().chunks(VISITED_IDS) {
+            let ids: Vec<&[u8]> = ids.iter().map(|id| id.as_bytes().as_slice()).collect();
+            tx.typed(
+                "INSERT INTO pg_temp.gc_visited(object_id) SELECT unnest($1::bytea[])",
+                &[&ids],
+                ids.len() as u64 * 36,
+            )?;
+        }
+        for packs in mark.objects().packs().chunks(VISITED_PACKS) {
+            tx.typed(
+                "INSERT INTO pg_temp.gc_live_pack(pack_id) SELECT unnest($1::bigint[])",
+                &[&packs],
+                packs.len() as u64 * 8,
+            )?;
+        }
         // The Phase A copy and the dead-set query read both sets; analyze
         // them after the bulk load so the planner sees the real cardinality.
         tx.batch("ANALYZE pg_temp.gc_visited; ANALYZE pg_temp.gc_live_pack;")?;
