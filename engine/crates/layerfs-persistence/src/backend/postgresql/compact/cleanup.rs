@@ -8,6 +8,7 @@ use super::op::read_generation;
 use super::op::read_op;
 use super::op::scalar;
 use super::op::scalar_session;
+use super::op::set_phase;
 use super::op::stage;
 use super::op::RunMetrics;
 use super::report::report;
@@ -19,6 +20,7 @@ use crate::backend::sqlite::compact::CompactPath;
 use crate::backend::sqlite::compact::CompactReceipt;
 use crate::backend::sqlite::compact::CompactResidue;
 use crate::compact_metrics::CompactPhase;
+use crate::HistoryProvider;
 use crate::PostgresHandles;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
@@ -73,11 +75,10 @@ pub(crate) fn owner_client_addr(
     })
 }
 
-/// §9/§12: bounded poll for a recorded backend that is already ending. A live
-/// backend is never terminated. The caller holds the exclusive Store key, so a
-/// recorded owner that were still inside this op would hold it and the claim
-/// would have failed; an idle backend is a healthy pooled connection, not a
-/// dead one, and must be left alone.
+/// §9/§12: bounded poll (25 ms steps) until the recorded backend is gone.
+/// `settle_leftover` uses it for an idle owner the exclusive key proved is no
+/// longer inside the op; the §8 lost-`COMMIT` recovery uses it after it has
+/// terminated exactly the recorded backend.
 pub(crate) fn poll_owner_gone(
     session: &Arc<Session>,
     op: &OpRow,
@@ -90,6 +91,122 @@ pub(crate) fn poll_owner_gone(
         std::thread::sleep(std::time::Duration::from_millis(25));
     }
     Ok(false)
+}
+
+/// The message a lost-`COMMIT` recovery reports when the role may not signal
+/// the recorded backend.
+const TERMINATE_PRIVILEGE: &str =
+    "pg_signal_backend (or membership) to terminate the recorded lost-COMMIT owner";
+
+/// The most 25 ms polls the lost-`COMMIT` recovery makes for a terminated
+/// backend (the termination itself waits up to 30 s in the server).
+const TERMINATE_POLLS: u32 = 1200;
+
+/// §8 lost `COMMIT` reply: resolve a recorded owner **before** the exclusive
+/// Store key is taken.
+///
+/// A recorded owner that still holds the Store's exclusive key is a live
+/// compaction: the claim that follows reports `Busy` with that backend named,
+/// and it is never terminated (§12, the runbook rule). A recorded owner that
+/// no longer holds the key is a lost reply: its `COMMIT` may or may not have
+/// reached the server, so the call opens a second connection, proves the role
+/// may signal it, terminates exactly `(pid, backend_start, usename,
+/// datname)`, polls until it is gone, and returns so the caller reads the
+/// incarnation and settles the leftover. The caller's own session is adopted
+/// by [`settle_leftover`], never terminated.
+pub(crate) fn resolve_lost_commit(
+    history: &HistoryProvider,
+    session: &Arc<Session>,
+    schema: &str,
+) -> HistoryResult<()> {
+    let Some(op) = read_op(session, schema)? else {
+        return Ok(());
+    };
+    let (Some(pid), Some(start), Some(usename)) =
+        (op.pid, op.backend_start.as_deref(), op.usename.as_deref())
+    else {
+        return Ok(());
+    };
+    if pid == current_backend_pid(session)? {
+        return Ok(());
+    }
+    if owner_state(session, &op)?.is_none() {
+        return Ok(());
+    }
+    if history.store_key_held_by(pid)? {
+        // A live compaction: the claim names it as `Busy`; never terminate it.
+        return Ok(());
+    }
+    terminate_recorded_owner(session, pid, start, usename)?;
+    if !poll_owner_gone(session, &op, TERMINATE_POLLS)? {
+        return Err(HistoryError::Busy);
+    }
+    Ok(())
+}
+
+/// One short second connection for the lost-`COMMIT` recovery: prove the role
+/// may signal the recorded backend (a superuser, a member of
+/// `pg_signal_backend`, or the owner's own role), terminate exactly the
+/// recorded tuple, and poll `pg_stat_activity` until it is gone. The
+/// connection is closed before the caller takes the exclusive key.
+fn terminate_recorded_owner(
+    session: &Arc<Session>,
+    pid: i64,
+    backend_start: &str,
+    usename: &str,
+) -> HistoryResult<()> {
+    let mut recovery = session.connector.connect().map_err(HistoryError::from)?;
+    let allowed = recovery
+        .query_one(
+            "SELECT (r.rolsuper OR pg_has_role(current_user,'pg_signal_backend','MEMBER') \
+                    OR current_user=$1)::int FROM pg_roles r WHERE r.rolname=current_user",
+            &[&usename],
+        )
+        .map_err(recovery_error)?
+        .get::<_, i32>(0);
+    if allowed == 0 {
+        return Err(HistoryError::Unsupported(TERMINATE_PRIVILEGE));
+    }
+    let terminated: bool = recovery
+        .query_one(
+            "SELECT COALESCE(bool_or(pg_terminate_backend(a.pid, 30000)), false) \
+               FROM pg_stat_activity a \
+              WHERE a.pid::bigint=$1 AND a.backend_start::text=$2 \
+                AND a.usename::text=$3 AND a.datname=current_database() \
+                AND a.pid<>pg_backend_pid()",
+            &[&pid, &backend_start, &usename],
+        )
+        .map_err(recovery_error)?
+        .get(0);
+    // The boolean only says the server accepted the signal; the poll is the
+    // proof, and it also covers a backend that ended before the statement.
+    let _ = terminated;
+    for _ in 0..TERMINATE_POLLS {
+        let alive = recovery
+            .query_one(
+                "SELECT EXISTS (SELECT 1 FROM pg_stat_activity \
+                  WHERE pid::bigint=$1 AND backend_start::text=$2 \
+                    AND usename::text=$3 AND datname=current_database())",
+                &[&pid, &backend_start, &usename],
+            )
+            .map_err(recovery_error)?
+            .get::<_, bool>(0);
+        if !alive {
+            let _ = recovery.close();
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    Err(HistoryError::Busy)
+}
+
+/// The typed refusal for a lost-`COMMIT` recovery statement: a missing signal
+/// privilege is `Unsupported` (the §8 precheck shape), never a raw `42501`.
+fn recovery_error(error: postgres::Error) -> HistoryError {
+    if error.code().is_some_and(|code| code.code() == "42501") {
+        return HistoryError::Unsupported(TERMINATE_PRIVILEGE);
+    }
+    HistoryError::from(crate::backend::postgresql::session::rows::error(&error))
 }
 
 pub(crate) fn drop_scratch(session: &Arc<Session>, scratch: &str) -> HistoryResult<()> {
@@ -302,9 +419,17 @@ fn dead_layer_stacks(session: &Arc<Session>, schema: &str) -> HistoryResult<Vec<
     })
 }
 
-/// Deletes one stack's dead rows in one transaction. The FKs are deferred, so
-/// the commit sees a state where every dead reference inside the stack is gone
-/// together; every other stack is independent.
+/// Deletes one stack's dead rows in one transaction: the persisted history
+/// rows, the derived lineage closure and the stack row itself. The FKs are
+/// deferred, so the commit sees a state where every dead reference inside the
+/// stack is gone together; every other stack is independent.
+///
+/// The lineage closure (`layer_lineage`, `commit_lineage`, `absorbed`,
+/// `reach`) is a member of `gc_dead` like the history rows, so it is deleted
+/// here with the project instead of by a Store-wide orphan predicate in the
+/// final settle. The order matters: the run-scoped `absorbed` and `reach` ids
+/// are resolved through the `commit_lineage`/`commit` rows, which still exist
+/// when they are deleted.
 fn delete_stack_batch(
     session: &Arc<Session>,
     schema: &str,
@@ -313,6 +438,44 @@ fn delete_stack_batch(
 ) -> HistoryResult<()> {
     stage(session, |tx| {
         let stack = Param::Bytes(stack.to_vec());
+        tx.query(
+            &format!(
+                "DELETE FROM {schema}.layer_lineage t USING {schema}.gc_dead d \
+                 WHERE d.kind='layer_lineage' AND d.id=t.layer_id \
+                   AND t.layer_stack_id=$1"
+            ),
+            vec![stack.clone()],
+        )?;
+        tx.query(
+            &format!(
+                "DELETE FROM {schema}.absorbed t USING {schema}.gc_dead d \
+                 WHERE d.kind='absorbed' AND d.id=t.run||int8send(t.depth) \
+                   AND t.run IN (SELECT cl.run FROM {schema}.commit_lineage cl \
+                                  JOIN {schema}.\"commit\" c ON c.commit_id=cl.commit_id \
+                                 WHERE c.layer_stack_id=$1)"
+            ),
+            vec![stack.clone()],
+        )?;
+        tx.query(
+            &format!(
+                "DELETE FROM {schema}.reach t USING {schema}.gc_dead d \
+                 WHERE d.kind='reach' AND d.id=t.key||int8send(t.x) \
+                   AND (t.key=$1 OR t.key IN (SELECT cl.run \
+                        FROM {schema}.commit_lineage cl \
+                        JOIN {schema}.\"commit\" c ON c.commit_id=cl.commit_id \
+                       WHERE c.layer_stack_id=$1))"
+            ),
+            vec![stack.clone()],
+        )?;
+        tx.query(
+            &format!(
+                "DELETE FROM {schema}.commit_lineage t USING {schema}.gc_dead d \
+                 WHERE d.kind='commit_lineage' AND d.id=t.commit_id \
+                   AND t.commit_id IN (SELECT commit_id FROM {schema}.\"commit\" \
+                                        WHERE layer_stack_id=$1)"
+            ),
+            vec![stack.clone()],
+        )?;
         // The serial is a guard only: membership in `gc_dead` is the real
         // filter, and a row created after the mark is never a member.
         tx.query(
@@ -409,10 +572,14 @@ fn delete_dead_digests(session: &Arc<Session>, schema: &str) -> HistoryResult<()
     }
 }
 
-/// The final Phase C transaction: remove the derived lineage rows, clear the
-/// advisory hints, settle the four totals once, assert the Store sums and
-/// clear the op. It runs after every dead row batch, so it holds no history
-/// delete.
+/// The final Phase C transaction: clear the Store-global advisory hint block,
+/// drop the mark's transient `kept_node` closure, settle the four totals once,
+/// assert the Store sums and clear the op. Every dead history row and its
+/// derived lineage closure was deleted with its project by
+/// [`delete_stack_batch`]; the marker rows (`branch_retired`,
+/// `layer_stack_retired`, `path_removed`, `project_epoch`) went with their FK
+/// parent in those same transactions, so this transaction holds no history
+/// delete and no Store-wide orphan scan.
 fn settle(
     session: &Arc<Session>,
     schema: &str,
@@ -424,19 +591,8 @@ fn settle(
     // Store carries no mark state afterwards, as SQLite's settle does.
     stage(session, |tx| {
         tx.batch(&format!(
-            "DELETE FROM {schema}.layer_lineage ll WHERE NOT EXISTS (SELECT 1 FROM {schema}.layer l WHERE l.layer_id=ll.layer_id);\
-             DELETE FROM {schema}.commit_lineage cl WHERE NOT EXISTS (SELECT 1 FROM {schema}.\"commit\" c WHERE c.commit_id=cl.commit_id);\
-             DELETE FROM {schema}.absorbed a WHERE NOT EXISTS (SELECT 1 FROM {schema}.commit_lineage cl WHERE cl.run=a.run);\
-             DELETE FROM {schema}.reach r WHERE r.key NOT IN (SELECT layer_stack_id FROM {schema}.layer_stack UNION SELECT run FROM {schema}.commit_lineage);\
-             DELETE FROM {schema}.branch_retired br WHERE NOT EXISTS (SELECT 1 FROM {schema}.branch b WHERE b.branch_id=br.branch_id);\
-             DELETE FROM {schema}.layer_stack_retired lr WHERE NOT EXISTS (SELECT 1 FROM {schema}.layer_stack s WHERE s.layer_stack_id=lr.layer_stack_id);\
-             DELETE FROM {schema}.path_removed pr WHERE NOT EXISTS (SELECT 1 FROM {schema}.layer_stack s WHERE s.layer_stack_id=pr.layer_stack_id);\
-             DELETE FROM {schema}.project_epoch pe WHERE NOT EXISTS (SELECT 1 FROM {schema}.layer_stack s WHERE s.layer_stack_id=pe.layer_stack_id);\
-             DELETE FROM {schema}.binding_hint_block;\
+            "DELETE FROM {schema}.binding_hint_block;\
              DELETE FROM {schema}.kept_node;"
-        ))?;
-        tx.batch(&format!(
-            "UPDATE {schema}.gc_op SET phase='cleanup' WHERE id=1"
         ))?;
         if !totals_applied {
             tx.query(
@@ -515,6 +671,11 @@ pub(crate) fn cleanup(
 ) -> HistoryResult<()> {
     let (mark_serial, mark_stamp, visited) = mark_watermarks(session, schema)?;
     assert_retained_object_set(session, schema, visited)?;
+    // F50R2-3: the `cleanup` phase is its own small transaction before the
+    // first batch, so a long Phase C is observable in `store.status` and a
+    // crash during the batches leaves `cleanup` recorded for the resume. It is
+    // never written into the transaction that deletes `gc_op` itself.
+    set_phase(session, schema, "cleanup")?;
     for stack in dead_layer_stacks(session, schema)? {
         delete_stack_batch(session, schema, &stack, mark_serial)?;
     }

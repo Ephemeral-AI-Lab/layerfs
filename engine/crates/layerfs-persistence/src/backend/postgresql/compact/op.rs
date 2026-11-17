@@ -233,7 +233,7 @@ pub(crate) fn read_op(session: &Arc<Session>, schema: &str) -> HistoryResult<Opt
     stage(session, |tx| {
         let rows = tx.query(
             &format!(
-                "SELECT generation,phase,artifact,dead_canonical,dead_stored,dead_metadata,dead_logical,totals_applied,pid,backend_start,physical_before,peak_temp,kept_waste,mark_totals FROM {schema}.gc_op WHERE id=1"
+                "SELECT generation,phase,artifact,dead_canonical,dead_stored,dead_metadata,dead_logical,totals_applied,pid,backend_start,physical_before,peak_temp,kept_waste,mark_totals,usename FROM {schema}.gc_op WHERE id=1"
             ),
             Vec::new(),
         )?;
@@ -263,6 +263,7 @@ pub(crate) fn read_op(session: &Arc<Session>, schema: &str) -> HistoryResult<Opt
                 Some(bytes) => stored_at_mark(&bytes)?,
                 None => 0,
             },
+            usename: row.get::<Option<String>>(14)?,
         }))
     })
 }
@@ -357,7 +358,13 @@ pub(crate) fn load_visited(
 
 /// Phase M: write `gc_op` (phase mark) and the persisted `gc_dead` set in
 /// batches. The set is a membership, not a predicate, so a row created after
-/// the mark is never collected.
+/// the mark is never collected. It carries the history rows (commit, layer,
+/// branch, stack), the signature and digest rows, and the derived lineage
+/// closure (layer_lineage, commit_lineage, absorbed, reach), so Phase C can
+/// delete each project closure in its per-project transaction instead of
+/// scanning the derived tables for orphans in the final settle. The
+/// run/depth and key/x primary keys are persisted as the concatenated bytes
+/// run || int8send(depth) and key || int8send(x).
 pub(crate) fn persist_mark(
     session: &Arc<Session>,
     schema: &str,
@@ -387,7 +394,20 @@ pub(crate) fn persist_mark(
               WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=cs.object_id) \
              UNION ALL \
              SELECT 'digest',fd.root FROM {schema}.file_digest fd \
-              WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=fd.root)"
+              WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=fd.root) \
+             UNION ALL \
+             SELECT 'layer_lineage',ll.layer_id FROM {schema}.layer_lineage ll \
+              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='layer' AND k.node_id=ll.layer_id) \
+             UNION ALL \
+             SELECT 'commit_lineage',cl.commit_id FROM {schema}.commit_lineage cl \
+              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='commit' AND k.node_id=cl.commit_id) \
+             UNION ALL \
+             SELECT 'absorbed',a.run||int8send(a.depth) FROM {schema}.absorbed a \
+              WHERE NOT EXISTS (SELECT 1 FROM {schema}.commit_lineage cl JOIN {schema}.kept_node k ON k.kind='commit' AND k.node_id=cl.commit_id WHERE cl.run=a.run) \
+             UNION ALL \
+             SELECT 'reach',r.key||int8send(r.x) FROM {schema}.reach r \
+              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='stack' AND k.node_id=r.key) \
+                AND NOT EXISTS (SELECT 1 FROM {schema}.commit_lineage cl JOIN {schema}.kept_node k ON k.kind='commit' AND k.node_id=cl.commit_id WHERE cl.run=r.key)"
         ))?;
         let logical = scalar(
             tx,

@@ -10,7 +10,9 @@
 `op = {id, name, phase, started, uncertain}` (§11). Phases — SQLite `mark`, `build`,
 `verify`, `install`, `cleanup` (the settle after install); PG `mark`, `build`,
 `swap`, `cleanup`. The SQLite `cleanup` phase is a recorded deviation (D4): the
-settle writes it while it removes the artifact set.
+settle writes it while it removes the artifact set. PostgreSQL writes `cleanup` in
+its own small transaction before the first Phase C batch, so a crash during the
+batched deletes reads `cleanup` and the next call resumes the persisted set.
 
 - **SQLite.** The op/phase is the *home op* (`store/<name>/record.json`, field `op`;
   a remote home is read via `step_on`); the Store DB has the admission row:
@@ -45,10 +47,13 @@ it, the owning/next call settles it (§5.1, §10). A live owner is `Busy` — wa
 2. Dead owner, uncertain op: run `layerfs store compact <store>` again; it adopts the dead
    op with the artifact/high-water in the record (§9). `sandbox.close`/`machine.remove`/
    `store.remove` clear their own ops; `logs.reset` cannot (§10). A removed machine record alone is no proof (§5.1).
-3. **PG lost `COMMIT` reply** — resolve on a *second* connection **before** the exclusive key
-   (§8). The swap recorded `pid`, `backend_start`, `usename` and the incarnation in
-   `gc_op` before the swap (`usename` is a `gc_op` column, §4.1). Prove the backend
-   ended, then read the generation:
+3. **PG lost `COMMIT` reply** — the next `store.compact` resolves it automatically on a
+   *second* connection **before** it takes the exclusive key (§8). The mark recorded
+   `pid`, `backend_start`, `usename` and the incarnation in `gc_op` (`usename` is a
+   `gc_op` column, §4.1). A recorded owner that no longer holds the Store's exclusive
+   key is a lost reply: the call terminates exactly that backend; a recorded owner that
+   still holds the key is a live run and stays `Busy`, never terminated. The operator
+   can run the same resolution by hand:
 
    ```sql
    SELECT pg_terminate_backend(a.pid, 30000)
@@ -60,7 +65,8 @@ it, the owning/next call settles it (§5.1, §10). A live owner is `Busy` — wa
 
    Check the boolean, poll until the `(pid, backend_start, usename)` triple is gone, then read
    `history_meta.catalog_incarnation`: `G` = not committed, `G+1` = installed. Needs PG 14+
-   and `pg_signal_backend`/membership, else `Unsupported` (§8). Never terminate a live owner to clear `Busy`.
+   and `pg_signal_backend`/membership, else `Unsupported` (§8); the automatic recovery
+   reports the same refusal. Never terminate a live key holder to clear `Busy`.
 
 ## 3. Safe cleanup
 

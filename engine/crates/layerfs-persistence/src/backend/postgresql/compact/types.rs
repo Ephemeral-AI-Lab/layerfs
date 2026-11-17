@@ -35,6 +35,10 @@ pub(crate) struct OpRow {
     pub(crate) totals_applied: bool,
     pub(crate) pid: Option<i64>,
     pub(crate) backend_start: Option<String>,
+    /// The login role of the recorded backend, so the lost-COMMIT recovery
+    /// can match (pid, backend_start, usename, datname) exactly instead of by
+    /// pid alone.
+    pub(crate) usename: Option<String>,
     /// `pg_total_relation_size(pack,object_location)` before the swap, so a
     /// resumed `G + 1` report can still answer `physicalShrink`.
     pub(crate) physical_before: u64,

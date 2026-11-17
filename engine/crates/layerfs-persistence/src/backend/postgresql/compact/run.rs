@@ -2,6 +2,7 @@
 
 use super::build::build;
 use super::cleanup::cleanup;
+use super::cleanup::resolve_lost_commit;
 use super::cleanup::settle_leftover;
 use super::op::clear_round;
 use super::op::live_stored;
@@ -242,6 +243,12 @@ impl PostgresHandles {
         if unfinished_work(&session, &schema)? {
             return Err(HistoryError::Busy);
         }
+        // §8 lost `COMMIT`: a recorded owner that no longer holds the
+        // exclusive Store key may have lost its COMMIT reply. Resolve it on a
+        // second connection before the key is taken; a recorded owner that
+        // still holds the key is a live compaction and stays the claim's
+        // `Busy`, never terminated.
+        resolve_lost_commit(&self.history, &session, &schema)?;
         // Spec 5.1/§9: the exclusive Store key is taken before the leftover op
         // is judged, so two compactions can never settle the same `gc_op` at
         // once, and a live owner is never terminated off-key.

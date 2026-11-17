@@ -133,14 +133,20 @@ frozen whole-lane exclusion; its measurements live under
     pages) and `no-shrink` (a rebuild collected dead bytes but
     `physicalShrink = 0`, as a resumed `G + 1` run can). Neither is
     explained as `no-waste`.
-- **Schema (pre-release):** PostgreSQL's `gc_op` also carries
-  `physical_before BIGINT NOT NULL DEFAULT 0`, `peak_temp BIGINT NOT NULL
-  DEFAULT 0` and `kept_waste BYTEA`, written at the swap so a resumed
-  rebuild reports the swap's measured shrink, peak temp and retained waste
-  instead of zero placeholders. 2.0.0 is unreleased, so the columns go into
-  the 2.0 schema creation in place: there is **no additive open-time step**
-  (`add_*`) and no compatibility arm for a 2.0 `gc_op` created before them
-  (the Disposable profile, §2, and item 42). `kept_waste` is a versioned
+- **Schema (pre-release):** PostgreSQL's `gc_op` also carries six columns.
+  The mark writes `op_id BYTEA` (the project op the round runs under, so a
+  retry that loses its reply can name that op), `mark_fingerprint TEXT` (the
+  `pack`/`object_location` `pg_attribute`/storage/tablespace fingerprint
+  Phase B re-checks against the scratch tables) and `mark_visited BIGINT`
+  (the mark's visited-object count, the exact retained set Phase C asserts).
+  The swap writes `physical_before BIGINT NOT NULL DEFAULT 0`,
+  `peak_temp BIGINT NOT NULL DEFAULT 0` and `kept_waste BYTEA`, so a
+  resumed rebuild reports the swap's measured shrink, peak temp and retained
+  waste instead of zero placeholders. 2.0.0 is unreleased, so the columns go
+  into the 2.0 schema creation in place: there is **no additive open-time
+  step** (`add_*`) and no compatibility arm for a 2.0 `gc_op` created
+  before them (the Disposable profile, §2, and item 42). `kept_waste` is a
+  versioned
   encoding of the §11 `keptWaste`: one version byte (1), three big-endian
   `u64` byte totals, the capped flag, a big-endian `u32` reference count
   and the identity bytes.
