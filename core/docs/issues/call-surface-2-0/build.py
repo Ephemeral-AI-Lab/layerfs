@@ -222,6 +222,7 @@ def doctor_shape(calls, checks):
         "children": {k: v for k, v in CHILDREN.items() if k != "workspace"},
         "progress_event": PROGRESS_EVENT + ["node"],
         "phases": PHASES,
+        "full_progress": "the Full check of project.doctor and backup.doctor may send {phase: \"data\", done, total} events without node while it reads (CF-3)",
         "exit": 0,
     }
 
@@ -1840,7 +1841,7 @@ def render(S, fams, today, state, pairs_mod, draft):
          + "<code>log_tag</code> is an argument in Node and Python; the shell reads <code>LAYERFS_LOGS_TAG</code>, a setting of the caller, not call context. "
          + "A secret is never a shell argument: the shell reads it from stdin and takes it no other way, and Node and Python pass the value as the option"
          + (" (" + "; ".join(f"<code>{E(o['shell'])}</code> on {cmd(c)}, <code>{o['name']}</code> in Node and Python" for c, o in secrets) + ")" if secrets else "") + "."),
-        ("Progress", f"<code>--progress</code> prints one JSON line per event on stderr, <code>{{{', '.join(chr(34) + k + chr(34) for k in PROGRESS_EVENT)}}}</code>; Node and Python pass <code>on_progress</code>. {len(state['progress'])} calls report it: {code_list(state['progress'])}. A doctor's event also carries <code>node</code>, the thing that just finished."),
+        ("Progress", f"<code>--progress</code> prints one JSON line per event on stderr, <code>{{{', '.join(chr(34) + k + chr(34) for k in PROGRESS_EVENT)}}}</code>; Node and Python pass <code>on_progress</code>. {len(state['progress'])} calls report it: {code_list(state['progress'])}. A doctor's event also carries <code>node</code>, the thing that just finished; the Full check of <code>project doctor</code> and <code>backup doctor</code> may also send <code>{{phase: &quot;data&quot;, done, total}}</code> events without <code>node</code> while it reads (CF-3)."),
         ("Call log", f"Every call writes one line to the home's call log, except the calls whose row says quiet, which a UI polls: {code_list(state['quiet']) or 'none'}. An argument whose row says <code>redact</code> is logged as its byte count, never its value: paths, commands, messages, edit strings, URLs, patterns, content and secrets, as today, and the new free-text arguments ({code_list(NEW_REDACTED)}). That is {len(redacted)} arguments on {len(redacted_calls)} calls ({code_list(sorted(set(redacted)))}). A <code>from</code> that is a path is redacted; a <code>from</code> that is a Branch is not. Every <code>cursor</code> is redacted, because a cursor carries its call's filters, which may hold a redacted path or pattern. <code>log_tag</code> tags the line, as today."),
         ("One attempt", "Every call is one attempt, with no retry and no replay of a lost reply. The in-between states are stated (C13): a <code>sandbox create --mount</code> whose mount is refused keeps the Sandbox and names it in the refusal; <code>store move</code> goes to or from this computer only; a lost reply on <code>machine start</code> or <code>machine stop</code> is settled by <code>machine get --with live</code>."),
     ]

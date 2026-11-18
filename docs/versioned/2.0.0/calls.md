@@ -1379,7 +1379,9 @@ every check was made and nothing was found; otherwise `findings` and
 - `--progress` (`on_progress`) sends one event per finished thing:
   `{ phase, done, total, node }`, `phase` `self` then the kind of thing
   (`machines`, `stores`, `projects`, `sandboxes`, `workspaces`, `buckets`).
-  `backup doctor` sends none.
+  The Full check of `project doctor` (and of `backup doctor`, which sends
+  none today) may also send `{ phase: "data", done, total }` events, with
+  no `node`, while it reads.
 - A Workspace has no doctor of its own: `sandbox doctor` reads its daemon's
   list once and gives each Workspace it lists or the home records one node,
   `<sandbox>:<name>`, with `workspace.mounted` and `workspace.activity`; a

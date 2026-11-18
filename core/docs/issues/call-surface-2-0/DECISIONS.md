@@ -266,3 +266,16 @@ Coordinator rulings on the R3 conformance review, applied to the rows by package
 - **CF-2 Store reason `unsupported`** `store list` and `store get` add the reason `unsupported`: a Store
   record of a kind this build cannot read is `broken` with that reason (a real state, as on a machine
   and a Sandbox).
+
+## Conformance fixes (2026-11-19, review R4)
+
+Coordinator rulings on the R4 conformance review, applied to the rows by package FX.
+
+- **CF-3 Full-check progress** The doctor progress rule gains one case: the Full check of
+  `project doctor` and `backup doctor` may send `{phase: "data", done, total}` events without `node`
+  while it reads. `project doctor --full` sends them; `backup doctor --full` sends none today.
+- **CF-4 one severity per condition** A Sandbox whose record names a Store, project or machine with no
+  record (or no project at all) is an `error` in `home.records`, as in that Sandbox's own reference
+  checks; the `home doctor` example's `old-run` finding is now an error. A machine that only a Sandbox
+  or Store record names has no record of its own: `machine doctor <m>` answers `NotFound` and the
+  record that names it reports the dangling reference.
