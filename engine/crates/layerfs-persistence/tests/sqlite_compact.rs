@@ -529,6 +529,11 @@ fn retained_packs_on_both_sides_of_a_long_dead_run_are_all_copied() {
         .collect();
     assert_eq!(packs, retained, "every retained pack, and only those");
     drop(rebuilt);
+    // Two windows: each one's packs are in the totals once.
+    let (totals, sums) = pack_totals_and_sums(&path);
+    assert_eq!(totals, sums);
+    let kept: u64 = retained.iter().map(|pack| lengths[pack]).sum();
+    assert_eq!(u64::try_from(totals.0).unwrap(), kept);
     clean(&reopened);
 }
 
@@ -1296,6 +1301,23 @@ fn store_file_tuple(path: &Path) -> (u64, std::time::SystemTime, u32) {
     (metadata.len(), modified, u32::from_be_bytes(header))
 }
 
+/// The rebuilt Store's `(stored, metadata)` totals beside the same two sums
+/// taken over its `pack` rows: the build sums them window by window.
+fn pack_totals_and_sums(path: &Path) -> ((i64, i64), (i64, i64)) {
+    let connection =
+        rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .unwrap();
+    connection
+        .query_row(
+            "SELECT t.stored,t.metadata,(SELECT COALESCE(SUM(length),0) FROM pack),\
+(SELECT COALESCE(SUM(CASE WHEN domain=0 THEN length ELSE 0 END),0) FROM pack) \
+FROM store_totals t WHERE t.id=1",
+            [],
+            |row| Ok(((row.get(0)?, row.get(1)?), (row.get(2)?, row.get(3)?))),
+        )
+        .unwrap()
+}
+
 /// The raw table counts a compaction must leave behind; the Store is closed
 /// after `compact` consumes its handles, so a plain read is safe.
 fn table_count(path: &Path, table: &str) -> i64 {
@@ -1856,6 +1878,10 @@ fn layout_round_trip(layout: SqlitePackLayout) {
     assert_eq!(final_handles.profile().pack_layout, layout);
     assert!(located(&final_handles, live));
     assert!(!located(&final_handles, dead));
+    // `pack` holds no payload in the group-row layouts and is summed whole.
+    let (totals, sums) = pack_totals_and_sums(&path);
+    assert_eq!(totals, sums);
+    assert!(totals.0 > 0);
     clean(&final_handles);
 }
 
