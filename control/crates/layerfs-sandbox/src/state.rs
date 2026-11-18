@@ -139,12 +139,16 @@ impl SandboxRecord {
 /// The state of machine `name` from its record alone (what the control
 /// crate's inventory answers; that crate is above this one): `native` and
 /// `docker` exist with or without a record, any
-/// other machine with none is `broken` `missing`. The fix of an outdated
+/// other machine with none is `broken` `missing`, and one whose record
+/// cannot be read `broken` `failed`. The fix of an outdated
 /// worker, which counts the machine's Sandboxes, is not needed here: a
 /// Sandbox's `blocked_by` carries only the reason.
 pub fn machine_state(home: &Path, name: &str) -> Result<State, SdkRefusal> {
-    let Some(record) = MachineRecord::read(home, name)? else {
-        return Ok(layerfs_machine::state::unrecorded(name));
+    let record = match MachineRecord::read(home, name) {
+        Ok(Some(record)) => record,
+        Ok(None) => return Ok(layerfs_machine::state::unrecorded(name)),
+        // a record that cannot be read blocks what is on it, nothing else
+        Err(_) => return Ok(layerfs_machine::state::unreadable(name)),
     };
     let platform = record.platform_name().unwrap_or("");
     let removed = layerfs_sandbox_backend::platform_policy::disabled_reason(platform).is_some();

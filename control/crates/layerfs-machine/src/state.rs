@@ -211,3 +211,16 @@ pub fn unrecorded(name: &str) -> State {
         _ => State::broken(Reason::Missing, None),
     }
 }
+
+/// The state of machine `name` whose record is there but cannot be read:
+/// `broken` `failed`, its doctor (which names the record, `machine.record`)
+/// as the fix. A list shows it as one item; a Store or Sandbox on it is
+/// blocked by it; nothing else fails for it (RF re-check N-D).
+pub fn unreadable(name: &str) -> State {
+    State::broken(Reason::Failed, Some(&unreadable_fix(name)))
+}
+
+/// The fix of machine `name` whose record cannot be read.
+pub fn unreadable_fix(name: &str) -> String {
+    format!("layerfs machine doctor {name}")
+}

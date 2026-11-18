@@ -7,7 +7,7 @@ use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{observed, paths};
 use layerfs_home::names::MachineName;
-use layerfs_home::outcome::{failed, Outcome};
+use layerfs_home::outcome::{failed, with_fix, Outcome};
 use layerfs_home::state::State;
 use layerfs_home::time::iso;
 use std::path::Path;
@@ -101,11 +101,16 @@ pub(super) fn summary(
 /// `machine.list()`: `{ items }`, every machine from the home's records.
 /// With `live`, every machine is probed once, all at the same time
 /// ([`live::observe`]), and each row's state comes from its probe.
+/// A machine whose record cannot be read is listed as `broken` `failed`,
+/// its doctor as the fix and the read's refusal as `message`; it is not
+/// probed, and the other machines are answered as usual.
 pub fn list(home: &Path, live: bool, related: Related) -> Outcome {
     let mut records = Vec::new();
+    let mut unread = Vec::new();
     for name in paths::names(&home.join("machine")).map_err(failed)? {
-        if let Some(record) = MachineRecord::read(home, &name)? {
-            records.push(record);
+        match MachineRecord::read(home, &name) {
+            Ok(record) => records.extend(record),
+            Err(refusal) => unread.push(unreadable(&name, &refusal)),
         }
     }
     let seen = match live {
@@ -116,7 +121,24 @@ pub fn list(home: &Path, live: bool, related: Related) -> Outcome {
     for (record, seen) in records.iter().zip(&seen) {
         items.push(summary(home, record, seen.as_ref(), related)?);
     }
+    items.extend(unread);
+    items.sort_by(|a, b| a.get_text("machine").cmp(&b.get_text("machine")));
     Ok(SdkValue::map([("items", SdkValue::List(items))]))
+}
+
+/// The `machine.list` item of machine `name` whose record could not be
+/// read (`refusal`): `broken` `failed`, as the home's tree shows it.
+fn unreadable(name: &str, refusal: &SdkRefusal) -> SdkValue {
+    let state = crate::state::unreadable(name);
+    // a built-in machine's platform is its name; another's is in the record
+    let platform = layerfs_home::names::BUILT_IN.contains(&name);
+    let mut fields = vec![("platform", SdkValue::opt_text(platform.then_some(name)))];
+    fields.extend(state.fields());
+    fields.extend([
+        ("machine", SdkValue::text(name)),
+        ("message", SdkValue::text(&refusal.message)),
+    ]);
+    SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect())
 }
 
 /// `machine.get(machine)`: its record and state, with no probe. With
@@ -124,7 +146,13 @@ pub fn list(home: &Path, live: bool, related: Related) -> Outcome {
 /// `live` section: `{ disk_free_bytes, tool_version, worker }`. A read:
 /// answered while an `op` holds the machine too.
 pub fn get(home: &Path, name: &MachineName, live: bool, related: Related) -> Outcome {
-    let rows = [MachineRecord::of(home, name)?];
+    // a record that cannot be read: refused, with its doctor as the fix
+    let rows = [
+        MachineRecord::of(home, name).map_err(|refusal| match refusal.code.as_str() {
+            "Failed" => with_fix(refusal, crate::state::unreadable_fix(name.as_str())),
+            _ => refusal,
+        })?,
+    ];
     if !live {
         return summary(home, &rows[0], None, related);
     }
