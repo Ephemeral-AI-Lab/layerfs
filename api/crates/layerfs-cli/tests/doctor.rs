@@ -79,7 +79,8 @@ fn home_doctor_text_names_each_finding_and_its_fix() {
 fn home_leftovers_lists_and_home_prune_removes_one() {
     let home = home_path("prune");
     home::open(&home).unwrap();
-    // a partly received image, last written two hours ago, and its lock
+    // an unpack's temporary folder, its image's lock, and a partly
+    // received image (no leftover since spec v19: `machine prune` owns it)
     let images = paths::run_root(&home).join("images");
     for folder in [
         home.join("machine"),
@@ -90,6 +91,11 @@ fn home_leftovers_lists_and_home_prune_removes_one() {
         private_dir(&folder).unwrap();
     }
     let digest = "ab".repeat(32);
+    let tmp = images.join(format!(".tmp-{digest}.2-ab12"));
+    for folder in [tmp.clone(), tmp.join("usr"), tmp.join("usr/bin")] {
+        private_dir(&folder).unwrap();
+    }
+    std::fs::write(tmp.join("usr/bin/tool"), vec![b'x'; 50]).unwrap();
     let part = images.join(format!(".recv-{digest}.part"));
     std::fs::write(&part, vec![b'x'; 50]).unwrap();
     let then = std::time::SystemTime::now() - std::time::Duration::from_secs(7200);
@@ -98,10 +104,10 @@ fn home_leftovers_lists_and_home_prune_removes_one() {
         .unwrap();
     let lock = images.join(format!("{digest}.2.lock"));
     std::fs::write(&lock, "").unwrap();
-    let id = format!("native:image_part:{digest}");
+    let id = format!("native:image_tmp:{digest}.2-ab12");
 
-    // the list names the part by its id, with its size; the lock is no
-    // leftover
+    // the list names the temporary by its id, with its size; the lock and
+    // the part are no leftover
     let out = layerfs(&home, &["home", "leftovers", "--machine", "native"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let listed = layerfs_api::json::parse(String::from_utf8(out.stdout).unwrap().trim()).unwrap();
@@ -121,9 +127,10 @@ fn home_leftovers_lists_and_home_prune_removes_one() {
         Some(2)
     );
     for (wrong, code) in [
-        ("native:image_part:../x".to_owned(), "NotFound"),
-        (format!("native:image-part:{digest}"), "NotFound"),
-        (format!("gone:image_part:{digest}"), "NotFound"),
+        ("native:image_tmp:../../x".to_owned(), "NotFound"),
+        (format!("native:image-tmp:{digest}.2-ab12"), "NotFound"),
+        (format!("gone:image_tmp:{digest}.2-ab12"), "NotFound"),
+        (format!("native:image_part:{digest}"), "NotFound"),
     ] {
         let out = layerfs(&home, &["home", "prune", &wrong]);
         assert_eq!(out.status.code(), Some(125), "{out:?}");
@@ -133,7 +140,7 @@ fn home_leftovers_lists_and_home_prune_removes_one() {
             "{refusal}"
         );
     }
-    assert!(part.is_file() && lock.is_file());
+    assert!(tmp.is_dir() && part.is_file() && lock.is_file());
 
     let out = layerfs(&home, &["home", "prune", &id, "--detail"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
@@ -141,12 +148,13 @@ fn home_leftovers_lists_and_home_prune_removes_one() {
     assert_eq!(
         removed.trim(),
         format!(
-            r#"{{"ok":true,"freed_bytes":50,"outcome":"removed","leftover":"{id}","kind":"image_part","machine":"native","path":"{}"}}"#,
-            part.display()
+            r#"{{"ok":true,"freed_bytes":null,"outcome":"removed","leftover":"{id}","kind":"image_tmp","machine":"native","path":"{}"}}"#,
+            tmp.display()
         )
     );
-    assert!(!part.exists(), "the part is still there");
+    assert!(!tmp.exists(), "the temporary is still there");
     assert!(lock.is_file(), "the lock file was removed");
+    assert!(part.is_file(), "the part was removed");
     assert_eq!(
         layerfs(&home, &["home", "prune", &id]).status.code(),
         Some(125)
