@@ -273,6 +273,9 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "gc_inode_blocks" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_inode_blocks.sql"
         )),
+        "gc_pack_lengths" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_pack_lengths.sql"
+        )),
         "gc_tuple_read" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_tuple_read.sql"
         )),

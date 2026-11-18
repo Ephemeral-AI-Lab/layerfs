@@ -205,7 +205,8 @@ impl HistoryProvider {
     /// The §6.3 compaction mark under one admission intent, as one write
     /// transaction whose caller decides whether it survives.
     ///
-    /// `decide` sees the completed [`MarkResult`] and returns `true` to keep
+    /// `decide` sees the completed [`MarkResult`] and the transaction that
+    /// made it, for what it still has to read, and returns `true` to keep
     /// the transaction (a `rebuild`) or `false` to roll it back (a `none`). §5.1
     /// registers the exclusive operation intent inside the same transaction, so
     /// a rollback takes it with the closure: the live Store then keeps no
@@ -217,7 +218,7 @@ impl HistoryProvider {
         &self,
         scratch: &Path,
         intent: &GcIntent,
-        decide: impl FnOnce(&MarkResult) -> HistoryResult<bool>,
+        decide: impl FnOnce(&Transaction<'_>, &MarkResult) -> HistoryResult<bool>,
     ) -> HistoryResult<(MarkResult, bool)> {
         match &self.engine {
             crate::backend::Engine::Sqlite(session) => session.run_decided(true, |backend| {
@@ -225,7 +226,7 @@ impl HistoryProvider {
                 super::admission::register_in(&tx, intent, false)?;
                 let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
                 let mark = mark_recorded(&tx, Some(&sink))?;
-                let keep = decide(&mark)?;
+                let keep = decide(&tx, &mark)?;
                 let completion = if keep {
                     // Only a rebuild reads the scratch, so only a rebuild
                     // writes it; a `none` drops the sink and no file exists.
@@ -236,11 +237,11 @@ impl HistoryProvider {
                 };
                 Ok(((mark, keep), completion))
             }),
-            crate::backend::Engine::Postgres(_) => {
-                let mark = self.write_snapshot(mark)?;
-                let keep = decide(&mark)?;
+            crate::backend::Engine::Postgres(_) => self.write_snapshot(|tx| {
+                let mark = mark(tx)?;
+                let keep = decide(tx, &mark)?;
                 Ok((mark, keep))
-            }
+            }),
         }
     }
 }
