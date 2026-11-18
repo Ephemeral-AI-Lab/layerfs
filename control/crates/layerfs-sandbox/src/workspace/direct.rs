@@ -13,6 +13,7 @@ use layerfs_home::events::Events;
 use layerfs_home::helpers;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store::call::store_call;
+use layerfs_store::calls::commit::CommitGet;
 use layerfs_store::calls::{Page, StoreOp};
 use layerfs_store::lease;
 use layerfs_store::resolve::{self, Target};
@@ -50,10 +51,22 @@ pub fn call(
                 &host,
                 path.as_deref(),
                 (force, expected.as_deref()),
-                &mut |id, name| {
-                    let (found, head) = branch_of(&home, events, &target, name?).ok()?;
-                    (found == id).then_some(head)
-                },
+                (
+                    &mut |id, name| {
+                        let (found, head) = branch_of(&home, events, &target, name?).ok()?;
+                        (found == id).then_some(head)
+                    },
+                    &mut |text| {
+                        let get = CommitGet {
+                            project: record.project().unwrap_or("").to_owned(),
+                            commit: text.to_owned(),
+                            branch: None,
+                        };
+                        let mut quiet = |_| {};
+                        let mut quiet = Events::new(&mut quiet);
+                        store_call(&home, &mut quiet, &target, &StoreOp::GetCommit(&get))
+                    },
+                ),
             )
         }
         Call::Unmount {

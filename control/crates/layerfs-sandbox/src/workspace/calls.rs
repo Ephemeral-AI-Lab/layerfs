@@ -75,7 +75,8 @@ pub struct CommitRequest {
     pub message: Message,
     /// Publish over a moved head instead of merging; `None` when not sent.
     pub force: Option<bool>,
-    /// The Commit the Branch's head must be ([`expected_commit`]).
+    /// The Commit the Branch's head must be: its id, or a prefix of 8 or
+    /// more of its characters, resolved in the Store (F-hist's resolver).
     pub expected: Option<String>,
 }
 
@@ -97,22 +98,6 @@ pub struct StatusRequest {
     pub ws: String,
     /// Only the changes under this folder of the Workspace.
     pub path: Option<String>,
-}
-
-/// SWITCH POINT (F-hist): the Commit `--expected` names, as the full id the
-/// Store keeps (66 hex digits). Package F-hist builds the one Store
-/// function that resolves a Commit reference (a full id or an 8+ hex
-/// prefix); until it lands, a full id is taken as it is and a prefix is
-/// refused `InvalidInput` here. Replace this body with that resolver.
-pub fn expected_commit(text: &str) -> Result<String> {
-    let hex = text.len() == 66 && text.bytes().all(|b| b.is_ascii_hexdigit());
-    match hex {
-        true => Ok(text.to_ascii_lowercase()),
-        false => Err(refused(
-            "InvalidInput",
-            format!("--expected is a full Commit id (66 hex digits) in this build, not {text:?}"),
-        )),
-    }
 }
 
 /// A Workspace of the Sandbox, named `ws` from then on.
@@ -260,16 +245,11 @@ fn changing(events: &mut Events<'_>, at: At, call: Call, message: Message) -> Ou
 
 /// `workspace.commit`: the Workspace's changes as one Commit.
 pub fn commit(home: &Path, events: &mut Events<'_>, request: &CommitRequest) -> Outcome {
-    let expected = request
-        .expected
-        .as_deref()
-        .map(expected_commit)
-        .transpose()?;
     let at = at(home, &request.ws, false, false)?;
     let call = Call::Commit {
         path: Some(at.path.clone()),
         force: request.force,
-        expected,
+        expected: request.expected.clone(),
     };
     changing(events, at, call, request.message.clone())
 }

@@ -260,24 +260,66 @@ pub fn status_with(
 /// `expected`.
 pub fn commit(host: &Host, path: Option<&str>, force: bool, expected: Option<&str>) -> Outcome {
     let open = host.open_args();
-    commit_with(host, path, (force, expected), &mut |branch, _| {
-        layerfs_store::service::head(&open, branch).ok()
+    let mut resolve = |text: &str| {
+        let args = SdkValue::map([
+            ("project", SdkValue::text(&host.project)),
+            ("commit", SdkValue::text(text)),
+        ]);
+        layerfs_store::service::call("branch.get_commit", &open, args)
+    };
+    commit_with(
+        host,
+        path,
+        (force, expected),
+        (
+            &mut |branch, _| layerfs_store::service::head(&open, branch).ok(),
+            &mut resolve,
+        ),
+    )
+}
+
+/// Reads the Commit a text names (`branch.get_commit`'s answer): F-hist's
+/// resolver, a full id or a prefix of 8 or more of its characters.
+pub type Resolve<'a> = dyn FnMut(&str) -> Outcome + 'a;
+
+/// The full id of the Commit `--expected` names, resolved in the Store: a
+/// prefix more than one Commit starts with is refused `InvalidInput` with
+/// `matches` beside it; one no Commit has, `NoSuchCommit`.
+fn expected_id(text: &str, resolve: &mut Resolve<'_>) -> Result<String, SdkRefusal> {
+    let found = resolve(text).map_err(|refusal| {
+        match (
+            refusal.code == "InvalidInput",
+            refusal.detail.get("matches"),
+        ) {
+            (true, Some(matches)) => {
+                let matches = matches.clone();
+                with_next(refusal, "matches", matches)
+            }
+            _ => refusal,
+        }
+    })?;
+    found.get_text("commit").map(str::to_owned).ok_or_else(|| {
+        layerfs_home::outcome::refused("Failed", "the Store named no Commit for --expected")
     })
 }
 
-/// [`commit`], the Branch's head read by `head_of` when `expected` (a full
-/// Commit id in hex) names the head the Commit is made over: a head that
-/// is not it refuses the Commit `Conflict`, naming the head as `commit`,
-/// before anything is captured. The check is one read before the Commit
+/// [`commit`], the Branch's head read by `head_of` when `expected` (a
+/// Commit id or prefix, resolved by `resolve`) names the head the Commit is
+/// made over: a head that is not it refuses the Commit `Conflict`, naming
+/// the head as `commit`, before anything is captured. The check is one read before the Commit
 /// is sent; a head that moves after it is merged as any Commit merges.
 pub fn commit_with(
     host: &Host,
     path: Option<&str>,
     (force, expected): (bool, Option<&str>),
-    head_of: &mut HeadOf<'_>,
+    (head_of, resolve): (&mut HeadOf<'_>, &mut Resolve<'_>),
 ) -> Outcome {
     let state = sandbox(host)?;
     let path = required(path, "path")?;
+    let expected = expected
+        .map(|text| expected_id(text, resolve))
+        .transpose()?;
+    let expected = expected.as_deref();
     let token = state.token(path)?;
     let mut control = crate::daemon::trace::control(&state.controls)?;
     let status = match expected {
@@ -465,15 +507,14 @@ fn dirty(state: &crate::registry::SandboxState, path: &str, refusal: SdkRefusal)
     let refusal = with_next(refusal, "changes", shown);
     let refusal = with_next(refusal, "changes_count", count);
     let refusal = with_next(refusal, "pending_merge", SdkValue::Bool(pending));
-    let refusal = layerfs_home::outcome::with_fix(
+    layerfs_home::outcome::with_fix(
         refusal,
         format!(
             "layerfs workspace commit {}:{} -m <message>",
             state.id,
             path_name(state, path)
         ),
-    );
-    refusal
+    )
 }
 
 /// The entries a refusal or a status shows of a bounded read.

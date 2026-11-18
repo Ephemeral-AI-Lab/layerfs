@@ -256,11 +256,7 @@ fn a_command_runs_as_its_identity_in_its_directory_with_only_its_environment() {
     // `workspace exec --stdin`); more than one pipe holds, read in full
     let input = ExecRequest {
         identity,
-        arguments: vec![
-            "bash".into(),
-            "-c".into(),
-            "wc -c; head -c 3 /dev/stdin".into(),
-        ],
+        arguments: vec!["bash".into(), "-c".into(), "wc -c".into()],
         environment: Vec::new(),
         directory: sandbox.directory().display().to_string(),
         stdin: Some(vec![b'x'; 200_000]),

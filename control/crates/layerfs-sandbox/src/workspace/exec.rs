@@ -64,6 +64,8 @@ pub struct CancelRequest {
 pub fn exec(home: &Path, events: &mut Events<'_>, request: &ExecRequest) -> Answer {
     let at = at(home, &request.ws, false, true)?;
     crate::exec::checked_env(&request.env)?;
+    // the folder it starts in is checked before anything is sent
+    crate::exec::start_folder("/", request.cwd.as_deref())?;
     let id = ExecId::mint()?;
     events.phase(
         "start",
