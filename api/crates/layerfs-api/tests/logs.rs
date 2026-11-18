@@ -169,28 +169,28 @@ fn argv_has_positionals_options_flags_and_the_scope_before_it_rewrites() {
     let (home, folder) = project();
     let _ = call(
         &home,
-        "file.diff",
+        "file.grep",
         &[
             p(),
-            ("left_branch", t("main")),
-            ("left_path", t("/README.md")),
-            ("right_branch", t("main")),
-            ("right_path", t("/README.md")),
-            ("allow_missing", SdkValue::Bool(true)),
-            ("include_attribution", SdkValue::Bool(false)),
-            ("page_size", SdkValue::Int(5)),
+            ("branch", t("main")),
+            ("pattern", t("login")),
+            ("path", t("/src")),
+            ("include", t("*.ts")),
+            ("ignore_case", SdkValue::Bool(true)),
+            ("limit", SdkValue::Int(5)),
         ],
     );
     let want: Vec<String> = vec![
         "file".into(),
-        "diff".into(),
+        "grep".into(),
         "shop/api".into(),
         "main".into(),
-        bytes("README.md".len()),
-        "main".into(),
-        bytes("README.md".len()),
-        "--allow-missing".into(),
-        "--page-size".into(),
+        bytes("login".len()),
+        bytes("src".len()),
+        "--include".into(),
+        bytes("*.ts".len()),
+        "--ignore-case".into(),
+        "--limit".into(),
         "5".into(),
     ];
     assert_eq!(argv(&last(&home)), want);
@@ -305,12 +305,15 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
             p(),
             ("branch", t("main")),
             ("path", t("/missing")),
-            ("old", t("ab")),
-            ("new", t("cde")),
+            ("old_string", t("ab")),
+            ("new_string", t("cde")),
         ],
     );
     let words = argv(&last(&home));
-    assert_eq!(&words[5..], ["--old", &bytes(2), "--new", &bytes(3)]);
+    assert_eq!(
+        &words[5..],
+        ["--old-string", &bytes(2), "--new-string", &bytes(3)]
+    );
     let _ = call(
         &home,
         "store.connect",
@@ -423,17 +426,17 @@ fn saved_versions_are_logged_for_saving_calls_only() {
         main.get_text("commit")
     );
     assert!(line.get("layer").is_none());
-    // Committed: commit.id
+    // committed: the new Commit
     let answer = write("one\n");
     let line = last(&home);
-    assert_eq!(line.get_text("kind"), Some("Committed"));
-    assert_eq!(hex66(&line, "commit"), answer.get_text("head").unwrap());
+    assert_eq!(line.get_text("kind"), Some("committed"));
+    assert_eq!(hex66(&line, "commit"), answer.get_text("commit").unwrap());
     assert!(line.get("layer").is_none());
-    // UpToDate: the head
+    // unchanged: the head
     let answer = write("one\n");
     let line = last(&home);
-    assert_eq!(line.get_text("kind"), Some("UpToDate"));
-    assert_eq!(hex66(&line, "commit"), answer.get_text("head").unwrap());
+    assert_eq!(line.get_text("kind"), Some("unchanged"));
+    assert_eq!(hex66(&line, "commit"), answer.get_text("commit").unwrap());
     // forked from a Branch with a head: the head
     let forked = ok(
         &home,

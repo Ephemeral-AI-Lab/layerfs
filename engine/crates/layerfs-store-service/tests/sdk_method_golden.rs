@@ -79,6 +79,7 @@ fn render(value: &SdkValue, out: &mut String) {
                             | "createdMs"
                             | "newStoredBytes"
                             | "newMetadataBytes"
+                            | "modifiedMs"
                     )
                 {
                     out.push_str("<varies>");

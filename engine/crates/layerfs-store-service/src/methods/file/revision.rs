@@ -8,7 +8,10 @@ use layerfs_bridge::control::SdkValue;
 pub fn revision(service: &StoreService, args: &SdkValue) -> Answer {
     let stack = project(service, args)?;
     let branch = text(args, "branch")?;
-    let node = saved::resolve_context(&service.store, &stack, branch, args.get_text("commit"))?;
+    // a Commit id prefix is resolved first
+    let pinned = crate::methods::args::pinned(service, &stack, args)?;
+    let at = pinned.as_deref().or(args.get_text("commit"));
+    let node = saved::resolve_context(&service.store, &stack, branch, at)?;
     let reader = snapshot::reader(&service.store, &stack);
     revision::list(
         &service.store,

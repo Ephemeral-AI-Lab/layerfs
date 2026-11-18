@@ -6,7 +6,8 @@ use crate::{
 };
 use layerfs_bridge::control::SdkValue;
 
-/// `read(path, { branch, commit?, startLine?, endLine? })`: one window of a file at a Branch, Commit or Layer.
+/// `read(path, { branch, commit?, startLine?, endLine?, binary? })`: one window of a file at a
+/// Branch, Commit or Layer; with `binary`, a file that is not text answers its size.
 pub fn read(service: &StoreService, args: &SdkValue) -> Answer {
     let (stack, reader, snap) = snapshot_full(service, args)?;
     let path = path(args, "path")?;
@@ -22,6 +23,7 @@ pub fn read(service: &StoreService, args: &SdkValue) -> Answer {
         &path,
         line(args, "startLine", 1),
         line(args, "endLine", 9_007_199_254_740_991),
+        crate::methods::args::flag(args, "binary", false)?,
     );
     paged_reads::pin(&service.store, &snap, answer)
 }

@@ -296,8 +296,8 @@ fn init_files_branches_move_and_remove() {
             p(),
             ("branch", t("fix")),
             ("path", t("/NEW.md")),
-            ("old", t("new")),
-            ("new", t("newer")),
+            ("old_string", t("new")),
+            ("new_string", t("newer")),
         ],
     );
     let read = ok(

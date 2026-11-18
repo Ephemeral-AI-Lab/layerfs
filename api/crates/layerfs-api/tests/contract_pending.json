@@ -7,25 +7,9 @@
     "project.stats",
     "project.export",
     "project.delete",
-    "project.hide_path",
-    "file.read",
-    "file.stat",
-    "file.list",
-    "file.glob",
-    "file.grep",
-    "file.history",
-    "file.blame",
-    "file.write",
-    "file.edit",
-    "file.rm",
-    "file.mkdir",
-    "file.mv",
-    "file.cp",
-    "file.apply"
+    "project.hide_path"
   ],
   "old_names": {
-    "file.diff": "commit.diff",
-    "file.revision": "file.history",
     "project.remove_file": "project.hide_path"
   },
   "not_built": {

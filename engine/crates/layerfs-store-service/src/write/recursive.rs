@@ -36,7 +36,9 @@ fn join(path: &str, name: &[u8]) -> Result<String> {
     ))
 }
 impl Mutation<'_> {
-    pub fn remove(&mut self, path: &str) -> Result<()> {
+    /// Removes the entry at `path`; a folder that is not empty only when
+    /// `recursive`, else it is refused `NotEmpty`.
+    pub fn remove(&mut self, path: &str, recursive: bool) -> Result<()> {
         if path == "/" {
             return Err(args::invalid("cannot remove the root"));
         }
@@ -45,6 +47,21 @@ impl Mutation<'_> {
             let (parent, name) = self.parent(path)?;
             self.apply(Operation::Unlink { parent, name })?;
             return Ok(());
+        }
+        if !recursive {
+            let page = (self.view)
+                .list(self.op.overlay(), top.serial, None)
+                .map_err(read_failure)?;
+            if !page.entries.is_empty() {
+                return Err(args::refuse(
+                    "NotEmpty",
+                    format!("{path} is a folder that is not empty"),
+                    layerfs_bridge::control::SdkValue::map([(
+                        "path",
+                        layerfs_bridge::control::SdkValue::text(path),
+                    )]),
+                ));
+            }
         }
         let mut stack = vec![Frame::new(path.to_owned(), top.serial)];
         while let Some(frame) = stack.last_mut() {

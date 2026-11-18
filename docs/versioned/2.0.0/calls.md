@@ -452,53 +452,99 @@ publication answers as a Commit. Every id in an answer is the full id.
   `paths_only`, `page_size` and `page_pos` became `ref`, `--from`, `--with
   patch`, `limit` and `cursor`).
 
-### `file` (15)
+### `file` (14)
 
 1.1.0's `fs` family, renamed (O13). Paths are absolute, starting with `/`.
+Store calls: Linux only (elsewhere `Unsupported`).
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `read` | `project`, `branch`, `path`, `[commit]` | `start_line`, `end_line` | reads a text file, or a window of its lines |
-| `stat` | `project`, `branch`, `path`, `[commit]` | — | a path's kind, size and mode |
-| `list` | `project`, `branch`, `path`, `[commit]` | `page_size`, `page_pos` | a folder's entries |
-| `glob` | `project`, `branch`, `path`, `pattern`, `[commit]` | `page_size`, `page_pos` | paths under `path` matching a glob |
-| `grep` | `project`, `branch`, `path`, `pattern`, `[commit]` | `page_size`, `page_pos` | lines under `path` matching a regular expression |
-| `revision` | `project`, `branch`, `path` | `at_commit`, `traversal`, `page`, `page_size`, `continuation` | the saved changes to one literal path, oldest first |
-| `blame` | `project`, `branch`, `path`, `[commit]` | `from_line` | the Commit of each line |
-| `diff` | `project`, `left_branch`, `left_path`, `right_branch`, `right_path` | `left_commit`, `right_commit` | the difference between two files (O29) |
-| `write` | `project`, `branch`, `path`, `content` | `message`, `mode` | writes a file; one Commit |
-| `edit` | `project`, `branch`, `path` | `old`, `new`, `message` | replaces one unique text in a file; one Commit |
-| `rm` | `project`, `branch`, `path` | `message` | removes a path; one Commit |
-| `mkdir` | `project`, `branch`, `path` | `message`, `mode` | makes a folder; one Commit |
-| `mv` | `project`, `branch`, `from_path`, `to_path` | `message` | moves a path; one Commit |
-| `cp` | `project`, `branch`, `from_path`, `to_path` | `message` | copies a path; one Commit |
-| `apply` | `project`, `branch`, `changes` (JSON) | `message` | applies a list of changes; one Commit, all or none |
+| `read` | `project`, `branch`, `path` | `at`, `line` (1), `limit` (2000) | read a text file, or a window of its lines |
+| `stat` | `project`, `branch`, `path` | `at` | a path's type, size and mode |
+| `list` | `project`, `branch`, `path` | `at`, `limit` (100), `cursor` | a folder's entries |
+| `glob` | `project`, `branch`, `pattern`, `[path]` (`/`) | `exclude`, `at`, `limit` (100), `cursor` | paths under a folder that match a glob |
+| `grep` | `project`, `branch`, `pattern`, `[path]` (`/`) | `include`, `exclude`, `ignore_case`, `at`, `limit` (100), `cursor` | lines under a folder that contain a literal text |
+| `history` | `project`, `branch`, `path` | `at`, `traversal` (`provenance`), `limit` (100), `cursor` | the Commits that changed one path, newest first |
+| `blame` | `project`, `branch`, `path` | `at`, `line` (1), `limit` (2000) | the Commit that last changed each line of a text file |
+| `write` | `project`, `branch`, `path`, `content` | `mode`, `expected`, `message` | write a file; one Commit |
+| `edit` | `project`, `branch`, `path` | `old_string`, `new_string` (both required), `replace_all`, `expected`, `message` | replace a text in a file; one Commit |
+| `rm` | `project`, `branch`, `path` | `recursive`, `expected`, `message` | remove a path; one Commit |
+| `mkdir` | `project`, `branch`, `path` | `mode`, `expected`, `message` | make a folder and its missing parents; one Commit |
+| `mv` | `project`, `branch`, `from`, `to` | `expected`, `message` | move a path; one Commit |
+| `cp` | `project`, `branch`, `from`, `to` | `expected`, `message` | copy a path, a folder with everything in it; one Commit |
+| `apply` | `project`, `branch`, `changes` (JSON) | `expected`, `message` | apply a list of changes; one Commit, all or none |
 
-- Reads answer `kind: "ok"`, the `snapshot` they read (such as
-  `agent@3a54ebd60426`), its `root` and the call's fields. `read` answers
-  `text`, `start_line`, `end_line`, `truncated`, `next_line` and `size`.
-  A file that is not text is refused `InvalidInput` (raised as `Binary`).
-- Writes answer `{kind: "Committed", branch, head, commit}`. Without a
-  message, the Commit message is `Apply filesystem changes`.
-- `mode` is a whole number permission mode, 0 to 0o7777 (in the shell, a
-  decimal number such as `420` for 0644).
+- **Reads** read the Branch's head, or `--at C`: a full Commit id or a
+  prefix of 8 or more of its characters (a prefix more than one Commit
+  starts with is `InvalidInput` with `matches`, a count). Every long form
+  names the Commit read as `commit` (its full 66-character id), its `root`
+  and the `path`. `read` answers `text` (an empty file `""`), `next_line`
+  while lines are left and `line_truncated` when a long line was cut; a file
+  that is not text answers `binary: true` and its `size` instead of
+  `text`. `stat` answers `type` (`file`, `dir` or `symlink`), `size` and
+  `mode` as octal text (`"0644"`); the long form adds `inode` and
+  `modified_at`. `blame` answers `ranges` (`{start, end, commit}`, runs of
+  lines with one owner; a range without `commit` has none found) and
+  `commits` (each owner once: `{commit, message}`, the long form adds
+  `created_at`), `next_line`, and `partial` when its history budget ran out
+  or a line was cut.
+- **Pages**: `list`, `glob`, `grep` and `history` answer `items` and
+  `next_cursor`. `limit` is 1 to 1000; a page also ends early at the reply
+  budget, with a cursor. The cursor carries the call's filters and the
+  Commit its first page read, so a later page reads the same tree while the
+  Branch moves on. A cursor given with other filters, or to another call,
+  is `InvalidInput`; one whose Commit is gone, `NotFound`. A `list` row is
+  `{path, type}` (long: `inode`), a `glob` row a path, a `grep` row `{path,
+  line, text}` with `line_truncated`; the long forms add `skipped_hidden`
+  (entries `project hide-path` hides) or, for `grep`, `skipped_binary` (the
+  files that are not text). `grep` searches literal text; `--ignore-case`
+  folds ASCII letters. `--include` and `--exclude` take a glob in the
+  `.lww` rules syntax that matches a path or one of its folders, so
+  `--exclude node_modules` leaves out every `node_modules` folder (and the
+  walk does not enter it). A `history` row is `{commit, change}` with its
+  `message`; `change` is `added`, `modified` or `removed`; the long row adds
+  `parent`, `created_at`, the path's `type`, `size` and `mode` after the
+  Commit, and which of `content`, `metadata` and `identity` changed.
+  `--traversal branch` stays on the Branch's own Commits.
+- **Writes** never write `main` (refused with a `fix` that forks a
+  Branch). Each answers `commit`, the new Commit's full id; `unchanged`
+  when nothing changed (`commit` is then the head); `merged` when the
+  Branch moved during the call and the change was merged; `overwritten`
+  (and its count) for the paths `.lww` rules took. The long form adds
+  `outcome` (`committed`, `merged` or `unchanged`), `branch`, `parent`,
+  `root`, `message` and `created_at`. `--expected C` is the head guard: the
+  head the call's private Workspace bound to must be `C` (an id or prefix),
+  else `Conflict` naming the head as `commit`. Without a message, the
+  Commit message is `Apply filesystem changes` (`-m` in the shell).
+- `mode` is octal text, four digits `0000` to `7777` (`0644`), as `stat`
+  answers it. A new file is `0644` and an existing one keeps its mode; a
+  folder `mkdir` makes gets its `mode`, missing parents `0755`.
+- `edit` without `--replace-all` needs exactly one occurrence: none is
+  `NotFound`, more than one `InvalidInput` with `matches` and a `fix` that
+  adds `--replace-all`. With it, every occurrence is replaced and the answer
+  says how many as `replaced`. `rm` of a folder that is not empty needs
+  `--recursive` (`InvalidInput` with a `fix` that adds it).
 - In the shell, `write` reads its content and `apply` its JSON from stdin,
-  or from `--from <file>`. `edit` also takes `--old-from <file>` and
-  `--new-from <file>`.
-- `apply`'s changes are objects with an `op`: `write` (`path`, `content`
-  as text or bytes, `mode`), `mkdir` (`path`, `mode`), `chmod` (`path`,
-  `mode`), `rm` (`path`), `cp` and `mv` (`from_path`, `to_path`), and `edit`
-  (`path`, `old`, `new`), the same names as the single calls
-  (`engine/crates/layerfs-api/src/family/files.rs` maps them to the Store's).
-  The Store's own names (`from`, `to`, `oldText`, `newText`, `bytes`) are
-  refused `InvalidInput`, so a folder scope sees every path.
+  or from `--from <file>`.
+- `apply`'s changes are objects with an `op` and that single call's fields:
+  `write` (`path`, `content` as text or bytes, `mode`), `mkdir` (`path`,
+  `mode`), `chmod` (`path`, `mode`), `rm` (`path`, `recursive`), `cp` and
+  `mv` (`from`, `to`), and `edit` (`path`, `old_string`, `new_string`,
+  `replace_all`). Any other field is refused `InvalidInput`, so a folder
+  scope sees every path.
+- `file.history` was `file.revision` (`at_commit`, `page`, `page_size` and
+  `continuation` became `--at`, `limit` and `cursor`); `file.diff` is gone:
+  one path between two Commits is `commit diff --path`. Reads lost their
+  optional `[commit]` positional for `--at`, the windows `start_line`,
+  `end_line`, `from_line` and `line_count` became `--line` and `--limit`,
+  and `page_size`/`page_pos` became `--limit` and `--cursor`.
 
 Run:
 
 ```console
-$ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","path":"/src"},{"op":"mv","from_path":"/docs/a.txt","to_path":"/src/a.txt"}]' \
+$ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","path":"/src"},{"op":"mv","from":"/docs/a.txt","to":"/src/a.txt"}]' \
     | layerfs file apply shop/api agent -m batch
-{"kind":"Committed","branch":"agent","head":"1271…","commit":{…,"message":"batch",…}}
+{"commit":"1271…"}
 ```
 
 ### `sandbox` (7)

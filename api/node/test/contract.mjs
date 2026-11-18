@@ -294,10 +294,10 @@ test("contract: the command reads content from --from and a text option from --N
   const message = join(homes.cli.folder, "message.txt");
   writeFileSync(content, Buffer.from([0, 255, 1]));
   writeFileSync(message, "from a file ☃");
-  const words = ["file", "write", P, "agent", "/from.bin", "--from", content, "--message-from", message];
+  const words = ["file", "write", P, "agent", "/from.bin", "--from", content, "--message-from", message, "--detail"];
   const run = spawnSync(command, words, { env, encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);
-  assert.equal(JSON.parse(run.stdout).commit.message, "from a file ☃");
+  assert.equal(JSON.parse(run.stdout).message, "from a file ☃");
   const stat = spawnSync(command, ["file", "stat", P, "agent", "/from.bin"], { env, encoding: "utf8" });
   assert.equal(JSON.parse(stat.stdout).size, 3);
   // no such file is a wrong command line, before any call
