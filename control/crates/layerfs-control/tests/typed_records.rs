@@ -101,24 +101,46 @@ fn a_bucket_shows_its_record() {
 
 #[test]
 fn a_sandbox_shows_its_record() {
+    use layerfs_home::state::State;
     use layerfs_sandbox::record::SandboxRecord;
     let text = r#"{"name":"t1","project":"shop/api","machine":"native","created":3,"id":"t1","platform":"macos","runtime":"native","image":null,"backend":"native","route":"nfs"}"#;
-    // its state is derived, never stored (#536 H4), and shown last
-    let shown = text.replacen('}', r#","state":"running"}"#, 1);
     let record = SandboxRecord::from_record("t1", value(text));
-    assert_eq!(print(&record.to_sdk(View::List)), shown);
-    assert_eq!(print(&record.to_sdk(View::Full)), shown);
-    // layout 3: `v`, `runtime_id` and what reopens it (`daemon`) are not shown
+    let read = |record: &SandboxRecord| {
+        (
+            record.name().to_owned(),
+            record.project().map(str::to_owned),
+            record.machine().to_owned(),
+            record.id().map(str::to_owned),
+            record.platform().map(str::to_owned),
+            record.image().map(str::to_owned),
+            record.backend().map(str::to_owned),
+            record.route().map(str::to_owned),
+            record.created_ms(),
+        )
+    };
+    let shown = (
+        "t1".to_owned(),
+        Some("shop/api".to_owned()),
+        "native".to_owned(),
+        Some("t1".to_owned()),
+        Some("macos".to_owned()),
+        None,
+        Some("native".to_owned()),
+        Some("nfs".to_owned()),
+        Some(3),
+    );
+    assert_eq!(read(&record), shown);
+    // its state is derived, never stored (#536 H4): ready on a ready machine
+    assert_eq!(record.status(&State::Ready), State::Ready);
+    // layout 3: `v`, `runtime_id` and what reopens it (`daemon`) read the same
     let hidden = text.replacen('{', r#"{"v":1,"#, 1).replacen(
         r#""route":"nfs""#,
         r#""route":"nfs","runtime_id":"c0ffee","daemon":{"pid":7}"#,
         1,
     );
     let versioned = SandboxRecord::from_record("t1", value(&hidden));
-    assert_eq!(print(&versioned.to_sdk(View::List)), shown);
-    assert_eq!(versioned.machine(), "native");
-    assert_eq!(record.project(), Some("shop/api"));
-    assert_eq!(record.id(), Some("t1"));
+    assert_eq!(read(&versioned), shown);
+    assert_eq!(versioned.status(&State::Ready), State::Ready);
 }
 
 #[cfg(feature = "machine")]
@@ -310,33 +332,57 @@ fn sandbox_with(id: bool, op: Option<(&str, i64, bool)>) -> layerfs_sandbox::rec
 
 #[test]
 fn a_sandbox_state_is_derived_from_its_record_and_intent() {
+    use layerfs_home::state::{Reason, State};
     let me = i64::from(std::process::id());
-    assert_eq!(sandbox_with(true, None).state(false), "running");
-    // the daemon answered that it does not run: it was lost (P-1)
-    assert_eq!(sandbox_with(true, None).state(true), "lost");
+    let ready = State::Ready;
+    let broken = |reason| State::broken(reason, Some("layerfs sandbox remove b"));
+    assert_eq!(sandbox_with(true, None).status(&ready), State::Ready);
+    // its machine is not ready: blocked by it
+    let blocked = sandbox_with(true, None).status(&State::Stopped);
+    assert_eq!(blocked.word(), "blocked", "{blocked:?}");
+    // the daemon answered that it does not run: a live read recorded `lost`
+    let lost = sandbox_with(true, None).observed_as(Some(("lost", "it does not run")));
+    assert_eq!(lost.status(&ready), broken(Reason::Lost));
+    assert_eq!(lost.reason_word(), Some("lost"));
     // no id: its create never recorded one
-    assert_eq!(sandbox_with(false, None).state(false), "gone");
     assert_eq!(
-        sandbox_with(false, Some(("sandbox.create", me, false))).state(false),
-        "creating"
+        sandbox_with(false, None).status(&ready),
+        broken(Reason::Missing)
+    );
+    // a live owner's op is busy, by its call word (`sandbox.close`, as a
+    // build before the call surface 2.0 recorded it, is `remove`)
+    let busy = |id: bool, op: &str| match sandbox_with(id, Some((op, me, false))).status(&ready) {
+        State::Busy { name, phase, .. } => (name, phase),
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(
+        busy(false, "sandbox.create"),
+        ("create".into(), "stop".into())
     );
     assert_eq!(
-        sandbox_with(true, Some(("sandbox.close", me, false))).state(false),
-        "closing"
-    );
-    // a gone owner (id 0): uncertain blocks, certain is ignored
-    assert_eq!(
-        sandbox_with(true, Some(("sandbox.close", 0, true))).state(false),
-        "unresolved"
+        busy(true, "sandbox.close"),
+        ("remove".into(), "stop".into())
     );
     assert_eq!(
-        sandbox_with(true, Some(("sandbox.close", 0, false))).state(false),
-        "running"
+        busy(true, "sandbox.remove"),
+        ("remove".into(), "stop".into())
     );
-    // the intent shows as `{id, name, phase, started, uncertain}`, never its owner
-    let shown = sandbox_with(true, Some(("sandbox.close", 0, true))).to_sdk(View::List);
+    // a gone owner (id 0): uncertain is unresolved, certain is ignored
     assert_eq!(
-        print(&shown),
-        r#"{"name":"b","id":"b","state":"unresolved","op":{"id":"op-00000000000000cc","name":"sandbox.close","phase":"stop","started":4,"uncertain":true}}"#
+        sandbox_with(true, Some(("sandbox.close", 0, true))).status(&ready),
+        broken(Reason::Unresolved)
+    );
+    assert_eq!(
+        sandbox_with(true, Some(("sandbox.close", 0, false))).status(&ready),
+        State::Ready
+    );
+    // the op shows as `{name, phase, started_at}`, never its owner
+    let record = sandbox_with(true, Some(("sandbox.close", 0, true)));
+    let shown = layerfs_sandbox::state::op_shown(&record.op().unwrap());
+    let text = print(&shown);
+    assert!(text.contains(r#""name":"remove""#), "{text}");
+    assert!(
+        text.contains(r#""phase":"stop""#) && !text.contains("owner"),
+        "{text}"
     );
 }

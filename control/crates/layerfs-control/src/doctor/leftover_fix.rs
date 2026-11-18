@@ -314,7 +314,7 @@ fn run_folder(root: &Path, path: &Path, known: &[String]) -> Result<Option<u64>>
     let shown = path.display();
     if leftovers::recorded(path, &leftovers::records(root), known) {
         return Err(in_use(format!(
-            "a Sandbox record names {shown}; `layerfs sandbox close` closes that Sandbox"
+            "a Sandbox record names {shown}; `layerfs sandbox remove` removes that Sandbox"
         )));
     }
     let marker = path.join(leftovers::OWNER);

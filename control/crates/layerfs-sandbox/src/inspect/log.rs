@@ -1,5 +1,6 @@
-//! `logs.machine` and `logs.sandbox`: a machine's worker log and a
-//! Sandbox's daemon log, one window per call (layerfs-project#178), read
+//! `machine.log` and `sandbox.log` (`logs.machine` and `logs.sandbox`
+//! before the call surface 2.0): a machine's worker log and a Sandbox's
+//! daemon log, one window per call (layerfs-project#178), read
 //! with `layerfs_home::tail` on the side that holds the file. They read
 //! `worker.log` with `worker.1.log`, and `daemon.log`, and nothing else:
 //! never `log/uncertain.jsonl` (#179 D8) or any other file.
@@ -96,7 +97,7 @@ pub fn machine_log(home: &Path, machine: &MachineName, window: &Window) -> Outco
     super::ask(home, machine, MACHINE_LOG, window.request(None))
 }
 
-/// `logs.sandbox(sandbox, { cursor, before, limit })`: one window of the
+/// `sandbox.log(sandbox, { before, limit })`: one window of the
 /// log of Sandbox `name`'s daemon, shaped as [`machine_log`]'s. A name
 /// with no record is `NoSuchSandbox`, and so is a Sandbox whose machine
 /// holds no run folder for it; a machine whose worker does not answer is
@@ -104,7 +105,7 @@ pub fn machine_log(home: &Path, machine: &MachineName, window: &Window) -> Outco
 /// its run folder is there.
 pub fn sandbox_log(home: &Path, name: &str, window: &Window) -> Outcome {
     tail::check(
-        "logs.sandbox",
+        "sandbox.log",
         window.cursor.is_some(),
         window.before.is_some(),
         window.limit,
@@ -132,5 +133,5 @@ pub(super) fn machine(side: &Side<'_>, args: &SdkValue) -> Outcome {
 /// [`sandbox_log`] on the side that holds the Sandbox's run folder.
 pub(super) fn sandbox(side: &Side<'_>, args: &SdkValue) -> Outcome {
     let folder = super::run_folder(side, args.get_text("sandbox").unwrap_or(""))?;
-    Window::of(args).read(&Pair::of(folder.join(DAEMON_LOG)), "logs.sandbox")
+    Window::of(args).read(&Pair::of(folder.join(DAEMON_LOG)), "sandbox.log")
 }

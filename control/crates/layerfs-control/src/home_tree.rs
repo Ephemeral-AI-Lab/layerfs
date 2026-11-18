@@ -103,19 +103,7 @@ fn workspaces(home: &Path, sandbox: &str) -> Result<Vec<SdkValue>> {
 /// worker.
 fn sandbox(home: &Path, record: &SandboxRecord, machine: &State) -> Result<SdkValue> {
     let name = record.name();
-    let state = match record.state(false) {
-        "creating" | "closing" => held(record.op()).unwrap_or(State::Ready),
-        "unresolved" => State::broken(Reason::Unresolved, None),
-        // it ended, or its create never recorded a runtime: only removing
-        // its record is left
-        "gone" => State::broken(
-            Reason::Missing,
-            Some(&format!("layerfs sandbox close {name}")),
-        ),
-        _ => machine
-            .blocks("machine", record.machine())
-            .unwrap_or(State::Ready),
-    };
+    let state = record.status(machine);
     let listed = match state {
         State::Blocked(_) => SdkValue::Null,
         _ => {

@@ -1,6 +1,6 @@
 //! Named Sandboxes and Workspaces (#533 step 12) on `native`: create, the
 //! name unique across the home, the wrong-machine refusal, mount, exec,
-//! status, commit, unmount and close. The live half needs the macOS (or
+//! status, commit, unmount and remove. The live half needs the macOS (or
 //! Linux, as root) daemon at LAYERFS_DAEMON; without it, it says NOT_RUN.
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_bridge::control::SdkValue;
@@ -116,9 +116,10 @@ fn named_sandboxes_on_native() {
             ("project", t("shop/api")),
             ("name", t("t1")),
             ("machine", t("native")),
+            ("detail", SdkValue::Bool(true)),
         ],
     );
-    assert_eq!(made.get_text("state"), Some("running"));
+    assert_eq!(made.get_text("state"), Some("ready"));
     // its success dropped the create's intent in the same write (#536 §7.1)
     assert!(made.get("op").is_none(), "{made:?}");
     let record = home::read_record(&paths::sandbox_record(&home, "t1"))
@@ -127,8 +128,12 @@ fn named_sandboxes_on_native() {
     assert!(record.get("op").is_none(), "{record:?}");
     // Host-process Sandboxes store `local`, not an image digest. Reads
     // must still reach the daemon; public image overrides stay strict.
-    let inspected = ok(&home, "sandbox.get", &[("name", t("t1"))]);
-    assert_eq!(inspected.get_text("state"), Some("running"));
+    let inspected = ok(
+        &home,
+        "sandbox.get",
+        &[("sandbox", t("t1")), ("detail", SdkValue::Bool(true))],
+    );
+    assert_eq!(inspected.get_text("state"), Some("ready"));
     assert_eq!(inspected.get("image"), made.get("image"));
     let invalid = call(
         &home,
@@ -184,7 +189,7 @@ fn named_sandboxes_on_native() {
         "workspace.commit",
         &[("ws", t(&ws)), ("message", t("from a sandbox"))],
     );
-    let got = ok(&home, "sandbox.get", &[("name", t("t1"))]);
+    let got = ok(&home, "sandbox.get", &[("sandbox", t("t1"))]);
     assert!(layerfs_api::json::print(&got).contains(&ws[3..]), "{got:?}");
     ok(&home, "workspace.unmount", &[("ws", t(&ws))]);
     let read = ok(
@@ -270,20 +275,20 @@ fn named_sandboxes_on_native() {
     assert_eq!(streamed.len(), 3_000_000);
     assert!(streamed.iter().all(|b| *b == b'a'));
 
-    // #533 review P1-21 (O31): a Sandbox holding Workspaces closes only
-    // with `force`, which reports each one it could not drain as Unknown
-    let (code, _) = call(&home, "sandbox.close", &[("name", t("t1"))]).unwrap_err();
+    // #533 review P1-21 (O31): a Sandbox holding Workspaces is removed
+    // only with `force`, which names each one it ended under `unmounted`
+    let (code, _) = call(&home, "sandbox.remove", &[("sandbox", t("t1"))]).unwrap_err();
     assert_eq!(code, "InUse");
     let closed = ok(
         &home,
-        "sandbox.close",
-        &[("name", t("t1")), ("force", SdkValue::Bool(true))],
+        "sandbox.remove",
+        &[("sandbox", t("t1")), ("force", SdkValue::Bool(true))],
     );
-    let unknown = match closed.get("unknown") {
-        Some(SdkValue::List(paths)) => paths.len(),
+    let unmounted = match closed.get("unmounted") {
+        Some(SdkValue::List(handles)) => handles.len(),
         other => panic!("{other:?} in {closed:?}"),
     };
-    assert_eq!(unknown, 2, "{closed:?}");
+    assert_eq!(unmounted, 2, "{closed:?}");
     assert!(!paths::sandbox_dir(&home, "t1").exists());
     ok(
         &home,
@@ -306,7 +311,7 @@ fn named_sandboxes_on_native() {
         .0,
         "InUse"
     );
-    ok(&home, "sandbox.close", &[("name", t("t1"))]);
+    ok(&home, "sandbox.remove", &[("sandbox", t("t1"))]);
     assert!(!paths::sandbox_dir(&home, "t1").exists());
     let _ = std::fs::remove_dir_all(home);
     let _ = std::fs::remove_dir_all(folder);

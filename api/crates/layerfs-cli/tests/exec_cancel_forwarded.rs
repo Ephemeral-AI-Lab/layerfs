@@ -6,10 +6,10 @@
 //! - A stale one (its owner gone) is ended in the worker, through the same
 //!   `workspace.exec_cancel` in `sandbox.host` with zero grace, before it is
 //!   removed and logged: by `workspace.exec_cancel`, `workspace.unmount`,
-//!   `sandbox.close` and a `workspace.exec` of the same id. A worker that
+//!   `sandbox.remove` and a `workspace.exec` of the same id. A worker that
 //!   answers the Sandbox does not run there confirms it ended.
 //! - A worker that cannot be reached keeps it as it was: the cancel answers
-//!   `unknown`, unmount and close are refused `Unknown`, its id stays taken.
+//!   `unknown`, unmount and remove are refused `Unknown`, its id stays taken.
 //! - A worker that takes a cancel and never answers leaves the call waiting
 //!   until the connection closes (no operation timeout, by design); then it
 //!   answers `unknown`, and the record is kept.
@@ -370,9 +370,9 @@ fn a_stale_forwarded_record_is_ended_in_its_worker_then_removed() {
     assert_eq!(cancels(&seen), [zero("e1"), zero("e4"), zero("e2")]);
     assert!(!exec_file(&home, "e2").exists());
 
-    // sandbox.close too
+    // sandbox.remove too
     exec_record(&home, "e3", owner(false));
-    let _ = cli(&home, &["sandbox", "close", "b1"]);
+    let _ = cli(&home, &["sandbox", "remove", "b1"]);
     assert_eq!(cancels(&seen).last(), Some(&zero("e3")));
     assert!(!exec_file(&home, "e3").exists());
     std::fs::remove_dir_all(home).unwrap();
@@ -401,12 +401,12 @@ fn a_worker_not_reached_keeps_the_stale_record_as_it_was() {
     assert_eq!(out.trim(), r#"{"outcome":"unknown"}"#);
     assert_eq!(kept(), bytes);
     assert!(log(&home).contains("\"kept\":true"), "{}", log(&home));
-    // unmount and close are refused Unknown, naming it; nothing changed
+    // unmount and remove are refused Unknown, naming it; nothing changed
     for words in [
         ["workspace", "unmount", "b1:one"].as_slice(),
         ["workspace", "unmount", "b1:one", "--force"].as_slice(),
-        ["sandbox", "close", "b1"].as_slice(),
-        ["sandbox", "close", "b1", "--force"].as_slice(),
+        ["sandbox", "remove", "b1"].as_slice(),
+        ["sandbox", "remove", "b1", "--force"].as_slice(),
     ] {
         // the commands it names are in the refusal's long form
         let words = [words, &["--detail"]].concat();

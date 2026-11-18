@@ -1,29 +1,44 @@
-//! `sandbox.get`: a Sandbox's record with one page of its Workspaces.
+//! `sandbox.get`: a Sandbox's state and its Workspaces, a live read (call
+//! surface 2.0). Its state starts from records (`crate::state`); a Sandbox
+//! its records say is ready, or lost or not answering, is then asked for
+//! its Workspaces by its daemon, on the route its other calls take. What the
+//! answer says decides the state: a list is `ready`, a machine that says the
+//! Sandbox does not run is `broken` `lost`, a daemon that admits no control
+//! connection is `broken` `not_answering`, and a machine or forward that does
+//! not answer is `unknown` with when its state was last known. The record
+//! is written only when that changes its `reason` (which moves the home's
+//! generation); when the state was observed is noted in `observed.json`
+//! beside it, which does not.
 use super::direct;
-use super::family::{page, sandbox_of, Page};
-use super::record::SandboxRecord;
+use super::family::named;
+use super::record::{self, SandboxRecord};
+use super::state::machine_state;
 use crate::host::Call;
 use crate::route::reach;
 use layerfs_bridge::control::{CapacityModel, SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
+use layerfs_home::home::observed;
+use layerfs_home::state::{Reason, State};
 use layerfs_machine::worker::Unreached;
 use std::path::Path;
 
-/// `sandbox.get(name, { page_size, page_pos })`.
+/// `sandbox.get(sandbox, { with: ["stats"] })`.
 #[derive(Clone, Debug, Default)]
 pub struct GetRequest {
     /// The Sandbox's name.
     pub name: String,
-    /// The page of its Workspaces it asks for.
-    pub page: Page,
+    /// Whether the daemon's control-capacity read model is read too: one
+    /// more daemon call, made only for a ready Sandbox (`--with stats`).
+    pub stats: bool,
 }
 
 /// One Workspace its Sandbox's daemon lists (#536 C3).
 pub struct ListedWorkspace {
     /// The daemon's item, as it answered it, with what the side that keeps
-    /// the Workspace's record added (layerfs-project#178): the commands
-    /// `running` in it and its `overlay_bytes`, and, from the side that runs
-    /// the Sandbox, its own cgroup's `usage` with `usage_reason`
+    /// the Workspace's record added (layerfs-project#178): its `path`,
+    /// `name` and `created` (when it was mounted), the commands `running`
+    /// in it and its `overlay_bytes`, and, from the side that runs the
+    /// Sandbox, its own cgroup's `usage` with `usage_reason`
     /// (`crate::run_folder::workspace_usage`). A worker from before those
     /// fields answers none of them, and the item then has none.
     pub item: SdkValue,
@@ -32,7 +47,8 @@ pub struct ListedWorkspace {
     pub path: String,
     /// The name its mount gave it, if any.
     pub name: Option<String>,
-    /// `<sandbox>:<name>` when it has a name, else `<sandbox>:<path>`.
+    /// Its handle: `<sandbox>:<name>` when it has a name, else
+    /// `<sandbox>:<path>`.
     pub ws: String,
 }
 
@@ -71,81 +87,134 @@ impl Down {
         })
     }
 
-    /// The SDK value `sandbox.get` shows as `down`.
-    pub fn to_sdk(&self) -> SdkValue {
-        SdkValue::map([
-            ("code", SdkValue::text(self.code.as_str())),
-            ("resource", SdkValue::text(self.resource.as_str())),
-            ("pool_vacant", SdkValue::Int(self.pool_vacant)),
-            ("reserved_vacant", SdkValue::Int(self.reserved_vacant)),
-            ("retained", SdkValue::Int(self.retained)),
-        ])
+    /// The sentence a `not_answering` state answers as its `message`: what
+    /// the refusing daemon said, with its counts.
+    pub fn sentence(&self, said: &str) -> String {
+        format!(
+            "its daemon admits no control connection: {said} ({} on {}: {} pool and {} reserved \
+             slots vacant, {} failures retained)",
+            self.code, self.resource, self.pool_vacant, self.reserved_vacant, self.retained
+        )
     }
 }
 
-/// A Sandbox's record with its derived state and one page of its
-/// Workspaces.
+/// A Sandbox's state and its Workspaces.
 pub struct Got {
-    /// Its record (with its `op` when it has one, H6).
+    /// Its record, as read before the live read.
     pub record: SandboxRecord,
-    /// Its derived state.
-    pub state: &'static str,
-    /// The page of its Workspaces.
-    pub workspaces: Vec<ListedWorkspace>,
-    /// Why its machine did not answer, or why the daemon it reached admitted
-    /// no control connection, when either.
-    pub down_reason: Option<String>,
-    /// The structured counts behind `down_reason`, when the refusing
-    /// daemon's capacity notice carried them (#649): read from a forwarded
-    /// daemon's unanswered dial, or from the pool a worker or this process
-    /// itself dialed.
-    pub down: Option<Down>,
-    /// The next page's position; `None` after the last.
-    pub next: Option<usize>,
-    /// Its daemon's control-capacity read model (#540), when a running
-    /// Sandbox answered the bounded read (#543).
+    /// Its state.
+    pub state: State,
+    /// The sentence behind a `blocked`, `broken` or `unknown` state.
+    pub message: Option<String>,
+    /// Its Workspaces, as its daemon listed them; none when the daemon was
+    /// not asked or did not list them.
+    pub workspaces: Option<Vec<ListedWorkspace>>,
+    /// Its daemon's control-capacity read model (#540), with `stats` for a
+    /// ready Sandbox that answered the bounded read (#543).
     pub daemon_capacity: Option<CapacityModel>,
     /// How many Workspaces a Sandbox holds at once: control's own constant
     /// ([`crate::lifecycle::WORKSPACES`]), not a daemon setting, so it is
     /// there whatever the Sandbox's state (layerfs-project#178, D10).
     pub workspace_capacity: u32,
     /// Its daemon process as the side that runs it saw it
-    /// (layerfs-project#164), as fields a get shows: `daemon` (`{ pid,
-    /// started_at }`), `usage` (its cgroup's `{ cpu_usec, memory_current,
-    /// memory_peak, pids }`, or null) and, with a null `usage`,
-    /// `usage_reason`. They ride the Workspace list's own answer, read
-    /// there by path with no daemon call; this home's own record answers
-    /// them when it runs the Sandbox and the list was not answered. Both
-    /// null, `not_observed`, when the side that runs it did not answer;
-    /// empty from a worker of a build before them.
+    /// (layerfs-project#164), as the fields its list answered: `daemon`
+    /// (`{ pid, started_at }`), `usage` (its cgroup's `{ cpu_usec,
+    /// memory_current, memory_peak, memory_file, pids, oom_kills }`, or
+    /// null) and, with a null `usage`, `usage_reason`. Empty when its
+    /// daemon did not list its Workspaces, and from a worker of a build
+    /// before them.
     pub process: Vec<(String, SdkValue)>,
 }
 
-/// Its record with one page of its Workspaces. Reading never clears an
-/// intent.
+/// What the live read found.
+enum Found {
+    /// The daemon listed its Workspaces.
+    Listed(SdkValue),
+    /// A broken state with the sentence behind it.
+    Broken(Reason, String),
+    /// The machine or the forward did not answer: why.
+    Unanswered(String),
+}
+
+/// The Sandbox's state and, when its daemon was asked and answered, its
+/// Workspaces. Reading never clears an intent and never starts a machine.
 pub fn get(home: &Path, events: &mut Events<'_>, request: &GetRequest) -> Result<Got, SdkRefusal> {
     let home = home.to_path_buf();
-    let name = request.name.as_str();
-    let record = sandbox_of(&home, name)?;
-    // a Sandbox with no id has no daemon to ask; a get starts no machine
-    // (P4): a machine that is down answers the record with no Workspaces
-    // and why
-    let listed = match record.id() {
-        _ if record.machine_stopped() => Ok(Ok(SdkValue::Null)),
-        // one reached directly lists its daemon's Workspaces from here (#535 G4)
-        Some(_) if direct::forwarded(&record) => direct::list(&home, &record),
-        Some(_) => reach(
-            &home,
+    let record = named(&home, &request.name)?;
+    let mut state = record.status(&machine_state(&home, record.machine())?);
+    let asked = match &state {
+        State::Ready => true,
+        State::Broken { reason, .. } => matches!(reason, Reason::Lost | Reason::NotAnswering),
+        _ => false,
+    };
+    let mut got = Got {
+        message: None,
+        workspaces: None,
+        daemon_capacity: None,
+        workspace_capacity: crate::lifecycle::WORKSPACES,
+        process: Vec::new(),
+        state: State::Ready,
+        record,
+    };
+    if asked {
+        match found(&home, events, &got.record)? {
+            Found::Listed(answer) => {
+                settle(&home, &got.record, None);
+                state = State::Ready;
+                got.workspaces = Some(match answer.get("workspaces") {
+                    Some(SdkValue::List(items)) => (items.iter())
+                        .map(|item| listed_workspace(got.record.name(), item))
+                        .collect(),
+                    _ => Vec::new(),
+                });
+                got.process = crate::run_folder::process_of(&answer);
+            }
+            Found::Broken(reason, sentence) => {
+                settle(&home, &got.record, Some((reason, &sentence)));
+                let fix = super::state::remove_fix(got.record.name());
+                state = State::broken(reason, Some(&fix));
+                got.message = Some(sentence);
+            }
+            Found::Unanswered(why) => {
+                let at = observed::last_known(&got.record.dir(&home).join("record.json"));
+                state = State::Unknown { observed_ms: at };
+                got.message = Some(why);
+            }
+        }
+    }
+    if got.message.is_none() {
+        got.message = got.record.message(&state);
+    }
+    if request.stats && state == State::Ready {
+        got.daemon_capacity = capacity(&home, events, &got.record);
+    }
+    got.state = state;
+    Ok(got)
+}
+
+/// One live read of Sandbox `record`'s Workspace list, on its route.
+fn found(
+    home: &Path,
+    events: &mut Events<'_>,
+    record: &SandboxRecord,
+) -> Result<Found, SdkRefusal> {
+    // one reached directly lists its daemon's Workspaces from here (#535 G4)
+    let listed = match direct::forwarded(record) {
+        true => direct::list(home, record),
+        false => reach(
+            home,
             events,
-            &record,
+            record,
             Call::ListWorkspaces { path: None },
             crate::dispatch::call,
         ),
-        None => Ok(Ok(SdkValue::Null)),
     };
-    let mut answered = None;
-    let (all, down_reason, down, gone) = match listed {
-        Ok(Err(refusal)) if refusal.code == "NoSuchSandbox" => (Vec::new(), None, None, true),
+    Ok(match listed {
+        Ok(Ok(answer)) => Found::Listed(answer),
+        Ok(Err(refusal)) if refusal.code == "NoSuchSandbox" => Found::Broken(
+            Reason::Lost,
+            format!("its machine says it does not run: {}", refusal.message),
+        ),
         // a route that runs the call in a machine's worker, or here, is told
         // by the pool it dialed: `Capacity` on `daemon_control_slot`, with
         // the counts the admission notice carried and no `code`. It reads as
@@ -155,51 +224,53 @@ pub fn get(home: &Path, events: &mut Events<'_>, request: &GetRequest) -> Result
                 detail: direct::down_detail("Capacity", refusal.detail.clone()),
                 ..refusal.clone()
             };
-            (Vec::new(), Some(refusal.message), Down::of(&tagged), false)
+            Found::Broken(Reason::NotAnswering, not_answering(&tagged))
         }
-        Ok(workspaces) => {
-            let answer = answered.insert(workspaces?);
-            match answer.get("workspaces") {
-                Some(SdkValue::List(items)) => (
-                    items.iter().map(|i| listed_workspace(name, i)).collect(),
-                    None,
-                    None,
-                    false,
-                ),
-                _ => (Vec::new(), None, None, false),
-            }
-        }
-        Err(Unreached(why)) => {
-            let down = Down::of(&why);
-            (Vec::new(), Some(why.message), down, false)
-        }
-    };
-    let (workspaces, next) = page(all, request.page);
-    let state = record.state(gone);
-    // best effort, bounded, and only for a Sandbox its daemon still serves:
-    // this read never fails a get (#540, #543)
-    let unreachable = down_reason.is_some();
-    let daemon_capacity = capacity(&home, events, &record, gone, state, unreachable);
-    let process = match answered {
-        // the side that runs it answered the list, with what it saw
-        Some(answer @ SdkValue::Map(_)) => crate::run_folder::process_of(&answer),
-        // not answered: this home's record says, when it names the process
-        _ => match record.daemon().filter(|daemon| daemon.pid().is_some()) {
-            Some(daemon) => crate::inspect::process::observed(daemon),
-            None => crate::inspect::process::not_observed(),
+        Ok(Err(refusal)) => return Err(refusal),
+        // a forwarded daemon that refused the dial with its capacity notice
+        // answered; any other unanswered dial says nothing of the Sandbox
+        Err(Unreached(why)) => match Down::of(&why) {
+            Some(_) => Found::Broken(Reason::NotAnswering, not_answering(&why)),
+            None => Found::Unanswered(why.message),
         },
-    };
-    Ok(Got {
-        state,
-        record,
-        workspaces,
-        down_reason,
-        down,
-        next,
-        daemon_capacity,
-        workspace_capacity: crate::lifecycle::WORKSPACES,
-        process,
     })
+}
+
+/// The `not_answering` sentence of refusal `refused`.
+fn not_answering(refused: &SdkRefusal) -> String {
+    match Down::of(refused) {
+        Some(down) => down.sentence(&refused.message),
+        None => format!(
+            "its daemon admits no control connection: {}",
+            refused.message
+        ),
+    }
+}
+
+/// Notes what a live read that answered found of Sandbox `record`: its
+/// record is written only when its broken `reason` changes, under its lock
+/// (taken only then) and only while it still has a record (a Sandbox
+/// removed meanwhile is not made again); when it was observed is noted
+/// beside it either way, the one file a get of an unchanged Sandbox
+/// writes. A note that cannot be written changes no answer.
+fn settle(home: &Path, record: &SandboxRecord, broken: Option<(Reason, &str)>) {
+    let word = broken.map(|(reason, _)| reason.word());
+    if record.reason_word() != word {
+        let Ok(_sandbox) = record::lock(home, record.name()) else {
+            return;
+        };
+        let Ok(Some(now)) = SandboxRecord::read(home, record.name()) else {
+            return;
+        };
+        if now.reason_word() != word {
+            let error = broken.map(|(reason, sentence)| (reason.word(), sentence));
+            let _ = now.observed_as(error).write(home);
+        }
+    }
+    let file = record.dir(home).join("record.json");
+    if file.exists() {
+        let _ = observed::write(&file, layerfs_home::home::now_ms());
+    }
 }
 
 /// Whether `refusal` is a full pool's own refusal: the pool a worker or this
@@ -210,22 +281,10 @@ fn slot_refused(refusal: &SdkRefusal) -> bool {
     refusal.code == "Capacity" && refusal.detail.get_text("resource") == Some("daemon_control_slot")
 }
 
-/// The daemon's `backend.daemon.connection_failures` read model of a Sandbox
-/// this process still reaches (#540): read once, best effort, and omitted
-/// when the Sandbox is gone, is not running, or its machine or forward is
-/// already down — a get dials nothing for one of those (#543).
-fn capacity(
-    home: &Path,
-    events: &mut Events<'_>,
-    record: &SandboxRecord,
-    gone: bool,
-    state: &str,
-    down: bool,
-) -> Option<CapacityModel> {
-    if gone || down || state != "running" {
-        return None;
-    }
-    record.id()?;
+/// The daemon's `backend.daemon.connection_failures` read model of a ready
+/// Sandbox whose Workspace list just answered (#540): read once, best
+/// effort, never failing a get (#543).
+fn capacity(home: &Path, events: &mut Events<'_>, record: &SandboxRecord) -> Option<CapacityModel> {
     // the forwarded daemon is dialed from here, its machine's from its worker:
     // either route reads it with the connection the Workspace list lent
     let answer = if direct::forwarded(record) {

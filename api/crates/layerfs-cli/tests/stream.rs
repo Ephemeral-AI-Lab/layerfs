@@ -102,7 +102,7 @@ fn exec_stream_passes_output_and_the_commands_exit_code() {
     let plain = layerfs(&home, &["workspace", "exec", &ws, "exit 4"]);
 
     ok(&home, "workspace.unmount", &[("ws", t(&ws))]);
-    ok(&home, "sandbox.close", &[("name", t("s1"))]);
+    ok(&home, "sandbox.remove", &[("sandbox", t("s1"))]);
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&folder);
 

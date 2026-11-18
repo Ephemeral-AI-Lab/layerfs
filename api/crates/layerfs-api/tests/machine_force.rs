@@ -124,8 +124,10 @@ esac
     );
     assert!(!paths::worker_record(&home, "vm").exists());
     assert!(paths::machine_record(&home, "vm").exists());
-    let sandbox = call(&home, "sandbox.get", &[("name", t("one"))]).unwrap();
-    assert_eq!(sandbox.get_text("state"), Some("gone"));
+    // its Sandboxes' runtimes stopped with it: broken, missing
+    let sandbox = call(&home, "sandbox.get", &[("sandbox", t("one"))]).unwrap();
+    assert_eq!(sandbox.get_text("state"), Some("broken"), "{sandbox:?}");
+    assert_eq!(sandbox.get_text("reason"), Some("missing"), "{sandbox:?}");
     let logs = std::fs::read_to_string(root.join("calls")).unwrap();
     assert_eq!(
         logs.lines()
@@ -185,10 +187,10 @@ esac
     .unwrap();
     assert_eq!(recovered.get_text("outcome"), Some("stopped"));
     assert_eq!(
-        call(&home, "sandbox.get", &[("name", t("one"))])
+        call(&home, "sandbox.get", &[("sandbox", t("one"))])
             .unwrap()
-            .get_text("state"),
-        Some("gone")
+            .get_text("reason"),
+        Some("missing")
     );
     let native = call(
         &home,

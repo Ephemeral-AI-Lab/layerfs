@@ -237,7 +237,7 @@ fn answers(home: &Path, sandboxes: &[&str]) -> Vec<Result<SdkValue, SdkValue>> {
         call(home, "sandbox.list", &[]),
     ];
     for name in sandboxes {
-        all.push(call(home, "sandbox.get", &[("name", t(name))]));
+        all.push(call(home, "sandbox.get", &[("sandbox", t(name))]));
     }
     all
 }
@@ -246,7 +246,7 @@ fn answers(home: &Path, sandboxes: &[&str]) -> Vec<Result<SdkValue, SdkValue>> {
 fn item(listed: &Result<SdkValue, SdkValue>, name: &str) -> SdkValue {
     match listed.as_ref().unwrap().get("items") {
         Some(SdkValue::List(items)) => (items.iter())
-            .find(|i| i.get_text("name") == Some(name))
+            .find(|i| i.get_text("sandbox") == Some(name))
             .cloned()
             .unwrap(),
         other => panic!("{other:?}"),
@@ -323,17 +323,28 @@ fn settled(answers: &[Result<SdkValue, SdkValue>]) -> Vec<Result<SdkValue, SdkVa
 
 #[test]
 fn a_closed_layout_2_home_converts_and_answers_as_before() {
-    // layout 3: a create whose process ended holds nothing (`gone`); one
-    // whose outcome was not known holds an uncertain intent (`unresolved`)
+    // layout 3: a create whose process ended holds nothing (`broken`
+    // `missing`); one whose outcome was not known holds an uncertain intent
+    // (`broken` `unresolved`)
     let closed = sandbox("old", "native", &[]);
     let unknown = sandbox("lost", "dev", &[("op", unresolved())]);
     let home = home_with("same", &[("old", closed), ("lost", unknown)]);
     let before = settled(&answers(&home, &["old", "lost"]));
     assert!(before.iter().all(Result::is_ok), "{before:?}");
-    assert_eq!(item(&before[4], "old").get_text("state"), Some("gone"));
+    let state = |name: &str| {
+        let row = item(&before[4], name);
+        (
+            row.get_text("state").map(str::to_owned),
+            row.get_text("reason").map(str::to_owned),
+        )
+    };
     assert_eq!(
-        item(&before[4], "lost").get_text("state"),
-        Some("unresolved")
+        state("old"),
+        (Some("broken".into()), Some("missing".into()))
+    );
+    assert_eq!(
+        state("lost"),
+        (Some("broken".into()), Some("unresolved".into()))
     );
     downgrade(&home);
     // as 2.0 kept them: `creating` with a creator's pid, and `unknown`
@@ -359,16 +370,20 @@ fn a_closed_layout_2_home_converts_and_answers_as_before() {
     write_record(&folder.join("record.json"), &ended).unwrap();
     assert!(matches!(home::detect(&home).unwrap(), Layout::Previous(_)));
 
-    // the first call converts it; the ended Sandbox now reads `gone`
+    // the first call converts it; the ended Sandbox now reads `broken`
+    // `missing`: the conversion left it no id
     let after = settled(&answers(&home, &["old", "lost"]));
     let gone = item(&after[4], "nat");
-    assert_eq!(gone.get_text("state"), Some("gone"));
-    assert_eq!(gone.get("id"), Some(&SdkValue::Null));
+    assert_eq!(gone.get_text("state"), Some("broken"), "{gone:?}");
+    assert_eq!(gone.get_text("reason"), Some("missing"), "{gone:?}");
+    let record = read_record(&paths::sandbox_record(&home, "nat")).unwrap();
+    let id = record.unwrap().get("id").cloned().unwrap_or_default();
+    assert_eq!(id, SdkValue::Null);
     let listed = |answer: &Result<SdkValue, SdkValue>| -> Vec<SdkValue> {
         match answer.as_ref().unwrap().get("items") {
             Some(SdkValue::List(items)) => items
                 .iter()
-                .filter(|i| i.get_text("name") != Some("nat"))
+                .filter(|i| i.get_text("sandbox") != Some("nat"))
                 .cloned()
                 .collect(),
             other => panic!("{other:?}"),
@@ -422,9 +437,11 @@ fn a_closed_layout_2_home_converts_and_answers_as_before() {
         .exists());
     only_layout_3(&home);
 
-    // the ended Sandbox closes as gone; a second open changes nothing
-    let closed = call(&home, "sandbox.close", &[("name", t("nat"))]).unwrap();
-    assert_eq!(closed.get_text("was"), Some("gone"));
+    // the ended Sandbox is removed as already gone; a second open changes
+    // nothing
+    let removed = [("sandbox", t("nat")), ("detail", SdkValue::Bool(true))];
+    let removed = call(&home, "sandbox.remove", &removed).unwrap();
+    assert_eq!(removed.get_text("outcome"), Some("already_gone"));
     home::open(&home).unwrap();
     let again = settled(&answers(&home, &["old", "lost"]));
     assert_eq!(again[..4], after[..4]);
@@ -524,7 +541,7 @@ fn a_layout_2_home_with_anything_live_is_refused_and_left() {
     call(&home, "store.list", &[]).unwrap();
     assert!(matches!(home::detect(&home).unwrap(), Layout::Current(_)));
     let listed = call(&home, "sandbox.list", &[]);
-    assert_eq!(item(&listed, "nat").get_text("state"), Some("gone"));
+    assert_eq!(item(&listed, "nat").get_text("reason"), Some("missing"));
     // the ended move's `in_progress` is not carried into layout 3
     let record = read_record(&store).unwrap().unwrap();
     assert_eq!(record.get("in_progress"), None, "{record:?}");

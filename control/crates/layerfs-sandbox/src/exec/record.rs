@@ -297,7 +297,7 @@ pub fn listed(dir: &Path, workspace: Option<&str>) -> Result<Vec<(PathBuf, ExecR
 
 /// The commands still running in Sandbox folder `dir`, oldest first: every
 /// record whose owner process is the one it names and still runs
-/// ([`ExecRecord::owned`]), the rule `sandbox.close` and
+/// ([`ExecRecord::owned`]), the rule `sandbox.remove` and
 /// `workspace.unmount` refuse `Busy` by ([`super::cancel::settle`]). A
 /// stale record (its owner gone) is left out and left alone: this is a
 /// read, and the next cancel, unmount or close ends it. `None` when the

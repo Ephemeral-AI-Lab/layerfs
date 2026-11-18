@@ -468,7 +468,7 @@ fn each_problem_gives_one_finding_naming_its_fix() {
             "sandbox",
             "sx",
             "Store gone is gone",
-            "`layerfs sandbox close sx`",
+            "`layerfs sandbox remove sx`",
         ),
         (
             "error",

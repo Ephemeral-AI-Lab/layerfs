@@ -344,7 +344,7 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
         ],
     );
     work(&home, "pg/app", "n", "on-native", "native.txt");
-    ok(&home, "sandbox.close", &[("name", t("n"))]);
+    ok(&home, "sandbox.remove", &[("sandbox", t("n"))]);
     if let (Some(image), Some(_)) = (env("LAYERFS_TEST_IMAGE"), env("LAYERFS_BUNDLE")) {
         ok(
             &home,
@@ -366,7 +366,7 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
                 ],
             );
             work(&home, "pg/app", "d", "on-docker", "docker.txt");
-            ok(&home, "sandbox.close", &[("name", t("d"))]);
+            ok(&home, "sandbox.remove", &[("sandbox", t("d"))]);
         });
         remove_worker(&id);
         if let Err(panic) = outcome {
@@ -472,7 +472,7 @@ fn a_sqlite_store_s_sandbox_on_the_docker_machine() {
         );
         assert_eq!(created.get_text("platform"), Some("docker"), "{created:?}");
         work(&home, "shop/app", "t", "on-docker", "docker.txt");
-        ok(&home, "sandbox.close", &[("name", t("t"))]);
+        ok(&home, "sandbox.remove", &[("sandbox", t("t"))]);
     });
     remove_worker(&id);
     let _ = std::fs::remove_dir_all(&home);
@@ -535,7 +535,7 @@ fn a_sqlite_store_s_sandbox_on_each_running_vm_machine() {
         );
         assert_eq!(created.get_text("machine"), Some(machine), "{created:?}");
         work(&home, &project, &store, "on-vm", "vm.txt");
-        ok(&home, "sandbox.close", &[("name", t(&store))]);
+        ok(&home, "sandbox.remove", &[("sandbox", t(&store))]);
         ok(&home, "store.remove", &[("name", t(&store))]);
         std::fs::remove_dir_all(&folder).unwrap();
         eprintln!("RAN on {machine}: {created:?}");

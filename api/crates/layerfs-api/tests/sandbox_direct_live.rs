@@ -75,8 +75,8 @@ fn helper() {
         _ => {
             ok(
                 home,
-                "sandbox.close",
-                &[("name", t("t1")), ("force", SdkValue::Bool(true))],
+                "sandbox.remove",
+                &[("sandbox", t("t1")), ("force", SdkValue::Bool(true))],
             );
         }
     }
@@ -229,7 +229,7 @@ fn a_forwarded_sandbox_s_workspace_calls_dial_its_daemon_from_here() {
             Some("Committed"),
             "{committed:?}"
         );
-        let got = ok(&home, "sandbox.get", &[("name", t("t1"))]);
+        let got = ok(&home, "sandbox.get", &[("sandbox", t("t1"))]);
         assert!(layerfs_api::json::print(&got).contains("t1:one"), "{got:?}");
         ok(&home, "workspace.unmount", &[("ws", t("t1:one"))]);
         let read = ok(

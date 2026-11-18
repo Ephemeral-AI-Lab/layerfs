@@ -241,33 +241,58 @@ fn exec_ids_records_and_cancel_on_native() {
         Some(SdkValue::List(items)) if items.len() == 1 => items[0].clone(),
         _ => panic!("{got:?}"),
     };
-    let got = ok(&home, "sandbox.get", &[("name", t("s1"))]);
+    let got = ok(&home, "sandbox.get", &get_s1());
     assert_eq!(got.get_int("workspace_capacity"), Some(16), "{got:?}");
     let workspace = listed(&got);
-    let running = SdkValue::List(vec![SdkValue::map([
-        ("exec_id", t("long-1")),
-        ("started", record.get("started").cloned().unwrap()),
-        ("tag", t(TAG)),
-        ("program", t("sleep")),
-    ])]);
+    // the command, by its exec id, program and tag, with when it started
+    // (`started_at`, the record's `started` as an ISO time)
+    let command = match workspace.get("commands") {
+        Some(SdkValue::List(commands)) if commands.len() == 1 => commands[0].clone(),
+        _ => panic!("{got:?}"),
+    };
+    let fields = ["exec", "program", "tag"].map(|key| command.get_text(key));
+    assert_eq!(
+        fields,
+        [Some("long-1"), Some("sleep"), Some(TAG)],
+        "{got:?}"
+    );
+    let at = command.get_text("started_at").unwrap_or("");
+    assert!(at.len() == 20 && at.ends_with('Z'), "{got:?}");
+    assert!(record.get_int("started").is_some(), "{record:?}");
+    let running = SdkValue::List(vec![t("long-1")]);
     assert_eq!(workspace.get("running"), Some(&running), "{got:?}");
     let run = std::fs::read_dir(home.join("machine/native/run"))
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .find(|path| path.join("overlay").is_dir())
         .expect("the Sandbox's run folder");
-    let namespace = workspace.get_int("namespace").unwrap();
-    let overlay = run.join(format!("overlay/{namespace}.sqlite"));
+    // the Workspace's own overlay file: `<namespace>.sqlite`
+    let overlay = std::fs::read_dir(run.join("overlay"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| {
+            let stem = path
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .unwrap_or("");
+            path.extension().is_some_and(|ext| ext == "sqlite")
+                && stem.chars().all(|c| c.is_ascii_digit())
+        })
+        .expect("the Workspace's overlay file");
     let bytes = i64::try_from(std::fs::metadata(&overlay).unwrap().len()).unwrap();
     assert!(bytes > 0, "{}", overlay.display());
-    assert_eq!(workspace.get_int("overlay_bytes"), Some(bytes), "{got:?}");
+    let stats = match got.get("stats").and_then(|stats| stats.get("workspaces")) {
+        Some(SdkValue::List(items)) if items.len() == 1 => items[0].clone(),
+        _ => panic!("{got:?}"),
+    };
+    assert_eq!(stats.get_int("overlay_bytes"), Some(bytes), "{got:?}");
     // ...the same id is refused while it runs
     let duplicate = [ws(), ("command", t("true")), ("exec_id", t("long-1"))];
     assert_eq!(refused(&home, "workspace.exec", &duplicate), "Exists");
     // ...unmount and close are refused while it runs
     assert_eq!(refused(&home, "workspace.unmount", &[ws()]), "Busy");
     assert_eq!(
-        refused(&home, "sandbox.close", &[("name", t("s1"))]),
+        refused(&home, "sandbox.remove", &[("sandbox", t("s1"))]),
         "Busy"
     );
     // ...and another process cancels it
@@ -291,7 +316,7 @@ fn exec_ids_records_and_cancel_on_native() {
     let again = ok(&home, "workspace.exec_cancel", &cancel);
     assert_eq!(again.get_text("outcome"), Some("ended"));
     // ...and a get lists it no more
-    let got = ok(&home, "sandbox.get", &[("name", t("s1"))]);
+    let got = ok(&home, "sandbox.get", &get_s1());
     let none = SdkValue::List(Vec::new());
     assert_eq!(listed(&got).get("running"), Some(&none), "{got:?}");
 
@@ -409,8 +434,8 @@ fn exec_ids_records_and_cancel_on_native() {
     );
     ok(
         &home,
-        "sandbox.close",
-        &[("name", t("s1")), ("force", SdkValue::Bool(true))],
+        "sandbox.remove",
+        &[("sandbox", t("s1")), ("force", SdkValue::Bool(true))],
     );
     let answer = answered(third);
     assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
@@ -420,10 +445,19 @@ fn exec_ids_records_and_cancel_on_native() {
     let _ = std::fs::remove_dir_all(&folder);
 }
 
+/// `sandbox get s1 --detail --with stats`.
+fn get_s1() -> [(&'static str, SdkValue); 3] {
+    [
+        ("sandbox", t("s1")),
+        ("detail", SdkValue::Bool(true)),
+        ("with", SdkValue::List(vec![t("stats")])),
+    ]
+}
+
 /// The exec ids `sandbox.get` lists under Sandbox `s1`'s one Workspace's
 /// `running`, oldest first.
 fn running_ids(home: &Path) -> Vec<String> {
-    let got = ok(home, "sandbox.get", &[("name", t("s1"))]);
+    let got = ok(home, "sandbox.get", &get_s1());
     let Some(SdkValue::List(items)) = got.get("workspaces") else {
         panic!("{got:?}")
     };
@@ -433,7 +467,10 @@ fn running_ids(home: &Path) -> Vec<String> {
     };
     running
         .iter()
-        .map(|item| item.get_text("exec_id").unwrap().to_owned())
+        .map(|item| match item {
+            SdkValue::Text(id) => id.clone(),
+            other => panic!("{other:?}"),
+        })
         .collect()
 }
 
@@ -535,7 +572,7 @@ fn two_commands_run_at_once_in_one_workspace_on_native() {
     assert!(running_ids(&home).is_empty());
 
     ok(&home, "workspace.unmount", &[ws()]);
-    ok(&home, "sandbox.close", &[("name", t("s1"))]);
+    ok(&home, "sandbox.remove", &[("sandbox", t("s1"))]);
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&folder);
 }
@@ -612,8 +649,8 @@ fn forced_native_machine_stop_cancels_running_commands() {
     assert!(!execs.join("stop-1.json").exists());
     let _ = call(
         &home,
-        "sandbox.close",
-        &[("name", t("s1")), ("force", SdkValue::Bool(true))],
+        "sandbox.remove",
+        &[("sandbox", t("s1")), ("force", SdkValue::Bool(true))],
         &mut |_| {},
     );
     let _ = std::fs::remove_dir_all(&home);

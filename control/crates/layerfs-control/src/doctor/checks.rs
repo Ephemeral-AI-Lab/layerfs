@@ -135,7 +135,7 @@ fn sandboxes(scanned: &Scanned, findings: &mut Findings) {
     for sandbox in &scanned.sandboxes {
         let name = sandbox.name();
         let entity = ("sandbox", name);
-        let close = format!("sandbox close {name}");
+        let close = format!("sandbox remove {name}");
         if let Some(op) = sandbox.op() {
             intent(
                 entity,

@@ -20,7 +20,8 @@ pub(super) fn check(home: &Path, scanned: &Scanned, findings: &mut Findings) {
     for sandbox in &scanned.sandboxes {
         // a Sandbox whose create never recorded an id is gone; a creating,
         // closing or unresolved one has no steady daemon to ask
-        if sandbox.id().is_none() || sandbox.state(false) != "running" {
+        let own = sandbox.status(&layerfs_home::state::State::Ready);
+        if sandbox.id().is_none() || own != layerfs_home::state::State::Ready {
             continue;
         }
         let name = sandbox.name();
@@ -65,7 +66,7 @@ fn unanswered(findings: &mut Findings, name: &str, endpoint: SocketAddr, refusal
             refusal.message
         ),
         format!(
-            "`layerfs sandbox get {name}` shows whether it still runs; `layerfs sandbox close {name}` closes one whose daemon is gone"
+            "`layerfs sandbox get {name}` shows whether it still runs; `layerfs sandbox remove {name}` removes one whose daemon is gone"
         ),
     );
 }

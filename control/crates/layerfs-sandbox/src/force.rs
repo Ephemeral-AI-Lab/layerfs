@@ -50,7 +50,7 @@ pub fn native_free(home: &Path) -> Result<(), SdkRefusal> {
     }
 }
 
-/// Forced `sandbox.close` of the Sandbox `host` names, on this process's
+/// Forced `sandbox.remove` of the Sandbox `host` names, on this process's
 /// kernel: no daemon control call, Store open, active-Workspace refusal or
 /// retry. Its running commands are cancelled first, as every forced close
 /// does (`crate::exec::cancel::settle`). The backend's Stop checks the runtime identity and ends its

@@ -284,8 +284,8 @@ use Kind::{Bool, Function, Int, Text};
 
 /// The paging options of a list call.
 pub const PAGE: [Arg; 2] = [opt("page_size", Int), opt("page_pos", Int)];
-/// The window options of a log read by cursor (`logs.machine`,
-/// `logs.sandbox`).
+/// The window options of a log read by cursor (`machine.log`,
+/// `sandbox.log`).
 pub const WINDOW: [Arg; 3] = [opt("cursor", Text), opt("before", Text), opt("limit", Int)];
 /// The options of a files read (`sandbox.files`, `machine.files`): a
 /// folder page's `depth`, `cursor` and `limit`, a file window's `offset`

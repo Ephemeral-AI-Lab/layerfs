@@ -159,7 +159,7 @@ fn native_exec_keeps_large_binary_output_cancellation_and_effects_on_closed_stdo
         "workspace.unmount",
         &[("ws", t("s1:one")), ("discard", SdkValue::Bool(true))],
     );
-    call(&home, "sandbox.close", &[("name", t("s1"))]);
+    call(&home, "sandbox.remove", &[("sandbox", t("s1"))]);
     layerfs_api::close_idle(std::time::Duration::ZERO);
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(source).unwrap();
