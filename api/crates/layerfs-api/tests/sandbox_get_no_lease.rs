@@ -189,8 +189,10 @@ fn workspaces(got: &SdkValue) -> Vec<BTreeMap<String, SdkValue>> {
     items
         .iter()
         .map(|item| match item {
-            SdkValue::Map(fields) => (fields.iter().cloned())
-                .filter(|(name, _)| COMPARED.contains(&name.as_str()))
+            SdkValue::Map(fields) => fields
+                .iter()
+                .filter(|&(name, _)| COMPARED.contains(&name.as_str()))
+                .cloned()
                 .collect(),
             other => panic!("{other:?}"),
         })

@@ -381,7 +381,7 @@ fn postgresql(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, chec
 
 /// The step id `o` gives, without its `store.connection.` prefix.
 fn step(o: &Observation) -> &str {
-    o.id.strip_prefix("store.connection.").unwrap_or(&o.id)
+    o.id.strip_prefix("store.connection.").unwrap_or(o.id)
 }
 
 /// Today's connection steps as the three frozen checks.
