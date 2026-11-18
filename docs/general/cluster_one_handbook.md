@@ -704,6 +704,10 @@ requires a singly linked regular file; checks closes and removes only its owned
 temporary after a known outcome. Uncertainty retains exact custody without
 retry. This common Persistence seal applies to all callers/layouts that seal a
 Store, including Project Init and the offline history construction driver.
+Since 2026-11-18 a compaction's own seal skips this release (its rename
+replaces the sealed file), and a file that was ever one side of an APFS clone,
+which refuses the transfer before moving anything, is sealed with its
+allocation kept ([macOS extent release](../architecture/engine/store/sqlite.md#lifecycle)).
 It does not run on the live Linux daemon's shared Store. Per-pack preallocation,
 the old allocation owner and public checkpoint remain retired. See the
 [source boundary](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/60-shared-store-foundation.md) and
