@@ -1,9 +1,9 @@
 //! A PostgreSQL Store's connection, checked from the side that dials it.
 //! A Store's Sandboxes run on any machine whose platform runs PostgreSQL
 //! Sandboxes (supersedes the per-machine attachments of 2026-11-12; #536
-//! C4 again): each dials the Store's connection, or its own where
-//! `store.update --machine` gave it one (H9), kept in the Store's record as
-//! `machines.<machine>`. This module is the Store's part: the check run on
+//! C4 again): each dials the Store's address, or its own where
+//! `store.connect --machine` gave it one, kept in the Store's record as
+//! `machines.<machine>`, always with the Store's saved login. This module is the Store's part: the check run on
 //! the side that dials, and the record writes. Which side dials, and the
 //! URL a machine dials, are the caller's (`layerfs-control`, through the
 //! Sandbox route).
@@ -27,7 +27,7 @@ pub fn postgresql_record(home: &Path, name: &str) -> Result<StoreRecord> {
         StoreKind::Sqlite => Err(refused(
             "InvalidInput",
             format!(
-                "Store {name} is a sqlite Store, which has no connection; `store push {name} <machine>` places it"
+                "Store {name} is a sqlite Store, which has no connection; `layerfs store remove {name}` deletes it"
             ),
         )),
     }
@@ -105,7 +105,7 @@ pub fn same_store(record: &StoreRecord, postgresql: &PgSelection) -> Result<()> 
     Ok(())
 }
 
-/// Saves `machine`'s own connection to Store `name` (an empty one removes
+/// Saves `machine`'s own address of Store `name` (an empty one removes
 /// it), under the home lock and the Store's: `Conflict` when the Store was
 /// disconnected, or connected again to another database (`binding`
 /// differs), since it was read.
@@ -122,7 +122,7 @@ pub fn save_own(
     let Some(record) = record else {
         return Err(refused(
             "Conflict",
-            format!("Store {name} changed while machine {machine} was checked; update it again"),
+            format!("Store {name} changed while machine {machine} was checked; connect it again"),
         ));
     };
     record.with_own_connection(machine, own).write(home_dir)

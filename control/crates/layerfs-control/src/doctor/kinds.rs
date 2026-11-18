@@ -15,14 +15,12 @@ use super::report::{Kind, Node, Thing};
 use super::target::{Budget, Checks};
 use crate::home_tree;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::events::Events;
 use layerfs_home::home::{detect, Layout};
 use layerfs_home::names::ProjectRef;
 use layerfs_home::outcome::refused;
 use layerfs_home::state::{BlockedBy, Reason, State};
-use layerfs_machine::record::MachineRecord;
 use layerfs_store::project::record::ProjectRecord;
-use layerfs_store::record::{StoreRecord, StoreRef};
+use layerfs_store::record::StoreRecord;
 use std::path::Path;
 use std::time::Duration;
 
@@ -75,26 +73,6 @@ const MACHINE_LIVE: &[&str] = &[
     "machine.worker.compatibility",
     "machine.worker.ping",
     "machine.capacity",
-];
-
-/// A Store's checks, without today's whole-Store data scan: its record
-/// and saved identity, and a PostgreSQL Store's connection from this
-/// computer (step by step) and from each machine with a Sandbox of it.
-const STORE: &[CheckId] = &[
-    own("store.record"),
-    own("store.identity"),
-    own("store.connection.configuration"),
-    own("store.connection.cancelled"),
-    own("store.connection.authentication"),
-    own("store.connection.database"),
-    own("store.connection.transport"),
-    own("store.connection.cancellation.release"),
-    own("store.connection.close"),
-    own("store.connection.schema"),
-    own("store.connection.identity"),
-    own("store.connection.read"),
-    own("store.connection.tls"),
-    own("store.connection"),
 ];
 
 /// A project's checks: its record, and its record against the Store's own
@@ -157,9 +135,9 @@ pub(super) static KINDS: [KindDoctor; 7] = [
     },
     KindDoctor {
         kind: Kind::Store,
-        checks: STORE,
+        checks: super::store_target::CHECKS,
         budget: Duration::from_secs(10),
-        run: store,
+        run: super::store_target::run,
     },
     KindDoctor {
         kind: Kind::Project,
@@ -267,69 +245,6 @@ fn failed(checks: &Checks, name: &str) -> Option<BlockedBy> {
         handle: name.to_owned(),
         reason,
     })
-}
-
-fn store(probe: &Probe<'_>, node: &mut Node) {
-    let name = probe.thing.name.as_str();
-    let mut checks = Checks::new("store", name);
-    let record = StoreRecord::of(probe.home, name);
-    match record.as_ref().map(StoreRecord::store_ref) {
-        Ok(Ok(StoreRef::Postgres { .. })) => {
-            super::store_target::diagnose_connection(probe.home, name, probe.budget, &mut checks);
-            if let Ok(record) = &record {
-                reach(probe, record, &mut checks);
-            }
-        }
-        _ => {
-            let _ = super::store_target::resolve(probe.home, name, &mut checks);
-        }
-    }
-    checks.fill(node, probe.checks, probe.budget.expired());
-    if node.gate.is_none() {
-        node.gate = blocker(probe.state, "store", name);
-    }
-}
-
-/// `store.connection` of PostgreSQL Store `record` from each machine that
-/// has a Sandbox of it, and from `--machine`, as those machines dial it;
-/// this computer's own probe is the step-by-step one. A machine that is
-/// not ready is not dialled.
-fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
-    let name = record.name();
-    let mut machines: Vec<String> = crate::inventory::sandboxes(probe.home)
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|sandbox| {
-            let project = sandbox.project().unwrap_or("");
-            project.split_once('/').map(|(store, _)| store) == Some(name)
-        })
-        .map(|sandbox| sandbox.machine().to_owned())
-        .collect();
-    machines.extend(probe.options.machine.clone());
-    machines.retain(|machine| machine != "native");
-    machines.sort();
-    machines.dedup();
-    const ID: &str = "store.connection";
-    for machine in &machines {
-        let record_of = MachineRecord::read(probe.home, machine);
-        let state = match record_of
-            .and_then(|found| crate::inventory::machine_state(probe.home, machine, found.as_ref()))
-        {
-            Ok(state) => state,
-            Err(_) => State::broken(Reason::Missing, None),
-        };
-        if let Some(by) = blocker(&state, "machine", machine) {
-            checks.waits(ID, format!("machine {machine} is not ready"), by);
-        } else {
-            let mut sink = |_| {};
-            let mut events = Events::new(&mut sink);
-            match crate::store::check_from(probe.home, &mut events, record, machine).1 {
-                Ok(_) => checks.pass(ID, format!("machine {machine} reaches the server")),
-                Err(refusal) => checks.fail(ID, refusal.message),
-            }
-        }
-        checks.from(ID, machine);
-    }
 }
 
 fn project(probe: &Probe<'_>, node: &mut Node) {

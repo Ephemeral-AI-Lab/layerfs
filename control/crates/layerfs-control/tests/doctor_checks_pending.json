@@ -34,25 +34,9 @@
       "order": false
     },
     "store": {
-      "today": [
-        "store.connection.configuration",
-        "store.connection.cancelled",
-        "store.connection.authentication",
-        "store.connection.database",
-        "store.connection.transport",
-        "store.connection.cancellation.release",
-        "store.connection.close",
-        "store.connection.schema",
-        "store.connection.identity",
-        "store.connection.read",
-        "store.connection.tls"
-      ],
-      "missing": [
-        "store.operation",
-        "store.schema",
-        "store.backups"
-      ],
-      "order": true
+      "today": [],
+      "missing": [],
+      "order": false
     },
     "project": {
       "today": [],

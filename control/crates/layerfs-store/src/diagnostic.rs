@@ -38,6 +38,22 @@ pub fn sqlite(
     })
 }
 
+/// The shallow cut of a sqlite Store (call surface 2.0, C14): its file at
+/// `path` opened read-only as Store `identity`, its id and schema checked
+/// against this build's, and nothing else read. A host that cannot open a
+/// sqlite Store is `Unsupported`.
+pub fn sqlite_schema(path: &Path, identity: &Identity) -> Result<(), SdkRefusal> {
+    layerfs_store_service::kernel_guard::check(path)
+        .map_err(|reason| refused("Unsupported", reason.0))?;
+    layerfs_persistence::SqliteHandles::open_diagnostic(
+        path,
+        &identity.binding,
+        identity.cursor_key,
+    )
+    .map(drop)
+    .map_err(|error| refused("Unavailable", format!("{error}")))
+}
+
 /// Diagnoses a registered PostgreSQL Store, resolving credentials only here.
 pub fn postgresql(
     record: &StoreRecord,
