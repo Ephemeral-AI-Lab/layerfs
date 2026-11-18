@@ -248,9 +248,18 @@ $ layerfs home get --with live
   `removable_at`, `kind`, `machine` and `path`. `leftover` is its id,
   `<machine>:<kind>:<name>` (never a path), the kind in snake_case:
   `run_folder`, `empty_root`, `init_copy`, `backup_staging`, `image_tmp`,
-  `image_part`. An image's lock file and a Workspace's unmount marker are
-  LayerFS's own and never listed. A home that is not current has none; a
-  machine the home does not know is `NotFound`.
+  `export_container`. An image's lock file and a Workspace's unmount marker are
+  LayerFS's own and never listed. A copy's staged part is not a leftover:
+  `machine images` shows it as a `broken`/`partial` item and `machine prune
+  --unused` removes it. An `export_container` is an image export container
+  a killed copy left in the host's Docker (this home's labelled ones and
+  legacy `layerfs-export-<machine>-<hex>` ones), listed with `native`'s
+  entries (`path` and `size` null, `report_only` while a copy of its image
+  holds the copy lock); Docker is asked only once an image copy has run from
+  the home (`run/image-lock/` exists). A Docker that does not answer names
+  `native` in `not_listed`, `blocked_by` `{machine: docker, reason:
+  engine_down}`; a host without Docker lists none. A home that is not
+  current has none; a machine the home does not know is `NotFound`.
 - **`prune <leftover>`** removes the one leftover whose id it is given,
   once, on that machine, under that kind's guard. Short: `{ freed_bytes }`,
   or `{"ok":true}` when the size was not measured; long: `ok, freed_bytes,
@@ -263,7 +272,7 @@ $ layerfs home get --with live
   | `init_copy` | a line of `log/uncertain.jsonl` names the machine and the copy, and its deadline (when the lost request went out, plus the Init's `timeoutMs`) passed more than an hour ago (`removable_at`); a copy no line names is `report_only` and refused `InvalidInput` |
   | `backup_staging` | no `backup create` of that Store is running (its `backup.lock` is taken for the removal) |
   | `image_tmp` | no unpack of that image is running (its lock is taken; the lock file stays) |
-  | `image_part` | it has not been written for an hour |
+  | `export_container` | no copy of its image to its machine holds the copy lock (taken without waiting); `docker rm -v` removes it with its anonymous volumes |
 
   Other refusals: `NotFound` (no leftover has that id now), `Unavailable`
   (the machine is stopped) and `Unknown` (the worker's answer was lost;
@@ -700,8 +709,9 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   (unpacked, or in its archive) starts at once; any other is resolved with
   `docker image inspect` through the `docker` machine's recorded socket
   (else Docker's default context), refused `Unsupported`
-  `{reason: "arch", value}` for another architecture, `Capacity`
-  `{needed, free, where}` when `2 × size × 1.05`, less the bytes a resumed
+  `{architecture}` for another architecture (`{os}` for another OS), `Capacity`
+  `{needed_bytes, free_bytes, path}` with `fix: layerfs machine prune <m>
+  --unused` when `2 × size × 1.05`, less the bytes a resumed
   copy already staged, is over the machine's free bytes (`size`: what the
   image's layers unpack to, the sum of `docker history`'s layer sizes),
   and otherwise exported once into an exclusive per-export container (`docker
@@ -709,18 +719,17 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   of the directories it stamps (the root, `dev/`, `etc/`, `proc/`, `sys/`)
   normalized to epoch 0 (`1970-01-01`) so resume across separate exports
   sees identical bytes; the container and its anonymous volumes are removed on
-  completion or error, and any residual containers left after `SIGKILL` are
-  reclaimed under `ImageLock` on the next `machine load-image` or
-  `sandbox create --image` in the same home without
-  waiting on active locks; legacy `layerfs-export-<machine>-<hex>` containers
-  labeled `layerfs.export.started` are no longer swept and require manual
-  `docker rm`), sent in 1 MiB frames and unpacked on the
+  completion or error; one a `SIGKILL`ed copy left is swept by the next copy
+  of the same image to the same machine, and any other is a `home leftovers`
+  entry of kind `export_container` that `home prune` removes), sent in 1 MiB frames and unpacked on the
   machine under `machines/native/run/images/<hex>.2/` with a sidecar
   `<hex>.2.json`; the staged tar is deleted. Docker unreachable is
   `Unavailable` `{what: "docker"}`, the machine stopped `Unavailable`
   `{what: "machine"}`. One copy of an image on one machine at a time: a
-  second waits for the first (phase `lock`, `waiting: "lock"`, the holder
-  in `holder`), then reuses what it published. `--progress` reports
+  second waits for the first (a `{phase: "lock"}` event once a second; the
+  copy it waits for is the `busy` item of `machine images`), then reuses
+  what it published. A create that copied holds the copy lock until the
+  Sandbox is made, so a prune cannot remove the image in between. `--progress` reports
   `inspect`, `lock`, `export`, `send`
   (`done`, `total`; `total` is an estimate until the last `send` event,
   which has `done` equal to `total`, the bytes sent), `unpack` and `start`. The record keeps the image's id,
@@ -960,20 +969,43 @@ positional `machine`, except `create`, which takes `name` and `platform`.
   **`update`** answers `{"ok":true}`; long `ok, outcome, machine, platform,
   cpus, memory_bytes, disk_bytes, image, docker, wsl, daemon`; it is `InUse`
   while Sandboxes run on the machine. **`remove`** also forgets the
-  machine's own PostgreSQL addresses in Store records; a machine of a
+  machine's own PostgreSQL addresses in Store records and deletes the
+  home's image copy locks of it (`run/image-lock/<machine>/`); a machine of a
   removed platform (`firecracker`, `ssh`, `microsandbox`), shown as
   `broken`/`unsupported`, is only forgotten: `{"ok":true,"forgotten":true}`.
-- **`images`** rows are `{image, refs, size, default}`, long adding
-  `architecture, source, sandboxes, sandboxes_count, last_used_at`
+- **`images`** rows are `{image}` with `refs, size, default, state, op,
+  reason, fix` when they apply, long adding `message, staged_bytes,
+  architecture, source, sandboxes, sandboxes_count, last_used_at`
   (`sandboxes` are names); the long answer adds `machine, mode,
-  architecture, disk_free_bytes`. macOS `native` answers `mode: "host"` with
-  none. `--with docker` reads the host's Docker: `images` it could copy,
+  architecture, disk_free_bytes`. One item per image, with a state (v19): a
+  published image is `ready`; a part a live copy holds is `busy` with `op
+  {name: load_image, phase, started_at}` (the phase the copy recorded in its
+  lock's owner record, `lock` before it named one); a part no copy holds,
+  or an unpack that stopped before it was recorded, is `broken`/`partial`
+  with `fix: layerfs machine load-image <m> sha256:<hex>`, which resumes
+  or rebuilds it, and `size` null. `staged_bytes` is how much of a part is
+  staged; a stale part beside a published image is in that image's row,
+  which stays `ready`. macOS `native` answers `mode: "host"` with
+  none. `--with docker` reads the host's Docker: `images` it could copy
+  (an image the machine holds `ready` is not offered),
   each `{image, refs, size, os, architecture, usable, needed_bytes, fits,
   unusable}`, with `reason` and `message` when Docker did not answer. It
-  never starts a machine. **`load_image`** answers `{image, reused}`, long
-  `outcome` (`loaded` or `reused`), `machine, refs, size`. **`prune`**
-  answers `freed_bytes`, long `outcome, machine, removed` (the first 20
-  images) and `removed_count`; an image in use is `InUse`.
+  never starts a machine. **`load_image`** answers `{image}` with `reused`
+  and `dropped` (the FIFO and device paths the copy left out, first 20)
+  when they apply, long `outcome` (`loaded` or `reused`), `machine, refs,
+  size, dropped_count` (only when the list was cut) and `expanded_bytes`;
+  its refusals are `sandbox create --image`'s. **`prune`**
+  answers `freed_bytes` and `skipped` (`[{image, message}]`, what
+  `--unused` could not remove, first 20), long `outcome, machine, removed`
+  (the first 20 images), `removed_count` and `skipped_count` (only when
+  cut). `--unused` also removes what copies left: parts no copy holds (even
+  beside an image a Sandbox uses), unpacks that were not recorded,
+  sidecars with no image and `.tmp-*` folders. A named image a live copy
+  holds is `Busy` with that copy's `op`; one a Sandbox uses is `InUse`
+  `{sandbox_count}`; a copy lock that cannot be checked is `Failed`.
+  **`doctor`**'s `machine.capacity` evidence adds `reclaimable_image_bytes`
+  (what `prune --unused` frees); that prune is its fix only when there are
+  such bytes.
 - **`stats`** short: `cpus, memory_used_bytes, memory_total_bytes,
   disk_free_bytes, disk_total_bytes`, and `incomplete` when the 4 s budget
   ended first. Long adds `disk_used_bytes, reasons, machine, platform,
@@ -1111,10 +1143,12 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
 - **`get --with live`** reads the Store where it lives, starting nothing: a
   sqlite Store's file through its machine (in this process on `native`,
   else its recorded worker), a PostgreSQL Store's server from this
-  computer. The read gives `state` and `observed_at`: `broken` `missing`
+  computer. The read gives `state` and `observed_at`: `blocked` first,
+  with nothing asked, while a sqlite Store's machine is not ready; `broken` `missing`
   when no file is where the record says, `broken` `unreachable` when the
   server does not answer, `busy` or `broken` `unresolved` from a
-  compaction's own record, `unknown` (with when LayerFS last knew) when the
+  compaction's own record beside the file (a run live there is `busy` even
+  when this home's record holds it unresolved after a lost reply), `unknown` (with when LayerFS last knew) when the
   machine or worker does not answer. The record is written only when what
   the read found wrong changed (which moves the home's `generation`);
   `observed_at` goes to `store/<store>/observed.json`, which does not. A
@@ -1157,11 +1191,25 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   dead_bytes, discarded_bytes, reusable_bytes, kept_waste,
   delta_base_references (at most 20), delta_base_references_count,
   peak_temp_bytes, residue_bytes, residue_artifacts, residue_reason,
-  estimate, zero_reasons`. It records a `compact` operation in the Store's
-  record while it runs; one left unresolved is cleared by the next
-  `store compact`. A sqlite Store on another machine is compacted by that
-  machine's worker; the call starts no machine, and a stopped one is
-  `Unavailable` naming `layerfs machine start <machine>`.
+  estimate, zero_reasons`. `kept_waste` is `{dead_in_retained_packs_bytes,
+  delta_bases_bytes, inode_blocks_bytes}`; on SQLite `dead_bytes` includes
+  the dead records inside packs the run keeps, and `unchanged` means they
+  are under 10% of the Store. Phases: `mark, build, verify, install`
+  (sqlite; an `unchanged` run sends `mark` only), `mark, build, swap,
+  cleanup` (PostgreSQL). It records a `compact` operation in the Store's
+  record while it runs; one left unresolved (its own record beside the
+  Store) is adopted and settled by the next `store compact`. A sqlite Store
+  on another machine is compacted by that machine's worker, which sends the
+  same phases; the call starts no machine. Refusals: `Unavailable` when the
+  machine is stopped, records no worker or does not answer (`fix: layerfs
+  machine start <m>`), or its worker is of another build (`fix: layerfs
+  machine stop <m> && layerfs machine start <m>`, `--force` on the stop when
+  Sandboxes are on it); `Busy` with `op` while a machine operation holds
+  the machine or a compaction runs (here or in the worker); `Unknown` when
+  the reply is lost and `Unresolved` when an earlier run left its outcome
+  unknown (both `fix: layerfs store compact <store>`); `InUse` while
+  Workspaces are mounted. While a compaction runs on a machine, a move's or
+  remove's steps there are `Busy` naming it.
 
 Run (macOS, native; the outputs are this build's):
 
@@ -1318,7 +1366,11 @@ every check was made and nothing was found; otherwise `findings` and
   doctor --machine` is for a PostgreSQL Store; a sqlite Store refuses it.
 - A Store's checks, in this order: `store.record` (its record reads and
   names it), `store.operation` (an operation whose owner is gone with its
-  outcome unknown is an error whose `fix` is the call that clears it),
+  outcome unknown is an error whose `fix` is the call that clears it; for a
+  sqlite Store it also reads the compaction record beside the file through
+  its machine: a run live there passes, one left unresolved is an error
+  with `fix: layerfs store compact <store>`; under a machine that is not
+  ready it waits with `store.connection`),
   `store.connection` (a sqlite Store's file is where its record says,
   read through its machine; a PostgreSQL Store's server answers this
   computer with the saved login), `store.identity` (the Store's id is the

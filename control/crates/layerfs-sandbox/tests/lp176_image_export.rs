@@ -11,6 +11,7 @@ use layerfs_home::events::Events;
 use layerfs_home::home;
 use layerfs_sandbox::docker::Docker;
 use layerfs_sandbox::image_artifact::{self as cache, CHUNK};
+use layerfs_sandbox::image_exports::{left_exports, remove_left_export};
 use layerfs_sandbox::image_load::{
     cleanup_owned, load, owned_containers, Cleanup, ImageLock, Loaded, Target, EXPORT_ROLE,
 };
@@ -787,7 +788,7 @@ fn real_docker_different_homes_do_not_collide_or_delete_each_other() {
 }
 
 #[test]
-fn real_docker_load_reclaims_killed_other_image_and_machine_without_touching_active() {
+fn real_docker_leftover_exports_list_and_remove_a_killed_copy_without_touching_active() {
     if !docker_available() {
         eprintln!("NOT_RUN: docker unavailable");
         return;
@@ -843,28 +844,53 @@ fn real_docker_load_reclaims_killed_other_image_and_machine_without_touching_act
         .expect("active container present");
     let v_active = container_volumes(&c_active.name)[0].clone();
 
-    // 3. Run a normal load on a DIFFERENT image and machine ("native", img_next):
-    //    it must automatically reclaim c_killed + v_killed while leaving c_active + v_active intact.
+    // 3. A normal load on a DIFFERENT image and machine ("native", img_next)
+    //    sweeps only its own (machine, image) (v19): c_killed stays for
+    //    `home leftovers`, which lists it removable and c_active held.
     let (loaded, _) = run_load(&docker, &home, "native", &img_next.tag);
     assert!(!loaded.unwrap().reused);
     assert!(
-        !container_exists(&c_killed.name),
-        "load() must reclaim killed container {} from other image/machine",
-        c_killed.name
+        container_exists(&c_killed.name),
+        "load() leaves another image's container to home prune"
     );
+    let left = left_exports(&docker, &home).unwrap();
+    let find = |name: &str| {
+        left.iter()
+            .find(|l| l.name == name)
+            .unwrap_or_else(|| panic!("{name} listed: {left:?}"))
+            .clone()
+    };
+    let killed = find(&c_killed.name);
+    assert_eq!(killed.machine, "docker");
+    assert_eq!(killed.image, img_killed.id);
+    assert!(!killed.held, "no copy holds the killed copy's lock");
+    assert!(killed.created_ms.is_some_and(|ms| ms > 0));
+    let active = find(&c_active.name);
+    assert_eq!(active.machine, "lima");
+    assert!(active.held, "the live copy holds its lock");
+
+    // `home prune` of the active copy's container is refused; the killed
+    // one is removed with its anonymous volume, then gone.
+    assert_eq!(
+        remove_left_export(&docker, &home, &c_active.name)
+            .unwrap_err()
+            .code,
+        "InUse"
+    );
+    remove_left_export(&docker, &home, &c_killed.name).unwrap();
+    assert!(!container_exists(&c_killed.name));
     assert!(
         !volume_exists(&v_killed),
-        "load() must reclaim anonymous volume {v_killed} of killed container"
+        "home prune removes the killed container's anonymous volume {v_killed}"
     );
-    assert!(
-        container_exists(&c_active.name),
-        "load() must not delete active container {}",
-        c_active.name
+    assert_eq!(
+        remove_left_export(&docker, &home, &c_killed.name)
+            .unwrap_err()
+            .code,
+        "NotFound"
     );
-    assert!(
-        volume_exists(&v_active),
-        "load() must not delete active volume {v_active}"
-    );
+    assert!(container_exists(&c_active.name));
+    assert!(volume_exists(&v_active));
     assert_eq!(
         owned_containers(&docker, &home).unwrap(),
         vec![c_active.clone()]

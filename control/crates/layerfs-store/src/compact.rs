@@ -159,8 +159,13 @@ pub fn compact(home: &Path, events: &mut Events<'_>, store: &str) -> Outcome {
     let mut marker = Marker::begin(&home, store);
     let (outcome, left) = match executor {
         Executor::Local => {
-            let outcome =
-                compact_sqlite(&home, events, store, &record, &mut |phase| marker.at(phase));
+            let outcome = compact_sqlite(
+                &home,
+                events,
+                (store, IN_THIS_PROCESS),
+                &record,
+                &mut |phase| marker.at(phase),
+            );
             // the run's own record beside the Store says whether it settled
             let path = paths::store_file(&home, store);
             let left = layerfs_persistence::compact_op_status(&path).is_some();
@@ -199,6 +204,78 @@ pub fn compact(home: &Path, events: &mut Events<'_>, store: &str) -> Outcome {
 /// The worker operation that compacts a sqlite Store on its machine.
 pub const WORKER_OP: &str = "store.compact";
 
+/// Whether the process a compaction record names still runs on this machine.
+/// The kernel start time and boot id, when recorded, keep a reused id from
+/// passing as the owner.
+pub fn owner_alive(op: &layerfs_persistence::CompactOpStatus) -> bool {
+    let Some(pid) = op.owner_pid else {
+        return false;
+    };
+    layerfs_home::process::alive_as(pid, op.owner_pid_start, op.owner_pid_boot)
+}
+
+/// The run `<store>.compact-op` beside Store file `file` records, as
+/// [`crate::report::compact_status`] projects it (`state` `busy` while it is
+/// live on this machine, else `unresolved`); `None` when there is none. It
+/// reads that record only, never the Store or an artifact.
+pub fn recorded_run(file: &Path) -> Option<SdkValue> {
+    let op = layerfs_persistence::compact_op_status(file)?;
+    Some(crate::report::compact_status(&op.status(owner_alive(&op))))
+}
+
+/// Refuses `Busy` while `<store>.compact-op` beside Store file `file`
+/// names a run that is live on this machine (its owner runs and it has not
+/// returned). The refusal carries the run as `op`, `{ name: compact, phase,
+/// started_at }`. A step that reads, replaces or deletes the file (a move's
+/// or remove's) asks this first: after a lost reply the caller's lease is
+/// gone, so only the record the run keeps beside the file can stop it.
+pub fn refuse_while_running(file: &Path, store: &str) -> Result<(), SdkRefusal> {
+    let Some((phase, op)) = live_run(file) else {
+        return Ok(());
+    };
+    let refusal = refused(
+        "Busy",
+        format!(
+            "Store {store} is being compacted on this machine (phase {phase}); it can be moved \
+             or removed once that run ends"
+        ),
+    );
+    Err(layerfs_home::outcome::with_next(refusal, "op", op))
+}
+
+/// The run `<store>.compact-op` beside Store file `file` names, while it is
+/// live on this machine: its phase and the `op` a refusal names it by,
+/// `{ name: compact, phase, started_at }`.
+fn live_run(file: &Path) -> Option<(String, SdkValue)> {
+    let op = layerfs_persistence::compact_op_status(file)?;
+    let status = op.status(owner_alive(&op));
+    if status.state != "busy" {
+        return None;
+    }
+    let op = SdkValue::map([
+        ("name", SdkValue::text("compact")),
+        ("phase", SdkValue::text(&status.phase)),
+        (
+            "started_at",
+            SdkValue::Text(layerfs_home::time::iso(status.started)),
+        ),
+    ]);
+    Some((status.phase, op))
+}
+
+/// A `Busy` refusal of a run, naming the run live beside Store file `file`
+/// as its `op` when it names none yet.
+fn naming_live_run(refusal: SdkRefusal, file: &Path) -> SdkRefusal {
+    let named = (refusal.detail.get(layerfs_home::outcome::NEXT)).and_then(|next| next.get("op"));
+    if refusal.code != "Busy" || named.is_some() {
+        return refusal;
+    }
+    match live_run(file) {
+        Some((_, op)) => layerfs_home::outcome::with_next(refusal, "op", op),
+        None => refusal,
+    }
+}
+
 /// The worker's side of `store.compact`: `{ store, store_record }`, the
 /// Store file under the worker's `root` (the machine's data disk), never a
 /// path the caller sends. The worker holds the Store's lease under its root
@@ -225,22 +302,43 @@ pub fn in_worker(
             format!("Store {store} is not a sqlite Store"),
         ));
     }
+    // a Store whose file is not here is `NotFound`, before its lease
+    // folder is made
+    let file = paths::store_file(root, store);
+    if !file.is_file() {
+        return Err(refused(
+            "NotFound",
+            format!("no file of Store {store} is on this machine"),
+        ));
+    }
     let _lease = lease::hold_locked(root, store)?;
     let mut sink = |event| {
         let _ = events(event);
     };
     let mut events = Events::new(&mut sink);
     // the caller's home keeps the marker; nothing is written beside it here
-    compact_sqlite(root, &mut events, store, &record, &mut |_| {})
+    compact_sqlite(
+        root,
+        &mut events,
+        (store, ON_THAT_MACHINE),
+        &record,
+        &mut |_| {},
+    )
 }
 
+/// Where a run's refusal says a call holds the Store: the caller's process,
+/// or the machine whose worker runs it.
+const IN_THIS_PROCESS: &str = "in this process";
+const ON_THAT_MACHINE: &str = "on that machine";
+
 /// The §7 SQLite path on Store file `store` under `home` (a home, or a
-/// worker's root), its lease held by the caller. `on_phase` hears each
-/// phase as it starts, before it is sent to `events`.
+/// worker's root, `here` saying which to a refusal), its lease held by the
+/// caller. `on_phase` hears each phase as it starts, before it is sent to
+/// `events`. A `Busy` while another run is live names that run as `op`.
 fn compact_sqlite(
     home: &Path,
     events: &mut Events<'_>,
-    store: &str,
+    (store, here): (&str, &str),
     record: &StoreRecord,
     on_phase: &mut dyn FnMut(&str),
 ) -> Outcome {
@@ -251,7 +349,7 @@ fn compact_sqlite(
     // `InUse` for non-GC calls), naming the Store with no phase or op: no
     // operation holds it, a call does.
     if let Err(refusal) = close(&path) {
-        let refusal = gc_refusal(store, refusal);
+        let refusal = gc_refusal_at(store, refusal, here);
         note_refusal(&refusal);
         return Err(refusal);
     }
@@ -298,7 +396,8 @@ fn compact_sqlite(
             },
         )
         .map_err(|error| {
-            lookup::history_in(error, GcScopeKind::Store, store, None, Some(&op_id))
+            let refusal = lookup::history_in(error, GcScopeKind::Store, store, None, Some(&op_id));
+            naming_live_run(refusal, &path)
         })?;
     Ok(crate::report::compact_report(store, &receipt))
 }
@@ -411,13 +510,19 @@ fn note_refusal(refusal: &SdkRefusal) {
 /// `store.disconnect`, `backup.restore`) that close it.
 #[doc(hidden)]
 pub fn gc_refusal(store: &str, refusal: SdkRefusal) -> SdkRefusal {
+    gc_refusal_at(store, refusal, IN_THIS_PROCESS)
+}
+
+/// [`gc_refusal`], saying where the call that holds the Store runs: `here`
+/// is "in this process" or, in a worker, "on that machine".
+fn gc_refusal_at(store: &str, refusal: SdkRefusal, here: &str) -> SdkRefusal {
     if refusal.code != "InUse" {
         return refusal;
     }
     let mut busy = refused(
         "Busy",
         format!(
-            "Store {store} is busy: a call is running on it in this process; retry \
+            "Store {store} is busy: a call is running on it {here}; retry \
              `store.compact` after that call ends"
         ),
     );

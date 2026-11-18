@@ -137,3 +137,68 @@ fn the_worker_refuses_a_frame_in_its_old_order() {
         "`bytes` must be bytes"
     );
 }
+
+/// A compaction record beside Store file `file`, owned by this process: a
+/// run that is live on this machine unless `returned`.
+fn compact_record(file: &std::path::Path, returned: bool) {
+    // where the kernel names no boot the owner is matched by its id alone
+    let (start, boot) = match layerfs_home::process::me() {
+        Some((start, boot)) => (start.to_string(), format!("{boot:032x}")),
+        None => (String::new(), String::new()),
+    };
+    let zeros = |n: usize| "0".repeat(n);
+    let text = format!(
+        "version=1\nop_id={}\ngeneration=4\nphase=build\nstarted_ms=1794993419000\n\
+owner_pid={}\nowner_pid_start={start}\nowner_pid_boot={boot}\nowner_pid_namespace=\n\
+catalog_id={}\nnext_history_serial=1\nnext_pack_id=1\nnext_ordinal=1\n\
+mark_serial=0\nmark_pack_id=1\nmark_digest={}\nmark_totals=0,0,0,0\nmark_stamp=0\nhistory_rows=0\n\
+live_heads_digest={}\nreturned={}\n",
+        zeros(32),
+        std::process::id(),
+        zeros(32),
+        zeros(64),
+        zeros(64),
+        u8::from(returned),
+    );
+    let mut path = file.as_os_str().to_owned();
+    path.push(".compact-op");
+    std::fs::write(path, text).unwrap();
+}
+
+/// Plan Part 3 fix 1: after a lost reply the caller's lease is gone, so a
+/// move's or remove's steps on the machine that compacts are refused `Busy`,
+/// naming the run as `op`, while its record names a live run; a returned
+/// run's record no longer holds them.
+#[test]
+fn a_live_compaction_on_the_machine_refuses_the_steps_that_copy_or_delete_the_file() {
+    use layerfs_store::sqlite::transfer::steps;
+    let root = std::env::temp_dir().join(format!("layerfs-steps-busy-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let file = layerfs_home::home::paths::store_file(&root, "s");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, b"not a store").unwrap();
+    compact_record(&file, false);
+    for step in [
+        StoreStep::Snapshot,
+        StoreStep::Stage,
+        StoreStep::Install,
+        StoreStep::Retire,
+        StoreStep::Remove,
+    ] {
+        let name = step.name();
+        let refusal = steps::run(&root, &StepFrame::on("s", step)).unwrap_err();
+        assert_eq!(refusal.code, "Busy", "{name}: {}", refusal.message);
+        let op = refusal.detail.get("next").and_then(|next| next.get("op"));
+        let op = op.unwrap_or_else(|| panic!("{name}: no op in {:?}", refusal.detail));
+        assert_eq!(op.get_text("name"), Some("compact"), "{name}");
+        assert_eq!(op.get_text("phase"), Some("build"), "{name}");
+        assert_eq!(op.get_text("started_at"), Some("2026-11-18T09:16:59Z"));
+        assert!(file.is_file(), "{name} left the file in place");
+    }
+    // a read is not held, and a run that returned holds nothing
+    assert!(steps::run(&root, &StepFrame::on("s", StoreStep::Stat)).is_ok());
+    compact_record(&file, true);
+    let removed = steps::run(&root, &StepFrame::on("s", StoreStep::Remove)).unwrap();
+    assert_eq!(removed.get("removed"), Some(&SdkValue::Bool(true)));
+    let _ = std::fs::remove_dir_all(&root);
+}

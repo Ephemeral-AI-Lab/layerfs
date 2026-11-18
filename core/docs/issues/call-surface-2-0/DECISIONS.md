@@ -184,3 +184,71 @@ Added by the coordinator while the fixes were applied:
   A doctor's `not_checked` entry stays `timeout`, `busy` or `lost`.
 - **`repeat`** An option that may be given more than once is marked `repeat`, on the option or as a
   list on the row (`workspace.exec`: `env`).
+
+## Version 19 (2026-11-19): `layerfs_v2_0_0` #738–#741
+
+The 2.0 rows brought up to `layerfs_v2_0_0` @ `ff114a5265`: GC compaction with D6/D7 (#740),
+`store.compact` in the Store's machine worker (#739) and the Sandbox image import hardening
+(#738, #741). The plan is `tmp/cs20-v2-sync-plan.md` Parts 2 and 3; where it left a choice open the
+recommended option is taken, and each such choice is listed here.
+
+- **V19-1 Image states** The state rule extends to the images a machine holds: a copy that runs or
+  stopped partway is a state on its `machine images` item, not a `source` word. Published is `ready`
+  (left out of the row); a part a live copy holds is `busy` with `op {name: load_image, phase,
+  started_at}`; a part no copy holds, or an unpack that stopped before it was recorded, is `broken`.
+  The row carries `states {reasons: [partial], ops: [load_image]}`.
+- **V19-2 Reason `partial`** A new broken reason: the thing was left partway by a copy, and its `fix`
+  resumes or rebuilds it (`layerfs machine load-image <m> sha256:<hex>`). It is the last reason code.
+- **V19-3 One item per image** A stale part beside a published image merges into that image's row,
+  which stays `ready` (the image is usable) and shows the part's bytes as `staged_bytes`; `machine
+  prune --unused` removes the part. A partial image's `size` is null.
+- **V19-4 The busy copy's phase** A copy records its phase (`export`, `send`, `unpack`) in its lock's
+  owner record in the home, beside `since`; the busy item's `op.phase` and `op.started_at` come from
+  there. A listing reads that record and never takes the copy's lock.
+- **V19-5 Not exposed** `source` stays `bundle`, `machine` or `imported`. `staged`, `stranded`,
+  `resumable`, `age` (it breaks the `_at` rule), `variant` (always null) and the image's `Env`
+  (recorded, never applied) stay out of every 2.0 answer. Applying `Env`/`WorkingDir`/`User`, filling
+  or deleting `variant`, and where rebuild temporaries go are the owner's, not this version's.
+- **V19-6 `machine load-image`** Short `{image}` with `reused` and `dropped` (non-empty only); long
+  adds `dropped` (FIFO and device paths, first 20), `dropped_count` (beside a cut list) and
+  `expanded_bytes`. Init files are always dropped and never listed. `size` is the image's tar bytes on
+  the machine. Progress `inspect, lock, export, send, unpack`; `lock` is `{phase: lock}`, once a
+  second while waiting, with no `waiting` or `holder` (a pid). Refusals: `Capacity` with fix
+  `layerfs machine prune <m> --unused` and detail `{needed_bytes, free_bytes, path}`; `Unsupported`
+  with `{architecture}` or `{os}`; `InvalidInput` for an ambiguous reference (`{images}`) or an image
+  Docker does not have; `Unavailable {what}`; `InUse` for a stranded unpack in use; `Failed` for an
+  export that failed or changed, a staged part that does not match, or a frame out of order (the last
+  two were `InvalidInput`).
+- **V19-7 `machine prune`** `skipped` (`[{image, message}]`, first 20) with `skipped_count`; short
+  `{freed_bytes}` with `skipped` when non-empty. `--unused` also removes parts no copy holds (even
+  beside an image a Sandbox uses), stranded unpacks, sidecars with no image and `.tmp-*` folders, each
+  image in `removed`. A named image a live copy holds is `Busy` with the copy's `op` (was `InUse`); one
+  a Sandbox uses is `InUse` with `{sandbox_count}`; a lock check error is `Failed`.
+- **V19-8 `sandbox create --image`** Progress `inspect, lock, export, send, unpack, start, mount`; the
+  load-image refusals with the same shapes. The copy's lock is held until the create returns, by which
+  time the Sandbox's own recorded lower layer protects the image from a prune. The example's `image`
+  is an id.
+- **V19-9 `home leftovers` / `home prune`** New kind `export_container`, id
+  `native:export_container:<container>`: export containers in the host's Docker labelled with this
+  home, and legacy `layerfs-export-<m>-<hex>` ones. `report_only` while the copy lock of its (machine,
+  image) is held; `modified_at` is its creation time; `path` is null and `size` is not measured.
+  `home prune` runs `docker rm -v` under that lock taken without waiting. Docker is asked only once an
+  image copy has run from the home (its `run/image-lock/` folder is there). When Docker does not answer,
+  `native` goes in `not_listed` with `blocked_by {machine: docker, reason: engine_down}`; a host with
+  no Docker installed lists none and names nothing. `image_part` leaves the kinds; a load keeps only
+  its own sweep of its (machine, image), and no load sweeps the whole home any more.
+- **V19-10 `machine remove`** Also deletes the home's `run/image-lock/<machine>/`.
+- **V19-11 `machine doctor`** No new check id. `machine.capacity`'s evidence adds
+  `reclaimable_image_bytes` (what `machine prune --unused` frees); its fix is that prune only when
+  those bytes exist.
+- **V19-12 `store compact`** Note: a sqlite Store on another machine is compacted by that machine's
+  worker and starts no machine. Long keys unchanged; on SQLite `dead_bytes` includes dead records in
+  packs the run keeps, `unchanged` means `dead_bytes` under 10% of the Store, `freed_bytes` can exceed
+  the wholly dead packs, and on a `compacted` run `kept_waste` describes the rebuilt Store. Progress
+  `mark, build, verify, install` on SQLite (`unchanged`: `mark` only; v18's `cleanup` had no event),
+  `mark, build, swap, cleanup` on PostgreSQL; the worker route forwards the same events. The refusal
+  table is the row's `refusals`; the worker's own `Busy` says "on that machine".
+- **V19-13 `store get --with live` and `store doctor`** The live read reads the worker's compaction
+  record through the machine; a run live there turns `broken`/`unresolved` into `busy` with its phase;
+  `blocked` comes first while the machine is stopped. `store.operation` reads it the same way; on a
+  stopped machine it is `not_checked` with `blocked_by`.

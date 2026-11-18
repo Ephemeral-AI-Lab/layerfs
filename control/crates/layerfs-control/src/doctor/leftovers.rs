@@ -9,7 +9,9 @@
 //! its own entries: the run root (`machine/native/run`) with its image
 //! cache, each Store folder's two staged-snapshot names and `incoming/`.
 //! A Store's files, a lock or lease
-//! file and an overlay database are never opened; a run folder's
+//! file and an overlay database are never opened, and a received image part
+//! is not listed (`machine images` shows it and `machine prune` removes it,
+//! under the copy's lock); a run folder's
 //! `workspaces/` (its Workspace mount points) is never entered or `stat`ed,
 //! and a directory on another device (a mount) is not descended into. The
 //! names an integration keeps in a home (`secret/`, `runtime/`, `job/`,
@@ -27,7 +29,11 @@
 //! in snake_case. The path is never part of it: the side that removes
 //! derives the path from the kind and the name ([`Kind::path`]), whose
 //! grammar admits no separator, no `..` and no leading dot, and finds the
-//! entry again under its guard ([`super::leftover_prune`]).
+//! entry again under its guard ([`super::leftover_prune`]). An
+//! `export_container` is not on a disk: it is an image export container in
+//! the host's Docker (`native:export_container:<container>`,
+//! `layerfs_sandbox::image_exports`), listed by `home leftovers` beside
+//! `native`'s walk.
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::paths;
 use layerfs_sandbox::record::SandboxRecord;
@@ -73,8 +79,8 @@ pub enum Kind {
     BackupStaging,
     /// An image unpack's temporary directory `.tmp-<hex>.2-<id>`.
     ImageTmp,
-    /// A received image tar `.recv-<hex>.part`.
-    ImagePart,
+    /// An image export container a killed copy left in the host's Docker.
+    ExportContainer,
 }
 
 impl Kind {
@@ -85,7 +91,7 @@ impl Kind {
         Kind::InitCopy,
         Kind::BackupStaging,
         Kind::ImageTmp,
-        Kind::ImagePart,
+        Kind::ExportContainer,
     ];
 
     /// Its word in an entry's `kind` and inside its id.
@@ -96,7 +102,7 @@ impl Kind {
             Kind::InitCopy => "init_copy",
             Kind::BackupStaging => "backup_staging",
             Kind::ImageTmp => "image_tmp",
-            Kind::ImagePart => "image_part",
+            Kind::ExportContainer => "export_container",
         }
     }
 
@@ -105,8 +111,17 @@ impl Kind {
         Self::ALL.into_iter().find(|kind| kind.as_str() == text)
     }
 
+    /// Whether `name` is a name this kind gives.
+    pub fn admits(self, name: &str) -> bool {
+        match self {
+            Kind::ExportContainer => layerfs_sandbox::image_exports::admits(name),
+            _ => self.path(Path::new("/"), name).is_some(),
+        }
+    }
+
     /// Where entry `name` of this kind is under side root `root`, or `None`
-    /// when `name` is not a name this kind gives. This is the only way a
+    /// when `name` is not a name this kind gives (and for an
+    /// `export_container`, which is in Docker). This is the only way a
     /// path comes from a fix id, and every name it admits is made of plain
     /// path components (letters, digits, `_`, `.`, `-`, no leading dot), so
     /// the path stays under the folder its kind names.
@@ -128,8 +143,7 @@ impl Kind {
                     .is_some()
                     .then(|| rootfs::cache(&run).join(&entry))
             }
-            Kind::ImagePart => (name.len() == 64 && hex(name))
-                .then(|| rootfs::cache(&run).join(format!(".recv-{name}.part"))),
+            Kind::ExportContainer => None,
         }
     }
 }
@@ -169,8 +183,8 @@ pub fn parse(id: &str) -> Option<(&str, Kind, &str)> {
     let (kind, name) = rest.split_once(':')?;
     let kind = Kind::named(kind)?;
     layerfs_home::names::name("machine", machine).ok()?;
-    kind.path(Path::new("/"), name)?;
-    Some((machine, kind, name))
+    (kind.admits(name) && (kind != Kind::ExportContainer || machine == "native"))
+        .then_some((machine, kind, name))
 }
 
 /// Whether `directory` is a mount point, from its own device, its parent's
@@ -372,15 +386,11 @@ impl Walk<'_> {
         }
     }
 
-    /// The image cache: an unpack's temporaries and received parts.
+    /// The image cache: an unpack's temporaries.
     fn images(&mut self, cache: &Path) {
         for (name, _) in self.list(cache) {
             if let Some(rest) = name.strip_prefix(".tmp-") {
                 self.found(Kind::ImageTmp, rest, None);
-            } else if let Some(digest) =
-                (name.strip_prefix(".recv-")).and_then(|rest| rest.strip_suffix(".part"))
-            {
-                self.found(Kind::ImagePart, digest, None);
             }
         }
     }

@@ -1,9 +1,13 @@
 //! A machine's Sandbox images (`machine.images`, `machine.prune`), read and
 //! removed on the side that runs its Sandboxes, without starting it: the
-//! unpacked images with their sidecars, and what the archives its Sandboxes
+//! unpacked images with their sidecars, what the archives its Sandboxes
 //! read still hold (the bundle's `sandbox-image.tar`, a VM's own archive),
-//! even when not unpacked yet. The host adds how many Sandbox records name
-//! each image, and the host's Docker images the machine could copy
+//! even when not unpacked yet, and what copies left (a staged part, an
+//! unpack that was not recorded). The host merges those into one item per
+//! image with its state (spec v19): `ready` when published, `busy` while a
+//! live copy holds the image's lock (read from the lock's owner record),
+//! else `broken` `partial`. It adds the Sandbox records that name each
+//! image, and the host's Docker images the machine could copy
 //! (`available`, read through the Docker the copy uses). macOS native runs
 //! no image (`mode: 'host'`).
 use crate::deploy::{self, Choice, Side};
@@ -12,7 +16,8 @@ use crate::image_lock::{ImageLock, PruneGate};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home;
 use layerfs_home::names::MachineName;
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::outcome::{failed, refused, with_next, Outcome};
+use layerfs_home::state::{Reason, State};
 use layerfs_sandbox_backend::rootfs::{self, Temporary};
 use layerfs_sandbox_backend::Image;
 use layerfs_store::place::{self, Executor};
@@ -20,7 +25,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::ErrorKind;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
-use std::time::SystemTime;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -56,9 +60,11 @@ pub fn host_mode(executor: &Executor) -> bool {
 }
 
 /// `machine.images`: `{machine, mode, default, free, images: [{id, refs,
-/// size, architecture, source, sandboxes, last_used}]}`, `sandboxes` the
-/// names of the Sandbox records that name the image. The host's Docker
-/// (`docker`, `available`) is read only when `docker` asks for it.
+/// size, architecture, source, last_used, state, op, reason, fix, message,
+/// staged_bytes, sandboxes}]}`, one item per image, `sandboxes` the names
+/// of the Sandbox records that name the image. The host's Docker
+/// (`docker`, `available`) is read only when `docker` asks for it; an image
+/// the machine does not hold `ready` is offered there.
 pub fn list(home: &Path, name: &MachineName, docker: bool) -> Outcome {
     let machine = name.as_str();
     let choice = deploy::choose(home, machine, None)?;
@@ -87,33 +93,19 @@ pub fn list(home: &Path, name: &MachineName, docker: bool) -> Outcome {
         let using = on.filter(|r| r.machine() == machine && r.image() == Some(id));
         SdkValue::List(using.map(|r| SdkValue::text(r.name())).collect())
     };
-    let images: Vec<SdkValue> = match answer.get("images") {
-        Some(SdkValue::List(rows)) => {
-            let mut out = Vec::with_capacity(rows.len());
-            for row in rows {
-                let id = row.get_text("id").unwrap_or("");
-                let mut enriched = home::with_field(row.clone(), "sandboxes", users(id));
-                if enriched.get_bool("staged") {
-                    if let Some(hex) = id.strip_prefix("sha256:").filter(|h| cache::is_hex(h)) {
-                        if is_flock_held(&ImageLock::path(home, machine, hex))? {
-                            enriched =
-                                home::with_field(enriched, "resumable", SdkValue::Bool(false));
-                        }
-                    }
-                }
-                out.push(enriched);
-            }
-            out
-        }
-        _ => Vec::new(),
-    };
+    let images: Vec<SdkValue> = merged(answer.get("images"))
+        .into_iter()
+        .map(|(id, found)| {
+            home::with_field(item(home, machine, &id, found), "sandboxes", users(&id))
+        })
+        .collect();
     if !docker {
         return Ok(home::with_field(answer, "images", SdkValue::List(images)));
     }
-    // the host's Docker images this machine could copy, minus those it holds completely
+    // the host's Docker images this machine could copy, minus those it holds ready
     let held: Vec<(String, Vec<String>)> = images
         .iter()
-        .filter(|row| !row.get_bool("staged") && !row.get_bool("stranded"))
+        .filter(|row| row.get_text("state") == Some("ready"))
         .map(|row| {
             (
                 row.get_text("id").unwrap_or("").to_owned(),
@@ -135,6 +127,111 @@ pub fn list(home: &Path, name: &MachineName, docker: bool) -> Outcome {
         "available",
         SdkValue::List(available),
     ))
+}
+
+/// What a machine's listing found of one image: its published row, the
+/// bytes of a staged part, an unpack that was not recorded.
+#[derive(Default)]
+struct Found {
+    published: Option<SdkValue>,
+    part: Option<i64>,
+    stranded: bool,
+}
+
+/// A machine's listing rows by image id: a part or a stranded unpack beside
+/// a published image is merged into its row.
+fn merged(rows: Option<&SdkValue>) -> BTreeMap<String, Found> {
+    let mut found: BTreeMap<String, Found> = BTreeMap::new();
+    let Some(SdkValue::List(rows)) = rows else {
+        return found;
+    };
+    for row in rows {
+        let Some(id) = row.get_text("id").filter(|id| cache::digest(id)) else {
+            continue;
+        };
+        let entry = found.entry(id.to_owned()).or_default();
+        if row.get_bool("staged") {
+            entry.part = row.get_int("size");
+        } else if row.get_bool("stranded") {
+            entry.stranded = true;
+        } else {
+            entry.published = Some(row.clone());
+        }
+    }
+    found
+}
+
+/// One image's item and state: `ready` when published (a stale part beside
+/// it shows as `staged_bytes`); otherwise `busy` while the copy whose owner
+/// record names it lives (`op` `load_image`, its recorded phase and
+/// `since`), else `broken` `partial`, whose fix copies it again.
+fn item(home: &Path, machine: &str, id: &str, found: Found) -> SdkValue {
+    let hex = &id["sha256:".len()..];
+    let state = match &found.published {
+        Some(_) => State::Ready,
+        None => match ImageLock::holder(home, machine, hex) {
+            Some(holder) => State::Busy {
+                name: "load_image".to_owned(),
+                phase: holder.get_text("phase").unwrap_or("lock").to_owned(),
+                started_ms: holder.get_int("since_ms"),
+            },
+            None => State::broken(
+                Reason::Partial,
+                Some(&format!("layerfs machine load-image {machine} {id}")),
+            ),
+        },
+    };
+    let message = match (&state, found.part) {
+        (State::Broken { .. }, Some(bytes)) => SdkValue::text(format!(
+            "a copy of this image stopped after {bytes} bytes; load-image resumes it"
+        )),
+        (State::Broken { .. }, None) => SdkValue::text(
+            "an unpack of this image stopped before it was recorded; load-image rebuilds it",
+        ),
+        _ => SdkValue::Null,
+    };
+    let mut row = found.published.unwrap_or_else(|| {
+        SdkValue::map([
+            ("id", SdkValue::text(id)),
+            ("refs", SdkValue::List(Vec::new())),
+            ("size", SdkValue::Null),
+            ("architecture", SdkValue::Null),
+            ("source", SdkValue::text("imported")),
+            ("last_used", SdkValue::Null),
+        ])
+    });
+    for (field, value) in state.fields() {
+        row = home::with_field(row, field, value);
+    }
+    row = home::with_field(row, "message", message);
+    let staged = found.part.map_or(SdkValue::Null, SdkValue::Int);
+    home::with_field(row, "staged_bytes", staged)
+}
+
+/// The bytes of a [`list`] answer's image cache that `machine prune --unused`
+/// frees: each `ready` image no Sandbox uses but the default, and what
+/// copies left that no copy holds (their staged bytes; an unpack that was
+/// not recorded counts nothing, its size unknown).
+pub fn reclaimable(listed: &SdkValue) -> u64 {
+    let default = listed.get_text("default");
+    let Some(SdkValue::List(images)) = listed.get("images") else {
+        return 0;
+    };
+    let bytes = |value: Option<i64>| value.map_or(0, |n| n.max(0) as u64);
+    let unused = |row: &SdkValue| {
+        matches!(row.get("sandboxes"), Some(SdkValue::List(names)) if names.is_empty())
+            && row.get_text("id") != default
+    };
+    images
+        .iter()
+        .map(|row| match row.get_text("state") {
+            Some("ready") if unused(row) => {
+                bytes(row.get_int("size")) + bytes(row.get_int("staged_bytes"))
+            }
+            Some("ready") | Some("broken") => bytes(row.get_int("staged_bytes")),
+            _ => 0,
+        })
+        .sum()
 }
 
 /// The worker request that carries what the machine's record chooses.
@@ -211,7 +308,7 @@ fn listing(machine: &str, side: &Side<'_>, choice: &Choice) -> Outcome {
         .into_iter()
         .map(|row| home::with_field(env_names(row.to_value()), "staged", SdkValue::Bool(false)))
         .collect();
-    append_cache_leftovers(root, machine, &dir, &published, &mut images)?;
+    append_cache_leftovers(&dir, &published, &mut images)?;
     images.sort_by(|a, b| {
         a.get_text("id")
             .unwrap_or("")
@@ -253,10 +350,11 @@ fn env_names(row: SdkValue) -> SdkValue {
     home::with_field(row, "config", SdkValue::Map(config.collect()))
 }
 
-/// Appends staged `.recv-<hex>.part` rows and stranded `<hex>.2` rows found in `dir`.
+/// Appends what copies left in `dir`: a staged `.recv-<hex>.part` as
+/// `{id, size, staged: true}` (its bytes so far), and a `<hex>.2` unpack
+/// with no sidecar that no archive holds as `{id, stranded: true}`. Whether
+/// a copy still holds them is the host's to read, from the copy's lock.
 fn append_cache_leftovers(
-    root: &Path,
-    machine: &str,
     dir: &Path,
     published: &BTreeSet<String>,
     images: &mut Vec<SdkValue>,
@@ -266,40 +364,20 @@ fn append_cache_leftovers(
         Err(e) if e.kind() == ErrorKind::NotFound => return Ok(()),
         Err(e) => return Err(failed(e)),
     };
-    let now = SystemTime::now();
     for entry in entries {
         let entry = entry.map_err(failed)?;
         let fname = entry.file_name();
         let Some(name) = fname.to_str() else { continue };
         if let Some(hex) = cache::part_hex(name) {
             let meta = match std::fs::symlink_metadata(entry.path()) {
-                Ok(meta) => meta,
+                Ok(meta) if meta.file_type().is_file() => meta,
+                Ok(_) => continue,
                 Err(e) if e.kind() == ErrorKind::NotFound => continue,
                 Err(e) => return Err(failed(e)),
             };
-            let id = format!("sha256:{hex}");
-            let age = meta
-                .modified()
-                .ok()
-                .and_then(|mtime| now.duration_since(mtime).ok())
-                .map_or(0, |d| d.as_secs() as i64);
-            let lock_held = is_flock_held(&dir.join(format!("{hex}.2.lock")))?
-                || is_flock_held(&ImageLock::path(root, machine, hex))?;
-            let resumable = meta.file_type().is_file()
-                && meta.len() > 0
-                && !published.contains(&id)
-                && !lock_held;
             images.push(SdkValue::map([
-                ("id", SdkValue::text(&id)),
-                ("refs", SdkValue::List(Vec::new())),
+                ("id", SdkValue::text(format!("sha256:{hex}"))),
                 ("size", SdkValue::Int(meta.len() as i64)),
-                ("age", SdkValue::Int(age)),
-                ("resumable", SdkValue::Bool(resumable)),
-                ("architecture", SdkValue::Null),
-                ("source", SdkValue::text("staged")),
-                ("variant", SdkValue::Null),
-                ("config", SdkValue::Null),
-                ("last_used", SdkValue::Null),
                 ("staged", SdkValue::Bool(true)),
             ]));
         } else if let Some(hex) = name.strip_suffix(".2").filter(|h| cache::is_hex(h)) {
@@ -309,13 +387,6 @@ fn append_cache_leftovers(
             }
             images.push(SdkValue::map([
                 ("id", SdkValue::text(&id)),
-                ("refs", SdkValue::List(Vec::new())),
-                ("size", SdkValue::Null),
-                ("architecture", SdkValue::Null),
-                ("source", SdkValue::text("stranded")),
-                ("variant", SdkValue::Null),
-                ("config", SdkValue::Null),
-                ("last_used", SdkValue::Null),
                 ("staged", SdkValue::Bool(false)),
                 ("stranded", SdkValue::Bool(true)),
             ]));
@@ -324,9 +395,49 @@ fn append_cache_leftovers(
     Ok(())
 }
 
+/// `Busy` for image `id` on `machine`, which a live copy holds: the copy as
+/// `op` `{name: load_image, phase, started_at}` when its owner record says.
+fn copied(home: &Path, machine: &str, id: &str) -> SdkRefusal {
+    let hex = &id["sha256:".len()..];
+    let holder = ImageLock::holder(home, machine, hex);
+    let phase = holder
+        .as_ref()
+        .and_then(|h| h.get_text("phase"))
+        .unwrap_or("lock");
+    let op = State::Busy {
+        name: "load_image".to_owned(),
+        phase: phase.to_owned(),
+        started_ms: holder.as_ref().and_then(|h| h.get_int("since_ms")),
+    };
+    let refusal = refused(
+        "Busy",
+        format!(
+            "image {id} is being copied to machine {machine} (phase {phase}); nothing was removed"
+        ),
+    );
+    let op = op
+        .fields()
+        .into_iter()
+        .find(|(key, _)| *key == "op")
+        .map(|(_, op)| op);
+    with_next(refusal, "op", op.unwrap_or_default())
+}
+
+/// `InUse` for image `id`, which `count` Sandboxes (at least one) use.
+fn used(id: &str, count: usize) -> SdkRefusal {
+    refused_with(
+        "InUse",
+        format!("image {id} is used by a Sandbox on this machine (or one being created)"),
+        SdkValue::map([("sandbox_count", SdkValue::Int(count.max(1) as i64))]),
+    )
+}
+
 /// `machine.prune(name, image?, { unused })`: removes image `image`, or with
-/// `unused` every image no Sandbox uses except the machine's default:
-/// `{removed: [id], freed}`, `freed` measured on the filesystem.
+/// `unused` every image no Sandbox uses except the machine's default, and
+/// what copies left: `{removed: [id], freed, skipped?: [{id, reason}]}`,
+/// `freed` measured on the filesystem. A named image a live copy holds is
+/// `Busy` with the copy's `op`; one a Sandbox uses is `InUse`
+/// (`{sandbox_count}`).
 pub fn prune(home: &Path, name: &MachineName, image: Option<&str>, unused: bool) -> Outcome {
     let machine = name.as_str();
     if image.is_none() && !unused {
@@ -355,19 +466,12 @@ pub fn prune(home: &Path, name: &MachineName, image: Option<&str>, unused: bool)
             return Err(refused("Failed", reason.clone()));
         }
         if locked.contains(target) {
-            return Err(refused_with(
-                "InUse",
-                format!("image {target} has an active copy lock on this machine"),
-                SdkValue::map([("count", SdkValue::Int(1))]),
-            ));
+            return Err(copied(home, machine, target));
         }
-        Some(ImageLock::try_hold(home, machine, target)?.ok_or_else(|| {
-            refused_with(
-                "InUse",
-                format!("image {target} has an active copy lock on this machine"),
-                SdkValue::map([("count", SdkValue::Int(1))]),
-            )
-        })?)
+        Some(
+            ImageLock::try_hold(home, machine, target)?
+                .ok_or_else(|| copied(home, machine, target))?,
+        )
     } else {
         None
     };
@@ -509,16 +613,24 @@ fn pruning(side: &Side<'_>, args: &SdkValue) -> Outcome {
                 continue;
             }
         };
-        if img_locked || lower_users > 0 || hold_locked {
+        // a live copy's part and image are left whole
+        if img_locked {
             if target.is_some() {
-                let count = lower_users.max(1);
-                return Err(refused_with(
-                    "InUse",
-                    format!(
-                        "image {id} is used by a Sandbox on this machine (or one being created)"
-                    ),
-                    SdkValue::map([("count", SdkValue::Int(count as i64))]),
+                return Err(refused(
+                    "Busy",
+                    format!("image {id} is being copied to this machine; nothing was removed"),
                 ));
+            }
+            continue;
+        }
+        // an image a Sandbox uses stays; with `unused`, a part no copy holds
+        // beside it goes
+        if lower_users > 0 || hold_locked {
+            if target.is_some() {
+                return Err(used(&id, lower_users));
+            }
+            if item.has_part && remove_file_if_present(&cache::part(&dir, &hex))? {
+                removed.push(SdkValue::Text(id));
             }
             continue;
         }
@@ -540,7 +652,7 @@ fn pruning(side: &Side<'_>, args: &SdkValue) -> Outcome {
                 return Err(refused_with(
                     "InUse",
                     format!("image {id} is being unpacked on this machine"),
-                    SdkValue::map([("count", SdkValue::Int(1))]),
+                    SdkValue::map([("sandbox_count", SdkValue::Int(1))]),
                 ));
             }
             continue;
@@ -562,14 +674,7 @@ fn pruning(side: &Side<'_>, args: &SdkValue) -> Outcome {
                 removed_any = true;
             } else {
                 if target.is_some() {
-                    let count = lower_users.max(1);
-                    return Err(refused_with(
-                        "InUse",
-                        format!(
-                            "image {id} is used by a Sandbox on this machine (or one being created)"
-                        ),
-                        SdkValue::map([("count", SdkValue::Int(count as i64))]),
-                    ));
+                    return Err(used(&id, lower_users));
                 }
                 continue;
             }

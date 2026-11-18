@@ -298,8 +298,11 @@ fn host_op(
     // either Store kind (#535 §7.4)
     let mut executor = place::on_machine(&home, machine)?;
     // the image a create names: none on macOS native (R0), else resolved
-    // and copied to the machine when it does not hold it yet (R1)
-    let image = match (op, image) {
+    // and copied to the machine when it does not hold it yet (R1). A copy's
+    // lock is held until this call returns, by when the Sandbox is built on
+    // the image (its recorded lower layer), so a `machine prune --unused`
+    // in between leaves the image it just copied
+    let (image, _copied) = match (op, image) {
         (Op::SandboxCreate, Some(_)) if crate::images::host_mode(&executor) => {
             return Err(crate::images::host_only(machine))
         }
@@ -312,11 +315,16 @@ fn host_op(
                     crate::image_load::Target::worker(&home, machine, worker)
                 }
             };
-            let loaded =
-                crate::image_load::load(&docker, events, &mut target, archive.as_deref(), &named)?;
-            Some(loaded.id)
+            let (loaded, lock) = crate::image_load::load_held(
+                &docker,
+                events,
+                &mut target,
+                archive.as_deref(),
+                &named,
+            )?;
+            (Some(loaded.id), lock)
         }
-        (_, image) => image,
+        (_, image) => (image, None),
     };
     // what the machine's record chooses; the side that runs the call
     // resolves the rest

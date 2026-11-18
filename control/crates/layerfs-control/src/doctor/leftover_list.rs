@@ -10,6 +10,13 @@
 //! Each item is `{ leftover, modified_at, size, report_only, removable_at,
 //! kind, machine, path }`: `leftover` is the id `home prune` takes.
 //!
+//! The host's Docker is asked for the image export containers killed copies
+//! left (`export_container`, with `native`'s entries) once an image copy has
+//! run from this home (its `run/image-lock/` folder is there): one
+//! `report_only` while a copy of its image holds the image's lock. A Docker
+//! that does not answer names `native` in `not_listed`, blocked by
+//! `docker`'s `engine_down`; a host with no Docker lists none.
+//!
 //! A folder copy is removable only when a line of the home's
 //! `log/uncertain.jsonl` names it with its Init's deadline
 //! ([`named_copies`]), from an hour after that deadline (`removable_at`);
@@ -135,7 +142,9 @@ impl List {
     fn item(&self, home: &Path, machine: &str, row: &SdkValue) -> Option<SdkValue> {
         let kind = row.get_text("kind").and_then(Kind::named)?;
         let (name, path) = (row.get_text("name")?, row.get_text("path")?);
-        kind.path(Path::new("/"), name)?;
+        if kind == Kind::ExportContainer || kind.path(Path::new("/"), name).is_none() {
+            return None;
+        }
         // a running `backup.create` of its Store is still using it
         if kind == Kind::BackupStaging && backup_runs(home, name) {
             return None;
@@ -167,6 +176,51 @@ impl List {
             ("machine", SdkValue::text(machine)),
             ("path", SdkValue::text(path)),
         ]))
+    }
+
+    /// The export containers killed copies left in the host's Docker, as
+    /// `native`'s entries; `native` in `not_listed` when Docker does not
+    /// answer.
+    fn exports(&mut self, home: &Path) {
+        use layerfs_sandbox::image_exports::{left_exports, not_installed};
+        // a home no image copy ran from has none: Docker is not asked
+        if !home.join("run").join("image-lock").is_dir() {
+            return;
+        }
+        let listed = layerfs_sandbox::docker::Docker::of(home)
+            .map_err(|refusal| layerfs_sandbox::docker::Failure::Error(refusal.message))
+            .and_then(|docker| left_exports(&docker, home));
+        let left = match listed {
+            Ok(left) => left,
+            Err(failure) if not_installed(&failure) => return,
+            Err(failure) => {
+                let by = SdkValue::map([
+                    ("machine", SdkValue::text("docker")),
+                    ("reason", SdkValue::text("engine_down")),
+                ]);
+                let message = format!(
+                    "Docker does not answer ({}); its export containers were not listed",
+                    failure.message()
+                );
+                return self.not_listed("native", ("blocked_by", by), message);
+            }
+        };
+        for left in left {
+            let at = left.created_ms.unwrap_or(0);
+            self.items.push(SdkValue::map([
+                (
+                    "leftover",
+                    SdkValue::text(leftovers::id("native", Kind::ExportContainer, &left.name)),
+                ),
+                ("modified_at", SdkValue::Text(iso(at))),
+                ("size", SdkValue::Null),
+                ("report_only", SdkValue::Bool(left.held)),
+                ("removable_at", SdkValue::Null),
+                ("kind", SdkValue::text(Kind::ExportContainer.as_str())),
+                ("machine", SdkValue::text("native")),
+                ("path", SdkValue::Null),
+            ]));
+        }
     }
 
     /// Machine `machine` (not `native`), asked through its worker when it
@@ -275,6 +329,9 @@ pub fn list(home: &Path, machine: Option<&str>) -> Outcome {
         if asked("native") && layerfs_machine::runs_here(home, "native").unwrap_or(false) {
             let walked = leftovers::walk(home, &[], BOUNDS);
             list.walked(home, "native", &walked);
+        }
+        if asked("native") {
+            list.exports(home);
         }
         let mut machines = paths::names(&home.join("machine")).unwrap_or_default();
         if let Some(only) = machine.filter(|only| !machines.iter().any(|name| name == only)) {
