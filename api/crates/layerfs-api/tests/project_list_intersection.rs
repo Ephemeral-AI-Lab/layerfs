@@ -137,7 +137,9 @@ fn a_retired_or_absent_store_project_is_not_listed_or_got() {
         assert_eq!(code, "NotFound", "{name}: {message}");
     }
     let live = ok(&home, "project.get", &[("project", t("shop/live"))]);
-    assert_eq!(live.get_text("project"), Some("shop/live"));
+    // the short form: its Store and its state
+    assert_eq!(live.get_text("store"), Some("shop"), "{live:?}");
+    assert_eq!(live.get_text("state"), Some("ready"), "{live:?}");
 
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(source);

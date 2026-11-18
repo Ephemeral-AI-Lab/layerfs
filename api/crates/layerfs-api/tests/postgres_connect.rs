@@ -188,12 +188,11 @@ fn connect_read_and_disconnect() {
             ("project", t("pg/api")),
             ("destination", t(&export_dir.display().to_string())),
             ("branch", t("fix")),
+            ("detail", SdkValue::Bool(true)),
         ],
     );
-    assert_eq!(exported.get_text("project"), Some("pg/api"));
-    assert_eq!(exported.get_text("kind"), Some("postgresql"));
-    assert_eq!(exported.get_text("branch"), Some("fix"));
-    assert_eq!(exported.get_int("files"), Some(2));
+    assert_eq!(exported.get_int("file_count"), Some(2), "{exported:?}");
+    assert!(exported.get_text("commit").is_some(), "{exported:?}");
     assert_eq!(
         std::fs::read_to_string(export_dir.join("README.md")).unwrap(),
         "hello pg\n"

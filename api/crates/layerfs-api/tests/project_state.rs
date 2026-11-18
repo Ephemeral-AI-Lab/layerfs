@@ -447,7 +447,7 @@ mod with_a_store {
         )
         .unwrap_err();
         assert_eq!(again.code, "Exists", "{again:?}");
-        // a refused Init removes the entry it claimed
+        // a folder that is not there is refused before anything is claimed
         let missing = tempdir("claim-missing").join("absent");
         let refused = call(
             &home,
@@ -458,8 +458,25 @@ mod with_a_store {
             ],
         )
         .unwrap_err();
-        assert_ne!(refused.code, "Unknown", "{refused:?}");
+        assert_eq!(refused.code, "InvalidInput", "{refused:?}");
         assert!(!paths::project_dir(&home, "shop", "web").exists());
+        // a name the Store holds but the home forgot: the Init claims the
+        // entry, the Store refuses it, and the claimed entry is removed
+        let kept = tempdir("claim-kept").join("api");
+        std::fs::rename(paths::project_dir(&home, "shop", "api"), &kept).unwrap();
+        let taken = call(
+            &home,
+            "project.init",
+            &[
+                ("project", t("shop/api")),
+                ("folder", t(&folder.display().to_string())),
+            ],
+        )
+        .unwrap_err();
+        assert_eq!(taken.code, "Exists", "{taken:?}");
+        assert!(!paths::project_dir(&home, "shop", "api").exists());
+        std::fs::rename(&kept, paths::project_dir(&home, "shop", "api")).unwrap();
+        std::fs::remove_dir_all(kept.parent().unwrap()).unwrap();
         // the finished record holds no `op`
         let record = home::read_record(&paths::project_record(&home, "shop", "api"))
             .unwrap()

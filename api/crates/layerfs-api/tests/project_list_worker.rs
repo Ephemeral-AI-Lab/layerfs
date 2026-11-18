@@ -150,7 +150,13 @@ fn shop_on_box(tag: &str, listener: &TcpListener, root: Option<&Path>) -> PathBu
     );
     write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+        // running, as its record says: a machine the record says is stopped
+        // blocks its Stores' projects with no worker asked
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("state", t("running")),
+        ]),
     )
     .unwrap();
     let address = listener.local_addr().unwrap().to_string();
@@ -269,7 +275,9 @@ fn a_worker_s_filtered_listing_hides_a_retired_project() {
         call(&home, "project.get", &[("project", t("shop/retired"))]).unwrap_err();
     assert_eq!(code, "NotFound", "{message}");
     let live = ok(&home, "project.get", &[("project", t("shop/live"))]);
-    assert_eq!(live.get_text("project"), Some("shop/live"));
+    // the short form: its Store and its state
+    assert_eq!(live.get_text("store"), Some("shop"), "{live:?}");
+    assert_eq!(live.get_text("state"), Some("ready"), "{live:?}");
     // Both home entries are still there; the Store, not the home, hides one.
     for name in ["live", "retired"] {
         assert!(
@@ -337,7 +345,9 @@ fn a_worker_store_lists_only_its_live_projects() {
         call(&home, "project.get", &[("project", t("shop/retired"))]).unwrap_err();
     assert_eq!(code, "NotFound", "{message}");
     let live = ok(&home, "project.get", &[("project", t("shop/live"))]);
-    assert_eq!(live.get_text("project"), Some("shop/live"));
+    // the short form: its Store and its state
+    assert_eq!(live.get_text("store"), Some("shop"), "{live:?}");
+    assert_eq!(live.get_text("state"), Some("ready"), "{live:?}");
     assert!(paths::project_record(&home, "shop", "retired").exists());
     let _ = std::fs::remove_dir_all(home);
     let _ = std::fs::remove_dir_all(root);

@@ -126,6 +126,13 @@ pub fn init(home: &Path, events: &mut Events<'_>, request: &ProjectInit) -> Outc
             "the folder must be an absolute path",
         ));
     }
+    // a folder that is not there, or not a directory, is refused before the
+    // entry is claimed, so it leaves nothing behind whatever the route; a
+    // link is left to the route, as before
+    let link = std::fs::symlink_metadata(folder).is_ok_and(|meta| meta.file_type().is_symlink());
+    if !link {
+        crate::project::send::root(Path::new(folder))?;
+    }
     let record = StoreRecord::read(&home, store)?.ok_or_else(|| {
         refused(
             "NotFound",
