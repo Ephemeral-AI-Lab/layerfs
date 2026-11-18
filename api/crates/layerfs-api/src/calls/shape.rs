@@ -153,10 +153,12 @@ impl Shaping<'_> {
             Level::Inner => (&[], &[]),
         };
         let at_top = asked.iter().filter(|section| section.place == Place::Top);
-        for key in flat
+        let flat_keys = flat
             .iter()
-            .chain(at_top.flat_map(|section| section.keys.iter()))
-        {
+            .chain(at_top.flat_map(|section| section.keys.iter()));
+        // a section key the form lists too (`machine list --with live`'s
+        // `observed_at`) was answered in its place above
+        for key in flat_keys.filter(|key| !form.long.contains(key)) {
             let value = take(&mut fields, key).unwrap_or_default();
             let value = if self.detail { value } else { pruned(value) };
             if self.detail || !empty(&value) {

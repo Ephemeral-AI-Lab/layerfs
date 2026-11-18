@@ -258,10 +258,10 @@ fn check_args(
     let want: Vec<String> = (list(at(row, what)).iter())
         .map(|arg| renamed(pending, call, arg.get_text("name").unwrap()))
         .collect();
-    // `on_progress` is a global option (calls.json `global_options`): a
-    // row says it with `progress`, which is checked on its own
+    // a front end's function (`on_progress`) is the row's `progress`, not
+    // one of its options
     let args: Vec<&layerfs_api::Arg> = (args.iter())
-        .filter(|arg| what != "options" || arg.name != "on_progress")
+        .filter(|arg| arg.kind != Kind::Function)
         .collect();
     let have: Vec<&str> = args.iter().map(|arg| arg.name).collect();
     assert_eq!(have, want, "{call}: {what}");
@@ -1136,5 +1136,7 @@ fn the_table_s_json_carries_each_migrated_entry_s_forms() {
             at(said, "paging") == &SdkValue::Null
         );
     }
-    assert_eq!(migrated, 9);
+    // every call of calls.json that is not pending
+    let pending = texts(at(&read(PENDING), "calls")).len();
+    assert_eq!(migrated, rows(&read(SPEC)).len() - pending);
 }

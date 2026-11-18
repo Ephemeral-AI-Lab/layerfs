@@ -115,7 +115,7 @@ fn update_and_check_refusals_need_no_server() {
         Some("postgresql://bob@127.0.0.1:1/app")
     );
     assert!(docker.get("checked").is_none(), "{shown:?}");
-    let native = ok(&home, "machine.get", &[("name", t("native"))]);
+    let native = ok(&home, "machine.get", &[("machine", t("native"))]);
     assert!(native.get("postgresql").is_none(), "{native:?}");
     let before = record_text(&home, "pg");
 

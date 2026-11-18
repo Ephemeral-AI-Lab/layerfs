@@ -50,8 +50,10 @@ pub fn host_mode(executor: &Executor) -> bool {
 }
 
 /// `machine.images`: `{machine, mode, default, free, images: [{id, refs,
-/// size, architecture, source, sandboxes, last_used}]}`.
-pub fn list(home: &Path, name: &MachineName) -> Outcome {
+/// size, architecture, source, sandboxes, last_used}]}`, `sandboxes` the
+/// names of the Sandbox records that name the image. The host's Docker
+/// (`docker`, `available`) is read only when `docker` asks for it.
+pub fn list(home: &Path, name: &MachineName, docker: bool) -> Outcome {
     let machine = name.as_str();
     let choice = deploy::choose(home, machine, None)?;
     let executor = place::on_machine(home, machine)?;
@@ -74,22 +76,28 @@ pub fn list(home: &Path, name: &MachineName) -> Outcome {
             .map_err(|unreached| stopped(unreached.0))??,
     };
     let records = crate::record::sandboxes(home)?;
-    let count = |id: &str| {
-        records
-            .iter()
-            .filter(|r| r.machine() == machine && r.image() == Some(id))
-            .count() as i64
+    let users = |id: &str| {
+        let on = records.iter();
+        let using = on.filter(|r| r.machine() == machine && r.image() == Some(id));
+        SdkValue::List(using.map(|r| SdkValue::text(r.name())).collect())
     };
-    let images = match answer.get("images") {
+    let images: Vec<SdkValue> = match answer.get("images") {
         Some(SdkValue::List(rows)) => rows
             .iter()
             .map(|row| {
-                let n = count(row.get_text("id").unwrap_or(""));
-                layerfs_home::home::with_field(row.clone(), "sandboxes", SdkValue::Int(n))
+                let names = users(row.get_text("id").unwrap_or(""));
+                layerfs_home::home::with_field(row.clone(), "sandboxes", names)
             })
             .collect(),
         _ => Vec::new(),
     };
+    if !docker {
+        return Ok(layerfs_home::home::with_field(
+            answer,
+            "images",
+            SdkValue::List(images),
+        ));
+    }
     // the host's Docker images this machine could copy, minus those it holds
     let held: Vec<(String, Vec<String>)> = images
         .iter()

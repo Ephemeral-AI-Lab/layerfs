@@ -1,8 +1,8 @@
 //! No list, get or status call starts a machine (#535 P4, #536 §10b): with
 //! a stopped Lima machine holding a Store, a project and a Sandbox (a
 //! stand-in `limactl` that reports it stopped and logs every command),
-//! every `*.list`, `*.get` and `*.status` call and `machine.platforms`
-//! answers from records and live probes. `sandbox.get` answers the record
+//! every `*.list`, `*.get` and `*.status` call answers from records and
+//! live probes (`machine list` and `machine get` with `--with live` too). `sandbox.get` answers the record
 //! with no Workspaces and why; `workspace.status` is refused `Unavailable`.
 //! Nothing ran a start: no `start.lock`, no `limactl start`, no
 //! `worker.json`. The same holds with a stale `worker.json` that nothing
@@ -36,7 +36,11 @@ fn t(s: &str) -> SdkValue {
 }
 
 fn call(home: &Path, name: &str, args: &[(&str, &str)]) -> Result<SdkValue, (String, String)> {
-    let args = SdkValue::Map(args.iter().map(|(n, v)| ((*n).to_owned(), t(v))).collect());
+    let live = |(n, v): &(&str, &str)| match (*n, *v) {
+        ("with", section) => ("with".to_owned(), SdkValue::List(vec![t(section)])),
+        (n, v) => (n.to_owned(), t(v)),
+    };
+    let args = SdkValue::Map(args.iter().map(live).collect());
     layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
@@ -89,9 +93,9 @@ fn home_with_stopped_vm(tag: &str) -> PathBuf {
 fn every_read(home: &Path) {
     for (name, args) in [
         ("machine.list", vec![]),
-        ("machine.platforms", vec![]),
-        ("machine.get", vec![("name", "dev")]),
-        ("machine.status", vec![("name", "dev")]),
+        ("machine.list", vec![("with", "live")]),
+        ("machine.get", vec![("machine", "dev")]),
+        ("machine.get", vec![("machine", "dev"), ("with", "live")]),
         ("store.list", vec![]),
         ("store.get", vec![("store", "shop")]),
         ("store.get", vec![("store", "shop"), ("with", "live")]),
@@ -115,7 +119,7 @@ fn every_read(home: &Path) {
         Some("blocked"),
         "{listed:?}"
     );
-    let machine = call(home, "machine.get", &[("name", "dev")]).unwrap();
+    let machine = call(home, "machine.get", &[("machine", "dev")]).unwrap();
     assert_eq!(machine.get_text("state"), Some("stopped"), "{machine:?}");
 
     let got = call(home, "sandbox.get", &[("name", "s1")]).unwrap();

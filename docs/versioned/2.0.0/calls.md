@@ -624,152 +624,149 @@ form.
   Routes.
 - Not run for this manual.
 
-### `machine` (15)
+### `machine` (13)
+
+The family is migrated: each call answers its short form, `--detail` its
+long form (see [the form of an answer](#the-form-of-an-answer)).
+`machine.doctor` is the doctor's (not yet migrated). Removed with no alias:
+`machine.status` (now `get`, with `--with live` for the probe),
+`machine.space` (now `stats --with space`), `machine.load` (now
+`load_image`), `logs.machine` (now `log`) and `machine.platforms` (its rows
+are `home get --with platforms`). Every call names the machine by the
+positional `machine`, except `create`, which takes `name` and `platform`.
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `list` | — | — | every machine, with what it supports (`supports`: `sqlite`, `postgresql_sandbox`, `reason`, and `log`, whether it has a worker whose log can be read; never on `native`) |
-| `platforms` | — | — | the platforms this host and build support: backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox runs and why not, readiness and options (#535; the rows of `control/SUPPORT.json`) |
-| `get` | `name` | — | a machine's record |
-| `images` | `name` | — | the Sandbox images the machine holds (`images`: `id`, `refs`, `size`, `architecture`, `source` `bundle`/`machine`/`imported`, `sandboxes`, `last_used`), its `default`, `free` bytes and `architecture`; and the host's tagged Docker images it could copy (`docker`, `available`: `id`, `refs`, `size`, `os`, `architecture`, `usable`, `reason`, `need`, `fits`). macOS `native` answers `mode: "host"` with none. Never starts a machine |
-| `load` | `name`, `image` | `on_progress` | copies an image to the machine as `sandbox create --image` does, without a Sandbox: `{id, refs, size, reused}` |
-| `prune` | `name`, `image`? | `unused` | removes one unpacked image, or with `unused` every one no Sandbox uses but the machine's default: `{removed, freed}` (`freed` measured on the filesystem); an image in use is `InUse` |
-| `status` | `name` | — | a machine's live state, free disk and tool version; `op` while a create or remove holds it (#536 H6) |
-| `stats` | `machine` | — | what a machine has and uses now: processors, memory and data disk, each sqlite Store's size, how many of its Sandboxes have a running daemon (#164). For a UI that polls: it writes no call-log line |
-| `space` | `machine` | — | where a machine's data disk goes: each Store, each Sandbox's run folder, the image cache and LayerFS's logs, and what the disk uses that is not LayerFS's. For a UI: it writes no call-log line |
-| `files` | `machine`, `[path]` | `depth`, `cursor`, `limit`, `offset`, `length` (int) | a machine's LayerFS folders by role, one page of a folder, or one window of a file (#178). For a UI that shows a tree: it writes no call-log line |
-| `start` | `name` | — | starts a stopped machine and its worker and waits until ready; a running one, and `native`, answer at once (#535 P1) |
-| `stop` | `name` | — | stops a machine's worker and, where it has one, its VM; disks stay; `InUse` while Sandboxes run on it (#535 P1) |
-| `create` | `name`, `platform` | `cpus`, `memory` (size), `disk` (size), `image` | creates an enabled VM machine (`apple-container`, `lima`) |
-| `remove` | `name` | — | deletes a VM machine and its disk; one of a removed platform (`firecracker`, `ssh`, `microsandbox`) is only forgotten |
-| `update` | `name` | `cpus`, `memory`, `image`, `docker`, `wsl`, `daemon` | sets a built-in machine's image, Docker socket, WSL distribution and daemon (an absolute path to a file; it replaces what `import-env` recorded) (O11); `InUse` while Sandboxes run on the machine; resizing a VM is not built |
+| `list` | — | `--with live` | every machine, from the home's records |
+| `get` | `machine` | `--with live` | a machine's record and state |
+| `images` | `machine` | `--with docker` | the Sandbox images a machine holds |
+| `load_image` | `machine`, `image` | `on_progress` | copies an image from the host's Docker to a machine without creating a Sandbox |
+| `prune` | `machine`, `[image]` | `unused` | removes a Sandbox image from a machine, or every unused one |
+| `stats` | `machine` | `--with space` | a machine's processors, memory and data disk, its Stores' sizes and live Sandboxes |
+| `files` | `machine`, `[path]` | `depth` (1), `limit` (100), `cursor`, `byte_offset` (0), `byte_length` (262144) | a machine's LayerFS folders by role, or a folder or file of the machine |
+| `log` | `machine` | `limit` (200), `cursor` | a machine's worker log: its last lines, then the lines before a cursor |
+| `start` | `machine` | `on_progress` | starts a stopped machine and its worker; a running one answers at once |
+| `stop` | `machine` | `force`, `on_progress` | stops a machine's worker and VM; its disks stay |
+| `create` | `name`, `platform` | `cpus` (2), `memory` (4G), `disk` (20G), `image`, `os_image`, `on_progress` | creates a VM machine (`lima`, `apple-container`) and starts it |
+| `remove` | `machine` | `on_progress` | deletes a VM machine and its disk; one of a removed platform is only forgotten |
+| `update` | `machine` | `cpus`, `memory`, `image`, `docker`, `wsl`, `daemon` | sets a machine's image, or a built-in machine's Docker socket, WSL distribution and daemon; no `disk` |
 
-Run:
+- **State from records.** `list` and `get` read the home's records and
+  probe nothing. A machine's `state` is `ready`, `busy` (with `op { name,
+  phase, started_at }`: a `create`, `start`, `stop` or `remove` running),
+  `stopped` or `broken` (with `reason` and `fix`); `unknown` is never
+  recorded. Reasons: `engine_down` (Docker is not running; `fix` starts it:
+  `open -a Docker` on macOS, `sudo systemctl start docker` on Linux),
+  `not_answering`, `outdated`, `missing`, `failed`, `unresolved` and
+  `unsupported`. A records-only read answers the last state word and
+  reason a start or a live read recorded, and `observed_at` from the last
+  live read.
+- **`--with live`** probes the provider and says hello to the worker once
+  (`list`: every machine at the same time), within 10 s, starting nothing.
+  The state, its companion, `message` and `observed_at` then come from the
+  probe; `unknown` means the probe did not answer, and its `observed_at` is
+  the last probe that did. The record is written only when the state word
+  or reason changed (which moves the home's `generation`); `observed_at` is
+  kept in `observed.json` beside the record, which does not. `get --with
+  live` adds the `live` section: `disk_free_bytes`, `tool_version` (the
+  provider tool's first line of `--version`) and `worker` (`{protocol,
+  bundle}` as it answered), each null when not read.
+- **Item and long keys.** A `list` row and the `get` answer have `machine,
+  platform, state, op, reason, fix, observed_at, backend, supports, cpus,
+  memory_bytes, disk_bytes, image, os_image, docker, wsl, daemon, message,
+  stores, stores_count, sandboxes, sandboxes_count, created_at` (`get` puts
+  `platform` and `state` first). `supports` is a list of words: `sqlite`,
+  `postgresql_sandbox`, and `log` when the machine has a worker whose log
+  can be read.
+- **`start`, `stop`, `create`, `remove`** record their `op` in the machine's
+  record before their first effect, move its `phase` as they go and report
+  `{"progress":{"phase","done","total"}}` events: `start` `bundle`,
+  `image` (the docker machine loading the bundle's image), `boot`, `worker`;
+  `stop` `check`, `stop`; `create` `bundle`, `boot`, `worker`; `remove`
+  `check`, `delete`. Another call on the machine meanwhile is `Busy`, naming
+  the op. A `start` of a running machine or a `stop` of a stopped one
+  answers `{"unchanged":true}`. A start or stop whose provider reply was lost
+  leaves the machine `broken`/`unresolved` with `fix: layerfs machine get
+  <m> --with live`, which settles it by observing; an uncertain create or
+  remove is cleared by `machine remove`.
+- **An outdated worker.** `start` refuses a worker of another build and
+  leaves the machine `broken`/`outdated`, with `fix: layerfs machine stop
+  <m> && layerfs machine start <m>`, or `layerfs machine stop <m> --force &&
+  layerfs machine start <m>` when Sandboxes are recorded on it (`message`
+  names how many).
+- **`stop`** is refused `InUse` while Sandboxes are recorded on the machine
+  (`detail.related` lists them); `--force` stops them first and answers
+  `stopped_sandboxes`, `unknown_workspaces` and their counts. It runs under
+  the machine's `start.lock` and removes `worker.json`: a later call that
+  needs the machine is `Unavailable` until `machine start`, the only call
+  that starts one.
+- **`create`** answers `{"ok":true}`; long `ok, outcome, machine, platform,
+  backend, cpus, memory_bytes, disk_bytes, image, os_image, created_at`.
+  **`update`** answers `{"ok":true}`; long `ok, outcome, machine, platform,
+  cpus, memory_bytes, disk_bytes, image, docker, wsl, daemon`; it is `InUse`
+  while Sandboxes run on the machine. **`remove`** also forgets the
+  machine's own PostgreSQL addresses in Store records; a machine of a
+  removed platform (`firecracker`, `ssh`, `microsandbox`), shown as
+  `broken`/`unsupported`, is only forgotten: `{"ok":true,"forgotten":true}`.
+- **`images`** rows are `{image, refs, size, default}`, long adding
+  `architecture, source, sandboxes, sandboxes_count, last_used_at`
+  (`sandboxes` are names); the long answer adds `machine, mode,
+  architecture, disk_free_bytes`. macOS `native` answers `mode: "host"` with
+  none. `--with docker` reads the host's Docker: `images` it could copy,
+  each `{image, refs, size, os, architecture, usable, needed_bytes, fits,
+  unusable}`, with `reason` and `message` when Docker did not answer. It
+  never starts a machine. **`load_image`** answers `{image, reused}`, long
+  `outcome` (`loaded` or `reused`), `machine, refs, size`. **`prune`**
+  answers `freed_bytes`, long `outcome, machine, removed` (the first 20
+  images) and `removed_count`; an image in use is `InUse`.
+- **`stats`** short: `cpus, memory_used_bytes, memory_total_bytes,
+  disk_free_bytes, disk_total_bytes`, and `incomplete` when the 4 s budget
+  ended first. Long adds `disk_used_bytes, reasons, machine, platform,
+  observed_at, scope, cpu_busy_ms, cpu_total_ms, worker, data_disk, stores`
+  (`[{store, size, allocated_bytes}]`) and `sandboxes`. `--with space` walks
+  LayerFS's folders where the machine's data is: `space { observed_at,
+  layerfs_bytes, outside_bytes, parts: [{part, bytes}], stores, sandboxes,
+  unreadable_count, incomplete, reasons }`. It starts nothing and takes no
+  lock.
+- **`files`** answers a page of `items` (`{path, type, size, not_read}`;
+  long adds `role, depth, mode` as octal text, `modified_at, target, fs,
+  workspace, disk_free_bytes`) with `next_cursor`, or for a file one byte
+  window: `text` (null when binary), `binary`, `size` (binary only) and
+  `next_byte_offset`. `not_read` says why an entry is listed but not read
+  (`restricted`, `unreadable`, `system`, `mount`). The roots, the private
+  files and what is entered are those of the
+  [architecture guide](../../architecture/api/sdk/machine.md#machinefiles).
+- **`log`** answers `items: [{text, continued?}]`, newest page first, and
+  `next_cursor` for the lines before it (left out at the start of the log).
+  A cursor from before the worker's log rotated is stale (`InvalidInput`).
+  `native` has no worker: `Unsupported`.
+- `stats`, `files` and `log` write no call-log line (`quiet`) and are no
+  MCP tool. None of the reads starts a machine.
+
+Run on a scratch home (macOS, a debug build; paths shortened):
 
 ```console
 $ layerfs machine list
-{"machines":[{"name":"docker","platform":"docker","backend":"namespaces","state":"ready","cpus":null,"memory":null,"disk":null,"supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null,"log":true},"stores":[],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","state":"ready",…,"stores":["shop"],"sandboxes":[]}]}
-
-$ layerfs machine platforms
-{"host":"macos","platforms":[{"platform":"native","how":"built_in","backend":"native","kernel":"nfs","sqlite":"in_process","postgresql":{"store_calls":"in_process","sandbox":true,"reason":null},"ready":true,"missing":[],"version":null,"options":[],"description":"…"},…,{"platform":"lima","how":"created","backend":"namespaces","kernel":"fuse","sqlite":"worker","postgresql":{"store_calls":"in_process","sandbox":true,"reason":null},"ready":true,"missing":[],"version":"limactl version 2.2.1","options":[{"name":"cpus","kind":"int"},…],"description":"…"},…]}
-
-$ layerfs machine status native
-{"name":"native","platform":"native","state":"running","free_disk":null,"tool_version":null,"down_reason":null,"stores":["shop"]}
+{"items":[{"machine":"docker","platform":"docker","state":"stopped"},{"machine":"native","platform":"native"}]}
+$ layerfs machine get docker --with live
+{"platform":"docker","state":"stopped","observed_at":"2026-11-18T15:34:11Z","live":{"tool_version":"29.5.2"}}
+$ layerfs machine get native --detail --with live
+{"platform":"native","state":"ready","op":null,"reason":null,"fix":null,"observed_at":null,"machine":"native","backend":"native","supports":["sqlite","postgresql_sandbox"],"cpus":null,"memory_bytes":null,"disk_bytes":null,"image":null,"os_image":null,"docker":null,"wsl":null,"daemon":null,"message":null,"stores":["shop"],"stores_count":1,"sandboxes":[],"sandboxes_count":0,"created_at":"2026-11-18T15:34:11Z","live":{"disk_free_bytes":null,"tool_version":null,"worker":null}}
+$ layerfs machine start native
+{"unchanged":true}
+$ layerfs machine stats native
+{"cpus":14,"memory_used_bytes":25457885184,"memory_total_bytes":38654705664,"disk_free_bytes":213131337728,"disk_total_bytes":994662584320}
+$ layerfs machine files native /tmp/home1/store/shop --depth 1
+{"items":[{"path":"/tmp/home1/store/shop/lock","type":"file","size":0,"not_read":"restricted"},{"path":"/tmp/home1/store/shop/record.json","type":"file","size":291},{"path":"/tmp/home1/store/shop/store.sqlite","type":"file","size":270336,"not_read":"restricted"}]}
+$ layerfs machine get old
+{"platform":"ssh","state":"broken","reason":"unsupported","fix":"layerfs machine remove old"}
+$ layerfs machine remove old --detail
+{"ok":true,"forgotten":true,"outcome":"forgotten","machine":"old","message":"forgot the record only: platform `ssh` was removed in LayerFS 2.0; nothing on its host was touched"}
 ```
 
-- `stats` answers `{machine, platform, observed_at, worker, resources,
-  data_disk, stores, sandboxes, complete}` (#164, #182). It answers the
-  present only; a client keeps its own history:
-  - `worker`: the machine's worker process, `{version, pid, started_at,
-    protocol, bundle}`; `null` on `native`, whose calls run in the caller.
-  - `resources`: `{cpus, memory_total, memory_used, disk_total,
-    disk_used, disk_free, cpu_busy_usec, cpu_total_usec, scope}`, sizes in
-    bytes, observed now. `cpu_busy_usec` and `cpu_total_usec` are the
-    machine's processor time since boot in microseconds (`/proc/stat`;
-    steal counts as busy); the processor share between two reads is
-    Δbusy / Δtotal. They are `null` on macOS (`cpu_unsupported`). `scope`
-    says whose processors and memory they are: `host` (`native`), `vm`
-    (`lima`, `apple-container`) or `engine_host` (`docker`: the Docker
-    Engine's kernel, a VM on macOS and Windows). A value that was not read
-    is `null` and `reason` names it: `memory_not_read` (`memory_*`),
-    `disk_not_read` (`disk_*`), `cpu_unsupported` or `cpu_not_read`
-    (`cpu_*`), joined by `, `.
-  - `data_disk`: `{path, fs, scope, volume, inodes_free}`, the filesystem
-    the `disk_*` values measure: `host_fs` (`native`, and `docker` on
-    Linux), `vm_disk` (`docker` on macOS and Windows, one disk every
-    image and volume shares) or `volume` (a VM machine's own disk), with
-    the provider's name of it.
-  - `stores`: `[{name, bytes, allocated}]` of the machine's sqlite
-    Stores, the length and the blocks of `store.sqlite` and its `-wal`.
-    The files are not opened.
-  - `sandboxes`: `{recorded, live, items}`: the Sandboxes recorded on the
-    machine, how many have a running daemon, and one row per recorded
-    Sandbox, `{name, live, live_reason?, started_at, usage,
-    usage_reason?}`, with `usage` as `sandbox get`'s. A row the 4 s budget
-    did not reach is kept, `null` with `deadline`. A worker of an older
-    build answers no `items`.
-  - `complete`: `false`, with `reason: "deadline"`, when the Stores or
-    Sandboxes were not all read within 4 s; the rest is answered.
-  It starts nothing and takes no lock: a stopped machine is `Unavailable`
-  and a machine an operation holds is still answered.
-  ```text
-  $ layerfs machine stats native
-  {"machine":"native","platform":"native","observed_at":1794776707857,"worker":null,"resources":{"cpus":14,"memory_total":38654705664,"memory_used":31340068864,"disk_total":994662584320,"disk_used":641705943040,"disk_free":352956641280,"cpu_busy_usec":null,"cpu_total_usec":null,"scope":"host","reason":"cpu_unsupported"},"data_disk":{"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs","volume":null,"inodes_free":3446842200},"stores":[{"name":"shop","bytes":217088,"allocated":217088}],"sandboxes":{"recorded":1,"live":1,"items":[{"name":"web","live":true,"started_at":1794776100211,"usage":null,"usage_reason":"host_process"}]},"complete":true}
-  ```
-- `space` answers `{machine, platform, observed_at, disk, layerfs,
-  outside, parts, stores, sandboxes, unreadable, complete}`: one bounded
-  walk of LayerFS's own folders where the machine's data is, every size the
-  blocks it takes (a file with several names once).
-  - `disk`: `{total, used, free, path, fs, scope}`, the filesystem `stats`
-    measures. `layerfs` is the sum of `parts`, and `outside` is `used` less
-    `layerfs`: what the disk holds that is not LayerFS's (on `vm_disk`,
-    Docker's images, build cache and other volumes). It is `null` unless
-    the walk finished.
-  - `parts`: `{stores, sandboxes, images, other_runs, logs, other}`: the
-    Store folders, the Sandboxes' run folders, the image cache, run folders
-    no recorded Sandbox names, `log/` and `trace/`, and the records.
-  - `stores`: `[{name, bytes}]`; `sandboxes`: one row per recorded Sandbox,
-    `{name, bytes, overlays, writes, home, log, runtime}`: its Workspaces'
-    overlay databases, its own writable layer (what its commands wrote
-    outside Workspaces), its `HOME`, its daemon log and its copies of the
-    daemon and runtime. A row whose run folder was not measured has `null`
-    sizes and `reason` (`no_run_folder`, `outside_run_root`,
-    `record_unreadable`, `deadline`); a row the bound ended inside keeps
-    what it counted, with `deadline`.
-  - `complete`: `false`, with `reason: "deadline"`, when the walk stopped at
-    250,000 entries or 4 s; every number is then a lower bound. `unreadable`
-    counts folders it could not list (`reason` adds `unreadable`).
-  A Workspace mount point and a private root are never entered or
-  `stat`ed, no file is opened and the home itself is never listed. It
-  starts nothing and takes no lock.
-  ```text
-  $ layerfs machine space native
-  {"machine":"native","platform":"native","observed_at":1794817324800,"disk":{"total":994662584320,"used":677787914240,"free":316874670080,"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs"},"layerfs":14168064,"outside":677773746176,"parts":{"stores":2277376,"sandboxes":11833344,"images":0,"other_runs":0,"logs":8192,"other":49152},"stores":[{"name":"shop","bytes":2277376}],"sandboxes":[{"name":"web","bytes":11833344,"overlays":8675328,"writes":0,"home":3145728,"log":4096,"runtime":8192}],"unreadable":0,"complete":true}
-  ```
-- `files` reads what is on a machine (#178); its options, pages and file
-  windows are those of [`sandbox files`](#sandbox-files), and the whole call
-  is in the
-  [architecture guide](../../architecture/api/sdk/machine.md#machinefiles).
-  - With no path it answers the machine's roots, each a folder with a
-    `role`, in the order a client shows them: `data` (the worker's root
-    `/layerfs/data`, with `free_bytes`), `stores`, `sandbox_records`,
-    `run_folders`, `images`, `staging`, `logs`, then `state`, `bundle`,
-    `image`, and last `/` with role `machine`. Only folders that are there
-    are listed. On `native` the roots are the home's `store`, `sandbox`,
-    `machine/native/run` and `log`, and there is no `/`: a path outside
-    them is `InvalidInput`.
-  - In a LayerFS folder no link is followed and no mount entered, and what
-    LayerFS keeps private is `restricted`: listed with its size, never
-    read (`store.sqlite*`, a run folder's `config/` and `overlay/`,
-    `control.json`, `worker.json`, locks and leases, the worker's
-    `secret`). A run folder's `workspaces/` entries are `mount`, with the
-    Workspace's id, and are never touched.
-  - From `/`, `/proc`, `/sys`, `/dev` and `/run` are `system`; a mount is
-    entered only when it is a local disk or memory (`ext4`, `xfs`, `btrfs`,
-    `zfs`, `f2fs`, `overlay`, `tmpfs`), else it is `mount` with its `fs`;
-    and only what every user of the machine may read is opened, the rest
-    is `unreadable` (`/etc/shadow`, `/root`). A link on the way resolves
-    inside the machine (`/lib/...` opens on a merged-`/usr` system).
-  ```text
-  $ layerfs machine files native
-  {"kind":"folder","entries":[{"path":"/Users/me/.layerfs/store","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"stores"},{"path":"/Users/me/.layerfs/sandbox","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"sandbox_records"},{"path":"/Users/me/.layerfs/machine/native/run","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"run_folders"},{"path":"/Users/me/.layerfs/log","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"logs"}],"next":null,"has_more":false}
-  ```
-- `start` and `stop` answer the machine's summary as `get` does. They are
-  the only lifecycle calls (#535 D11): no other call starts a machine, and
-  nothing stops one when it is unused. `stop` is refused `InUse` while
-  Sandboxes are recorded on the machine; `detail.related` lists them as `{kind: "sandbox", name}`. It
-  runs under the machine's `start.lock`, so no `machine start` runs
-  meanwhile, and removes `worker.json`; a later call that needs the machine
-  is refused `Unavailable` until `machine start`.
-
-- A record of a removed platform (`firecracker`, `ssh`, `microsandbox`) still shows in
-  `list` and `get` with `state: "unsupported"` and the reason; `remove`
-  forgets it and touches nothing outside the home. Every other call on it
-  is `Unsupported`. See
-  [removed platforms](machines-and-stores.md#removed-platforms-firecracker-microsandbox-and-ssh).
-
 See [machines](machines-and-stores.md#machines) for kinds, defaults and
-refusals.
+refusals, and
+[removed platforms](machines-and-stores.md#removed-platforms-firecracker-microsandbox-and-ssh).
 
 ### `store` (9)
 

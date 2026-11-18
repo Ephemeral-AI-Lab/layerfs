@@ -1,30 +1,38 @@
 //! `machine.start`: start a stopped machine and its worker; a running one answers at once.
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call, PROGRESS};
-use crate::calls::Context;
-use crate::calls::Policy;
+use crate::calls::{Context, Form, Policy};
 use layerfs_bridge::control::SdkValue;
 #[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
 
+/// Its answer: `ok`, or `unchanged` when it was running already.
+const FORM: Form = Form::of(
+    &[],
+    &["ok", "unchanged"],
+    &["ok", "unchanged", "outcome", "machine"],
+);
+
 /// Its table entry.
 pub(crate) const CALL: Call = call(
     "machine",
     "start",
-    &[a("name", Name)],
+    &[a("machine", Name)],
     &[PROGRESS],
     "start a stopped machine and its worker; a running one answers at once",
     run,
 )
-.policy(Policy::Machine("name"));
+.policy(Policy::Machine("machine"))
+.form(&FORM);
 
-/// Runs `machine.start`.
+/// Runs `machine.start`: `{ phase, done, total }` events, phases `bundle`,
+/// `image` (docker), `boot` and `worker`.
 #[cfg(feature = "machine")]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    let name = MachineName::parse(args.get_text("name").unwrap_or(""))?;
+    let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     let (home, events) = context.parts();
-    layerfs_control::machine::start_with_progress(home, events, &name)
+    layerfs_control::machine::start(home, events, &machine)
 }
 
 /// Without the `machine` feature (the guest worker's build) it is
@@ -33,6 +41,6 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 fn run(_context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
     Err(layerfs_home::outcome::refused(
         "Unsupported",
-        "machine.start is not built yet (#533 step 6)",
+        "machine.start runs on the host",
     ))
 }

@@ -1,4 +1,5 @@
-//! `machine.platforms` (#535 §9a, D10, P2): the support table for this host
+//! `home get --with platforms` (#535 §9a, D10, P2; `machine.platforms`
+//! before the call surface 2.0): the support table for this host
 //! and build, the rows of `control/SUPPORT.json`, each with its live probe
 //! (`ready`, `missing`, `version`), the bundle a worker platform needs
 //! (`bundle:<dir>`), each option's default, and the docker row's socket and
@@ -14,7 +15,7 @@ use layerfs_platform::{
 };
 use std::path::{Path, PathBuf};
 
-/// `machine.platforms()`: `{ host, platforms: [row] }`.
+/// The platforms of this host: `{ host, platforms: [row] }`.
 pub fn platforms(home: &Path) -> Outcome {
     let host = HostOs::current();
     let env = DockerEnv::current();
@@ -110,20 +111,22 @@ fn default_of(name: &str) -> SdkValue {
     }
 }
 
-/// A machine's `supports`: its platform's row on this host.
+/// A machine's `supports`: what its platform does on this host, as words
+/// (`sqlite`, `postgresql_sandbox`, `log`).
 pub fn supports(platform: Platform) -> SdkValue {
     let Supports {
         sqlite,
         postgresql_sandbox,
-        reason,
         log,
+        ..
     } = adapters::support(platform, HostOs::current()).supports();
-    SdkValue::map([
-        ("sqlite", SdkValue::Bool(sqlite)),
-        ("postgresql_sandbox", SdkValue::Bool(postgresql_sandbox)),
-        ("reason", optional(reason)),
-        ("log", SdkValue::Bool(log)),
-    ])
+    let does = [
+        ("sqlite", sqlite),
+        ("postgresql_sandbox", postgresql_sandbox),
+        ("log", log),
+    ];
+    let words = does.into_iter().filter(|(_, does)| *does);
+    SdkValue::List(words.map(|(word, _)| SdkValue::text(word)).collect())
 }
 
 fn row_value(row: &SupportRow, probe: Probe) -> SdkValue {

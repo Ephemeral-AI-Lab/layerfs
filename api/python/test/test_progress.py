@@ -63,7 +63,7 @@ class Progress(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.home, True)
         self.addCleanup(shutil.rmtree, self.folder, True)
 
-    def test_the_table_eleven_calls_take_on_progress(self):
+    def test_the_table_thirteen_calls_take_on_progress(self):
         self.assertEqual(
             declaring("on_progress"),
             [
@@ -71,9 +71,11 @@ class Progress(unittest.TestCase):
                 "project.export",
                 "sandbox.create",
                 "workspace.exec",
-                "machine.load",
+                "machine.load_image",
                 "machine.start",
+                "machine.stop",
                 "machine.create",
+                "machine.remove",
                 "store.move",
                 "store.compact",
                 "backup.create",

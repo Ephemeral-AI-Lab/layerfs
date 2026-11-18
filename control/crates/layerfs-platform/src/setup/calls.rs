@@ -39,6 +39,11 @@ impl State {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Status {
     pub state: State,
+    /// What the provider says of the VM or container itself, before its
+    /// worker is asked: a kernel that runs with a worker that does not
+    /// answer is `Running` here and `Stopped` in `state`. `None` when the
+    /// provider did not answer (the Docker Engine is not running).
+    pub kernel: Option<State>,
     /// Free bytes of the data disk at `/layerfs/data`, as the guest sees them.
     pub free_disk: Option<u64>,
     pub tool_version: Option<String>,
@@ -147,6 +152,7 @@ pub fn provider_within(spec: &Spec, deadline: Instant) -> Result<Status, Machine
         let state = adapter(spec.kind).provider_state(spec)?;
         Ok(Status {
             state,
+            kernel: Some(state),
             free_disk: None,
             tool_version: probe.version,
             down_reason: None,
@@ -260,6 +266,7 @@ pub(crate) fn with_worker(
     };
     Status {
         state,
+        kernel: Some(kernel),
         free_disk,
         tool_version,
         down_reason,

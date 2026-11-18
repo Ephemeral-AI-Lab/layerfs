@@ -34,27 +34,6 @@ fn held(op: Option<Op>) -> Option<State> {
     }
 }
 
-/// A machine's state as its record says it: its intent, a removed
-/// platform, then the state a create, start or stop recorded; with none,
-/// `native` is ready and any other machine stopped.
-fn machine_state(record: &MachineRecord) -> State {
-    if let Some(state) = held(record.op()) {
-        return state;
-    }
-    let platform = record.platform_name().unwrap_or("");
-    if layerfs_sandbox_backend::platform_policy::disabled_reason(platform).is_some() {
-        return State::broken(Reason::Unsupported, None);
-    }
-    match record.recorded_state() {
-        Some("running") => State::Ready,
-        Some("failed") => State::broken(Reason::Failed, None),
-        Some("stopped") => State::Stopped,
-        Some(_) => State::Unknown { observed_ms: None },
-        None if record.name() == "native" => State::Ready,
-        None => State::Stopped,
-    }
-}
-
 /// The names of a Store's projects the home records.
 fn projects(home: &Path, store: &str) -> Result<SdkValue> {
     let names = paths::names(&paths::store_dir(home, store).join("project")).map_err(failed)?;
@@ -197,12 +176,7 @@ fn machine(
     sandboxes: &[SandboxRecord],
 ) -> Result<SdkValue> {
     let built_in = matches!(name, "native" | "docker").then_some(name);
-    let state = match (record, name) {
-        (Some(record), _) => machine_state(record),
-        (None, "native") => State::Ready,
-        (None, "docker") => State::Stopped,
-        (None, _) => State::broken(Reason::Missing, None),
-    };
+    let state = inventory::machine_state(home, name, record)?;
     let mut held_stores = Vec::new();
     for store_record in stores {
         if placed(store_record)?.as_deref() == Some(name) {

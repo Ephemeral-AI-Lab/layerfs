@@ -29,34 +29,20 @@ pub const SEEN: &str = "broken";
 
 /// A machine's state from its record alone.
 ///
-/// **The seam with package F-machine.** This is the single place the Store
-/// code derives a machine's records-only state; it is to be replaced by the
-/// function that package builds in `layerfs-machine`, and nothing else
-/// here changes then. Until it is, this reads what a machine's record
-/// holds today: its operation, the state a create, start or stop recorded,
-/// and the built-in machines that need no record.
+/// **The seam with the machine family.** This is the single place the
+/// Store code derives a machine's records-only state, and it is the
+/// machine family's own derivation ([`MachineRecord::status`],
+/// [`layerfs_machine::state::unrecorded`]), so a Store's `blocked_by` says
+/// what `machine get` says. Two inputs that only `layerfs-control` has are
+/// left out: whether the record's platform was removed in 2.0 (the policy
+/// is behind the `machine` feature, which this crate's guest build lacks),
+/// so a removed platform's machine blocks its Stores by what its record
+/// says rather than as `unsupported`; and the Sandbox count, which only
+/// shapes an outdated worker's `fix`.
 pub fn machine_state(home: &Path, machine: &str) -> Result<State> {
-    let Some(record) = MachineRecord::read(home, machine)? else {
-        return Ok(match machine {
-            "native" => State::Ready,
-            "docker" => State::Stopped,
-            _ => State::broken(Reason::Missing, None),
-        });
-    };
-    if let Some(op) = record.op() {
-        match op.standing() {
-            Standing::Running => return Ok(State::busy(&op)),
-            Standing::Unresolved => return Ok(State::broken(Reason::Unresolved, None)),
-            Standing::Stale => {}
-        }
-    }
-    Ok(match record.recorded_state() {
-        Some("running") => State::Ready,
-        Some("failed") => State::broken(Reason::Failed, None),
-        Some("stopped") => State::Stopped,
-        Some(_) => State::Unknown { observed_ms: None },
-        None if machine == "native" => State::Ready,
-        None => State::Stopped,
+    Ok(match MachineRecord::read(home, machine)? {
+        Some(record) => record.status(false, 0),
+        None => layerfs_machine::state::unrecorded(machine),
     })
 }
 
