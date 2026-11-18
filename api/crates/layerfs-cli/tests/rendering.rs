@@ -76,4 +76,19 @@ fn progress_counts_steps_and_bytes_apart() {
         "phase: upload  2 KiB/4 KiB"
     );
     assert!(progress_line("send", Some(2048), None, 2.0).ends_with("/s)"));
+    // project.export's bytes written, and a Store move's hashing verify
+    // (RF re-check N-C)
+    assert_eq!(
+        progress_line("export", Some(119032), None, 0.1),
+        "phase: export  116.2 KiB"
+    );
+    assert_eq!(
+        progress_line("verify", Some(4096), Some(4096), 0.1),
+        "phase: verify  4 KiB/4 KiB"
+    );
+    // a doctor's Full-check data phase counts objects, not bytes
+    assert_eq!(
+        progress_line("data", Some(3), Some(3), 0.1),
+        "phase: data  3/3"
+    );
 }

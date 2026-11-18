@@ -169,9 +169,16 @@ pub fn format_time(ms: i64) -> String {
     format!("{y:04}-{m:02}-{d:02} {hour:02}:{min:02}:{sec:02}")
 }
 
-/// The progress phases whose `done` and `total` are bytes: a Store or an
-/// image sent to a machine, a backup's snapshot, hash, upload and download.
-const BYTE_PHASES: [&str; 5] = ["send", "snapshot", "hash", "upload", "download"];
+/// The progress phases whose `done` and `total` are bytes: a Store, a
+/// project's parts or an image sent to a machine (`send`), a Store move's
+/// `snapshot` and `verify` (each hashes the file), a backup's `hash`,
+/// `upload` and `download`, and the bytes `project.export` wrote
+/// (`export`; an image copy's `export` carries no counts). Every other
+/// phase with counts counts steps or things: a doctor's, a create's,
+/// a start's, a remove's.
+const BYTE_PHASES: [&str; 7] = [
+    "send", "snapshot", "verify", "hash", "upload", "download", "export",
+];
 
 /// One progress event as the terminal line shows it, `elapsed` seconds
 /// after the first: `done`/`total` in bytes (with a rate) only in a phase
