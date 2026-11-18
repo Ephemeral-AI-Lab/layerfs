@@ -317,12 +317,15 @@ fn the_worker_path_writes_the_sidecar_then_admits_and_releases_after_the_marker(
     })
     .unwrap();
     let outcome = remove(&home).unwrap();
-    assert_eq!(outcome.get_text("kind"), Some("Removed"));
+    assert_eq!(outcome.get_text("outcome"), Some("deleted"));
     assert!(
-        !outcome.get_bool("home_entry_removed"),
+        outcome.get_bool("home_entry_kept"),
         "a pending retry settles without finishing the entry"
     );
-    assert_eq!(outcome.get_int("deleted_ms"), Some(pending.deleted_ms));
+    assert_eq!(
+        outcome.get_text("deleted_at"),
+        Some(layerfs_home::time::iso(pending.deleted_ms).as_str())
+    );
     assert!(paths::project_dir(&home, "shop", "app").is_dir());
     assert!(
         paths::project_dir(&root, "shop", "app").is_dir(),
@@ -345,8 +348,8 @@ fn the_worker_path_writes_the_sidecar_then_admits_and_releases_after_the_marker(
     // The marker is confirmed now: the next call removes both entries and
     // unlinks the sidecar.
     let outcome = remove(&home).unwrap();
-    assert_eq!(outcome.get_text("kind"), Some("Removed"));
-    assert!(outcome.get_bool("home_entry_removed"));
+    assert_eq!(outcome.get_text("outcome"), Some("deleted"));
+    assert!(!outcome.get_bool("home_entry_kept"));
     assert!(!paths::project_dir(&home, "shop", "app").exists());
     assert!(!paths::project_dir(&root, "shop", "app").exists());
     assert_eq!(
@@ -614,9 +617,12 @@ fn a_fake_workers_success_removes_the_entry_and_releases_the_admission() {
     });
 
     let outcome = remove(&home).unwrap();
-    assert_eq!(outcome.get_text("kind"), Some("Removed"));
-    assert_eq!(outcome.get_int("deleted_ms"), Some(42));
-    assert!(outcome.get_bool("home_entry_removed"));
+    assert_eq!(outcome.get_text("outcome"), Some("deleted"));
+    assert_eq!(
+        outcome.get_text("deleted_at"),
+        Some(layerfs_home::time::iso(42).as_str())
+    );
+    assert!(!outcome.get_bool("home_entry_kept"));
     assert!(!paths::project_dir(&home, "shop", "app").exists());
     assert_eq!(
         layerfs_store::project::delete::Intent::read(&home, "shop", "app").unwrap(),
@@ -682,9 +688,12 @@ fn a_fake_workers_pending_retry_settles_the_marker_and_then_finishes_the_entry()
     // The first call is the pending retry: it redos the marker with the
     // sidecar's deleted_ms, keeps the entry and leaves the sidecar marked.
     let outcome = remove(&home).unwrap();
-    assert_eq!(outcome.get_text("kind"), Some("Removed"));
-    assert!(!outcome.get_bool("home_entry_removed"));
-    assert_eq!(outcome.get_int("deleted_ms"), Some(77));
+    assert_eq!(outcome.get_text("outcome"), Some("deleted"));
+    assert!(outcome.get_bool("home_entry_kept"));
+    assert_eq!(
+        outcome.get_text("deleted_at"),
+        Some(layerfs_home::time::iso(77).as_str())
+    );
     assert!(paths::project_dir(&home, "shop", "app").is_dir());
     let settled = layerfs_store::project::delete::Intent::read(&home, "shop", "app")
         .unwrap()
@@ -706,7 +715,7 @@ fn a_fake_workers_pending_retry_settles_the_marker_and_then_finishes_the_entry()
     // The marker is confirmed: the next call sends only the entry-removal
     // frame, takes no admission and writes no marker.
     let outcome = remove(&home).unwrap();
-    assert!(outcome.get_bool("home_entry_removed"));
+    assert!(!outcome.get_bool("home_entry_kept"));
     assert!(!paths::project_dir(&home, "shop", "app").exists());
     assert_eq!(
         layerfs_store::project::delete::Intent::read(&home, "shop", "app").unwrap(),
@@ -761,9 +770,12 @@ fn a_fake_workers_marked_sidecar_finishes_with_only_the_entry_frame() {
     });
 
     let outcome = remove(&home).unwrap();
-    assert_eq!(outcome.get_text("kind"), Some("Removed"));
-    assert_eq!(outcome.get_int("deleted_ms"), Some(55));
-    assert!(outcome.get_bool("home_entry_removed"));
+    assert_eq!(outcome.get_text("outcome"), Some("deleted"));
+    assert_eq!(
+        outcome.get_text("deleted_at"),
+        Some(layerfs_home::time::iso(55).as_str())
+    );
+    assert!(!outcome.get_bool("home_entry_kept"));
     assert!(!paths::project_dir(&home, "shop", "app").exists());
     assert_eq!(
         layerfs_store::project::delete::Intent::read(&home, "shop", "app").unwrap(),
@@ -831,9 +843,12 @@ fn a_lost_worker_reply_is_unknown_and_keeps_the_sidecar_for_the_retry() {
 
     // The retry re-registers the same identity and finishes the entry.
     let outcome = remove(&home).expect("the retry settles the unknown outcome");
-    assert_eq!(outcome.get_text("kind"), Some("Removed"));
-    assert_eq!(outcome.get_int("deleted_ms"), Some(42));
-    assert!(outcome.get_bool("home_entry_removed"));
+    assert_eq!(outcome.get_text("outcome"), Some("deleted"));
+    assert_eq!(
+        outcome.get_text("deleted_at"),
+        Some(layerfs_home::time::iso(42).as_str())
+    );
+    assert!(!outcome.get_bool("home_entry_kept"));
     assert!(!paths::project_dir(&home, "shop", "app").exists());
     assert_eq!(
         layerfs_store::project::delete::Intent::read(&home, "shop", "app").unwrap(),

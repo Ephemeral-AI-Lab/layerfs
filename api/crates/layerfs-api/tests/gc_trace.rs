@@ -1,5 +1,5 @@
 //! T-G2: the call log redacts every path argument (#41 §4.3). A
-//! `project.remove_file` or a hidden `file.read`/`stat`/`list`/`glob` path is
+//! `project.hide_path` or a hidden `file.read`/`stat`/`list`/`glob` path is
 //! logged as `<N bytes>` of its normalized form (one leading `/` stripped),
 //! the `Removed` refusal still echoes the request path, the salted trace key
 //! changes with the salt, and a `store.compact` report's artifact names never
@@ -136,17 +136,13 @@ fn removed_path(refusal: &SdkRefusal) -> &str {
 fn path_arguments_are_byte_counts_in_the_call_log() {
     let _env = serial();
     let (home, folder) = project();
-    let removed = ok(
-        &home,
-        "project.remove_file",
-        &[p(), ("path", t("/base.txt"))],
-    );
-    assert_eq!(removed.get_text("kind"), Some("Removed"));
+    let removed = ok(&home, "project.hide_path", &[p(), ("path", t("/base.txt"))]);
+    assert_eq!(removed, SdkValue::map([("ok", SdkValue::Bool(true))]));
     assert_eq!(
         argv(&last(&home)),
         [
             "project".to_owned(),
-            "remove-file".into(),
+            "hide-path".into(),
             "shop/api".into(),
             bytes("base.txt".len()),
         ]
@@ -211,11 +207,7 @@ fn path_arguments_are_byte_counts_in_the_call_log() {
 fn a_removed_refusal_echoes_the_path_the_log_does_not() {
     let _env = serial();
     let (home, folder) = project();
-    ok(
-        &home,
-        "project.remove_file",
-        &[p(), ("path", t("/base.txt"))],
-    );
+    ok(&home, "project.hide_path", &[p(), ("path", t("/base.txt"))]);
     let refusal = refused(
         &home,
         "file.read",
@@ -256,7 +248,7 @@ fn the_redacted_set_covers_every_path_bearing_call() {
         assert!(seen > 0, "no call takes {name}");
     }
     for (name, args) in [
-        ("project.remove_file", &["path"][..]),
+        ("project.hide_path", &["path"][..]),
         ("file.read", &["path"][..]),
         ("file.stat", &["path"][..]),
         ("file.list", &["path"][..]),

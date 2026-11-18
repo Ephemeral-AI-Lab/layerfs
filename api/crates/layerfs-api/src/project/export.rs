@@ -1,28 +1,47 @@
-//! `project.export`: export a project's snapshot from its Store to a local folder.
+//! `project.export`: export a Branch's committed tree to a folder on this
+//! computer.
 use crate::calls::table::Kind::{Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call, PROGRESS};
-use crate::calls::Context;
+use crate::calls::{Context, Form};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::names::ProjectRef;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::project::export::{run as export, ProjectExport};
+
+/// The exported tree's counts; the exported `commit` and its `root` in the
+/// long form.
+const FORM: Form = Form::of(
+    &["file_count", "size"],
+    &[],
+    &[
+        "file_count",
+        "size",
+        "dir_count",
+        "symlink_count",
+        "commit",
+        "root",
+    ],
+);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
     "project",
     "export",
     &[a("project", Project), a("destination", Text)],
-    &[opt("branch", Name), PROGRESS],
-    "export a project's snapshot from its Store to a local folder",
+    &[opt("branch", Name), opt("at", Name), PROGRESS],
+    "export a Branch's committed tree to a folder on this computer",
     run,
-);
+)
+.form(&FORM);
 
 /// Runs `project.export`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    let text = |name: &str| args.get_text(name).map(str::to_owned);
     let request = ProjectExport {
         project: ProjectRef::parse(args.get_text("project").unwrap_or(""))?,
-        destination: args.get_text("destination").unwrap_or("").to_owned(),
-        branch: args.get_text("branch").map(str::to_owned),
+        destination: text("destination").unwrap_or_default(),
+        branch: text("branch"),
+        at: text("at"),
     };
     let (home, events) = context.parts();
     export(home, events, &request)

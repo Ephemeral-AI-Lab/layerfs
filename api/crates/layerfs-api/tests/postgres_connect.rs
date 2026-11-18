@@ -76,9 +76,12 @@ fn connect_read_and_disconnect() {
         &[
             ("project", t("pg/api")),
             ("folder", t(&folder.display().to_string())),
+            ("detail", SdkValue::Bool(true)),
         ],
     );
     assert_eq!(made.get_text("project"), Some("pg/api"));
+    // a PostgreSQL Store is on no machine
+    assert_eq!(made.get("machine"), Some(&SdkValue::Null));
     assert!(paths::project_record(&home, "pg", "api").is_file());
     assert_eq!(
         call(

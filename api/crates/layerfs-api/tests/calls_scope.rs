@@ -120,7 +120,7 @@ fn a_scope_refuses_every_call_it_does_not_cover() {
         ),
         ("project.delete", &[("project", t("shop/api"))]),
         (
-            "project.remove_file",
+            "project.hide_path",
             &[("project", t("shop/api")), ("path", t("/web/a"))],
         ),
         ("store.compact", &[("store", t("shop"))]),

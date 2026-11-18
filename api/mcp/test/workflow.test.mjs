@@ -152,7 +152,7 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
     for (const name of names("admin").filter((name) => !names("work").includes(name))) {
       assert.ok(!workNames.has(name), `${name} is an admin tool in the work profile`);
     }
-    for (const prefix of ["store_", "machine_", "backup_", "project_init", "project_delete", "project_remove_file", "branch_remove", "sandbox_create", "sandbox_close"]) {
+    for (const prefix of ["store_", "machine_", "backup_", "project_init", "project_delete", "project_hide_path", "branch_remove", "sandbox_create", "sandbox_close"]) {
       assert.ok(![...workNames].some((name) => name.startsWith(prefix)), `${prefix} in the work profile`);
     }
     const scopedRead = await call(work.client, "file_read", { project: "shop/api", branch: "feat", path: "/sub/b.txt" });

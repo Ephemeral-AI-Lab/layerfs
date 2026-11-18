@@ -120,11 +120,15 @@ fn init_files_branches_move_and_remove() {
     let args = SdkValue::map([
         ("project", t("shop/api")),
         ("folder", t(&folder.display().to_string())),
+        ("detail", SdkValue::Bool(true)),
     ]);
     let made = layerfs_api::call(Some(&home), "project.init", args, &mut |e| events.push(e))
         .unwrap_or_else(|e| panic!("init: {} {}", e.code, e.message));
     assert_eq!(made.get_text("project"), Some("shop/api"));
     assert_eq!(made.get_text("machine"), Some("native"));
+    assert_eq!(made.get_text("outcome"), Some("created"));
+    // `commit` is main's first Layer, its full id
+    assert_eq!(made.get_text("commit").map(str::len), Some(66), "{made:?}");
     // in process on native, progress is a push's (#536 §10b): no `send`,
     // null counts, nothing but `phase`, `done` and `total`
     let expected: Vec<SdkValue> = ["check", "install", "record"]
@@ -151,7 +155,7 @@ fn init_files_branches_move_and_remove() {
     // every other project call reports (spec §4.2).
     let refused = call(&home, "project.list", &[("store", t("nope"))]).unwrap_err();
     assert_eq!(refused.0, "NotFound", "{refused:?}");
-    // project.list pages with `has_more` (#611)
+    // project.list pages by cursor (call surface 2.0)
     let web = tempdir("web");
     std::fs::write(web.join("index.html"), "<h1>shop</h1>\n").unwrap();
     ok(
@@ -162,30 +166,25 @@ fn init_files_branches_move_and_remove() {
             ("folder", t(&web.display().to_string())),
         ],
     );
-    let page = ok(&home, "project.list", &[("page_size", SdkValue::Int(1))]);
+    let page = ok(&home, "project.list", &[("limit", SdkValue::Int(1))]);
     let SdkValue::List(one) = page.get("items").unwrap() else {
         panic!("{page:?}")
     };
     assert_eq!(one.len(), 1);
-    assert_eq!(page.get("has_more"), Some(&SdkValue::Bool(true)));
-    assert_eq!(page.get("next_page_pos"), Some(&SdkValue::Int(1)));
+    let next = page.get("next_cursor").cloned().expect("a next page");
     let page = ok(
         &home,
         "project.list",
-        &[
-            ("page_size", SdkValue::Int(1)),
-            ("page_pos", SdkValue::Int(1)),
-        ],
+        &[("limit", SdkValue::Int(1)), ("cursor", next)],
     );
     let SdkValue::List(two) = page.get("items").unwrap() else {
         panic!("{page:?}")
     };
     assert_eq!(two.len(), 1);
-    assert_eq!(page.get("has_more"), Some(&SdkValue::Bool(false)));
-    assert_eq!(page.get("next_page_pos"), Some(&SdkValue::Null));
+    assert_eq!(page.get("next_cursor"), None, "the last page");
     assert_eq!(
-        [one[0].get_text("name"), two[0].get_text("name")],
-        [Some("api"), Some("web")]
+        [one[0].get_text("project"), two[0].get_text("project")],
+        [Some("shop/api"), Some("shop/web")]
     );
     let _ = std::fs::remove_dir_all(web);
 
@@ -318,12 +317,11 @@ fn init_files_branches_move_and_remove() {
             p(),
             ("destination", t(&export_dir.display().to_string())),
             ("branch", t("fix")),
+            ("detail", SdkValue::Bool(true)),
         ],
     );
-    assert_eq!(exported.get_text("project"), Some("shop/api"));
-    assert_eq!(exported.get_text("branch"), Some("fix"));
-    assert_eq!(exported.get_int("files"), Some(3));
-    assert_eq!(exported.get_int("directories"), Some(1));
+    assert_eq!(exported.get_int("file_count"), Some(3));
+    assert_eq!(exported.get_int("dir_count"), Some(1));
     assert_eq!(
         std::fs::read_to_string(export_dir.join("NEW.md")).unwrap(),
         "newer\n"
@@ -348,12 +346,7 @@ fn init_files_branches_move_and_remove() {
     // `project.delete` retires the project in the Store under `box` and
     // removes both entries; its history stays until a compaction.
     let deleted = ok(&home, "project.delete", &[p()]);
-    assert_eq!(deleted.get_text("kind"), Some("Removed"));
-    assert_eq!(deleted.get_text("project"), Some("shop/api"));
-    assert_eq!(
-        deleted.get("home_entry_removed"),
-        Some(&SdkValue::Bool(true))
-    );
+    assert_eq!(deleted, SdkValue::map([("ok", SdkValue::Bool(true))]));
     assert_eq!(
         call(&home, "project.get", &[p()]).unwrap_err().0,
         "NotFound"

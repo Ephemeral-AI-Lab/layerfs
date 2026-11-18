@@ -574,7 +574,7 @@ fn the_four_gc_calls_take_only_ids() {
         ),
         ("project.delete", &[("project", Kind::Project)]),
         (
-            "project.remove_file",
+            "project.hide_path",
             &[("project", Kind::Project), ("path", Kind::Text)],
         ),
         ("store.compact", &[("store", Kind::Name)]),

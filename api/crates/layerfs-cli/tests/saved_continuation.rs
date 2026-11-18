@@ -38,8 +38,8 @@ fn invalid(home: &Path, words: &[&str]) {
 }
 fn check(home: &Path, source: &Path) {
     call(home, &["project", "init", "q/p", source.to_str().unwrap()]);
-    let base = call(home, &["project", "stats", "q/p"]);
-    let layer = base.get("at").unwrap().get_text("id").unwrap();
+    let base = call(home, &["project", "stats", "q/p", "--detail"]);
+    let layer = base.get_text("commit").unwrap();
     call(home, &["branch", "fork", "q/p", "dev", "main"]);
     // Three paths in the first Commit; this is also the first-Commit/base-Layer case.
     for (path, value) in [("/a", "one"), ("/b", "two"), ("/c", "three")] {
@@ -49,8 +49,11 @@ fn check(home: &Path, source: &Path) {
         );
         assert!(out.status.success(), "{}", text(&out.stderr));
     }
-    let saved = call(home, &["project", "stats", "q/p", "dev"]);
-    let commit = saved.get("at").unwrap().get_text("id").unwrap();
+    let saved = call(
+        home,
+        &["project", "stats", "q/p", "--branch", "dev", "--detail"],
+    );
+    let commit = saved.get_text("commit").unwrap();
     // `commit` (dev's head, the third write) from `layer`; by default from
     // its parent, which lacks only the last write
     let changed = call(home, &["commit", "diff", "q/p", commit, "--from", layer]);
@@ -87,8 +90,8 @@ fn check(home: &Path, source: &Path) {
     altered.insert(0, '!');
     invalid(home, &[&query[..], &["--cursor", &altered]].concat());
     call(home, &["branch", "publish", "q/p", "dev"]);
-    let published = call(home, &["project", "stats", "q/p"]);
-    let new_layer = published.get("at").unwrap().get_text("id").unwrap();
+    let published = call(home, &["project", "stats", "q/p", "--detail"]);
+    let new_layer = published.get_text("commit").unwrap();
     assert_eq!(
         items(&call(
             home,
@@ -105,8 +108,11 @@ fn check(home: &Path, source: &Path) {
         );
         assert!(out.status.success(), "{}", text(&out.stderr));
     }
-    let saved = call(home, &["project", "stats", "q/p", "dev"]);
-    let tip = saved.get("at").unwrap().get_text("id").unwrap();
+    let saved = call(
+        home,
+        &["project", "stats", "q/p", "--branch", "dev", "--detail"],
+    );
+    let tip = saved.get_text("commit").unwrap();
     let revisions = [
         "file",
         "revision",

@@ -76,9 +76,9 @@ export async function fixture() {
     assert.equal((await lfs.store.get("sdk")).machine, "docker");
   }
   return {
-    route, home, folder, lfs, project, init: init.layer, head,
+    route, home, folder, lfs, project, init: init.commit, head,
     source: left.head, other: right.head, publication: published.published_layer.id,
-    foreign: otherProject.layer, binary: binary.head, long: long.head,
+    foreign: otherProject.commit, binary: binary.head, long: long.head,
     async cleanup() {
       // Never conceal a failed assertion by destroying its Store. The caller
       // invokes cleanup only after all assertions pass.

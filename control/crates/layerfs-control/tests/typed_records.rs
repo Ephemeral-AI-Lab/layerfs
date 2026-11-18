@@ -1,6 +1,7 @@
 //! Each typed record's `to_sdk` gives the shape its calls answered before
 //! the records were typed (#536 §10 "Result keys stay stable"), byte for
-//! byte as JSON text, and reads past a layout-3 `v`.
+//! byte as JSON text, and reads past a layout-3 `v`; a project's record
+//! gives the fields every project answer carries (call surface 2.0).
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::json::{parse, print};
 use layerfs_home::outcome::View;
@@ -52,30 +53,39 @@ fn a_store_record_of_an_unknown_kind_still_shows() {
 }
 
 #[test]
-fn a_project_shows_its_store_kind_machine_and_creation() {
+fn a_project_answers_its_store_engine_machine_and_creation() {
+    let print_answer = |fields: Vec<(&str, SdkValue)>| {
+        print(&SdkValue::Map(
+            fields.into_iter().map(|(k, v)| (k.to_owned(), v)).collect(),
+        ))
+    };
     let sqlite = StoreRecord::from_record("shop", value(r#"{"kind":"sqlite"}"#));
-    let project =
-        ProjectRecord::from_record("shop", "api", value(r#"{"v":1,"name":"api","created":7}"#));
-    assert_eq!(
-        print(&project.to_sdk(View::Full, &sqlite)),
-        r#"{"project":"shop/api","store":"shop","name":"api","kind":"sqlite","machine":"native","created":7}"#
+    let project = ProjectRecord::from_record(
+        "shop",
+        "api",
+        value(r#"{"v":1,"name":"api","created":7000}"#),
     );
-    let placed = StoreRecord::from_record("shop", value(r#"{"machine":"box"}"#));
+    assert_eq!(
+        print_answer(project.answer(&sqlite)),
+        r#"{"project":"shop/api","store":"shop","engine":"sqlite","machine":"native","created_at":"1970-01-01T00:00:07Z"}"#
+    );
+    let placed = StoreRecord::from_record("shop", value(r#"{"kind":"sqlite","machine":"box"}"#));
     let missing = ProjectRecord::from_record("shop", "web", SdkValue::Null);
     assert_eq!(
-        print(&missing.to_sdk(View::List, &placed)),
-        r#"{"project":"shop/web","store":"shop","name":"web","kind":"sqlite","machine":"box","created":null}"#
+        print_answer(missing.answer(&placed)),
+        r#"{"project":"shop/web","store":"shop","engine":"sqlite","machine":"box","created_at":null}"#
     );
     let unknown = StoreRecord::from_record("shop", value(r#"{"kind":"oracle","machine":null}"#));
     assert_eq!(
-        print(&missing.to_sdk(View::List, &unknown)),
-        r#"{"project":"shop/web","store":"shop","name":"web","kind":null,"machine":null,"created":null}"#
+        print_answer(missing.answer(&unknown)),
+        r#"{"project":"shop/web","store":"shop","engine":null,"machine":null,"created_at":null}"#
     );
+    // a PostgreSQL Store is on no machine
     let postgres = StoreRecord::from_record("pg", value(r#"{"kind":"postgresql"}"#));
     let project = ProjectRecord::from_record("pg", "api", value(r#"{"name":"api","stack":"s"}"#));
     assert_eq!(
-        print(&project.to_sdk(View::Full, &postgres)),
-        r#"{"project":"pg/api","store":"pg","name":"api","kind":"postgresql","machine":"native","created":null}"#
+        print_answer(project.answer(&postgres)),
+        r#"{"project":"pg/api","store":"pg","engine":"postgresql","machine":null,"created_at":null}"#
     );
 }
 

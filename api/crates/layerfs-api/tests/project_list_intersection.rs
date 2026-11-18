@@ -108,15 +108,15 @@ fn a_retired_or_absent_store_project_is_not_listed_or_got() {
     let SdkValue::List(items) = list.get("items").unwrap() else {
         panic!("{list:?}")
     };
-    let names: Vec<&str> = items.iter().filter_map(|i| i.get_text("name")).collect();
-    assert_eq!(names, vec!["live"]);
+    let names: Vec<&str> = items.iter().filter_map(|i| i.get_text("project")).collect();
+    assert_eq!(names, vec!["shop/live"]);
     // the named listing intersects the same way
     let one = ok(&home, "project.list", &[("store", t("shop"))]);
     let SdkValue::List(items) = one.get("items").unwrap() else {
         panic!("{one:?}")
     };
-    let names: Vec<&str> = items.iter().filter_map(|i| i.get_text("name")).collect();
-    assert_eq!(names, vec!["live"]);
+    let names: Vec<&str> = items.iter().filter_map(|i| i.get_text("project")).collect();
+    assert_eq!(names, vec!["shop/live"]);
     // both stale home entries are still there; the Store, not the home, hides them
     for name in ["retired", "absent"] {
         assert!(

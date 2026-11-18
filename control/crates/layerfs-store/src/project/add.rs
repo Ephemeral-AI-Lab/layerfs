@@ -72,17 +72,20 @@ pub fn save_entry(
 
 /// Makes the entry of project `name` of the shared Store `store` once,
 /// owner-only, with its parents: `<home>/store/<store>/project/<name>/`.
+/// An entry an Init of this process claimed ([`crate::project::op`]) is
+/// that Init's to fill; any other entry already there is `NameTaken`.
 pub fn make_entry(home: &Path, store: &str, name: &str) -> Result<PathBuf> {
     let directory = store_dir(home, store)?;
     layerfs_home::home::private_dir(&directory.join("project"))?;
     let entry = layerfs_home::home::paths::project_dir(home, store, name);
-    std::fs::create_dir(&entry).map_err(|error| {
-        if error.kind() == std::io::ErrorKind::AlreadyExists {
-            home_name_taken(store, name)
-        } else {
-            failed(error)
+    if let Err(error) = std::fs::create_dir(&entry) {
+        if error.kind() != std::io::ErrorKind::AlreadyExists {
+            return Err(failed(error));
         }
-    })?;
+        if !crate::project::op::claimed(home, store, name)? {
+            return Err(home_name_taken(store, name));
+        }
+    }
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o700)).map_err(failed)?;
     Ok(entry)

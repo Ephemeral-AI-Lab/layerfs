@@ -31,10 +31,12 @@ fn call(
     layerfs_api::call(Some(home), name, args, events).map_err(|r| (r.code, r.message))
 }
 
+/// Init's arguments, asking for its long form (`detail`).
 fn init_args(project: &str, folder: &Path) -> SdkValue {
     SdkValue::map([
         ("project", t(project)),
         ("folder", t(&folder.display().to_string())),
+        ("detail", SdkValue::Bool(true)),
     ])
 }
 
@@ -691,7 +693,9 @@ fn a_part_whose_answer_is_lost_leaves_the_copy_unknown() {
         "{}",
         refusal.1
     );
-    // nothing resent or sent after it, nothing discarded: the copy stays
+    // nothing resent or sent after it, nothing discarded: the copy stays;
+    // the project is certainly not in the Store (its Init was never sent),
+    // so the claimed home entry is removed
     let seen = seen.lock().unwrap();
     let at_once = layerfs_store::project::parts::AT_ONCE;
     assert!(writes(&seen) <= at_once, "{:?}", seen.log);

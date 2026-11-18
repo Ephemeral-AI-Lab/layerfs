@@ -1,13 +1,6 @@
 {
   "about": "What the call surface 2.0 contract test (tests/contract.rs) still excuses. `calls`: the calls of calls.json this build has not migrated (an entry with no form, or no entry yet). `old_names`: the calls of this build's table that calls.json does not name, each with the call that replaces it; every one is removed, with no alias, by a later package (the one that migrates its replacement or, where the replacement is already migrated, the one that owns the old call's family). `spec_sync`: where this build is ahead of calls.json version 18 (the review fixes); each entry leaves when calls.json says the same, and the test fails while a stale one stays. `not_built`: per migrated call, what of its row this build does not do yet, with the reason; each line leaves when its package builds it. The test's PENDING_MUST_BE_EMPTY switch requires all four empty.",
   "calls": [
-    "project.init",
-    "project.list",
-    "project.get",
-    "project.stats",
-    "project.export",
-    "project.delete",
-    "project.hide_path",
     "file.read",
     "file.stat",
     "file.list",
@@ -55,7 +48,6 @@
     "file.diff": "commit.diff",
     "file.revision": "file.history",
     "logs.sandbox": "sandbox.log",
-    "project.remove_file": "project.hide_path",
     "sandbox.close": "sandbox.remove",
     "workspace.exec_cancel": "workspace.cancel"
   },

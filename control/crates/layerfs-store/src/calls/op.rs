@@ -60,9 +60,9 @@ pub enum StoreOp<'a> {
     Statistics,
     /// Entry counts at one project pin.
     ProjectStats(&'a super::project::ProjectStats),
-    /// `project.remove_file`: hide one path from every node at or below its
-    /// marker frontier.
-    RemoveFile(&'a super::project::ProjectRemoveFile),
+    /// `project.hide_path` (engine method `project.remove_file`): hide one
+    /// path from every node at or below its marker frontier.
+    RemoveFile(&'a super::project::ProjectHidePath),
     /// `project.list_branches`: the Branch `name`, or, without one, the
     /// first page of `page.size` Branches.
     ListBranches {
@@ -259,7 +259,7 @@ impl StoreOp<'_> {
         let mut args = Args::default();
         match self {
             Self::Statistics => &mut args,
-            Self::ProjectStats(r) => args.at(&r.branch, r.commit.as_deref()),
+            Self::ProjectStats(r) => args.at(&r.branch, r.at.as_deref()),
             Self::RemoveFile(r) => args.text("path", &r.path),
             Self::ListBranches { name, page } => args.opt("name", *name).int("limit", page.size),
             Self::Branches { names, limit } => args
