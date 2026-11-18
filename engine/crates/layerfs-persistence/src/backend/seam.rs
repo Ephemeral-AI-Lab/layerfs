@@ -95,6 +95,19 @@ pub(crate) trait Mechanics {
             .map(|located| located.location)
             .filter(|location| location.object_id == *id))
     }
+    /// A hint that objects of `ids` are about to be asked through
+    /// [`Self::location`], inside this transaction. An engine that pays a
+    /// round trip per lookup may find them all in one and keep the answers;
+    /// every answer is the same with or without the hint. Only an engine
+    /// that says so ([`Self::batches_locations`]) is told.
+    fn expect_locations(&self, _ids: &[ObjectId]) -> Result<(), PersistenceError> {
+        Ok(())
+    }
+    /// Whether [`Self::expect_locations`] saves this engine anything. A
+    /// caller that must read ahead to learn the ids does so only then.
+    fn batches_locations(&self) -> bool {
+        false
+    }
     /// Whether [`Self::locations_after`] orders identities by their first
     /// eight bytes read as a signed big-endian number, then by their bytes,
     /// instead of by their bytes alone.

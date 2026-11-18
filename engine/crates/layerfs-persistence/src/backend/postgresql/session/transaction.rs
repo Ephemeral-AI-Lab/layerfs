@@ -64,6 +64,9 @@ pub(crate) struct Transaction<'a> {
     /// Inode value blocks this transaction has read
     /// (`metadata::reads::inode_values_ahead`).
     pub(crate) values: RefCell<super::super::metadata::reads::HeldBlocks>,
+    /// Locators this transaction was told to expect lookups of
+    /// (`metadata::reads::expect_locations`).
+    pub(crate) located: RefCell<super::super::metadata::reads::HeldLocations>,
 }
 
 impl Transaction<'_> {
@@ -417,6 +420,7 @@ impl Session {
                     schema,
                     packs: RefCell::default(),
                     values: RefCell::default(),
+                    located: RefCell::default(),
                 };
                 let result = body(&tx);
                 let uncertain = tx.uncertain.get()
@@ -552,6 +556,7 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
             schema,
             packs: RefCell::default(),
             values: RefCell::default(),
+            located: RefCell::default(),
         };
         let result = body(&tx);
         let uncertain = tx.uncertain.get();

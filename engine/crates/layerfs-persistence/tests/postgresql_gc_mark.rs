@@ -943,6 +943,136 @@ fn a_none_round_sends_no_visited_ids() {
     }
 }
 
+/// Objects the inode-table writer emits, in order.
+#[derive(Default)]
+struct Emitted(Vec<layerfs_content::FinalizedObject>);
+
+impl layerfs_content::FinalizedConsumer for Emitted {
+    fn accept(
+        &mut self,
+        object: layerfs_content::FinalizedObject,
+    ) -> layerfs_content::ContentResult<()> {
+        self.0.push(object);
+        Ok(())
+    }
+}
+
+/// Inodes of the table [`save_table`] writes: many leaves under one branch.
+const TABLE_INODES: u64 = 20_000;
+
+/// One Layer's tree in one Save: an inode table of [`TABLE_INODES`]
+/// directories that all name one empty directory page, under a filesystem
+/// root. With a `base` table only the inodes of `changes` are written anew,
+/// at `version`: the product's writer emits the leaves they sit in, each
+/// naming the leaf it replaces as its predecessor, and the branch above
+/// them. Returns the table's root, the filesystem root and how many leaves
+/// the Save stored as deltas.
+fn save_table(
+    handles: &PostgresHandles,
+    base: Option<ObjectId>,
+    changes: &[u64],
+    version: u32,
+) -> (ObjectId, ObjectId, u64) {
+    use layerfs_content::filesystem::attributes::PortableMetadata;
+    use layerfs_content::filesystem::directory::{encode_directory_page, DirectoryPage};
+    use layerfs_content::filesystem::inode::apply_inode_values;
+    use layerfs_content::filesystem::root::profile_id;
+    use layerfs_content::filesystem::{
+        scope_for_seed, FilesystemObjects, FilesystemRoot, MAXIMUM_SCRATCH_BYTES,
+    };
+    use layerfs_content::inode_leaf::{InodeKind, InodeMetadata, InodeValue};
+    use layerfs_content::{FinalizedObject, ObjectRole};
+
+    let directory = FinalizedObject::new(
+        ObjectRole::DirectoryLeaf,
+        encode_directory_page(&DirectoryPage::Leaf {
+            entries: Vec::new(),
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    let value = InodeValue {
+        kind: InodeKind::Directory,
+        namespace_ref_count: 1,
+        content_root: directory.id(),
+        metadata_root: InodeMetadata::Inline(PortableMetadata {
+            mode: 0o755,
+            mtime_seconds: i64::from(version),
+            mtime_nanoseconds: 0,
+        }),
+    };
+    let storage = Storage::new(handles.storage.clone() as Arc<dyn PackPersistence>).unwrap();
+    let reader = storage.reader().unwrap();
+    let mut emitted = Emitted::default();
+    let (table, _) = {
+        let mut objects = FilesystemObjects::new(&reader, &mut emitted);
+        apply_inode_values(
+            &mut objects,
+            base,
+            changes.iter().map(|serial| Ok((*serial, Some(value)))),
+            MAXIMUM_SCRATCH_BYTES,
+        )
+        .unwrap()
+    };
+    let root = FilesystemRoot::new(profile_id(), scope_for_seed([9; 32]), 1, table).unwrap();
+    let root = FinalizedObject::new(ObjectRole::FilesystemRoot, root.encode().unwrap())
+        .unwrap()
+        .with_references(vec![table]);
+    let root_id = root.id();
+    let save = storage.begin_save().unwrap();
+    save.accept(directory).unwrap();
+    for object in emitted.0 {
+        save.accept(object).unwrap();
+    }
+    save.accept(root).unwrap();
+    let outcome = save.finish().unwrap();
+    (table, root_id, outcome.pool.delta_leaves)
+}
+
+/// A mark rebuilds every inode leaf of a Layer, and a leaf stored as a delta
+/// needs the locator of its base, which an earlier Layer's pack holds. The
+/// lookups of one pack go to the server together: Layers that each rewrite
+/// eight times the leaves cost a mark far fewer statements than one more per
+/// leaf. One lookup per base again adds a statement for every rewritten
+/// leaf of every Layer and fails here.
+#[test]
+fn a_mark_looks_up_the_delta_bases_of_a_pack_together() {
+    let Some(url) = url() else { return };
+    const VERSIONS: u32 = 6;
+    let all: Vec<u64> = (1..=TABLE_INODES).collect();
+    let mut statements = Vec::new();
+    for (tag, leaves) in [("mark_bases_2", 2u64), ("mark_bases_16", 16)] {
+        let schema = Schema::new(url.clone(), tag);
+        let handles: PostgresHandles = schema.create(BINDING, CURSOR);
+        let (mut table, genesis_root, _) = save_table(&handles, None, &all, 1);
+        let (shop, work, _genesis) = project_with_genesis(&handles.history, 1, genesis_root);
+        // Inodes far enough apart to sit in different leaves.
+        let changes: Vec<u64> = (0..leaves)
+            .map(|leaf| 1 + leaf * (TABLE_INODES / 16))
+            .collect();
+        for version in 2..=VERSIONS {
+            let (next, root, deltas) = save_table(&handles, Some(table), &changes, version);
+            assert_eq!(
+                deltas, leaves,
+                "each change rewrites its own leaf as a delta on the leaf before"
+            );
+            commit_with(&handles.history, work, root);
+            publish(&handles.history, shop, work);
+            table = next;
+        }
+        let before = handles.diagnostics().unwrap();
+        let mark = handles.history.mark().expect("the mark");
+        let sent = handles.diagnostics().unwrap().since(&before);
+        assert!(mark.objects().contains(table), "the last table is reached");
+        statements.push(sent.statements);
+    }
+    let more_bases = (16 - 2) * u64::from(VERSIONS - 1);
+    assert!(
+        statements[1] < statements[0] + more_bases / 2,
+        "{more_bases} more delta bases cost a statement each: {statements:?}"
+    );
+}
+
 const POSTGRESQL_MARK: &str = include_str!("../sql/postgresql/queries/history/kept_node_mark.sql");
 
 /// `(from kind, to kind, column)` of every edge the shared text follows: one

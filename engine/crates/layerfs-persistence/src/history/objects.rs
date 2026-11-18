@@ -363,6 +363,7 @@ fn mark_recorded(tx: &Transaction<'_>) -> HistoryResult<(MarkResult, Reach)> {
             records::layouts_by_group,
         )),
         upcoming: std::cell::RefCell::default(),
+        based: std::cell::Cell::new((i64::MIN, 0)),
         values: std::cell::RefCell::default(),
         ordinals: std::cell::RefCell::default(),
     };
@@ -444,6 +445,9 @@ struct ClosureSource<'a> {
     /// The packs the rows being walked decode metadata from, ascending, and
     /// how many of them the engine has been told to expect.
     upcoming: std::cell::RefCell<(Vec<i64>, usize)>,
+    /// The pack and group whose delta bases the engine was last told to
+    /// expect lookups of ([`walk`]'s `expect_bases`).
+    based: std::cell::Cell<(i64, usize)>,
     /// Inode values the engine has returned, asked for or not.
     values: std::cell::RefCell<values::HeldValues>,
     /// Every ordinal the walk asked for ([`ordinals`]), whether the engine or
@@ -528,6 +532,20 @@ impl ClosureSource<'_> {
     /// in one visit of it and not in one visit per tree level.
     fn held_here(&self, id: &ObjectId) -> Option<records::Row> {
         self.here.borrow().rows.get(id).copied()
+    }
+
+    /// The objects of group `group` of the pack being walked that name other
+    /// objects: those whose rebuild may look a delta base up.
+    fn held_in_group(&self, group: usize) -> Vec<ObjectLocation> {
+        let here = self.here.borrow();
+        let mut rows: Vec<ObjectLocation> = here
+            .rows
+            .values()
+            .map(|row| row.location)
+            .filter(|row| row.group_number == group && row.role.has_references())
+            .collect();
+        rows.sort_unstable_by_key(|row| row.record_number);
+        rows
     }
 
     /// Keeps the group extents the walk read for `pack_id`.
