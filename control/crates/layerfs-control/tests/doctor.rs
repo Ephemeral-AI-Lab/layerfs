@@ -517,7 +517,7 @@ fn each_problem_gives_one_finding_naming_its_fix() {
             "store",
             "s6",
             "store.sqlite.incoming",
-            "`layerfs store pull s6`",
+            "`layerfs store move s6 native`",
         ),
     ];
     for (severity, kind, name, message, fix) in expect {

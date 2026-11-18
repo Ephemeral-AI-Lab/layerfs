@@ -26,7 +26,7 @@ nix = { version = "=0.31.3", default-features = false, features = ["fs", "user",
 # https:// remotes: Cloudflare R2, MinIO behind TLS.
 tls = ["layerfs-bucket/tls"]
 
-# The control-level PostgreSQL `store.status` test drives a real server and
+# The control-level PostgreSQL `store get --with live` test drives a real server and
 # inserts the rows a compaction leaves; this is the pinned client the
 # persistence PostgreSQL feature already locks, no new version.
 [dev-dependencies]

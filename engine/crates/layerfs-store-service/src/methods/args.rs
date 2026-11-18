@@ -66,6 +66,7 @@ pub fn diff_page(args: &SdkValue) -> Result<Request, SdkRefusal> {
         pos,
         cursor,
         hunks,
+        scope: None,
     })
 }
 

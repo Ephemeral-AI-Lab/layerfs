@@ -27,7 +27,7 @@ pub fn postgresql_record(home: &Path, name: &str) -> Result<StoreRecord> {
         StoreKind::Sqlite => Err(refused(
             "InvalidInput",
             format!(
-                "Store {name} is a sqlite Store, which has no connection; `store push {name} <machine>` places it"
+                "Store {name} is a sqlite Store, which has no connection; `store move {name} <machine>` places it"
             ),
         )),
     }

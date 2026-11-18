@@ -107,7 +107,7 @@ fn two_stuck_reads_hold_two_helpers_and_nothing_else() {
     // every other operation goes on: a Store call, a Sandbox operation, a ping
     let asked = Instant::now();
     let during = worker_store::stats(&home).unwrap();
-    assert_eq!(during.get_text("name"), before.get_text("name"));
+    assert_eq!(during.get_text("store"), before.get_text("store"));
     let sandbox = worker_store::sandbox_call(&placed.endpoint).unwrap_err();
     assert_eq!(sandbox.code, "NoSuchSandbox", "{sandbox:?}");
     worker::ping(&placed.endpoint).unwrap();

@@ -1,7 +1,7 @@
-//! `commit.get` pages a Branch's Commits to the end, past the reply budget
-//! of one page; an absent Commit or Branch is refused `NotFound` (their
-//! `NoSuch*` codes fold into it since the call surface 2.0). #533 review,
-//! group calls.
+//! `commit.list` pages a Branch's Commits to the end by its cursor, and
+//! `commit.get` reads any of them by id or prefix without naming the
+//! Branch; an absent Commit or Branch is refused `NotFound` (their `NoSuch*`
+//! codes fold into it since the call surface 2.0). #533 review, group calls.
 use layerfs_api::home;
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
@@ -67,13 +67,14 @@ fn project() -> (PathBuf, PathBuf) {
 }
 
 #[test]
-fn commit_get_pages_to_the_end_and_an_absent_commit_or_branch_is_not_found() {
+fn commit_list_pages_to_the_end_and_an_absent_commit_or_branch_is_not_found() {
     let (home, folder) = project();
     let p = || ("project", t("shop/api"));
+    let detail = || ("detail", SdkValue::Bool(true));
     ok(
         &home,
         "branch.fork",
-        &[p(), ("name", t("fix")), ("from_branch", t("main"))],
+        &[p(), ("name", t("fix")), ("from", t("main"))],
     );
     let mut oldest = String::new();
     for n in 0..60 {
@@ -90,42 +91,81 @@ fn commit_get_pages_to_the_end_and_an_absent_commit_or_branch_is_not_found() {
         );
         if n == 0 {
             let first = ok(&home, "commit.list", &[p(), ("branch", t("fix"))]);
-            oldest = items(&first)[0].get_text("id").unwrap().to_owned();
+            oldest = items(&first)[0].get_text("commit").unwrap().to_owned();
         }
     }
-    // the 60th newest Commit is past the first page (the reply budget)
-    let page = ok(
-        &home,
-        "commit.list",
-        &[
-            p(),
-            ("branch", t("fix")),
-            ("page_size", SdkValue::Int(1000)),
-        ],
-    );
-    assert!(items(&page).len() < 60, "{}", items(&page).len());
-    assert!(!items(&page)
-        .iter()
-        .any(|c| c.get_text("id") == Some(oldest.as_str())));
-    let found = ok(
+    assert_eq!(oldest.len(), 66, "a full id");
+    // pages of 25 by the cursor: 25, 25, 10, newest first, the last with no
+    // next; writes after the first page do not move what the later ones list
+    let (mut pages, mut cursor) = (Vec::<Vec<String>>::new(), None::<String>);
+    loop {
+        let mut args = vec![p(), ("branch", t("fix")), ("limit", SdkValue::Int(25))];
+        if let Some(cursor) = &cursor {
+            args.push(("cursor", t(cursor)));
+        }
+        let page = ok(&home, "commit.list", &args);
+        let rows = items(&page);
+        pages.push(
+            rows.iter()
+                .map(|c| c.get_text("commit").unwrap().to_owned())
+                .collect(),
+        );
+        if pages.len() == 1 {
+            ok(
+                &home,
+                "file.write",
+                &[
+                    p(),
+                    ("branch", t("fix")),
+                    ("path", t("/late")),
+                    ("content", t("y\n")),
+                ],
+            );
+        }
+        match page.get_text("next_cursor") {
+            Some(next) => cursor = Some(next.to_owned()),
+            None => break,
+        }
+        assert!(pages.len() < 10, "a list that never ends");
+    }
+    assert_eq!(pages.iter().map(Vec::len).collect::<Vec<_>>(), [25, 25, 10]);
+    assert_eq!(pages[2].last(), Some(&oldest));
+    // the cursor is this Branch's: another Branch with it is refused, and
+    // so is another `--at`
+    let cursor = cursor.expect("the second page's cursor");
+    for other in [("branch", t("main")), ("at", t(&oldest))] {
+        let mut args = vec![p(), ("branch", t("fix")), ("cursor", t(&cursor))];
+        args.retain(|(name, _)| *name != other.0);
+        args.push(other);
+        let refused = call(&home, "commit.list", &args);
+        assert_eq!(refused.unwrap_err().0, "InvalidInput");
+    }
+    // by id or a prefix, with no Branch named
+    for given in [oldest.as_str(), &oldest[..8], &oldest[..12]] {
+        let found = ok(&home, "commit.get", &[p(), ("commit", t(given)), detail()]);
+        assert_eq!(found.get_text("commit"), Some(oldest.as_str()), "{given}");
+        assert_eq!(found.get_text("branch"), Some("fix"));
+        assert_eq!(found.get_text("message"), Some("write 0"));
+    }
+    let short = ok(&home, "commit.get", &[p(), ("commit", t(&oldest[..8]))]);
+    assert_eq!(short.get_text("branch"), Some("fix"), "{short:?}");
+    // `--branch` must hold it
+    ok(
         &home,
         "commit.get",
-        &[p(), ("branch", t("fix")), ("commit", t(&oldest))],
+        &[p(), ("commit", t(&oldest)), ("branch", t("fix"))],
     );
-    assert_eq!(found.get_text("id"), Some(oldest.as_str()));
-    let short = ok(
-        &home,
-        "commit.get",
-        &[p(), ("branch", t("fix")), ("commit", t(&oldest[..12]))],
-    );
-    assert_eq!(short.get_text("id"), Some(oldest.as_str()));
-
-    let nosuch = "f".repeat(66);
     let refused = call(
         &home,
         "commit.get",
-        &[p(), ("branch", t("fix")), ("commit", t(&nosuch))],
+        &[p(), ("commit", t(&oldest)), ("branch", t("main"))],
     );
+    assert_eq!(refused.unwrap_err().0, "NotFound");
+    let refused = call(&home, "commit.get", &[p(), ("commit", t(&oldest[..7]))]);
+    assert_eq!(refused.unwrap_err().0, "InvalidInput");
+
+    let nosuch = format!("{}{}", &oldest[..2], "f".repeat(64));
+    let refused = call(&home, "commit.get", &[p(), ("commit", t(&nosuch))]);
     assert_eq!(refused.unwrap_err().0, "NotFound");
     let refused = call(&home, "branch.get", &[p(), ("branch", t("nosuch"))]);
     assert_eq!(refused.unwrap_err().0, "NotFound");

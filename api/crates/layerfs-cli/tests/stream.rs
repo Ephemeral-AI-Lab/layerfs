@@ -69,7 +69,7 @@ fn exec_stream_passes_output_and_the_commands_exit_code() {
         &[
             ("project", t("shop/api")),
             ("name", t("dev")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     ok(

@@ -1,6 +1,17 @@
 //! `store.compact`: one Store's §7 (SQLite) or §8 (PostgreSQL) rebuild, run
 //! in this process.
 //!
+//! The run is recorded as the Store's `op` (name `store.compact`) so every
+//! client reads the Store as `busy` while it runs (call surface 2.0): a
+//! marker beside the run's own record, written once the Store is this
+//! call's to compact, moved as each phase starts and dropped when the run
+//! settled. A run that left its own record (its reply was lost, or a
+//! residue stayed) leaves the marker with its outcome unknown, so the
+//! Store reads `broken`, `unresolved` until the next `store compact`
+//! adopts and settles it; a crash leaves the same. The marker refuses
+//! nothing: the Store's own admission decides what runs beside a
+//! compaction, as before.
+//!
 //! The call takes the Store's lease, so a move or remove cannot start, and
 //! closes the Store this process holds open: a call still running on it is
 //! `Busy` in the GC vocabulary (§10 keeps `InUse` for non-GC calls), before
@@ -14,6 +25,7 @@
 //! docs); run the call on that machine.
 use crate::identity;
 use crate::identity::Kind;
+use crate::intent;
 use crate::lease;
 use crate::open::close;
 use crate::open_args::OpenArgs;
@@ -25,6 +37,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::GcScopeKind;
 use layerfs_home::events::Events;
 use layerfs_home::home::paths;
+use layerfs_home::op::Op;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_persistence::compact_metrics::{self, CompactRefusal};
 use layerfs_persistence::PostgresHandles;
@@ -71,10 +84,60 @@ fn crash_failpoint() -> Option<CompactFailpoint> {
     None
 }
 
-/// `store.compact(name)`: reclaim one Store's dead bytes, answering
-/// the §11 report. Each phase is sent to `events` as it starts, as
-/// `{ phase, done, total }` with null counts (the shape `store.push` sends);
-/// the op record `store.status` reads is written by the run, not from here.
+/// The run's marker in the Store's record, if one was written.
+struct Marker<'a> {
+    home: &'a Path,
+    store: &'a str,
+    op: Option<Op>,
+}
+
+impl<'a> Marker<'a> {
+    /// Records the compaction as the Store's `op`, its outcome unknown
+    /// until the run settles (a crash leaves the run's own record). None is
+    /// kept when a live process's operation is on the Store, or when the
+    /// record cannot be written: the run goes on either way.
+    fn begin(home: &'a Path, store: &'a str) -> Self {
+        let op = intent::mark(home, store, intent::COMPACT, "mark", SdkValue::Null)
+            .ok()
+            .flatten()
+            .map(Op::as_uncertain);
+        if let Some(op) = &op {
+            let _ = intent::replace(home, store, op.id(), Some(op));
+        }
+        Marker { home, store, op }
+    }
+
+    /// The run entered `phase`.
+    fn at(&mut self, phase: &str) {
+        if let Some(op) = &mut self.op {
+            let _ = intent::advance(self.home, self.store, op, phase);
+        }
+    }
+
+    /// The run ended: the marker goes when the run settled (`left` false),
+    /// and stays, unresolved, when the run's own record is still there.
+    fn end(self, left: bool, outcome: &Outcome) {
+        let Some(op) = &self.op else {
+            return;
+        };
+        let refused_busy = matches!(outcome, Err(refusal) if refusal.code == "Busy");
+        if left && !refused_busy {
+            let message = match outcome {
+                Ok(_) => "the compaction left a residue",
+                Err(refusal) => refusal.message.as_str(),
+            };
+            intent::leave(self.home, self.store, op, message);
+        } else {
+            let _ = intent::clear(self.home, self.store, op);
+        }
+    }
+}
+
+/// `store.compact(store)`: reclaim one Store's dead bytes, answering
+/// the report ([`crate::report::compact_report`]). Each phase is sent to
+/// `events` as it starts, as `{ phase, done, total }` with null counts (the
+/// shape `store.move` sends) and written to the Store's `op`; the run's own
+/// record, which a live read shows, is written by the run, not from here.
 pub fn compact(home: &Path, events: &mut Events<'_>, store: &str) -> Outcome {
     let home = home.to_path_buf();
     // A live operation is `Busy`, a dead owner's record `Unresolved`; the
@@ -112,7 +175,7 @@ pub fn compact(home: &Path, events: &mut Events<'_>, store: &str) -> Outcome {
         return Err(refusal);
     }
     let args = OpenArgs {
-        home: Some(home),
+        home: Some(home.clone()),
         store: Some(store.to_owned()),
         project: None,
         store_path: Some(path.display().to_string()),
@@ -120,40 +183,50 @@ pub fn compact(home: &Path, events: &mut Events<'_>, store: &str) -> Outcome {
         postgresql: None,
     };
     let identity = identity::identity(&args)?;
-    let handles = SqliteHandles::open_writable(
-        PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
-        &identity.binding,
-        identity.cursor_key,
-    )
-    .map_err(open_refusal)?;
-    let (owner_pid_start, owner_pid_boot) = match layerfs_home::process::me() {
-        Some((start, boot)) => (Some(start), Some(boot)),
-        None => (None, None),
-    };
-    let op_id = admission::op_id();
-    let (owner_runtime, owner_boot) = admission::owner_tokens(&format!(
-        "compact:{}",
-        layerfs_bridge::sdk_values::hex(&op_id)
-    ));
-    let receipt = handles
-        .compact_observed(
-            &CompactRequest {
-                op_id,
-                owner_pid: Some(std::process::id()),
-                owner_pid_start,
-                owner_pid_boot,
-                owner_runtime: Some(owner_runtime),
-                owner_boot: Some(owner_boot),
-                owner_live: Some(layerfs_home::process::recorded_owner_alive),
-                failpoint: crash_failpoint(),
-                ..CompactRequest::default()
-            },
-            &mut |phase| progress(events, phase, None),
+    let mut marker = Marker::begin(&home, store);
+    let outcome: Outcome = (|| {
+        let handles = SqliteHandles::open_writable(
+            PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
+            &identity.binding,
+            identity.cursor_key,
         )
-        .map_err(|error| {
-            lookup::history_in(error, GcScopeKind::Store, store, None, Some(&op_id))
-        })?;
-    Ok(crate::report::compact_report(&receipt))
+        .map_err(open_refusal)?;
+        let (owner_pid_start, owner_pid_boot) = match layerfs_home::process::me() {
+            Some((start, boot)) => (Some(start), Some(boot)),
+            None => (None, None),
+        };
+        let op_id = admission::op_id();
+        let (owner_runtime, owner_boot) = admission::owner_tokens(&format!(
+            "compact:{}",
+            layerfs_bridge::sdk_values::hex(&op_id)
+        ));
+        let receipt = handles
+            .compact_observed(
+                &CompactRequest {
+                    op_id,
+                    owner_pid: Some(std::process::id()),
+                    owner_pid_start,
+                    owner_pid_boot,
+                    owner_runtime: Some(owner_runtime),
+                    owner_boot: Some(owner_boot),
+                    owner_live: Some(layerfs_home::process::recorded_owner_alive),
+                    failpoint: crash_failpoint(),
+                    ..CompactRequest::default()
+                },
+                &mut |phase| {
+                    marker.at(phase);
+                    progress(events, phase, None)
+                },
+            )
+            .map_err(|error| {
+                lookup::history_in(error, GcScopeKind::Store, store, None, Some(&op_id))
+            })?;
+        Ok(crate::report::compact_report(store, &receipt))
+    })();
+    // the run's own record beside the Store says whether it settled
+    let left = layerfs_persistence::compact_op_status(&path).is_some();
+    marker.end(left, &outcome);
+    outcome
 }
 
 /// The §8 PostgreSQL path: dial the Store's recorded URL, open its schema as
@@ -185,34 +258,49 @@ fn compact_postgresql(
         ));
     };
     let selection = postgresql::open::selection(&url, schema, synchronous_commit);
-    let handles = PostgresHandles::open_writable(&selection, &id.binding, id.cursor_key)
-        .map_err(open_refusal)?;
-    let (owner_pid_start, owner_pid_boot) = match layerfs_home::process::me() {
-        Some((start, boot)) => (Some(start), Some(boot)),
-        None => (None, None),
+    let mut marker = Marker::begin(home, store);
+    let outcome: Outcome = (|| {
+        let handles = PostgresHandles::open_writable(&selection, &id.binding, id.cursor_key)
+            .map_err(open_refusal)?;
+        let (owner_pid_start, owner_pid_boot) = match layerfs_home::process::me() {
+            Some((start, boot)) => (Some(start), Some(boot)),
+            None => (None, None),
+        };
+        let op_id = admission::op_id();
+        let (owner_runtime, owner_boot) = admission::owner_tokens(&format!(
+            "compact:{}",
+            layerfs_bridge::sdk_values::hex(&op_id)
+        ));
+        let receipt = handles
+            .compact_observed(
+                &CompactRequest {
+                    op_id,
+                    owner_pid: Some(std::process::id()),
+                    owner_pid_start,
+                    owner_pid_boot,
+                    owner_runtime: Some(owner_runtime),
+                    owner_boot: Some(owner_boot),
+                    ..CompactRequest::default()
+                },
+                &mut |phase| {
+                    marker.at(phase);
+                    progress(events, phase, None)
+                },
+            )
+            .map_err(|error| {
+                lookup::history_in(error, GcScopeKind::Store, store, None, Some(&op_id))
+            })?;
+        Ok(crate::report::compact_report(store, &receipt))
+    })();
+    // the Store's own `gc_op` row says whether the run settled; when the
+    // server cannot say, only a lost reply leaves the outcome unknown
+    let left = match layerfs_persistence::postgresql_compact_status(&url, schema) {
+        Ok(None) => false,
+        Ok(Some(op)) => op.status().state == "unresolved",
+        Err(_) => matches!(&outcome, Err(refusal) if refusal.code == "Unknown"),
     };
-    let op_id = admission::op_id();
-    let (owner_runtime, owner_boot) = admission::owner_tokens(&format!(
-        "compact:{}",
-        layerfs_bridge::sdk_values::hex(&op_id)
-    ));
-    let receipt = handles
-        .compact_observed(
-            &CompactRequest {
-                op_id,
-                owner_pid: Some(std::process::id()),
-                owner_pid_start,
-                owner_pid_boot,
-                owner_runtime: Some(owner_runtime),
-                owner_boot: Some(owner_boot),
-                ..CompactRequest::default()
-            },
-            &mut |phase| progress(events, phase, None),
-        )
-        .map_err(|error| {
-            lookup::history_in(error, GcScopeKind::Store, store, None, Some(&op_id))
-        })?;
-    Ok(crate::report::compact_report(&receipt))
+    marker.end(left, &outcome);
+    outcome
 }
 
 /// An open refusal before the run: `Busy` is definite, everything else a
@@ -245,7 +333,7 @@ fn note_refusal(refusal: &SdkRefusal) {
 /// running on the Store in this process keeps it open and is `Busy`, naming
 /// the Store as the entity with a null `phase` and `op` because no operation
 /// holds it; everything else is returned unchanged. The cache's own `InUse`
-/// stays for the non-GC calls (`store.push`, `store.pull`, `store.remove`,
+/// stays for the non-GC calls (`store.move`, `store.remove`,
 /// `store.disconnect`, `backup.restore`) that close it.
 #[doc(hidden)]
 pub fn gc_refusal(store: &str, refusal: SdkRefusal) -> SdkRefusal {

@@ -17,11 +17,7 @@ use support::{items, Fixture};
 fn named(fixture: &Fixture, name: &str) -> SdkValue {
     fixture.call(
         "project.list_branches",
-        vec![
-            ("name", SdkValue::text(name)),
-            ("pageSize", SdkValue::Int(1000)),
-            ("pagePos", SdkValue::Int(0)),
-        ],
+        vec![("name", SdkValue::text(name))],
     )
 }
 
@@ -45,9 +41,9 @@ fn a_branch_is_listed_by_name_with_the_same_work_at_any_branch_count() {
         let work = fixture.since(before);
         let listed = items(&value);
         assert_eq!(listed.len(), 1, "{value:?}");
-        assert_eq!(listed[0].get_text("name"), Some("lane-00005"));
+        assert_eq!(listed[0].get_text("branch"), Some("lane-00005"));
         assert!(listed[0].get_text("id").is_some());
-        assert!(!value.get_bool("hasMore"));
+        assert_eq!(value.get("next"), Some(&SdkValue::Null));
         println!("SDK_MOUNT_LOOKUP branches={count} work={work:?}");
         observed.push(work);
     }
@@ -60,7 +56,7 @@ fn a_branch_is_listed_by_name_with_the_same_work_at_any_branch_count() {
     // main and an absent name: one item and none, never a listing.
     let main = named(&fixture, "main");
     assert_eq!(items(&main).len(), 1);
-    assert_eq!(items(&main)[0].get_text("name"), Some("main"));
+    assert_eq!(items(&main)[0].get_text("branch"), Some("main"));
     assert!(items(&named(&fixture, "no-such-lane")).is_empty());
     fixture.cleanup();
 }

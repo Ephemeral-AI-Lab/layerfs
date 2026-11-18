@@ -1,22 +1,19 @@
 //! `branch.list_commits`.
-use crate::methods::args::{paging, project, text, Answer};
-use crate::{
-    history::{branch, lookup, MAIN},
-    StoreService,
-};
+use crate::methods::args::{project, text, Answer};
+use crate::{history::listing, StoreService};
 use layerfs_bridge::control::SdkValue;
 
-/// `list_commits({ branch, pageSize?, pagePos? })`: one page, newest first.
-/// `main` lists the stack's published Layers (S §3.3). The Branch is
-/// resolved before the page arguments are read, as before.
+/// `list_commits({ branch, at?, after?, limit? })`: one page of the
+/// Branch's Commits, newest first; on `main`, its publications. `at` starts
+/// the first page at an older Commit (an id or a prefix); a later page names
+/// the Commit the first one started at as `at` and its own place as `after`.
 pub fn list_commits(service: &StoreService, args: &SdkValue) -> Answer {
     let stack = project(service, args)?;
-    let named = text(args, "branch")?;
-    if named == MAIN {
-        let (limit, pos) = paging(args)?;
-        return branch::list_layers(&service.store, &stack, limit, pos);
-    }
-    let branch = lookup::branch(&service.store, &stack, named)?;
-    let (limit, pos) = paging(args)?;
-    branch::list_commits(&service.store, &branch, limit, pos)
+    let branch = text(args, "branch")?;
+    let from = listing::From {
+        at: args.get_text("at"),
+        after: args.get_text("after"),
+    };
+    // the Branch is resolved before the page's limit is read
+    listing::commits(&service.store, &stack, branch, from, listing::limit(args))
 }

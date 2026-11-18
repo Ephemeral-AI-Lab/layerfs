@@ -1,7 +1,8 @@
-//! `branch.list` pages past the old 64-item window and the default page of
-//! 50, plain and under a folder scope: every page boundary is crossed, the
-//! last page says so, and a bad page is refused (#30, #33). The Store's
-//! paging is real: one Disposable home, Branches made by `branch.fork`.
+//! `branch.list` pages by its cursor past the old 64-item window and the
+//! default page of 100, plain and under a folder scope: every page boundary
+//! is crossed, the last page has no `next_cursor`, and a bad limit or cursor
+//! is refused (#30, #33; 2.0 call surface). The Store's paging is real: one
+//! Disposable home, Branches made by `branch.fork`.
 use layerfs_api::home;
 use layerfs_api::Scope;
 use layerfs_bridge::control::SdkValue;
@@ -63,36 +64,38 @@ fn names(page: &SdkValue) -> Vec<String> {
     match page.get("items") {
         Some(SdkValue::List(items)) => items
             .iter()
-            .map(|i| i.get_text("name").unwrap().to_owned())
+            .map(|i| i.get_text("branch").unwrap().to_owned())
             .collect(),
         other => panic!("no items: {other:?}"),
     }
 }
 
 /// Every page of `branch.list` at `size` (None: the default page), from the
-/// first: the pages' names, with each page's `has_more` and `next_page_pos`
-/// checked as it goes (the position moves strictly on; the last page has no
-/// next).
+/// first, each next page by the cursor the page before answered; the last
+/// page has none.
 fn walk(home: &Path, scope: Option<&Scope>, size: Option<i64>) -> Vec<Vec<String>> {
-    let (mut pages, mut pos) = (Vec::new(), 0i64);
+    let (mut pages, mut cursor) = (Vec::new(), None::<String>);
     loop {
         let mut args = vec![p()];
         if let Some(size) = size {
-            args.push(("page_size", SdkValue::Int(size)));
+            args.push(("limit", SdkValue::Int(size)));
         }
-        if pos > 0 {
-            args.push(("page_pos", SdkValue::Int(pos)));
+        if let Some(cursor) = &cursor {
+            args.push(("cursor", t(cursor)));
         }
         let page = call(home, scope, "branch.list", &args).unwrap_or_else(|e| panic!("{e:?}"));
-        let more = page.get("has_more") == Some(&SdkValue::Bool(true));
         pages.push(names(&page));
-        match (more, page.get_int("next_page_pos")) {
-            (true, Some(next)) => {
-                assert!(next > pos, "page {} did not move on: {next}", pages.len());
-                pos = next;
+        match page.get_text("next_cursor") {
+            Some(next) => {
+                assert_ne!(
+                    cursor.as_deref(),
+                    Some(next),
+                    "page {} did not move on",
+                    pages.len()
+                );
+                cursor = Some(next.to_owned());
             }
-            (false, None) => return pages,
-            other => panic!("has_more and next_page_pos disagree: {other:?} {page:?}"),
+            None => return pages,
         }
         assert!(pages.len() < 1000, "a list that never ends");
     }
@@ -119,7 +122,7 @@ fn project() -> (PathBuf, PathBuf) {
                 &[
                     p(),
                     ("name", t(&format!("{prefix}.{n:03}"))),
-                    ("from_branch", t("main")),
+                    ("from", t("main")),
                 ],
             );
         }
@@ -128,25 +131,28 @@ fn project() -> (PathBuf, PathBuf) {
 }
 
 #[test]
-fn a_list_pages_past_the_old_64_and_the_default_50() {
+fn a_list_pages_past_the_old_64_and_the_default_100() {
     let (home, folder) = project();
     // the whole list at the largest page: main and 173 Branches (the reply
     // budget may still cut a page short, so the pages are joined)
     let every = walk(&home, None, Some(1000)).concat();
     assert_eq!(every.len(), 174, "{every:?}");
-    // the default page is 50, and paging by it reaches every Branch once
+    // the default page is 100, and paging by it reaches every Branch once
     let by_default = walk(&home, None, None);
-    assert_eq!(by_default[0].len(), 50);
-    assert_eq!(by_default.len(), 4, "174 = 3 x 50 + 24");
+    assert_eq!(
+        by_default.iter().map(Vec::len).collect::<Vec<_>>(),
+        [100, 74]
+    );
     assert_eq!(by_default.concat(), every, "same items, same order");
-    // sizes around the old 64 window and the default 50
-    for size in [1, 49, 50, 51, 63, 64, 65, 173, 174, 175] {
+    // sizes around the old 64 window and the default 100
+    for size in [1, 49, 50, 51, 63, 64, 65, 99, 100, 101, 173, 174, 175] {
         let pages = walk(&home, None, Some(size));
-        assert_eq!(pages.concat(), every, "page_size {size}");
+        assert_eq!(pages.concat(), every, "limit {size}");
         assert!(pages
             .iter()
             .all(|page| !page.is_empty() && page.len() as i64 <= size));
-        if size <= 65 {
+        // a page also ends early at 64 KiB of rows
+        if size <= 101 {
             let full = pages.len() - 1;
             assert!(pages[..full].iter().all(|page| page.len() as i64 == size));
         }
@@ -165,16 +171,12 @@ fn a_scoped_list_pages_its_namespace_across_the_others() {
     ]))
     .unwrap();
     let expected: Vec<String> = (0..70).map(|n| format!("{n:03}")).collect();
-    // default page: 50 then 20; the namespace's names are relative
+    // one default page; the namespace's names are relative
     let by_default = walk(&home, Some(&scoped), None);
-    assert_eq!(
-        by_default.iter().map(Vec::len).collect::<Vec<_>>(),
-        [50, 20]
-    );
-    assert_eq!(by_default.concat(), expected);
+    assert_eq!(by_default, [expected.clone()]);
     for size in [1, 49, 50, 51, 63, 64, 65, 69, 70, 71, 1000] {
         let pages = walk(&home, Some(&scoped), Some(size));
-        assert_eq!(pages.concat(), expected, "page_size {size}");
+        assert_eq!(pages.concat(), expected, "limit {size}");
         let full = pages.len() - 1;
         assert!(pages[..full].iter().all(|page| page.len() as i64 == size));
     }
@@ -186,12 +188,28 @@ fn a_scoped_list_pages_its_namespace_across_the_others() {
     ]))
     .unwrap();
     assert_eq!(walk(&home, Some(&none), None), [Vec::<String>::new()]);
+    // a prefix narrows a page; the cursor carries it
+    let page = ok(
+        &home,
+        "branch.list",
+        &[p(), ("prefix", t("z.")), ("limit", SdkValue::Int(2))],
+    );
+    assert_eq!(names(&page), ["z.000", "z.001"]);
+    let cursor = page.get_text("next_cursor").unwrap().to_owned();
+    let rest = ok(&home, "branch.list", &[p(), ("cursor", t(&cursor))]);
+    assert_eq!(names(&rest), ["z.002"]);
+    let kept = ok(
+        &home,
+        "branch.list",
+        &[p(), ("exclude_prefix", t("a")), ("limit", SdkValue::Int(3))],
+    );
+    assert_eq!(names(&kept), ["main", "z.000", "z.001"]);
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(folder).unwrap();
 }
 
 #[test]
-fn a_bad_page_is_refused_and_a_page_past_the_end_is_empty() {
+fn a_bad_limit_or_cursor_is_refused_and_a_cursor_past_the_end_is_empty() {
     let (home, folder) = project();
     let scoped = Scope::parse(&map(&[
         ("project", t("shop/api")),
@@ -199,14 +217,25 @@ fn a_bad_page_is_refused_and_a_page_past_the_end_is_empty() {
         ("branch", t("agent")),
     ]))
     .unwrap();
+    let first = ok(
+        &home,
+        "branch.list",
+        &[p(), ("prefix", t("a.")), ("limit", SdkValue::Int(1))],
+    );
+    let made = first.get_text("next_cursor").unwrap().to_owned();
+    let other_call = layerfs_home::cursor::make("commit.list", t("a.000"), &[]);
     for scope in [None, Some(&scoped)] {
         for (what, args) in [
-            ("page_size 0", vec![("page_size", SdkValue::Int(0))]),
-            ("page_size 1001", vec![("page_size", SdkValue::Int(1001))]),
-            ("page_size -1", vec![("page_size", SdkValue::Int(-1))]),
-            ("page_pos -1", vec![("page_pos", SdkValue::Int(-1))]),
-            ("page_pos text", vec![("page_pos", t("next"))]),
-            ("page_size text", vec![("page_size", t("50"))]),
+            ("limit 0", vec![("limit", SdkValue::Int(0))]),
+            ("limit 1001", vec![("limit", SdkValue::Int(1001))]),
+            ("limit -1", vec![("limit", SdkValue::Int(-1))]),
+            ("limit text", vec![("limit", t("50"))]),
+            ("a cursor that is no cursor", vec![("cursor", t("next"))]),
+            ("another call's cursor", vec![("cursor", t(&other_call))]),
+            (
+                "a cursor with another prefix",
+                vec![("cursor", t(&made)), ("prefix", t("z."))],
+            ),
         ] {
             let mut given = vec![p()];
             given.extend(args);
@@ -214,20 +243,23 @@ fn a_bad_page_is_refused_and_a_page_past_the_end_is_empty() {
             assert_eq!(refused.0, "InvalidInput", "{what}: {refused:?}");
         }
         // past the end: an empty last page, not an error
-        let past = call(
-            &home,
-            scope,
-            "branch.list",
-            &[p(), ("page_pos", SdkValue::Int(100_000))],
-        )
-        .unwrap();
+        let past = layerfs_home::cursor::make("branch.list", t("zzz"), &[]);
+        let past = call(&home, scope, "branch.list", &[p(), ("cursor", t(&past))]).unwrap();
         assert!(names(&past).is_empty(), "{past:?}");
-        assert_ne!(
-            past.get("has_more"),
-            Some(&SdkValue::Bool(true)),
-            "{past:?}"
-        );
+        assert_eq!(past.get_text("next_cursor"), None, "{past:?}");
     }
+    // the same filter given again is accepted
+    let again = ok(
+        &home,
+        "branch.list",
+        &[
+            p(),
+            ("cursor", t(&made)),
+            ("prefix", t("a.")),
+            ("limit", SdkValue::Int(1)),
+        ],
+    );
+    assert_eq!(names(&again), ["a.001"]);
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(folder).unwrap();
 }

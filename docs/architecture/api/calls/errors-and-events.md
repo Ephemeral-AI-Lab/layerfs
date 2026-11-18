@@ -118,14 +118,14 @@ The CLI refuses a wrong command line itself, with exit 2, before any call
                                |
      +-------------------------+---------------------------+
      | operation with an intent (op)                       | Store call
-     | store push/pull/remove, machine create/remove,      | (file write,
+     | store move/remove, machine create/remove,           | (file write,
      | sandbox create/close                                |  merge, ...)
      v                                                     v
  record keeps op {uncertain: true}               engine keeps the private
  + line in log/uncertain.jsonl                   Workspace; detail names it
      |
      v  its process gone, later calls on the entity:
- "Unresolved"  --> show: store status | machine status | sandbox get
+ "Unresolved"  --> show: store get   | machine status | sandbox get
                    clear: store remove | machine remove | sandbox close
 ```
 
@@ -165,7 +165,7 @@ the call's own thread, before it returns.
 
 Twelve calls declare the shared `PROGRESS` option (`on_progress`; CLI
 `--progress`) in [`calls/table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs):
-`project.init`, `project.export`, `store.push`, `store.pull`, `store.compact`,
+`project.init`, `project.export`, `store.move`, `store.compact`,
 `backup.create`, `backup.restore`, `machine.start`, `machine.create`,
 `machine.load`, `sandbox.create` and `workspace.exec`. `workspace.exec` alone also declares the `stdout` and
 `stderr` functions. A function never crosses into the library:
@@ -174,7 +174,7 @@ refuses one as a value.
 
 | Shape | Calls | Source |
 | --- | --- | --- |
-| `{ phase, done, total }` | `project.init`, `store.push`, `store.pull`, `store.compact` | [`sqlite/family.rs`](../../../../control/crates/layerfs-store/src/sqlite/family.rs) `progress` |
+| `{ phase, done, total }` | `project.init`, `store.move`, `store.compact` | [`sqlite/family.rs`](../../../../control/crates/layerfs-store/src/sqlite/family.rs) `progress` |
 | `{ phase, files, directories, symlinks, bytes, done, total }` | `project.export` | [`project/export/writer.rs`](../../../../control/crates/layerfs-store/src/project/export/writer.rs) `phase_event` |
 | `{ phase, done, total, pieces }` | `backup.create`, `backup.restore` | [`backup/progress.rs`](../../../../control/crates/layerfs-store/src/backup/progress.rs) |
 | `{ exec: { id } }`, once, before the command starts | `workspace.exec` | [`workspace/exec.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/exec.rs) |
@@ -184,8 +184,8 @@ refuses one as a value.
 | Call | Phases or stages, in order |
 | --- | --- |
 | `project.init` | `check`, `send` (worker Stores only: first `done` 0, then one per 8 MiB of tree records, last `done == total`), `install`, `record` |
-| `store.push`, `store.pull` | `check`, `snapshot` (marker, then byte counts), `send` (8 MiB chunks, [`steps.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) `CHUNK`), `verify` (marker, then byte counts), `install`, `record`, `retire` |
-| `store.compact` | SQLite: `mark`, `build`, `verify`, `install`; PostgreSQL: `mark`, `build`, `swap`, `cleanup`. One event as each phase starts, with null counts; a run with nothing to rebuild sends `mark` alone. The SQLite settle (`cleanup` in `store.status`) is inside `install` |
+| `store.move` | `check`, `snapshot` (marker, then byte counts), `send` (8 MiB chunks, [`steps.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) `CHUNK`), `verify` (marker, then byte counts), `install`, `record`, `retire` |
+| `store.compact` | SQLite: `mark`, `build`, `verify`, `install`; PostgreSQL: `mark`, `build`, `swap`, `cleanup`. One event as each phase starts, with null counts; a run with nothing to rebuild sends `mark` alone. The SQLite settle (`cleanup` in `store get --with live`) is inside `install` |
 | `project.export` | `prepare`, `export` (first at zero, then at most one per 200 ms, last at the final counts), `finalize` (after the staging folder is renamed onto the destination) |
 | `backup.create` | `check`, `snapshot`, `send` (worker Stores only), `check`, `hash`, `upload` |
 | `backup.restore` | `check`, `download`, `verify`, `install` |
