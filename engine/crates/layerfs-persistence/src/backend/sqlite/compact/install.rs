@@ -283,9 +283,15 @@ pub(crate) fn remove_scratch(scratch: &Path) -> HistoryResult<()> {
 /// says whether a committed admission intent is still there to release (the
 /// pre-seal abort does; the rolled-back `none` mark and the already-released
 /// failure before the seal do not).
+///
+/// The artifacts go first: when the build failed because the disk is full,
+/// the fresh file is what fills it, and the release is a write transaction on
+/// the live Store that needs a few free pages. Releasing first left the intent
+/// live on a full disk, and every mount, Init, merge and removal answered
+/// `BusyOp` until a later compaction settled it.
 pub(crate) fn abort_before_install(store: &Path, op_id: &[u8; 16], release_intent: bool) {
-    let released = !release_intent || clear_installed_mark(store, op_id);
     let residue = clear_artifacts(store);
+    let released = !release_intent || clear_installed_mark(store, op_id);
     if residue.artifacts.is_empty() && released {
         // §9: only this run's record is removed, never one another run wrote.
         let _ = remove_op_record(store, op_id);
