@@ -787,3 +787,76 @@ fn a_lost_daemon_blocks_its_workspaces_without_trying_them() {
     );
     std::fs::remove_dir_all(home).unwrap();
 }
+
+/// A worker on `vm1` whose one `doctor.sandbox` report names Workspace
+/// `sb:agent` from a daemon list it never asked for.
+fn not_asking_worker(home: &Path) -> std::thread::JoinHandle<()> {
+    use layerfs_machine::worker::{read_frame_within, write_frame, MAX_HELLO, PROTOCOL};
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    write_record(
+        &paths::worker_record(home, "vm1"),
+        &SdkValue::map([("address", t(&address)), ("secret", t("worker-secret"))]),
+    )
+    .unwrap();
+    std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        stream
+            .set_write_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        assert!(read_frame_within(&mut stream, MAX_HELLO).unwrap().is_some());
+        let hello = SdkValue::map([
+            ("ready", SdkValue::Bool(true)),
+            ("protocol", SdkValue::Int(PROTOCOL)),
+        ]);
+        write_frame(&mut stream, &hello).unwrap();
+        let request = read_frame_within(&mut stream, 64 * 1024).unwrap().unwrap();
+        assert_eq!(request.get_text("op"), Some("doctor.sandbox"));
+        let workspace = SdkValue::map([
+            ("workspace", t("sb:agent")),
+            ("recorded", SdkValue::Bool(true)),
+        ]);
+        let report = SdkValue::map([
+            ("checks", SdkValue::List(Vec::new())),
+            ("listing", t("not_asked")),
+            ("workspaces", SdkValue::List(vec![workspace])),
+        ]);
+        write_frame(&mut stream, &SdkValue::map([("value", report)])).unwrap();
+    })
+}
+
+#[test]
+fn a_workspace_whose_list_was_not_asked_for_waits_on_its_sandbox_not_lost() {
+    let home = home();
+    write_entity(
+        &paths::machine_record(&home, "vm1"),
+        &SdkValue::map([("platform", t("lima")), ("state", t("running"))]),
+    )
+    .unwrap();
+    on_vm1(&home);
+    sandbox(&home, "vm1", SdkValue::Null);
+    let worker = not_asking_worker(&home);
+    let report = run(&home);
+    worker.join().unwrap();
+    let nodes = workspaces(&report);
+    assert_eq!(nodes.len(), 1, "{report:?}");
+    assert_eq!(
+        nodes[0].get_text("status"),
+        Some("not_checked"),
+        "{report:?}"
+    );
+    let entry = (list(&report, "not_checked").iter())
+        .find(|entry| entry.get_text("workspace") == Some("sb:agent"))
+        .unwrap_or_else(|| panic!("{report:?}"));
+    assert_eq!(entry.get("reason"), Some(&SdkValue::Null), "{report:?}");
+    let by = entry
+        .get("blocked_by")
+        .unwrap_or_else(|| panic!("{report:?}"));
+    assert_eq!(by.get_text("sandbox"), Some("sb"), "{report:?}");
+    assert_eq!(by.get_text("reason"), Some("not_answering"), "{report:?}");
+    assert!(!format!("{report:?}").contains("\"lost\""), "{report:?}");
+    std::fs::remove_dir_all(home).unwrap();
+}

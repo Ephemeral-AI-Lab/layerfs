@@ -6,11 +6,13 @@
 //! records (on `native` and for a Sandbox reached directly the home's, on
 //! another machine its worker's own); a recorded one the daemon does not
 //! hold is a finding. A list that gave no verdict leaves every Workspace
-//! `not_checked` with its `reason`.
+//! `not_checked` with its `reason`; a list never asked for leaves each
+//! `blocked_by` its Sandbox, `not_answering`: no probe was tried.
 use super::frame::Probe;
 use super::report::{NoVerdict, Node, NotChecked, Thing};
 use super::target::Checks;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::state::BlockedBy;
 use std::path::Path;
 
 /// The `workspace` kind's checks, in the order they run.
@@ -162,18 +164,27 @@ fn unmount_fix(handle: &str) -> String {
     format!("layerfs workspace unmount {handle} --discard --force")
 }
 
-/// One node per Workspace in `seen`, from the daemon's list as `listing`
-/// left it.
-pub(super) fn nodes(seen: &[Seen], listing: Listing) -> Vec<Node> {
-    seen.iter().map(|one| node(one, listing)).collect()
+/// One node per Workspace in `seen` of Sandbox `sandbox`, from the
+/// daemon's list as `listing` left it.
+pub(super) fn nodes(sandbox: &str, seen: &[Seen], listing: Listing) -> Vec<Node> {
+    seen.iter().map(|one| node(sandbox, one, listing)).collect()
 }
 
-fn node(seen: &Seen, listing: Listing) -> Node {
+fn node(sandbox: &str, seen: &Seen, listing: Listing) -> Node {
     let thing = Thing::new(super::report::Kind::Workspace, &seen.handle);
     let reason = match listing {
         Listing::Read => None,
         Listing::NoVerdict(reason) => Some(reason),
-        Listing::NotAsked => Some(NoVerdict::Lost),
+        // nothing reached its daemon's list: no probe was tried, so nothing
+        // was lost; it waits on its Sandbox
+        Listing::NotAsked => {
+            let by = BlockedBy {
+                thing: "sandbox",
+                handle: sandbox.to_owned(),
+                reason: "not_answering",
+            };
+            return Node::blocked(thing, by);
+        }
     };
     if let Some(reason) = reason {
         return unchecked(thing, reason);
