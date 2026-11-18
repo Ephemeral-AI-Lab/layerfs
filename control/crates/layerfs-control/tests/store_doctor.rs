@@ -271,3 +271,68 @@ fn a_worker_makes_the_shallow_cut_and_refuses_a_request_without_one() {
     assert_eq!(ask(full).unwrap_err().code, "InvalidInput");
     drop(writer);
 }
+
+/// A `<store>.compact-op` record beside `file` naming this process as its
+/// owner (`live`), or a process that is gone.
+fn compact_record(file: &Path, live: bool) {
+    let (start, boot) = match (live, layerfs_home::process::me()) {
+        (true, Some((start, boot))) => (start.to_string(), format!("{boot:032x}")),
+        (true, None) => (String::new(), String::new()),
+        (false, _) => ("1".to_owned(), "0".repeat(32)),
+    };
+    let zeros = |n: usize| "0".repeat(n);
+    let text = format!(
+        "version=1\nop_id={}\ngeneration=4\nphase=build\nstarted_ms=1794993419000\n\
+owner_pid={}\nowner_pid_start={start}\nowner_pid_boot={boot}\nowner_pid_namespace=\n\
+catalog_id={}\nnext_history_serial=1\nnext_pack_id=1\nnext_ordinal=1\n\
+mark_serial=0\nmark_pack_id=1\nmark_digest={}\nmark_totals=0,0,0,0\nmark_stamp=0\nhistory_rows=0\n\
+live_heads_digest={}\nreturned=0\n",
+        zeros(32),
+        std::process::id(),
+        zeros(32),
+        zeros(64),
+        zeros(64),
+    );
+    let mut path = file.as_os_str().to_owned();
+    path.push(".compact-op");
+    std::fs::write(path, text).unwrap();
+}
+
+/// v19: `store.operation` also reads the compaction record beside a sqlite
+/// Store's file through its machine: a run live there passes, naming its
+/// phase; a run whose process is gone fails with `store compact` as the fix.
+#[test]
+fn store_operation_reads_the_compaction_record_beside_the_file() {
+    let f = Fixture::new();
+    let path = paths::store_file(&f.root, "one");
+    let writer = store_file(&path);
+    write_entity(&paths::store_record(&f.root, "one"), &fields("one")).unwrap();
+    compact_record(&path, true);
+    let out = report(&f.root, "one");
+    assert_eq!(
+        rows(&out)[1],
+        ("store.operation".to_owned(), "pass".to_owned())
+    );
+    assert!(
+        !list(&out, "findings")
+            .iter()
+            .any(|f| f.get_text("check") == Some("store.operation")),
+        "{out:?}"
+    );
+    compact_record(&path, false);
+    let out = report(&f.root, "one");
+    let finding = list(&out, "findings")
+        .iter()
+        .find(|f| f.get_text("check") == Some("store.operation"))
+        .unwrap_or_else(|| panic!("an operation finding: {out:?}"))
+        .clone();
+    assert_eq!(finding.get_text("severity"), Some("error"), "{finding:?}");
+    assert!(
+        finding
+            .get_text("message")
+            .is_some_and(|m| m.contains("compaction") && m.contains("build")),
+        "{finding:?}"
+    );
+    assert_eq!(finding.get_text("fix"), Some("layerfs store compact one"));
+    drop(writer);
+}

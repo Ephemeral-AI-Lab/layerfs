@@ -547,18 +547,29 @@ impl Machine<'_> {
         }
     }
 
-    /// `machine.capacity`: its data disk has room.
+    /// `machine.capacity`: its data disk has room. Its evidence adds the
+    /// bytes of its image cache `machine prune --unused` frees
+    /// (`reclaimable_image_bytes`, from the machine's image listing); that
+    /// prune is the fix only when there are such bytes.
     fn capacity(&mut self, free: Option<u64>) {
+        use layerfs_bridge::control::SdkValue;
         const ID: &str = "machine.capacity";
+        let reclaimable = layerfs_home::names::MachineName::parse(self.name)
+            .ok()
+            .and_then(|machine| layerfs_sandbox::images::list(self.home, &machine, false).ok())
+            .map(|listed| layerfs_sandbox::images::reclaimable(&listed));
+        let fix = reclaimable
+            .filter(|bytes| *bytes > 0)
+            .map(|_| format!("layerfs machine prune {} --unused", self.name));
+        let bytes = reclaimable.and_then(|n| i64::try_from(n).ok());
+        let evidence = vec![(
+            "reclaimable_image_bytes",
+            bytes.map_or(SdkValue::Null, SdkValue::Int),
+        )];
         match free {
-            Some(free) => super::capacity::room(
-                self.checks,
-                ID,
-                "its data disk",
-                free,
-                Some(format!("layerfs machine prune {} --unused", self.name)),
-                Vec::new(),
-            ),
+            Some(free) => {
+                super::capacity::room(self.checks, ID, "its data disk", free, fix, evidence)
+            }
             None => self.checks.unknown(
                 ID,
                 "neither its provider nor its worker measured its data disk",

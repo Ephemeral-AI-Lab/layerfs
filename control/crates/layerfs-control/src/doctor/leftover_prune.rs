@@ -17,7 +17,7 @@
 //! | `empty_root` | its run folder is gone; not a mount point (mount table, and its device is its parent's); `rmdir` only |
 //! | `backup_staging` | the Store's `backup.lock` in the home, taken without waiting and held for the removal |
 //! | `image_tmp` | the image's `<hex>.2.lock`, taken without waiting; the lock file stays |
-//! | `image_part` | not written for an hour |
+//! | `export_container` | (host's Docker, `native` only) the copy lock of its machine and image in the home, taken without waiting and held while `docker rm -v` removes it |
 //! | `init_copy` | a line of the home's `log/uncertain.jsonl` names this machine and copy, and its deadline passed more than an hour ago; then the worker's `project.stage` discard removes it. A copy no line names, or one with no deadline, is report-only (`InvalidInput`) |
 //!
 //! `NotFound`: an id no walk gives, or an entry that is gone. `InvalidInput`:
@@ -37,8 +37,6 @@ use std::time::{Duration, SystemTime};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// How long a received image part must have been unchanged.
-pub const PART_QUIET: Duration = Duration::from_secs(60 * 60);
 /// How long a run folder's `owner` marker must have been there: a start
 /// writes it just before its record.
 pub const OWNER_QUIET: Duration = Duration::from_secs(60);
@@ -67,6 +65,7 @@ pub fn prune(home: &Path, id: &str) -> Outcome {
     }
     let removed = match kind {
         Kind::InitCopy => init_copy(home, machine, name, id)?,
+        Kind::ExportContainer => export_container(home, name).map_err(|r| renamed(r, id))?,
         _ => {
             // a create of this Store stages at these paths: held until the
             // removal ends
@@ -129,6 +128,17 @@ fn backup_lock(
             _ => refusal,
         }
     })
+}
+
+/// An image export container in the host's Docker, under its image's copy
+/// lock: `{ path: null, freed_bytes: null }`.
+fn export_container(home: &Path, name: &str) -> Outcome {
+    let docker = layerfs_sandbox::docker::Docker::of(home)?;
+    layerfs_sandbox::image_exports::remove_left_export(&docker, home, name)?;
+    Ok(SdkValue::map([
+        ("path", SdkValue::Null),
+        ("freed_bytes", SdkValue::Null),
+    ]))
 }
 
 /// A folder copy: removable only when an uncertain line names it and its
@@ -241,21 +251,7 @@ pub fn prune_on(root: &Path, kind: Kind, name: &str, known: &[String]) -> Outcom
             }
             Err(error) => return Err(failed(error)),
         },
-        Kind::ImagePart if found.is_file() => {
-            let quiet = (found.modified().ok())
-                .and_then(|at| SystemTime::now().duration_since(at).ok())
-                .unwrap_or_default();
-            if quiet < PART_QUIET {
-                return Err(in_use(format!(
-                    "the received image was written {} s ago, and a load may still be sending it: it is removable once unchanged for {} s",
-                    quiet.as_secs(),
-                    PART_QUIET.as_secs()
-                )));
-            }
-            std::fs::remove_file(&path).map_err(failed)?;
-            Some(found.len())
-        }
-        Kind::InitCopy => {
+        Kind::InitCopy | Kind::ExportContainer => {
             return Err(refused(
                 "InvalidInput",
                 format!("`{}` entries are not removed here", kind.as_str()),

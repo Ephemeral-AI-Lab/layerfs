@@ -125,9 +125,13 @@ last, attempt }`, `profile`, `synchronous_commit`, `sqlite_version`,
 reads the Store where it lives, starting nothing: a sqlite Store's file by
 `stat`, its compaction record and its heads, in this process on `native`
 or through its worker (`StoreStep::Stat`, `CompactOp`, `Heads`); a
-PostgreSQL Store's server from this process. A blocked Store is not read.
+PostgreSQL Store's server from this process. A blocked Store is not read:
+`blocked` comes first in a live read, even over an op the Store's record
+holds (spec v19; the records-only read keeps the held state first).
 The read sets `state`: `broken` `missing` (no file), `broken` `unreachable`
-(no server), `busy` or `broken` `unresolved` from a compaction's own record,
+(no server), `busy` or `broken` `unresolved` from a compaction's own record
+(a run live on the machine is `busy` even when the home's record holds it
+unresolved after a lost reply),
 `unknown` with the last known `observed_at` when the machine does not
 answer. The record is written, under the Store's lock, only when the
 reason it found changed (moving the home's generation); `observed_at` is
@@ -368,7 +372,16 @@ released the writer lane just before its `cleanup` settle stays protected. A
 returned run's record, whether the run left a residue or an unknown outcome, is
 a leftover the next call adopts and settles even though the owner process is
 alive. The settle and a pre-install abort remove the record only while it still
-names the operation being settled.
+names the operation being settled. A panic out of the run marks the record
+returned on its way out (a drop guard), so it is adopted as a leftover, not
+held as live. While a live run's record names the Store on a machine, a
+move's or remove's file steps there (`snapshot`, `stage`, `install`,
+`retire`, `remove`) refuse `Busy` naming it (`compact::refuse_while_running`).
+In a worker a Store whose file is absent answers `NotFound` before anything
+is made. Refusals the run raises without a `fix` get one at the call
+(`layerfs-control/src/store.rs`): a worker of another build, replace the
+worker; a machine not answering, `layerfs machine start <m>`; `Unknown` and
+`Unresolved`, `layerfs store compact <store>`.
 
 ```text
 JS      await layerfs.store.compact(name, { on_progress })

@@ -5,8 +5,11 @@
 //! worker's `store.diagnose` with `cut: schema` elsewhere), which also
 //! reads its heads when it has a bucket link; a PostgreSQL Store from this
 //! computer, then once more from each machine with a Sandbox of it and from
-//! `--machine` (R9), one `store.connection` each with `from`. Under a
-//! machine that is not ready only the records checks are made.
+//! `--machine` (R9), one `store.connection` each with `from`.
+//! `store.operation` reads the home's record and, for a sqlite Store, the
+//! compaction record beside its file through its machine (the shallow cut
+//! answers it, spec v19). Under a machine that is not ready only
+//! `store.record` is made: the rest wait on the machine.
 use super::frame::{CheckId, Probe};
 use super::report::Node;
 use super::target::{Budget, Checks};
@@ -56,16 +59,19 @@ pub(super) fn run(probe: &Probe<'_>, node: &mut Node) {
         if let Ok(recorded) = layerfs_store::state::recorded(probe.home, &record, &machines) {
             state = recorded;
         }
-        operation(probe.home, &record, &mut checks);
         match &state {
             State::Blocked(by) => {
                 let message = format!("its {} {} is not ready", by.thing, by.handle);
+                checks.waits(OPERATION, message.clone(), by.clone());
                 checks.waits(CONNECTION, message, by.clone());
             }
             _ => match record.store_ref() {
-                Ok(StoreRef::Postgres { .. }) => postgresql(probe, &record, &identity, &mut checks),
+                Ok(StoreRef::Postgres { .. }) => {
+                    operation(probe.home, &record, None, &mut checks);
+                    postgresql(probe, &record, &identity, &mut checks)
+                }
                 Ok(StoreRef::Sqlite { .. }) => sqlite(probe, &record, &identity, &mut checks),
-                Err(_) => {}
+                Err(_) => operation(probe.home, &record, None, &mut checks),
             },
         }
     }
@@ -127,11 +133,25 @@ fn resolve(home: &Path, name: &str, checks: &mut Checks) -> Option<(StoreRecord,
 }
 
 /// `store.operation`: no operation on it is half-finished or left with its
-/// outcome not known, and no lease is stale; read from the home's records.
-fn operation(home: &Path, record: &StoreRecord, checks: &mut Checks) {
+/// outcome not known, and no lease is stale; read from the home's records
+/// and, for a sqlite Store, from `compaction`, the compaction record beside
+/// its file as its machine read it (`report::compact_status`, null when
+/// there is none). A run live there passes, even when the home's record
+/// holds it unresolved after a lost reply.
+fn operation(
+    home: &Path,
+    record: &StoreRecord,
+    compaction: Option<&SdkValue>,
+    checks: &mut Checks,
+) {
     let name = record.name();
-    match record.op() {
-        Some(op) if op.standing() == Standing::Unresolved => {
+    let there = compaction.and_then(|run| Some((run.get_text("state")?, run.get_text("phase")?)));
+    match (record.op(), there) {
+        (_, Some(("busy", phase))) => checks.pass(
+            OPERATION,
+            format!("a compaction is running on it where it lives (phase {phase})"),
+        ),
+        (Some(op), _) if op.standing() == Standing::Unresolved => {
             let message = format!(
                 "a {} on it left its outcome not known, and its process is gone",
                 op.word()
@@ -139,10 +159,17 @@ fn operation(home: &Path, record: &StoreRecord, checks: &mut Checks) {
             checks.fail(OPERATION, message);
             checks.fix(OPERATION, format!("layerfs {}", clearing_call(&op, name)));
         }
-        Some(op) if op.standing() == Standing::Running => checks.pass(
+        (Some(op), _) if op.standing() == Standing::Running => checks.pass(
             OPERATION,
             format!("a {} is running on it (phase {})", op.word(), op.phase()),
         ),
+        (_, Some(("unresolved", phase))) => {
+            let message = format!(
+                "a compaction on it left its outcome not known in phase {phase}, and its process is gone"
+            );
+            checks.fail(OPERATION, message);
+            checks.fix(OPERATION, format!("layerfs store compact {name}"));
+        }
         _ => checks.pass(OPERATION, "no operation on it is unfinished"),
     }
     match layerfs_store::lease::read_holders(home, name) {
@@ -185,6 +212,7 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
     let found = match found {
         Ok(found) => found,
         Err(error) => {
+            operation(probe.home, record, None, checks);
             let message = format!("machine {machine} did not answer: {}", error.message);
             match error.code.as_str() {
                 "Busy" => checks.busy(CONNECTION, message),
@@ -193,6 +221,7 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
             return;
         }
     };
+    operation(probe.home, record, found.get("compaction"), checks);
     let text = |key: &str| found.get_text(key).map(str::to_owned);
     if found.get("found") != Some(&SdkValue::Bool(true)) {
         checks.fail(
@@ -253,13 +282,17 @@ fn backups(record: &StoreRecord, now: Option<String>, error: Option<String>, che
 }
 
 /// The shallow cut of the sqlite file at `path`, as this process or a
-/// worker makes it: `{ found, unsupported, schema_error, heads,
-/// heads_error }`, its heads read only when `heads` and the schema check
-/// passed.
+/// worker makes it: `{ found, compaction, unsupported, schema_error, heads,
+/// heads_error }`, `compaction` the run its `<store>.compact-op` records
+/// (`report::compact_status`), its heads read only when `heads` and the
+/// schema check passed.
 fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
     let mut fields = vec![("found", SdkValue::Bool(path.is_file()))];
     if !path.is_file() {
         return map(fields);
+    }
+    if let Some(run) = layerfs_store::compact::recorded_run(path) {
+        fields.push(("compaction", run));
     }
     match diagnostic::sqlite_schema(path, identity) {
         Err(error) if error.code == "Unsupported" => {

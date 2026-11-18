@@ -285,3 +285,29 @@ fn the_worker_operation_needs_a_sqlite_store_record() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// Plan Part 3 fix 4: a worker asked to compact a Store whose file it does
+/// not hold answers `NotFound`, and makes no lease folder for it first.
+#[test]
+fn a_worker_without_the_store_file_answers_not_found_and_makes_nothing() {
+    let root = tempdir("missing");
+    let endpoint = serve(&root);
+    let sqlite = SdkValue::map([
+        ("name", text("shop")),
+        ("kind", text("sqlite")),
+        ("machine", text("native")),
+    ]);
+    let refusal = worker::call(
+        &endpoint,
+        "store.compact",
+        SdkValue::map([("store", text("shop")), ("store_record", sqlite)]),
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert_eq!(refusal.code, "NotFound", "{}", refusal.message);
+    assert!(
+        !paths::store_dir(&root, "shop").exists(),
+        "no Store folder (and no open/ lease folder) was made"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

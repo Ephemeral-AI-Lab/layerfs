@@ -3,11 +3,14 @@
 //! file through its machine (in this process for `native`, else its
 //! worker), a PostgreSQL Store's server from this computer.
 //!
-//! The read gives the state: `broken` `missing` when no file is where the
-//! record says, `broken` `unreachable` when the server does not answer,
-//! `busy` or `broken` `unresolved` from a compaction's own record, `unknown`
-//! (with when LayerFS last knew) when the machine does not answer, else
-//! the records-only state. The record is written only when what the read
+//! The read gives the state: `blocked` first, with nothing asked, while a
+//! sqlite Store's machine is not ready; `broken` `missing` when no file is
+//! where the record says, `broken` `unreachable` when the server does not
+//! answer, `busy` or `broken` `unresolved` from a compaction's own record
+//! (read through the machine; a run live there is `busy` even when this
+//! home's record holds it unresolved after a lost reply, spec v19),
+//! `unknown` (with when LayerFS last knew) when the machine does not
+//! answer, else the records-only state. The record is written only when what the read
 //! found wrong ([`state::SEEN`]) changed, which moves the home's
 //! generation; `observed_at` goes to the observation file, which does not.
 //! A backup or a restore whose owner is gone with its outcome unknown is
@@ -207,8 +210,15 @@ pub fn read(home: &Path, record: StoreRecord, machines: state::Machines) -> Resu
     let holders = holders.iter().map(|pid| SdkValue::Int(i64::from(*pid)));
     let holders = SdkValue::List(holders.collect());
     // what the records say first: a Store whose machine is not ready is
-    // blocked, and nothing is asked of a machine that is not running
-    let recorded = state::recorded(home, &record, machines)?;
+    // blocked, whatever its own record holds, and nothing is asked of a
+    // machine that is not running
+    let recorded = match state::placed(&record) {
+        Some(machine) => match machines(home, machine)?.blocks("machine", machine) {
+            Some(blocked) => blocked,
+            None => state::recorded(home, &record, machines)?,
+        },
+        None => state::recorded(home, &record, machines)?,
+    };
     let found = match (&recorded, record.store_ref()) {
         (State::Blocked(_), _) | (_, Err(_)) => None,
         // a 1.1.0 Store whose machine its record does not tell: nowhere to read
@@ -279,9 +289,10 @@ pub fn read(home: &Path, record: StoreRecord, machines: state::Machines) -> Resu
     let left = matches!(compaction, Some(State::Broken { .. }));
     let wrong = found.wrong.or(left.then_some(Reason::Unresolved));
     let record = remember(home, &store, record, wrong.map(Reason::word))?;
+    // a run live where the Store lives wins over this home's record of it
     let state = match (state::held(&record), compaction) {
+        (_, Some(busy @ State::Busy { .. })) => busy,
         (Some(held), _) => held,
-        (None, Some(busy @ State::Busy { .. })) => busy,
         (None, _) => state::recorded(home, &record, machines)?,
     };
     let behind = match (&record.store_ref(), &found.heads) {
