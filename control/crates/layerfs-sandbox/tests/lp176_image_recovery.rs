@@ -1283,11 +1283,24 @@ fn real_docker_and_small_tar_preserve_mtime_mode_sha_and_record_config() {
         .find(|r| r.get_text("id") == Some(id.as_str()))
         .unwrap();
     assert_eq!(row.get_text("variant"), Some("v8"));
+    // machine.images shows the Env names, never their values; the sidecar
+    // on the machine keeps the whole record
+    let listed = SdkValue::map([
+        (
+            "Env",
+            SdkValue::List(vec![SdkValue::text("LP176_TEST_VAR")]),
+        ),
+        ("WorkingDir", SdkValue::text("/srv/work")),
+        ("User", SdkValue::text("nobody")),
+    ]);
     assert_eq!(
         row.get("config"),
-        Some(&cfg),
-        "config must be visible in machine.images: {row:?}"
+        Some(&listed),
+        "config must be visible in machine.images without Env values: {row:?}"
     );
+    assert!(!format!("{row:?}").contains("recorded_only"), "{row:?}");
+    let kept = cache::SidecarInfo::read(&cache_dir, &hex).unwrap().unwrap();
+    assert_eq!(kept.sidecar.config, cfg);
 
     // Also test real Docker image with ENV/WORKDIR/USER/FIFO/mode/mtime.
     if docker_available() {

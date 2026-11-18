@@ -206,7 +206,7 @@ fn listing(machine: &str, side: &Side<'_>, choice: &Choice) -> Outcome {
     let published: BTreeSet<String> = rows.iter().map(|r| r.sidecar.id.clone()).collect();
     let mut images: Vec<SdkValue> = rows
         .into_iter()
-        .map(|row| home::with_field(row.to_value(), "staged", SdkValue::Bool(false)))
+        .map(|row| home::with_field(env_names(row.to_value()), "staged", SdkValue::Bool(false)))
         .collect();
     append_cache_leftovers(root, machine, &dir, &published, &mut images)?;
     images.sort_by(|a, b| {
@@ -226,6 +226,28 @@ fn listing(machine: &str, side: &Side<'_>, choice: &Choice) -> Outcome {
         ),
         ("images", SdkValue::List(images)),
     ]))
+}
+
+/// A listing row whose `config.Env` keeps only the variable names: a value can
+/// be a secret (`ENV TOKEN=...`) that the answer, its traces and a UI would
+/// carry. The sidecar on the machine keeps the whole record.
+fn env_names(row: SdkValue) -> SdkValue {
+    let Some(SdkValue::Map(config)) = row.get("config").cloned() else {
+        return row;
+    };
+    let name = |var: SdkValue| match var {
+        SdkValue::Text(text) => SdkValue::text(text.split('=').next().unwrap_or("")),
+        _ => SdkValue::Null,
+    };
+    let config = config
+        .into_iter()
+        .map(|(field, value)| match (field.as_str(), value) {
+            ("Env", SdkValue::List(vars)) => {
+                (field, SdkValue::List(vars.into_iter().map(name).collect()))
+            }
+            (_, value) => (field, value),
+        });
+    home::with_field(row, "config", SdkValue::Map(config.collect()))
 }
 
 /// Appends staged `.recv-<hex>.part` rows and stranded `<hex>.2` rows found in `dir`.

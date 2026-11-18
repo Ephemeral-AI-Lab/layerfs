@@ -186,9 +186,11 @@ still hold (`bundle`, `machine`, `staged: false`), staged partial downloads
 in seconds, and `resumable` true only when a non-empty regular file is not yet
 published and not held by a live `ImageLock` or `.2.lock`), and any stranded
 unpacked directories left without a sidecar (`source: "stranded"`,
-`staged: false`, `stranded: true`). `variant` and `config` (such as `Env`,
-`WorkingDir`, `User`) are recorded on import/publish and surfaced without
-being applied. `id` is the Docker image Id for an
+`staged: false`, `stranded: true`). `variant` and `config` (`Env`,
+`WorkingDir`, `User`, `Entrypoint`, `Cmd`) are recorded on import/publish and
+surfaced without being applied; `config.Env` lists the variable names only,
+never their values (a value can be a secret), while the sidecar on the machine
+keeps them. `id` is the Docker image Id for an
 imported image and the config digest for an archive's. `sandboxes` counts
 the Sandbox records on this machine naming that `id`; `last_used` is the
 last create's time (RFC 3339) or null. `default` is the record's image, else
