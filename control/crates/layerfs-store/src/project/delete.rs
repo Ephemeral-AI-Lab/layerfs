@@ -82,7 +82,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 mod remote;
 pub use remote::listed_unknown;
-use remote::{listed_stack, open_args, Remote};
+use remote::{listed_on_worker, listed_stack, open_args, Remote};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -753,15 +753,12 @@ pub fn delete(
                     delete_with(&home, store, name, stack, &mut effects)
                 }
                 Executor::Worker(worker) => {
-                    if stack.is_none() && project_record.is_some() {
-                        return Err(refused(
-                            "Unsupported",
-                            format!(
-                                "project {store}/{name} has no recorded LayerStack id and its Store is on another machine; \
-                                 list it on that machine first"
-                            ),
-                        ));
-                    }
+                    // a record with no Stack id (an Init through the worker
+                    // whose outcome is not known) asks the Store's own list
+                    let stack = match (stack, &project_record) {
+                        (None, Some(_)) => listed_on_worker(&home, name, &record)?,
+                        (stack, _) => stack,
+                    };
                     let mut effects = Remote {
                         worker,
                         store: store.to_owned(),

@@ -37,7 +37,11 @@ pub fn list(home: &Path, request: &ProjectList) -> Outcome {
 /// project's record while it runs: a certain failure drops it, an unknown
 /// outcome keeps it uncertain (`broken` `unresolved` until the delete is
 /// run again). An Init that stopped part-way and never reached the Store
-/// is cleared by removing its entry. Answers `{ ok, home_entry_kept,
+/// is cleared by removing its entry, and so is any entry whose project the
+/// Store's own list does not hold (deleted from another home; the fix
+/// `project doctor` names). An Init through a machine's worker whose
+/// outcome is not known, recorded with no stack id, is resolved by that
+/// Store's list, read once: retired there when it is listed. Answers `{ ok, home_entry_kept,
 /// outcome, deleted_at }`; a home entry it could not remove is kept for the
 /// next run, the project being retired already.
 pub fn delete(home: &Path, events: &mut Events<'_>, project: &ProjectRef) -> Outcome {
@@ -47,9 +51,15 @@ pub fn delete(home: &Path, events: &mut Events<'_>, project: &ProjectRef) -> Out
     op::begin(home, store, name, DELETE, "mark")?;
     let outcome =
         match layerfs_store::project::delete::delete(home, events, project, PROJECT_RELATED) {
-            Err(refusal) if refusal.code == "NoSuchProject" && left_init => {
-                op::remove_entry(home, store, name)
-                    .map(|()| removed(layerfs_home::home::now_ms(), true))
+            Err(refusal) if refusal.code == "NoSuchProject" => {
+                // a list that cannot be read leaves the Store's answer and
+                // the entry as they are
+                let clear = left_init || unlisted(home, store, name).unwrap_or(false);
+                match clear {
+                    true => op::remove_entry(home, store, name)
+                        .map(|()| removed(layerfs_home::home::now_ms(), true)),
+                    false => Err(refusal),
+                }
             }
             Ok(value) => {
                 let deleted_ms = value
@@ -61,6 +71,23 @@ pub fn delete(home: &Path, events: &mut Events<'_>, project: &ProjectRef) -> Out
         };
     settle(home, store, name, &outcome);
     outcome
+}
+
+/// Whether the home records project `name` of Store `store` and the Store's
+/// own list does not hold it, by the record's stack id or, for a record
+/// without one, by its name (the `project.listed` comparison `project
+/// doctor` makes, whose fix is `project delete`): an entry left by a delete
+/// from another home, or by an Init that never reached the Store. A list
+/// that cannot be read is its refusal.
+fn unlisted(home: &Path, store: &str, name: &str) -> Result<bool, SdkRefusal> {
+    let (Some(record), Some(project)) = (
+        layerfs_store::record::StoreRecord::read(home, store)?,
+        ProjectRecord::read(home, store, name)?,
+    ) else {
+        return Ok(false);
+    };
+    let projects = layerfs_store::project::live::projects(home, store, &record, false)?;
+    Ok(layerfs_store::project::live::find(&project, name, &projects).is_none())
 }
 
 /// The delete's answer.

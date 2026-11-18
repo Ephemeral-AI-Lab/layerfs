@@ -6,7 +6,9 @@
 //! the named thing, else the list word of the kind being checked, `done`
 //! and `total` counting things (the total is known from records, and from
 //! what the named thing's own check listed, before the first thing on it is
-//! checked). A parent that failed or is stopped blocks what is on it:
+//! checked). A Full check that walks data sends its own events while it
+//! runs, `{ phase, done, total }` without `node` (the project's `data`
+//! phase counts the trees it read). A parent that failed or is stopped blocks what is on it:
 //! those things are not tried, each one `not_checked` with `blocked_by`
 //! naming the root of the block. Nothing is retried.
 //!
@@ -21,6 +23,7 @@ use crate::home::Build;
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::events::Events;
 use layerfs_home::state::{BlockedBy, State};
+use std::cell::RefCell;
 use std::path::Path;
 use std::time::Duration;
 
@@ -83,7 +86,13 @@ pub struct Probe<'a> {
     pub blocked: Option<&'a BlockedBy>,
     /// The call's options.
     pub options: &'a Options,
+    /// Sends one progress event `{ phase, done, total }` while a long check
+    /// runs (a Full check's walk); the frame sends each finished thing's.
+    pub progress: &'a Progress<'a>,
 }
+
+/// Sends one progress event: `phase`, `done`, `total`.
+pub type Progress<'a> = dyn Fn(&str, u64, u64) + 'a;
 
 /// One kind's doctor.
 #[derive(Clone, Copy)]
@@ -149,13 +158,18 @@ pub fn run_with(
     events: &mut Events<'_>,
 ) -> Result<Report, SdkRefusal> {
     let located = (registry.locate)(home, &root)?;
+    let events = RefCell::new(events);
+    let progress = |phase: &str, done: u64, total: u64| {
+        let count = |n: u64| Some(i64::try_from(n).unwrap_or(i64::MAX));
+        (events.borrow_mut()).phase(phase, count(done), count(total), Vec::new());
+    };
     let mut tree = visit(
         registry,
         home,
         &root,
         options.full,
         (&located.state, located.blocked.as_ref()),
-        options,
+        (options, &progress),
     );
     // a kind whose own check observes what is on its thing (a Sandbox's
     // daemon lists its Workspaces) makes their nodes itself: those join
@@ -168,16 +182,23 @@ pub fn run_with(
         }
     }
     let total = 1 + children.len();
-    finished(events, "self", 1, total, &tree);
+    finished(&mut events.borrow_mut(), "self", 1, total, &tree);
     for (at, (child, state)) in children.into_iter().enumerate() {
         let phase = child.kind.list();
         let found = made.iter().position(|node| node.thing == child);
         let node = match (&tree.gate, found) {
             (Some(by), _) => Node::blocked(child, by.clone()),
             (None, Some(at)) => made.swap_remove(at),
-            (None, None) => visit(registry, home, &child, false, (&state, None), options),
+            (None, None) => visit(
+                registry,
+                home,
+                &child,
+                false,
+                (&state, None),
+                (options, &progress),
+            ),
         };
-        finished(events, phase, at + 2, total, &node);
+        finished(&mut events.borrow_mut(), phase, at + 2, total, &node);
         tree.children.push(node);
     }
     Ok(Report {
@@ -193,7 +214,7 @@ fn visit(
     thing: &Thing,
     full: bool,
     (state, blocked): (&State, Option<&BlockedBy>),
-    options: &Options,
+    (options, progress): (&Options, &Progress<'_>),
 ) -> Node {
     let mut node = Node::new(thing.clone());
     let Some(doctor) = registry.kind(thing.kind) else {
@@ -213,6 +234,7 @@ fn visit(
         state,
         blocked,
         options,
+        progress,
     };
     (doctor.run)(&probe, &mut node);
     let tried = node.blocked_by.is_none() && node.reason.is_none();

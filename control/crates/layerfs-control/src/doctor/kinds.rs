@@ -16,11 +16,8 @@ use super::target::Checks;
 use crate::home_tree;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{detect, Layout};
-use layerfs_home::names::ProjectRef;
 use layerfs_home::outcome::refused;
 use layerfs_home::state::{BlockedBy, Reason, State};
-use layerfs_store::project::record::ProjectRecord;
-use layerfs_store::record::StoreRecord;
 use std::path::Path;
 use std::time::Duration;
 
@@ -57,10 +54,6 @@ const MACHINE: &[CheckId] = &[
     own("machine.worker.ping"),
     own("machine.capacity"),
 ];
-
-/// A project's checks: its record, and its record against the Store's own
-/// list (the comparison `project.get` makes).
-const PROJECT: &[CheckId] = &[own("project.record"), own("project.listed")];
 
 /// A Sandbox's checks; its Workspaces' are `workspace_target::CHECKS`.
 const SANDBOX: &[CheckId] = &[
@@ -119,9 +112,9 @@ pub(super) static KINDS: [KindDoctor; 7] = [
     },
     KindDoctor {
         kind: Kind::Project,
-        checks: PROJECT,
+        checks: super::project_target::CHECKS,
         budget: Duration::from_secs(10),
-        run: project,
+        run: super::project_target::run,
     },
     KindDoctor {
         kind: Kind::Sandbox,
@@ -187,74 +180,6 @@ fn machine(probe: &Probe<'_>, node: &mut Node) {
     };
     if node.gate.is_none() {
         node.gate = gate;
-    }
-}
-
-fn project(probe: &Probe<'_>, node: &mut Node) {
-    if let Some(by) = probe.blocked {
-        *node = Node::blocked(probe.thing.clone(), by.clone());
-        return;
-    }
-    let handle = probe.thing.name.as_str();
-    let mut checks = Checks::new("project", handle);
-    let (store, name) = handle.split_once('/').unwrap_or((handle, ""));
-    let recorded = StoreRecord::read(probe.home, store).and_then(|found| {
-        let found = found.ok_or_else(|| refused("NotFound", format!("no Store {store}")))?;
-        Ok((found, ProjectRecord::read(probe.home, store, name)?))
-    });
-    match recorded {
-        Ok((_, Some(_))) => {
-            checks.pass("project.record", "the project and its Store are on record")
-        }
-        Ok((_, None)) => {
-            checks.fail(
-                "project.record",
-                format!("the home has no record of {handle}"),
-            );
-        }
-        Err(refusal) => checks.fail("project.record", refusal.message),
-    }
-    if matches!(checks.outcome("project.record"), Some(("pass", _))) {
-        listed(probe, handle, store, &mut checks);
-    }
-    checks.fill(node, probe.checks, probe.budget.expired());
-}
-
-/// `project.listed`: the Store's own list holds the project its record
-/// names, as `project.get` compares them.
-fn listed(probe: &Probe<'_>, handle: &str, store: &str, checks: &mut Checks) {
-    const ID: &str = "project.listed";
-    let answer = ProjectRef::parse(handle)
-        .and_then(|project| layerfs_store::project::family::get(probe.home, &project));
-    match answer {
-        Ok(_) => checks.pass(ID, "the Store lists it"),
-        Err(refusal) if refusal.code == "NoSuchProject" => {
-            checks.notice(ID, "on record, but the Store does not list it");
-            checks.fix(ID, format!("layerfs project delete {handle}"));
-            checks.evidence(
-                ID,
-                SdkValue::map([
-                    ("recorded", SdkValue::Bool(true)),
-                    ("listed", SdkValue::Bool(false)),
-                ]),
-            );
-        }
-        // the Store this host cannot open, or whose file is gone: the
-        // listing waits on it, and the Store's own doctor says why
-        Err(refusal) if matches!(refusal.code.as_str(), "Unsupported" | "NoStore") => {
-            let by = BlockedBy {
-                thing: "store",
-                handle: store.to_owned(),
-                reason: if refusal.code == "NoStore" {
-                    "missing"
-                } else {
-                    "unsupported"
-                },
-            };
-            checks.waits(ID, refusal.message, by);
-        }
-        Err(refusal) if refusal.code == "Busy" => checks.busy(ID, refusal.message),
-        Err(refusal) => checks.unknown(ID, refusal.message),
     }
 }
 

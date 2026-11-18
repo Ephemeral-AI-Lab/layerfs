@@ -41,3 +41,8 @@ layerfs-project = { path = "../../../engine/crates/layerfs-project" }
 layerfs-platform = { path = "../../../control/crates/layerfs-platform" }
 layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
 layerfs-bucket = { path = "../../../control/crates/layerfs-bucket" }
+# project_doctor_full damages a throwaway Store's object table to check the
+# data walk's finding.
+rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob"] }
+# project_doctor_full damages its own PostgreSQL Store database.
+postgres = "=0.19.14"

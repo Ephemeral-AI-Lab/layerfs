@@ -249,6 +249,38 @@ pub(crate) fn with_cancellation<T>(
 }
 
 impl PostgresHandles {
+    /// Audits one project's data ([`super::project`]) in one REPEATABLE READ
+    /// READ ONLY view, with nothing written. Problems stream to `observer`;
+    /// `progress` hears `(done, total)` trees.
+    pub fn diagnose_project(
+        &self,
+        stack: layerfs_history::LayerStackId,
+        options: Options,
+        observer: &mut dyn FnMut(Observation),
+        progress: &mut dyn FnMut(u64, u64),
+    ) -> Result<super::ProjectCoverage, PersistenceError> {
+        let cancellation = self
+            .storage
+            .session
+            .state
+            .lock()
+            .map_err(|_| PersistenceError::Uncertain)?
+            .client
+            .cancellation();
+        with_cancellation(options.cancelled, cancellation, || {
+            self.storage
+                .session
+                .run_observed::<_, BackendError>(false, |tx| {
+                    options.check()?;
+                    crate::backend::postgresql::schema::diagnostic_guard(tx)?;
+                    let rows = tx.query("SELECT COALESCE(MAX(pack_id),0) FROM pack", vec![])?;
+                    let ceiling = rows.first().ok_or(BackendError::Integrity)?.get(0)?;
+                    super::project::run(tx, ceiling, stack, options, observer, progress)
+                })
+                .map_err(PersistenceError::from)
+        })?
+    }
+
     /// Audits logical LayerFS data in one REPEATABLE READ READ ONLY view.
     /// Online engine checks follow separately and carry their own observations.
     pub fn diagnose(

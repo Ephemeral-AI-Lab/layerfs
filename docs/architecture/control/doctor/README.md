@@ -168,6 +168,19 @@ then one `workspaces` event each.
 
 A `store.advisory.*` failure is a warning; `*.progress` events are dropped.
 
+### Project
+
+| Check | What is observed | Source |
+| --- | --- | --- |
+| `project.record` | The project's record and its Store's record read | [`project_target.rs`](../../../../control/crates/layerfs-control/src/doctor/project_target.rs) |
+| `project.listed` | The Store's own list (read where its calls run) holds the record's stack id, or its name for a record without one. Not listed: a notice, `fix` `layerfs project delete <project>`, which removes such an entry. A Store this host cannot open or whose file is gone, and a worker that does not answer (`machine`, `not_answering`), block it | [`project_target.rs`](../../../../control/crates/layerfs-control/src/doctor/project_target.rs), [`live.rs`](../../../../control/crates/layerfs-store/src/project/live.rs) |
+| `project.data` (`--full` only) | Everything main's head and each live Branch's head reach, read and checked once per project in one pinned read view: each tree's namespace qualified, each object located, reconstructed, admitted and its children's context checked, as the whole-Store scan checks its rows ([Store diagnostics](../../engine/store/diagnostics.md#one-projects-data)). sqlite on this kernel and PostgreSQL in this process; sqlite on a machine through its worker's `store.diagnose` with `cut: project`, its `data` events passed back. The first 64 problems are findings (an unreadable object `not_checked` `lost`), the rest one counted finding | [`project_target.rs`](../../../../control/crates/layerfs-control/src/doctor/project_target.rs), [`diagnostic.rs`](../../../../control/crates/layerfs-store/src/diagnostic.rs) |
+
+`project.data` runs only after `project.listed` passed and only for the
+named project: a shallow check (`store doctor`'s of each project) never
+makes it. It writes nothing to the Store and holds no lease; the Full
+check has no time budget.
+
 ### Backup
 
 Uses the alias's own S3 configuration, signer, TLS policy and HTTP codec,
