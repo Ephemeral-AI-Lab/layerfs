@@ -94,6 +94,22 @@ fn a_reference_is_copied_once_then_reused_with_nothing_sent() {
     assert_eq!(first.id, ID);
     assert!(!first.reused);
     assert_eq!(first.size, Some(filtered(&export()).len() as u64));
+    // what the copy left out is in its answer
+    let report = first.report.as_ref().expect("a sent copy reports");
+    assert_eq!(report.init, vec![".dockerenv", "etc/hostname"]);
+    let answer = first.to_value();
+    let dropped = answer.get("dropped").expect("dropped");
+    assert_eq!(
+        cache::texts(dropped.get("init")),
+        vec![".dockerenv", "etc/hostname"]
+    );
+    assert!(cache::texts(dropped.get("fifos")).is_empty());
+    assert_eq!(
+        answer
+            .get("sparse")
+            .and_then(|s| s.get_int("expanded_bytes")),
+        Some(0)
+    );
     let sends = named(&run1, "send");
     let last = sends.last().expect("send events");
     assert_eq!(
@@ -127,6 +143,7 @@ fn a_reference_is_copied_once_then_reused_with_nothing_sent() {
         let (again, run) = run(&standin, &home, image);
         let again = again.unwrap();
         assert!(again.reused, "{image}");
+        assert!(again.report.is_none() && again.to_value().get("dropped").is_none());
         assert!(named(&run, "send").is_empty(), "{image}");
         assert_eq!(
             again.size, first.size,

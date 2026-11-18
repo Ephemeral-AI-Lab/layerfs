@@ -4,6 +4,7 @@
 //! 2. Entry-header resolution, entry-size-bounded descriptor construction, and checks.
 //! 3. Archive end-block / clean EOF termination and streaming payload output.
 
+use layerfs_bridge::control::SdkValue;
 use std::collections::HashSet;
 use std::io::{self, Read};
 
@@ -28,6 +29,12 @@ const INIT_FILES: [&str; 5] = [
     "etc/resolv.conf",
     "etc/mtab",
 ];
+
+/// The directories `docker create`'s init layer creates or adds entries to:
+/// the root, `dev`, `etc`, `proc` and `sys`. Their modification times are the
+/// container's creation time, not the image's; every other directory keeps its
+/// own.
+const INIT_DIRS: [&str; 6] = ["", ".", "dev", "etc", "proc", "sys"];
 
 fn clean_path(path: &str) -> String {
     path.trim_start_matches("./")
@@ -87,6 +94,37 @@ impl TarReport {
     /// Number of dropped init/runtime entries.
     pub fn init_count(&self) -> usize {
         self.init.len()
+    }
+
+    /// `machine.load`'s `dropped` (`fifos`, `devices` and `init` paths left
+    /// out) and `sparse` (each expanded file and the bytes in all) fields.
+    pub fn to_value(&self) -> SdkValue {
+        let paths = |list: &[String]| SdkValue::List(list.iter().map(SdkValue::text).collect());
+        let int = |n: u64| SdkValue::Int(n.min(i64::MAX as u64) as i64);
+        let files = self.sparse_files.iter().map(|file| {
+            SdkValue::map([
+                ("path", SdkValue::text(&file.path)),
+                ("expanded_bytes", int(file.expanded_bytes)),
+                ("stored_bytes", int(file.stored_bytes)),
+            ])
+        });
+        SdkValue::map([
+            (
+                "dropped",
+                SdkValue::map([
+                    ("fifos", paths(&self.fifos)),
+                    ("devices", paths(&self.devices)),
+                    ("init", paths(&self.init)),
+                ]),
+            ),
+            (
+                "sparse",
+                SdkValue::map([
+                    ("files", SdkValue::List(files.collect())),
+                    ("expanded_bytes", int(self.sparse_expanded_bytes)),
+                ]),
+            ),
+        ])
     }
 }
 
@@ -298,11 +336,10 @@ impl<R: Read> Filtered<R> {
             return Ok(());
         }
 
-        if flag == b'5' {
+        if flag == b'5' && INIT_DIRS.contains(&clean_path(&path).as_str()) {
+            // the init layer stamps these at container creation: their mtime is
+            // set to 0 so exports >=2 s apart stay byte-identical
             pending.emit_for_directory(&mut self.out)?;
-            // `docker create`'s init layer touches directories such as `dev/`
-            // and `etc/` at container creation time; normalize every kept
-            // directory's mtime so exports >=2 s apart stay byte-identical.
             zero_header_mtime(&mut header);
         } else {
             pending.emit_passthrough(&mut self.out);

@@ -8,7 +8,7 @@
 //! no image (`mode: 'host'`).
 use crate::deploy::{self, Choice, Side};
 use crate::image_artifact::{self as cache, SidecarInfo};
-use crate::image_load::ImageLock;
+use crate::image_lock::{ImageLock, PruneGate};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home;
 use layerfs_home::names::MachineName;
@@ -321,6 +321,9 @@ pub fn prune(home: &Path, name: &MachineName, image: Option<&str>, unused: bool)
     if host_mode(&executor) {
         return Err(host_only(machine));
     }
+    // no copy starts writing until this prune is over, so the copy locks read
+    // here are every copy it must leave alone, on a worker machine too
+    let _gate = PruneGate::hold(home, machine)?;
     let (locked, lock_errors) = scan_image_locks(&ImageLock::dir(home, machine))?;
     let _target_lock = if let Some(target) = image {
         if let Some(reason) = lock_errors.get(target) {
@@ -495,25 +498,6 @@ fn pruning(side: &Side<'_>, args: &SdkValue) -> Outcome {
             continue;
         }
         let is_default = target.is_none() && unused && default.as_deref() == Some(id.as_str());
-        let _local_guard = if target.is_none()
-            && matches!(side, Side::Home(_))
-            && !machine.is_empty()
-            && ImageLock::dir(root, machine).is_dir()
-        {
-            match ImageLock::try_hold(root, machine, &id) {
-                Ok(Some(guard)) => Some(guard),
-                Ok(None) => continue,
-                Err(err) => {
-                    skipped.push(SdkValue::map([
-                        ("id", SdkValue::text(&id)),
-                        ("reason", SdkValue::text(err.message)),
-                    ]));
-                    continue;
-                }
-            }
-        } else {
-            None
-        };
         let mut removed_any = false;
         let mut temp_held = false;
         for temp_name in &item.temps {

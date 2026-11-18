@@ -20,6 +20,7 @@ use layerfs_home::home;
 use layerfs_sandbox::docker::{self, Docker};
 use layerfs_sandbox::image_artifact::{self as cache, architecture};
 use layerfs_sandbox::image_load::{load, ImageLock, Loaded, Target};
+use layerfs_sandbox::image_lock::PruneGate;
 use layerfs_sandbox::image_tar::Filtered;
 use std::fs;
 use std::io::Read;
@@ -315,6 +316,34 @@ fn one_copy_of_an_image_per_machine() {
         "a finished copy leaves no record"
     );
     assert!(standin.containers().is_empty(), "its container is gone");
+}
+
+/// `machine.prune` holds the machine's gate while it reads the copy locks and
+/// removes: a copy that takes its lock meanwhile holds it (so the prune sees
+/// it) and creates and writes nothing until the prune is over.
+#[test]
+fn a_copy_waits_for_a_prune_under_way() {
+    let (_scratch, standin, home) = setup("lp176-prune-gate");
+    let gate = PruneGate::hold(&home, "docker").unwrap();
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let copying = {
+        let (docker, at_home, events) = (standin.docker(), home.clone(), events.clone());
+        std::thread::spawn(move || copy(&docker, &at_home, "docker", "demo/app:1", &events))
+    };
+    wait_for("the copy to take its lock", || {
+        ImageLock::try_hold(&home, "docker", ID).unwrap().is_none()
+    });
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(!copying.is_finished(), "the copy waits for the prune");
+    assert_eq!(standin.creates(), 0, "no export container meanwhile");
+    assert!(!cache::cache(&home)
+        .join(format!(".recv-{HEX}.part"))
+        .exists());
+    drop(gate);
+    wait_for("the copy to finish", || copying.is_finished());
+    let loaded = copying.join().unwrap().unwrap();
+    assert!(!loaded.reused);
+    assert_eq!(standin.starts(), 1);
 }
 
 #[test]

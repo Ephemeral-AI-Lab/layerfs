@@ -44,6 +44,8 @@ pub mod image_artifact;
 #[doc(hidden)]
 pub mod image_load;
 #[doc(hidden)]
+pub mod image_lock;
+#[doc(hidden)]
 pub mod image_tar;
 #[doc(hidden)]
 pub mod images;
