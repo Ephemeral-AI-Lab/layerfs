@@ -111,6 +111,16 @@ reaches PostgreSQL only by an Init into it.
 
 ### Credentials
 
+A Store connected by the 2.0 `store.connect` names a saved login (`auth`),
+which `postgresql/login.rs` `dial` puts into the address it dials
+(`secrets::with_login`). A record written before saved logins names no
+`auth` and keeps its user-only URL and `password` reference, with a
+machine's own `machines.<m>.password` taking precedence for that machine;
+`dial` resolves it on each call as below, reading the record only (it is
+never converted; `store.update --auth` replaces the reference). Such a
+record dialled at an address with no user is `InvalidInput` with the fix
+`layerfs store update <store> --auth <auth>`.
+
 ```text
  Store record: url postgres://u@h/db  password env:NAME | file:/abs/path
       |  each call, in the caller only

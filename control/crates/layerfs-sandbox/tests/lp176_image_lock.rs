@@ -26,7 +26,7 @@ use std::fs;
 use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -427,13 +427,16 @@ fn a_dead_owner_is_taken_over_and_a_reused_pid_holds_nothing() {
     assert!(!record.exists());
     // a copy in another process that is killed: the kernel releases its
     // lock, and the waiting copy takes over without a deadline
-    let helper = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "holds_the_lock_for_another_copy", "--nocapture"])
-        .env("LP176_LOCK_HOLD", &home)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
+    let mut helper = Holder(
+        Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "holds_the_lock_for_another_copy", "--nocapture"])
+            .env("LP176_LOCK_HOLD", &home)
+            .env("LP176_LOCK_PARENT", std::process::id().to_string())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap(),
+    );
     wait_for("the other process to hold the lock", || {
         home.join("helper-held").exists()
     });
@@ -453,13 +456,12 @@ fn a_dead_owner_is_taken_over_and_a_reused_pid_holds_nothing() {
     assert!(!waiter.is_finished(), "a live owner is waited for");
     assert_eq!(
         ImageLock::holder(&home, "docker", HEX).and_then(|record| record.get_int("pid")),
-        Some(helper.id() as i64),
+        Some(helper.0.id() as i64),
         "the owner record names the other process"
     );
     // killed: no drop runs in it, so its record stays and its lock is freed
-    let mut helper = helper;
-    helper.kill().unwrap();
-    helper.wait().unwrap();
+    helper.0.kill().unwrap();
+    helper.0.wait().unwrap();
     let taken = waiter.join().unwrap().unwrap();
     assert!(
         start.elapsed() < Duration::from_secs(10),
@@ -470,19 +472,41 @@ fn a_dead_owner_is_taken_over_and_a_reused_pid_holds_nothing() {
     drop(taken);
 }
 
+/// The helper process of a test, killed and reaped however the test ends (a
+/// failed assertion or a panic included), so it never outlives the test.
+struct Holder(Child);
+
+impl Drop for Holder {
+    fn drop(&mut self) {
+        // SIGKILL cannot be caught, so the wait that follows is bounded; both
+        // answer `Ok` for a child the test already killed and reaped
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
 /// The other process of the test above: it takes the lock, says so and
-/// blocks until the test kills it. Run only with `LP176_LOCK_HOLD` set.
+/// blocks until the test kills it. Run only with `LP176_LOCK_HOLD` set. It
+/// also ends by itself, within 50 ms of its test process dying (killed, so
+/// no [`Holder`] drop ran) and at the latest after 60 s, three times the
+/// test's longest wait.
 #[test]
 fn holds_the_lock_for_another_copy() {
     let Ok(at_home) = std::env::var("LP176_LOCK_HOLD") else {
         return;
     };
+    let parent: u32 = std::env::var("LP176_LOCK_PARENT")
+        .expect("the test process's pid")
+        .parse()
+        .unwrap();
     let at_home = PathBuf::from(at_home);
     let mut sink = |_: SdkValue| {};
     let _held = ImageLock::take(&at_home, "docker", ID, &mut Events::new(&mut sink)).unwrap();
     fs::write(at_home.join("helper-held"), b"").unwrap();
-    loop {
-        std::thread::sleep(Duration::from_secs(1));
+    let start = Instant::now();
+    while std::os::unix::process::parent_id() == parent && start.elapsed() < Duration::from_secs(60)
+    {
+        std::thread::sleep(Duration::from_millis(50));
     }
 }
 

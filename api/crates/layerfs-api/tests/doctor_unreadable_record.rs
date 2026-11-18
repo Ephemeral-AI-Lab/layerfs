@@ -125,7 +125,13 @@ fn an_unreadable_record_is_a_broken_node_and_its_siblings_are_listed() {
     let long = answer(&home, "home.doctor", vec![("detail", SdkValue::Bool(true))]);
     let root = long.get("tree").unwrap();
     let checked = list(root, "machines");
-    for name in ["docker", "lab", "native"] {
+    // the built-in `docker` machine's record is written by the first call
+    // only in a build with the machine calls (`ensure_built_ins`)
+    let mut expected = vec!["lab", "native"];
+    if cfg!(feature = "machine") {
+        expected.push("docker");
+    }
+    for name in expected {
         assert!(
             named(checked, "machine", name).is_some(),
             "{name}: {root:?}"

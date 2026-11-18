@@ -50,24 +50,31 @@ pub struct PgServer {
 /// A machine's own address of a PostgreSQL Store, its record's
 /// `machines.<machine>`: the URL (no user, no password) that machine dials
 /// in place of the Store's (`store.connect --machine`), with the Store's
-/// saved login. A machine without one dials the Store's address.
+/// saved login. A machine without one dials the Store's address. An entry
+/// written before saved logins may also hold that machine's password
+/// reference (`password`), which it dials with while the Store names no
+/// login; no 2.0 call writes one, and none answers it.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct OwnConnection {
     /// The URL the machine dials, when not the Store's.
     pub url: Option<String>,
+    /// A password reference recorded before saved logins (`env:NAME` or
+    /// `file:/path`), read and kept as it is, never set by a 2.0 call.
+    pub password: Option<String>,
 }
 
 impl OwnConnection {
     fn from_record(value: &SdkValue) -> Self {
         Self {
             url: value.get_text("url").map(str::to_owned),
+            password: value.get_text("password").map(str::to_owned),
         }
     }
 
-    /// Whether it names no URL: the Store's address, which no record entry
-    /// is kept for.
+    /// Whether it names neither a URL nor a password reference: the
+    /// Store's connection, which no record entry is kept for.
     pub fn is_empty(&self) -> bool {
-        self.url.is_none()
+        self.url.is_none() && self.password.is_none()
     }
 
     /// The connection as its record holds it: only the fields it has.
@@ -75,6 +82,9 @@ impl OwnConnection {
         let mut fields = Vec::new();
         if let Some(url) = &self.url {
             fields.push(("url".to_owned(), SdkValue::text(url)));
+        }
+        if let Some(password) = &self.password {
+            fields.push(("password".to_owned(), SdkValue::text(password)));
         }
         SdkValue::Map(fields)
     }
@@ -345,10 +355,11 @@ impl StoreRecord {
             })
     }
 
-    /// The machines with their own address of a PostgreSQL Store, in
-    /// record order. An entry that names no URL (a record written while
-    /// machines were attached one by one, or one that named only a
-    /// password reference before saved logins) is none.
+    /// The machines with their own connection of a PostgreSQL Store, in
+    /// record order: an address, or a password reference written before
+    /// saved logins (answers show only the entries with an address). An
+    /// entry that names neither (a record written while machines were
+    /// attached one by one) is none.
     pub fn own_connections(&self) -> Vec<(String, OwnConnection)> {
         match self.fields.get("machines") {
             Some(SdkValue::Map(machines)) => machines
@@ -531,7 +542,8 @@ pub fn clearing_call(op: &Op, name: &str) -> String {
 }
 
 /// The full URL of a PostgreSQL Store's record, with its saved login put
-/// in now.
+/// in now (or, in a record written before saved logins, its password
+/// reference resolved now).
 pub fn url(record: &StoreRecord) -> Result<String> {
     let url = record.text("url").ok_or_else(|| {
         refused(
@@ -539,12 +551,13 @@ pub fn url(record: &StoreRecord) -> Result<String> {
             format!("PostgreSQL Store {}'s record has no url", record.name()),
         )
     })?;
-    crate::postgresql::login::dial(record, url)
+    crate::postgresql::login::dial(record, url, record.text("password"))
 }
 
 /// The full URL machine `machine` dials for PostgreSQL Store `record`, with
 /// the Store's saved login put in now: its own address where it has one,
-/// else the Store's.
+/// else the Store's. A record written before saved logins resolves the
+/// machine's own password reference, else the Store's, as it did then.
 pub fn url_on(record: &StoreRecord, machine: &str) -> Result<String> {
     let own = record.own_connection(machine).unwrap_or_default();
     let url = match own.url.as_deref().or(record.text("url")) {
@@ -556,7 +569,8 @@ pub fn url_on(record: &StoreRecord, machine: &str) -> Result<String> {
             ))
         }
     };
-    crate::postgresql::login::dial(record, url)
+    let reference = own.password.as_deref().or(record.text("password"));
+    crate::postgresql::login::dial(record, url, reference)
 }
 
 /// Every Store record, by name.

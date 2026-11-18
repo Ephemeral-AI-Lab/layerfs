@@ -121,7 +121,10 @@ fn connections(record: &StoreRecord) -> SdkValue {
         ("machine", SdkValue::Null),
         ("url", SdkValue::opt_text(store_url)),
     ])];
-    for (machine, own) in record.own_connections() {
+    // an entry holding only a password reference (before saved logins)
+    // is no address of its own: not answered
+    let own = record.own_connections().into_iter();
+    for (machine, own) in own.filter(|(_, own)| own.url.is_some()) {
         rows.push(SdkValue::map([
             ("machine", SdkValue::text(machine)),
             ("url", SdkValue::opt_text(own.url.as_deref().or(store_url))),
