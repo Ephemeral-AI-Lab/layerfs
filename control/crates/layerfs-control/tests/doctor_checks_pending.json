@@ -18,9 +18,7 @@
     },
     "project": {
       "today": [],
-      "missing": [
-        "project.data"
-      ],
+      "missing": [],
       "order": false
     },
     "sandbox": {

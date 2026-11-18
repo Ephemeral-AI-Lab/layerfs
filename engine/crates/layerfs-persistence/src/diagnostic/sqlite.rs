@@ -7,6 +7,34 @@ use crate::{
 use layerfs_storage::port::PersistenceError;
 
 impl SqliteHandles {
+    /// Audits one project's data ([`super::project`]): everything main's
+    /// head and each live Branch's head reach, in one read transaction,
+    /// with nothing written to the Store. Problems stream to `observer`;
+    /// `progress` hears `(done, total)` trees.
+    pub fn diagnose_project(
+        &self,
+        stack: layerfs_history::LayerStackId,
+        options: Options,
+        observer: &mut dyn FnMut(Observation),
+        progress: &mut dyn FnMut(u64, u64),
+    ) -> Result<super::ProjectCoverage, PersistenceError> {
+        self.storage
+            .session
+            .run::<_, BackendError>(false, |tx| {
+                options.check()?;
+                let ceiling = tx
+                    .query(
+                        "SELECT COALESCE(MAX(pack_id),0) FROM pack",
+                        Vec::<Param>::new(),
+                    )?
+                    .first()
+                    .ok_or(BackendError::Integrity)?
+                    .get(0)?;
+                super::project::run(tx, ceiling, stack, options, observer, progress)
+            })
+            .map_err(Into::into)
+    }
+
     /// Audits the original Store in one read transaction. No source migration,
     /// checkpoint, publication, repair or staging operation is performed.
     /// Observations stream to the caller; expiration returns incomplete work.

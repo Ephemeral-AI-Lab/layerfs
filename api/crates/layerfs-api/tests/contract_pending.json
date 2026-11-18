@@ -2,11 +2,7 @@
   "about": "What the call surface 2.0 contract test (tests/contract.rs) still excuses. `calls`: the calls of calls.json this build has not migrated (an entry with no form, or no entry yet). `old_names`: the calls of this build's table that calls.json does not name, each with the call that replaces it; every one is removed, with no alias, by a later package (the one that migrates its replacement or, where the replacement is already migrated, the one that owns the old call's family). `spec_sync`: where this build is ahead of calls.json version 18 (the review fixes); each entry leaves when calls.json says the same, and the test fails while a stale one stays. `not_built`: per migrated call, what of its row this build does not do yet, with the reason; each line leaves when its package builds it. The test's PENDING_MUST_BE_EMPTY switch requires all four empty.",
   "calls": [],
   "old_names": {},
-  "not_built": {
-    "project.doctor": [
-      "`--full` (`project.data`, the walk of everything the project's Branches reach) is refused `Unsupported` until the P-full package builds it"
-    ]
-  },
+  "not_built": {},
   "spec_sync": {
     "nodes": {}
   }

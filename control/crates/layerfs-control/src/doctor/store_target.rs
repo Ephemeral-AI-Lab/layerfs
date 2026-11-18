@@ -353,21 +353,23 @@ fn remote(
 }
 
 /// The worker's `store.diagnose` of Store `store` under its fixed root:
-/// the shallow cut, `cut: schema`, which a request must name (an older
-/// host's full scan is refused); caller paths and leases are not used.
+/// the shallow cut, `cut: schema`, or one project's data, `cut: project`
+/// (`project doctor --full`), which a request must name (an older host's
+/// full scan is refused); caller paths and leases are not used.
 pub(crate) fn in_worker(
     root: &Path,
     args: SdkValue,
-    _events: &mut dyn FnMut(SdkValue) -> Result<(), SdkRefusal>,
+    events: &mut dyn FnMut(SdkValue) -> Result<(), SdkRefusal>,
 ) -> CallOutcome {
     let name = args
         .get_text("store")
         .ok_or_else(|| refused("InvalidInput", "store required"))?;
     layerfs_home::names::StoreName::parse(name)?;
-    if args.get_text("cut") != Some(CUT) {
+    let cut = args.get_text("cut");
+    if cut != Some(CUT) && cut != Some(super::project_target::CUT) {
         return Err(refused(
             "InvalidInput",
-            "store.diagnose takes cut: schema (the shallow cut); the whole-Store scan left the doctors",
+            "store.diagnose takes cut: schema (the shallow cut) or cut: project (one project's data); the whole-Store scan left the doctors",
         ));
     }
     let bytes = |key: &str| match args.get(key) {
@@ -381,6 +383,9 @@ pub(crate) fn in_worker(
             .try_into()
             .map_err(|_| refused("InvalidInput", "cursor width"))?,
     };
+    if cut == Some(super::project_target::CUT) {
+        return super::project_target::in_worker(root, &args, &identity, events);
+    }
     let heads = args.get("heads") == Some(&SdkValue::Bool(true));
     Ok(shallow(&paths::store_file(root, name), &identity, heads))
 }

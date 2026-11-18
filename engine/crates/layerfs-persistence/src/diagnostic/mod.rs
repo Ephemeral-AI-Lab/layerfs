@@ -8,6 +8,8 @@ mod lineage;
 mod postgresql;
 pub(crate) mod postgresql_contract;
 mod postgresql_contract_expected;
+mod project;
+pub use project::{ProjectCoverage, CHECK as PROJECT_CHECK};
 mod reader;
 mod scan;
 mod scratch;

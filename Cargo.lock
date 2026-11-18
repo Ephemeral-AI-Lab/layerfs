@@ -723,6 +723,8 @@ dependencies = [
  "layerfs-telemetry",
  "layerfs-workspace",
  "nix",
+ "postgres",
+ "rusqlite",
 ]
 
 [[package]]

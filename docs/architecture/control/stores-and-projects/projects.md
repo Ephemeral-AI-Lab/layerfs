@@ -120,6 +120,18 @@ refused `Busy` while a Sandbox of the project is recorded
 [`delete.rs`](../../../../control/crates/layerfs-store/src/project/delete.rs),
 [`layerfs-control/src/project.rs`](../../../../control/crates/layerfs-control/src/project.rs)).
 
+A record the Store does not list is cleared by the same call: when the
+Store answers `NoSuchProject` and its own list, read once more, does not
+hold the record's stack id (or its name, for a record without one), the
+home entry is removed and the call answers as a delete; a list that cannot
+be read leaves the entry and the refusal. An Init through a machine's
+worker whose outcome is not known leaves a record with no stack id: the
+delete reads the Store's list once in that worker, retires the Stack it
+names there, then removes the entry; a project the list does not hold only
+loses its entry, and a lost answer is `Unknown` with the entry kept
+([`delete/remote.rs`](../../../../control/crates/layerfs-store/src/project/delete/remote.rs)
+`listed_on_worker`).
+
 ## Discovery (`discovery.rs`)
 
 The side that runs a Sandbox call keeps a project's private discovery

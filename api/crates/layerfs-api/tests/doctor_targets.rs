@@ -235,17 +235,30 @@ fn a_project_s_record_is_checked_against_its_store() {
         "{report:?}"
     );
     assert_eq!(events.len(), 1);
-    // `--full` is not built yet
-    let (refused, _) = call(
+    // `--full` reads no data the Store's list does not reach: the same
+    // waiting entry, and no `project.data` row
+    let (full, _) = call(
         &home,
         "project.doctor",
-        &[("project", t("shop/old")), ("full", SdkValue::Bool(true))],
+        &[
+            ("project", t("shop/old")),
+            ("full", SdkValue::Bool(true)),
+            ("detail", SdkValue::Bool(true)),
+        ],
     );
-    let refused = refused.unwrap_err();
-    assert!(
-        refused.starts_with("Unsupported: project doctor --full"),
-        "{refused}"
+    let full = full.unwrap();
+    let checks: Vec<_> = list(full.get("tree").unwrap(), "checks")
+        .iter()
+        .map(|row| row.get_text("check").map(str::to_owned))
+        .collect();
+    assert_eq!(
+        checks,
+        [
+            Some("project.record".to_owned()),
+            Some("project.listed".to_owned())
+        ]
     );
+    assert_eq!(list(&full, "not_checked"), list(&report, "not_checked"));
     let _ = std::fs::remove_dir_all(home);
 }
 

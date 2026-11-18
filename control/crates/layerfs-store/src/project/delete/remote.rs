@@ -215,3 +215,21 @@ pub(super) fn listed_stack(open: &OpenArgs, name: &str) -> Result<Option<LayerSt
     // about (F43R5-2).
     .map_err(|refusal| listed_unknown(refusal, name))
 }
+
+/// The Stack id the Store on another machine lists for project `name`, for
+/// a record that names none (an Init through the worker whose outcome is
+/// not known): the Store's own list, read once in its worker. `None` when
+/// the Store does not hold it; a lost answer is `Unknown`, naming the
+/// project, and nothing is removed.
+pub(super) fn listed_on_worker(
+    home: &Path,
+    name: &str,
+    record: &StoreRecord,
+) -> Result<Option<LayerStackId>> {
+    let projects = crate::project::live::projects(home, record.name(), record, false)
+        .map_err(|refusal| listed_unknown(refusal, name))?;
+    Ok(projects
+        .into_iter()
+        .find(|project| project.name == name)
+        .map(|project| project.stack))
+}

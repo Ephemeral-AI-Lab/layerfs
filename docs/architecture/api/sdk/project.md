@@ -264,7 +264,6 @@ lost worker reply is `Unknown` and keeps the intent.
 | `NoSuchStore`, `NoSuchProject` | the Store or project is missing (or already retired) | [`project/delete.rs`](../../../../control/crates/layerfs-store/src/project/delete.rs) |
 | `MountsActive` | a mount of the project is live; its holders are named | [`history/admission.rs`](../../../../engine/crates/layerfs-store-service/src/history/admission.rs) |
 | `Busy`, `Unresolved` | another user or operation holds the project, or a dead owner left an uncertain one | spec §5.1 |
-| `Unsupported` | the Store is on another machine and the project record names no LayerStack id | [`project/delete.rs`](../../../../control/crates/layerfs-store/src/project/delete.rs) |
 | `Unknown` | worker route: the answer was lost; the intent stays | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 ### project.remove_file
