@@ -47,7 +47,7 @@ fn with(tag: &str) -> (Placed, Arc<Faults>) {
     (placed, faults)
 }
 
-/// `logs.machine` of machine `box`, as the call runs it: through the
+/// `machine.log` of machine `box`, as the call runs it: through the
 /// inspect route, waiting at most the caller's budget.
 fn machine_log(home: &Path) -> Result<SdkValue, SdkRefusal> {
     let machine = MachineName::parse("box").unwrap();
