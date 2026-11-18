@@ -75,6 +75,7 @@ fn profile_label(profile: SqlitePersistenceProfile) -> &'static str {
     match profile {
         SqlitePersistenceProfile::Durable => "SqlitePersistenceProfile::Durable (WAL/FULL)",
         SqlitePersistenceProfile::Disposable => "SqlitePersistenceProfile::Disposable (WAL/OFF)",
+        SqlitePersistenceProfile::Normal => "SqlitePersistenceProfile::Normal (WAL/NORMAL)",
     }
 }
 
