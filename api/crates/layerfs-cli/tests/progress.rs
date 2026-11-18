@@ -177,6 +177,7 @@ fn only_calls_declaring_on_progress_accept_the_cli_switch() {
         ["project", "init", "--help"],
         ["store", "push", "--help"],
         ["store", "pull", "--help"],
+        ["store", "compact", "--help"],
         ["backup", "create", "--help"],
         ["backup", "restore", "--help"],
         ["workspace", "exec", "--help"],

@@ -13,10 +13,12 @@
 //! [`CompactMetricsCapture`], so concurrent work on other threads does not
 //! pollute the observation.
 
-use crate::backend::sqlite::compact::CompactKeptWaste;
+use crate::backend::sqlite::compact::{CompactKeptWaste, CompactPath, CompactReceipt};
+use layerfs_history::error::{HistoryError, HistoryResult};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 
 /// The outcome of one Store compaction call.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -87,6 +89,20 @@ impl CompactPhase {
             Self::PostgresBuild => "pg_build",
             Self::PostgresSwap => "pg_swap",
             Self::PostgresCleanup => "pg_cleanup",
+        }
+    }
+
+    /// The phase as `store.status` and a progress event name it (§11): the
+    /// two backends share `mark`, `build` and `cleanup`.
+    #[must_use]
+    pub const fn step(self) -> &'static str {
+        match self {
+            Self::Mark | Self::PostgresMark => "mark",
+            Self::Build | Self::PostgresBuild => "build",
+            Self::Verify => "verify",
+            Self::Install => "install",
+            Self::PostgresSwap => "swap",
+            Self::PostgresCleanup => "cleanup",
         }
     }
 }
@@ -588,5 +604,125 @@ impl Drop for CompactMetricsCapture {
         if !self.finished {
             CAPTURE.with_borrow_mut(|capture| *capture = self.previous.take());
         }
+    }
+}
+
+/// The phase clock and §11 values one measured `store.compact` run observes,
+/// on either backend. The SQLite §7 phases and the PostgreSQL `pg_` phases are
+/// distinct [`CompactPhase`] values, so one clock serves both.
+pub(crate) struct RunMetrics<'a> {
+    /// Told each phase as it starts, once per change of phase. It observes
+    /// only: it runs on the calling thread, in memory, and writes no record.
+    on_phase: &'a mut dyn FnMut(&'static str),
+    pub(crate) started: Instant,
+    pub(crate) phase: Option<(CompactPhase, Instant)>,
+    pub(crate) phase_nanos: Vec<(CompactPhase, u64)>,
+    pub(crate) generation_before: u64,
+    pub(crate) generation_after: u64,
+    pub(crate) dead_bytes_bound: u64,
+    pub(crate) dead_bytes_refined: u64,
+    pub(crate) kept_waste: CompactKeptWaste,
+    pub(crate) residue_bytes: u64,
+    pub(crate) leftover_settled: bool,
+    /// §11 `markBytes`, the PostgreSQL Phase M transfer metric. `None` on
+    /// SQLite, whose mark reads only metadata bodies and sweeps the payload
+    /// in the build copy.
+    pub(crate) mark_bytes: Option<u64>,
+}
+
+impl<'a> RunMetrics<'a> {
+    pub(crate) fn start(
+        mark_bytes: Option<u64>,
+        on_phase: &'a mut dyn FnMut(&'static str),
+    ) -> Self {
+        Self {
+            on_phase,
+            started: Instant::now(),
+            phase: None,
+            phase_nanos: Vec::new(),
+            generation_before: 0,
+            generation_after: 0,
+            dead_bytes_bound: 0,
+            dead_bytes_refined: 0,
+            kept_waste: CompactKeptWaste::default(),
+            residue_bytes: 0,
+            leftover_settled: false,
+            mark_bytes,
+        }
+    }
+
+    /// Ends the current phase and starts `phase`; a phase is inclusive wall
+    /// time, never an exclusive CPU decomposition.
+    pub(crate) fn begin_phase(&mut self, phase: CompactPhase) {
+        self.end_phase();
+        if self.phase_nanos.last().map(|(last, _)| *last) != Some(phase) {
+            (self.on_phase)(phase.step());
+        }
+        self.phase = Some((phase, Instant::now()));
+    }
+
+    pub(crate) fn end_phase(&mut self) {
+        if let Some((phase, started)) = self.phase.take() {
+            self.phase_nanos.push((
+                phase,
+                u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX),
+            ));
+        }
+    }
+
+    /// Records this run once, whatever its result. The outcome and refusal
+    /// come from the typed error, so a `Busy`/`Unresolved` refusal is counted
+    /// without changing the error the caller receives.
+    pub(crate) fn finish(mut self, result: &HistoryResult<CompactReceipt>) {
+        self.end_phase();
+        let total_nanos = u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        let (outcome, refusal) = match result {
+            Ok(receipt) => {
+                // A resumed `G + 1` round reports the original run's
+                // generation, so the receipt is the authority here.
+                self.generation_before = receipt.generation_before;
+                self.generation_after = receipt.generation_after;
+                self.dead_bytes_bound = receipt.dead_bytes_bound;
+                self.dead_bytes_refined = receipt.dead_bytes_refined;
+                self.kept_waste = receipt.kept_waste.clone();
+                self.residue_bytes = receipt.residue.bytes;
+                let outcome = match receipt.path {
+                    CompactPath::Rebuild => CompactOutcome::Rebuild,
+                    CompactPath::None => CompactOutcome::None,
+                };
+                (outcome, None)
+            }
+            Err(error) => {
+                if !error.unknown() {
+                    self.generation_after = self.generation_before;
+                }
+                (
+                    if error.unknown() {
+                        CompactOutcome::Uncertain
+                    } else {
+                        CompactOutcome::Failed
+                    },
+                    match error {
+                        HistoryError::Busy | HistoryError::BusyOp(_) => Some(CompactRefusal::Busy),
+                        HistoryError::Unresolved(_) => Some(CompactRefusal::Unresolved),
+                        _ => None,
+                    },
+                )
+            }
+        };
+        record_run(&CompactRunObservation {
+            outcome,
+            generation_before: self.generation_before,
+            generation_after: self.generation_after,
+            dead_bytes_bound: self.dead_bytes_bound,
+            dead_bytes_refined: self.dead_bytes_refined,
+            kept_waste: self.kept_waste,
+            residue_bytes: self.residue_bytes,
+            mark_bytes: self.mark_bytes,
+            phase_nanos: self.phase_nanos,
+            total_nanos,
+            leftover_settled: self.leftover_settled,
+            refusal,
+        });
     }
 }

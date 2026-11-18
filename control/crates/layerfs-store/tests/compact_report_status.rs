@@ -1,5 +1,5 @@
 //! T10: the §11 report wire shape and the `store.status` compaction op
-//! projection. The report renders snake_case from the shared `CompactReport`;
+//! projection. The report renders snake_case from the `CompactReceipt`;
 //! status reads only the `<store>.compact-op` sidecar and never opens the
 //! Store database.
 use layerfs_bridge::control::SdkValue;
@@ -7,8 +7,7 @@ use layerfs_content::ObjectId;
 use layerfs_home::home::{paths, private_dir, write_entity};
 use layerfs_home::names::StoreName;
 use layerfs_persistence::{
-    CompactKeptWaste, CompactPath, CompactReceipt, CompactReport, CompactResidue,
-    CompactZeroReason, KeptWaste,
+    CompactKeptWaste, CompactPath, CompactReceipt, CompactResidue, CompactZeroReason, KeptWaste,
 };
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -129,7 +128,7 @@ fn a_capped_reference_list_carries_its_cap() {
     capped.kept_waste.delta_base_references =
         vec![[9; 32]; layerfs_persistence::DELTA_BASE_REFERENCES_CAP];
     capped.kept_waste.delta_base_references_capped = true;
-    let wire = layerfs_store::report::compact_report(&CompactReport::from(&capped));
+    let wire = layerfs_store::report::compact_report(&capped);
     let bases = wire.get("kept_waste").unwrap().get("delta_bases").unwrap();
     let references = bases.get("references").unwrap();
     assert_eq!(
@@ -161,7 +160,7 @@ fn a_mark_over_the_delta_base_cap_renders_value_and_cap() {
     let waste = KeptWaste::from_parts(0, 12, references, 0);
     let mut receipt = receipt();
     receipt.kept_waste = CompactKeptWaste::from_waste(&waste);
-    let wire = layerfs_store::report::compact_report(&CompactReport::from(&receipt));
+    let wire = layerfs_store::report::compact_report(&receipt);
     let bases = wire.get("kept_waste").unwrap().get("delta_bases").unwrap();
     let references = bases.get("references").unwrap();
     assert_eq!(
@@ -180,7 +179,7 @@ fn a_mark_over_the_delta_base_cap_renders_value_and_cap() {
 
 #[test]
 fn the_report_wire_is_the_snake_case_contract_shape() {
-    let wire = layerfs_store::report::compact_report(&CompactReport::from(&receipt()));
+    let wire = layerfs_store::report::compact_report(&receipt());
     assert_eq!(text(wire.get("kind").unwrap()), "Compacted");
     assert_eq!(text(wire.get("path").unwrap()), "rebuild");
     let generation = wire.get("generation").unwrap();

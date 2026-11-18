@@ -147,27 +147,9 @@ fn mounts_detail(state: &layerfs_history::MountHolders) -> SdkValue {
             SdkValue::map([
                 ("kind", SdkValue::text(holder.kind.as_str())),
                 ("entity", SdkValue::text(&holder.entity)),
-                (
-                    "workspace",
-                    holder
-                        .workspace
-                        .as_ref()
-                        .map_or(SdkValue::Null, SdkValue::text),
-                ),
-                (
-                    "sandbox",
-                    holder
-                        .sandbox
-                        .as_ref()
-                        .map_or(SdkValue::Null, SdkValue::text),
-                ),
-                (
-                    "machine",
-                    holder
-                        .machine
-                        .as_ref()
-                        .map_or(SdkValue::Null, SdkValue::text),
-                ),
+                ("workspace", SdkValue::opt_text(holder.workspace.as_ref())),
+                ("sandbox", SdkValue::opt_text(holder.sandbox.as_ref())),
+                ("machine", SdkValue::opt_text(holder.machine.as_ref())),
                 ("op", SdkValue::text(&holder.op)),
             ])
         })
@@ -187,17 +169,8 @@ fn unknown_detail(state: &layerfs_history::UnknownOutcomeState) -> SdkValue {
                 ("name", SdkValue::text(&state.entity)),
             ]),
         ),
-        (
-            "phase",
-            state
-                .phase
-                .as_deref()
-                .map_or(SdkValue::Null, SdkValue::text),
-        ),
-        (
-            "op",
-            state.op.as_deref().map_or(SdkValue::Null, SdkValue::text),
-        ),
+        ("phase", SdkValue::opt_text(state.phase.as_deref())),
+        ("op", SdkValue::opt_text(state.op.as_deref())),
     ])
 }
 
@@ -212,10 +185,7 @@ fn op_detail(state: &layerfs_history::OpConflict) -> SdkValue {
                 ("name", SdkValue::text(&state.entity)),
             ]),
         ),
-        (
-            "phase",
-            state.phase.as_ref().map_or(SdkValue::Null, SdkValue::text),
-        ),
+        ("phase", SdkValue::opt_text(state.phase.as_ref())),
         ("op", SdkValue::text(&state.op)),
         ("uncertain", SdkValue::Bool(state.uncertain)),
         // The PostgreSQL holder, when the refusal names one (spec 10);
@@ -223,17 +193,11 @@ fn op_detail(state: &layerfs_history::OpConflict) -> SdkValue {
         ("pid", state.pid.map_or(SdkValue::Null, SdkValue::Int)),
         (
             "client_addr",
-            state
-                .client_addr
-                .as_ref()
-                .map_or(SdkValue::Null, SdkValue::text),
+            SdkValue::opt_text(state.client_addr.as_ref()),
         ),
         (
             "backend_start",
-            state
-                .backend_start
-                .as_ref()
-                .map_or(SdkValue::Null, SdkValue::text),
+            SdkValue::opt_text(state.backend_start.as_ref()),
         ),
     ])
 }

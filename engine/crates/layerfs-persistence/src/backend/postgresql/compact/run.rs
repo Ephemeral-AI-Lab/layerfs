@@ -12,7 +12,6 @@ use super::op::read_generation;
 use super::op::scratch_name;
 use super::op::stage;
 use super::op::stop;
-use super::op::RunMetrics;
 use super::report::report;
 use super::swap::swap;
 use super::sync::effective_sync_rank;
@@ -28,6 +27,7 @@ use crate::backend::sqlite::compact::CompactReceipt;
 use crate::backend::sqlite::compact::CompactRequest;
 use crate::backend::sqlite::compact::CompactResidue;
 use crate::compact_metrics::CompactPhase;
+use crate::compact_metrics::RunMetrics;
 use crate::PostgresHandles;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
@@ -48,7 +48,7 @@ pub(crate) fn round(
     metrics.begin_phase(CompactPhase::PostgresMark);
     let (mark, tuple) = handles.history.mark_gc()?;
     // §11 `markBytes`: the distinct live-pack body bytes this mark read.
-    metrics.mark_bytes = mark.mark_bytes();
+    metrics.mark_bytes = Some(mark.mark_bytes());
     load_visited(session, schema, &mark)?;
     // §3 decides over the mark's own snapshot, never a later Store total: a
     // publication after the mark raises `pack` bytes, and reading them here
@@ -218,7 +218,18 @@ impl PostgresHandles {
     /// deletes only the persisted dead set. The caller keeps its session; the
     /// Store is usable at `G + 1` from the swap on.
     pub fn compact(&self, request: &CompactRequest) -> HistoryResult<CompactReceipt> {
-        let mut metrics = RunMetrics::start();
+        self.compact_observed(request, &mut |_| {})
+    }
+
+    /// [`Self::compact`], telling `on_phase` each phase as it starts (`mark`,
+    /// `build`, `swap`, `cleanup`). The observer changes nothing about the
+    /// run; `store.status` stays the record another process reads.
+    pub fn compact_observed(
+        &self,
+        request: &CompactRequest,
+        on_phase: &mut dyn FnMut(&'static str),
+    ) -> HistoryResult<CompactReceipt> {
+        let mut metrics = RunMetrics::start(Some(0), on_phase);
         let result = self.compact_measured(request, &mut metrics);
         metrics.finish(&result);
         result

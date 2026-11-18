@@ -122,7 +122,7 @@ Front-end problems: none.
 | `store.push` | name, machine | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `store.pull` | name | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `store.remove` | name | - | yes | yes | yes | yes | admin |
-| `store.compact` | name | - | yes | yes | yes | yes | admin |
+| `store.compact` | name | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `store.disconnect` | name | - | yes | yes | yes | yes | admin |
 | `backup.connect` | name, url | key, region, part_size | yes | yes | yes | yes | admin |
 | `backup.disconnect` | name | - | yes | yes | yes | yes | admin |

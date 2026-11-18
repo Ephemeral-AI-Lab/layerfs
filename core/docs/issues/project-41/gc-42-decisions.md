@@ -31,7 +31,7 @@ frozen whole-lane exclusion; its measurements live under
 
 ---
 
-## A. Contract amendments (11) and one reading
+## A. Contract amendments (12) and one reading
 
 ### A1. §4.1 `project.delete` sidecar gains `op_id` (additive)
 
@@ -290,6 +290,34 @@ frozen whole-lane exclusion; its measurements live under
   says it "keeps only this run's admission intent").
 - **No contract change:** neither frozen sentence is edited; the spec stays
   byte-identical until sign-off, like A8–A11.
+
+### A13. §11: `store.compact` takes `on_progress` and sends one event per phase
+
+- **Frozen:** §11 says compaction writes its phase into the op, that
+  `store.status` shows it, and "there is no `PROGRESS` option (#42 item 40)".
+- **Proposed (owner, 2026-11-18):** `store.compact` declares the shared
+  `on_progress` function, the twelfth call to do so. The run sends
+  `{ phase, done, total }` as each phase starts, once per phase and with null
+  counts: `mark`, `build`, `verify`, `install` on SQLite and `mark`, `build`,
+  `swap`, `cleanup` on PostgreSQL. A `none` run sends `mark` alone. The SQLite
+  settle (D4's `cleanup` in `store.status`) is inside `install` and sends no
+  event of its own. The op record and `store.status` are unchanged and stay
+  the only record another process, or a call after a crash, reads.
+- **Reason:** the caller of a long rebuild saw nothing until the report; a
+  client that drives its progress display from `on_progress`, as it does for
+  `store.push` and `backup.create`, had to poll `store.status` for this one
+  call. The four GC calls still take ids only: `on_progress` is a function,
+  not a data option, and a function never crosses into the library.
+- **Not in this entry:** byte counts inside a phase, an estimate before the
+  run, and cancellation.
+- **Where:** `api/crates/layerfs-api/src/store/compact.rs` (`PROGRESS`),
+  `control/crates/layerfs-store/src/compact.rs` (the events),
+  `engine/crates/layerfs-persistence/src/compact_metrics.rs`
+  (`RunMetrics::begin_phase`, `CompactPhase::step`) and `compact_observed` on
+  both backends' handles; tests `an_observed_run_is_told_each_phase_once_in_order`
+  (`sqlite_compact.rs`, `postgresql_compact.rs`) and
+  `store_compact_sends_each_phase_as_a_progress_event` (`gc_calls.rs`). The
+  frozen spec file stays byte-identical until sign-off, like A8–A11.
 
 ---
 
@@ -573,9 +601,9 @@ rotational (HDD) backing — not NVMe** (88 vCPU across two Xeon E5-2699C v4,
 
 ## Request
 
-Please record A1–A11 as #42 items (or amend the frozen text) and note the A12
+Please record A1–A11 and A13 as #42 items (or amend the frozen text) and note the A12
 reading (it changes no contract text), and accept or reject D1–D5 individually
 when the owner signs off, and accept G7 as the record of a deferred design (it
 changes no contract text). Until then the implementation follows the frozen
-text except where A8–A12 and D1–D5 are named, and the spec file in this branch
+text except where A8–A13 and D1–D5 are named, and the spec file in this branch
 is byte-identical to the frozen version.

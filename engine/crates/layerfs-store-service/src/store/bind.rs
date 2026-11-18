@@ -87,17 +87,6 @@ impl Store {
     ) -> Result<BindSuccess, BindRefusal> {
         self.bind_with(owner, BindIntent::Id(request), MountPlace::default(), true)
     }
-    /// [`Self::bind_private`] of a caller that knows the Sandbox and
-    /// machine the Workspace belongs to.
-    #[allow(clippy::result_large_err)]
-    pub fn bind_private_placed(
-        self: &Arc<Self>,
-        owner: OwnerClient,
-        request: BindRequest,
-        place: MountPlace,
-    ) -> Result<BindSuccess, BindRefusal> {
-        self.bind_with(owner, BindIntent::Id(request), place, true)
-    }
     #[allow(clippy::result_large_err)]
     fn bind_with(
         self: &Arc<Self>,

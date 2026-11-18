@@ -574,7 +574,13 @@ class StoreFamily:
         """bring a sqlite Store from its machine to native"""
     def remove(self, name: str, *, log_tag: str | None = None) -> Result:
         """delete a sqlite Store with every project in it"""
-    def compact(self, name: str, *, log_tag: str | None = None) -> Result:
+    def compact(
+        self,
+        name: str,
+        *,
+        on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
+    ) -> Result:
         """reclaim dead bytes from one Store"""
     def disconnect(self, name: str, *, log_tag: str | None = None) -> Result:
         """forget a PostgreSQL Store; its data stays"""

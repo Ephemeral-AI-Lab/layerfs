@@ -13,9 +13,8 @@ use layerfs_history::{
     HistoryCatalogConfig, HistoryError, LayerStackId, LayerStackRecord, StackInitialization,
 };
 use layerfs_persistence::{
-    compact_op_status, CompactFailpoint, CompactPath, CompactReport, CompactReportSource,
-    CompactRequest, PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePackLayout,
-    SqlitePersistenceProfile,
+    compact_op_status, CompactFailpoint, CompactPath, CompactRequest, PersistenceConfig,
+    SqliteAcquisitionSchema, SqliteHandles, SqlitePackLayout, SqlitePersistenceProfile,
 };
 use layerfs_storage::{port::PackPersistence, Storage, StoragePolicy};
 use std::cell::RefCell;
@@ -910,7 +909,7 @@ fn an_unrecorded_non_removable_artifact_does_not_strand_the_store() {
 }
 
 #[test]
-fn the_report_projects_every_section_11_field() {
+fn the_receipt_carries_every_section_11_field() {
     let (_temp, handles, _path) = create_store();
     let live = filesystem_root(&handles, 1);
     initialize(&handles, 1, live);
@@ -918,20 +917,11 @@ fn the_report_projects_every_section_11_field() {
     let before = generation(&handles);
     let receipt = handles.compact(&request(30)).unwrap();
     assert_eq!(receipt.path, CompactPath::Rebuild);
-    let report = CompactReport::from(&receipt);
-    assert_eq!(report.path, CompactPath::Rebuild);
-    assert_eq!(report.generation.before, before);
-    assert_eq!(report.generation.after, before + 1);
-    assert_eq!(report.dead_bytes_bound, receipt.dead_bytes_bound);
+    let report = &receipt;
+    assert_eq!(report.generation_before, before);
+    assert_eq!(report.generation_after, before + 1);
     assert_eq!(report.dead_bytes_refined, report.dead_bytes_bound);
-    assert_eq!(report.logical_discarded, receipt.logical_discarded);
-    assert_eq!(report.backend_reusable, receipt.backend_reusable);
-    assert_eq!(report.physical_shrink, receipt.physical_shrink);
-    assert_eq!(report.kept_waste, receipt.kept_waste);
-    assert_eq!(report.peak_temp_bytes, receipt.peak_temp_bytes);
-    assert_eq!(report.residue, receipt.residue);
     assert!(report.estimate);
-    assert_eq!(report.zero_reasons, receipt.zero_reasons);
     assert!(
         report
             .zero_reasons
@@ -939,17 +929,39 @@ fn the_report_projects_every_section_11_field() {
             .all(|zero| zero.wire_field() != "dead_bytes_bound"),
         "a rebuild with dead bytes does not explain a zero"
     );
-    // `From` and the shared source trait project the same report.
-    assert_eq!(report, receipt.compact_report());
+}
+
+/// An observed run is told each phase once, in order, as it starts, by the
+/// names `store.status` shows; a run with nothing to rebuild stops at `mark`.
+#[test]
+fn an_observed_run_is_told_each_phase_once_in_order() {
+    let (_temp, handles, _path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let _ = whole_file(&handles, b"dead");
+    let mut phases = Vec::new();
+    let receipt = handles
+        .compact_observed(&request(34), &mut |phase| phases.push(phase))
+        .unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(phases, ["mark", "build", "verify", "install"]);
+
+    let (_temp, handles, _path) = create_store();
+    let mut phases = Vec::new();
+    let receipt = handles
+        .compact_observed(&request(35), &mut |phase| phases.push(phase))
+        .unwrap();
+    assert_eq!(receipt.path, CompactPath::None);
+    assert_eq!(phases, ["mark"]);
 }
 
 #[test]
 fn the_empty_store_report_explains_its_zeros() {
     let (_temp, handles, path) = create_store();
     let receipt = handles.compact(&request(31)).unwrap();
-    let report = CompactReport::from(&receipt);
+    let report = &receipt;
     assert_eq!(report.path, CompactPath::None);
-    assert_eq!(report.generation.before, report.generation.after);
+    assert_eq!(report.generation_before, report.generation_after);
     assert_eq!(report.dead_bytes_refined, report.dead_bytes_bound);
     assert!(report.estimate);
     assert!(

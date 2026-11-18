@@ -567,7 +567,8 @@ fn sandbox_images_are_named_by_the_image_kind() {
 
 #[test]
 fn the_four_gc_calls_take_only_ids() {
-    // T11.1: the four GC calls, each one resource identifier and no option.
+    // T11.1: the four GC calls, each one resource identifier and no data
+    // option; `store.compact` alone declares `on_progress` (#42 item 45).
     use layerfs_api::Kind;
     let expected: &[(&str, &[(&str, Kind)])] = &[
         (
@@ -586,6 +587,11 @@ fn the_four_gc_calls_take_only_ids() {
         let given: Vec<(&str, Kind)> = spec.args.iter().map(|arg| (arg.name, arg.kind)).collect();
         assert_eq!(given.as_slice(), args, "{name}");
         assert!(spec.args.iter().all(|arg| !arg.optional), "{name}");
-        assert!(spec.options.is_empty(), "{name} takes no option");
+        let options: Vec<(&str, Kind)> = spec.options.iter().map(|o| (o.name, o.kind)).collect();
+        if name == "store.compact" {
+            assert_eq!(options, [("on_progress", Kind::Function)], "{name}");
+        } else {
+            assert!(options.is_empty(), "{name} takes no option");
+        }
     }
 }

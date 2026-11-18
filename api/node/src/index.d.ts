@@ -418,6 +418,11 @@ export interface StorePullOptions extends CallOptions {
   on_progress?: ProgressHandler;
 }
 
+/** Options of `store.compact`; an unknown option is refused. */
+export interface StoreCompactOptions extends CallOptions {
+  on_progress?: ProgressHandler;
+}
+
 /** Options of `backup.connect`; an unknown option is refused. */
 export interface BackupConnectOptions extends CallOptions {
   key?: string;
@@ -647,7 +652,7 @@ export interface StoreFamily {
   /** delete a sqlite Store with every project in it */
   remove(name: string, options?: CallOptions): Promise<Result>;
   /** reclaim dead bytes from one Store */
-  compact(name: string, options?: CallOptions): Promise<Result>;
+  compact(name: string, options?: StoreCompactOptions): Promise<Result>;
   /** forget a PostgreSQL Store; its data stays */
   disconnect(name: string, options?: CallOptions): Promise<Result>;
 }
