@@ -2,7 +2,7 @@
 // outside the repository with `typescript` and `@types/node` installed:
 //   tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target es2022 \
 //     --typeRoots <that dir>/node_modules/@types api/node/test/types/sample.ts
-import layerfs, { client, doctor, close, table, LayerFSError, type Result, type FileReadOptions } from "../../src/index.js";
+import layerfs, { client, close, table, LayerFSError, type Result, type FileReadOptions } from "../../src/index.js";
 
 const lfs = client({ home: "/tmp/home", scope: { project: "shop/api", folder: "/web", branch: "agent" } });
 
@@ -42,11 +42,9 @@ async function main(): Promise<void> {
   });
   await lfs.project.export("shop/api", "/exports/api-default");
   const cancelled: Result = await lfs.workspace.exec_cancel("ws", "exec-0123456789abcdef", { grace_ms: 1_000 });
-  const report = await doctor({ home: "/tmp/home" });
-  const worst: string | undefined = report.findings[0]?.severity;
   const closed: number = close();
   const first = table[0];
-  void [page, worst, closed, first.family, progress, exported, cancelled];
+  void [page, closed, first.family, progress, exported, cancelled];
   try {
     await lfs.store.list();
   } catch (error) {

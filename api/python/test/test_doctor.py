@@ -1,7 +1,7 @@
 """The doctors over the real native module (call surface 2.0):
 ``home.doctor()`` and its five siblings are table calls that report and
-change nothing; and ``doctor.fix(id)``, the ``doctor`` family's one call,
-which removes one leftover (layerfs-project#180).
+change nothing; and ``home.leftovers()`` and ``home.prune(leftover)``,
+which list what earlier runs left and remove one (layerfs-project#180).
 
 Build first, as for test_calls.py."""
 
@@ -74,7 +74,7 @@ class Doctor(unittest.TestCase):
         finally:
             shutil.rmtree(home)
 
-    def test_doctor_fix_removes_a_leftover_by_its_id(self):
+    def test_home_prune_removes_a_leftover_home_leftovers_listed(self):
         home = tempfile.mkdtemp(prefix="layerfs-py-doctor-")
         os.chmod(home, 0o700)
         try:
@@ -96,27 +96,38 @@ class Doctor(unittest.TestCase):
             lock = os.path.join(images, f"{digest}.2.lock")
             open(lock, "w").close()
 
-            # no doctor's report lists a leftover: its id is the leftover walk's
-            fix_id = f"native:image-part:{digest}"
+            # the list names the part by its id; the lock is no leftover
+            leftover = f"native:image_part:{digest}"
+            listed = lfs.home.leftovers(machine="native")
+            self.assertEqual([item["leftover"] for item in listed["items"]], [leftover])
 
             # the same call on the module's function, on a client and as a coroutine
-            self.assertTrue(callable(layerfs.doctor.fix))
-            for wrong, code in ((f"native:image-lock:{digest}.2", "InvalidInput"), ("native:image-part:../x", "NotFound")):
+            self.assertTrue(callable(layerfs.home.prune))
+            self.assertFalse(hasattr(layerfs, "doctor"))
+            for wrong in (f"native:image_lock:{digest}.2", "native:image_part:../x"):
                 with self.assertRaises(layerfs.LayerFSError) as refused:
-                    lfs.doctor.fix(wrong)
-                self.assertEqual(refused.exception.code, code)
+                    lfs.home.prune(wrong)
+                self.assertEqual(refused.exception.code, "NotFound")
             with self.assertRaises(layerfs.LayerFSError) as refused:
-                asyncio.run(aio.client(home=home).doctor.fix(f"native:image-lock:{digest}.2"))
-            self.assertEqual(refused.exception.code, "InvalidInput")
-            removed = lfs.doctor.fix(fix_id)
+                asyncio.run(aio.client(home=home).home.prune(f"native:image-part:{digest}"))
+            self.assertEqual(refused.exception.code, "NotFound")
+            removed = lfs.home.prune(leftover, detail=True)
             self.assertEqual(
                 removed,
-                {"kind": "image-part", "path": received, "removed": True, "bytes": 50, "machine": "native", "id": fix_id},
+                {
+                    "ok": True,
+                    "freed_bytes": 50,
+                    "outcome": "removed",
+                    "leftover": leftover,
+                    "kind": "image_part",
+                    "machine": "native",
+                    "path": received,
+                },
             )
             self.assertFalse(os.path.exists(received))
             self.assertTrue(os.path.exists(lock), "the lock file stays")
             with self.assertRaises(layerfs.LayerFSError) as refused:
-                lfs.doctor.fix(fix_id)
+                lfs.home.prune(leftover)
             self.assertEqual(refused.exception.code, "NotFound")
         finally:
             shutil.rmtree(home)

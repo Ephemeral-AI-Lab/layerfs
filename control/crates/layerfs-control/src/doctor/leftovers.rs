@@ -1,13 +1,14 @@
-//! What interrupted operations left behind (layerfs-project#180): one
-//! bounded walk of one side's LayerFS folders, the home on `native` or a
-//! machine's worker root, and how each entry it finds is named.
+//! What interrupted operations left behind (layerfs-project#180, `home
+//! leftovers`): one bounded walk of one side's LayerFS folders, the home on
+//! `native` or a machine's worker root, and how each entry it finds is
+//! named.
 //!
 //! The walk ([`walk`]) is a read: it takes no lock, lease or daemon
 //! connection, follows no link and opens no file but a run folder's small
 //! `owner` marker and the Sandbox records. It looks only where LayerFS puts
 //! its own entries: the run root (`machine/native/run`) with its image
-//! cache, each Store folder's two staged-snapshot names, `incoming/` and
-//! the Workspace records' unmount markers. A Store's files, a lock or lease
+//! cache, each Store folder's two staged-snapshot names and `incoming/`.
+//! A Store's files, a lock or lease
 //! file and an overlay database are never opened; a run folder's
 //! `workspaces/` (its Workspace mount points) is never entered or `stat`ed,
 //! and a directory on another device (a mount) is not descended into. The
@@ -15,18 +16,18 @@
 //! `stat/`, `preset/`) are neither listed nor read: the walk never lists the
 //! home itself. It stops at [`Bounds`] and then answers `complete: false`.
 //!
-//! Each entry is `{ kind, name, path, bytes, age }`: `bytes` is the size of
-//! the file, or of every file under the folder (`null` when a bound ended
-//! the walk before it was measured), and `age` the seconds since the newest
-//! modification time (`mtime`) of the entry and of what was measured under
-//! it. Image `<hex>.2.lock` files and `<id>.unmount` markers are only
-//! counted: they are never removed.
+//! Each entry is `{ kind, name, path, bytes, modified }`: `bytes` is the
+//! size of the file, or of every file under the folder (`null` when a bound
+//! ended the walk before it was measured), and `modified` the newest
+//! modification time (`mtime`, seconds since 1970) of the entry and of what
+//! was measured under it. An image's `<hex>.2.lock` file and a Workspace's
+//! `<id>.unmount` marker are LayerFS's own and never listed.
 //!
-//! An entry's fix id is `<machine>:<kind>:<name>` ([`id`], [`parse`]). The
-//! path is never part of it: the side that removes derives the path from
-//! the kind and the name ([`Kind::path`]), whose grammar admits no
-//! separator, no `..` and no leading dot, and finds the entry again under
-//! its guard ([`super::leftover_fix`]).
+//! An entry's id is `<machine>:<kind>:<name>` ([`id`], [`parse`]), its kind
+//! in snake_case. The path is never part of it: the side that removes
+//! derives the path from the kind and the name ([`Kind::path`]), whose
+//! grammar admits no separator, no `..` and no leading dot, and finds the
+//! entry again under its guard ([`super::leftover_prune`]).
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::paths;
 use layerfs_sandbox::record::SandboxRecord;
@@ -45,7 +46,7 @@ pub struct Bounds {
     pub within: Duration,
 }
 
-/// The bounds `layerfs doctor` walks each side with.
+/// The bounds `home leftovers` walks each side with.
 pub const BOUNDS: Bounds = Bounds {
     entries: 20_000,
     within: Duration::from_secs(2),
@@ -74,47 +75,34 @@ pub enum Kind {
     ImageTmp,
     /// A received image tar `.recv-<hex>.part`.
     ImagePart,
-    /// An image's `<hex>.2.lock`: counted, never removed.
-    ImageLock,
-    /// A Workspace's `<id>.unmount` marker: counted, never removed.
-    UnmountMarker,
 }
 
 impl Kind {
-    const ALL: [Kind; 8] = [
+    /// Every kind, in the order the specification lists them.
+    pub const ALL: [Kind; 6] = [
         Kind::RunFolder,
         Kind::EmptyRoot,
         Kind::InitCopy,
         Kind::BackupStaging,
         Kind::ImageTmp,
         Kind::ImagePart,
-        Kind::ImageLock,
-        Kind::UnmountMarker,
     ];
 
-    /// Its name in a finding and a fix id.
+    /// Its word in an entry's `kind` and inside its id.
     pub fn as_str(self) -> &'static str {
         match self {
-            Kind::RunFolder => "run-folder",
-            Kind::EmptyRoot => "empty-root",
-            Kind::InitCopy => "init-copy",
-            Kind::BackupStaging => "backup-staging",
-            Kind::ImageTmp => "image-tmp",
-            Kind::ImagePart => "image-part",
-            Kind::ImageLock => "image-lock",
-            Kind::UnmountMarker => "unmount-marker",
+            Kind::RunFolder => "run_folder",
+            Kind::EmptyRoot => "empty_root",
+            Kind::InitCopy => "init_copy",
+            Kind::BackupStaging => "backup_staging",
+            Kind::ImageTmp => "image_tmp",
+            Kind::ImagePart => "image_part",
         }
     }
 
     /// The kind named `text`.
     pub fn named(text: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|kind| kind.as_str() == text)
-    }
-
-    /// Whether entries of this kind are only reported: `doctor.fix` refuses
-    /// them `InvalidInput`.
-    pub fn report_only(self) -> bool {
-        matches!(self, Kind::ImageLock | Kind::UnmountMarker)
     }
 
     /// Where entry `name` of this kind is under side root `root`, or `None`
@@ -142,19 +130,6 @@ impl Kind {
             }
             Kind::ImagePart => (name.len() == 64 && hex(name))
                 .then(|| rootfs::cache(&run).join(format!(".recv-{name}.part"))),
-            Kind::ImageLock => {
-                let digest = name.strip_suffix(".2").unwrap_or(name);
-                (digest.len() == 64 && hex(digest))
-                    .then(|| rootfs::cache(&run).join(format!("{name}.lock")))
-            }
-            Kind::UnmountMarker => {
-                let (sandbox, workspace) = name.split_once('/')?;
-                (plain(sandbox) && plain(workspace)).then(|| {
-                    paths::sandbox_dir(root, sandbox)
-                        .join("workspace")
-                        .join(format!("{workspace}.unmount"))
-                })
-            }
         }
     }
 }
@@ -182,13 +157,13 @@ fn run_name(name: &str) -> bool {
     plain(name) && name != "images" && !name.ends_with(".root")
 }
 
-/// The fix id of entry `name` of `kind` on `machine`.
+/// The id of entry `name` of `kind` on `machine`.
 pub fn id(machine: &str, kind: Kind, name: &str) -> String {
     format!("{machine}:{}:{name}", kind.as_str())
 }
 
-/// The machine, kind and name a fix id holds; `None` unless every part is
-/// one a [`walk`] gives.
+/// The machine, kind and name an id holds; `None` unless every part is one
+/// a [`walk`] gives.
 pub fn parse(id: &str) -> Option<(&str, Kind, &str)> {
     let (machine, rest) = id.split_once(':')?;
     let (kind, name) = rest.split_once(':')?;
@@ -279,8 +254,6 @@ struct Walk<'a> {
     complete: bool,
     now: i64,
     found: Vec<SdkValue>,
-    locks: i64,
-    markers: i64,
 }
 
 impl Walk<'_> {
@@ -366,7 +339,7 @@ impl Walk<'_> {
             ("name", SdkValue::text(name)),
             ("path", SdkValue::text(path.display().to_string())),
             ("bytes", bytes.map_or(SdkValue::Null, SdkValue::Int)),
-            ("age", SdkValue::Int(self.now.saturating_sub(newest).max(0))),
+            ("modified", SdkValue::Int(newest)),
         ]));
     }
 
@@ -399,8 +372,7 @@ impl Walk<'_> {
         }
     }
 
-    /// The image cache: an unpack's temporaries, received parts, and the
-    /// lock files, which are only counted.
+    /// The image cache: an unpack's temporaries and received parts.
     fn images(&mut self, cache: &Path) {
         for (name, _) in self.list(cache) {
             if let Some(rest) = name.strip_prefix(".tmp-") {
@@ -409,8 +381,6 @@ impl Walk<'_> {
                 (name.strip_prefix(".recv-")).and_then(|rest| rest.strip_suffix(".part"))
             {
                 self.found(Kind::ImagePart, digest, None);
-            } else if name.ends_with(".lock") {
-                self.locks += 1;
             }
         }
     }
@@ -437,23 +407,10 @@ impl Walk<'_> {
             }
         }
     }
-
-    /// The unmount markers beside the Workspace records: only counted.
-    fn unmount_markers(&mut self) {
-        for (sandbox, directory) in self.list(&self.root.join("sandbox")) {
-            if !directory || !plain(&sandbox) {
-                continue;
-            }
-            let records = paths::sandbox_dir(self.root, &sandbox).join("workspace");
-            for (name, _) in self.list(&records) {
-                self.markers += i64::from(name.ends_with(".unmount"));
-            }
-        }
-    }
 }
 
 /// One side's walk under `root`, inside `bounds`: `{ leftovers: [{ kind,
-/// name, path, bytes, age }], image_locks, unmount_markers, complete }`.
+/// name, path, bytes, modified }], complete }`.
 /// `known` names the Sandboxes the caller's home records on this machine.
 pub fn walk(root: &Path, known: &[String], bounds: Bounds) -> SdkValue {
     let mut walk = Walk {
@@ -463,17 +420,12 @@ pub fn walk(root: &Path, known: &[String], bounds: Bounds) -> SdkValue {
         complete: true,
         now: layerfs_home::home::now_ms() / 1000,
         found: Vec::new(),
-        locks: 0,
-        markers: 0,
     };
     walk.run_root(known);
     walk.stores();
     walk.incoming();
-    walk.unmount_markers();
     SdkValue::map([
         ("leftovers", SdkValue::List(walk.found)),
-        ("image_locks", SdkValue::Int(walk.locks)),
-        ("unmount_markers", SdkValue::Int(walk.markers)),
         ("complete", SdkValue::Bool(walk.complete)),
     ])
 }

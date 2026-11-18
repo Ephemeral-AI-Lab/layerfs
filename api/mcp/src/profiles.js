@@ -14,8 +14,7 @@
 //          machine, store, backup and logs families
 //   ui     the monitoring calls a UI polls (layerfs-project#178 D2, #164): in no
 //          profile, so no agent is offered them
-//   none   the doctor family: like `layerfs doctor` itself, which is no
-//          tool, its repair call is a person's, in neither profile
+//   none   a family that is no tool in any profile (none today)
 // The `admin` launch profile exposes the union of `work` and `admin`, so
 // `admin` adds the administrative calls to the `work` set.
 
@@ -38,7 +37,7 @@ const UI_CALLS = new Set(["machine.stats", "machine.files", "machine.log", "logs
 const ADMIN_FAMILIES = new Set(["home", "machine", "store", "backup", "logs"]);
 
 /** Families that are no MCP tool in any profile. */
-const NO_TOOL_FAMILIES = new Set(["doctor"]);
+const NO_TOOL_FAMILIES = new Set([]);
 
 /** Why a family's calls sit where they do; one line per family, in the doc. */
 const WHY = {
@@ -53,7 +52,6 @@ const WHY = {
   store: "create, connect, transfer and remove Stores; administration",
   backup: "upload and restore a Store on a bucket; administration",
   logs: "read a machine's worker log or a Sandbox's daemon log; a UI's monitoring reads",
-  doctor: "remove a leftover the doctor's report listed; like `layerfs doctor` itself, a person's repair and no MCP tool",
 };
 
 const nameOf = (spec) => `${spec.family}.${spec.call}`;

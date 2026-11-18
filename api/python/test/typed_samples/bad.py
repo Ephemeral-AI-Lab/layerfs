@@ -21,7 +21,6 @@ layerfs.project.init("shop/api", "/src", on_progress=3)  # E: a function option 
 layerfs.file.write("shop/api", "main", "/a", 12)  # E: content is text or bytes
 layerfs.machine.create("m", "docker", memory=1.5)  # E: a size is a number or text
 lfs.nosuch.list()  # E: no such family
-layerfs.doctor()["nosuch"]  # E: not a field of the report
 layerfs.client(scope={"project": 1, "folder": "/"})  # E: scope.project is text
 
 layerfs.project.init("shop/api", "/src", on_progress=None)  # E: supplied callback must be callable

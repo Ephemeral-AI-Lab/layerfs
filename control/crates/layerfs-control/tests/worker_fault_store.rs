@@ -2,7 +2,7 @@
 //! (layerfs-project#177): the Store and the Sandbox tables answer the next
 //! call, and a stalled `project.export` gives up the Store's lease. And a
 //! `project.init` whose answer is lost names its folder copy in the home's
-//! uncertain log, which is what lets `doctor.fix` remove that copy later
+//! uncertain log, which is what lets `home.prune` remove that copy later
 //! (layerfs-project#180). Empty without the `worker-fault` cargo feature:
 //!
 //! `cargo test -p layerfs-control --features worker-fault --test worker_fault_store`
@@ -171,22 +171,23 @@ fn a_lost_init_names_its_copy_for_doctor() {
     let staged = placed.root.join("incoming").join(format!("init-{copy}"));
     assert!(staged.join("README.md").is_file(), "the copy is there");
 
-    // doctor lists it as removable an hour after that deadline, and until
-    // then `doctor.fix` leaves it
-    let report = layerfs_control::doctor::doctor(&placed.home).unwrap();
-    let Some(SdkValue::List(findings)) = report.get("findings") else {
-        panic!("{report:?}");
+    // `home leftovers` lists it as removable an hour after that deadline,
+    // and until then `home prune` leaves it
+    let listed = layerfs_control::doctor::leftover_list::list(&placed.home, None).unwrap();
+    let Some(SdkValue::List(left)) = listed.get("items") else {
+        panic!("{listed:?}");
     };
-    let left: Vec<&SdkValue> = (findings.iter())
-        .filter_map(|finding| finding.get("leftover"))
-        .collect();
-    assert_eq!(left.len(), 1, "{findings:?}");
-    let id = format!("box:init-copy:{copy}");
-    assert_eq!(left[0].get_text("id"), Some(id.as_str()));
+    assert_eq!(left.len(), 1, "{listed:?}");
+    let id = format!("box:init_copy:{copy}");
+    assert_eq!(left[0].get_text("leftover"), Some(id.as_str()));
     assert_eq!(left[0].get_text("path"), staged.to_str());
-    assert!(left[0].get_bool("fixable"), "{left:?}");
-    assert_eq!(left[0].get_int("not_before"), Some(deadline + 3_600_000));
-    let early = layerfs_control::doctor::leftover_fix::fix(&placed.home, &id).unwrap_err();
+    assert!(!left[0].get_bool("report_only"), "{left:?}");
+    let removable_at = layerfs_home::time::iso(deadline + 3_600_000);
+    assert_eq!(
+        left[0].get_text("removable_at"),
+        Some(removable_at.as_str())
+    );
+    let early = layerfs_control::doctor::leftover_prune::prune(&placed.home, &id).unwrap_err();
     assert_eq!(early.code, "InUse", "{early:?}");
     assert!(staged.join("README.md").is_file());
     placed.remove();

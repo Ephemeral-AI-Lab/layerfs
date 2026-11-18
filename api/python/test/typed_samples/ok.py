@@ -46,10 +46,6 @@ def sync_flow() -> None:
         code: str = error.code
         message: str = error.message
         print(code, message, error.detail)
-    report = layerfs.doctor()
-    ok: bool = report["ok"]
-    severity: str = report["findings"][0]["severity"] if report["findings"] else "none"
-    print(ok, severity)
     layerfs.project.list()
     layerfs.file.read("shop/api", "main", "/a", commit="c1")
     closed: int = layerfs.close()

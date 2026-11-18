@@ -57,9 +57,8 @@ const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", fo
   [`layerfs doctor`](calls.md#layerfs-doctor), outside the table: it
   resolves to `{ ok, findings: [{ severity, entity: { kind, name }, message,
   fix }] }` and changes nothing; `home` defaults as above.
-  `layerfs.doctor.fix(id)` is the table call
-  [`doctor fix`](calls.md#layerfs-doctor-fix-id): it removes one leftover the
-  report listed (`findings[].leftover.id`).
+  The leftovers are `layerfs.home.leftovers()`, and `layerfs.home.prune(leftover)`
+  removes one ([`home`](calls.md#home-7)).
 - `layerfs.close()` (also a named export), outside the table, closes every
   Store this process holds open with no call running, which drops its
   leases; it answers how many it closed. A process calls it before it

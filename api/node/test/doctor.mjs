@@ -1,13 +1,13 @@
 // The doctors over the real addon (call surface 2.0): `home.doctor()` and
 // its five siblings are table calls that report and change nothing; and
-// `doctor.fix(id)`, the `doctor` family's one call, which removes one
-// leftover (layerfs-project#180).
+// `home.leftovers()` and `home.prune(leftover)`, which list what earlier
+// runs left and remove one of them (layerfs-project#180).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import layerfs, { doctor, table, LayerFSError } from "../src/index.js";
+import layerfs, { table, LayerFSError } from "../src/index.js";
 
 test("home.doctor reports a home without making it, as a table call", async () => {
   const names = table.filter((spec) => spec.call === "doctor").map((spec) => `${spec.family}.${spec.call}`);
@@ -38,7 +38,7 @@ test("home.doctor names a record that does not parse and its fix", async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-test("doctor.fix removes a leftover by its id, on the package and on a client", async () => {
+test("home.prune removes a leftover home.leftovers listed, on the package and on a client", async () => {
   const home = mkdtempSync(join(tmpdir(), "layerfs-node-doctor-"));
   chmodSync(home, 0o700);
   const lfs = layerfs.client({ home });
@@ -58,20 +58,23 @@ test("doctor.fix removes a leftover by its id, on the package and on a client", 
   utimesSync(part, then, then);
   writeFileSync(join(images, `${digest}.2.lock`), "");
 
-  // no doctor's report lists a leftover: its id is the leftover walk's
-  const id = `native:image-part:${digest}`;
+  // the list names the part by its id; the lock is no leftover
+  const id = `native:image_part:${digest}`;
+  const listed = await lfs.home.leftovers({ machine: "native" });
+  assert.deepEqual(listed.items.map((item) => item.leftover), [id]);
 
   // the same function on the package and on a client; refusals carry a code
-  assert.equal(typeof layerfs.doctor.fix, "function");
-  assert.equal(typeof doctor.fix, "function");
+  assert.equal(typeof layerfs.home.prune, "function");
+  assert.equal(typeof lfs.home.prune, "function");
+  assert.equal(layerfs.doctor, undefined, "the doctor family is gone");
   const refused = (code) => (error) => error instanceof LayerFSError && error.code === code;
-  await assert.rejects(lfs.doctor.fix(`native:image-lock:${digest}.2`), refused("InvalidInput"));
-  await assert.rejects(lfs.doctor.fix("native:image-part:../x"), refused("NotFound"));
-  await assert.rejects(lfs.doctor.fix(), refused("InvalidInput"));
-  const removed = await lfs.doctor.fix(id);
-  assert.deepEqual(removed, { kind: "image-part", path: part, removed: true, bytes: 50, machine: "native", id });
+  await assert.rejects(lfs.home.prune(`native:image_lock:${digest}.2`), refused("NotFound"));
+  await assert.rejects(lfs.home.prune("native:image_part:../x"), refused("NotFound"));
+  await assert.rejects(lfs.home.prune(), refused("InvalidInput"));
+  const removed = await lfs.home.prune(id, { detail: true });
+  assert.deepEqual(removed, { ok: true, freed_bytes: 50, outcome: "removed", leftover: id, kind: "image_part", machine: "native", path: part });
   assert.ok(!existsSync(part));
   assert.ok(existsSync(join(images, `${digest}.2.lock`)), "the lock file stays");
-  await assert.rejects(lfs.doctor.fix(id), refused("NotFound"));
+  await assert.rejects(lfs.home.prune(id), refused("NotFound"));
   rmSync(home, { recursive: true, force: true });
 });
