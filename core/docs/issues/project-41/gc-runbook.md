@@ -193,8 +193,9 @@ collects the marker, and never touches `main` (`ReservedName`).
 **Reclaim (optional, later).** `layerfs store compact <name>` only when the
 Store is idle (no mounts, daemon or other op). A rebuild copies retained rows
 into a fresh Store and installs `G + 1`; only then are retired names and their
-rows collected. A `none` outcome (<10 % wholly dead) keeps everything, and the
-retired names stay taken. Follow the compaction procedure in §6 and the
+rows collected. A `none` outcome (<10 % wholly dead; on SQLite the prototype of
+[decision D6](gc-42-decisions.md) also counts dead records inside retained
+packs) keeps everything, and the retired names stay taken. Follow the compaction procedure in §6 and the
 rollback limits in §4.
 
 **Rollback.** Restore the whole home and Store from the pre-cutover backup

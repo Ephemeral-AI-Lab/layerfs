@@ -44,6 +44,7 @@ use std::path::Path;
 mod edges;
 mod ids;
 mod impls;
+mod ordinals;
 mod plan;
 
 use ids::{IdMap, IdSet};
@@ -82,6 +83,12 @@ pub struct KeptObjects {
     objects: Vec<ObjectId>,
     packs: Vec<i64>,
     waste: KeptWaste,
+    /// Retained packs that hold a record no reached object owns, in ascending
+    /// pack order, each with its share of
+    /// [`KeptWaste::dead_in_retained_packs_bytes`].
+    partly_dead: Vec<(i64, u64)>,
+    /// The inode value ordinals the reached leaves read, as inclusive runs.
+    inode_ordinals: Vec<(u32, u32)>,
 }
 
 /// One complete mark: the §6.1 history closure, the §6.2 object closure and the
@@ -268,16 +275,19 @@ fn mark_recorded(
         layouts: std::cell::RefCell::new(HashMap::new()),
         upcoming: std::cell::RefCell::default(),
         values: std::cell::RefCell::default(),
+        ordinals: std::cell::RefCell::default(),
     };
     let roots = roots(tx)?;
     let closure = walk(&source, &capacities, policy.construction(), roots, visit)?;
-    let waste = waste(tx, &source, &located, &closure)?;
+    let (waste, partly_dead) = waste(tx, &source, &located, &closure)?;
     let mark_bytes = source.read_bytes();
     let digest = live_heads_digest(tx)?;
     let objects = KeptObjects {
         objects: closure.objects(),
         packs: closure.packs(),
         waste,
+        partly_dead,
+        inode_ordinals: source.ordinals.borrow().runs(),
     };
     Ok(MarkResult {
         history,
@@ -418,6 +428,8 @@ struct ClosureSource<'a> {
     upcoming: std::cell::RefCell<(Vec<i64>, usize)>,
     /// Inode values the engine returned ahead of need, by ordinal.
     values: std::cell::RefCell<HashMap<u32, [u8; INODE_VALUE_BYTES]>>,
+    /// Every ordinal the walk asked for ([`ordinals`]).
+    ordinals: std::cell::RefCell<ordinals::Ordinals>,
 }
 
 /// Packs announced to the engine at a time ([`ClosureSource::announce`]).
@@ -568,6 +580,7 @@ impl Source for ClosureSource<'_> {
         // One keyed map, so a page of many ordinals is not scanned per
         // ordinal. It also keeps what the engine read ahead: a walk meets
         // leaves in about the order their values were stored.
+        self.ordinals.borrow_mut().extend(ordinals);
         let mut held = self.values.borrow_mut();
         if !ordinals.iter().all(|ordinal| held.contains_key(ordinal)) {
             let mut rows = Vec::new();
@@ -738,18 +751,38 @@ fn waste(
     source: &ClosureSource<'_>,
     located: &Located,
     closure: &Closure,
-) -> HistoryResult<KeptWaste> {
+) -> HistoryResult<(KeptWaste, Vec<(i64, u64)>)> {
     let mut dead_in_retained_packs_bytes = 0u64;
-    let packs = closure.packs();
+    // Reached records per retained pack, in pack order: the same single pass
+    // over the closure that names the retained packs.
+    let mut reached: BTreeMap<i64, usize> = BTreeMap::new();
+    for location in closure.visited.values() {
+        *reached.entry(location.pack_id).or_default() += 1;
+    }
     // Packs the walk did not lay out have their directory prefix read here:
     // a bounded batch of packs per call, not one call per pack.
     let mut prefixes = {
         let layouts = source.layouts.borrow();
-        let unread = packs.iter().filter(|pack| !layouts.contains_key(pack));
+        let unread = reached.keys().filter(|pack| !layouts.contains_key(pack));
         edges::Prefixes::new(source, unread.copied().collect())
     };
-    for pack_id in packs {
+    let mut partly_dead = Vec::new();
+    let mut counted = (0i64, 0u64, false);
+    for (pack_id, reached) in reached {
+        // The pack before this one is complete: record what it added.
+        if counted.2 || dead_in_retained_packs_bytes > counted.1 {
+            partly_dead.push((counted.0, dead_in_retained_packs_bytes - counted.1));
+        }
         let groups = located.inventory.get(&pack_id);
+        // A pack that locates more records than the walk reached in it holds
+        // a dead one. That is the only sign a compressed group gives; its
+        // bytes are not attributed.
+        let located_records = groups.map_or(0, |groups| groups.values().map(BTreeMap::len).sum());
+        counted = (
+            pack_id,
+            dead_in_retained_packs_bytes,
+            located_records > reached,
+        );
         // The walk already read this pack's directory when it read its
         // record headers; only a pack it reached another way is read here.
         let kept = source.layouts.borrow().get(&pack_id).cloned();
@@ -813,6 +846,9 @@ fn waste(
                 .saturating_add(dead_raw_record_bytes(directory, records, closure)?);
         }
     }
+    if counted.2 || dead_in_retained_packs_bytes > counted.1 {
+        partly_dead.push((counted.0, dead_in_retained_packs_bytes - counted.1));
+    }
     let mut deltas: Vec<ObjectId> = closure
         .bases
         .difference(&closure.logical)
@@ -833,11 +869,14 @@ fn waste(
         inode_blocks_bytes =
             inode_blocks_bytes.saturating_add(u64::try_from(length).unwrap_or(u64::MAX));
     }
-    Ok(KeptWaste::from_parts(
-        dead_in_retained_packs_bytes,
-        delta_bases_bytes,
-        delta_base_references,
-        inode_blocks_bytes,
+    Ok((
+        KeptWaste::from_parts(
+            dead_in_retained_packs_bytes,
+            delta_bases_bytes,
+            delta_base_references,
+            inode_blocks_bytes,
+        ),
+        partly_dead,
     ))
 }
 

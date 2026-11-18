@@ -365,7 +365,7 @@
       "generationAfter": 8,
       "generationBefore": 7,
       "keptWaste": {
-        "deadInRetainedPacksBytes": 265,
+        "deadInRetainedPacksBytes": 0,
         "deltaBases": {
           "bytes": 571,
           "references": [
@@ -373,11 +373,11 @@
             "e7069dfd5e4a6720d9e7a8dfb74e3eda95b0cc6c798a8942d0b956ac919e8c85"
           ]
         },
-        "inodeBlocksBytes": 665
+        "inodeBlocksBytes": 380
       },
       "logicalDiscarded": 182465,
       "path": "rebuild",
-      "peakTempBytes": 389120,
+      "peakTempBytes": 401408,
       "physicalShrink": 221184,
       "residue": {
         "artifacts": [],
@@ -390,7 +390,7 @@
       "canonical": 134988,
       "logical": 1090,
       "metadata": 2024,
-      "stored": 134670
+      "stored": 134401
     },
     "totalsBefore": {
       "canonical": 317453,
