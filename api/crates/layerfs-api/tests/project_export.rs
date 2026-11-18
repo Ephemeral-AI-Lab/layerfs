@@ -773,7 +773,7 @@ fn branch_selection_and_pinned_snapshot_under_concurrent_writes() {
         &[
             ("project", t("shop/app")),
             ("name", t("feat")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     ok(

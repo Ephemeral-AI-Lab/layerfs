@@ -243,7 +243,6 @@ fn the_redacted_set_covers_every_path_bearing_call() {
         "right_path",
         "from_path",
         "to_path",
-        "path_prefix",
         "pattern",
     ] {
         let named = (layerfs_api::calls().into_iter())
@@ -265,7 +264,7 @@ fn the_redacted_set_covers_every_path_bearing_call() {
         ("file.diff", &["left_path", "right_path"][..]),
         ("file.cp", &["from_path", "to_path"][..]),
         ("file.mv", &["from_path", "to_path"][..]),
-        ("branch.diff", &["path_prefix"][..]),
+        ("commit.diff", &["path"][..]),
     ] {
         let spec = layerfs_api::find(name).unwrap_or_else(|| panic!("{name} is missing"));
         for arg in args {

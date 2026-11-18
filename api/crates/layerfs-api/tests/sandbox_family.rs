@@ -61,7 +61,7 @@ fn named_sandboxes_on_native() {
         &[
             ("project", t("shop/api")),
             ("name", t("dev")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     write_record(

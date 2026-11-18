@@ -291,42 +291,116 @@ The final JSON result contains `project`, `store`, `name`, `kind`, `machine`,
 writing and `total: null`; `finalize` is the last event and comes only once the
 folder is in place. Events arrive at most every 200 ms.
 
-### `branch` (9)
+### `branch` (6)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `list` | `project` | `page_size`, `page_pos` | a project's Branches |
+| `list` | `project` | `prefix`, `exclude_prefix`, `limit`, `cursor` | a project's Branches, `main` included, in name order |
 | `get` | `project`, `branch` | — | one Branch and its head Commit |
-| `commits` | `project`, `branch` | `page`, `page_size`, `at_commit`, `include_storage` | a Branch's Commits, newest first |
-| `get_commit` | `project`, `branch`, `commit` | — | one saved Commit or `main` publication |
-| `fork` | `project`, `name`, `from_branch`, `[from_commit]` | — | a new Branch from another Branch's head or Commit |
-| `merge` | `project`, `name`, `a`, `b` | `message`, `units` (JSON) | merges two Branches into a new one |
-| `publish` | `project`, `branch`, `[commit]` | `expected_base`, `expected_head`, `force` | a Branch's head or Commit as `main`'s next Layer, refusing a stale base |
-| `diff` | `project`, `from_branch`, `to_branch` | `paths_only`, `page_size`, `page_pos`, `cursor` | files that differ between two Branches' heads |
-| `remove` | `project`, `branch` | — | soft-removes one Branch; its name stays taken until compaction |
+| `fork` | `project`, `name`, `[from]` | `at` | a new Branch from another Branch's head, or from a Commit |
+| `merge` | `project`, `branch`, `from` | `into`, `units` (JSON), `expected`, `message` (`-m`) | merges one Branch into another, or into a new Branch |
+| `publish` | `project`, `branch` | `at`, `expected`, `force` | a Branch's head or Commit as `main`'s next head, refusing a stale base |
+| `remove` | `project`, `branch` | — | removes one Branch; its name stays taken until compaction |
 
-Run: `fork` answers `{kind: "Forked", branch, base, head}`; `publish`
-answers `{kind: "Added", source, published_layer, based_on, overwrote_count,
-overwrote, overwrote_has_more}`; `merge` answers `{kind: "Merged",
-fast_forward, branch, head, root, sources, merge_base, conflicts, lww,
-units, …}`. `publish` is refused `HeadMoved` when `main` gained a Layer since
-the Branch forked (merge with `main` into a new Branch and publish that), or
-when `main` or the Branch head is not the `expected_base` or `expected_head`
-given; `force` overwrites instead. A Commit already published answers
-`UpToDate`, and a tree `main` already holds answers `NoChanges`.
+Where a call takes a Commit (`--at`, `--expected`, `commit get`, a
+`commit diff` side), it is a full id (66 hex characters) or a prefix of 8 or
+more, resolved by the Store in one call. A prefix more than one Commit
+starts with is refused `InvalidInput`, its detail's `matches` saying how
+many; one no Commit starts with is `NotFound`. Where a call takes a ref or
+`from`, a Branch of that name comes first, then a Commit. On `main` a
+publication answers as a Commit. Every id in an answer is the full id.
+
+- **`list`** pages by name. A row's short form is `{ branch, commit }`
+  (`commit`: the head Commit, or the publication a Branch with no Commit of
+  its own stands on); its long form adds `forked_from`, `id`, `base` and
+  `root`. `--prefix` keeps only the names that start with it,
+  `--exclude-prefix` leaves those out (such as `dsh.`), and the page does
+  not walk the names it leaves out. `limit` is 1 to 1000, 100 by default.
+  The `next_cursor` carries the filters only; a page always lists the
+  Branches there are now. `get` answers one row, by its name.
+- **`fork`** forks from the head of `from` (`main` when it is left off),
+  or with `--at` from one Commit of `from`'s history (`NotFound` when it is
+  not in it). Short: `{ commit }`, the Commit the new Branch stands on;
+  long: `commit, outcome ("forked"), branch, base, root`.
+- **`merge`** merges `from` into `branch`: a fast-forward when `branch`
+  holds nothing `from` lacks, else one merge Commit on `branch`, its first
+  parent `branch`'s head. When `branch` already holds `from` nothing changes
+  and the answer says `unchanged`. `--into NEW` writes the result to a new
+  Branch and leaves `branch` as it is (1.1.0's form). `--expected C`
+  refuses `Conflict` unless `branch`'s head is `C`, its detail's `commit`
+  being the head it is at. `main` takes changes only by `publish`; merging
+  into it without `--into` is `InvalidInput`. A conflict changes nothing and
+  is `Conflict` with the conflicts in its detail. Short: `{ commit }`, with
+  `unchanged`, `fast_forward`, `overwritten` (the paths one side's later
+  write took) and `overwritten_count` when they are set; long:
+  `commit, unchanged, fast_forward, overwritten, overwritten_count, outcome
+  ("merged", "fast_forward" or "unchanged"), branch, parent, second_parent,
+  merge_base, root, units, units_count`.
+- **`publish`** publishes the Branch's head, or with `--at` one Commit of
+  its history (a Commit `main` already holds answers `unchanged`).
+  `--expected C` refuses `Conflict` unless `main`'s head is `C`; without it
+  the call is refused `Conflict` when `main` gained a publication since the
+  Branch forked (merge `main` in and publish again), and `--force` publishes
+  over it. Either refusal's detail names `main`'s head as `commit`. Short:
+  `{ commit }` (the new publication), with `unchanged` and `previous`
+  (`main`'s head before, when it was not the Branch's base); long:
+  `commit, unchanged, previous, outcome ("published" or "unchanged"), branch,
+  source_commit, base, root, size`.
+- **`remove`** short: `{"ok":true}`; long: `{ ok, outcome: "removed",
+  branch, removed_at }`.
+- `branch.commits`, `branch.get_commit` and `branch.diff` are gone, with no
+  alias: they are `commit.list`, `commit.get` and `commit.diff`. `fork`'s
+  `from_branch` and `from_commit` became `from` and `--at`; `merge`'s
+  `name`, `a` and `b` became `branch`, `from` and `--into`; `publish`'s
+  `commit`, `expected_base` and `expected_head` became `--at` and
+  `--expected` (the Branch's head is no longer checked); `list`'s
+  `page_size` and `page_pos` became `limit` and `cursor`.
 
 ### `commit` (3)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `list` | `project`, `branch` | `page_size`, `page_pos` | a Branch's Commits, newest first |
-| `get` | `project`, `branch`, `commit` | — | one Commit of a Branch |
-| `diff` | `project`, `from_commit`, `to_commit` | `paths_only`, `page_size`, `page_pos`, `cursor` | files that differ between two Commits |
+| `list` | `project`, `branch` | `at`, `limit`, `cursor` | a Branch's Commits, newest first; on `main`, its publications |
+| `get` | `project`, `commit` | `branch` | one Commit, by its id or a prefix of 8 or more characters |
+| `diff` | `project`, `ref` | `from`, `path`, `--with patch`, `limit`, `cursor` | the paths that differ between two Commits or Branches |
 
-A Commit record has `id`, `branch`, `parent`, `second_parent`, `base`,
-`root`, `via`, `message`, `merged_from`, `time`, `logical`,
-`new_canonical`, `new_stored`, `new_metadata`, `displaced`, `lww` and
-`lww_truncated`. `commit.get` accepts an id prefix of 8 or more characters.
+- **`list`** starts at the Branch's head, or at `--at` (`NotFound` when it
+  is not in the Branch's history). A row's short form is `{ commit }`, with
+  `message`, `message_truncated` (the message is cut at 128 characters in a
+  list; `get` answers it whole) and `source_branch` (a publication's Branch)
+  when they are set. The long form adds `branch, parent, second_parent,
+  base, root, via, created_at, merged_from, source_commit, size,
+  new_canonical_bytes, new_stored_bytes, new_metadata_bytes`. `via` is how
+  the Commit was made: `workspace`, `file` or `merge`, and on `main`
+  `publish` or `init`. `limit` is 1 to 1000, 100 by default; a page also
+  ends early at 64 KiB of rows. The `next_cursor` carries the Commit the
+  first page started at, so a later page lists the same history while the
+  Branch moves on, and is `NotFound` once that Commit is gone.
+- **`get`** reads one Commit of the project, in one Store call, without
+  naming its Branch; `--branch B` refuses `NotFound` unless the Commit is in
+  `B`'s history. Short: `{ branch, parent, message }`, each when it is set.
+  The long form has the list row's keys (no `message_truncated`) and
+  `displaced`, `overwritten` (the paths a merge took from the side with the
+  later write, cut at 4 KiB), `overwritten_count` and `units`.
+- **`diff`** compares `from` to `ref`. Without `--from` the side compared
+  from is a Branch's fork point, a Commit's parent, the base of a Branch's
+  first Commit, and for `main`'s first publication the empty tree (every
+  path `added`). `--path P` keeps only `P` and what is under it. A row's
+  short form is `{ path, change }` (`added`, `removed`, `modified`, …);
+  its long form adds `type`, `content`, `metadata` and `identity` (which of
+  them differ). `--with patch` adds each changed text file's lines as
+  `hunks` and `hunks_omitted`. The answer's long form adds `from`, `to`,
+  `from_root` and `to_root` (`from` and `from_root` null for the empty
+  tree). The `next_cursor` carries both Commits the first page compared and
+  the filters, so a later page compares the same two Commits; a cursor given
+  with other filters, or to another call, is `InvalidInput`.
+- `commit.list` absorbs `branch.commits` (`page`, `page_size`,
+  `at_commit` and `include_storage` became `--at`, `limit` and `cursor`; the
+  storage figures are always in the long form), `commit.get` absorbs
+  `branch.get_commit` and no longer takes a Branch positional, and
+  `commit.diff` absorbs `branch.diff` (`from_branch`, `to_branch`,
+  `paths_only`, `page_size` and `page_pos` became `ref`, `--from`, `--with
+  patch`, `limit` and `cursor`).
 
 ### `file` (15)
 

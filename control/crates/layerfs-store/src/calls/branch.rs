@@ -1,22 +1,29 @@
 //! The `branch` family: a project's Branches, each call translated to the
-//! Store method that does it.
-use super::op::{on_project, page_of, DiffOptions, Page, StoreOp};
-use crate::call::store_call;
-use crate::resolve::target;
+//! Store method that does it, its answer the call's full map (the keys of
+//! its long form; the dispatcher shapes it).
+use super::op::{next_fields, on_project, Names, StoreOp};
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::cursor;
 use layerfs_home::events::Events;
 use layerfs_home::outcome::{refused, Outcome};
 use std::path::Path;
 
-/// `branch.list(project, { page_size, page_pos })`.
+/// `branch.list(project, { prefix, exclude_prefix, limit, cursor })`.
 #[derive(Clone, Debug, Default)]
 pub struct BranchList {
     /// The project, `<store>/<project>`.
     pub project: String,
-    /// The Branch namespace of a scoped call (only a scope sets it).
+    /// The Branch namespace of a scoped call (only a scope sets it): the
+    /// names listed are `<namespace>.<name>`, answered as `<name>`.
     pub namespace: Option<String>,
-    /// The page.
-    pub page: Page,
+    /// Only Branches whose name starts with this.
+    pub prefix: Option<String>,
+    /// No Branch whose name starts with this.
+    pub exclude_prefix: Option<String>,
+    /// The most rows in one page.
+    pub limit: Option<i64>,
+    /// The `next_cursor` of the page before.
+    pub cursor: Option<String>,
 }
 
 /// `branch.get(project, branch)`.
@@ -28,99 +35,51 @@ pub struct BranchGet {
     pub branch: String,
 }
 
-/// Saved branch history, pinned to an optional immutable start.
-#[derive(Clone, Debug, Default)]
-pub struct BranchCommits {
-    /// Project qualified by Store.
-    pub project: String,
-    /// Branch context, including main.
-    pub branch: String,
-    /// One-based result page.
-    pub page: Option<i64>,
-    /// Maximum matching records.
-    pub page_size: Option<i64>,
-    /// Full immutable starting identity.
-    pub at_commit: Option<String>,
-    /// Include acknowledged Save allocation facts in compact summaries.
-    pub include_storage: Option<bool>,
-}
-
-/// One saved record admitted through its branch context.
-#[derive(Clone, Debug, Default)]
-pub struct BranchGetCommit {
-    /// Project qualified by Store.
-    pub project: String,
-    /// Branch context.
-    pub branch: String,
-    /// Full immutable identity.
-    pub commit: String,
-}
-
-/// Read pinned saved history without changing the branch.
-pub fn commits(home: &Path, events: &mut Events<'_>, request: &BranchCommits) -> Outcome {
-    on_project(
-        home,
-        events,
-        &request.project,
-        StoreOp::BranchCommits(request),
-    )
-}
-
-/// Read one saved Commit or publication Layer.
-pub fn get_commit(home: &Path, events: &mut Events<'_>, request: &BranchGetCommit) -> Outcome {
-    on_project(
-        home,
-        events,
-        &request.project,
-        StoreOp::BranchGetCommit(request),
-    )
-}
-
-/// `branch.fork(project, name, from_branch, from_commit)`.
+/// `branch.fork(project, name, [from], { at })`.
 #[derive(Clone, Debug, Default)]
 pub struct BranchFork {
     /// The project.
     pub project: String,
     /// The new Branch's name.
     pub name: String,
-    /// The Branch it forks from.
-    pub from_branch: String,
-    /// The Commit it forks from, which takes precedence.
-    pub from_commit: Option<String>,
+    /// The Branch it forks from (main when absent): a Branch name first,
+    /// else a Commit id or prefix.
+    pub from: Option<String>,
+    /// The Commit of `from`'s history it forks at, instead of its head.
+    pub at: Option<String>,
 }
 
-/// `branch.merge(project, name, a, b, { message, units })`.
+/// `branch.merge(project, branch, from, { into, units, expected, message })`.
 #[derive(Clone, Debug, Default)]
 pub struct BranchMerge {
     /// The project.
     pub project: String,
-    /// The new Branch's name.
-    pub name: String,
-    /// One Branch.
-    pub a: String,
-    /// The other.
-    pub b: String,
-    /// The Commit message.
-    pub message: Option<String>,
+    /// The Branch merged into; its rules apply.
+    pub branch: String,
+    /// The Branch, or main, merged from.
+    pub from: String,
+    /// A new Branch the result goes to, leaving `branch` as it is.
+    pub into: Option<String>,
     /// How each unit merges (JSON).
     pub units: Option<SdkValue>,
+    /// The head `branch` must be at: a Commit id or prefix.
+    pub expected: Option<String>,
+    /// The merge Commit's message.
+    pub message: Option<String>,
 }
 
-/// `branch.publish(project, branch, commit, { expected_base, expected_head,
-/// force })`.
+/// `branch.publish(project, branch, { at, expected, force })`.
 #[derive(Clone, Debug, Default)]
 pub struct BranchPublish {
     /// The project.
     pub project: String,
     /// The Branch.
     pub branch: String,
-    /// The Commit, else its head.
-    pub commit: Option<String>,
-    /// The base Layer the caller expects the Branch and main to be at.
-    pub expected_base: Option<String>,
-    /// The Branch head Commit the caller expects.
-    pub expected_head: Option<String>,
-    /// Publish over a moved main, as before.
+    /// The Commit published instead of the Branch's head.
+    pub at: Option<String>,
+    /// The head main must be at: a Commit id or prefix.
+    pub expected: Option<String>,
+    /// Publish over what main gained since the Branch forked.
     pub force: Option<bool>,
 }
 
@@ -133,79 +92,227 @@ pub struct BranchRemove {
     pub branch: String,
 }
 
-/// `branch.diff(project, from_branch, to_branch, { paths_only, page_size,
-/// page_pos, cursor })`.
-#[derive(Clone, Debug, Default)]
-pub struct BranchDiff {
-    /// The project.
-    pub project: String,
-    /// One Branch.
-    pub from_branch: String,
-    /// The other.
-    pub to_branch: String,
-    /// Its options.
-    pub options: DiffOptions,
-    /// Full saved left endpoint, else the branch head.
-    pub from_commit: Option<String>,
-    /// Full saved right endpoint, else the branch head.
-    pub to_commit: Option<String>,
-    /// Component-qualified absolute subtree filter.
-    pub path_prefix: Option<String>,
-    /// Discover equal-content paths with different owning commits.
-    pub include_attribution: Option<bool>,
-    /// Stateless continuation of a pinned comparison.
-    pub continuation: Option<String>,
+/// The call a `branch.list` cursor belongs to.
+const LIST: &str = "branch.list";
+
+/// A Branch row as the call answers it: what the Store listed, less the
+/// head Commit it answers for other callers.
+fn branch_row(row: &SdkValue, namespace: Option<&str>) -> SdkValue {
+    let SdkValue::Map(fields) = row else {
+        return row.clone();
+    };
+    let prefix = namespace.map(|namespace| format!("{namespace}."));
+    let fields = fields
+        .iter()
+        .filter(|(key, _)| key != "head")
+        .map(|(key, value)| {
+            let value = match (key.as_str(), value, &prefix) {
+                ("branch", SdkValue::Text(name), Some(prefix)) => name
+                    .strip_prefix(prefix.as_str())
+                    .map_or(value.clone(), SdkValue::text),
+                _ => value.clone(),
+            };
+            (key.clone(), value)
+        });
+    SdkValue::Map(fields.collect())
 }
 
-/// `branch.list`: one page of the project's Branches.
-pub fn list(home: &Path, events: &mut Events<'_>, request: &BranchList) -> Outcome {
-    match &request.namespace {
-        Some(namespace) => branches_in(home, events, request, namespace),
-        None => {
-            let op = StoreOp::ListBranches {
-                name: None,
-                page: request.page,
-            };
-            on_project(home, events, &request.project, op)
-        }
+fn items(value: &SdkValue) -> Vec<SdkValue> {
+    match value.get("items") {
+        Some(SdkValue::List(items)) => items.clone(),
+        _ => Vec::new(),
     }
 }
 
-/// `branch.get`: one Branch.
+/// `branch.list`: one page of the project's Branches, main among them, in
+/// name order. The cursor carries the filters only.
+pub fn list(home: &Path, events: &mut Events<'_>, request: &BranchList) -> Outcome {
+    let limit = cursor::limit(LIST, request.limit, cursor::DEFAULT_LIMIT)?;
+    let text = |value: &Option<String>| value.clone().map_or(SdkValue::Null, SdkValue::Text);
+    let filters = [
+        ("prefix", text(&request.prefix)),
+        ("exclude_prefix", text(&request.exclude_prefix)),
+    ];
+    let carried = (request.cursor.as_deref())
+        .map(|made| cursor::resume(LIST, made, &filters))
+        .transpose()?;
+    let filter = |name: &str, given: &Option<String>| match &carried {
+        Some(carried) => carried.text(name).map(str::to_owned),
+        None => given.clone(),
+    };
+    let (prefix, exclude) = (
+        filter("prefix", &request.prefix),
+        filter("exclude_prefix", &request.exclude_prefix),
+    );
+    // a scope lists its namespace's Branches, by their names in it
+    let scoped = |name: Option<String>| match &request.namespace {
+        Some(namespace) => Some(format!("{namespace}.{}", name.unwrap_or_default())),
+        None => name,
+    };
+    let (prefix, exclude) = (scoped(prefix), exclude.and_then(|e| scoped(Some(e))));
+    let after = carried
+        .as_ref()
+        .and_then(|c| c.text("at"))
+        .map(str::to_owned);
+    let op = StoreOp::Branches {
+        names: Names {
+            prefix: prefix.as_deref(),
+            exclude_prefix: exclude.as_deref(),
+            after: after.as_deref(),
+        },
+        limit,
+    };
+    let page = on_project(home, events, &request.project, op).map_err(next_fields)?;
+    let next = match page.get("next") {
+        Some(place @ SdkValue::Text(_)) => {
+            let filters = match &carried {
+                Some(carried) => [
+                    ("prefix", carried.get("prefix")),
+                    ("exclude_prefix", carried.get("exclude_prefix")),
+                ],
+                None => filters,
+            };
+            SdkValue::Text(cursor::make(LIST, place.clone(), &filters))
+        }
+        _ => SdkValue::Null,
+    };
+    let namespace = request.namespace.as_deref();
+    let rows = items(&page)
+        .iter()
+        .map(|row| branch_row(row, namespace))
+        .collect();
+    Ok(SdkValue::map([
+        ("items", SdkValue::List(rows)),
+        ("next_cursor", next),
+    ]))
+}
+
+/// `branch.get`: one Branch, or main, read through the name index.
 pub fn get(home: &Path, events: &mut Events<'_>, request: &BranchGet) -> Outcome {
     let op = StoreOp::ListBranches {
         name: Some(&request.branch),
-        page: Page::default(),
+        page: Default::default(),
     };
-    let page = on_project(home, events, &request.project, op)?;
-    first(page, "NoSuchBranch", "Branch", &request.branch)
+    let page = on_project(home, events, &request.project, op).map_err(next_fields)?;
+    match items(&page).first() {
+        Some(row) => Ok(branch_row(row, None)),
+        None => Err(refused(
+            "NoSuchBranch",
+            format!("no Branch {}", request.branch),
+        )),
+    }
 }
 
-/// `branch.fork`: a new Branch from a Branch or a Commit.
+/// `branch.fork`: a new Branch from a Branch's head or one of its Commits.
 pub fn fork(home: &Path, events: &mut Events<'_>, request: &BranchFork) -> Outcome {
-    on_project(home, events, &request.project, StoreOp::Fork(request))
+    let value =
+        on_project(home, events, &request.project, StoreOp::Fork(request)).map_err(next_fields)?;
+    let take = |key: &str| value.get(key).cloned().unwrap_or_default();
+    Ok(SdkValue::map([
+        ("commit", take("commit")),
+        ("outcome", SdkValue::text("forked")),
+        ("branch", take("branch")),
+        ("base", take("base")),
+        ("root", take("root")),
+    ]))
 }
 
-/// `branch.merge`: two Branches merged into a new one.
+/// The paths of a list of `{ path, … }` rows.
+fn paths(value: Option<&SdkValue>) -> SdkValue {
+    let rows = match value {
+        Some(SdkValue::List(rows)) => rows.as_slice(),
+        _ => &[],
+    };
+    let path = |row: &SdkValue| row.get("path").cloned().unwrap_or_default();
+    SdkValue::List(rows.iter().map(path).collect())
+}
+
+fn count(value: &SdkValue) -> SdkValue {
+    match value {
+        SdkValue::List(items) => SdkValue::Int(items.len() as i64),
+        _ => SdkValue::Int(0),
+    }
+}
+
+/// `branch.merge`: `from` merged into `branch`, or into a new Branch.
 pub fn merge(home: &Path, events: &mut Events<'_>, request: &BranchMerge) -> Outcome {
-    on_project(home, events, &request.project, StoreOp::Merge(request))
+    let value =
+        on_project(home, events, &request.project, StoreOp::Merge(request)).map_err(next_fields)?;
+    let take = |key: &str| value.get(key).cloned().unwrap_or_default();
+    let source = |at: usize| match value.get("sources") {
+        Some(SdkValue::List(sources)) => sources
+            .get(at)
+            .and_then(|side| side.get("node").cloned())
+            .unwrap_or_default(),
+        _ => SdkValue::Null,
+    };
+    let (unchanged, fast_forward) = (value.get_bool("unchanged"), value.get_bool("fastForward"));
+    let outcome = match (unchanged, fast_forward) {
+        (true, _) => "unchanged",
+        (false, true) => "fast_forward",
+        (false, false) => "merged",
+    };
+    let overwritten = paths(value.get("lww"));
+    let units = take("units");
+    Ok(SdkValue::map([
+        ("commit", take("commit")),
+        ("unchanged", SdkValue::Bool(unchanged)),
+        ("fast_forward", SdkValue::Bool(fast_forward)),
+        ("overwritten_count", count(&overwritten)),
+        ("overwritten", overwritten),
+        ("outcome", SdkValue::text(outcome)),
+        ("branch", take("branch")),
+        ("parent", source(0)),
+        ("second_parent", source(1)),
+        ("merge_base", take("mergeBase")),
+        ("root", take("root")),
+        ("units_count", count(&units)),
+        ("units", units),
+    ]))
 }
 
-/// `branch.publish`: a Branch moved to a Commit.
+/// `branch.publish`: a Branch's head, or one of its Commits, as main's next
+/// head.
 pub fn publish(home: &Path, events: &mut Events<'_>, request: &BranchPublish) -> Outcome {
-    on_project(home, events, &request.project, StoreOp::Publish(request))
+    let value = on_project(home, events, &request.project, StoreOp::Publish(request))
+        .map_err(next_fields)?;
+    let take = |key: &str| value.get(key).cloned().unwrap_or_default();
+    let published = |key: &str| {
+        (value.get("publishedLayer"))
+            .and_then(|layer| layer.get(key).cloned())
+            .unwrap_or_default()
+    };
+    let (commit, unchanged) = match value.get_text("kind") {
+        Some("Added") => (published("id"), false),
+        Some("UpToDate") => (take("layer"), true),
+        _ => (take("headLayer"), true),
+    };
+    let source = |key: &str| {
+        (value.get("source"))
+            .and_then(|source| source.get(key).cloned())
+            .unwrap_or_default()
+    };
+    Ok(SdkValue::map([
+        ("commit", commit),
+        ("unchanged", SdkValue::Bool(unchanged)),
+        ("previous", take("previous")),
+        (
+            "outcome",
+            SdkValue::text(if unchanged { "unchanged" } else { "published" }),
+        ),
+        ("branch", SdkValue::text(&request.branch)),
+        ("source_commit", source("commit")),
+        ("base", take("basedOn")),
+        ("root", published("root")),
+        ("size", published("logical")),
+    ]))
 }
 
-/// `branch.remove`: one Branch hidden by its Store marker. The result names
-/// the project as the caller gave it, `<store>/<project>`: the Store sees
-/// only the project's name within it and echoes that alone.
+/// `branch.remove`: one Branch hidden by its Store marker; its name stays
+/// taken until compaction.
 pub fn remove(home: &Path, events: &mut Events<'_>, request: &BranchRemove) -> Outcome {
-    let value = match on_project(
-        home,
-        events,
-        &request.project,
-        StoreOp::BranchRemove(request),
-    ) {
+    let op = StoreOp::BranchRemove(request);
+    let value = match on_project(home, events, &request.project, op) {
         Ok(value) => value,
         Err(refusal) => {
             return Err(crate::unknown::named_unknown(
@@ -216,126 +323,13 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &BranchRemove) -> O
             ))
         }
     };
-    Ok(layerfs_home::home::with_field(
-        value,
-        "project",
-        SdkValue::text(&request.project),
-    ))
-}
-
-/// `branch.diff`: the changes between two Branches.
-pub fn diff(home: &Path, events: &mut Events<'_>, request: &BranchDiff) -> Outcome {
-    on_project(
-        home,
-        events,
-        &request.project,
-        StoreOp::DiffBranches(request),
-    )
-}
-
-/// The one item of a list page whose `name` or `id` is `wanted`; else the
-/// refusal `code` (S §2.9 keeps 1.1.0's `NoSuch*` codes).
-fn first(page: SdkValue, code: &str, what: &str, wanted: &str) -> Outcome {
-    let items = match page.get("items") {
-        Some(SdkValue::List(items)) => items.clone(),
-        _ => Vec::new(),
-    };
-    items
-        .into_iter()
-        .find(|item| item.get_text("name") == Some(wanted) || item.get_text("id") == Some(wanted))
-        .ok_or_else(|| refused(code, format!("no {what} {wanted}")))
-}
-
-/// A scoped `branch.list`: the Branches named `<namespace>.<name>`, named
-/// relative to the namespace, one page (`page_size`, `page_pos`) of them.
-/// The project's Branches are read page by page to the end, or until the
-/// page is full; only the requested page is kept.
-fn branches_in(
-    home: &Path,
-    events: &mut Events<'_>,
-    request: &BranchList,
-    namespace: &str,
-) -> Outcome {
-    let size = request.page.size.unwrap_or(50);
-    if request.page.number.is_some() && request.page.pos.is_some() {
-        return Err(refused(
-            "InvalidInput",
-            "page cannot be combined with page_pos",
-        ));
-    }
-    let skip = match request.page.number {
-        Some(page) if page > 0 => (page - 1)
-            .checked_mul(size)
-            .ok_or_else(|| refused("InvalidInput", "page overflow"))?,
-        Some(_) => return Err(refused("InvalidInput", "page must be positive")),
-        None => request.page.pos.unwrap_or(0),
-    };
-    if !(1..=1000).contains(&size) || skip < 0 {
-        return Err(refused(
-            "InvalidInput",
-            "page_size is in 1..=1000 and page_pos is not negative",
-        ));
-    }
-    let target = target(home, &request.project)?;
-    let prefix = format!("{namespace}.");
-    let (mut pos, mut seen, mut kept, mut more) = (0i64, 0i64, Vec::new(), false);
-    let mut reply_bytes = 0usize;
-    'pages: loop {
-        if pos >= 10_000 {
-            return Err(refused(
-                "Capacity",
-                "scoped branch listing work bound reached",
-            ));
-        }
-        let op = StoreOp::ListBranches {
-            name: None,
-            page: Page {
-                size: Some(1000),
-                pos: Some(pos),
-                number: None,
-            },
-        };
-        let page = store_call(home, events, &target, &op)?;
-        let (items, next) = page_of(&page, pos)?;
-        for item in items {
-            let Some(name) = item.get_text("name").and_then(|n| n.strip_prefix(&prefix)) else {
-                continue;
-            };
-            let name = SdkValue::text(name);
-            if seen < skip {
-                seen += 1;
-            } else if kept.len() as i64 == size {
-                more = true;
-                break 'pages;
-            } else {
-                if request.page.number.is_some() {
-                    reply_bytes += match &name {
-                        SdkValue::Text(name) => name.len() + 768,
-                        _ => 768,
-                    };
-                    if reply_bytes > 40 * 1024 {
-                        return Err(refused(
-                            "Capacity",
-                            "scoped branch page exceeds reply budget; reduce page_size",
-                        ));
-                    }
-                }
-                kept.push(layerfs_home::home::with_field(item, "name", name));
-            }
-        }
-        match next {
-            Some(next) => pos = next,
-            None => break,
-        }
-    }
-    let next = if more {
-        SdkValue::Int(skip + kept.len() as i64)
-    } else {
-        SdkValue::Null
-    };
+    let removed_at = value.get_int("removed_ms").map_or(SdkValue::Null, |ms| {
+        SdkValue::text(layerfs_home::time::iso(ms))
+    });
     Ok(SdkValue::map([
-        ("items", SdkValue::List(kept)),
-        ("hasMore", SdkValue::Bool(more)),
-        ("nextPagePos", next),
+        ("ok", SdkValue::Bool(true)),
+        ("outcome", SdkValue::text("removed")),
+        ("branch", value.get("branch").cloned().unwrap_or_default()),
+        ("removed_at", removed_at),
     ]))
 }

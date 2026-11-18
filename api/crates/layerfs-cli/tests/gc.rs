@@ -17,7 +17,7 @@ const CALLS: &[(&[&str], &str, &str)] = &[
     (
         &["branch", "remove"],
         "layerfs branch remove <project> <branch>",
-        "soft-remove one Branch",
+        "remove one Branch; its name stays taken until compaction",
     ),
     (
         &["project", "delete"],

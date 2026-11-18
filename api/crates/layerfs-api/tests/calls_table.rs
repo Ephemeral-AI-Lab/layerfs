@@ -134,24 +134,34 @@ fn project_family() {
 
 #[test]
 fn branch_family() {
-    assert!(code(
+    assert!(code("branch.fork", map(&[("project", t("shop/api"))])).contains("`name` is required"));
+    // the history calls moved to `commit`, with no alias
+    for gone in ["branch.commits", "branch.get_commit", "branch.diff"] {
+        assert!(layerfs_api::find(gone).is_none(), "{gone}");
+        assert_eq!(
+            code(gone, SdkValue::Null),
+            format!("InvalidInput: no call named `{gone}`")
+        );
+    }
+    // `from` is optional: main when left off
+    let reached = code(
         "branch.fork",
-        map(&[("project", t("shop/api")), ("name", t("fix"))])
-    )
-    .contains("`from_branch` is required"));
+        map(&[("project", t("shop/api")), ("name", t("fix"))]),
+    );
+    assert!(!reached.starts_with("InvalidInput"), "{reached}");
     let reached = code(
         "branch.fork",
         map(&[
             ("project", t("shop/api")),
             ("name", t("fix")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ]),
     );
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
 }
 
 #[test]
-fn branch_publish_declares_its_expected_base_options() {
+fn branch_publish_declares_its_at_expected_and_force_options() {
     // The shell, Node and Python front ends build their arguments from this
     // table, so these options (and their shapes) are the CLI's and SDK's.
     let call = layerfs_api::calls()
@@ -166,40 +176,24 @@ fn branch_publish_declares_its_expected_base_options() {
     assert_eq!(
         declared,
         vec![
-            ("expected_base", Kind::Name, true),
-            ("expected_head", Kind::Name, true),
+            ("at", Kind::Name, true),
+            ("expected", Kind::Name, true),
             ("force", Kind::Bool, true),
         ]
     );
     assert_eq!(
         call.help,
-        "a Branch's head or Commit as main's next Layer, refusing a stale base"
+        "a Branch's head or Commit as main's next head, refusing a stale base"
     );
 }
 
 #[test]
 fn branch_publish_expectations_are_plumbed() {
     for (name, value, why) in [
-        (
-            "expected_base",
-            SdkValue::Int(1),
-            "`expected_base` must be text",
-        ),
-        (
-            "expected_base",
-            SdkValue::Bool(true),
-            "`expected_base` must be text",
-        ),
-        (
-            "expected_head",
-            SdkValue::Bool(true),
-            "`expected_head` must be text",
-        ),
-        (
-            "expected_head",
-            SdkValue::Int(1),
-            "`expected_head` must be text",
-        ),
+        ("at", SdkValue::Int(1), "`at` must be text"),
+        ("at", SdkValue::Bool(true), "`at` must be text"),
+        ("expected", SdkValue::Bool(true), "`expected` must be text"),
+        ("expected", SdkValue::Int(1), "`expected` must be text"),
         ("force", t("yes"), "`force` must be true or false"),
         ("force", SdkValue::Int(1), "`force` must be true or false"),
     ] {
@@ -213,17 +207,17 @@ fn branch_publish_expectations_are_plumbed() {
         );
         assert!(refused.contains(why), "{name}: {refused}");
     }
-    // A misspelled option is not read as an argument of the call.
+    // An option of the old form is not read as an argument of the call.
     let typo = code(
         "branch.publish",
         map(&[
             ("project", t("shop/api")),
             ("branch", t("work")),
-            ("expectedBase", t("00")),
+            ("expected_base", t("00")),
         ]),
     );
     assert!(
-        typo.starts_with("InvalidInput: branch.publish: unknown argument `expectedBase`"),
+        typo.starts_with("InvalidInput: branch.publish: unknown argument `expected_base`"),
         "{typo}"
     );
     // A well-shaped expectation reaches the call instead of being refused by
@@ -233,8 +227,8 @@ fn branch_publish_expectations_are_plumbed() {
         map(&[
             ("project", t("shop/api")),
             ("branch", t("work")),
-            ("expected_base", t("00")),
-            ("expected_head", t("00")),
+            ("at", t("00")),
+            ("expected", t("00")),
             ("force", SdkValue::Bool(true)),
         ]),
     );
@@ -248,10 +242,10 @@ fn commit_family() {
         map(&[
             ("project", t("shop/api")),
             ("branch", t("main")),
-            ("page_size", t("9"))
+            ("limit", t("9"))
         ])
     )
-    .contains("`page_size` must be a whole number"));
+    .contains("`limit` must be a whole number"));
     let reached = code(
         "commit.list",
         map(&[("project", t("shop/api")), ("branch", t("main"))]),
@@ -644,7 +638,15 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "machine.doctor",
     ];
     let home = ["home.get", "home.log", "home.clear_log", "home.doctor"];
-    let doctors = ["project.doctor", "sandbox.doctor"];
+    let branch = [
+        "branch.list",
+        "branch.get",
+        "branch.fork",
+        "branch.merge",
+        "branch.publish",
+        "branch.remove",
+    ];
+    let commit = ["commit.list", "commit.get", "commit.diff"];
     let store = [
         "store.list",
         "store.get",
@@ -655,14 +657,18 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "store.doctor",
     ];
     let after = ["backup.doctor"];
+    // in family order: home, project, branch, commit, file, sandbox, …
     assert_eq!(
         migrated,
         [
             &home[..],
-            &doctors[..],
+            &["project.doctor"][..],
+            &branch[..],
+            &commit[..],
+            &["sandbox.doctor"][..],
             &machine[..],
             &store[..],
-            &after[..]
+            &after[..],
         ]
         .concat()
     );

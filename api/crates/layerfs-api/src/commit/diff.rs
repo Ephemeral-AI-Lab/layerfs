@@ -1,47 +1,57 @@
-//! `commit.diff`: files that differ between two Commits.
+//! `commit.diff`: the paths that differ between two Commits or Branches.
 use crate::calls::scope::Rule;
-use crate::calls::table::Kind::{Name, Project};
-use crate::calls::table::{a, call, Call, DIFF};
-use crate::calls::Context;
+use crate::calls::table::Kind::{Int, Name, Project, Text};
+use crate::calls::table::{a, call, opt, Call};
+use crate::calls::{Context, Form, Paging, Part, Section};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::commit::{diff, CommitDiff};
-use layerfs_store::calls::{DiffOptions, Page};
+
+/// One path that differs; `change` is added, modified or removed.
+const ROW: Form = Form::of(
+    &["path", "change"],
+    &[],
+    &["path", "change", "type", "content", "metadata", "identity"],
+);
+const FORM: Form = Form::of(
+    &["items"],
+    &["next_cursor"],
+    &["items", "next_cursor", "from", "to", "from_root", "to_root"],
+)
+.parts(&[("items", Part::Rows(&ROW))]);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
     "commit",
     "diff",
+    &[a("project", Project), a("ref", Name)],
     &[
-        a("project", Project),
-        a("from_commit", Name),
-        a("to_commit", Name),
+        opt("from", Name),
+        opt("path", Text).redact_path(),
+        opt("limit", Int),
+        opt("cursor", Text).redact(),
     ],
-    &DIFF,
-    "files that differ between two Commits",
+    "the paths that differ between two Commits or Branches",
     run,
 )
-.scoped(Rule::History);
+.scoped(Rule::History)
+.form(&FORM)
+.with(&[Section::item("patch", &["hunks", "hunks_omitted"])])
+.paged(Paging::Cursor)
+.agent();
 
-/// Runs `commit.diff`.
+/// Runs `commit.diff`: each text file's lines are read only when
+/// `--with patch` asks for them.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let text = |name: &str| args.get_text(name).map(str::to_owned);
     let request = CommitDiff {
         project: text("project").unwrap_or_default(),
-        from_commit: text("from_commit").unwrap_or_default(),
-        to_commit: text("to_commit").unwrap_or_default(),
-        options: DiffOptions {
-            page: Page {
-                number: None,
-                size: args.get_int("page_size"),
-                pos: args.get_int("page_pos"),
-            },
-            cursor: text("cursor"),
-            paths_only: match args.get("paths_only") {
-                Some(SdkValue::Bool(paths_only)) => Some(*paths_only),
-                _ => None,
-            },
-        },
+        reference: text("ref").unwrap_or_default(),
+        from: text("from"),
+        path: text("path"),
+        patch: context.with("patch"),
+        limit: args.get_int("limit"),
+        cursor: text("cursor"),
     };
     let (home, events) = context.parts();
     diff(home, events, &request)

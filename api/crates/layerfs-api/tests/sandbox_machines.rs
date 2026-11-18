@@ -79,7 +79,7 @@ fn work(home: &Path, project: &str, sandbox: &str, branch: &str, file: &str) {
         &[
             ("project", t(project)),
             ("name", t(branch)),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     let mounted = ok(

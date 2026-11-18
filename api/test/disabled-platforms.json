@@ -174,16 +174,16 @@
       "args": {
         "project": "shop/api",
         "name": "new",
-        "from_branch": "main"
+        "from": "main"
       }
     },
     {
       "call": "branch.merge",
       "args": {
         "project": "shop/api",
-        "name": "new",
-        "a": "a",
-        "b": "b"
+        "branch": "a",
+        "from": "b",
+        "into": "new"
       }
     },
     {

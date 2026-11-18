@@ -209,7 +209,7 @@ fn argv_has_positionals_options_flags_and_the_scope_before_it_rewrites() {
         &home,
         &scope,
         "branch.fork",
-        &[p(), ("name", t("x")), ("from_branch", t("main"))],
+        &[p(), ("name", t("x")), ("from", t("main"))],
     );
     let scope_words = [
         "--scope",
@@ -243,7 +243,7 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
     ok(
         &home,
         "branch.fork",
-        &[p(), ("name", t("dev")), ("from_branch", t("main"))],
+        &[p(), ("name", t("dev")), ("from", t("main"))],
     );
     let body = "x".repeat(5321);
     ok(
@@ -379,16 +379,20 @@ fn saved_versions_are_logged_for_saving_calls_only() {
             ],
         )
     };
-    // Forked: a new Branch has no head, so its base Layer
+    // forked: a new Branch has no head, so main's head, the Layer it stands on
+    let main = ok(&home, "branch.get", &[p(), ("branch", t("main"))]);
     ok(
         &home,
         "branch.fork",
-        &[p(), ("name", t("work")), ("from_branch", t("main"))],
+        &[p(), ("name", t("work")), ("from", t("main"))],
     );
     let line = last(&home);
-    assert_eq!(line.get_text("kind"), Some("Forked"));
-    assert!(line.get("commit").is_none());
-    hex66(&line, "layer");
+    assert_eq!(line.get_text("kind"), Some("forked"));
+    assert_eq!(
+        Some(hex66(&line, "commit").as_str()),
+        main.get_text("commit")
+    );
+    assert!(line.get("layer").is_none());
     // Committed: commit.id
     let answer = write("one\n");
     let line = last(&home);
@@ -400,15 +404,18 @@ fn saved_versions_are_logged_for_saving_calls_only() {
     let line = last(&home);
     assert_eq!(line.get_text("kind"), Some("UpToDate"));
     assert_eq!(hex66(&line, "commit"), answer.get_text("head").unwrap());
-    // Forked from a Branch with a head: the head
-    ok(
+    // forked from a Branch with a head: the head
+    let forked = ok(
         &home,
         "branch.fork",
-        &[p(), ("name", t("side")), ("from_branch", t("work"))],
+        &[p(), ("name", t("side")), ("from", t("work"))],
     );
-    assert_eq!(last(&home).get_text("kind"), Some("Forked"));
-    hex66(&last(&home), "commit");
-    // Merged: the head
+    assert_eq!(last(&home).get_text("kind"), Some("forked"));
+    assert_eq!(
+        Some(hex66(&last(&home), "commit").as_str()),
+        forked.get_text("commit")
+    );
+    // merged: the merge Commit
     ok(
         &home,
         "file.write",
@@ -422,31 +429,30 @@ fn saved_versions_are_logged_for_saving_calls_only() {
     let answer = ok(
         &home,
         "branch.merge",
-        &[p(), ("name", t("both")), ("a", t("work")), ("b", t("side"))],
+        &[
+            p(),
+            ("branch", t("work")),
+            ("from", t("side")),
+            ("into", t("both")),
+        ],
     );
     let line = last(&home);
-    assert_eq!(line.get_text("kind"), Some("Merged"));
-    assert_eq!(hex66(&line, "commit"), answer.get_text("head").unwrap());
-    // Added: published_layer.id; again: UpToDate with its layer
+    assert_eq!(line.get_text("kind"), Some("fast_forward"));
+    assert_eq!(
+        Some(hex66(&line, "commit").as_str()),
+        answer.get_text("commit")
+    );
+    // published: the new publication; again: unchanged, with it
     let answer = ok(&home, "branch.publish", &[p(), ("branch", t("work"))]);
     let line = last(&home);
-    assert_eq!(line.get_text("kind"), Some("Added"));
-    let published = answer.get("published_layer").unwrap().get_text("id");
-    assert_eq!(Some(hex66(&line, "layer").as_str()), published);
-    assert!(line.get("commit").is_none());
+    assert_eq!(line.get_text("kind"), Some("published"));
+    let published = answer.get_text("commit").unwrap().to_owned();
+    assert_eq!(hex66(&line, "commit"), published);
+    assert!(line.get("layer").is_none());
     let answer = ok(&home, "branch.publish", &[p(), ("branch", t("work"))]);
     let line = last(&home);
-    match answer.get_text("kind") {
-        Some("UpToDate") => assert_eq!(
-            Some(hex66(&line, "layer").as_str()),
-            answer.get_text("layer")
-        ),
-        Some("NoChanges") => assert_eq!(
-            Some(hex66(&line, "layer").as_str()),
-            answer.get_text("head_layer")
-        ),
-        other => panic!("publish again: {other:?}"),
-    }
+    assert_eq!(line.get_text("kind"), Some("unchanged"), "{answer:?}");
+    assert_eq!(hex66(&line, "commit"), published);
     // a read names no version
     ok(&home, "branch.get", &[p(), ("branch", t("work"))]);
     let line = last(&home);

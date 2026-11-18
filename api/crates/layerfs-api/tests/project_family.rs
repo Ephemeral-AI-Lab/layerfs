@@ -199,7 +199,7 @@ fn init_files_branches_move_and_remove() {
     ok(
         &home,
         "branch.fork",
-        &[p(), ("name", t("fix")), ("from_branch", t("main"))],
+        &[p(), ("name", t("fix")), ("from", t("main"))],
     );
     ok(
         &home,
@@ -217,71 +217,77 @@ fn init_files_branches_move_and_remove() {
         panic!("{commits:?}")
     };
     assert_eq!(commits.len(), 1);
-    let id = commits[0].get_text("id").unwrap().to_owned();
-    let got = ok(
-        &home,
-        "commit.get",
-        &[p(), ("branch", t("fix")), ("commit", t(&id))],
-    );
-    assert_eq!(got.get_text("id"), Some(id.as_str()));
-    let diff = ok(
-        &home,
-        "branch.diff",
-        &[
-            p(),
-            ("from_branch", t("main")),
-            ("to_branch", t("fix")),
-            ("paths_only", SdkValue::Bool(true)),
-        ],
-    );
+    let id = commits[0].get_text("commit").unwrap().to_owned();
+    assert_eq!(commits[0].get_text("message"), Some("add NEW"));
+    let detail = || ("detail", SdkValue::Bool(true));
+    let got = ok(&home, "commit.get", &[p(), ("commit", t(&id)), detail()]);
+    assert_eq!(got.get_text("commit"), Some(id.as_str()));
+    assert_eq!(got.get_text("branch"), Some("fix"));
+    // fix compared from its fork point by default
+    let diff = ok(&home, "commit.diff", &[p(), ("ref", t("fix"))]);
     assert!(
-        layerfs_api::json::print(&diff).contains("NEW.md"),
+        layerfs_api::json::print(&diff).contains("/NEW.md"),
         "{diff:?}"
     );
 
     // main lists its published Layers, where a Layer id stands for a Commit
-    // (S §3.3); a short identity is an identity fault, not a Branch fault
-    // (#611). The publish below advances main to fix's head before fix is
-    // edited again.
-    let main = ok(&home, "commit.list", &[p(), ("branch", t("main"))]);
+    // (S §3.3); a too-short identity is no Commit (#611). The publish
+    // below advances main to fix's head before fix is edited again.
+    let main = ok(
+        &home,
+        "commit.list",
+        &[p(), ("branch", t("main")), detail()],
+    );
     let SdkValue::List(layers) = main.get("items").unwrap() else {
         panic!("{main:?}")
     };
     assert_eq!(layers.len(), 1);
     assert_eq!(layers[0].get("parent"), Some(&SdkValue::Null));
-    let base_layer = layers[0].get_text("id").unwrap().to_owned();
+    assert_eq!(layers[0].get_text("via"), Some("init"));
+    let base_layer = layers[0].get_text("commit").unwrap().to_owned();
     ok(&home, "branch.publish", &[p(), ("branch", t("fix"))]);
-    let main = ok(&home, "commit.list", &[p(), ("branch", t("main"))]);
+    let main = ok(
+        &home,
+        "commit.list",
+        &[p(), ("branch", t("main")), detail()],
+    );
     let SdkValue::List(layers) = main.get("items").unwrap() else {
         panic!("{main:?}")
     };
     assert_eq!(layers.len(), 2);
     assert_eq!(layers[0].get_text("source_commit"), Some(id.as_str()));
     assert_eq!(layers[0].get_text("source_branch"), Some("fix"));
-    let short: String = id.chars().take(12).collect();
+    assert_eq!(layers[0].get_text("via"), Some("publish"));
+    // seven characters are too few for a Commit: `commit.get` refuses them
+    // as input, and `commit.diff` reads them as a Branch name, which is absent
+    let short: String = id.chars().take(7).collect();
     assert_eq!(
-        call(
-            &home,
-            "commit.diff",
-            &[
-                p(),
-                ("from_commit", t(&short)),
-                ("to_commit", t(&base_layer))
-            ]
-        )
-        .unwrap_err()
-        .0,
+        call(&home, "commit.get", &[p(), ("commit", t(&short))])
+            .unwrap_err()
+            .0,
         "InvalidInput"
     );
-    ok(
+    assert_eq!(
+        call(&home, "commit.diff", &[p(), ("ref", t(&short))])
+            .unwrap_err()
+            .0,
+        "NotFound"
+    );
+    // a Commit by a prefix, from its parent (here main's first publication)
+    let diff = ok(
         &home,
         "commit.diff",
-        &[
-            p(),
-            ("from_commit", t(&base_layer)),
-            ("to_commit", t(&base_layer)),
-        ],
+        &[p(), ("ref", t(&id[..12])), detail()],
     );
+    assert_eq!(diff.get_text("from"), Some(base_layer.as_str()), "{diff:?}");
+    // main's first publication, from the empty tree
+    let first = ok(
+        &home,
+        "commit.diff",
+        &[p(), ("ref", t(&base_layer)), detail()],
+    );
+    assert_eq!(first.get("from"), Some(&SdkValue::Null), "{first:?}");
+    assert!(layerfs_api::json::print(&first).contains("/README.md"));
 
     ok(
         &home,
@@ -494,7 +500,7 @@ fn a_retired_source_branch_still_renders_on_its_layers() {
         &[
             ("project", t("shop/api")),
             ("name", t("work")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     ok(
@@ -522,7 +528,7 @@ fn a_retired_source_branch_still_renders_on_its_layers() {
     let SdkValue::List(layers) = main.get("items").expect("items") else {
         panic!("{main:?}")
     };
-    let id = layers[0].get_text("id").expect("layer id").to_owned();
+    let id = layers[0].get_text("commit").expect("layer id").to_owned();
     assert_eq!(
         layers[0].get_text("source_branch"),
         Some("work"),
@@ -557,6 +563,7 @@ fn a_retired_source_branch_still_renders_on_its_layers() {
             ("project", t("shop/api")),
             ("branch", t("main")),
             ("commit", t(&id)),
+            ("detail", SdkValue::Bool(true)),
         ],
     );
     assert_eq!(

@@ -169,6 +169,39 @@ pub trait HistoryCatalog: Send + Sync {
     fn branches(&self, stack: LayerStackId, page: &Page)
         -> HistoryResult<PageResult<BranchRecord>>;
 
+    /// Branches of one stack in name order from the name `from` on: the names
+    /// after it, and `from` itself when `inclusive`. At most `limit` records
+    /// (one to 128), read through the name index: a list filtered by a name
+    /// prefix, or continued after the last name of a page, reads only its own
+    /// rows. The default refuses.
+    fn branches_from(
+        &self,
+        stack: LayerStackId,
+        from: &str,
+        inclusive: bool,
+        limit: u16,
+    ) -> HistoryResult<Vec<BranchRecord>> {
+        let _ = (stack, from, inclusive, limit);
+        Err(crate::error::HistoryError::Unsupported("Branch name range"))
+    }
+
+    /// The nodes of one stack whose tagged identity lies in `low..=high`,
+    /// both of one kind (the same leading tag): the first of them in identity
+    /// order and how many there are. One bounded read through the stack's
+    /// identity index, so a caller resolves a prefix of an identity without
+    /// paging history. The default refuses.
+    fn nodes_between(
+        &self,
+        stack: LayerStackId,
+        low: &[u8; 33],
+        high: &[u8; 33],
+    ) -> HistoryResult<(Option<NodeId>, u64)> {
+        let _ = (stack, low, high);
+        Err(crate::error::HistoryError::Unsupported(
+            "identity prefix lookup",
+        ))
+    }
+
     /// One Commit by identity.
     fn commit(&self, id: CommitId) -> HistoryResult<Option<CommitRecord>>;
 
@@ -301,10 +334,26 @@ pub trait HistoryCatalog: Send + Sync {
     fn commit_branch(&self, request: &CommitRequest) -> HistoryResult<CommitOutcome>;
 
     /// Publishes one Commit root as a new Layer against the expected stack head.
+    /// The Commit is the Branch's head or one its head holds.
     fn add_layer(&self, request: &AddLayerRequest) -> HistoryResult<AddLayerOutcome>;
 
     /// Creates a Branch from a merge of two sides, atomically.
     fn merge_branch(&self, request: &BranchMergeRequest) -> HistoryResult<BranchSnapshot>;
+
+    /// Moves an existing Branch to the result of merging another side into
+    /// it, atomically: `request.branch` is the Branch (its `name` is not
+    /// read), `sides[0]` is that Branch and the node it must still be at, and
+    /// `sides[1]` the side merged in and the node it must still be at. A
+    /// fast-forward moves the Branch to an existing node (a Commit with that
+    /// Commit's base, or a Layer as its base with no head); a merge gives it
+    /// one new Commit with two parents and that Commit's base. The other side
+    /// does not change. The default refuses.
+    fn merge_into_branch(&self, request: &BranchMergeRequest) -> HistoryResult<BranchSnapshot> {
+        let _ = request;
+        Err(crate::error::HistoryError::Unsupported(
+            "merge into an existing Branch",
+        ))
+    }
 
     /// Consumes one checked half-open inode range for a scope.
     fn reserve_inodes(&self, request: &ReserveRequest) -> HistoryResult<Reservation>;

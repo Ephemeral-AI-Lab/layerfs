@@ -491,7 +491,7 @@ fn snapshot_checkpoints_an_unheld_leftover_wal_before_moving_either_way() {
         &[
             ("project", t("shop/api")),
             ("name", t("dev")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     )
     .unwrap();

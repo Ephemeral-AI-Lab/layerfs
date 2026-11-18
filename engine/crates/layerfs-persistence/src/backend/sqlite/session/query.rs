@@ -63,6 +63,18 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "branch_branch_next_page" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/branch_branch_next_page.sql"
         )),
+        "branch_branch_from_page" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/branch_branch_from_page.sql"
+        )),
+        "branch_move_branch" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/branch_move_branch.sql"
+        )),
+        "commit_identity_range" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/commit_identity_range.sql"
+        )),
+        "layerstack_identity_range" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/layerstack_identity_range.sql"
+        )),
         "branch_insert_branch" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/branch_insert_branch.sql"
         )),
