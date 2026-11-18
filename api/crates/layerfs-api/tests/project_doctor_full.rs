@@ -103,7 +103,7 @@ fn source(tag: &str) -> PathBuf {
 }
 
 #[test]
-fn full_reads_main_and_each_branch_and_names_a_damaged_object_in_each_project() {
+fn sqlite_full_reads_main_and_each_branch_and_names_a_damaged_object_in_each_project() {
     let home = folder("home");
     let created = layerfs_api::call(
         Some(&home),
@@ -119,11 +119,111 @@ fn full_reads_main_and_each_branch_and_names_a_damaged_object_in_each_project() 
         }
     }
     created.unwrap();
+    check(&home, &|home| {
+        // the Store loses the largest object, which every head of both
+        // projects reaches
+        let file = home.join("store/shop/store.sqlite");
+        let file = if file.is_file() {
+            file
+        } else {
+            find_store_file(home).expect("the Store file")
+        };
+        let db = rusqlite::Connection::open(&file).unwrap();
+        let id: Vec<u8> = db
+            .query_row(
+                "SELECT object_id FROM object_location ORDER BY canonical_length DESC, object_id LIMIT 1",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        db.execute("DELETE FROM object_location WHERE object_id=?1", [&id])
+            .unwrap();
+        db.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)").unwrap();
+        hex(&id)
+    });
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// The same on a PostgreSQL Store, in a database of its own (a 2.0 Store
+/// lives in that database's fixed `layerfs` schema), dropped at the end.
+/// `LAYERFS_TEST_POSTGRES_URL` is `postgresql://user@host:port/db?...`.
+#[test]
+fn postgresql_full_reads_main_and_each_branch_and_names_a_damaged_object_in_each_project() {
+    let Ok(url) = std::env::var("LAYERFS_TEST_POSTGRES_URL") else {
+        eprintln!("NOT_RUN: LAYERFS_TEST_POSTGRES_URL unset");
+        return;
+    };
+    let database = format!("pdfull_{}", std::process::id());
+    let admin = |sql: &str| {
+        let mut client = postgres::Client::connect(&url, postgres::NoTls).unwrap();
+        client.batch_execute(sql).unwrap();
+    };
+    admin(&format!("DROP DATABASE IF EXISTS {database}"));
+    admin(&format!("CREATE DATABASE {database}"));
+    let (base, query) = url.split_once('?').unwrap_or((url.as_str(), ""));
+    let (server, _) = base.rsplit_once('/').unwrap();
+    let store_url = match query {
+        "" => format!("{server}/{database}"),
+        query => format!("{server}/{database}?{query}"),
+    };
+    let home = folder("pg-home");
+    // the URL's user becomes a saved login (a trust-auth server takes any
+    // password); the address is connected without it
+    let (scheme, rest) = store_url.split_once("://").unwrap();
+    let (user, address) = rest.split_once('@').unwrap();
+    call(
+        &home,
+        "store.save_auth",
+        &[
+            ("auth", t("pg")),
+            ("user", t(user)),
+            ("password", t("unused")),
+        ],
+    );
+    call(
+        &home,
+        "store.connect",
+        &[
+            ("store", t("shop")),
+            ("url", t(&format!("{scheme}://{address}"))),
+            ("auth", t("pg")),
+            ("synchronous_commit", t("off")),
+        ],
+    );
+    check(&home, &|_| {
+        let mut client = postgres::Client::connect(&store_url, postgres::NoTls).unwrap();
+        let row = client
+            .query_one(
+                "SELECT object_id FROM layerfs.object_location ORDER BY canonical_length DESC, object_id LIMIT 1",
+                &[],
+            )
+            .unwrap();
+        let id: Vec<u8> = row.get(0);
+        // the Store's own triggers and keys would refuse the damage
+        client
+            .batch_execute("SET session_replication_role = replica")
+            .unwrap();
+        client
+            .execute(
+                "DELETE FROM layerfs.object_location WHERE object_id=$1",
+                &[&id],
+            )
+            .unwrap();
+        hex(&id)
+    });
+    let _ = std::fs::remove_dir_all(&home);
+    admin(&format!("DROP DATABASE IF EXISTS {database} WITH (FORCE)"));
+}
+
+/// Two projects of Store `shop` in `home`, two Branches of one; the doctor
+/// without and with `--full`; then `damage` makes the Store lose one object
+/// both projects reach (answering its id) and each project names it once.
+fn check(home: &Path, damage: &dyn Fn(&Path) -> String) {
     let tree = source("source");
     let folder_text = t(tree.to_str().unwrap());
     for project in ["shop/app", "shop/twin"] {
         call(
-            &home,
+            home,
             "project.init",
             &[("project", t(project)), ("folder", folder_text.clone())],
         );
@@ -131,7 +231,7 @@ fn full_reads_main_and_each_branch_and_names_a_damaged_object_in_each_project() 
     // two Branches of app, each one Commit ahead of main
     for (branch, path, content) in [("dev", "/new", "abc"), ("feature", "/src/more.rs", "x")] {
         call(
-            &home,
+            home,
             "branch.fork",
             &[
                 ("project", t("shop/app")),
@@ -140,7 +240,7 @@ fn full_reads_main_and_each_branch_and_names_a_damaged_object_in_each_project() 
             ],
         );
         call(
-            &home,
+            home,
             "file.write",
             &[
                 ("project", t("shop/app")),
@@ -152,7 +252,7 @@ fn full_reads_main_and_each_branch_and_names_a_damaged_object_in_each_project() 
     }
 
     // without --full nothing of the data is read
-    let (shallow, events) = doctor(&home, "shop/app", false);
+    let (shallow, events) = doctor(home, "shop/app", false);
     assert_eq!(
         rows(&shallow),
         [
@@ -173,7 +273,7 @@ fn full_reads_main_and_each_branch_and_names_a_damaged_object_in_each_project() 
         .ok()
         .and_then(|()| peak_kib());
     let started = Instant::now();
-    let (clean, events) = doctor(&home, "shop/app", true);
+    let (clean, events) = doctor(home, "shop/app", true);
     let elapsed = started.elapsed();
     let peak = peak_kib();
     eprintln!(
@@ -220,31 +320,10 @@ fn full_reads_main_and_each_branch_and_names_a_damaged_object_in_each_project() 
     assert_eq!(last.get_text("phase"), Some("self"), "{events:?}");
     assert!(last.get("node").is_some(), "{last:?}");
 
-    // damage: the Store loses the largest object, which every head of both
-    // projects reaches
     layerfs_api::close_idle(std::time::Duration::ZERO);
-    let file = home.join("store/shop/store.sqlite");
-    let file = if file.is_file() {
-        file
-    } else {
-        find_store_file(&home).expect("the Store file")
-    };
-    let lost = {
-        let db = rusqlite::Connection::open(&file).unwrap();
-        let id: Vec<u8> = db
-            .query_row(
-                "SELECT object_id FROM object_location ORDER BY canonical_length DESC, object_id LIMIT 1",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap();
-        db.execute("DELETE FROM object_location WHERE object_id=?1", [&id])
-            .unwrap();
-        db.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)").unwrap();
-        hex(&id)
-    };
+    let lost = damage(home);
     for project in ["shop/app", "shop/twin"] {
-        let (damaged, _) = doctor(&home, project, true);
+        let (damaged, _) = doctor(home, project, true);
         assert_eq!(
             damaged.get("ok"),
             Some(&SdkValue::Bool(false)),
@@ -278,7 +357,6 @@ fn full_reads_main_and_each_branch_and_names_a_damaged_object_in_each_project() 
         assert_eq!(row.map(|(_, outcome)| outcome).as_deref(), Some("error"));
     }
     layerfs_api::close_idle(std::time::Duration::ZERO);
-    let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&tree);
 }
 
