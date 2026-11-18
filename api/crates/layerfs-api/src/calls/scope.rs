@@ -294,7 +294,7 @@ impl Scope {
         let sandbox = match call.scope {
             Rule::WorkspaceMount => args.get_text("sandbox").unwrap_or(""),
             Rule::WorkspaceExec | Rule::Workspace => args
-                .get_text("ws")
+                .get_text("workspace")
                 .and_then(|ws| ws.split_once(':'))
                 .map_or("", |(sandbox, _)| sandbox),
             _ => return Ok(()),

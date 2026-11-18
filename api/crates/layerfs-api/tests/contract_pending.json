@@ -30,13 +30,6 @@
     "sandbox.files",
     "sandbox.log",
     "sandbox.doctor",
-    "workspace.list",
-    "workspace.mount",
-    "workspace.exec",
-    "workspace.cancel",
-    "workspace.commit",
-    "workspace.unmount",
-    "workspace.status",
     "branch.list",
     "branch.get",
     "branch.fork",
@@ -84,8 +77,7 @@
     "store.pull": "store.move",
     "store.push": "store.move",
     "store.stats": "store.get",
-    "store.status": "store.get",
-    "workspace.exec_cancel": "workspace.cancel"
+    "store.status": "store.get"
   },
   "spec_sync": {
     "nodes": {

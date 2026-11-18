@@ -327,30 +327,30 @@ fn sandbox_family() {
 #[test]
 fn workspace_family() {
     assert!(
-        code("workspace.exec", map(&[("ws", t("tests:/workspaces/1"))]))
+        code("workspace.exec", map(&[("workspace", t("tests:dev"))]))
             .contains("`command` is required")
     );
-    let reached = code("workspace.status", map(&[("ws", t("tests:/workspaces/1"))]));
+    // a Workspace by its name (#536 C3); the path form is gone (2.0)
+    let reached = code("workspace.status", map(&[("workspace", t("tests:dev"))]));
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
-    // a Workspace by its name (#536 C3)
-    let reached = code("workspace.status", map(&[("ws", t("tests:dev"))]));
-    assert!(!reached.starts_with("InvalidInput"), "{reached}");
+    let refused = code(
+        "workspace.status",
+        map(&[("workspace", t("tests:/workspaces/1"))]),
+    );
+    assert!(refused.starts_with("InvalidInput"), "{refused}");
     let mount = layerfs_api::find("workspace.mount").unwrap();
     let options: Vec<_> = mount.options.iter().map(|o| (o.name, o.kind)).collect();
     assert_eq!(options, [("name", Kind::Name)]);
-    // exec_cancel (layerfs-project#113): the Workspace, the exec id and a grace
-    let cancel = layerfs_api::find("workspace.exec_cancel").unwrap();
+    // cancel (was exec_cancel): the Workspace, and an exec id to end one
+    let cancel = layerfs_api::find("workspace.cancel").unwrap();
     let args: Vec<_> = cancel.args.iter().map(|a| (a.name, a.kind)).collect();
-    assert_eq!(args, [("ws", Kind::Text), ("exec_id", Kind::Text)]);
+    assert_eq!(args, [("workspace", Kind::Text)]);
     let options: Vec<_> = cancel.options.iter().map(|o| (o.name, o.kind)).collect();
-    assert_eq!(options, [("grace_ms", Kind::Int)]);
+    assert_eq!(options, [("exec", Kind::Text)]);
+    assert!(layerfs_api::find("workspace.exec_cancel").is_none());
     let exec = layerfs_api::find("workspace.exec").unwrap();
-    assert!(exec.options.iter().any(|o| o.name == "exec_id"));
-    assert!(code(
-        "workspace.exec_cancel",
-        map(&[("ws", t("tests:/workspaces/1"))])
-    )
-    .contains("`exec_id` is required"));
+    assert!(!exec.options.iter().any(|o| o.name == "exec_id"));
+    assert!(exec.options.iter().any(|o| o.name == "env" && o.repeat));
 }
 
 #[test]
@@ -640,7 +640,16 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "machine.update",
     ];
     let home = ["home.get", "home.log", "home.clear_log"];
-    assert_eq!(migrated, [&home[..], &machine[..]].concat());
+    let workspace = [
+        "workspace.list",
+        "workspace.mount",
+        "workspace.exec",
+        "workspace.cancel",
+        "workspace.commit",
+        "workspace.unmount",
+        "workspace.status",
+    ];
+    assert_eq!(migrated, [&home[..], &workspace[..], &machine[..]].concat());
     for call in layerfs_api::calls() {
         if let Some(form) = call.form {
             // every short key is a long key, and no key is listed twice

@@ -546,83 +546,91 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 - Not run for this manual. See
   [limitations](limitations.md#not-built-refused-as-unsupported).
 
-### `workspace` (6)
+### `workspace` (7)
 
-A Workspace is `<sandbox>:<path>`, or `<sandbox>:<name>` when its mount
-named it, answered as `ws` by `mount`. Every `workspace` call takes either
-form.
+A Workspace is `<sandbox>:<name>`, the handle `mount` answers as
+`workspace`; every other `workspace` call takes it. The path form of the
+handle is gone: `<sandbox>:/path` is refused `InvalidInput`.
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `mount` | `sandbox`, `branch` | `name` | mounts a side Branch in a Sandbox; `main` is refused `InvalidInput` (fork a Branch from it) |
-| `exec` | `ws`, `command` | `message`, `stream`, `stdout`, `stderr`, `exec_id`, `on_progress` | runs one bash command in a Workspace |
-| `exec_cancel` | `ws`, `exec_id` | `grace_ms` | ends a running command: SIGTERM, then SIGKILL after `grace_ms` |
-| `commit` | `ws` | `message`, `force` | commits a Workspace's changes to its Branch |
-| `unmount` | `ws` | `discard`, `force` | ends a Workspace |
-| `status` | `ws` | — | a Workspace's changes since its base (O14) |
+| `list` | — | `sandbox`, `limit`, `cursor` | every mounted Workspace, or one Sandbox's (agent profile) |
+| `mount` | `sandbox`, `branch` | `name` | mounts a Branch in a Sandbox |
+| `exec` | `workspace`, `command` | `cwd`, `env` (repeat), `stdin`, `stream`, `stdout`, `stderr`, `on_progress` | runs one bash command in a Workspace |
+| `cancel` | `workspace` | `exec` | ends the commands running in a Workspace, or one of them |
+| `commit` | `workspace` | `message` (`-m`), `expected`, `force` | commits a Workspace's changes to its Branch |
+| `unmount` | `workspace` | `discard`, `force` | ends a Workspace |
+| `status` | `workspace` | `path` | a Workspace's uncommitted changes, and whether its Branch moved |
 
-- `mount` with `name` names the Workspace (a name, as for Sandboxes);
-  `ws` is then `<sandbox>:<name>`. A name is unique within its Sandbox: one
-  in use is `Exists`. It is free again once that Workspace is unmounted.
-  `mount` answers `name` (or `null`) beside `path`. A name no mounted
-  Workspace carries is `NotMounted`.
-- `exec` answers `kind` (`exit:<code>`), `exit_code`, `stdout`, `stderr`,
-  `message`, `truncated`, `exec_id` and `stop` (`cgroup` on Linux kernels,
-  the docker machine included; `group`, the command's own process group,
-  on macOS `native`). A command that exits non-zero is still exit 0
-  for the shell unless `--stream` is given. Inline output that is not UTF-8
-  comes back as bytes.
-- A stream over 1 MiB is not inline: it is sent as output events, one
-  1 MiB page at a time, and the reply has that stream `null` with
-  `stdout_bytes` or `stderr_bytes` and `streamed: true`. Only the
-  `stdout`/`stderr` functions, `stream: true` (Node, Python) and `--stream`
-  (shell) receive those bytes; without one of them they are not kept.
-- `stdout` and `stderr` (Node, Python) are functions given the command's
-  output. `stream: true` without them writes it to the calling process's
-  own stdout and stderr. The library sends the output after the command
-  ends; there is no live output stream yet.
-- Every command has an exec id: `exec_id` names it (1 to 64 letters,
-  digits, `.`, `_` or `-`, not starting with `.` or `-`), else LayerFS
-  makes one (`exec-` and 16 hex digits). Either way it is the call's first
-  progress event, `{exec: {id}}`, given to `on_progress` (Node, Python)
-  and printed by `--progress` (shell) before the command starts. An id a
-  running command of the same Workspace carries is `Exists`.
-- While a command runs, its record lets any process end it:
-  `workspace exec-cancel <ws> <exec-id> [--grace-ms N]` sends SIGTERM to
-  everything it started, waits `grace_ms` (default 5000), then SIGKILL. It
-  answers `{outcome: "cancelled", signal}` (`signal` is the last one sent),
-  `{outcome: "ended"}` when the command had already finished (or has no
-  record), or `{outcome: "unknown"}` when the machine's worker was not
-  reached or did not answer: nothing is known to have changed. The
-  cancelled command's `exec` answers `kind: "cancelled"` with exit code
-  128 + the signal. A cancel that comes before the command starts answers
-  `cancelled` with `SIGKILL`, and the command is ended as it starts (exit
-  code 137). After `unknown` the record keeps the cancel's mark: cancel
-  again once the worker answers; if the command then ends by a signal,
-  its `exec` answers `kind: "cancelled"`. On Linux each command runs in its own cgroup, so
-  children that left its process group end too; on macOS a child that
-  calls `setsid` itself escapes the group.
-- A command record whose owning process is gone is stale. The next exec of
-  its id, cancel, unmount or close ends its command (no grace), removes it
-  and logs it to `log/exec.jsonl`; `layerfs doctor` reports it. On a
-  Sandbox the caller reaches directly, a stale record whose worker cannot
-  be reached is kept as it was.
-- `commit` merges first when the Branch moved since the mount; `force`
-  publishes over a moved head instead.
-- `unmount` with `discard` drops uncommitted changes; `force` aborts its
-  connection. `unmount` is `Busy` while a command runs in the Workspace
-  (`detail.execs`); with `force` each one is cancelled first, and one whose
-  cancel is not confirmed refuses it `Unknown`.
-- `status` starts no machine (#535 P4): on a Sandbox whose machine is down
-  it is `Unavailable`, naming `machine start`. `mount`, `exec`, `commit`
-  and `unmount` on a stopped machine are refused the same way, as Store
-  calls are; nothing starts a machine but `machine start` (#535 D11).
-- On `lima`, `mount`, `commit`, `unmount` and
-  `status` go from the caller straight to the Sandbox's daemon (#535 G4);
-  `exec` goes through the machine's worker. On `docker` every call goes
-  through its worker (D-8). See machines-and-stores.md,
-  Routes.
-- Not run for this manual.
+- `list` reads Workspace records and asks no daemon: the home's own for a
+  Sandbox on `native` or one reached directly, and one `workspace.list`
+  request to each other ready machine's worker. A Sandbox whose machine,
+  or which itself, is not ready is named in `not_listed` with
+  `blocked_by`; one whose worker did not answer with `reason` (`timeout`,
+  `busy`, `lost`, or `refused` with its refusal in `message`). Rows are
+  `{workspace, branch}` (long: `sandbox`, `project`, `path`, `mounted_at`),
+  ordered by Sandbox then name, paged by `limit` (1 to 1000, default 100)
+  and `cursor`, which carries `--sandbox`.
+- `mount` answers `{workspace, path}` (long: `outcome: mounted`, `branch`,
+  `commit` the Commit it stands on, `base_layer`, `root`, `id` the 64-hex
+  Workspace id, `namespace`). Without `name` the name is the Branch's made
+  valid: lowercased, each character outside `a-z 0-9 _ . -` replaced by
+  `-`, cut to 63 and `_ . -` trimmed from the ends (`Feature/Login` mounts
+  as `feature-login`). A name in use is `Exists`; a Branch whose default is
+  empty or reserved, and `main`, are `InvalidInput`; each with a `fix`. A
+  seventeenth Workspace is `Capacity`.
+- `exec` answers `{exit_code}` and `stdout`, `stderr` when not empty; long:
+  `stdout_file`, `stderr_file`, `cancelled`, `exec`, `stop` (`cgroup` on
+  Linux kernels, `group` on macOS `native`), `stdout_bytes`,
+  `stderr_bytes`, `duration_ms`. A stream of at most 1 MiB is answered
+  whole; a longer one answers its last 1 MiB and names the file that holds
+  all of it, `<run folder>/exec/<workspace id>/<exec id>.stdout`, which
+  `sandbox files` reads and `unmount` deletes. The shell exits with the
+  command's own code in every form and prints the result JSON on stdout; a
+  refusal exits 125. `--cwd` is a folder of the Workspace as a path from
+  its root; `--env K=V` repeats (Node and Python: one object); `--stdin`
+  gives the command this process's stdin, read whole (Node and Python:
+  text or bytes); without it the command reads `/dev/null`. `--stream`
+  writes the output to this process's stdout and stderr and prints no
+  result. There is no timeout.
+- LayerFS makes every exec id (`exec-` and 16 hex digits); `--progress`
+  sends `{"phase":"start","done":0,"total":1,"exec":"exec-…"}` before the
+  command starts. A lost reply is the refusal `Unknown` with `exec` and a
+  `fix` naming `workspace cancel --exec`; the command is never run again.
+- `cancel` ends every command running in the Workspace, or the one
+  `--exec` names: SIGTERM, then SIGKILL after 5 s. Short answers:
+  `{"signal":"SIGTERM"}`, `{"already_ended":true}`, `{"unknown":true}`
+  (the worker was not reached or did not answer: cancel again once it
+  answers). Long: `outcome` (the worst of `commands[].outcome`: unknown,
+  cancelled, already_ended) and `commands: [{exec, outcome, signal}]`. A
+  cancelled command's `exec` answers `cancelled: true` and exit code 128
+  plus the signal.
+- `commit` answers `{commit}` (the Branch's new head) with `unchanged`,
+  `merged`, `overwritten` (paths a newer-write-wins rule decided, the
+  first 20) and `overwritten_count` past those; long: `outcome`, `branch`,
+  `parent`, `root`, `message`, `created_at`, `merged_from`, `displaced`.
+  `--expected C` refuses `Conflict` unless the Branch's head is `C`, a
+  full 66-hex Commit id in this build (a prefix is `InvalidInput`); the
+  check is one read before the Commit. A conflict is `Conflict` with
+  `commit` (the head), `conflicts` (first 20 paths) and `conflicts_count`.
+- `unmount` answers `{"ok":true}`; long: `outcome` (`unmounted` or
+  `force_unmounted`) and a forced unmount's `abort`, `detach`, `cleanup`.
+  `Dirty` carries `changes` (the first 20 entries, as `status` lists
+  them), `changes_count` and `pending_merge`, with a `fix` naming
+  `workspace commit`; `Busy` and an unconfirmed forced cancel (`Unknown`)
+  carry `running` (the exec ids).
+- `status` answers `changes`: the first 20 entries of one bounded read of
+  256 overlay rows, each `{path, change}` (`added`, `modified`,
+  `removed`) with `type: "dir"` for a folder; `changes_count` past the 20
+  shown, `partial: true` at the bound, `branch_moved: true` when the
+  Branch gained Commits since the mount, and `state` with its companion
+  when not ready (from the daemon's `activity`). `--path` filters within
+  the same read. A machine that is not ready refuses it `Unavailable`; it
+  starts no machine.
+- On `lima`, `mount`, `commit`, `unmount` and `status` go from the caller
+  straight to the Sandbox's daemon (#535 G4); `exec` and `cancel` go
+  through the machine's worker. On `docker` every call goes through its
+  worker (D-8).
 
 ### `machine` (13)
 

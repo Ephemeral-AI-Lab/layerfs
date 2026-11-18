@@ -44,7 +44,7 @@ fn exec_helper() {
         Some(home),
         "workspace.exec",
         SdkValue::map([
-            ("ws", t(&format!("{name}:work"))),
+            ("workspace", t(&format!("{name}:work"))),
             (
                 "command",
                 t(&format!(

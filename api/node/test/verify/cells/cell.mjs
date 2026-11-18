@@ -83,11 +83,11 @@ out.store = pgUrl ? { kind: "postgresql", host: new URL(pgUrl).hostname } : { ki
 const name = `c${cell.slice(1)}`;
 let sandbox = null;
 const mounted = new Set();
-const exec = (ws, text, label) => step(label, () => lfs.workspace.exec(ws, text, { message: `lfs533 ${cell} ${label}` }));
+const exec = (ws, text, label) => step(label, () => lfs.workspace.exec(ws, text));
 const summary = ({ value, ms }) => ({ wallMs: ms, exitCode: value.exit_code, stdout: value.stdout?.slice(0, 2000), stderr: value.stderr?.slice(0, 2000), ...parseTimed(value.stdout) });
 const mount = async (label) => {
   const result = await step(`${label}.mount`, () => lfs.workspace.mount(sandbox, "lane"));
-  mounted.add(result.value.ws);
+  mounted.add(result.value.workspace);
   return result;
 };
 const unmount = async (label, ws, discard) => {
@@ -126,21 +126,21 @@ try {
   const line = timedLine(command(cell));
   if (CF[cell][1]) {
     const { value } = await mount("setup");
-    const ran = summary(await exec(value.ws, CF[cell][1], "setup.exec"));
+    const ran = summary(await exec(value.workspace, CF[cell][1], "setup.exec"));
     if (ran.exitCode !== 0) throw Object.assign(new Error(`setup body exited ${ran.exitCode}: ${ran.stderr}`), { step: "setup.exec" });
-    const committed = await step("setup.commit", () => lfs.workspace.commit(value.ws, { message: `lfs533 ${cell} setup` }));
-    await unmount("setup", value.ws, false);
+    const committed = await step("setup.commit", () => lfs.workspace.commit(value.workspace, { message: `lfs533 ${cell} setup` }));
+    await unmount("setup", value.workspace, false);
     out.phases.setup = { exec: ran, commit: committed.value };
   }
   {
     const at = await mount("warmup");
-    const ran = summary(await exec(at.value.ws, line, "warmup.exec"));
-    const left = await unmount("warmup", at.value.ws, true);
+    const ran = summary(await exec(at.value.workspace, line, "warmup.exec"));
+    const left = await unmount("warmup", at.value.workspace, true);
     out.phases.warmup = { mountMs: at.ms, exec: ran, unmountMs: left.ms };
   }
   {
     const at = await mount("timed");
-    const ws = at.value.ws;
+    const ws = at.value.workspace;
     const ran = summary(await exec(ws, line, "timed.exec"));
     const committed = await step("timed.commit", () => lfs.workspace.commit(ws, { message: `lfs533 ${cell}` }));
     const left = await unmount("timed", ws, false);
@@ -148,10 +148,10 @@ try {
   }
   {
     const { value } = await mount("verify");
-    const identity = await exec(value.ws, IDENTITY, "verify.identity");
+    const identity = await exec(value.workspace, IDENTITY, "verify.identity");
     out.where = parseIdentity(identity.value.stdout);
-    const checked = await exec(value.ws, verifier(cell), "verify.exec");
-    await unmount("verify", value.ws, true);
+    const checked = await exec(value.workspace, verifier(cell), "verify.exec");
+    await unmount("verify", value.workspace, true);
     out.phases.verify = { exitCode: checked.value.exit_code, stdout: checked.value.stdout?.slice(0, 2000), stderr: checked.value.stderr?.slice(0, 2000) };
   }
   const timed = out.phases.timed;

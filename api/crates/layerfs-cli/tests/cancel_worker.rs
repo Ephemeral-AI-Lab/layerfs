@@ -1,11 +1,11 @@
-//! `workspace.exec`'s exec id and `workspace.exec_cancel` on a machine's
-//! worker (layerfs-project#113, compute-plane 2.0 §5, D-11), against a
-//! stand-in worker (no VM, container or daemon): the exec id control makes
-//! or the caller names is the call's first progress event and travels in
-//! the `sandbox.host` frame; `layerfs workspace exec-cancel <ws> <exec-id>
-//! [--grace-ms N]` rides the same frame and answers what the worker
-//! answers; a worker that cannot be reached answers `unknown` and nothing
-//! in the home changes.
+//! `workspace.exec`'s exec id and `workspace.cancel` on a machine's worker
+//! (layerfs-project#113, compute-plane 2.0 §5, D-11, call surface 2.0),
+//! against a stand-in worker (no VM, container or daemon): control makes
+//! the exec id, which is the call's first progress event, the long
+//! answer's `exec`, and travels in the `sandbox.host` frame; `layerfs
+//! workspace cancel <workspace> [--exec <id>]` rides the same frame and
+//! answers what the worker answers; a worker that cannot be reached
+//! answers `unknown` and nothing in the home changes.
 #![cfg(feature = "machine")]
 mod common;
 use common::{layerfs, run, tempdir, text};
@@ -24,7 +24,7 @@ fn t(s: &str) -> SdkValue {
 type Seen = Arc<Mutex<Vec<SdkValue>>>;
 
 /// A stand-in worker: it answers `sandbox.create`, `workspace.exec` and
-/// `workspace.exec_cancel`, and keeps every Workspace frame's `more`.
+/// `workspace.cancel`, and keeps every Workspace frame's `more`.
 fn worker(seen: Seen) -> SocketAddr {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
@@ -53,16 +53,25 @@ fn worker(seen: Seen) -> SocketAddr {
             let value = match args.get_text("op") {
                 _ if image => SdkValue::map([("present", SdkValue::Bool(true))]),
                 Some("workspace.exec") => SdkValue::map([
-                    ("kind", t("exit:0")),
-                    ("exitCode", SdkValue::Int(0)),
+                    ("exit_code", SdkValue::Int(0)),
+                    ("cancelled", SdkValue::Bool(false)),
                     ("stdout", t("")),
                     ("stderr", t("")),
-                    ("execId", more.get("execId").cloned().unwrap_or_default()),
+                    ("stdoutBytes", SdkValue::Int(0)),
+                    ("stderrBytes", SdkValue::Int(0)),
+                    ("exec", more.get("execId").cloned().unwrap_or_default()),
                     ("stop", t("cgroup")),
+                    ("duration_ms", SdkValue::Int(3)),
                 ]),
-                Some("workspace.exec_cancel") => {
-                    SdkValue::map([("outcome", t("cancelled")), ("signal", t("SIGTERM"))])
-                }
+                // the command it names, cancelled
+                Some("workspace.cancel") => SdkValue::map([(
+                    "commands",
+                    SdkValue::List(vec![SdkValue::map([
+                        ("exec", more.get("execId").cloned().unwrap_or_default()),
+                        ("outcome", t("cancelled")),
+                        ("signal", t("SIGTERM")),
+                    ])]),
+                )]),
                 _ => create(&more),
             };
             if args
@@ -165,37 +174,44 @@ fn exec(home: &Path, args: &[(&str, SdkValue)]) -> (SdkValue, Vec<SdkValue>) {
     (answer, events)
 }
 
-/// The exec id an exec's first event names.
+/// The exec id an exec's first event, `{ phase: "start", exec }`, names.
 fn first_id(events: &[SdkValue]) -> Option<String> {
-    let exec = events.first()?.get("progress")?.get("exec")?;
-    exec.get_text("id").map(str::to_owned)
+    let progress = events.first()?.get("progress")?;
+    assert_eq!(progress.get_text("phase"), Some("start"), "{progress:?}");
+    progress.get_text("exec").map(str::to_owned)
 }
+
+const ID: &str = "exec-00000000000000e1";
 
 #[test]
 fn the_exec_id_is_the_first_event_and_travels_to_the_worker() {
     let seen = Seen::default();
     let home = home_with_sandbox("id", seen.clone());
-    let (named, events) = exec(
+    let (made, events) = exec(
         &home,
         &[
-            ("ws", t("d1:one")),
+            ("workspace", t("d1:one")),
             ("command", t("true")),
-            ("exec_id", t("build-7")),
             ("log_tag", t("dsh:s9:t1")),
+            ("detail", SdkValue::Bool(true)),
         ],
     );
-    assert_eq!(first_id(&events).as_deref(), Some("build-7"));
-    assert_eq!(named.get_text("exec_id"), Some("build-7"));
-    let (made, events) = exec(&home, &[("ws", t("d1:one")), ("command", t("true"))]);
     let id = first_id(&events).unwrap();
     assert!(id.starts_with("exec-") && id.len() == 21, "{id}");
-    assert_eq!(made.get_text("exec_id"), Some(id.as_str()));
+    assert_eq!(made.get_text("exec"), Some(id.as_str()), "{made:?}");
+    assert_eq!(made.get_int("exit_code"), Some(0), "{made:?}");
+    assert_eq!(made.get_text("stop"), Some("cgroup"), "{made:?}");
+    let (short, events) = exec(&home, &[("workspace", t("d1:one")), ("command", t("true"))]);
+    let other = first_id(&events).unwrap();
+    assert_ne!(other, id);
+    // the short answer of a command that wrote nothing is its code alone
+    assert_eq!(layerfs_api::json::print(&short), r#"{"exit_code":0}"#);
     let frames = seen.lock().unwrap().clone();
     let sent: Vec<_> = frames
         .iter()
         .map(|f| f.get("more").unwrap().get_text("execId"))
         .collect();
-    assert_eq!(sent, [Some("build-7"), Some(id.as_str())]);
+    assert_eq!(sent, [Some(id.as_str()), Some(other.as_str())]);
     // the call's log tag travels with it, for the record the worker keeps
     // while the command runs (layerfs-project#178); a call with none sends none
     let tags: Vec<_> = frames
@@ -203,11 +219,12 @@ fn the_exec_id_is_the_first_event_and_travels_to_the_worker() {
         .map(|f| f.get("more").unwrap().get_text("tag"))
         .collect();
     assert_eq!(tags, [Some("dsh:s9:t1"), None]);
-    // a bad caller-named id is refused before anything is sent
+    // a caller cannot name the id: the option is gone, refused before
+    // anything is sent
     let args = SdkValue::map([
-        ("ws", t("d1:one")),
+        ("workspace", t("d1:one")),
         ("command", t("true")),
-        ("exec_id", t("a/b")),
+        ("exec_id", t("build-7")),
     ]);
     let refused = layerfs_api::call(Some(&home), "workspace.exec", args, &mut |_| {}).unwrap_err();
     assert_eq!(refused.code, "InvalidInput");
@@ -216,39 +233,49 @@ fn the_exec_id_is_the_first_event_and_travels_to_the_worker() {
 }
 
 #[test]
-fn exec_cancel_rides_the_sandbox_host_frame() {
+fn cancel_rides_the_sandbox_host_frame() {
     let seen = Seen::default();
     let home = home_with_sandbox("frame", seen.clone());
     let out = run(&mut layerfs(
         &home,
-        &[
-            "workspace",
-            "exec-cancel",
-            "d1:one",
-            "e1",
-            "--grace-ms",
-            "250",
-        ],
+        &["workspace", "cancel", "d1:one", "--exec", ID],
     ));
     assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
-    assert_eq!(
-        text(&out.stdout).trim(),
-        r#"{"outcome":"cancelled","signal":"SIGTERM"}"#
-    );
+    assert_eq!(text(&out.stdout).trim(), r#"{"signal":"SIGTERM"}"#);
+    let out = run(&mut layerfs(
+        &home,
+        &["workspace", "cancel", "d1:one", "--exec", ID, "--detail"],
+    ));
+    let long = layerfs_api::json::parse(text(&out.stdout).trim()).unwrap();
+    assert_eq!(long.get_text("outcome"), Some("cancelled"), "{long:?}");
+    let commands = long.get("commands").unwrap();
+    let SdkValue::List(commands) = commands else {
+        panic!("{long:?}")
+    };
+    assert_eq!(commands[0].get_text("exec"), Some(ID), "{long:?}");
     let frames = seen.lock().unwrap().clone();
-    assert_eq!(frames.len(), 1);
-    assert_eq!(frames[0].get_text("op"), Some("workspace.exec_cancel"));
+    assert_eq!(frames.len(), 2);
+    assert_eq!(frames[0].get_text("op"), Some("workspace.cancel"));
     let more = frames[0].get("more").unwrap();
     assert_eq!(more.get_text("path"), Some("one"));
-    assert_eq!(more.get_text("execId"), Some("e1"));
-    assert_eq!(more.get_int("graceMs"), Some(250));
-    // the help names it as the spec does
-    let help = run(&mut layerfs(&home, &["workspace", "exec-cancel", "--help"]));
+    assert_eq!(more.get_text("execId"), Some(ID));
+    assert!(more.get("graceMs").is_none(), "{more:?}");
+    // with no `--exec`, the frame names no command: every one running
+    run(&mut layerfs(&home, &["workspace", "cancel", "d1:one"]));
+    let frames = seen.lock().unwrap().clone();
+    assert_eq!(frames[2].get("more").unwrap().get_text("execId"), None);
+    // the help names it as the spec does; the old name is gone
+    let help = run(&mut layerfs(&home, &["workspace", "cancel", "--help"]));
     let help = text(&help.stdout) + &text(&help.stderr);
     assert!(
-        help.contains("<exec-id>") && help.contains("--grace-ms"),
+        help.contains("<workspace>") && help.contains("--exec"),
         "{help}"
     );
+    let old = run(&mut layerfs(
+        &home,
+        &["workspace", "exec-cancel", "d1:one", ID],
+    ));
+    assert_eq!(old.status.code(), Some(2), "{}", text(&old.stderr));
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -268,10 +295,10 @@ fn an_unreachable_worker_answers_unknown_and_changes_nothing() {
     let before = listing(&home);
     let out = run(&mut layerfs(
         &home,
-        &["workspace", "exec-cancel", "d1:one", "e1"],
+        &["workspace", "cancel", "d1:one", "--exec", ID],
     ));
     assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
-    assert_eq!(text(&out.stdout).trim(), r#"{"outcome":"unknown"}"#);
+    assert_eq!(text(&out.stdout).trim(), r#"{"unknown":true}"#);
     assert_eq!(listing(&home), before);
     std::fs::remove_dir_all(home).unwrap();
 }

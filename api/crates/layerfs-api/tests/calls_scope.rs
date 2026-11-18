@@ -220,11 +220,11 @@ fn a_scoped_workspace_call_needs_a_sandbox_of_its_project() {
         ("workspace.mount", map(&[("sandbox", t("theirs"))])),
         (
             "workspace.exec",
-            map(&[("ws", t("theirs:/w")), ("command", t("true"))]),
+            map(&[("workspace", t("theirs:w")), ("command", t("true"))]),
         ),
-        ("workspace.status", map(&[("ws", t("theirs:/w"))])),
-        ("workspace.unmount", map(&[("ws", t("nosuch:/w"))])),
-        ("workspace.commit", map(&[("ws", t("no-colon"))])),
+        ("workspace.status", map(&[("workspace", t("theirs:w"))])),
+        ("workspace.unmount", map(&[("workspace", t("nosuch:w"))])),
+        ("workspace.commit", map(&[("workspace", t("no-colon"))])),
     ] {
         let refused = scoped
             .owns(&home, layerfs_api::find(call_name).unwrap(), &args)
@@ -234,7 +234,7 @@ fn a_scoped_workspace_call_needs_a_sandbox_of_its_project() {
             "{call_name}"
         );
     }
-    let mine = map(&[("ws", t("mine:/w"))]);
+    let mine = map(&[("workspace", t("mine:w"))]);
     scoped
         .owns(&home, layerfs_api::find("workspace.status").unwrap(), &mine)
         .unwrap();
@@ -250,7 +250,7 @@ fn a_scoped_workspace_call_needs_a_sandbox_of_its_project() {
         &home,
         Some(&scoped),
         "workspace.status",
-        &[("ws", t("theirs:/w"))],
+        &[("workspace", t("theirs:w"))],
     );
     assert!(refused.unwrap_err().1.contains("out of scope: sandbox"));
     std::fs::remove_dir_all(home).unwrap();

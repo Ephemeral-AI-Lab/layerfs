@@ -258,10 +258,10 @@ fn check_args(
     let want: Vec<String> = (list(at(row, what)).iter())
         .map(|arg| renamed(pending, call, arg.get_text("name").unwrap()))
         .collect();
-    // a front end's function (`on_progress`) is the row's `progress`, not
-    // one of its options
+    // a front end's function `on_progress` is the row's `progress`, not
+    // one of its options; exec's output sinks are options of its row
     let args: Vec<&layerfs_api::Arg> = (args.iter())
-        .filter(|arg| arg.kind != Kind::Function)
+        .filter(|arg| arg.name != "on_progress")
         .collect();
     let have: Vec<&str> = args.iter().map(|arg| arg.name).collect();
     assert_eq!(have, want, "{call}: {what}");
@@ -275,6 +275,9 @@ fn check_args(
         if let Some(SdkValue::Bool(redact)) = said.get("redact") {
             assert_eq!(arg.redacted(), *redact, "{spot}: redact");
         }
+        let repeated = list(at(row, "repeat")).contains(&SdkValue::text(arg.name))
+            || at(said, "repeat") == &SdkValue::Bool(true);
+        assert_eq!(arg.repeat, repeated, "{spot}: repeat");
         if let Some(shell) = said.get("shell") {
             assert_eq!(
                 arg.shell.map(SdkValue::text).unwrap_or_default(),
@@ -360,7 +363,7 @@ fn check_entry(pending: &SdkValue, entry: &Call, row: &SdkValue) {
     // what the shell reads from stdin, as the arguments say it
     let stdin = if (entry.args.iter().chain(entry.options)).any(|arg| arg.shell.is_some()) {
         Some("secret")
-    } else if entry.args.iter().any(|arg| arg.kind == Kind::Content) {
+    } else if (entry.args.iter().chain(entry.options)).any(|arg| arg.kind == Kind::Content) {
         Some("content")
     } else if entry.args.iter().any(|arg| arg.kind == Kind::Json) {
         Some("json")

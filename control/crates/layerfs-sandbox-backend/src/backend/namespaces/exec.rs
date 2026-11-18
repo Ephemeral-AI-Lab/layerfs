@@ -2,7 +2,8 @@
 //! Sandbox's mount, PID and IPC namespaces, becomes uid:gid with no
 //! capabilities and no-new-privs, and runs the command there. The streams are
 //! the helper's own pipes; nothing of this process's environment but the
-//! search path reaches it, and no stdin is offered.
+//! search path reaches it. Its standard input is the request's bytes, given
+//! whole once it runs, or `/dev/null` with none.
 use super::{cgroup, sandbox::Sandbox};
 use crate::local::search::search_path;
 use crate::local::streams;
@@ -109,6 +110,8 @@ impl Sandbox {
             .arg(cgroup::helper_group(&self.cgroup));
         // the helper's stdin is one end of a socket: it writes one byte
         // there once the command is in its group, and its exit closes it
+        // (and, with `--stdin inherit`, the command's standard input: the
+        // request's bytes are written on this end once it runs)
         let mut ready = None;
         if let Some((path, _)) = &group {
             let (ours, theirs) = UnixStream::pair().map_err(|error| self.io(error))?;
@@ -117,8 +120,13 @@ impl Sandbox {
                 .arg(path)
                 .stdin(Stdio::from(OwnedFd::from(theirs)));
             ready = Some(ours);
+        } else if request.stdin.is_some() {
+            command.stdin(Stdio::piped());
         } else {
             command.stdin(Stdio::null());
+        }
+        if request.stdin.is_some() {
+            command.arg("--stdin").arg("inherit");
         }
         let traced = steps::helper_file();
         if let Some(file) = &traced {
@@ -166,13 +174,26 @@ impl Sandbox {
         // this process's copy of the helper's end goes, so the helper's
         // exit is an end of file here
         drop(command);
-        let refused = match (ready, group) {
-            (Some(ready), Some((path, slot))) => told(ready, path, slot),
-            _ => None,
+        let (refused, input) = match (ready, group) {
+            (Some(mut ready), Some((path, slot))) => {
+                let (refused, started) = told(&mut ready, path, slot);
+                (refused, started.then_some(Input::Socket(ready)))
+            }
+            _ => (None, child.stdin.take().map(Input::Pipe)),
         };
         let out = child.stdout.take();
         let err = child.stderr.take();
         let copied = std::thread::scope(|scope| {
+            scope.spawn(move || match input {
+                Some(Input::Socket(socket)) => {
+                    if let Some(bytes) = request.stdin.as_deref() {
+                        let _ = (&socket).write_all(bytes);
+                    }
+                    let _ = socket.shutdown(std::net::Shutdown::Write);
+                }
+                Some(Input::Pipe(pipe)) => streams::feed(Some(pipe), request.stdin.as_deref()),
+                None => {}
+            });
             let errors = scope.spawn(move || streams::copy(err, stderr));
             let outs = streams::copy(out, stdout);
             let errs = errors
@@ -211,28 +232,41 @@ impl Sandbox {
     }
 }
 
+/// Where a command's standard input is written: the helper's socket (a
+/// command in its own group), or the helper's stdin pipe.
+enum Input {
+    Socket(UnixStream),
+    Pipe(std::process::ChildStdin),
+}
+
 /// Waits for the helper to say the command is in its group `path` (one
-/// byte on `ready`), then tells `slot` its stop handle. Bounded by the
-/// helper: its exit ends the wait, with nothing told (the command did not
-/// start). A slot that refuses it as interrupted (a cancel came first) has
-/// the command ended at once with the kill and runs on to its exit, which then reports
-/// the signal; any other refusal ends it too and is the error returned.
-fn told(mut ready: UnixStream, path: &Path, slot: ExecSlot<'_>) -> Option<io::Error> {
+/// byte on `ready`), then tells `slot` its stop handle; with it, whether
+/// the command started. Bounded by the helper: its exit ends the wait,
+/// with nothing told (the command did not start). A slot that refuses it
+/// as interrupted (a cancel came first) has the command ended at once with
+/// the kill and runs on to its exit, which then reports the signal; any
+/// other refusal ends it too and is the error returned.
+fn told(ready: &mut UnixStream, path: &Path, slot: ExecSlot<'_>) -> (Option<io::Error>, bool) {
     let mut byte = [0u8; 1];
     if !matches!(ready.read(&mut byte), Ok(1)) {
-        return None;
+        return (None, false);
     }
     let handle = Stop::Cgroup {
         path: path.to_path_buf(),
     };
-    let error = (slot.spawned)(&handle).err()?;
+    let Err(error) = (slot.spawned)(&handle) else {
+        return (None, true);
+    };
     // the cancel was answered as SIGKILL: no SIGTERM first, which a
     // default disposition makes fatal at once and reports as 143
     let _ = stop::kill(&handle);
-    (error.kind() != io::ErrorKind::Interrupted).then_some(error)
+    (
+        (error.kind() != io::ErrorKind::Interrupted).then_some(error),
+        true,
+    )
 }
 
-/// The Engine's own checks of an ordinary command, and no stdin.
+/// The Engine's own checks of an ordinary command.
 fn check(request: &ExecRequest) -> Result<(), RuntimeError> {
     request.identity.check()?;
     if request.arguments.is_empty()
@@ -247,9 +281,6 @@ fn check(request: &ExecRequest) -> Result<(), RuntimeError> {
     }
     if (request.environment.iter()).any(|v| !v.contains('=') || v.starts_with('=')) {
         return Err(RuntimeError::Protocol("ordinary environment field"));
-    }
-    if request.stdin {
-        return Err(RuntimeError::Unsupported("local command standard input"));
     }
     Ok(())
 }

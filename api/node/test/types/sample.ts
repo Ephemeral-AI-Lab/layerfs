@@ -27,7 +27,7 @@ async function main(): Promise<void> {
   await lfs.file.write("shop/api", "agent", "/a.bin", Buffer.from([0, 1, 255]), { message: "bytes", mode: 0o644 });
   await lfs.file.write("shop/api", "agent", "/a.txt", "text");
   await lfs.file.apply("shop/api", "agent", [{ op: "write", path: "/a", content: new Uint8Array([0, 255]) }], { message: "m" });
-  await lfs.workspace.exec("ws", "ls", { stream: true, stdout: (bytes) => process.stdout.write(bytes), stderr: (bytes) => void bytes });
+  await lfs.workspace.exec("shop:dev", "ls", { stream: true, stdout: (bytes) => process.stdout.write(bytes), stderr: (bytes) => void bytes });
   await lfs.machine.create("vm", "lima", { cpus: 2, memory: "8G", disk: 8589934592n });
   await lfs.machine.images("lima1");
   await lfs.sandbox.create("shop/api", "dev", "lima1", {
@@ -41,7 +41,7 @@ async function main(): Promise<void> {
     branch: "main", on_progress: (p) => progress.push(p),
   });
   await lfs.project.export("shop/api", "/exports/api-default");
-  const cancelled: Result = await lfs.workspace.exec_cancel("ws", "exec-0123456789abcdef", { grace_ms: 1_000 });
+  const cancelled: Result = await lfs.workspace.cancel("shop:dev", { exec: "exec-0123456789abcdef" });
   const report = await doctor({ home: "/tmp/home" });
   const worst: string | undefined = report.findings[0]?.severity;
   const closed: number = close();
@@ -76,5 +76,5 @@ void lfs.machine.create("vm", "lima", { memory: true });
 void client({ scope: { folder: "/web" } });
 // @ts-expect-error export has no commit option
 void lfs.project.export("shop/api", "/exports/api", { commit: "main" });
-// @ts-expect-error a cancel grace is a whole number
-void lfs.workspace.exec_cancel("ws", "exec-1", { grace_ms: "5s" });
+// @ts-expect-error a cancel's exec id is text
+void lfs.workspace.cancel("shop:dev", { exec: 1 });

@@ -86,7 +86,7 @@ fn run(sandbox: &Sandbox, arguments: &[&str], environment: &[&str]) -> (i32, Str
         arguments: arguments.iter().map(|a| a.to_string()).collect(),
         environment: environment.iter().map(|a| a.to_string()).collect(),
         directory: sandbox.directory().display().to_string(),
-        stdin: false,
+        stdin: None,
     };
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let exit = sandbox.run(&request, &mut out, &mut err).unwrap();
@@ -252,18 +252,46 @@ fn a_command_runs_as_its_identity_in_its_directory_with_only_its_environment() {
         &[],
     );
     assert_eq!((code, out.len(), err.len()), (0, 300000, 200000));
-    // refused before any effect: root, stdin, a relative directory, a bad variable
+    // the request's stdin, given whole and then closed (call surface 2.0
+    // `workspace exec --stdin`); more than one pipe holds, read in full
+    let input = ExecRequest {
+        identity,
+        arguments: vec![
+            "bash".into(),
+            "-c".into(),
+            "wc -c; head -c 3 /dev/stdin".into(),
+        ],
+        environment: Vec::new(),
+        directory: sandbox.directory().display().to_string(),
+        stdin: Some(vec![b'x'; 200_000]),
+    };
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let exit = sandbox.run(&input, &mut out, &mut err).unwrap();
+    assert_eq!(
+        (exit.code, String::from_utf8(out).unwrap().trim()),
+        (0, "200000")
+    );
+    // a command that never reads its stdin still ends
+    let mut unread = input.clone();
+    unread.arguments = vec!["true".into()];
+    assert_eq!(
+        sandbox
+            .run(&unread, &mut Vec::new(), &mut Vec::new())
+            .unwrap()
+            .code,
+        0
+    );
+    // refused before any effect: root, a relative directory, a bad variable
     let mut request = ExecRequest {
         identity,
         arguments: vec!["true".into()],
         environment: Vec::new(),
         directory: "/".into(),
-        stdin: false,
+        stdin: None,
     };
     for change in [
         (|r: &mut ExecRequest| r.identity = CommandIdentity { uid: 0, gid: 0 })
             as fn(&mut ExecRequest),
-        |r| r.stdin = true,
         |r| r.directory = "relative".into(),
         |r| r.environment = vec!["NOEQUALS".into()],
         |r| r.arguments = Vec::new(),

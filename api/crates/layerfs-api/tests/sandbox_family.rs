@@ -96,7 +96,7 @@ fn named_sandboxes_on_native() {
         "NotFound"
     );
     assert_eq!(
-        call(&home, "workspace.status", &[("ws", t("t1"))])
+        call(&home, "workspace.status", &[("workspace", t("t1"))])
             .unwrap_err()
             .0,
         "InvalidInput"
@@ -165,28 +165,32 @@ fn named_sandboxes_on_native() {
         "workspace.mount",
         &[("sandbox", t("t1")), ("branch", t("dev"))],
     );
-    let ws = text(&mounted, "ws");
+    let ws = text(&mounted, "workspace");
     let ran = ok(
         &home,
         "workspace.exec",
         &[
-            ("ws", t(&ws)),
+            ("workspace", t(&ws)),
             ("command", t("cat README.md && echo made > NEW.md")),
         ],
     );
     assert_eq!(ran.get("exit_code"), Some(&SdkValue::Int(0)), "{ran:?}");
     assert_eq!(text(&ran, "stdout"), "in a sandbox\n");
-    let status = ok(&home, "workspace.status", &[("ws", t(&ws))]);
-    let entries = status.get("overlay").and_then(|o| o.get_int("entries"));
-    assert_eq!(entries, Some(1), "one changed path: {status:?}");
+    let status = ok(&home, "workspace.status", &[("workspace", t(&ws))]);
+    let SdkValue::List(changes) = status.get("changes").unwrap() else {
+        panic!("{status:?}")
+    };
+    assert_eq!(changes.len(), 1, "one changed path: {status:?}");
+    assert_eq!(changes[0].get_text("path"), Some("/NEW.md"), "{status:?}");
+    assert_eq!(changes[0].get_text("change"), Some("added"), "{status:?}");
     ok(
         &home,
         "workspace.commit",
-        &[("ws", t(&ws)), ("message", t("from a sandbox"))],
+        &[("workspace", t(&ws)), ("message", t("from a sandbox"))],
     );
     let got = ok(&home, "sandbox.get", &[("name", t("t1"))]);
     assert!(layerfs_api::json::print(&got).contains(&ws[3..]), "{got:?}");
-    ok(&home, "workspace.unmount", &[("ws", t(&ws))]);
+    ok(&home, "workspace.unmount", &[("workspace", t(&ws))]);
     let read = ok(
         &home,
         "file.read",
@@ -205,25 +209,29 @@ fn named_sandboxes_on_native() {
         let mounted = ok(
             &home,
             "workspace.mount",
-            &[("sandbox", t("t1")), ("branch", t("dev"))],
+            &[
+                ("sandbox", t("t1")),
+                ("branch", t("dev")),
+                ("name", t(content)),
+            ],
         );
-        let ws = text(&mounted, "ws");
+        let ws = text(&mounted, "workspace");
         let command = format!("echo {content} > SAME.md");
         ok(
             &home,
             "workspace.exec",
-            &[("ws", t(&ws)), ("command", t(&command))],
+            &[("workspace", t(&ws)), ("command", t(&command))],
         );
         both.push(ws);
     }
-    ok(&home, "workspace.commit", &[("ws", t(&both[0]))]);
+    ok(&home, "workspace.commit", &[("workspace", t(&both[0]))]);
     let forced = ok(
         &home,
         "workspace.commit",
-        &[("ws", t(&both[1])), ("force", SdkValue::Bool(true))],
+        &[("workspace", t(&both[1])), ("force", SdkValue::Bool(true))],
     );
-    assert_eq!(forced.get_text("kind"), Some("Committed"), "{forced:?}");
-    assert_eq!(forced.get("merged"), Some(&SdkValue::Null), "{forced:?}");
+    assert!(forced.get_text("commit").is_some(), "{forced:?}");
+    assert_eq!(forced.get("merged"), None, "{forced:?}");
     let same = ok(
         &home,
         "file.read",
@@ -242,18 +250,27 @@ fn named_sandboxes_on_native() {
         Some(&home),
         "workspace.exec",
         SdkValue::map([
-            ("ws", t(&both[0])),
+            ("workspace", t(&both[0])),
             (
                 "command",
                 t("head -c 3000000 /dev/zero | tr '\\0' a; printf '\\377' >&2"),
             ),
+            ("detail", SdkValue::Bool(true)),
         ]),
         &mut |event| events.push(event),
     )
     .unwrap();
-    assert_eq!(big.get("stdout"), Some(&SdkValue::Null), "{big:?}");
+    // the answer holds the last 1 MiB and names the file that holds all
+    let tail = big.get_text("stdout").unwrap_or("");
+    assert_eq!(tail.len(), 1 << 20, "{big:?}");
+    let file = big
+        .get_text("stdout_file")
+        .expect("a spilled stream's file");
+    assert_eq!(
+        std::fs::metadata(file).map(|m| m.len()).ok(),
+        Some(3_000_000)
+    );
     assert_eq!(big.get_int("stdout_bytes"), Some(3_000_000), "{big:?}");
-    assert_eq!(big.get("streamed"), Some(&SdkValue::Bool(true)), "{big:?}");
     assert_eq!(
         big.get("stderr"),
         Some(&SdkValue::Bytes(vec![0xff])),

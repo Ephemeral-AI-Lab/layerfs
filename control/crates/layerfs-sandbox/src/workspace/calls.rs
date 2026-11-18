@@ -9,7 +9,7 @@ use crate::route::{on_machine, reach, Asked};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::names::{WorkspaceAt, WorkspaceName, WorkspaceRef};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::outcome::{refused, with_fix, Outcome};
 use layerfs_machine::worker::Unreached;
 use std::path::{Path, PathBuf};
 
@@ -22,17 +22,48 @@ pub struct MountRequest {
     pub sandbox: String,
     /// The Branch it mounts.
     pub branch: Option<String>,
-    /// A name, unique in the Sandbox, which `ws` then uses (#536 C3).
+    /// A name, unique in the Sandbox, which `ws` then uses (#536 C3);
+    /// with none, the Branch's name made valid ([`default_name`]).
     pub name: Option<String>,
 }
 
 /// A Workspace just mounted.
 pub struct Mounted {
-    /// What names it from then on: `<sandbox>:<name>`, or
-    /// `<sandbox>:<path>` when it has no name.
+    /// What names it from then on: `<sandbox>:<name>`.
     pub ws: String,
     /// Its side's answer.
     pub answer: SdkValue,
+}
+
+/// The name a mount gives a Workspace of Branch `branch` when the caller
+/// names none (call surface 2.0): the Branch's name lowercased, each
+/// character outside the Workspace name alphabet (lowercase letters,
+/// digits, `_`, `.`, `-`) replaced by `-`, cut to 63 characters and `_`,
+/// `.` and `-` trimmed from its ends. A Branch whose default is then empty
+/// or reserved is refused `InvalidInput` with a `fix` naming `--name`.
+pub fn default_name(sandbox: &str, branch: &str) -> Result<WorkspaceName> {
+    let mapped: String = (branch.chars())
+        .map(|c| c.to_ascii_lowercase())
+        .map(|c| match c {
+            'a'..='z' | '0'..='9' | '_' | '.' | '-' => c,
+            _ => '-',
+        })
+        .take(63)
+        .collect();
+    let trimmed = mapped.trim_matches(|c| matches!(c, '_' | '.' | '-'));
+    WorkspaceName::parse(trimmed).map_err(|_| {
+        let refusal = refused(
+            "InvalidInput",
+            format!(
+                "Branch {branch} gives no valid Workspace name ({trimmed:?}); name the Workspace \
+                 with --name"
+            ),
+        );
+        with_fix(
+            refusal,
+            format!("layerfs workspace mount {sandbox} {branch} --name <name>"),
+        )
+    })
 }
 
 /// `workspace.commit(ws, { message, force })`.
@@ -44,6 +75,8 @@ pub struct CommitRequest {
     pub message: Message,
     /// Publish over a moved head instead of merging; `None` when not sent.
     pub force: Option<bool>,
+    /// The Commit the Branch's head must be ([`expected_commit`]).
+    pub expected: Option<String>,
 }
 
 /// `workspace.unmount(ws, { discard, force })`.
@@ -57,11 +90,29 @@ pub struct UnmountRequest {
     pub force: Option<bool>,
 }
 
-/// `workspace.status(ws)`.
+/// `workspace.status(ws, { path })`.
 #[derive(Clone, Debug, Default)]
 pub struct StatusRequest {
     /// The Workspace.
     pub ws: String,
+    /// Only the changes under this folder of the Workspace.
+    pub path: Option<String>,
+}
+
+/// SWITCH POINT (F-hist): the Commit `--expected` names, as the full id the
+/// Store keeps (66 hex digits). Package F-hist builds the one Store
+/// function that resolves a Commit reference (a full id or an 8+ hex
+/// prefix); until it lands, a full id is taken as it is and a prefix is
+/// refused `InvalidInput` here. Replace this body with that resolver.
+pub fn expected_commit(text: &str) -> Result<String> {
+    let hex = text.len() == 66 && text.bytes().all(|b| b.is_ascii_hexdigit());
+    match hex {
+        true => Ok(text.to_ascii_lowercase()),
+        false => Err(refused(
+            "InvalidInput",
+            format!("--expected is a full Commit id (66 hex digits) in this build, not {text:?}"),
+        )),
+    }
 }
 
 /// A Workspace of the Sandbox, named `ws` from then on.
@@ -72,31 +123,52 @@ pub fn mount(home: &Path, events: &mut Events<'_>, request: &MountRequest) -> Re
     // refused while a create or close holds the Sandbox, or left it
     // unresolved (#536 §7.1)
     record.free()?;
-    // a name, unique in the Sandbox, which `ws` then uses (#536 C3)
+    let branch = request.branch.as_deref().unwrap_or("");
+    if branch == "main" {
+        // main is the project's line of Layers, not a Branch (#535 terminal pass)
+        let project = record.project().unwrap_or("<project>").to_owned();
+        let refusal = refused(
+            "InvalidInput",
+            "main is the project's published line, not a Branch, and is not mounted: fork a Branch from it and mount that",
+        );
+        return Err(with_fix(
+            refusal,
+            format!("layerfs branch fork {project} <name> main"),
+        ));
+    }
+    // a name, unique in the Sandbox, which `ws` then uses (#536 C3); by
+    // default the Branch's own, made valid
     let named = match &request.name {
-        Some(text) => Some(WorkspaceName::parse(text)?),
-        None => None,
+        Some(text) => WorkspaceName::parse(text)?,
+        None => default_name(name, branch)?,
     };
     let call = Call::Mount {
         branch: request.branch.clone(),
-        name: named.as_ref().map(|named| named.as_str().to_owned()),
+        name: Some(named.as_str().to_owned()),
+    };
+    let taken = |refusal: SdkRefusal| match refusal.code.as_str() {
+        "Exists" => with_fix(
+            refusal,
+            format!("layerfs workspace mount {name} {branch} --name {named}-2"),
+        ),
+        _ => refusal,
     };
     // a Sandbox whose daemon this host reaches is mounted from here
     // (#535 G4); every other through its machine
     let mounted = match direct::forwarded(&record) {
-        true => crate::workspace::direct::call(&home, events, &record, call, Message::Absent)?,
+        true => crate::workspace::direct::call(&home, events, &record, call, Message::Absent),
         false => on_machine(
             &home,
             events,
             &record,
             call,
             crate::workspace::dispatch::call,
-        )?,
+        ),
     };
-    let path = mounted.get_text("path").unwrap_or("").to_owned();
+    let mounted = mounted.map_err(taken)?;
     let ws = WorkspaceRef {
         sandbox: name.to_owned(),
-        at: named.map_or(WorkspaceAt::Path(path), WorkspaceAt::Name),
+        at: WorkspaceAt::Name(named),
     };
     Ok(Mounted {
         ws: ws.to_string(),
@@ -125,6 +197,18 @@ pub(crate) struct At {
 pub(crate) fn at(home: &Path, ws: &str, reads: bool, exec: bool) -> Result<At> {
     let home = home.to_path_buf();
     let ws = WorkspaceRef::parse(ws)?;
+    // every Workspace has a name: the path form of the handle is gone
+    // (call surface 2.0)
+    if let WorkspaceAt::Path(path) = &ws.at {
+        return Err(refused(
+            "InvalidInput",
+            format!(
+                "a Workspace is <sandbox>:<name>, not the path {path}; `layerfs workspace list \
+                 --sandbox {}` lists the names",
+                ws.sandbox
+            ),
+        ));
+    }
     let record = sandbox_of(&home, &ws.sandbox)?;
     // a status only reads; every other call is refused while an intent
     // holds the Sandbox
@@ -176,10 +260,16 @@ fn changing(events: &mut Events<'_>, at: At, call: Call, message: Message) -> Ou
 
 /// `workspace.commit`: the Workspace's changes as one Commit.
 pub fn commit(home: &Path, events: &mut Events<'_>, request: &CommitRequest) -> Outcome {
+    let expected = request
+        .expected
+        .as_deref()
+        .map(expected_commit)
+        .transpose()?;
     let at = at(home, &request.ws, false, false)?;
     let call = Call::Commit {
         path: Some(at.path.clone()),
         force: request.force,
+        expected,
     };
     changing(events, at, call, request.message.clone())
 }
@@ -215,6 +305,7 @@ pub fn status(home: &Path, events: &mut Events<'_>, request: &StatusRequest) -> 
     let at = at(home, &request.ws, true, false)?;
     let call = Call::Status {
         path: Some(at.path.clone()),
+        under: request.path.clone(),
     };
     if at.forwarded {
         return crate::workspace::direct::call(&at.home, events, &at.record, call, Message::Absent);

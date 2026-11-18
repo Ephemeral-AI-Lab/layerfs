@@ -146,4 +146,12 @@ impl WorkspaceRecord {
             _ => None,
         })
     }
+
+    /// When its mount recorded it, in milliseconds since 1970.
+    pub fn created(&self) -> Option<i64> {
+        self.fields.get(|f| match f {
+            Field::Created(n) => Some(*n),
+            _ => None,
+        })
+    }
 }

@@ -1,4 +1,5 @@
-//! Real native exec framing; no stand-in command output or cancellation.
+//! Real native exec output, exit codes and cancellation from another
+//! process (call surface 2.0); no stand-in command output.
 mod common;
 use common::{broken_pipe, finish, layerfs, run, tempdir, text};
 use layerfs_api::{home, json};
@@ -19,12 +20,6 @@ fn call(home: &Path, method: &str, args: &[(&str, SdkValue)]) -> SdkValue {
         &mut |_| {},
     )
     .unwrap_or_else(|r| panic!("{method}: {r:?}"))
-}
-fn frames(bytes: &[u8]) -> Vec<SdkValue> {
-    text(bytes)
-        .lines()
-        .map(|line| json::parse(line).unwrap())
-        .collect()
 }
 #[test]
 fn native_exec_keeps_large_binary_output_cancellation_and_effects_on_closed_stdout() {
@@ -72,101 +67,91 @@ fn native_exec_keeps_large_binary_output_cancellation_and_effects_on_closed_stdo
             ("name", t("one")),
         ],
     );
+    // --stream: the output, whole and as bytes, on this process's streams,
+    // and the command's code as the exit
     let script = r"head -c 1100000 /dev/zero | tr '\0' x; printf '\377\376' >&2; exit 125";
     let out = run(&mut layerfs(
         &home,
-        &["workspace", "exec", "s1:one", script, "--events"],
+        &["workspace", "exec", "s1:one", script, "--stream"],
     ));
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
-    assert!(out.stderr.is_empty());
-    let frames = frames(&out.stdout);
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-    for frame in &frames {
-        let bytes = match frame.get("bytes") {
-            Some(SdkValue::Text(s)) => s.as_bytes(),
-            Some(SdkValue::Bytes(b)) => b,
-            _ => continue,
-        };
-        match frame.get_text("stream") {
-            Some("stdout") => stdout.extend_from_slice(bytes),
-            Some("stderr") => stderr.extend_from_slice(bytes),
-            _ => panic!("{frame:?}"),
-        }
-    }
-    assert_eq!(stdout, vec![b'x'; 1100000]);
-    assert_eq!(stderr, [0xff, 0xfe]);
-    assert_eq!(
-        frames.iter().filter(|f| f.get("result").is_some()).count(),
-        1
-    );
-    assert_eq!(
-        frames
-            .last()
-            .unwrap()
-            .get("result")
-            .unwrap()
-            .get_int("exit_code"),
-        Some(125)
-    );
+    assert_eq!(out.status.code(), Some(125), "{}", text(&out.stderr));
+    assert_eq!(out.stdout, vec![b'x'; 1100000]);
+    assert_eq!(out.stderr, [0xff, 0xfe]);
+    // without it: the answer is printed, the exit is still the command's;
+    // a stream past 1 MiB is its last 1 MiB, with the file that holds it
+    let big = run(&mut layerfs(
+        &home,
+        &["workspace", "exec", "s1:one", script, "--detail"],
+    ));
+    assert_eq!(big.status.code(), Some(125), "{}", text(&big.stderr));
+    let result = json::parse(text(&big.stdout).trim()).unwrap();
+    assert_eq!(result.get_int("stdout_bytes"), Some(1100000), "{result:?}");
+    assert_eq!(result.get_text("stdout").map(str::len), Some(1 << 20));
+    let file = result
+        .get_text("stdout_file")
+        .expect("the spilled stream's file");
+    assert_eq!(std::fs::metadata(file).unwrap().len(), 1100000);
     let two = run(&mut layerfs(
         &home,
-        &["workspace", "exec", "s1:one", "exit 2", "--events"],
+        &["workspace", "exec", "s1:one", "exit 2"],
     ));
-    assert_eq!(two.status.code(), Some(0));
-    assert_eq!(frames_of_result(&two.stdout).get_int("exit_code"), Some(2));
-    call(
-        &home,
-        "workspace.exec_cancel",
-        &[("ws", t("s1:one")), ("exec_id", t("early-framed"))],
+    assert_eq!(two.status.code(), Some(2));
+    let result = json::parse(text(&two.stdout).trim()).unwrap();
+    assert_eq!(result.get_int("exit_code"), Some(2));
+    // a cancel from another process ends a running command: its exec
+    // answers `cancelled`, exiting with the signal's code
+    let sleeping = layerfs(&home, &["workspace", "exec", "s1:one", "sleep 600"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let cancel = call(&home, "workspace.cancel", &[("workspace", t("s1:one"))]);
+        if cancel.get_text("signal").is_some() {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < until,
+            "never running: {cancel:?}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let cancelled = finish(sleeping);
+    let result = json::parse(text(&cancelled.stdout).trim()).unwrap();
+    assert_eq!(
+        result.get("cancelled"),
+        Some(&SdkValue::Bool(true)),
+        "{result:?}"
     );
-    let cancelled = run(&mut layerfs(
-        &home,
-        &[
-            "workspace",
-            "exec",
-            "s1:one",
-            "sleep 600",
-            "--exec-id",
-            "early-framed",
-            "--events",
-        ],
-    ));
-    assert_eq!(cancelled.status.code(), Some(0));
-    let result = frames_of_result(&cancelled.stdout);
-    assert_eq!(result.get_text("kind"), Some("cancelled"));
-    assert_eq!(result.get_int("exit_code"), Some(137));
+    let code = result.get_int("exit_code").unwrap();
+    assert!(code == 143 || code == 137, "{result:?}");
+    assert_eq!(cancelled.status.code(), Some(code as i32));
+    // a closed stdout does not undo the command's effect or its exit
     let child = layerfs(
         &home,
-        &[
-            "workspace",
-            "exec",
-            "s1:one",
-            "echo effect > kept",
-            "--events",
-        ],
+        &["workspace", "exec", "s1:one", "echo effect > kept"],
     )
     .stdout(broken_pipe("phase1-live"))
     .stderr(Stdio::piped())
     .spawn()
     .unwrap();
     let closed = finish(child);
-    assert_eq!(closed.status.code(), Some(125));
+    assert_eq!(closed.status.code(), Some(0));
     let kept = std::fs::read(Path::new(mounted.get_text("path").unwrap()).join("kept")).unwrap();
     assert_eq!(kept, b"effect\n");
     call(
         &home,
         "workspace.unmount",
-        &[("ws", t("s1:one")), ("discard", SdkValue::Bool(true))],
+        &[
+            ("workspace", t("s1:one")),
+            ("discard", SdkValue::Bool(true)),
+        ],
     );
     call(&home, "sandbox.close", &[("name", t("s1"))]);
     layerfs_api::close_idle(std::time::Duration::ZERO);
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(source).unwrap();
-}
-fn frames_of_result(bytes: &[u8]) -> SdkValue {
-    let f = frames(bytes);
-    f.last().unwrap().get("result").unwrap().clone()
 }
 
 #[cfg(feature = "machine")]
@@ -181,7 +166,8 @@ fn cli_json_keeps_i64_above_double_precision() {
         &home,
         &["workspace", "exec", "d1:one", "exit 9007199254740993"],
     ));
-    assert!(out.status.success(), "{}", text(&out.stderr));
+    // a code past 0..=255 exits 1; the answer keeps it whole
+    assert_eq!(out.status.code(), Some(1), "{}", text(&out.stderr));
     let value = json::parse(text(&out.stdout).trim()).unwrap();
     assert_eq!(value.get_int("exit_code"), Some(9007199254740993));
     assert!(text(&out.stdout).contains("9007199254740993"));
