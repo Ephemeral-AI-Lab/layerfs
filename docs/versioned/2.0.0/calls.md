@@ -1120,7 +1120,7 @@ layerfs home doctor                 # the home, then each machine, PostgreSQL St
 layerfs machine doctor <machine>    # the machine, then each Store and Sandbox on it
 layerfs store doctor <store> [--machine <machine>]   # the Store, then each of its projects
 layerfs project doctor <project>    # the project's record against its Store's own list
-layerfs sandbox doctor <sandbox>    # the Sandbox: record, runtime, daemon
+layerfs sandbox doctor <sandbox>    # the Sandbox: record, runtime, daemon; then each of its Workspaces
 layerfs backup doctor <bucket> [--full]               # the bucket's record and reach; --full writes and reads one object
 ```
 
@@ -1129,7 +1129,7 @@ every check was made and nothing was found; otherwise `findings` and
 `not_checked`, each present only with entries:
 
 ```json
-{"findings":[{"store":"bad","check":"host.records","severity":"error","message":"…","fix":"…"}],
+{"findings":[{"store":"bad","check":"home.records","severity":"error","message":"…"}],
  "not_checked":[{"sandbox":"sb","blocked_by":{"machine":"docker","reason":"stopped"}}]}
 ```
 
@@ -1150,13 +1150,20 @@ every check was made and nothing was found; otherwise `findings` and
   or could not be checked.
 - The doctor checks its own thing, then each thing on it. A thing whose
   parent is stopped or failed is `not_checked` with `blocked_by`, and none
-  of its checks is tried; a stopped machine is checked by its records only.
+  of its checks is tried; a stopped machine gets no worker checks.
   Each thing has its own time budget; a check still running when it ends is
   `not_checked` with `timeout`.
 - `--progress` (`on_progress`) sends one event per finished thing:
   `{ phase, done, total, node }`, `phase` `self` then the kind of thing
-  (`machines`, `stores`, `projects`, `sandboxes`, `buckets`). `backup doctor`
-  sends none.
+  (`machines`, `stores`, `projects`, `sandboxes`, `workspaces`, `buckets`).
+  `backup doctor` sends none.
+- A Workspace has no doctor of its own: `sandbox doctor` reads its daemon's
+  list once and gives each Workspace it lists or the home records one node,
+  `<sandbox>:<name>`, with `workspace.mounted` and `workspace.activity`; a
+  failed or uncertain one is an error fixed by `layerfs workspace unmount
+  <workspace> --discard --force`. A daemon that is not ready leaves its
+  Workspaces `not_checked`, blocked by the Sandbox (or its machine's
+  worker), and none is tried.
 - `project doctor --full` is refused `Unsupported` (not built yet). `store
   doctor --machine` is for a PostgreSQL Store; a sqlite Store refuses it.
 - `--text` prints a count line (`N error(s), N warning(s), N notice(s), N

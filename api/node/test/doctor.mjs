@@ -32,9 +32,10 @@ test("home.doctor names a record that does not parse and its fix", async () => {
   const report = await lfs.home.doctor();
   assert.equal(report.ok, undefined);
   const finding = report.findings.find((found) => found.store === "bad");
-  assert.equal(finding.check, "host.records");
+  assert.equal(finding.check, "home.records");
   assert.equal(finding.severity, "error");
-  assert.match(finding.fix, /by hand/);
+  assert.match(finding.message, /by hand/);
+  assert.equal(finding.fix, undefined);
   rmSync(home, { recursive: true, force: true });
 });
 
