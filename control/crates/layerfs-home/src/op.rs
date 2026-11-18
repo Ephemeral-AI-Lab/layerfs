@@ -77,6 +77,13 @@ impl Op {
         self.fields.get_text("name").unwrap_or("")
     }
 
+    /// The operation's call word, as a state's `op.name` shows it: the
+    /// name without its family (`create` for `machine.create`).
+    pub fn word(&self) -> &str {
+        let name = self.name();
+        name.rsplit_once('.').map_or(name, |(_, word)| word)
+    }
+
     /// The phase it last recorded.
     pub fn phase(&self) -> &str {
         self.fields.get_text("phase").unwrap_or("")
@@ -196,6 +203,23 @@ impl Op {
             ("phase", copied("phase")),
             ("started", copied("started")),
             ("uncertain", SdkValue::Bool(self.uncertain())),
+        ])
+    }
+
+    /// When it began, in milliseconds since 1970.
+    pub fn started_ms(&self) -> Option<i64> {
+        self.fields.get_int("started")
+    }
+
+    /// The intent as a state's companion and a refusal's `op` show it
+    /// (call surface 2.0): `{ name, phase, started_at }`, the name its call
+    /// word.
+    pub fn shown(&self) -> SdkValue {
+        let started = self.started_ms().map(crate::time::iso);
+        SdkValue::map([
+            ("name", SdkValue::text(self.word())),
+            ("phase", SdkValue::text(self.phase())),
+            ("started_at", SdkValue::opt_text(started)),
         ])
     }
 

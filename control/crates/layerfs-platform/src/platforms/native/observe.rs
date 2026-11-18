@@ -11,6 +11,7 @@ pub(crate) fn status() -> Status {
     let missing = native_missing(HostOs::current());
     Status {
         state: State::Running,
+        kernel: Some(State::Running),
         free_disk: None,
         tool_version: None,
         down_reason: (!missing.is_empty()).then(|| format!("missing: {}", missing.join(", "))),

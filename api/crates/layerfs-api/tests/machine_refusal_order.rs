@@ -51,13 +51,12 @@ fn the_first_broken_rule_is_the_refusal() {
     let bad = MachineName::parse("-x").unwrap_err().message;
     for call in [
         "machine.get",
-        "machine.status",
         "machine.start",
         "machine.stop",
         "machine.remove",
         "machine.update",
     ] {
-        let got = refusal(home, call, &[("name", t("-x"))]);
+        let got = refusal(home, call, &[("machine", t("-x"))]);
         assert_eq!(got, ("InvalidInput".to_owned(), bad.clone()), "{call}");
     }
 
@@ -71,7 +70,7 @@ fn the_first_broken_rule_is_the_refusal() {
     let update = |args: &[(&str, SdkValue)]| refusal(home, "machine.update", args).1;
     assert_eq!(
         update(&[
-            ("name", t("native")),
+            ("machine", t("native")),
             ("cpus", SdkValue::Int(2)),
             ("docker", t("/tmp/docker.sock")),
         ]),
@@ -87,11 +86,11 @@ fn the_first_broken_rule_is_the_refusal() {
     )
     .unwrap();
     assert_eq!(
-        update(&[("name", t("box")), ("wsl", t("Ubuntu"))]),
+        update(&[("machine", t("box")), ("wsl", t("Ubuntu"))]),
         "docker, wsl and daemon are the built-in machines' settings"
     );
     let daemon_and_wsl = update(&[
-        ("name", t("native")),
+        ("machine", t("native")),
         ("daemon", t("relative")),
         ("wsl", t("Ubuntu")),
     ]);
@@ -101,7 +100,7 @@ fn the_first_broken_rule_is_the_refusal() {
     );
     #[cfg(not(windows))]
     assert_eq!(
-        update(&[("name", t("native")), ("wsl", t("Ubuntu"))]),
+        update(&[("machine", t("native")), ("wsl", t("Ubuntu"))]),
         "wsl is a Windows host's setting"
     );
 }

@@ -275,8 +275,14 @@ fn greet(
 /// closes with no request. `Unavailable` when it does not answer, its
 /// refusal (`Denied`) when it refuses the secret.
 pub fn hello(endpoint: &Endpoint) -> Result<Hello, SdkRefusal> {
+    hello_within(endpoint, HELLO_WAIT)
+}
+
+/// [`hello`], its answer waited for at most `wait`: what a live read asks,
+/// which has a bound of its own to keep.
+pub fn hello_within(endpoint: &Endpoint, wait: Duration) -> Result<Hello, SdkRefusal> {
     let started = Instant::now();
-    let greeted = greet(endpoint, CONNECT, HELLO_WAIT);
+    let greeted = greet(endpoint, CONNECT.min(wait), wait);
     layerfs_home::trace::connection(&endpoint.address.to_string(), "hello", false, started);
     match greeted {
         Ok((_, hello)) => Ok(hello),

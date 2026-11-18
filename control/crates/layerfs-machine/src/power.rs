@@ -3,82 +3,160 @@
 //! (P4). `start` starts a stopped machine and its worker and waits until it
 //! is ready; a running one answers at once. `stop` stops the worker and,
 //! where there is one, the VM; its disks stay. Built-in `native` answers
-//! both at once. Each answers the machine's summary as `machine.get` does.
-use super::endpoint::{running_with_progress, start_lock};
-use super::spec::{self as record, machine_of, refusal};
-use super::status::home_id;
+//! both at once. A call that had nothing to do answers `unchanged: true`
+//! and records nothing (call surface 2.0); one that works records its `op`
+//! and reports its phases.
+use super::endpoint::{bring_up, start_lock};
+use super::progress::Phases;
+use super::record::{MachineRecord, STOP};
+use super::spec::{self as record, home_id, machine_of, refusal};
+use super::state::settle;
 use crate::Related;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::events::Events;
 use layerfs_home::home::{lock, paths};
 use layerfs_home::names::MachineName;
-use layerfs_home::outcome::{failed, Outcome};
-use layerfs_platform::{self as adapters, Platform};
+use layerfs_home::op::Op;
+use layerfs_home::outcome::{failed, with_fix, Outcome};
+use layerfs_home::state::State;
+use layerfs_platform::{self as adapters, Code, Platform};
 use std::path::Path;
+use std::time::{Duration, Instant};
 
-/// `machine.start(name)`: the machine's worker answers its secret, or the
-/// machine and its worker are started (under its `start.lock`) and waited
-/// for. A readiness wait, not a retry.
-pub fn start(home: &Path, name: &MachineName, related: Related) -> Outcome {
-    let mut sink = |_| {};
-    start_with_progress(home, name, related, &mut Events::new(&mut sink))
+/// How long a stop waits for the provider to say whether a machine its
+/// record calls stopped is.
+const CHECK: Duration = Duration::from_secs(10);
+
+/// The phases of a stop.
+pub const STOP_PHASES: [&str; 2] = ["check", "stop"];
+
+/// What a start or a stop answers: `{ unchanged, outcome, machine }`.
+/// `changed` is the word for what it did (`started`, `stopped`); a call
+/// with nothing to do answers `unchanged: true`.
+pub fn done(name: &str, changed: Option<&str>) -> SdkValue {
+    SdkValue::map([
+        ("unchanged", SdkValue::Bool(changed.is_none())),
+        ("outcome", SdkValue::text(changed.unwrap_or("unchanged"))),
+        ("machine", SdkValue::text(name)),
+    ])
 }
 
-/// `machine.start` with stage progress on the caller's event stream.
-pub fn start_with_progress(
+/// `machine.start(machine)`: the machine's worker answers its secret
+/// (`unchanged: true`), or the machine and its worker are started (under
+/// its `start.lock`) and waited for. A readiness wait, not a retry.
+pub fn start(
     home: &Path,
     name: &MachineName,
     related: Related,
     events: &mut Events<'_>,
 ) -> Outcome {
-    if machine_of(home, name)?.platform()? != Platform::Native {
-        running_with_progress(home, name, events)?;
-    }
-    super::get::get(home, name, related)
+    let started = bring_up(home, name, related, events)?;
+    Ok(done(name, started.then_some("started")))
 }
 
-/// `machine.stop(name)`: refused `InUse` while Sandboxes run on it,
-/// `detail.related` naming each; else its
-/// worker and VM stop under its `start.lock`, so no `machine.start` runs
-/// meanwhile, and `worker.json` goes. Its disks and Stores stay.
-pub fn stop(home: &Path, name: &MachineName, related: Related) -> Outcome {
-    let home = home.to_path_buf();
-    let record = machine_of(&home, name)?;
-    if record.platform()? == Platform::Native {
-        return super::get::get(&home, name, related);
+/// Whether machine `record` describes is stopped already: its record says
+/// so, no worker is recorded for it, and its provider agrees. A provider
+/// that cannot be asked answers no: the stop then runs and says why.
+fn stopped(home: &Path, machine: &MachineRecord) -> bool {
+    let name = machine.name();
+    if machine.recorded(0) != State::Stopped || paths::worker_record(home, name).exists() {
+        return false;
     }
-    let _start = start_lock(&home, name)?;
-    let spec = {
-        let _lock = lock::take(&home)?;
-        let record = machine_of(&home, name)?;
-        (related.can_stop)(&home, name)?;
-        record::spec(&home, &home_id(&home)?, &record)?
-    };
-    adapters::stop(&spec).map_err(refusal)?;
-    {
-        let _lock = lock::take(&home)?;
-        match std::fs::remove_file(paths::worker_record(&home, name)) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(failed(error)),
-        }
-        record::update(&home, name, |record| {
-            record.with("state", SdkValue::text("stopped"))
-        })?;
-    }
-    super::get::get(&home, name, related)
-}
-
-/// A provider-confirmed terminal state, without contacting its stopped worker.
-pub fn stopped_summary(home: &Path, name: &str, related: Related) -> Outcome {
-    let machine = super::record::MachineRecord::of(home, name)?;
-    super::list::summary(
-        home,
-        &machine,
-        Some((
-            if name == "native" { "ready" } else { "stopped" }.to_owned(),
-            None,
-        )),
-        related,
+    let spec = home_id(home).and_then(|id| record::provider_spec(home, &id, machine));
+    let seen = spec.map(|spec| adapters::provider_within(&spec, Instant::now() + CHECK));
+    matches!(
+        seen,
+        Ok(Ok(adapters::Status {
+            state: adapters::State::Stopped | adapters::State::Missing,
+            ..
+        }))
     )
+}
+
+/// `machine.stop(machine)`: refused `InUse` while Sandboxes are on it,
+/// naming each; else its worker and VM stop under its `start.lock`, so no
+/// `machine.start` runs meanwhile, and `worker.json` goes. Its disks and
+/// Stores stay. A machine that is stopped already answers `unchanged:
+/// true`. A lost reply keeps the `op`, uncertain: `machine get <m> --with
+/// live` settles it.
+pub fn stop(home: &Path, name: &MachineName, related: Related, events: &mut Events<'_>) -> Outcome {
+    let home = home.to_path_buf();
+    let machine = machine_of(&home, name)?;
+    if machine.platform()? == Platform::Native || stopped(&home, &machine) {
+        return Ok(done(name, None));
+    }
+    let mut phases = Phases::new(events, &STOP_PHASES);
+    let _start = start_lock(&home, name)?;
+    phases.begin("check");
+    let (spec, op) = {
+        let _lock = lock::take(&home)?;
+        let machine = machine_of(&home, name)?;
+        (related.can_stop)(&home, name)?;
+        let spec = record::spec(&home, &home_id(&home)?, &machine)?;
+        let op = Op::begin(STOP, "stop", SdkValue::Null)?;
+        machine.with_op(&op).write(&home)?;
+        (spec, op)
+    };
+    phases.begin("stop");
+    let stopped = adapters::stop(&spec);
+    let _lock = lock::take(&home)?;
+    match stopped {
+        Ok(()) => {
+            match std::fs::remove_file(paths::worker_record(&home, name)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(failed(error)),
+            }
+            record::update(&home, name, |record| {
+                let record = record.with("state", SdkValue::text("stopped"));
+                record.mended().without_op()
+            })?;
+            phases.end();
+            let done = done(name, Some("stopped"));
+            Ok(layerfs_home::home::with_field(
+                done,
+                "forced",
+                SdkValue::Bool(false),
+            ))
+        }
+        // a lost reply: whether it stopped is not known
+        Err(error) if error.code == Code::Unknown => {
+            let op = op.as_uncertain();
+            record::update(&home, name, |record| {
+                (record.with_op(&op)).with("error", SdkValue::text(&error.message))
+            })?;
+            op.log_uncertain(&home, "machine", name, &error.message);
+            Err(with_fix(refusal(error), settle(name, &op)))
+        }
+        // refused: the machine is as it was
+        Err(error) => {
+            record::update(&home, name, MachineRecord::without_op)?;
+            Err(refusal(error))
+        }
+    }
+}
+
+/// A forced stop's answer, with what it stopped beside the machine:
+/// `forced`, `stopped_sandboxes` and `unknown_workspaces` (the Workspaces
+/// whose uncommitted changes are then not known), each with its count. A
+/// plain stop stops nothing beside the machine and answers none of them.
+pub fn with_stopped(
+    answer: SdkValue,
+    forced: bool,
+    sandboxes: &[String],
+    workspaces: &[String],
+) -> SdkValue {
+    let list = |items: &[String]| SdkValue::List(items.iter().map(SdkValue::text).collect());
+    let count = |items: &[String]| SdkValue::Int(i64::try_from(items.len()).unwrap_or(i64::MAX));
+    let mut answer = answer;
+    for (key, value) in [
+        ("stopped_sandboxes", list(sandboxes)),
+        ("stopped_sandboxes_count", count(sandboxes)),
+        ("unknown_workspaces", list(workspaces)),
+        ("unknown_workspaces_count", count(workspaces)),
+        ("forced", SdkValue::Bool(forced)),
+    ] {
+        answer = layerfs_home::home::with_field(answer, key, value);
+    }
+    answer
 }

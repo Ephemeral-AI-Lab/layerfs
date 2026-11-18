@@ -258,6 +258,11 @@ fn check_args(
     let want: Vec<String> = (list(at(row, what)).iter())
         .map(|arg| renamed(pending, call, arg.get_text("name").unwrap()))
         .collect();
+    // a front end's function (`on_progress`) is the row's `progress`, not
+    // one of its options
+    let args: Vec<&layerfs_api::Arg> = (args.iter())
+        .filter(|arg| arg.kind != Kind::Function)
+        .collect();
     let have: Vec<&str> = args.iter().map(|arg| arg.name).collect();
     assert_eq!(have, want, "{call}: {what}");
     for (arg, said) in args.iter().zip(list(at(row, what))) {
@@ -1131,10 +1136,7 @@ fn the_table_s_json_carries_each_migrated_entry_s_forms() {
             at(said, "paging") == &SdkValue::Null
         );
     }
-    // every migrated entry carries its form (no count is pinned during the
-    // rollout)
-    let entries = layerfs_api::calls()
-        .into_iter()
-        .filter(|entry| entry.form.is_some());
-    assert_eq!(migrated, entries.count());
+    // every call of calls.json that is not pending
+    let pending = texts(at(&read(PENDING), "calls")).len();
+    assert_eq!(migrated, rows(&read(SPEC)).len() - pending);
 }

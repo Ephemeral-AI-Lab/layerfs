@@ -32,7 +32,7 @@ const WORK_CALLS = new Set(["project.list", "project.get", "project.stats", "pro
 const ADMIN_CALLS = new Set(["project.init", "project.delete", "project.remove_file", "branch.remove", "sandbox.create", "sandbox.close"]);
 
 /** Monitoring calls for a UI, which no profile lists (layerfs-project#178 D2, #164). */
-const UI_CALLS = new Set(["machine.stats", "machine.space", "machine.files", "logs.machine", "logs.sandbox", "sandbox.files"]);
+const UI_CALLS = new Set(["machine.stats", "machine.files", "machine.log", "logs.sandbox", "sandbox.files"]);
 
 /** Families whose every call belongs to the `admin` profile. */
 const ADMIN_FAMILIES = new Set(["home", "machine", "store", "backup", "logs"]);

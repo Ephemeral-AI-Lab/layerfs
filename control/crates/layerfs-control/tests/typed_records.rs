@@ -124,149 +124,138 @@ fn a_sandbox_shows_its_record() {
 #[cfg(feature = "machine")]
 mod machines {
     use super::*;
-    use layerfs_machine::record::{MachineDerived, MachineRecord};
+    use layerfs_home::state::{Reason, State};
+    use layerfs_machine::record::MachineRecord;
+    use layerfs_machine::state::unrecorded;
 
-    fn keys(value: &SdkValue) -> Vec<&str> {
-        match value {
-            SdkValue::Map(fields) => fields.iter().map(|(n, _)| n.as_str()).collect(),
-            _ => Vec::new(),
+    fn machine(name: &str, record: &str) -> MachineRecord {
+        MachineRecord::from_record(name, value(record))
+    }
+
+    fn broken(state: &State) -> (Reason, Option<&str>) {
+        match state {
+            State::Broken { reason, fix } => (*reason, fix.as_deref()),
+            other => panic!("not broken: {other:?}"),
         }
     }
 
     #[test]
-    fn a_vm_shows_its_live_state_size_and_settings() {
-        let record = MachineRecord::from_record(
-            "dev",
-            value(
-                r#"{"v":1,"name":"dev","platform":"lima","cpus":2,"memory":4,"disk":20,"vm_name":"lfs-x-dev",
-                   "state":"running","created":1,"image":"sha256:ab","error":"old",
-                   "lasting":{"port":2222}}"#,
-            ),
-        );
-        let derived = MachineDerived {
-            live: Some(("stopped".into(), Some("its probe did not answer".into()))),
-            stores: vec!["shop".into()],
-            sandboxes: vec!["t1".into()],
+    fn a_machine_s_state_comes_from_its_record_alone() {
+        let dev = |state: &str| {
+            machine(
+                "dev",
+                &format!(r#"{{"platform":"lima","state":"{state}"}}"#),
+            )
         };
-        let shown = record.to_sdk(View::List, &derived).unwrap();
+        assert_eq!(dev("running").recorded(0), State::Ready);
+        assert_eq!(dev("stopped").recorded(0), State::Stopped);
         assert_eq!(
-            keys(&shown),
-            [
-                "name",
-                "platform",
-                "backend",
-                "supports",
-                "state",
-                "cpus",
-                "memory",
-                "disk",
-                "stores",
-                "sandboxes",
-                "image",
-                "error"
-            ]
+            machine("vm", r#"{"platform":"lima"}"#).recorded(0),
+            State::Stopped
         );
-        assert_eq!(shown.get_text("platform"), Some("lima"));
-        assert_eq!(shown.get_text("state"), Some("stopped"));
-        assert_eq!(shown.get_text("error"), Some("its probe did not answer"));
-        assert_eq!(shown.get("cpus"), Some(&SdkValue::Int(2)));
-        assert_eq!(print(shown.get("stores").unwrap()), r#"["shop"]"#);
-        assert_eq!(print(shown.get("sandboxes").unwrap()), r#"["t1"]"#);
-        assert_eq!(record.state(Some("missing")).unwrap(), "missing");
-        assert_eq!(record.state(None).unwrap(), "running");
-        // without a live answer the record's state and error show
-        let derived = MachineDerived::default();
-        let shown = record.to_sdk(View::Full, &derived).unwrap();
-        assert_eq!(shown.get_text("state"), Some("running"));
-        assert_eq!(shown.get_text("error"), Some("old"));
-    }
-
-    #[test]
-    fn a_built_in_machine_is_ready_and_unsized() {
-        let record = MachineRecord::from_record(
-            "docker",
-            value(r#"{"name":"docker","platform":"docker","created":1,"docker":"/run/d.sock"}"#),
-        );
-        let shown = record
-            .to_sdk(View::List, &MachineDerived::default())
-            .unwrap();
+        // a record written before reasons were
+        assert_eq!(broken(&dev("failed").recorded(0)).0, Reason::Failed);
         assert_eq!(
-            keys(&shown),
-            [
-                "name",
-                "platform",
-                "backend",
-                "supports",
-                "state",
-                "cpus",
-                "memory",
-                "disk",
-                "stores",
-                "sandboxes",
-                "docker"
-            ]
+            machine("native", r#"{"platform":"native"}"#).recorded(0),
+            State::Ready
         );
-        assert_eq!(shown.get_text("state"), Some("ready"));
-        assert_eq!(shown.get("cpus"), Some(&SdkValue::Null));
-        let vm = MachineRecord::from_record("vm", value(r#"{"platform":"lima"}"#));
-        assert_eq!(vm.state(None).unwrap(), "stopped");
-        // a platform removed in 2.0 is shown with why, whatever its record says
-        let ssh = MachineRecord::from_record(
-            "box",
-            value(r#"{"name":"box","platform":"ssh","state":"running","ssh":{"host":"h"}}"#),
+        // what a live read or a start found stays until it changes
+        let outdated = dev("running").broken_as(Reason::Outdated, "worker of another build");
+        assert_eq!(
+            broken(&outdated.recorded(0)),
+            (
+                Reason::Outdated,
+                Some("layerfs machine stop dev && layerfs machine start dev")
+            )
         );
-        let shown = ssh.to_sdk(View::Full, &MachineDerived::default()).unwrap();
-        assert_eq!(keys(&shown).last(), Some(&"ssh"));
-        assert_eq!(shown.get_text("platform"), Some("ssh"));
-        assert_eq!(shown.get_text("state"), Some("unsupported"));
-        let removed = "platform `ssh` was removed in LayerFS 2.0";
-        assert_eq!(shown.get_text("error"), Some(removed));
-        assert_eq!(ssh.platform().unwrap_err().message, removed);
-        let unknown = MachineRecord::from_record("x", value(r#"{"platform":"vmware"}"#));
-        let refusal = unknown
-            .to_sdk(View::List, &MachineDerived::default())
-            .unwrap_err();
-        assert_eq!(refusal.code, "Failed");
-        assert_eq!(refusal.message, "a machine record names no known platform");
+        let on_it = outdated.recorded(2);
+        assert_eq!(
+            broken(&on_it).1,
+            Some("layerfs machine stop dev --force && layerfs machine start dev")
+        );
+        assert_eq!(
+            outdated.message(&on_it, 2).as_deref(),
+            Some("worker of another build; 2 Sandboxes are on it")
+        );
+        let down = dev("stopped").broken_as(Reason::EngineDown, "Docker does not answer");
+        let fix = if cfg!(target_os = "macos") {
+            "open -a Docker"
+        } else {
+            "sudo systemctl start docker"
+        };
+        assert_eq!(broken(&down.recorded(0)), (Reason::EngineDown, Some(fix)));
+        assert_eq!(down.mended().recorded(0), State::Stopped);
+        // a platform removed in 2.0, whatever its record says
+        let ssh = machine("box", r#"{"platform":"ssh","state":"running"}"#);
+        assert_eq!(
+            broken(&ssh.recorded(0)),
+            (Reason::Unsupported, Some("layerfs machine remove box"))
+        );
+        assert_eq!(
+            ssh.platform().unwrap_err().message,
+            "platform `ssh` was removed in LayerFS 2.0"
+        );
+        let unknown = machine("x", r#"{"platform":"vmware"}"#);
+        assert_eq!(unknown.platform().unwrap_err().code, "Failed");
+        // a machine a Store or Sandbox names with no record of its own
+        assert_eq!(unrecorded("native"), State::Ready);
+        assert_eq!(unrecorded("docker"), State::Stopped);
+        assert_eq!(broken(&unrecorded("gone")).0, Reason::Missing);
     }
 
     /// Machine `dev` (lima, recorded `running`) holding intent `name` of
     /// process `pid`.
     fn held(name: &str, pid: u32, uncertain: bool) -> MachineRecord {
-        MachineRecord::from_record(
+        machine(
             "dev",
-            value(&format!(
+            &format!(
                 r#"{{"name":"dev","platform":"lima","state":"running",
-                   "op":{{"name":"{name}","owner":{{"pid":{pid}}},"uncertain":{uncertain}}}}}"#
-            )),
+                   "op":{{"name":"{name}","phase":"boot","owner":{{"pid":{pid}}},"uncertain":{uncertain}}}}}"#
+            ),
         )
     }
 
     #[test]
     fn a_machine_s_state_follows_its_op() {
         let me = std::process::id();
-        // a live owner: its call, whatever the probe says
-        let removing = held("machine.remove", me, false);
-        assert_eq!(removing.state(Some("running")).unwrap(), "removing");
+        // a live owner: busy, the op named by its call word
+        let starting = held("machine.start", me, false);
         assert_eq!(
-            held("machine.create", me, false).state(None).unwrap(),
-            "creating"
+            starting.recorded(0),
+            State::Busy {
+                name: "start".into(),
+                phase: "boot".into(),
+                started_ms: None
+            }
         );
-        assert!(removing.in_flight());
-        // a gone owner (id 0): unresolved when uncertain, else nothing
+        // a gone owner (id 0): unresolved when uncertain, else ignored
         let unresolved = held("machine.create", 0, true);
-        assert_eq!(unresolved.state(Some("running")).unwrap(), "unresolved");
-        assert!(unresolved.in_flight());
+        assert_eq!(
+            broken(&unresolved.recorded(0)),
+            (Reason::Unresolved, Some("layerfs machine remove dev"))
+        );
+        let lost_start = held("machine.start", 0, true);
+        assert_eq!(
+            broken(&lost_start.recorded(0)),
+            (
+                Reason::Unresolved,
+                Some("layerfs machine get dev --with live")
+            )
+        );
         let stale = held("machine.remove", 0, false);
-        assert_eq!(stale.state(Some("missing")).unwrap(), "missing");
-        assert_eq!(stale.state(None).unwrap(), "running");
-        assert!(!stale.in_flight());
+        assert_eq!(stale.recorded(0), State::Ready);
         stale.not_held().unwrap();
-        assert_eq!(removing.not_held().unwrap_err().code, "Busy");
-        assert_eq!(unresolved.not_held().unwrap_err().code, "Unresolved");
+        let busy = starting.not_held().unwrap_err();
+        assert_eq!(busy.code, "Busy");
+        let refused = lost_start.not_held().unwrap_err();
+        assert_eq!(refused.code, "Unresolved");
+        assert_eq!(
+            refused.detail.get_text("fix"),
+            Some("layerfs machine get dev --with live")
+        );
         // a remove clears an unresolved intent, never a live one
         unresolved.not_running().unwrap();
-        assert_eq!(removing.not_running().unwrap_err().code, "Busy");
+        assert_eq!(starting.not_running().unwrap_err().code, "Busy");
         assert!(stale.clone().without_op().op().is_none());
     }
 }

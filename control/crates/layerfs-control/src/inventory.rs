@@ -8,6 +8,7 @@
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused};
+use layerfs_home::state::State;
 use layerfs_machine::record::MachineRecord;
 use layerfs_store::lease;
 use layerfs_store::record::{Placement, StoreRef};
@@ -32,6 +33,22 @@ pub fn machines(home: &Path) -> Result<Vec<MachineRecord>> {
 }
 
 pub use layerfs_sandbox::record::{sandbox, sandboxes};
+
+/// The state of machine `name` from the home's records alone, with no
+/// probe (call surface 2.0): its record's ([`MachineRecord::status`]), its
+/// platform checked against the ones 2.0 removed, the `fix` of an outdated
+/// worker forced while Sandboxes are recorded on it; with no record,
+/// `native` is ready, `docker` stopped and any other `broken` `missing`.
+/// What the home's tree, a Store's or Sandbox's `blocked_by` and the
+/// doctor say of a machine, as `machine list` and `machine get` do.
+pub fn machine_state(home: &Path, name: &str, record: Option<&MachineRecord>) -> Result<State> {
+    let Some(record) = record else {
+        return Ok(layerfs_machine::state::unrecorded(name));
+    };
+    let platform = record.platform_name().unwrap_or("");
+    let removed = layerfs_sandbox_backend::platform_policy::disabled_reason(platform).is_some();
+    Ok(record.status(removed, sandboxes_on(home, name)?.len()))
+}
 
 /// The sqlite Stores whose record names machine `machine`. A Store record
 /// of a kind LayerFS does not write is refused, as before.

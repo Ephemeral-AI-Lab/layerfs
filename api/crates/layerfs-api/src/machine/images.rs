@@ -1,27 +1,118 @@
-//! `machine.images`: the Sandbox images a machine holds, and the host's Docker images it can copy.
+//! `machine.images`: the Sandbox images a machine holds; with `--with
+//! docker`, the host's Docker images it could copy.
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call};
-use crate::calls::Context;
+use crate::calls::{Context, Form, Part, Section};
 use layerfs_bridge::control::SdkValue;
 #[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
 
+/// One image the machine holds.
+const ITEM: Form = Form::of(
+    &["image"],
+    &["refs", "size", "default"],
+    &[
+        "image",
+        "refs",
+        "size",
+        "default",
+        "architecture",
+        "source",
+        "sandboxes",
+        "sandboxes_count",
+        "last_used_at",
+    ],
+)
+.parts(&[
+    ("refs", Part::Scalars("ref")),
+    ("sandboxes", Part::Scalars("sandbox")),
+]);
+const FORM: Form = Form::of(
+    &["items"],
+    &[],
+    &[
+        "items",
+        "machine",
+        "mode",
+        "architecture",
+        "disk_free_bytes",
+    ],
+)
+.parts(&[("items", Part::Rows(&ITEM))]);
+
 /// Its table entry.
 pub(crate) const CALL: Call = call(
     "machine",
     "images",
-    &[a("name", Name)],
+    &[a("machine", Name)],
     &[],
-    "the Sandbox images a machine holds, and the host's Docker images it can copy",
+    "the Sandbox images a machine holds",
     run,
-);
+)
+.form(&FORM)
+.with(&[Section::own("docker", &["images", "reason", "message"])]);
 
-/// Runs `machine.images`.
+/// Runs `machine.images`: the host's Docker is read only with `--with
+/// docker`.
 #[cfg(feature = "machine")]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    let name = MachineName::parse(args.get_text("name").unwrap_or(""))?;
-    layerfs_control::machine::images(&context.home, &name)
+    let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
+    let docker = context.with("docker");
+    let answer = layerfs_control::machine::images(&context.home, &machine, docker)?;
+    Ok(shown(&answer, docker))
+}
+
+/// The answer of `layerfs_sandbox::images::list` as the row names it.
+#[cfg(feature = "machine")]
+fn shown(answer: &SdkValue, docker: bool) -> SdkValue {
+    use super::stats::{count, field, rows};
+    let default = answer.get_text("default");
+    let items = rows(answer.get("images"), |image| {
+        let id = image.get_text("id");
+        let sandboxes = field(image, "sandboxes");
+        SdkValue::map([
+            ("image", field(image, "id")),
+            ("refs", field(image, "refs")),
+            ("size", field(image, "size")),
+            ("default", SdkValue::Bool(id.is_some() && id == default)),
+            ("architecture", field(image, "architecture")),
+            ("source", field(image, "source")),
+            ("sandboxes_count", count(&sandboxes)),
+            ("sandboxes", sandboxes),
+            ("last_used_at", field(image, "last_used")),
+        ])
+    });
+    let mut fields = vec![
+        ("items", items),
+        ("machine", field(answer, "machine")),
+        ("mode", field(answer, "mode")),
+        ("architecture", field(answer, "architecture")),
+        ("disk_free_bytes", field(answer, "free")),
+    ];
+    if docker {
+        let state = field(answer, "docker");
+        let images = rows(answer.get("available"), |image| {
+            SdkValue::map([
+                ("image", field(image, "id")),
+                ("refs", field(image, "refs")),
+                ("size", field(image, "size")),
+                ("os", field(image, "os")),
+                ("architecture", field(image, "architecture")),
+                ("usable", field(image, "usable")),
+                ("needed_bytes", field(image, "need")),
+                ("fits", field(image, "fits")),
+                ("unusable", field(image, "reason")),
+            ])
+        });
+        let section = SdkValue::map([
+            ("images", images),
+            ("reason", field(&state, "reason")),
+            ("message", field(&state, "message")),
+        ]);
+        fields.push(("docker", section));
+    }
+    SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect())
 }
 
 /// Without the `machine` feature (the guest worker's build) it is
@@ -30,6 +121,6 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 fn run(_context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
     Err(layerfs_home::outcome::refused(
         "Unsupported",
-        "machine.images is not built yet (#533 step 6)",
+        "machine.images runs on the host",
     ))
 }

@@ -16,11 +16,11 @@ mod create;
 #[cfg(feature = "machine")]
 mod endpoint;
 #[cfg(feature = "machine")]
-mod get;
-#[cfg(feature = "machine")]
 mod image;
 #[cfg(feature = "machine")]
 mod list;
+#[cfg(feature = "machine")]
+mod live;
 mod local;
 #[cfg(feature = "machine")]
 mod platforms;
@@ -35,8 +35,7 @@ mod related;
 mod remove;
 #[cfg(feature = "machine")]
 mod spec;
-#[cfg(feature = "machine")]
-mod status;
+pub mod state;
 #[cfg(feature = "machine")]
 mod update;
 pub mod worker;
@@ -47,9 +46,7 @@ pub use bundle::{bundle_dir, IMAGE_ARCHIVE};
 #[cfg(feature = "machine")]
 pub use create::{create, MachineCreate, STOCK};
 #[cfg(feature = "machine")]
-pub use endpoint::{running, running_with_progress};
-#[cfg(feature = "machine")]
-pub use get::get;
+pub use endpoint::running;
 #[cfg(feature = "machine")]
 pub use image::docker_default;
 /// The platform driver, for the Sandbox code that reaches a machine's
@@ -57,12 +54,14 @@ pub use image::docker_default;
 #[cfg(feature = "machine")]
 pub use layerfs_platform as platform;
 #[cfg(feature = "machine")]
-pub use list::list;
+pub use list::{get, list};
 pub use local::runs_here;
 #[cfg(feature = "machine")]
 pub use platforms::platforms;
 #[cfg(feature = "machine")]
-pub use power::{start, start_with_progress, stop};
+pub use power::{done, start, stop, with_stopped, STOP_PHASES};
+#[cfg(feature = "machine")]
+pub use progress::Phases;
 pub use related::Related;
 #[cfg(feature = "machine")]
 pub use remove::remove;
@@ -73,13 +72,8 @@ pub use spec::{
     provider_spec as machine_provider_spec, refusal as machine_refusal, spec as machine_spec,
 };
 #[cfg(feature = "machine")]
-pub use status::status;
-#[cfg(feature = "machine")]
 pub use update::{update, MachineUpdate};
 
 /// The machine lifecycle lock, shared by the spanning forced-stop call.
 #[cfg(feature = "machine")]
 pub use endpoint::start_lock as force_stop_lock;
-/// A confirmed stopped machine summary without a worker or provider probe.
-#[cfg(feature = "machine")]
-pub use power::stopped_summary;

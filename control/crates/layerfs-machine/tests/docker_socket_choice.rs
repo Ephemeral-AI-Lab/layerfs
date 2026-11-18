@@ -165,7 +165,7 @@ esac
     assert_eq!(chosen(&h), (first.clone(), "env:DOCKER_HOST".to_owned()));
 
     // the first start runs on that socket and records it, whatever its outcome
-    let started = running(&h, "docker").unwrap_err();
+    let started = running(&h, "docker", RELATED).unwrap_err();
     assert_eq!(started.code, "Unavailable", "{}", started.message);
     let calls = fs::read_to_string(root.join("calls")).unwrap();
     let on_first = format!("-H unix://{} ", first.display());
@@ -188,7 +188,7 @@ esac
 
     // `--docker ""`: automatic again, though the machine ran; get shows none
     let summary = set_docker(&h, "").unwrap();
-    assert_eq!(summary.get("docker"), None, "{summary:?}");
+    assert_eq!(summary.get_text("docker"), None, "{summary:?}");
     let record = MachineRecord::of(&h, "docker").unwrap();
     assert_eq!(record.field("docker"), Some(&SdkValue::Null));
     assert_eq!(record.docker(), None);
@@ -266,7 +266,7 @@ esac
         .with("image", SdkValue::text("test-base"))
         .write(&h2)
         .unwrap();
-    let failed = running(&h2, "docker").unwrap_err();
+    let failed = running(&h2, "docker", RELATED).unwrap_err();
     pinging.join().unwrap();
     let record = MachineRecord::of(&h2, "docker").unwrap();
     assert_eq!(

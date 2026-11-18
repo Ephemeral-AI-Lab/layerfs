@@ -10,6 +10,7 @@ pub mod generation;
 pub mod guest;
 pub mod layout;
 pub mod lock;
+pub mod observed;
 pub mod paths;
 pub mod records;
 

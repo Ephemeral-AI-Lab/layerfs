@@ -1,5 +1,5 @@
 //! `machine.update`.
-use super::list::summary;
+use super::list::changed;
 use super::spec::machine_of;
 use crate::Related;
 use layerfs_bridge::control::SdkValue;
@@ -7,6 +7,19 @@ use layerfs_home::home::{lock, paths};
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_platform::HostOs;
 use std::path::Path;
+
+/// What an update answers beside `ok` and `outcome`.
+const ANSWER: [&str; 9] = [
+    "machine",
+    "platform",
+    "cpus",
+    "memory_bytes",
+    "disk_bytes",
+    "image",
+    "docker",
+    "wsl",
+    "daemon",
+];
 
 /// A `machine.update` request. The name stays text: it is checked under the
 /// home lock.
@@ -104,7 +117,7 @@ pub fn update(home: &Path, request: &MachineUpdate, related: Related) -> Outcome
         record = record.with("docker", SdkValue::Null);
     }
     record.write(&home)?;
-    summary(&home, &record, None, related)
+    changed(&record, "updated", &ANSWER)
 }
 
 /// The Docker socket `--docker` names: an absolute path, or `unix://` and
