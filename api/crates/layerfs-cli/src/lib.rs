@@ -3,7 +3,6 @@
 
 pub mod banner;
 mod capabilities;
-mod framed;
 pub mod help;
 pub mod output;
 pub mod parse;

@@ -571,7 +571,7 @@ class Calls(unittest.TestCase):
         lfs.sandbox.create("shop/api", "s1", "native")
         ws = None
         try:
-            ws = lfs.workspace.mount("s1", "dev")["ws"]
+            ws = lfs.workspace.mount("s1", "dev")["workspace"]
             out, err = [], []
             ran = lfs.workspace.exec(ws, "cat README.md; echo oops >&2", stdout=out.append, stderr=err.append)
             self.assertEqual(ran["exit_code"], 0)

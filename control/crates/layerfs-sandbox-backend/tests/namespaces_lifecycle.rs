@@ -232,7 +232,7 @@ fn run(sandbox: &Sandbox, arguments: &[&str], environment: &[&str]) -> (i32, Str
             .map(|value| (*value).to_owned())
             .collect(),
         directory: directory.clone(),
-        stdin: false,
+        stdin: None,
     };
     let mut out = Vec::new();
     let mut err = Vec::new();
@@ -798,7 +798,7 @@ fn started(
             arguments: vec!["/bin/sh".into(), "-c".into(), script.into()],
             environment: Vec::new(),
             directory: sandbox.tmp().display().to_string(),
-            stdin: false,
+            stdin: None,
         };
         let mut spawned = |stop: &Stop| {
             let _ = sent.send(stop.clone());
@@ -849,7 +849,7 @@ fn a_cancelled_command_and_what_it_started_leave_its_own_group_empty() {
         arguments: vec!["/bin/true".into()],
         environment: Vec::new(),
         directory: sandbox.tmp().display().to_string(),
-        stdin: false,
+        stdin: None,
     };
     let slot = ExecSlot {
         workspace: "ws1",
@@ -904,7 +904,7 @@ fn a_command_cancelled_before_its_handle_was_told_ends_as_it_starts() {
         ],
         environment: Vec::new(),
         directory: sandbox.tmp().display().to_string(),
-        stdin: false,
+        stdin: None,
     };
     let (sent, ran) = std::sync::mpsc::channel();
     let mut procs = String::new();

@@ -101,7 +101,7 @@ fn sandbox_records_without_a_sandbox() {
     let (code, _) = call(
         &home,
         "workspace.exec",
-        &[("ws", t("busy:/w")), ("command", t("true"))],
+        &[("workspace", t("busy:w")), ("command", t("true"))],
     )
     .unwrap_err();
     assert_eq!(code, "Busy");
@@ -125,7 +125,7 @@ fn sandbox_records_without_a_sandbox() {
     let (code, message) = call(
         &home,
         "workspace.exec",
-        &[("ws", t("lost:/w")), ("command", t("true"))],
+        &[("workspace", t("lost:w")), ("command", t("true"))],
     )
     .unwrap_err();
     assert_eq!(code, "Unresolved", "{message}");

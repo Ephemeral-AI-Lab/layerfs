@@ -17,6 +17,7 @@ pub(crate) fn dispatch(service: &Service, call: &SdkCall) -> Reply {
     let answer = match call.method.as_str() {
         "backend.daemon.workspace.get_storage" => super::workspace::overlay(service, &call.args),
         "backend.daemon.workspace.list_changes" => super::workspace::changes(service, &call.args),
+        "backend.daemon.workspace.list_changed" => super::workspace::changed(service, &call.args),
         "sandbox.list_workspaces" => return service.inspect(call),
         "sandbox.doctor_workspaces" => return service.diagnostic_workspaces(call),
         method => Err(SdkRefusal {

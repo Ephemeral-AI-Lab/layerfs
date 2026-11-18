@@ -27,19 +27,19 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Paths one report names.
 const PATHS: usize = 256;
 /// Base directories one path walk may list.
-const WALK: usize = 4096;
+pub(super) const WALK: usize = 4096;
 /// Deepest local path resolved.
 const DEPTH: usize = 256;
 
 /// Paths of serials: local bindings first, then the local base.
-struct Names {
-    root: u64,
-    local: BTreeMap<u64, (u64, String)>,
-    base: BTreeMap<u64, String>,
+pub(super) struct Names {
+    pub(super) root: u64,
+    pub(super) local: BTreeMap<u64, (u64, String)>,
+    pub(super) base: BTreeMap<u64, String>,
 }
 
 impl Names {
-    fn path(&self, serial: u64, depth: usize) -> Option<String> {
+    pub(super) fn path(&self, serial: u64, depth: usize) -> Option<String> {
         if serial == self.root {
             return Some("/".to_owned());
         }
@@ -54,7 +54,7 @@ impl Names {
     }
 }
 
-fn join(parent: &str, name: &str) -> String {
+pub(super) fn join(parent: &str, name: &str) -> String {
     if parent == "/" {
         format!("/{name}")
     } else {

@@ -87,12 +87,12 @@ fn work(home: &Path, project: &str, sandbox: &str, branch: &str, file: &str) {
         "workspace.mount",
         &[("sandbox", t(sandbox)), ("branch", t(branch))],
     );
-    let ws = mounted.get_text("ws").unwrap().to_owned();
+    let ws = mounted.get_text("workspace").unwrap().to_owned();
     let ran = ok(
         home,
         "workspace.exec",
         &[
-            ("ws", t(&ws)),
+            ("workspace", t(&ws)),
             (
                 "command",
                 t(&format!("cat readme.txt && echo {file} > {file}")),
@@ -103,14 +103,12 @@ fn work(home: &Path, project: &str, sandbox: &str, branch: &str, file: &str) {
     let committed = ok(
         home,
         "workspace.commit",
-        &[("ws", t(&ws)), ("message", t(file))],
+        &[("workspace", t(&ws)), ("message", t(file))],
     );
-    assert_eq!(
-        committed.get_text("kind"),
-        Some("Committed"),
-        "{committed:?}"
-    );
-    ok(home, "workspace.unmount", &[("ws", t(&ws))]);
+    // a new Commit: its id, and no `unchanged`
+    assert!(committed.get_text("commit").is_some(), "{committed:?}");
+    assert!(committed.get("unchanged").is_none(), "{committed:?}");
+    ok(home, "workspace.unmount", &[("workspace", t(&ws))]);
     let read = ok(
         home,
         "file.read",
