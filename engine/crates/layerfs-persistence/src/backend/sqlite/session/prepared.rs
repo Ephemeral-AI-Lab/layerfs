@@ -15,6 +15,8 @@ pub(crate) struct Prepared<'a> {
     work: &'a RefCell<SqlWork>,
     commit: bool,
     uncertain: Option<&'a Cell<bool>>,
+    /// The statement text, kept only while this thread profiles statements.
+    profiled: Option<Box<str>>,
 }
 impl<'a> Prepared<'a> {
     pub(crate) fn new(
@@ -30,11 +32,16 @@ impl<'a> Prepared<'a> {
             connection.prepare_cached(sql).map_err(rows::error)
         };
         Self::elapsed(work, commit, start);
+        let profiled = super::thread_work::profiling_statements().then(|| {
+            super::thread_work::note_statement(sql, 0, start.elapsed().as_nanos() as u64, 0);
+            Box::from(sql)
+        });
         Ok(Self {
             statement: Some(statement?),
             work,
             commit,
             uncertain,
+            profiled,
         })
     }
     fn elapsed(work: &RefCell<SqlWork>, commit: bool, start: Instant) {
@@ -158,6 +165,10 @@ impl<'a> Prepared<'a> {
             work.bound_bytes += bytes;
         }
         Self::elapsed(work, commit, start);
+        if let Some(sql) = &self.profiled {
+            let wall = start.elapsed().as_nanos() as u64;
+            super::thread_work::note_statement(sql, 1, wall, returned);
+        }
         if result.as_ref().err().is_some_and(OutcomeError::uncertain) {
             if let Some(uncertain) = self.uncertain {
                 uncertain.set(true);

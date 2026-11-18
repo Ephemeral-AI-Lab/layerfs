@@ -107,9 +107,12 @@ function usage(words) {
 /** What the command line of `spec` must be, by the table: a content or JSON positional is read from
  * stdin or `--from`, `on_progress` is `--progress`, the output functions are `--stream`. */
 function expectedCli(spec) {
+  const options = spec.options.filter((o) => o.kind !== FUNCTION || o.name === "on_progress").map((o) => (o.name === "on_progress" ? "progress" : o.name));
+  // the command frames a call with a stdout sink as events: `--events`, last
+  if (spec.options.some((o) => o.name === "stdout")) options.push("events");
   return {
     positionals: spec.args.filter((a) => !piped(a)).map((a) => ({ name: a.name, optional: a.optional })),
-    options: spec.options.filter((o) => o.kind !== FUNCTION || o.name === "on_progress").map((o) => (o.name === "on_progress" ? "progress" : o.name)),
+    options,
     from: spec.args.some(piped),
   };
 }

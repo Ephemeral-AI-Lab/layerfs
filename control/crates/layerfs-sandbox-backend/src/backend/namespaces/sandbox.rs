@@ -92,7 +92,7 @@ impl Sandbox {
     }
 
     /// Reopens a recorded Sandbox whose init stage still runs: the same
-    /// process (id, start time and boot), in its own cgroup, and its loopback
+    /// process (id, start time and boot), in its own cgroup's leaf, and its loopback
     /// port. It starts nothing.
     pub(crate) fn reopen(
         paths: Paths,
@@ -113,7 +113,10 @@ impl Sandbox {
         if !owner.paths.local.directory.is_absolute() || port == 0 {
             return Err(owner.invalid("saved namespaces Sandbox"));
         }
-        if !init.alive() || !host::in_cgroup(init.pid, &owner.cgroup) {
+        // its leaf, or its own group when an earlier build started it
+        let grouped = host::in_cgroup(init.pid, &cgroup::leaf(&owner.cgroup))
+            || host::in_cgroup(init.pid, &owner.cgroup);
+        if !init.alive() || !grouped {
             let mut failure = owner.invalid(crate::types::STOPPED);
             failure.observed_container = Some(owner.id);
             return Err(failure);

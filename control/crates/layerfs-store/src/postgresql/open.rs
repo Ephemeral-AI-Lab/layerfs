@@ -14,14 +14,11 @@ use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store_service::StoreService;
 use std::path::Path;
 
-#[cfg(not(feature = "postgresql"))]
-const UNBUILT: &str =
-    "this LayerFS build has no PostgreSQL engine; build the binding with --features postgresql";
-
-/// `synchronous_commit` as the call or record names it: off (default),
-/// local, remote_write, on or remote_apply.
+/// `synchronous_commit` as the call or record names it: off, local (the
+/// default since 2026-11-17), remote_write, on or remote_apply. A record
+/// keeps the value it was connected with.
 pub fn setting_of(given: Option<&str>) -> Result<String, SdkRefusal> {
-    let given = given.unwrap_or("off");
+    let given = given.unwrap_or("local");
     match given {
         "off" | "local" | "remote_write" | "on" | "remote_apply" => Ok(given.to_owned()),
         other => Err(refused(
@@ -64,15 +61,14 @@ pub fn url_of(url: Option<&str>) -> Result<&str, SdkRefusal> {
     })
 }
 
-#[cfg(feature = "postgresql")]
 pub fn selection(url: &str, schema: &str, sync: &str) -> layerfs_persistence::PostgresSelection {
     use layerfs_persistence::SynchronousCommit as S;
     let setting = match sync {
-        "local" => S::Local,
+        "off" => S::Off,
         "remote_write" => S::RemoteWrite,
         "on" => S::On,
         "remote_apply" => S::RemoteApply,
-        _ => S::Off,
+        _ => S::Local,
     };
     layerfs_persistence::PostgresSelection::new(url, schema).with_synchronous_commit(setting)
 }
@@ -85,7 +81,6 @@ pub fn open(
     identity: &Identity,
     template: &Path,
 ) -> Result<StoreService, SdkRefusal> {
-    #[cfg(feature = "postgresql")]
     {
         StoreService::open_postgres(
             &selection(url, schema, sync),
@@ -94,11 +89,6 @@ pub fn open(
             template,
         )
         .map_err(|refusal| refused("Failed", format!("{refusal:?}")))
-    }
-    #[cfg(not(feature = "postgresql"))]
-    {
-        let _ = (url, schema, sync, identity, template);
-        Err(refused("Unsupported", UNBUILT))
     }
 }
 
@@ -115,7 +105,6 @@ pub fn read_binding(postgresql: &PgSelection) -> Result<Vec<u8>, SdkRefusal> {
 /// The refusal for a PostgreSQL call that got no session, `None` for any
 /// other failure: no connection was made, or the server answered it with
 /// an error (no such database, failed authentication).
-#[cfg(feature = "postgresql")]
 pub fn no_session(error: &layerfs_storage::port::PersistenceError) -> Option<SdkRefusal> {
     let layerfs_storage::port::PersistenceError::Refused { status, .. } = error else {
         return None;
@@ -130,7 +119,6 @@ pub fn no_session(error: &layerfs_storage::port::PersistenceError) -> Option<Sdk
 
 /// The binding key the LayerFS schema `schema` records.
 fn binding(url: &str, schema: &str, sync: &str) -> Result<Vec<u8>, SdkRefusal> {
-    #[cfg(feature = "postgresql")]
     {
         (layerfs_persistence::PostgresHandles::binding(&selection(url, schema, sync))).map_err(
             |error| {
@@ -139,11 +127,6 @@ fn binding(url: &str, schema: &str, sync: &str) -> Result<Vec<u8>, SdkRefusal> {
                 })
             },
         )
-    }
-    #[cfg(not(feature = "postgresql"))]
-    {
-        let _ = (url, schema, sync);
-        Err(refused("Unsupported", UNBUILT))
     }
 }
 
@@ -185,7 +168,6 @@ pub fn sandbox_store(open: &OpenArgs) -> Result<Option<layerfs_bridge::DaemonSto
 /// error: { code: Unavailable | Denied, message } }`. A failed query after
 /// connecting is refused `Failed`.
 pub fn status(url: &str, schemas: &[String]) -> Outcome {
-    #[cfg(feature = "postgresql")]
     {
         use layerfs_bridge::control::SdkValue;
         use layerfs_persistence::PostgresStatusError as E;
@@ -234,16 +216,10 @@ pub fn status(url: &str, schemas: &[String]) -> Outcome {
             Err(error @ E::Failed(_)) => Err(refused("Failed", error.to_string())),
         }
     }
-    #[cfg(not(feature = "postgresql"))]
-    {
-        let _ = (url, schemas);
-        Err(refused("Unsupported", UNBUILT))
-    }
 }
 
 /// The open service of a PostgreSQL Store, from the call's
-/// `postgresql: { url }` and the Store's record (#506). Built without the
-/// `postgresql` feature, it is `Unsupported`.
+/// `postgresql: { url }` and the Store's record (#506).
 pub fn open_postgres(
     postgresql: Option<&PgSelection>,
     identity: &Identity,

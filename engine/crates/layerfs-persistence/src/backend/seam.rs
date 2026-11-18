@@ -3,8 +3,11 @@
 use super::records::{BackendError, Param, Record};
 use layerfs_content::ObjectId;
 use layerfs_storage::{
+    location::PackInfo,
     location::{InodeValueRow, LocatedObject, SignatureRow},
-    port::{PersistedPack, PersistenceError},
+    port::{
+        AcquiredPackRead, PackRange, PackReadChoice, PackReadPlan, PersistedPack, PersistenceError,
+    },
     StoragePolicy,
 };
 use std::sync::Arc;
@@ -16,13 +19,14 @@ pub(crate) const ORDINAL_END: i64 = 4_294_967_296;
 #[derive(Clone)]
 pub(crate) enum Engine {
     Sqlite(Arc<super::Session>),
-    #[cfg(feature = "postgresql")]
     Postgres(Arc<super::postgresql::session::connection::Session>),
 }
 
 /// Named history statements in one open engine transaction.
 pub(crate) trait HistoryStatements {
     fn history(&self, key: &str, params: Vec<Param>) -> Result<Vec<Record>, BackendError>;
+    /// The same open transaction's physical object and metadata access.
+    fn mechanics(&self) -> &dyn Mechanics;
     /// One statement over parallel column arrays, where the engine binds
     /// arrays (PostgreSQL: one round trip for many rows). `None`: the
     /// engine has no such statement and the caller runs its per-row one.
@@ -36,7 +40,6 @@ pub(crate) trait HistoryStatements {
 }
 
 /// One column of an array statement; only PostgreSQL reads them.
-#[cfg_attr(not(feature = "postgresql"), allow(dead_code))]
 pub(crate) enum Column {
     I64(Vec<i64>),
     Bytes(Vec<Vec<u8>>),
@@ -79,4 +82,113 @@ pub(crate) trait Mechanics {
     fn signatures(&self, out: &mut Vec<SignatureRow>) -> Result<(), PersistenceError>;
     fn read_packs(&self, ids: &[i64], out: &mut Vec<PersistedPack>)
         -> Result<(), PersistenceError>;
+    /// The bounded control/directory prefix of one pack and its declared
+    /// length, or `None` when this engine has no bounded prefix read.
+    fn pack_prefix(
+        &self,
+        _id: i64,
+        _limit: usize,
+    ) -> Result<Option<(usize, Vec<u8>)>, PersistenceError> {
+        Ok(None)
+    }
+    /// [`Self::pack_prefix`] for several packs in one call, in `ids` order.
+    /// An engine answers from one cursor or one statement, not one per pack;
+    /// a pack that is absent is an error.
+    fn pack_prefixes(
+        &self,
+        ids: &[i64],
+        limit: usize,
+        out: &mut Vec<(usize, Vec<u8>)>,
+    ) -> Result<(), PersistenceError> {
+        for id in ids {
+            out.push(
+                self.pack_prefix(*id, limit)?
+                    .ok_or(PersistenceError::BackendUnavailable)?,
+            );
+        }
+        Ok(())
+    }
+    /// The bytes of selected ranges of several packs in one call: for each
+    /// `(pack, ranges)` of `requests`, in order, the bytes of each range, in
+    /// order. A pack's ranges are sorted and disjoint. The bytes are not
+    /// authenticated; the consumer does that. An engine answers from one
+    /// cursor or one statement; this default acquires each pack on its own.
+    fn pack_ranges(
+        &self,
+        requests: &[(i64, Vec<PackRange>)],
+        out: &mut Vec<Vec<Vec<u8>>>,
+    ) -> Result<(), PersistenceError> {
+        ranges_by_acquisition(self, requests, out)
+    }
+    /// A hint that each pack of `ids` is about to be asked through
+    /// [`Self::read_scoped_pack`], in this order, inside this transaction.
+    /// An engine that pays a round trip per pack may read the small ones
+    /// ahead in one; every answer is the same with or without the hint.
+    fn expect_scoped_packs(&self, _ids: &[i64]) -> Result<(), PersistenceError> {
+        Ok(())
+    }
+    /// [`Self::inode_values`], and at the engine's choice also the values of
+    /// the blocks holding up to `ahead` ordinals past the last one asked, so
+    /// a caller that reads leaves in ordinal order can keep them for its next
+    /// calls. Rows come in ascending ordinal order; the extra ones are any
+    /// rows of `out` the caller did not ask for.
+    fn inode_values_ahead(
+        &self,
+        ordinals: &[u32],
+        _ahead: u32,
+        out: &mut Vec<InodeValueRow>,
+    ) -> Result<(), PersistenceError> {
+        self.inode_values(ordinals, out)
+    }
+    /// One pack through the caller's bounded range plan: only the control
+    /// prefix and the selected complete groups are read, never the body behind
+    /// them. The storage port owns the plan and the returned units.
+    fn read_scoped_pack(
+        &self,
+        _id: i64,
+        _plan: &mut dyn layerfs_storage::port::PackReadPlan,
+    ) -> Result<layerfs_storage::port::AcquiredPackRead, PersistenceError> {
+        Err(PersistenceError::Refused {
+            status: "pack range read".to_owned(),
+        })
+    }
+}
+
+/// A plan that selects ranges chosen before the acquisition starts.
+struct FixedRanges(Option<Vec<PackRange>>);
+
+impl PackReadPlan for FixedRanges {
+    fn select(
+        &mut self,
+        _info: PackInfo,
+        _prefix: &[u8],
+    ) -> Result<PackReadChoice, PersistenceError> {
+        self.0
+            .take()
+            .map(PackReadChoice::Ranges)
+            .ok_or(PersistenceError::Malformed)
+    }
+}
+
+/// [`Mechanics::pack_ranges`] as one scoped acquisition per pack.
+pub(crate) fn ranges_by_acquisition<M: Mechanics + ?Sized>(
+    mechanics: &M,
+    requests: &[(i64, Vec<PackRange>)],
+    out: &mut Vec<Vec<Vec<u8>>>,
+) -> Result<(), PersistenceError> {
+    for (id, ranges) in requests {
+        let mut plan = FixedRanges(Some(ranges.clone()));
+        let AcquiredPackRead::Units(units) = mechanics.read_scoped_pack(*id, &mut plan)? else {
+            return Err(PersistenceError::Malformed);
+        };
+        out.push(
+            units
+                .into_parts()
+                .2
+                .into_iter()
+                .map(|(_, bytes)| bytes)
+                .collect(),
+        );
+    }
+    Ok(())
 }

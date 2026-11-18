@@ -37,7 +37,7 @@ Nothing here is published to npm, PyPI or crates.io.
 | Old | 2.0.0 | Status and reason |
 | --- | --- | --- |
 | npm `@layerfs/agent` (`import { LayerFS } from "@layerfs/agent"`) | npm `layerfs`: `import layerfs from "layerfs"` or `import { client, LayerFSError } from "layerfs"`. An ES module for Node 22 or later, MIT | **Replaced.** One package, one native addon. [`api/node/package.json`](../../../api/node/package.json), [Node](../../architecture/api/front-ends/bindings.md#layerfs-node) |
-| npm `@layerfs/cli` (the Node `layerfs` command; #521: 106 commands) | the native `layerfs` command, one Rust binary, 61 calls plus `doctor`, `import-env`, `worker` and `help` | **Replaced.** It is not an npm package: `layerfs-cli` has `publish = false`. The command counts are not comparable (the old ones included the backend and runtime commands). [CLI](../../architecture/api/front-ends/README.md#the-layerfs-command) |
+| npm `@layerfs/cli` (the Node `layerfs` command; #521: 106 commands) | the native `layerfs` command, one Rust binary, 84 calls plus `doctor`, `import-env`, `worker` and `help` | **Replaced.** It is not an npm package: `layerfs-cli` has `publish = false`. The command counts are not comparable (the old ones included the backend and runtime commands). [CLI](../../architecture/api/front-ends/README.md#the-layerfs-command) |
 | npm `@layerfs/backend` (`LayerFSBackend.of(client)`, 14 operator and diagnostic calls) | none, except `layerfs.workspace.status(ws)` | **Removed** (O25). [Limitations](limitations.md#not-built-refused-as-unsupported), [README](README.md#compatibility-with-110) |
 | npm `@layerfs/runtime` (`LayerFSRuntime.open`, worker start and restart, `project.start_init` / `get_init` / `subscribe_init`, Sandbox and volume sweep) | no package. The `machine`, `store`, `project` and `sandbox` families; `project.init` with `on_progress`; `machine start` and `machine stop` by hand (nothing starts a machine on demand, D11) | **Replaced** in part, **Removed** for the job registry (O22) and the sweep. [Machines and Stores](machines-and-stores.md#starting-and-stopping-manual-535-d11), [Node and Python](sdk.md#functions-as-options) |
 | npm `@layerfs/mcp` (#521: 50 tools, stdio) | none | **Removed.** MCP is shelved (O32): 2.0 has no MCP server, and this guide gives no MCP setup. [Coverage](../../architecture/api/calls/coverage.md#outside-the-table) |
@@ -65,9 +65,10 @@ pip install "$OUT"/layerfs-2.0.0-*.whl
 cargo +1.85.1 build --release --locked -p layerfs-cli    # target/release/layerfs
 ```
 
-The default addon, wheel and command have no PostgreSQL and no TLS; a call
-that needs them is refused `Unsupported`. Each artifact needs the glibc of the
-host that built it (2.39 on the host used). See
+PostgreSQL is built into every artifact, so no build flag selects it; only TLS
+is optional (`--features tls`), and a call that needs an `https://` remote is
+refused `Unsupported` without it. Each artifact needs the glibc of the host
+that built it (2.39 on the host used). See
 [artifact-qualification-2.0.0.md](../../general/artifact-qualification-2.0.0.md).
 
 ## 2. Constructors, settings and entry points
@@ -76,7 +77,7 @@ host that built it (2.39 on the host used). See
 | --- | --- | --- |
 | `LayerFS.open(name, { home, storePath, deploy, storePolicy, trace, scope })` | `client({ home, scope })` (Node), `client(home=, scope=)` (Python). The default export and the family exports use `client()`. Every call names its project as `"<store>/<project>"` | **Replaced.** There is no default project and no per-client Store, deploy or policy option. [Node and Python](sdk.md), [README](README.md#compatibility-with-110) |
 | `LayerFS.init(name, folder, timeoutMs)` | `store.create(store)`, then `project.init("<store>/<project>", folder, { timeout, on_progress })` | **Replaced.** `LayerFS.init` and `LayerFS.open` have no alias (D5). [`project.init`](../../architecture/api/sdk/project.md#projectinit) |
-| `client.call(method, args)`, `LayerFS.call` | not exported. Node exports `table`, `families`, `client`, `doctor`, `close` and the nine families; Python `TABLE`, `FAMILIES`, `client`, `doctor`, `close` | **Removed** from the packages. Rust callers use `layerfs_api::call_scoped`. [`index.js`](../../../api/node/src/index.js), [Table](../../architecture/api/calls/README.md#what-it-does) |
+| `client.call(method, args)`, `LayerFS.call` | not exported. Node exports `table`, `families`, `client`, `doctor`, `close` and the twelve families; Python `TABLE`, `FAMILIES`, `client`, `doctor`, `close` | **Removed** from the packages. Rust callers use `layerfs_api::call_scoped`. [`index.js`](../../../api/node/src/index.js), [Table](../../architecture/api/calls/README.md#what-it-does) |
 | `await client.close()`, `Symbol.asyncDispose` (#521) | module-level `layerfs.close()` (Node) and `layerfs.close()` (Python): closes the Stores this process holds idle, answers how many | **Changed.** There is no client object to dispose; call `close()` before the process ends. [Node and Python](sdk.md) |
 | `LAYERFS_STORE_PATH`, `storePath` | none. A Store lives under the home (`store/<name>/`); `store.create`, `store.connect`, `store.push` and `store.pull` make and move Stores | **Removed.** [The home](home.md), [Machines and Stores](machines-and-stores.md#stores) |
 | `LAYERFS_WORKER_ENDPOINT`, worker started by `@layerfs/runtime` | none. The home's machine records say where a Store's worker is; `layerfs worker` serves it | **Removed.** [Machines and Stores](machines-and-stores.md#routes) |
@@ -123,10 +124,10 @@ options. The argument lists are in the generated
 | `backend.daemon.workspace.status(ws)` | `workspace.status(ws)` | **Replaced** (O14). |
 | background processes (`process.*` of the backend facade) | none | **Removed** with the backend facade (O25). [Limitations](limitations.md#not-built-refused-as-unsupported) |
 
-Calls with no counterpart in the 1.1.0 method table above: `project.remove`,
+Calls with no counterpart in the 1.1.0 method table above: `project.delete`,
 `commit.get`, and the `machine`, `store` and `backup` families, plus the
-commands `layerfs doctor` and `layerfs import-env`. In all there are 61 calls in
-nine families ([coverage](../../architecture/api/calls/coverage.md)).
+commands `layerfs doctor` and `layerfs import-env`. In all there are 84 calls in
+twelve families ([coverage](../../architecture/api/calls/coverage.md)).
 
 ## 4. Folder scope
 

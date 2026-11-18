@@ -11,7 +11,8 @@ CREATE TABLE store_policy (
  chunk_delta_max_depth bigint NOT NULL CHECK (chunk_delta_max_depth BETWEEN 0 AND 50),
  metadata_delta_max_depth bigint NOT NULL CHECK (metadata_delta_max_depth BETWEEN 0 AND 50),
  next_pack_id bigint NOT NULL DEFAULT 1 CHECK (next_pack_id > 0),
- next_ordinal bigint NOT NULL DEFAULT 1 CHECK (next_ordinal BETWEEN 1 AND 4294967296)
+ next_ordinal bigint NOT NULL DEFAULT 1 CHECK (next_ordinal BETWEEN 1 AND 4294967296),
+ trace_salt bytea NOT NULL DEFAULT decode(repeat('00',32),'hex') CHECK (length(trace_salt)=32)
 );
 CREATE TABLE pack (
  pack_id bigint PRIMARY KEY CHECK (pack_id > 0),
@@ -70,6 +71,7 @@ CREATE TABLE history_meta (
  binding_key bytea NOT NULL CHECK (octet_length(binding_key) BETWEEN 1 AND 128),
  identity_format bigint NOT NULL CHECK (identity_format = 3),
  schema_version bigint NOT NULL CHECK (schema_version = 2),
+ next_history_serial bigint NOT NULL DEFAULT 1,
  schema_source text NOT NULL,
  schema_definition text NOT NULL
 );
@@ -96,6 +98,7 @@ CREATE TABLE layer (
  overwrote bytea NOT NULL,
  source_commit_id bytea
   CHECK (source_commit_id IS NULL OR (octet_length(source_commit_id) = 33 AND get_byte(source_commit_id, 0) = 18)),
+ history_serial bigint NOT NULL DEFAULT 0,
  CHECK (
   (parent_layer_id IS NULL AND source_branch_id IS NULL AND source_commit_id IS NULL)
   OR (parent_layer_id IS NOT NULL AND source_branch_id IS NOT NULL AND source_commit_id IS NOT NULL)
@@ -126,6 +129,7 @@ CREATE TABLE "commit" (
  new_metadata bigint NOT NULL DEFAULT 0 CHECK (new_metadata >= 0),
  lww bytea NOT NULL,
  displaced_id bytea CHECK (displaced_id IS NULL OR octet_length(displaced_id) = 33),
+ history_serial bigint NOT NULL DEFAULT 0,
  UNIQUE (layer_stack_id, commit_id)
 );
 CREATE TABLE branch (

@@ -62,6 +62,18 @@ impl ObjectRole {
         }
     }
 
+    /// Whether a canonical body of this role names other objects.
+    ///
+    /// A role without logical references is fully described by its identity,
+    /// stored width and delta base, so a mark never decodes its payload. This
+    /// is what makes the object closure metadata-only for file payloads.
+    pub const fn has_references(self) -> bool {
+        !matches!(
+            self,
+            Self::WholeFile | Self::Chunk | Self::Symlink | Self::DirectoryLeaf
+        )
+    }
+
     /// Rebuilds a role from its persisted code.
     pub const fn from_code(code: u8) -> ContentResult<Self> {
         match code {

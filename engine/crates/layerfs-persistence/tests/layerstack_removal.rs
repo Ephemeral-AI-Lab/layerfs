@@ -161,7 +161,6 @@ fn removing_one_project_leaves_the_other_whole_on_sqlite() {
     removes_one_project(&created.history, api_only, &api_commit, &shop_commit);
 }
 
-#[cfg(feature = "postgresql")]
 #[test]
 fn removing_one_project_leaves_the_other_whole_on_postgresql() {
     use layerfs_persistence::{PostgresHandles, PostgresSelection};

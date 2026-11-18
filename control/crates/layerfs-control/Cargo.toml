@@ -21,13 +21,6 @@ layerfs-bucket = { path = "../layerfs-bucket" }
 libc = "=0.2.189"
 
 [features]
-# PostgreSQL Stores (#506, #533): open, attach, create and Init.
-# Off by default; the sealed Linux build the worker runs turns it on.
-postgresql = [
-    "layerfs-store/postgresql",
-    "layerfs-project/postgresql",
-    "layerfs-store-service/postgresql",
-]
 # https:// remotes: Cloudflare R2, MinIO behind TLS. Off by default; the
 # sealed Linux build the worker runs turns it on.
 tls = ["layerfs-store/tls", "layerfs-bucket/tls"]

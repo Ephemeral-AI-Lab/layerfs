@@ -151,6 +151,27 @@ fn check(value: &Binding, token: WorkspaceToken) -> Result<(), Failure> {
     Ok(())
 }
 
+impl Service {
+    /// A daemon that ends normally gives every bound Workspace back before
+    /// its process goes: the unmount path releases the Store-side mount
+    /// intent, so a stopped daemon cannot leave a permanent `MountsActive`.
+    pub(crate) fn close_bound(&self) {
+        let workspaces: Vec<Arc<BoundWorkspace>> = match self.entries.lock() {
+            Ok(mut entries) => std::mem::take(&mut *entries)
+                .into_iter()
+                .filter_map(|(_, entry)| match entry {
+                    Entry::Bound(binding) => Some(binding.workspace),
+                    Entry::Binding => None,
+                })
+                .collect(),
+            Err(_) => Vec::new(),
+        };
+        for workspace in workspaces {
+            let _ = workspace.close();
+        }
+    }
+}
+
 pub(super) fn idle(value: &Binding) -> Result<(), Failure> {
     match value.activity {
         Activity::Idle => Ok(()),

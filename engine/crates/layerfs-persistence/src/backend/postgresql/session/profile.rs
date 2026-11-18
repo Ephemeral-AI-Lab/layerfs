@@ -58,6 +58,25 @@ impl Settings {
         sql
     }
 
+    /// A writable repeatable-read snapshot that does **not** wait for the
+    /// publication lane. The mark reads every history, locator and pack row
+    /// from one fixed snapshot and writes only `kept_node`; publications into
+    /// other tables never overlap it, and a second mark is the only writer
+    /// contending for its rows.
+    ///
+    /// The server's JIT compiler is off for this transaction. The planner's
+    /// estimate for the history closure crosses the JIT threshold on any
+    /// Store, and compiling it then costs hundreds of milliseconds for a
+    /// statement that runs in about ten.
+    pub(crate) fn snapshot_begin(&self) -> String {
+        format!(
+            "BEGIN ISOLATION LEVEL REPEATABLE READ; SET LOCAL search_path TO {}; \
+             SET LOCAL synchronous_commit TO {}; SET LOCAL jit TO off",
+            self.schema,
+            self.synchronous_commit.setting()
+        )
+    }
+
     /// A publication: like `write_begin(false)` with the lane's
     /// `lock_timeout`; the body takes the lane row itself, after its pack
     /// bodies are sent, with [`Self::LANE_ROW`].

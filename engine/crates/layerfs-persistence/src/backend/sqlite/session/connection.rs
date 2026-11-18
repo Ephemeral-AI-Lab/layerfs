@@ -3,6 +3,7 @@ use super::profile;
 use super::query;
 use super::rows;
 use crate::backend::records::BackendError;
+use crate::backend::sqlite::lifecycle::identity::FileIdentity;
 use crate::SqlitePersistenceProfile;
 use rusqlite::{limits::Limit, Connection, OpenFlags};
 use std::{
@@ -165,6 +166,9 @@ pub(crate) struct Session {
     pub(crate) profile: ConnectionProfile,
     pub(crate) layout: crate::SqlitePackLayout,
     pub(crate) acquisition: crate::SqliteAcquisitionSchema,
+    /// The `(dev, ino)` identity the path named when this handle opened (§10).
+    /// `None` on a platform without one; the fence then has nothing to compare.
+    pub(crate) identity: Option<FileIdentity>,
     pub(crate) path: PathBuf,
 }
 impl Session {
@@ -328,9 +332,11 @@ impl Session {
             writer.release().map_err(|_| BackendError::Unknown)?;
         }
         super::thread_work::add(&work.borrow());
-        let background = (writable && selected == SqlitePersistenceProfile::Disposable)
-            .then(|| super::background::Checkpointer::start(path))
+        let background = (writable && selected.background_checkpoint())
+            .then(|| super::background::Checkpointer::start(path, selected.synchronous()))
             .transpose()?;
+        // §10: the record every later transaction is fenced against.
+        let identity = FileIdentity::capture(path).map_err(|_| BackendError::Integrity)?;
         Ok(Self {
             diagnostic,
             background,
@@ -347,6 +353,7 @@ impl Session {
             profile,
             layout,
             acquisition,
+            identity,
         })
     }
     /// Stored schema version: the pack layout's, offset by the acquisition tables.
@@ -360,5 +367,20 @@ impl Session {
         let s = self.state.lock().map_err(|_| BackendError::Unknown)?;
         let w = *s.work.borrow();
         Ok(w)
+    }
+    /// §10: the Store path must still name the file this handle opened, or the
+    /// call is `StaleStore` before it reads or writes anything.
+    pub(crate) fn check_identity(&self) -> Result<(), BackendError> {
+        let Some(expected) = self.identity else {
+            return Ok(());
+        };
+        match expected.names(&self.path) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(BackendError::Stale),
+            // A removed Store is as stale as a replaced one: nothing this
+            // handle opened is left at the path to act on.
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Err(BackendError::Stale),
+            Err(_) => Err(BackendError::Integrity),
+        }
     }
 }

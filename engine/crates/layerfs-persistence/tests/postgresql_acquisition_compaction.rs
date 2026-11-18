@@ -10,14 +10,12 @@
 //! `host=127.0.0.1 port=55433 user=postgres password=... dbname=postgres
 //! sslmode=disable`). Without it each test reports NOT_RUN and passes nothing.
 //! Sizes are read with catalog functions on the test's own disposable schema.
-#![cfg(feature = "postgresql")]
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{PostgresHandles, PostgresSelection};
 use layerfs_storage::{port::acquisition::*, StoragePolicy};
 use std::time::{Duration, Instant};
 
-const BINDING: &[u8] = b"postgresql-acquisition-compaction";
 const CURSOR: [u8; 32] = [87; 32];
 const PAGE: i64 = 8192;
 const TABLES: [&str; 3] = ["init_entry", "init_host_file", "init_operation"];
@@ -26,21 +24,33 @@ const TABLES: [&str; 3] = ["init_entry", "init_host_file", "init_operation"];
 struct Schema {
     url: String,
     selection: PostgresSelection,
+    /// Per-test catalog identity: PostgreSQL advisory keys are server-wide,
+    /// so parallel tests must not share one binding.
+    binding: Vec<u8>,
 }
 impl Schema {
     fn new(url: String, tag: &str) -> Self {
         let name = format!("lfs87_{tag}_{}", std::process::id());
         let selection = PostgresSelection::new(&url, &name);
-        let schema = Self { url, selection };
+        let binding = format!("postgresql-acquisition-{tag}-{}", std::process::id()).into_bytes();
+        let schema = Self {
+            url,
+            selection,
+            binding,
+        };
         schema.drop_schema();
         schema
     }
     fn create(&self) -> PostgresHandles {
-        PostgresHandles::create(&self.selection, StoragePolicy::frozen_default(), &catalog())
-            .unwrap()
+        PostgresHandles::create(
+            &self.selection,
+            StoragePolicy::frozen_default(),
+            &catalog(&self.binding),
+        )
+        .unwrap()
     }
     fn open(&self) -> PostgresHandles {
-        PostgresHandles::open_writable(&self.selection, BINDING, CURSOR).unwrap()
+        PostgresHandles::open_writable(&self.selection, &self.binding, CURSOR).unwrap()
     }
     fn client(&self) -> postgres::Client {
         postgres::Client::connect(&self.url, postgres::NoTls).unwrap()
@@ -81,6 +91,13 @@ impl Schema {
                 "DROP SCHEMA IF EXISTS {} CASCADE",
                 self.selection.schema
             ));
+            let catalog = layerfs_history::CatalogId::derive(&self.binding).expect("catalog");
+            let mut scratch = String::from("lfs_gc_");
+            for byte in catalog.as_slice() {
+                scratch.push_str(&format!("{byte:02x}"));
+            }
+            scratch.truncate(63);
+            let _ = client.batch_execute(&format!("DROP SCHEMA IF EXISTS {scratch} CASCADE"));
         }
     }
 }
@@ -90,9 +107,9 @@ impl Drop for Schema {
     }
 }
 
-fn catalog() -> HistoryCatalogConfig {
+fn catalog(binding: &[u8]) -> HistoryCatalogConfig {
     HistoryCatalogConfig {
-        binding_key: BINDING.to_vec(),
+        binding_key: binding.to_vec(),
         cursor_key: CURSOR,
         incarnation: 1,
     }

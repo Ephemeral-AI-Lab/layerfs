@@ -16,7 +16,6 @@ path = "src/lib.rs"
 [features]
 default = ["machine"]
 machine = ["layerfs-api/machine"]
-postgresql = ["layerfs-api/postgresql"]
 tls = ["layerfs-api/tls"]
 
 [dependencies]

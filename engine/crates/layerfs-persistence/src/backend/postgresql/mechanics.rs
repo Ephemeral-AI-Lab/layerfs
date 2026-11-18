@@ -16,6 +16,9 @@ use layerfs_storage::{
 use postgres::types::ToSql;
 
 impl HistoryStatements for Transaction<'_> {
+    fn mechanics(&self) -> &dyn Mechanics {
+        self
+    }
     fn history(&self, key: &str, params: Vec<Param>) -> Result<Vec<Record>, BackendError> {
         match history::statements::qualified(key) {
             Some(sql) => self.query(&sql.replace("{s}", self.schema), params),
@@ -89,5 +92,45 @@ impl Mechanics for Transaction<'_> {
         out: &mut Vec<PersistedPack>,
     ) -> Result<(), PersistenceError> {
         objects::read::read(self, ids, out)
+    }
+    fn pack_prefix(
+        &self,
+        id: i64,
+        limit: usize,
+    ) -> Result<Option<(usize, Vec<u8>)>, PersistenceError> {
+        objects::read::prefix(self, id, limit)
+    }
+    fn pack_prefixes(
+        &self,
+        ids: &[i64],
+        limit: usize,
+        out: &mut Vec<(usize, Vec<u8>)>,
+    ) -> Result<(), PersistenceError> {
+        objects::read::prefixes(self, ids, limit, out)
+    }
+    fn pack_ranges(
+        &self,
+        requests: &[(i64, Vec<layerfs_storage::port::PackRange>)],
+        out: &mut Vec<Vec<Vec<u8>>>,
+    ) -> Result<(), PersistenceError> {
+        objects::read::ranges(self, requests, out)
+    }
+    fn read_scoped_pack(
+        &self,
+        id: i64,
+        plan: &mut dyn layerfs_storage::port::PackReadPlan,
+    ) -> Result<layerfs_storage::port::AcquiredPackRead, PersistenceError> {
+        objects::read::scoped(self, id, plan)
+    }
+    fn expect_scoped_packs(&self, ids: &[i64]) -> Result<(), PersistenceError> {
+        objects::read::expect(self, ids)
+    }
+    fn inode_values_ahead(
+        &self,
+        ordinals: &[u32],
+        ahead: u32,
+        out: &mut Vec<InodeValueRow>,
+    ) -> Result<(), PersistenceError> {
+        metadata::reads::inode_values_ahead(self, ordinals, ahead, out)
     }
 }

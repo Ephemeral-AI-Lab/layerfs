@@ -16,7 +16,11 @@ fn parallel_branch_lists_never_trip_over_a_dropped_lease() {
         vec!["project", "init", "s/p", source.to_str().unwrap()],
     ] {
         let out = run(&mut layerfs(&home, &words));
-        assert!(out.status.success(), "layerfs {words:?}: {}", text(&out.stderr));
+        assert!(
+            out.status.success(),
+            "layerfs {words:?}: {}",
+            text(&out.stderr)
+        );
     }
     for round in 0..6 {
         let children: Vec<_> = (0..8)

@@ -51,7 +51,8 @@ pub struct HelperSpec {
     pub daemon: PathBuf,
     /// The daemon's setup file, 0600.
     pub config: PathBuf,
-    /// The Sandbox's cgroup v2 directory.
+    /// The cgroup v2 group the Sandbox's init stage joins: its group's leaf
+    /// (`namespaces::leaf`), so its daemon and commands are in it too.
     pub cgroup: PathBuf,
     /// The unpacked image: the read-only lower layer of the Sandbox's root.
     pub lower: PathBuf,

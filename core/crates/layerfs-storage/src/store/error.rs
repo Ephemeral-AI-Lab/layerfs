@@ -95,10 +95,14 @@ impl StorageError {
         }
     }
 
-    /// True when persistence definitely refused the write for lack of space,
-    /// such as a full Store disk. Nothing was written by the refused attempt.
+    /// True when persistence definitely refused the write for lack of capacity:
+    /// a full Store disk, or a declared bound ([`Self::CapacityExceeded`]) that
+    /// refused the offered value. Nothing was written by the refused attempt.
+    /// A declared bound stays a provider/input failure, never disk exhaustion
+    /// (`admission-and-persistence.md` §10).
     pub fn is_capacity_refusal(&self) -> bool {
         match self {
+            Self::CapacityExceeded { .. } => true,
             Self::Io(error) => matches!(
                 error
                     .get_ref()

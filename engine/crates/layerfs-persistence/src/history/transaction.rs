@@ -1,6 +1,6 @@
 //! Shared history transaction facade; backend owns acknowledgement and errors.
 use super::{bindings::Parameters, provider::HistoryProvider};
-use crate::backend::{records::Record, Column, Engine, HistoryStatements};
+use crate::backend::{records::Record, Column, Engine, HistoryStatements, Mechanics};
 use layerfs_history::HistoryResult;
 pub(crate) struct Transaction<'a> {
     backend: &'a dyn HistoryStatements,
@@ -16,6 +16,10 @@ impl<'a> Transaction<'a> {
     }
     pub(crate) fn execute(&self, key: &str, params: impl Parameters) -> HistoryResult<usize> {
         self.query(key, params).map(|r| r.len())
+    }
+    /// The same transaction's physical object and metadata access.
+    pub(crate) fn mechanics(&self) -> &dyn Mechanics {
+        self.backend.mechanics()
     }
     /// The engine's array form of a statement, if it has one.
     pub(crate) fn arrays(
@@ -35,7 +39,6 @@ impl HistoryProvider {
     ) -> HistoryResult<T> {
         match &self.engine {
             Engine::Sqlite(session) => session.run(false, |b| f(&Transaction { backend: b })),
-            #[cfg(feature = "postgresql")]
             Engine::Postgres(session) => session.run(false, |b| f(&Transaction { backend: b })),
         }
     }
@@ -49,7 +52,6 @@ impl HistoryProvider {
     ) -> HistoryResult<T> {
         match &self.engine {
             Engine::Sqlite(session) => session.run(false, |b| f(&Transaction { backend: b })),
-            #[cfg(feature = "postgresql")]
             Engine::Postgres(session) => session.read_statement(|b| f(&Transaction { backend: b })),
         }
     }
@@ -59,8 +61,21 @@ impl HistoryProvider {
     ) -> HistoryResult<T> {
         match &self.engine {
             Engine::Sqlite(session) => session.run(true, |b| f(&Transaction { backend: b })),
-            #[cfg(feature = "postgresql")]
             Engine::Postgres(session) => session.run(true, |b| f(&Transaction { backend: b })),
+        }
+    }
+    /// The mark's write: one fixed repeatable-read snapshot on PostgreSQL
+    /// without the publication lane, and the ordinary implicit write
+    /// transaction on SQLite (whose single writer is already the exclusion).
+    /// Only `kept_node` rows are written, so publications into other tables
+    /// never wait for a mark, and a second mark is the only row contention.
+    pub(crate) fn write_snapshot<T>(
+        &self,
+        f: impl FnOnce(&Transaction<'_>) -> HistoryResult<T>,
+    ) -> HistoryResult<T> {
+        match &self.engine {
+            Engine::Sqlite(session) => session.run(true, |b| f(&Transaction { backend: b })),
+            Engine::Postgres(session) => session.run_snapshot(|b| f(&Transaction { backend: b })),
         }
     }
 }

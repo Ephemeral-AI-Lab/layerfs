@@ -6,9 +6,12 @@ use super::{
 };
 use crate::backend::records::{BackendError, OutcomeError, Param, Record};
 use layerfs_telemetry::timer::waits::Wait;
-use postgres::{binary_copy::BinaryCopyInWriter, types::ToSql, types::Type, Row};
+use postgres::{
+    binary_copy::BinaryCopyInWriter, types::ToSql, types::Type, Row, SimpleQueryMessage,
+};
 use std::{
     cell::{Cell, RefCell},
+    sync::atomic::Ordering,
     time::Instant,
 };
 
@@ -19,6 +22,11 @@ pub(crate) enum Mode {
     Read,
     /// A write, serialized behind the lane row unless nested in a held lane.
     Write,
+    /// A writable repeatable-read snapshot that never waits for the lane row:
+    /// the mark's closure and its `kept_node` write see one fixed snapshot
+    /// while publications continue. A second mark is the only row-level
+    /// contention, and it reports the engine's serialization failure.
+    Snapshot,
     /// A write of new immutable rows only (pack bodies), without the lane.
     Stage,
     /// One publication: pack bodies first, without the lane, then the lane
@@ -43,11 +51,25 @@ pub(crate) struct Transaction<'a> {
     single: Option<Cell<bool>>,
     /// `Mode::Publish` outside a held lane: the lane row is still to lock.
     lane: Cell<bool>,
+    /// The generation an autocommit read must still see (spec 5.2). The read's
+    /// one statement joins it as a trailing column, so the check costs no extra
+    /// round trip. `None` inside a transaction (its `BEGIN` batch checks) and on
+    /// a session whose open has not set a generation yet (the open check).
+    fence: Option<u64>,
     /// The Store's checked schema, for statements that name it.
     pub(crate) schema: &'a str,
+    /// Pack rows read ahead of the scoped reads a caller announced
+    /// (`objects::read::expect`), by pack. Each is used once.
+    pub(crate) ahead: RefCell<std::collections::HashMap<i64, Row>>,
 }
 
 impl Transaction<'_> {
+    /// Whether statements run as written, with no generation fence wrapped
+    /// around them: true inside a transaction.
+    pub(crate) fn unfenced(&self) -> bool {
+        self.fence.is_none()
+    }
+
     /// Online engine check preserving the server's concrete corruption verdict.
     /// Other refusals (including permissions) retain ordinary typed custody.
     pub(crate) fn engine_check(
@@ -104,7 +126,8 @@ impl Transaction<'_> {
         self.admit()?;
         let start = Instant::now();
         let mut state = self.state.borrow_mut();
-        let statement = state.statement(sql);
+        let text = self.fenced(sql);
+        let statement = state.statement(&text);
         let statement = self.checked(statement)?;
         if statement.params().len() != params.len() {
             return Err(BackendError::Integrity);
@@ -118,9 +141,14 @@ impl Transaction<'_> {
         }
         let refs: Vec<&(dyn ToSql + Sync)> = bound.iter().map(|b| b.as_ref()).collect();
         let result = state.client.query(&statement, &refs);
-        let result = self
-            .checked(result)
-            .and_then(|rows| rows.iter().map(rows::record).collect::<Result<Vec<_>, _>>());
+        let result = self.checked(result).and_then(|rows| {
+            let mut records = rows
+                .iter()
+                .map(rows::record)
+                .collect::<Result<Vec<_>, _>>()?;
+            self.check_fence(&mut records)?;
+            Ok(records)
+        });
         let work = &mut state.work;
         work.statements += 1;
         work.round_trips += 1;
@@ -142,10 +170,14 @@ impl Transaction<'_> {
         self.admit()?;
         let start = Instant::now();
         let mut state = self.state.borrow_mut();
-        let statement = state.statement(sql);
+        let text = self.fenced(sql);
+        let statement = state.statement(&text);
         let statement = self.checked(statement)?;
         let result = state.client.query(&statement, params);
         let result = self.checked(result);
+        if let Ok(rows) = &result {
+            check_typed_fence(rows, self.fence)?;
+        }
         let work = &mut state.work;
         work.statements += 1;
         work.round_trips += 1;
@@ -211,7 +243,29 @@ impl Session {
         body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
     ) -> Result<T, E> {
         let mode = if writable { Mode::Write } else { Mode::Read };
-        self.run_as(mode, body)
+        self.run_mode(mode, true, body)
+    }
+
+    /// [`Self::run`] without the generation fence: the Store diagnostic is an
+    /// observation of a Store whose authority may have changed, and reports the
+    /// change itself instead of refusing with `Stale` (spec 5.2). It is
+    /// read-only on a read-only session exactly like [`Self::run`].
+    pub(crate) fn run_observed<T, E: From<BackendError> + OutcomeError>(
+        &self,
+        writable: bool,
+        body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
+    ) -> Result<T, E> {
+        let mode = if writable { Mode::Write } else { Mode::Read };
+        self.run_mode(mode, false, body)
+    }
+
+    /// One writable repeatable-read snapshot without the publication lane.
+    /// Used by the mark, whose only writes are `kept_node` rows.
+    pub(crate) fn run_snapshot<T, E: From<BackendError> + OutcomeError>(
+        &self,
+        body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
+    ) -> Result<T, E> {
+        self.run_as(Mode::Snapshot, body)
     }
 
     /// Immutable rows (packs, locations, inode values) read without a
@@ -237,6 +291,15 @@ impl Session {
         mode: Mode,
         body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
     ) -> Result<T, E> {
+        self.run_mode(mode, true, body)
+    }
+
+    fn run_mode<T, E: From<BackendError> + OutcomeError>(
+        &self,
+        mode: Mode,
+        fenced: bool,
+        body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
+    ) -> Result<T, E> {
         if !matches!(mode, Mode::Read | Mode::Immutable | Mode::Statement) && !self.writable {
             return Err(BackendError::ReadOnly.into());
         }
@@ -255,14 +318,32 @@ impl Session {
         if state.quarantined {
             return Err(BackendError::Unknown.into());
         }
+        // Spec 5.2: the generation check rides in the statements a client
+        // already sends. A transaction checks it in the same round trip as its
+        // `BEGIN`, so the `AccessShareLock` it takes on `history_meta` holds
+        // until `COMMIT`: a swap that starts after this point meets
+        // `LOCK TABLE ... ACCESS EXCLUSIVE NOWAIT` and abandons. An autocommit
+        // read (`Statement`/`Immutable`) joins the same column into its one
+        // statement below. A session whose open has not set a generation (the
+        // open's own check) is unfenced.
+        let generation = fenced
+            .then(|| self.incarnation.load(Ordering::SeqCst))
+            .filter(|generation| *generation != 0);
+        let transactional = matches!(
+            mode,
+            Mode::Read | Mode::Write | Mode::Snapshot | Mode::Stage | Mode::Publish
+        );
+        let expected = generation.filter(|_| transactional);
+        let autocommit = generation.filter(|_| matches!(mode, Mode::Immutable | Mode::Statement));
         let begin = match mode {
             Mode::Read => self.settings.read_begin(),
+            Mode::Snapshot => self.settings.snapshot_begin(),
             Mode::Write => self.settings.write_begin(!turn.nested),
             Mode::Stage => self.settings.write_begin(false),
             Mode::Publish => self.settings.publish_begin(),
             Mode::Immutable | Mode::Statement => {
                 let single = (mode == Mode::Statement).then(|| Cell::new(false));
-                let result = immutable(state, &self.settings.schema, single, body);
+                let result = immutable(state, &self.settings.schema, single, autocommit, body);
                 state.work.transaction_ns += start.elapsed().as_nanos() as u64;
                 return result;
             }
@@ -270,7 +351,41 @@ impl Session {
         let schema = self.settings.schema.as_str();
         let result = (|| {
             state.work.round_trips += 1;
-            if let Err(e) = state.client.batch_execute(&begin) {
+            if let Some(expected) = expected {
+                let check = format!(
+                    "{begin}; SELECT catalog_incarnation::text FROM {schema}.history_meta WHERE id=1"
+                );
+                match state.client.simple_query(&check) {
+                    Ok(messages) => {
+                        let mut actual: Option<&str> = None;
+                        for message in &messages {
+                            if let SimpleQueryMessage::Row(row) = message {
+                                actual = row.try_get(0).ok().flatten();
+                            }
+                        }
+                        let generation = actual
+                            .and_then(|text| text.parse::<u64>().ok())
+                            .ok_or(BackendError::Integrity)?;
+                        if generation != expected {
+                            if rollback(state).is_err() {
+                                state.quarantined = true;
+                                return Err(BackendError::Unknown.into());
+                            }
+                            state.work.rollbacks += 1;
+                            return Err(BackendError::Stale.into());
+                        }
+                    }
+                    Err(e) => {
+                        let error = e.backend();
+                        if error == BackendError::Unknown || rollback(state).is_err() {
+                            state.quarantined = true;
+                            return Err(BackendError::Unknown.into());
+                        }
+                        state.work.rollbacks += 1;
+                        return Err(error.into());
+                    }
+                }
+            } else if let Err(e) = state.client.batch_execute(&begin) {
                 let error = e.backend();
                 if error == BackendError::Unknown || rollback(state).is_err() {
                     state.quarantined = true;
@@ -290,7 +405,9 @@ impl Session {
                     uncertain: Cell::new(false),
                     single: None,
                     lane: Cell::new(mode == Mode::Publish && !turn.nested),
+                    fence: None,
                     schema,
+                    ahead: RefCell::default(),
                 };
                 let result = body(&tx);
                 let uncertain = tx.uncertain.get()
@@ -343,11 +460,76 @@ impl Session {
     }
 }
 
+impl Transaction<'_> {
+    /// The one statement with the generation it must still see joined as its
+    /// trailing column (spec 5.2). Autocommit reads name the schema, so the
+    /// fence's `history_meta` read is schema-qualified too. A statement that
+    /// reads no rows returns no rows: the swap retains exactly the live set
+    /// (`live_heads_digest` is unchanged), so an absence at `G` is an absence
+    /// at `G + 1` and needs no generation to be answered.
+    fn fenced<'a>(&self, sql: &'a str) -> std::borrow::Cow<'a, str> {
+        match self.fence {
+            None => std::borrow::Cow::Borrowed(sql),
+            Some(_) => {
+                // A shipped statement ends in `;`, which the extended protocol
+                // accepts as one statement but a parenthesized subquery does not.
+                let statement = sql.trim_end();
+                let statement = statement.strip_suffix(';').unwrap_or(statement).trim_end();
+                std::borrow::Cow::Owned(format!(
+                    "SELECT q.*,f.__layerfs_incarnation FROM ({statement}) q CROSS JOIN \
+                     (SELECT catalog_incarnation AS __layerfs_incarnation FROM {}.history_meta WHERE id=1) f",
+                    self.schema
+                ))
+            }
+        }
+    }
+
+    /// Checks and removes the joined generation column of a fenced read.
+    fn check_fence(&self, rows: &mut [Record]) -> Result<(), BackendError> {
+        let Some(expected) = self.fence else {
+            return Ok(());
+        };
+        for row in rows.iter_mut() {
+            let actual = match row.cells.pop() {
+                Some(crate::backend::records::Value::Integer(generation)) if generation > 0 => {
+                    generation as u64
+                }
+                _ => return Err(BackendError::Integrity),
+            };
+            if actual != expected {
+                return Err(BackendError::Stale);
+            }
+        }
+        Ok(())
+    }
+}
+
+/// The same check for a fenced `typed` read, whose raw rows keep the trailing
+/// column (its callers read the leading ones by index).
+fn check_typed_fence(rows: &[Row], fence: Option<u64>) -> Result<(), BackendError> {
+    let Some(expected) = fence else {
+        return Ok(());
+    };
+    for row in rows {
+        let actual: i64 = row
+            .try_get(row.len() - 1)
+            .map_err(|_| BackendError::Integrity)?;
+        if actual <= 0 {
+            return Err(BackendError::Integrity);
+        }
+        if actual as u64 != expected {
+            return Err(BackendError::Stale);
+        }
+    }
+    Ok(())
+}
+
 /// A body of autocommit statements; a lost reply still quarantines.
 fn immutable<T, E: From<BackendError> + OutcomeError>(
     state: &mut State,
     schema: &str,
     single: Option<Cell<bool>>,
+    fence: Option<u64>,
     body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
 ) -> Result<T, E> {
     let (result, uncertain) = {
@@ -357,7 +539,9 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
             uncertain: Cell::new(false),
             single,
             lane: Cell::new(false),
+            fence,
             schema,
+            ahead: RefCell::default(),
         };
         let result = body(&tx);
         let uncertain = tx.uncertain.get();

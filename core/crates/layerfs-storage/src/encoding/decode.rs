@@ -277,6 +277,24 @@ fn decode_payload(
     }
 }
 
+/// Number of framed records in one group body, with the group directory
+/// validated exactly as [`framed_record`] validates it.
+pub fn framed_record_count(group: &[u8]) -> StorageResult<usize> {
+    if group.len() < 4 {
+        return Err(StorageError::Integrity("group framing"));
+    }
+    let count = u32::from_le_bytes(
+        group[..4]
+            .try_into()
+            .map_err(|_| StorageError::Integrity("group record count"))?,
+    ) as usize;
+    let ends = group
+        .get(4..4 + 4 * count)
+        .ok_or(StorageError::Integrity("group record directory"))?;
+    record_range(count, ends, group.len(), 0)?;
+    Ok(count)
+}
+
 /// Extracts one framed record from a group body.
 pub fn framed_record(group: &[u8], ordinal: usize) -> StorageResult<&[u8]> {
     if group.len() < 4 {

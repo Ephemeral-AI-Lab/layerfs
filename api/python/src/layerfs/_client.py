@@ -1,4 +1,4 @@
-"""One client per home (and optional folder scope, O32): eleven families
+"""One client per home (and optional folder scope, O32): twelve families
 built from the library's call table. Each function takes its positionals
 in the table's order; optional positionals and options may be keywords.
 Any call also takes ``log_tag=``, the tag of its call log line (#659).
@@ -12,7 +12,7 @@ from ._values import decode, encode, path_text
 
 #: The table: ``[{family, call, args, options, help}]``.
 TABLE = decode(_native.table())
-#: The eleven families, in help order.
+#: The twelve families, in help order.
 FAMILIES = list(dict.fromkeys(spec["family"] for spec in TABLE))
 
 _FUNCTION = "function"
@@ -95,7 +95,7 @@ def _bind(client, spec):
         if args.get("stream") is True:
             _streamed(handlers)
         scope = encode(client.scope) if client.scope is not None else None
-        answer = decode(_native.call(name, encode(args), client.home, scope, _event_handler(handlers)))
+        answer = decode(_native.call(name, encode(args), client._home, scope, _event_handler(handlers)))
         refused = answer.get("refused")
         if refused is not None:
             raise LayerFSError(refused["code"], refused["message"], refused.get("detail"))
@@ -122,7 +122,8 @@ class Client:
     with an optional folder scope ``{"project": ..., "folder": ..., "branch": ...}``."""
 
     def __init__(self, home=None, scope=None):
-        self.home = path_text(home)
+        # not ``self.home``: that is the ``home`` family
+        self._home = path_text(home)
         self.scope = scope
         for family in FAMILIES:
             setattr(self, family, Family(family))

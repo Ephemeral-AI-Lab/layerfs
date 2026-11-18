@@ -19,6 +19,7 @@ use layerfs_history::NodeId;
 use layerfs_home::outcome::refused;
 use layerfs_store_service::history::{lookup, MAIN};
 use layerfs_store_service::read::cached::Cached;
+use layerfs_store_service::read::visibility::Visibility;
 use layerfs_store_service::store::StorePorts;
 use layerfs_store_service::StoreService;
 use layerfs_telemetry::timer::Timing;
@@ -45,6 +46,9 @@ pub(super) struct PinnedSnapshot {
     pub(super) node: String,
     pub(super) root: String,
     tree: TreeTable,
+    /// §4.3: the pinned node's marker visibility. Hidden entries are omitted
+    /// from the exported folder and from its counts.
+    visibility: Visibility,
 }
 
 /// Resolves `(project, branch)` once into an immutable `(NodeId, ObjectId,
@@ -65,12 +69,16 @@ pub(super) fn pin_snapshot(
     let root = lookup::root(&service.store, node)?;
     let reader = service.store.ports(stack.scope);
     let tree = TreeTable::open(reader.as_ref(), FilesystemRootId(root)).map_err(lookup::content)?;
+    // The pinned node's stack and serial, fail-closed: a marker read error
+    // must refuse the export rather than export a removed path.
+    let visibility = Visibility::for_node(&service.store, node)?;
     Ok(PinnedSnapshot {
         reader,
         label,
         node: node_text(node),
         root: hex(root.as_bytes()),
         tree,
+        visibility,
     })
 }
 
@@ -163,6 +171,11 @@ pub(super) fn stream_snapshot(
             rel.push(b'/');
         }
         rel.extend_from_slice(name.as_bytes());
+        // A hidden entry is omitted; a hidden directory's subtree with it, as
+        // the read surface omits it and the marker hides everything below it.
+        if pinned.visibility.hidden_relative(&rel).is_some() {
+            continue;
+        }
         match value.kind {
             InodeKind::Directory => {
                 counts.directories += 1;

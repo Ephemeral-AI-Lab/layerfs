@@ -1,6 +1,6 @@
 //! One correlated bounded control request, never an immutable-content upload.
 use crate::{
-    control::{Call, ControlError, Request, HISTORY_WINDOW},
+    control::{Call, ControlError, MountPlace, Request, HISTORY_WINDOW},
     control_history::*,
     wire::{Reader, Writer},
 };
@@ -50,6 +50,28 @@ impl Call {
                 out.put(&workspace.to_bytes())?;
                 out.blob(project.as_bytes())?;
                 out.blob(branch.as_bytes())?;
+            }
+            Request::MountPlaced {
+                workspace,
+                branch,
+                place,
+            } => {
+                out.byte(16)?;
+                out.put(&workspace.to_bytes())?;
+                out.put(&branch.to_bytes())?;
+                put_place(&mut out, place)?;
+            }
+            Request::MountNamedPlaced {
+                workspace,
+                project,
+                branch,
+                place,
+            } => {
+                out.byte(17)?;
+                out.put(&workspace.to_bytes())?;
+                out.blob(project.as_bytes())?;
+                out.blob(branch.as_bytes())?;
+                put_place(&mut out, place)?;
             }
             Request::Sdk(value) => {
                 out.byte(20)?;
@@ -169,6 +191,17 @@ impl Call {
                 project: input.text(NAME_FIELD)?,
                 branch: input.text(NAME_FIELD)?,
             },
+            16 => Request::MountPlaced {
+                workspace: history(WorkspaceId::from_authority(input.array()?))?,
+                branch: history(BranchId::from_bytes(input.array()?))?,
+                place: place(&mut input)?,
+            },
+            17 => Request::MountNamedPlaced {
+                workspace: history(WorkspaceId::from_authority(input.array()?))?,
+                project: input.text(NAME_FIELD)?,
+                branch: input.text(NAME_FIELD)?,
+                place: place(&mut input)?,
+            },
             2 => Request::Commit(crate::control_merge::commit_control(&mut input)?),
             20 => Request::Sdk(crate::control_sdk::call(&mut input)?),
             3 => Request::Status(token(&mut input)?),
@@ -225,6 +258,38 @@ impl Call {
         Ok(Self { id, request })
     }
 }
+/// Writes the known Sandbox and machine names of one placed mount.
+fn put_place(out: &mut Writer, place: &MountPlace) -> Result<(), ControlError> {
+    let flags = u8::from(place.sandbox.is_some()) | (u8::from(place.machine.is_some()) << 1);
+    out.byte(flags)?;
+    if let Some(sandbox) = &place.sandbox {
+        out.blob(sandbox.as_bytes())?;
+    }
+    if let Some(machine) = &place.machine {
+        out.blob(machine.as_bytes())?;
+    }
+    Ok(())
+}
+
+/// Reads the known Sandbox and machine names of one placed mount.
+fn place(input: &mut Reader<'_>) -> Result<MountPlace, ControlError> {
+    let flags = input.byte()?;
+    if flags & !0b11 != 0 {
+        return Err(ControlError("mount place"));
+    }
+    let sandbox = if flags & 1 != 0 {
+        Some(input.text(NAME_FIELD)?)
+    } else {
+        None
+    };
+    let machine = if flags & 2 != 0 {
+        Some(input.text(NAME_FIELD)?)
+    } else {
+        None
+    };
+    Ok(MountPlace { sandbox, machine })
+}
+
 fn window(limit: u16) -> Result<(), ControlError> {
     if limit == 0 || limit > HISTORY_WINDOW {
         Err(ControlError("history processing window"))

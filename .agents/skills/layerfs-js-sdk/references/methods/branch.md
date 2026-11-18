@@ -5,12 +5,15 @@
 > command in a private home on 2026-11-02; ids are shortened.
 
 ```js
-branch.list(project, { page_size, page_pos })
+branch.list(project, { page_size, page_pos, page })
 branch.get(project, branch)
+branch.commits(project, branch, { page, page_size, at_commit, include_storage })
+branch.get_commit(project, branch, commit)
 branch.fork(project, name, from_branch, from_commit?)
 branch.merge(project, name, a, b, { message, units })
-branch.publish(project, branch, commit?)
-branch.diff(project, from_branch, to_branch, { paths_only, page_size, page_pos, cursor })
+branch.publish(project, branch, commit?, { expected_base, expected_head, force })
+branch.diff(project, from_branch, to_branch, { paths_only, page_size, page_pos, cursor, page, from_commit, to_commit, path_prefix, include_attribution, continuation })
+branch.remove(project, branch)
 ```
 
 `main` is not a Branch: it is the project's published line of Layers. It shows
@@ -19,7 +22,7 @@ in `branch.list`, you can read it and fork from it, and it changes only through
 
 ## `branch.list` and `branch.get`
 
-`branch.list(project, { page_size, page_pos })`, `branch.get(project, branch)`
+`branch.list(project, { page_size, page_pos, page })`, `branch.get(project, branch)`
 
 ```bash
 layerfs branch list shop/api --text
@@ -35,6 +38,46 @@ Each item is `{ name, id, base, head, forked_from }`. `base` is the `main`
 Layer underneath; `head` is the newest Commit, `null` before the first one.
 `branch.get` returns one item, or `NoSuchBranch` (`no Branch <name>`;
 `NotFound` before `88b033cfa9`).
+
+## `branch.commits`
+
+`branch.commits(project, branch, { page, page_size, at_commit, include_storage })`
+
+Saved side-Branch Commits, or `main`'s publication Layers, newest first from
+an immutable start. `page` and `page_size` number the pages; `at_commit` (a
+full saved id) starts from another point; `include_storage` adds each row's
+`new_canonical`, `new_stored` and `new_metadata` (`null` for a main Layer,
+which performs no Save).
+
+```json
+{"branch":"work","at_commit":{"id":"12ad2061f04f…","kind":"Commit","branch":"work","root":"f55fa9660a73…"},
+ "items":[{"id":"12ad2061f04f…","parent":"12c7ef811a49…","base":"3275838904b6…",
+   "time":1793574061147,"via":"fs","message":"add retries","message_truncated":false,
+   "details_omitted":true}],
+ "page":1,"page_size":50,"has_more":false,"scan":{"complete":true,"examined":1,"reason":null}}
+```
+
+Each item carries a full `ref: { id, kind, branch, root }`; `branch.get_commit`
+answers the rest. A side Branch follows its first-parent chain; `main` follows
+publication Layer parents, and a Layer's `time` is `null` with
+`time_status: "unavailable"` (its `source_time` is the source Commit's own
+time). A side Branch with no Commit has no rows.
+
+## `branch.get_commit`
+
+`branch.get_commit(project, branch, commit)`
+
+Full details of one saved Commit or `main` publication Layer admitted by the
+Branch. `commit` is the complete id: no prefix matching (unlike `commit.get`).
+
+The answer keeps the recorded metadata and adds typed `ref`, `parent_ref`,
+`second_parent_ref`, `base_layer`, `source_commit_ref`, `source_time` and
+`time_status`; a relationship that does not apply is null. For a publication,
+`parent` is the previous Layer and `source_commit` what was published. `main`
+admits its Layer lineage; a side Branch admits its first-parent and base
+lineage and its own recorded Commits, displaced ones included. The context
+lookup visits at most 10,000 records, and the whole answer, merge-unit
+reports included, must fit 48 KiB: either limit is `Capacity`.
 
 ## `branch.fork`
 
@@ -185,5 +228,24 @@ result is the same shape as [`commit.diff`](commit.md#commitdiff):
 layerfs branch diff shop/api main work --paths-only
 ```
 
-`paths_only` leaves out each item's `hunks` (they come back `null`). Resume a
+`paths_only` leaves out each item's `hunks` (they come back `null`). `page`,
+`page_size` and `page_pos` page the items; `from_commit` and `to_commit` pin
+the compared versions; `path_prefix` keeps one subtree; `include_attribution`
+adds each path's last writers; `continuation` resumes a saved query. Resume a
 long diff with `cursor: next_cursor`. Refused under a folder scope.
+
+## `branch.remove`
+
+`branch.remove(project, branch)`
+
+Retires one Branch in its Store. Its row is hidden from listings and name
+resolution; fork, merge, publish and mount of it are refused, and its Commits
+and objects stay until a later `store.compact`. `main` is `ReservedName`.
+
+```json
+{"kind":"Removed","project":"shop/api","branch":"work","removed_ms":1793574061147}
+```
+
+A repeat is `NoSuchBranch` (only `project.delete` is retry-idempotent); a
+concurrent remove is `Busy` with phase `"retire"`. `MountsActive` while a
+mount of the Branch is live.

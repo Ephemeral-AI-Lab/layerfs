@@ -105,26 +105,33 @@ pub(crate) fn pack_info(
         length,
     })
 }
+/// The typed failure of one backend call, shared by both engines.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum BackendError {
+pub enum BackendError {
+    /// A lock or session was held; the call had no effect.
     Busy,
     /// The Store was closed while the call waited for, or before, its turn.
     Closed,
     /// The server answered a new connection with an error (no such
     /// database, failed authentication): no session, so nothing ran.
-    #[cfg_attr(not(feature = "postgresql"), allow(dead_code))]
     Rejected,
     /// A signal interrupted the cross-process writer wait (Linux or macOS).
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Cancelled,
+    /// The Store or its session is read-only; the call had no effect.
     ReadOnly,
+    /// §10: the Store path no longer names the file this handle opened.
+    Stale,
+    /// The Store definitely ran out of a resource; the call had no effect.
     Capacity,
+    /// The reply or stored layout violated a checked invariant.
     Integrity,
     /// A SQLite Store of schema version 1 (before #91): refused at open with
     /// the offline conversion named, never misread.
     SchemaVersion1,
     /// Stored SQLite layout is not implemented; this is not a corruption verdict.
     UnsupportedSchemaVersion(i64),
+    /// The outcome is not proven: the failure may have committed.
     Unknown,
 }
 /// The refusal a schema version 1 SQLite Store gets at open.
@@ -143,6 +150,11 @@ impl From<BackendError> for layerfs_storage::port::PersistenceError {
             BackendError::UnsupportedSchemaVersion(version) => Self::Refused {
                 status: format!("unsupported SQLite Store schema version {version}; supported versions are 36/37/38 and 42/43/44; no migration performed"),
             },
+            // §10: the definite out-of-space refusal, named explicitly so a
+            // new variant cannot silently inherit a capacity verdict.
+            BackendError::Capacity => Self::Refused {
+                status: "Capacity".to_owned(),
+            },
             _ => Self::Refused {
                 status: format!("{e:?}"),
             },
@@ -158,6 +170,8 @@ impl From<BackendError> for layerfs_history::HistoryError {
                 Self::OwnershipUnavailable
             }
             BackendError::ReadOnly => Self::ContinuityUnavailable,
+            // §10: the file was replaced or moved under this handle.
+            BackendError::Stale => Self::StaleStore,
             BackendError::Capacity => Self::Capacity("persistence"),
             BackendError::Integrity => Self::Integrity("persistence"),
             BackendError::SchemaVersion1 => Self::Integrity(SCHEMA_VERSION_1),

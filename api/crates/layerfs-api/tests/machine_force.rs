@@ -46,6 +46,8 @@ esac
     .unwrap();
     std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o700)).unwrap();
     std::env::set_var("PATH", &root);
+    // only the stand-ins: no fallback folder after PATH
+    std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");
     write_record(
         &paths::machine_record(&home, "vm"),
         &SdkValue::map([

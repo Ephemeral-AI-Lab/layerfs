@@ -12,7 +12,6 @@ use std::path::Path;
 /// What a machine holds, read from the Store and Sandbox records.
 pub const RELATED: Related = Related {
     stores_on: inventory::stores_on,
-    postgresql_on: inventory::postgresql_on,
     sandboxes_on: inventory::sandboxes_on,
     can_remove: inventory::can_remove_machine,
     can_stop: inventory::can_stop_machine,
@@ -54,9 +53,21 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &MachineCreate) -> 
     layerfs_machine::create(home, events, request, RELATED)
 }
 
-/// `machine.remove`.
+/// `machine.remove`. A removed machine's own connection to each
+/// PostgreSQL Store is forgotten with it, so a later machine of its name
+/// dials the Store's.
 pub fn remove(home: &Path, name: &MachineName) -> Outcome {
-    layerfs_machine::remove(home, name, RELATED)
+    let removed = layerfs_machine::remove(home, name, RELATED)?;
+    layerfs_store::postgresql::check::forget_machine(home, name).map_err(|refusal| {
+        layerfs_home::outcome::refused(
+            &refusal.code,
+            format!(
+                "machine {name} was removed, but its own PostgreSQL connection was not forgotten: {}",
+                refusal.message
+            ),
+        )
+    })?;
+    Ok(removed)
 }
 
 /// `machine.update`.

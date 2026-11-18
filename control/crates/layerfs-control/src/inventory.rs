@@ -51,37 +51,6 @@ pub fn stores_on(home: &Path, machine: &str) -> Result<Vec<String>> {
     Ok(on)
 }
 
-/// The PostgreSQL Stores attached to machine `machine`, sorted by name.
-pub fn postgresql_on(home: &Path, machine: &str) -> Result<Vec<String>> {
-    let mut on = Vec::new();
-    for store in stores(home)? {
-        if let StoreRef::Postgres { .. } = store.store_ref()? {
-            if store.attachment(machine).is_some() {
-                on.push(store.name().to_owned());
-            }
-        }
-    }
-    Ok(on)
-}
-
-/// `store.detach`: refused `InUse` while a Sandbox of Store `store` is
-/// recorded on machine `machine`; `detail.related` lists them.
-pub fn store_idle_on(home: &Path, store: &str, machine: &str) -> Result<()> {
-    let on = sandboxes(home)?.into_iter().filter(|sandbox| {
-        let project = sandbox.project().unwrap_or("");
-        sandbox.machine() == machine && project.split_once('/').map(|(s, _)| s) == Some(store)
-    });
-    let names: Vec<String> = on.map(|sandbox| sandbox.name().to_owned()).collect();
-    if names.is_empty() {
-        return Ok(());
-    }
-    let message = format!(
-        "Store {store} has Sandboxes on machine {machine}: {}; close them first",
-        names.join(", ")
-    );
-    Err(in_use(message, related("sandbox", &names)))
-}
-
 /// The Sandboxes whose record names machine `machine`.
 pub fn sandboxes_on(home: &Path, machine: &str) -> Result<Vec<String>> {
     let on = sandboxes(home)?.into_iter();
@@ -115,16 +84,13 @@ pub fn sandboxes_of_project(home: &Path, project: &str) -> Result<Vec<String>> {
     Ok(of.map(|sandbox| sandbox.name().to_owned()).collect())
 }
 
-/// `machine.remove`: refused `InUse` while the machine holds Stores (or
-/// PostgreSQL Stores are attached to it),
+/// `machine.remove`: refused `InUse` while the machine holds Stores,
 /// Sandboxes or old Firecracker records it hosted (removing it would delete
 /// their microVMs' disks; forgetting those records first lets it go);
-/// `detail.related` lists them (#536 §10b).
+/// `detail.related` lists them (#536 §10b). A PostgreSQL Store is on no
+/// machine and holds none.
 pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
-    // a PostgreSQL Store attached to it is detached first, as a sqlite
-    // Store on it is pulled first
-    let mut stores = stores_on(home, name)?;
-    stores.extend(postgresql_on(home, name)?);
+    let stores = stores_on(home, name)?;
     let sandboxes = sandboxes_on(home, name)?;
     let hosted = hosted_on(home, name)?;
     if stores.is_empty() && sandboxes.is_empty() && hosted.is_empty() {
@@ -191,6 +157,37 @@ pub fn can_change_machine(home: &Path, name: &str) -> Result<()> {
     ))
 }
 
+/// `project.delete`: refused `Busy` while a Sandbox of `project`
+/// (`<store>/<project>`) is recorded, so a live Sandbox cannot outlive its
+/// project's Store rows. The `detail` is spec §10's `{entity: {kind:
+/// "project", name}, phase: null, op: null}`, and `related` lists the
+/// Sandboxes as `{kind, name}`; an unreachable Sandbox is still a live user
+/// and keeps holding.
+pub fn can_remove_project(home: &Path, project: &str) -> Result<()> {
+    let sandboxes = sandboxes_of_project(home, project)?;
+    if sandboxes.is_empty() {
+        return Ok(());
+    }
+    let message = match sandboxes.as_slice() {
+        [sandbox] => format!("Sandbox {sandbox} of {project} is running"),
+        many => format!("Sandboxes {} of {project} are running", many.join(", ")),
+    };
+    let mut refusal = refused("Busy", message);
+    refusal.detail = SdkValue::map([
+        (
+            "entity",
+            SdkValue::map([
+                ("kind", SdkValue::text("project")),
+                ("name", SdkValue::text(project)),
+            ]),
+        ),
+        ("phase", SdkValue::Null),
+        ("op", SdkValue::Null),
+        ("related", SdkValue::List(related("sandbox", &sandboxes))),
+    ]);
+    Err(refusal)
+}
+
 /// `store.push`, `store.pull`, `store.remove`, `store.disconnect` and
 /// `backup.restore`: refused `InUse` while
 /// another live process holds Store `store` (its lease) or a Sandbox of one
@@ -215,16 +212,4 @@ pub fn store_idle(home: &Path, store: &str) -> Result<()> {
     let mut held = related("lease", &pids);
     held.extend(related("sandbox", &sandboxes));
     Err(in_use(why.join("; "), held))
-}
-
-/// `project.remove`: refused `InUse` while a Sandbox of `project` is
-/// recorded; `detail.related` lists them as `{kind: "sandbox", name}`.
-pub fn can_remove_project(home: &Path, project: &str) -> Result<()> {
-    let sandboxes = sandboxes_of_project(home, project)?;
-    let message = match sandboxes.as_slice() {
-        [] => return Ok(()),
-        [sandbox] => format!("Sandbox {sandbox} of {project} is running"),
-        many => format!("Sandboxes {} of {project} are running", many.join(", ")),
-    };
-    Err(in_use(message, related("sandbox", &sandboxes)))
 }

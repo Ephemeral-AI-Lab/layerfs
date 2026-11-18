@@ -271,9 +271,10 @@ Exit 0. What it shows beyond the packages:
 - **`project.export`** ([#53](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/53))
   is not implemented: there is no such call in the table, and no example.
 - **MCP** is shelved (O32); there is nothing to set up.
-- **PostgreSQL** needs a build with `--features postgresql`; the default
-  artifacts refuse it `Unsupported`. See
-  [artifact-qualification-2.0.0.md](../../../general/artifact-qualification-2.0.0.md#postgresql-and-tls).
+- **PostgreSQL** is built into every artifact (#726): no build flag is
+  needed. The
+  [qualification report](../../../general/artifact-qualification-2.0.0.md#postgresql-and-tls)
+  records the earlier opt-in builds.
 
 ## The Workspace route (NOT RUN)
 

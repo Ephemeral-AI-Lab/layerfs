@@ -8,7 +8,7 @@ use std::process::Command;
 
 /// `docker -H unix://<socket> args...`.
 pub(super) fn docker(spec: &Spec, args: &[&str]) -> Result<Command, MachineError> {
-    let mut command = tool::command(&tool::find(&spec.tools, "docker")?, ["-H"]);
+    let mut command = tool::command(&spec.tools, &tool::find(&spec.tools, "docker")?, ["-H"]);
     command
         .arg(format!("unix://{}", spec.tools.docker_socket.display()))
         .args(args);

@@ -3,7 +3,7 @@
 //! refuses in the order it always did.
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::names::StoreName;
-use layerfs_store::project::frame::{InitFrame, RemoveFrame, StageFrame, StageStep};
+use layerfs_store::project::frame::{InitFrame, StageFrame, StageStep};
 
 fn t(text: &str) -> SdkValue {
     SdkValue::text(text)
@@ -45,26 +45,6 @@ fn each_frame_encodes_the_map_its_caller_built() {
     assert_eq!((decoded.name, decoded.timeout_ms), (init.name, Some(5)));
     assert_eq!(decoded.store_record, init.store_record);
 
-    let remove = RemoveFrame {
-        store: store(),
-        project: "web".to_owned(),
-        store_record: Some(record.clone()),
-    };
-    let encoded = remove.encode();
-    assert_eq!(
-        encoded,
-        map(vec![
-            ("store", t("shop")),
-            ("project", t("web")),
-            ("store_record", record),
-        ])
-    );
-    let decoded = RemoveFrame::decode(&encoded).unwrap();
-    assert_eq!(
-        (decoded.store, decoded.project),
-        (store(), "web".to_owned())
-    );
-
     let stage = |step| StageFrame {
         store: "shop".to_owned(),
         name: "web".to_owned(),
@@ -97,15 +77,6 @@ fn the_worker_refuses_a_frame_in_its_old_order() {
     // name and timeoutMs are the add's to check
     let bare = InitFrame::decode(&map(vec![("store", t("shop")), ("staged", t(ID))])).unwrap();
     assert_eq!((bare.name, bare.timeout_ms), (None, None));
-
-    let remove = |fields| RemoveFrame::decode(&map(fields)).unwrap_err().message;
-    assert_eq!(remove(vec![]), "missing text argument `store`");
-    // no project before a bad Store name
-    assert_eq!(
-        remove(vec![("store", t("../x"))]),
-        "missing text argument `project`"
-    );
-    assert!(remove(vec![("store", t("../x")), ("project", t("web"))]).starts_with("store name"));
 
     let stage = |fields| StageFrame::decode(map(fields)).unwrap_err().message;
     // a bad id before an unknown step

@@ -122,7 +122,7 @@ state passes through `with_worker`: running but no worker hello is
 | `Spec` | `name`, `kind`, `vm_name` (`<prefix><machine>`), `cpus`, `memory`, `disk`, `image` (Sandbox image archive), `os_image` (the VM's own system), `state: Lasting {port, gateway}`, `worker`, `work_dir`, `tools` | [`spec.rs`](../../../../control/crates/layerfs-platform/src/spec.rs) |
 | `WORKER_PORT` | 7070, the worker's port in the guest | same |
 | Guest paths | `/layerfs/data` (data disk), `/layerfs/bundle`, `/layerfs/state`, `/layerfs/image` | same |
-| `Tools::from_env` | `PATH`; Docker socket `/var/run/docker.sock` | same |
+| `Tools::from_env` | `PATH`, then the fallback folders (macOS: Homebrew's, `/usr/local/bin`, Docker Desktop's; `LAYERFS_TOOL_FALLBACKS` replaces them), also every provider command's `PATH`; Docker socket `/var/run/docker.sock`, which the machine layer replaces with the docker machine's socket ([Tools and the docker socket](platforms.md#tools-and-the-docker-socket)) | same |
 | `parse_size` | bytes or `K`/`M`/`G`/`T` (powers of 1024), optional `iB`/`B`; 0 refused | same |
 | Record to `Spec` | an absolute-path `image` becomes `Spec::image`; `Spec::os_image` comes from `os_image`, or on `docker` from `image` | [`layerfs-machine/src/spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs) |
 

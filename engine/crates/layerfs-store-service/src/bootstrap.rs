@@ -13,14 +13,12 @@ use std::{
 #[derive(Clone)]
 enum Writer {
     Sqlite(Arc<StorageProvider>),
-    #[cfg(feature = "postgresql")]
     Postgres(Arc<layerfs_persistence::PostgresStorage>),
 }
 impl Writer {
     fn diagnostics(&self) -> Result<SqlWork, PersistenceError> {
         match self {
             Self::Sqlite(provider) => provider.diagnostics(),
-            #[cfg(feature = "postgresql")]
             Self::Postgres(provider) => provider.diagnostics(),
         }
     }
@@ -34,7 +32,6 @@ impl Observed for StorageProvider {
         self.diagnostics()
     }
 }
-#[cfg(feature = "postgresql")]
 impl Observed for layerfs_persistence::PostgresStorage {
     fn work(&self) -> Result<SqlWork, PersistenceError> {
         self.diagnostics()
@@ -122,7 +119,6 @@ impl OpenedStore {
             Writer::Sqlite(provider) => {
                 Some(provider.as_ref() as &dyn layerfs_persistence::StoreFile)
             }
-            #[cfg(feature = "postgresql")]
             Writer::Postgres(_) => None,
         }
     }
@@ -212,7 +208,6 @@ pub fn open_store_observed(
         layerfs_persistence::StoreSelection::Sqlite(config) => config,
         layerfs_persistence::StoreSelection::Postgres(selection) => {
             let _ = &selection;
-            #[cfg(feature = "postgresql")]
             return open_postgres(
                 &selection,
                 binding,
@@ -221,8 +216,6 @@ pub fn open_store_observed(
                 cache_bytes,
                 reservations,
             );
-            #[cfg(not(feature = "postgresql"))]
-            return Err(PersistenceError::BackendUnavailable.into());
         }
     };
     let writer = SqliteHandles::open_writable(config.clone(), binding, cursor_key)?;
@@ -265,7 +258,6 @@ pub fn open_store_observed(
 /// reader, one reader per mounted Workspace and `IDLE_READERS` idle ones.
 /// A merge's records live in the writer connection's temporary tables
 /// (#506 d).
-#[cfg(feature = "postgresql")]
 fn open_postgres(
     selection: &layerfs_persistence::PostgresSelection,
     binding: &[u8],

@@ -14,10 +14,26 @@ const temp = (tag) => {
   return dir;
 };
 
-test("the table: eleven families, 80 calls, each a function", () => {
-  assert.deepEqual(families, ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs", "doctor"]);
-  assert.equal(table.length, 80);
+test("the table: twelve families, 84 calls, each a function", () => {
+  assert.deepEqual(families, ["home", "project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs", "doctor"]);
+  assert.equal(table.length, 84);
   for (const spec of table) assert.equal(typeof layerfs[spec.family][spec.call], "function", `${spec.family}.${spec.call}`);
+});
+
+test("client.home is the home family; the client's home is where it calls", async () => {
+  const parent = temp("home");
+  const home = join(parent, "made");
+  try {
+    const lfs = client({ home });
+    assert.equal(typeof lfs.home.init, "function");
+    assert.equal((await lfs.home.get()).home.state, "missing");
+    const made = await lfs.home.init();
+    assert.equal(made.home, home);
+    assert.equal(made.created, true);
+    assert.equal((await lfs.home.get()).home.state, "current");
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
 });
 
 test("every call reaches the library, which checks its arguments first", async () => {

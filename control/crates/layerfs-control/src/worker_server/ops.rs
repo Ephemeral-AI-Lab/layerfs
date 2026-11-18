@@ -3,10 +3,17 @@
 use super::Server;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_store::project::delete::{
+    admit_project, delete_project, release_project, remove_project_entry,
+};
 use layerfs_store::project::discovery::home_of;
 use layerfs_store::project::export::in_worker as export_in_worker;
-use layerfs_store::project::frame::{ExportFrame, InitFrame, RemoveFrame, StageFrame};
-use layerfs_store::project::{init::in_worker, remove::remove_project, staged};
+use layerfs_store::project::frame::{
+    DeleteAdmitFrame, DeleteEntryFrame, DeleteFrame, DeleteReleaseFrame, ExportFrame, InitFrame,
+    ListingFrame, StageFrame,
+};
+use layerfs_store::project::listing::list_projects;
+use layerfs_store::project::{init::in_worker, staged};
 use std::path::Path;
 
 /// The operations that change nothing on the machine. Only these answer
@@ -14,13 +21,14 @@ use std::path::Path;
 /// any other operation's panic closes the connection, so its caller
 /// reports `Unknown` (layerfs-project#179 D7). A new read-only operation
 /// is added here.
-const READ_ONLY: [&str; 6] = [
+const READ_ONLY: [&str; 7] = [
     "worker.ping",
     layerfs_sandbox::inspect::OP,
     "machine.images",
     "store.reach",
     "doctor.sandbox",
     "store.diagnose",
+    "project.list",
 ];
 
 /// Whether `op` is one of the read-only operations.
@@ -102,8 +110,9 @@ pub(super) fn run(
         // removes one leftover under this root, under its guard (#180)
         "doctor.fix" => crate::doctor::leftover_fix::fix_in_worker(root, &args),
         "store.diagnose" => crate::doctor::diagnose_store_in_worker(root, args, events),
-        // `store.attach`'s check of this machine's connection to a
-        // PostgreSQL Store: the caller sends the record and what it dials
+        // the check of this machine's connection to a PostgreSQL Store
+        // (`store.update`, `store.status`): the caller sends the record and
+        // what it dials
         "store.reach" => crate::store::reach_in_worker(&args),
         // one Store call, on the Store file under this worker's root (2.0)
         "store.call" => {
@@ -155,12 +164,36 @@ pub(super) fn run(
             },
             layerfs_sandbox::workspace::dispatch::call,
         ),
-        // drops one project from the Store under this worker's root (2.0):
-        // `{ store, project, store_record }`
-        "project.remove" => {
+        // retires one project in the Store under this worker root and
+        // removes the worker own entry (2.0, T4.5b): `{ store, stack_id,
+        // deleted_ms?, project?, op_id?, pending_retry?, store_record? }`
+        "project.delete" => {
             let root = home_of(Some(root))?;
-            remove_project(&root, &RemoveFrame::decode(&args)?)
+            delete_project(&root, &DeleteFrame::decode(&args)?)
         }
+        // registers the caller's project-scope admission before its sidecar
+        // and marker (2.0, T4.6): `{ store, stack_id, op_id, store_record? }`
+        "project.delete.admit" => {
+            let root = home_of(Some(root))?;
+            admit_project(&root, &DeleteAdmitFrame::decode(&args)?)
+        }
+        // releases the caller's project-scope admission after the marker
+        // (2.0, T4.6): `{ store, op_id, store_record? }`
+        "project.delete.release" => {
+            let root = home_of(Some(root))?;
+            release_project(&root, &DeleteReleaseFrame::decode(&args)?)
+        }
+        // removes only the worker's own entry for a `marked` sidecar whose
+        // marker is already durable (2.0, T4.5b): `{ store, stack_id,
+        // project? }`
+        "project.delete.entry" => {
+            let root = home_of(Some(root))?;
+            remove_project_entry(&root, &DeleteEntryFrame::decode(&args)?)
+        }
+        // reads the Store's own filtered project listing under this worker
+        // root, the same `layerfs_project::store::projects` a local Store
+        // uses (2.0, T4.5c): `{ store, store_record? }`
+        "project.list" => list_projects(root, &ListingFrame::decode(&args)?),
         // writes or discards one part of a caller's folder copy under this
         // worker's root (#536 H11a)
         "project.stage" => staged::run(root, &StageFrame::decode(args)?),

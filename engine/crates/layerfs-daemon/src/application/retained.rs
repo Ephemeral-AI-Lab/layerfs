@@ -278,6 +278,8 @@ fn kind(request: &layerfs_bridge::control::Request) -> &'static str {
     match request {
         Request::Mount { .. } => "mount",
         Request::MountNamed { .. } => "mount",
+        Request::MountPlaced { .. } => "mount",
+        Request::MountNamedPlaced { .. } => "mount",
         Request::Commit(_) => "commit",
         Request::Status(_) => "status",
         Request::Unmount(_) => "unmount",

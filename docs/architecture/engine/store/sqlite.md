@@ -28,7 +28,7 @@ The SQLite backend of the [Store](README.md): one WAL file every opener shares t
 | --- | --- | --- |
 | `sqlite_pack_layout` | `Monolithic` (`user_version` 36): whole `pack.body`; `GroupRows` (37): `control` row plus one `pack_unit` row per group; `GroupRowsIndexed` (38): adds index `pack_unit_mapping` | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs), [`objects_units.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/objects_units.sql) |
 | `sqlite_acquisition` | `Absent` (+0) or `Tables` (+6, versions 42–44, created with `auto_vacuum=INCREMENTAL`) | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs), [`acquisition/schema.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/acquisition/schema.sql) |
-| `sqlite_profile` | `Disposable` in every product opener (see [Store](README.md)) | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
+| `sqlite_profile` | `Normal` in every product opener since 2026-11-17 (see [Store](README.md)); a test may select `Disposable` | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
 
 Every table is `STRICT`; history keys are `WITHOUT ROWID` blobs whose first
 byte tags the kind (`0x31` stack, `0x32` Layer, `0x12` Commit, `0x11`
@@ -55,13 +55,13 @@ UPDATE and DELETE on `pack` and `pack_unit`. Open checks `application_id`,
 | Open | `READ_WRITE` or `READ_ONLY`, `NO_MUTEX`; statement cache 64 | [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
 | Guard | `busy_timeout=0`; `SQLITE_DBCONFIG_DEFENSIVE` on | same |
 | Settings | `profile::apply`, then read back into `ConnectionProfile`; a mismatch is `Integrity`; an existing Store not in `wal` mode is refused | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
-| Checkpoint thread | writable Disposable session only: a second connection on its own thread; failure to start it refuses the open | [`background.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/background.rs) |
+| Checkpoint thread | writable Normal or Disposable session only: a second connection on its own thread, opened with the session's `synchronous` value and read back; failure to start it refuses the open | [`background.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/background.rs) |
 | Last close | A writable session's close waits for `Writer::acquire(path)` like any write (or reuses the lane an uncertain transaction already holds), so its close, which may be SQLite's last, checkpoints and removes `-wal`/`-shm` under the lane; a pull's verify close and a restore's in-use check rely on that. If the wait itself fails (interrupted, or the directory cannot be opened), the close sets `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` first, so SQLite takes no exclusive lock, runs no checkpoint and removes nothing; there is no second attempt. If even that setting fails, the connection is kept until process exit. A read-only or diagnostic session cannot checkpoint or remove those files and takes no lane, so it never waits behind a writer kept after an uncertain write. The checkpoint thread's connection closes first and never takes it. One exception: an open whose checkpoint thread fails to start drops its new connection after the open's lane is released | [`lifecycle.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/lifecycle.rs) |
 
-| Setting | Disposable | Source |
+| Setting | Normal (Disposable where it differs) | Source |
 | --- | --- | --- |
-| identity | `sqlite-wal-off-v2` | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
-| `journal_mode`, `synchronous`, `fullfsync` | `wal`, 0 (OFF), 0 | same |
+| identity | `sqlite-wal-normal-v2` (`sqlite-wal-off-v2`) | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
+| `journal_mode`, `synchronous`, `fullfsync` | `wal`, 1 (NORMAL; Disposable 0, OFF), 0 | same |
 | `wal_autocheckpoint` | 0: the session's checkpoint thread copies the log | same |
 | shared | `foreign_keys=1`, `checkpoint_fullfsync=1`, `journal_size_limit=4194304`, `cache_size=-2048`, `mmap_size=0`, `temp_store=2`, `page_size=4096`, `busy_timeout=0` | same |
 
@@ -154,24 +154,49 @@ quarantines the session and keeps the lock
 
 | Operation | Bound or rule | Source |
 | --- | --- | --- |
-| `seal` | Consumes the sole session; never runs on a live shared Store (a daemon keeps its Store open across Saves and Commits) | [`seal.rs`](../../../../engine/crates/layerfs-persistence/src/store/seal.rs), [`lifecycle/seal.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/seal.rs) |
+| `seal` | Consumes the sole session; never runs on a live shared Store (a daemon keeps its Store open across Saves and Commits). It holds the writer lane from its checkpoint to its sidecar check; a refused seal closes its connection under that same hold and then frees the lane | [`seal.rs`](../../../../engine/crates/layerfs-persistence/src/store/seal.rs), [`lifecycle/seal.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/seal.rs) |
 | macOS extent release | Unused extents past logical EOF move to a same-volume scratch, which is removed; no logical byte is copied or truncated. The one module allowed `unsafe` | [`seal_allocation.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/seal_allocation.rs), [`file_control.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/file_control.rs) |
 | `snapshot` | One read transaction; page size, `auto_vacuum`, `user_version` and `application_id` carry over; destination must not exist; a busy source is `Busy`, never retried; a failed copy may leave a file for the caller to remove | [`snapshot.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/snapshot.rs) |
 | Free-space guard | A pack batch must leave 64 MiB after counting its bytes twice (WAL, then file); metadata-only batches are not guarded | [`headroom.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/headroom.rs) |
-| `reclaim_space(pages)` | `1..=RECLAMATION_PAGE_LIMIT` (512) pages by `incremental_vacuum`, one short write; only Stores created with `auto_vacuum=2` | [`reclamation.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/reclamation.rs) |
+| `reclaim_space(pages)` | `1..=RECLAMATION_PAGE_LIMIT` (512) pages by `incremental_vacuum`, stepped in one short write until the free list is empty or the page budget is spent (SQLite 3.40 removes one page per statement, not `N`); only Stores created with `auto_vacuum=2` | [`reclamation.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/reclamation.rs) |
+
+## Compaction rebuild
+
+`SqliteHandles::compact` marks under the writer lane, seals the file, builds
+`<store>.compact` beside it from the retained rows, checks it through an
+`immutable=1` reader and renames it into place. The build's cost is the copy
+of the retained packs, so its steps are shaped around that copy.
+
+| Step | Rule | Source |
+| --- | --- | --- |
+| Op record | `<store>.compact-op` is rewritten by rename at admission and at the build, verify, install and cleanup phases. The admission record stands through the mark: a later call judges a leftover by the run, generation and owner it names, and `store.status` reads its phase as `mark` | [`op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/op.rs), [`run.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/run.rs) |
+| Fresh file | The sealed Store's tables, then the rows, then its indexes and triggers; `journal_mode=OFF` and `synchronous=OFF` while loading, then WAL. The sealed file is attached `immutable=1` with a 256 MiB `mmap_size` | [`build.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/build.rs) |
+| File size | macOS sizes the fresh file for the retained pack bytes before the load (one advisory `F_PREALLOCATE`, one `set_len`), because on APFS a page write that also moves the end of the file costs about four times one inside a sized file. The closed file is cut to the pages its header counts. Linux leaves the file to grow | [`space.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/space.rs) |
+| Pack copy | The table that holds the pack payload (`pack`, or `pack_unit` in the group-row layouts) is copied one window per statement: `WINDOW_BYTES` (64 MiB) of retained payload, ended early by a dead run longer than `GAP_BYTES` (8 MiB). Every other table is one statement | [`window.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/window.rs), [`build.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/build.rs) |
+| Read-ahead | Before each window the sealed file's matching range is asked for once, through a second read-only descriptor: `F_RDADVISE` on macOS, `POSIX_FADV_WILLNEED` in 128 KiB steps on Linux. Without it a source that is not in memory is read one pack per device round trip. The range assumes packs lie in the file in id order; a hint only, so another layout loses the benefit and nothing else | [`window.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/window.rs) |
+| Visited scratch | The mark writes one `visited` row per reached object into `<store>.compact-visited`; the retained packs (`live_pack`) are derived from those rows in one statement when the mark finishes | [`compact_visit.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact_visit.rs) |
+| Verification | One `immutable=1` reader of the fresh file: the schema check, one statement that reads the row counts and recomputed sums with one pass per table, the live-heads digest and the tuple. The sealed file's tuple and digest are read back through one reader as well | [`verify.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/verify.rs) |
+| Synchronization | The op record is synchronized at each write, the fresh file before the rename and the directory after it | [`op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/op.rs), [`install.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/install.rs) |
+| Settle | The run lets go of the writer lane after the rename, removes its artifacts, then takes the lane again for the one transaction that clears its admission intent and the `kept_node` rows in the installed Store. A writer has no busy handler, so a settle that wrote beside one would leave it `Busy`; the settle waits its turn instead. The op record is removed last | [`install.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/install.rs) |
 
 ## Heads
 
 | Function | Returns | Source |
 | --- | --- | --- |
-| `read_heads(path)` | Sorted lines `stack <name> <head_layer_id>` and `branch <project> <name> <base_layer_id> <head_commit_id or ->`, lowercase hex | [`heads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/heads.rs) |
+| `read_heads(path)` | Sorted lines `stack <name> <head_layer_id>` and `branch <project> <name> <base_layer_id> <head_commit_id or ->` for live rows only, lowercase hex | [`heads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/heads.rs) |
 | `heads_digest(path)` | sha256 of those lines, each ending in `\n` | same |
 
 `read_heads` opens its own read-write but `query_only` connection, because
 SQLite cannot open a WAL file read-only without a `-shm`. A busy Store is
 reported, never waited on. The heads change exactly when history changes, so
 the digest identifies a backup copy
-([Control: Backups](../../control/backups/README.md)).
+([Control: Backups](../../control/backups/README.md)). Both reads are filtered
+by the same §4.2 markers the catalog uses: a row named by `branch_retired`
+leaves no `branch` line, and a row named by `layer_stack_retired` leaves
+neither its `stack` line nor its Branches' lines. A soft removal is a marker,
+not a delete, so the base rows can still be present while the backup digest
+already names the visible history; `visibility_guard` scans inline SQL in
+`src` too, which is what holds `heads.rs` to that filter.
 
 ## Objects
 

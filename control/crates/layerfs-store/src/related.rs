@@ -5,16 +5,17 @@
 use layerfs_bridge::control::SdkRefusal;
 use std::path::Path;
 
-/// An `InUse` check on the Store or project `name` in home `home`.
+/// A related-use check on the Store or project `name` in home `home`.
 type Check = fn(home: &Path, name: &str) -> Result<(), SdkRefusal>;
 
-/// The `InUse` checks over a Store's and a project's users.
+/// The checks over a Store's users.
 #[derive(Clone, Copy)]
 pub struct Related {
     /// `store.push`, `store.pull`, `store.remove`, `store.disconnect` and
     /// `backup.restore`: refused while another live process holds the Store
     /// or a Sandbox of one of its projects is recorded.
     pub store_idle: Check,
-    /// `project.remove`: refused while a Sandbox of the project is recorded.
+    /// `project.delete`: refused `Busy` while a Sandbox of the project is
+    /// recorded, even with nothing mounted.
     pub can_remove_project: Check,
 }

@@ -10,7 +10,7 @@ use layerfs_mount_ports::ports::{
 };
 use layerfs_overlay::{KernelCookieOffer, KernelMount, Publication};
 use layerfs_workspace::{
-    BaseView, CanonicalClient, JobOutcome, KernelDirectoryWindow, KernelInput,
+    BaseView, CanonicalClient, JobOutcome, KernelDirectoryRead, KernelDirectoryWindow, KernelInput,
     KernelMutationOutcome, KernelReadOperation, KernelReadOutcome, KernelVisitRequest,
     KernelWindow, Recognition, RecognizeWork, VisitFacts, WorkspaceError, WriteData,
     RECOGNIZE_BYTES,
@@ -106,6 +106,7 @@ impl RequestServices for FilesystemPort {
         handle: u64,
         offset: u64,
         after: Option<Vec<u8>>,
+        attributes: bool,
     ) -> ServiceFuture<'_, ServiceReply<Arc<KernelDirectoryWindow>>> {
         // A stopped mount refuses before anything about the request is read.
         if let Err(fenced) = self.fenced(true) {
@@ -116,8 +117,11 @@ impl RequestServices for FilesystemPort {
             mount,
             serial,
             handle,
-            offset,
-            after,
+            KernelDirectoryRead {
+                offset,
+                after,
+                attributes,
+            },
         );
         match visit {
             Ok(visit) => self.call(

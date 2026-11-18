@@ -35,6 +35,8 @@ pub struct Snap {
     pub node: NodeId,
     pub root: ObjectId,
     pub tree: TreeTable,
+    /// The node's `history_serial`, for the `remove_file` visibility rule.
+    pub serial: u64,
 }
 
 /// The stack's object reader.
@@ -89,36 +91,79 @@ pub fn resolve(
     }
     let root = args::root(store, node)?;
     let tree = TreeTable::open(reader, FilesystemRootId(root)).map_err(args::content)?;
+    let serial = match store.published(|history| history.node_history_serial(node)) {
+        Ok(Some(serial)) => serial,
+        _ => 0,
+    };
     Ok(Snap {
         kind,
         label,
         node,
         root,
         tree,
+        serial,
     })
 }
 
 /// The entry at a checked absolute path, if any.
+///
+/// Only a component before the last that is a symlink is refused
+/// `InvalidInput` (spec 4.3): a symlink is not followed, so a name below it
+/// is ill-typed, not absent, and `/link/f` must not read as an ordinary
+/// missing path. A regular-file (or removed-file) component cannot contain
+/// the next name, so the path resolves as absent (`NoSuchPath`/`NotFound`).
 pub fn entry(
     reader: &StorePorts,
     tree: &TreeTable,
     path: &str,
 ) -> Result<Option<EntryFacts>, SdkRefusal> {
-    find(reader, tree, path)
+    find_with(reader, tree, path, true)
 }
 
-/// [`entry`] through any object reader, such as a call's memo.
+/// [`entry`] through any object reader, such as a call's memo. A component
+/// before the last that is not a directory reads as absent, for callers that
+/// build a path from the tree's own directory listings.
 pub fn find(
     reader: &dyn AuthenticatedObjects,
     tree: &TreeTable,
     path: &str,
 ) -> Result<Option<EntryFacts>, SdkRefusal> {
+    find_with(reader, tree, path, false)
+}
+
+/// The shared path walk. `strict` refuses a symlink component before the last
+/// instead of reading past it as an absent path; any other non-directory
+/// component makes the rest of the walk absent, because it cannot contain the
+/// next name.
+fn find_with(
+    reader: &dyn AuthenticatedObjects,
+    tree: &TreeTable,
+    path: &str,
+    strict: bool,
+) -> Result<Option<EntryFacts>, SdkRefusal> {
     let mut serial = tree.root_serial();
-    for name in path.split('/').filter(|name| !name.is_empty()) {
+    let mut names = path.split('/').filter(|name| !name.is_empty()).peekable();
+    while let Some(name) = names.next() {
         let name = PathName::new(name).map_err(|_| invalid(format!("`{path}` is not valid")))?;
         match tree.lookup(reader, serial, &name).map_err(args::content)? {
             Some(child) => serial = child,
             None => return Ok(None),
+        }
+        if strict && names.peek().is_some() {
+            let value = tree
+                .value(reader, serial)
+                .map_err(args::content)?
+                .ok_or_else(|| args::failed("bound inode record"))?;
+            // Spec 4.3: only an intermediate symlink is ill-typed. A regular
+            // file cannot contain the next name either, but that is the
+            // absent path a removed-file child also reports: `lookup` returns
+            // None for a non-directory parent and the walk ends there.
+            if value.kind == InodeKind::Symlink {
+                return Err(invalid(format!(
+                    "`{}` is a symlink; `{path}` cannot be resolved",
+                    name.as_str()
+                )));
+            }
         }
     }
     Ok(tree
@@ -133,7 +178,7 @@ pub fn existing(
     snap: &Snap,
     path: &str,
 ) -> Result<EntryFacts, SdkRefusal> {
-    find(reader, &snap.tree, path)?.ok_or_else(|| {
+    find_with(reader, &snap.tree, path, true)?.ok_or_else(|| {
         refuse(
             "NoSuchPath",
             format!("{path} does not exist at {}", snap.label),

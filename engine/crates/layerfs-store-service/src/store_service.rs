@@ -106,8 +106,7 @@ impl StoreService {
             )));
         }
         let opened = open_store_observed(
-            PersistenceConfig::sqlite(store)
-                .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            PersistenceConfig::sqlite(store).with_sqlite_profile(SqlitePersistenceProfile::Normal),
             binding,
             cursor_key,
             CALLS,
@@ -122,7 +121,6 @@ impl StoreService {
     /// the overlay template at `template`. No kernel guard runs: the Store
     /// is no file shared through one kernel but a server every opener
     /// reaches over its own connection.
-    #[cfg(feature = "postgresql")]
     pub fn open_postgres(
         selection: &layerfs_persistence::PostgresSelection,
         binding: &[u8],

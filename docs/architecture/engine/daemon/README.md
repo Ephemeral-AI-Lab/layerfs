@@ -60,9 +60,9 @@ layerfs-daemon --config <file>
 | Chooses the route | `fuse` or `nfs`; macOS accepts only `nfs` | [`application/filesystem.rs`](../../../../engine/crates/layerfs-daemon/src/application/filesystem.rs) |
 | Starts the overlay owner | Creates and closes the overlay template (`pager_kib`, `namespaces`); every later start failure is `AfterOverlay`, keeping the owner | [`application/owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs), [Overlay](../overlay/README.md) |
 | Takes a fresh incarnation | `generate_keypair()`; the public half is `DaemonStatus.instance` | [`application/owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs) |
-| Opens the Store | An installed SQLite file with the `Disposable` profile, or PostgreSQL (feature `postgresql`); `Sqlite { install: None }` waits for an install | [`application/owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs), [`Cargo.toml`](../../../../engine/crates/layerfs-daemon/Cargo.toml) |
+| Opens the Store | An installed SQLite file with the `Disposable` profile, or PostgreSQL; `Sqlite { install: None }` waits for an install | [`application/owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs), [`Cargo.toml`](../../../../engine/crates/layerfs-daemon/Cargo.toml) |
 | Starts FUSE serving (Linux) | `/dev/fuse` to `0600`, checks the mount home, mounts a private `fusectl` tree for abort controls; if that fails, writes `LAYERFS_DAEMON_ABORT_UNBOUND` and starts without forced unmount | [`application/filesystem.rs`](../../../../engine/crates/layerfs-daemon/src/application/filesystem.rs) |
-| Starts NFS serving | `ExportServing`; force-unmounts client mounts a previous daemon left (`LAYERFS_NFS_RECLAIM` lines); helper overrides `LAYERFS_NFS_MOUNT`, `_UNMOUNT`, `_FORCE`, `_FLUSH` | [`application/filesystem.rs`](../../../../engine/crates/layerfs-daemon/src/application/filesystem.rs) |
+| Starts NFS serving | `ExportServing`; force-unmounts client mounts a previous daemon left (`LAYERFS_NFS_RECLAIM` lines); the same reclaim deletes `<mounts>/.appledouble`, the AppleDouble companions' disposable scratch area (directories `0700`, files `0600`, no fsync, no space reserved ahead), and touches nothing else under the mount home; helper overrides `LAYERFS_NFS_MOUNT`, `_UNMOUNT`, `_FORCE`, `_FLUSH` | [`application/filesystem.rs`](../../../../engine/crates/layerfs-daemon/src/application/filesystem.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 
 ### Phases and Hello
 
@@ -194,7 +194,7 @@ before the Durable sync branches in `install.rs` can run.
 | Mount admission and the registry | Mount reads the owner's retained maintenance failure while it holds the registry; the doctor's registry page answers `Busy` meanwhile | [`control/operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs), [`control/diagnostic.rs`](../../../../engine/crates/layerfs-daemon/src/control/diagnostic.rs) |
 | Attach and drain observation | `READY_WAIT` 5 s, `DRAIN_WAIT` 5 s; expiry keeps owners `Retained` | [`application/filesystem.rs`](../../../../engine/crates/layerfs-daemon/src/application/filesystem.rs) |
 | Platform | FUSE serving on Linux only; macOS serves NFS only | [`application/filesystem.rs`](../../../../engine/crates/layerfs-daemon/src/application/filesystem.rs) |
-| Store kinds | SQLite always; PostgreSQL only with feature `postgresql` | [`Cargo.toml`](../../../../engine/crates/layerfs-daemon/Cargo.toml) |
+| Store kinds | SQLite and PostgreSQL, both always built | [`Cargo.toml`](../../../../engine/crates/layerfs-daemon/Cargo.toml) |
 
 Per-call failures (refusal codes, `TeardownStage`, forced facts) are in
 [Control calls](control-calls.md).

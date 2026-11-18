@@ -5,7 +5,6 @@ use layerfs_bridge::{
     duplex::{Connection, MAX_PLAINTEXT_BYTES},
     provision::StoreProfile,
 };
-use layerfs_persistence::SqlitePersistenceProfile;
 use std::{
     fs::File,
     io::{self, Read},
@@ -33,11 +32,9 @@ pub fn install_file(
     let mut accepted = false;
     let mut acknowledged = None;
     let result = (|| {
-        if manifest.profile != StoreProfile::Disposable
-            || store.profile != SqlitePersistenceProfile::Disposable
-        {
+        if manifest.profile != StoreProfile::Disposable || !store.profile.permitted() {
             return Err(InstallError::Protocol(ControlError(
-                "explicit Disposable Store profile required",
+                "explicit Normal or Disposable Store profile required",
             )));
         }
         if manifest.daemon_sqlite.is_some() {

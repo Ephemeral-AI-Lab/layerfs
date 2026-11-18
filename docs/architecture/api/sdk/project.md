@@ -2,12 +2,12 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The `project` calls: import a host folder into a Store as `<store>/<project>`, read the home's project records, count or export a saved tree, and remove a project, within the [SDK](README.md).
+The `project` calls: import a host folder into a Store as `<store>/<project>`, read the home's project records, count or export a saved tree, retire a project, and hide one path from every node at or below a frontier, within the [SDK](README.md).
 
 | | |
 | --- | --- |
 | Source | [`api/crates/layerfs-api/src/project`](../../../../api/crates/layerfs-api/src/project), [`layerfs-store/src/project`](../../../../control/crates/layerfs-store/src/project), [`layerfs-control/src/project.rs`](../../../../control/crates/layerfs-control/src/project.rs) |
-| Runs by default | `list`, `get`: the caller's process, home records only. `init`, `stats`, `export`, `remove`: where the Store's calls run (the caller's process for PostgreSQL and a sqlite Store on a locally executing machine, else that machine's worker) |
+| Runs by default | `list`, `get`: the caller's process, home records only. `init`, `stats`, `export`, `delete`, `remove_file`: where the Store's calls run (the caller's process for PostgreSQL and a sqlite Store on a locally executing machine, else that machine's worker) |
 | Design | [Stores and projects](../../control/stores-and-projects/README.md), [projects](../../control/stores-and-projects/projects.md), [Project Init](../../engine/project-init/README.md) |
 
 ## Calls
@@ -22,7 +22,7 @@ The `project` calls: import a host folder into a Store as `<store>/<project>`, r
         +--> stats          export <destination>    (one pinned saved tree)
         +--> branch.*, commit.*, file.*, sandbox.create ...
         v
- remove <store>/<project>   (no Sandbox of it may be recorded)
+ delete <store>/<project>   remove_file <store>/<project> <path>
 ```
 
 | Call | Returns |
@@ -32,7 +32,8 @@ The `project` calls: import a host folder into a Store as `<store>/<project>`, r
 | [`project.get`](#projectget) | the project summary |
 | [`project.stats`](#projectstats) | entry counts of one pinned tree |
 | [`project.export`](#projectexport) | pinned identity and local output counts |
-| [`project.remove`](#projectremove) | `{ stack, packs_kept: true, project }` |
+| [`project.delete`](#projectdelete) | `{ kind: "Removed", project, deleted_ms, home_entry_removed }` |
+| [`project.remove_file`](#projectremove_file) | `{ kind: "Removed" \| "UpToDate", project, path, frontier_serial, removed_ms }` |
 
 The **project summary** is `ProjectRecord::to_sdk`
 ([`project/record.rs`](../../../../control/crates/layerfs-store/src/project/record.rs)):
@@ -73,7 +74,7 @@ Branch's base) and `root` (that Branch's effective root)
 
 | Store | Runs in |
 | --- | --- |
-| PostgreSQL | caller's process (a build with the `postgresql` feature) |
+| PostgreSQL | caller's process |
 | sqlite on a locally executing machine (`native` on Linux or macOS) | caller's process; the kernel guard admits the Store's directory only when it is owned by this user and private (`0700`) on Linux ext4, xfs or btrfs, or macOS apfs or hfs |
 | sqlite on any other machine, and `native` on Windows | that machine's worker, on a staged copy of the folder sent from the caller |
 
@@ -84,7 +85,7 @@ Branch's base) and `root` (that Branch's effective root)
 | `Exists` | the project's record, entry or LayerStack name exists | `project/family.rs`, [`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs) |
 | `Busy` | also when another add's working rows remain in the Store | `identity.rs` `add_failure` |
 | `Capacity` | worker route: the machine's free disk is below the copy plus headroom | `project/send.rs` `room` |
-| `Unsupported` | the kernel guard refuses the Store's directory (non-private mode/owner/type or unsupported filesystem); PostgreSQL in a build without `postgresql` | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
+| `Unsupported` | the kernel guard refuses the Store's directory (non-private mode/owner/type or unsupported filesystem) | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | `NoStore` | no Store file at the Store's path | `identity.rs` |
 | `Failed` | deadline passed, read error or any other engine failure, **including an Init whose outcome is unknown**; the entry this call made is kept | `identity.rs` `add_failure` |
 | `Unknown` | worker route: a stage or the `project.init` answer was lost; the home gains no record, and the worker removes its staged copy when its Init ends | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
@@ -106,7 +107,7 @@ CLI     layerfs project list [<store>] [--page-size <page-size>] [--page-pos <pa
 
 | Argument | Kind | Rule |
 | --- | --- | --- |
-| `store` (optional) | Name | its record must exist, else `NotFound`; omitted: every Store in the home |
+| `store` (optional) | Name | its record must exist, else `NoSuchStore`; omitted: every Store in the home |
 | `page_size` option | Int | clamped to 1..=1000, default 50; never refused |
 | `page_pos` option | Int | items to skip; negative is taken as 0 |
 
@@ -115,8 +116,9 @@ project name; `next_page_pos` is null after the last page. There is no
 `has_more`. The whole listing is built from home folders, then paged in
 memory; a project folder without `record.json` is listed with
 `created: null` ([`project/family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs) `list`).
-Errors: `InvalidInput` (bad Store name), `NotFound`, `Failed` (a home folder
-cannot be read).
+Errors: `InvalidInput` (bad Store name), `NoSuchStore` (a named Store the home
+does not record), `Busy`/`Unknown` (a named Store that cannot be listed),
+`Failed` (a home folder cannot be read).
 
 ### project.get
 
@@ -214,7 +216,7 @@ per 200 ms besides the first and last
 | --- | --- | --- |
 | sqlite on a locally executing machine | caller's process | caller's host |
 | sqlite on a worker machine | that worker, streaming bounded entry and byte frames with backpressure over one request | caller's host |
-| PostgreSQL | caller's process (`postgresql` feature) | caller's host |
+| PostgreSQL | caller's process | caller's host |
 
 | Error | When |
 | --- | --- |
@@ -231,36 +233,67 @@ per 200 ms besides the first and last
 Export only reads history: a lost reply creates no source mutation and no
 uncertain intent.
 
-### project.remove
+### project.delete
 
-Drops one project's LayerStack (Layers, Branches, Commits) from its Store in
-one write, then the project's home entry; other projects stay.
+Retires one project in its Store and removes its home entry (spec §4). The
+project's Layers, Branches, Commits, packs and objects stay until a later
+[`store.compact`](store.md#storecompact) collects them: the project is hidden
+from listings and name resolution, and the Store stays addressable. No mount
+or operation of the project may be live.
 
 ```text
-JS      await layerfs.project.remove(project)
-Python  layerfs.project.remove(project)
-CLI     layerfs project remove <project>
+JS      await layerfs.project.delete(project)
+Python  layerfs.project.delete(project)
+CLI     layerfs project delete <project>
 ```
 
-Returns `{ stack, packs_kept: true, project }`: `stack` is the removed
-LayerStack's id; `packs_kept` is always true because the project's packs and
-objects stay in the Store
-([`project/remove.rs`](../../../../control/crates/layerfs-store/src/project/remove.rs)).
-It runs through `layerfs_control::project::remove`
-([`project.rs`](../../../../control/crates/layerfs-control/src/project.rs)),
-under the Store's lease, locally or as the worker operation `project.remove`.
+Returns `{ kind: "Removed", project, deleted_ms, home_entry_removed }`. The
+Store marker is the commit point: if the home entry cannot be removed the
+call still succeeds with `home_entry_removed: false` and keeps its durable
+intent `store/<store>/delete/<project>.json`, so a repeat from the same home
+reuses `deleted_ms` and finishes the entry. A retry of an intent written
+before its admission (the row may still be live and no marker confirmed)
+redoes the marker with the intent's `deleted_ms`, keeps the caller and
+worker entries, marks the intent and answers `home_entry_removed: false`;
+the next call finds the marker confirmed and finishes the entries. The call
+is idempotent only through that intent; it never resolves the name again. A
+lost worker reply is `Unknown` and keeps the intent.
 
 | Error | When | Source |
 | --- | --- | --- |
-| `NoSuchProject` | also when the Store holds no LayerStack of that name | [`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs) |
-| `InUse` | a Sandbox of the project is recorded; `detail.related` lists `{ kind: "sandbox", name }` | [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
-| `Unsupported` | a PostgreSQL Store ("removing a project from a PostgreSQL Store is not built"); the kernel guard refuses the Store's directory when opened (non-private mode/owner/type — another user's directory or group/other access instead of `0700` — or unsupported filesystem) | [`project/family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs) |
-| `Failed` | the Store write failed, its outcome included | `identity.rs` `remove_project` |
-| `Unknown` | worker route: the answer was lost | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| `NoSuchStore`, `NoSuchProject` | the Store or project is missing (or already retired) | [`project/delete.rs`](../../../../control/crates/layerfs-store/src/project/delete.rs) |
+| `MountsActive` | a mount of the project is live; its holders are named | [`history/admission.rs`](../../../../engine/crates/layerfs-store-service/src/history/admission.rs) |
+| `Busy`, `Unresolved` | another user or operation holds the project, or a dead owner left an uncertain one | spec §5.1 |
+| `Unsupported` | the Store is on another machine and the project record names no LayerStack id | [`project/delete.rs`](../../../../control/crates/layerfs-store/src/project/delete.rs) |
+| `Unknown` | worker route: the answer was lost; the intent stays | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
-After `Failed` or `Unknown` the home entry is kept (it is removed only after
-success). `branch.list` answering `NoSuchProject` from the Store means the
-stack is gone.
+### project.remove_file
+
+Hides one absolute project path from every node at or below its marker
+frontier (spec §4.3). It writes one `path_removed` marker and changes no
+pack, object, Commit or Layer; reads and stats of the path afterwards are
+refused `Removed`.
+
+```text
+JS      await layerfs.project.remove_file(project, path)
+Python  layerfs.project.remove_file(project, path)
+CLI     layerfs project remove-file <project> <path>
+```
+
+The path is normalized (one leading `/` stripped) and must be an absolute
+POSIX path of at most 4096 bytes and 256 components, with no empty, `.` or
+`..` component and no `\` or NUL
+([`path.rs`](../../../../core/crates/layerfs-history/src/contract/path.rs)).
+Returns `{ kind: "Removed" | "UpToDate", project, path, frontier_serial,
+removed_ms }`: the marker's stored values, `UpToDate` when no project node is
+above this path's marker frontier.
+
+| Error | When | Source |
+| --- | --- | --- |
+| `InvalidInput` | the path is not a normalized absolute POSIX path | [`path.rs`](../../../../core/crates/layerfs-history/src/contract/path.rs) |
+| `NoSuchStore`, `NoSuchProject` | the Store or project is missing (or retired) | [`methods/project.rs`](../../../../engine/crates/layerfs-store-service/src/methods/project.rs) |
+| `MountsActive`, `Busy`, `Unresolved` | project-scope admission, as `project.delete` | spec §5.1 |
+| `Unknown` | worker route: the answer was lost | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 ## Family errors
 

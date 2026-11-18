@@ -117,6 +117,17 @@ impl Transaction<'_> {
         }
     }
 }
+
+/// What [`Session::run_decided`] does with the transaction its body wrote.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Completion {
+    /// Keep the body's writes: COMMIT.
+    Commit,
+    /// Discard the body's writes: ROLLBACK, so nothing it wrote reaches the
+    /// Store and no WAL frame is committed.
+    Rollback,
+}
+
 impl Session {
     /// The wait kind of this connection's admission queue.
     fn wait_kind(&self) -> layerfs_telemetry::timer::waits::Wait {
@@ -148,6 +159,7 @@ impl Session {
             if state.quarantined {
                 return Err(BackendError::Unknown.into());
             }
+            self.check_identity().map_err(E::from)?;
             // An earlier uncertain transaction may still exist. It cannot be
             // inherited by an independently owned snapshot or guessed complete.
             if !state.connection.is_autocommit() {
@@ -207,6 +219,7 @@ impl Session {
             if state.quarantined {
                 return Err(BackendError::Unknown.into());
             }
+            self.check_identity().map_err(E::from)?;
             // An earlier uncertain transaction cannot be inherited or guessed done.
             if !state.connection.is_autocommit() {
                 state.quarantined = true;
@@ -236,6 +249,19 @@ impl Session {
         writable: bool,
         body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
     ) -> Result<T, E> {
+        self.run_decided(writable, |tx| {
+            body(tx).map(|value| (value, Completion::Commit))
+        })
+    }
+
+    /// [`Self::run`] with the body's [`Completion`] deciding the outcome: a
+    /// `Rollback` body restores the pre-transaction Store, so the caller can
+    /// take a decision on data the body wrote without persisting it.
+    pub(crate) fn run_decided<T, E: From<BackendError> + OutcomeError>(
+        &self,
+        writable: bool,
+        body: impl FnOnce(&Transaction<'_>) -> Result<(T, Completion), E>,
+    ) -> Result<T, E> {
         if writable && !self.writable {
             return Err(BackendError::ReadOnly.into());
         }
@@ -249,6 +275,7 @@ impl Session {
             if s.quarantined {
                 return Err(BackendError::Unknown.into());
             }
+            self.check_identity().map_err(E::from)?;
             // A held publication lane already owns the writer for its nested work.
             if writable && !turn.nested {
                 // State owns this before BEGIN, including across a poisoned unwind.
@@ -284,30 +311,52 @@ impl Session {
                 s.work.borrow_mut().transaction_ns += start.elapsed().as_nanos() as u64;
                 return Err(BackendError::Unknown.into());
             }
+            let mut committed = false;
             let result = match result {
-                Ok(value) => match query::run(&s.connection, "COMMIT", vec![], &s.work) {
-                    Ok(_) => {
-                        s.work.borrow_mut().commits += 1;
-                        if writable {
-                            s.work.borrow_mut().write_commits += 1;
+                Ok((value, Completion::Commit)) => {
+                    match query::run(&s.connection, "COMMIT", vec![], &s.work) {
+                        Ok(_) => {
+                            committed = true;
+                            s.work.borrow_mut().commits += 1;
+                            if writable {
+                                s.work.borrow_mut().write_commits += 1;
+                            }
+                            Ok(value)
                         }
+                        Err(e) => {
+                            if e == BackendError::Unknown {
+                                s.quarantined = true;
+                                Err(e.into())
+                            } else if !s.connection.is_autocommit()
+                                && query::run(&s.connection, "ROLLBACK", vec![], &s.work).is_err()
+                            {
+                                s.quarantined = true;
+                                Err(BackendError::Unknown.into())
+                            } else {
+                                s.work.borrow_mut().rollbacks += 1;
+                                Err(e.into())
+                            }
+                        }
+                    }
+                }
+                Ok((value, Completion::Rollback)) => {
+                    if s.connection.is_autocommit() {
+                        // The body wrote nothing, so there is nothing to undo.
+                        s.work.borrow_mut().rollbacks += 1;
                         Ok(value)
-                    }
-                    Err(e) => {
-                        if e == BackendError::Unknown {
-                            s.quarantined = true;
-                            Err(e.into())
-                        } else if !s.connection.is_autocommit()
-                            && query::run(&s.connection, "ROLLBACK", vec![], &s.work).is_err()
-                        {
-                            s.quarantined = true;
-                            Err(BackendError::Unknown.into())
-                        } else {
-                            s.work.borrow_mut().rollbacks += 1;
-                            Err(e.into())
+                    } else {
+                        match query::run(&s.connection, "ROLLBACK", vec![], &s.work) {
+                            Ok(_) => {
+                                s.work.borrow_mut().rollbacks += 1;
+                                Ok(value)
+                            }
+                            Err(_) => {
+                                s.quarantined = true;
+                                Err(BackendError::Unknown.into())
+                            }
                         }
                     }
-                },
+                }
                 Err(e) => {
                     // A SQL I/O error is marked in the transaction facade before returning.
                     if s.quarantined {
@@ -330,8 +379,12 @@ impl Session {
             };
             s.finish_writer().map_err(E::from)?;
             s.work.borrow_mut().transaction_ns += start.elapsed().as_nanos() as u64;
-            if let (true, Ok(_), Some(background)) = (writable, &result, &self.background) {
-                background.committed(&self.path);
+            // Only a COMMIT can lengthen the log; a rolled-back body must not
+            // wake the checkpoint thread as if it had written.
+            if committed {
+                if let Some(background) = &self.background {
+                    background.committed(&self.path);
+                }
             }
             result
         })

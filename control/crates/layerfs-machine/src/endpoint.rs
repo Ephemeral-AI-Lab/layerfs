@@ -58,6 +58,17 @@ fn start(
     let id = layerfs_home::home::opened(home)?.id;
     let mut spec = record::spec(home, &id, record)?;
     let bundle = stage(events, "bundle-validation", super::bundle::bundle)?;
+    // the first start pins its Engine before anything is made in it (an
+    // image loaded, a volume or container made); an Engine that does not
+    // answer gets nothing, so a start that cannot reach it pins nothing
+    let socket = &spec.tools.docker_socket;
+    if spec.kind == Platform::Docker
+        && adapters::socket_state(socket, adapters::SOCKET_ANSWER)
+            == adapters::SocketState::Answering
+    {
+        let _lock = layerfs_home::home::lock::take(home)?;
+        record_socket(home, name, socket)?;
+    }
     // the docker worker's container runs the bundle's image when the
     // machine names none (P5)
     if spec.kind == Platform::Docker && spec.os_image.is_none() {
@@ -88,9 +99,28 @@ fn start(
             Ok(()) => save_running(home, name, &running)?,
             Err(error) => record::save_unready(home, name, &running, &error.message)?,
         }
+        if spec.kind == Platform::Docker {
+            record_socket(home, name, &spec.tools.docker_socket)?;
+        }
     }
     checked?;
     Ok(Some(endpoint))
+}
+
+/// The docker machine's first start records the socket it starts on: once
+/// the Engine answers, before anything is made in it, and again once the
+/// provider started (a start that reached it without a ping), so it never
+/// moves to another Engine (its data volume and loaded image are in that
+/// one) until `machine update docker --docker ""` clears it. A socket
+/// recorded meanwhile is kept.
+fn record_socket(home: &Path, name: &str, socket: &Path) -> Result<(), SdkRefusal> {
+    record::update(home, name, |record| match record.docker() {
+        Some(_) => record,
+        None => record.with(
+            "docker",
+            layerfs_bridge::control::SdkValue::text(socket.display().to_string()),
+        ),
+    })
 }
 
 /// Machine `name`'s `start.lock`, held until dropped. Starting, creating and

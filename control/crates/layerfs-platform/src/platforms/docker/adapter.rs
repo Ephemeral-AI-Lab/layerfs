@@ -2,6 +2,7 @@
 //! container runs `namespaces` Sandboxes (D-8).
 use super::{guest, host_address, start, status, stop};
 use crate::adapter::{refused, Adapter};
+use crate::docker_socket::{socket_state, SocketState, SOCKET_ANSWER};
 use crate::error::{Code, MachineError};
 use crate::platform::{ExecutorKind, HostOs, Platform};
 use crate::probe::first_line;
@@ -29,13 +30,23 @@ impl Adapter for Docker {
             missing.push("tool:docker".into());
             return None;
         };
-        let mut command = tool::command(&docker, ["-H"]);
-        command
-            .arg(format!("unix://{}", tools.docker_socket.display()))
-            .args(["version", "--format", "{{.Server.Version}}"]);
-        let version = first_line(command, false);
+        // the Engine is asked for its version only once its socket answers a
+        // ping (bounded), so a silent socket costs no `docker` call
+        let socket = &tools.docker_socket;
+        let version = match socket_state(socket, SOCKET_ANSWER) {
+            SocketState::Answering => {
+                let mut command = tool::command(tools, &docker, ["-H"]);
+                command.arg(format!("unix://{}", socket.display())).args([
+                    "version",
+                    "--format",
+                    "{{.Server.Version}}",
+                ]);
+                first_line(command, false)
+            }
+            _ => None,
+        };
         if version.is_none() {
-            missing.push(format!("host:{}", tools.docker_socket.display()));
+            missing.push(format!("host:{}", socket.display()));
         }
         version
     }

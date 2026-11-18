@@ -873,6 +873,7 @@ dependencies = [
  "layerfs-storage",
  "layerfs-telemetry",
  "layerfs-workspace",
+ "libc",
 ]
 
 [[package]]
@@ -1001,6 +1002,7 @@ dependencies = [
  "layerfs-telemetry",
  "libc",
  "nix",
+ "postgres",
 ]
 
 [[package]]

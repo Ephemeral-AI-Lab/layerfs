@@ -1,5 +1,4 @@
 //! Real PostgreSQL audits and actual stalled-handshake cancellation.
-#![cfg(feature = "postgresql")]
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{
@@ -12,6 +11,9 @@ use std::{
     net::TcpListener,
     time::{Duration, Instant},
 };
+
+#[path = "pg_doctor/conninfo.rs"]
+mod conninfo;
 
 #[test]
 fn tcp_peer_that_stalls_authentication_is_bounded_and_closed() {
@@ -152,10 +154,17 @@ fn deadline_driver_reads_one_view_and_ordinary_sync_writes_still_work() {
         "{connection:?}"
     );
     drop(writer);
-    let fallback = PostgresSelection::new(
-        url.replace("127.0.0.1:", "missing.invalid,127.0.0.1:"),
-        &schema,
+    let fallback_url = conninfo::with_failing_first_host(&url);
+    assert_ne!(
+        fallback_url, url,
+        "failover fixture must actually rewrite the conninfo host"
     );
+    let fallback = PostgresSelection::new(&fallback_url, &schema);
+    let mut attempted = Vec::new();
+    let mut recording = |host: &str, port: u16, until: Instant| {
+        attempted.push((host.to_owned(), port));
+        fixture_resolver(host, port, until)
+    };
     let mut fallback_observations = Vec::new();
     diagnostic::postgresql_connection(
         &fallback,
@@ -164,10 +173,14 @@ fn deadline_driver_reads_one_view_and_ordinary_sync_writes_still_work() {
             deadline: Some(Instant::now() + Duration::from_secs(3)),
             ..Options::default()
         },
-        &mut fixture_resolver,
+        &mut recording,
         &mut |o| fallback_observations.push(o),
     )
     .unwrap();
+    assert!(
+        attempted.iter().any(|(host, _)| host == "missing.invalid"),
+        "failover case must first attempt the unresolvable host: {attempted:?}"
+    );
     assert!(
         fallback_observations
             .iter()
@@ -188,12 +201,9 @@ fn lock_wait_cancellation_releases_backend_work_and_snapshot() {
     };
     let schema = format!("doctor_cancel_{}", std::process::id());
     let application = format!("doctor_cancel_{}", std::process::id());
-    // URL syntax is not reserialized or logged; an explicit startup option
-    // marks the diagnostic session for independent backend observation.
-    let diagnostic_url = format!(
-        "{url}{}application_name={application}",
-        if url.contains('?') { "&" } else { "?" }
-    );
+    // The connection string is not reserialized or logged; an explicit startup
+    // option marks the diagnostic session for independent backend observation.
+    let diagnostic_url = conninfo::with_option(&url, "application_name", &application);
     let selection = PostgresSelection::new(&diagnostic_url, &schema);
     let authority = HistoryCatalogConfig {
         binding_key: b"doctor-pg-cancel".to_vec(),
@@ -250,12 +260,9 @@ fn cancellation_signal_without_deadline_releases_backend_work_and_snapshot() {
     };
     let schema = format!("doctor_signal_{}", std::process::id());
     let application = format!("doctor_signal_{}", std::process::id());
-    // URL syntax is not reserialized or logged; an explicit startup option
-    // marks the diagnostic session for independent backend observation.
-    let diagnostic_url = format!(
-        "{url}{}application_name={application}",
-        if url.contains('?') { "&" } else { "?" }
-    );
+    // The connection string is not reserialized or logged; an explicit startup
+    // option marks the diagnostic session for independent backend observation.
+    let diagnostic_url = conninfo::with_option(&url, "application_name", &application);
     let selection = PostgresSelection::new(&diagnostic_url, &schema);
     let authority = HistoryCatalogConfig {
         binding_key: b"doctor-pg-cancel".to_vec(),
@@ -343,10 +350,7 @@ fn denied_signature_read_is_unknown_instead_of_corruption() {
         PostgresHandles::create(&selection, StoragePolicy::frozen_default(), &authority).unwrap();
     let mut admin = postgres::Client::connect(&url, postgres::NoTls).unwrap();
     admin.batch_execute(&format!("CREATE ROLE {role}; GRANT USAGE ON SCHEMA {schema} TO {role}; GRANT SELECT ON ALL TABLES IN SCHEMA {schema} TO {role}")).unwrap();
-    let restricted_url = format!(
-        "{url}{}options=-c%20role%3D{role}",
-        if url.contains('?') { "&" } else { "?" }
-    );
+    let restricted_url = conninfo::with_option(&url, "options", &format!("-c role={role}"));
     let restricted = PostgresSelection::new(&restricted_url, &schema);
     let reader = PostgresHandles::open_diagnostic(
         &restricted,

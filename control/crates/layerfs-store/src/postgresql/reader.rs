@@ -19,18 +19,14 @@
 use crate::open_args::{OpenArgs, PgSelection};
 use crate::record::StoreRecord;
 use layerfs_bridge::control::SdkRefusal;
-#[cfg(feature = "postgresql")]
 use layerfs_history::HistoryCatalog as _;
-#[cfg(feature = "postgresql")]
 use layerfs_home::outcome::failed;
 use layerfs_home::outcome::refused;
 use std::path::Path;
-#[cfg(feature = "postgresql")]
 use std::path::PathBuf;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-#[cfg(feature = "postgresql")]
 mod held {
     use super::*;
     use layerfs_persistence::{PostgresCheck, PostgresHandles};
@@ -132,19 +128,10 @@ mod held {
     }
 }
 
-#[cfg(feature = "postgresql")]
 fn another(store: &str) -> SdkRefusal {
     refused(
         "Unavailable",
         format!("the PostgreSQL server holds another Store than {store}"),
-    )
-}
-
-#[cfg(not(feature = "postgresql"))]
-fn unbuilt() -> SdkRefusal {
-    refused(
-        "Unsupported",
-        "this LayerFS build has no PostgreSQL engine; build the binding with --features postgresql",
     )
 }
 
@@ -162,7 +149,6 @@ pub fn reach(
     postgresql: &PgSelection,
     project: &str,
 ) -> Result<std::result::Result<bool, OtherStore>> {
-    #[cfg(feature = "postgresql")]
     {
         let Some(handles) = held::session(key, record, postgresql)? else {
             return Ok(Err(OtherStore));
@@ -179,11 +165,6 @@ pub fn reach(
             Err(refusal) => Err(refusal),
         }
     }
-    #[cfg(not(feature = "postgresql"))]
-    {
-        let _ = (key, record, postgresql, project);
-        Err(unbuilt())
-    }
 }
 
 /// The id and head of Branch `name` of project `project`, read on this
@@ -198,7 +179,6 @@ pub(crate) fn branch(
     postgresql: &PgSelection,
     (project, name): (&str, &str),
 ) -> Result<(layerfs_history::BranchId, Option<layerfs_history::CommitId>)> {
-    #[cfg(feature = "postgresql")]
     {
         let handles =
             held::session(key, record, postgresql)?.ok_or_else(|| another(record.name()))?;
@@ -211,11 +191,6 @@ pub(crate) fn branch(
         })?;
         Ok((branch.id, branch.head_commit))
     }
-    #[cfg(not(feature = "postgresql"))]
-    {
-        let _ = (key, record, postgresql, project, name);
-        Err(unbuilt())
-    }
 }
 
 /// The newest Commit of `branch`, read on the held session; `None` when it
@@ -224,7 +199,6 @@ pub fn head(
     args: &OpenArgs,
     branch: layerfs_history::BranchId,
 ) -> Result<Option<layerfs_history::CommitId>> {
-    #[cfg(feature = "postgresql")]
     {
         let page = held_of(args)?
             .history
@@ -237,15 +211,9 @@ pub fn head(
             .map_err(failed)?;
         Ok(page.records.first().map(|record| record.id))
     }
-    #[cfg(not(feature = "postgresql"))]
-    {
-        let _ = (args, branch);
-        Err(unbuilt())
-    }
 }
 
 /// The held session of the call's Store, opened if this process holds none.
-#[cfg(feature = "postgresql")]
 fn held_of(args: &OpenArgs) -> Result<std::sync::Arc<layerfs_persistence::PostgresHandles>> {
     let key = PathBuf::from(args.store_path.as_deref().unwrap_or(""));
     let store = args.store.as_deref().unwrap_or("");
@@ -261,19 +229,10 @@ fn held_of(args: &OpenArgs) -> Result<std::sync::Arc<layerfs_persistence::Postgr
 
 /// Closes every held session unused for at least `idle`; how many.
 pub fn close_idle(idle: std::time::Duration) -> usize {
-    #[cfg(feature = "postgresql")]
-    return held::close_idle(idle);
-    #[cfg(not(feature = "postgresql"))]
-    {
-        let _ = idle;
-        0
-    }
+    held::close_idle(idle)
 }
 
 /// Closes the held sessions of the Store at `key` (its disconnect or move).
 pub fn forget(key: &Path) {
-    #[cfg(feature = "postgresql")]
     held::forget(key);
-    #[cfg(not(feature = "postgresql"))]
-    let _ = key;
 }

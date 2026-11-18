@@ -2,6 +2,8 @@
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
+#[path = "support/engine.rs"]
+mod support;
 use layerfs_platform::{native_missing, probe, HostOs, Platform};
 use standin::Scratch;
 
@@ -67,10 +69,36 @@ fn docker_without_an_engine_names_its_socket() {
         found.missing,
         [format!("host:{}", tools.docker_socket.display())]
     );
+    // a socket that is not there costs no `docker` call
+    assert_eq!(scratch.log(), "");
+}
+
+#[test]
+fn docker_with_an_answering_socket_asks_the_engine_for_its_version() {
+    let scratch = Scratch::new("dping");
+    scratch.tool("docker", "echo 29.0.1");
+    let mut tools = scratch.tools();
+    // a short path: a Unix socket's is at most 104 bytes on macOS
+    let socket = std::path::PathBuf::from(format!("/tmp/lfs-dp-{}.sock", std::process::id()));
+    let _ = std::fs::remove_file(&socket);
+    tools.docker_socket = socket;
+    let engine = support::engine(&tools.docker_socket, "HTTP/1.1 200 OK\r\n\r\nOK");
+    let found = probe(Platform::Docker, &tools);
+    assert_eq!(found.version.as_deref(), Some("29.0.1"));
+    assert!(found.ready, "{:?}", found.missing);
     assert!(scratch.log().contains(&format!(
         "-H unix://{} version",
         tools.docker_socket.display()
     )));
+    // a socket that answers while `docker version` fails still names it
+    scratch.tool("docker", "echo 'Error response from daemon' >&2; exit 1");
+    let found = probe(Platform::Docker, &tools);
+    assert_eq!(found.version, None);
+    assert_eq!(
+        found.missing,
+        [format!("host:{}", tools.docker_socket.display())]
+    );
+    drop(engine);
 }
 
 #[test]

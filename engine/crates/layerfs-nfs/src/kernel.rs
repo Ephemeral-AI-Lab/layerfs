@@ -40,13 +40,14 @@ use crate::{
     block::wait,
     change::Wcc,
     handle::{HandleError, SqliteHandles},
+    read::{failure, read_failure, Answer, Refused},
 };
 use layerfs_content::{filesystem::PathName, object::inode_leaf::InodeKind};
 use layerfs_mount_ports::{
-    operations::{KernelData, KernelRead, MutationFailure, ReadDataInput, ReadFailure},
-    ports::{Fence, MountServices, RequestServices, ServiceError},
+    operations::{KernelData, KernelRead, MutationFailure, ReadDataInput},
+    ports::{Fence, MountServices, RequestServices},
 };
-use layerfs_overlay::{KernelMount, OverlayError, READ_WINDOW};
+use layerfs_overlay::{KernelMount, READ_WINDOW};
 use layerfs_workspace::{KernelReadOperation, ViewStat};
 use std::{
     collections::{HashMap, HashSet},
@@ -55,6 +56,9 @@ use std::{
         Arc, Mutex, MutexGuard,
     },
 };
+
+mod released;
+pub use released::Released;
 
 /// Implicit file descriptors kept open at once.
 pub const FILES_HELD: usize = 1024;
@@ -106,8 +110,15 @@ pub(crate) struct Table {
     /// Serial -> the name it was last reached by, kept after its reference
     /// is collected so a later handle can be resolved again.
     pub names: HashMap<u64, Named>,
-    /// (directory, name) -> serial last seen under that name.
+    /// Every observed (directory, name) -> serial, including hard-link aliases.
+    /// A second name does not retire the first; unlink/rename remove known
+    /// vanished names, and retiring a serial removes all its keys.
     pub by_name: HashMap<Named, u64>,
+    /// Serial -> the names it is reached by besides [`Table::names`]: the
+    /// hard-link aliases it was also observed under. Every key of
+    /// [`Table::by_name`] is one of the two, so dropping one record removes
+    /// exactly its own keys instead of scanning the whole index.
+    pub aliases: HashMap<u64, Vec<Named>>,
     /// Serial -> last use, for the collection order.
     pub used: HashMap<u64, u64>,
     /// Serials marked for a cache refresh, and when (see [`crate::refresh`]).
@@ -128,6 +139,55 @@ impl Table {
     pub fn pinned(&self, serial: u64) -> bool {
         self.silly.values().any(|held| *held == serial)
     }
+    /// Records that `serial` is reached as `named`.
+    pub(crate) fn bind_name(&mut self, named: Named, serial: u64) {
+        self.by_name.insert(named, serial);
+    }
+    /// Remembers that `serial` is also reached as `named`, a name beyond its
+    /// remembered one, so dropping the serial needs no scan of `by_name`.
+    pub(crate) fn remember_alias(&mut self, serial: u64, named: &Named) {
+        let aliases = self.aliases.entry(serial).or_default();
+        if !aliases.iter().any(|alias| alias == named) {
+            aliases.push(named.clone());
+        }
+    }
+    /// Drops `named`, which `serial` no longer holds. Returns whether it did.
+    pub(crate) fn unbind_name(&mut self, named: &Named, serial: u64) -> bool {
+        if self.by_name.get(named) != Some(&serial) {
+            return false;
+        }
+        self.by_name.remove(named);
+        self.drop_alias(serial, named);
+        true
+    }
+    /// Drops `named` whatever serial holds it, and its alias record.
+    pub(crate) fn unbind_any(&mut self, named: &Named) -> Option<u64> {
+        let serial = self.by_name.remove(named)?;
+        self.drop_alias(serial, named);
+        Some(serial)
+    }
+    fn drop_alias(&mut self, serial: u64, named: &Named) {
+        let Some(aliases) = self.aliases.get_mut(&serial) else {
+            return;
+        };
+        aliases.retain(|alias| alias != named);
+        if aliases.is_empty() {
+            self.aliases.remove(&serial);
+        }
+    }
+    /// Drops every key `serial` holds: its remembered name and its aliases.
+    pub(crate) fn unbind_serial(&mut self, serial: u64) {
+        if let Some(named) = self.names.remove(&serial) {
+            if self.by_name.get(&named) == Some(&serial) {
+                self.by_name.remove(&named);
+            }
+        }
+        for named in self.aliases.remove(&serial).unwrap_or_default() {
+            if self.by_name.get(&named) == Some(&serial) {
+                self.by_name.remove(&named);
+            }
+        }
+    }
 }
 /// One opened file as READ and WRITE need it.
 #[derive(Clone, Copy)]
@@ -135,7 +195,6 @@ pub(crate) struct OpenFile {
     pub handle: u64,
     pub size: u64,
 }
-
 /// One kernel mount served over NFS: its ports and its synthetic kernel state.
 pub struct Kernel {
     services: Arc<dyn MountServices>,
@@ -285,11 +344,12 @@ impl Kernel {
                     None,
                     KernelReadOperation::Lookup { parent, name: path },
                 )
+                .map_err(|refused| refused.status)
             });
         match found {
-            Ok((stat, _, _)) => {
-                self.entry_taken(&stat, parent, &name);
-                if stat.serial == serial {
+            Ok(answer) => {
+                self.entry_taken(&answer.stat, parent, &name);
+                if answer.stat.serial == serial {
                     self.resolved.fetch_add(1, Ordering::Relaxed);
                     return Ok(());
                 }
@@ -298,16 +358,12 @@ impl Kernel {
             Err(status) => return Err(status),
         }
         let mut table = self.table();
-        if table
+        let remembered = table
             .names
             .get(&serial)
-            .is_some_and(|(p, n)| *p == parent && *n == name)
-        {
-            if let Some(old) = table.names.remove(&serial) {
-                if table.by_name.get(&old) == Some(&serial) {
-                    table.by_name.remove(&old);
-                }
-            }
+            .is_some_and(|(p, n)| *p == parent && *n == name);
+        if remembered {
+            table.unbind_serial(serial);
         }
         self.unresolved.fetch_add(1, Ordering::Relaxed);
         Err(Status::Stale)
@@ -316,26 +372,42 @@ impl Kernel {
         let services = self.services.request(&self.fence).map_err(failure)?;
         Ok((services, self.requests.fetch_add(1, Ordering::Relaxed)))
     }
-    fn observe(
+    pub(crate) fn observe(
         &self,
         protected: u64,
         handle: Option<u64>,
         operation: KernelReadOperation,
-    ) -> Result<(ViewStat, Option<u64>, Option<u64>), Status> {
-        let (services, request) = self.request()?;
+    ) -> Result<Answer, Refused> {
+        let (services, request) = self.request().map_err(|status| Refused {
+            status,
+            directory: None,
+        })?;
         let found = wait(KernelRead::prepare(
             services, self.mount, request, protected, handle, operation,
         ))
-        .map_err(read_failure)?;
-        let answer = found.value().map(|value| {
-            (
-                value.stat.clone(),
-                value.file.map(|file| file.owner_id()),
-                value.directory.map(|directory| directory.owner_id()),
-            )
-        });
-        wait(found.dispose()).map_err(read_failure)?;
-        answer.map_err(refusal)
+        .map_err(|failure| Refused {
+            status: read_failure(failure),
+            directory: None,
+        })?;
+        let answer = match found.value() {
+            Ok(value) => Ok(Answer {
+                stat: value.stat.clone(),
+                parent: value.parent.clone(),
+                file: value.file.map(|file| file.owner_id()),
+                directory: value.directory.map(|directory| directory.owner_id()),
+            }),
+            // A refusal still carries the directory row its job read, when it
+            // read one: fresh facts, not this export's last observation.
+            Err(status) => Err(Refused {
+                status: refusal(status),
+                directory: found.refused_directory().cloned(),
+            }),
+        };
+        wait(found.dispose()).map_err(|failure| Refused {
+            status: read_failure(failure),
+            directory: None,
+        })?;
+        answer
     }
     /// GETATTR. An inode that lost its last name while a silly name keeps it
     /// is observed through its descriptor; any other inode no name reaches
@@ -354,58 +426,82 @@ impl Kernel {
         };
         let stat = self
             .observe(serial, handle, KernelReadOperation::Getattr { serial })
-            .map(|(stat, _, _)| stat)
-            .map_err(|status| {
-                if status == Status::NoEnt {
-                    Status::Stale
-                } else {
-                    status
-                }
+            .map(|answer| answer.stat)
+            .map_err(|refused| match refused.status {
+                Status::NoEnt => Status::Stale,
+                status => status,
             })?;
         self.observed(&stat);
         Ok(stat)
     }
     /// LOOKUP of `name` in directory `parent`, including `.`, `..` and the
-    /// export's own silly names.
-    pub fn lookup(&self, parent: u64, name: &[u8]) -> Result<ViewStat, Status> {
+    /// export's own silly names. One owner job answers both the entry and,
+    /// when the name resolved, the directory itself: the same job had to read
+    /// the directory's row to resolve it, so the reply's directory attributes
+    /// cost nothing more.
+    ///
+    /// A failure answers the directory's own fresh facts only when the job
+    /// that failed read its row, which is every name this export looked up:
+    /// a name that binds nothing still read the parent's row. `.`, `..`, a
+    /// silly name and a refusal decided before any visit read no directory
+    /// row and answer `None`, so the client falls back to its own `actimeo`
+    /// instead of restarting its timer on facts nothing refreshes.
+    pub fn lookup(
+        &self,
+        parent: u64,
+        name: &[u8],
+    ) -> Result<(ViewStat, Option<ViewStat>), Refused> {
         match name {
-            b"" => return Err(Status::NoEnt),
-            b"." => return self.getattr(parent),
+            b"" => return Err(Refused::plain(Status::NoEnt)),
+            b"." => {
+                return self
+                    .getattr(parent)
+                    .map(|stat| (stat, None))
+                    .map_err(Refused::plain)
+            }
             b".." => {
                 let up = if parent == self.root() {
                     parent
                 } else {
                     let known = self.table().parents.get(&parent).copied();
-                    known.ok_or(Status::NoEnt)?
+                    known.ok_or(Refused::plain(Status::NoEnt))?
                 };
-                self.held_reference(up)?;
-                return self.getattr(up);
+                self.held_reference(up).map_err(Refused::plain)?;
+                return self
+                    .getattr(up)
+                    .map(|stat| (stat, None))
+                    .map_err(Refused::plain);
             }
-            _ if name.len() > 255 => return Err(Status::NameTooLong),
+            _ if name.len() > 255 => return Err(Refused::plain(Status::NameTooLong)),
             _ => {}
         }
+        // A companion lives in the export alone: no job read the directory.
         if let Some(stat) = self.companion_named(parent, name) {
-            return Ok(stat);
+            return Ok((stat, None));
         }
         if self.refuses_apple_double() && crate::names::apple_double(name) {
             if parent != self.root() && !self.table().parents.contains_key(&parent) {
-                return Err(Status::NotDir);
+                return Err(Refused::plain(Status::NotDir));
             }
-            return Err(Status::NoEnt);
+            return Err(Refused::plain(Status::NoEnt));
         }
         let silly = self.table().silly.get(&(parent, name.to_vec())).copied();
         if let Some(serial) = silly {
-            return self.getattr(serial);
+            return self
+                .getattr(serial)
+                .map(|stat| (stat, None))
+                .map_err(Refused::plain);
         }
-        let path = PathName::from_bytes(name).map_err(|_| Status::Inval)?;
-        let (stat, _, _) = self.observe(
-            parent,
-            None,
-            KernelReadOperation::Lookup { parent, name: path },
-        )?;
+        let path = PathName::from_bytes(name).map_err(|_| Refused::plain(Status::Inval))?;
+        let lookup = KernelReadOperation::Lookup { parent, name: path };
+        let answer = self.observe(parent, None, lookup).inspect_err(|refused| {
+            refused.directory.iter().for_each(|row| self.observed(row));
+        })?;
+        answer.parent.iter().for_each(|row| self.observed(row));
         // The deciding visit took one engine reference; keep exactly one.
-        self.entry_taken(&stat, parent, name);
-        Ok(stat)
+        self.entry_taken(&answer.stat, parent, name);
+        self.trace_main_file("LOOKUP", parent, name, answer.stat.serial, "Ok");
+        Ok((answer.stat, answer.parent))
     }
     /// A visit or mutation that decided `stat` as the entry `name` of
     /// `parent` took one engine lookup reference on it: the export keeps
@@ -424,11 +520,40 @@ impl Kernel {
                 if table.names.len() < NAMES_HELD || table.names.contains_key(&stat.serial) {
                     let named = (parent, name.to_vec());
                     if let Some(old) = table.names.insert(stat.serial, named.clone()) {
-                        if table.by_name.get(&old) == Some(&stat.serial) {
-                            table.by_name.remove(&old);
+                        if old != named {
+                            if stat.namespace_refs <= 1 {
+                                // The inode has one name: every other name the
+                                // index held for it is one it no longer has.
+                                // (Its old keys stay a moment in a state whose
+                                // nlink the engine last reported higher.)
+                                table.unbind_name(&old, stat.serial);
+                                for alias in table.aliases.remove(&stat.serial).unwrap_or_default()
+                                {
+                                    if table.by_name.get(&alias) == Some(&stat.serial) {
+                                        table.by_name.remove(&alias);
+                                    }
+                                }
+                            } else {
+                                // A hard link: the old name still reaches the
+                                // inode, so it stays, remembered per serial so
+                                // that retiring the serial drops no other name.
+                                table.remember_alias(stat.serial, &old);
+                            }
+                            // Held here: the table lock, and inside it the
+                            // companion lock as everywhere else. Off unless the
+                            // trace is on.
+                            self.trace_bind(
+                                parent,
+                                name,
+                                stat.serial,
+                                match stat.namespace_refs <= 1 {
+                                    true => "unbound",
+                                    false => "alias",
+                                },
+                            );
                         }
                     }
-                    table.by_name.insert(named, stat.serial);
+                    table.bind_name(named, stat.serial);
                 }
             }
             let extra = root || !table.lookups.insert(stat.serial);
@@ -449,16 +574,26 @@ impl Kernel {
         }
         self.observed(stat);
     }
-    /// Records that `serial` is now reached as `name` in `parent` (RENAME).
-    pub(crate) fn renamed(&self, serial: u64, parent: u64, name: &[u8]) {
+    /// Records that `serial` is now reached as `new_name` in `to` rather than as
+    /// `name` in `from` (RENAME). Only the name that moved leaves the index:
+    /// other names of the inode, its hard links, stay reachable as they were.
+    pub(crate) fn renamed(&self, serial: u64, from: u64, name: &[u8], to: u64, new_name: &[u8]) {
         let mut table = self.table();
-        let named = (parent, name.to_vec());
-        if let Some(slot) = table.names.get_mut(&serial) {
-            let old = std::mem::replace(slot, named.clone());
-            if table.by_name.get(&old) == Some(&serial) {
-                table.by_name.remove(&old);
+        let named = (to, new_name.to_vec());
+        let moved = (from, name.to_vec());
+        table.unbind_name(&moved, serial);
+        let previous = table
+            .names
+            .get_mut(&serial)
+            .map(|slot| std::mem::replace(slot, named.clone()));
+        if let Some(previous) = previous {
+            // The name the inode was last recalled by did not move and is still
+            // one of its names: overwriting the remembered name keeps it only
+            // as an alias, which is what retiring the serial reads.
+            if previous != moved && previous != named {
+                table.remember_alias(serial, &previous);
             }
-            table.by_name.insert(named, serial);
+            table.bind_name(named, serial);
         }
     }
     pub(crate) fn forget(&self, serial: u64, count: u64) {
@@ -486,11 +621,7 @@ impl Kernel {
             let mut table = self.table();
             table.parents.remove(&serial);
             table.directory_stats.remove(&serial);
-            if let Some(old) = table.names.remove(&serial) {
-                if table.by_name.get(&old) == Some(&serial) {
-                    table.by_name.remove(&old);
-                }
-            }
+            table.unbind_serial(serial);
             table.used.remove(&serial);
             table.verifiers.retain(|_, entry| entry.1 != serial);
             let directories: Vec<u64> = table
@@ -521,6 +652,8 @@ impl Kernel {
         if held && !retired_in_job {
             self.forget(serial, 1);
         }
+        // An inode's last name is gone: so is its AppleDouble companion.
+        self.companion_drop_inode(serial);
     }
     /// Records the parent of a directory seen in a listing or moved by RENAME.
     pub fn saw_directory(&self, serial: u64, parent: u64) {
@@ -611,9 +744,11 @@ impl Kernel {
             }
         }
         let operation = KernelReadOperation::Open { serial, writable };
-        let (stat, file, _) = self.observe(serial, None, operation)?;
-        let handle = file.ok_or(Status::ServerFault)?;
-        Ok(self.file_taken(serial, handle, &stat, writable))
+        let answer = self
+            .observe(serial, None, operation)
+            .map_err(|refused| refused.status)?;
+        let handle = answer.file.ok_or(Status::ServerFault)?;
+        Ok(self.file_taken(serial, handle, &answer.stat, writable))
     }
     /// Records an open file descriptor (from `OPEN` or `CREATE`), evicting
     /// the oldest unpinned descriptor when the bound is reached.
@@ -730,9 +865,13 @@ impl Kernel {
         if crate::apple_double::companion(serial) {
             return Err(Status::NotDir);
         }
-        let (_, _, directory) =
-            self.observe(serial, None, KernelReadOperation::Opendir { serial })?;
-        let handle = directory.ok_or(Status::ServerFault)?;
+        let answer = self
+            .observe(serial, None, KernelReadOperation::Opendir { serial })
+            .map_err(|refused| refused.status)?;
+        let handle = answer.directory.ok_or(Status::ServerFault)?;
+        // The visit read the directory's own row: remember it, so a LOOKUP in
+        // this directory answers its `dir_attributes` from memory.
+        self.observed(&answer.stat);
         let evicted = {
             let mut table = self.table();
             let tick = table.tick();
@@ -774,61 +913,6 @@ impl Kernel {
     fn close_directory(&self, serial: u64, handle: u64) {
         if let Ok((services, _)) = self.request() {
             drop(wait(services.close_directory(self.mount, serial, handle)));
-        }
-    }
-    /// Gives back everything the synthetic kernel holds: descriptors first,
-    /// then lookup references. Run once, before the engine mount is revoked.
-    /// Retained mutation failures keep their custody and are only counted.
-    pub fn release(&self) -> Released {
-        let table = std::mem::take(&mut *self.table());
-        let companions = self.companions_release();
-        let released = Released {
-            companions,
-            files: table.files.len(),
-            directories: table.directories.len(),
-            lookups: table.lookups.len(),
-            silly: table.silly.len(),
-            retained: self.retained_count(),
-            silly_renamed: self.silly_renamed.load(Ordering::Relaxed),
-            names_refused: self.names_refused.load(Ordering::Relaxed),
-            names_detached: self.names_detached.load(Ordering::Relaxed),
-            collected: self.collected.load(Ordering::Relaxed),
-            resolved: self.resolved.load(Ordering::Relaxed),
-            unresolved: self.unresolved.load(Ordering::Relaxed),
-        };
-        for (serial, held) in table.files {
-            self.close_file(serial, held.handle);
-        }
-        for (handle, (serial, _)) in table.directories {
-            self.close_directory(serial, handle);
-        }
-        for serial in table.lookups {
-            self.forget(serial, 1);
-        }
-        released
-    }
-    fn retained_count(&self) -> usize {
-        self.retained
-            .lock()
-            .unwrap_or_else(|poison| poison.into_inner())
-            .len()
-    }
-    /// Current holdings, for diagnostics.
-    pub fn held(&self) -> Released {
-        let table = self.table();
-        Released {
-            companions: self.companions_held(),
-            files: table.files.len(),
-            directories: table.directories.len(),
-            lookups: table.lookups.len(),
-            silly: table.silly.len(),
-            retained: self.retained_count(),
-            silly_renamed: self.silly_renamed.load(Ordering::Relaxed),
-            names_refused: self.names_refused.load(Ordering::Relaxed),
-            names_detached: self.names_detached.load(Ordering::Relaxed),
-            collected: self.collected.load(Ordering::Relaxed),
-            resolved: self.resolved.load(Ordering::Relaxed),
-            unresolved: self.unresolved.load(Ordering::Relaxed),
         }
     }
     /// Closes every implicit file descriptor that no silly name needs, so
@@ -906,64 +990,6 @@ fn collectable(table: &mut Table, keep: usize) -> Vec<u64> {
     }
     candidates.into_iter().map(|(_, serial)| serial).collect()
 }
-/// What [`Kernel::release`] gave back.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct Released {
-    pub files: usize,
-    pub directories: usize,
-    pub lookups: usize,
-    /// Silly names whose inode was kept alive until release.
-    pub silly: usize,
-    /// Failed mutations still holding engine custody.
-    pub retained: usize,
-    /// Client silly renames served as unlinks, over the export's life.
-    pub silly_renamed: u64,
-    /// Creations refused for their AppleDouble name, over the export's life.
-    pub names_refused: u64,
-    /// AppleDouble companions held in memory (see [`crate::apple_double`]).
-    pub companions: usize,
-    /// AppleDouble companions created, over the export's life.
-    pub names_detached: u64,
-    /// References collected beyond the bound, over the export's life.
-    pub collected: u64,
-    /// SqliteHandles of collected serials resolved again by their name.
-    pub resolved: u64,
-    /// SqliteHandles of collected serials whose name no longer reaches them.
-    pub unresolved: u64,
-}
 fn oldest(entries: impl Iterator<Item = (u64, u64)>) -> Option<u64> {
     entries.min_by_key(|(_, tick)| *tick).map(|(key, _)| key)
-}
-fn stale(error: &(dyn std::error::Error + 'static)) -> bool {
-    let mut current = Some(error);
-    while let Some(error) = current {
-        if matches!(
-            error.downcast_ref::<OverlayError>(),
-            Some(OverlayError::Stale)
-        ) {
-            return true;
-        }
-        current = error.source();
-    }
-    false
-}
-/// Whether a failed step's cause chain holds an engine `Stale`.
-pub(crate) fn failure_is_stale(error: &ServiceError) -> bool {
-    stale(error.as_ref())
-}
-/// A failed port step: an engine `Stale` is the client's stale handle; any
-/// other failure is an I/O error of this request alone.
-pub fn failure(error: ServiceError) -> Status {
-    if stale(error.as_ref()) {
-        Status::Stale
-    } else {
-        Status::Io
-    }
-}
-fn read_failure(failure: ReadFailure) -> Status {
-    if stale(failure.reason.as_ref()) {
-        Status::Stale
-    } else {
-        Status::Io
-    }
 }

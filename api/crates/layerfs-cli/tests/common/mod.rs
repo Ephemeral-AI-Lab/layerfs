@@ -22,7 +22,10 @@ const DEADLINE: Duration = Duration::from_secs(60);
 
 /// A fresh private folder, to be used as a home or a scratch directory.
 pub fn tempdir(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("lfs-cli-{tag}-{}", std::process::id()));
+    let base = std::env::var_os("LAYERFS_TEST_TMPDIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let dir = base.join(format!("lfs-cli-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();

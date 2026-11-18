@@ -13,11 +13,11 @@ use crate::daemon::values;
 use crate::host::Host;
 use crate::internal::workspace;
 use crate::lifecycle::{operation, WORKSPACES};
-use crate::record::{DaemonRecord, WorkspaceRecord};
+use crate::record::{DaemonRecord, SandboxRecord, WorkspaceRecord};
 use crate::registry::{sandbox, sandbox_live, Mount};
 use crate::OperationCause;
 use crate::Unmounted;
-use layerfs_bridge::control::{CommitControl, Reply, SdkRefusal, SdkValue};
+use layerfs_bridge::control::{CommitControl, MountPlace, Reply, SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, CommitId, WorkspaceId};
 use layerfs_home::helpers::{lock, random, required};
 use layerfs_home::names::WorkspaceName;
@@ -102,7 +102,14 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
     let id = WorkspaceId::from_authority(random()?).map_err(failed)?;
     let mounted = {
         let mut control = crate::daemon::trace::control(&state.controls)?;
-        workspace(&mut control).mount_named(id, (project, branch))
+        // This Sandbox's record names the machine it runs on; the daemon
+        // that binds the mount registers both names beside its Workspace.
+        let machine =
+            SandboxRecord::read_in(&directory, sandbox)?.map(|record| record.machine().to_owned());
+        let place = MountPlace::new(Some(state.id.as_str()), machine.as_deref());
+        workspace(&mut control)
+            .placed(place.sandbox.as_deref(), place.machine.as_deref())
+            .mount_named(id, (project, branch))
     };
     let mounted = mounted.map_err(|failure| match (&failure.bound, &failure.failure.cause) {
         // the daemon's lookup refusal, nothing bound: the call's answer
@@ -250,15 +257,19 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     let state = sandbox(host)?;
     let path = required(path, "path")?;
     if let Some(value) = crate::unmount_guard::find(&state, path)? {
-        return crate::unmount_guard::repeat(&value);
+        if !(force && crate::unmount_guard::forceable(&value)) {
+            return crate::unmount_guard::repeat(&value);
+        }
     }
     let guard = layerfs_store::project::discovery::guard(&state.directory)?;
     // Another process may have registered while this call waited for the
     // short admission section. Check again before sending anything.
     if let Some(value) = crate::unmount_guard::find(&state, path)? {
-        return crate::unmount_guard::repeat(&value);
+        if !(force && crate::unmount_guard::forceable(&value)) {
+            return crate::unmount_guard::repeat(&value);
+        }
     }
-    let token = state.token(path)?;
+    let token = state.unmount_token(path)?;
     // its running commands (D-10): `Busy`, or with `force` cancelled first
     let wsid = layerfs_bridge::sdk_values::hex(&token.workspace.to_bytes());
     let unreached = &mut crate::exec::cancel::unreached;
@@ -268,7 +279,7 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     // ordinary 60 s control wait running (#540).
     crate::files::refresh_within(&state, UNMOUNT_STATUS_WAIT)?;
     // the daemon's kernel probe answers Busy for a process still holding it
-    let attempt = crate::unmount_guard::begin(&state, token, path)?;
+    let attempt = crate::unmount_guard::begin(&state, token, path, force)?;
     drop(guard);
     // Only this Workspace's lease remains held. Other Workspaces and
     // processes can take Sandbox ownership while the daemon helper waits.
@@ -277,17 +288,25 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
         let mut control = crate::daemon::trace::control(&state.controls)?;
         sent = true;
         let mut api = workspace(&mut control);
+        // A request whose sending was never attempted reached no daemon:
+        // the attempt's record is undone like a call that never connected.
+        let mut answered = |failure: Box<crate::OperationFailure>| {
+            if matches!(&failure.cause, OperationCause::Exchange(exchange) if !exchange.attempted) {
+                sent = false;
+            }
+            operation(failure)
+        };
         // Forced: one abort write ends the connection, also after a normal
         // unmount stalled at Join; uncommitted changes are dropped.
         if force {
-            match api.unmount(token, true).map_err(operation)? {
+            match api.unmount(token, true).map_err(&mut answered)? {
                 Some(outcome) => Ok(values::force_unmounted(&outcome)),
                 None => values::unmounted(&Unmounted::Closed),
             }
         } else {
             match api.unmount_checked(token, discard) {
                 Ok(answer) => values::unmounted(&answer),
-                Err(error) => Err(operation(error)),
+                Err(error) => Err(answered(error)),
             }
         }
     })();

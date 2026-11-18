@@ -42,7 +42,7 @@ check and proves a missing, renamed or extra call is reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-61 calls in 9 families, counted from the Node table. Calls present: Node 61, Python 61, Python `aio` 61, CLI 61, MCP 61 (34 in `work`, 27 admin only).
+84 calls in 12 families, counted from the Node table. Calls present: Node 84, Python 84, Python `aio` 84, CLI 84, MCP 77 (38 in `work`, 39 admin only; 6 UI only, in no profile).
 
 Argument names that are Python keywords: none.
 
@@ -50,27 +50,35 @@ Front-end problems: none.
 
 | Call | Positionals (`?` optional) | Options (`()` a function) | Node | Python | Python `aio` | CLI | MCP |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| `home.init` | - | - | yes | yes | yes | yes | admin |
+| `home.get` | - | - | yes | yes | yes | yes | admin |
 | `project.init` | project, folder | timeout, on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `project.list` | ?store | page_size, page_pos | yes | yes | yes | yes | yes |
 | `project.get` | project | - | yes | yes | yes | yes | yes |
+| `project.stats` | project, ?branch, ?commit | - | yes | yes | yes | yes | yes |
 | `project.export` | project, destination | branch, on_progress() | yes | yes | yes | yes (--progress) | yes |
-| `project.remove` | project | - | yes | yes | yes | yes | admin |
-| `branch.list` | project | page_size, page_pos | yes | yes | yes | yes | yes |
+| `project.delete` | project | - | yes | yes | yes | yes | admin |
+| `project.remove_file` | project, path | - | yes | yes | yes | yes | admin |
+| `branch.list` | project | page_size, page_pos, page | yes | yes | yes | yes | yes |
 | `branch.get` | project, branch | - | yes | yes | yes | yes | yes |
+| `branch.commits` | project, branch | page, page_size, at_commit, include_storage | yes | yes | yes | yes | yes |
+| `branch.get_commit` | project, branch, commit | - | yes | yes | yes | yes | yes |
 | `branch.fork` | project, name, from_branch, ?from_commit | - | yes | yes | yes | yes | yes |
 | `branch.merge` | project, name, a, b | message, units | yes | yes | yes | yes | yes |
-| `branch.publish` | project, branch, ?commit | - | yes | yes | yes | yes | yes |
-| `branch.diff` | project, from_branch, to_branch | paths_only, page_size, page_pos, cursor | yes | yes | yes | yes | yes |
+| `branch.publish` | project, branch, ?commit | expected_base, expected_head, force | yes | yes | yes | yes | yes |
+| `branch.diff` | project, from_branch, to_branch | paths_only, page_size, page_pos, cursor, page, from_commit, to_commit, path_prefix, include_attribution, continuation | yes | yes | yes | yes | yes |
+| `branch.remove` | project, branch | - | yes | yes | yes | yes | admin |
 | `commit.list` | project, branch | page_size, page_pos | yes | yes | yes | yes | yes |
 | `commit.get` | project, branch, commit | - | yes | yes | yes | yes | yes |
 | `commit.diff` | project, from_commit, to_commit | paths_only, page_size, page_pos, cursor | yes | yes | yes | yes | yes |
 | `file.read` | project, branch, path, ?commit | start_line, end_line | yes | yes | yes | yes | yes |
 | `file.stat` | project, branch, path, ?commit | - | yes | yes | yes | yes | yes |
-| `file.list` | project, branch, path, ?commit | page_size, page_pos | yes | yes | yes | yes | yes |
-| `file.glob` | project, branch, path, pattern, ?commit | page_size, page_pos | yes | yes | yes | yes | yes |
-| `file.grep` | project, branch, path, pattern, ?commit | page_size, page_pos | yes | yes | yes | yes | yes |
-| `file.blame` | project, branch, path, ?commit | from_line | yes | yes | yes | yes | yes |
-| `file.diff` | project, left_branch, left_path, right_branch, right_path | left_commit, right_commit | yes | yes | yes | yes | yes |
+| `file.list` | project, branch, path, ?commit | page_size, page, page_pos | yes | yes | yes | yes | yes |
+| `file.glob` | project, branch, path, pattern, ?commit | page_size, page, page_pos | yes | yes | yes | yes | yes |
+| `file.grep` | project, branch, path, pattern, ?commit | page_size, page, page_pos | yes | yes | yes | yes | yes |
+| `file.revision` | project, branch, path | at_commit, traversal, page, page_size, continuation | yes | yes | yes | yes | yes |
+| `file.blame` | project, branch, path, ?commit | from_line, line_count | yes | yes | yes | yes | yes |
+| `file.diff` | project, left_branch, left_path, right_branch, right_path | left_commit, right_commit, include_attribution, allow_missing, page, page_size | yes | yes | yes | yes | yes |
 | `file.write` | project, branch, path, content | message, mode | yes | yes | yes | yes (stdin/--from) | yes |
 | `file.edit` | project, branch, path | old, new, message | yes | yes | yes | yes | yes |
 | `file.rm` | project, branch, path | message | yes | yes | yes | yes | yes |
@@ -78,10 +86,11 @@ Front-end problems: none.
 | `file.mv` | project, branch, from_path, to_path | message | yes | yes | yes | yes | yes |
 | `file.cp` | project, branch, from_path, to_path | message | yes | yes | yes | yes | yes |
 | `file.apply` | project, branch, changes | message | yes | yes | yes | yes (stdin/--from) | yes |
-| `sandbox.create` | project, name, ?machine | image | yes | yes | yes | yes | admin |
-| `sandbox.list` | ?project | page_size, page_pos | yes | yes | yes | yes | yes |
+| `sandbox.create` | project, name, ?machine | image, on_progress() | yes | yes | yes | yes (--progress) | admin |
+| `sandbox.list` | ?project | page_size, page_pos, live | yes | yes | yes | yes | yes |
 | `sandbox.get` | name | page_size, page_pos | yes | yes | yes | yes | yes |
 | `sandbox.close` | name | force | yes | yes | yes | yes | admin |
+| `sandbox.files` | sandbox, ?path | depth, cursor, limit, offset, length | yes | yes | yes | yes | no (UI only) |
 | `workspace.mount` | sandbox, branch | name | yes | yes | yes | yes | yes |
 | `workspace.exec` | ws, command | message, stream, stdout(), stderr(), exec_id, on_progress() | yes | yes | yes | yes (--progress, --stream) | yes |
 | `workspace.exec_cancel` | ws, exec_id | grace_ms | yes | yes | yes | yes | yes |
@@ -91,28 +100,40 @@ Front-end problems: none.
 | `machine.list` | - | - | yes | yes | yes | yes | admin |
 | `machine.platforms` | - | - | yes | yes | yes | yes | admin |
 | `machine.get` | name | - | yes | yes | yes | yes | admin |
+| `machine.images` | name | - | yes | yes | yes | yes | admin |
+| `machine.load` | name, image | on_progress() | yes | yes | yes | yes (--progress) | admin |
+| `machine.prune` | name, ?image | unused | yes | yes | yes | yes | admin |
 | `machine.status` | name | - | yes | yes | yes | yes | admin |
-| `machine.start` | name | - | yes | yes | yes | yes | admin |
-| `machine.stop` | name | - | yes | yes | yes | yes | admin |
-| `machine.create` | name, platform | cpus, memory, disk, image | yes | yes | yes | yes | admin |
+| `machine.stats` | machine | - | yes | yes | yes | yes | no (UI only) |
+| `machine.space` | machine | - | yes | yes | yes | yes | no (UI only) |
+| `machine.files` | machine, ?path | depth, cursor, limit, offset, length | yes | yes | yes | yes | no (UI only) |
+| `machine.start` | name | on_progress() | yes | yes | yes | yes (--progress) | admin |
+| `machine.stop` | name | force | yes | yes | yes | yes | admin |
+| `machine.create` | name, platform | cpus, memory, disk, image, os_image, on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `machine.remove` | name | - | yes | yes | yes | yes | admin |
 | `machine.update` | name | cpus, memory, image, docker, wsl, daemon | yes | yes | yes | yes | admin |
 | `store.list` | - | - | yes | yes | yes | yes | admin |
 | `store.get` | name | - | yes | yes | yes | yes | admin |
-| `store.status` | name | - | yes | yes | yes | yes | admin |
+| `store.status` | name | machine | yes | yes | yes | yes | admin |
+| `store.stats` | name | - | yes | yes | yes | yes | admin |
 | `store.create` | name | - | yes | yes | yes | yes | admin |
 | `store.connect` | name, url | password, synchronous_commit | yes | yes | yes | yes | admin |
-| `store.attach` | name, machine | url, password | yes | yes | yes | yes | admin |
-| `store.detach` | name, machine | - | yes | yes | yes | yes | admin |
+| `store.update` | name | machine, url, password, synchronous_commit, clear | yes | yes | yes | yes | admin |
 | `store.push` | name, machine | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `store.pull` | name | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `store.remove` | name | - | yes | yes | yes | yes | admin |
+| `store.compact` | name | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `store.disconnect` | name | - | yes | yes | yes | yes | admin |
 | `backup.connect` | name, url | key, region, part_size | yes | yes | yes | yes | admin |
 | `backup.disconnect` | name | - | yes | yes | yes | yes | admin |
 | `backup.list` | ?bucket | - | yes | yes | yes | yes | admin |
 | `backup.create` | store, bucket, ?file | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `backup.restore` | store, bucket, ?file | on_progress() | yes | yes | yes | yes (--progress) | admin |
+| `logs.list` | - | op, project, client, tag, outcome, since, cursor, limit | yes | yes | yes | yes | admin |
+| `logs.reset` | - | - | yes | yes | yes | yes | admin |
+| `logs.machine` | machine | cursor, before, limit | yes | yes | yes | yes | no (UI only) |
+| `logs.sandbox` | sandbox | cursor, before, limit | yes | yes | yes | yes | no (UI only) |
+| `doctor.fix` | id | - | yes | yes | yes | yes | no (no tool) |
 
 <!-- END GENERATED -->
 

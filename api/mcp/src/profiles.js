@@ -6,9 +6,9 @@
 // Assignment rule (each call lands in exactly one bucket):
 //   work   the families an agent works in (branch, commit, file, workspace)
 //          plus the read-only project and Sandbox calls named below
-//   admin  every other call an agent may make: project create/remove,
-//          Sandbox create/close, and the machine, store, backup and logs
-//          families
+//   admin  every other call an agent may make: project create/delete/
+//          remove_file, Branch remove, Sandbox create/close, and the home,
+//          machine, store, backup and logs families
 //   ui     the monitoring calls a UI polls (layerfs-project#178 D2, #164): in no
 //          profile, so no agent is offered them
 //   none   the doctor family: like `layerfs doctor` itself, which is no
@@ -25,21 +25,22 @@ const WORK_FAMILIES = new Set(["branch", "commit", "file", "workspace"]);
 /** Read-only calls of families that are otherwise administration. */
 const WORK_CALLS = new Set(["project.list", "project.get", "project.stats", "project.export", "sandbox.list", "sandbox.get"]);
 
-/** Administrative calls of the project and sandbox families. */
-const ADMIN_CALLS = new Set(["project.init", "project.remove", "sandbox.create", "sandbox.close"]);
+/** Administrative calls outside the admin families. */
+const ADMIN_CALLS = new Set(["project.init", "project.delete", "project.remove_file", "branch.remove", "sandbox.create", "sandbox.close"]);
 
 /** Monitoring calls for a UI, which no profile lists (layerfs-project#178 D2, #164). */
 const UI_CALLS = new Set(["machine.stats", "machine.space", "machine.files", "logs.machine", "logs.sandbox", "sandbox.files"]);
 
 /** Families whose every call belongs to the `admin` profile. */
-const ADMIN_FAMILIES = new Set(["machine", "store", "backup", "logs"]);
+const ADMIN_FAMILIES = new Set(["home", "machine", "store", "backup", "logs"]);
 
 /** Families that are no MCP tool in any profile. */
 const NO_TOOL_FAMILIES = new Set(["doctor"]);
 
 /** Why a family's calls sit where they do; one line per family, in the doc. */
 const WHY = {
-  project: "read a project's record or its entry counts, or export one (work); importing and removing a project are administration",
+  home: "set the home up and read what this build would use with it; administration",
+  project: "read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration",
   branch: "work on Branches: list, read, fork, merge, publish and diff",
   commit: "read a Branch's Commit history",
   file: "read and change files in a Branch; each write is one explicit Commit",
@@ -61,10 +62,13 @@ const nameOf = (spec) => `${spec.family}.${spec.call}`;
  */
 export function bucketOf(spec) {
   const name = nameOf(spec);
+  // The admin exception list is checked before the work families: a retired
+  // entity in a work family (`branch.remove`) is still administration (§10),
+  // and a monitoring call a UI polls is offered to no agent.
   if (UI_CALLS.has(name)) return "ui";
+  if (ADMIN_CALLS.has(name)) return "admin";
   if (WORK_CALLS.has(name)) return "work";
   if (WORK_FAMILIES.has(spec.family)) return "work";
-  if (ADMIN_CALLS.has(name)) return "admin";
   if (ADMIN_FAMILIES.has(spec.family)) return "admin";
   if (NO_TOOL_FAMILIES.has(spec.family)) return "none";
   return null;
@@ -74,7 +78,10 @@ export function bucketOf(spec) {
 export function whyOf(spec) {
   if (UI_CALLS.has(nameOf(spec))) return "a monitoring read a UI polls (a machine's stats, disk space, files or worker log, a Sandbox's daemon log or files); offered to no agent";
   if (spec.family === "project" && spec.call === "init") return "import a host folder into a Store; administration";
-  if (spec.family === "project" && spec.call === "remove") return "remove a project from its Store; administration";
+  if (spec.family === "project" && spec.call === "delete") return "retire a project in its Store and remove its home entry; administration; a folder scope refuses it";
+  if (spec.family === "project" && spec.call === "remove_file") return "hide one absolute path from every node at or below its marker frontier; administration; a folder scope refuses it";
+  if (spec.family === "branch" && spec.call === "remove") return "retire one Branch in its Store; administration; a folder scope refuses it";
+  if (spec.family === "store" && spec.call === "compact") return "reclaim one Store's dead bytes; administration; a folder scope refuses it";
   if (spec.family === "sandbox" && spec.call === "create") return "start a Sandbox process; administration";
   if (spec.family === "sandbox" && spec.call === "close") return "stop a Sandbox; administration";
   if (spec.family === "project" && spec.call === "export") return "export a Branch snapshot to a local folder under a launch-time --export-root; a folder scope refuses it";

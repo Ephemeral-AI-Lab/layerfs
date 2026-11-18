@@ -20,9 +20,10 @@ use crate::error::HistoryResult;
 use crate::identity::{BranchId, CatalogId, CommitId, HistoryName, LayerId, LayerStackId, NodeId};
 use crate::records::{
     AddLayerOutcome, AddLayerRequest, BranchMergeRequest, BranchRecord, BranchSnapshot,
-    CommitHistoryRequest, CommitOutcome, CommitRecord, CommitRequest, ForkRequest,
-    LayerHistoryRequest, LayerRecord, LayerStackRecord, Page, PageResult, Reservation,
-    ReserveRequest, StackInitialization,
+    CommitHistoryRequest, CommitOutcome, CommitRecord, CommitRequest, ForkRequest, GcDeletion,
+    GcIntent, GcScopeKind, LayerHistoryRequest, LayerRecord, LayerStackRecord, Page, PageResult,
+    PathRemovalOutcome, PathRemovalRecord, PathRemovalRequest, Reservation, ReserveRequest,
+    StackInitialization,
 };
 /// Checked inputs that establish one catalog binding.
 #[derive(Clone, Eq, PartialEq)]
@@ -91,6 +92,17 @@ pub trait HistoryCatalog: Send + Sync {
     /// Stacks in name order.
     fn layer_stacks(&self, page: &Page) -> HistoryResult<PageResult<LayerStackRecord>>;
 
+    /// The typed `NameTaken` state for a LayerStack (project) name, live or
+    /// deleted, read without resolving the Stack (spec 4.4). The default
+    /// reports none; a provider that keeps the collision query overrides it,
+    /// so `project.init` refuses a held name before it scans anything.
+    fn layer_stack_name_taken(
+        &self,
+        _name: &HistoryName,
+    ) -> HistoryResult<Option<crate::error::NameTakenState>> {
+        Ok(None)
+    }
+
     /// The stack named `name`, if any. A provider answers through its name
     /// index; this default pages through the stacks in name order.
     fn layer_stack_named(&self, name: &HistoryName) -> HistoryResult<Option<LayerStackRecord>> {
@@ -112,6 +124,15 @@ pub trait HistoryCatalog: Send + Sync {
 
     /// One Branch by identity.
     fn branch(&self, id: BranchId) -> HistoryResult<Option<BranchRecord>>;
+
+    /// One Branch by identity without the visibility filter (spec 4.2). Only
+    /// rendering and identity keep a retired Branch's name this way; every
+    /// caller-facing lookup resolves through [`HistoryCatalog::branch`]. A
+    /// provider that keeps retired rows overrides this; the default reads the
+    /// filtered row.
+    fn branch_any(&self, id: BranchId) -> HistoryResult<Option<BranchRecord>> {
+        self.branch(id)
+    }
 
     /// One Branch by its name in a stack, through the name index: the
     /// stack's other Branches are not read.
@@ -287,6 +308,200 @@ pub trait HistoryCatalog: Send + Sync {
 
     /// Consumes one checked half-open inode range for a scope.
     fn reserve_inodes(&self, request: &ReserveRequest) -> HistoryResult<Reservation>;
+
+    /// Records a `branch.remove` marker. The default refuses.
+    ///
+    /// # Errors
+    ///
+    /// The default returns [`crate::error::HistoryError::Unsupported`]
+    /// because it keeps no removal markers; an implementation returns its own
+    /// [`crate::error::HistoryError`] when the marker cannot be recorded.
+    fn mark_branch_removed(&self, _branch: BranchId, _removed_ms: i64) -> HistoryResult<()> {
+        Err(crate::error::HistoryError::Unsupported(
+            "branch removal marker",
+        ))
+    }
+
+    /// Records a `project.delete` marker. The default refuses.
+    ///
+    /// # Errors
+    ///
+    /// The default returns [`crate::error::HistoryError::Unsupported`]
+    /// because it keeps no deletion markers; an implementation returns its own
+    /// [`crate::error::HistoryError`] when the marker cannot be recorded.
+    fn mark_stack_deleted(&self, _stack: LayerStackId, _deleted_ms: i64) -> HistoryResult<()> {
+        Err(crate::error::HistoryError::Unsupported(
+            "project deletion marker",
+        ))
+    }
+
+    /// The deleted_ms a project.delete marker recorded, when the stack is
+    /// retired. A same-home retry reads it by the stack id its durable intent
+    /// recorded before the marker; a live or absent stack has none. The
+    /// default refuses.
+    fn stack_deleted_ms(&self, _stack: LayerStackId) -> HistoryResult<Option<i64>> {
+        Err(crate::error::HistoryError::Unsupported(
+            "project deletion marker read",
+        ))
+    }
+
+    /// Records a `project.remove_file` marker. The default refuses.
+    ///
+    /// # Errors
+    ///
+    /// The default returns [`crate::error::HistoryError::Unsupported`]
+    /// because it keeps no path removal markers; an implementation returns its own
+    /// [`crate::error::HistoryError`] when the marker cannot be recorded.
+    fn mark_path_removed(
+        &self,
+        _stack: LayerStackId,
+        _path: &[u8],
+        _frontier_serial: u64,
+        _removed_ms: i64,
+    ) -> HistoryResult<()> {
+        Err(crate::error::HistoryError::Unsupported(
+            "path removal marker",
+        ))
+    }
+
+    /// Applies one `project.remove_file` marker in one write transaction:
+    /// reads the Store high-water as the new frontier, returns `UpToDate`
+    /// when the path's marker already covers every project node, otherwise
+    /// advances the marker and the project epoch. The default refuses.
+    fn remove_path(&self, _request: &PathRemovalRequest) -> HistoryResult<PathRemovalOutcome> {
+        Err(crate::error::HistoryError::Unsupported("path removal"))
+    }
+
+    /// Every `path_removed` marker of one Stack. The default refuses.
+    fn path_removals(&self, _stack: LayerStackId) -> HistoryResult<Vec<PathRemovalRecord>> {
+        Err(crate::error::HistoryError::Unsupported(
+            "path removal markers",
+        ))
+    }
+
+    /// The `history_serial` a Commit or Layer records, if it exists. The
+    /// default refuses.
+    fn node_history_serial(&self, _node: NodeId) -> HistoryResult<Option<u64>> {
+        Err(crate::error::HistoryError::Unsupported(
+            "node history position",
+        ))
+    }
+
+    /// The retained history roots of one Stack. The default refuses.
+    ///
+    /// # Errors
+    ///
+    /// The default returns [`crate::error::HistoryError::Unsupported`]
+    /// because it retains no roots; an implementation returns its own
+    /// [`crate::error::HistoryError`] when the roots cannot be read.
+    fn retained_roots(&self, _stack: LayerStackId) -> HistoryResult<Vec<NodeId>> {
+        Err(crate::error::HistoryError::Unsupported("retained roots"))
+    }
+
+    /// The retained history roots of one Stack, for a caller that resolves
+    /// them separately. The default refuses.
+    ///
+    /// # Errors
+    ///
+    /// The default returns [`crate::error::HistoryError::Unsupported`]
+    /// because it retains no roots; an implementation returns its own
+    /// [`crate::error::HistoryError`] when the roots cannot be read.
+    fn get_retained_roots(&self, _stack: LayerStackId) -> HistoryResult<Vec<NodeId>> {
+        Err(crate::error::HistoryError::Unsupported("retained roots"))
+    }
+
+    /// Removes the unreachable history rows of one Stack, or reports how many
+    /// a dry run would remove. The mark that decides reachability runs in the
+    /// same write transaction as the removal (a dry run runs it too), so a
+    /// node created after an earlier mark is never collected. The returned
+    /// count covers that Stack's Commit, Layer, Branch and LayerStack rows;
+    /// the orphaned lineage rows the cleanup also drops are not included. The
+    /// default refuses.
+    ///
+    /// # Errors
+    ///
+    /// The default returns [`crate::error::HistoryError::Unsupported`]
+    /// because it removes nothing; an implementation returns its own
+    /// [`crate::error::HistoryError`] when the rows cannot be removed.
+    fn remove_unreachable(&self, _stack: LayerStackId, _dry_run: bool) -> HistoryResult<u64> {
+        Err(crate::error::HistoryError::Unsupported(
+            "unreachable history removal",
+        ))
+    }
+
+    /// Registers one admission intent (§5) in its own write transaction.
+    ///
+    /// The default refuses: a provider without admission cannot make the
+    /// `MountsActive`/`Busy`/`Unresolved` promise.
+    fn gc_register(&self, _intent: &GcIntent) -> HistoryResult<()> {
+        Err(crate::error::HistoryError::Unsupported("GC admission"))
+    }
+
+    /// Releases one admission intent, deleting its row.
+    ///
+    /// The default refuses; a provider that never registered one is unaffected.
+    fn gc_release(&self, _op_id: &[u8; 16]) -> HistoryResult<()> {
+        Err(crate::error::HistoryError::Unsupported("GC admission"))
+    }
+
+    /// Marks one admission intent uncertain, so a later call reports
+    /// `Unresolved` until its owner settles it.
+    fn gc_mark_uncertain(&self, _op_id: &[u8; 16]) -> HistoryResult<()> {
+        Err(crate::error::HistoryError::Unsupported("GC admission"))
+    }
+
+    /// `branch.remove`: admits at Branch scope and writes the marker in one
+    /// write transaction.
+    fn gc_remove_branch(
+        &self,
+        branch: BranchId,
+        removed_ms: i64,
+        _intent: &GcIntent,
+    ) -> HistoryResult<()> {
+        // A provider without admission still writes the marker; the Store
+        // service only adds admission where the provider keeps intents.
+        self.mark_branch_removed(branch, removed_ms)
+    }
+
+    /// `project.delete`: admits at project scope and writes the marker in one
+    /// write transaction, preserving the same-home retry classification.
+    fn gc_delete_stack(
+        &self,
+        stack: LayerStackId,
+        deleted_ms: i64,
+        _intent: &GcIntent,
+    ) -> HistoryResult<GcDeletion> {
+        if let Some(deleted_ms) = self.stack_deleted_ms(stack)? {
+            return Ok(GcDeletion::Retired { deleted_ms });
+        }
+        if self.layer_stack(stack)?.is_some() {
+            self.mark_stack_deleted(stack, deleted_ms)?;
+            return Ok(GcDeletion::Marked { deleted_ms });
+        }
+        Ok(match self.stack_deleted_ms(stack)? {
+            Some(deleted_ms) => GcDeletion::Retired { deleted_ms },
+            None => GcDeletion::Absent,
+        })
+    }
+
+    /// `project.remove_file`: admits at project scope and advances the marker
+    /// in one write transaction.
+    fn gc_remove_path(
+        &self,
+        request: &PathRemovalRequest,
+        _intent: &GcIntent,
+    ) -> HistoryResult<PathRemovalOutcome> {
+        self.remove_path(request)
+    }
+
+    /// The live intents recorded at one scope, for `store.status` and tests.
+    fn gc_intents(
+        &self,
+        _scope_kind: GcScopeKind,
+        _scope_id: &[u8],
+    ) -> HistoryResult<Vec<GcIntent>> {
+        Err(crate::error::HistoryError::Unsupported("GC admission"))
+    }
 }
 
 impl std::fmt::Debug for HistoryCatalogConfig {

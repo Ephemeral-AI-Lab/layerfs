@@ -134,7 +134,8 @@ fn install_manifest(
         retained.phase = InstallPhase::Open;
         let profile = match manifest.profile {
             StoreProfile::Durable => SqlitePersistenceProfile::Durable,
-            StoreProfile::Disposable => SqlitePersistenceProfile::Disposable,
+            // The manifest's non-durable label; its connections open Normal.
+            StoreProfile::Disposable => SqlitePersistenceProfile::Normal,
         };
         retained.opened = Some(
             open_store_observed(

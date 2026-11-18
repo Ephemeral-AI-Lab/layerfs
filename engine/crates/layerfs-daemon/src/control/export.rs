@@ -20,10 +20,18 @@
 //!   every reference and descriptor given back), revokes the engine mount
 //!   and runs the one logical Close. A step that is not established keeps
 //!   the export and its engine mount in the entry, as FUSE custody is kept.
-//! - ForceUnmount runs the forced helper once, then the same teardown.
+//!   A helper that failed or ran out of time is judged by the host's mount
+//!   table, never by the mount itself: only a mount Attach saw listed there,
+//!   and only an ordinary (not lazy) helper, can be known gone
+//!   (`export_helper::listed`, `Helper::lazy`).
+//! - ForceUnmount runs the forced helper once, then the same teardown. It is
+//!   also how an export kept at Detach for a mount still listed is finished.
+//!   A helper that outlives its KILL goes to the retained queue, whose one
+//!   background thread polls it (no call waits for it).
+pub(super) use super::export_custody::{ExportKept, ExportLeaving, Exported};
 use super::{
-    export_helper::{Helpers, Ran},
-    kernel::{bounded, Kernel},
+    export_helper::{listed, mounted_under, Helpers, Ran},
+    kernel::Kernel,
     registry::{bound_mut, idle},
     Failure, Service, Success,
 };
@@ -31,14 +39,11 @@ use crate::store::BoundWorkspace;
 use layerfs_bridge::control::{
     AbortDisposition, Activity, ControlCode, DetachDisposition, ForceUnmounted, ForcedCleanup,
     ForcedFacts, ForcedOutcome, MountPhase, MountReceipt, MountStatus, MountWork, ReadyMount,
-    Reply, TeardownCustody, TeardownStage, WorkspaceToken, MOUNT_DIRECTORY_LIMIT,
+    Reply, TeardownStage, WorkspaceToken, MOUNT_DIRECTORY_LIMIT,
 };
 use layerfs_nfs::{ExportConfig, Released, Server};
 use layerfs_overlay::{CleanupState, KernelMount};
-#[cfg(target_os = "macos")]
-use std::process::{Command, Stdio};
 use std::{
-    fmt,
     net::{IpAddr, Ipv4Addr, TcpListener},
     path::PathBuf,
     sync::Arc,
@@ -49,7 +54,7 @@ use std::{
 /// `rsize`/`wsize` it asks the host client to mount with. One source: the
 /// receipt, the mount options and FSINFO cannot drift apart.
 const WINDOW: u32 = layerfs_nfs::TRANSFER_WINDOW;
-pub use super::export_helper::{Helper, HELPER_WAIT};
+pub use super::export_helper::{Helper, HELPER_WAIT, REAP_WAIT};
 
 /// Stale inodes one install refreshes through the mount point at most.
 pub const REFRESHED: usize = 4096;
@@ -145,6 +150,18 @@ pub struct ExportServingConfig {
     pub refuse_apple_double: bool,
     /// Lookup references one export keeps before collecting.
     pub lookups_held: usize,
+    /// How long one client helper may run before it is killed and reported
+    /// as unknown. Production value [`HELPER_WAIT`].
+    pub helper_wait: std::time::Duration,
+    /// The post-KILL window in which the helper's own exit is still observed
+    /// synchronously; past it the child goes to the retained queue. Zero
+    /// skips the window, so a test reaches the retained path at once with a
+    /// bounded wait. Production value [`REAP_WAIT`].
+    pub reap_wait: std::time::Duration,
+    /// Test hook, `None` in production: a file read line by line in place of
+    /// the host's mount table, so a test states which mounts exist without
+    /// mounting anything.
+    pub mount_table: Option<PathBuf>,
 }
 impl ExportServingConfig {
     pub fn new(mounts: PathBuf, command_uid: u32, command_gid: u32, mounter: Mounter) -> Self {
@@ -156,6 +173,9 @@ impl ExportServingConfig {
             mounter,
             refuse_apple_double: true,
             lookups_held: layerfs_nfs::kernel::LOOKUPS_HELD,
+            helper_wait: HELPER_WAIT,
+            reap_wait: REAP_WAIT,
+            mount_table: None,
         }
     }
 }
@@ -164,127 +184,75 @@ impl ExportServingConfig {
 #[derive(Debug)]
 pub struct ExportServing {
     config: ExportServingConfig,
-    helpers: Helpers,
+    helpers: Arc<Helpers>,
 }
 impl ExportServing {
     pub fn start(config: ExportServingConfig) -> Self {
-        Self {
-            config,
-            helpers: Helpers::default(),
-        }
+        let helpers = Helpers::new(config.helper_wait, config.reap_wait);
+        Self { config, helpers }
     }
     pub fn config(&self) -> &ExportServingConfig {
         &self.config
     }
+    /// Test and diagnostic accessor: the helper exits the queue's one
+    /// background thread has observed since the daemon started (newest last,
+    /// at most 64 kept).
+    /// Production code reports a retained child inside its own refusal text
+    /// instead; nothing in the daemon reads this.
+    pub fn reaped_helpers(&self) -> Vec<(u32, String)> {
+        self.helpers.reaped()
+    }
     fn directory(&self, token: WorkspaceToken) -> PathBuf {
         self.config.mounts.join(token.namespace.to_string())
+    }
+    /// Whether the host's table still lists this mount. The table comes from
+    /// the home the daemon owns, never from the mount itself: see [`listed`].
+    fn is_mounted(&self, directory: &str) -> std::io::Result<bool> {
+        let points = mounted_under(&self.config.mounts, self.config.mount_table.as_deref())?;
+        Ok(listed(
+            &points,
+            &self.config.mounts,
+            std::path::Path::new(directory),
+        ))
+    }
+    fn companion_spill_dir(&self, token: WorkspaceToken) -> PathBuf {
+        self.spill_root().join(token.namespace.to_string())
+    }
+    /// Every companion's scratch directory lives below this one, outside the
+    /// mount home's mounts.
+    fn spill_root(&self) -> PathBuf {
+        self.config.mounts.join(".appledouble")
     }
     /// At startup, before any Attach: every mount the host still has at or
     /// under the mount home is one a daemon that ended without unmounting
     /// left (its export is gone, so the client would hang on it). Each is
     /// forced off once with the force helper; one line per mount says what
-    /// happened. Nothing is retried.
+    /// happened. Nothing is retried. The companions' scratch directories of
+    /// that daemon belong to exports that are gone too, so they go as well;
+    /// nothing else under the mount home is touched.
     pub fn reclaim(&self) -> Vec<String> {
-        let points = match mounted_under(&self.config.mounts) {
-            Ok(points) => points,
-            Err(error) => return vec![format!("mount table unreadable: {error}")],
-        };
-        (points.into_iter())
-            .map(|point| {
-                let text = point.display().to_string();
-                match self.helpers.run(&self.config.mounter.force, 0, &text) {
-                    Ran::Done => format!("forced off {text}"),
-                    Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail) => {
-                        format!("left {text}: {detail}")
-                    }
-                }
-            })
-            .collect()
-    }
-}
-/// Mount points at or under `home`, deepest first, from the host's table:
-/// `mount`'s `<what> on <point> (<options>)` lines on macOS,
-/// `/proc/self/mountinfo` (field 5, octal escapes) on Linux.
-fn mounted_under(home: &std::path::Path) -> std::io::Result<Vec<PathBuf>> {
-    #[cfg(target_os = "macos")]
-    let points: Vec<PathBuf> = {
-        let out = Command::new("/sbin/mount")
-            .env("LC_ALL", "C")
-            .stdin(Stdio::null())
-            .output()?;
-        (String::from_utf8_lossy(&out.stdout).lines())
-            .filter_map(|line| {
-                Some(PathBuf::from(
-                    line.split_once(" on ")?.1.rsplit_once(" (")?.0,
-                ))
-            })
-            .collect()
-    };
-    #[cfg(not(target_os = "macos"))]
-    let points: Vec<PathBuf> = (std::fs::read_to_string("/proc/self/mountinfo")?.lines())
-        .filter_map(|line| line.split(' ').nth(4))
-        .map(|point| PathBuf::from(point.replace("\\040", " ").replace("\\011", "\t")))
-        .collect();
-    let mut found: Vec<PathBuf> = (points.into_iter())
-        .filter(|point| point.starts_with(home))
-        .collect();
-    found.sort_by_key(|point| std::cmp::Reverse(point.components().count()));
-    found.dedup();
-    Ok(found)
-}
-/// A serving export and the mount the host client holds of it.
-pub(super) struct Exported {
-    pub server: Arc<Server>,
-    pub mount: KernelMount,
-    pub ready: ReadyMount,
-}
-/// A terminal operation owns the export; status still observes it.
-pub(super) struct ExportLeaving {
-    pub ready: ReadyMount,
-    pub phase: MountPhase,
-    pub work: MountWork,
-}
-/// Export custody a terminal or attach step could not finish disposing:
-/// kept exactly, never retried or settled by a later observation.
-pub(super) struct ExportKept {
-    pub ready: Option<ReadyMount>,
-    pub stage: TeardownStage,
-    pub detail: String,
-    pub work: Option<MountWork>,
-    pub evidence: Box<dyn fmt::Debug + Send>,
-    pub forced: Option<ForcedFacts>,
-}
-impl ExportKept {
-    pub(super) fn custody(&self, token: WorkspaceToken) -> TeardownCustody {
-        TeardownCustody {
-            token,
-            stage: self.stage,
-            detached: matches!(self.stage, TeardownStage::Revoke | TeardownStage::Close),
-            work: self.work,
-            detail: bounded(&self.detail),
-            forced: self.forced.clone(),
+        let mut lines = Vec::new();
+        let spill = self.spill_root();
+        if std::fs::remove_dir_all(&spill).is_ok() {
+            lines.push(format!("removed leftovers under {}", spill.display()));
         }
-    }
-}
-impl fmt::Debug for ExportKept {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ExportKept")
-            .field("ready", &self.ready)
-            .field("stage", &self.stage)
-            .field("detail", &self.detail)
-            .field("work", &self.work)
-            .field("evidence", &self.evidence)
-            .field("forced", &self.forced)
-            .finish()
-    }
-}
-impl fmt::Debug for Exported {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Exported")
-            .field("address", &self.server.local_addr())
-            .field("mount", &self.mount)
-            .field("held", &self.server.held())
-            .finish()
+        let points = match mounted_under(&self.config.mounts, self.config.mount_table.as_deref()) {
+            Ok(points) => points,
+            Err(error) => {
+                lines.push(format!("mount table unreadable: {error}"));
+                return lines;
+            }
+        };
+        lines.extend((points.into_iter()).map(|point| {
+            let text = point.display().to_string();
+            match self.helpers.run(&self.config.mounter.force, 0, &text) {
+                Ran::Done => format!("forced off {text}"),
+                Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail, _) => {
+                    format!("left {text}: {detail}")
+                }
+            }
+        }));
+        lines
     }
 }
 /// The maintained counters of a serving export.
@@ -294,8 +262,8 @@ pub(super) fn work(server: &Server) -> MountWork {
     MountWork {
         loops_configured: 1,
         loops_entered: 1,
-        loops_exited: 0,
-        loops_joined: 0,
+        loops_exited: u16::from(server.exited()),
+        loops_joined: u16::from(server.joined()),
         active: 0,
         retained: u32::try_from(held.retained).unwrap_or(u32::MAX),
         completed: served,
@@ -481,12 +449,10 @@ impl Service {
             }
         };
         let export = ExportConfig {
-            path: "/".into(),
-            uid: config.command_uid,
-            gid: config.command_gid,
-            read_only: false,
             refuse_apple_double: config.refuse_apple_double,
             lookups_held: config.lookups_held,
+            companion_spill_dir: Some(serving.companion_spill_dir(token)),
+            ..ExportConfig::writable(config.command_uid, config.command_gid)
         };
         let started = TcpListener::bind((config.listen, 0)).and_then(|listener| {
             Server::start(
@@ -511,7 +477,7 @@ impl Service {
         let port = server.local_addr().port();
         match serving.helpers.run(&config.mounter.mount, port, &text) {
             Ran::Done => {}
-            Ran::Interrupted(detail) => {
+            Ran::Interrupted(detail, _) => {
                 // The mount helper may have reached the kernel before its
                 // deadline. Keep the export alive and do not revoke/delete
                 // through a possibly mounted directory.
@@ -520,17 +486,20 @@ impl Service {
                     stage: TeardownStage::Detach,
                     detail,
                     work: Some(work(&server)),
-                    evidence: Box::new(Exported {
+                    exported: Some(Box::new(Exported {
                         server: Arc::new(server),
                         mount,
                         ready: receipt(token, text, mount, port),
-                    }),
+                        tracked: false,
+                    })),
+                    evidence: Box::new(()),
                     forced: None,
                 })));
             }
             Ran::Busy(detail) | Ran::Failed(detail) => {
                 let released = server.stop();
                 drop(std::fs::remove_dir(&directory));
+                drop(std::fs::remove_dir(serving.spill_root()));
                 return Err(self.unwind_export(
                     workspace,
                     mount,
@@ -542,7 +511,8 @@ impl Service {
         Ok(Exported {
             server: Arc::new(server),
             mount,
-            ready: receipt(token, text, mount, port),
+            ready: receipt(token, text.clone(), mount, port),
+            tracked: serving.is_mounted(&text).unwrap_or(false),
         })
     }
     /// No client mount and no export of this attempt remains: revoke its
@@ -563,6 +533,7 @@ impl Service {
                 stage: TeardownStage::Revoke,
                 detail: revoke.wire().detail,
                 work: None,
+                exported: None,
                 evidence: Box::new((failure, mount, released, revoke)),
                 forced: None,
             })),
@@ -596,7 +567,7 @@ impl Service {
                     .run(helper, server.local_addr().port(), &directory)
                 {
                     Ran::Done => {}
-                    Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail) => {
+                    Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail, _) => {
                         return Err(kernel_failure(ControlCode::Failed, "commit:flush", detail))
                     }
                 }
@@ -687,7 +658,9 @@ impl Service {
                     format!("client reported the mount busy; no terminal effect: {detail}"),
                 ));
             }
-            Ran::Failed(detail) | Ran::Interrupted(detail) => {
+            Ran::Failed(_) | Ran::Interrupted(..)
+                if self.detached_export(&exported, helper.as_ref(), &ran) => {}
+            Ran::Failed(detail) | Ran::Interrupted(detail, _) => {
                 return Err(self.keep_export(
                     token,
                     TeardownStage::Detach,
@@ -700,6 +673,21 @@ impl Service {
         self.teardown_export(token, &workspace, exported, None)?;
         self.close(token, &workspace, None)
     }
+    /// Whether a failed or timed-out helper proves the client mount is gone:
+    /// Attach saw the mount listed (`tracked`), the helper cannot detach
+    /// lazily, the helper has ended, and the host's table does not list it
+    /// now. A lazy detach (`umount -l`, the Linux force helper) removes the
+    /// table entry while the kernel still holds the superblock, so it is
+    /// never proof. Neither is a plain Linux `umount` still running: it drops
+    /// the table entry before the superblock's shutdown, which flushes the
+    /// client's writes through this export ([`Ran::ended`]).
+    fn detached_export(&self, exported: &Exported, helper: Option<&Helper>, ran: &Ran) -> bool {
+        !helper.is_some_and(Helper::lazy)
+            && ran.ended()
+            && exported.tracked
+            && (self.export.as_ref())
+                .is_some_and(|s| matches!(s.is_mounted(&exported.ready.directory), Ok(false)))
+    }
     /// After the client mount is gone: stop the export, revoke the engine
     /// mount, remove the directory and leave the entry Unattached for Close.
     fn teardown_export(
@@ -708,15 +696,16 @@ impl Service {
         workspace: &BoundWorkspace,
         exported: Exported,
         forced: Option<ForcedFacts>,
-    ) -> Result<(), Failure> {
+    ) -> Result<MountWork, Failure> {
         self.export_phase(token, MountPhase::Draining, Some(work(&exported.server)));
         let Exported {
             server,
             mount,
             ready,
+            tracked,
         } = exported;
-        let released = match Arc::try_unwrap(server) {
-            Ok(server) => server.stop(),
+        let (released, stopped) = match Arc::try_unwrap(server) {
+            Ok(mut server) => (server.shutdown(), work(&server)),
             Err(server) => {
                 return Err(self.keep_export(
                     token,
@@ -726,6 +715,7 @@ impl Service {
                         server,
                         mount,
                         ready,
+                        tracked,
                     },
                     forced,
                 ))
@@ -739,6 +729,7 @@ impl Service {
                 stage: TeardownStage::Revoke,
                 detail: failure.wire().detail,
                 work: None,
+                exported: None,
                 evidence: Box::new((failure, mount, released)),
                 forced,
             };
@@ -751,6 +742,9 @@ impl Service {
             return Err(Failure::Retained(Box::new(reply)));
         }
         drop(std::fs::remove_dir(&ready.directory));
+        if let Some(serving) = self.export.as_ref() {
+            drop(std::fs::remove_dir(serving.spill_root()));
+        }
         if let Ok(mut entries) = self.entries.lock() {
             if let Ok(binding) = bound_mut(&mut entries, token) {
                 binding.kernel = Kernel::Unattached;
@@ -760,7 +754,7 @@ impl Service {
             .lock()
             .map(|mut last| *last = Some((token, released)))
             .ok();
-        Ok(())
+        Ok(stopped)
     }
     fn keep_export(
         &self,
@@ -775,7 +769,8 @@ impl Service {
             stage,
             detail,
             work: Some(work(&exported.server)),
-            evidence: Box::new(exported),
+            exported: Some(Box::new(exported)),
+            evidence: Box::new(()),
             forced,
         };
         let custody = kept.custody(token);
@@ -800,6 +795,9 @@ impl Service {
     }
     /// Describes retained export custody for an operator. Observation only.
     pub fn retained_export(&self, token: WorkspaceToken) -> Result<Option<String>, Failure> {
+        if let Some(serving) = &self.export {
+            serving.helpers.reap();
+        }
         let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
         Ok(match &bound_mut(&mut entries, token)?.kernel {
             Kernel::ExportKept(kept) => Some(format!("{kept:?}")),
@@ -858,8 +856,10 @@ impl Service {
                 None => Ran::Failed("export serving not assembled".into()),
             };
         match ran {
-            Ran::Done => facts.detach = DetachDisposition::Detached,
-            Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail) => {
+            Ran::Done => {}
+            Ran::Busy(_) | Ran::Failed(_) | Ran::Interrupted(..)
+                if self.detached_export(&exported, helper.as_ref(), &ran) => {}
+            Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail, _) => {
                 facts.detach = DetachDisposition::Failed;
                 return Err(self.keep_export(
                     token,
@@ -870,8 +870,8 @@ impl Service {
                 ));
             }
         }
-        let work = work(&exported.server);
-        self.teardown_export(token, &workspace, exported, Some(facts.clone()))?;
+        facts.detach = DetachDisposition::Detached;
+        let work = self.teardown_export(token, &workspace, exported, Some(facts.clone()))?;
         let kernel = self.closed(token, &workspace, None, Some(facts.clone()))?;
         let (cleanup, observation_failure) = match self
             .owner
@@ -911,8 +911,17 @@ impl Service {
 /// Terminal admission over an export-owning entry; the entry observes the
 /// export as leaving until the operation settles it.
 pub(super) fn take(kernel: &mut Kernel, phase: MountPhase) -> Result<Exported, Failure> {
-    match kernel {
-        Kernel::Exported(_) => {}
+    let exported = match kernel {
+        Kernel::Exported(_) => match std::mem::replace(kernel, Kernel::Unattached) {
+            Kernel::Exported(exported) => *exported,
+            _ => unreachable!("checked export"),
+        },
+        Kernel::ExportKept(kept) if phase == MountPhase::Stopping && kept.forceable() => {
+            match std::mem::replace(kernel, Kernel::Unattached) {
+                Kernel::ExportKept(mut kept) => *kept.exported.take().expect("forceable export"),
+                _ => unreachable!("checked retained export"),
+            }
+        }
         Kernel::ExportLeaving(_) => {
             return Err(kernel_failure(
                 ControlCode::Busy,
@@ -927,16 +936,13 @@ pub(super) fn take(kernel: &mut Kernel, phase: MountPhase) -> Result<Exported, F
                 "Workspace owns no export",
             ))
         }
-    }
-    let Kernel::Exported(exported) = std::mem::replace(kernel, Kernel::Unattached) else {
-        unreachable!("checked export")
     };
     *kernel = Kernel::ExportLeaving(Box::new(ExportLeaving {
         ready: exported.ready.clone(),
         phase,
         work: work(&exported.server),
     }));
-    Ok(*exported)
+    Ok(exported)
 }
 
 /// The export volume's own flush on macOS. A failed `sync_volume_np` refuses

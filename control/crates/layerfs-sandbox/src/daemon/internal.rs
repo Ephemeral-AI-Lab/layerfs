@@ -2,7 +2,7 @@
 pub use super::channel::{Control, ControlCause, ControlFailure, ControlPhase};
 use crate::{BoundWorkspace, OperationFailure, WorkspaceApi};
 use layerfs_bridge::{
-    control::{CleanupObservation, ReadyMount, WorkspaceStatus, WorkspaceToken},
+    control::{CleanupObservation, MountPlace, ReadyMount, WorkspaceStatus, WorkspaceToken},
     duplex::Connection,
 };
 use layerfs_history::{BranchId, WorkspaceId};
@@ -16,6 +16,7 @@ pub fn workspace(control: &mut Control) -> InternalWorkspaceApi<'_> {
     InternalWorkspaceApi(WorkspaceApi {
         control,
         observation_scope: None,
+        place: MountPlace::default(),
     })
 }
 /// Applies explicit observation scope only to this borrow's filesystem calls.
@@ -26,6 +27,7 @@ pub fn with_observations<'a>(
     InternalWorkspaceApi(WorkspaceApi {
         control,
         observation_scope: Some(scope),
+        place: MountPlace::default(),
     })
 }
 impl<'a> Deref for InternalWorkspaceApi<'a> {
@@ -40,6 +42,13 @@ impl DerefMut for InternalWorkspaceApi<'_> {
     }
 }
 impl InternalWorkspaceApi<'_> {
+    /// Names the Sandbox and machine a mount through this channel belongs
+    /// to; a mount then registers them beside its Workspace.
+    #[must_use]
+    pub fn placed(mut self, sandbox: Option<&str>, machine: Option<&str>) -> Self {
+        self.0.place = MountPlace::new(sandbox, machine);
+        self
+    }
     /// Original logical bind for component proofs; kernel mount still uses both steps.
     pub fn bind(
         &mut self,

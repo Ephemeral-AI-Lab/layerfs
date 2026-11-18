@@ -4,6 +4,8 @@
 //! `sandbox/files.rs` reads and writes with the rest kept.
 use crate::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::provision::StoreManifest;
+use layerfs_bridge::sdk_values::unhex;
 use layerfs_home::home::{now_ms, paths, read_record, with_field, write_entity};
 use layerfs_home::outcome::View;
 use std::path::Path;
@@ -74,6 +76,19 @@ impl ProjectRecord {
     /// When the project was made, as its record holds it.
     pub fn created(&self) -> Option<&SdkValue> {
         self.fields.get("created")
+    }
+
+    /// The project's LayerStack identity as its record holds it (S §4.2):
+    /// the `manifest`'s stack for a local SQLite record, the record's
+    /// `stack` for a PostgreSQL or worker record. A record with neither has
+    /// none; its Store's filtered listing is then matched by name.
+    pub fn stack(&self) -> Option<Vec<u8>> {
+        if let Some(SdkValue::Bytes(bytes)) = self.fields.get("manifest") {
+            if let Ok(manifest) = StoreManifest::decode(bytes) {
+                return Some(manifest.stack.to_vec());
+            }
+        }
+        self.fields.get_text("stack").and_then(unhex)
     }
 
     /// The record as written.

@@ -45,7 +45,7 @@ pub mod worker;
 pub use bundle::bundle;
 pub use bundle::{bundle_dir, IMAGE_ARCHIVE};
 #[cfg(feature = "machine")]
-pub use create::{create, MachineCreate};
+pub use create::{create, MachineCreate, STOCK};
 #[cfg(feature = "machine")]
 pub use endpoint::{running, running_with_progress};
 #[cfg(feature = "machine")]
@@ -67,7 +67,7 @@ pub use related::Related;
 #[cfg(feature = "machine")]
 pub use remove::remove;
 #[cfg(feature = "machine")]
-pub use spec::{ensure_built_ins, machine_of, vm_name};
+pub use spec::{docker_socket, ensure_built_ins, machine_of, tools as machine_tools, vm_name};
 #[cfg(feature = "machine")]
 pub use spec::{
     provider_spec as machine_provider_spec, refusal as machine_refusal, spec as machine_spec,

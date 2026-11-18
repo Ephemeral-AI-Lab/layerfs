@@ -472,10 +472,11 @@ def component_violations(path, source):
     # host/operator paths were deleted. Owner D15 (2026-11-04): the call
     # surface is lib.rs plus one folder per call family, one file per call.
     # layerfs-project#107: the call machinery (calls/) moved back from
-    # layerfs-control to layerfs-api, which alone speaks the SDK.
+    # layerfs-control to layerfs-api, which alone speaks the SDK. `home` is a
+    # call family again (home.init, home.get), so it is no retired folder.
     moved = {
         "layerfs-api": tuple(
-            f"/src/{part}/" for part in ("host", "family", "home", "worker", "fs", "base", "operator")
+            f"/src/{part}/" for part in ("host", "family", "worker", "fs", "base", "operator")
         ),
         "layerfs-control": ("/src/host/", "/src/operator/", "/src/calls/"),
         "layerfs-store-service": ("/src/remote/",),

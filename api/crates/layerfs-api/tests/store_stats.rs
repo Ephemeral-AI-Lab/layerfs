@@ -26,28 +26,31 @@ fn call(home: &Path, method: &str, fields: &[(&str, SdkValue)]) -> SdkValue {
     layerfs_api::call(Some(home), method, args, &mut |_| {})
         .unwrap_or_else(|r| panic!("{method}: {r:?}"))
 }
-fn check(home: &Path, kind: &str) {
+fn check(home: &Path, kind: &str, test: &str) {
     let stats = || call(home, "store.stats", &[("name", t("stats"))]);
     let empty = stats();
     assert_eq!(empty.get_text("kind"), Some(kind));
-    assert_eq!(empty.get_int("history_logical"), Some(0));
+    // a previous project's bytes stay after its soft delete, so later runs
+    // measure from the Store's current history
+    let base = empty.get_int("history_logical").unwrap();
     assert_eq!(
         empty.get("free") == Some(&SdkValue::Null),
         kind == "postgresql"
     );
     assert!(empty.get("dedupe").is_none());
-    let source = folder(&format!("input-{kind}"));
+    let name = format!("stats/{test}");
+    let source = folder(&format!("input-{kind}-{test}"));
     std::fs::write(source.join("file"), "hello").unwrap();
     call(
         home,
         "project.init",
         &[
-            ("project", t("stats/p")),
+            ("project", t(&name)),
             ("folder", t(source.to_str().unwrap())),
         ],
     );
     let initial = stats();
-    assert_eq!(initial.get_int("history_logical"), Some(5));
+    assert_eq!(initial.get_int("history_logical"), Some(base + 5));
     assert!(initial.get_int("canonical").unwrap() > 0);
     assert!(initial.get_int("stored").unwrap() > 0);
     assert!(initial.get_int("file").unwrap() > 0);
@@ -55,7 +58,7 @@ fn check(home: &Path, kind: &str) {
         home,
         "branch.fork",
         &[
-            ("project", t("stats/p")),
+            ("project", t(&name)),
             ("name", t("dev")),
             ("from_branch", t("main")),
         ],
@@ -64,7 +67,7 @@ fn check(home: &Path, kind: &str) {
         home,
         "file.write",
         &[
-            ("project", t("stats/p")),
+            ("project", t(&name)),
             ("branch", t("dev")),
             ("path", t("/file")),
             ("content", t("abcdef")),
@@ -73,30 +76,31 @@ fn check(home: &Path, kind: &str) {
     call(
         home,
         "branch.publish",
-        &[("project", t("stats/p")), ("branch", t("dev"))],
+        &[("project", t(&name)), ("branch", t("dev"))],
     );
     let published = stats();
     assert_eq!(
         published.get_int("history_logical"),
-        Some(17),
+        Some(base + 17),
         "Commit and Layer count their snapshots"
     );
-    if kind == "postgresql" {
-        let refused = layerfs_api::call(
-            Some(home),
-            "project.remove",
-            SdkValue::map([("project", t("stats/p"))]),
-            &mut |_| {},
-        )
-        .unwrap_err();
-        assert_eq!(refused.code, "Unsupported");
-    } else {
-        call(home, "project.remove", &[("project", t("stats/p"))]);
-        let removed = stats();
-        assert_eq!(removed.get_int("history_logical"), Some(0));
-        assert_eq!(removed.get("canonical"), published.get("canonical"));
-        assert_eq!(removed.get("stored"), published.get("stored"));
-    }
+    // `project.delete` retires the Stack and removes the home entry; the
+    // marker is the commit point, so the history bytes stay until a
+    // `store.compact` collects them and the counters do not drop.
+    call(home, "project.delete", &[("project", t(&name))]);
+    let removed = stats();
+    assert_eq!(removed.get_int("history_logical"), Some(base + 17));
+    assert_eq!(removed.get("canonical"), published.get("canonical"));
+    assert_eq!(removed.get("stored"), published.get("stored"));
+    let gone = layerfs_api::call(
+        Some(home),
+        "project.get",
+        SdkValue::map([("project", t(&name))]),
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert_eq!(gone.code, "NoSuchProject");
+    assert!(!paths::project_record(home, "stats", test).exists());
     layerfs_api::close_idle(std::time::Duration::ZERO);
     std::fs::remove_dir_all(source).unwrap();
 }
@@ -105,7 +109,7 @@ fn check(home: &Path, kind: &str) {
 fn native_sqlite_and_worker_statistics_use_the_same_counters() {
     let home = folder("sqlite-home");
     call(&home, "store.create", &[("name", t("stats"))]);
-    check(&home, "sqlite");
+    check(&home, "sqlite", "p");
     let root = folder("worker-root");
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap().to_string();
@@ -126,7 +130,7 @@ fn native_sqlite_and_worker_statistics_use_the_same_counters() {
         "store.push",
         &[("name", t("stats")), ("machine", t("box"))],
     );
-    check(&home, "sqlite");
+    check(&home, "sqlite", "w");
     // A stopped worker refuses rather than starting anything.
     layerfs_api::close_idle(std::time::Duration::ZERO);
     std::fs::remove_file(paths::worker_record(&home, "box")).unwrap();
@@ -143,7 +147,6 @@ fn native_sqlite_and_worker_statistics_use_the_same_counters() {
 }
 
 #[test]
-#[cfg(feature = "postgresql")]
 fn postgresql_statistics_have_null_free_and_count_publications() {
     let Ok(url) = std::env::var("LAYERFS_TEST_POSTGRES_URL") else {
         eprintln!("NOT_RUN: LAYERFS_TEST_POSTGRES_URL unset");
@@ -159,6 +162,6 @@ fn postgresql_statistics_have_null_free_and_count_publications() {
             ("synchronous_commit", t("off")),
         ],
     );
-    check(&home, "postgresql");
+    check(&home, "postgresql", "p");
     std::fs::remove_dir_all(home).unwrap();
 }

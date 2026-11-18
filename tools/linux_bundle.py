@@ -84,10 +84,10 @@ ARCHIVE = "sandbox-image.tar"
 BINARIES = ("layerfs", "layerfs-daemon", "layerfs-sandbox-helper")
 STEPS = {
     # the daemon serves sqlite and PostgreSQL Stores in a Sandbox
-    "daemon": ["-p", "layerfs-daemon", "--features", "layerfs-daemon/postgresql", "--bin", "layerfs-daemon"],
+    "daemon": ["-p", "layerfs-daemon", "--bin", "layerfs-daemon"],
     # the guest's `layerfs worker`: no machine adapter runs inside a machine;
     # it reads a PostgreSQL Store's schema binding in sandbox.create (#535 G3)
-    "worker": ["-p", "layerfs-cli", "--no-default-features", "--features", "postgresql", "--bin", "layerfs"],
+    "worker": ["-p", "layerfs-cli", "--no-default-features", "--bin", "layerfs"],
     # the namespaces Sandbox backend runs it beside the daemon
     "helper": ["-p", "layerfs-sandbox-backend", "--bin", "layerfs-sandbox-helper"],
 }
@@ -499,7 +499,7 @@ def seal(record, profile, image, dest, timeout):
             "runtime": bundle_hash({f: files[f] for f in BINARIES}),
             "sandbox_runtime": sandbox_runtime,
             "saved_from": image,
-            "source": {"head": now["head"], "sha256": now["sha256"]},
+            "source": {"head": now["head"], "dirty": now["dirty"], "sha256": now["sha256"]},
             "toolchain": TOOLCHAIN,
             "files": files,
             "at": timestamp(),

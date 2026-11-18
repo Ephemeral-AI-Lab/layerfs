@@ -1,5 +1,4 @@
 //! Cancellation signals interrupt actual connection/preflight work, without sleeps.
-#![cfg(feature = "postgresql")]
 mod pg_doctor;
 use layerfs_persistence::{
     diagnostic::{Options, Outcome},
@@ -143,7 +142,7 @@ fn blocked_preflight_identity_query_is_cancelled_and_backend_work_is_released() 
     let before = f.fingerprint();
     let app = f.selection.schema.clone();
     let mut selected = f.selection.clone();
-    selected.url.push_str(&format!("&application_name={app}"));
+    selected.url = conninfo::with_option(&selected.url, "application_name", &app);
     f.admin
         .batch_execute(&format!(
             "BEGIN; LOCK TABLE {}.history_meta IN ACCESS EXCLUSIVE MODE",

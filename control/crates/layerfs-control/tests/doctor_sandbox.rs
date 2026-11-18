@@ -63,6 +63,7 @@ fn request(timeout: Duration) -> DoctorRequest {
         timeout: Some(timeout),
         quick: false,
         write_test: false,
+        build: Default::default(),
     }
 }
 fn run(home: &Path) -> SdkValue {

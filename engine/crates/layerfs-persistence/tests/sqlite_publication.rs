@@ -2,8 +2,6 @@
 mod support;
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, ReserveRequest};
-#[cfg(not(feature = "postgresql"))]
-use layerfs_persistence::{Handles, PostgresSelection, StoreSelection, SynchronousCommit};
 use layerfs_persistence::{PersistenceConfig, SqliteHandles};
 use layerfs_storage::{
     location::{ObjectLocation, PackDomain, SignatureRow},
@@ -54,25 +52,9 @@ fn unit(pack_id: i64, objects: usize) -> Publication {
     }
 }
 #[test]
-fn wal_full_settings_and_unavailable_engine_are_explicit() {
+fn wal_full_settings_are_explicit() {
     let t = Temp::new("durable-profile");
     let path = t.join("db");
-    // without the `postgresql` feature a PostgreSQL selection is unavailable
-    // (the backend selection this checked became `StoreSelection`, #535 2b)
-    #[cfg(not(feature = "postgresql"))]
-    {
-        let selection = StoreSelection::Postgres(PostgresSelection {
-            url: "postgresql://unused".to_owned(),
-            schema: "unused".to_owned(),
-            synchronous_commit: SynchronousCommit::Off,
-            lock_timeout_ms: 0,
-            check: Default::default(),
-        });
-        assert_eq!(
-            Handles::open_writable(&selection, b"binding", [0; 32]).err(),
-            Some(PersistenceError::BackendUnavailable)
-        );
-    }
     assert!(!path.exists());
     let h = create(&path);
     let p = h.profile();
@@ -111,8 +93,10 @@ fn wal_full_settings_and_unavailable_engine_are_explicit() {
         .unwrap();
     // #327 dropped workspace_stage and added store_totals; #352 added binding_hint;
     // #353 added layer_lineage, commit_lineage, absorbed and reach; #355
-    // added merge_operation and merge_record; #364 added file_digest.
-    assert_eq!(names, 20);
+    // added merge_operation and merge_record; #364 added file_digest;
+    // the GC work added the markers, project_epoch, gc_intent, gc_op, gc_dead
+    // and kept_node.
+    assert_eq!(names, 28);
 }
 #[test]
 fn final_body_multirow_locators_and_first_wins_have_one_atomic_ack() {

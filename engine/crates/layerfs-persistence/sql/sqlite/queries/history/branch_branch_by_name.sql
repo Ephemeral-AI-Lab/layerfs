@@ -1,1 +1,1 @@
-SELECT branch_id, layer_stack_id, name, base_layer_id, head_commit_id, forked_from_id FROM branch WHERE layer_stack_id = $1 AND name = $2;
+SELECT branch_id, layer_stack_id, name, base_layer_id, head_commit_id, forked_from_id FROM branch WHERE layer_stack_id = $1 AND name = $2 AND NOT EXISTS (SELECT 1 FROM branch_retired r WHERE r.branch_id = branch.branch_id) AND NOT EXISTS (SELECT 1 FROM layer_stack_retired s WHERE s.layer_stack_id = branch.layer_stack_id);

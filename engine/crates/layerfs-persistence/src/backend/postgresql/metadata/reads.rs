@@ -102,6 +102,47 @@ pub(crate) fn inode_values(
     ordinals: &[u32],
     out: &mut Vec<InodeValueRow>,
 ) -> Result<(), PersistenceError> {
+    crate::blocks::values::pick(ordinals, value_blocks(tx, ordinals, 0)?, out)?;
+    Ok(())
+}
+
+/// [`inode_values`], and every other value of the blocks that hold the asked
+/// ordinals and up to `ahead` ordinals past the last of them: the caller's
+/// next leaves, when it reads them in ordinal order, at no further round trip.
+pub(crate) fn inode_values_ahead(
+    tx: &Transaction<'_>,
+    ordinals: &[u32],
+    ahead: u32,
+    out: &mut Vec<InodeValueRow>,
+) -> Result<(), PersistenceError> {
+    let mut end = 0u32;
+    for block in value_blocks(tx, ordinals, ahead)? {
+        let (first, last, body) = block?;
+        // The same order rule `pick` applies: blocks ascend and never overlap.
+        if first <= end {
+            return Err(BackendError::Integrity.into());
+        }
+        end = last;
+        let values = crate::blocks::values::decode(first, last, &body)?;
+        out.extend(
+            (first..=last)
+                .zip(values)
+                .map(|(ordinal, value)| InodeValueRow { ordinal, value }),
+        );
+    }
+    Ok(())
+}
+
+/// One stored block: its first and last ordinal and its body.
+type ValueBlock = Result<(u32, u32, Vec<u8>), BackendError>;
+
+/// The value blocks covering `ordinals`, and those starting within `ahead`
+/// ordinals past the last one, in ascending first-ordinal order.
+fn value_blocks(
+    tx: &Transaction<'_>,
+    ordinals: &[u32],
+    ahead: u32,
+) -> Result<Vec<ValueBlock>, PersistenceError> {
     let (mut lows, mut highs) = (Vec::new(), Vec::new());
     for &ordinal in ordinals {
         match highs.last_mut() {
@@ -119,19 +160,20 @@ pub(crate) fn inode_values(
          WHERE y.first_ordinal<=r.lo),0) AND r.hi) ORDER BY b.first_ordinal",
         s = tx.schema
     );
+    if let Some(high) = highs.last_mut() {
+        *high += i64::from(ahead);
+    }
     let rows = tx.typed(&sql, &[&lows, &highs], lows.len() as u64 * 16)?;
     let ordinal = |v: i64| u32::try_from(v).map_err(|_| BackendError::Integrity);
-    crate::blocks::values::pick(
-        ordinals,
-        rows.iter().map(|row| {
+    Ok(rows
+        .iter()
+        .map(|row| {
             let first: i64 = row.try_get(0).map_err(|_| BackendError::Integrity)?;
             let last: i64 = row.try_get(1).map_err(|_| BackendError::Integrity)?;
             let body: Vec<u8> = row.try_get(2).map_err(|_| BackendError::Integrity)?;
             Ok((ordinal(first)?, ordinal(last)?, body))
-        }),
-        out,
-    )?;
-    Ok(())
+        })
+        .collect())
 }
 
 /// The signature ring in insertion (stamp) order.

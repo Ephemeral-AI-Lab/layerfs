@@ -5,6 +5,13 @@
 //! would bring changes: projects added or removed, Branches made, moved,
 //! merged or deleted, and every Commit (a Branch Commit moves its head).
 //!
+//! A soft removal is a marker, not a delete, so the base rows can still be
+//! present; the listing is filtered by the same `branch_retired` and
+//! `layer_stack_retired` markers the catalog uses (spec 4.2). A retired
+//! Branch leaves no `branch` line, and a retired project leaves neither its
+//! `stack` line nor its Branches' lines: a backup copy's digest names the
+//! visible history, not the leftover rows.
+//!
 //! Read on a connection of its own, opened for this read and closed before
 //! it returns, so it never keeps the Store open. SQLite cannot open a WAL
 //! database read-only while it has no `-shm` (a Store no process holds), so
@@ -45,7 +52,10 @@ pub fn read_heads(path: &Path) -> Result<Vec<String>, PersistenceError> {
     let mut lines = Vec::new();
     {
         let mut stacks = connection
-            .prepare("SELECT name, head_layer_id FROM layer_stack")
+            .prepare(
+                "SELECT s.name, s.head_layer_id FROM layer_stack s WHERE NOT EXISTS ( \
+                 SELECT 1 FROM layer_stack_retired r WHERE r.layer_stack_id = s.layer_stack_id)",
+            )
             .map_err(failed)?;
         let mut found = stacks.query([]).map_err(failed)?;
         while let Some(row) = found.next().map_err(failed)? {
@@ -56,7 +66,11 @@ pub fn read_heads(path: &Path) -> Result<Vec<String>, PersistenceError> {
         let mut branches = connection
             .prepare(
                 "SELECT s.name, b.name, b.base_layer_id, b.head_commit_id FROM branch b \
-                 JOIN layer_stack s ON s.layer_stack_id = b.layer_stack_id",
+                 JOIN layer_stack s ON s.layer_stack_id = b.layer_stack_id \
+                 WHERE NOT EXISTS (SELECT 1 FROM branch_retired r \
+                                    WHERE r.branch_id = b.branch_id) \
+                   AND NOT EXISTS (SELECT 1 FROM layer_stack_retired d \
+                                    WHERE d.layer_stack_id = b.layer_stack_id)",
             )
             .map_err(failed)?;
         let mut found = branches.query([]).map_err(failed)?;

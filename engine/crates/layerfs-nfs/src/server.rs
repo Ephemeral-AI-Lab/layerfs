@@ -43,6 +43,17 @@ pub struct ExportConfig {
     /// Lookup references kept before the least recently used are collected
     /// (see [`crate::kernel`]); [`crate::kernel::LOOKUPS_HELD`] by default.
     pub lookups_held: usize,
+    /// Scratch directory where AppleDouble companion bodies spill when resident
+    /// bytes exceed [`Self::companion_resident_bytes`]. Removed when set and
+    /// when the export releases.
+    pub companion_spill_dir: Option<std::path::PathBuf>,
+    /// Resident memory budget for AppleDouble companion bodies before spilling
+    /// to [`Self::companion_spill_dir`]; [`crate::apple_double::RESIDENT_BYTES`]
+    /// by default.
+    pub companion_resident_bytes: usize,
+    /// Maximum AppleDouble companion index entries held at once;
+    /// [`crate::apple_double::HELD`] by default.
+    pub companions_held: usize,
 }
 impl ExportConfig {
     /// A writable export of "/" shown as `uid`:`gid`, refusing AppleDouble
@@ -55,6 +66,9 @@ impl ExportConfig {
             read_only: false,
             refuse_apple_double: true,
             lookups_held: crate::kernel::LOOKUPS_HELD,
+            companion_spill_dir: None,
+            companion_resident_bytes: crate::apple_double::RESIDENT_BYTES,
+            companions_held: crate::apple_double::HELD,
         }
     }
 }
@@ -120,6 +134,8 @@ struct Shared {
     config: ExportConfig,
     counters: Counters,
     stopping: AtomicBool,
+    exited: AtomicBool,
+    joined: AtomicBool,
     connections: Mutex<Vec<(TcpStream, JoinHandle<()>)>>,
 }
 /// A running export.
@@ -137,14 +153,22 @@ impl Server {
         config: ExportConfig,
     ) -> io::Result<Self> {
         let address = listener.local_addr()?;
+        let kernel = Kernel::new(services, mount, config.uid, config.gid)
+            .refusing_apple_double(config.refuse_apple_double)
+            .holding(config.lookups_held);
+        kernel.configure_companions(
+            config.companion_spill_dir.clone(),
+            config.companion_resident_bytes,
+            config.companions_held,
+        );
         let shared = Arc::new(Shared {
-            kernel: Kernel::new(services, mount, config.uid, config.gid)
-                .refusing_apple_double(config.refuse_apple_double)
-                .holding(config.lookups_held),
+            kernel,
             verifier: fresh_verifier(),
             config,
             counters: Counters::default(),
             stopping: AtomicBool::new(false),
+            exited: AtomicBool::new(false),
+            joined: AtomicBool::new(false),
             connections: Mutex::default(),
         });
         let accepting = shared.clone();
@@ -200,13 +224,19 @@ impl Server {
     pub fn verifier(&self) -> [u8; 8] {
         self.shared.verifier
     }
+    pub fn exited(&self) -> bool {
+        self.shared.exited.load(Ordering::Acquire)
+    }
+    pub fn joined(&self) -> bool {
+        self.shared.joined.load(Ordering::Acquire)
+    }
     /// Stops accepting, closes every connection, joins every thread, then
     /// releases the synthetic kernel's descriptors and references. The engine
     /// mount itself stays with the caller, who revokes it afterwards.
     pub fn stop(mut self) -> Released {
         self.shutdown()
     }
-    fn shutdown(&mut self) -> Released {
+    pub fn shutdown(&mut self) -> Released {
         let Some(accept) = self.accept.take() else {
             return Released::default();
         };
@@ -214,6 +244,7 @@ impl Server {
         // Wake the blocking accept; it sees the flag and returns.
         drop(TcpStream::connect(self.address));
         drop(accept.join());
+        self.shared.exited.store(true, Ordering::Release);
         let connections = std::mem::take(
             &mut *self
                 .shared
@@ -227,6 +258,7 @@ impl Server {
         for (_, thread) in connections {
             drop(thread.join());
         }
+        self.shared.joined.store(true, Ordering::Release);
         self.shared.kernel.release()
     }
 }
@@ -238,6 +270,7 @@ impl Drop for Server {
 fn accept_loop(listener: &TcpListener, shared: &Arc<Shared>) {
     for stream in listener.incoming() {
         if shared.stopping.load(Ordering::Acquire) {
+            shared.exited.store(true, Ordering::Release);
             return;
         }
         let Ok(stream) = stream else { continue };

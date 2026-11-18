@@ -14,10 +14,10 @@ const nameOf = (spec) => `${spec.family}.${spec.call}`;
 
 test("every call is in exactly one bucket, and admin adds the work bucket", () => {
   assert.deepEqual(check(table), []);
-  assert.equal(table.length, 80);
+  assert.equal(table.length, 84);
   const buckets = table.map(bucketOf);
   assert.equal(buckets.filter((bucket) => bucket === "work").length, 38);
-  assert.equal(buckets.filter((bucket) => bucket === "admin").length, 35);
+  assert.equal(buckets.filter((bucket) => bucket === "admin").length, 40);
   assert.ok(buckets.every((bucket) => bucket === "work" || bucket === "admin" || bucket === "ui" || bucket === "none"));
   // `doctor.fix`, like `layerfs doctor` itself, is no tool in either profile
   assert.deepEqual(table.filter((spec) => bucketOf(spec) === "none").map(nameOf), ["doctor.fix"]);
@@ -32,10 +32,18 @@ test("every call is in exactly one bucket, and admin adds the work bucket", () =
   const work = tools(table, "work").map(nameOf);
   const admin = tools(table, "admin").map(nameOf);
   assert.equal(work.length, 38);
-  assert.equal(admin.length, 73);
+  assert.equal(admin.length, 77);
   for (const name of work) assert.ok(admin.includes(name), `${name} is in work but not admin`);
   assert.ok(!admin.some((name) => name.startsWith("doctor.")), "a doctor call is a tool");
   assert.throws(() => tools(table, "root"), /unknown profile/);
+});
+
+test("the admin exception list is checked before the work families", () => {
+  // `branch` is a work family, but retiring one is administration (§10)
+  const retire = { family: "branch", call: "remove" };
+  assert.equal(bucketOf(retire), "admin");
+  assert.ok(!tools([...table, retire], "work").includes(retire));
+  assert.ok(tools([...table, retire], "admin").includes(retire));
 });
 
 test("every generated tool is a valid MCP tool with the table's arguments and options", () => {

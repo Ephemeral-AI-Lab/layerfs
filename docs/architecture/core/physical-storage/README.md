@@ -230,7 +230,8 @@ proportional to the bytes requested.
 | Canonical object | 16 MiB, else `CapacityExceeded { what: "encoding.canonical_length" }` | [`encoding/full.rs`](../../../../core/crates/layerfs-storage/src/encoding/full.rs) |
 | Read demand | 4,096 ids and 32 MiB, else `CapacityExceeded { what: "storage.read_objects" / "storage.read_canonical_bytes" }`; unknown id `ObjectMissing` | [`read/objects.rs`](../../../../core/crates/layerfs-storage/src/read/objects.rs) |
 | Pack above the read's visibility ceiling | `VisibilityCeiling` | [`delta/read.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/read.rs) |
-| Disk full | `Refused { status: "Capacity" }`; only that is `is_capacity_refusal()` | [`store/error.rs`](../../../../core/crates/layerfs-storage/src/store/error.rs) |
+| Disk full | `Refused { status: "Capacity" }`; `is_capacity_refusal()` | [`store/error.rs`](../../../../core/crates/layerfs-storage/src/store/error.rs) |
+| A declared bound refused | `CapacityExceeded { what, limit, actual }`; also `is_capacity_refusal()`, and `ProviderFailure` (not absence) to a provider read, never disk exhaustion | [`store/error.rs`](../../../../core/crates/layerfs-storage/src/store/error.rs) |
 | Reference not stored | `MissingDependency` | [`save/wave.rs`](../../../../core/crates/layerfs-storage/src/save/wave.rs) |
 
 ## Demonstration

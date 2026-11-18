@@ -336,6 +336,22 @@ def _read_sql(*parts):
         return stream.read()
 
 
+# The position columns T1.2a/T1.4 appended after the schema this tool migrates;
+# a Store it converts records neither them nor the GC tables/columns added
+# later, so the first writable open still runs those additive steps.
+HISTORY_SERIAL = "    history_serial INTEGER NOT NULL DEFAULT 0,\n"
+NEXT_SERIAL = "    next_history_serial INTEGER NOT NULL DEFAULT 1,\n"
+TRACE_SALT = (
+    ",\n trace_salt BLOB NOT NULL DEFAULT "
+    "(X'0000000000000000000000000000000000000000000000000000000000000000') "
+    "CHECK(length(trace_salt)=32)"
+)
+
+def _without_position_columns(source):
+    """`source` as it read before T1.2a/T1.4 appended the position columns."""
+    return source.replace(HISTORY_SERIAL, "").replace(TRACE_SALT, "", 1).replace(NEXT_SERIAL, "")
+
+
 def _source(version, layout, tables, without=()):
     """The schema source the engine records for a version (scripts in its order), less `without`."""
     objects = {16: "objects.sql", 17: "objects_units.sql", 18: "objects_units.sql"}[layout]
@@ -347,7 +363,7 @@ def _source(version, layout, tables, without=()):
     scripts += [_read_sql("sqlite", n) for n in ("lineage.sql", "merge_scratch.sql", "file_digest.sql")]
     if tables:
         scripts.append(_read_sql("sqlite", "acquisition", "schema.sql"))
-    source = "".join(scripts)
+    source = _without_position_columns("".join(scripts))
     for text in without:
         source = source.replace(text, "", 1)
     return source

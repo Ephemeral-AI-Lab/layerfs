@@ -19,9 +19,6 @@ layerfs-sandbox = { path = "../../../control/crates/layerfs-sandbox" }
 layerfs-sandbox-backend = { path = "../../../control/crates/layerfs-sandbox-backend" }
 
 [features]
-# PostgreSQL Stores (#506, #533): open, attach, create and Init.
-# Off by default; the sealed Linux build the worker runs turns it on.
-postgresql = ["layerfs-control/postgresql"]
 # https:// remotes: Cloudflare R2, MinIO behind TLS. Off by default; the
 # sealed Linux build the worker runs turns it on.
 tls = ["layerfs-control/tls"]

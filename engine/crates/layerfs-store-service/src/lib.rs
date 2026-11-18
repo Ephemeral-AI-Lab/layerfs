@@ -21,6 +21,7 @@ pub mod methods;
 pub mod operator;
 pub mod overlay;
 pub mod read;
+pub mod removal;
 pub mod service;
 pub mod store;
 mod store_service;

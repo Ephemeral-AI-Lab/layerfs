@@ -5,7 +5,6 @@
 //! Needs a PostgreSQL server: set `LAYERFS_TEST_POSTGRES_URL` (for example
 //! `host=127.0.0.1 port=55433 user=postgres password=... dbname=postgres
 //! sslmode=disable`). Without it each test reports NOT_RUN and passes nothing.
-#![cfg(feature = "postgresql")]
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig};
 use layerfs_persistence::{PostgresHandles, PostgresSelection};

@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The public surface: the `layerfs-api` call table with its one dispatcher, and the front ends (the `layerfs` command, Node, Python and a local MCP server) that expose its **80 calls in 11 families** with the same names and arguments (the MCP server lists 73: six monitoring calls are for a UI only, and `doctor.fix` is no tool).
+The public surface: the `layerfs-api` call table with its one dispatcher, and the front ends (the `layerfs` command, Node, Python and a local MCP server) that expose its **84 calls in 12 families** with the same names and arguments (the MCP server lists 78: six monitoring calls are for a UI only, and `doctor.fix` is no tool).
 
 | | |
 | --- | --- |
@@ -34,13 +34,13 @@ The public surface: the `layerfs-api` call table with its one dispatcher, and th
 
 | Part | What it holds | Source |
 | --- | --- | --- |
-| `families()` | the eleven families in help order: `project`, `branch`, `commit`, `file`, `sandbox`, `workspace`, `machine`, `store`, `backup`, `logs`, `doctor` | [`lib.rs`](../../../api/crates/layerfs-api/src/lib.rs) |
+| `families()` | the twelve families in help order: `home`, `project`, `branch`, `commit`, `file`, `sandbox`, `workspace`, `machine`, `store`, `backup`, `logs`, `doctor` | [`lib.rs`](../../../api/crates/layerfs-api/src/lib.rs) |
 | `calls/` | the table types, argument checks, folder scope, dispatcher, argv rendering, key casing, text form, platform policy and call context | [`calls/`](../../../api/crates/layerfs-api/src/calls), [Calls](calls/README.md) |
 | `<family>/` | one file per call, `<family>/<call>.rs`; the family's `mod.rs` lists them in help order. Each `run` builds one typed request and calls one control-crate function | [`src/`](../../../api/crates/layerfs-api/src), [SDK](sdk/README.md) |
 | `doctor/` | explicit diagnostics outside the call table (`layerfs doctor`) | [`doctor/mod.rs`](../../../api/crates/layerfs-api/src/doctor/mod.rs) |
 | Entry points | `calls()`, `find`, `table_json`, `call`, `call_scoped`, `call_json` | [`lib.rs`](../../../api/crates/layerfs-api/src/lib.rs) |
 | Re-exports | the control-crate paths the front ends need (`home`, `worker`, `daemon`, `ProjectApi`, `WorkspaceApi`, doctor), so front ends reach control through this crate | [`lib.rs`](../../../api/crates/layerfs-api/src/lib.rs) |
-| Features | `machine` (machine calls; host builds only, not the guest worker), `postgresql` (PostgreSQL Stores), `tls` (`https://` remotes); the latter two are on in the sealed Linux worker build | [`Cargo.toml`](../../../api/crates/layerfs-api/Cargo.toml) |
+| Features | `machine` (machine calls; host builds only, not the guest worker), `tls` (`https://` remotes), on in the sealed Linux worker build; PostgreSQL Stores are always built, no feature | [`Cargo.toml`](../../../api/crates/layerfs-api/Cargo.toml) |
 
 ## Calling conventions
 
@@ -58,7 +58,7 @@ give each call's own arguments, answer and errors.
 | Uncertainty | `Unknown`, and `Failed` with `attempted: true`, mean the outcome is not known; `Unresolved` blocks later calls on that entity. Read state with `get`, `list` or `status` before acting again | [Uncertain outcomes](calls/errors-and-events.md#uncertain-outcomes) |
 | One attempt | a call runs once; nothing retries, refreshes or replays it | [`calls/dispatch.rs`](../../../api/crates/layerfs-api/src/calls/dispatch.rs) |
 | Paging | lists that page take `page_size` and `page_pos` and answer `{ items, has_more, next_page_pos }`; pass `next_page_pos` back as `page_pos`. Diffs add `paths_only` and a `cursor`; `logs.list` uses `cursor` and `limit` | [`calls/table.rs`](../../../api/crates/layerfs-api/src/calls/table.rs) `PAGE`, `DIFF` |
-| Events | `on_progress` (nine calls) and `workspace.exec`'s `stdout`/`stderr` functions receive events before the call answers; an event never means the call finished | [Errors and events](calls/errors-and-events.md) |
+| Events | `on_progress` (twelve calls) and `workspace.exec`'s `stdout`/`stderr` functions receive events before the call answers; an event never means the call finished | [Errors and events](calls/errors-and-events.md) |
 | Home | explicit, else `LAYERFS_HOME`, else `$HOME/.layerfs`; absolute | [`calls/dispatch.rs`](../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home` |
 | Scope | a client may be bound to one project, folder and Branch namespace: out-of-scope calls are `InvalidInput`, paths are relative to the folder and Branch names to the namespace | [`calls/scope.rs`](../../../api/crates/layerfs-api/src/calls/scope.rs), [folder scope](calls/README.md#folder-scope) |
 | Call log | every call except `logs.*` writes one line to `<home>/trace/calls.jsonl` when it ends (not with `LAYERFS_LOGS=0`) | [the call log](calls/README.md#the-call-log) |
@@ -85,7 +85,7 @@ give each call's own arguments, answer and errors.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`calls_table.rs`](../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host | 80 calls in eleven families; one source file per call; refusals before any effect |
+| [`calls_table.rs`](../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host | 84 calls in twelve families; one source file per call; refusals before any effect |
 | [`coverage.mjs`](../../../api/node/test/coverage.mjs) | `node --test api/node/test/coverage.mjs` | macOS or Linux, with the built addon, Python module and CLI | every front end matches the table |
 | [`file-history.mjs`](../../../api/node/examples/file-history.mjs) | `node api/node/examples/file-history.mjs` | macOS or Linux, with the built addon | a Store, Init, file writes and history reads |
 

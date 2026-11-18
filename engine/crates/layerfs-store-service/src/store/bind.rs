@@ -4,6 +4,7 @@ use super::{
     NamedBindRequest, Store,
 };
 use crate::OwnerClient;
+use layerfs_bridge::control::MountPlace;
 use layerfs_content::filesystem::{
     attributes::{read_portable, AttributeReadWork},
     directory::decode_directory_page,
@@ -24,7 +25,19 @@ impl Store {
         owner: OwnerClient,
         request: BindRequest,
     ) -> Result<BindSuccess, BindRefusal> {
-        self.bind_with(owner, BindIntent::Id(request), false)
+        self.bind_with(owner, BindIntent::Id(request), MountPlace::default(), false)
+    }
+    /// [`Self::bind`] of a mount whose caller knows the Sandbox and machine
+    /// its daemon serves: the registered holder reports them beside the
+    /// Workspace. An unknown place is the plain [`Self::bind`].
+    #[allow(clippy::result_large_err)]
+    pub fn bind_placed(
+        self: &Arc<Self>,
+        owner: OwnerClient,
+        request: BindRequest,
+        place: MountPlace,
+    ) -> Result<BindSuccess, BindRefusal> {
+        self.bind_with(owner, BindIntent::Id(request), place, false)
     }
     /// [`Self::bind`] of the Branch a project and Branch name select (#64),
     /// found on the Workspace's own reader with its snapshot in one read.
@@ -46,7 +59,23 @@ impl Store {
                 request: BindIntent::Named(request),
             });
         }
-        self.bind_with(owner, BindIntent::Named(request), false)
+        self.bind_with(
+            owner,
+            BindIntent::Named(request),
+            MountPlace::default(),
+            false,
+        )
+    }
+    /// [`Self::bind_named`] of a mount whose caller knows the Sandbox and
+    /// machine its daemon serves.
+    #[allow(clippy::result_large_err)]
+    pub fn bind_named_placed(
+        self: &Arc<Self>,
+        owner: OwnerClient,
+        request: NamedBindRequest,
+        place: MountPlace,
+    ) -> Result<BindSuccess, BindRefusal> {
+        self.bind_with(owner, BindIntent::Named(request), place, false)
     }
     /// [`Self::bind`] for an SDK call's private Workspace: its reader comes
     /// from, and returns to, the Store's idle readers (#352 F-025 fix 4).
@@ -56,17 +85,19 @@ impl Store {
         owner: OwnerClient,
         request: BindRequest,
     ) -> Result<BindSuccess, BindRefusal> {
-        self.bind_with(owner, BindIntent::Id(request), true)
+        self.bind_with(owner, BindIntent::Id(request), MountPlace::default(), true)
     }
     #[allow(clippy::result_large_err)]
     fn bind_with(
         self: &Arc<Self>,
         owner: OwnerClient,
         request: BindIntent,
+        place: MountPlace,
         pooled: bool,
     ) -> Result<BindSuccess, BindRefusal> {
         let mut phase = BindPhase::Snapshot;
         let mut snapshot = None;
+        let mut gc_op: Option<[u8; 16]> = None;
         let workspace = request.workspace();
         crate::telemetry::timed("bind.reader", |_| self.readers.mount(workspace, pooled)).map_err(
             |error| BindRefusal {
@@ -90,6 +121,18 @@ impl Store {
                 }
             })?;
             snapshot = Some(captured.clone());
+            // Admission before any root demand: a live removal is `Busy`, an
+            // uncertain owner `Unresolved`, and the intent lives until this
+            // Workspace's unmount deletes it.
+            let intent = crate::history::admission::mount_intent(workspace, &captured, &place);
+            match self.history().gc_register(&intent) {
+                Ok(()) => gc_op = Some(intent.op_id),
+                // A provider without admission cannot exclude a removal; it
+                // is a test double or a legacy wrapper, never this service's
+                // real Store provider.
+                Err(layerfs_history::HistoryError::Unsupported(_)) => {}
+                Err(error) => return Err(BindError::History(error)),
+            }
             phase = BindPhase::Root;
             let ports = self.ports_for(captured.scope, workspace);
             let client = ports.client();
@@ -110,20 +153,44 @@ impl Store {
                 Ok((route, owner.workspace_client(route)?))
             })
             .map_err(BindError::Owner)?;
-            Ok(BindSuccess {
-                workspace: BoundWorkspace {
-                    store: self.clone(),
-                    owner,
-                    snapshot: std::sync::Mutex::new(captured),
-                    identity: workspace,
-                    workspace: Arc::new(Workspace::bind(route, base)),
-                    committing: std::sync::atomic::AtomicBool::new(false),
-                    producer: Default::default(),
-                    pending: std::sync::Mutex::new(None),
-                },
-            })
+            let bound = BoundWorkspace {
+                store: self.clone(),
+                owner,
+                snapshot: std::sync::Mutex::new(captured),
+                identity: workspace,
+                workspace: Arc::new(Workspace::bind(route, base)),
+                gc_op,
+                committing: std::sync::atomic::AtomicBool::new(false),
+                producer: Default::default(),
+                pending: std::sync::Mutex::new(None),
+            };
+            // §4.3: a mount of a node at or below a marker frontier applies
+            // the whiteout, so its view hides the path and its next Commit
+            // records a real deletion.
+            if bound.materialize_removals().is_err() {
+                let _ = bound.owner.close(route);
+                if let Some(op) = bound.gc_op {
+                    let _ = crate::history::admission::release_or_mark(self.history(), &op);
+                }
+                return Err(BindError::Content {
+                    error: ContentError::ProviderFailure {
+                        what: "path removal whiteout",
+                    },
+                    provider: None,
+                });
+            }
+            Ok(BindSuccess { workspace: bound })
         })();
         result.map_err(|error| {
+            let error = match gc_op
+                .map(|op| crate::history::admission::release_or_mark(self.history(), &op))
+            {
+                Some(Err(cause)) => BindError::Cleanup {
+                    original: Box::new(error),
+                    cause: Arc::new(super::PortError::History(cause)),
+                },
+                _ => error,
+            };
             let error = match self.close_reader(workspace) {
                 Ok(()) => error,
                 Err(cause) => BindError::Cleanup {

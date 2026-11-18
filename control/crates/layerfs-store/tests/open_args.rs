@@ -25,7 +25,7 @@ fn reads_the_routing_fields_and_refuses_a_missing_store_path() {
     );
     let postgresql = open.postgresql.as_ref().unwrap();
     assert_eq!(postgresql.url().unwrap(), "postgresql://u:pw@x/db");
-    assert_eq!(postgresql.setting().unwrap(), "off");
+    assert_eq!(postgresql.setting().unwrap(), "local");
     assert_eq!(
         postgresql.schema().unwrap_err().message,
         "postgresql.schema is required"

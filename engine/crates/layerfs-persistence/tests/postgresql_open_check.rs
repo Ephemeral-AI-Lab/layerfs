@@ -3,7 +3,6 @@
 //! only the full check reads `information_schema`, so only it refuses a
 //! column changed by hand. Each open costs one round trip after connecting.
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#![cfg(feature = "postgresql")]
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{PostgresCheck, PostgresHandles, PostgresSelection};
 use layerfs_storage::{port::PersistenceError, StoragePolicy};

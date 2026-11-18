@@ -63,6 +63,8 @@ const refusing = { project: "nosuch/x", name: "Bad!", text: "/x", json: [], cont
 test("every call is refused the same way by the command and the package", { skip: !existsSync(command) }, async () => {
   const home = temp("refused");
   const lfs = client({ home });
+  // home.init would say `created` only to the first front end
+  await lfs.home.init();
   for (const spec of table) {
     // the first reset clears what the second would count
     if (`${spec.family}.${spec.call}` === "logs.reset") continue;

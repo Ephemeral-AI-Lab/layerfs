@@ -8,18 +8,17 @@
 //! never seals or replaces the Store. Init statistics are recorded once per
 //! Store, by its first Init, so an added project records none.
 //!
-//! The Store is a SQLite file or, with the `postgresql` feature, a
-//! PostgreSQL schema (#533 step 10b); its selection decides which. The Init
+//! The Store is a SQLite file or a PostgreSQL
+//! schema (#533 step 10b); its selection decides which. The Init
 //! is the same on both: only the opened handles differ.
+use crate::init::init_unknown_state;
 use crate::store::{live_open::Opened, InitError};
 use crate::{InitCounters, InitStep, Initialized, ProjectError};
 use layerfs_history::{
     BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig,
-    HistoryName, HistoryResult, LayerStackId, LayerStackRecord, Page,
+    HistoryError, HistoryName, HistoryResult, LayerStackId, LayerStackRecord, Page,
 };
-use layerfs_persistence::{
-    SealedStore, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile, StoreSelection,
-};
+use layerfs_persistence::{SealedStore, SqliteAcquisitionSchema, SqliteHandles, StoreSelection};
 use layerfs_storage::port::{acquisition::AcquisitionError, PersistenceError};
 use layerfs_storage::{Storage, StoragePolicy};
 use layerfs_telemetry::timer::{Active, TimingScope};
@@ -95,15 +94,15 @@ impl std::fmt::Display for AddFailure {
 }
 impl std::error::Error for AddFailure {}
 
-/// The Disposable profile rule applies to a SQLite Store only; a PostgreSQL
-/// Store has no SQLite profile and passes.
+/// The profile rule (Normal, or Disposable in a test) applies to a SQLite
+/// Store only; a PostgreSQL Store has no SQLite profile and passes.
 fn disposable(store: &StoreSelection) -> Result<(), InitError> {
     let StoreSelection::Sqlite(store) = store else {
         return Ok(());
     };
-    if store.sqlite_profile != SqlitePersistenceProfile::Disposable {
+    if !store.sqlite_profile.permitted() {
         return Err(InitError::Manifest(
-            "explicit Disposable Store profile required",
+            "explicit Normal or Disposable Store profile required",
         ));
     }
     Ok(())
@@ -132,11 +131,18 @@ pub(crate) fn add(
         disposable(&request.store)?;
         let handles = Opened::writable(&request.store, &request.binding, request.cursor_key)?;
         let history = handles.history();
-        let taken = history
-            .layer_stack_named(&request.stack_name)
-            .map_err(InitError::History)?;
-        if taken.is_some() {
-            return Err(InitError::Exists);
+        // A held name (live, retired or deleted) is refused before the folder
+        // is scanned or any object written. The publication re-checks it, so
+        // a collision that appears meanwhile is refused the same way.
+        if let Some(state) = history
+            .layer_stack_name_taken(&request.stack_name)
+            .map_err(|error| {
+                InitError::History(
+                    error.with_unknown(init_unknown_state(request.stack_name.as_str(), None)),
+                )
+            })?
+        {
+            return Err(InitError::NameTaken(Box::new(state)));
         }
         let storage = Storage::new(handles.storage()).map_err(InitError::Storage)?;
         let imported = crate::init_observed(
@@ -164,7 +170,11 @@ pub(crate) fn add(
                 name: request.branch_name.clone(),
                 source,
             })
-            .map_err(InitError::History)?;
+            .map_err(|error| {
+                InitError::History(
+                    error.with_unknown(init_unknown_state(request.stack_name.as_str(), None)),
+                )
+            })?;
         let sqlite_version = handles.version();
         drop(storage);
         handles.close();
@@ -195,6 +205,11 @@ fn refused_acquisition(error: ProjectError) -> InitError {
         ProjectError::Acquisition(AcquisitionError::Persistence(PersistenceError::Refused {
             status,
         })) if status == "acquisition working rows remain" => InitError::Busy,
+        // The catalog's collision query read the holder (live, retired or
+        // deleted) and wrote nothing: keep its typed state for the SDK.
+        ProjectError::History(HistoryError::NameTaken(state)) => {
+            InitError::NameTaken(state.clone())
+        }
         _ => InitError::Project(error),
     }
 }

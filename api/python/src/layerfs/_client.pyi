@@ -8,6 +8,12 @@ from ._values import JSON, Content, Output, Progress, Result, Scope, Size
 TABLE: list[dict[str, object]]
 FAMILIES: list[str]
 
+class HomeFamily:
+    def init(self, *, log_tag: str | None = None) -> Result:
+        """create this home, or convert an older one; a current home is left as it is"""
+    def get(self, *, log_tag: str | None = None) -> Result:
+        """the home's state, and the Linux bundle and daemon this build would use; changes nothing"""
+
 class ProjectFamily:
     def init(
         self,
@@ -49,8 +55,10 @@ class ProjectFamily:
         log_tag: str | None = None,
     ) -> Result:
         """export a project's snapshot from its Store to a local folder"""
-    def remove(self, project: str, *, log_tag: str | None = None) -> Result:
-        """remove one project from its Store"""
+    def delete(self, project: str, *, log_tag: str | None = None) -> Result:
+        """retire one project in its Store and remove its home entry"""
+    def remove_file(self, project: str, path: str, *, log_tag: str | None = None) -> Result:
+        """hide one absolute path from every node at or below its marker frontier"""
 
 class BranchFamily:
     def list(
@@ -132,6 +140,8 @@ class BranchFamily:
         log_tag: str | None = None,
     ) -> Result:
         """files that differ between two Branches' heads"""
+    def remove(self, project: str, branch: str, *, log_tag: str | None = None) -> Result:
+        """soft-remove one Branch; its name stays taken until compaction"""
 
 class CommitFamily:
     def list(
@@ -463,6 +473,8 @@ class MachineFamily:
         """a machine's live state, free disk and tool version"""
     def stats(self, machine: str, *, log_tag: str | None = None) -> Result:
         """a machine's observed processors, memory and data disk, its Stores' sizes and live Sandboxes"""
+    def space(self, machine: str, *, log_tag: str | None = None) -> Result:
+        """where a machine's data disk goes: its Stores, Sandboxes, images and logs, and what is not LayerFS's"""
     def files(
         self,
         machine: str,
@@ -521,8 +533,8 @@ class StoreFamily:
         """every Store, from the home's records"""
     def get(self, name: str, *, log_tag: str | None = None) -> Result:
         """a Store's record"""
-    def status(self, name: str, *, log_tag: str | None = None) -> Result:
-        """a Store's live state"""
+    def status(self, name: str, *, machine: str | None = None, log_tag: str | None = None) -> Result:
+        """a Store's live state; with a machine, whether it reaches a PostgreSQL Store"""
     def stats(self, name: str, *, log_tag: str | None = None) -> Result:
         """Store-wide publication and allocation counters"""
     def create(self, name: str, *, log_tag: str | None = None) -> Result:
@@ -536,19 +548,19 @@ class StoreFamily:
         synchronous_commit: str | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """attach a PostgreSQL database as a Store"""
-    def attach(
+        """connect a PostgreSQL database as a Store"""
+    def update(
         self,
         name: str,
-        machine: str,
         *,
+        machine: str | None = None,
         url: str | None = None,
         password: str | None = None,
+        synchronous_commit: str | None = None,
+        clear: bool | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """let a machine run Sandboxes of a PostgreSQL Store, after checking it reaches the server"""
-    def detach(self, name: str, machine: str, *, log_tag: str | None = None) -> Result:
-        """stop a machine running Sandboxes of a PostgreSQL Store"""
+        """change a PostgreSQL Store's connection, or the one a machine alone dials"""
     def push(
         self,
         name: str,
@@ -562,6 +574,14 @@ class StoreFamily:
         """bring a sqlite Store from its machine to native"""
     def remove(self, name: str, *, log_tag: str | None = None) -> Result:
         """delete a sqlite Store with every project in it"""
+    def compact(
+        self,
+        name: str,
+        *,
+        on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
+    ) -> Result:
+        """reclaim dead bytes from one Store"""
     def disconnect(self, name: str, *, log_tag: str | None = None) -> Result:
         """forget a PostgreSQL Store; its data stays"""
 
@@ -645,8 +665,8 @@ class DoctorFamily:
         """remove one leftover `layerfs doctor` listed, under its guard"""
 
 class Client:
-    home: str | None
     scope: Scope | Mapping[str, str | None] | None
+    home: HomeFamily
     project: ProjectFamily
     branch: BranchFamily
     commit: CommitFamily

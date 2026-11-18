@@ -7,6 +7,8 @@ use crate::project::discovery::Project;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
 use layerfs_bridge::sdk_values::hex;
+use layerfs_history::error::{HolderKind, HolderState, NameHolder, NameSource, NameTakenState};
+use layerfs_history::records::GcScopeKind;
 use layerfs_history::{BranchId, HistoryName, LayerStackId};
 use layerfs_home::helpers::random;
 use layerfs_home::home::paths;
@@ -15,6 +17,7 @@ use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_persistence::{PersistenceConfig, SealedStore, SqlitePersistenceProfile};
 use layerfs_project::store::{AddRequest, InitError, ProjectApi};
 use layerfs_project::{InitCounters, ProjectError};
+use layerfs_store_service::history::lookup;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -57,7 +60,7 @@ pub fn save_entry(
     let project = Project {
         store: SealedStore {
             path: entry.join("sealed.sqlite"),
-            profile: SqlitePersistenceProfile::Disposable,
+            profile: SqlitePersistenceProfile::Normal,
             sqlite_version: manifest.host_sqlite.clone(),
             bytes: manifest.bytes,
         },
@@ -75,7 +78,7 @@ pub fn make_entry(home: &Path, store: &str, name: &str) -> Result<PathBuf> {
     let entry = layerfs_home::home::paths::project_dir(home, store, name);
     std::fs::create_dir(&entry).map_err(|error| {
         if error.kind() == std::io::ErrorKind::AlreadyExists {
-            refused("Exists", format!("project {name} exists in Store {store}"))
+            home_name_taken(store, name)
         } else {
             failed(error)
         }
@@ -83,6 +86,20 @@ pub fn make_entry(home: &Path, store: &str, name: &str) -> Result<PathBuf> {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o700)).map_err(failed)?;
     Ok(entry)
+}
+
+/// A project name the caller's home already records: `NameTaken` with its
+/// `home` source, decided before the Store is asked anything.
+pub(crate) fn home_name_taken(store: &str, name: &str) -> SdkRefusal {
+    let state = NameTakenState::new(
+        NameHolder::new(HolderKind::Project, name, HolderState::Live),
+        NameSource::Home,
+    );
+    lookup::refuse(
+        "NameTaken",
+        format!("project {name} exists in Store {store}"),
+        lookup::name_taken_detail(&state),
+    )
 }
 
 /// `project.init`'s add of folder `source` as the new project `name` of
@@ -143,10 +160,7 @@ pub fn add_project(request: &ProjectAdd) -> Outcome {
     }
     let home = discovery::home_of(Some(&request.home))?;
     if name == store && legacy(&home, store)? {
-        return Err(refused(
-            "Exists",
-            format!("Store {store} already has a project named {name}"),
-        ));
+        return Err(home_name_taken(store, name));
     }
     let entry = make_entry(&home, store, name)?;
     let _guard = discovery::guard(&entry)?;
@@ -156,7 +170,7 @@ pub fn add_project(request: &ProjectAdd) -> Outcome {
     let request = AddRequest {
         source,
         store: PersistenceConfig::sqlite(&store_file)
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal)
             .into(),
         binding: identity.binding.clone(),
         cursor_key: identity.cursor_key,
@@ -213,9 +227,10 @@ pub fn add_project(request: &ProjectAdd) -> Outcome {
 /// diagnosis.
 pub fn add_failure(error: InitError, entry: Option<&Path>, name: &str, store: &str) -> SdkRefusal {
     let refusal = match &error {
-        InitError::Exists => refused(
-            "Exists",
+        InitError::NameTaken(state) => lookup::refuse(
+            "NameTaken",
             format!("Store {store} already has a project named {name}"),
+            lookup::name_taken_detail(state),
         ),
         InitError::NoAcquisition => refused(
             "Unsupported",
@@ -232,6 +247,41 @@ pub fn add_failure(error: InitError, entry: Option<&Path>, name: &str, store: &s
             "InvalidInput",
             format!("adding {name} refused {}: {reason}", path.display()),
         ),
+        // A history refusal from Init is the call's own: `Busy`/
+        // `MountsActive`/`Unresolved` keeps its code and detail, and an
+        // `Unknown` keeps spec §10 A6's entity, phase and operation instead
+        // of becoming `Failed` with a null detail (F43R4-2). The entry may
+        // lie behind a project the Store already holds, so it stays for the
+        // retry or for diagnosis.
+        InitError::Project(ProjectError::History(error)) | InitError::History(error) => {
+            // A bare `UnknownOutcome` from a history call that did not attach
+            // its context still knows the call: name the project and Init
+            // phase, with no durable operation (F43R5-1).
+            return lookup::history_in(
+                error.clone(),
+                GcScopeKind::Project,
+                name,
+                Some("init"),
+                None,
+            );
+        }
+        // The acquisition retains an unknown outcome as
+        // `ProjectError::Uncertain { cause, .. }` (`backing.settle`). A
+        // history cause is still the call's own: `lookup::history_in` keeps
+        // spec §10 A6's entity, phase and operation (F43R6-1), while a
+        // definite history cause keeps its code.
+        InitError::Project(ProjectError::Uncertain { cause, .. }) => match cause.as_ref() {
+            ProjectError::History(error) => {
+                return lookup::history_in(
+                    error.clone(),
+                    GcScopeKind::Project,
+                    name,
+                    Some("init"),
+                    None,
+                );
+            }
+            _ => return failed(format!("adding project {name} to Store {store}: {error:?}")),
+        },
         _ => return failed(format!("adding project {name} to Store {store}: {error:?}")),
     };
     if let Some(entry) = entry {

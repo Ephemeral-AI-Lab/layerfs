@@ -25,6 +25,16 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
+/// Whether the process a compaction record names still runs on this machine.
+/// The kernel start time and boot id, when recorded, keep a reused id from
+/// passing as the owner.
+fn owner_alive(op: &layerfs_persistence::CompactOpStatus) -> bool {
+    let Some(pid) = op.owner_pid else {
+        return false;
+    };
+    layerfs_home::process::alive_as(pid, op.owner_pid_start, op.owner_pid_boot)
+}
+
 fn length(path: &Path) -> Result<u64, SdkRefusal> {
     match std::fs::metadata(path) {
         Ok(meta) => Ok(meta.len()),
@@ -78,7 +88,7 @@ fn checkpoint_leftover_wal(file: &Path, frame: &StepFrame) -> Result<(), SdkRefu
     let identity = crate::identity::identity_of(record)?;
     if let Ok(handles) = layerfs_persistence::SqliteHandles::open_writable(
         layerfs_persistence::PersistenceConfig::sqlite(file)
-            .with_sqlite_profile(layerfs_persistence::SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(layerfs_persistence::SqlitePersistenceProfile::Normal),
         &identity.binding,
         identity.cursor_key,
     ) {
@@ -124,6 +134,12 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
             ),
             ("incoming_bytes", SdkValue::Int(length(&incoming)? as i64)),
         ])),
+        // the compaction record beside the Store only: `store.status` shows
+        // its op and phase without opening the Store database or an artifact
+        StoreStep::CompactOp => match layerfs_persistence::compact_op_status(&file) {
+            None => Ok(SdkValue::Null),
+            Some(op) => Ok(crate::report::compact_status(&op.status(owner_alive(&op)))),
+        },
         // snapshot: the idle Store's bytes, sha256 and history heads. A Store
         // nobody holds has no write-ahead log left unless a process crashed;
         // if a crashed opener left one, checkpoint and close it first.

@@ -397,5 +397,7 @@ fn operation_code(operation: &Request) -> u64 {
         Request::Cleanup(_) => 13,
         Request::Sdk(_) => 15,
         Request::MountNamed { .. } => 16,
+        Request::MountPlaced { .. } => 17,
+        Request::MountNamedPlaced { .. } => 18,
     }
 }

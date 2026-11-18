@@ -45,6 +45,12 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "branch_branch_by_id" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/branch_branch_by_id.sql"
         )),
+        "branch_branch_by_id_any" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/branch_branch_by_id_any.sql"
+        )),
+        "branch_retire_insert" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/branch_retire_insert.sql"
+        )),
         "branch_branch_by_name" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/branch_branch_by_name.sql"
         )),
@@ -101,6 +107,18 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         )),
         "layerstack_stack_name_taken" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/layerstack_stack_name_taken.sql"
+        )),
+        "layerstack_insert_project_epoch" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/layerstack_insert_project_epoch.sql"
+        )),
+        "layerstack_bump_project_epoch" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/layerstack_bump_project_epoch.sql"
+        )),
+        "layerstack_insert_retired" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/layerstack_insert_retired.sql"
+        )),
+        "layerstack_deleted_ms" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/layerstack_deleted_ms.sql"
         )),
         "layerstack_stack_next_page" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/layerstack_stack_next_page.sql"
@@ -170,6 +188,138 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         )),
         "removal_stack" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/removal_stack.sql"
+        )),
+        "position_high_water" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/position_high_water.sql"
+        )),
+        "position_stack_high_water" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/position_stack_high_water.sql"
+        )),
+        "position_next_serial" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/position_next_serial.sql"
+        )),
+        "position_node_serial" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/position_node_serial.sql"
+        )),
+        "paths_marker" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/paths_marker.sql"
+        )),
+        "paths_markers" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/paths_markers.sql"
+        )),
+        "paths_upsert" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/paths_upsert.sql"
+        )),
+        "paths_advance_epoch" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/paths_advance_epoch.sql"
+        )),
+        "gc_intent_insert" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_insert.sql"
+        )),
+        "gc_intent_get" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_get.sql"
+        )),
+        "gc_intent_release" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_release.sql"
+        )),
+        "gc_intent_uncertain" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_uncertain.sql"
+        )),
+        "gc_intent_list" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_list.sql"
+        )),
+        "gc_intent_ops_branch" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_ops_branch.sql"
+        )),
+        "gc_intent_ops_project" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_ops_project.sql"
+        )),
+        "gc_intent_ops_store" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_ops_store.sql"
+        )),
+        "gc_intent_all_branch" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_all_branch.sql"
+        )),
+        "gc_intent_all_project" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_all_project.sql"
+        )),
+        "gc_intent_all_store" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_all_store.sql"
+        )),
+        "gc_branch_stack_any" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_branch_stack_any.sql"
+        )),
+        "gc_epoch_read" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_epoch_read.sql"
+        )),
+        "gc_epoch_share" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_epoch_share.sql"
+        )),
+        "gc_epoch_lock" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_epoch_lock.sql"
+        )),
+        "gc_kept_roots" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_kept_roots.sql"
+        )),
+        "gc_object_locations" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_object_locations.sql"
+        )),
+        "gc_live_stacks" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_live_stacks.sql"
+        )),
+        "gc_live_branches" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_live_branches.sql"
+        )),
+        "gc_inode_blocks" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_inode_blocks.sql"
+        )),
+        "gc_tuple_read" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_tuple_read.sql"
+        )),
+        "kept_node_clear" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/kept_node_clear.sql"
+        )),
+        "kept_node_mark" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/kept_node_mark.sql"
+        )),
+        "kept_node_read" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/kept_node_read.sql"
+        )),
+        "kept_node_roots" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/kept_node_roots.sql"
+        )),
+        "kept_node_kept_roots" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/kept_node_kept_roots.sql"
+        )),
+        "history_unreachable_count" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_unreachable_count.sql"
+        )),
+        "history_remove_unreachable_totals" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_totals.sql"
+        )),
+        "history_remove_unreachable_commit" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_commit.sql"
+        )),
+        "history_remove_unreachable_layer" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_layer.sql"
+        )),
+        "history_remove_unreachable_branch" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_branch.sql"
+        )),
+        "history_remove_unreachable_stack" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_stack.sql"
+        )),
+        "history_remove_unreachable_lineage" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_lineage.sql"
+        )),
+        "history_remove_unreachable_commit_lineage" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_commit_lineage.sql"
+        )),
+        "history_remove_unreachable_absorbed" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_absorbed.sql"
+        )),
+        "history_remove_unreachable_reach" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_reach.sql"
         )),
         _ => Err(BackendError::Integrity),
     }

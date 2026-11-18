@@ -77,6 +77,8 @@ esac
     std::fs::write(&docker, script).unwrap();
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
     std::env::set_var("PATH", &tools);
+    // only the stand-ins: no fallback folder after PATH
+    std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");
     // a sealed bundle of empty stand-ins, with no image archive yet
     let bundle = tempdir("bundle");
     std::env::set_var("LAYERFS_BUNDLE", &bundle);

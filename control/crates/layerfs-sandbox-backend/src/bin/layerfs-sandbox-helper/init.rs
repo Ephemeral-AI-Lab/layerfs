@@ -97,8 +97,9 @@ fn daemon(spec: &HelperSpec) -> Result<Command, String> {
     Ok(daemon)
 }
 
-/// The Sandbox's own cgroup, written by the Sandbox's own init stage: every
-/// process it creates afterwards inherits it, so one write ends them all.
+/// The leaf of the Sandbox's cgroup (the spec's `cgroup`), written by the
+/// Sandbox's own init stage: every process it creates afterwards inherits
+/// it, so one write to the Sandbox group's `cgroup.kill` ends them all.
 fn join(cgroup: &Path) -> Result<(), String> {
     let pid = nix::unistd::getpid().as_raw();
     let mut file = fs::OpenOptions::new()

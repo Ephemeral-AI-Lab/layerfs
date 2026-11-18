@@ -13,8 +13,14 @@ mod install;
 #[path = "host_inventory.rs"]
 mod inventory;
 
-pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
+pub(super) fn diagnose(
+    home: &Path,
+    build: crate::home::Build<'_>,
+    budget: &Budget,
+    checks: &mut Checks,
+) {
     install::identity(checks);
+    install::native_daemon(home, build, checks);
     capacity::check(home, budget, checks);
     if budget.expired() {
         checks.unknown("host.layout", "Deadline expired before inspecting the home");

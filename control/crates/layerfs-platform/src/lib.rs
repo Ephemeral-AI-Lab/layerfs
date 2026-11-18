@@ -13,6 +13,7 @@
 #![cfg(unix)]
 #![forbid(unsafe_code)]
 mod adapter;
+mod docker_socket;
 mod error;
 mod facts;
 mod options;
@@ -23,20 +24,25 @@ mod reach;
 mod setup;
 mod spec;
 mod support;
+pub use docker_socket::{
+    docker_automatic, docker_candidates, socket_state, DockerCandidate, DockerEnv, SocketState,
+    DEFAULT_DOCKER_SOCKET, SOCKET_ANSWER,
+};
 pub use error::{Code, MachineError};
 pub use layerfs_sandbox_backend::platform_policy;
 pub use layerfs_sandbox_backend::Backend;
 pub use options::{OptKind, OptSpec};
 pub use platform::{ExecutorKind, HostOs, How, KernelRoute, Platform, Profile, Route};
 pub use probe::{native_missing, probe, Probe};
+pub use setup::find_tool;
 pub use setup::{
     cached_image, copy_in, copy_out, create, data_volume, forward, forward_close, load_image,
     name_limit, provider_within, reach, remove, start, status, status_within, stop, stop_force,
     State, Status,
 };
 pub use spec::{
-    parse_size, Bundle, Endpoint, Forward, Lasting, NameLimit, Running, Spec, Tools, BUNDLE, DATA,
-    IMAGE, STATE, WORKER_LOG, WORKER_PORT,
+    parse_size, search_path, tool_fallbacks, Bundle, Endpoint, Forward, Lasting, NameLimit,
+    Running, Spec, Tools, BUNDLE, DATA, IMAGE, STATE, WORKER_LOG, WORKER_PORT,
 };
 pub use support::{
     platforms, sandbox_allowed, support, support_json, CallSite, PostgresqlSupport, StoreKind,

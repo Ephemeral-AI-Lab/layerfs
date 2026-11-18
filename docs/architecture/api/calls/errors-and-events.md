@@ -33,6 +33,8 @@ front ends carry it unchanged.
 | `NoSuchBranch`, `NoSuchCommit` | no such Branch, or no such Commit on it | [`calls/branch.rs`](../../../../control/crates/layerfs-store/src/calls/branch.rs), [`history/lookup.rs`](../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `NoSuchSandbox`, `NotMounted` | no Sandbox of that name; no Workspace of that name or path | [`family.rs`](../../../../control/crates/layerfs-sandbox/src/family.rs), [`workspace/serve.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `NoSuchPath`, `IsDirectory`, `NotDirectory`, `NotFile`, `NotEmpty`, `Binary` | path refusals of the `file` calls | [`write/mutation.rs`](../../../../engine/crates/layerfs-store-service/src/write/mutation.rs), [`read/`](../../../../engine/crates/layerfs-store-service/src/read) |
+| `Removed` | a path is hidden by `project.remove_file`; `detail.paths[]` names each hidden path and the frontier serial that governs it | [`history/lookup.rs`](../../../../engine/crates/layerfs-store-service/src/history/lookup.rs), [`history/error.rs`](../../../../core/crates/layerfs-history/src/contract/error.rs) |
+| `StaleStore` | the Store was replaced or moved under this handle; nothing on it is read or written | [`history/lookup.rs`](../../../../engine/crates/layerfs-store-service/src/history/lookup.rs), [`sqlite/lifecycle/identity.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/identity.rs) |
 | `Exists`, `NameTaken`, `ReservedName` | a name is taken or reserved; a database already connected | [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `InUse` | held: running Sandboxes, processes with the Store open, Stores on a machine | [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
 | `Busy` | another operation runs on the entity (`detail {entity, phase, op}`), no daemon connection came free, or a Store's writable open met SQLite's busy lock before any effect (the open wrote nothing, so the caller may repeat the call); nothing was attempted | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs), [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs), [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) |
@@ -45,7 +47,7 @@ front ends carry it unchanged.
 | `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
 | `StaleSandbox`, `NoStore`, `Unauthorized`, `UnknownMethod` | a saved daemon not ready; a Store file missing where it should be; a Sandbox record not owned by this user or not private; an operation no one serves | [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs), [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs), [`files.rs`](../../../../control/crates/layerfs-sandbox/src/files.rs) |
 | `Failed` | tried and did not happen, or no code of its own (`outcome::failed`); whatever exists is kept | [`outcome.rs`](../../../../control/crates/layerfs-home/src/outcome.rs) |
-| `Unknown` | the outcome is not known | [Uncertain outcomes](#uncertain-outcomes) |
+| `Unknown` | the outcome is not known; a GC call names its durable operation (`detail {entity, phase, op}`, with `phase`/`op` null when none is known) | [Uncertain outcomes](#uncertain-outcomes) |
 
 A daemon refusal of a Workspace call carries the daemon's `ControlCode` as
 its code (`Busy`, `HeadMoved`, `Missing`, `Capacity`, `Invalid`, `Failed`,
@@ -96,7 +98,7 @@ The CLI refuses a wrong command line itself, with exit 2, before any call
 
 | Code | Outcome | Source |
 | --- | --- | --- |
-| `Unknown` | may have happened. Every call is one attempt; nothing is resent. Read state with `list`, `get` or `status` before acting again | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `lost`, `answer`; [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) `retain`; [`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) |
+| `Unknown` | may have happened. Every call is one attempt; nothing is resent. A GC call's detail names its entity and, when one is known, its durable op. Read state with `list`, `get` or `status` before acting again | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `lost`, `answer`; [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) `retain`; [`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) |
 | `Unresolved` | an earlier `Unknown` on this entity stands; this call did nothing | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) `blocks` |
 | daemon `Unknown` | a Workspace operation's outcome is uncertain at the daemon | [`control_types.rs`](../../../../engine/crates/layerfs-bridge/src/control_types.rs) `ControlCode::Unknown` |
 | `Failed` with `attempted: true` after a daemon exchange | uncertain, though the code is `Failed`: a lost daemon reply is not mapped to `Unknown` | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `operation` |
@@ -126,18 +128,18 @@ over [`Events`](../../../../control/crates/layerfs-home/src/events.rs):
 it came, `output(stream, bytes)` sends `{ stream, bytes }`. Events are sent on
 the call's own thread, before it returns.
 
-Nine calls declare the shared `PROGRESS` option (`on_progress`; CLI
+Twelve calls declare the shared `PROGRESS` option (`on_progress`; CLI
 `--progress`) in [`calls/table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs):
-`project.init`, `project.export`, `store.push`, `store.pull`,
-`backup.create`, `backup.restore`, `machine.start`, `machine.create` and
-`workspace.exec`. `workspace.exec` alone also declares the `stdout` and
+`project.init`, `project.export`, `store.push`, `store.pull`, `store.compact`,
+`backup.create`, `backup.restore`, `machine.start`, `machine.create`,
+`machine.load`, `sandbox.create` and `workspace.exec`. `workspace.exec` alone also declares the `stdout` and
 `stderr` functions. A function never crosses into the library:
 [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs)
 refuses one as a value.
 
 | Shape | Calls | Source |
 | --- | --- | --- |
-| `{ phase, done, total }` | `project.init`, `store.push`, `store.pull` | [`sqlite/family.rs`](../../../../control/crates/layerfs-store/src/sqlite/family.rs) `progress` |
+| `{ phase, done, total }` | `project.init`, `store.push`, `store.pull`, `store.compact` | [`sqlite/family.rs`](../../../../control/crates/layerfs-store/src/sqlite/family.rs) `progress` |
 | `{ phase, files, directories, symlinks, bytes, done, total }` | `project.export` | [`project/export/writer.rs`](../../../../control/crates/layerfs-store/src/project/export/writer.rs) `phase_event` |
 | `{ phase, done, total, pieces }` | `backup.create`, `backup.restore` | [`backup/progress.rs`](../../../../control/crates/layerfs-store/src/backup/progress.rs) |
 | `{ exec: { id } }`, once, before the command starts | `workspace.exec` | [`workspace/exec.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/exec.rs) |
@@ -148,6 +150,7 @@ refuses one as a value.
 | --- | --- |
 | `project.init` | `check`, `send` (worker Stores only: first `done` 0, then one per 8 MiB of tree records, last `done == total`), `install`, `record` |
 | `store.push`, `store.pull` | `check`, `snapshot` (marker, then byte counts), `send` (8 MiB chunks, [`steps.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) `CHUNK`), `verify` (marker, then byte counts), `install`, `record`, `retire` |
+| `store.compact` | SQLite: `mark`, `build`, `verify`, `install`; PostgreSQL: `mark`, `build`, `swap`, `cleanup`. One event as each phase starts, with null counts; a run with nothing to rebuild sends `mark` alone. The SQLite settle (`cleanup` in `store.status`) is inside `install` |
 | `project.export` | `prepare`, `export` (first at zero, then at most one per 200 ms, last at the final counts), `finalize` (after the staging folder is renamed onto the destination) |
 | `backup.create` | `check`, `snapshot`, `send` (worker Stores only), `check`, `hash`, `upload` |
 | `backup.restore` | `check`, `download`, `verify`, `install` |

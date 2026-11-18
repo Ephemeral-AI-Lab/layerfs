@@ -89,13 +89,13 @@ enum RunRoot {
 }
 
 /// A PostgreSQL Store's `postgresql` argument for a Sandbox on `machine`
-/// (#535 §7.4): the URL the machine's attachment names, else the record's,
+/// (#535 §7.4): the URL the machine's own connection names, else the record's,
 /// with its password, resolved here in the caller, with a loopback host
 /// rewritten to the machine's alias or refused
 /// (`layerfs_machine::platform::reach`). It travels only in the one request that runs
 /// the call and is never written to a record.
 /// With it, what a failed reach check tells a user to check on that
-/// machine's platform, if anything. `store.attach` builds its check's
+/// machine's platform, if anything. `store.update` and `store.status` build their check's
 /// argument here too.
 pub fn reached(
     home: &Path,

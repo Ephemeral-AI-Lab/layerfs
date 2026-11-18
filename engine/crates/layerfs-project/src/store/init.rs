@@ -1,9 +1,10 @@
 //! Host Init and original handoff/failure custody.
 use crate as layerfs_project;
+use crate::init::init_unknown_state;
 use layerfs_bridge::provision::{check_destination, ProviderKind, StoreManifest, StoreProfile};
 use layerfs_history::{
-    BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig,
-    HistoryError, HistoryName, InitStatistics, LayerStackId,
+    error::NameTakenState, BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryCatalog,
+    HistoryCatalogConfig, HistoryError, HistoryName, InitStatistics, LayerStackId,
 };
 use layerfs_persistence::{
     PersistenceConfig, SealedStore, SqliteAcquisitionSchema, SqliteHandles,
@@ -77,9 +78,10 @@ pub enum InitError {
     Project(ProjectError),
     /// First Branch publication.
     History(HistoryError),
-    /// Adding a project (#506): the Store already has a project of that
-    /// name; nothing was written.
-    Exists,
+    /// Adding a project (#506): the Store still holds that project name.
+    /// It is `NameTaken` whether the holder is live, retired or deleted;
+    /// nothing was written.
+    NameTaken(Box<NameTakenState>),
     /// Adding a project (#506): the Store was made without the acquisition
     /// tables (schema versions 16 to 18), refused before anything was
     /// scanned or written. LayerFS adds no tables to an existing Store.
@@ -107,9 +109,9 @@ pub(crate) fn initialize(
     let mut initialized = None;
     let mut branch = None;
     let result = (|| {
-        if request.store.sqlite_profile != SqlitePersistenceProfile::Disposable {
+        if !request.store.sqlite_profile.permitted() {
             return Err(InitError::Manifest(
-                "explicit Disposable Store profile required",
+                "explicit Normal or Disposable Store profile required",
             ));
         }
         check_destination(
@@ -152,7 +154,11 @@ pub(crate) fn initialize(
                     name: request.branch_name.clone(),
                     source,
                 })
-                .map_err(InitError::History)?,
+                .map_err(|error| {
+                    InitError::History(
+                        error.with_unknown(init_unknown_state(request.stack_name.as_str(), None)),
+                    )
+                })?,
         );
         let totals = handles.history.statistics().map_err(InitError::History)?;
         let counts = counters.read();
@@ -179,7 +185,9 @@ pub(crate) fn initialize(
                 locator: request.locator.clone(),
                 profile: match request.store.sqlite_profile {
                     SqlitePersistenceProfile::Durable => StoreProfile::Durable,
-                    SqlitePersistenceProfile::Disposable => StoreProfile::Disposable,
+                    SqlitePersistenceProfile::Disposable | SqlitePersistenceProfile::Normal => {
+                        StoreProfile::Disposable
+                    }
                 },
                 binding: request.catalog.binding_key.clone(),
                 cursor_key: request.catalog.cursor_key,
@@ -252,8 +260,7 @@ impl ProjectApi {
     /// empty Store with the acquisition tables projects are added through
     /// (#533 step 10b), in one transaction. An existing schema is refused
     /// `Persistence(Refused { status: "schema exists" })` with nothing
-    /// written; a build without the `postgresql` feature refuses
-    /// `Persistence(BackendUnavailable)`.
+    /// written.
     pub fn create_postgresql_store(
         &self,
         request: super::live::CreateRequest,
@@ -263,8 +270,8 @@ impl ProjectApi {
     }
     /// Imports a folder as a new project of the live Store (#506), through
     /// its admission and writer lane; the Store is neither sealed nor
-    /// replaced. `request.store` is a SQLite file or, built with the
-    /// `postgresql` feature, a PostgreSQL schema made by
+    /// replaced. `request.store` is a SQLite file or a
+    /// PostgreSQL schema made by
     /// [`ProjectApi::create_postgresql_store`] (#533 step 10b).
     /// `counters` follow it as for [`ProjectApi::init_observed`].
     pub fn add_project(

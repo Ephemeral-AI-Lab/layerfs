@@ -16,3 +16,6 @@ pub use super::owner::{
 };
 #[doc(hidden)]
 pub use super::retained::{RetainedFailure, RetainedFailures, RetainedSnapshot, LIMIT, TTL};
+
+#[doc(hidden)]
+pub use crate::operator::workspace::changes_of;

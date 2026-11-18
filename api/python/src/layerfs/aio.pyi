@@ -6,6 +6,12 @@ from os import PathLike
 from ._values import JSON, Content, Output, Progress, Result, Scope, Size
 from ._errors import LayerFSError as LayerFSError
 
+class AsyncHomeFamily:
+    async def init(self, *, log_tag: str | None = None) -> Result:
+        """create this home, or convert an older one; a current home is left as it is"""
+    async def get(self, *, log_tag: str | None = None) -> Result:
+        """the home's state, and the Linux bundle and daemon this build would use; changes nothing"""
+
 class AsyncProjectFamily:
     async def init(
         self,
@@ -47,8 +53,10 @@ class AsyncProjectFamily:
         log_tag: str | None = None,
     ) -> Result:
         """export a project's snapshot from its Store to a local folder"""
-    async def remove(self, project: str, *, log_tag: str | None = None) -> Result:
-        """remove one project from its Store"""
+    async def delete(self, project: str, *, log_tag: str | None = None) -> Result:
+        """retire one project in its Store and remove its home entry"""
+    async def remove_file(self, project: str, path: str, *, log_tag: str | None = None) -> Result:
+        """hide one absolute path from every node at or below its marker frontier"""
 
 class AsyncBranchFamily:
     async def list(
@@ -130,6 +138,8 @@ class AsyncBranchFamily:
         log_tag: str | None = None,
     ) -> Result:
         """files that differ between two Branches' heads"""
+    async def remove(self, project: str, branch: str, *, log_tag: str | None = None) -> Result:
+        """soft-remove one Branch; its name stays taken until compaction"""
 
 class AsyncCommitFamily:
     async def list(
@@ -468,6 +478,8 @@ class AsyncMachineFamily:
         """a machine's live state, free disk and tool version"""
     async def stats(self, machine: str, *, log_tag: str | None = None) -> Result:
         """a machine's observed processors, memory and data disk, its Stores' sizes and live Sandboxes"""
+    async def space(self, machine: str, *, log_tag: str | None = None) -> Result:
+        """where a machine's data disk goes: its Stores, Sandboxes, images and logs, and what is not LayerFS's"""
     async def files(
         self,
         machine: str,
@@ -526,8 +538,8 @@ class AsyncStoreFamily:
         """every Store, from the home's records"""
     async def get(self, name: str, *, log_tag: str | None = None) -> Result:
         """a Store's record"""
-    async def status(self, name: str, *, log_tag: str | None = None) -> Result:
-        """a Store's live state"""
+    async def status(self, name: str, *, machine: str | None = None, log_tag: str | None = None) -> Result:
+        """a Store's live state; with a machine, whether it reaches a PostgreSQL Store"""
     async def stats(self, name: str, *, log_tag: str | None = None) -> Result:
         """Store-wide publication and allocation counters"""
     async def create(self, name: str, *, log_tag: str | None = None) -> Result:
@@ -541,19 +553,19 @@ class AsyncStoreFamily:
         synchronous_commit: str | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """attach a PostgreSQL database as a Store"""
-    async def attach(
+        """connect a PostgreSQL database as a Store"""
+    async def update(
         self,
         name: str,
-        machine: str,
         *,
+        machine: str | None = None,
         url: str | None = None,
         password: str | None = None,
+        synchronous_commit: str | None = None,
+        clear: bool | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """let a machine run Sandboxes of a PostgreSQL Store, after checking it reaches the server"""
-    async def detach(self, name: str, machine: str, *, log_tag: str | None = None) -> Result:
-        """stop a machine running Sandboxes of a PostgreSQL Store"""
+        """change a PostgreSQL Store's connection, or the one a machine alone dials"""
     async def push(
         self,
         name: str,
@@ -573,6 +585,14 @@ class AsyncStoreFamily:
         """bring a sqlite Store from its machine to native"""
     async def remove(self, name: str, *, log_tag: str | None = None) -> Result:
         """delete a sqlite Store with every project in it"""
+    async def compact(
+        self,
+        name: str,
+        *,
+        on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
+    ) -> Result:
+        """reclaim dead bytes from one Store"""
     async def disconnect(self, name: str, *, log_tag: str | None = None) -> Result:
         """forget a PostgreSQL Store; its data stays"""
 
@@ -656,6 +676,7 @@ class AsyncDoctorFamily:
         """remove one leftover `layerfs doctor` listed, under its guard"""
 
 class AsyncClient:
+    home: AsyncHomeFamily
     project: AsyncProjectFamily
     branch: AsyncBranchFamily
     commit: AsyncCommitFamily
@@ -671,6 +692,7 @@ class AsyncClient:
 
 def client(home: str | PathLike[str] | None = None, scope: Scope | Mapping[str, str | None] | None = None) -> AsyncClient: ...
 
+home: AsyncHomeFamily
 project: AsyncProjectFamily
 branch: AsyncBranchFamily
 commit: AsyncCommitFamily
@@ -683,4 +705,4 @@ backup: AsyncBackupFamily
 logs: AsyncLogsFamily
 doctor: AsyncDoctorFamily
 
-__all__ = ['AsyncClient', 'LayerFSError', 'client', 'project', 'branch', 'commit', 'file', 'sandbox', 'workspace', 'machine', 'store', 'backup', 'logs', 'doctor']
+__all__ = ['AsyncClient', 'LayerFSError', 'client', 'home', 'project', 'branch', 'commit', 'file', 'sandbox', 'workspace', 'machine', 'store', 'backup', 'logs', 'doctor']

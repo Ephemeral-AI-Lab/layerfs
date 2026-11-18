@@ -388,16 +388,24 @@ export interface MachineUpdateOptions extends CallOptions {
   daemon?: string;
 }
 
+/** Options of `store.status`; an unknown option is refused. */
+export interface StoreStatusOptions extends CallOptions {
+  machine?: string;
+}
+
 /** Options of `store.connect`; an unknown option is refused. */
 export interface StoreConnectOptions extends CallOptions {
   password?: string;
   synchronous_commit?: string;
 }
 
-/** Options of `store.attach`; an unknown option is refused. */
-export interface StoreAttachOptions extends CallOptions {
+/** Options of `store.update`; an unknown option is refused. */
+export interface StoreUpdateOptions extends CallOptions {
+  machine?: string;
   url?: string;
   password?: string;
+  synchronous_commit?: string;
+  clear?: boolean;
 }
 
 /** Options of `store.push`; an unknown option is refused. */
@@ -407,6 +415,11 @@ export interface StorePushOptions extends CallOptions {
 
 /** Options of `store.pull`; an unknown option is refused. */
 export interface StorePullOptions extends CallOptions {
+  on_progress?: ProgressHandler;
+}
+
+/** Options of `store.compact`; an unknown option is refused. */
+export interface StoreCompactOptions extends CallOptions {
   on_progress?: ProgressHandler;
 }
 
@@ -453,6 +466,13 @@ export interface LogsSandboxOptions extends CallOptions {
   limit?: WholeNumber;
 }
 
+export interface HomeFamily {
+  /** create this home, or convert an older one; a current home is left as it is */
+  init(options?: CallOptions): Promise<Result>;
+  /** the home's state, and the Linux bundle and daemon this build would use; changes nothing */
+  get(options?: CallOptions): Promise<Result>;
+}
+
 export interface ProjectFamily {
   /** import a host folder as a new project into an existing Store */
   init(project: string, folder: string, options?: ProjectInitOptions): Promise<Result>;
@@ -467,8 +487,10 @@ export interface ProjectFamily {
   stats(project: string, branch?: string | null, commit?: string | null, options?: CallOptions): Promise<Result>;
   /** export a project's snapshot from its Store to a local folder */
   export(project: string, destination: string, options?: ProjectExportOptions): Promise<Result>;
-  /** remove one project from its Store */
-  remove(project: string, options?: CallOptions): Promise<Result>;
+  /** retire one project in its Store and remove its home entry */
+  delete(project: string, options?: CallOptions): Promise<Result>;
+  /** hide one absolute path from every node at or below its marker frontier */
+  remove_file(project: string, path: string, options?: CallOptions): Promise<Result>;
 }
 
 export interface BranchFamily {
@@ -490,6 +512,8 @@ export interface BranchFamily {
   publish(project: string, branch: string, commit?: string | null, options?: BranchPublishOptions): Promise<Result>;
   /** files that differ between two Branches' heads */
   diff(project: string, from_branch: string, to_branch: string, options?: BranchDiffOptions): Promise<Result>;
+  /** soft-remove one Branch; its name stays taken until compaction */
+  remove(project: string, branch: string, options?: CallOptions): Promise<Result>;
 }
 
 export interface CommitFamily {
@@ -589,6 +613,8 @@ export interface MachineFamily {
   status(name: string, options?: CallOptions): Promise<Result>;
   /** a machine's observed processors, memory and data disk, its Stores' sizes and live Sandboxes */
   stats(machine: string, options?: CallOptions): Promise<Result>;
+  /** where a machine's data disk goes: its Stores, Sandboxes, images and logs, and what is not LayerFS's */
+  space(machine: string, options?: CallOptions): Promise<Result>;
   /** a machine's files: its LayerFS folders by role, or a folder or file of the machine */
   files(machine: string, options: MachineFilesOptions): Promise<Result>;
   files(machine: string, path?: string | null, options?: MachineFilesOptions): Promise<Result>;
@@ -609,24 +635,24 @@ export interface StoreFamily {
   list(options?: CallOptions): Promise<Result>;
   /** a Store's record */
   get(name: string, options?: CallOptions): Promise<Result>;
-  /** a Store's live state */
-  status(name: string, options?: CallOptions): Promise<Result>;
+  /** a Store's live state; with a machine, whether it reaches a PostgreSQL Store */
+  status(name: string, options?: StoreStatusOptions): Promise<Result>;
   /** Store-wide publication and allocation counters */
   stats(name: string, options?: CallOptions): Promise<Result>;
   /** an empty sqlite Store on native */
   create(name: string, options?: CallOptions): Promise<Result>;
-  /** attach a PostgreSQL database as a Store */
+  /** connect a PostgreSQL database as a Store */
   connect(name: string, url: string, options?: StoreConnectOptions): Promise<Result>;
-  /** let a machine run Sandboxes of a PostgreSQL Store, after checking it reaches the server */
-  attach(name: string, machine: string, options?: StoreAttachOptions): Promise<Result>;
-  /** stop a machine running Sandboxes of a PostgreSQL Store */
-  detach(name: string, machine: string, options?: CallOptions): Promise<Result>;
+  /** change a PostgreSQL Store's connection, or the one a machine alone dials */
+  update(name: string, options?: StoreUpdateOptions): Promise<Result>;
   /** send a sqlite Store from native to a machine */
   push(name: string, machine: string, options?: StorePushOptions): Promise<Result>;
   /** bring a sqlite Store from its machine to native */
   pull(name: string, options?: StorePullOptions): Promise<Result>;
   /** delete a sqlite Store with every project in it */
   remove(name: string, options?: CallOptions): Promise<Result>;
+  /** reclaim dead bytes from one Store */
+  compact(name: string, options?: StoreCompactOptions): Promise<Result>;
   /** forget a PostgreSQL Store; its data stays */
   disconnect(name: string, options?: CallOptions): Promise<Result>;
 }
@@ -664,8 +690,8 @@ export interface DoctorFamily {
 }
 
 export interface Client {
-  readonly home: string | undefined;
   readonly scope: Scope | undefined;
+  readonly home: HomeFamily;
   readonly project: ProjectFamily;
   readonly branch: BranchFamily;
   readonly commit: CommitFamily;
@@ -695,6 +721,7 @@ export namespace doctor {
 /** Closes every Store this process holds open with no call running; answers how many. Outside the call table. */
 export function close(): number;
 
+export const home: HomeFamily;
 export const project: ProjectFamily;
 export const branch: BranchFamily;
 export const commit: CommitFamily;

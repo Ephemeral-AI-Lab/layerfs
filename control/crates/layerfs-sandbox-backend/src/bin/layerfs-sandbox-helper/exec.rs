@@ -1,7 +1,8 @@
 //! The exec stage: one command inside a running Sandbox. The helper opens
-//! the Sandbox's cgroup (and the command's, below), then forks itself into
-//! the Sandbox's group (`clone3` with `CLONE_INTO_CGROUP`,
-//! `local::OneThread`): the child does the work, inside the group, so the
+//! the group `--cgroup` names, the leaf of the Sandbox's cgroup (or the
+//! Sandbox's own group for a Sandbox an earlier build started), and the
+//! command's, below, then forks itself into the first (`clone3` with
+//! `CLONE_INTO_CGROUP`, `local::OneThread`): the child does the work, inside the group, so the
 //! Sandbox's `cgroup.kill` ends it and its stop finds the group empty only
 //! once it is gone; the parent, outside it, only waits and ends as the child
 //! did. No process ever moves between groups: a move (a pid written to
@@ -18,7 +19,7 @@
 //! With `--command-cgroup <group>` (a command with its own group,
 //! layerfs-project#113) the command is created inside that group, opened
 //! before entering the namespaces; with none it is created in the
-//! Sandbox's. The helper itself is never in the command's group, so a
+//! helper's. The helper itself is never in the command's group, so a
 //! cancel's signals and `cgroup.kill` reach the command and what it
 //! started, never the helper, which then reports how the command ended; a
 //! command that cannot be created there never runs. Once the command runs

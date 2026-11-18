@@ -159,13 +159,14 @@ waits at most 10 s; other operations wait as long as they run
 | --- | --- |
 | `worker.ping` | `{kind: "worker", version, pid}`; `args.capacity` adds `free_disk` of the root's filesystem |
 | `store.call` | one Store method on `store/<name>/store.sqlite` under the root, holding the Store's lease there |
+| `store.compact` | none: there is no compaction operation. A remote sqlite Store's `store.compact` is refused `Unsupported` before the worker is dialled (spec S6 deviation D5) |
 | `store.file` | one step of a Store push, pull, remove, stat or backup, with `progress` events for hashing steps |
-| `store.reach` | `store.attach`'s check of this machine's connection to a PostgreSQL Store |
+| `store.reach` | the check of this machine's connection to a PostgreSQL Store, for `store.update --machine` and `store.status --machine` |
 | `store.diagnose`, `doctor.sandbox` | doctor's read-only observations; `doctor.sandbox` with `leftovers: true` is the bounded walk for what interrupted operations left under the root |
 | `doctor.fix` | removes one such leftover, named by kind and name (never a path), under its guard ([Checks](../doctor/checks.md#leftovers)) |
 | `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`, decoded into its typed request first |
 | `inspect` | one read-only inspect request `{ kind, .. }` (a window of `worker.log` or of a Sandbox's `daemon.log`, overlay file sizes with the Sandbox's process and usage, the machine's stats, which Sandboxes' daemons run) on a helper thread, two at a time, answered within 6 s; the operation adds `worker: { version, pid, started_at, protocol, bundle }` to the request ([Inspection](../sandboxes/inspect.md)) |
-| `project.stage`, `project.init`, `project.export`, `project.remove` | write one part of a folder copy; add it as a project; stream a pinned snapshot back; drop a project |
+| `project.stage`, `project.init`, `project.export`, `project.delete`, `project.delete.admit`, `project.delete.entry`, `project.delete.release` | write one part of a folder copy; add it as a project; stream a pinned snapshot back; admit, mark, remove the entry of and release a project's deletion |
 | anything else | `InvalidInput`, "the worker has no operation …" |
 
 The worker uses its own root as the home and the Store file under it as

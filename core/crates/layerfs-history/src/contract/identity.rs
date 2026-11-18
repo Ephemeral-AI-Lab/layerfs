@@ -264,7 +264,8 @@ authority_identity!(BranchId, BRANCH_BYTES, BRANCH_TAG);
 
 impl BranchId {
     /// The identity the SDK gives a Branch it creates by name. Branch names
-    /// are unique in their stack and are never reused, so the name decides.
+    /// are unique in their stack and are never reused while their rows exist,
+    /// so the name decides.
     pub fn named(stack: LayerStackId, name: &HistoryName) -> Self {
         let mut hasher = blake3::Hasher::new();
         hasher.update(b"layerfs/sdk-branch/v1\0");

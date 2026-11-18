@@ -59,7 +59,7 @@ lfs.file.read(p, b, path, {..})
 | Values out | a whole number as `number` when safe, else `bigint`; `{ base64 }` → `Buffer`, so exec output is a `string` or a `Buffer` per event. A map whose only key is `base64` with base64 text is bytes both ways | [`values.js`](../../../../api/node/src/values.js) |
 | Outside the table | `doctor({ home, target?, name?, timeout?, quick?, write_test? })` off the JS thread; `close()` synchronous, answering how many Stores it closed | [`index.js`](../../../../api/node/src/index.js) |
 | Loading | the file `LAYERFS_NATIVE` names, else `layerfs.node` beside `src`; nothing else is tried. A missing or unloadable file throws one error naming the path, `platform/arch`, the Node version and how to build | [`native.js`](../../../../api/node/src/native.js) |
-| Build | `npm --prefix api run build:native` runs `cargo +1.85.1 build --offline --locked [--release] -p layerfs-node` (`--debug` for dev; `--features postgresql,tls` opt-in) and copies the result to `api/node/layerfs.node`, or `LAYERFS_NATIVE_OUTPUT`, through a staged rename. Only `darwin` and `linux`; a set `CARGO_BUILD_TARGET` or a target outside the worktree is refused | [`build-native.mjs`](../../../../api/scripts/build-native.mjs) |
+| Build | `npm --prefix api run build:native` runs `cargo +1.85.1 build --offline --locked [--release] -p layerfs-node` (`--debug` for dev; `--features tls` opt-in; PostgreSQL is always built) and copies the result to `api/node/layerfs.node`, or `LAYERFS_NATIVE_OUTPUT`, through a staged rename. Only `darwin` and `linux`; a set `CARGO_BUILD_TARGET` or a target outside the worktree is refused | [`build-native.mjs`](../../../../api/scripts/build-native.mjs) |
 | Typings | `index.d.ts` from the table (`npm --prefix api run gen:types`; `--check` compares): per family an interface, positionals typed by kind (`int` → `number \| bigint`, `size` → `number \| bigint \| string`, `content` → `string \| Uint8Array`, `json` → `Value`), options extending `CallOptions` (`log_tag`); every call answers `Promise<Result>`, since the table has no result schema | [`gen-node-types.mjs`](../../../../api/scripts/gen-node-types.mjs) |
 
 The package is an ES module, MIT, for Node 22 or later (exact whole numbers
@@ -70,7 +70,7 @@ links it and holds the build and type scripts.
 
 | Test | Checks |
 | --- | --- |
-| [`calls.mjs`](../../../../api/node/test/calls.mjs) | eleven families, every function; required-argument refusals; a Store, Init with progress, file and Branch calls, bytes, a folder scope; the call log's `client` and `log_tag` |
+| [`calls.mjs`](../../../../api/node/test/calls.mjs) | twelve families, every function; required-argument refusals; a Store, Init with progress, file and Branch calls, bytes, a folder scope; the call log's `client` and `log_tag` |
 | [`shell.mjs`](../../../../api/node/test/shell.mjs) | the command and the package refuse every call alike; a live Store read both ways (needs `target/debug/layerfs`) |
 | [`events.mjs`](../../../../api/node/test/events.mjs), [`progress.mjs`](../../../../api/node/test/progress.mjs) | handler failures, delivery before settling, exec output through functions and `stream: true` (exec half needs `LAYERFS_DAEMON`) |
 | [`values.mjs`](../../../../api/node/test/values.mjs) | exact `bigint`, refused values, bytes and the one-key map |
