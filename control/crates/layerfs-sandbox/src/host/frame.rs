@@ -78,8 +78,10 @@ fn fields(call: &Call, sent: &Message, sandbox: Option<&str>) -> Vec<(&'static s
                 fields.push(("held", SdkValue::List(held)));
             }
         }
-        Call::ListWorkspaces { path } | Call::Status { path } => {
-            fields.extend(path.as_deref().map(|p| ("path", text(p))))
+        Call::ListWorkspaces { path } => fields.extend(path.as_deref().map(|p| ("path", text(p)))),
+        Call::Status { path, under } => {
+            fields.extend(path.as_deref().map(|p| ("path", text(p))));
+            fields.extend(under.as_deref().map(|u| ("under", text(u))));
         }
         // a bounded operator read: it sends no field of its own
         Call::Capacity => {}
@@ -91,7 +93,9 @@ fn fields(call: &Call, sent: &Message, sandbox: Option<&str>) -> Vec<(&'static s
             path,
             directory,
             command,
-            spool,
+            cwd,
+            env,
+            stdin,
             exec_id,
             workspace,
             tag,
@@ -101,9 +105,12 @@ fn fields(call: &Call, sent: &Message, sandbox: Option<&str>) -> Vec<(&'static s
             fields.push(("command", opt(command)));
             fields.extend(message(sent).map(|m| ("message", m)));
             said = true;
-            if *spool {
-                fields.push(("spool", SdkValue::Bool(true)));
+            fields.extend(cwd.as_deref().map(|c| ("cwd", text(c))));
+            if !env.is_empty() {
+                let env = env.iter().map(|entry| text(entry)).collect();
+                fields.push(("env", SdkValue::List(env)));
             }
+            fields.extend(stdin.clone().map(|bytes| ("stdin", SdkValue::Bytes(bytes))));
             fields.extend(exec_id.as_deref().map(|id| ("execId", text(id))));
             fields.extend(workspace.as_deref().map(|w| ("workspace", text(w))));
             fields.extend(tag.as_deref().map(|t| ("tag", text(t))));
@@ -119,11 +126,16 @@ fn fields(call: &Call, sent: &Message, sandbox: Option<&str>) -> Vec<(&'static s
             fields.extend(grace_ms.map(|ms| ("graceMs", SdkValue::Int(ms))));
             fields.extend(workspace.as_deref().map(|w| ("workspace", text(w))));
         }
-        Call::Commit { path, force } => {
+        Call::Commit {
+            path,
+            force,
+            expected,
+        } => {
             fields.push(("path", opt(path)));
             fields.extend(message(sent).map(|m| ("message", m)));
             said = true;
             fields.extend(force.map(|f| ("force", SdkValue::Bool(f))));
+            fields.extend(expected.as_deref().map(|e| ("expected", text(e))));
         }
         Call::Unmount {
             path,
@@ -261,7 +273,21 @@ fn call(op: Op, more: &SdkValue) -> Call {
             path: text("path"),
             directory: text("directory"),
             command: text("command"),
-            spool: more.get_bool("spool"),
+            cwd: text("cwd"),
+            env: match more.get("env") {
+                Some(SdkValue::List(items)) => (items.iter())
+                    .filter_map(|item| match item {
+                        SdkValue::Text(entry) => Some(entry.clone()),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            },
+            stdin: match more.get("stdin") {
+                Some(SdkValue::Bytes(bytes)) => Some(bytes.clone()),
+                Some(SdkValue::Text(text)) => Some(text.clone().into_bytes()),
+                _ => None,
+            },
             exec_id: text("execId"),
             workspace: text("workspace"),
             tag: text("tag"),
@@ -274,6 +300,7 @@ fn call(op: Op, more: &SdkValue) -> Call {
         },
         Op::Commit => Call::Commit {
             path: text("path"),
+            expected: text("expected"),
             force: flag("force"),
         },
         Op::Unmount => Call::Unmount {
@@ -281,7 +308,10 @@ fn call(op: Op, more: &SdkValue) -> Call {
             discard: flag("discard"),
             force: flag("force"),
         },
-        Op::Status => Call::Status { path: text("path") },
+        Op::Status => Call::Status {
+            path: text("path"),
+            under: text("under"),
+        },
     }
 }
 

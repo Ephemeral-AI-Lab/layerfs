@@ -80,7 +80,7 @@ fn every_new_work_route_refuses_before_writes_or_worker_and_daemon_connections()
             Some(&home),
             "workspace.exec",
             SdkValue::map([
-                ("ws", SdkValue::text("box:one")),
+                ("workspace", SdkValue::text("box:one")),
                 ("command", SdkValue::text("true")),
             ]),
             &mut |_| {},

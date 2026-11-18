@@ -28,13 +28,6 @@
     "sandbox.remove",
     "sandbox.files",
     "sandbox.log",
-    "workspace.list",
-    "workspace.mount",
-    "workspace.exec",
-    "workspace.cancel",
-    "workspace.commit",
-    "workspace.unmount",
-    "workspace.status",
     "home.init",
     "home.leftovers",
     "home.prune",
@@ -56,8 +49,7 @@
     "file.revision": "file.history",
     "logs.sandbox": "sandbox.log",
     "project.remove_file": "project.hide_path",
-    "sandbox.close": "sandbox.remove",
-    "workspace.exec_cancel": "workspace.cancel"
+    "sandbox.close": "sandbox.remove"
   },
   "not_built": {
     "store.doctor": [

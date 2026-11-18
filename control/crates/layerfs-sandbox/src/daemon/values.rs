@@ -216,6 +216,26 @@ pub fn commit(reply: &CommitReply) -> Result<SdkValue, SdkRefusal> {
                     SdkValue::List(report.written.iter().map(SdkValue::text).collect()),
                 ),
                 ("truncated", SdkValue::Bool(report.truncated)),
+                // what the call answers flat beside the code (call surface
+                // 2.0): the head, the first 20 conflicting paths and their count
+                (
+                    "next",
+                    SdkValue::map([
+                        ("commit", head(report.head)),
+                        (
+                            "conflicts",
+                            SdkValue::List(
+                                (report.conflicts.iter().take(20))
+                                    .map(|conflict| SdkValue::text(&conflict.path))
+                                    .collect(),
+                            ),
+                        ),
+                        (
+                            "conflicts_count",
+                            SdkValue::Int(report.conflicts.len() as i64),
+                        ),
+                    ]),
+                ),
             ]),
         }),
     }

@@ -110,14 +110,14 @@
     {
       "call": "workspace.exec",
       "args": {
-        "ws": "box:one",
+        "workspace": "box:one",
         "command": "touch /must-not-run"
       }
     },
     {
       "call": "workspace.commit",
       "args": {
-        "ws": "box:one"
+        "workspace": "box:one"
       }
     },
     {

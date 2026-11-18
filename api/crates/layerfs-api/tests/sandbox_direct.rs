@@ -106,10 +106,11 @@ fn worker(endpoint: SocketAddr) -> (SocketAddr, Log) {
                 "workspace.exec" => SdkValue::map([(
                     "value",
                     SdkValue::map([
-                        ("kind", t("exit:0")),
-                        ("exitCode", SdkValue::Int(0)),
+                        ("exit_code", SdkValue::Int(0)),
                         ("stdout", t("")),
                         ("stderr", t("")),
+                        ("stdoutBytes", SdkValue::Int(0)),
+                        ("stderrBytes", SdkValue::Int(0)),
                     ]),
                 )]),
                 "sandbox.close" => SdkValue::map([(
@@ -247,7 +248,7 @@ fn ssh_is_refused_and_docker_goes_through_its_worker() {
     assert!(!dir.join("control.json").exists());
     let record = read_record(&dir.join("record.json")).unwrap().unwrap();
     assert!(record.get("daemon").is_none(), "{record:?}");
-    let (code, message) = call(&home, "workspace.status", &[("ws", t("d1:/w/x"))]).unwrap_err();
+    let (code, message) = call(&home, "workspace.status", &[("workspace", t("d1:x"))]).unwrap_err();
     assert_eq!(code, "Failed", "{message}");
     assert!(message.contains("stand-in worker refuses"), "{message}");
     assert_eq!(
