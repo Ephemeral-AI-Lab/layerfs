@@ -252,3 +252,17 @@ recommended option is taken, and each such choice is listed here.
   record through the machine; a run live there turns `broken`/`unresolved` into `busy` with its phase;
   `blocked` comes first while the machine is stopped. `store.operation` reads it the same way; on a
   stopped machine it is `not_checked` with `blocked_by`.
+
+## Conformance fixes (2026-11-19, review R3)
+
+Coordinator rulings on the R3 conformance review, applied to the rows by package FX.
+
+- **CF-1 `_count` examples** A `<list>_count` is set only beside a list cut at its first 20 (SCHEMA,
+  ruling R1 of the rollout). The long examples that showed a count beside an uncut list now show it
+  null: `backup disconnect`, `backup restore`, `branch merge`, `commit get`, the seven `file` writes,
+  `machine list`/`get`/`images`/`prune`/`stop`, `store list`/`get`/`connect`/`save-auth`/`auths`,
+  `store compact`, `workspace commit` and `workspace status`. A plain `machine stop` answers
+  `stopped_sandboxes` and `unknown_workspaces` null in its long form, as the shaper does.
+- **CF-2 Store reason `unsupported`** `store list` and `store get` add the reason `unsupported`: a Store
+  record of a kind this build cannot read is `broken` with that reason (a real state, as on a machine
+  and a Sandbox).

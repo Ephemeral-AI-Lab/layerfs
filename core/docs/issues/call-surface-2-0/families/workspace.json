@@ -473,7 +473,7 @@
      "the Branch had moved: {\"commit\":\"8d2e44f1\",\"merged\":true}",
      "a rule decided a path: {\"commit\":\"8d2e44f1\",\"merged\":true,\"overwritten\":[\"/package-lock.json\"]}"
     ],
-    "long": "{\"commit\":\"5c77a1d0\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"c41d77e2\",\"message\":\"fix login options\",\"created_at\":\"2026-11-18T09:16:59Z\",\"merged_from\":null,\"displaced\":null}"
+    "long": "{\"commit\":\"5c77a1d0\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"c41d77e2\",\"message\":\"fix login options\",\"created_at\":\"2026-11-18T09:16:59Z\",\"merged_from\":null,\"displaced\":null}"
    },
    "dropped": [
     {
@@ -652,7 +652,7 @@
      "the bound was hit: {\"changes\":[{\"path\":\"/node_modules\",\"change\":\"added\",\"type\":\"dir\"}],\"changes_count\":256,\"partial\":true}",
      "a Commit is running: {\"changes\":[{\"path\":\"/src/app.ts\",\"change\":\"modified\"}],\"state\":\"busy\",\"op\":{\"name\":\"commit\",\"phase\":\"publish\",\"started_at\":\"2026-11-18T09:16:59Z\"}}"
     ],
-    "long": "{\"changes\":[{\"path\":\"/src/app.ts\",\"change\":\"modified\",\"type\":\"file\"}],\"changes_count\":1,\"partial\":false,\"branch_moved\":false,\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"branch\":\"agent\",\"commit\":\"5c77a1d0\",\"base_layer\":\"a1e4c7d2\",\"branch_head\":\"5c77a1d0\",\"activity\":\"idle\",\"overlay\":{\"inode_count\":3,\"entry_count\":4},\"pending_merge\":false}"
+    "long": "{\"changes\":[{\"path\":\"/src/app.ts\",\"change\":\"modified\",\"type\":\"file\"}],\"changes_count\":null,\"partial\":false,\"branch_moved\":false,\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"branch\":\"agent\",\"commit\":\"5c77a1d0\",\"base_layer\":\"a1e4c7d2\",\"branch_head\":\"5c77a1d0\",\"activity\":\"idle\",\"overlay\":{\"inode_count\":3,\"entry_count\":4},\"pending_merge\":false}"
    },
    "dropped": [
     {

@@ -313,7 +313,7 @@
           "nothing to merge: {\"commit\":\"5c77a1d0\",\"unchanged\":true}",
           "a rule decided a path: {\"commit\":\"8d2e44f1\",\"overwritten\":[\"/package-lock.json\"]}"
         ],
-        "long": "{\"commit\":\"8d2e44f1\",\"unchanged\":false,\"fast_forward\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"merged\",\"branch\":\"agent\",\"parent\":\"5c77a1d0\",\"second_parent\":\"6f0a2b9c\",\"merge_base\":\"32ab9e01\",\"root\":\"c41d77e2\",\"units\":[],\"units_count\":0}"
+        "long": "{\"commit\":\"8d2e44f1\",\"unchanged\":false,\"fast_forward\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"merged\",\"branch\":\"agent\",\"parent\":\"5c77a1d0\",\"second_parent\":\"6f0a2b9c\",\"merge_base\":\"32ab9e01\",\"root\":\"c41d77e2\",\"units\":[],\"units_count\":null}"
       },
       "dropped": [
         {

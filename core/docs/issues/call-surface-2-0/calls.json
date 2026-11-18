@@ -2170,7 +2170,7 @@
        "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
        "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
       ],
-      "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
      },
      "dropped": [],
      "new_work": "`--mode` as octal text (`0644`, four digits, `0000` to `7777`) is new: today it is a whole number, 0 to 4095 (420 for 0644). `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
@@ -2270,7 +2270,7 @@
        "--replace-all: {\"commit\":\"12d1c0ff\",\"replaced\":3}",
        "the new text equals the old: {\"commit\":\"12d1c0ff\",\"unchanged\":true}"
       ],
-      "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"replaced\":1,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"replaced\":1,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
      },
      "dropped": [
       {
@@ -2365,7 +2365,7 @@
        "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
        "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
       ],
-      "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
      },
      "dropped": [],
      "new_work": "`--recursive` is new: today `rm` removes a folder with everything in it. Without the option a folder that is not empty is refused `InvalidInput`, with a `fix` that adds `--recursive`. `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
@@ -2449,7 +2449,7 @@
        "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
        "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
       ],
-      "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
      },
      "dropped": [],
      "new_work": "`--mode` as octal text (`0644`, four digits, `0000` to `7777`) is new: today it is a whole number, 0 to 4095 (420 for 0644). `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
@@ -2533,7 +2533,7 @@
        "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
        "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
       ],
-      "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
      },
      "dropped": [
       {
@@ -2628,7 +2628,7 @@
        "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
        "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
       ],
-      "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
      },
      "dropped": [
       {
@@ -2718,7 +2718,7 @@
        "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
        "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
       ],
-      "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
      },
      "dropped": [],
      "new_work": "A change's fields follow the single calls' new names (`from`, `to`, `old_string`, `new_string`, `replace_all`, `recursive`): today they are `from_path`, `to_path`, `old` and `new`, and `from` and `to` are refused. A folder scope checks a change's path fields by name, so its list of names moves with them. A change's `mode` is octal text, as `--mode` is; today it is a whole number. `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
@@ -4103,7 +4103,7 @@
        "the Branch had moved: {\"commit\":\"8d2e44f1\",\"merged\":true}",
        "a rule decided a path: {\"commit\":\"8d2e44f1\",\"merged\":true,\"overwritten\":[\"/package-lock.json\"]}"
       ],
-      "long": "{\"commit\":\"5c77a1d0\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"c41d77e2\",\"message\":\"fix login options\",\"created_at\":\"2026-11-18T09:16:59Z\",\"merged_from\":null,\"displaced\":null}"
+      "long": "{\"commit\":\"5c77a1d0\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"c41d77e2\",\"message\":\"fix login options\",\"created_at\":\"2026-11-18T09:16:59Z\",\"merged_from\":null,\"displaced\":null}"
      },
      "dropped": [
       {
@@ -4280,7 +4280,7 @@
        "the bound was hit: {\"changes\":[{\"path\":\"/node_modules\",\"change\":\"added\",\"type\":\"dir\"}],\"changes_count\":256,\"partial\":true}",
        "a Commit is running: {\"changes\":[{\"path\":\"/src/app.ts\",\"change\":\"modified\"}],\"state\":\"busy\",\"op\":{\"name\":\"commit\",\"phase\":\"publish\",\"started_at\":\"2026-11-18T09:16:59Z\"}}"
       ],
-      "long": "{\"changes\":[{\"path\":\"/src/app.ts\",\"change\":\"modified\",\"type\":\"file\"}],\"changes_count\":1,\"partial\":false,\"branch_moved\":false,\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"branch\":\"agent\",\"commit\":\"5c77a1d0\",\"base_layer\":\"a1e4c7d2\",\"branch_head\":\"5c77a1d0\",\"activity\":\"idle\",\"overlay\":{\"inode_count\":3,\"entry_count\":4},\"pending_merge\":false}"
+      "long": "{\"changes\":[{\"path\":\"/src/app.ts\",\"change\":\"modified\",\"type\":\"file\"}],\"changes_count\":null,\"partial\":false,\"branch_moved\":false,\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"branch\":\"agent\",\"commit\":\"5c77a1d0\",\"base_layer\":\"a1e4c7d2\",\"branch_head\":\"5c77a1d0\",\"activity\":\"idle\",\"overlay\":{\"inode_count\":3,\"entry_count\":4},\"pending_merge\":false}"
      },
      "dropped": [
       {
@@ -4633,7 +4633,7 @@
        "nothing to merge: {\"commit\":\"5c77a1d0\",\"unchanged\":true}",
        "a rule decided a path: {\"commit\":\"8d2e44f1\",\"overwritten\":[\"/package-lock.json\"]}"
       ],
-      "long": "{\"commit\":\"8d2e44f1\",\"unchanged\":false,\"fast_forward\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"merged\",\"branch\":\"agent\",\"parent\":\"5c77a1d0\",\"second_parent\":\"6f0a2b9c\",\"merge_base\":\"32ab9e01\",\"root\":\"c41d77e2\",\"units\":[],\"units_count\":0}"
+      "long": "{\"commit\":\"8d2e44f1\",\"unchanged\":false,\"fast_forward\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"merged\",\"branch\":\"agent\",\"parent\":\"5c77a1d0\",\"second_parent\":\"6f0a2b9c\",\"merge_base\":\"32ab9e01\",\"root\":\"c41d77e2\",\"units\":[],\"units_count\":null}"
      },
      "dropped": [
       {
@@ -4982,7 +4982,7 @@
       "short": [
        "{\"branch\":\"agent\",\"parent\":\"12d1c0ff\",\"message\":\"fix login options\"}"
       ],
-      "long": "{\"branch\":\"agent\",\"parent\":\"12d1c0ff\",\"message\":\"fix login options\",\"commit\":\"5c77a1d0\",\"second_parent\":null,\"base\":\"32ab9e01\",\"root\":\"c41d77e2\",\"via\":\"workspace\",\"created_at\":\"2026-11-18T09:16:59Z\",\"merged_from\":null,\"displaced\":null,\"overwritten\":[],\"overwritten_count\":0,\"units\":[],\"source_branch\":null,\"source_commit\":null,\"size\":52428800,\"new_canonical_bytes\":4096,\"new_stored_bytes\":1890,\"new_metadata_bytes\":412}"
+      "long": "{\"branch\":\"agent\",\"parent\":\"12d1c0ff\",\"message\":\"fix login options\",\"commit\":\"5c77a1d0\",\"second_parent\":null,\"base\":\"32ab9e01\",\"root\":\"c41d77e2\",\"via\":\"workspace\",\"created_at\":\"2026-11-18T09:16:59Z\",\"merged_from\":null,\"displaced\":null,\"overwritten\":[],\"overwritten_count\":null,\"units\":[],\"source_branch\":null,\"source_commit\":null,\"size\":52428800,\"new_canonical_bytes\":4096,\"new_stored_bytes\":1890,\"new_metadata_bytes\":412}"
      },
      "dropped": [
       {
@@ -6174,7 +6174,7 @@
       "short": [
        "{\"items\":[{\"machine\":\"native\",\"platform\":\"native\"},{\"machine\":\"dev\",\"platform\":\"lima\"},{\"machine\":\"docker\",\"platform\":\"docker\",\"state\":\"stopped\"},{\"machine\":\"demo-build\",\"platform\":\"lima\",\"state\":\"broken\",\"reason\":\"outdated\",\"fix\":\"layerfs machine stop demo-build && layerfs machine start demo-build\"}]}"
       ],
-      "long": "{\"items\":[{\"machine\":\"dev\",\"platform\":\"lima\",\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"backend\":\"namespaces\",\"supports\":[\"sqlite\",\"postgresql_sandbox\",\"log\"],\"cpus\":4,\"memory_bytes\":8589934592,\"disk_bytes\":68719476736,\"image\":null,\"os_image\":null,\"docker\":null,\"wsl\":null,\"daemon\":null,\"message\":null,\"stores\":[\"shop\"],\"stores_count\":1,\"sandboxes\":[\"tests\"],\"sandboxes_count\":1,\"created_at\":\"2026-11-17T09:16:59Z\"},{\"machine\":\"docker\",\"platform\":\"docker\",\"state\":\"stopped\",\"op\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"backend\":\"namespaces\",\"supports\":[\"sqlite\",\"postgresql_sandbox\",\"log\"],\"cpus\":null,\"memory_bytes\":null,\"disk_bytes\":null,\"image\":null,\"os_image\":null,\"docker\":\"/var/run/docker.sock\",\"wsl\":null,\"daemon\":null,\"message\":null,\"stores\":[\"sim-website\"],\"stores_count\":1,\"sandboxes\":[],\"sandboxes_count\":0,\"created_at\":\"2026-11-17T09:16:59Z\"}]}"
+      "long": "{\"items\":[{\"machine\":\"dev\",\"platform\":\"lima\",\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"backend\":\"namespaces\",\"supports\":[\"sqlite\",\"postgresql_sandbox\",\"log\"],\"cpus\":4,\"memory_bytes\":8589934592,\"disk_bytes\":68719476736,\"image\":null,\"os_image\":null,\"docker\":null,\"wsl\":null,\"daemon\":null,\"message\":null,\"stores\":[\"shop\"],\"stores_count\":null,\"sandboxes\":[\"tests\"],\"sandboxes_count\":null,\"created_at\":\"2026-11-17T09:16:59Z\"},{\"machine\":\"docker\",\"platform\":\"docker\",\"state\":\"stopped\",\"op\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"backend\":\"namespaces\",\"supports\":[\"sqlite\",\"postgresql_sandbox\",\"log\"],\"cpus\":null,\"memory_bytes\":null,\"disk_bytes\":null,\"image\":null,\"os_image\":null,\"docker\":\"/var/run/docker.sock\",\"wsl\":null,\"daemon\":null,\"message\":null,\"stores\":[\"sim-website\"],\"stores_count\":null,\"sandboxes\":[],\"sandboxes_count\":null,\"created_at\":\"2026-11-17T09:16:59Z\"}]}"
      },
      "dropped": [],
      "new_work": "The probe exists today and becomes opt-in; a records-only answer is new. The six states and the reason codes are new: today the record holds running, stopped or failed with a sentence in `error`, and the answer says running, stopped, failed, missing, unknown, creating, removing, unresolved or unsupported. The record must also keep the reason code a start or a live read found (`outdated` today is only a sentence), so that a records-only read answers it. The observation file that holds `observed_at` beside each record is new, as is the rule that a live read writes the record only when the state word or its reason changes (today a read writes nothing).",
@@ -6277,7 +6277,7 @@
        "--with live: {\"platform\":\"lima\",\"state\":\"ready\",\"observed_at\":\"2026-11-18T09:16:59Z\",\"live\":{\"disk_free_bytes\":52613349376,\"tool_version\":\"1.2.3\",\"worker\":{\"protocol\":3,\"bundle\":\"8888888888888888888888888888888888888888888888888888888888888888\"}}}",
        "--with live, the probe did not answer: {\"platform\":\"lima\",\"state\":\"unknown\",\"observed_at\":\"2026-11-18T09:15:59Z\"}"
       ],
-      "long": "{\"platform\":\"lima\",\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"machine\":\"dev\",\"backend\":\"namespaces\",\"supports\":[\"sqlite\",\"postgresql_sandbox\",\"log\"],\"cpus\":4,\"memory_bytes\":8589934592,\"disk_bytes\":68719476736,\"image\":null,\"os_image\":null,\"docker\":null,\"wsl\":null,\"daemon\":null,\"message\":null,\"stores\":[\"shop\"],\"stores_count\":1,\"sandboxes\":[\"tests\"],\"sandboxes_count\":1,\"created_at\":\"2026-11-17T09:16:59Z\"}"
+      "long": "{\"platform\":\"lima\",\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"machine\":\"dev\",\"backend\":\"namespaces\",\"supports\":[\"sqlite\",\"postgresql_sandbox\",\"log\"],\"cpus\":4,\"memory_bytes\":8589934592,\"disk_bytes\":68719476736,\"image\":null,\"os_image\":null,\"docker\":null,\"wsl\":null,\"daemon\":null,\"message\":null,\"stores\":[\"shop\"],\"stores_count\":null,\"sandboxes\":[\"tests\"],\"sandboxes_count\":null,\"created_at\":\"2026-11-17T09:16:59Z\"}"
      },
      "dropped": [
       {
@@ -6387,7 +6387,7 @@
        "a copy is running: {\"items\":[{\"image\":\"sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"state\":\"busy\",\"op\":{\"name\":\"load_image\",\"phase\":\"send\",\"started_at\":\"2026-11-18T09:16:59Z\"}}]}",
        "a copy stopped partway: {\"items\":[{\"image\":\"sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"state\":\"broken\",\"reason\":\"partial\",\"fix\":\"layerfs machine load-image dev sha256:8888888888888888888888888888888888888888888888888888888888888888\"}]}"
       ],
-      "long": "{\"items\":[{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"refs\":[\"node:22\"],\"size\":412000000,\"default\":true,\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"message\":null,\"staged_bytes\":null,\"architecture\":\"arm64\",\"source\":\"imported\",\"sandboxes\":[\"tests\"],\"sandboxes_count\":1,\"last_used_at\":\"2026-11-18T09:15:59Z\"},{\"image\":\"sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"refs\":[],\"size\":null,\"default\":false,\"state\":\"broken\",\"op\":null,\"reason\":\"partial\",\"fix\":\"layerfs machine load-image dev sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"message\":\"a copy of this image stopped after 104857600 bytes; load-image resumes it\",\"staged_bytes\":104857600,\"architecture\":null,\"source\":\"imported\",\"sandboxes\":[],\"sandboxes_count\":0,\"last_used_at\":null}],\"machine\":\"dev\",\"mode\":\"images\",\"architecture\":\"arm64\",\"disk_free_bytes\":52613349376}"
+      "long": "{\"items\":[{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"refs\":[\"node:22\"],\"size\":412000000,\"default\":true,\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"message\":null,\"staged_bytes\":null,\"architecture\":\"arm64\",\"source\":\"imported\",\"sandboxes\":[\"tests\"],\"sandboxes_count\":null,\"last_used_at\":\"2026-11-18T09:15:59Z\"},{\"image\":\"sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"refs\":[],\"size\":null,\"default\":false,\"state\":\"broken\",\"op\":null,\"reason\":\"partial\",\"fix\":\"layerfs machine load-image dev sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"message\":\"a copy of this image stopped after 104857600 bytes; load-image resumes it\",\"staged_bytes\":104857600,\"architecture\":null,\"source\":\"imported\",\"sandboxes\":[],\"sandboxes_count\":null,\"last_used_at\":null}],\"machine\":\"dev\",\"mode\":\"images\",\"architecture\":\"arm64\",\"disk_free_bytes\":52613349376}"
      },
      "dropped": [
       {
@@ -6576,7 +6576,7 @@
        "nothing to remove: {\"freed_bytes\":0}",
        "a copy lock could not be checked: {\"freed_bytes\":0,\"skipped\":[{\"image\":\"sha256:7777777777777777777777777777777777777777777777777777777777777777\",\"message\":\"its copy lock cannot be read: Permission denied\"}]}"
       ],
-      "long": "{\"freed_bytes\":2147483648,\"skipped\":[],\"outcome\":\"pruned\",\"machine\":\"dev\",\"removed\":[\"sha256:7777777777777777777777777777777777777777777777777777777777777777\"],\"removed_count\":1,\"skipped_count\":null}"
+      "long": "{\"freed_bytes\":2147483648,\"skipped\":[],\"outcome\":\"pruned\",\"machine\":\"dev\",\"removed\":[\"sha256:7777777777777777777777777777777777777777777777777777777777777777\"],\"removed_count\":null,\"skipped_count\":null}"
      },
      "dropped": [
       {
@@ -7015,7 +7015,7 @@
        "already stopped: {\"unchanged\":true}",
        "--force with a Sandbox on it: {\"stopped_sandboxes\":[\"tests\"],\"unknown_workspaces\":[\"tests:agent\"]}"
       ],
-      "long": "{\"ok\":true,\"unchanged\":false,\"stopped_sandboxes\":[],\"stopped_sandboxes_count\":0,\"unknown_workspaces\":[],\"unknown_workspaces_count\":0,\"outcome\":\"stopped\",\"machine\":\"dev\",\"forced\":false}"
+      "long": "{\"ok\":true,\"unchanged\":false,\"stopped_sandboxes\":null,\"stopped_sandboxes_count\":null,\"unknown_workspaces\":null,\"unknown_workspaces_count\":null,\"outcome\":\"stopped\",\"machine\":\"dev\",\"forced\":false}"
      },
      "dropped": [
       {
@@ -7460,7 +7460,7 @@
       "short": [
        "{\"items\":[{\"store\":\"shop\",\"engine\":\"sqlite\",\"machine\":\"dev\",\"projects\":[\"api\",\"web\"],\"backups\":[{\"bucket\":\"r2-main\"}]},{\"store\":\"sim-website\",\"engine\":\"sqlite\",\"machine\":\"docker\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"},\"projects\":[\"website\"]},{\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"auth\":\"pg-app\",\"connections\":[{\"url\":\"postgres://db.internal:5432/shop\"}],\"projects\":[\"abc\"]}]}"
       ],
-      "long": "{\"items\":[{\"store\":\"shop\",\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"auth\":null,\"connections\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":2,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"ended_at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"profile\":\"disposable\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"ended_at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}},{\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"state\":\"ready\",\"machine\":null,\"auth\":\"pg-app\",\"connections\":[{\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\"},{\"machine\":\"lab\",\"url\":\"postgres://proxy.lab:6432/shop\"}],\"projects\":[\"api\",\"web\"],\"projects_count\":2,\"backups\":[],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"profile\":null,\"synchronous_commit\":\"local\",\"sqlite_version\":null,\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":null}]}"
+      "long": "{\"items\":[{\"store\":\"shop\",\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"auth\":null,\"connections\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"ended_at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"profile\":\"disposable\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"ended_at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}},{\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"state\":\"ready\",\"machine\":null,\"auth\":\"pg-app\",\"connections\":[{\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\"},{\"machine\":\"lab\",\"url\":\"postgres://proxy.lab:6432/shop\"}],\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"profile\":null,\"synchronous_commit\":\"local\",\"sqlite_version\":null,\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":null}]}"
      },
      "dropped": [],
      "new_work": "A records-only state is new: today each item's state comes from the leases and a `stat` on the Store's machine, and is idle, in_use, busy, down or unresolved. `--machine` is a new filter. `blocked` with `blocked_by` replaces `down`.",
@@ -7468,7 +7468,8 @@
       "reasons": [
        "unresolved",
        "missing",
-       "unreachable"
+       "unreachable",
+       "unsupported"
       ],
       "ops": [
        "move",
@@ -7577,7 +7578,7 @@
        "lost reply on a move: {\"engine\":\"sqlite\",\"state\":\"broken\",\"machine\":\"native\",\"projects\":[\"api\",\"web\"],\"reason\":\"unresolved\",\"fix\":\"layerfs store move shop dev\"}",
        "PostgreSQL: {\"engine\":\"postgresql\",\"state\":\"ready\",\"auth\":\"pg-app\",\"connections\":[{\"url\":\"postgres://db.internal:5432/shop\"},{\"machine\":\"lab\",\"url\":\"postgres://proxy.lab:6432/shop\"}],\"projects\":[\"api\",\"web\"]}"
       ],
-      "long": "{\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"auth\":null,\"connections\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":2,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"ended_at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"store\":\"shop\",\"profile\":\"disposable\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"ended_at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}}"
+      "long": "{\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"auth\":null,\"connections\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"ended_at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"store\":\"shop\",\"profile\":\"disposable\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"ended_at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}}"
      },
      "dropped": [
       {
@@ -7596,7 +7597,8 @@
       "reasons": [
        "unresolved",
        "missing",
-       "unreachable"
+       "unreachable",
+       "unsupported"
       ],
       "ops": [
        "move",
@@ -7728,7 +7730,7 @@
        "first connect: {\"projects\":[\"api\",\"web\"]}",
        "an empty database, or an address set: {\"ok\":true}"
       ],
-      "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":2,\"outcome\":\"connected\",\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"auth\":\"pg-app\",\"connections\":[{\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\"}],\"synchronous_commit\":\"local\"}"
+      "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"outcome\":\"connected\",\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"auth\":\"pg-app\",\"connections\":[{\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\"}],\"synchronous_commit\":\"local\"}"
      },
      "dropped": [
       {
@@ -7852,7 +7854,7 @@
       "short": [
        "{\"ok\":true}"
       ],
-      "long": "{\"ok\":true,\"outcome\":\"saved\",\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[],\"stores_count\":0}"
+      "long": "{\"ok\":true,\"outcome\":\"saved\",\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[],\"stores_count\":null}"
      },
      "dropped": [],
      "new_work": "All of it: saved logins, the home's secret folder and reading a secret from stdin do not exist. Today each Store records its own password reference (env:NAME or file:/path), resolved by the caller on each call."
@@ -7904,7 +7906,7 @@
       "short": [
        "{\"items\":[{\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[\"shop-pg\",\"analytics\"]},{\"auth\":\"pg-ro\",\"user\":\"reader\"}]}"
       ],
-      "long": "{\"items\":[{\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[\"shop-pg\",\"analytics\"],\"stores_count\":2,\"created_at\":\"2026-11-17T09:16:59Z\",\"updated_at\":\"2026-11-18T09:16:59Z\"}]}"
+      "long": "{\"items\":[{\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[\"shop-pg\",\"analytics\"],\"stores_count\":null,\"created_at\":\"2026-11-17T09:16:59Z\",\"updated_at\":\"2026-11-18T09:16:59Z\"}]}"
      },
      "dropped": [],
      "new_work": "All of it (see store.save_auth)."
@@ -8186,7 +8188,7 @@
        "{\"freed_bytes\":73400320}",
        "nothing to reclaim: {\"freed_bytes\":0}"
       ],
-      "long": "{\"freed_bytes\":73400320,\"outcome\":\"compacted\",\"store\":\"shop\",\"generation_before\":41,\"generation_after\":42,\"dead_bytes\":81264640,\"discarded_bytes\":195035136,\"reusable_bytes\":4096,\"kept_waste\":{\"dead_in_retained_packs_bytes\":1048576,\"delta_bases_bytes\":524288,\"inode_blocks_bytes\":0},\"delta_base_references\":[\"12d1c0ffee58aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"],\"delta_base_references_count\":1,\"peak_temp_bytes\":139862016,\"residue_bytes\":0,\"residue_artifacts\":[],\"residue_reason\":null,\"estimate\":false,\"zero_reasons\":[{\"field\":\"residue_bytes\",\"reason\":\"settled\"}]}"
+      "long": "{\"freed_bytes\":73400320,\"outcome\":\"compacted\",\"store\":\"shop\",\"generation_before\":41,\"generation_after\":42,\"dead_bytes\":81264640,\"discarded_bytes\":195035136,\"reusable_bytes\":4096,\"kept_waste\":{\"dead_in_retained_packs_bytes\":1048576,\"delta_bases_bytes\":524288,\"inode_blocks_bytes\":0},\"delta_base_references\":[\"12d1c0ffee58aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"],\"delta_base_references_count\":null,\"peak_temp_bytes\":139862016,\"residue_bytes\":0,\"residue_artifacts\":[],\"residue_reason\":null,\"estimate\":false,\"zero_reasons\":[{\"field\":\"residue_bytes\",\"reason\":\"settled\"}]}"
      },
      "dropped": [
       {
@@ -8497,7 +8499,7 @@
        "{\"ok\":true}",
        "Stores were linked to it: {\"unlinked\":[\"shop\"]}"
       ],
-      "long": "{\"ok\":true,\"unlinked\":[\"shop\"],\"unlinked_count\":1,\"outcome\":\"disconnected\",\"bucket\":\"r2-main\"}"
+      "long": "{\"ok\":true,\"unlinked\":[\"shop\"],\"unlinked_count\":null,\"outcome\":\"disconnected\",\"bucket\":\"r2-main\"}"
      },
      "dropped": [
       {
@@ -8705,7 +8707,7 @@
        "{\"projects\":[\"api\",\"web\"]}",
        "an empty Store: {\"ok\":true}"
       ],
-      "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":2,\"outcome\":\"created\",\"store\":\"shop\",\"bucket\":\"r2-main\",\"file\":\"shop\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\"}"
+      "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"outcome\":\"created\",\"store\":\"shop\",\"bucket\":\"r2-main\",\"file\":\"shop\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\"}"
      },
      "dropped": [
       {

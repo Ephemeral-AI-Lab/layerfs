@@ -101,7 +101,7 @@
         "short": [
           "{\"items\":[{\"store\":\"shop\",\"engine\":\"sqlite\",\"machine\":\"dev\",\"projects\":[\"api\",\"web\"],\"backups\":[{\"bucket\":\"r2-main\"}]},{\"store\":\"sim-website\",\"engine\":\"sqlite\",\"machine\":\"docker\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"},\"projects\":[\"website\"]},{\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"auth\":\"pg-app\",\"connections\":[{\"url\":\"postgres://db.internal:5432/shop\"}],\"projects\":[\"abc\"]}]}"
         ],
-        "long": "{\"items\":[{\"store\":\"shop\",\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"auth\":null,\"connections\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":2,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"ended_at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"profile\":\"disposable\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"ended_at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}},{\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"state\":\"ready\",\"machine\":null,\"auth\":\"pg-app\",\"connections\":[{\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\"},{\"machine\":\"lab\",\"url\":\"postgres://proxy.lab:6432/shop\"}],\"projects\":[\"api\",\"web\"],\"projects_count\":2,\"backups\":[],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"profile\":null,\"synchronous_commit\":\"local\",\"sqlite_version\":null,\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":null}]}"
+        "long": "{\"items\":[{\"store\":\"shop\",\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"auth\":null,\"connections\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"ended_at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"profile\":\"disposable\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"ended_at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}},{\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"state\":\"ready\",\"machine\":null,\"auth\":\"pg-app\",\"connections\":[{\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\"},{\"machine\":\"lab\",\"url\":\"postgres://proxy.lab:6432/shop\"}],\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"profile\":null,\"synchronous_commit\":\"local\",\"sqlite_version\":null,\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":null}]}"
       },
       "dropped": [],
       "new_work": "A records-only state is new: today each item's state comes from the leases and a `stat` on the Store's machine, and is idle, in_use, busy, down or unresolved. `--machine` is a new filter. `blocked` with `blocked_by` replaces `down`.",
@@ -109,7 +109,8 @@
         "reasons": [
           "unresolved",
           "missing",
-          "unreachable"
+          "unreachable",
+          "unsupported"
         ],
         "ops": [
           "move",
@@ -219,7 +220,7 @@
           "lost reply on a move: {\"engine\":\"sqlite\",\"state\":\"broken\",\"machine\":\"native\",\"projects\":[\"api\",\"web\"],\"reason\":\"unresolved\",\"fix\":\"layerfs store move shop dev\"}",
           "PostgreSQL: {\"engine\":\"postgresql\",\"state\":\"ready\",\"auth\":\"pg-app\",\"connections\":[{\"url\":\"postgres://db.internal:5432/shop\"},{\"machine\":\"lab\",\"url\":\"postgres://proxy.lab:6432/shop\"}],\"projects\":[\"api\",\"web\"]}"
         ],
-        "long": "{\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"auth\":null,\"connections\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":2,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"ended_at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"store\":\"shop\",\"profile\":\"disposable\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"ended_at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}}"
+        "long": "{\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"auth\":null,\"connections\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"ended_at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"store\":\"shop\",\"profile\":\"disposable\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"ended_at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}}"
       },
       "dropped": [
         {
@@ -238,7 +239,8 @@
         "reasons": [
           "unresolved",
           "missing",
-          "unreachable"
+          "unreachable",
+          "unsupported"
         ],
         "ops": [
           "move",
@@ -372,7 +374,7 @@
           "first connect: {\"projects\":[\"api\",\"web\"]}",
           "an empty database, or an address set: {\"ok\":true}"
         ],
-        "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":2,\"outcome\":\"connected\",\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"auth\":\"pg-app\",\"connections\":[{\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\"}],\"synchronous_commit\":\"local\"}"
+        "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"outcome\":\"connected\",\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"auth\":\"pg-app\",\"connections\":[{\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\"}],\"synchronous_commit\":\"local\"}"
       },
       "dropped": [
         {
@@ -498,7 +500,7 @@
         "short": [
           "{\"ok\":true}"
         ],
-        "long": "{\"ok\":true,\"outcome\":\"saved\",\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[],\"stores_count\":0}"
+        "long": "{\"ok\":true,\"outcome\":\"saved\",\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[],\"stores_count\":null}"
       },
       "dropped": [],
       "new_work": "All of it: saved logins, the home's secret folder and reading a secret from stdin do not exist. Today each Store records its own password reference (env:NAME or file:/path), resolved by the caller on each call."
@@ -551,7 +553,7 @@
         "short": [
           "{\"items\":[{\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[\"shop-pg\",\"analytics\"]},{\"auth\":\"pg-ro\",\"user\":\"reader\"}]}"
         ],
-        "long": "{\"items\":[{\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[\"shop-pg\",\"analytics\"],\"stores_count\":2,\"created_at\":\"2026-11-17T09:16:59Z\",\"updated_at\":\"2026-11-18T09:16:59Z\"}]}"
+        "long": "{\"items\":[{\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[\"shop-pg\",\"analytics\"],\"stores_count\":null,\"created_at\":\"2026-11-17T09:16:59Z\",\"updated_at\":\"2026-11-18T09:16:59Z\"}]}"
       },
       "dropped": [],
       "new_work": "All of it (see store.save_auth)."
@@ -838,7 +840,7 @@
           "{\"freed_bytes\":73400320}",
           "nothing to reclaim: {\"freed_bytes\":0}"
         ],
-        "long": "{\"freed_bytes\":73400320,\"outcome\":\"compacted\",\"store\":\"shop\",\"generation_before\":41,\"generation_after\":42,\"dead_bytes\":81264640,\"discarded_bytes\":195035136,\"reusable_bytes\":4096,\"kept_waste\":{\"dead_in_retained_packs_bytes\":1048576,\"delta_bases_bytes\":524288,\"inode_blocks_bytes\":0},\"delta_base_references\":[\"12d1c0ffee58aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"],\"delta_base_references_count\":1,\"peak_temp_bytes\":139862016,\"residue_bytes\":0,\"residue_artifacts\":[],\"residue_reason\":null,\"estimate\":false,\"zero_reasons\":[{\"field\":\"residue_bytes\",\"reason\":\"settled\"}]}"
+        "long": "{\"freed_bytes\":73400320,\"outcome\":\"compacted\",\"store\":\"shop\",\"generation_before\":41,\"generation_after\":42,\"dead_bytes\":81264640,\"discarded_bytes\":195035136,\"reusable_bytes\":4096,\"kept_waste\":{\"dead_in_retained_packs_bytes\":1048576,\"delta_bases_bytes\":524288,\"inode_blocks_bytes\":0},\"delta_base_references\":[\"12d1c0ffee58aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"],\"delta_base_references_count\":null,\"peak_temp_bytes\":139862016,\"residue_bytes\":0,\"residue_artifacts\":[],\"residue_reason\":null,\"estimate\":false,\"zero_reasons\":[{\"field\":\"residue_bytes\",\"reason\":\"settled\"}]}"
       },
       "dropped": [
         {
