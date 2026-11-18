@@ -405,6 +405,16 @@ measured implementation of this branch.
   `peakTempBytes` and deleted before the reply (the §11 table already names the
   visited scratch as part of `peakTempBytes`). Alternative is an in-memory
   visited set, which the measurement rules out for large Stores.
+- **Changed 2026-11-18:** the `none` path no longer writes the scratch. The
+  walk has kept its visited set in memory since the mark was rebuilt around
+  one read of every locator, so the scratch was a second copy of it, written
+  one row at a time during the walk: on a 4.9 GB Store with 1.69 million
+  objects that was 27 of 62 seconds of a `none` run. The mark now hands each
+  reached object to a sink that keeps it (40 bytes an object) until the path
+  is chosen; only a `rebuild` writes `<store>.compact-visited`, before its
+  mark transaction commits, and `none` reports `peakTempBytes` 0 with the
+  `none-path` reason. `<store>.compact-op` is still written and removed on
+  both paths. The owner has not ruled on the frozen sentences.
 
 ### D4. §11: SQLite records a fifth observable phase, `cleanup`, during settle
 

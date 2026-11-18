@@ -2,7 +2,6 @@
 
 use super::build::build;
 use super::build::live_page_metrics;
-use super::build::pack_lengths;
 use super::build::BuildInput;
 use super::install::abort_before_install;
 use super::install::abort_run;
@@ -33,6 +32,7 @@ use super::verify::live_tuple;
 use super::verify::sealed_state;
 use super::verify::verify;
 use super::verify::VerifyInput;
+use crate::backend::records::Param;
 use crate::compact_metrics::CompactPhase;
 use crate::compact_metrics::RunMetrics;
 use crate::MarkResult;
@@ -44,6 +44,9 @@ use layerfs_history::records::GcIntentKind;
 use layerfs_history::records::GcScopeKind;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+
+/// The history statement that reads every pack's stored length.
+const PACK_LENGTHS: &str = "gc_pack_lengths";
 
 impl SqliteHandles {
     /// Runs one §7 SQLite Store compaction on this Store's own machine.
@@ -166,10 +169,10 @@ impl SqliteHandles {
             )
             .with_phase(Some("mark"));
             // The op record is written before the mark so a crash inside the
-            // mark transaction (which creates the §6.3 visited scratch before
-            // it decides) leaves a *recorded* run for the next call to adopt,
-            // never an unrecorded staged name (§9). The mark phase overwrites
-            // it once the mark's tuple and digest are known.
+            // mark transaction (which writes the §6.3 visited scratch before
+            // a rebuild's commit) leaves a *recorded* run for the next call to
+            // adopt, never an unrecorded staged name (§9). The mark phase
+            // overwrites it once the mark's tuple and digest are known.
             let mut op = RunOp {
                 op_id,
                 generation: live.generation,
@@ -189,28 +192,30 @@ impl SqliteHandles {
 
             metrics.begin_phase(CompactPhase::Mark);
             // Every pack descriptor is fixed while the lane is held, so the
-            // §6.4 decision reads them once around the mark instead of asking
-            // the Store per reached pack.
-            let lengths = match pack_lengths(&session) {
-                Ok(lengths) => lengths,
-                Err(error) => {
-                    let _ = remove_op_record(&store, &op_id);
-                    return Err(error);
-                }
-            };
-            let total = lengths.values().copied().fold(0u64, u64::saturating_add);
-            let decide = |mark: &MarkResult| -> HistoryResult<bool> {
-                let live_stored = live_stored_bytes(&lengths, mark)?;
-                let dead = total.saturating_sub(live_stored);
-                Ok(total > 0 && dead.saturating_mul(10) >= total)
-            };
+            // §6.4 decision reads them all once instead of asking the Store
+            // per reached pack. It reads them inside the mark's transaction,
+            // after the walk: in the layout that keeps a pack's payload in
+            // its row, the scan visits one table page per pack, and the walk
+            // has just read those pages for every pack it reached.
+            let mut lengths = BTreeMap::new();
             // §5.1/§6.3/§8: the registration, the §6.1 closure and the §6.2
             // walk are ONE write transaction. `rebuild` commits it; `none`
             // rolls it back, so §3's `nothing is written` holds in the Store's
             // own file: no `kept_node` row, no `gc_intent` row and no committed
             // WAL frame survive the call. The visited scratch is the separate
-            // temp database §6.3 allows; `none` deletes it below.
-            let decided = history.mark_for_compaction(&visited_path(&store), &intent, decide);
+            // temp database §6.3 allows; only a `rebuild` writes it, after the
+            // decision and before that commit.
+            let decided =
+                history.mark_for_compaction(&visited_path(&store), &intent, |tx, mark| {
+                    for row in &tx.query(PACK_LENGTHS, Vec::<Param>::new())? {
+                        let length = u64::try_from(row.get::<i64>(1)?)
+                            .map_err(|_| HistoryError::Integrity("pack length"))?;
+                        lengths.insert(row.get::<i64>(0)?, length);
+                    }
+                    let total = total_stored_bytes(&lengths);
+                    let dead = total.saturating_sub(live_stored_bytes(&lengths, mark)?);
+                    Ok(total > 0 && dead.saturating_mul(10) >= total)
+                });
             let (mark, rebuild) = match decided {
                 Ok(decided) => decided,
                 Err(error) => {
@@ -228,6 +233,7 @@ impl SqliteHandles {
                     return Err(error);
                 }
             };
+            let total = total_stored_bytes(&lengths);
             let live_stored = match live_stored_bytes(&lengths, &mark) {
                 Ok(live_stored) => live_stored,
                 Err(error) => {
@@ -242,20 +248,9 @@ impl SqliteHandles {
             if !rebuild {
                 // §3/§6.3 `none`: the mark's write transaction was rolled back,
                 // so the live Store keeps no mark state and no admission
-                // intent. Only the visited scratch was written, and it counts
-                // in `peakTempBytes` until it is deleted before the reply.
-                let scratch = visited_path(&store);
-                let visited_bytes = match std::fs::metadata(&scratch) {
-                    Ok(metadata) => metadata.len(),
-                    Err(_) => {
-                        abort_before_install(&store, &op_id, false);
-                        return Err(HistoryError::Integrity("visited scratch"));
-                    }
-                };
-                if let Err(error) = remove_scratch(&scratch) {
-                    abort_before_install(&store, &op_id, false);
-                    return Err(error);
-                }
+                // intent. The visited scratch is written only for a rebuild,
+                // so this path created no temporary file and `peakTempBytes`
+                // is 0 with the `none-path` reason.
                 let (free, page) = match live_page_metrics(&session) {
                     Ok(metrics) => metrics,
                     Err(error) => {
@@ -279,7 +274,7 @@ impl SqliteHandles {
                     free.saturating_mul(page),
                     0,
                     kept_waste,
-                    visited_bytes,
+                    0,
                     CompactResidue::default(),
                     total,
                     history_rows,
@@ -502,6 +497,11 @@ impl SqliteHandles {
             ))
         }
     }
+}
+
+/// The stored bytes of every pack of the Store.
+fn total_stored_bytes(lengths: &BTreeMap<i64, u64>) -> u64 {
+    lengths.values().copied().fold(0u64, u64::saturating_add)
 }
 
 /// The stored bytes of every pack the mark retains, from the one read of the

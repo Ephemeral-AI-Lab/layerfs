@@ -65,24 +65,6 @@ pub fn peak_temp_bytes(target_bytes: u64, visited_bytes: u64) -> u64 {
     target_bytes.saturating_add(visited_bytes)
 }
 
-pub(crate) fn pack_lengths(session: &Arc<Session>) -> HistoryResult<BTreeMap<i64, u64>> {
-    session
-        .run::<_, BackendError>(false, |tx| {
-            let rows = tx.query("SELECT pack_id,length FROM pack", vec![])?;
-            let mut lengths = BTreeMap::new();
-            for row in &rows {
-                let id: i64 = row.get(0)?;
-                let length: i64 = row.get(1)?;
-                lengths.insert(
-                    id,
-                    u64::try_from(length).map_err(|_| BackendError::Integrity)?,
-                );
-            }
-            Ok(lengths)
-        })
-        .map_err(Into::into)
-}
-
 pub(crate) fn live_page_metrics(session: &Arc<Session>) -> HistoryResult<(u64, u64)> {
     session
         .run::<_, BackendError>(false, |tx| {
