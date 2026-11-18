@@ -53,6 +53,14 @@ fn read_change_counter(path: &Path) -> Result<u32, PersistenceError> {
     Ok(u32::from_be_bytes(bytes))
 }
 
+/// What a seal does with macOS allocation past the file's logical end.
+enum Extents {
+    /// The file is handed off as it is: give the unused allocation back.
+    Release,
+    /// The file is about to be replaced: leave its allocation alone.
+    Keep,
+}
+
 impl Session {
     /// Consumes the sole session, checkpoints once, closes and verifies one file.
     /// macOS then releases unused allocation beyond the original file's logical
@@ -64,6 +72,9 @@ impl Session {
     /// new openers throughout sealing and handoff. This is not live Store
     /// reclamation. Uncertain transfer/temporary-close outcomes retain the owned
     /// `.layerfs-allocation-*` sibling; no automatic retry or deletion follows.
+    /// A file that was ever one side of an APFS clone keeps its allocation: the
+    /// filesystem refuses the release before moving anything, and the seal
+    /// still succeeds (see `seal_allocation`).
     pub(crate) fn seal(self) -> Result<SealedStore, PersistenceError> {
         let writer = {
             let mut state = self.state.lock().map_err(|_| PersistenceError::Uncertain)?;
@@ -73,19 +84,35 @@ impl Session {
             Some(writer) => writer,
             None => Writer::acquire(&self.path)?,
         };
-        let (facts, writer) = self.seal_holding(writer)?;
+        let (facts, writer) = self.seal_under(writer, Extents::Release)?;
         writer.release().map_err(|_| PersistenceError::Uncertain)?;
         Ok(facts.into_store())
     }
 
-    /// [`Self::seal`] under a caller-held writer lane (§7 step 1: the guard is
-    /// passed into the seal, never acquired a second time). The lane is returned
-    /// so a compaction can keep it through the rename. The checkpoint, checked
-    /// close, sidecar check and the sealed `(size, mtime, change counter)`
-    /// capture all run while the lane is held.
+    /// A compaction's seal under its caller-held writer lane (§7 step 1: the
+    /// guard is passed into the seal, never acquired a second time). The lane
+    /// is returned so the compaction can keep it through the rename. The
+    /// checkpoint, checked close, sidecar check and the sealed `(size, mtime,
+    /// change counter)` capture all run while the lane is held.
+    ///
+    /// Unlike [`Self::seal`] it releases no allocation: the install's rename
+    /// replaces this file, which frees its allocation with it, and the fresh
+    /// file is sized and cut on its own. On macOS it still refuses a Store
+    /// path that is a symbolic link or has a second hard link, before the
+    /// checkpoint, as `seal` does.
     pub(crate) fn seal_holding(
+        self,
+        writer: Writer,
+    ) -> Result<(SealedFacts, Writer), PersistenceError> {
+        self.seal_under(writer, Extents::Keep)
+    }
+
+    /// The seal both entry points share; `extents` is their one difference.
+    #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
+    fn seal_under(
         mut self,
         writer: Writer,
+        extents: Extents,
     ) -> Result<(SealedFacts, Writer), PersistenceError> {
         if !self.writable {
             return Err(BackendError::ReadOnly.into());
@@ -153,9 +180,9 @@ impl Session {
             }
         }
         #[cfg(target_os = "macos")]
-        let released = super::seal_allocation::release(&self.path, identity)?;
-        #[cfg(not(target_os = "macos"))]
-        let released = 0u64;
+        if matches!(extents, Extents::Release) {
+            super::seal_allocation::release(&self.path, identity)?;
+        }
         let metadata =
             std::fs::metadata(&self.path).map_err(|error| PersistenceError::Refused {
                 status: error.to_string(),
@@ -165,11 +192,6 @@ impl Session {
             .map_err(|error| PersistenceError::Refused {
                 status: error.to_string(),
             })?;
-        let bytes = if released == 0 {
-            metadata.len()
-        } else {
-            released
-        };
         let change_counter = read_change_counter(&self.path)?;
         let identity =
             FileIdentity::capture(&self.path).map_err(|error| PersistenceError::Refused {
@@ -180,7 +202,7 @@ impl Session {
                 path: self.path.clone(),
                 profile: self.profile.persistence,
                 sqlite_version: self.profile.sqlite_version.clone(),
-                bytes,
+                bytes: metadata.len(),
                 modified,
                 change_counter,
                 identity,

@@ -343,8 +343,18 @@ run and no automatic collection. It writes its operation intent before the
 first checkpoint, verifies the rebuilt Store, and installs it by rename; a
 definite failure before the rename keeps the old Store and the generation `G`,
 while an installed-but-uncertain reply stays at `G + 1` and is reported, never
-deleted. A Store with less than 10% wholly dead packs takes the `none` path:
-it marks only and writes nothing. `dead_bytes_refined` equals
+deleted. A Store with less than 10% dead bytes takes the `none` path:
+it marks only and writes nothing. On PostgreSQL the dead bytes are those of
+wholly dead packs and a retained pack is copied whole. On SQLite they also
+include the dead records the mark found inside retained packs, and the rebuild
+writes each such pack again without them: the pack keeps its id and gets a new
+digest and length, and `kept_waste.dead_in_retained_packs_bytes` reports only
+what the rebuild still kept (accepted by the owner,
+[`gc-42-decisions.md`](../../../../core/docs/issues/project-41/gc-42-decisions.md)
+D6). A SQLite rebuild also copies only the inode value blocks a kept inode
+leaf reads, and `kept_waste.inode_blocks_bytes` then reports the blocks the
+rebuilt Store holds; PostgreSQL and the `none` path report every block (accepted by
+the owner, D7). `dead_bytes_refined` equals
 `dead_bytes_bound` on every path, not only on `none`: the mark resolves the
 whole retained set and no second payload sweep runs (documented amendment
 #42 A10).
@@ -359,15 +369,6 @@ returned run's record, whether the run left a residue or an unknown outcome, is
 a leftover the next call adopts and settles even though the owner process is
 alive. The settle and a pre-install abort remove the record only while it still
 names the operation being settled.
-
-**Local-only route (documented S6 deviation, #42 D5).** A sqlite Store on
-another machine is `Unsupported` and is never sent to that machine's worker:
-spec S6 says compaction runs on the machine that holds the file, but 2.0
-implements only `place::plan`'s `Local` route and refuses before it opens the
-Store or dials anything. The worker has no `store.compact` operation. Run the
-call on that machine; the deviation and its owner-sign-off request are in
-[`gc-42-decisions.md`](../../../../core/docs/issues/project-41/gc-42-decisions.md)
-D5, and the control route table names the same exception.
 
 ```text
 JS      await layerfs.store.compact(name, { on_progress })
@@ -398,7 +399,8 @@ SQLite, whose payload walk runs inside the mark, reports no value.
 
 | Error | When | Source |
 | --- | --- | --- |
-| `NoSuchStore`, `Unsupported` | a missing Store; a sqlite Store on another machine, because compaction is local-only by the documented S6 deviation (#42 D5) and never takes the worker route; a non-private Store directory; or an unsupported filesystem | [`compact.rs`](../../../../control/crates/layerfs-store/src/compact.rs) |
+| `NoSuchStore`, `Unsupported` | a missing Store; a non-private Store directory; or an unsupported filesystem. A sqlite Store on another machine is compacted by that machine's worker (spec S6, #42 D5) | [`compact.rs`](../../../../control/crates/layerfs-store/src/compact.rs) |
+| `Unavailable`, `Unknown` | a sqlite Store on another machine whose worker is not running (nothing is started; the message names `layerfs machine start`), or whose answer was lost after the request was sent: the run may have finished, and its op record lets the next `store.compact` judge it | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
 | `MountsActive`, `Busy`, `Unresolved` | a mount, long-lived client or operation holds the Store, or a dead owner left an uncertain one | spec §5 |
 | `Busy` | a call still running on the Store in this process, so the Store cannot be closed for the rebuild: the open cache's refusal is reported as `Busy`, naming the Store as `entity` with `phase` and `op` null | spec §10 |
 | `StaleStore`, `Conflict` | `StaleStore` for a connection that bypassed admission and touches the Store after the install; `Conflict` when the sealed state changed at install (sidecar, `(dev, ino)` identity, or the sealed size/mtime/change counter) | spec §7, §10 |

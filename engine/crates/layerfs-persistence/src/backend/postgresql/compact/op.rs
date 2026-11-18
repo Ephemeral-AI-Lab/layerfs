@@ -2,6 +2,7 @@
 
 use super::report::decode_kept_waste;
 use super::report::encode_kept_waste;
+use super::types::takes_rebuild_path;
 use super::types::DeadTotals;
 use super::types::OpRow;
 use super::types::SCRATCH_PREFIX;
@@ -13,7 +14,9 @@ use crate::backend::sqlite::compact::CompactFailpoint;
 use crate::backend::sqlite::compact::CompactKeptWaste;
 use crate::backend::sqlite::compact::CompactRequest;
 use crate::history::GcTuple;
+use crate::history::Reach;
 use crate::MarkResult;
+use layerfs_content::ObjectId;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
 use std::sync::Arc;
@@ -184,51 +187,178 @@ pub(crate) fn stop(
     Err(HistoryError::UnknownOutcome)
 }
 
-/// Object ids one statement of [`load_visited`] carries: about 300 KiB.
+/// Object ids one statement of [`load_visited`] carries: about 300 KiB, and
+/// the most reached identities a compaction holds at a time.
 const VISITED_IDS: usize = 8192;
-/// Pack ids one statement of [`load_visited`] carries.
+/// Pack ids one statement of [`load_live_packs`] carries.
 const VISITED_PACKS: usize = 32_768;
 
-/// The set of live object ids and live pack ids, as session temporary tables
-/// the Phase A copy and the dead-set query read.
-pub(crate) fn load_visited(
-    session: &Arc<Session>,
-    schema: &str,
-    mark: &MarkResult,
-) -> HistoryResult<()> {
-    stage(session, |tx| {
-        tx.batch(
-            "DROP TABLE IF EXISTS pg_temp.gc_visited;\
-             DROP TABLE IF EXISTS pg_temp.gc_live_pack;\
-             CREATE TEMP TABLE pg_temp.gc_visited(object_id bytea PRIMARY KEY) ON COMMIT PRESERVE ROWS;\
-             CREATE TEMP TABLE pg_temp.gc_live_pack(pack_id bigint PRIMARY KEY) ON COMMIT PRESERVE ROWS;",
-        )?;
-        // A large visited set is loaded as arrays of ids, a bounded piece
-        // per statement. A binary COPY was tried first and spent about four
-        // microseconds per row handing rows to the driver one at a time; an
-        // array is encoded once and the server unnests it. The ids are in
-        // ascending order, so the key's index is built by appending.
-        for ids in mark.objects().objects().chunks(VISITED_IDS) {
-            let ids: Vec<&[u8]> = ids.iter().map(|id| id.as_bytes().as_slice()).collect();
-            tx.typed(
-                "INSERT INTO pg_temp.gc_visited(object_id) SELECT unnest($1::bytea[])",
-                &[&ids],
-                ids.len() as u64 * 36,
-            )?;
+/// What Phase M's mark transaction hands the round.
+pub(crate) struct Marked {
+    pub(crate) mark: MarkResult,
+    pub(crate) tuple: GcTuple,
+    /// The stored bytes of the packs the mark retained.
+    pub(crate) live: i64,
+    /// The §3 decision; the visited ids are loaded only when it is true.
+    pub(crate) rebuild: bool,
+}
+
+/// Phase M's mark: the Store tuple, the closure, the live packs, the §3
+/// decision and, for a rebuild, the visited ids, all in the mark's one
+/// repeatable-read transaction.
+///
+/// The reached identities are never listed in this process: the mark keeps a
+/// bit per object over the Store's locator order, and the visited table is
+/// filled by reading the locators again a block at a time and sending back
+/// the reached ones. A locator's rank is its position in this snapshot, so
+/// the fill reads the snapshot the walk read; a publication that lands while
+/// the mark runs is in neither, and moves the tuple Phase B checks.
+pub(crate) fn mark(session: &Arc<Session>, schema: &str) -> HistoryResult<Marked> {
+    session.run_snapshot(|tx| {
+        let (mark, tuple, mut reach) = crate::history::mark_gc_reached(tx)?;
+        load_live_packs(tx, &mark)?;
+        // §3 decides over the mark's own snapshot, never a later Store
+        // total: a publication after the mark raises `pack` bytes, and
+        // reading them later would flip a `none` decision into a rebuild
+        // the mark never judged.
+        let live = live_stored(tx, schema)?;
+        let rebuild = takes_rebuild_path(tuple.stored, live);
+        // The visited ids and the dead set are a rebuild's inputs alone: a
+        // `none` round writes its op row and clears it, and loads neither.
+        if rebuild {
+            load_visited(tx, &mut reach)?;
         }
-        for packs in mark.objects().packs().chunks(VISITED_PACKS) {
-            tx.typed(
-                "INSERT INTO pg_temp.gc_live_pack(pack_id) SELECT unnest($1::bigint[])",
-                &[&packs],
-                packs.len() as u64 * 8,
-            )?;
-        }
-        // The Phase A copy and the dead-set query read both sets; analyze
-        // them after the bulk load so the planner sees the real cardinality.
-        tx.batch("ANALYZE pg_temp.gc_visited; ANALYZE pg_temp.gc_live_pack;")?;
-        let _ = schema;
-        Ok(())
+        Ok(Marked {
+            mark,
+            tuple,
+            live,
+            rebuild,
+        })
     })
+}
+
+/// The live pack ids, as a session temporary table: what the §3 decision
+/// sums, and what the Phase A copy joins. They come from the mark's own
+/// bounded list in ascending order, a piece per statement, and are never
+/// held together here.
+fn load_live_packs(tx: &Transaction<'_>, mark: &MarkResult) -> HistoryResult<()> {
+    tx.batch(
+        "DROP TABLE IF EXISTS pg_temp.gc_live_pack;\
+         CREATE TEMP TABLE pg_temp.gc_live_pack(pack_id bigint PRIMARY KEY) ON COMMIT PRESERVE ROWS;",
+    )?;
+    let send = |packs: &[i64]| -> HistoryResult<()> {
+        if packs.is_empty() {
+            return Ok(());
+        }
+        tx.typed(
+            "INSERT INTO pg_temp.gc_live_pack(pack_id) SELECT unnest($1::bigint[])",
+            &[&packs],
+            packs.len() as u64 * 8,
+        )?;
+        Ok(())
+    };
+    let mut packs: Vec<i64> = Vec::with_capacity(VISITED_PACKS);
+    mark.objects().retained_packs().each(&mut |pack| {
+        packs.push(pack as i64);
+        if packs.len() == VISITED_PACKS {
+            send(&packs)?;
+            packs.clear();
+        }
+        Ok(())
+    })?;
+    send(&packs)?;
+    // The decision's sum and the Phase A copy read the set; analyze it
+    // after the load so the planner sees the real cardinality.
+    tx.batch("ANALYZE pg_temp.gc_live_pack;")?;
+    Ok(())
+}
+
+/// The live object ids, as a session temporary table the dead-set query and
+/// the Phase A copy read. Only a round that rebuilds loads it: a `none`
+/// decision needs the live packs alone.
+///
+/// The ids come from the mark's reached set in ascending identity order, a
+/// bounded piece per statement, so the key's index is built by appending. A
+/// binary COPY was tried first and spent about four microseconds per row
+/// handing rows to the driver one at a time; an array is encoded once and
+/// the server unnests it.
+fn load_visited(tx: &Transaction<'_>, reach: &mut Reach) -> HistoryResult<()> {
+    tx.batch(
+        "DROP TABLE IF EXISTS pg_temp.gc_visited;\
+         CREATE TEMP TABLE pg_temp.gc_visited(object_id bytea PRIMARY KEY) ON COMMIT PRESERVE ROWS;",
+    )?;
+    let send = |ids: &[ObjectId]| -> HistoryResult<()> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let ids: Vec<&[u8]> = ids.iter().map(|id| id.as_bytes().as_slice()).collect();
+        tx.typed(
+            "INSERT INTO pg_temp.gc_visited(object_id) SELECT unnest($1::bytea[])",
+            &[&ids],
+            ids.len() as u64 * 36,
+        )?;
+        Ok(())
+    };
+    let mut ids: Vec<ObjectId> = Vec::with_capacity(VISITED_IDS);
+    reach.each(tx, &mut |row, _| {
+        ids.push(row.object_id);
+        if ids.len() == VISITED_IDS {
+            send(&ids)?;
+            ids.clear();
+        }
+        Ok(())
+    })?;
+    send(&ids)?;
+    tx.batch("ANALYZE pg_temp.gc_visited;")?;
+    Ok(())
+}
+
+/// The `gc_dead` set of one mark, and the `logical` bytes of its dead Commit
+/// and Layer rows.
+fn persist_dead(tx: &Transaction<'_>, schema: &str) -> HistoryResult<i64> {
+    tx.batch(&format!(
+        "INSERT INTO {schema}.gc_dead(kind,id) \
+         SELECT 'commit',c.commit_id FROM {schema}.\"commit\" c \
+          WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='commit' AND k.node_id=c.commit_id) \
+         UNION ALL \
+         SELECT 'layer',l.layer_id FROM {schema}.layer l \
+          WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='layer' AND k.node_id=l.layer_id) \
+         UNION ALL \
+         SELECT 'branch',b.branch_id FROM {schema}.branch b \
+          WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='branch' AND k.node_id=b.branch_id) \
+         UNION ALL \
+         SELECT 'stack',s.layer_stack_id FROM {schema}.layer_stack s \
+          WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='stack' AND k.node_id=s.layer_stack_id) \
+         UNION ALL \
+         SELECT 'signature',int8send(cs.slot)||int8send(cs.stamp) FROM {schema}.content_signature cs \
+          WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=cs.object_id) \
+         UNION ALL \
+         SELECT DISTINCT 'digest',fd.root FROM {schema}.file_digest fd \
+          WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=fd.root) \
+         UNION ALL \
+         SELECT 'layer_lineage',ll.layer_id FROM {schema}.layer_lineage ll \
+          WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='layer' AND k.node_id=ll.layer_id) \
+         UNION ALL \
+         SELECT 'commit_lineage',cl.commit_id FROM {schema}.commit_lineage cl \
+          WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='commit' AND k.node_id=cl.commit_id) \
+         UNION ALL \
+         SELECT 'absorbed',a.run||int8send(a.depth) FROM {schema}.absorbed a \
+          WHERE NOT EXISTS (SELECT 1 FROM {schema}.commit_lineage cl JOIN {schema}.kept_node k ON k.kind='commit' AND k.node_id=cl.commit_id WHERE cl.run=a.run) \
+         UNION ALL \
+         SELECT 'reach',r.key||int8send(r.x) FROM {schema}.reach r \
+          WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='stack' AND k.node_id=r.key) \
+            AND NOT EXISTS (SELECT 1 FROM {schema}.commit_lineage cl JOIN {schema}.kept_node k ON k.kind='commit' AND k.node_id=cl.commit_id WHERE cl.run=r.key)"
+    ))?;
+    scalar(
+        tx,
+        &format!(
+            "SELECT COALESCE((SELECT SUM(c.logical)::bigint FROM {schema}.\"commit\" c \
+               WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='commit' AND d.id=c.commit_id)),0) \
+              + COALESCE((SELECT SUM(l.logical)::bigint FROM {schema}.layer l \
+               WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='layer' AND d.id=l.layer_id)),0)"
+        ),
+        Vec::new(),
+    )
 }
 
 /// Phase M: write `gc_op` (phase mark) and the persisted `gc_dead` set in
@@ -242,6 +372,10 @@ pub(crate) fn load_visited(
 /// run || int8send(depth) and key || int8send(x). A digest root is recorded
 /// once however many `file_digest` rows name it; every other arm selects its
 /// table's own key.
+///
+/// With `rebuild` false (a `none` decision, §3) only the op row is written
+/// and `gc_dead` is left empty: nothing reads the set of a round that
+/// installs nothing, and the caller clears the op row before it replies.
 pub(crate) fn persist_mark(
     session: &Arc<Session>,
     schema: &str,
@@ -249,53 +383,16 @@ pub(crate) fn persist_mark(
     tuple: &GcTuple,
     scratch: &str,
     request: &CompactRequest,
+    rebuild: bool,
 ) -> HistoryResult<DeadTotals> {
     let digest = mark.live_heads_digest().to_vec();
     stage(session, |tx| {
         tx.query(&format!("DELETE FROM {schema}.gc_dead"), Vec::new())?;
-        tx.batch(&format!(
-            "INSERT INTO {schema}.gc_dead(kind,id) \
-             SELECT 'commit',c.commit_id FROM {schema}.\"commit\" c \
-              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='commit' AND k.node_id=c.commit_id) \
-             UNION ALL \
-             SELECT 'layer',l.layer_id FROM {schema}.layer l \
-              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='layer' AND k.node_id=l.layer_id) \
-             UNION ALL \
-             SELECT 'branch',b.branch_id FROM {schema}.branch b \
-              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='branch' AND k.node_id=b.branch_id) \
-             UNION ALL \
-             SELECT 'stack',s.layer_stack_id FROM {schema}.layer_stack s \
-              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='stack' AND k.node_id=s.layer_stack_id) \
-             UNION ALL \
-             SELECT 'signature',int8send(cs.slot)||int8send(cs.stamp) FROM {schema}.content_signature cs \
-              WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=cs.object_id) \
-             UNION ALL \
-             SELECT DISTINCT 'digest',fd.root FROM {schema}.file_digest fd \
-              WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=fd.root) \
-             UNION ALL \
-             SELECT 'layer_lineage',ll.layer_id FROM {schema}.layer_lineage ll \
-              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='layer' AND k.node_id=ll.layer_id) \
-             UNION ALL \
-             SELECT 'commit_lineage',cl.commit_id FROM {schema}.commit_lineage cl \
-              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='commit' AND k.node_id=cl.commit_id) \
-             UNION ALL \
-             SELECT 'absorbed',a.run||int8send(a.depth) FROM {schema}.absorbed a \
-              WHERE NOT EXISTS (SELECT 1 FROM {schema}.commit_lineage cl JOIN {schema}.kept_node k ON k.kind='commit' AND k.node_id=cl.commit_id WHERE cl.run=a.run) \
-             UNION ALL \
-             SELECT 'reach',r.key||int8send(r.x) FROM {schema}.reach r \
-              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='stack' AND k.node_id=r.key) \
-                AND NOT EXISTS (SELECT 1 FROM {schema}.commit_lineage cl JOIN {schema}.kept_node k ON k.kind='commit' AND k.node_id=cl.commit_id WHERE cl.run=r.key)"
-        ))?;
-        let logical = scalar(
-            tx,
-            &format!(
-                "SELECT COALESCE((SELECT SUM(c.logical)::bigint FROM {schema}.\"commit\" c \
-                   WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='commit' AND d.id=c.commit_id)),0) \
-                  + COALESCE((SELECT SUM(l.logical)::bigint FROM {schema}.layer l \
-                   WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='layer' AND d.id=l.layer_id)),0)"
-            ),
-            Vec::new(),
-        )?;
+        let logical = if rebuild {
+            persist_dead(tx, schema)?
+        } else {
+            0
+        };
         let started = now_ms();
         let kept_waste = encode_kept_waste(&CompactKeptWaste::from_waste(mark.objects().waste()));
         let fingerprint = format!(
@@ -348,10 +445,10 @@ pub(crate) fn clear_round(session: &Arc<Session>, schema: &str) -> HistoryResult
     })
 }
 
-/// The stored bytes of every pack the mark retained, in the current Store.
-pub(crate) fn live_stored(session: &Arc<Session>, schema: &str) -> HistoryResult<i64> {
-    scalar_session(
-        session,
+/// The stored bytes of every pack the mark retained.
+fn live_stored(tx: &Transaction<'_>, schema: &str) -> HistoryResult<i64> {
+    scalar(
+        tx,
         &format!(
             "SELECT COALESCE(SUM(p.length)::bigint,0) FROM {schema}.pack p \
              WHERE EXISTS (SELECT 1 FROM pg_temp.gc_live_pack v WHERE v.pack_id=p.pack_id)"
@@ -370,49 +467,4 @@ pub(crate) fn history_rows(session: &Arc<Session>, schema: &str) -> HistoryResul
         ),
         Vec::new(),
     )
-}
-
-/// The §6.4 live-heads digest, computed inside one transaction (the mark's
-/// SQL is the same vector).
-pub(crate) fn digest(tx: &Transaction<'_>) -> HistoryResult<[u8; 32]> {
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(b"layerfs/live-heads/v1\0");
-    let stacks = tx.query(
-        "SELECT s.layer_stack_id, s.head_layer_id FROM layer_stack s \
-         WHERE NOT EXISTS (SELECT 1 FROM layer_stack_retired r WHERE r.layer_stack_id=s.layer_stack_id) \
-         ORDER BY s.layer_stack_id",
-        Vec::new(),
-    )?;
-    for row in &stacks {
-        let id: Vec<u8> = row.get(0)?;
-        let head: Vec<u8> = row.get(1)?;
-        if id.len() != 17 || head.len() != 33 {
-            return Err(HistoryError::Integrity("live-heads stack width"));
-        }
-        hasher.update(&id);
-        hasher.update(&head);
-    }
-    let branches = tx.query(
-        "SELECT b.branch_id, b.head_commit_id, b.base_layer_id FROM branch b \
-         WHERE NOT EXISTS (SELECT 1 FROM branch_retired r WHERE r.branch_id=b.branch_id) \
-         AND NOT EXISTS (SELECT 1 FROM layer_stack_retired s WHERE s.layer_stack_id=b.layer_stack_id) \
-         ORDER BY b.branch_id",
-        Vec::new(),
-    )?;
-    for row in &branches {
-        let id: Vec<u8> = row.get(0)?;
-        let head: Option<Vec<u8>> = row.get(1)?;
-        let base: Vec<u8> = row.get(2)?;
-        if id.len() != 17 || base.len() != 33 {
-            return Err(HistoryError::Integrity("live-heads branch width"));
-        }
-        hasher.update(&id);
-        match head {
-            Some(head) if head.len() == 33 => hasher.update(&head),
-            Some(_) => return Err(HistoryError::Integrity("live-heads commit width")),
-            None => hasher.update(&[0u8; 33]),
-        };
-        hasher.update(&base);
-    }
-    Ok(*hasher.finalize().as_bytes())
 }

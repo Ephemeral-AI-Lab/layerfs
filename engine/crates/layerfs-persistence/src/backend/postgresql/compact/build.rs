@@ -165,27 +165,35 @@ pub(crate) fn create_scratch(
 
 /// Phase A copies about this many retained pack body bytes per transaction:
 /// a fixed row count would be unbounded in bytes for large packs.
-const PHASE_A_BATCH_BYTES: u64 = 1 << 30;
+const PHASE_A_BATCH_BYTES: i64 = 1 << 30;
 
-/// One byte-bounded pack-id batch: `(pack_id, length)` pairs in ascending
-/// pack-id order, split so each batch carries at most about 1 GiB (at least
-/// one pack per batch).
-fn byte_batches(packs: &[(i64, u64)]) -> Vec<&[(i64, u64)]> {
-    let mut out = Vec::new();
-    let mut start = 0;
-    let mut bytes = 0u64;
-    for (index, (_, length)) in packs.iter().enumerate() {
-        if index > start && bytes.saturating_add(*length) > PHASE_A_BATCH_BYTES {
-            out.push(&packs[start..index]);
-            start = index;
-            bytes = 0;
+/// The byte-bounded pack-id batches of the live packs, ascending: the first
+/// and last pack id of each and how many live packs it holds. A batch takes
+/// the packs whose bodies start inside one [`PHASE_A_BATCH_BYTES`] stretch of
+/// the live bodies laid end to end in pack-id order, so it carries about
+/// that much, at most one pack more, and at least one pack.
+///
+/// The server cuts the batches; this process is handed one row a batch and
+/// never the list of live packs.
+fn byte_batches(session: &Arc<Session>, schema: &str) -> HistoryResult<Vec<(i64, i64, i64)>> {
+    stage(session, |tx| {
+        let rows = tx.query(
+            &format!(
+                "SELECT min(b.pack_id),max(b.pack_id),count(*) FROM (\
+                   SELECT p.pack_id,\
+                          floor((sum(p.length) OVER (ORDER BY p.pack_id) - p.length) / $1::bigint)::bigint AS batch \
+                   FROM {schema}.pack p \
+                   WHERE EXISTS (SELECT 1 FROM pg_temp.gc_live_pack v WHERE v.pack_id=p.pack_id)) b \
+                 GROUP BY b.batch ORDER BY 1"
+            ),
+            vec![Param::I64(PHASE_A_BATCH_BYTES)],
+        )?;
+        let mut out = Vec::with_capacity(rows.len());
+        for row in &rows {
+            out.push((row.get(0)?, row.get(1)?, row.get(2)?));
         }
-        bytes = bytes.saturating_add(*length);
-    }
-    if start < packs.len() {
-        out.push(&packs[start..]);
-    }
-    out
+        Ok(out)
+    })
 }
 
 /// The run's peak temp so far: the scratch relations' size plus the WAL this
@@ -214,26 +222,11 @@ pub(crate) fn build(
     tuple: &GcTuple,
 ) -> HistoryResult<Built> {
     create_scratch(session, schema, scratch)?;
-    // The live packs with their source lengths, ascending: the byte batches
-    // and the per-batch range assertions both read this one list.
-    let live_packs: Vec<(i64, u64)> = stage(session, |tx| {
-        let rows = tx.query(
-            &format!(
-                "SELECT p.pack_id,p.length FROM {schema}.pack p \
-                 WHERE EXISTS (SELECT 1 FROM pg_temp.gc_live_pack v WHERE v.pack_id=p.pack_id) \
-                 ORDER BY p.pack_id"
-            ),
-            Vec::new(),
-        )?;
-        let mut out = Vec::with_capacity(rows.len());
-        for row in &rows {
-            let id: i64 = row.get(0)?;
-            let length = u64::try_from(row.get::<i64>(1)?).unwrap_or(0);
-            out.push((id, length));
-        }
-        Ok(out)
-    })?;
-    if live_packs.len() != mark.objects().packs().len() {
+    // The byte batches of the live packs, cut by the server: their counts
+    // must add up to the packs the mark retained.
+    let batches = byte_batches(session, schema)?;
+    let live_packs: i64 = batches.iter().map(|(_, _, packs)| *packs).sum();
+    if live_packs != mark.objects().retained_packs().len() as i64 {
         return Err(HistoryError::Integrity("compaction live pack list"));
     }
     let wal_start: String = stage(session, |tx| {
@@ -252,10 +245,7 @@ pub(crate) fn build(
     }
     let mut peak_temp = 0u64;
     let mut copied_rows = 0i64;
-    for batch in byte_batches(&live_packs) {
-        let lo = batch[0].0;
-        let hi = batch[batch.len() - 1].0;
-        let expected_packs = batch.len() as i64;
+    for (lo, hi, expected_packs) in batches {
         let (pack_rows, objects) = stage(session, |tx| {
             // §8 step 3: a batch first deletes its own range. The scratch
             // `object_location` has no `pack_id` index (the Store's has none,
@@ -339,7 +329,7 @@ pub(crate) fn build(
     })?;
     if distinct != mark.objects().len() as i64
         || objects != distinct
-        || pack_rows != mark.objects().packs().len() as i64
+        || pack_rows != mark.objects().retained_packs().len() as i64
     {
         return Err(HistoryError::Integrity("compaction object count"));
     }

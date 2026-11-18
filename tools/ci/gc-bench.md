@@ -336,8 +336,9 @@ owner-only until the owner records it.
 
 ## Profiling a mark or a compaction
 
-`gc_profile` answers "where does the time go" on a Store `gc_bench` kept. It is
-a diagnostic, not a measurement harness: it has no receipt and claims nothing.
+`gc_profile` answers "where does the time go" on a Store `gc_bench` kept, or
+on a copy of a real Store. It is a diagnostic, not a measurement harness: it
+has no receipt and claims nothing.
 
 ```text
 cargo run -p layerfs-persistence --release --example gc_bench -- --keep --tmpdir DIR
@@ -349,12 +350,35 @@ cargo run -p layerfs-persistence --release --example gc_profile -- DIR/<run>/sto
   the statements that cost the most, by text. `--marks N` repeats it; the
   second mark shows the warm-cache cost, and the difference from the first is
   what a cold cache adds.
-- `--compact` then runs one compaction and prints the same for it. The
-  rebuild's copy runs on its own connection, so its statements are not listed.
+- `--compact` then runs one compaction and prints the same for it, then one
+  line of the same counters for each phase: `admission` (everything before
+  the mark: the leftover check, the Store tuple, the op record), `mark`,
+  and on a rebuild `build`, `verify` and `install`. The counters include
+  transactions, write transactions, commits and rollbacks; a `none` run shows
+  its one write transaction rolled back. The rebuild's copy and the visited
+  scratch run on their own connections, so their statements are not listed:
+  their time is the phase's wall time less its statement time.
+- `--marks 0 --compact` profiles the compaction alone, with no mark before it
+  to warm the cache.
 - The per-statement list comes from `layerfs_persistence::profile_statements`
   and `take_statement_profile`: a per-thread profile that is off unless
   started.
 - For CPU stacks on macOS, run with `--marks 40` and `sample <pid> 2`.
+
+To profile a real Store, set `GC_BINDING_HEX` and `GC_CURSOR_HEX` to its
+binding and its 32-byte cursor key, in hex, and name a **copy** of the file: a
+mark writes `kept_node` rows and `--compact` may rebuild the file. On macOS
+`cp -c` makes the copy without copying its blocks. The synthetic Store has
+about one large object per pack; a real one has many small records per pack,
+and its profile is different: on a 4.9 GB Store with 1.69 million objects in
+38,680 packs, a `none` compaction is about 1.5 million BLOB reads of record
+headers, one read of every `object_location` row and one of every pack's
+length, which the synthetic Store shows none of.
+
+```text
+GC_BINDING_HEX=... GC_CURSOR_HEX=... \
+  cargo run -p layerfs-persistence --release --example gc_profile -- COPY.sqlite --marks 0 --compact
+```
 
 ### On PostgreSQL
 

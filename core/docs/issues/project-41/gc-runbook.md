@@ -130,8 +130,8 @@ installed → it records the outcome. A dead owner's op is adopted; only a live 
   visited, §8 — it follows S5's fresh-Store sentence but deviates from §7 step
   4's payload sweep and rollback journal, D2); `none` writes only a transient
   visited scratch and rolls its mark transaction back; the settle records a
-  `cleanup` phase; `store.compact` is local-only, and a Store pushed to another
-  machine is compacted there or pushed back.
+  `cleanup` phase; `store.compact` of a Store pushed to another machine runs
+  in that machine's worker.
 
 ## 6. First 10 minutes
 
@@ -193,8 +193,9 @@ collects the marker, and never touches `main` (`ReservedName`).
 **Reclaim (optional, later).** `layerfs store compact <name>` only when the
 Store is idle (no mounts, daemon or other op). A rebuild copies retained rows
 into a fresh Store and installs `G + 1`; only then are retired names and their
-rows collected. A `none` outcome (<10 % wholly dead) keeps everything, and the
-retired names stay taken. Follow the compaction procedure in §6 and the
+rows collected. A `none` outcome (<10 % wholly dead; on SQLite
+[decision D6](gc-42-decisions.md), accepted by the owner, also counts dead records inside retained
+packs) keeps everything, and the retired names stay taken. Follow the compaction procedure in §6 and the
 rollback limits in §4.
 
 **Rollback.** Restore the whole home and Store from the pre-cutover backup
@@ -270,9 +271,9 @@ op record or the next-call adoption.
 |---|---|---|
 | D1 (§7 step 4) | `PRAGMA foreign_keys=ON` outside the transaction (frozen text, unchanged) | the fresh bulk load runs `foreign_keys=OFF`; the step 6 `foreign_key_check` on the `immutable=1` open is the guard |
 | D2 (S5/§3/§7/§11) | "copies only retained rows into a fresh Store"; §7 step 4's payload sweep and rollback-journal transaction; peak old + new + journal/WAL + visited | fresh-copy build (pack-as-unit, no payload sweep, no rollback journal; indexes and triggers after the load); peak old + new + visited (§8) — a recorded deviation from §7/§11, not an edit to the frozen text |
-| D3 (§3/§7 step 1.5) | `none` writes nothing; delete the scratch and stop | `none` spills the closure to `<store>.compact-visited`, counts it in `peakTempBytes` and deletes it before replying; the mark and its intent are one transaction that is rolled back, so no `kept_node`/`gc_intent` row and no WAL frame survives; no residue survives |
+| D3 (§3/§7 step 1.5) | `none` writes nothing; delete the scratch and stop | `none` writes no visited scratch (since 2026-11-18): the mark keeps the reached set in memory, `<store>.compact-visited` is written only when the run rebuilds, and `peakTempBytes` is 0 on `none`. The mark and its intent are one transaction that is rolled back, so no `kept_node`/`gc_intent` row and no WAL frame survives. The `<store>.compact-op` record is still written at admission and removed before the reply; no residue survives |
 | D4 (§11) | SQLite phases `mark`, `build`, `verify`, `install` | the settle also writes `cleanup` (§1) |
-| D5 (S6/§7) | "A SQLite Store compacts on the machine where it lives"; §7 "Runs as one operation on the Store's machine (S6)" | `store.compact` is local-only: its `Worker` branch is refused `Unsupported` before the Store is opened; a pushed sqlite Store is compacted after `store.push` back to `native` |
+| D5 (S6/§7) | "A SQLite Store compacts on the machine where it lives"; §7 "Runs as one operation on the Store's machine (S6)" | resolved 2026-11-18: a pushed sqlite Store is compacted by its machine's worker (`store.compact` worker operation), as S6 says |
 
 A10 is an amendment rather than a deviation: it records that
 `deadBytesRefined` equals `deadBytesBound` on every path, because the mark

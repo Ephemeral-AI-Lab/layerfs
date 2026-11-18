@@ -9,6 +9,9 @@ use layerfs_storage::{
         PersistenceError,
     },
 };
+use postgres::Row;
+use std::collections::HashMap;
+use std::rc::Rc;
 
 fn info(r: &Record) -> Result<PackInfo, BackendError> {
     pack_info(r.get(0)?, r.get(1)?, &r.get::<Vec<u8>>(2)?, r.get(3)?)
@@ -97,36 +100,130 @@ const HEAD_BYTES: i32 = policy::PACK_LIMIT as i32;
 /// A pack's descriptor and the head of its body, `$2` bytes long.
 const HEAD_COLUMNS: &str = "p.pack_id,p.domain,CASE WHEN octet_length(p.digest)=32 THEN p.digest END,p.length,CASE WHEN octet_length(p.body)=p.length THEN substring(p.body FROM 1 FOR $2) END";
 
-/// Packs one [`expect`] reads ahead, and the longest body it takes: the rows
-/// held between two calls stay within their product, 8 MiB.
+/// Packs one [`expect`] reads ahead at most, and the bytes of their rows it
+/// asks for in one statement.
 const AHEAD_PACKS: usize = 256;
-const AHEAD_BYTES: i64 = 32 * 1024;
+const AHEAD_BYTES: i64 = 8 * 1024 * 1024;
+/// Bytes of pack rows a transaction that announced its reads keeps, in two
+/// generations: when the young one reaches half of this, the old one is
+/// dropped.
+const HELD_PACK_BYTES: usize = 32 * 1024 * 1024;
+
+/// One pack row as a scoped read uses it: the descriptor and the head of the
+/// body, copied out of the driver's row. The driver cuts its rows from the
+/// buffers it received them in, so a kept row would keep the whole buffer.
+pub(crate) struct HeldPack {
+    info: PackInfo,
+    head: Vec<u8>,
+}
+
+impl HeldPack {
+    /// Checks one fetched row and copies what a scoped read needs of it.
+    fn from_row(row: &Row) -> Result<Self, PersistenceError> {
+        let info = info(&rows::record_first(row, 4)?)?;
+        let head: Vec<u8> = row.try_get(4).map_err(|e| rows::error(&e))?;
+        if head.len() != info.length.min(HEAD_BYTES as usize) {
+            return Err(PersistenceError::Malformed);
+        }
+        Ok(Self { info, head })
+    }
+
+    /// The bytes this holds, with an allowance for the entry itself.
+    fn bytes(&self) -> usize {
+        self.head.len() + 128
+    }
+}
+
+/// The pack rows a transaction holds for its scoped reads: those read ahead
+/// ([`expect`]) and, once the caller has announced a walk, every row a
+/// scoped read fetched.
+///
+/// A published pack never changes, so a held row is the row the server
+/// would return again. A walk comes back to a pack whenever a later record
+/// is a delta on one of its records; the row it already fetched then costs
+/// no second round trip and no second transfer.
+#[derive(Default)]
+pub(crate) struct HeldPacks {
+    young: HashMap<i64, Rc<HeldPack>>,
+    old: HashMap<i64, Rc<HeldPack>>,
+    young_bytes: usize,
+    /// Whether the caller announced its reads: only then are rows kept.
+    walk: bool,
+}
+
+impl HeldPacks {
+    fn holds(&self, id: i64) -> bool {
+        self.young.contains_key(&id) || self.old.contains_key(&id)
+    }
+
+    /// The held row of `id`; one found in the old generation joins the
+    /// young one, so a pack in use outlives the next turn.
+    fn get(&mut self, id: i64) -> Option<Rc<HeldPack>> {
+        if let Some(pack) = self.young.get(&id) {
+            return Some(pack.clone());
+        }
+        let pack = self.old.remove(&id)?;
+        self.keep(id, pack.clone());
+        Some(pack)
+    }
+
+    fn keep(&mut self, id: i64, pack: Rc<HeldPack>) {
+        let bytes = pack.bytes();
+        if self.young_bytes + bytes > HELD_PACK_BYTES / 2 {
+            self.old = std::mem::take(&mut self.young);
+            self.young_bytes = 0;
+        }
+        self.young_bytes += bytes;
+        if let Some(replaced) = self.young.insert(id, pack) {
+            self.young_bytes -= replaced.bytes();
+        }
+    }
+}
 
 /// Reads ahead, in one statement, the rows that scoped reads of `ids` would
-/// each fetch on their own, for the packs short enough to arrive whole.
+/// each fetch on their own: the packs from the front of `ids` that are not
+/// held yet, in order, as long as their rows together stay within
+/// [`AHEAD_BYTES`].
 ///
-/// The rows replace any still held from the call before. A longer pack, or
-/// one this call was not told about, is read by its own statement as before,
-/// so the hint changes round trips and nothing else. Inside a transaction
-/// only: an autocommit statement carries a generation fence this one lacks.
+/// A pack past the byte bound, or one this call was not told about, is read
+/// by its own statement as before, so the hint changes round trips and
+/// nothing else. Inside a transaction only: an autocommit statement carries
+/// a generation fence this one lacks.
 pub(crate) fn expect(tx: &Transaction<'_>, ids: &[i64]) -> Result<(), PersistenceError> {
-    tx.ahead.borrow_mut().clear();
     if ids.is_empty() || !tx.unfenced() {
         return Ok(());
     }
-    let ids = &ids[..ids.len().min(AHEAD_PACKS)];
+    let ids: Vec<i64> = {
+        let mut held = tx.packs.borrow_mut();
+        held.walk = true;
+        ids.iter()
+            .take(AHEAD_PACKS)
+            .copied()
+            .filter(|id| !held.holds(*id))
+            .collect()
+    };
+    if ids.is_empty() {
+        return Ok(());
+    }
+    // The running sum is over the bytes each row would carry, in the order
+    // the packs were announced; a body is fetched only for a row it admits.
     let rows = tx.typed(
         &format!(
-            "SELECT {HEAD_COLUMNS} FROM {}.pack p WHERE p.pack_id = ANY($1::bigint[]) AND p.length <= $3::bigint",
+            "SELECT {HEAD_COLUMNS} FROM (SELECT q.*,sum(least(q.length,($2::int4)::bigint)) OVER (ORDER BY i.n) AS held \
+             FROM unnest($1::bigint[]) WITH ORDINALITY AS i(pack_id,n) JOIN {}.pack q ON q.pack_id=i.pack_id) p \
+             WHERE p.held <= $3::bigint",
             tx.schema
         ),
         &[&ids, &HEAD_BYTES, &AHEAD_BYTES],
         ids.len() as u64 * 8 + 12,
     )?;
-    let mut ahead = tx.ahead.borrow_mut();
-    for row in rows {
-        let id: i64 = row.try_get(0).map_err(|e| rows::error(&e))?;
-        ahead.insert(id, row);
+    let mut held = tx.packs.borrow_mut();
+    for row in &rows {
+        // A row that does not check is left for the scoped read of its
+        // pack, which fetches it again and refuses it there.
+        if let Ok(pack) = HeldPack::from_row(row) {
+            held.keep(pack.info.pack_id, Rc::new(pack));
+        }
     }
     Ok(())
 }
@@ -143,10 +240,10 @@ fn read_with<T>(
     if id <= 0 {
         return Err(PersistenceError::Malformed);
     }
-    // A row read ahead for this pack is the row the statement below returns.
-    let ahead = tx.ahead.borrow_mut().remove(&id);
-    let row = match ahead {
-        Some(row) => row,
+    // A held row of this pack is the row the statement below returns.
+    let held = tx.packs.borrow_mut().get(id);
+    let pack = match held {
+        Some(pack) => pack,
         None => {
             let mut found = tx.typed(
                 &format!(
@@ -159,17 +256,20 @@ fn read_with<T>(
             if found.len() > 1 {
                 return Err(PersistenceError::Malformed);
             }
-            found.pop().ok_or(PersistenceError::Missing)?
+            let row = found.pop().ok_or(PersistenceError::Missing)?;
+            let pack = Rc::new(HeldPack::from_row(&row)?);
+            let mut held = tx.packs.borrow_mut();
+            if held.walk {
+                held.keep(id, pack.clone());
+            }
+            pack
         }
     };
-    let descriptor = info(&rows::record_first(&row, 4)?)?;
+    let descriptor = pack.info;
     if descriptor.pack_id != id {
         return Err(PersistenceError::Malformed);
     }
-    let head: Vec<u8> = row.try_get(4).map_err(|e| rows::error(&e))?;
-    if head.len() != descriptor.length.min(HEAD_BYTES as usize) {
-        return Err(PersistenceError::Malformed);
-    }
+    let head = &pack.head;
     let ranged = format!(
         "SELECT substring(body FROM $2 FOR $3) FROM {}.pack WHERE pack_id=$1",
         tx.schema
@@ -273,25 +373,44 @@ pub(crate) fn prefixes(
     Ok(())
 }
 
+/// The widest gap between two wanted ranges of one pack that the server
+/// reads through rather than skips. Each separate piece of a body costs the
+/// server a descent of the body's index; the stored pieces between two
+/// nearby ranges come from the pages that descent already reached. The bytes
+/// of a gap stay in the server: only the wanted ranges are sent.
+const SPAN_FILL: usize = 8 * 1024;
+
 /// The bytes of selected ranges of several packs in one statement: for each
 /// `(pack, ranges)` of `requests`, in order, the bytes of each range, in
-/// order. A pack's ranges are sorted and disjoint. The body is stored
-/// uncompressed out of line, so each `substring` fetches only the chunks it
-/// covers. A pack that is absent is `Missing`; a range that reaches past its
-/// body comes back short and is `Malformed`.
+/// order. A pack's ranges are sorted and disjoint. A pack that is absent is
+/// `Missing`; a range that reaches past its body comes back short and is
+/// `Malformed`.
+///
+/// The body is stored uncompressed out of line, so `substring` fetches only
+/// the stored pieces it covers. Ranges of one pack no further apart than
+/// [`SPAN_FILL`] are fetched as one span, once, and cut from it inside the
+/// statement: a pack whose record headers are all wanted costs one fetch of
+/// its body instead of one per header, and still returns only the headers.
 pub(crate) fn ranges(
     tx: &Transaction<'_>,
     requests: &[(i64, Vec<PackRange>)],
     out: &mut Vec<Vec<Vec<u8>>>,
 ) -> Result<(), PersistenceError> {
     let total = requests.iter().map(|(_, ranges)| ranges.len()).sum();
-    let mut ids = Vec::with_capacity(total);
+    let int = |value: usize| i32::try_from(value).map_err(|_| PersistenceError::Malformed);
+    // One row per span: its pack, 1-based start, length, and the 1-based
+    // position and count of its ranges in the two range arrays.
+    let (mut ids, mut starts, mut lengths) = (Vec::new(), Vec::new(), Vec::new());
+    let (mut firsts, mut counts) = (Vec::new(), Vec::new());
+    // One row per range: its 1-based start inside its span, and its length.
     let mut from = Vec::with_capacity(total);
     let mut count = Vec::with_capacity(total);
     for (id, ranges) in requests {
         if *id <= 0 {
             return Err(PersistenceError::Malformed);
         }
+        // The open span of this pack: its start and end offsets.
+        let mut span: Option<(usize, usize)> = None;
         let mut end = 0;
         for range in ranges {
             let stop = range
@@ -300,23 +419,40 @@ pub(crate) fn ranges(
                 .filter(|_| range.length > 0 && range.offset >= end)
                 .ok_or(PersistenceError::Malformed)?;
             end = stop;
-            ids.push(*id);
-            from.push(i32::try_from(range.offset + 1).map_err(|_| PersistenceError::Malformed)?);
-            count.push(i32::try_from(range.length).map_err(|_| PersistenceError::Malformed)?);
+            let start = match span {
+                Some((start, reach)) if range.offset <= reach + SPAN_FILL => start,
+                _ => {
+                    ids.push(*id);
+                    starts.push(int(range.offset + 1)?);
+                    lengths.push(0);
+                    firsts.push(int(from.len() + 1)?);
+                    counts.push(0);
+                    range.offset
+                }
+            };
+            span = Some((start, stop));
+            *lengths.last_mut().ok_or(PersistenceError::Malformed)? = int(stop - start)?;
+            *counts.last_mut().ok_or(PersistenceError::Malformed)? += 1;
+            from.push(int(range.offset - start + 1)?);
+            count.push(int(range.length)?);
         }
     }
     let rows = if total == 0 {
         Vec::new()
     } else {
+        // `OFFSET 0` keeps the span a value computed once per span row; the
+        // ranges are then cut from that value in memory.
         tx.typed(
             &format!(
-                "SELECT substring(p.body FROM r.o FOR r.l) \
-                 FROM unnest($1::bigint[],$2::int4[],$3::int4[]) WITH ORDINALITY AS r(pack_id,o,l,n) \
-                 JOIN {}.pack p ON p.pack_id=r.pack_id ORDER BY r.n",
+                "SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) \
+                 FROM unnest($1::bigint[],$2::int4[],$3::int4[],$4::int4[],$5::int4[]) AS g(pack_id,o,l,first,n) \
+                 JOIN {}.pack p ON p.pack_id=g.pack_id \
+                 CROSS JOIN LATERAL (SELECT substring(p.body FROM g.o FOR g.l) AS span OFFSET 0) s \
+                 CROSS JOIN LATERAL generate_series(g.first,g.first+g.n-1) AS k ORDER BY k",
                 tx.schema
             ),
-            &[&ids, &from, &count],
-            total as u64 * 16,
+            &[&ids, &starts, &lengths, &firsts, &counts, &from, &count],
+            ids.len() as u64 * 24 + total as u64 * 8,
         )?
     };
     if rows.len() != total {

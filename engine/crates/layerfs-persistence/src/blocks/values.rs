@@ -213,6 +213,29 @@ pub(crate) fn decode(
     Ok(values)
 }
 
+/// Every value of blocks in ascending first-ordinal order, in ordinal order;
+/// a block that overlaps the one before it is refused, as [`pick`] refuses it.
+pub(crate) fn every(
+    blocks: impl IntoIterator<Item = Result<(u32, u32, Vec<u8>), BackendError>>,
+    out: &mut Vec<InodeValueRow>,
+) -> Result<(), BackendError> {
+    let mut end = 0u32;
+    for block in blocks {
+        let (first, last, body) = block?;
+        if first <= end {
+            return Err(BackendError::Integrity);
+        }
+        end = last;
+        let values = decode(first, last, &body)?;
+        out.extend(
+            (first..=last)
+                .zip(values)
+                .map(|(ordinal, value)| InodeValueRow { ordinal, value }),
+        );
+    }
+    Ok(())
+}
+
 /// Picks the asked values out of blocks in ascending first-ordinal order,
 /// in ordinal order; a block that overlaps the one before it is refused.
 pub(crate) fn pick(

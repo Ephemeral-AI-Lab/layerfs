@@ -25,8 +25,9 @@ struct Statement {
 }
 
 /// The §4.2 statements that must carry the filter: the four Branch lookups,
-/// both snapshots and the GC live set.
+/// both snapshots, the GC live set and the roots of the batched §6.1 closure.
 const BRANCH_FILTERED: &[&str] = &[
+    "kept_node_seed.sql",
     "branch_branch_by_id.sql",
     "branch_branch_by_name.sql",
     "branch_branch_first_page.sql",
@@ -39,6 +40,7 @@ const BRANCH_FILTERED: &[&str] = &[
 /// The four project lookups, their live set and the PostgreSQL by-name
 /// override (the reason the guard scans both backends).
 const STACK_FILTERED: &[&str] = &[
+    "kept_node_seed.sql",
     "layerstack_stack_by_id.sql",
     "layerstack_stack_by_name.sql",
     "layerstack_stack_first_page.sql",
@@ -60,6 +62,21 @@ struct Allow {
 /// §4.2's allow-list. Every entry is a decision, not a convenience: the reason
 /// is the comment and the test proves the entry still reads the table.
 const ALLOWED: &[Allow] = &[
+    Allow {
+        file: "kept_node_expand.sql",
+        markers: &[],
+        returns_state: false,
+        reason: "§6.1 edges of the batched history closure (#42 item 29). The retained \
+                 roots are chosen by kept_node_seed.sql, which carries both markers and is \
+                 pinned as a filtered statement above. This statement only follows the \
+                 edges of nodes already in `kept_node`, and §6.1 requires a retired Branch \
+                 that a retained Commit or Layer names (`commit.branch_id`, \
+                 `layer.source_branch_id`) to stay with its head, base and fork point, so \
+                 the Branch row it joins must be read whether retired or not. It is the \
+                 edge half of the one recursive statement PostgreSQL still runs \
+                 (kept_node_mark.sql), whose edges are equally unfiltered; \
+                 tests/kept_node_closure.rs holds the two to the same rows",
+    },
     Allow {
         file: "branch_branch_by_id_any.sql",
         markers: &[],

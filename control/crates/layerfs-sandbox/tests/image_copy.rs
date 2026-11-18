@@ -61,7 +61,7 @@ fn run(
     let out = load(
         &standin.docker(),
         &mut events,
-        &mut Target::Local(home),
+        &mut Target::local(home, "native"),
         None,
         image,
     );
@@ -94,6 +94,22 @@ fn a_reference_is_copied_once_then_reused_with_nothing_sent() {
     assert_eq!(first.id, ID);
     assert!(!first.reused);
     assert_eq!(first.size, Some(filtered(&export()).len() as u64));
+    // what the copy left out is in its answer
+    let report = first.report.as_ref().expect("a sent copy reports");
+    assert_eq!(report.init, vec![".dockerenv", "etc/hostname"]);
+    let answer = first.to_value();
+    let dropped = answer.get("dropped").expect("dropped");
+    assert_eq!(
+        cache::texts(dropped.get("init")),
+        vec![".dockerenv", "etc/hostname"]
+    );
+    assert!(cache::texts(dropped.get("fifos")).is_empty());
+    assert_eq!(
+        answer
+            .get("sparse")
+            .and_then(|s| s.get_int("expanded_bytes")),
+        Some(0)
+    );
     let sends = named(&run1, "send");
     let last = sends.last().expect("send events");
     assert_eq!(
@@ -127,6 +143,7 @@ fn a_reference_is_copied_once_then_reused_with_nothing_sent() {
         let (again, run) = run(&standin, &home, image);
         let again = again.unwrap();
         assert!(again.reused, "{image}");
+        assert!(again.report.is_none() && again.to_value().get("dropped").is_none());
         assert!(named(&run, "send").is_empty(), "{image}");
         assert_eq!(
             again.size, first.size,
@@ -141,7 +158,7 @@ fn a_reference_is_copied_once_then_reused_with_nothing_sent() {
     let found = load(
         &none,
         &mut Events::new(&mut sink),
-        &mut Target::Local(&home),
+        &mut Target::local(&home, "native"),
         None,
         "demo/pg:17",
     )
@@ -172,20 +189,39 @@ fn refusals_carry_their_detail() {
     let error = load(
         &none,
         &mut Events::new(&mut sink),
-        &mut Target::Local(&home),
+        &mut Target::local(&home, "native"),
         None,
         "demo/pg:17",
     )
     .unwrap_err();
     assert_eq!(error.code, "Unavailable");
     assert_eq!(error.detail.get_text("what"), Some("docker"));
-    // larger than twice what the machine has free
-    standin.set_rootfs_size(u64::MAX / 8);
+    // larger than twice what the machine has free: refused before anything
+    // exists, and the container's root is not what decides it
+    standin.image(ID, &["demo/pg:17"], ("linux", architecture()), u64::MAX / 8);
     let error = run(&standin, &home, "demo/pg:17").0.unwrap_err();
-    assert_eq!(error.code, "NoSpace");
-    let need = error.detail.get_int("need").unwrap();
+    assert_eq!(error.code, "Capacity");
+    let needed = error.detail.get_int("needed").unwrap();
     let free = error.detail.get_int("free").unwrap();
-    assert!(need > free, "{need} {free}");
+    assert!(needed > free, "{needed} {free}");
+    assert_eq!(
+        needed as u64,
+        layerfs_sandbox::docker::need(u64::MAX / 8),
+        "a fresh copy needs the whole unpacked size"
+    );
+    assert_eq!(
+        error.detail.get_text("where"),
+        Some(cache::cache(&home).to_string_lossy().as_ref()),
+        "the refusal names the filesystem it measured"
+    );
+    assert!(
+        !standin.dir.join("containers").exists(),
+        "no export container is created"
+    );
+    assert_eq!(standin.exports(), 0, "no byte is exported");
+    assert!(!cache::cache(&home)
+        .join(format!(".recv-{HEX}.part"))
+        .exists());
     assert!(!cache::cache(&home).join(format!("{HEX}.2")).exists());
 }
 
@@ -197,9 +233,9 @@ fn need_counts_what_the_layers_unpack_to() {
     let layers = [u64::MAX / 32, 0, u64::MAX / 32];
     standin.layers(ID, &layers);
     let error = run(&standin, &home, "demo/pg:17").0.unwrap_err();
-    assert_eq!(error.code, "NoSpace", "{}", error.message);
-    let need = layerfs_sandbox::docker::need(layers.iter().sum());
-    assert_eq!(error.detail.get_int("need"), Some(need as i64));
+    assert_eq!(error.code, "Capacity", "{}", error.message);
+    let needed = layerfs_sandbox::docker::need(layers.iter().sum());
+    assert_eq!(error.detail.get_int("needed"), Some(needed as i64));
 }
 
 #[test]
@@ -254,14 +290,8 @@ fn a_staged_prefix_is_resumed_and_a_mismatched_one_restarted() {
             vec![9u8; 1024]
         };
         cache::write(&cache::cache(&home), HEX, 0, &staged).unwrap();
-        // left by a copy that stopped a minute ago, not one still sending
-        let part = cache::cache(&home).join(format!(".recv-{HEX}.part"));
-        fs::File::options()
-            .write(true)
-            .open(&part)
-            .unwrap()
-            .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(60))
-            .unwrap();
+        // left by a copy that is not running: no lock holds it, so its bytes
+        // are resumed whatever their age
         let (out, run) = run(&standin, &home, "demo/pg:17");
         out.unwrap();
         let first = named(&run, "send")[0].get_int("done").unwrap();
@@ -289,7 +319,11 @@ fn frames_out_of_order_are_refused_and_publish_checks_the_bytes() {
     ]))
     .unwrap();
     assert_eq!(probe.get_int("offset"), Some(3));
-    assert!(probe.get_bool("receiving"));
+    assert_eq!(
+        probe.get_text("root"),
+        Some(cache::cache(&home).to_string_lossy().as_ref()),
+        "a probe says which filesystem its free bytes are"
+    );
     assert!(!probe.get_bool("present"));
     let wrong = step(SdkValue::map([
         ("step", SdkValue::text("publish")),

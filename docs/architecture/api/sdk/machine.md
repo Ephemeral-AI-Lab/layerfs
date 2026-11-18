@@ -33,7 +33,7 @@ The `machine` calls: list, inspect, create, start, stop, update and remove the m
 | [`machine.platforms`](#machineplatforms) | `{ host, platforms: [row] }` |
 | [`machine.get`](#machineget) | summary |
 | [`machine.images`](#machineimages) | `{ machine, mode, architecture, default, free, images, docker, available }` |
-| [`machine.load`](#machineload) | `{ id, refs, size, reused }` |
+| [`machine.load`](#machineload) | `{ id, refs, size, reused, dropped?, sparse? }` |
 | [`machine.prune`](#machineprune) | `{ removed: [id], freed }` |
 | [`machine.status`](#machinestatus) | `{ name, platform, state, free_disk, tool_version, down_reason, stores, op? }` |
 | [`machine.stats`](#machinestats) | `{ machine, platform, observed_at, worker, resources, data_disk, stores, sandboxes, complete, reason? }` |
@@ -172,24 +172,33 @@ CLI     layerfs machine images <name>
 
 ```text
 { machine, mode: "images" | "host", architecture, default, free,
-  images: [{ id, refs, size, architecture, source, sandboxes, last_used }],
+  images: [{ id, refs, size, architecture, source, variant, config, sandboxes, last_used, staged, stranded?, age?, resumable? }],
   docker: null | { available: true }
         | { available: false, reason: "not-installed" | "not-running" | "error", message },
   available: [{ id, refs, size, os, architecture, usable, reason?, need, fits }] }
 ```
 
-`images` are the unpacked images with their sidecars
+`images` lists published unpacked images with their sidecars
 (`machines/native/run/images/<hex>.2.json`: `source: "imported"` for one
-copied from Docker) and what the archives its Sandboxes read still hold
-(`bundle`, `machine`), unpacked or not. `id` is the Docker image Id for an
+copied from Docker, `staged: false`), what the archives its Sandboxes read
+still hold (`bundle`, `machine`, `staged: false`), staged partial downloads
+(`.recv-<hex>.part`: `source: "staged"`, `staged: true`, received `size`, `age`
+in seconds, and `resumable` true only when a non-empty regular file is not yet
+published and not held by a live `ImageLock` or `.2.lock`), and any stranded
+unpacked directories left without a sidecar (`source: "stranded"`,
+`staged: false`, `stranded: true`). `variant` and `config` (`Env`,
+`WorkingDir`, `User`, `Entrypoint`, `Cmd`) are recorded on import/publish and
+surfaced without being applied; `config.Env` lists the variable names only,
+never their values (a value can be a secret), while the sidecar on the machine
+keeps them. `id` is the Docker image Id for an
 imported image and the config digest for an archive's. `sandboxes` counts
 the Sandbox records on this machine naming that `id`; `last_used` is the
 last create's time (RFC 3339) or null. `default` is the record's image, else
 the archive's only one. `free` is the image cache's free bytes. `available`
 lists the host's tagged Docker images (one `docker image ls`, one batched
 `docker image inspect`, 10 s each) through the `docker` machine's socket,
-else Docker's default context, minus any whose id or refs `images` already
-has (the bundle's image in Docker, `layerfs-cache/sandbox:<hex>`, included).
+else Docker's default context, minus any published id or refs (`images` entries
+with `!staged && !stranded`, the bundle's image in Docker, `layerfs-cache/sandbox:<hex>`, included).
 A row for another OS or architecture is `usable: false` with `reason {kind:
 "os" | "arch", value}`. `size` is what the image's layers unpack to: the
 sum of `docker history`'s layer sizes (one call per image, eight at a time,
@@ -214,24 +223,75 @@ CLI     layerfs machine load <name> <image> [--progress]
 
 `image` is a digest, Docker image Id or Docker reference. The machine is
 asked first: an image it holds is `reused: true` and needs neither Docker nor
-a byte sent. Otherwise `docker image inspect` resolves it; the host keeps an
-export container `layerfs-export-<hex>` (removed once the machine publishes
-the image), streams `docker export` without the init layer's files
-(`.dockerenv`, `etc/hosts`, `etc/hostname`, `etc/resolv.conf`, `etc/mtab`,
-`dev/*`) and device or FIFO entries in 1 MiB `image.artifact` frames to
-`.recv-<hex>.part`, and the machine checks its size and sha256, unpacks it
-once into `<hex>.2/`, writes the sidecar and deletes the staged tar. A staged
-tar left by a stopped copy is resumed when its bytes hash as this export's
-prefix, else restarted; one still growing (under 30 s old) is another
-caller's copy, which this one waits for. `NoSpace`'s `need` counts the
-larger of the layers' unpacked size and the export container's root
-(`SizeRootFs`); `size` is the bytes sent, else the sidecar's, else the
-layers' unpacked size. Progress: `inspect`, `export`, `send` (`done`,
-`total`: an estimate, never below `done`, until the last `send` event, whose
-`done` and `total` are both the bytes sent), `unpack`. Errors: `Unsupported` `{reason: "host"}`
+a byte sent. Otherwise `docker image inspect` resolves it; one copy of that Id
+on that machine at a time holds `<home>/run/image-lock/<machine>/<hex>.lock`
+(an exclusive `flock` with the owner's `pid`, `pid_start` and `pid_boot`
+beside it), so a second copy waits — `{phase: "lock", waiting: "lock",
+holder}` each second, with no deadline — and then reuses what the first
+published; a copy whose owner died takes the lock over at once, because the
+kernel released it, and a record naming a reused pid holds nothing. Holding
+the lock, a copy passes the machine's prune gate (an exclusive `flock` on
+`<home>/run/image-lock/<machine>/` that `machine.prune` holds while it runs)
+before it creates or writes anything, so it waits for a prune under way. The
+machine's free bytes are checked before anything is created on either side:
+`Capacity` `{needed, free, where}` refuses a machine too small for the copy,
+with no export container, no staged byte and no cache folder, `needed`
+counting the bytes a resumed copy already staged once and `where` the
+filesystem `probe` measured. Only then does the host create an exclusive export
+container `layerfs-export-<home8>-<machine>-<nonce>` (labeled with
+`layerfs.role=image-export`, `layerfs.home`, `layerfs.machine`, `layerfs.image`
+and `layerfs.export.nonce`, removed with its anonymous volumes on exit or
+error; any residual containers left by a `SIGKILL`ed copy are reclaimed under
+`ImageLock` on the next `load` in the same home via `cleanup_owned` without
+waiting on active locks, and can also be enumerated via `owned_containers`;
+legacy `layerfs-export-<machine>-<hex>` containers labeled
+`layerfs.export.started` are no longer swept automatically and require manual
+`docker rm`) and stream `docker export` without the init layer's
+files (`.dockerenv`, `etc/hosts`, `etc/hostname`, `etc/resolv.conf`, `etc/mtab`,
+`dev/*`), device or FIFO entries, refuses hardlinks whose targets were dropped,
+expands GNU oldgnu (`S`) and PAX (`0.0`, `0.1`, `1.0`) sparse entries while
+streaming (enforcing `image_tar::SPARSE_MAX` on per-entry `realsize` and
+cumulative expanded bytes, bounding oldgnu/PAX `0.x` chunk counts by entry
+`size`, requiring `payload_needed == size` after padding, refusing malformed PAX
+records after `GNU.sparse.*` keys with `InvalidData`, counting expanded bytes
+written to `.part` against `Capacity`, and answering the dropped paths and
+expanded sparse files as `dropped` and `sparse`), and normalizes the
+modification times of the directories the init layer stamps (the root, `dev/`,
+`etc/`, `proc/`, `sys/`) to epoch 0 (`1970-01-01T00:00:00Z`, PAX time records
+stripped and header checksum recomputed, so exports separated in time are
+byte-identical for resume; every other directory keeps the image's time) in
+1 MiB `image.artifact` frames to `.recv-<hex>.part`;
+the machine checks its size and sha256, unpacks it
+once into `<hex>.2/`, strips the newly claimed `refs` from other cached
+sidecars (skipping corrupt unrelated sidecars) so moved tags cannot select stale
+images, writes the sidecar (keeping
+`variant` and `config` recorded-only), and deletes the staged tar.
+`<hex>.2.json` is the publication commit point (Option B interrupted-publish
+recovery): a read-only `probe` treats an un-sidecared `<hex>.2/` outside a
+sealed archive as `present: false, stranded: true` instead of backfilling
+incomplete `refs`/`config`/`variant` without a lock, while `publish` removes
+any non-in-use stranded `<hex>.2/` under `ImageLock` before re-unpacking, and
+`probe` refuses ambiguous `ref` lookups matching multiple cached images
+(`InvalidInput`, suggesting `machine.prune` to remove one).
+
+Known limitations of `load` ref maintenance:
+- `strip_moved_refs` reads and rewrites other sidecars without a cross-file lock; in a narrow concurrent window between `publish` stripping a moved ref and a simultaneous `touch()` (Sandbox creation) on the older image, the stripped ref can reappear on the older sidecar and cause an ambiguous-ref refusal until one image is removed with `machine.prune`.
+- When the target digest is already cached on the machine, `load` returns `reused: true` early without calling `publish`, so moving a tag in Docker onto an already-cached target does not strip that tag from an older cached sidecar; if two sidecars claim the same ref, use `machine.prune` on one of them.
+
+A staged
+tar left by a copy that is not running is resumed when its bytes hash as this
+export's prefix, else restarted; `size` is the bytes sent, else the sidecar's,
+else the layers' unpacked size, and the export container's `SizeRootFs` only
+refines the progress estimate. A copy that sent the image also answers
+`dropped: {fifos, devices, init}` (the paths left out) and `sparse: {files:
+[{path, expanded_bytes, stored_bytes}], expanded_bytes}`; a reused one has
+neither. Progress: `inspect`, `lock`, `export`, `send`
+(`done`, `total`: an estimate, never below `done`, until the last `send`
+event, whose `done` and `total` are both the bytes sent), `unpack`. Errors:
+`Unsupported` `{reason: "host"}`
 (macOS `native`), `{reason: "arch" | "os", value}`; `InvalidInput` (Docker
-has no such image); `Unavailable` `{what: "docker" | "machine"}`; `NoSpace`
-`{need, free}`.
+has no such image); `Unavailable` `{what: "docker" | "machine"}`; `Capacity`
+`{needed, free, where}`.
 
 ### machine.prune
 
@@ -246,12 +306,25 @@ CLI     layerfs machine prune <name> [<image>] [--unused]
 ```
 
 An image is in use while a Sandbox directory's `config/helper.spec`
-`lower=` names it, or while a create holds its lock between its unpack and
-its spec: a named one is refused `InUse` (`detail.count`), `unused` skips
-it. Naming the default removes it; the next create unpacks it again from
+`lower=` names it, while a create holds `.2.lock`, or while a live process
+holds `ImageLock` (`<home>/run/image-lock/<machine>/<hex>.lock`): a named one
+is refused `InUse` (`detail.count`), and `unused` leaves its artifacts
+untouched. `prune` holds the machine's prune gate (an exclusive `flock` on the
+folder `<home>/run/image-lock/<machine>/`, creating no file, so disk-full
+cleanups still proceed) from before it reads the `ImageLock`s until its
+removals are done, on every route: a `load` passes the gate after taking its
+`ImageLock` and before it writes, so it either holds its lock when `prune`
+reads them or waits until `prune` is over. If probing a single hex's lock fails
+(a bad `.lock` file), `unused` skips that hex, continues cleaning the rest, and
+returns `skipped: [{ id, reason }]` when any were skipped (naming that image
+directly returns the error). Otherwise `prune` removes unpacked directories (including stranded
+`<hex>.2` without `<hex>.2.json`), dangling `<hex>.2.json` sidecars, unheld
+`.recv-<hex>.part` staged files, and temporary `.tmp-<hex>.2-*` unpack
+directories (`unused` keeps valid unpacked copies of the machine's default).
+Naming the default removes it; the next create unpacks it again from
 its archive. `freed` is the free bytes after minus before. Errors:
 `InvalidInput` (neither an image nor `unused`, or not an id), `NotFound`
-(not unpacked here), `InUse`, `Unsupported` `{reason: "host"}`.
+(no matching artifact here), `InUse`, `Unsupported` `{reason: "host"}`.
 
 ### machine.status
 

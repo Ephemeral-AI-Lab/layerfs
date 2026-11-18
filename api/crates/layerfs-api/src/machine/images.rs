@@ -68,7 +68,18 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 fn shown(answer: &SdkValue, docker: bool) -> SdkValue {
     use super::stats::{count, field, rows};
     let default = answer.get_text("default");
-    let items = rows(answer.get("images"), |image| {
+    // Until an image carries its own state, a staged part (a copy still
+    // running, or one left partway) and a stranded unpack are not images the
+    // machine holds ready: they are left out rather than shown as ready.
+    let ready = match answer.get("images") {
+        Some(SdkValue::List(images)) => images
+            .iter()
+            .filter(|image| !image.get_bool("staged") && !image.get_bool("stranded"))
+            .cloned()
+            .collect(),
+        _ => Vec::new(),
+    };
+    let items = rows(Some(&SdkValue::List(ready)), |image| {
         let id = image.get_text("id");
         let sandboxes = field(image, "sandboxes");
         SdkValue::map([

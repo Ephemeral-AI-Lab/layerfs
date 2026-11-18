@@ -17,6 +17,13 @@ impl Transaction<'_> {
     pub(crate) fn layout(&self) -> crate::SqlitePackLayout {
         self.owner.layout
     }
+    /// The directory that holds the Store file.
+    pub(crate) fn store_directory(&self) -> std::path::PathBuf {
+        match self.owner.path.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
+            _ => std::path::PathBuf::from("."),
+        }
+    }
     pub(crate) fn schema_version(&self) -> i64 {
         self.owner.schema_version()
     }

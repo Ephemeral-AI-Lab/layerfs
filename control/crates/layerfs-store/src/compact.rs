@@ -17,12 +17,12 @@
 //! `Busy` in the GC vocabulary (§10 keeps `InUse` for non-GC calls), before
 //! any effect. It then opens the Store's own session, runs
 //! the §7 (SQLite) or §8 (PostgreSQL) compaction and answers the §11 report.
-//! A SQLite Store on another machine is `Unsupported` and is never sent to
-//! that machine's worker. Spec S6 says the rebuild runs on the machine that
-//! holds the file; 2.0 implements that only through `place::plan`'s `Local`
-//! route. This local-only reading is the documented contract deviation D5 in
-//! `core/docs/issues/project-41/gc-42-decisions.md` (with the API and control
-//! docs); run the call on that machine.
+//! A SQLite Store on another machine compacts there (spec S6): the call sends
+//! `{ store, store_record }` to that machine's worker ([`WORKER_OP`]), which
+//! runs the same §7 path on the file under its own root ([`in_worker`]) while
+//! this process keeps the Store's lease and its marker. Decision D5 in
+//! `core/docs/issues/project-41/gc-42-decisions.md` records the change from
+//! the earlier local-only refusal.
 use crate::identity;
 use crate::identity::Kind;
 use crate::intent;
@@ -153,17 +153,98 @@ pub fn compact(home: &Path, events: &mut Events<'_>, store: &str) -> Outcome {
     if matches!(store_ref, StoreRef::Postgres { .. }) {
         return compact_postgresql(&record, &home, events, store);
     }
-    match place::plan(&home, &store_ref)? {
-        Executor::Local => {}
-        Executor::Worker(_) => {
-            return Err(refused(
-                "Unsupported",
-                format!(
-                    "store.compact of Store {store} is local-only: run it on that Store's machine (S6 deviation #42 D5; the worker has no compaction route)"
-                ),
-            ))
+    let executor = place::plan(&home, &store_ref)?;
+    // The marker is this home's, whichever machine runs the rebuild: it is
+    // written here, beside the caller's record, never under a worker's root.
+    let mut marker = Marker::begin(&home, store);
+    let (outcome, left) = match executor {
+        Executor::Local => {
+            let outcome =
+                compact_sqlite(&home, events, store, &record, &mut |phase| marker.at(phase));
+            // the run's own record beside the Store says whether it settled
+            let path = paths::store_file(&home, store);
+            let left = layerfs_persistence::compact_op_status(&path).is_some();
+            (outcome, left)
         }
+        Executor::Worker(mut worker) => {
+            // S6: the rebuild runs on the machine that holds the file. This
+            // process keeps the Store's lease while the worker runs it, so a
+            // move or remove cannot start; the worker's phases come back as
+            // they are sent. A lost answer is `Unknown`, never resent: the
+            // run's own op record lets the next compaction judge it (§9).
+            let request = SdkValue::map([
+                ("store", SdkValue::text(store)),
+                ("store_record", record.to_record().clone()),
+            ]);
+            let outcome = worker.call(WORKER_OP, request, &mut |event| {
+                let phase = event.get("progress").and_then(|p| p.get_text("phase"));
+                if let Some(phase) = phase {
+                    marker.at(phase);
+                }
+                events.event(event)
+            });
+            // the worker's record is not readable here: a lost answer, or a
+            // run that reports a residue, leaves the outcome unresolved
+            let left = match &outcome {
+                Ok(report) => report.get_int("residue_bytes").unwrap_or(0) > 0,
+                Err(refusal) => refusal.code == "Unknown",
+            };
+            (outcome, left)
+        }
+    };
+    marker.end(left, &outcome);
+    outcome
+}
+
+/// The worker operation that compacts a sqlite Store on its machine.
+pub const WORKER_OP: &str = "store.compact";
+
+/// The worker's side of `store.compact`: `{ store, store_record }`, the
+/// Store file under the worker's `root` (the machine's data disk), never a
+/// path the caller sends. The worker holds the Store's lease under its root
+/// for the run, as `store.call` does while it keeps a Store open. An event
+/// that cannot be written does not end the run (#177): a caller that went
+/// away gets `Unknown`, and the run still finishes or aborts on its own terms.
+pub fn in_worker(
+    root: &Path,
+    args: &SdkValue,
+    events: &mut dyn FnMut(SdkValue) -> Result<(), SdkRefusal>,
+) -> Outcome {
+    let store = args
+        .get_text("store")
+        .ok_or_else(|| refused("InvalidInput", "store.compact names its Store"))?;
+    layerfs_home::names::StoreName::parse(store)?;
+    let fields = args
+        .get("store_record")
+        .cloned()
+        .ok_or_else(|| refused("InvalidInput", "store.compact sends the Store's record"))?;
+    let record = StoreRecord::from_record(store, fields);
+    if !matches!(record.store_ref()?, StoreRef::Sqlite { .. }) {
+        return Err(refused(
+            "InvalidInput",
+            format!("Store {store} is not a sqlite Store"),
+        ));
     }
+    let _lease = lease::hold_locked(root, store)?;
+    let mut sink = |event| {
+        let _ = events(event);
+    };
+    let mut events = Events::new(&mut sink);
+    // the caller's home keeps the marker; nothing is written beside it here
+    compact_sqlite(root, &mut events, store, &record, &mut |_| {})
+}
+
+/// The §7 SQLite path on Store file `store` under `home` (a home, or a
+/// worker's root), its lease held by the caller. `on_phase` hears each
+/// phase as it starts, before it is sent to `events`.
+fn compact_sqlite(
+    home: &Path,
+    events: &mut Events<'_>,
+    store: &str,
+    record: &StoreRecord,
+    on_phase: &mut dyn FnMut(&str),
+) -> Outcome {
+    let home = home.to_path_buf();
     let path = paths::store_file(&home, store);
     // A cached open in this process must end first. A call still running on
     // it keeps the Store open and is `Busy` in the GC vocabulary (§10 keeps
@@ -183,50 +264,43 @@ pub fn compact(home: &Path, events: &mut Events<'_>, store: &str) -> Outcome {
         postgresql: None,
     };
     let identity = identity::identity(&args)?;
-    let mut marker = Marker::begin(&home, store);
-    let outcome: Outcome = (|| {
-        let handles = SqliteHandles::open_writable(
-            PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
-            &identity.binding,
-            identity.cursor_key,
+    let handles = SqliteHandles::open_writable(
+        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
+        &identity.binding,
+        identity.cursor_key,
+    )
+    .map_err(open_refusal)?;
+    let (owner_pid_start, owner_pid_boot) = match layerfs_home::process::me() {
+        Some((start, boot)) => (Some(start), Some(boot)),
+        None => (None, None),
+    };
+    let op_id = admission::op_id();
+    let (owner_runtime, owner_boot) = admission::owner_tokens(&format!(
+        "compact:{}",
+        layerfs_bridge::sdk_values::hex(&op_id)
+    ));
+    let receipt = handles
+        .compact_observed(
+            &CompactRequest {
+                op_id,
+                owner_pid: Some(std::process::id()),
+                owner_pid_start,
+                owner_pid_boot,
+                owner_runtime: Some(owner_runtime),
+                owner_boot: Some(owner_boot),
+                owner_live: Some(layerfs_home::process::recorded_owner_alive),
+                failpoint: crash_failpoint(),
+                ..CompactRequest::default()
+            },
+            &mut |phase| {
+                on_phase(phase);
+                progress(events, phase, None)
+            },
         )
-        .map_err(open_refusal)?;
-        let (owner_pid_start, owner_pid_boot) = match layerfs_home::process::me() {
-            Some((start, boot)) => (Some(start), Some(boot)),
-            None => (None, None),
-        };
-        let op_id = admission::op_id();
-        let (owner_runtime, owner_boot) = admission::owner_tokens(&format!(
-            "compact:{}",
-            layerfs_bridge::sdk_values::hex(&op_id)
-        ));
-        let receipt = handles
-            .compact_observed(
-                &CompactRequest {
-                    op_id,
-                    owner_pid: Some(std::process::id()),
-                    owner_pid_start,
-                    owner_pid_boot,
-                    owner_runtime: Some(owner_runtime),
-                    owner_boot: Some(owner_boot),
-                    owner_live: Some(layerfs_home::process::recorded_owner_alive),
-                    failpoint: crash_failpoint(),
-                    ..CompactRequest::default()
-                },
-                &mut |phase| {
-                    marker.at(phase);
-                    progress(events, phase, None)
-                },
-            )
-            .map_err(|error| {
-                lookup::history_in(error, GcScopeKind::Store, store, None, Some(&op_id))
-            })?;
-        Ok(crate::report::compact_report(store, &receipt))
-    })();
-    // the run's own record beside the Store says whether it settled
-    let left = layerfs_persistence::compact_op_status(&path).is_some();
-    marker.end(left, &outcome);
-    outcome
+        .map_err(|error| {
+            lookup::history_in(error, GcScopeKind::Store, store, None, Some(&op_id))
+        })?;
+    Ok(crate::report::compact_report(store, &receipt))
 }
 
 /// The §8 PostgreSQL path: dial the Store's recorded URL, open its schema as

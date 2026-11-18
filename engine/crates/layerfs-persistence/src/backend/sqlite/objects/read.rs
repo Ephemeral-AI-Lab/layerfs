@@ -202,6 +202,21 @@ pub(crate) fn prefixes(
     closed(tx, blob, read)
 }
 
+/// The gap between two wanted ranges of one pack body that the mark reads
+/// through rather than skips ([`crate::backend::Mechanics::pack_range_fill`]):
+/// four database pages.
+///
+/// A body past its row's page is a chain of pages, and SQLite reads a chain
+/// one page at a time. Skipping a page saves that page; it also ends the run
+/// of consecutive page reads the operating system reads ahead of, so the
+/// next page waits for the disk on its own. On a 4.9 GB Store whose chunk
+/// records average 3.9 KB (about one record header on every page), reading
+/// only the headers was one wait per page: 28.4 s for the header reads of a
+/// mark from a cold file cache, against 13.4 s reading the groups through.
+/// From a warm cache both took under 1 s. A gap wider than this is still
+/// skipped, so a pack of large records costs its headers only.
+pub(crate) const RANGE_FILL_BYTES: usize = 16 * 1024;
+
 /// Selected ranges of several packs through one BLOB handle moved from row
 /// to row. A pack's ranges ascend, so its overflow chain is followed once.
 pub(crate) fn ranges(

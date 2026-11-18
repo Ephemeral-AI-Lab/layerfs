@@ -598,16 +598,28 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   (unpacked, or in its archive) starts at once; any other is resolved with
   `docker image inspect` through the `docker` machine's recorded socket
   (else Docker's default context), refused `Unsupported`
-  `{reason: "arch", value}` for another architecture, `NoSpace`
-  `{need, free}` when `2 × size × 1.05` is over the machine's free bytes
-  (`size`: what the image's layers unpack to, the sum of `docker history`'s
-  layer sizes, or the export container's root if larger),
-  and otherwise exported once (`docker create` + `docker export`, without
-  the init layer's files), sent in 1 MiB frames and unpacked on the
+  `{reason: "arch", value}` for another architecture, `Capacity`
+  `{needed, free, where}` when `2 × size × 1.05`, less the bytes a resumed
+  copy already staged, is over the machine's free bytes (`size`: what the
+  image's layers unpack to, the sum of `docker history`'s layer sizes),
+  and otherwise exported once into an exclusive per-export container (`docker
+  create` + `docker export`, without the init layer's files and with the mtimes
+  of the directories it stamps (the root, `dev/`, `etc/`, `proc/`, `sys/`)
+  normalized to epoch 0 (`1970-01-01`) so resume across separate exports
+  sees identical bytes; the container and its anonymous volumes are removed on
+  completion or error, and any residual containers left after `SIGKILL` are
+  reclaimed under `ImageLock` on the next `machine load-image` or
+  `sandbox create --image` in the same home without
+  waiting on active locks; legacy `layerfs-export-<machine>-<hex>` containers
+  labeled `layerfs.export.started` are no longer swept and require manual
+  `docker rm`), sent in 1 MiB frames and unpacked on the
   machine under `machines/native/run/images/<hex>.2/` with a sidecar
   `<hex>.2.json`; the staged tar is deleted. Docker unreachable is
   `Unavailable` `{what: "docker"}`, the machine stopped `Unavailable`
-  `{what: "machine"}`. `--progress` reports `inspect`, `export`, `send`
+  `{what: "machine"}`. One copy of an image on one machine at a time: a
+  second waits for the first (phase `lock`, `waiting: "lock"`, the holder
+  in `holder`), then reuses what it published. `--progress` reports
+  `inspect`, `lock`, `export`, `send`
   (`done`, `total`; `total` is an estimate until the last `send` event,
   which has `done` equal to `total`, the bytes sent), `unpack` and `start`. The record keeps the image's id,
   and every create sets its sidecar's `last_used`. The worker container's own
@@ -917,7 +929,7 @@ refusals, and
 | `update` | `store` | `auth`, `synchronous_commit` | a PostgreSQL Store's login or write setting |
 | `move` | `store`, `machine` | `on_progress` | moves a sqlite Store between this computer and a machine |
 | `remove` | `store` | — | deletes a sqlite Store with every project in it |
-| `compact` | `store` | `on_progress` | reclaims the dead bytes of one Store |
+| `compact` | `store` | `on_progress` | reclaims the dead bytes of one Store; a sqlite Store on another machine is compacted by that machine's worker |
 
 All twelve are migrated. `store.status` and `store.stats` are gone into
 `store get` (`--with live`, `--with stats`), `store.push` and `store.pull`
@@ -1037,7 +1049,9 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   peak_temp_bytes, residue_bytes, residue_artifacts, residue_reason,
   estimate, zero_reasons`. It records a `compact` operation in the Store's
   record while it runs; one left unresolved is cleared by the next
-  `store compact`.
+  `store compact`. A sqlite Store on another machine is compacted by that
+  machine's worker; the call starts no machine, and a stopped one is
+  `Unavailable` naming `layerfs machine start <machine>`.
 
 Run (macOS, native; the outputs are this build's):
 
@@ -1280,7 +1294,7 @@ $ layerfs file read nope/p main /a --detail
 | `Unresolved` | an earlier operation on the entity ended with its outcome not known; its process is gone and its `op` stays. The message names the call that shows it (`store status`, `machine status`, `sandbox get`) and the one that clears it (`store remove`, `machine remove`, `sandbox close`); `detail` as for `Busy` |
 | `Conflict` | a merge or Commit conflict, or a head that moved; for `backup.restore`, the Store changed since its last backup or restore |
 | `Dirty` | uncommitted changes stand in the way |
-| `Capacity` | a Sandbox's Workspace limit; a `store push` or `store pull` target without room for the Store (the long form's `detail.needed`, `detail.free`); no space left |
+| `Capacity` | a Sandbox's Workspace limit; a `store push` or `store pull` target without room for the Store (the long form's `detail.needed`, `detail.free`); copying an image to a machine without room for it (`detail.needed`, `detail.free`, `detail.where`); no space left |
 | `InvalidInput` | the request is wrong for this name or kind (a file where a folder is needed, a binary file read as text, a reserved name, a write to `main`, an unknown `with` section, a cursor of another call); nothing happened |
 | `Unsupported` | not possible here, or not built (see [limitations](limitations.md)); a missing tool is listed in the long form's `detail.missing` |
 | `Unavailable` | a server, bucket, worker or host cannot be reached, refused the login or secret, or did not answer in time |

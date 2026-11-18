@@ -28,6 +28,7 @@ use crate::location::ObjectLocation;
 use crate::policy::StorageCapacities;
 use crate::source::Source;
 
+use super::memo::Known;
 use super::read::PooledCaches;
 
 /// True for the roles whose records may be a COPY/INSERT program against a
@@ -170,6 +171,9 @@ impl PoolReader {
         let cap = usize::from(capacities.metadata_delta_max_depth);
         let mut chain: Vec<(ObjectLocation, Vec<u8>)> = Vec::with_capacity(cap + 1);
         let mut current = root;
+        // The element the walk stopped at because this reader already rebuilt
+        // and authenticated it: the chain below it is not read again.
+        let mut known: Option<(ObjectId, Known)> = None;
         loop {
             if current.pack_id > ceiling {
                 return Err(StorageError::VisibilityCeiling {
@@ -182,6 +186,18 @@ impl PoolReader {
                 .any(|(row, _)| row.object_id == current.object_id)
             {
                 return Err(StorageError::Integrity("branch dependency cycle"));
+            }
+            let held = self
+                .memo
+                .as_mut()
+                .and_then(|memo| memo.get(&current.object_id, root.role, ceiling));
+            if let Some(held) = held {
+                // The depth a full walk would have reached, under the same cap.
+                if chain.len() + usize::from(held.depth) > cap {
+                    return Err(StorageError::Integrity("branch chain depth"));
+                }
+                known = Some((current.object_id, held));
+                break;
             }
             let record = self.record(connection, workspace, &current, caches.as_mut())?;
             let base = stored_base(&record)?;
@@ -212,14 +228,21 @@ impl PoolReader {
             }
             current = location;
         }
+        // A known element brings the work its own chain charged, so the
+        // totals and the allowance checks below are those of a full walk.
+        let below = known
+            .as_ref()
+            .map_or(0, |(_, held)| usize::from(held.depth) + 1);
         let mut work = BranchChain {
-            depth: u8::try_from(chain.len() - 1)
+            depth: u8::try_from(chain.len() + below - 1)
                 .map_err(|_| StorageError::Integrity("branch chain depth"))?,
-            ..BranchChain::default()
+            canonical: known.as_ref().map_or(0, |(_, held)| held.canonical),
+            encoded: known.as_ref().map_or(0, |(_, held)| held.encoded),
         };
-        let mut page: Option<(ObjectId, Vec<u8>)> = None;
+        let mut highest_pack = known.as_ref().map_or(0, |(_, held)| held.highest_pack);
+        let mut page: Option<(ObjectId, Vec<u8>)> = known.map(|(id, held)| (id, held.bytes));
         let mut applies = 0_u64;
-        for (location, record) in chain.iter().rev() {
+        for (position, (location, record)) in chain.iter().rev().enumerate() {
             work.canonical = work
                 .canonical
                 .saturating_add(location.canonical_length as u64);
@@ -255,6 +278,22 @@ impl PoolReader {
             }
             if ObjectId::for_bytes(&decoded) != location.object_id {
                 return Err(StorageError::Integrity("branch canonical identity"));
+            }
+            highest_pack = highest_pack.max(location.pack_id);
+            if let Some(memo) = self.memo.as_mut() {
+                // Authenticated just above, with the chain facts up to here.
+                memo.insert(
+                    location.object_id,
+                    Known {
+                        role: root.role,
+                        bytes: decoded.clone(),
+                        depth: u8::try_from(below + position)
+                            .map_err(|_| StorageError::Integrity("branch chain depth"))?,
+                        canonical: work.canonical,
+                        encoded: work.encoded,
+                        highest_pack,
+                    },
+                );
             }
             page = Some((location.object_id, decoded));
         }

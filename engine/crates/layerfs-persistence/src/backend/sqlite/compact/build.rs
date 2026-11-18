@@ -8,11 +8,13 @@
 //! in-place rewrite: `VACUUM INTO` + delete + `VACUUM` would write the retained
 //! bytes about four times over (measured), while this path writes them once.
 
+use super::lengths::PackLengths;
 use super::op::compact_path;
 use super::op::hex;
 use super::op::stop_at;
 use super::op::visited_path;
 use super::op::RunOp;
+use super::repack::Repacked;
 use super::space;
 use super::types::db_error;
 use super::types::io_error;
@@ -22,23 +24,43 @@ use super::types::MarkTuple;
 use super::verify::immutable_uri;
 use super::window::windows;
 use super::window::ReadAhead;
-use super::window::Window;
 use crate::backend::records::BackendError;
 use crate::backend::sqlite::lifecycle::seal::SealedFacts;
 use crate::backend::sqlite::session::connection::Session;
+use crate::history::spill::Space;
+use crate::KeptObjects;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
 use rusqlite::params;
 use rusqlite::Connection;
 use rusqlite::OpenFlags;
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-/// The bulk load's page cache: 256 MiB, so the retained packs stream through
-/// memory instead of the default 2 MiB cache.
-const CACHE_KIB: i64 = 262_144;
+/// The bulk load's page cache: 64 MiB, so the retained packs stream through
+/// memory instead of the default 2 MiB cache. The verification reader takes
+/// the same size once the build has closed and released its own. The size is
+/// part of what a compaction may hold whatever the Store's size: a mark holds
+/// more than this, and the cache is taken after the mark has let go.
+pub(crate) const CACHE_KIB: i64 = 65_536;
+
+/// The cache while the secondary indexes are built, 8 MiB. SQLite sorts an
+/// index's keys in memory up to its cache size before it writes a run to a
+/// temporary file, so this is also the most one index sort holds; the load
+/// is committed by then and the index pages are written in key order.
+pub(crate) const INDEX_CACHE_KIB: i64 = 8_192;
+
+/// The least page cache a connection of the compaction is given.
+const LEAST_CACHE_KIB: usize = 512;
+
+/// A page cache that is `kib` under the default budget, under the budget
+/// of `space`: the run's one budget sizes the caches as it sizes the
+/// sorters ([`Space::scaled`]).
+pub(crate) fn cache_kib(space: &Space, kib: i64) -> i64 {
+    let kib = space.scaled(usize::try_from(kib).unwrap_or(0).saturating_mul(1024)) / 1024;
+    i64::try_from(kib.max(LEAST_CACHE_KIB)).unwrap_or(i64::MAX)
+}
 
 /// §7 step 2's large window for the attached sealed source. The session default
 /// is no mmap (`session/profile.rs:86-87`), so the bulk copy would page the old
@@ -65,24 +87,6 @@ pub fn peak_temp_bytes(target_bytes: u64, visited_bytes: u64) -> u64 {
     target_bytes.saturating_add(visited_bytes)
 }
 
-pub(crate) fn pack_lengths(session: &Arc<Session>) -> HistoryResult<BTreeMap<i64, u64>> {
-    session
-        .run::<_, BackendError>(false, |tx| {
-            let rows = tx.query("SELECT pack_id,length FROM pack", vec![])?;
-            let mut lengths = BTreeMap::new();
-            for row in &rows {
-                let id: i64 = row.get(0)?;
-                let length: i64 = row.get(1)?;
-                lengths.insert(
-                    id,
-                    u64::try_from(length).map_err(|_| BackendError::Integrity)?,
-                );
-            }
-            Ok(lengths)
-        })
-        .map_err(Into::into)
-}
-
 pub(crate) fn live_page_metrics(session: &Arc<Session>) -> HistoryResult<(u64, u64)> {
     session
         .run::<_, BackendError>(false, |tx| {
@@ -102,11 +106,19 @@ pub(crate) fn live_page_metrics(session: &Arc<Session>) -> HistoryResult<(u64, u
 pub(crate) struct Built {
     pub(crate) target: PathBuf,
     pub(crate) target_bytes: u64,
+    /// Whether `pack` holds the payload of the fresh file's packs, so that
+    /// its rows lie spread over the whole file: the verification then reads
+    /// them window by window.
+    pub(crate) payload_in_pack: bool,
     pub(crate) visited_bytes: u64,
     pub(crate) logical: u64,
     pub(crate) canonical: u64,
     pub(crate) stored: u64,
     pub(crate) metadata: u64,
+    /// The retained packs this build wrote again without their dead records.
+    pub(crate) repacked: Repacked,
+    /// The body bytes of the inode value blocks the fresh file holds.
+    pub(crate) inode_blocks_bytes: u64,
 }
 
 impl Built {
@@ -140,9 +152,24 @@ pub(crate) struct BuildInput<'a> {
     /// about to write, known before the fresh file holds a row.
     pub(crate) payload_bytes: u64,
     /// Every pack of the sealed Store and its stored length.
-    pub(crate) lengths: &'a BTreeMap<i64, u64>,
-    /// The packs the mark retains, ascending.
-    pub(crate) retained: &'a [i64],
+    pub(crate) lengths: &'a mut PackLengths,
+    /// What the mark kept: the packs it retains, those among them that hold
+    /// dead records (for [`super::repack`]) and the inode value ordinals it
+    /// read (for [`super::values`]). Each is read as a stream.
+    pub(crate) kept: &'a KeptObjects,
+    /// The run's sort space, for its budget.
+    pub(crate) space: &'a Space,
+}
+
+/// What the mark found besides the retained packs, for the steps of the copy
+/// that leave part of a retained row set behind.
+struct Marked<'a> {
+    /// See [`BuildInput::lengths`].
+    lengths: &'a mut PackLengths,
+    /// See [`BuildInput::kept`].
+    kept: &'a KeptObjects,
+    /// The bytes of the sealed file that are not pack payload.
+    slack: u64,
 }
 
 /// How one table's rows enter the fresh file.
@@ -166,11 +193,13 @@ enum Copy {
 /// admission intent, so the installed Store carries the row the settle clears.
 fn copy_rule(table: &str) -> Copy {
     match table {
-        // A pack is one unit: a pack with any live object is copied whole.
+        // A pack with any live object is copied whole, unless `repack::plan`
+        // took it out of `live_pack` to write it again without its dead
+        // records.
         "pack" | "pack_unit" => Copy::Where(RETAINED_PACK),
-        "object_location" | "content_signature" => {
-            Copy::Where("object_id IN (SELECT object_id FROM scratch.visited)")
-        }
+        // `object_location` is not filtered: `copy_rows` writes the kept
+        // locators from the visited set itself ([`KEPT_LOCATORS`]).
+        "content_signature" => Copy::Where("object_id IN (SELECT object_id FROM scratch.visited)"),
         "file_digest" => Copy::Where("root IN (SELECT object_id FROM scratch.visited)"),
         "layer_stack" => {
             Copy::Where("layer_stack_id IN (SELECT node_id FROM src.kept_node WHERE kind='stack')")
@@ -205,8 +234,12 @@ UNION SELECT run FROM src.commit_lineage WHERE commit_id IN \
         "layer_stack_retired" | "path_removed" | "project_epoch" => {
             Copy::Where("layer_stack_id IN (SELECT node_id FROM src.kept_node WHERE kind='stack')")
         }
-        "inode_value_block" | "kept_node" | "scope_allocator" | "store_policy" | "store_totals"
-        | "history_meta" => Copy::All,
+        // A block is one unit: a block with any ordinal a kept leaf reads is
+        // copied whole.
+        "inode_value_block" => Copy::Where(super::values::LIVE_BLOCK),
+        "kept_node" | "scope_allocator" | "store_policy" | "store_totals" | "history_meta" => {
+            Copy::All
+        }
         "gc_intent" => Copy::Empty,
         "gc_op" | "gc_dead" | "merge_operation" | "merge_record" | "init_operation"
         | "init_entry" | "init_host_file" | "binding_hint_block" => Copy::Empty,
@@ -214,20 +247,88 @@ UNION SELECT run FROM src.commit_lineage WHERE commit_id IN \
     }
 }
 
+/// The columns of `object_location`, in the order its definition gives them.
+const LOCATOR_COLUMNS: &str = "object_id,role,canonical_length,pack_id,group_number,record_number";
+
+/// The kept locators. A `visited` row is the object's whole locator as the
+/// mark read it from this Store with the writer lane held, so they are
+/// written from the scratch in one forward scan, in key order: appended to
+/// the fresh table, with no lookup in the sealed Store's (the join against
+/// it made 5.1 million page-cache lookups for 1.5 million objects and took
+/// 1.7 to 1.9 s; this scan makes 0.7 million and takes about 1 s).
+const KEPT_LOCATORS: &str = "INSERT INTO main.object_location\
+(object_id,role,canonical_length,pack_id,group_number,record_number) \
+SELECT object_id,role,canonical_length,pack_id,group_number,record_number FROM scratch.visited";
+
+/// Requires the fresh `object_location` to have exactly [`LOCATOR_COLUMNS`]:
+/// a definition with another column would lose it in [`KEPT_LOCATORS`].
+fn locator_columns(connection: &Connection) -> HistoryResult<()> {
+    let columns: String = connection
+        .query_row(
+            "SELECT COALESCE(group_concat(name,','),'') FROM \
+(SELECT name FROM pragma_table_info('object_location','main') ORDER BY cid)",
+            params![],
+            |row| row.get(0),
+        )
+        .map_err(db_error)?;
+    if columns != LOCATOR_COLUMNS {
+        return Err(HistoryError::Integrity("staged Store locator columns"));
+    }
+    Ok(())
+}
+
 /// The filter that keeps a retained pack's rows.
 const RETAINED_PACK: &str = "pack_id IN (SELECT pack_id FROM scratch.live_pack)";
+
+/// The stored bytes of the fresh file's packs between two identities, and the
+/// metadata-domain part of them: the two `store_totals` sums `pack` decides.
+const PACK_SUMS: &str = "SELECT COALESCE(SUM(length),0),\
+COALESCE(SUM(CASE WHEN domain=0 THEN length ELSE 0 END),0) \
+FROM main.pack WHERE pack_id BETWEEN ?1 AND ?2";
+
+/// The same two sums over the packs the repack step planned: they leave the
+/// windowed copy and are written after it, again or whole.
+const REPACKED_PACK_SUMS: &str = "SELECT COALESCE(SUM(length),0),\
+COALESCE(SUM(CASE WHEN domain=0 THEN length ELSE 0 END),0) \
+FROM main.pack WHERE pack_id IN (SELECT pack_id FROM scratch.repack)";
+
+/// Adds the fresh file's packs between `first` and `last` to `(stored,
+/// metadata)`.
+fn add_pack_sums(
+    sums: &mut rusqlite::Statement<'_>,
+    (first, last): (i64, i64),
+    totals: &mut (i64, i64),
+) -> HistoryResult<()> {
+    let (stored, metadata): (i64, i64) = sums
+        .query_row(params![first, last], |row| Ok((row.get(0)?, row.get(1)?)))
+        .map_err(db_error)?;
+    totals.0 = totals.0.saturating_add(stored);
+    totals.1 = totals.1.saturating_add(metadata);
+    Ok(())
+}
 
 /// The pack copy: the rows of the table that holds the pack payload, one
 /// window of retained packs per statement. Before each window the sealed file
 /// is asked for the part the window reads, so a source that is not in memory
 /// arrives in sequential requests instead of one pack per round trip.
+///
+/// When the payload table is `pack` itself, each window's rows are summed into
+/// `totals` right after they are written, while their pages are still in this
+/// connection's cache. One pass over `pack` after the whole load would read
+/// every row's page back from the file: one read per pack, spread over the
+/// whole file.
 fn copy_packs(
     connection: &Connection,
     table: &str,
-    plan: &[Window],
+    marked: &mut Marked<'_>,
     sealed: &mut ReadAhead,
+    totals: &mut (i64, i64),
 ) -> HistoryResult<()> {
     let name = identifier(table);
+    let mut sums = match table {
+        "pack" => Some(connection.prepare(PACK_SUMS).map_err(db_error)?),
+        _ => None,
+    };
     let mut statement = connection
         .prepare(&format!(
             // The range goes inside the subquery: SQLite drives this loop
@@ -237,13 +338,23 @@ fn copy_packs(
 (SELECT pack_id FROM scratch.live_pack WHERE pack_id BETWEEN ?1 AND ?2)"
         ))
         .map_err(db_error)?;
-    for window in plan {
-        sealed.ask(window);
-        statement
-            .execute(params![window.first, window.last])
-            .map_err(db_error)?;
-    }
-    Ok(())
+    // The windows are cut from the stream of pack lengths and each is copied
+    // as soon as it is cut, so no plan is held.
+    windows(
+        marked.lengths.packs()?,
+        marked.kept.retained_packs(),
+        marked.slack,
+        &mut |window| {
+            sealed.ask(&window);
+            statement
+                .execute(params![window.first, window.last])
+                .map_err(db_error)?;
+            if let Some(sums) = sums.as_mut() {
+                add_pack_sums(sums, (window.first, window.last), totals)?;
+            }
+            Ok(())
+        },
+    )
 }
 
 /// The `store_policy` columns the rebuild copies, named explicitly: the fresh
@@ -331,9 +442,9 @@ fn copy_rows(
     op: &RunOp,
     generation: i64,
     target_tables: &BTreeSet<String>,
-    plan: &[Window],
     sealed: &mut ReadAhead,
-) -> HistoryResult<()> {
+    marked: &mut Marked<'_>,
+) -> HistoryResult<Repacked> {
     // The pack payload is `pack.body` in a Monolithic Store and the
     // `pack_unit` rows otherwise; that table is copied window by window.
     let payload = if target_tables.contains("pack_unit") {
@@ -344,7 +455,14 @@ fn copy_rows(
     connection
         .execute_batch("BEGIN IMMEDIATE")
         .map_err(db_error)?;
-    let copied = (|| -> HistoryResult<()> {
+    // `(stored, metadata)`, summed from the fresh file's own `pack` rows.
+    let mut pack_totals = (0i64, 0i64);
+    let copied = (|| -> HistoryResult<Repacked> {
+        // Packs that hold dead records leave the whole-pack copy here and are
+        // written again, without those records, once the tables are copied.
+        let repack = super::repack::plan(connection, marked.kept)?;
+        // The ordinals the block copy below looks its blocks up in.
+        super::values::plan(connection, marked.kept.inode_ordinal_runs())?;
         // §7 step 4: the totals trigger invariant holds before the copy. The
         // rewrite of `store_totals` below trusts it.
         let before: (i64, i64) = connection
@@ -366,11 +484,14 @@ fn copy_rows(
                 continue;
             }
             if table == payload {
-                copy_packs(connection, table, plan, sealed)?;
+                copy_packs(connection, table, marked, sealed, &mut pack_totals)?;
                 continue;
             }
             let name = identifier(table);
-            let statement = if table == "gc_intent" {
+            let statement = if table == "object_location" {
+                locator_columns(connection)?;
+                KEPT_LOCATORS.to_owned()
+            } else if table == "gc_intent" {
                 format!(
                     "INSERT INTO main.{name} SELECT * FROM src.{name} WHERE op_id=x'{}'",
                     hex(&op.op_id)
@@ -389,6 +510,12 @@ fn copy_rows(
                 }
             };
             connection.execute_batch(&statement).map_err(db_error)?;
+            if table == "pack" {
+                // The group-row layouts: `pack` holds no payload, was copied
+                // in the one statement above, and is small enough to sum whole.
+                let mut sums = connection.prepare(PACK_SUMS).map_err(db_error)?;
+                add_pack_sums(&mut sums, (i64::MIN, i64::MAX), &mut pack_totals)?;
+            }
         }
         // `sqlite_sequence` is the acquisition operation counter: the copy
         // keeps every row the source had, so the counter never falls (§4.1).
@@ -410,23 +537,42 @@ SELECT name,seq FROM src.sqlite_sequence",
                     .map_err(db_error)?;
             }
         }
+        let repacked =
+            super::repack::apply(connection, &repack, target_tables.contains("pack_unit"))?;
+        // The packs the repack step took out of the whole-pack copy were
+        // written just now, after every window was summed: add them.
+        if marked.kept.partly_dead_count() > 0 {
+            let planned: (i64, i64) = connection
+                .query_row(REPACKED_PACK_SUMS, params![], |row| {
+                    Ok((row.get(0)?, row.get(1)?))
+                })
+                .map_err(db_error)?;
+            pack_totals.0 = pack_totals.0.saturating_add(planned.0);
+            pack_totals.1 = pack_totals.1.saturating_add(planned.1);
+        }
         // §7 step 4: `store_totals` is a whole row, so the `init_*` columns
         // keep the source values; only the four derived sums are rewritten.
+        // The two pack sums were taken from the fresh file's rows as the load
+        // wrote them; the verification recomputes all four from the closed
+        // file and compares.
         connection
             .execute_batch(&format!(
                 "UPDATE main.store_totals SET \
 logical=(SELECT COALESCE(SUM(logical),0) FROM main.\"commit\")+\
 (SELECT COALESCE(SUM(logical),0) FROM main.layer),\
 canonical=(SELECT COALESCE(SUM(canonical_length),0) FROM main.object_location),\
-(stored,metadata)=(SELECT COALESCE(SUM(length),0),\
-COALESCE(SUM(CASE WHEN domain=0 THEN length ELSE 0 END),0) FROM main.pack) WHERE id=1;\
-UPDATE main.history_meta SET catalog_incarnation={generation} WHERE id=1;"
+stored={},metadata={} WHERE id=1;\
+UPDATE main.history_meta SET catalog_incarnation={generation} WHERE id=1;",
+                pack_totals.0, pack_totals.1
             ))
             .map_err(db_error)?;
-        Ok(())
+        Ok(repacked)
     })();
     match copied {
-        Ok(()) => connection.execute_batch("COMMIT").map_err(db_error),
+        Ok(repacked) => {
+            connection.execute_batch("COMMIT").map_err(db_error)?;
+            Ok(repacked)
+        }
         Err(error) => {
             let _ = connection.execute_batch("ROLLBACK");
             Err(error)
@@ -477,8 +623,11 @@ pub(crate) fn build(
         synchronous,
         payload_bytes,
         lengths,
-        retained,
+        kept,
+        space: sorts,
     } = input;
+    let cache = cache_kib(sorts, CACHE_KIB);
+    let index_cache = cache_kib(sorts, INDEX_CACHE_KIB);
     let store = &facts.path;
     let target = compact_path(store);
     let visited = visited_path(store);
@@ -539,7 +688,7 @@ pub(crate) fn build(
         .execute_batch(&format!(
             "PRAGMA page_size={page_size};PRAGMA auto_vacuum={auto_vacuum};\
 PRAGMA journal_mode=OFF;PRAGMA synchronous=OFF;PRAGMA foreign_keys=OFF;\
-PRAGMA temp_store=MEMORY;PRAGMA cache_size=-{CACHE_KIB};\
+PRAGMA temp_store=FILE;PRAGMA cache_size=-{cache};\
 PRAGMA user_version={user_version};PRAGMA application_id={application_id};"
         ))
         .map_err(db_error)?;
@@ -571,21 +720,36 @@ PRAGMA user_version={user_version};PRAGMA application_id={application_id};"
     let page_bytes = u64::try_from(page_size).unwrap_or(0);
     space::reserve(&target, payload_bytes, page_bytes)?;
     let target_tables = main_tables(&connection)?;
-    let plan = windows(lengths, retained, facts.bytes)?;
     let mut sealed = ReadAhead::open(store)?;
-    copy_rows(
+    let repacked = copy_rows(
         &connection,
         op,
         tuple.generation + 1,
         &target_tables,
-        &plan,
         &mut sealed,
+        &mut Marked {
+            slack: facts.bytes.saturating_sub(lengths.total()),
+            lengths,
+            kept,
+        },
     )?;
     drop(sealed);
+    // §11 `peakTempBytes`: the repack step added its working tables to the
+    // visited scratch, so the scratch is measured again after the load.
+    let visited_bytes = std::fs::metadata(&visited)
+        .map_or(visited_bytes, |scratch| visited_bytes.max(scratch.len()));
 
     // §7 step 4: the secondary indexes and the immutability/logical triggers
     // are built after the bulk load, so the load writes no index page and fires
-    // no trigger.
+    // no trigger. The connection's temporary storage is files
+    // (`temp_store=FILE`): an index over the Commits, the Layers or the pack
+    // units is sorted through runs in SQLite's temporary directory once its
+    // keys pass the cache size set here, and a statement of the copy that
+    // SQLite answers from a temporary table spills the same way. In memory
+    // (the earlier `temp_store=MEMORY`) each held every key at once.
+    connection
+        .execute_batch(&format!("PRAGMA cache_size=-{index_cache}"))
+        .map_err(db_error)?;
     for sql in &schema.secondary {
         connection.execute_batch(sql).map_err(db_error)?;
     }
@@ -633,6 +797,7 @@ WHERE sql IS NOT NULL AND substr(name,1,7)!='sqlite_' ORDER BY type,name",
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .map_err(db_error)?;
+    let inode_blocks_bytes = super::values::kept_bytes(&connection)?;
     // The schema is complete, so the header's page count is final: the file
     // ends there, whatever the load was sized for.
     let pages: i64 = connection
@@ -679,10 +844,14 @@ WHERE sql IS NOT NULL AND substr(name,1,7)!='sqlite_' ORDER BY type,name",
     Ok(Built {
         target,
         target_bytes,
+        // `pack` holds the payload unless the layout has `pack_unit` rows.
+        payload_in_pack: !target_tables.contains("pack_unit"),
         visited_bytes,
         logical: u64::try_from(totals.0).unwrap_or(0),
         canonical: u64::try_from(totals.1).unwrap_or(0),
         stored: u64::try_from(totals.2).unwrap_or(0),
         metadata: u64::try_from(totals.3).unwrap_or(0),
+        repacked,
+        inode_blocks_bytes,
     })
 }

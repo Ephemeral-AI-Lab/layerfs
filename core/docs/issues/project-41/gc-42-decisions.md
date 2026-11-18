@@ -321,10 +321,12 @@ frozen whole-lane exclusion; its measurements live under
 
 ---
 
-## D. SQLite implementation notes: four deviations and the D2 build decision
+## D. SQLite implementation notes: three deviations, the D2 build decision, the D5 route and D6–D7
 
-This section keeps five records. D1, D3, D4 and D5 are deviations from the
-frozen text that the shipped code still carries. D2 is the build decision that
+This section keeps seven records. D1, D3 and D4 are deviations from the
+frozen text that the shipped code still carries; D5 was one until
+2026-11-18 and now records how the code follows S6; D6 and D7 were
+prototypes and the owner accepted both on 2026-11-18. D2 is the build decision that
 replaced the whole-Store copy: the fresh-copy rebuild follows S5's "fresh
 Store" sentence but deviates from §7 step 4's payload sweep and rollback
 journal and from §11's peak-temp line, and the earlier `VACUUM INTO` + delete +
@@ -405,6 +407,16 @@ measured implementation of this branch.
   `peakTempBytes` and deleted before the reply (the §11 table already names the
   visited scratch as part of `peakTempBytes`). Alternative is an in-memory
   visited set, which the measurement rules out for large Stores.
+- **Changed 2026-11-18:** the `none` path no longer writes the scratch. The
+  walk has kept its visited set in memory since the mark was rebuilt around
+  one read of every locator, so the scratch was a second copy of it, written
+  one row at a time during the walk: on a 4.9 GB Store with 1.69 million
+  objects that was 27 of 62 seconds of a `none` run. The mark now hands each
+  reached object to a sink that keeps it (40 bytes an object) until the path
+  is chosen; only a `rebuild` writes `<store>.compact-visited`, before its
+  mark transaction commits, and `none` reports `peakTempBytes` 0 with the
+  `none-path` reason. `<store>.compact-op` is still written and removed on
+  both paths. The owner has not ruled on the frozen sentences.
 
 ### D4. §11: SQLite records a fifth observable phase, `cleanup`, during settle
 
@@ -420,33 +432,190 @@ measured implementation of this branch.
 - **Runbook consequence:** `store.status` shows `cleanup` on SQLite after the
   install point; the runbook's phase list includes it.
 
-### D5. S6/§7: `store.compact` is local-only; a remote sqlite Store is `Unsupported`
+### D5. S6/§7: `store.compact` of a sqlite Store on another machine runs in that machine's worker
 
 - **Frozen:** S6 "A SQLite Store compacts on the machine where it lives
   (`place::plan`, `control/crates/layerfs-store/src/place.rs:40-49`)"; §7
   "Runs as one operation on the Store's machine (S6)."
-- **Implemented:** the call consults `place::plan` but runs compaction only on
-  the `Local` branch, in the caller's process. Its `Worker` branch is refused
-  `Unsupported` before the Store is opened or the machine is dialled, and the
-  worker has no `store.compact` operation at all. A sqlite Store pushed to a
-  machine (`docker`, `lima`, `apple-container`) therefore cannot be compacted
-  from the home that owns the record; the owner pushes it back to `native`,
-  compacts there, and pushes it again. `store.compact` of a PostgreSQL Store
-  is unchanged: the call dials the Store's recorded URL itself.
-- **Reason:** the worker route needs a worker-side compaction operation, the
-  Store record and lease read under the worker's root, and a crash/resume
-  answer for a call whose run can be hours long; 2.0 ships the local engine
-  and the transfer route (`store.push`/`store.pull`) instead. The refusal is
-  named, never a silent local run on the wrong file.
-- **Decision requested:** accept local-only for 2.0 as a deviation from S6
-  (and say so in the API and control docs, which now name #42 D5), or require
-  the worker `store.compact` route before the contract closes.
-- **Consequence:** `store.compact` of a Store whose record names another
-  machine is `Unsupported` with "local-only: run it on that Store's machine
-  (S6 deviation #42 D5; the worker has no compaction route)"; the operation is
-  refused before any effect. `api/crates/layerfs-api/tests/store_family.rs`
-  `compact_of_a_remote_sqlite_store_is_a_documented_local_only_refusal` pins
-  it.
+- **History:** until 2026-11-18 the call ran compaction only on `place::plan`'s
+  `Local` branch and refused the `Worker` branch `Unsupported` ("local-only"),
+  as a requested deviation from S6. The owner asked on 2026-11-18 for
+  `store.compact` to work on a Store pushed to a machine (`docker`, `lima`,
+  `apple-container`), so the deviation is withdrawn.
+- **Implemented:** the caller takes the Store's lease under its home, as
+  before, and sends `{ store, store_record }` to the machine's worker
+  operation `store.compact` (`compact::WORKER_OP`). The worker holds the
+  Store's lease under its own root and runs the same §7 path on
+  `store/<name>/store.sqlite` there (`compact::in_worker`); each phase comes
+  back as a `progress` event. A worker that is not running is `Unavailable`
+  naming `layerfs machine start`, and nothing is started (#535 D11). A lost
+  answer after the request went out is `Unknown` and is never resent; an
+  event that cannot be written does not end the run (#177), and the run's op
+  record lets the next compaction judge it (§9). PostgreSQL is unchanged:
+  the call dials the Store's recorded URL itself.
+- **Tests:** `control/crates/layerfs-control/tests/store_compact_worker.rs`
+  compacts a Store under a worker root through a live worker (phases, rebuild,
+  nothing left beside the file, the kept project reads, a second run takes
+  `none`) and checks the operation's frame refusals;
+  `api/crates/layerfs-api/tests/store_family.rs`
+  `compact_of_a_remote_sqlite_store_takes_its_machines_worker_route` pins the
+  `Unavailable` answer for a machine with no worker.
+
+
+### D6. S5/§2/§3/§6.4: the SQLite rebuild writes partly dead packs again, and the 10% counts their dead records
+
+- **Status:** built on branch `claude/gc-opt-repack` (2026-11-18), now on the combined
+  branch `claude/gc-real-lead`; accepted by the owner the same day (see
+  Decision below). The frozen text is not amended; this entry is the record.
+- **Frozen:** S5 "The unit that frees bytes is the pack"; §2 lists
+  "repacking partly dead packs (reported, not performed)" as out of the
+  release; §3 takes the numerator of the 10% test over wholly dead packs only;
+  §7 step 4 copies a retained pack whole.
+- **Implemented (SQLite only):** the mark names every retained pack in which
+  it found a record no reached object owns (`KeptObjects::partly_dead_packs`).
+  The rebuild takes those packs out of the whole-pack copy and writes each one
+  again from the records the visited set keeps, which includes records kept
+  only as delta bases. The bytes are built by `layerfs-storage`
+  (`pack::repack::retain_records`): a group that keeps every record is
+  carried over as stored, a group that keeps none is left out, a group that
+  keeps some is framed again, and a compressed ordinary group is decoded and
+  compressed again. The pack keeps its `pack_id`; it gets a new SHA-256 and
+  length; the kept objects' `object_location` rows move to the new group and
+  record numbers. Singleton packs are never rewritten. The new packs are
+  written to `<store>.compact`, and the step's working tables (`repack`,
+  `repack_kept`) to the mark's visited scratch `<store>.compact-visited`,
+  whose size `peakTempBytes` counts; both are artifacts of the run, so the
+  old Store is unchanged until the rename, as before. The kept locators are
+  ordered by the scratch table's key, on disk, and read one pack at a
+  time, not sorted in memory.
+- **A pack that cannot be rewritten is copied whole**, exactly as every
+  rebuild copied it before, so a damaged Store does not turn a compaction
+  that used to succeed into one that fails: a pack whose stored bytes are
+  not the ones its row's SHA-256 and length describe (a rewrite would give
+  damaged bytes a fresh, matching digest), a pack whose kept locators
+  disagree with it (two objects on one record, or a record the pack does not
+  hold), and a pack the core rebuild refuses for any other reason. Its
+  locators stay as they were and its dead bytes stay in
+  `keptWaste.deadInRetainedPacksBytes` after the rebuild, which is the only
+  place the report shows the condition; there is no separate field or log
+  line. Such a pack still counts towards the 10%, so a Store whose in-pack
+  dead bytes sit mostly in packs like this rebuilds on every call instead of
+  taking `none`.
+- **Threshold:** `rebuild iff total > 0 AND (dead + deadInRetained) * 10 >=
+  total`, where `dead` is the bytes of wholly dead packs and `deadInRetained`
+  is the mark's `keptWaste.deadInRetainedPacksBytes`. The 10% value and the
+  denominator are unchanged. A compressed group that mixes live and dead
+  records still counts 0 here (its bytes cannot be attributed without
+  decoding it), although the rebuild does rewrite it.
+- **Report:** `deadBytesBound` and `deadBytesRefined` stay the bytes of wholly
+  dead packs. After a rebuild `keptWaste.deadInRetainedPacksBytes` is the
+  mark's value minus the share of the packs written again (0 when all were).
+  A rebuild chosen only by in-pack dead bytes reports `deadBytesBound = 0`
+  with `zeroReason: "no-waste"` and a non-zero `physicalShrink`; a field for
+  the in-pack bytes freed is not added here.
+- **Verification (§7 step 6):** besides the existing counts, each rewritten
+  pack is read back whole from the staged file and hashed: its bytes must
+  carry the SHA-256 and length of its row, and both must be the ones the
+  build computed. The pack's own directories then state how many records
+  each group holds (a compressed group is decoded for its count; the pack
+  directory records only its extent and decoded length), and the staged
+  locators that name the pack must be exactly those records: each `(group,
+  record)` in range and named once, none unnamed. The locators come from one
+  plain scan of `object_location`, which has no index by pack; no statement
+  sorts or groups in a temporary b-tree. Which object a record belongs to is
+  not re-proved here: the build compares every kept record byte for byte with
+  its source, whose own SHA-256 it checks first, and reading objects back by
+  identity stays with the full doctor. Cost: about 0.65 ms per rewritten
+  megabyte (577 MB read back and hashed in 0.37 s, one sample).
+- **Not changed:** PostgreSQL (it still copies packs whole and decides on
+  wholly dead packs only), `remove_file` (visibility-only, §6.2), the
+  `inode_value_block` rows (#42 item 37) and delta-base-only records, which
+  stay because a live record needs them.
+- **Measured (one sample each, macOS host, load about 5):** on the scenario
+  matrix the nine rows with dead records in retained packs end within eight
+  4 KiB pages of their control Store's used pages (for example S8c 1,990,656
+  → 495,616 bytes, control 479,232; S9a 2,490,368 → 1,421,312, control
+  1,404,928; S8e 573,440 → 372,736, control 339,968), and four of them
+  previously took `none`. Their pack bytes end within 500 bytes of control;
+  the rest is `inode_value_block` rows of the removed history and page
+  rounding over more, smaller packs. A 1.16 GB Store with half of every pack dead
+  rebuilds to 580,763,648 bytes in 2.05 s (build 1.68 s); copying the same
+  packs whole takes 1.91 s (build 1.52 s) and frees 0.9 MB.
+- **Measured on a real Store (`qv2`, 4.9 GB, one sample each, macOS, load 3 to
+  5, commits ported to branch `claude/gc-real-storage`; file sizes include
+  D7's block change, which is 3.1 MB or less in these rows):**
+
+  | Store | Rebuild without repack | With repack | Whole call without | With |
+  | --- | ---: | ---: | ---: | ---: |
+  | 210 of 211 Branches removed, old history unreferenced (5,129,699,328 bytes, 11.7% in wholly dead packs) | 4,529,102,848 | 4,448,587,776 | 60.6 s (build 9.9, verify 3.9) | 51.5 s (build 6.3, verify 2.3) |
+  | 210 of 211 Branches removed (4,927,729,664 bytes, 7.97%), rebuild forced | 4,529,123,328 | 4,448,608,256 | 51.5 s (build 9.4, verify 2.4) | 63.6 s (build 9.8, verify 1.9) |
+  | half the Branches removed (4,927,729,664 bytes, 4.48%), rebuild forced | 4,700,323,840 | 4,650,729,472 | 77.1 s (build 11.6, verify 15.4) | 56.7 s (build 8.9, verify 2.0) |
+
+  The repack returns 76.9 MB and 47.1 MB more pack bytes (the mark's
+  `deadInRetainedPacksBytes` said 75.2 MB and 45.6 MB; the rest sits in
+  compressed groups). That is 13% to 22% more than the whole-pack rebuild
+  returns, and 1.0% to 1.6% of the file. The mark is 39 to 52 s of every call
+  and moves by more than the build between two samples, so the calls do not
+  order by arm; build plus verify is 8.6 to 11.7 s with repack and 11.8 to
+  27.0 s without. The widened numerator changed no decision on this Store:
+  the forced rows stay under 10% with it (9.55% and 5.44%).
+- **A reason to repack in the same rebuild:** a mixed compressed group shows
+  its dead records only through locators the walk did not reach. A rebuild
+  that copies the pack whole deletes those locators, so a later mark no
+  longer sees that pack as partly dead (817 packs before, 536 after, on the
+  half-removed Store) and its dead records stay for good.
+- **Decision:** accepted by the owner on 2026-11-18 ("Keep both", for D6 and
+  D7, relayed by the session that merged PR 735): the SQLite rebuild repacks
+  partly dead packs and the 10% test counts their dead records. It is SQLite
+  only and keeps the existing Store format. The question put was: accept
+  repacking and the widened numerator for SQLite in 2.0, or keep the frozen
+  pack-as-unit rebuild.
+
+### D7. §6.4 (#42 item 37): the SQLite rebuild copies only the inode value blocks a kept leaf reads
+
+- **Status:** built on branch `claude/gc-real-storage` (2026-11-18), now on the combined
+  branch `claude/gc-real-lead`; accepted by the owner the same day (see
+  Decision below). The frozen text is not amended; this entry is the record.
+- **Frozen:** §6.4 "Kept in 2.0: every `inode_value_block` row; the ordinals
+  of pooled leaves are private to core, and the blocks are small"; §7 step 4
+  copies all `inode_value_block` rows.
+- **Why it is reopened:** on the real 4.9 GB Store `qv2` the blocks are 24.4 MB
+  (9,999 rows, 604,117 values). After its large project is deleted the rebuilt
+  Store is 28,884,992 bytes, of which 27.6 MB is that project's values: the
+  kept project needs 24,726 bytes of them.
+- **Implemented (SQLite only):** the ordinals stay private to core. The mark
+  reads every reached inode leaf through the shared reader, and the reader
+  asks the mark's source for the ordinals of every body of the leaf's delta
+  chain; every member of that chain is itself reached. The mark notes each
+  ordinal it is asked for (`KeptObjects::inode_ordinals`, inclusive runs), so
+  the noted set is every ordinal a later read of a kept leaf can ask for. The
+  rebuild writes the runs to the visited scratch (`live_ordinal`) and copies
+  an `inode_value_block` row only when it holds one of them. A block is one
+  unit: it is copied whole, byte for byte, with the unread ordinals beside the
+  read ones; no value is encoded again. `store_policy.next_ordinal` is copied
+  unchanged, so an ordinal a dropped block held is never handed out again,
+  and gaps between blocks were already valid (the doctor's
+  `store.catalog.ordinal_overlap` says "reservation gaps remain valid").
+- **Report:** after a rebuild `keptWaste.inodeBlocksBytes` is the body bytes
+  of the blocks the rebuilt Store holds. On the `none` path, and from a mark
+  alone, it is every block's bytes, as before. The dropped blocks are not
+  counted towards the 10%.
+- **Verification (§7 step 6):** one ordered pass over the staged file's block
+  keys requires every ordinal the mark read to be inside a staged block.
+- **Not changed:** PostgreSQL (it keeps every block), the block format, the
+  values of a kept block that no kept leaf reads.
+- **Measured (`qv2`, one sample each, macOS, load 3 to 5):**
+  `project-b-deleted` rebuilds to 1,294,336 bytes instead of 28,884,992
+  (blocks 24,380,718 → 24,726 bytes, 9,999 → 234 rows; whole call 6.1 s
+  against 5.9 s, build 0.15 s against 0.20 s). On Stores that keep most of
+  their history the blocks shrink little, because most values are still
+  read: all Branches but `main` removed 24,380,718 → 21,250,030; half the
+  Branches removed → 22,227,858. In every case a mark of the rebuilt Store keeps the same
+  objects and history nodes, and every kept object reads back.
+- **Decision:** accepted by the owner on 2026-11-18 ("Keep both", for D6 and
+  D7): the SQLite rebuild copies only the inode value blocks a kept leaf
+  reads. It is SQLite only and keeps the existing Store format. The question
+  put was: accept dropping unread blocks for SQLite in 2.0, or keep item 37.
 
 ## G. Deferred design decision (1)
 

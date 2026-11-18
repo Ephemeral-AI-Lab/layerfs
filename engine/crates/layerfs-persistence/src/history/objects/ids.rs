@@ -13,13 +13,11 @@
 //! scan. Results never depend on the key: nothing here is iterated in map
 //! order without sorting first.
 use layerfs_content::ObjectId;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::{BuildHasher, Hasher, RandomState};
 
 /// A map from object identity.
 pub(super) type IdMap<V> = HashMap<ObjectId, V, IdState>;
-/// A set of object identities.
-pub(super) type IdSet = HashSet<ObjectId, IdState>;
 
 /// One map's secret: a mask and an odd multiplier.
 #[derive(Clone, Copy)]

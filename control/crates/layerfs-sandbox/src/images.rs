@@ -7,14 +7,20 @@
 //! (`available`, read through the Docker the copy uses). macOS native runs
 //! no image (`mode: 'host'`).
 use crate::deploy::{self, Choice, Side};
-use crate::image_artifact::{self as cache, Sidecar};
+use crate::image_artifact::{self as cache, SidecarInfo};
+use crate::image_lock::{ImageLock, PruneGate};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_sandbox_backend::rootfs;
+use layerfs_sandbox_backend::rootfs::{self, Temporary};
 use layerfs_sandbox_backend::Image;
 use layerfs_store::place::{self, Executor};
+use std::collections::{BTreeMap, BTreeSet};
+use std::io::ErrorKind;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
+use std::time::SystemTime;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -82,25 +88,32 @@ pub fn list(home: &Path, name: &MachineName, docker: bool) -> Outcome {
         SdkValue::List(using.map(|r| SdkValue::text(r.name())).collect())
     };
     let images: Vec<SdkValue> = match answer.get("images") {
-        Some(SdkValue::List(rows)) => rows
-            .iter()
-            .map(|row| {
-                let names = users(row.get_text("id").unwrap_or(""));
-                layerfs_home::home::with_field(row.clone(), "sandboxes", names)
-            })
-            .collect(),
+        Some(SdkValue::List(rows)) => {
+            let mut out = Vec::with_capacity(rows.len());
+            for row in rows {
+                let id = row.get_text("id").unwrap_or("");
+                let mut enriched = home::with_field(row.clone(), "sandboxes", users(id));
+                if enriched.get_bool("staged") {
+                    if let Some(hex) = id.strip_prefix("sha256:").filter(|h| cache::is_hex(h)) {
+                        if is_flock_held(&ImageLock::path(home, machine, hex))? {
+                            enriched =
+                                home::with_field(enriched, "resumable", SdkValue::Bool(false));
+                        }
+                    }
+                }
+                out.push(enriched);
+            }
+            out
+        }
         _ => Vec::new(),
     };
     if !docker {
-        return Ok(layerfs_home::home::with_field(
-            answer,
-            "images",
-            SdkValue::List(images),
-        ));
+        return Ok(home::with_field(answer, "images", SdkValue::List(images)));
     }
-    // the host's Docker images this machine could copy, minus those it holds
+    // the host's Docker images this machine could copy, minus those it holds completely
     let held: Vec<(String, Vec<String>)> = images
         .iter()
+        .filter(|row| !row.get_bool("staged") && !row.get_bool("stranded"))
         .map(|row| {
             (
                 row.get_text("id").unwrap_or("").to_owned(),
@@ -164,7 +177,7 @@ fn listing(machine: &str, side: &Side<'_>, choice: &Choice) -> Outcome {
         Side::Home(root) | Side::Worker(root) => *root,
     };
     let dir = cache::cache(root);
-    let mut rows: Vec<Sidecar> = cache::sidecars(&dir)?;
+    let mut rows: Vec<SidecarInfo> = cache::sidecar_infos(&dir)?;
     // the archives a Sandbox here reads: the machine's own, and the bundle's
     let mut archives = Vec::new();
     if choice.archive.is_some() {
@@ -182,24 +195,29 @@ fn listing(machine: &str, side: &Side<'_>, choice: &Choice) -> Outcome {
         }
         for entry in entries {
             let id = entry.digest.as_str();
-            if rows.iter().any(|row| row.id == id) {
+            if rows.iter().any(|row| row.sidecar.id == id) {
                 continue;
             }
             if let Some(row) = cache::from_archive(side, archive, id)? {
-                rows.push(row);
+                rows.push(SidecarInfo {
+                    sidecar: row,
+                    variant: None,
+                });
             }
         }
     }
-    let images = rows
+    let published: BTreeSet<String> = rows.iter().map(|r| r.sidecar.id.clone()).collect();
+    let mut images: Vec<SdkValue> = rows
         .into_iter()
-        .map(|row| {
-            let mut value = row.to_value();
-            if let SdkValue::Map(fields) = &mut value {
-                fields.retain(|(name, _)| name != "config");
-            }
-            value
-        })
+        .map(|row| home::with_field(env_names(row.to_value()), "staged", SdkValue::Bool(false)))
         .collect();
+    append_cache_leftovers(root, machine, &dir, &published, &mut images)?;
+    images.sort_by(|a, b| {
+        a.get_text("id")
+            .unwrap_or("")
+            .cmp(b.get_text("id").unwrap_or(""))
+            .then_with(|| a.get_bool("staged").cmp(&b.get_bool("staged")))
+    });
     Ok(SdkValue::map([
         ("machine", SdkValue::text(machine)),
         ("mode", SdkValue::text("images")),
@@ -211,6 +229,99 @@ fn listing(machine: &str, side: &Side<'_>, choice: &Choice) -> Outcome {
         ),
         ("images", SdkValue::List(images)),
     ]))
+}
+
+/// A listing row whose `config.Env` keeps only the variable names: a value can
+/// be a secret (`ENV TOKEN=...`) that the answer, its traces and a UI would
+/// carry. The sidecar on the machine keeps the whole record.
+fn env_names(row: SdkValue) -> SdkValue {
+    let Some(SdkValue::Map(config)) = row.get("config").cloned() else {
+        return row;
+    };
+    let name = |var: SdkValue| match var {
+        SdkValue::Text(text) => SdkValue::text(text.split('=').next().unwrap_or("")),
+        _ => SdkValue::Null,
+    };
+    let config = config
+        .into_iter()
+        .map(|(field, value)| match (field.as_str(), value) {
+            ("Env", SdkValue::List(vars)) => {
+                (field, SdkValue::List(vars.into_iter().map(name).collect()))
+            }
+            (_, value) => (field, value),
+        });
+    home::with_field(row, "config", SdkValue::Map(config.collect()))
+}
+
+/// Appends staged `.recv-<hex>.part` rows and stranded `<hex>.2` rows found in `dir`.
+fn append_cache_leftovers(
+    root: &Path,
+    machine: &str,
+    dir: &Path,
+    published: &BTreeSet<String>,
+    images: &mut Vec<SdkValue>,
+) -> Result<()> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(failed(e)),
+    };
+    let now = SystemTime::now();
+    for entry in entries {
+        let entry = entry.map_err(failed)?;
+        let fname = entry.file_name();
+        let Some(name) = fname.to_str() else { continue };
+        if let Some(hex) = cache::part_hex(name) {
+            let meta = match std::fs::symlink_metadata(entry.path()) {
+                Ok(meta) => meta,
+                Err(e) if e.kind() == ErrorKind::NotFound => continue,
+                Err(e) => return Err(failed(e)),
+            };
+            let id = format!("sha256:{hex}");
+            let age = meta
+                .modified()
+                .ok()
+                .and_then(|mtime| now.duration_since(mtime).ok())
+                .map_or(0, |d| d.as_secs() as i64);
+            let lock_held = is_flock_held(&dir.join(format!("{hex}.2.lock")))?
+                || is_flock_held(&ImageLock::path(root, machine, hex))?;
+            let resumable = meta.file_type().is_file()
+                && meta.len() > 0
+                && !published.contains(&id)
+                && !lock_held;
+            images.push(SdkValue::map([
+                ("id", SdkValue::text(&id)),
+                ("refs", SdkValue::List(Vec::new())),
+                ("size", SdkValue::Int(meta.len() as i64)),
+                ("age", SdkValue::Int(age)),
+                ("resumable", SdkValue::Bool(resumable)),
+                ("architecture", SdkValue::Null),
+                ("source", SdkValue::text("staged")),
+                ("variant", SdkValue::Null),
+                ("config", SdkValue::Null),
+                ("last_used", SdkValue::Null),
+                ("staged", SdkValue::Bool(true)),
+            ]));
+        } else if let Some(hex) = name.strip_suffix(".2").filter(|h| cache::is_hex(h)) {
+            let id = format!("sha256:{hex}");
+            if published.contains(&id) || !entry.file_type().is_ok_and(|t| t.is_dir()) {
+                continue;
+            }
+            images.push(SdkValue::map([
+                ("id", SdkValue::text(&id)),
+                ("refs", SdkValue::List(Vec::new())),
+                ("size", SdkValue::Null),
+                ("architecture", SdkValue::Null),
+                ("source", SdkValue::text("stranded")),
+                ("variant", SdkValue::Null),
+                ("config", SdkValue::Null),
+                ("last_used", SdkValue::Null),
+                ("staged", SdkValue::Bool(false)),
+                ("stranded", SdkValue::Bool(true)),
+            ]));
+        }
+    }
+    Ok(())
 }
 
 /// `machine.prune(name, image?, { unused })`: removes image `image`, or with
@@ -235,13 +346,59 @@ pub fn prune(home: &Path, name: &MachineName, image: Option<&str>, unused: bool)
     if host_mode(&executor) {
         return Err(host_only(machine));
     }
+    // no copy starts writing until this prune is over, so the copy locks read
+    // here are every copy it must leave alone, on a worker machine too
+    let _gate = PruneGate::hold(home, machine)?;
+    let (locked, lock_errors) = scan_image_locks(&ImageLock::dir(home, machine))?;
+    let _target_lock = if let Some(target) = image {
+        if let Some(reason) = lock_errors.get(target) {
+            return Err(refused("Failed", reason.clone()));
+        }
+        if locked.contains(target) {
+            return Err(refused_with(
+                "InUse",
+                format!("image {target} has an active copy lock on this machine"),
+                SdkValue::map([("count", SdkValue::Int(1))]),
+            ));
+        }
+        Some(ImageLock::try_hold(home, machine, target)?.ok_or_else(|| {
+            refused_with(
+                "InUse",
+                format!("image {target} has an active copy lock on this machine"),
+                SdkValue::map([("count", SdkValue::Int(1))]),
+            )
+        })?)
+    } else {
+        None
+    };
     let mut args = request(machine, &choice);
-    args = layerfs_home::home::with_field(
+    args = home::with_field(args, "target", image.map_or(SdkValue::Null, SdkValue::text));
+    args = home::with_field(args, "unused", SdkValue::Bool(unused));
+    args = home::with_field(
         args,
-        "target",
-        image.map_or(SdkValue::Null, SdkValue::text),
+        "locked",
+        SdkValue::List(locked.into_iter().map(SdkValue::Text).collect()),
     );
-    args = layerfs_home::home::with_field(args, "unused", SdkValue::Bool(unused));
+    if !lock_errors.is_empty() {
+        args = home::with_field(
+            args,
+            "lock_errors",
+            SdkValue::List(
+                lock_errors
+                    .into_iter()
+                    .map(|(id, reason)| {
+                        SdkValue::map([
+                            ("id", SdkValue::text(id)),
+                            ("reason", SdkValue::text(reason)),
+                        ])
+                    })
+                    .collect(),
+            ),
+        );
+    }
+    if image.is_some() {
+        args = home::with_field(args, "target_guarded", SdkValue::Bool(true));
+    }
     match executor {
         Executor::Local => pruning(&Side::Home(home), &args),
         Executor::Worker(mut worker) => worker
@@ -256,15 +413,54 @@ pub fn prune_in_worker(root: &Path, args: SdkValue) -> Outcome {
     pruning(&Side::Worker(root), &args)
 }
 
-/// Removes the images `args` names on `side`.
+/// Artifacts present in the image cache directory for one digest hex.
+#[derive(Default)]
+struct CacheEntry {
+    has_unpacked: bool,
+    has_sidecar: bool,
+    has_part: bool,
+    temps: Vec<String>,
+}
+
+/// Removes the images `args` names on `side`, plus unheld staged parts,
+/// temporary unpack directories, stranded unpacked directories, and dangling
+/// sidecars, while never touching live-locked or in-use entries.
 fn pruning(side: &Side<'_>, args: &SdkValue) -> Outcome {
     let root = match side {
         Side::Home(root) | Side::Worker(root) => *root,
     };
     let dir = cache::cache(root);
     let choice = choice_of(args);
+    let machine = args.get_text("machine").unwrap_or("");
     let target = args.get_text("target").filter(|t| cache::digest(t));
     let unused = args.get_bool("unused");
+    let target_guarded = args.get_bool("target_guarded");
+    let mut locked: BTreeSet<String> = cache::texts(args.get("locked")).into_iter().collect();
+    let mut lock_errors: BTreeMap<String, String> = match args.get("lock_errors") {
+        Some(SdkValue::List(items)) => items
+            .iter()
+            .filter_map(|item| {
+                Some((
+                    item.get_text("id")?.to_owned(),
+                    item.get_text("reason")?.to_owned(),
+                ))
+            })
+            .collect(),
+        _ => BTreeMap::new(),
+    };
+    if !machine.is_empty() {
+        let (local_locked, local_errors) = scan_image_locks(&ImageLock::dir(root, machine))?;
+        for id in local_locked {
+            if !(target_guarded && target == Some(id.as_str())) {
+                locked.insert(id);
+            }
+        }
+        for (id, reason) in local_errors {
+            if !(target_guarded && target == Some(id.as_str())) {
+                lock_errors.insert(id, reason);
+            }
+        }
+    }
     let default = match &choice.image {
         Some(image) => Some(image.clone()),
         None => deploy::archive(side, choice.archive.as_deref())
@@ -274,40 +470,115 @@ fn pruning(side: &Side<'_>, args: &SdkValue) -> Outcome {
             .map(|entries| entries[0].digest.as_str().to_owned()),
     };
     let before = cache::free(&dir);
-    let candidates: Vec<String> = match target {
-        Some(target) => vec![target.to_owned()],
-        None => unpacked(&dir)?,
-    };
+    let target_hex = target.map(|t| &t["sha256:".len()..]);
+    let entries = collect_cache_entries(&dir, target_hex)?;
+    if target.is_some() && entries.is_empty() {
+        return Err(refused(
+            "NotFound",
+            format!("machine has no unpacked image {}", target.unwrap_or("")),
+        ));
+    }
     let lowers = lowers(dir.parent().unwrap_or(&dir))?;
     let mut removed = Vec::new();
-    for id in candidates {
-        if target.is_none() && unused && default.as_deref() == Some(id.as_str()) {
+    let mut skipped = Vec::new();
+    for (hex, item) in entries {
+        let id = format!("sha256:{hex}");
+        if let Some(reason) = lock_errors.get(&id) {
+            if target.is_some() {
+                return Err(refused("Failed", reason.clone()));
+            }
+            skipped.push(SdkValue::map([
+                ("id", SdkValue::text(&id)),
+                ("reason", SdkValue::text(reason)),
+            ]));
             continue;
         }
-        let hex = &id["sha256:".len()..];
-        let held = [dir.join(format!("{hex}.2")), dir.join(hex)];
-        if target.is_some() && !held.iter().any(|p| p.exists()) {
-            return Err(refused(
-                "NotFound",
-                format!("machine has no unpacked image {id}"),
-            ));
-        }
-        let image = Image::parse(&id).map_err(|e| refused("InvalidInput", e.to_string()))?;
-        let gone = rootfs::remove(&image, &dir, |path| lowers.iter().any(|l| l == path))
-            .map_err(failed)?;
-        if gone {
-            match std::fs::remove_file(cache::sidecar_path(&dir, hex)) {
-                Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(failed(e)),
-                _ => {}
+        let held = [dir.join(format!("{hex}.2")), dir.join(&hex)];
+        let lower_users = lowers.iter().filter(|l| held.contains(l)).count();
+        let img_locked = locked.contains(&id);
+        let hold_locked = match is_flock_held(&dir.join(format!("{hex}.2.lock"))) {
+            Ok(held) => held,
+            Err(err) => {
+                if target.is_some() {
+                    return Err(err);
+                }
+                skipped.push(SdkValue::map([
+                    ("id", SdkValue::text(&id)),
+                    ("reason", SdkValue::text(err.message)),
+                ]));
+                continue;
             }
+        };
+        if img_locked || lower_users > 0 || hold_locked {
+            if target.is_some() {
+                let count = lower_users.max(1);
+                return Err(refused_with(
+                    "InUse",
+                    format!(
+                        "image {id} is used by a Sandbox on this machine (or one being created)"
+                    ),
+                    SdkValue::map([("count", SdkValue::Int(count as i64))]),
+                ));
+            }
+            continue;
+        }
+        let is_default = target.is_none() && unused && default.as_deref() == Some(id.as_str());
+        let mut removed_any = false;
+        let mut temp_held = false;
+        for temp_name in &item.temps {
+            match rootfs::remove_temporary(&dir, temp_name).map_err(failed)? {
+                Temporary::Removed => removed_any = true,
+                Temporary::Absent => {}
+                Temporary::Held => {
+                    temp_held = true;
+                    break;
+                }
+            }
+        }
+        if temp_held {
+            if target.is_some() {
+                return Err(refused_with(
+                    "InUse",
+                    format!("image {id} is being unpacked on this machine"),
+                    SdkValue::map([("count", SdkValue::Int(1))]),
+                ));
+            }
+            continue;
+        }
+        if item.has_part && remove_file_if_present(&cache::part(&dir, &hex))? {
+            removed_any = true;
+        }
+        if is_default {
+            if removed_any && !item.has_unpacked {
+                removed.push(SdkValue::Text(id));
+            }
+            continue;
+        }
+        if item.has_unpacked {
+            let image = Image::parse(&id).map_err(|e| refused("InvalidInput", e.to_string()))?;
+            let gone = rootfs::remove(&image, &dir, |path| lowers.iter().any(|l| l == path))
+                .map_err(failed)?;
+            if gone {
+                removed_any = true;
+            } else {
+                if target.is_some() {
+                    let count = lower_users.max(1);
+                    return Err(refused_with(
+                        "InUse",
+                        format!(
+                            "image {id} is used by a Sandbox on this machine (or one being created)"
+                        ),
+                        SdkValue::map([("count", SdkValue::Int(count as i64))]),
+                    ));
+                }
+                continue;
+            }
+        }
+        if item.has_sidecar && remove_file_if_present(&cache::sidecar_path(&dir, &hex))? {
+            removed_any = true;
+        }
+        if removed_any {
             removed.push(SdkValue::Text(id));
-        } else if target.is_some() {
-            let users = lowers.iter().filter(|l| held.contains(l)).count();
-            return Err(refused_with(
-                "InUse",
-                format!("image {id} is used by a Sandbox on this machine (or one being created)"),
-                SdkValue::map([("count", SdkValue::Int(users as i64))]),
-            ));
         }
     }
     let after = cache::free(&dir);
@@ -315,37 +586,124 @@ fn pruning(side: &Side<'_>, args: &SdkValue) -> Outcome {
         (Some(before), Some(after)) => after.saturating_sub(before) as i64,
         _ => 0,
     };
-    Ok(SdkValue::map([
-        ("removed", SdkValue::List(removed)),
-        ("freed", SdkValue::Int(freed)),
-    ]))
+    let mut out = vec![
+        ("removed".to_owned(), SdkValue::List(removed)),
+        ("freed".to_owned(), SdkValue::Int(freed)),
+    ];
+    if !skipped.is_empty() {
+        out.push(("skipped".to_owned(), SdkValue::List(skipped)));
+    }
+    Ok(SdkValue::Map(out))
 }
 
-/// Every image unpacked in `dir`, the current layout's and older ones'.
-fn unpacked(dir: &Path) -> Result<Vec<String>> {
-    let mut ids = Vec::new();
+/// Scans `dir` for unpacked images, sidecars, staged `.part` files, and temporary
+/// `.tmp-*` directories, optionally filtered to a single `target_hex`.
+fn collect_cache_entries(
+    dir: &Path,
+    target_hex: Option<&str>,
+) -> Result<BTreeMap<String, CacheEntry>> {
+    let mut found: BTreeMap<String, CacheEntry> = BTreeMap::new();
     let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(ids),
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(found),
         Err(e) => return Err(failed(e)),
     };
     for entry in entries {
         let entry = entry.map_err(failed)?;
-        let name = entry.file_name();
-        let Some(name) = name.to_str() else { continue };
-        let hex = name.strip_suffix(".2").unwrap_or(name);
-        let id = format!("sha256:{hex}");
-        if cache::digest(&id) && entry.path().is_dir() && !ids.contains(&id) {
-            ids.push(id);
+        let fname = entry.file_name();
+        let Some(name) = fname.to_str() else { continue };
+        if let Some(hex) = cache::part_hex(name) {
+            if target_hex.is_none_or(|t| t == hex) {
+                found.entry(hex.to_owned()).or_default().has_part = true;
+            }
+        } else if let Some(hex) = rootfs::temporary_digest(name) {
+            if target_hex.is_none_or(|t| t == hex) {
+                found
+                    .entry(hex.to_owned())
+                    .or_default()
+                    .temps
+                    .push(name.to_owned());
+            }
+        } else if let Some(hex) = name.strip_suffix(".2.json").filter(|h| cache::is_hex(h)) {
+            if target_hex.is_none_or(|t| t == hex) {
+                found.entry(hex.to_owned()).or_default().has_sidecar = true;
+            }
+        } else {
+            let hex = name.strip_suffix(".2").unwrap_or(name);
+            if cache::is_hex(hex)
+                && target_hex.is_none_or(|t| t == hex)
+                && entry.file_type().is_ok_and(|t| t.is_dir())
+            {
+                found.entry(hex.to_owned()).or_default().has_unpacked = true;
+            }
         }
     }
-    ids.sort();
-    Ok(ids)
+    Ok(found)
+}
+
+fn remove_file_if_present(path: &Path) -> Result<bool> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(failed(e)),
+    }
+}
+
+/// Checks whether an `flock` exists and is currently held on `path` without
+/// creating or mutating any file on disk.
+fn is_flock_held(path: &Path) -> Result<bool> {
+    let file = match std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+    {
+        Ok(file) => file,
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(false),
+        Err(e) => return Err(failed(e)),
+    };
+    let acquired = home::flock::try_lock(&file, true).map_err(failed)?;
+    if acquired {
+        home::flock::unlock(&file);
+        Ok(false)
+    } else {
+        Ok(true)
+    }
+}
+
+/// Scans `lock_dir` for `ImageLock` files held by live processes and per-image
+/// lock probe errors (e.g. a symlink or unreadable `.lock` file).
+fn scan_image_locks(lock_dir: &Path) -> Result<(BTreeSet<String>, BTreeMap<String, String>)> {
+    let mut locked = BTreeSet::new();
+    let mut errors = BTreeMap::new();
+    let entries = match std::fs::read_dir(lock_dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok((locked, errors)),
+        Err(e) => return Err(failed(e)),
+    };
+    for entry in entries {
+        let entry = entry.map_err(failed)?;
+        let fname = entry.file_name();
+        let Some(name) = fname.to_str() else { continue };
+        let Some(hex) = name.strip_suffix(".lock").filter(|h| cache::is_hex(h)) else {
+            continue;
+        };
+        let id = format!("sha256:{hex}");
+        match is_flock_held(&entry.path()) {
+            Ok(true) => {
+                locked.insert(id);
+            }
+            Ok(false) => {}
+            Err(err) => {
+                errors.insert(id, err.message);
+            }
+        }
+    }
+    Ok((locked, errors))
 }
 
 /// The image directories the Sandboxes under runtime root `run` are built on:
 /// each Sandbox directory's `config/helper.spec` `lower=` line.
-fn lowers(run: &Path) -> Result<Vec<std::path::PathBuf>> {
+pub(crate) fn lowers(run: &Path) -> Result<Vec<std::path::PathBuf>> {
     let mut found = Vec::new();
     let entries = match std::fs::read_dir(run) {
         Ok(entries) => entries,

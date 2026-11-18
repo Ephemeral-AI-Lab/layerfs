@@ -1,20 +1,35 @@
 //! §6.3 visited scratch: a SQLite compaction's visited set is a temp-file
-//! table, streamed while the mark walks the object closure.
+//! table the build attaches.
 //!
-//! One row per discovered object is written to `<store>.compact-visited`
-//! (journal off, no sidecars) instead of leaving the set to a second pass
-//! over an in-memory map. The §7 build attaches the same file as `scratch`
-//! and joins `object_location` against it, and the `none`/abort paths delete
-//! it with the rest of the artifact set.
-use layerfs_content::ObjectId;
+//! The path is chosen after the walk, and a `none` decision drops the sink
+//! without creating a file. A `rebuild` calls [`VisitSink::finish`], which
+//! writes `<store>.compact-visited` (journal off, no sidecars) in one
+//! transaction: the `visited` rows as the mark lists them, in identity
+//! order, and the retained packs (`live_pack`) in pack order, so both tables
+//! are filled by appending and neither needs a sort or a second pass in SQL.
+//! A `visited` row is the object's whole locator, as the mark read it from
+//! the Store while it held the writer lane, so the §7 build copies the kept
+//! locators from this table in one forward scan and never looks one up in
+//! the sealed Store. A row also says whether its object was reached only as
+//! a delta base, so the rebuild can restate the mark's
+//! `keptWaste.deltaBases.bytes` for the packs it writes again. The rows are
+//! written as they are listed; the sink holds one statement's worth of them.
+//! The build attaches the file as `scratch`, and the abort paths delete it
+//! with the rest of the artifact set.
 use layerfs_history::error::{HistoryError, HistoryResult};
-use rusqlite::{params, Connection, OpenFlags};
+use layerfs_storage::location::ObjectLocation;
+use rusqlite::types::{ToSqlOutput, ValueRef};
+use rusqlite::{Connection, OpenFlags};
 use std::path::{Path, PathBuf};
 
-/// The rows a mark streams into the compaction's visited scratch.
+/// Rows one `INSERT` writes; seven bound values each.
+const ROWS_PER_INSERT: usize = 128;
+
+/// The scratch a rebuilding mark writes its reached objects to.
 pub(crate) struct VisitSink {
     path: PathBuf,
-    connection: Option<Connection>,
+    /// Whether [`Self::finish`] started the scratch file.
+    created: bool,
     finished: bool,
 }
 
@@ -39,14 +54,38 @@ fn io_error(error: std::io::Error) -> HistoryError {
 }
 
 impl VisitSink {
-    /// Creates the scratch beside the Store. The caller has already refused a
-    /// recorded artifact; an existing name here is an unrecorded leftover.
+    /// Starts a sink for the scratch beside the Store. The caller has already
+    /// refused a recorded artifact; an existing name here is an unrecorded
+    /// leftover. No file is created until [`Self::finish`].
     pub(crate) fn create(path: &Path) -> HistoryResult<Self> {
         if std::fs::symlink_metadata(path).is_ok() {
             return Err(HistoryError::Exists("staged compaction artifact"));
         }
+        Ok(Self {
+            path: path.to_path_buf(),
+            created: false,
+            finished: false,
+        })
+    }
+
+    /// Writes the scratch in one transaction: every reached locator `list`
+    /// hands over with its delta-base-only flag, which must come in ascending
+    /// identity order with no identity twice, and the retained `packs`,
+    /// ascending. Closes the connection, refuses a sidecar and returns the
+    /// file's size.
+    pub(crate) fn finish(
+        mut self,
+        packs: &crate::Sequence,
+        list: impl FnOnce(
+            &mut dyn FnMut(&ObjectLocation, bool) -> HistoryResult<()>,
+        ) -> HistoryResult<()>,
+    ) -> HistoryResult<u64> {
+        if std::fs::symlink_metadata(&self.path).is_ok() {
+            return Err(HistoryError::Exists("staged compaction artifact"));
+        }
+        self.created = true;
         let connection = Connection::open_with_flags(
-            path,
+            &self.path,
             OpenFlags::SQLITE_OPEN_READ_WRITE
                 | OpenFlags::SQLITE_OPEN_CREATE
                 | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -62,49 +101,74 @@ impl VisitSink {
                 "PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF;\
 CREATE TABLE visited (\
  object_id BLOB PRIMARY KEY CHECK(length(object_id)=32),\
- pack_id INTEGER NOT NULL\
+ role INTEGER NOT NULL,\
+ canonical_length INTEGER NOT NULL,\
+ pack_id INTEGER NOT NULL,\
+ group_number INTEGER NOT NULL,\
+ record_number INTEGER NOT NULL,\
+ base_only INTEGER NOT NULL\
 ) STRICT, WITHOUT ROWID;\
 CREATE TABLE live_pack (pack_id INTEGER PRIMARY KEY) STRICT, WITHOUT ROWID;\
 BEGIN IMMEDIATE;",
             )
             .map_err(db_error)?;
-        let sink = Self {
-            path: path.to_path_buf(),
-            connection: Some(connection),
-            finished: false,
-        };
-        Ok(sink)
-    }
-
-    /// Streams one reached object and its locating pack as it is discovered.
-    pub(crate) fn visit(&self, id: ObjectId, pack_id: i64) -> HistoryResult<()> {
-        let connection = self
-            .connection
-            .as_ref()
-            .ok_or(HistoryError::Integrity("visited scratch"))?;
-        connection
-            .prepare_cached("INSERT OR IGNORE INTO visited(object_id,pack_id) VALUES(?1,?2)")
-            .map_err(db_error)?
-            .execute(params![id.as_bytes().as_slice(), pack_id])
-            .map_err(db_error)?;
-        Ok(())
-    }
-
-    /// Derives the retained packs, commits, closes the connection and refuses
-    /// a sidecar.
-    pub(crate) fn finish(mut self) -> HistoryResult<u64> {
-        let connection = self
-            .connection
-            .take()
-            .ok_or(HistoryError::Integrity("visited scratch"))?;
-        // The retained packs are the visited rows' packs: one ordered
-        // statement at the end instead of one insert per reached object.
-        connection
-            .execute_batch(
-                "INSERT INTO live_pack(pack_id) \
-SELECT DISTINCT pack_id FROM visited ORDER BY pack_id; COMMIT",
+        // Key order makes every insert an append to the table's last page.
+        // The mark lists an object once and an object has one locator, so
+        // the key refuses nothing; a row out of order would still be stored.
+        let mut rows: Vec<(ObjectLocation, bool)> = Vec::with_capacity(ROWS_PER_INSERT);
+        let write = |rows: &[(ObjectLocation, bool)]| {
+            insert(
+                &connection,
+                "INSERT INTO visited(object_id,role,canonical_length,pack_id,\
+group_number,record_number,base_only) VALUES",
+                "(?,?,?,?,?,?,?)",
+                rows,
+                |(row, base_only)| {
+                    [
+                        blob(row.object_id.as_bytes()),
+                        integer(i64::from(row.role.code())),
+                        integer(row.canonical_length as i64),
+                        integer(row.pack_id),
+                        integer(row.group_number as i64),
+                        integer(row.record_number as i64),
+                        integer(i64::from(*base_only)),
+                    ]
+                },
             )
-            .map_err(db_error)?;
+        };
+        list(&mut |row, base_only| {
+            rows.push((*row, base_only));
+            if rows.len() == ROWS_PER_INSERT {
+                write(&rows)?;
+                rows.clear();
+            }
+            Ok(())
+        })?;
+        write(&rows)?;
+        drop(rows);
+        // The retained packs come from the mark's list a statement's worth
+        // at a time; the whole list is never held.
+        let mut batch: Vec<i64> = Vec::with_capacity(ROWS_PER_INSERT);
+        let write = |batch: &[i64]| {
+            insert(
+                &connection,
+                "INSERT INTO live_pack(pack_id) VALUES",
+                "(?)",
+                batch,
+                |pack_id| [integer(*pack_id)],
+            )
+        };
+        packs.each(&mut |pack| {
+            batch.push(i64::try_from(pack).map_err(|_| HistoryError::Integrity("mark pack"))?);
+            if batch.len() == ROWS_PER_INSERT {
+                write(&batch)?;
+                batch.clear();
+            }
+            Ok(())
+        })?;
+        write(&batch)?;
+        drop(batch);
+        connection.execute_batch("COMMIT").map_err(db_error)?;
         connection.close().map_err(|(_, error)| db_error(error))?;
         for sidecar in sidecars(&self.path) {
             if std::fs::symlink_metadata(&sidecar).is_ok() {
@@ -117,12 +181,49 @@ SELECT DISTINCT pack_id FROM visited ORDER BY pack_id; COMMIT",
     }
 }
 
+fn blob(bytes: &[u8]) -> ToSqlOutput<'_> {
+    ToSqlOutput::Borrowed(ValueRef::Blob(bytes))
+}
+
+fn integer(value: i64) -> ToSqlOutput<'static> {
+    ToSqlOutput::Borrowed(ValueRef::Integer(value))
+}
+
+/// Inserts `rows` in order, [`ROWS_PER_INSERT`] rows a statement and the
+/// remainder in one shorter statement.
+fn insert<'row, T, const N: usize>(
+    connection: &Connection,
+    head: &str,
+    row: &str,
+    rows: &'row [T],
+    values: impl Fn(&'row T) -> [ToSqlOutput<'row>; N],
+) -> HistoryResult<()> {
+    let statement = |count: usize| format!("{head}{}", vec![row; count].join(","));
+    let full = statement(ROWS_PER_INSERT);
+    for batch in rows.chunks(ROWS_PER_INSERT) {
+        let short;
+        let sql = if batch.len() == ROWS_PER_INSERT {
+            &full
+        } else {
+            short = statement(batch.len());
+            &short
+        };
+        connection
+            .prepare_cached(sql)
+            .map_err(db_error)?
+            .execute(rusqlite::params_from_iter(batch.iter().flat_map(&values)))
+            .map_err(db_error)?;
+    }
+    Ok(())
+}
+
 impl Drop for VisitSink {
     fn drop(&mut self) {
-        if self.finished {
+        // A sink that never started its file has nothing to remove, and a
+        // finished one leaves its scratch to the build.
+        if self.finished || !self.created {
             return;
         }
-        self.connection.take();
         let _ = std::fs::remove_file(&self.path);
         for sidecar in sidecars(&self.path) {
             let _ = std::fs::remove_file(sidecar);
