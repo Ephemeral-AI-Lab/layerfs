@@ -48,4 +48,4 @@ pub use types::{
     CompactFailpoint, CompactKeptWaste, CompactPath, CompactReceipt, CompactRequest,
     CompactResidue, CompactZeroReason, OwnerLiveness,
 };
-pub use window::{windows, Window, GAP_BYTES, WINDOW_BYTES};
+pub use window::{staged_windows, windows, Window, GAP_BYTES, WINDOW_BYTES};

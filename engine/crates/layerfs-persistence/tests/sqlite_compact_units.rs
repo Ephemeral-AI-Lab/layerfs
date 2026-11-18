@@ -269,7 +269,9 @@ fn a_sized_fresh_file_loads_and_is_cut_back_to_its_page_count() {
 /// payload.
 #[test]
 fn the_pack_copy_is_cut_into_windows_in_pack_order() {
-    use layerfs_persistence::internals::{windows, Window, GAP_BYTES, WINDOW_BYTES};
+    use layerfs_persistence::internals::{
+        staged_windows, windows, Window, GAP_BYTES, WINDOW_BYTES,
+    };
     use std::collections::BTreeMap;
 
     const MIB: u64 = 1024 * 1024;
@@ -353,6 +355,27 @@ fn the_pack_copy_is_cut_into_windows_in_pack_order() {
     // integrity failure, never a silently shorter copy.
     for broken in [&[6][..], &[3, 1][..], &[1, 1][..], &[5, 8][..]] {
         let error = windows(&lengths, broken, 15 * MIB).unwrap_err();
+        assert!(
+            matches!(error, HistoryError::Integrity("mark pack")),
+            "{broken:?}: {error:?}"
+        );
+    }
+
+    // The file a rebuild writes holds the retained packs alone, so its plan
+    // counts no dead pack: the long dead run neither ends a window nor moves
+    // an offset, and the slack is that of the fresh file.
+    assert_eq!(
+        staged_windows(&lengths, &[1, 3, 5], 4 * MIB).unwrap(),
+        vec![Window {
+            first: 1,
+            last: 5,
+            offset: 0,
+            bytes: 4 * MIB
+        }]
+    );
+    assert_eq!(staged_windows(&lengths, &[], MIB).unwrap(), Vec::new());
+    for broken in [&[6][..], &[3, 1][..]] {
+        let error = staged_windows(&lengths, broken, 4 * MIB).unwrap_err();
         assert!(
             matches!(error, HistoryError::Integrity("mark pack")),
             "{broken:?}: {error:?}"

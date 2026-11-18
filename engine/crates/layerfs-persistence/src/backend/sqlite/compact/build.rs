@@ -20,6 +20,7 @@ use super::types::CompactFailpoint;
 use super::types::CompactRequest;
 use super::types::MarkTuple;
 use super::verify::immutable_uri;
+use super::window::staged_windows;
 use super::window::windows;
 use super::window::ReadAhead;
 use super::window::Window;
@@ -103,6 +104,9 @@ pub(crate) fn live_page_metrics(session: &Arc<Session>) -> HistoryResult<(u64, u
 pub(crate) struct Built {
     pub(crate) target: PathBuf,
     pub(crate) target_bytes: u64,
+    /// Where the retained packs lie in the fresh file, when `pack` holds their
+    /// payload: the verification's read-ahead plan.
+    pub(crate) windows: Vec<Window>,
     pub(crate) visited_bytes: u64,
     pub(crate) logical: u64,
     pub(crate) canonical: u64,
@@ -723,9 +727,16 @@ WHERE sql IS NOT NULL AND substr(name,1,7)!='sqlite_' ORDER BY type,name",
         }
     }
     let target_bytes = space::trim(&target, u64::try_from(pages).unwrap_or(0), page_bytes)?;
+    // `pack` holds the payload unless the layout has `pack_unit` rows.
+    let staged = if target_tables.contains("pack_unit") {
+        Vec::new()
+    } else {
+        staged_windows(lengths, retained, target_bytes)?
+    };
     Ok(Built {
         target,
         target_bytes,
+        windows: staged,
         visited_bytes,
         logical: u64::try_from(totals.0).unwrap_or(0),
         canonical: u64::try_from(totals.1).unwrap_or(0),

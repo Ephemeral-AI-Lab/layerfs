@@ -8,6 +8,7 @@ use super::types::db_error;
 use super::types::CompactFailpoint;
 use super::types::CompactRequest;
 use super::types::MarkTuple;
+use super::window::ReadAhead;
 use crate::backend::records::BackendError;
 use crate::backend::sqlite::schema;
 use crate::backend::sqlite::session::connection::Session;
@@ -166,25 +167,95 @@ pub(crate) fn file_heads_digest(connection: &Connection) -> HistoryResult<[u8; 3
 }
 
 /// The staged file's row counts and recomputed sums, one pass per table.
+/// `pack` is read before this statement, by [`scan_packs`].
 const SCAN_SQL: &str = "SELECT \
 (SELECT count(*) FROM pragma_foreign_key_check),\
-o.n,o.canonical,p.n,p.stored,p.metadata,\
+o.n,o.canonical,\
 (SELECT count(*) FROM kept_node),\
 (SELECT COALESCE(SUM(logical),0) FROM \"commit\")+\
 (SELECT COALESCE(SUM(logical),0) FROM layer) \
 FROM (SELECT count(*) AS n,COALESCE(SUM(canonical_length),0) AS canonical \
-FROM object_location) o,\
-(SELECT count(*) AS n,COALESCE(SUM(length),0) AS stored,\
-COALESCE(SUM(CASE WHEN domain=0 THEN length ELSE 0 END),0) AS metadata FROM pack) p";
+FROM object_location) o";
+
+/// The staged file's pack rows between two identities: how many, their stored
+/// bytes and the metadata-domain part of those.
+const PACK_SCAN_SQL: &str = "SELECT count(*),COALESCE(SUM(length),0),\
+COALESCE(SUM(CASE WHEN domain=0 THEN length ELSE 0 END),0) \
+FROM pack WHERE pack_id BETWEEN ?1 AND ?2";
+
+/// A window whose packs average under this many stored bytes is asked for
+/// whole before its rows are read. A pack's row is one page beside its
+/// payload, so the rows of dense packs lie a few pages apart over the whole
+/// file: one sequential request brings them in faster than one device round
+/// trip per pack. Larger packs leave too much payload between two rows.
+const DENSE_PACK_BYTES: u64 = 512 * 1024;
+
+/// What [`scan_packs`] counted.
+#[derive(Default)]
+struct PackScan {
+    packs: i64,
+    stored: i64,
+    metadata: i64,
+}
+
+/// Counts and sums the staged file's `pack` rows, one window at a time.
+///
+/// `built.windows` says where each run of retained packs lies in the fresh
+/// file. Read in one pass without it, the rows of a file the kernel no longer
+/// holds cost one device round trip per pack (measured on a 4.9 GB Store of
+/// 38,666 packs with the file out of memory: 2.3 s, against 0.7 s window by
+/// window). The windows only place the read-ahead: the ranges read are
+/// consecutive and cover every identity, so the sums are those of one pass
+/// over the table, and a row outside every window is counted too. The file is
+/// immutable to this reader, so the statements see one state. Without windows
+/// (the group-row layouts keep `pack` small and in one place) one range reads
+/// the table.
+fn scan_packs(connection: &Connection, built: &Built, retained: &[i64]) -> HistoryResult<PackScan> {
+    let plan = &built.windows;
+    // What a window's range holds beyond its own payload (see `windows`).
+    let slack = built.target_bytes.saturating_sub(built.stored);
+    let mut ahead = ReadAhead::open(&built.target)?;
+    let mut statement = connection.prepare(PACK_SCAN_SQL).map_err(db_error)?;
+    let mut scan = PackScan::default();
+    let mut read = |first: i64, last: i64| -> HistoryResult<()> {
+        let (packs, stored, metadata): (i64, i64, i64) = statement
+            .query_row(params![first, last], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })
+            .map_err(db_error)?;
+        scan.packs = scan.packs.saturating_add(packs);
+        scan.stored = scan.stored.saturating_add(stored);
+        scan.metadata = scan.metadata.saturating_add(metadata);
+        Ok(())
+    };
+    let mut first = i64::MIN;
+    let mut before = 0usize;
+    for (index, window) in plan.iter().enumerate() {
+        let through = retained.partition_point(|pack| *pack <= window.last);
+        let packs = (through - before) as u64;
+        before = through;
+        if window.bytes.saturating_sub(slack) < packs.saturating_mul(DENSE_PACK_BYTES) {
+            ahead.ask(window);
+        }
+        let last = if index + 1 == plan.len() {
+            i64::MAX
+        } else {
+            window.last
+        };
+        read(first, last)?;
+        first = last.saturating_add(1);
+    }
+    if plan.is_empty() {
+        read(i64::MIN, i64::MAX)?;
+    }
+    Ok(scan)
+}
 
 /// What [`SCAN_SQL`] returns, in column order.
 struct Scan {
     foreign_keys: i64,
     objects: i64,
     canonical: i64,
-    packs: i64,
-    stored: i64,
-    metadata: i64,
     history: i64,
     logical: i64,
 }
@@ -221,7 +292,7 @@ pub(crate) fn verify(
     // identity order, so the lookups land on the pack table's leaf pages at
     // random. Through the default 2 MiB cache nearly every lookup reads its
     // page from the file again (measured on a 4.9 GB Store of 38,666 packs:
-    // 1.71 million page reads for about 62 thousand distinct pages). The
+    // 1.71 million page reads, against 47 thousand with this cache). The
     // build's cache size keeps the pages this pass has read.
     connection
         .execute_batch(&format!("PRAGMA cache_size=-{CACHE_KIB}"))
@@ -232,19 +303,20 @@ pub(crate) fn verify(
         (layout, acquisition),
     )
     .map_err(HistoryError::from)?;
-    // One statement and one pass over each table: the row counts the mark
-    // fixes and the sums the totals row must equal come from the same scan.
+    // `pack` first: its rows are then in this reader's cache for the
+    // foreign-key pass below.
+    let packs = scan_packs(&connection, built, mark.objects().packs())?;
+    // One statement and one pass over each other table: the row counts the
+    // mark fixes and the sums the totals row must equal come from the same
+    // scan.
     let scanned = connection
         .query_row(SCAN_SQL, params![], |row| {
             Ok(Scan {
                 foreign_keys: row.get(0)?,
                 objects: row.get(1)?,
                 canonical: row.get(2)?,
-                packs: row.get(3)?,
-                stored: row.get(4)?,
-                metadata: row.get(5)?,
-                history: row.get(6)?,
-                logical: row.get(7)?,
+                history: row.get(3)?,
+                logical: row.get(4)?,
             })
         })
         .map_err(db_error)?;
@@ -257,7 +329,7 @@ pub(crate) fn verify(
     if counted(scanned.objects)? != mark.objects().len() as u64 {
         return Err(HistoryError::Integrity("staged Store object count"));
     }
-    if counted(scanned.packs)? != mark.objects().packs().len() as u64 {
+    if counted(packs.packs)? != mark.objects().packs().len() as u64 {
         return Err(HistoryError::Integrity("staged Store pack count"));
     }
     if counted(scanned.history)? != mark.history().len() as u64 {
@@ -282,8 +354,8 @@ pub(crate) fn verify(
     // The totals row the tuple read, against the sums the scan recomputed.
     if checked.logical != scanned.logical
         || checked.canonical != scanned.canonical
-        || checked.stored != scanned.stored
-        || checked.metadata != scanned.metadata
+        || checked.stored != packs.stored
+        || checked.metadata != packs.metadata
     {
         return Err(HistoryError::Integrity("staged Store totals"));
     }

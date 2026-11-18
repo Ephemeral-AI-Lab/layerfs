@@ -160,6 +160,80 @@ fn filesystem_root(handles: &SqliteHandles, seed: u8) -> ObjectId {
     save_objects(handles, &[directory, inode, object])
 }
 
+/// A filesystem root whose one directory entry is a regular file of `bytes`.
+/// Returns the root and the file's object.
+fn file_root(handles: &SqliteHandles, bytes: &[u8]) -> (ObjectId, ObjectId) {
+    use layerfs_content::{
+        filesystem::{
+            attributes::PortableMetadata,
+            directory::{encode_directory_page, DirectoryPage},
+            inode::{encode_inode_page, InodePage},
+            root::profile_id,
+            scope_for_seed, FilesystemRoot, PathName,
+        },
+        inode_leaf::{InodeKind, InodeMetadata, InodeValue},
+    };
+    let file = FinalizedObject::new(
+        ObjectRole::WholeFile,
+        encode_whole_file_payload(bytes).unwrap(),
+    )
+    .unwrap();
+    let file_id = file.id();
+    let directory = FinalizedObject::new(
+        ObjectRole::DirectoryLeaf,
+        encode_directory_page(&DirectoryPage::Leaf {
+            entries: vec![(PathName::new("file").unwrap(), 2)],
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    let directory_id = directory.id();
+    let metadata = |mode| {
+        InodeMetadata::Inline(PortableMetadata {
+            mode,
+            mtime_seconds: 1,
+            mtime_nanoseconds: 0,
+        })
+    };
+    let inode = FinalizedObject::new(
+        ObjectRole::InodeLeaf,
+        encode_inode_page(&InodePage::Leaf {
+            entries: vec![
+                (
+                    1,
+                    InodeValue {
+                        kind: InodeKind::Directory,
+                        namespace_ref_count: 0,
+                        content_root: directory_id,
+                        metadata_root: metadata(0o755),
+                    },
+                ),
+                (
+                    2,
+                    InodeValue {
+                        kind: InodeKind::RegularFile,
+                        namespace_ref_count: 1,
+                        content_root: file_id,
+                        metadata_root: metadata(0o644),
+                    },
+                ),
+            ],
+        })
+        .unwrap(),
+    )
+    .unwrap()
+    .with_references(vec![directory_id, file_id]);
+    let inode_id = inode.id();
+    let root = FilesystemRoot::new(profile_id(), scope_for_seed([1; 32]), 1, inode_id).unwrap();
+    let object = FinalizedObject::new(ObjectRole::FilesystemRoot, root.encode().unwrap())
+        .unwrap()
+        .with_references(vec![inode_id]);
+    (
+        save_objects(handles, &[file, directory, inode, object]),
+        file_id,
+    )
+}
+
 fn initialize(handles: &SqliteHandles, tag: u8, genesis: ObjectId) -> LayerStackRecord {
     handles
         .history
@@ -533,6 +607,96 @@ fn retained_packs_on_both_sides_of_a_long_dead_run_are_all_copied() {
     let (totals, sums) = pack_totals_and_sums(&path);
     assert_eq!(totals, sums);
     let kept: u64 = retained.iter().map(|pack| lengths[pack]).sum();
+    assert_eq!(u64::try_from(totals.0).unwrap(), kept);
+    clean(&reopened);
+}
+
+/// The verification reads the fresh file's `pack` rows one window at a time.
+/// A rebuild that keeps more than one window of payload is verified over
+/// several ranges, and every retained pack is counted in exactly one of them:
+/// the run installs, and the installed totals are the sums over its packs.
+#[test]
+fn a_rebuild_keeping_more_than_one_window_is_verified_window_by_window() {
+    use layerfs_persistence::internals::{staged_windows, windows, WINDOW_BYTES};
+    use std::collections::BTreeMap;
+
+    // A whole-file object holds at most 131,071 raw bytes.
+    const FILE_BYTES: usize = 100_000;
+    let (_temp, handles, path) = create_store();
+    // Bytes that do not compress: a pack is as long as its file.
+    let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+    let mut file = || -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(FILE_BYTES);
+        while bytes.len() < FILE_BYTES {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            bytes.extend_from_slice(&state.to_le_bytes());
+        }
+        bytes
+    };
+    // One Branch whose 720 Commits each keep one file (72 MB), and 100 files
+    // no Commit reaches (10 MB) between them.
+    let genesis = filesystem_root(&handles, 1);
+    let stack = initialize(&handles, 1, genesis);
+    let work = support::branch_id(1);
+    fork(&handles, stack.id, work, 1);
+    let mut live = vec![genesis];
+    let mut dead = Vec::new();
+    for index in 0..720 {
+        let (root, kept) = file_root(&handles, &file());
+        commit(&handles, work, root);
+        live.extend([root, kept]);
+        if index == 100 {
+            for _ in 0..100 {
+                dead.push(whole_file(&handles, &file()));
+            }
+        }
+    }
+    let before = generation(&handles);
+
+    let receipt = handles.compact(&request(49)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    let reopened = reopen(&path);
+    assert_eq!(generation(&reopened), before + 1);
+    for id in &live {
+        assert!(located(&reopened, *id), "retained file {id} survives");
+    }
+    for id in &dead {
+        assert!(!located(&reopened, *id), "dead file {id} is collected");
+    }
+
+    // The plan the verification read by: the fresh file's packs are all
+    // retained, and they are more than one window.
+    let lengths: BTreeMap<i64, u64> = {
+        let rebuilt = rusqlite::Connection::open_with_flags(
+            &path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .unwrap();
+        let mut statement = rebuilt
+            .prepare("SELECT pack_id,length FROM pack ORDER BY pack_id")
+            .unwrap();
+        let lengths = statement
+            .query_map([], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)? as u64))
+            })
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        lengths
+    };
+    let retained: Vec<i64> = lengths.keys().copied().collect();
+    let kept: u64 = lengths.values().sum();
+    assert!(kept > WINDOW_BYTES, "{kept} bytes kept");
+    let bytes = std::fs::metadata(&path).unwrap().len();
+    let plan = staged_windows(&lengths, &retained, bytes).unwrap();
+    assert!(plan.len() > 1, "{plan:?}");
+    assert_eq!(plan, windows(&lengths, &retained, bytes).unwrap());
+    assert_eq!(plan.first().unwrap().first, retained[0]);
+    assert_eq!(plan.last().unwrap().last, *retained.last().unwrap());
+    let (totals, sums) = pack_totals_and_sums(&path);
+    assert_eq!(totals, sums);
     assert_eq!(u64::try_from(totals.0).unwrap(), kept);
     clean(&reopened);
 }
