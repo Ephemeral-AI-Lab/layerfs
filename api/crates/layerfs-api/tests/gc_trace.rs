@@ -180,9 +180,14 @@ fn path_arguments_are_byte_counts_in_the_call_log() {
     let listed = ok(
         &home,
         "file.list",
-        &[p(), ("branch", t("main")), ("path", t("/"))],
+        &[
+            p(),
+            ("branch", t("main")),
+            ("path", t("/")),
+            ("detail", SdkValue::Bool(true)),
+        ],
     );
-    assert_eq!(listed.get_int("removed_count"), Some(1));
+    assert_eq!(listed.get_int("skipped_hidden"), Some(1));
     assert_eq!(argv(&last(&home))[4], bytes(0));
 
     let globbed = ok(
@@ -191,14 +196,15 @@ fn path_arguments_are_byte_counts_in_the_call_log() {
         &[
             p(),
             ("branch", t("main")),
-            ("path", t("/")),
             ("pattern", t("*.txt")),
+            ("path", t("/")),
+            ("detail", SdkValue::Bool(true)),
         ],
     );
-    assert_eq!(globbed.get_int("removed_count"), Some(1));
+    assert_eq!(globbed.get_int("skipped_hidden"), Some(1));
     let words = argv(&last(&home));
-    assert_eq!(words[4], bytes(0));
-    assert_eq!(words[5], bytes("*.txt".len()));
+    assert_eq!(words[4], bytes("*.txt".len()));
+    assert_eq!(words[5], bytes(0));
 
     let text = log_text(&home);
     assert!(!text.contains("/base.txt"), "raw path in the log:\n{text}");
@@ -237,14 +243,7 @@ fn a_removed_refusal_echoes_the_path_the_log_does_not() {
 fn the_redacted_set_covers_every_path_bearing_call() {
     // every argument of these names is logged only as a byte count: its
     // table entry says so (the flag replaced the dispatcher's name list)
-    for name in [
-        "path",
-        "left_path",
-        "right_path",
-        "from_path",
-        "to_path",
-        "pattern",
-    ] {
+    for name in ["path", "pattern"] {
         let named = (layerfs_api::calls().into_iter())
             .flat_map(|call| call.args.iter().chain(call.options))
             .filter(|arg| arg.name == name);
@@ -261,9 +260,9 @@ fn the_redacted_set_covers_every_path_bearing_call() {
         ("file.stat", &["path"][..]),
         ("file.list", &["path"][..]),
         ("file.glob", &["path", "pattern"][..]),
-        ("file.diff", &["left_path", "right_path"][..]),
-        ("file.cp", &["from_path", "to_path"][..]),
-        ("file.mv", &["from_path", "to_path"][..]),
+        ("file.grep", &["path", "pattern"][..]),
+        ("file.cp", &["from", "to"][..]),
+        ("file.mv", &["from", "to"][..]),
         ("commit.diff", &["path"][..]),
     ] {
         let spec = layerfs_api::find(name).unwrap_or_else(|| panic!("{name} is missing"));

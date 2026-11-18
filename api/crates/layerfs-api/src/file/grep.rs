@@ -1,12 +1,33 @@
-//! `file.grep`: lines under `path` matching a regular expression.
+//! `file.grep`: lines under a folder that contain a literal text.
+use super::text;
 use crate::calls::scope::Rule;
-use crate::calls::table::Kind::{Int, Name, Project, Text};
+use crate::calls::table::Kind::{Bool, Int, Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call};
-use crate::calls::Context;
+use crate::calls::{Context, Form, Paging, Part};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::file::{grep, FileGrep};
-use layerfs_store::calls::Page;
+
+/// One matching line.
+const ROW: Form = Form::of(
+    &["path", "line", "text"],
+    &["line_truncated"],
+    &["path", "line", "text", "line_truncated"],
+);
+/// `skipped_binary` counts the files that are not text.
+const FORM: Form = Form::of(
+    &["items"],
+    &["next_cursor"],
+    &[
+        "items",
+        "next_cursor",
+        "commit",
+        "root",
+        "path",
+        "skipped_binary",
+    ],
+)
+.parts(&[("items", Part::Rows(&ROW))]);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -15,34 +36,38 @@ pub(crate) const CALL: Call = call(
     &[
         a("project", Project),
         a("branch", Name),
-        a("path", Text).redact_path(),
         a("pattern", Text).redact(),
-        opt("commit", Name),
+        opt("path", Text).redact_path(),
     ],
     &[
-        opt("page_size", Int),
-        opt("page", Int),
-        opt("page_pos", Int),
+        opt("include", Text).redact(),
+        opt("exclude", Text).redact(),
+        opt("ignore_case", Bool),
+        opt("at", Name),
+        opt("limit", Int),
+        opt("cursor", Text).redact(),
     ],
-    "lines under `path` matching a regular expression",
+    "lines under a folder that contain a literal text",
     run,
 )
-.scoped(Rule::File(&["path"]));
+.scoped(Rule::File(&["path"]))
+.form(&FORM)
+.paged(Paging::Cursor)
+.agent();
 
 /// Runs `file.grep`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    let text = |name: &str| args.get_text(name).map(str::to_owned);
     let request = FileGrep {
-        project: text("project").unwrap_or_default(),
-        branch: text("branch").unwrap_or_default(),
-        commit: text("commit"),
-        path: text("path").unwrap_or_default(),
-        pattern: text("pattern").unwrap_or_default(),
-        page: Page {
-            size: args.get_int("page_size"),
-            pos: args.get_int("page_pos"),
-            number: args.get_int("page"),
-        },
+        project: text(args, "project").unwrap_or_default(),
+        branch: text(args, "branch").unwrap_or_default(),
+        pattern: text(args, "pattern").unwrap_or_default(),
+        path: text(args, "path"),
+        include: text(args, "include"),
+        exclude: text(args, "exclude"),
+        ignore_case: args.get_bool("ignore_case"),
+        at: text(args, "at"),
+        limit: args.get_int("limit"),
+        cursor: text(args, "cursor"),
     };
     let (home, events) = context.parts();
     grep(home, events, &request)
