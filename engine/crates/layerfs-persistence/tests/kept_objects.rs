@@ -24,7 +24,8 @@ use layerfs_history::{
     LayerStackRecord, StackInitialization,
 };
 use layerfs_persistence::{
-    CompactPath, CompactRequest, PersistenceConfig, SqliteHandles, SqlitePersistenceProfile,
+    thread_work, CompactPath, CompactRequest, PersistenceConfig, SqliteHandles,
+    SqlitePersistenceProfile,
 };
 use layerfs_storage::{
     encoding::{encode_full, encode_prefix, framed_record, raw_payload, CompressionWorkspace},
@@ -660,4 +661,170 @@ fn a_delta_base_is_enqueued_and_reported() {
         "the base is kept only because the delta names it"
     );
     assert!(objects.waste().delta_bases_bytes() > 0);
+}
+
+/// A whole-file object of `length` payload bytes that do not compress, so its
+/// stored record is about as wide as its payload.
+fn noise_file(seed: u64, length: usize) -> FinalizedObject {
+    let mut state = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
+    let bytes: Vec<u8> = (0..length)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state >> 24) as u8
+        })
+        .collect();
+    FinalizedObject::new(
+        ObjectRole::WholeFile,
+        encode_whole_file_payload(&bytes).unwrap(),
+    )
+    .unwrap()
+}
+
+/// Publishes one whole-file pack of Raw groups, each holding the given
+/// objects as its records, and returns the pack and each group's stored bytes.
+fn publish_record_groups(f: &Fixture, groups: &[Vec<FinalizedObject>]) -> (i64, Vec<usize>) {
+    let capacities = StorageCapacities::from_policy(f.policy).unwrap();
+    let mut workspace = CompressionWorkspace::new().unwrap();
+    let mut profile = SaveProfile::default();
+    let encoded: Vec<_> = groups
+        .iter()
+        .map(|objects| {
+            let records: Vec<_> = objects
+                .iter()
+                .map(|object| {
+                    encode_full(
+                        object.canonical(),
+                        object.role(),
+                        &capacities,
+                        &mut workspace,
+                        &mut profile,
+                    )
+                    .unwrap()
+                    .record
+                })
+                .collect();
+            build_group(PackLane::WholeFile, &records, None).unwrap()
+        })
+        .collect();
+    let extents = encoded.iter().map(|group| group.bytes.len()).collect();
+    let body = assemble(PackLane::WholeFile, &encoded).unwrap();
+    let reserved = f
+        .handles
+        .storage
+        .reserve(Reserve {
+            packs: 1,
+            ordinals: 0,
+        })
+        .unwrap();
+    f.handles
+        .storage
+        .publish(&Publication {
+            packs: vec![PublishedPack::seal(
+                reserved.first_pack_id,
+                PackDomain::Payload,
+                Arc::new(body),
+            )],
+            objects: groups
+                .iter()
+                .enumerate()
+                .flat_map(|(group, objects)| {
+                    objects
+                        .iter()
+                        .enumerate()
+                        .map(move |(record, object)| ObjectLocation {
+                            object_id: object.id(),
+                            role: object.role(),
+                            canonical_length: object.canonical_len(),
+                            pack_id: reserved.first_pack_id,
+                            group_number: group,
+                            record_number: record,
+                        })
+                })
+                .collect(),
+            ..Publication::default()
+        })
+        .unwrap();
+    (reserved.first_pack_id, extents)
+}
+
+/// Makes every object of `roots` the root of a retained Commit.
+fn retain(f: &Fixture, roots: &[FinalizedObject]) {
+    let stack = initialize(&f.handles, 1, roots[0].id());
+    fork(&f.handles, stack.id, branch_id(1), 1);
+    for root in &roots[1..] {
+        commit(&f.handles, branch_id(1), root.id());
+    }
+}
+
+/// The record headers of a group whose wanted records sit close together are
+/// read in one piece, not one read per record: on the real 4.9 GB Store the
+/// per-record reads were one disk wait per database page.
+#[test]
+fn close_records_of_a_group_are_read_in_one_piece() {
+    // With `lead`, the group of many records starts past the bytes read as
+    // the pack's head, so its record directory is not held when the group is
+    // first met. Without it the directory comes with the head.
+    for lead in [false, true] {
+        let f = Fixture::new();
+        let files: Vec<_> = (0..48).map(|seed| noise_file(seed + 1, 600)).collect();
+        let mut groups = Vec::new();
+        if lead {
+            groups.push(vec![noise_file(1000, 1024)]);
+        }
+        groups.push(files.clone());
+        let (pack, extents) = publish_record_groups(&f, &groups);
+        let extent = *extents.last().unwrap();
+        assert!(extent > 48 * 600, "the group is far wider than the head");
+        retain(&f, &files);
+
+        let before = thread_work();
+        let mark = f.handles.history.mark().unwrap();
+        let work = thread_work().since(&before);
+        for file in &files {
+            assert!(mark.objects().contains(file.id()));
+        }
+        assert!(mark.objects().packs().contains(&pack));
+        // The pack's head, then the rest of the group in one read. Reading
+        // the directory and then each header would be about fifty reads.
+        assert_eq!(work.blob_read_calls, 2, "lead group: {lead}");
+        assert!(
+            work.blob_read_bytes <= (extent + 432 + 512) as u64,
+            "no more than the group and the head: {} of {extent}",
+            work.blob_read_bytes
+        );
+        let dead = if lead { extents[0] as u64 } else { 0 };
+        assert_eq!(mark.objects().waste().dead_in_retained_packs_bytes(), dead);
+    }
+}
+
+/// A record far from the other wanted records of its group is still read by
+/// its header alone: a group of large records is not read through.
+#[test]
+fn a_far_record_of_a_group_is_read_by_its_header() {
+    let f = Fixture::new();
+    let files: Vec<_> = (0..3).map(|seed| noise_file(seed + 1, 18_000)).collect();
+    let (pack, extents) = publish_record_groups(&f, &[vec![noise_file(1000, 1024)], files.clone()]);
+    assert!(extents[1] > 3 * 18_000);
+    retain(&f, &files[2..]);
+
+    let before = thread_work();
+    let mark = f.handles.history.mark().unwrap();
+    let work = thread_work().since(&before);
+    assert!(mark.objects().contains(files[2].id()));
+    assert!(!mark.objects().contains(files[0].id()));
+    assert!(mark.objects().packs().contains(&pack));
+    // The head, the group's directory, the one header, and the directory
+    // again for the kept-waste split of the group's two dead records.
+    assert!(
+        work.blob_read_bytes < 2048,
+        "headers only: {} bytes of a {} byte group",
+        work.blob_read_bytes,
+        extents[1]
+    );
+    assert!(
+        mark.objects().waste().dead_in_retained_packs_bytes() > 2 * 18_000,
+        "the two unreached records and the lead group are dead bytes"
+    );
 }

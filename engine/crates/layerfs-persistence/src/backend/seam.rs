@@ -120,6 +120,14 @@ pub(crate) trait Mechanics {
     ) -> Result<(), PersistenceError> {
         ranges_by_acquisition(self, requests, out)
     }
+    /// The widest gap between two wanted ranges of one pack that costs this
+    /// engine less to read through than to skip. A caller of
+    /// [`Self::pack_ranges`] may join ranges no further apart than this into
+    /// one, and take the bytes between them as well. `0`: every byte asked
+    /// for is transferred at its own cost, so ask for exactly what is wanted.
+    fn pack_range_fill(&self) -> usize {
+        0
+    }
     /// A hint that each pack of `ids` is about to be asked through
     /// [`Self::read_scoped_pack`], in this order, inside this transaction.
     /// An engine that pays a round trip per pack may read the small ones

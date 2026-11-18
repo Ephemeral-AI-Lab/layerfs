@@ -210,6 +210,26 @@ tail and the signature upserts, in one write transaction
 [`units_publish.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/objects/units_publish.rs),
 [`units_read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/objects/units_read.rs)).
 
+A mark learns a payload record's delta base and stored width from the record's
+first bytes, through one BLOB handle moved from pack to pack
+([`objects/read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/objects/read.rs),
+[`edges.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/edges.rs)).
+On the one-row layout a body past its row's page is a chain of 4 KiB pages
+that SQLite reads one page at a time. Two wanted ranges no more than
+`RANGE_FILL_BYTES` (16 KiB) apart are therefore read as one, and a group whose
+wanted records lie that close on average is read whole. Skipping a page
+between two headers saves that page and ends the run of consecutive reads the
+operating system reads ahead of, so the next header waits for the device on
+its own. Measured on a 4.9 GB Store whose chunk records average 3.9 KB, about
+one header per page (macOS, one sample, both arms run at once): the header
+reads of one mark took 28.4 s reading headers only and 13.4 s reading through,
+from a file not in memory; 0.70 s and 0.85 s from memory. BLOB reads fell from
+1,556,579 to 256,704 and BLOB bytes rose from 1.46 GB to 5.92 GB. A gap wider
+than the fill is still skipped, so a pack of large records costs its headers
+only. The group-row layouts and PostgreSQL ask for exact ranges
+(`Mechanics::pack_range_fill` is 0): there every byte read is a byte
+transferred.
+
 ## Acquisition
 
 `AcquisitionProvider` gives Project Init indexed working tables in the same

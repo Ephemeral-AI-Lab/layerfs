@@ -81,6 +81,15 @@ impl Mechanics for Transaction<'_> {
         }
         super::objects::read::ranges(self, requests, out)
     }
+    fn pack_range_fill(&self) -> usize {
+        // Group rows are separate BLOBs: a range is mapped to the rows it
+        // covers, and nothing between two ranges is free.
+        if self.layout().uses_units() {
+            0
+        } else {
+            super::objects::read::RANGE_FILL_BYTES
+        }
+    }
     fn read_scoped_pack(
         &self,
         id: i64,
