@@ -771,54 +771,126 @@ $ layerfs machine status native
 See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals.
 
-### `store` (12)
+### `store` (9)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `list` | — | — | every Store, from the home's records, each with its `state` |
-| `get` | `name` | — | a Store's record |
-| `status` | `name` | `machine` | a Store's live state; with `machine`, whether that machine reaches a PostgreSQL Store (`check`) |
-| `stats` | `name` | — | Store-wide publication and allocation counters |
-| `create` | `name` | — | an empty sqlite Store on `native` |
+| `list` | — | `machine`, `--with stats` | every Store, from the home's records |
+| `get` | `store` | `--with live,stats` | a Store's record and state; with `--with`, read where it lives or opened for its counters |
+| `create` | `name` | `machine` | an empty sqlite Store, on this computer or made on `machine` directly |
 | `connect` | `name`, `url` | `password`, `synchronous_commit` | connects a PostgreSQL database as a Store; its Sandboxes run on every machine that supports them |
 | `update` | `name` | `machine`, `url`, `password`, `synchronous_commit`, `clear` | changes a PostgreSQL Store's connection; with `machine`, gives that machine a connection of its own (checked from it first), or removes it with `clear` |
-| `push` | `name`, `machine` | `on_progress` | sends a sqlite Store from `native` to a machine |
-| `pull` | `name` | `on_progress` | brings a sqlite Store from its machine to `native` |
-| `remove` | `name` | — | deletes a sqlite Store with every project in it |
-| `compact` | `name` | — | reclaims the dead bytes of one Store: the `none` path marks only, the `rebuild` path installs a new generation |
+| `move` | `store`, `machine` | `on_progress` | moves a sqlite Store between this computer and a machine |
+| `remove` | `store` | — | deletes a sqlite Store with every project in it |
+| `compact` | `store` | `on_progress` | reclaims the dead bytes of one Store |
 | `disconnect` | `name` | — | forgets a PostgreSQL Store; its data stays |
 
-Run:
+`list`, `get`, `create`, `move`, `remove` and `compact` are migrated;
+`connect`, `update` and `disconnect` are not yet. `store.status` and
+`store.stats` are gone into `store get` (`--with live`, `--with stats`),
+and `store.push` and `store.pull` into `store move`, with no alias.
+
+- **A Store's state** comes from its records only, with no probe: `busy`
+  while an operation it records (`op: { name, phase, started_at }`: a
+  move, a remove, a create on a machine, a compaction, a backup or a
+  restore) has a live owner; `broken` `unresolved` once a gone owner left
+  that operation's outcome unknown, with `fix` naming the call that clears
+  it (`store move` again for a move, `store remove` for a remove,
+  `store compact` for a compaction, `store get <store> --with live` for a
+  backup or a restore); `blocked` when its machine is not ready, with
+  `blocked_by: { machine, reason }`; `broken` with the reason the last live
+  read found (`missing`, `unreachable`, `unresolved`) or `unsupported` for
+  a record kind this build does not read; else `ready`. A move or remove
+  holds the Store exclusively; a compaction, backup or restore does not
+  refuse reads.
+- **`get`**, short: `{ engine, state }`, with `machine`, `projects`,
+  `projects_count`, `backups` (each `{ bucket }`), `connections` and the
+  state's companion when they say something. Long: `engine, state,
+  machine, auth, connections, projects, projects_count, backups, op,
+  blocked_by, reason, fix, observed_at, store, profile, synchronous_commit,
+  sqlite_version, created_at, last_transfer`. A sqlite Store answers
+  `machine`, `profile` and `sqlite_version`; a PostgreSQL Store
+  `connections` (the Store's own address, with no `machine`, then each
+  machine's own; never a password) and `synchronous_commit`; the other
+  engine's keys are null. `projects` shows at most 20 names;
+  `projects_count` counts them all. A `backups` row's long form is
+  `bucket, file, sha256, heads_sha256, last, attempt`: `last` the last
+  transfer that worked (`{ call, ended_at, size }`), `attempt` the last one
+  that did not (`{ call, ended_at, error }`). `auth` is null until saved
+  logins land.
+- **`get --with live`** reads the Store where it lives, starting nothing: a
+  sqlite Store's file through its machine (in this process on `native`,
+  else its recorded worker), a PostgreSQL Store's server from this
+  computer. The read gives `state` and `observed_at`: `broken` `missing`
+  when no file is where the record says, `broken` `unreachable` when the
+  server does not answer, `busy` or `broken` `unresolved` from a
+  compaction's own record, `unknown` (with when LayerFS last knew) when the
+  machine or worker does not answer. The record is written only when what
+  the read found wrong changed (which moves the home's `generation`);
+  `observed_at` goes to `store/<store>/observed.json`, which does not. A
+  backup or restore whose owner is gone with its outcome unknown is settled
+  here: the read drops the `op` and writes what was tried to the bucket
+  row's `attempt`. The `live` section: `holders` (pids of other live
+  processes holding the Store), `phases` (a running compaction's phases,
+  else null), `behind` (the buckets whose backup heads differ from the
+  Store's; null for PostgreSQL or when the heads could not be read),
+  `server_version` and `latency_ms` (PostgreSQL only).
+- **`get --with stats`** opens the Store, as a Store call does (refused
+  while a move or remove holds it): `size` (the file with its write-ahead
+  log, or the PostgreSQL schema), `logical_bytes`, `canonical_bytes`,
+  `stored_bytes`, `metadata_bytes`, `file_bytes`, `reusable_bytes` (null
+  for PostgreSQL), `dedupe` and `compression` (ratios as text, six
+  decimals) and `init` (the first project init's
+  `{ entries, files, size, canonical_bytes, stored_bytes, metadata_bytes,
+  duration_ms }`, or null).
+- **`list`** answers `{ items }`, each item as `get` answers it with
+  `store` first: short `{ store, engine }` plus what says something.
+  `--machine M` keeps the sqlite Stores on `M`. `--with stats` adds each
+  item's `size` from one stat on its machine, starting nothing; null for a
+  PostgreSQL Store and for a machine that does not answer.
+- **`create`**, short `{"ok":true}`; long `ok, outcome: "created", store,
+  engine, machine, profile, sqlite_version, created_at`. `--machine M`
+  makes the Store on `M` directly through its worker (a running machine),
+  recording a `create` operation while it runs.
+- **`move`** goes to or from this computer only: a Store on a machine moves
+  to another machine by `store move <store> native` first (refused
+  `InvalidInput` naming that call). Its progress phases are `check,
+  snapshot, send, verify, install, record, retire`. Short
+  `{ moved_bytes }`; long `moved_bytes, outcome: "moved", store, from, to,
+  heads_sha256`. A move whose owner is gone is cleared by the same move or
+  by `store remove`.
+- **`remove`** deletes a sqlite Store (refused for a PostgreSQL Store:
+  `store disconnect` forgets one). Short `{"ok":true}`; long
+  `ok, outcome: "removed", store`.
+- **`compact`**, short `{ freed_bytes }`; long `freed_bytes, outcome
+  (compacted or unchanged), store, generation_before, generation_after,
+  dead_bytes, discarded_bytes, reusable_bytes, kept_waste,
+  delta_base_references (at most 20), delta_base_references_count,
+  peak_temp_bytes, residue_bytes, residue_artifacts, residue_reason,
+  estimate, zero_reasons`. It records a `compact` operation in the Store's
+  record while it runs; one left unresolved is cleared by the next
+  `store compact`.
+
+Run (macOS, native; the outputs are this build's):
 
 ```console
-$ layerfs store get shop --text
-name  shop
-kind  sqlite
-machine  native
-profile  disposable
-created  1793574130507
-sqlite  3.53.2
-
-PROJECTS  (none)
-
-$ layerfs store status shop
-{"name":"shop","kind":"sqlite","state":"idle","holders":[],"op":null,"machine":"native","file":{"exists":true,"bytes":212992,"wal_bytes":271952}}
+$ layerfs store create shop
+{"ok":true}
+$ layerfs store list
+{"items":[{"store":"shop","engine":"sqlite","machine":"native","projects_count":0}]}
+$ layerfs store get shop
+{"engine":"sqlite","state":"ready","machine":"native","projects_count":0}
+$ layerfs store get shop --with live --detail
+{"engine":"sqlite","state":"ready","machine":"native","auth":null,"connections":null,"projects":[],"projects_count":0,"backups":[],"op":null,"blocked_by":null,"reason":null,"fix":null,"observed_at":"2026-11-18T15:35:10Z","store":"shop","profile":"disposable","synchronous_commit":null,"sqlite_version":"3.53.2","created_at":"2026-11-18T15:35:10Z","last_transfer":null,"live":{"holders":[],"phases":null,"behind":[],"server_version":null,"latency_ms":null}}
+$ layerfs store list --with stats
+{"items":[{"store":"shop","engine":"sqlite","machine":"native","projects_count":0,"observed_at":"2026-11-18T15:35:10Z","size":270336}]}
+$ layerfs store compact shop
+{"freed_bytes":0}
+$ layerfs store move shop native
+{"error":"InvalidInput","message":"store move, check: Store shop is already on native"}
 ```
 
-`state` is `idle`, `in_use`, `busy`, `down` or `unresolved`; `op` is the
-move or remove running on the Store, `{id, name, phase, started,
-uncertain}`, or `null`. `store status` starts no
-machine: a Store whose machine is stopped, or whose recorded worker does
-not answer, is `down`, with `down_reason` and `file.unavailable` (O34).
-`store status`, `store list` and `store get` change nothing: they take no
-lock, and `holders` leaves out a stale lease without removing it. See
-[Stores](machines-and-stores.md#stores).
-
-Each `store list` item is the Store's record (as `store get` shows it) with
-the same `state` last, derived as `store status` derives it (#536 §10b):
-it starts no machine, dials a machine's recorded worker once for all its
-Stores, and is `down` for a Store whose kind or machine its record does
-not tell. Not run for this manual (from source and tests).
+See [Stores](machines-and-stores.md#stores).
 
 ### `backup` (5)
 
