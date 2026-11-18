@@ -42,7 +42,7 @@ check and proves a missing, renamed or extra call is reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-86 calls in 10 families, counted from the Node table. Calls present: Node 86, Python 86, Python `aio` 86, CLI 86, MCP 86 (28 in `work`, 58 admin only; 0 UI only, in no profile).
+85 calls in 10 families, counted from the Node table. Calls present: Node 85, Python 85, Python `aio` 85, CLI 85, MCP 85 (17 in `work`, 68 admin only; 0 UI only, in no profile).
 
 Argument names that are Python keywords: from.
 
@@ -58,12 +58,12 @@ Front-end problems: none.
 | `home.leftovers` | - | machine | yes | yes | yes | yes | admin |
 | `home.prune` | leftover | - | yes | yes | yes | yes | admin |
 | `project.init` | project, folder | timeout, on_progress() | yes | yes | yes | yes (--progress) | admin |
-| `project.list` | ?store | page_size, page_pos | yes | yes | yes | yes | yes |
-| `project.get` | project | - | yes | yes | yes | yes | yes |
-| `project.stats` | project, ?branch, ?commit | - | yes | yes | yes | yes | yes |
-| `project.export` | project, destination | branch, on_progress() | yes | yes | yes | yes (--progress) | yes |
+| `project.list` | - | store, limit, cursor | yes | yes | yes | yes | admin |
+| `project.get` | project | - | yes | yes | yes | yes | admin |
+| `project.stats` | project | branch, at | yes | yes | yes | yes | admin |
+| `project.export` | project, destination | branch, at, on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `project.delete` | project | - | yes | yes | yes | yes | admin |
-| `project.remove_file` | project, path | - | yes | yes | yes | yes | admin |
+| `project.hide_path` | project, path | - | yes | yes | yes | yes | admin |
 | `project.doctor` | project | full, on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `branch.list` | project | prefix, exclude_prefix, limit, cursor | yes | yes | yes | yes | admin |
 | `branch.get` | project, branch | - | yes | yes | yes | yes | admin |
@@ -74,21 +74,20 @@ Front-end problems: none.
 | `commit.list` | project, branch | at, limit, cursor | yes | yes | yes | yes | yes |
 | `commit.get` | project, commit | branch | yes | yes | yes | yes | admin |
 | `commit.diff` | project, ref | from, path, limit, cursor | yes | yes | yes | yes | yes |
-| `file.read` | project, branch, path, ?commit | start_line, end_line | yes | yes | yes | yes | yes |
-| `file.stat` | project, branch, path, ?commit | - | yes | yes | yes | yes | yes |
-| `file.list` | project, branch, path, ?commit | page_size, page, page_pos | yes | yes | yes | yes | yes |
-| `file.glob` | project, branch, path, pattern, ?commit | page_size, page, page_pos | yes | yes | yes | yes | yes |
-| `file.grep` | project, branch, path, pattern, ?commit | page_size, page, page_pos | yes | yes | yes | yes | yes |
-| `file.revision` | project, branch, path | at_commit, traversal, page, page_size, continuation | yes | yes | yes | yes | yes |
-| `file.blame` | project, branch, path, ?commit | from_line, line_count | yes | yes | yes | yes | yes |
-| `file.diff` | project, left_branch, left_path, right_branch, right_path | left_commit, right_commit, include_attribution, allow_missing, page, page_size | yes | yes | yes | yes | yes |
-| `file.write` | project, branch, path, content | message, mode | yes | yes | yes | yes (stdin/--from) | yes |
-| `file.edit` | project, branch, path | old, new, message | yes | yes | yes | yes | yes |
-| `file.rm` | project, branch, path | message | yes | yes | yes | yes | yes |
-| `file.mkdir` | project, branch, path | message, mode | yes | yes | yes | yes | yes |
-| `file.mv` | project, branch, from_path, to_path | message | yes | yes | yes | yes | yes |
-| `file.cp` | project, branch, from_path, to_path | message | yes | yes | yes | yes | yes |
-| `file.apply` | project, branch, changes | message | yes | yes | yes | yes (stdin/--from) | yes |
+| `file.read` | project, branch, path | at, line, limit | yes | yes | yes | yes | yes |
+| `file.stat` | project, branch, path | at | yes | yes | yes | yes | admin |
+| `file.list` | project, branch, path | at, limit, cursor | yes | yes | yes | yes | yes |
+| `file.glob` | project, branch, pattern, ?path | exclude, at, limit, cursor | yes | yes | yes | yes | yes |
+| `file.grep` | project, branch, pattern, ?path | include, exclude, ignore_case, at, limit, cursor | yes | yes | yes | yes | yes |
+| `file.history` | project, branch, path | at, traversal, limit, cursor | yes | yes | yes | yes | admin |
+| `file.blame` | project, branch, path | at, line, limit | yes | yes | yes | yes | admin |
+| `file.write` | project, branch, path, content | mode, expected, message | yes | yes | yes | yes (stdin/--from) | yes |
+| `file.edit` | project, branch, path | old_string, new_string, replace_all, expected, message | yes | yes | yes | yes | yes |
+| `file.rm` | project, branch, path | recursive, expected, message | yes | yes | yes | yes | yes |
+| `file.mkdir` | project, branch, path | mode, expected, message | yes | yes | yes | yes | admin |
+| `file.mv` | project, branch, from, to | expected, message | yes | yes | yes | yes | yes |
+| `file.cp` | project, branch, from, to | expected, message | yes | yes | yes | yes | admin |
+| `file.apply` | project, branch, changes | expected, message | yes | yes | yes | yes (stdin/--from) | admin |
 | `sandbox.create` | project, name | machine, image, mount, on_progress() | yes | yes | yes | yes (--progress) | yes |
 | `sandbox.list` | - | project, machine, limit, cursor | yes | yes | yes | yes | admin |
 | `sandbox.get` | sandbox | - | yes | yes | yes | yes | admin |

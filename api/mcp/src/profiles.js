@@ -10,7 +10,7 @@
 //   work   the families an agent works in (branch, commit, file, workspace)
 //          plus the read-only project calls named below
 //   admin  every other call an agent may make: project create/delete/
-//          remove_file, Branch remove, and the home, machine, store and
+//          hide_path, Branch remove, and the home, machine, store and
 //          backup families
 //   ui     the monitoring calls a UI polls (layerfs-project#178 D2, #164): in no
 //          profile, so no agent is offered them
@@ -28,7 +28,7 @@ const WORK_FAMILIES = new Set(["branch", "commit", "file", "workspace"]);
 const WORK_CALLS = new Set(["project.list", "project.get", "project.stats", "project.export"]);
 
 /** Administrative calls outside the admin families. */
-const ADMIN_CALLS = new Set(["project.init", "project.delete", "project.remove_file", "branch.remove"]);
+const ADMIN_CALLS = new Set(["project.init", "project.delete", "project.hide_path", "branch.remove"]);
 
 /** Monitoring calls for a UI, which no profile lists (layerfs-project#178 D2, #164). */
 const UI_CALLS = new Set(["machine.stats", "machine.files", "machine.log"]);
@@ -82,7 +82,7 @@ export function whyOf(spec) {
   if (UI_CALLS.has(nameOf(spec))) return "a monitoring read a UI polls (a machine's stats, disk space, files or worker log); offered to no agent";
   if (spec.family === "project" && spec.call === "init") return "import a host folder into a Store; administration";
   if (spec.family === "project" && spec.call === "delete") return "retire a project in its Store and remove its home entry; administration; a folder scope refuses it";
-  if (spec.family === "project" && spec.call === "remove_file") return "hide one absolute path from every node at or below its marker frontier; administration; a folder scope refuses it";
+  if (spec.family === "project" && spec.call === "hide_path") return "hide one absolute path from the project's whole history; administration; a folder scope refuses it";
   if (spec.family === "branch" && spec.call === "remove") return "retire one Branch in its Store; administration; a folder scope refuses it";
   if (spec.family === "store" && spec.call === "compact") return "reclaim one Store's dead bytes; administration; a folder scope refuses it";
   if (spec.family === "sandbox" && spec.call === "create") return "start a Sandbox, and with --mount mount a Branch in it; work";

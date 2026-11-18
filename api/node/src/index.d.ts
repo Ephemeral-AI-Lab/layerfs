@@ -185,13 +185,22 @@ export interface ProjectInitOptions extends CallOptions {
 
 /** Options of `project.list`; an unknown option is refused. */
 export interface ProjectListOptions extends CallOptions {
-  page_size?: WholeNumber;
-  page_pos?: WholeNumber;
+  store?: string;
+  limit?: WholeNumber;
+  cursor?: string;
+  with?: readonly ("stats")[];
+}
+
+/** Options of `project.stats`; an unknown option is refused. */
+export interface ProjectStatsOptions extends CallOptions {
+  branch?: string;
+  at?: string;
 }
 
 /** Options of `project.export`; an unknown option is refused. */
 export interface ProjectExportOptions extends CallOptions {
   branch?: string;
+  at?: string;
   on_progress?: ProgressHandler;
 }
 
@@ -252,92 +261,101 @@ export interface CommitDiffOptions extends CallOptions {
 
 /** Options of `file.read`; an unknown option is refused. */
 export interface FileReadOptions extends CallOptions {
-  start_line?: WholeNumber;
-  end_line?: WholeNumber;
+  at?: string;
+  line?: WholeNumber;
+  limit?: WholeNumber;
+}
+
+/** Options of `file.stat`; an unknown option is refused. */
+export interface FileStatOptions extends CallOptions {
+  at?: string;
 }
 
 /** Options of `file.list`; an unknown option is refused. */
 export interface FileListOptions extends CallOptions {
-  page_size?: WholeNumber;
-  page?: WholeNumber;
-  page_pos?: WholeNumber;
+  at?: string;
+  limit?: WholeNumber;
+  cursor?: string;
 }
 
 /** Options of `file.glob`; an unknown option is refused. */
 export interface FileGlobOptions extends CallOptions {
-  page_size?: WholeNumber;
-  page?: WholeNumber;
-  page_pos?: WholeNumber;
+  exclude?: string;
+  at?: string;
+  limit?: WholeNumber;
+  cursor?: string;
 }
 
 /** Options of `file.grep`; an unknown option is refused. */
 export interface FileGrepOptions extends CallOptions {
-  page_size?: WholeNumber;
-  page?: WholeNumber;
-  page_pos?: WholeNumber;
+  include?: string;
+  exclude?: string;
+  ignore_case?: boolean;
+  at?: string;
+  limit?: WholeNumber;
+  cursor?: string;
 }
 
-/** Options of `file.revision`; an unknown option is refused. */
-export interface FileRevisionOptions extends CallOptions {
-  at_commit?: string;
+/** Options of `file.history`; an unknown option is refused. */
+export interface FileHistoryOptions extends CallOptions {
+  at?: string;
   traversal?: string;
-  page?: WholeNumber;
-  page_size?: WholeNumber;
-  continuation?: string;
+  limit?: WholeNumber;
+  cursor?: string;
 }
 
 /** Options of `file.blame`; an unknown option is refused. */
 export interface FileBlameOptions extends CallOptions {
-  from_line?: WholeNumber;
-  line_count?: WholeNumber;
-}
-
-/** Options of `file.diff`; an unknown option is refused. */
-export interface FileDiffOptions extends CallOptions {
-  left_commit?: string;
-  right_commit?: string;
-  include_attribution?: boolean;
-  allow_missing?: boolean;
-  page?: WholeNumber;
-  page_size?: WholeNumber;
+  at?: string;
+  line?: WholeNumber;
+  limit?: WholeNumber;
 }
 
 /** Options of `file.write`; an unknown option is refused. */
 export interface FileWriteOptions extends CallOptions {
+  mode?: string;
+  expected?: string;
   message?: string;
-  mode?: WholeNumber;
 }
 
 /** Options of `file.edit`; an unknown option is refused. */
 export interface FileEditOptions extends CallOptions {
-  old?: string;
-  new?: string;
+  old_string?: string;
+  new_string?: string;
+  replace_all?: boolean;
+  expected?: string;
   message?: string;
 }
 
 /** Options of `file.rm`; an unknown option is refused. */
 export interface FileRmOptions extends CallOptions {
+  recursive?: boolean;
+  expected?: string;
   message?: string;
 }
 
 /** Options of `file.mkdir`; an unknown option is refused. */
 export interface FileMkdirOptions extends CallOptions {
+  mode?: string;
+  expected?: string;
   message?: string;
-  mode?: WholeNumber;
 }
 
 /** Options of `file.mv`; an unknown option is refused. */
 export interface FileMvOptions extends CallOptions {
+  expected?: string;
   message?: string;
 }
 
 /** Options of `file.cp`; an unknown option is refused. */
 export interface FileCpOptions extends CallOptions {
+  expected?: string;
   message?: string;
 }
 
 /** Options of `file.apply`; an unknown option is refused. */
 export interface FileApplyOptions extends CallOptions {
+  expected?: string;
   message?: string;
 }
 
@@ -621,23 +639,20 @@ export interface HomeFamily {
 }
 
 export interface ProjectFamily {
-  /** import a host folder as a new project into an existing Store */
+  /** import a folder on this computer as a new project into an existing Store */
   init(project: string, folder: string, options?: ProjectInitOptions): Promise<Result>;
   /** every project in the home, or one Store's */
-  list(options: ProjectListOptions): Promise<Result>;
-  list(store?: string | null, options?: ProjectListOptions): Promise<Result>;
-  /** a project's record: its Store, kind and machine */
+  list(options?: ProjectListOptions): Promise<Result>;
+  /** one project: its Store, state and main's head */
   get(project: string, options?: CallOptions): Promise<Result>;
-  /** entry counts of one pinned saved tree */
-  stats(project: string, options: CallOptions): Promise<Result>;
-  stats(project: string, branch?: string | null, options: CallOptions): Promise<Result>;
-  stats(project: string, branch?: string | null, commit?: string | null, options?: CallOptions): Promise<Result>;
-  /** export a project's snapshot from its Store to a local folder */
+  /** entry counts and size of the tree at a Branch's head or a Commit */
+  stats(project: string, options?: ProjectStatsOptions): Promise<Result>;
+  /** export a Branch's committed tree to a folder on this computer */
   export(project: string, destination: string, options?: ProjectExportOptions): Promise<Result>;
   /** retire one project in its Store and remove its home entry */
   delete(project: string, options?: CallOptions): Promise<Result>;
-  /** hide one absolute path from every node at or below its marker frontier */
-  remove_file(project: string, path: string, options?: CallOptions): Promise<Result>;
+  /** hide one absolute path from the project's whole history; frees no bytes */
+  hide_path(project: string, path: string, options?: CallOptions): Promise<Result>;
   /** check one project's record; with --full, also read and check its data */
   doctor(project: string, options?: ProjectDoctorOptions): Promise<Result>;
 }
@@ -668,41 +683,35 @@ export interface CommitFamily {
 }
 
 export interface FileFamily {
-  /** read a file */
-  read(project: string, branch: string, path: string, options: FileReadOptions): Promise<Result>;
-  read(project: string, branch: string, path: string, commit?: string | null, options?: FileReadOptions): Promise<Result>;
-  /** a path's kind, size and mode */
-  stat(project: string, branch: string, path: string, options: CallOptions): Promise<Result>;
-  stat(project: string, branch: string, path: string, commit?: string | null, options?: CallOptions): Promise<Result>;
+  /** read a text file, or a window of its lines */
+  read(project: string, branch: string, path: string, options?: FileReadOptions): Promise<Result>;
+  /** a path's type, size and mode */
+  stat(project: string, branch: string, path: string, options?: FileStatOptions): Promise<Result>;
   /** a folder's entries */
-  list(project: string, branch: string, path: string, options: FileListOptions): Promise<Result>;
-  list(project: string, branch: string, path: string, commit?: string | null, options?: FileListOptions): Promise<Result>;
-  /** paths under `path` matching a glob */
-  glob(project: string, branch: string, path: string, pattern: string, options: FileGlobOptions): Promise<Result>;
-  glob(project: string, branch: string, path: string, pattern: string, commit?: string | null, options?: FileGlobOptions): Promise<Result>;
-  /** lines under `path` matching a regular expression */
-  grep(project: string, branch: string, path: string, pattern: string, options: FileGrepOptions): Promise<Result>;
-  grep(project: string, branch: string, path: string, pattern: string, commit?: string | null, options?: FileGrepOptions): Promise<Result>;
-  /** saved changes to a literal path */
-  revision(project: string, branch: string, path: string, options?: FileRevisionOptions): Promise<Result>;
-  /** the Commit of each line */
-  blame(project: string, branch: string, path: string, options: FileBlameOptions): Promise<Result>;
-  blame(project: string, branch: string, path: string, commit?: string | null, options?: FileBlameOptions): Promise<Result>;
-  /** the difference between two files */
-  diff(project: string, left_branch: string, left_path: string, right_branch: string, right_path: string, options?: FileDiffOptions): Promise<Result>;
+  list(project: string, branch: string, path: string, options?: FileListOptions): Promise<Result>;
+  /** paths under a folder that match a glob */
+  glob(project: string, branch: string, pattern: string, options: FileGlobOptions): Promise<Result>;
+  glob(project: string, branch: string, pattern: string, path?: string | null, options?: FileGlobOptions): Promise<Result>;
+  /** lines under a folder that contain a literal text */
+  grep(project: string, branch: string, pattern: string, options: FileGrepOptions): Promise<Result>;
+  grep(project: string, branch: string, pattern: string, path?: string | null, options?: FileGrepOptions): Promise<Result>;
+  /** the Commits that changed one path, newest first */
+  history(project: string, branch: string, path: string, options?: FileHistoryOptions): Promise<Result>;
+  /** the Commit that last changed each line of a text file */
+  blame(project: string, branch: string, path: string, options?: FileBlameOptions): Promise<Result>;
   /** write a file; one Commit */
   write(project: string, branch: string, path: string, content: Content, options?: FileWriteOptions): Promise<Result>;
-  /** replace one unique text in a file; one Commit */
+  /** replace a text in a file; one Commit */
   edit(project: string, branch: string, path: string, options?: FileEditOptions): Promise<Result>;
   /** remove a path; one Commit */
   rm(project: string, branch: string, path: string, options?: FileRmOptions): Promise<Result>;
-  /** make a folder; one Commit */
+  /** make a folder and its missing parents; one Commit */
   mkdir(project: string, branch: string, path: string, options?: FileMkdirOptions): Promise<Result>;
   /** move a path; one Commit */
-  mv(project: string, branch: string, from_path: string, to_path: string, options?: FileMvOptions): Promise<Result>;
-  /** copy a path; one Commit */
-  cp(project: string, branch: string, from_path: string, to_path: string, options?: FileCpOptions): Promise<Result>;
-  /** apply a list of changes; one Commit */
+  mv(project: string, branch: string, from: string, to: string, options?: FileMvOptions): Promise<Result>;
+  /** copy a path, a folder with everything in it; one Commit */
+  cp(project: string, branch: string, from: string, to: string, options?: FileCpOptions): Promise<Result>;
+  /** apply a list of changes; one Commit, all or none */
   apply(project: string, branch: string, changes: Value, options?: FileApplyOptions): Promise<Result>;
 }
 

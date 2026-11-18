@@ -90,15 +90,15 @@ class ProjectFamily:
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """import a host folder as a new project into an existing Store"""
+        """import a folder on this computer as a new project into an existing Store"""
     def list(
         self,
-        store: str | None = None,
         *,
-        page_size: int | None = None,
-        page_pos: int | None = None,
+        store: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
         detail: bool | None = None,
-        with_: Sequence[str] | None = None,
+        with_: Sequence[Literal['stats']] | None = None,
         log_tag: str | None = None,
     ) -> Result:
         """every project in the home, or one Store's"""
@@ -110,30 +110,31 @@ class ProjectFamily:
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """a project's record: its Store, kind and machine"""
+        """one project: its Store, state and main's head"""
     def stats(
         self,
         project: str,
-        branch: str | None = None,
-        commit: str | None = None,
         *,
+        branch: str | None = None,
+        at: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """entry counts of one pinned saved tree"""
+        """entry counts and size of the tree at a Branch's head or a Commit"""
     def export(
         self,
         project: str,
         destination: str,
         *,
         branch: str | None = None,
+        at: str | None = None,
         on_progress: Callable[[Progress], object] = ...,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """export a project's snapshot from its Store to a local folder"""
+        """export a Branch's committed tree to a folder on this computer"""
     def delete(
         self,
         project: str,
@@ -143,7 +144,7 @@ class ProjectFamily:
         log_tag: str | None = None,
     ) -> Result:
         """retire one project in its Store and remove its home entry"""
-    def remove_file(
+    def hide_path(
         self,
         project: str,
         path: str,
@@ -152,7 +153,7 @@ class ProjectFamily:
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """hide one absolute path from every node at or below its marker frontier"""
+        """hide one absolute path from the project's whole history; frees no bytes"""
     def doctor(
         self,
         project: str,
@@ -286,37 +287,36 @@ class FileFamily:
         project: str,
         branch: str,
         path: str,
-        commit: str | None = None,
         *,
-        start_line: int | None = None,
-        end_line: int | None = None,
+        at: str | None = None,
+        line: int | None = None,
+        limit: int | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """read a file"""
+        """read a text file, or a window of its lines"""
     def stat(
         self,
         project: str,
         branch: str,
         path: str,
-        commit: str | None = None,
         *,
+        at: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """a path's kind, size and mode"""
+        """a path's type, size and mode"""
     def list(
         self,
         project: str,
         branch: str,
         path: str,
-        commit: str | None = None,
         *,
-        page_size: int | None = None,
-        page: int | None = None,
-        page_pos: int | None = None,
+        at: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
@@ -326,83 +326,65 @@ class FileFamily:
         self,
         project: str,
         branch: str,
-        path: str,
         pattern: str,
-        commit: str | None = None,
+        path: str | None = None,
         *,
-        page_size: int | None = None,
-        page: int | None = None,
-        page_pos: int | None = None,
+        exclude: str | None = None,
+        at: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """paths under `path` matching a glob"""
+        """paths under a folder that match a glob"""
     def grep(
         self,
         project: str,
         branch: str,
-        path: str,
         pattern: str,
-        commit: str | None = None,
+        path: str | None = None,
         *,
-        page_size: int | None = None,
-        page: int | None = None,
-        page_pos: int | None = None,
+        include: str | None = None,
+        exclude: str | None = None,
+        ignore_case: bool | None = None,
+        at: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """lines under `path` matching a regular expression"""
-    def revision(
+        """lines under a folder that contain a literal text"""
+    def history(
         self,
         project: str,
         branch: str,
         path: str,
         *,
-        at_commit: str | None = None,
+        at: str | None = None,
         traversal: str | None = None,
-        page: int | None = None,
-        page_size: int | None = None,
-        continuation: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """saved changes to a literal path"""
+        """the Commits that changed one path, newest first"""
     def blame(
         self,
         project: str,
         branch: str,
         path: str,
-        commit: str | None = None,
         *,
-        from_line: int | None = None,
-        line_count: int | None = None,
+        at: str | None = None,
+        line: int | None = None,
+        limit: int | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """the Commit of each line"""
-    def diff(
-        self,
-        project: str,
-        left_branch: str,
-        left_path: str,
-        right_branch: str,
-        right_path: str,
-        *,
-        left_commit: str | None = None,
-        right_commit: str | None = None,
-        include_attribution: bool | None = None,
-        allow_missing: bool | None = None,
-        page: int | None = None,
-        page_size: int | None = None,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """the difference between two files"""
+        """the Commit that last changed each line of a text file"""
     def write(
         self,
         project: str,
@@ -410,8 +392,9 @@ class FileFamily:
         path: str,
         content: Content,
         *,
+        mode: str | None = None,
+        expected: str | None = None,
         message: str | None = None,
-        mode: int | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
@@ -423,20 +406,24 @@ class FileFamily:
         branch: str,
         path: str,
         *,
-        old: str | None = None,
-        new: str | None = None,
+        old_string: str | None = None,
+        new_string: str | None = None,
+        replace_all: bool | None = None,
+        expected: str | None = None,
         message: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """replace one unique text in a file; one Commit"""
+        """replace a text in a file; one Commit"""
     def rm(
         self,
         project: str,
         branch: str,
         path: str,
         *,
+        recursive: bool | None = None,
+        expected: str | None = None,
         message: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
@@ -449,20 +436,22 @@ class FileFamily:
         branch: str,
         path: str,
         *,
+        mode: str | None = None,
+        expected: str | None = None,
         message: str | None = None,
-        mode: int | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """make a folder; one Commit"""
+        """make a folder and its missing parents; one Commit"""
     def mv(
         self,
         project: str,
         branch: str,
-        from_path: str,
-        to_path: str,
+        from_: str,
+        to: str,
         *,
+        expected: str | None = None,
         message: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
@@ -473,27 +462,29 @@ class FileFamily:
         self,
         project: str,
         branch: str,
-        from_path: str,
-        to_path: str,
+        from_: str,
+        to: str,
         *,
+        expected: str | None = None,
         message: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """copy a path; one Commit"""
+        """copy a path, a folder with everything in it; one Commit"""
     def apply(
         self,
         project: str,
         branch: str,
         changes: JSON,
         *,
+        expected: str | None = None,
         message: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """apply a list of changes; one Commit"""
+        """apply a list of changes; one Commit, all or none"""
 
 class SandboxFamily:
     def create(
