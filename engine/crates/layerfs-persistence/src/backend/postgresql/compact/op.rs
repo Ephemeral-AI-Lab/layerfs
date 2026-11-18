@@ -238,19 +238,35 @@ pub(crate) fn mark(session: &Arc<Session>, schema: &str) -> HistoryResult<Marked
 }
 
 /// The live pack ids, as a session temporary table: what the §3 decision
-/// sums, and what the Phase A copy joins.
+/// sums, and what the Phase A copy joins. They come from the mark's own
+/// bounded list in ascending order, a piece per statement, and are never
+/// held together here.
 fn load_live_packs(tx: &Transaction<'_>, mark: &MarkResult) -> HistoryResult<()> {
     tx.batch(
         "DROP TABLE IF EXISTS pg_temp.gc_live_pack;\
          CREATE TEMP TABLE pg_temp.gc_live_pack(pack_id bigint PRIMARY KEY) ON COMMIT PRESERVE ROWS;",
     )?;
-    for packs in mark.objects().packs().chunks(VISITED_PACKS) {
+    let send = |packs: &[i64]| -> HistoryResult<()> {
+        if packs.is_empty() {
+            return Ok(());
+        }
         tx.typed(
             "INSERT INTO pg_temp.gc_live_pack(pack_id) SELECT unnest($1::bigint[])",
             &[&packs],
             packs.len() as u64 * 8,
         )?;
-    }
+        Ok(())
+    };
+    let mut packs: Vec<i64> = Vec::with_capacity(VISITED_PACKS);
+    mark.objects().retained_packs().each(&mut |pack| {
+        packs.push(pack as i64);
+        if packs.len() == VISITED_PACKS {
+            send(&packs)?;
+            packs.clear();
+        }
+        Ok(())
+    })?;
+    send(&packs)?;
     // The decision's sum and the Phase A copy read the set; analyze it
     // after the load so the planner sees the real cardinality.
     tx.batch("ANALYZE pg_temp.gc_live_pack;")?;
@@ -451,49 +467,4 @@ pub(crate) fn history_rows(session: &Arc<Session>, schema: &str) -> HistoryResul
         ),
         Vec::new(),
     )
-}
-
-/// The §6.4 live-heads digest, computed inside one transaction (the mark's
-/// SQL is the same vector).
-pub(crate) fn digest(tx: &Transaction<'_>) -> HistoryResult<[u8; 32]> {
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(b"layerfs/live-heads/v1\0");
-    let stacks = tx.query(
-        "SELECT s.layer_stack_id, s.head_layer_id FROM layer_stack s \
-         WHERE NOT EXISTS (SELECT 1 FROM layer_stack_retired r WHERE r.layer_stack_id=s.layer_stack_id) \
-         ORDER BY s.layer_stack_id",
-        Vec::new(),
-    )?;
-    for row in &stacks {
-        let id: Vec<u8> = row.get(0)?;
-        let head: Vec<u8> = row.get(1)?;
-        if id.len() != 17 || head.len() != 33 {
-            return Err(HistoryError::Integrity("live-heads stack width"));
-        }
-        hasher.update(&id);
-        hasher.update(&head);
-    }
-    let branches = tx.query(
-        "SELECT b.branch_id, b.head_commit_id, b.base_layer_id FROM branch b \
-         WHERE NOT EXISTS (SELECT 1 FROM branch_retired r WHERE r.branch_id=b.branch_id) \
-         AND NOT EXISTS (SELECT 1 FROM layer_stack_retired s WHERE s.layer_stack_id=b.layer_stack_id) \
-         ORDER BY b.branch_id",
-        Vec::new(),
-    )?;
-    for row in &branches {
-        let id: Vec<u8> = row.get(0)?;
-        let head: Option<Vec<u8>> = row.get(1)?;
-        let base: Vec<u8> = row.get(2)?;
-        if id.len() != 17 || base.len() != 33 {
-            return Err(HistoryError::Integrity("live-heads branch width"));
-        }
-        hasher.update(&id);
-        match head {
-            Some(head) if head.len() == 33 => hasher.update(&head),
-            Some(_) => return Err(HistoryError::Integrity("live-heads commit width")),
-            None => hasher.update(&[0u8; 33]),
-        };
-        hasher.update(&base);
-    }
-    Ok(*hasher.finalize().as_bytes())
 }

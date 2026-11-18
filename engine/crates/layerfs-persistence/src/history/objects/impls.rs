@@ -102,9 +102,9 @@ impl KeptObjects {
 
     /// Every pack holding a reached object, in ascending pack order, when
     /// the mark listed them ([`crate::HistoryProvider::mark`],
-    /// `mark_with_scratch`, and a PostgreSQL compaction's mark, which lists
-    /// these and nothing else); eight bytes a pack. A SQLite compaction's
-    /// own mark leaves it empty and reads [`Self::retained_packs`].
+    /// `mark_with_scratch`); eight bytes a pack. A compaction's own mark,
+    /// on SQLite and on PostgreSQL, leaves it empty and reads
+    /// [`Self::retained_packs`].
     pub fn packs(&self) -> &[i64] {
         &self.packs
     }

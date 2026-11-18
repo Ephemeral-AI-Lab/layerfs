@@ -226,7 +226,7 @@ pub(crate) fn build(
     // must add up to the packs the mark retained.
     let batches = byte_batches(session, schema)?;
     let live_packs: i64 = batches.iter().map(|(_, _, packs)| *packs).sum();
-    if live_packs != mark.objects().packs().len() as i64 {
+    if live_packs != mark.objects().retained_packs().len() as i64 {
         return Err(HistoryError::Integrity("compaction live pack list"));
     }
     let wal_start: String = stage(session, |tx| {
@@ -329,7 +329,7 @@ pub(crate) fn build(
     })?;
     if distinct != mark.objects().len() as i64
         || objects != distinct
-        || pack_rows != mark.objects().packs().len() as i64
+        || pack_rows != mark.objects().retained_packs().len() as i64
     {
         return Err(HistoryError::Integrity("compaction object count"));
     }

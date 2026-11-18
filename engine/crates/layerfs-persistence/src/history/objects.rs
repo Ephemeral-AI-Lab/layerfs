@@ -196,7 +196,9 @@ fn mark_gc(tx: &Transaction<'_>, budget: u64) -> HistoryResult<(MarkResult, GcTu
 }
 
 /// [`HistoryProvider::mark_gc`] inside a caller's engine transaction, with the
-/// reached set instead of a list of it ([`KeptObjects::objects`] is empty).
+/// reached set instead of a list of it ([`KeptObjects::objects`] is empty),
+/// and no list of the retained packs either: the caller reads
+/// [`KeptObjects::retained_packs`] as a stream.
 /// A PostgreSQL compaction decides and fills its visited table from
 /// [`Reach::each`] in the transaction that walked, so the reached identities
 /// are never held: the ranks a `Reach` names are those of this snapshot only.
@@ -205,10 +207,17 @@ pub(crate) fn mark_gc_reached(
 ) -> HistoryResult<(MarkResult, GcTuple, Reach)> {
     let tx = Transaction::new(backend);
     let tuple = gc_tuple(&tx)?;
-    let (mut mark, reach) = mark_recorded(&tx, false, spill::BUDGET_BYTES)?;
-    // A PostgreSQL compaction reads the retained packs as a slice.
-    mark.objects.list_packs()?;
+    let (mark, reach) = mark_recorded(&tx, false, spill::BUDGET_BYTES)?;
     Ok((mark, tuple, reach))
+}
+
+/// The §6.4 live-heads digest inside a caller's engine transaction, read a
+/// bounded page at a time: what a PostgreSQL swap compares with its mark's
+/// under the Store-wide lock.
+pub(crate) fn live_heads_digest_in(
+    backend: &dyn crate::backend::HistoryStatements,
+) -> HistoryResult<[u8; 32]> {
+    live_heads_digest(&Transaction::new(backend))
 }
 
 fn gc_tuple(tx: &Transaction<'_>) -> HistoryResult<GcTuple> {

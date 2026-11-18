@@ -192,7 +192,8 @@ A compaction round's mark, its decision and a rebuild's visited ids are one
 repeatable-read transaction
 ([`compact/op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/op.rs)
 `mark`). After the walk it sends the server the live pack ids
-(`gc_live_pack`), sums their bytes and decides between `none` and `rebuild`
+(`gc_live_pack`), read from the mark's own list in ascending order and sent
+32,768 a statement, sums their bytes and decides between `none` and `rebuild`
 over that same snapshot. Only a rebuild then fills the visited ids
 (`gc_visited`): the mark keeps one bit an object over the Store's locator
 order, never the identities, so the fill reads the locators again a block
@@ -221,13 +222,18 @@ least locator); a rank is a position in that order. The mark's sort files
 are unnamed files in the client's temporary directory, and so are the
 block boundaries and the bits of the locator order beyond the pages the
 mark holds of them (32 bytes for every 512 objects and two bits an object,
-on disk). What still grows with the Store on the client is the one list
-this compaction asks the mark for: the retained pack ids as a slice, 8
-bytes a live pack
-([`compact/op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/op.rs)).
-The mark itself keeps them in a bounded list like every other
-([SQLite: the mark's memory](sqlite.md#the-marks-memory)); a compaction
-that read that list as a stream would hold nothing per pack.
+on disk). The compaction asks the mark for no list: the retained pack ids
+are read as a stream from the mark's bounded list
+([SQLite: the mark's memory](sqlite.md#the-marks-memory)) and counted from
+it, and the swap reads the live heads for its digest with the mark's own
+statements, 1,024 rows at a time
+([`compact/op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/op.rs),
+[`compact/swap.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/swap.rs)).
+So nothing the client holds through a compaction grows with the Store's
+objects, packs, Commits or Branches. What it does hold per unit is small and
+not of those: one row for each batch of about 1 GiB of kept pack bodies, and
+one identity for each project that has a dead row while Phase C deletes them
+a project at a time.
 
 One method decides where the sort files go
 ([`seam.rs`](../../../../engine/crates/layerfs-persistence/src/backend/seam.rs),
