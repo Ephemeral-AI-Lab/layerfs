@@ -301,8 +301,10 @@ fn roots(tx: &Transaction<'_>) -> HistoryResult<Vec<ObjectId>> {
 ///
 /// An object has one locator row (its identity is the table's key), so no
 /// order is needed to pick a winner, and asking for pack order made the
-/// engine sort every row of the table for each mark. Both maps below are
-/// keyed, so they do not need sorted input either.
+/// engine sort every row of the table for each mark. `locations` is keyed by
+/// identity and needs no order; `inventory` is built from the rows sorted here
+/// by locator, because filling three nested ordered maps in identity order
+/// puts every row in a different pack's map.
 ///
 /// `locations` answers the walk; `inventory` answers kept-waste attribution.
 /// They are two views of the same single `gc_object_locations` read, so the
@@ -317,10 +319,8 @@ struct Located {
 
 fn locate_all(tx: &Transaction<'_>) -> HistoryResult<Located> {
     let rows = tx.query(LOCATIONS, Vec::<Param>::new())?;
-    let mut located = Located {
-        locations: IdMap::with_capacity_and_hasher(rows.len(), ids::IdState::default()),
-        inventory: BTreeMap::new(),
-    };
+    let mut locations = IdMap::with_capacity_and_hasher(rows.len(), ids::IdState::default());
+    let mut placed: Vec<(i64, usize, usize, ObjectId)> = Vec::with_capacity(rows.len());
     for row in &rows {
         let id = object(row, 0)?;
         let pack: i64 = cell(row, 1)?;
@@ -335,14 +335,8 @@ fn locate_all(tx: &Transaction<'_>) -> HistoryResult<Located> {
         .map_err(|_| HistoryError::Integrity("mark object role"))?;
         let canonical_length = usize::try_from(cell::<i64>(row, 5)?)
             .map_err(|_| HistoryError::Integrity("mark object length"))?;
-        located
-            .inventory
-            .entry(pack)
-            .or_default()
-            .entry(group)
-            .or_default()
-            .insert(record, id);
-        located.locations.entry(id).or_insert(ObjectLocation {
+        placed.push((pack, group, record, id));
+        locations.entry(id).or_insert(ObjectLocation {
             object_id: id,
             role,
             canonical_length,
@@ -351,7 +345,28 @@ fn locate_all(tx: &Transaction<'_>) -> HistoryResult<Located> {
             record_number: record,
         });
     }
-    Ok(located)
+    drop(rows);
+    // Each map is collected from a run that is already in its key order. A
+    // record holds one object; were two rows to name one record, the greater
+    // identity is kept.
+    placed.sort_unstable();
+    let inventory = placed
+        .chunk_by(|left, right| left.0 == right.0)
+        .map(|pack| {
+            let groups = pack
+                .chunk_by(|left, right| left.1 == right.1)
+                .map(|group| {
+                    let records = group.iter().map(|placed| (placed.2, placed.3)).collect();
+                    (group[0].1, records)
+                })
+                .collect();
+            (pack[0].0, groups)
+        })
+        .collect();
+    Ok(Located {
+        locations,
+        inventory,
+    })
 }
 
 /// The in-memory closure of one mark, before `keptWaste` is attributed.
