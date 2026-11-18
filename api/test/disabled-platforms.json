@@ -208,8 +208,8 @@
         "project": "shop/api",
         "branch": "work",
         "path": "/a",
-        "old": "x",
-        "new": "y"
+        "old_string": "x",
+        "new_string": "y"
       }
     },
     {

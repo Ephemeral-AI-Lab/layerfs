@@ -225,7 +225,7 @@ fn init_into_a_worker_s_store_copies_the_caller_s_folder() {
     let read = store_call(&home, "file.read", "shop/web", "/src/lib/a.txt");
     assert_eq!(read.get_text("text"), Some("nested\n"));
     let stat = store_call(&home, "file.stat", "shop/web", "/run.sh");
-    assert_eq!(stat.get_int("mode"), Some(0o755), "{stat:?}");
+    assert_eq!(stat.get_text("mode"), Some("0755"), "{stat:?}");
     let stat = store_call(&home, "file.stat", "shop/web", "/src/big.bin");
     assert_eq!(stat.get_int("size"), Some(big.len() as i64), "{stat:?}");
     let stat = store_call(&home, "file.stat", "shop/web", "/empty");
