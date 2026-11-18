@@ -270,7 +270,7 @@ AC-51 does not depend on the projection alone.
   `sdk_path_merge_removal` (6), `sdk_mount_bind_failure` (1),
   `sdk_path_whiteouts` (7), `sdk_path_hidden_semantics` (3),
   `sdk_path_removal` (5); and the `layerfs-control
-  project_delete_worker` (8), the `layerfs-store
+  project_delete_worker` (13), the `layerfs-store
   project_delete` (18), `compact_report_status` (6) and the
   PostgreSQL AC-44 suite `postgresql_compact` (32 tests; AC-44's nine are
   `a_fully_privileged_role_compacts`,

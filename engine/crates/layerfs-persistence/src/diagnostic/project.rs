@@ -163,7 +163,7 @@ impl Audit<'_, '_> {
         let mut after = Vec::<u8>::new();
         loop {
             self.options.check()?;
-            let rows = self.view.query("SELECT branch_id,name,CASE WHEN blob_length(base_layer_id)=33 THEN base_layer_id END,CASE WHEN blob_length(head_commit_id)=33 THEN head_commit_id END FROM branch b WHERE layer_stack_id=?1 AND blob_length(branch_id)=17 AND branch_id>?2 AND NOT EXISTS(SELECT 1 FROM branch_retired r WHERE r.branch_id=b.branch_id) ORDER BY branch_id LIMIT 64", vec![Param::Bytes(id.clone()), Param::Bytes(after.clone())])?;
+            let rows = self.view.query("SELECT branch_id,name,CASE WHEN blob_length(base_layer_id)=33 THEN base_layer_id END,CASE WHEN blob_length(head_commit_id)=33 THEN head_commit_id END FROM branch b WHERE layer_stack_id=?1 AND blob_length(branch_id)=17 AND branch_id>?2 AND NOT EXISTS(SELECT 1 FROM branch_retired r WHERE r.branch_id=b.branch_id) AND NOT EXISTS(SELECT 1 FROM layer_stack_retired s WHERE s.layer_stack_id=b.layer_stack_id) ORDER BY branch_id LIMIT 64", vec![Param::Bytes(id.clone()), Param::Bytes(after.clone())])?;
             if rows.is_empty() {
                 break;
             }
