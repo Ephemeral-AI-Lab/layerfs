@@ -143,20 +143,7 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
                 let now = std::time::Instant::now();
                 let start = *progress_start.get_or_insert(now);
                 let elapsed = (now - start).as_secs_f64();
-                let mut status = format!("phase: {phase}");
-                if let Some(d) = done {
-                    let d_str = output::format_size(d);
-                    if let Some(t) = total {
-                        let t_str = output::format_size(t);
-                        status.push_str(&format!("  {d_str}/{t_str}"));
-                    } else {
-                        status.push_str(&format!("  {d_str}"));
-                    }
-                    if elapsed > 0.5 && d > 0 {
-                        let rate = (d as f64) / elapsed;
-                        status.push_str(&format!("  ({}/s)", output::format_size(rate as i64)));
-                    }
-                }
+                let status = output::progress_line(phase, done, total, elapsed);
                 let len = status.chars().count();
                 let pad = if last_progress_len > len {
                     " ".repeat(last_progress_len - len)

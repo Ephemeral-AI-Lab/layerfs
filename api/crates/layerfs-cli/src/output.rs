@@ -169,6 +169,34 @@ pub fn format_time(ms: i64) -> String {
     format!("{y:04}-{m:02}-{d:02} {hour:02}:{min:02}:{sec:02}")
 }
 
+/// The progress phases whose `done` and `total` are bytes: a Store or an
+/// image sent to a machine, a backup's snapshot, hash, upload and download.
+const BYTE_PHASES: [&str; 5] = ["send", "snapshot", "hash", "upload", "download"];
+
+/// One progress event as the terminal line shows it, `elapsed` seconds
+/// after the first: `done`/`total` in bytes (with a rate) only in a phase
+/// that moves bytes, else as plain counts (a doctor's or a create's steps;
+/// conformance R4 F8).
+pub fn progress_line(phase: &str, done: Option<i64>, total: Option<i64>, elapsed: f64) -> String {
+    let bytes = BYTE_PHASES.contains(&phase);
+    let shown = |n: i64| match bytes {
+        true => format_size(n),
+        false => n.to_string(),
+    };
+    let mut status = format!("phase: {phase}");
+    if let Some(done) = done {
+        status.push_str(&format!("  {}", shown(done)));
+        if let Some(total) = total {
+            status.push_str(&format!("/{}", shown(total)));
+        }
+        if bytes && elapsed > 0.5 && done > 0 {
+            let rate = (done as f64) / elapsed;
+            status.push_str(&format!("  ({}/s)", format_size(rate as i64)));
+        }
+    }
+    status
+}
+
 /// Formats byte counts as human units (B, KiB, MiB, GiB, TiB, PiB).
 pub fn format_size(bytes: i64) -> String {
     if bytes < 0 {

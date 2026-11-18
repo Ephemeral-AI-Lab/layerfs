@@ -105,7 +105,7 @@ does not.
 - **Sections.** `with` adds a named part of the answer that costs a read of
   its own: `home get --with platforms`, `--with tree`. A call takes only the
   sections its row lists; another name is refused `InvalidInput`, naming the
-  ones it takes (in the shell it is a wrong command line, exit 2). A section is in both forms, and only when asked for.
+  ones it takes (in the shell it is a wrong command line, exit 2). A section is there only when asked for: always in the long form, and in the short form only when it is not empty.
   Python spells the option `with_`, because `with` is a keyword.
 - **Counts.** A list inside an answer (`overwritten`, `projects`,
   `stores`) holds its first 20 entries; its `<list>_count` is set only when
@@ -1523,7 +1523,7 @@ Every call is one attempt. After `Unknown`, read the state with `list`,
 | `--text` | all | a readable result instead of JSON |
 | `--detail` | all | the long form of a migrated call's answer, and of any call's refusal ([the form of an answer](#the-form-of-an-answer)) |
 | `--with <a,b>` | the calls whose row lists sections (`home get`) | adds the named sections to the answer |
-| `--progress` | `project init`, `project export`, `workspace exec`, `store push`, `store pull`, `backup create`, `backup restore` | progress as one JSON line per event on stderr, the event itself: `{"phase", "done", "total", …}`; for `workspace exec`, the exec id first |
+| `--progress` | `project init`, `project export`, `workspace exec`, `store push`, `store pull`, `backup create`, `backup restore` | progress as one JSON line per event on stderr, the event itself: `{"phase", "done", "total", …}`; for `workspace exec`, the exec id first. On a terminal it is one status line instead: `phase: <phase>  done/total`, in byte units (with a rate) for the byte phases `send`, `snapshot`, `hash`, `upload` and `download`, plain counts for every other phase |
 | `--stream` | `workspace exec` | passes the command's stdout and stderr through (output over 1 MiB too) and exits with its code |
 | `--from <file>` | `file write`, `file apply` | reads the content or JSON from a file instead of stdin |
 | `--<option>-from <file>` | any optional text option (`--old-from`, `--new-from`, `--message-from`) | reads the option's value from a file |

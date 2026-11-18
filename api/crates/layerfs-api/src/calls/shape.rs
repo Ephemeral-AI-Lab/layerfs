@@ -199,7 +199,9 @@ impl Shaping<'_> {
                 },
                 other => other,
             };
-            if self.detail || value != SdkValue::Null {
+            // a section asked for stays out of the short form when nothing
+            // in it is news (`"live":{}`; conformance R4 F10)
+            if self.detail || !empty(&value) {
                 out.push((section.name.to_owned(), value));
             }
         }

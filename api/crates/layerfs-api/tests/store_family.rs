@@ -190,6 +190,8 @@ fn create_list_and_get() {
     )
     .unwrap();
     assert!(asked.get_text("observed_at").is_some(), "{asked:?}");
+    // nothing in the live section is news: it stays out (R4 F10)
+    assert_eq!(asked.get("live"), None, "{asked:?}");
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
 }
