@@ -125,28 +125,14 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
     let switches = parsed.switches;
     let scope = match switches.scope.as_ref().map(Scope::parse).transpose() {
         Ok(scope) => scope,
-        Err(refusal) => {
-            return if switches.events {
-                crate::framed::finish(Err(refusal), false, switches.detail)
-            } else {
-                output::refusal(&refusal, switches.detail)
-            }
-        }
+        Err(refusal) => return output::refusal(&refusal, switches.detail),
     };
     let (progress, stream) = (switches.progress, switches.stream);
     let is_term =
         std::io::stderr().is_terminal() && std::env::var_os("LAYERFS_PROGRESS_JSON").is_none();
     let mut last_progress_len = 0;
     let mut progress_start: Option<std::time::Instant> = None;
-    let mut framing_failed = false;
     let mut send = |event: SdkValue| {
-        if switches.events {
-            if !framing_failed && (event.get("progress").is_some() || event.get("stream").is_some())
-            {
-                framing_failed = crate::framed::event(&event).is_err();
-            }
-            return;
-        }
         if progress && event.get("progress").is_some() {
             let mut err = std::io::stderr().lock();
             if is_term {
@@ -219,17 +205,21 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
     // process's exit is not a dropped connection in the daemon's log and
     // retained failures (layerfs-project#181). Bounded; the result is ready.
     layerfs_api::end_idle_sessions(layerfs_api::SESSION_END);
-    if switches.events {
-        return crate::framed::finish(outcome, framing_failed, switches.detail);
-    }
+    // `workspace exec` exits with the command's own code in every form
+    // (call surface 2.0); its result JSON is still printed, except with
+    // `--stream`, which wrote the output itself
+    let exits = call.arg("stream").is_some();
     match outcome {
         Err(refusal) => output::refusal(&refusal, switches.detail),
-        Ok(value) if stream => {
+        Ok(value) if exits => {
+            let printed = match stream {
+                true => ExitCode::SUCCESS,
+                false => output::result(&value, switches.text),
+            };
             let _ = std::io::stdout().flush();
-            // the command's own exit code, as 1.1.0 passed it through; a
-            // result with none is a plain success (125 is for refusals)
+            // a result with none is a plain success (125 is for refusals)
             match value.get_int("exit_code") {
-                None => ExitCode::SUCCESS,
+                None => printed,
                 Some(code) => ExitCode::from(u8::try_from(code).unwrap_or(1)),
             }
         }

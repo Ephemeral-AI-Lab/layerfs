@@ -269,10 +269,10 @@ fn check_args(
     let want: Vec<String> = (list(at(row, what)).iter())
         .map(|arg| renamed(pending, call, arg.get_text("name").unwrap()))
         .collect();
-    // a front end's function (`on_progress`) is the row's `progress`, not
-    // one of its options
+    // a front end's function `on_progress` is the row's `progress`, not
+    // one of its options; exec's output sinks are options of its row
     let args: Vec<&layerfs_api::Arg> = (args.iter())
-        .filter(|arg| arg.kind != Kind::Function)
+        .filter(|arg| arg.name != "on_progress")
         .collect();
     let have: Vec<&str> = args.iter().map(|arg| arg.name).collect();
     assert_eq!(have, want, "{call}: {what}");
@@ -286,6 +286,9 @@ fn check_args(
         if let Some(SdkValue::Bool(redact)) = said.get("redact") {
             assert_eq!(arg.redacted(), *redact, "{spot}: redact");
         }
+        let repeated = list(at(row, "repeat")).contains(&SdkValue::text(arg.name))
+            || at(said, "repeat") == &SdkValue::Bool(true);
+        assert_eq!(arg.repeat, repeated, "{spot}: repeat");
         if let Some(shell) = said.get("shell") {
             assert_eq!(
                 arg.shell.map(SdkValue::text).unwrap_or_default(),
@@ -371,7 +374,7 @@ fn check_entry(pending: &SdkValue, entry: &Call, row: &SdkValue) {
     // what the shell reads from stdin, as the arguments say it
     let stdin = if (entry.args.iter().chain(entry.options)).any(|arg| arg.shell.is_some()) {
         Some("secret")
-    } else if entry.args.iter().any(|arg| arg.kind == Kind::Content) {
+    } else if (entry.args.iter().chain(entry.options)).any(|arg| arg.kind == Kind::Content) {
         Some("content")
     } else if entry.args.iter().any(|arg| arg.kind == Kind::Json) {
         Some("json")
@@ -411,25 +414,44 @@ fn check_entry(pending: &SdkValue, entry: &Call, row: &SdkValue) {
     }
 }
 
-/// The node forms a tree section declares, by the word that names each:
-/// the first `always` key of every form reachable from the section's.
-fn nodes_of(form: &'static Form, found: &mut Vec<(&'static str, &'static Form)>) {
-    for (_, part) in form.parts {
-        if let Part::Rows(node) = part {
-            let word = node.always[0];
-            if !found.iter().any(|(held, _)| *held == word) {
-                found.push((word, node));
-                nodes_of(node, found);
+/// The node forms a tree section declares: every form reachable from the
+/// section's, with the key that holds it, and the plain lists, with the
+/// word that says what each string is.
+#[derive(Default)]
+struct Nodes {
+    rows: Vec<(&'static str, &'static Form)>,
+    scalars: Vec<(&'static str, &'static str)>,
+}
+
+fn nodes_of(form: &'static Form, found: &mut Nodes) {
+    for (key, part) in form.parts {
+        match part {
+            Part::Rows(node) => {
+                if !found
+                    .rows
+                    .iter()
+                    .any(|(_, held)| std::ptr::eq(*held, *node))
+                {
+                    found.rows.push((key, node));
+                    nodes_of(node, found);
+                }
+            }
+            Part::Scalars(word) => {
+                if !found.scalars.iter().any(|(held, _)| held == key) {
+                    found.scalars.push((key, word));
+                }
             }
         }
     }
 }
 
 /// Checks a tree section's nodes against the row's `nodes`, or against
-/// pending's `spec_sync.nodes` while this build is ahead of calls.json.
+/// pending's `spec_sync.nodes` while this build is ahead of calls.json. A
+/// node is named by the word of its first `always` key (`machine`), or,
+/// where the row names it so, by the key that holds it (`workspaces`).
 fn check_nodes(pending: &SdkValue, call: &str, section: &Section, said: &SdkValue) {
-    let mut found = Vec::new();
-    nodes_of(section.form.unwrap(), &mut found);
+    let mut nodes = Nodes::default();
+    nodes_of(section.form.unwrap(), &mut nodes);
     let ahead = at(
         at(at(at(pending, "spec_sync"), "nodes"), call),
         section.name,
@@ -440,15 +462,40 @@ fn check_nodes(pending: &SdkValue, call: &str, section: &Section, said: &SdkValu
             && node.long == texts(at(want, "long"))
     };
     if fields(ahead).is_empty() {
-        for (word, node) in &found {
+        let mut named = Vec::new();
+        for (key, node) in &nodes.rows {
+            let word = [node.always[0], *key]
+                .into_iter()
+                .find(|word| said.get(word).is_some())
+                .unwrap_or_else(|| panic!("{call}: the row names no node `{key}`"));
             assert!(
                 matches(node, at(said, word)),
                 "{call} --with {}: node `{word}` is not the row's",
                 section.name
             );
+            named.push(word);
+        }
+        for (key, word) in &nodes.scalars {
+            assert_eq!(
+                at(said, key).get_text("scalar"),
+                Some(*word),
+                "{call} --with {}: `{key}`",
+                section.name
+            );
+            named.push(*key);
+        }
+        for word in keys(said) {
+            assert!(
+                named.contains(&word),
+                "{call} --with {}: the row's node `{word}` is not declared",
+                section.name
+            );
         }
         return;
     }
+    let found: Vec<(&str, &Form)> = (nodes.rows.iter())
+        .map(|(_, node)| (node.always[0], *node))
+        .collect();
     let listed: Vec<&str> = found.iter().map(|(word, _)| *word).collect();
     assert_eq!(
         listed,
@@ -959,13 +1006,13 @@ fn home_get_answers_in_its_row_s_shape() {
     let short = call(&home, "home.get", &[with(&["tree"])]).unwrap();
     let tree = at(&short, "tree");
     assert_eq!(keys(tree), ["machines", "stores", "buckets"]);
-    // a ready machine and its ready sqlite Store say only their names
+    // a ready machine and its ready sqlite Store say only what names them
     let native = (list(at(tree, "machines")).iter())
         .find(|machine| machine.get_text("machine") == Some("native"))
         .unwrap_or_else(|| panic!("{tree:?}"));
     assert_eq!(
         json::print(native),
-        r#"{"machine":"native","stores":[{"store":"shop"}]}"#
+        r#"{"machine":"native","platform":"native","stores":[{"store":"shop","engine":"sqlite"}]}"#
     );
     let long = call(&home, "home.get", &[DETAIL, with(&["tree"])]).unwrap();
     let mut top = spelled(&pending, "home.get", at(said, "long"));

@@ -75,7 +75,7 @@ pub struct Left<'a> {
 /// `{ at, call: "project.init", store, project, machine, copy, phase,
 /// deadline, message }`. `deadline` (ms since the epoch) is when the request
 /// went out plus the Init's `timeoutMs`: nothing of this Init runs past it.
-/// `doctor.fix` removes the copy only when such a line names it and that
+/// `home.prune` removes the copy only when such a line names it and that
 /// deadline passed long enough ago. A log that cannot be written changes no
 /// outcome.
 pub fn log_left(home: &Path, left: &Left<'_>, message: &str) {

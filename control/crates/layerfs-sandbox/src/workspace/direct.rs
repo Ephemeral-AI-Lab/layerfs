@@ -13,6 +13,7 @@ use layerfs_home::events::Events;
 use layerfs_home::helpers;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store::call::store_call;
+use layerfs_store::calls::commit::CommitGet;
 use layerfs_store::calls::{Page, StoreOp};
 use layerfs_store::lease;
 use layerfs_store::resolve::{self, Target};
@@ -39,9 +40,34 @@ pub fn call(
     let host = host(&home, record, &target, message);
     match call {
         Call::Mount { branch, name } => serve::mount(&host, branch.as_deref(), name.as_deref()),
-        Call::Commit { ref path, force } => {
+        Call::Commit {
+            ref path,
+            force,
+            ref expected,
+        } => {
             let path = serve::by_name(&host, path.as_deref())?;
-            serve::commit(&host, path.as_deref(), force.unwrap_or(false))
+            let force = force.unwrap_or(false);
+            serve::commit_with(
+                &host,
+                path.as_deref(),
+                (force, expected.as_deref()),
+                (
+                    &mut |id, name| {
+                        let (found, head) = branch_of(&home, events, &target, name?).ok()?;
+                        (found == id).then_some(head)
+                    },
+                    &mut |text| {
+                        let get = CommitGet {
+                            project: record.project().unwrap_or("").to_owned(),
+                            commit: text.to_owned(),
+                            branch: None,
+                        };
+                        let mut quiet = |_| {};
+                        let mut quiet = Events::new(&mut quiet);
+                        store_call(&home, &mut quiet, &target, &StoreOp::GetCommit(&get))
+                    },
+                ),
+            )
         }
         Call::Unmount {
             ref path,
@@ -52,12 +78,19 @@ pub fn call(
             let (discard, force) = (discard.unwrap_or(false), force.unwrap_or(false));
             serve::unmount(&host, path.as_deref(), discard, force)
         }
-        Call::Status { ref path } => {
+        Call::Status {
+            ref path,
+            ref under,
+        } => {
             let path = serve::by_name(&host, path.as_deref())?;
-            serve::status_with(&host, path.as_deref(), &mut |id, name| {
-                let (found, head) = branch_of(&home, events, &target, name?).ok()?;
-                (found == id).then_some(head)
-            })
+            serve::status_with(
+                &host,
+                (path.as_deref(), under.as_deref()),
+                &mut |id, name| {
+                    let (found, head) = branch_of(&home, events, &target, name?).ok()?;
+                    (found == id).then_some(head)
+                },
+            )
         }
         Call::ListWorkspaces { .. } => dispatch::call(host, call),
         _ => Err(refused(

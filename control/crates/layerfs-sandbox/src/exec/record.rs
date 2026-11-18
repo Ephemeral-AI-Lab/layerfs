@@ -371,7 +371,7 @@ impl Running {
                 "Exists",
                 format!(
                     "Workspace {sandbox}:{} {why} exec_id {}: pick another exec_id, or cancel \
-                     it with workspace.exec_cancel",
+                     it with workspace.cancel",
                     record.name.as_deref().unwrap_or(&record.path),
                     record.id
                 ),

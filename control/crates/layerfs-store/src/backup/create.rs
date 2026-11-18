@@ -163,7 +163,7 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
 /// at the same path: an `flock` on `store/<s>/backup.lock`, taken without
 /// waiting and held until the create ends (a killed create's goes with it).
 ///
-/// `doctor.fix` takes it the same way before it removes a staged snapshot an
+/// `home.prune` takes it the same way before it removes a staged snapshot an
 /// interrupted create left (layerfs-project#180).
 pub struct Creating(std::fs::File);
 

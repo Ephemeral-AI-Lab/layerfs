@@ -4,15 +4,16 @@
 
 The `home` calls: set a home up on purpose, read its state and what this
 build would use with it without changing anything, and read and clear its
-call log, within the [SDK](README.md). `get`, `log` and `clear_log` are
-migrated to the call surface 2.0's [forms](../calls/README.md#forms): the
-shapes below are their long forms, and the short form is the projection the
-entry declares.
+call log, list and remove what interrupted operations left on disk, within
+the [SDK](README.md). The calls are migrated to the call surface 2.0's
+[forms](../calls/README.md#forms): the shapes below are their long forms, and
+the short form is the projection the entry declares. The family's `doctor`
+is one of [the doctors](../../control/doctor/README.md).
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-api/src/home`](../../../../api/crates/layerfs-api/src/home), [`layerfs-control/src/home.rs`](../../../../control/crates/layerfs-control/src/home.rs), [`layerfs-control/src/home_tree.rs`](../../../../control/crates/layerfs-control/src/home_tree.rs), [`layerfs-home/src/logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs), [`layerfs-home/src/home/generation.rs`](../../../../control/crates/layerfs-home/src/home/generation.rs) |
-| Runs by default | the caller's process. `init` and `get` are not opened by the dispatcher (`Call.opens` is false): `init` opens the home itself, `get` never does. `get`, `log` and `clear_log` are `quiet`: they write no call-log line |
+| Source | [`api/crates/layerfs-api/src/home`](../../../../api/crates/layerfs-api/src/home), [`layerfs-control/src/home.rs`](../../../../control/crates/layerfs-control/src/home.rs), [`layerfs-control/src/home_tree.rs`](../../../../control/crates/layerfs-control/src/home_tree.rs), [`layerfs-home/src/logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs), [`layerfs-home/src/home/generation.rs`](../../../../control/crates/layerfs-home/src/home/generation.rs), [`leftover_list.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_list.rs), [`leftover_prune.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_prune.rs) |
+| Runs by default | the caller's process; `leftovers` also asks each running machine's worker, and `prune` runs on the machine its leftover names. `init`, `get` and `leftovers` are not opened by the dispatcher (`Call.opens` is false): `init` opens the home itself, `get` never does. `get`, `log` and `clear_log` are `quiet`: they write no call-log line |
 | Design | [Home](../../control/home/README.md), [Migration](../../control/home/migration.md) |
 | Clients | `lfs.home` is this family (`lfs.home.get()`, `layerfs.home.init()`); a client's home is the one given to `client()` and is no field of it |
 
@@ -24,7 +25,9 @@ entry declares.
    --with platforms   the host's platform rows (what machine.platforms answers)
    --with tree        the home's records: machines > Stores, Sandboxes; buckets
  home.init       migrate::open (create | convert | finish)
-                 + the built-in machine records                -> {created, converted}
+                 + the built-in machine records   -> {outcome: created | converted | unchanged}
+ home.leftovers  walk native + ask each running machine's worker -> {items, not_listed}
+ home.prune      the leftover's machine: guard, remove once     -> {freed_bytes, outcome: "removed"}
 
  every other call ---- one line when it ends ----> <home>/trace/calls.jsonl
                                                     (calls.1.jsonl past 16 MiB)
@@ -34,10 +37,12 @@ entry declares.
 
 | Call | Short form | Long form |
 | --- | --- | --- |
-| [`home.init`](#homeinit) | not migrated | `{ home, created, converted, layout }` |
+| [`home.init`](#homeinit) | `{ home }` + `unchanged`, `converted` when true | `{ home, unchanged, converted, outcome, layout, version }` |
 | [`home.get`](#homeget) | `{ home, state, version }` + `generation`, `reason`, `fix` when news | `{ home, state, version, generation, reason, fix, message, layout, mode, bundle, daemon, cache }` |
 | [`home.log`](#homelog) | `{ items }` + `next_cursor` when there is a next page | `{ items, next_cursor, skipped }` |
 | [`home.clear_log`](#homeclear_log) | `{ ok: true }` | `{ ok, outcome: "cleared", line_count }` |
+| [`home.leftovers`](#homeleftovers) | `{ items }` + `not_listed` unless empty | `{ items, not_listed, observed_at }` |
+| [`home.prune`](#homeprune) | `{ ok: true }` + `freed_bytes` | `{ ok, freed_bytes, outcome: "removed", leftover, kind, machine, path }` |
 
 ### home.init
 
@@ -45,8 +50,9 @@ Makes the home ready for calls, as the first call of any other kind does: an
 empty or missing folder is created (0700, `layerfs.json`, `machine/native/`
 and `machine/docker/` with the `machine` feature), a 1.1.0 or layout 2 home
 is converted, and an interrupted conversion to layout 3 is finished. A current
-home is left as it is (`created` and `converted` both false). It writes one
-call-log line.
+home is left as it is. `outcome` is `created`, `converted` or `unchanged`;
+`version` is this build's version and `layout` the layout it left. It writes
+one call-log line, and the records it writes move the generation.
 
 ```text
 JS      await layerfs.home.init()
@@ -110,14 +116,18 @@ it dials nothing, and null unless the home is ready.
 
 | Node | Long form | Short form |
 | --- | --- | --- |
-| machine | `machine, platform, cpus, memory_bytes, state, op, reason, fix, stores, sandboxes` | `machine`; its state and companion unless ready; `stores` and `sandboxes` unless empty |
-| Store | `store, engine, state, op, blocked_by, reason, fix, projects, connections` | `store`; `engine` unless sqlite; `projects` and `connections` unless empty; its state unless ready |
-| Sandbox | `sandbox, project, image, state, op, blocked_by, reason, fix, workspaces` | `sandbox`; `workspaces` (`[{ workspace, branch }]`) unless empty; its state unless ready |
-| bucket | `bucket, provider` | `bucket` |
+| machine | `machine, platform, cpus, memory_bytes, state, op, reason, fix, stores, sandboxes` | `machine`, `platform`; its state and companion unless ready; `stores` and `sandboxes` unless empty |
+| Store | `store, engine, projects, connections, state, op, blocked_by, reason, fix` | `store`, `engine`; `projects` and `connections` (`[{ machine, url }]`) unless empty; its state unless ready |
+| Sandbox | `sandbox, project, image, workspaces, workspaces_not_listed, state, op, blocked_by, reason, fix` | `sandbox`, `project`; `workspaces` (`[{ workspace, branch }]`) unless empty; `workspaces_not_listed` when true; its state unless ready |
+| bucket | `bucket, provider` | `bucket`, `provider` |
 
 A sqlite Store is under its machine; a PostgreSQL Store lives on no machine
-and is in the top-level `stores`, with `connections` naming the machines it
-is connected from. States come from the records: a recorded operation whose
+and is in the top-level `stores`, with `connections` naming where it is
+reached from: first `{ machine: null, url }` (the Store's own URL), then one
+row per machine it is connected from. A Sandbox's `workspaces` are listed
+only when the home holds them (on `native`, or a Sandbox whose daemon
+records are forwarded here); otherwise `workspaces_not_listed` is true, and
+for a blocked Sandbox `workspaces` is null. States come from the records: a recorded operation whose
 process lives is `busy` with `op { name, phase, started_at }`, one whose
 process is gone with its outcome unknown is `broken` `unresolved`; a machine
 of a removed platform is `broken` `unsupported`; a machine recorded stopped
@@ -194,3 +204,52 @@ waiting for it, so a line another process writes meanwhile lands before or
 after the clear and is never torn. A `home.log` cursor from before the clear
 is stale afterwards. Error: `Failed` (the lock or a file cannot be opened,
 truncated or removed).
+
+### home.leftovers
+
+What interrupted operations left on `native` and on each running machine:
+one bounded walk of each side's own folders, the machines' through their
+workers' `doctor.sandbox` request. It changes nothing and starts nothing.
+
+```text
+JS      await layerfs.home.leftovers({ machine })
+Python  layerfs.home.leftovers(machine=None)
+CLI     layerfs home leftovers [--machine <machine>]
+```
+
+Each item is `{ leftover, modified_at, size, report_only, removable_at, kind,
+machine, path }`; the short item is `{ leftover, modified_at }` plus `size`
+and `report_only` when set. `leftover` is `<machine>:<kind>:<name>`, the id
+`home.prune` takes; it never holds a path. The kinds are `run_folder`,
+`empty_root`, `init_copy`, `backup_staging`, `image_tmp` and `image_part`
+([Checks: leftovers](../../control/doctor/checks.md#leftovers)). A machine
+that was not walked, or not to the end, is in `not_listed` as `{ machine,
+blocked_by, reason, message }`: `blocked_by` for a stopped machine or one an
+operation holds, `reason` `timeout` (no answer, or the walk stopped at its
+bound of 20,000 entries or 2 s), `busy` or `refused`. `--machine` limits the
+list to one machine; an unknown one is `NotFound`.
+
+### home.prune
+
+Removes the one leftover `leftover` names, under that kind's guard (it was
+`doctor.fix`; the `doctor` family is gone).
+
+```text
+JS      await layerfs.home.prune(leftover)
+Python  layerfs.home.prune(leftover)
+CLI     layerfs home prune <leftover>
+```
+
+Long form `{ ok, freed_bytes, outcome: "removed", leftover, kind, machine,
+path }`; `freed_bytes` is what the removed files held, null for a folder copy
+and an image temporary. One attempt: nothing is retried or sent twice, and
+nothing but the one entry is removed.
+
+| Error | When |
+| --- | --- |
+| `NotFound` | no leftover has that id now: an id no list gives (a path, `..`, an unknown kind or machine), an entry already removed, or a link in its place |
+| `InUse` | the kind's guard does not hold: a Sandbox record names the run folder, its `owner` marker is missing or newer than a minute, a daemon of it runs, something is mounted there, a `backup create` of the Store or an unpack of the image is running, the image part was written within the hour, or a folder copy's Init may run until an hour after its deadline. Nothing was removed |
+| `InvalidInput` | a folder copy no line of `log/uncertain.jsonl` names (report-only); a missing `leftover` |
+| `Unavailable` | the machine is stopped; `layerfs machine start <machine>` starts it |
+| `Unknown` | the worker's answer was lost; `layerfs home leftovers` shows whether the entry is still there |
+| `Failed` | the mount table cannot be read, or a removal stopped at an I/O error (the message names where) |

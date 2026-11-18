@@ -160,7 +160,7 @@ fn a_command_cancelled_before_its_handle_was_told_ends_as_it_starts() {
         ],
         environment: Vec::new(),
         directory: sandbox.directory().display().to_string(),
-        stdin: false,
+        stdin: None,
     };
     let (sent, ran) = std::sync::mpsc::channel();
     std::thread::scope(|scope| {

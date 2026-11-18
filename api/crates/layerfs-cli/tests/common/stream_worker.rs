@@ -42,15 +42,6 @@ fn worker() -> SocketAddr {
                 Some("sandbox.host") => args.get_text("op"),
                 other => other,
             };
-            if op == Some("workspace.exec") && more.get_text("command") == Some("framed-big") {
-                for bytes in [vec![b'x'; 1_048_576], vec![0xff, 0xfe, 0], vec![b'z'; 8192]] {
-                    let event =
-                        SdkValue::map([("stream", t("stdout")), ("bytes", SdkValue::Bytes(bytes))]);
-                    if write_frame(&mut stream, &SdkValue::map([("event", event)])).is_err() {
-                        break;
-                    }
-                }
-            }
             let answer = match op {
                 // the machine holds the named image already: nothing is copied
                 Some("image.artifact") => {
@@ -95,31 +86,31 @@ fn create(more: &SdkValue) -> SdkValue {
     )])
 }
 
-/// `exit N` exits N with a line on each stream; `big` writes `BIG` bytes.
+/// `exit N` exits N with a line on each stream; `big` writes `BIG` bytes;
+/// `cancelled` is a command a cancel ended. The answer is the side's
+/// result, as `exec::run::exec` makes it.
 fn exec(command: &str) -> SdkValue {
     let code = command
         .strip_prefix("exit ")
         .and_then(|n| n.parse::<i64>().ok())
-        .unwrap_or(0);
+        .unwrap_or(if command == "cancelled" { 143 } else { 0 });
     let (stdout, stderr) = match command {
-        "framed-big" | "cancelled" => (String::new(), String::new()),
+        "cancelled" => (String::new(), String::new()),
         "big" => ("x".repeat(BIG), String::new()),
         _ => ("out\n".to_owned(), "err\n".to_owned()),
     };
+    let size = |text: &str| SdkValue::Int(text.len() as i64);
     SdkValue::map([(
         "value",
         SdkValue::map([
-            (
-                "kind",
-                t(&if command == "cancelled" {
-                    "cancelled".to_owned()
-                } else {
-                    format!("exit:{code}")
-                }),
-            ),
-            ("exitCode", SdkValue::Int(code)),
+            ("exit_code", SdkValue::Int(code)),
+            ("cancelled", SdkValue::Bool(command == "cancelled")),
+            ("stdoutBytes", size(&stdout)),
+            ("stderrBytes", size(&stderr)),
             ("stdout", SdkValue::Text(stdout)),
             ("stderr", SdkValue::Text(stderr)),
+            ("exec", t("exec-0000000000000001")),
+            ("duration_ms", SdkValue::Int(1)),
         ]),
     )])
 }

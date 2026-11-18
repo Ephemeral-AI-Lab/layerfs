@@ -21,7 +21,7 @@ use std::path::Path;
 /// any other operation's panic closes the connection, so its caller
 /// reports `Unknown` (layerfs-project#179 D7). A new read-only operation
 /// is added here.
-const READ_ONLY: [&str; 7] = [
+const READ_ONLY: [&str; 8] = [
     "worker.ping",
     layerfs_sandbox::inspect::OP,
     "machine.images",
@@ -29,6 +29,7 @@ const READ_ONLY: [&str; 7] = [
     "doctor.sandbox",
     "store.diagnose",
     "project.list",
+    layerfs_sandbox::workspace::list::OP,
 ];
 
 /// Whether `op` is one of the read-only operations.
@@ -104,11 +105,16 @@ pub(super) fn run(
             ))
         }
         layerfs_sandbox::inspect::OP => inspect(server, args),
+        // the Workspace records of named Sandboxes, read as files
+        // (`workspace.list`, call surface 2.0)
+        layerfs_sandbox::workspace::list::OP => {
+            layerfs_sandbox::workspace::list::in_worker(root, &args)
+        }
         "machine.images" => layerfs_sandbox::images::in_worker(root, args),
         "machine.prune" => layerfs_sandbox::images::prune_in_worker(root, args),
         "doctor.sandbox" => crate::doctor::diagnose_worker_sandbox(root, args),
         // removes one leftover under this root, under its guard (#180)
-        "doctor.fix" => crate::doctor::leftover_fix::fix_in_worker(root, &args),
+        "home.prune" => crate::doctor::leftover_prune::prune_in_worker(root, &args),
         "store.diagnose" => crate::doctor::diagnose_store_in_worker(root, args, events),
         // the check of this machine's connection to a PostgreSQL Store
         // (`store.update`): the caller sends the record and

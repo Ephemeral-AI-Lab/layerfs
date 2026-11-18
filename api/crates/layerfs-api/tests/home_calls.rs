@@ -1,9 +1,10 @@
 //! `home.init` and `home.get`: a home is set up on purpose, and read without
 //! being changed. `home.get` answers for a home that does not exist, creates
 //! nothing and writes no log line; `home.init` says whether it created or
-//! converted the home and leaves a current one alone. `home.get` answers in
-//! the call surface's forms (2.0): `state` with its `reason` and `fix`, the
-//! build's `version` and the home's `generation`.
+//! converted the home and leaves a current one alone. Both answer in the
+//! call surface's forms (2.0): `home.get` its `state` with `reason` and
+//! `fix`, the build's `version` and the home's `generation`; `home.init` its
+//! `outcome` and the build's `version`.
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -21,6 +22,13 @@ fn place() -> PathBuf {
 
 fn call(home: &Path, name: &str) -> SdkValue {
     layerfs_api::call(Some(home), name, SdkValue::Null, &mut |_| {})
+        .unwrap_or_else(|r| panic!("{name}: {}: {}", r.code, r.message))
+}
+
+/// `name` in its long form.
+fn long(home: &Path, name: &str) -> SdkValue {
+    let detail = SdkValue::map([("detail", SdkValue::Bool(true))]);
+    layerfs_api::call(Some(home), name, detail, &mut |_| {})
         .unwrap_or_else(|r| panic!("{name}: {}: {}", r.code, r.message))
 }
 
@@ -66,16 +74,34 @@ fn get_answers_for_a_missing_home_and_creates_nothing() {
 #[test]
 fn init_creates_a_home_then_leaves_it_and_get_reads_it_without_a_log_line() {
     let home = place();
-    let first = call(&home, "home.init");
-    assert_eq!(first.get("created"), Some(&SdkValue::Bool(true)));
+    let first = long(&home, "home.init");
+    assert_eq!(
+        keys(&first),
+        [
+            "home",
+            "unchanged",
+            "converted",
+            "outcome",
+            "layout",
+            "version"
+        ]
+    );
+    assert_eq!(first.get_text("outcome"), Some("created"));
+    assert_eq!(first.get("unchanged"), Some(&SdkValue::Bool(false)));
     assert_eq!(first.get("converted"), Some(&SdkValue::Bool(false)));
     assert_eq!(first.get("layout"), Some(&SdkValue::Int(3)));
+    assert_eq!(first.get_text("version"), Some(env!("CARGO_PKG_VERSION")));
     assert!(home.join("layerfs.json").is_file());
     let mode = std::fs::metadata(&home).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o700);
+    // the short form names the home, and says only what is news
     let again = call(&home, "home.init");
-    assert_eq!(again.get("created"), Some(&SdkValue::Bool(false)));
-    assert_eq!(again.get("converted"), Some(&SdkValue::Bool(false)));
+    assert_eq!(keys(&again), ["home", "unchanged"]);
+    assert_eq!(again.get("unchanged"), Some(&SdkValue::Bool(true)));
+    assert_eq!(
+        long(&home, "home.init").get_text("outcome"),
+        Some("unchanged")
+    );
     let before = log_lines(&home);
     let got = get(&home);
     assert_eq!(log_lines(&home), before, "home.get wrote a log line");
@@ -126,8 +152,9 @@ fn a_layout_2_home_needs_converting_until_init_converts_it() {
     // reading it converted nothing
     let file = std::fs::read_to_string(home.join("layerfs.json")).unwrap();
     assert!(file.contains("\"layout\":2"), "{file}");
-    let init = call(&home, "home.init");
-    assert_eq!(init.get("created"), Some(&SdkValue::Bool(false)));
+    let init = long(&home, "home.init");
+    assert_eq!(init.get_text("outcome"), Some("converted"));
+    assert_eq!(init.get("unchanged"), Some(&SdkValue::Bool(false)));
     assert_eq!(init.get("converted"), Some(&SdkValue::Bool(true)));
     assert_eq!(init.get("layout"), Some(&SdkValue::Int(3)));
     assert_eq!(get(&home).get_text("state"), Some("ready"));

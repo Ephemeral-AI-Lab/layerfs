@@ -132,7 +132,7 @@ fn doctor_on_shop(home: &Path) -> Vec<(String, String, String)> {
     items
         .iter()
         .filter(|f| f.get_text("store") == Some("shop"))
-        .filter(|f| f.get_text("check") == Some("host.records"))
+        .filter(|f| f.get_text("check") == Some("home.records"))
         .map(|f| (text(f, "severity"), text(f, "message"), text(f, "fix")))
         .collect()
 }
@@ -185,7 +185,7 @@ fn a_move_stopped_between_install_and_record_is_unresolved_and_a_new_move_clears
             .iter()
             .any(|(severity, message, fix)| severity == "error"
                 && message.contains("unresolved store.move")
-                && fix.contains("`layerfs store move shop box` clears it")),
+                && fix == "layerfs store move shop box"),
         "{found:?}"
     );
 
@@ -279,7 +279,8 @@ fn a_transfer_stopped_at_retire_leaves_a_usable_store_and_the_next_one_deletes_t
             .iter()
             .any(|(severity, message, fix)| severity == "warning"
                 && message.contains("did not retire the copy on native")
-                && fix == "the next `layerfs store move shop native` deletes it first"),
+                && message.contains("the next `layerfs store move shop` deletes it first")
+                && fix.is_empty()),
         "{found:?}"
     );
     // the next move here deletes native's old copy first, then moves
@@ -310,7 +311,8 @@ fn a_transfer_stopped_at_retire_leaves_a_usable_store_and_the_next_one_deletes_t
         found
             .iter()
             .any(|(_, message, fix)| message.contains("the copy on box")
-                && fix == "the next `layerfs store move shop <machine>` deletes it first"),
+                && message.contains("the next `layerfs store move shop` deletes it first")
+                && fix.is_empty()),
         "{found:?}"
     );
     call_ok(&home, "store.move", &push);

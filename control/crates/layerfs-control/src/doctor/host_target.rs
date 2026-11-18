@@ -1,4 +1,11 @@
-//! Observational host diagnosis: installation, local records and local capacity.
+//! The home's own checks (call surface 2.0, `calls.json` `doctor.checks.home`),
+//! in the order they run: `home.build`, `home.prerequisites`, `home.layout`,
+//! `home.records`, `home.bundle`, `home.native_daemon`, `home.artifacts`,
+//! `home.capacity`. Each observes; none opens, converts or changes the
+//! home. A check that does not apply is left out: a home not made yet has
+//! no layout or records; the bundle is checked only where a recorded
+//! machine needs it; a check that waits on an unreadable layout or record
+//! set is not made.
 use super::records::Findings;
 use super::target::{Budget, Checks};
 use layerfs_bridge::control::SdkValue;
@@ -7,11 +14,14 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 #[path = "host_capacity.rs"]
-mod capacity;
+mod disk;
 #[path = "host_install.rs"]
 mod install;
 #[path = "host_inventory.rs"]
 mod inventory;
+
+const LAYOUT: &str = "home.layout";
+const RECORDS: &str = "home.records";
 
 pub(super) fn diagnose(
     home: &Path,
@@ -19,73 +29,70 @@ pub(super) fn diagnose(
     budget: &Budget,
     checks: &mut Checks,
 ) {
-    install::identity(checks);
-    install::native_daemon(home, build, checks);
-    capacity::check(home, budget, checks);
-    if budget.expired() {
-        checks.unknown("host.layout", "Deadline expired before inspecting the home");
-        return;
+    install::build(home, checks);
+    install::prerequisites(checks);
+    let scanned = layout(home, budget, checks);
+    if let Some(records) = &scanned {
+        install::bundle(records, checks);
     }
-    let layout = match detect(home) {
-        Ok(layout) => layout,
-        Err(_) => {
-            checks.fail(
-                "host.layout",
-                "Home layout is unreadable, malformed or unsupported",
-            );
-            checks.blocked(
-                "host.records",
-                "Home layout could not be established",
-                "host.layout",
-            );
-            install::without_inventory(checks, true);
-            return;
-        }
+    install::native_daemon(home, build, checks);
+    if let Some(records) = &scanned {
+        install::artifacts(records, budget, checks);
+    }
+    disk::check(home, budget, checks);
+}
+
+/// `home.layout`, then `home.records` on a home whose layout reads: what
+/// the records scan read, when it gave a stable verdict.
+fn layout(home: &Path, budget: &Budget, checks: &mut Checks) -> Option<super::scan::Scanned> {
+    if budget.expired() {
+        checks.unknown(LAYOUT, "its time ran out before the home was read");
+        return None;
+    }
+    let Ok(layout) = detect(home) else {
+        checks.fail(
+            LAYOUT,
+            format!(
+                "{}'s layerfs.json is unreadable, malformed or of a layout this build does not know; repair it by hand",
+                home.display()
+            ),
+        );
+        return None;
     };
-    checks.evidence(
-        "host.build",
-        SdkValue::map([
-            ("home", SdkValue::text(home.display().to_string())),
-            ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
-            ("os", SdkValue::text(std::env::consts::OS)),
-            ("arch", SdkValue::text(std::env::consts::ARCH)),
-        ]),
-    );
     match layout {
-        Layout::Empty => {
-            checks.skip(
-                "host.layout",
-                "Home is not initialized; no home was created",
-            );
-            checks.skip("host.records", "No initialized home to inspect");
-            install::without_inventory(checks, false);
-        }
+        // a home not made yet: nothing to read
+        Layout::Empty => None,
         Layout::Old => {
             checks.warning(
-                "host.layout",
-                "LayerFS 1.1.0 home requires explicit import; no conversion performed",
+                LAYOUT,
+                "a LayerFS 1.1.0 home: it is converted on its first 2.0 call that writes; nothing was converted",
             );
-            checks.skip(
-                "host.records",
-                "Current-layout checks do not apply to this home",
-            );
-            install::without_inventory(checks, false);
+            checks.fix(LAYOUT, "layerfs home init");
+            None
         }
         Layout::Previous(_) => {
             checks.warning(
-                "host.layout",
-                "Layout 2 home requires conversion; no conversion performed",
+                LAYOUT,
+                "a layout 2 home: it is converted on its first call; nothing was converted",
             );
-            observed(home, budget, checks, true);
+            checks.fix(LAYOUT, "layerfs home init");
+            observed(home, budget, checks, true)
         }
         Layout::Current(_) => {
-            checks.pass("host.layout", "Current home layout is readable");
-            observed(home, budget, checks, false);
+            checks.pass(LAYOUT, "a current-layout home this build reads");
+            observed(home, budget, checks, false)
         }
     }
 }
 
-fn observed(home: &Path, budget: &Budget, checks: &mut Checks, previous: bool) {
+/// `home.records`: every record, with the home's record set fingerprinted
+/// before and after so a home that changed meanwhile gives no verdict.
+fn observed(
+    home: &Path,
+    budget: &Budget,
+    checks: &mut Checks,
+    previous: bool,
+) -> Option<super::scan::Scanned> {
     let before = inventory::fingerprint(home, budget);
     if before.is_err() {
         // a home folder the inventory will not walk (a symlinked `store/`)
@@ -96,10 +103,12 @@ fn observed(home: &Path, budget: &Budget, checks: &mut Checks, previous: bool) {
         if named && matches!(said.get("findings"), Some(SdkValue::List(rows)) if !rows.is_empty()) {
             publish(findings, checks);
         } else {
-            checks.unknown("host.records", "Management record metadata could not be observed completely; no consistency scan attempted");
+            checks.unknown(
+                RECORDS,
+                "the home's records could not all be read; no verdict",
+            );
         }
-        install::without_inventory(checks, true);
-        return;
+        return None;
     }
     let mut findings = Findings::default();
     let mut scanned = None;
@@ -119,31 +128,22 @@ fn observed(home: &Path, budget: &Budget, checks: &mut Checks, previous: bool) {
             })
     };
     let after = inventory::fingerprint(home, budget);
-    if budget.expired() || before.is_err() || after.is_err() || before.ok() != after.ok() {
-        checks.unknown("host.records", "Record inventory changed or could not be observed completely; no stable consistency verdict");
-        install::without_inventory(checks, true);
-        return;
+    if budget.expired() || after.is_err() || before.ok() != after.ok() {
+        checks.unknown(
+            RECORDS,
+            "the home's records changed while they were read, or its time ran out; no verdict",
+        );
+        return None;
     }
     if result.is_err() {
-        checks.unknown(
-            "host.records",
-            "Local record or lease inspection could not complete",
-        );
-        install::without_inventory(checks, true);
-        return;
+        checks.unknown(RECORDS, "a record or lease could not be read; no verdict");
+        return None;
     }
     publish(findings, checks);
-    if let Some(records) = scanned {
-        install::artifacts(&records, budget, checks);
-    } else {
-        install::without_inventory(checks, false);
-    }
-    checks.skip(
-        "host.remote",
-        "Worker connections and remote transfer files are outside host scope",
-    );
+    scanned
 }
 
+/// The records findings, each on the thing it is about.
 fn publish(findings: Findings, checks: &mut Checks) {
     let report = findings.to_sdk();
     let Some(SdkValue::List(rows)) = report.get("findings") else {
@@ -151,24 +151,24 @@ fn publish(findings: Findings, checks: &mut Checks) {
     };
     if rows.is_empty() {
         checks.pass(
-            "host.records",
-            "Local record, permission, reference, intent and lease checks found no problems",
+            RECORDS,
+            "every record reads: references, file modes, leases and operations",
         );
         return;
     }
     for row in rows {
-        let message = row.get_text("message").unwrap_or("Local record issue");
+        let message = row.get_text("message").unwrap_or("a record is wrong");
         if row.get_text("severity") == Some("error") {
-            checks.fail("host.records", message);
+            checks.fail(RECORDS, message);
         } else {
-            checks.warning("host.records", message);
+            checks.warning(RECORDS, message);
         }
-        if let Some(fix) = row.get_text("fix") {
-            checks.fix("host.records", fix);
+        if let Some(fix) = row.get_text("fix").filter(|fix| !fix.is_empty()) {
+            checks.fix(RECORDS, fix);
         }
         if let Some(entity) = row.get("entity") {
             let text = |key: &str| entity.get_text(key).unwrap_or("").to_owned();
-            checks.about("host.records", &text("kind"), &text("name"));
+            checks.about(RECORDS, &text("kind"), &text("name"));
         }
     }
 }

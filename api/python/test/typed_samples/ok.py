@@ -39,17 +39,13 @@ def sync_flow() -> None:
     lfs.backup.create("shop", "bucket", on_progress=on_progress)
     lfs.project.export("shop/api", "/exports/api", branch="main", on_progress=on_progress)
     lfs.project.export("shop/api", "/exports/api-default")
-    lfs.workspace.exec_cancel("ws", "exec-0123456789abcdef", grace_ms=1000)
+    lfs.workspace.cancel("shop:dev", exec="exec-0123456789abcdef")
     try:
         lfs.sandbox.close("s1", force=True)
     except layerfs.LayerFSError as error:
         code: str = error.code
         message: str = error.message
         print(code, message, error.detail)
-    report = layerfs.doctor()
-    ok: bool = report["ok"]
-    severity: str = report["findings"][0]["severity"] if report["findings"] else "none"
-    print(ok, severity)
     layerfs.project.list()
     layerfs.file.read("shop/api", "main", "/a", commit="c1")
     closed: int = layerfs.close()
@@ -68,7 +64,7 @@ async def async_flow() -> None:
     await asyncio.gather(lfs.store.create("a"), lfs.store.create("b"))
     await lfs.workspace.exec("ws", "ls", stdout=on_output)
     await lfs.project.export("shop/api", "/exports/api", branch="agent", on_progress=on_progress)
-    await lfs.workspace.exec_cancel("ws", "exec-0123456789abcdef")
+    await lfs.workspace.cancel("shop:dev", exec="exec-0123456789abcdef")
     await aio.store.move("shop", "machine", on_progress=on_progress)
     try:
         await aio.file.stat("shop/api", "main", "/a")

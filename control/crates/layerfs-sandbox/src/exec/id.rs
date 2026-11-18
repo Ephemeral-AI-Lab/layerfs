@@ -21,7 +21,7 @@ impl ExecId {
             return Err(refused(
                 "InvalidInput",
                 format!(
-                    "exec_id is 1 to {MAX} letters, digits, '.', '_' or '-', not starting with \
+                    "an exec id is 1 to {MAX} letters, digits, '.', '_' or '-', not starting with \
                      '.' or '-'; not {text:?}"
                 ),
             ));

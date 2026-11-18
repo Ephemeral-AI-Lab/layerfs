@@ -128,7 +128,7 @@ fn every_read(home: &Path) {
     let why = got.get_text("down_reason").unwrap_or("");
     assert!(!why.is_empty(), "{got:?}");
 
-    let (code, message) = call(home, "workspace.status", &[("ws", "s1:/w")]).unwrap_err();
+    let (code, message) = call(home, "workspace.status", &[("workspace", "s1:w")]).unwrap_err();
     assert_eq!(code, "Unavailable", "{message}");
     // D11: nothing starts a machine; the refusal names the call that does
     assert!(message.contains("layerfs machine start dev"), "{message}");

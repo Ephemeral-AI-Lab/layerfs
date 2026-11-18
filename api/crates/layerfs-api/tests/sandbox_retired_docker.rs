@@ -156,14 +156,14 @@ fn a_retired_docker_sandbox_is_refused_and_close_forgets_it() {
             ("sandbox.get", vec![("name", t("d1"))]),
             (
                 "workspace.mount",
-                vec![("sandbox", t("d1")), ("branch", t("main"))],
+                vec![("sandbox", t("d1")), ("branch", t("dev"))],
             ),
-            ("workspace.status", vec![("ws", t("d1:/w/x"))]),
+            ("workspace.status", vec![("workspace", t("d1:x"))]),
             (
                 "workspace.exec",
-                vec![("ws", t("d1:/w/x")), ("command", t("true"))],
+                vec![("workspace", t("d1:x")), ("command", t("true"))],
             ),
-            ("workspace.unmount", vec![("ws", t("d1:/w/x"))]),
+            ("workspace.unmount", vec![("workspace", t("d1:x"))]),
         ] {
             let (code, message) = call(&home, name, &args).unwrap_err();
             assert_eq!(code, "Unsupported", "{name}: {message}");

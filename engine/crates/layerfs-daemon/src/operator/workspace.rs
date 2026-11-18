@@ -353,6 +353,31 @@ pub fn changes_of(service: &Service, workspace: &BoundWorkspace, args: &SdkValue
     })
 }
 
+/// `backend.daemon.workspace.list_changed { path, under? }`: what a Commit
+/// would capture now, from one bounded read of the overlay
+/// (`Service::changed`): `{ entries: [{ path, change, type }], partial }`,
+/// `type` `dir` or `file`.
+pub(crate) fn changed(service: &Service, args: &SdkValue) -> Answer {
+    let workspace = selected(service, args)?;
+    let under = args.get_text("under");
+    let found = service
+        .changed(&workspace, under)
+        .map_err(|e| args::failed(format!("{e:?}")))?;
+    let entries = (found.entries.into_iter())
+        .map(|(path, change, folder)| {
+            SdkValue::map([
+                ("path", SdkValue::Text(path)),
+                ("change", SdkValue::text(change)),
+                ("type", SdkValue::text(if folder { "dir" } else { "file" })),
+            ])
+        })
+        .collect();
+    Ok(SdkValue::map([
+        ("entries", SdkValue::List(entries)),
+        ("partial", SdkValue::Bool(found.partial)),
+    ]))
+}
+
 /// The overlay's own row counts, read from its database alone (#508). Path
 /// change counts are `null`: naming them walks the base tree, which costs
 /// minutes on a large tree, and state reads call this for every Workspace.

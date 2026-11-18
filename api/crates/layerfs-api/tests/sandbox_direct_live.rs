@@ -207,8 +207,7 @@ fn a_forwarded_sandbox_s_workspace_calls_dial_its_daemon_from_here() {
                 ("name", t("one")),
             ],
         );
-        assert_eq!(mounted.get_text("ws"), Some("t1:one"), "{mounted:?}");
-        assert_eq!(mounted.get_text("runtime"), Some("native"), "{mounted:?}");
+        assert_eq!(mounted.get_text("workspace"), Some("t1:one"), "{mounted:?}");
         let directory = mounted.get_text("path").unwrap().to_owned();
         // its record is in the home's folder
         let records = std::fs::read_dir(paths::sandbox_dir(&home, "t1").join("workspace"))
@@ -216,22 +215,20 @@ fn a_forwarded_sandbox_s_workspace_calls_dial_its_daemon_from_here() {
             .count();
         assert!(records >= 1);
         std::fs::write(Path::new(&directory).join("NEW.md"), "made\n").unwrap();
-        let status = ok(&home, "workspace.status", &[("ws", t("t1:one"))]);
+        let status = ok(&home, "workspace.status", &[("workspace", t("t1:one"))]);
         assert_eq!(status.get_text("branch"), Some("dev"), "{status:?}");
         assert!(status.get("branch_head").is_some(), "{status:?}");
         let committed = ok(
             &home,
             "workspace.commit",
-            &[("ws", t("t1:one")), ("message", t("direct"))],
+            &[("workspace", t("t1:one")), ("message", t("direct"))],
         );
-        assert_eq!(
-            committed.get_text("kind"),
-            Some("Committed"),
-            "{committed:?}"
-        );
+        // a new Commit: its id, and no `unchanged`
+        assert!(committed.get_text("commit").is_some(), "{committed:?}");
+        assert!(committed.get("unchanged").is_none(), "{committed:?}");
         let got = ok(&home, "sandbox.get", &[("name", t("t1"))]);
         assert!(layerfs_api::json::print(&got).contains("t1:one"), "{got:?}");
-        ok(&home, "workspace.unmount", &[("ws", t("t1:one"))]);
+        ok(&home, "workspace.unmount", &[("workspace", t("t1:one"))]);
         let read = ok(
             &home,
             "file.read",

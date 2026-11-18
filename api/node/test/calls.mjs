@@ -31,8 +31,8 @@ test("client.home is the home family; the client's home is where it calls", asyn
     assert.deepEqual(Object.keys(missing), ["home", "state", "version", "reason", "fix"]);
     assert.deepEqual([missing.state, missing.reason, missing.fix], ["broken", "missing", "layerfs home init"]);
     const made = await lfs.home.init();
-    assert.equal(made.home, home);
-    assert.equal(made.created, true);
+    assert.deepEqual(made, { home });
+    assert.equal((await lfs.home.init({ detail: true })).outcome, "unchanged");
     const ready = await lfs.home.get();
     assert.deepEqual(Object.keys(ready), ["home", "state", "version", "generation"]);
     assert.equal(ready.state, "ready");

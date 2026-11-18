@@ -19,11 +19,8 @@ pub struct Switches {
     pub text: bool,
     /// `--progress`: progress as JSON lines on stderr.
     pub progress: bool,
-    /// `--stream` (`workspace exec`): the command's output and exit code
-    /// passed through.
+    /// `--stream` (`workspace exec`): the command's output passed through.
     pub stream: bool,
-    /// Framed output events followed by one result or refusal on stdout.
-    pub events: bool,
     /// `--scope <folder>` with `--scope-project <store>/<project>` and
     /// `--scope-branch <name>` (O32).
     pub scope: Option<SdkValue>,
@@ -132,7 +129,6 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                 let sections = take(&mut i)?;
                 fields.push((layerfs_api::WITH.to_owned(), SdkValue::Text(sections)));
             }
-            "--events" if call.arg("stdout").is_some() => switches.events = true,
             "--progress" if call.arg("on_progress").is_some() => switches.progress = true,
             "--stream" if call.arg("stream").is_some() => {
                 switches.stream = true;
@@ -220,6 +216,35 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                     Some(arg) if arg.kind == Kind::Bool && inline.is_none() => {
                         fields.push((name, SdkValue::Bool(true)))
                     }
+                    // a content option (`workspace exec --stdin`): this
+                    // process's stdin, read whole
+                    Some(arg) if arg.kind == Kind::Content && inline.is_none() => {
+                        let mut bytes = Vec::new();
+                        stdin
+                            .read_to_end(&mut bytes)
+                            .map_err(|why| usage(format!("cannot read stdin: {why}")))?;
+                        fields.push((name, content(bytes)));
+                    }
+                    // a repeated option (`--env K=V`): one object of names
+                    // to text
+                    Some(arg) if arg.repeat => {
+                        let text = take(&mut i)?;
+                        let Some((key, value)) = text.split_once('=') else {
+                            return Err(usage(format!(
+                                "{}: `--{}` is K=V, not {text:?}",
+                                call.name(),
+                                arg.name.replace('_', "-")
+                            )));
+                        };
+                        let entry = (key.to_owned(), SdkValue::text(value));
+                        match fields.iter_mut().find(|(held, _)| *held == name) {
+                            Some((_, SdkValue::Map(held))) => {
+                                held.retain(|(k, _)| k != key);
+                                held.push(entry);
+                            }
+                            _ => fields.push((name, SdkValue::Map(vec![entry]))),
+                        }
+                    }
                     Some(arg) if arg.kind != Kind::Function => {
                         let text = take(&mut i)?;
                         fields.push((name, value(call, arg, &text)?));
@@ -228,9 +253,6 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                 }
             }
         }
-    }
-    if switches.events && (switches.stream || switches.text) {
-        return Err(usage("--events is exclusive with --stream and --text"));
     }
     if (scope_branch.is_some() || scope_project.is_some()) && scope_folder.is_none() {
         return Err(usage("--scope-branch and --scope-project need --scope"));

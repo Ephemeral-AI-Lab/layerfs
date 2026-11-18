@@ -114,7 +114,7 @@ test("exec output: the stdout and stderr functions, and stream: true without the
   await lfs.sandbox.create("shop/api", "s1", "native");
   let ws;
   try {
-    ({ ws } = await lfs.workspace.mount("s1", "dev"));
+    ({ workspace: ws } = await lfs.workspace.mount("s1", "dev"));
     const out = [];
     const err = [];
     const ran = await lfs.workspace.exec(ws, "cat README.md; echo oops >&2", {

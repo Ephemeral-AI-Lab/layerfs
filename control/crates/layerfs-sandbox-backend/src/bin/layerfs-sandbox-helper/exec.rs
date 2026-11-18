@@ -26,8 +26,10 @@
 //! (its exec succeeded), the helper writes one byte to its standard input,
 //! which the backend gives it as one end of a socket: only then is the
 //! command's stop handle recorded, so a cancel never finds the group empty
-//! while the command is still to start. The command itself gets no
-//! standard input.
+//! while the command is still to start. The command gets no standard
+//! input unless `--stdin inherit` gives it the helper's own: the backend
+//! then writes the caller's bytes on its end of that socket once the
+//! command runs, and shuts its writing down for the end of the input.
 //!
 //! With `--trace <file>` (a traced call, `LAYERFS_TRACE_STEP`) it writes
 //! when each stage ended to that file, which the worker made, once the
@@ -69,6 +71,7 @@ struct Run {
     command_cgroup: Option<PathBuf>,
     trace: Option<PathBuf>,
     runtime: Option<PathBuf>,
+    stdin: bool,
     uid: u32,
     gid: u32,
     directory: PathBuf,
@@ -106,7 +109,10 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
         .uid(run.uid)
         .gid(run.gid)
         .current_dir(&run.directory)
-        .stdin(Stdio::null())
+        .stdin(match run.stdin {
+            true => Stdio::inherit(),
+            false => Stdio::null(),
+        })
         .process_group(0);
     if let Some(runtime) = &run.runtime {
         // set on the command, so its lookup of a bare program name (`bash`)
@@ -286,6 +292,7 @@ fn parse(arguments: &[OsString]) -> Result<Run, String> {
     let (mut init, mut uid, mut gid) = (0, 0, 0);
     let (mut cgroup, mut directory) = (PathBuf::new(), PathBuf::new());
     let (mut command_cgroup, mut trace, mut runtime) = (None, None, None);
+    let mut stdin = false;
     let mut command = Vec::new();
     let mut index = 0;
     while index < arguments.len() {
@@ -306,6 +313,7 @@ fn parse(arguments: &[OsString]) -> Result<Run, String> {
             Some("--trace") => trace = Some(PathBuf::from(value)),
             Some("--runtime") => runtime = Some(PathBuf::from(value)),
             Some("--cwd") => directory = PathBuf::from(value),
+            Some("--stdin") if value == "inherit" => stdin = true,
             _ => {
                 return Err(format!(
                     "unknown argument {}",
@@ -333,6 +341,7 @@ fn parse(arguments: &[OsString]) -> Result<Run, String> {
         command_cgroup,
         trace,
         runtime,
+        stdin,
         uid,
         gid,
         directory,

@@ -33,9 +33,6 @@ pub fn usage(call: &Call) -> String {
     {
         line.push_str(" [--from <file>] (content from stdin)");
     }
-    if call.arg("stdout").is_some() {
-        line.push_str(" [--events]");
-    }
     if !call.with.is_empty() {
         let sections: Vec<&str> = call.with.iter().map(|section| section.name).collect();
         line.push_str(&format!(" [--with {}]", sections.join(",")));
@@ -50,7 +47,8 @@ fn option(arg: &Arg) -> String {
     match (arg.name, arg.kind) {
         ("on_progress", _) => " [--progress]".to_owned(),
         ("stdout" | "stderr", _) => String::new(),
-        (name, Kind::Bool) => format!(" [--{}]", shell(name)),
+        (name, Kind::Bool | Kind::Content) => format!(" [--{}]", shell(name)),
+        (name, Kind::Json) if arg.repeat => format!(" [--{} K=V]...", shell(name)),
         (name, _) => format!(" [--{} <{}>]", shell(name), shell(name)),
     }
 }
