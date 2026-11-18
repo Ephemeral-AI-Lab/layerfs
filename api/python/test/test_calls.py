@@ -331,7 +331,7 @@ class Calls(unittest.TestCase):
             lfs.store.get("nope", log_tag="dsh:s1:r2")
         # the call log is `home.log` (`logs.list` until 2.0): a row's short
         # form is its call, its outcome, when, and what went wrong
-        self.assertFalse(hasattr(lfs.logs, "list"))
+        self.assertFalse(hasattr(lfs, "logs"))
         short = lfs.home.log(tag="dsh:s1:")
         self.assertEqual(list(short), ["items"])
         self.assertEqual(
@@ -401,14 +401,14 @@ class Calls(unittest.TestCase):
     def test_the_table(self):
         self.assertEqual(
             layerfs.FAMILIES,
-            ["home", "project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs"],
+            ["home", "project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup"],
         )
-        self.assertEqual(len(layerfs.TABLE), 87)
+        self.assertEqual(len(layerfs.TABLE), 86)
         for spec in layerfs.TABLE:
             self.assertTrue(callable(getattr(getattr(layerfs, spec["family"]), spec["call"])))
-        # the options the Publish change added are in the table the Python
-        # front end is built from, so `publish(expected_base=...)` is a keyword
-        # option rather than an unknown one (#691)
+        # the options of `branch publish` (2.0 row: at, expected, force) are in
+        # the table the Python front end is built from, so `publish(expected=...)`
+        # is a keyword option rather than an unknown one (#691)
         publish = next(
             spec
             for spec in layerfs.TABLE
@@ -417,8 +417,8 @@ class Calls(unittest.TestCase):
         self.assertEqual(
             [(opt["name"], opt["kind"], opt["optional"]) for opt in publish["options"]],
             [
-                ("expected_base", "name", True),
-                ("expected_head", "name", True),
+                ("at", "name", True),
+                ("expected", "name", True),
                 ("force", "bool", True),
             ],
         )
@@ -469,13 +469,13 @@ class Calls(unittest.TestCase):
             ["file", "read", "shop/api", "agent", "/b.bin"],
             ["file", "list", "shop/api", "agent", "/"],
             ["file", "grep", "shop/api", "agent", "/", "hello"],
-            ["branch", "diff", "shop/api", "main", "agent"],
+            ["commit", "diff", "shop/api", "agent"],
         ]:
             self.same(
                 f"{family}.{call}", shell(home, [family, call, *positionals]), python(lfs, family, call, positionals)
             )
         # an optional positional as a keyword, and a folder scope
-        first = lfs.commit.list("shop/api", "agent")["items"][-1]["id"]
+        first = lfs.commit.list("shop/api", "agent")["items"][-1]["commit"]
         self.assertEqual(lfs.file.read("shop/api", "agent", "/README.md", commit=first)["text"], "hello python\n")
         scoped = layerfs.client(home=home, scope={"project": "shop/api", "folder": "/web"})
         with self.assertRaisesRegex(layerfs.LayerFSError, "out of scope: path"):
@@ -499,7 +499,7 @@ class Calls(unittest.TestCase):
             return await lfs.store.list()
 
         listed = asyncio.run(run())
-        self.assertEqual(sorted(s["name"] for s in listed["items"]), ["one", "three", "two"])
+        self.assertEqual(sorted(s["store"] for s in listed["items"]), ["one", "three", "two"])
         shutil.rmtree(home)
 
     def test_aio_functions_run_on_the_loop_before_the_call_returns(self):

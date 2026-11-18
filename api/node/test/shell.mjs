@@ -116,19 +116,13 @@ test("a live Store gives the same answers both ways", { skip: !existsSync(comman
     ["file", "stat", "shop/api", "agent", "/README.md"],
     ["file", "list", "shop/api", "agent", "/"],
     ["file", "grep", "shop/api", "agent", "/", "hello"],
-    ["branch", "diff", "shop/api", "main", "agent"],
+    ["commit", "diff", "shop/api", "agent"],
   ];
   for (const [family, call, ...positionals] of reads) {
     const fromNode = await node(lfs, family, call, positionals);
     const fromShell = shell(home, [family, call, ...positionals]);
-    if (family === "store" && call === "list") {
-      // a Store's state counts the leases of other processes: this one
-      // keeps the Store open since the fork, so the shell sees it in use
-      // and this process does not
-      assert.equal(fromShell.value.items[0].state, "in_use");
-      assert.equal(fromNode.value.items[0].state, "idle");
-      for (const item of [...fromShell.value.items, ...fromNode.value.items]) delete item.state;
-    }
+    // a Store this process keeps open reads the same to the shell (2.0
+    // states: a lease is no state), so store answers compare whole
     same(`${family}.${call}`, fromShell, fromNode);
   }
   assert.equal((await lfs.file.read("shop/api", "agent", "/a.txt")).text, "piped\n");

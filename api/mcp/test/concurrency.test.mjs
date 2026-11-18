@@ -52,8 +52,8 @@ test("SIGTERM closes idle Stores and exits 0", async () => {
   const box = workspace("sigterm", { "a.txt": "a\n" });
   const server = await connect({ home: box.home, profile: "admin" });
   try {
-    const created = await call(server.client, "store_create", { name: "shop" });
-    assert.equal(value(created.result).name, "shop");
+    const created = await call(server.client, "store_create", { name: "shop", detail: true });
+    assert.equal(value(created.result).store, "shop");
     const child = server.transport._process;
     child.kill("SIGTERM");
     const exited = await new Promise((resolve) => child.once("exit", (code, signal) => resolve({ code, signal })));

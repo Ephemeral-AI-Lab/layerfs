@@ -22,27 +22,27 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
 
     const listed = await server.client.listTools();
     assert.equal(listed.tools.length, calls("admin"));
-    // the admin profile lists work + admin only: the six monitoring calls a UI
-    // polls are no tool in any profile
-    assert.equal(listed.tools.length, table.length - 6);
+    // the admin profile lists work + admin: every call, since each 2.0 row names
+    // its own profile and no row is a UI-only one
+    assert.equal(listed.tools.length, table.length);
     assert.ok(!listed.tools.some((tool) => tool.name.startsWith("doctor_")));
     assert.equal(new Set(listed.tools.map((tool) => tool.name)).size, calls("admin"));
     for (const tool of listed.tools) ToolSchema.parse(tool);
 
     const run = async (name, args, options) => value((await call(server.client, name, args, options)).result);
 
-    const store = await run("store_create", { name: "shop" });
-    assert.equal(store.name, "shop");
-    assert.equal(store.kind, "sqlite");
+    const store = await run("store_create", { name: "shop", detail: true });
+    assert.equal(store.store, "shop");
+    assert.equal(store.engine, "sqlite");
 
     const project = await run("project_init", { project: "shop/api", folder: box.source });
     assert.equal(project.project, "shop/api");
 
-    const fork = await run("branch_fork", { project: "shop/api", name: "feat", from_branch: "main" });
-    assert.equal(fork.kind, "Forked");
+    const fork = await run("branch_fork", { project: "shop/api", name: "feat", from: "main", detail: true });
+    assert.equal(fork.outcome, "forked");
     // the namespace branch a folder scope composes: <scope branch>.<call branch>
-    const namespaced = await run("branch_fork", { project: "shop/api", name: "feat.main", from_branch: "main" });
-    assert.equal(namespaced.kind, "Forked");
+    const namespaced = await run("branch_fork", { project: "shop/api", name: "feat.main", from: "main", detail: true });
+    assert.equal(namespaced.outcome, "forked");
 
     const write = await run("file_write", {
       project: "shop/api",
@@ -64,11 +64,10 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
     assert.equal(commits.items.length, 1);
     assert.equal(commits.items[0].message, "one file");
 
-    const diff = await run("branch_diff", { project: "shop/api", from_branch: "main", to_branch: "feat" });
-    assert.deepEqual(diff.items.map((item) => [item.path, item.kind]), [["/new.txt", "Added"]]);
+    const diff = await run("commit_diff", { project: "shop/api", ref: "feat", from: "main" });
+    assert.deepEqual(diff.items.map((item) => [item.path, item.change]), [["/new.txt", "added"]]);
 
-    const merge = await run("branch_merge", { project: "shop/api", name: "merged", a: "main", b: "feat" });
-    assert.equal(merge.kind, "Merged");
+    const merge = await run("branch_merge", { project: "shop/api", branch: "feat", from: "main", into: "merged", detail: true });
     assert.equal(merge.branch, "merged");
 
     const exported = await call(
@@ -136,7 +135,7 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
     );
     // a call that is not migrated has one form: it is offered neither option
     await assert.rejects(
-      server.client.callTool({ name: "store_list", arguments: { detail: true } }),
+      server.client.callTool({ name: "project_list", arguments: { detail: true } }),
       (error) => error.code === -32602 && /unknown argument "detail"/.test(error.message),
     );
     await server.close();
@@ -146,7 +145,7 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
     const work = await connect({ home: box.home, profile: "work" });
     const workList = await work.client.listTools();
     assert.equal(workList.tools.length, calls("work"));
-    assert.equal(workList.tools.length, 38);
+    assert.equal(workList.tools.length, 28);
     const workNames = new Set(workList.tools.map((tool) => tool.name));
     for (const name of names("work")) assert.ok(workNames.has(name), `${name} is missing from work`);
     for (const name of names("admin").filter((name) => !names("work").includes(name))) {

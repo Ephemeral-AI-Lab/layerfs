@@ -31,9 +31,9 @@ const bad = (id, group, call, args, expect, opts = {}, more = {}) => ({ id, grou
 
 export const steps = [
   // --- setup: a Store, a project from a folder, a Branch
-  ok("store", "setup", "store.create", ["shop"], {}, { check: (v) => assert.equal(v.profile, "disposable") }),
+  ok("store", "setup", "store.create", ["shop"], { detail: true }, { check: (v) => assert.equal(v.profile, "disposable") }),
   ok("init", "setup", "project.init", (ctx) => [P, ctx.folder], {}, { check: (v) => assert.equal(v.project, P) }),
-  ok("fork", "setup", "branch.fork", [P, B, "main"], {}, { check: (v) => assert.equal(v.kind, "Forked") }),
+  ok("fork", "setup", "branch.fork", [P, B, "main"], { detail: true }, { check: (v) => assert.equal(v.outcome, "forked") }),
 
   // --- required and optional arguments, defaults, omitted and null
   bad("missing path", "args", "file.read", [P, B], "InvalidInput", {}, { cli: "usage", loose: true, check: (v) => assert.match(v.message ?? v.usage, /path|positional/) }),
@@ -44,9 +44,9 @@ export const steps = [
   ok("read null commit", "args", "file.read", [P, B, "/README.md", null], {}, { cli: "skip", sameAs: "read default" }),
   ok("read null options", "args", "file.read", [P, B, "/README.md"], { start_line: null, end_line: null }, { cli: "skip", sameAs: "read default" }),
   ok("read window", "args", "file.read", [P, B, "/README.md"], { start_line: 2 }, { check: (v) => assert.deepEqual([v.text, v.start_line], ["second\n", 2]) }),
-  ok("branches default", "args", "branch.list", [P], {}, { check: (v) => assert.deepEqual([v.items.length, v.has_more], [2, false]) }),
-  ok("branches page", "args", "branch.list", [P], { page_size: 1 }, { check: (v) => assert.deepEqual([v.items.length, v.has_more], [1, true]) }),
-  bad("branches page 0", "args", "branch.list", [P], "InvalidInput", { page_size: 0 }, { check: (v) => assert.match(v.message, /pageSize/) }),
+  ok("branches default", "args", "branch.list", [P], {}, { check: (v) => assert.deepEqual([v.items.length, v.next_cursor ?? null], [2, null]) }),
+  ok("branches page", "args", "branch.list", [P], { limit: 1 }, { check: (v) => assert.deepEqual([v.items.length, typeof v.next_cursor], [1, "string"]) }),
+  bad("branches page 0", "args", "branch.list", [P], "InvalidInput", { limit: 0 }, { check: (v) => assert.match(v.message, /limit/) }),
   ok("write default message", "args", "file.write", [P, B, "/dflt.txt", "x\n"], {}, { check: (v) => assert.equal(typeof v.commit.message, "string") }),
   ok("write message", "args", "file.write", [P, B, "/msg.txt", "x\n"], { message: "say so" }, { check: (v) => assert.equal(v.commit.message, "say so") }),
   ok("write mode", "args", "file.write", [P, B, "/mode.txt", "x\n"], { mode: 0o600 }),
@@ -85,10 +85,10 @@ export const steps = [
   bad("no such path", "validation", "file.stat", [P, B, "/nope"], "NotFound", { detail: true }, { check: (v) => assert.deepEqual([v.fix, v.detail], [null, { path: "/nope", code: "NoSuchPath" }]) }),
   bad("write to main", "validation", "file.write", [P, "main", "/x.txt", "x"], "InvalidInput"),
   bad("fork exists", "validation", "branch.fork", [P, B, "main"], "Exists"),
-  bad("wrong kind text for int", "validation", "branch.list", [P], "InvalidInput", { page_size: "10" }, { cli: "skip", check: (v) => assert.match(v.message, /whole number/) }),
+  bad("wrong kind text for int", "validation", "branch.list", [P], "InvalidInput", { limit: "10" }, { cli: "skip", check: (v) => assert.match(v.message, /whole number/) }),
   bad("wrong kind number for text", "validation", "file.stat", [P, B, 7], "InvalidInput", {}, { cli: "skip", check: (v) => assert.match(v.message, /text/) }),
   bad("wrong kind text for bool", "validation", "workspace.unmount", ["x"], "InvalidInput", { force: "yes" }, { cli: "usage", loose: true }),
-  bad("bad page_pos", "validation", "branch.list", [P], "InvalidInput", { page_pos: "zzz" }, { cli: "skip" }),
+  bad("bad cursor", "validation", "branch.list", [P], "InvalidInput", { cursor: "zzz" }, { loose: true }),
   bad("apply not a list", "validation", "file.apply", [P, B, { op: "mkdir", path: "/z" }], "InvalidInput", {}, { check: (v) => assert.match(v.message, /list/) }),
   bad("apply unknown op", "validation", "file.apply", [P, B, [{ op: "frobnicate", path: "/z" }]], "InvalidInput", { detail: true }, { check: (v) => assert.deepEqual(v.detail, { index: 0 }) }),
   bad("apply second change refused", "validation", "file.apply", [P, B, [{ op: "mkdir", path: "/zz" }, { op: "rm", path: "/nope" }]], "NotFound", { detail: true }, { check: (v) => assert.deepEqual(v.detail?.index, 1) }),
@@ -152,7 +152,7 @@ export const steps = [
   bad("line i64 max", "ints", "file.read", [P, B, "/lines.txt"], "InvalidInput", { start_line: 2n ** 63n - 1n }, { check: (v) => assert.match(v.message, /safe integer/) }),
   bad("line i64 max + 1", "ints", "file.read", [P, B, "/lines.txt"], "InvalidInput", { start_line: 2n ** 63n }, { cli: "usage", loose: true, check: (v) => assert.match(v.message ?? v.usage, /out of range|whole number/) }),
   bad("line unsafe number", "ints", "file.read", [P, B, "/lines.txt"], "InvalidInput", { start_line: Number.MAX_SAFE_INTEGER + 2 }, { cli: "skip", loose: true, check: (v) => assert.match(v.message, /safe integer/) }),
-  bad("page_size 2^62", "ints", "branch.list", [P], "InvalidInput", { page_size: 2n ** 62n }, { check: (v) => assert.match(v.message, /safe integer/) }),
+  bad("limit 2^62", "ints", "branch.list", [P], "InvalidInput", { limit: 2n ** 62n }, { check: (v) => assert.match(v.message, /`limit` is 1 to 1000/) }),
   bad("mode 2^62", "ints", "file.write", [P, B, "/big.txt", "x"], "InvalidInput", { mode: 2n ** 62n }, { check: (v) => assert.match(v.message, /mode/) }),
   bad("mode i64 max + 1", "ints", "file.write", [P, B, "/big.txt", "x"], "InvalidInput", { mode: 2n ** 63n }, { cli: "usage", loose: true }),
   bad("apply mode 2^63", "ints", "file.apply", [P, B, [{ op: "chmod", path: "/lines.txt", mode: 2n ** 63n }]], "InvalidInput", {}, { cli: "usage", loose: true }),
@@ -162,9 +162,9 @@ export const steps = [
   // --- a real flow across Branches, then the same answers from every front end
   ok("fork b2", "flow", "branch.fork", [P, "b2", "main"]),
   ok("b2 write", "flow", "file.write", [P, "b2", "/from-b2.txt", "b2\n"], { message: "on b2" }),
-  ok("merge", "flow", "branch.merge", [P, "merged", B, "b2"], { message: "merge" }),
+  ok("merge", "flow", "branch.merge", [P, B, "b2"], { into: "merged", message: "merge" }),
   ok("merged read", "flow", "file.read", [P, "merged", "/from-b2.txt"], {}, { check: (v) => assert.equal(v.text, "b2\n") }),
-  ok("branch diff", "flow", "branch.diff", [P, "main", "merged"], { paths_only: true }),
+  ok("commit diff", "flow", "commit.diff", [P, "merged"], { from: "main" }),
   ok("commits", "flow", "commit.list", [P, "merged"]),
   ok("branch get", "flow", "branch.get", [P, "merged"]),
   ok("project get", "flow", "project.get", [P]),

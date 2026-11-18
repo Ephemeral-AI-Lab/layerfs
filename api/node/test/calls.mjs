@@ -14,9 +14,9 @@ const temp = (tag) => {
   return dir;
 };
 
-test("the table: twelve families, 87 calls, each a function", () => {
-  assert.deepEqual(families, ["home", "project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs", "doctor"]);
-  assert.equal(table.length, 87);
+test("the table: ten families, 86 calls, each a function", () => {
+  assert.deepEqual(families, ["home", "project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup"]);
+  assert.equal(table.length, 86);
   for (const spec of table) assert.equal(typeof layerfs[spec.family][spec.call], "function", `${spec.family}.${spec.call}`);
 });
 
@@ -105,7 +105,7 @@ test("a Store, an Init with progress, files, Branches and a folder scope", async
   await assert.rejects(scoped.file.read("shop/api", "main", "/README.md"), /out of scope: path/);
   await assert.rejects(scoped.commit.list("shop/api", "main"), /out of scope: history/);
   const branches = await scoped.branch.list("shop/api");
-  assert.deepEqual(branches.items.map((b) => b.name), ["main"]);
+  assert.deepEqual(branches.items.map((b) => b.branch), ["main"]);
   await assert.rejects(scoped.store.list(), /out of scope: store.list/);
   await assert.rejects(scoped.file.stat("shop/other", "main", "/web/a.bin"), /out of scope: project/);
   await assert.rejects(client({ home, scope: { folder: "/web" } }).store.list(), /scope.project/);
@@ -122,7 +122,7 @@ test("the call log names the client node and takes log_tag with any call (#659)"
   await assert.rejects(lfs.store.get("nope", { log_tag: "dsh:s1:r2" }), LayerFSError);
   // the call log is `home.log` (`logs.list` until 2.0): a row's short form
   // is its call, its outcome, when, and what went wrong
-  assert.equal(lfs.logs.list, undefined);
+  assert.equal(lfs.logs, undefined);
   const short = await lfs.home.log({ tag: "dsh:s1:" });
   assert.deepEqual(Object.keys(short), ["items"]);
   assert.deepEqual(short.items.map((row) => Object.keys(row)), [["call", "outcome", "logged_at", "error"], ["call", "outcome", "logged_at"]]);

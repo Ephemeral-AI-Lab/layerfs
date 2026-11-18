@@ -68,7 +68,7 @@ class Encoding(Fixture):
 
     def test_nan_and_infinity_are_invalid_input(self):
         for number in (float("nan"), float("inf"), float("-inf")):
-            self.invalid(self.lfs.branch.list, "JSON", P, page_size=number)
+            self.invalid(self.lfs.branch.list, "JSON", P, limit=number)
             self.invalid(self.lfs.file.apply, "JSON", P, B, [{"op": "write", "path": "/n", "content": [number]}])
             self.invalid(
                 layerfs.client(home=self.home, scope={"project": P, "folder": "/", "x": number}).store.list, "JSON"
@@ -84,7 +84,7 @@ class Encoding(Fixture):
 
     def test_a_fraction_is_refused_by_the_library_as_invalid_input(self):
         with self.assertRaisesRegex(layerfs.LayerFSError, "whole numbers") as caught:
-            self.lfs.branch.list(P, page_size=1.5)
+            self.lfs.branch.list(P, limit=1.5)
         self.assertEqual(caught.exception.code, "InvalidInput")
 
 

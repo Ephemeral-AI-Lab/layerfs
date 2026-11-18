@@ -69,8 +69,8 @@ class Flow(unittest.TestCase):
             ("project", "get", [P], {}),
             ("branch", "list", [P], {}),
             ("branch", "get", [P, "agent"], {}),
-            ("branch", "diff", [P, "main", "agent"], {}),
-            ("commit", "list", [P, "agent"], {"page_size": 2}),
+            ("commit", "diff", [P, "agent"], {"from": "main"}),
+            ("commit", "list", [P, "agent"], {"limit": 2}),
             ("file", "read", [P, "agent", "/docs/a.txt"], {"start_line": 2}),
             ("file", "stat", [P, "agent", "/docs"], {}),
             ("file", "list", [P, "agent", "/"], {}),
@@ -92,12 +92,12 @@ class Flow(unittest.TestCase):
         from_sync = [refusal(getattr(getattr(sync, f), c), *a, **k) for f, c, a, k in reads]
         self.assertEqual(from_aio, from_sync)
         self.assertEqual(sum("refused" in answer for answer in from_sync), 4)
-        # a page past the first: the cursor-free page position, same both ways
-        first = sync.commit.list(P, "agent", page_size=2)
+        # a page past the first: the first page's cursor, same both ways
+        first = sync.commit.list(P, "agent", limit=2)
         self.assertEqual(len(first["items"]), 2)
         self.assertEqual(
-            asyncio.run(lfs.commit.list(P, "agent", page_size=2, page_pos=2)),
-            sync.commit.list(P, "agent", page_size=2, page_pos=2),
+            asyncio.run(lfs.commit.list(P, "agent", limit=2, cursor=first["next_cursor"])),
+            sync.commit.list(P, "agent", limit=2, cursor=first["next_cursor"]),
         )
 
     def test_the_history_of_the_flow_is_one_commit_per_write(self):
@@ -109,7 +109,7 @@ class Flow(unittest.TestCase):
         sync.file.write(P, "agent", "/two", "2\n", message="two")
         messages = [commit["message"] for commit in sync.commit.list(P, "agent")["items"]]
         self.assertEqual(messages[:2], ["two", "one"])
-        oldest = sync.commit.list(P, "agent")["items"][-1]["id"]
+        oldest = sync.commit.list(P, "agent")["items"][-1]["commit"]
         # a Commit id as the optional last positional reads that history
         self.assertEqual(sync.file.stat(P, "agent", "/README.md", oldest)["path"], "/README.md")
         self.assertEqual(refusal(sync.file.stat, P, "agent", "/two", oldest)["refused"][0], "NotFound")

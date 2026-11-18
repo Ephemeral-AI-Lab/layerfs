@@ -14,7 +14,7 @@ const INITIALIZE = {
   params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "purity", version: "1.0.0" } },
 };
 const INITIALIZED = { jsonrpc: "2.0", method: "notifications/initialized" };
-const CREATE = { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "store_create", arguments: { name: "shop" } } };
+const CREATE = { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "store_create", arguments: { name: "shop", detail: true } } };
 
 test("only JSON-RPC lines on stdout while a call logs to stderr", async () => {
   const home = temp("purity");
@@ -56,7 +56,7 @@ test("only JSON-RPC lines on stdout while a call logs to stderr", async () => {
     child.stdin.write(`${JSON.stringify(CREATE)}\n`);
     const answered = await response(2);
     assert.equal(answered.result.isError, undefined);
-    assert.equal(JSON.parse(answered.result.content[0].text).name, "shop");
+    assert.equal(JSON.parse(answered.result.content[0].text).store, "shop");
 
     // every line the server wrote to stdout is a JSON-RPC message
     const text = Buffer.concat(out).toString();

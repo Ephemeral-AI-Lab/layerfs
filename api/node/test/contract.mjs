@@ -131,8 +131,10 @@ function runCli(ctx) {
 }
 
 // --- normalizing: what differs between homes and runs but not in meaning
-// times; inode numbers (a process hands out its own range); stored sizes (they hold the times)
+// times (a number, or 2.0's `..._at` text); inode numbers (a process hands out its own range);
+// stored sizes (they hold the times)
 const TIMES = new Set(["created", "time", "inode", "new_stored", "new_metadata"]);
+const time = (key, item) => (TIMES.has(key) && typeof item === "number") || (key.endsWith("_at") && typeof item === "string");
 const ids = (text, ctx) =>
   /^[0-9a-f]{32,}$/.test(text)
     ? "<id>"
@@ -142,7 +144,7 @@ function normalize(value, ctx) {
   if (typeof value === "string") return ids(value, ctx);
   if (Array.isArray(value)) return value.map((item) => normalize(item, ctx));
   if (value && typeof value === "object" && !Buffer.isBuffer(value)) {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, TIMES.has(key) && typeof item === "number" ? "<n>" : normalize(item, ctx)]));
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, time(key, item) ? "<n>" : normalize(item, ctx)]));
   }
   return value;
 }

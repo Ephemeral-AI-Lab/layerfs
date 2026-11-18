@@ -13,25 +13,24 @@ const nameOf = (spec) => `${spec.family}.${spec.call}`;
 
 test("every call is in exactly one bucket, and admin adds the work bucket", () => {
   assert.deepEqual(check(table), []);
-  assert.equal(table.length, 81);
+  assert.equal(table.length, 86);
   const buckets = table.map(bucketOf);
-  assert.equal(buckets.filter((bucket) => bucket === "work").length, 38);
-  assert.equal(buckets.filter((bucket) => bucket === "admin").length, 37);
+  assert.equal(buckets.filter((bucket) => bucket === "work").length, 28);
+  assert.equal(buckets.filter((bucket) => bucket === "admin").length, 58);
   assert.ok(buckets.every((bucket) => bucket === "work" || bucket === "admin" || bucket === "ui" || bucket === "none"));
   // no call is in the `none` bucket since the doctor family left (`home.prune` is admin)
   assert.deepEqual(table.filter((spec) => bucketOf(spec) === "none").map(nameOf), []);
-  // the monitoring calls a UI polls are offered to no agent (layerfs-project#178 D2, #164)
+  // a migrated entry names its own profile (call surface 2.0): the monitoring
+  // calls a UI polls (machine.stats, files, log) are `full` rows, so the
+  // `ui` bucket (layerfs-project#178 D2) holds no call any more
   const ui = table.filter((spec) => bucketOf(spec) === "ui").map(nameOf);
-  assert.deepEqual(ui, ["machine.stats", "machine.files", "machine.log"]);
-  for (const profile of ["work", "admin"]) {
-    const listed = tools(table, profile).map(nameOf);
-    for (const name of ui) assert.ok(!listed.includes(name), `${name} is in the ${profile} profile`);
-  }
+  assert.deepEqual(ui, []);
+  for (const name of ["machine.stats", "machine.files", "machine.log"]) assert.equal(bucketOf(table.find((spec) => nameOf(spec) === name)), "admin", name);
 
   const work = tools(table, "work").map(nameOf);
   const admin = tools(table, "admin").map(nameOf);
-  assert.equal(work.length, 38);
-  assert.equal(admin.length, 75);
+  assert.equal(work.length, 28);
+  assert.equal(admin.length, 86);
   for (const name of work) assert.ok(admin.includes(name), `${name} is in work but not admin`);
   assert.ok(!admin.some((name) => name.startsWith("doctor.")), "a doctor call is a tool");
   assert.throws(() => tools(table, "root"), /unknown profile/);

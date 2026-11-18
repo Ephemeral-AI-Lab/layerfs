@@ -21,7 +21,7 @@ test("a binary file round-trips byte for byte through file_write and export", as
     const run = async (name, args) => value((await call(server.client, name, args)).result);
     await run("store_create", { name: "shop" });
     await run("project_init", { project: "shop/api", folder: box.source });
-    await run("branch_fork", { project: "shop/api", name: "feat", from_branch: "main" });
+    await run("branch_fork", { project: "shop/api", name: "feat", from: "main" });
 
     const write = await run("file_write", {
       project: "shop/api",
