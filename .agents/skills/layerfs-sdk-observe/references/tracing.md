@@ -33,16 +33,18 @@ the call as CLI words (`argv[0]`/`argv[1]` are the family and call),
 `outcome` is `"ok"` or the refusal code, `kind` and `commit`/`layer` come
 from the result, `client` is `cli`/`node`/`python`/`rust`, and `tag` is the
 caller's (`log_tag` argument, else `LAYERFS_LOGS_TAG`). Read it with
-`layerfs logs list` (filters `--op`, `--project`, `--client`, `--tag`,
-`--outcome`, `--since`; newest first; `--cursor` pages) and clear it with
-`layerfs logs reset`. It rotates once to `calls.1.jsonl` past 16 MiB. See
+`layerfs home log` (filters `--call`, `--project`, `--client`, `--tag`,
+`--outcome`, `--since`; newest first; `--cursor` pages; `--detail` adds
+`duration_ms`, `client`, `argv`, `commit` and `tag` to each row) and clear it
+with `layerfs home clear-log`. A row's `error` is the public code; the stored
+line keeps the code as it was raised. It rotates once to `calls.1.jsonl` past 16 MiB. See
 [Home: traces and the call log](../../../../docs/architecture/control/home/README.md#traces-and-the-call-log).
 
 ```bash
 # slowest calls in the home's log
-layerfs logs list --limit 1000 | jq -c '.lines[] | [.ms, .argv[0] + "." + .argv[1]]' | sort -rn | head
+layerfs home log --limit 1000 --detail | jq -c '.items[] | [.duration_ms, .call]' | sort -rn | head
 # refusals
-layerfs logs list --limit 1000 | jq -c '.lines[] | select(.outcome != "ok") | [.at, .argv, .outcome]'
+layerfs home log --limit 1000 --outcome refused --detail | jq -c '.items[] | [.logged_at, .argv, .error]'
 ```
 
 ## The worker-connection line

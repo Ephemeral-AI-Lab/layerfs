@@ -60,7 +60,7 @@ $ layerfs project list
 - `project init` imports the folder `./src` as project `api` of Store
   `shop`. Init never creates a Store. In this run the small folder printed
   no progress lines; the current build prints `check`, `install` and
-  `record` as `{"progress": {"phase", "done", "total"}}` lines on stderr.
+  `record` as `{"phase", "done", "total"}` lines on stderr.
 - A project is always written `<store>/<project>`.
 
 ## 3. Branches and files (shell)
@@ -164,7 +164,7 @@ const { text } = await lfs.file.read("web/site", "agent", "/README.md"); // "Hel
 try {
   await lfs.file.read("web/site", "agent", "/missing");
 } catch (e) {
-  if (e instanceof LayerFSError) console.log(e.code); // "NoSuchPath"
+  if (e instanceof LayerFSError) console.log(e.error); // "NotFound"
 }
 
 const page = await lfs.commit.list("web/site", "agent", { page_size: 1 });

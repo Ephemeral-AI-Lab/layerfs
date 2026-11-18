@@ -216,7 +216,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   Store's record and the home id with the call; the worker never reads the
   home, and its own root (`/layerfs/data`) is never treated as a home.
 - A connection starts with a small frame holding only the secret (at most
-  4 KiB, read within 10 s); the worker answers it, or refuses `Denied` and
+  4 KiB, read within 10 s); the worker answers it, or refuses `Unavailable` (raised as `Denied`) and
   closes, before it reads the request. A caller that gets no answer in 10 s
   is `Unavailable`; in both cases the request was not sent. Only a
   connection lost after the request was sent is `Unknown`. One attempt;
@@ -480,7 +480,8 @@ layerfs project init pg-main/load ./load
   database holds the `layerfs` schema with the Store's binding (another
   one is `Unavailable` "holds another Store"), and the role may use the
   schema, make temporary tables and read and write every LayerFS table and
-  sequence (else `Denied`, naming the first privilege missing). A refused
+  sequence (else `Unavailable`, raised as `Denied`, naming the first
+  privilege missing). A refused
   check saves nothing. `store status --machine <machine>` runs the same
   check on request and answers it as `check: {machine, host, ok, ..}`; it
   records nothing. The record keeps the URL without a password and the

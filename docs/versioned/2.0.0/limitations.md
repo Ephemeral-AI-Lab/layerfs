@@ -178,7 +178,8 @@ step commits.
 
 On macOS arm64, with the debug build, in a private temporary home:
 
-- `file.read` of a 3-byte binary file is refused `Binary`. Bytes can be
+- `file.read` of a 3-byte binary file is refused `InvalidInput` (raised
+  as `Binary`). Bytes can be
   written (`file.write` with a `Buffer` or `bytes`), but no 2.0 call reads
   them back as bytes.
 - `project init --progress` printed no progress lines for a small folder

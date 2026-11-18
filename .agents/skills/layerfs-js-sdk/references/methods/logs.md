@@ -3,42 +3,49 @@
 > **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
 > `layerfs-js-sdk` skill. An agent working on a project rarely needs this
 > family; it belongs to whoever watches a run. A folder scope refuses every
-> `logs` call.
+> call on this page.
 
 ```js
-logs.list({ op, project, client, tag, outcome, since, cursor, limit })
-logs.reset()
+home.log({ call, project, client, tag, outcome, since, limit, cursor, detail })
+home.clear_log()
 logs.machine(machine, { cursor, before, limit })
 logs.sandbox(sandbox, { cursor, before, limit })
 ```
 
-`logs.list` reads the home's call log (`trace/calls.jsonl`, then
+`home.log` reads the home's call log (`trace/calls.jsonl`, then
 `trace/calls.1.jsonl`); `logs.machine` and `logs.sandbox` read a machine's
-worker log and a Sandbox's `daemon.log`. A call-log line is
-`{ v, at, ms, client, argv, outcome, kind?, commit?, layer?, tag? }`, where
-`at` is when the call started (ms since the epoch) and `ms` its duration.
+worker log and a Sandbox's `daemon.log`. The two call-log calls were
+`logs.list` and `logs.reset` before the call surface 2.0; those names are
+gone, with no alias.
 
-## `logs.list`
+## `home.log`
 
-`logs.list({ op, project, client, tag, outcome, since, cursor, limit })`: the
-calls made against this home, newest first. Every option given must match:
-`op` is `family` or `family.call`; `project` matches the lines' `argv`;
-`client` is `cli`, `node`, `python` or `rust`; `tag` is an exact tag or a
-prefix ending in `:`; `outcome` is `ok` or a refusal code; `since` keeps lines
-at or after a time (ms). `limit` is 1 to 1000 (default 100), and `cursor` is a
-previous answer's `next`.
+`home.log({ call, project, client, tag, outcome, since, limit, cursor, detail })`:
+the calls made against this home, newest first. Every option given must
+match: `call` is `family` or `family.call`; `project` matches the lines'
+`argv`; `client` is `cli`, `node`, `python` or `rust`; `tag` is an exact tag
+or a prefix ending in `:`; `outcome` is a row's `outcome` (`ok`, `refused`, a
+result's word such as `committed`) or its `error` (a public refusal code);
+`since` keeps calls that started at or after a time (ms). `limit` is 1 to
+1000 (default 200), and `cursor` is a previous answer's `next_cursor`.
 
-Returns `{ lines, next?, has_more, skipped }`; `skipped` counts torn lines
-that do not parse, which are never answered. Errors: `InvalidInput` (a bad
-option, `limit` out of range, a malformed or stale cursor), `Failed` (a log
-file cannot be read).
+Returns `{ items, next_cursor? }`. A row is `{ call, outcome, logged_at }`,
+with `project` and `error` when it has them; `detail: true` gives every key
+(`duration_ms`, `client`, `argv`, `commit`, `tag` too, nulls included) and
+`skipped`, the torn lines that do not parse, which are never answered.
+`next_cursor` carries the filters that made it: a later call may leave them
+out, a filter given again must be the same. Errors: `InvalidInput` (a bad
+option, `limit` out of range, a malformed or stale cursor, a cursor given
+with other filters or made by another call), `Failed` (a log file cannot be
+read).
 
-## `logs.reset`
+## `home.clear_log`
 
-`logs.reset()`: clears the call log, truncating `trace/calls.jsonl` in place
-and removing `trace/calls.1.jsonl`. Returns `{ kind: "Reset", removed }`, the
-lines both files held. A cursor from before the reset is stale afterwards.
-Error: `Failed`.
+`home.clear_log()`: clears the call log, truncating `trace/calls.jsonl` in
+place and removing `trace/calls.1.jsonl`. Returns `{ ok: true }`; with
+`detail: true`, `{ ok, outcome: "cleared", line_count }`, the lines both
+files held. A cursor from before the clear is stale afterwards. Error:
+`Failed`.
 
 ## `logs.machine`
 

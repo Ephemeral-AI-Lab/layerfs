@@ -169,18 +169,20 @@ The two refusals on a scoped client in [the examples](examples/README.md) were.
 | Python `int` (no release had a Python package; #521 only) | exact both ways; past signed 64 bits the library refuses `InvalidInput`, "number out of range"; a float is refused | **New.** [Python](../../architecture/api/front-ends/bindings.md#layerfs-python) |
 | the shell | a signed 64-bit decimal; larger is exit 2 | [Coverage: differences](../../architecture/api/calls/coverage.md#where-the-front-ends-differ-on-purpose) |
 | bytes as `{ "$layerfs": "bytes", "base64": "..." }` (#521, MCP results) | `Buffer` / `Uint8Array` (Node), `bytes` / `bytearray` / `memoryview` (Python) go in as `{ "base64": "..." }`; the same shape comes back as `Buffer` / `bytes` | **Changed.** The key `base64` is reserved: a map whose only key is `base64` with base64 text is read as bytes. A map with another key beside it stays a map |
-| reading bytes | `file.read` returns text only and refuses a file that is not UTF-8 text as `Binary`; bytes can be written | **Not restored** (binary `file.read`, see [section 10](#10-history-features-that-are-gone)) |
+| reading bytes | `file.read` returns text only and refuses a file that is not UTF-8 text (`InvalidInput`, raised as `Binary`); bytes can be written | **Not restored** (binary `file.read`, see [section 10](#10-history-features-that-are-gone)) |
 | exec output as a string | a `string` when an event's bytes are UTF-8, else a `Buffer` / `bytes`, **per event** | **Changed.** A caller that joins output must accept both ([Events](../../architecture/api/calls/errors-and-events.md#workspaceexec-output)) |
 
 ## 6. Errors, Unknown and Unresolved
 
 The refusal is `{ code, message, detail }` in every front end: Node throws
-`LayerFSError`, Python raises `layerfs.LayerFSError` (`.code`, `.message`,
-`.detail`), the command prints the JSON on stderr and exits 125. A wrong command
+`LayerFSError`, Python raises `layerfs.LayerFSError` (`.error`, also `.code`;
+`.message`; `.fix`; `.detail` when the call asked the long form), the command
+prints the JSON on stderr and exits 125. A wrong command
 line is exit 2 with one plain `layerfs: ...` line. The codes are in the
 [catalog](../../architecture/api/calls/errors-and-events.md#refusals); which of
-them are 1.1.0's own (`NoSuchStore`, `NoSuchPath`, `NoSuchSandbox` and others)
-is noted in [calls: errors](calls.md#errors-and-exit-codes).
+them are 1.1.0's own (`NoSuchStore`, `NoSuchPath`, `NoSuchSandbox` and others),
+and the public code each now leaves under, is in
+[calls: errors](calls.md#errors-and-exit-codes).
 
 - **Every call is one attempt.** The library never retries, resumes or replays,
   and nothing commits or unmounts on its own.
@@ -200,7 +202,7 @@ is noted in [calls: errors](calls.md#errors-and-exit-codes).
 
 | Old | 2.0.0 | Status and reason |
 | --- | --- | --- |
-| `events.subscribe` / `poll` / `unsubscribe`, SSE and NDJSON streams (#521); the trace subscription of `@layerfs/backend` (1.1.0) | none | **Removed** (O26). Trace files are the feed: `<home>/trace/calls.jsonl` holds one line per call, read with `logs.list` (#659); `LAYERFS_TRACE` records worker connections and step times ([home and records](../../architecture/control/home/README.md#traces-and-the-call-log)) |
+| `events.subscribe` / `poll` / `unsubscribe`, SSE and NDJSON streams (#521); the trace subscription of `@layerfs/backend` (1.1.0) | none | **Removed** (O26). Trace files are the feed: `<home>/trace/calls.jsonl` holds one line per call, read with `home.log` (#659); `LAYERFS_TRACE` records worker connections and step times ([home and records](../../architecture/control/home/README.md#traces-and-the-call-log)) |
 | job registry: `start_init` / `get_init` / `subscribe_init` | one `on_progress` stream on the call itself | **Removed** (O22). Another process cannot watch a call it did not start; `store status` shows a push or pull in progress |
 | progress of any call | `on_progress` on exactly five calls: `project.init`, `store.push`, `store.pull`, `backup.create`, `backup.restore`. The shell form is `--progress` (JSON lines on stderr) | **Changed.** Three payload shapes; events mark the **entry** of a phase, never completion. [Events](../../architecture/api/calls/errors-and-events.md#progress-events) |
 | `exec` output | `stdout` / `stderr` functions, `stream: true`, `--stream` | **Changed.** Output is **buffered and delivered after the command ends**, never live; stdout then stderr, not interleaved; a stream over 1 MiB only as event pages (the answer has it `null`, with `stdout_bytes` and `streamed: true`), and dropped when there is no sink. All of this is **UNVERIFIED by run**: no Sandbox could be started here ([Events](../../architecture/api/calls/errors-and-events.md#workspaceexec-output)) |
@@ -218,7 +220,7 @@ not the native call.
 | Old | 2.0.0 | Status and reason |
 | --- | --- | --- |
 | `client.results(after?)`, a ring of per-call results (#521) | none | **Not restored** (owner decision, [#31](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/31#issuecomment-6657201351)) |
-| the call trace and operator reads of `@layerfs/backend` | the home's call log: one line per call in `<home>/trace/calls.jsonl` (CLI words, outcome, time, client, the saved version, an optional tag), read with `logs.list` and cleared with `logs.reset`; `LAYERFS_TRACE=<file>` appends one `worker.connection` line per connection to a machine's worker | **Changed** (#659). No daemon telemetry, operator reads or argument values beyond the redacted words ([home and records](../../architecture/control/home/README.md#traces-and-the-call-log)) |
+| the call trace and operator reads of `@layerfs/backend` | the home's call log: one line per call in `<home>/trace/calls.jsonl` (CLI words, outcome, time, client, the saved version, an optional tag), read with `home.log` and cleared with `home.clear_log`; `LAYERFS_TRACE=<file>` appends one `worker.connection` line per connection to a machine's worker | **Changed** (#659). No daemon telemetry, operator reads or argument values beyond the redacted words ([home and records](../../architecture/control/home/README.md#traces-and-the-call-log)) |
 | a health check | `layerfs doctor [--text]`, `doctor({ home })` (Node), `layerfs.doctor(home)` (Python): outside the call table, reads the home, takes no lock, writes nothing, starts no machine | **New.** [Doctor](../../architecture/control/doctor/README.md), [calls](calls.md#layerfs-doctor) |
 | `close()` | `close()` closes idle Stores; the command does it after every call | **Changed** (section 2) |
 
@@ -273,7 +275,7 @@ named consumer would reopen each one.
 | commit author and labels | none. A Commit carries `id`, `branch`, `parent`, `second_parent`, `base`, `root`, `via`, `message`, `merged_from`, `time` and size counters | the `commit.list` output in the [CLI example](examples/README.md#cli); [`commit.list`](../../architecture/api/sdk/commit.md#commitlist) |
 | per-call results (`client.results`) | none | section 8 |
 | cheap project summary (`get_summary`: Branch and Commit counts, last Commit, size) | `project.get` answers the record only: Store, kind, machine, when recorded | [`project.get`](../../architecture/api/sdk/project.md#projectget) |
-| binary `file.read`, `offset` / `nextOffset` cursor | `file.read` is text only and pages by `start_line` / `end_line`, answering `next_line`; a non-text file is `Binary` | [`file.read`](../../architecture/api/sdk/file.md#fileread); [coverage: values](../../architecture/api/calls/coverage.md#what-is-checked-across-the-front-ends) |
+| binary `file.read`, `offset` / `nextOffset` cursor | `file.read` is text only and pages by `start_line` / `end_line`, answering `next_line`; a non-text file is `InvalidInput` (raised as `Binary`) | [`file.read`](../../architecture/api/sdk/file.md#fileread); [coverage: values](../../architecture/api/calls/coverage.md#what-is-checked-across-the-front-ends) |
 
 Also not restored, by earlier decisions: the backend facade (O25), the event
 streams (O26), the Node CLI, MCP (O32). A by-id Commit lookup is a page walk:

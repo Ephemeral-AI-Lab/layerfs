@@ -37,7 +37,10 @@ layerfs.<family>.<call>(<positionals>, <option>=...)
   `workspace.exec`) exists only in Node and Python. The shell has
   `--progress` and `--stream` instead.
 - A call name with `_` is written with `-` in the shell:
-  `layerfs workspace exec-cancel`.
+  `layerfs workspace exec-cancel`, `layerfs home clear-log`.
+- Three options are every call's: `detail` and `with` say which
+  [form of the answer](#the-form-of-an-answer) is wanted, and `log_tag`
+  tags the call's line in the home's call log.
 
 ### Names
 
@@ -73,24 +76,163 @@ Sandbox names (H §7.6).
 | size | bytes as a number, or text with `K`, `M` or `G` (`512M`, `8G`) | a word |
 | function | a callback (Node, Python only) | — |
 
+## The form of an answer
+
+The call surface is being moved, family by family, to one form of answer
+(the [call surface specification](../../../core/docs/issues/call-surface-2-0/README.md);
+its rows are `calls.json`, which a contract test reads). A call that has
+moved is **migrated**: today `home.get`, `home.log` and `home.clear_log`.
+Every other call still answers as its own section below says, and takes
+`detail` without changing its answer. The refusal shape below is already
+every call's.
+
+**Short and long form.** A migrated call answers its short form: the few
+keys an agent needs, with a key left out when it is null, false or empty.
+`detail` asks for the long form: every key the call declares, in a fixed
+order, null where there is no value. Neither form reads anything the other
+does not.
+
+| | Shell | Node | Python |
+| --- | --- | --- | --- |
+| the long form | `--detail` | `{ detail: true }` | `detail=True` |
+| sections | `--with platforms,tree` | `{ with: ["platforms", "tree"] }` | `with_=["platforms", "tree"]` |
+
+- A short key is one of two sorts: always there (`home`, `state`), or there
+  only when it is news (`reason`, `fix`, a `state` that is not `ready`).
+- A call that changed something and has nothing to say answers
+  `{"ok":true}`; `ok` is never beside another key in the short form.
+- **Sections.** `with` adds a named part of the answer that costs a read of
+  its own: `home get --with platforms`, `--with tree`. A call takes only the
+  sections its row lists; another name is refused `InvalidInput`, naming the
+  ones it takes. A section is in both forms, and only when asked for.
+  Python spells the option `with_`, because `with` is a keyword.
+- **Lists.** A list call answers `{ items, next_cursor }`: `next_cursor` is
+  left out of the short form on the last page and null in the long form.
+  Pass it back as `cursor`. It carries the filters of the call that made it:
+  a filter given again must be the same, and a cursor given to another call
+  is refused `InvalidInput`. A page ends at `limit` items, or early past
+  64 KiB, with a cursor.
+- **State.** A thing's `state` is one of `ready`, `busy`, `stopped`,
+  `blocked`, `broken` and `unknown`, each with its companion and no other:
+  `busy` has `op { name, phase, started_at }`, `blocked` has
+  `blocked_by { <machine|store|sandbox>, reason }` (the thing at the root of
+  the block), `broken` has `reason` (a code) and `fix` (one shell line, or
+  null), `unknown` has `observed_at`.
+- **Refusals.** `{"error", "message"}`, `fix` when there is one, and the
+  fields the next call needs flat beside them; `detail` adds `fix` (null
+  when there is none) and `detail`. See [errors](#errors-and-exit-codes).
+
+Run for this manual on a scratch home (macOS, a debug build; the home's
+path is shortened):
+
+```console
+$ layerfs home get
+{"home":"/tmp/home1","state":"broken","version":"2.0.0","reason":"missing","fix":"layerfs home init"}
+$ layerfs home init
+{"home":"/tmp/home1","created":true,"converted":false,"layout":3}
+$ layerfs home get
+{"home":"/tmp/home1","state":"ready","version":"2.0.0","generation":2}
+$ layerfs store create shop
+{"name":"shop","kind":"sqlite","machine":"native","profile":"disposable","created":1795008741370,"sqlite":"3.53.2","projects":[]}
+$ layerfs home get --with tree
+{"home":"/tmp/home1","state":"ready","version":"2.0.0","generation":4,"tree":{"machines":[{"machine":"docker","state":"stopped"},{"machine":"native","stores":[{"store":"shop"}]}],"stores":[],"buckets":[]}}
+$ layerfs home get --with live
+{"error":"InvalidInput","message":"home.get: `with` names `live`; this call takes platforms, tree"}
+```
+
 ## The calls
 
 `[x]` is an optional positional. Every family's results are snake_case.
 
-### `home` (2)
+### `home` (4)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `init` | — | — | creates this home, converts an older layout to the current one, and leaves a current home as it is |
-| `get` | — | — | the home's state and the Linux bundle and native daemon this build would use; changes nothing |
+| `get` | — | `--with platforms,tree` | the home's state and build; with `--with`, the platforms this computer supports or the tree of everything in the home |
+| `log` | — | `call`, `project`, `client`, `tag`, `outcome`, `since`, `limit`, `cursor` | the calls made against this home, newest first |
+| `clear_log` | — | — | clears this home's call log |
 
-- Neither call is opened by the dispatcher: `init` opens or creates the home
-  itself, and `get` never opens it. `get` reads `layerfs.json`, the folder's
-  mode, `bundle.json`, the native daemon's record and the daemon file, writes
-  no log line, and is `admin` in the MCP server.
-- `init` returns `{ home, created, converted, layout }`; `get` returns
-  `{ home, bundle, daemon, cache, warnings }`. The home's layout and settings
-  are in [the home](home.md).
+- `init` and `get` are not opened by the dispatcher: `init` opens or
+  creates the home itself, and `get` never opens it. `get`, `log` and
+  `clear_log` write no line to the call log, and all four are `admin` in the
+  MCP server. `init` is not migrated: it returns
+  `{ home, created, converted, layout }`.
+- **`get`**, short: `{ home, state, version }`, with `generation` when the
+  home is ready, and `reason` and `fix` when it is broken (`missing`: no
+  home there; `outdated`: an older layout; both fixed by
+  `layerfs home init`; `failed`: `layerfs.json` cannot be read, or is of a
+  newer layout; the long form's `message` says which). Long:
+  `home, state, version, generation, reason, fix, message, layout, mode,
+  bundle, daemon, cache`. `mode` is the folder's permission bits as text
+  (`"0700"`); `bundle` and `daemon` are
+  `{ path, source, present, commit, dirty, matches }` for the Linux bundle
+  and the native daemon this build would use (`matches` is null when either
+  side cannot tell); `cache` is `{ path }`. It reads `layerfs.json`, the
+  folder's mode, `bundle.json`, the native daemon's record and the daemon
+  file, and changes nothing. The answer has no `warnings` list any more:
+  what is wrong with a bundle, a daemon or the folder's mode is the home
+  doctor's to say.
+- `generation` is a counter that moves each time a record of the home is
+  written or removed (a machine, Store, project, bucket, Sandbox or
+  Workspace record) and never for a read: a caller that kept a tree reads it
+  again only when the number differs.
+- **`get --with platforms`** adds `platforms: { host, items }`: `host` is
+  this computer's system and `items` one row per platform this build knows.
+  A row's short form is `{ platform, ready }`, with `missing` when something
+  is; its long form has `platform, how, backend, route, sqlite, postgresql,
+  ready, missing, version, options, description, socket, candidates`. It
+  needs no home. (`machine.platforms` answers the same rows until the
+  `machine` family is migrated.)
+- **`get --with tree`** adds `tree: { machines, stores, buckets }`, read
+  from the home's records only: each machine with its sqlite `stores` and
+  its `sandboxes`, the PostgreSQL Stores (which live on no machine) and the
+  buckets. A node's short form is its name, and its state only when it is
+  not `ready`; a Store adds `projects` and, when it is not sqlite,
+  `engine`; a Sandbox adds `workspaces`, each `{ workspace, branch }`. The
+  long forms are: machine `machine, platform, cpus, memory_bytes, state, op,
+  reason, fix, stores, sandboxes`; Store `store, engine, state, op,
+  blocked_by, reason, fix, projects, connections` (`connections`: the
+  machines a PostgreSQL Store is connected from); Sandbox `sandbox,
+  project, image, state, op, blocked_by, reason, fix, workspaces`; bucket
+  `bucket, provider`. A Store or Sandbox whose machine is stopped, busy or
+  broken is `blocked`, and `blocked_by` names that machine. A machine that
+  only a Store or Sandbox names, with no record of its own, is listed too
+  (`broken`, `missing`, unless it is `native` or `docker`), so nothing in the
+  home is left out.
+- **`log`** reads the home's call log (`trace/calls.jsonl`, then the one
+  file it rotates to), newest first. A row's short form is
+  `{ call, outcome, logged_at }`, with `project` when the call named one and
+  `error` when it was refused; the long form adds `duration_ms`, `client`,
+  `argv`, `commit` and `tag`. `outcome` is `refused` for a refused call
+  (its public code is `error`), else the result's word in snake_case, else
+  `ok`. `logged_at` is UTC, to the second. The filters: `call` (such as
+  `file.write`), `project`, `client` (`cli`, `node`, `python`, `rust`),
+  `tag` (exactly, or a prefix when it ends with `:`), `outcome` (a row's
+  `outcome` or its `error`) and `since` (milliseconds since 1970). `limit` is 1 to 1000, 200 by
+  default. The long form adds `skipped`: the lines of the page that could
+  not be read. A cursor from before a rotation or a `clear_log` is stale
+  and refused `InvalidInput`. An argument the log redacts (a path, a
+  command, a message, edit text, a URL, a pattern, content) is in `argv` as
+  its byte count, never its value.
+- **`clear_log`** truncates the call log in place and removes the rotated
+  file. Short: `{"ok":true}`; long: `{ ok, outcome: "cleared", line_count }`.
+- `home.log` and `home.clear_log` were `logs.list` and `logs.reset`; the old
+  names are gone, with no alias. A row's `at`, `ms`, `lines`, `has_more`
+  and `next` became `logged_at`, `duration_ms`, `items` and `next_cursor`.
+  The home's layout and settings are in [the home](home.md).
+
+```console
+$ layerfs home log --limit 5
+{"items":[{"call":"store.get","outcome":"refused","logged_at":"2026-11-18T13:32:21Z","error":"NotFound"},{"call":"store.create","outcome":"ok","logged_at":"2026-11-18T13:32:21Z"},{"call":"home.init","outcome":"ok","logged_at":"2026-11-18T13:32:21Z"}]}
+$ layerfs home log --limit 2 --detail
+{"items":[{"call":"store.get","outcome":"refused","logged_at":"2026-11-18T13:32:21Z","project":null,"error":"NotFound","duration_ms":0,"client":"cli","argv":["store","get","nope"],"commit":null,"tag":null},{"call":"store.create","outcome":"ok","logged_at":"2026-11-18T13:32:21Z","project":null,"error":null,"duration_ms":25,"client":"cli","argv":["store","create","shop"],"commit":null,"tag":null}],"next_cursor":"eyJmb3IiOiJob21lLmxvZyIsImF0IjoiYzEuMC40MzM3OTRiMy4zMGMwOGNmMTE1MjBlYTc2LjU3In0","skipped":0}
+$ layerfs home clear-log --detail
+{"ok":true,"outcome":"cleared","line_count":4}
+```
+
+(Four lines: the three above and the refused `file read` shown under
+[errors](#errors-and-exit-codes), all from the same run.)
 
 ### `project` (7)
 
@@ -124,7 +266,7 @@ Sandbox names (H §7.6).
 `project export` ([reference](../../architecture/api/sdk/project.md#projectexport)) exports a committed Branch snapshot. `destination` is an absolute path
 on the caller’s host, even for a worker Store. It must be absent or an empty
 real directory, outside the home, with an existing parent. A nonempty destination
-is `NotEmpty`; files and symlinks are refused. Same-parent staging is published
+is `InvalidInput` (raised as `NotEmpty`); files and symlinks are refused. Same-parent staging is published
 by atomic rename only after all bytes and metadata are written; failures clean
 up this call’s staging without deleting unrelated files.
 
@@ -211,7 +353,7 @@ A Commit record has `id`, `branch`, `parent`, `second_parent`, `base`,
 - Reads answer `kind: "ok"`, the `snapshot` they read (such as
   `agent@3a54ebd60426`), its `root` and the call's fields. `read` answers
   `text`, `start_line`, `end_line`, `truncated`, `next_line` and `size`.
-  A file that is not text is refused `Binary`.
+  A file that is not text is refused `InvalidInput` (raised as `Binary`).
 - Writes answer `{kind: "Committed", branch, head, commit}`. Without a
   message, the Commit message is `Apply filesystem changes`.
 - `mode` is a whole number permission mode, 0 to 0o7777 (in the shell, a
@@ -690,17 +832,15 @@ not tell. Not run for this manual (from source and tests).
 
 See [backups](machines-and-stores.md#backups). Not run for this manual.
 
-### `logs` (4)
+### `logs` (2)
 
-The home's call log, and two reads for a UI that shows a machine or Sandbox
-log and follows it (layerfs-project#178). The machine and Sandbox reads are
-in the
-[architecture guide](../../architecture/api/sdk/logs.md).
+Two reads for a UI that shows a machine or Sandbox log and follows it
+(layerfs-project#178), in the
+[architecture guide](../../architecture/api/sdk/logs.md). The home's own
+call log is [`home.log` and `home.clear_log`](#home-4).
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `list` | — | `op`, `project`, `client`, `tag`, `outcome`, `since`, `cursor`, `limit` | the calls made against this home, newest first |
-| `reset` | — | — | clears this home's call log |
 | `machine` | `machine` | `cursor`, `before`, `limit` (int) | one window of a machine's worker log |
 | `sandbox` | `sandbox` | `cursor`, `before`, `limit` (int) | one window of a Sandbox's daemon log |
 
@@ -864,9 +1004,13 @@ this manual.
 - **`--text`** prints a readable form instead: a file's text as it is; a
   result's list of records as a table with upper-case headers; other fields
   as `key  value` lines. It is one generic form, not a layout per call.
-- Paged results carry `items`, `has_more` (most families) and
-  `next_page_pos`; pass `next_page_pos` back as `page_pos`. The diff calls
-  also carry `next_cursor`, passed back as `cursor`.
+- A migrated call answers its short form, or its long form with `--detail`
+  ([the form of an answer](#the-form-of-an-answer)); its lists carry `items`
+  and `next_cursor`.
+- The paged results of a call that is not migrated carry `items`,
+  `has_more` (most families) and `next_page_pos`; pass `next_page_pos` back
+  as `page_pos`. The diff calls also carry `next_cursor`, passed back as
+  `cursor`.
 - Result keys are snake_case in every front end. Only identifier-like keys
   change; a key that holds a path or a name never does.
 - Bytes are `Buffer`s in Node and `bytes` in Python.
@@ -884,7 +1028,15 @@ a result with no exit code, 1 for a code outside 0 to 255); 125 still means
 LayerFS refused or failed. `layerfs help` and `layerfs --version` need no
 home.
 
-A refusal is `{"code", "message", "detail"}`. Run:
+A refusal is one line of JSON: `{"error", "message"}`, then `fix` when
+LayerFS knows one runnable shell line that clears it, then the fields the
+next call needs, flat (a `Conflict` names the head as `commit`, a `Busy` or
+`Unresolved` its `op`, a `Dirty` its paths). `--detail` asks for its long
+form: `fix` is there even when null, and `detail` holds what else the
+refusing code recorded. Node and Python raise `LayerFSError` with the same
+fields as properties (`error`, also readable as `code`; `message`; `fix`;
+`detail`, null unless the call asked `detail`; and each flat field; Python
+also keeps them in `fields`). Run:
 
 ```console
 $ layerfs file read shop/api
@@ -892,32 +1044,48 @@ layerfs: file.read takes 3 to 4 positional arguments, not 1
 $ echo $?
 2
 
-$ layerfs file read shop/api agent /nope
-{"code":"NoSuchPath","message":"/nope does not exist at agent@71e889e68390","detail":{"path":"/nope"}}
+$ layerfs store get nope
+{"error":"NotFound","message":"no Store named nope"}
 $ echo $?
 125
+
+$ layerfs file read nope/p main /a --detail
+{"error":"NotFound","message":"no Store named nope","fix":null,"detail":{"code":"NoSuchStore"}}
 ```
 
-Codes seen in the 2.0 library include:
+`error` is one of thirteen codes:
 
 | Code | Meaning |
 | --- | --- |
-| `InvalidInput` | the request is wrong for this name or kind; nothing happened |
-| `NotFound` | no machine, bucket or Store of that name, for a call that names it directly (`store get`, `machine get`, `backup create`, the Store of `project init`, …) |
-| `NoSuchStore`, `NoSuchProject` | a call that names `<store>/<project>` whose Store or project is missing (1.1.0's codes, S §2.9) |
-| `NoSuchBranch`, `NoSuchCommit` | no such Branch, or no such Commit on it (`branch.get`, `commit.get`, …) |
-| `NoSuchPath`, `NoSuchSandbox`, `NoSuchProcess`, … | 1.1.0's codes for paths, Sandboxes and processes |
+| `NotFound` | no machine, bucket, Store, project, Branch, Commit, path, Sandbox or Workspace of that name; a path a project hid |
 | `Exists` | the name is taken, the same database or bucket is already connected (under any name), or a bucket object was exported from another home |
-| `InUse` | held: running Sandboxes, processes with the Store open, Stores on a machine; a layout 2 home with any of these, or with a move, removal or create still running, which is not converted yet ([the home](home.md#a-layout-2-home)) |
-| `Busy` | an operation runs on the entity: a Store being pushed, pulled or removed, a machine being made or removed, a Sandbox being created or closed; the message names it (`op` id and phase) and its process (#536 §7.1); `detail` is `{entity: {kind, name}, phase, op}`. Also: another project is being added to the same Store; a Store's writable open met SQLite's busy lock before any effect (the open wrote nothing, so the caller may repeat the call) |
+| `InUse` | held: running Sandboxes, mounted Workspaces, processes with the Store open, Stores on a machine; a layout 2 home with any of these, or with a move, removal or create still running, which is not converted yet ([the home](home.md#a-layout-2-home)) |
+| `Busy` | an operation runs on the entity: a Store being pushed, pulled or removed, a machine being made or removed, a Sandbox being created or closed; the message names it (`op` id and phase) and its process (#536 §7.1); the long form's `detail` is `{entity: {kind, name}, phase, op}`. Also: another project is being added to the same Store; a Store's writable open met SQLite's busy lock before any effect (the open wrote nothing, so the caller may repeat the call) |
 | `Unresolved` | an earlier operation on the entity ended with its outcome not known; its process is gone and its `op` stays. The message names the call that shows it (`store status`, `machine status`, `sandbox get`) and the one that clears it (`store remove`, `machine remove`, `sandbox close`); `detail` as for `Busy` |
-| `Unsupported` | not possible here, or not built (see [limitations](limitations.md)); a missing tool is listed in `detail.missing` |
-| `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret |
-| `Conflict` | a merge or Commit conflict; for `backup.restore`, the Store changed since its last backup or restore |
-| `Binary` | `file.read` of a file that is not text |
-| `Capacity` | a Sandbox's Workspace limit; a `store push` or `store pull` target without room for the Store (`detail.needed`, `detail.free`) |
+| `Conflict` | a merge or Commit conflict, or a head that moved; for `backup.restore`, the Store changed since its last backup or restore |
+| `Dirty` | uncommitted changes stand in the way |
+| `Capacity` | a Sandbox's Workspace limit; a `store push` or `store pull` target without room for the Store (the long form's `detail.needed`, `detail.free`); no space left |
+| `InvalidInput` | the request is wrong for this name or kind (a file where a folder is needed, a binary file read as text, a reserved name, a write to `main`, an unknown `with` section, a cursor of another call); nothing happened |
+| `Unsupported` | not possible here, or not built (see [limitations](limitations.md)); a missing tool is listed in the long form's `detail.missing` |
+| `Unavailable` | a server, bucket, worker or host cannot be reached, refused the login or secret, or did not answer in time |
 | `Failed` | it was tried and did not happen; whatever exists is kept |
 | `Unknown` | the outcome is not known; both sides are kept and logged in `log/uncertain.jsonl`, and the entity keeps an uncertain `op` (later calls on it are `Unresolved`) |
+
+The control and engine crates raise more specific codes; the dispatcher
+folds each into its public one, and the long form keeps the raised one as
+`detail.code`. The home's call log stores the raised code and `home.log`
+answers the public one.
+
+| Public code | Raised codes it holds |
+| --- | --- |
+| `NotFound` | `NoSuchStore`, `NoSuchProject`, `NoSuchBranch`, `NoSuchCommit`, `NoSuchPath`, `NoSuchSandbox`, `NoStore`, `NoCommit`, `NotInHistory`, `NotMounted`, `Removed`, `NoMatch` |
+| `Exists` | `NameTaken` |
+| `InUse` | `MountsActive` |
+| `Conflict` | `HeadMoved` |
+| `InvalidInput` | `NotFile`, `IsDirectory`, `NotDirectory`, `NotEmpty`, `Binary`, `ReservedName`, `ReadOnly`, `NoMergeBase`, `TooLarge`, `AmbiguousMatch` |
+| `Capacity` | `NoSpace` |
+| `Unavailable` | `Denied`, `Unauthorized`, `StaleSandbox`, `StaleStore`, `Timeout` |
+| `Failed` | `UnknownMethod`, and any code this table does not name |
 
 Every call is one attempt. After `Unknown`, read the state with `list`,
 `get` or `status` before acting again.
@@ -927,7 +1095,9 @@ Every call is one attempt. After `Unknown`, read the state with `list`,
 | Switch | Calls | Does |
 | --- | --- | --- |
 | `--text` | all | a readable result instead of JSON |
-| `--progress` | `project init`, `project export`, `workspace exec`, `store push`, `store pull`, `backup create`, `backup restore` | progress as one JSON line per update on stderr, `{"progress": {…}}`; for `workspace exec`, the exec id first |
+| `--detail` | all | the long form of a migrated call's answer, and of any call's refusal ([the form of an answer](#the-form-of-an-answer)) |
+| `--with <a,b>` | the calls whose row lists sections (`home get`) | adds the named sections to the answer |
+| `--progress` | `project init`, `project export`, `workspace exec`, `store push`, `store pull`, `backup create`, `backup restore` | progress as one JSON line per event on stderr, the event itself: `{"phase", "done", "total", …}`; for `workspace exec`, the exec id first |
 | `--stream` | `workspace exec` | passes the command's stdout and stderr through (output over 1 MiB too) and exits with its code |
 | `--from <file>` | `file write`, `file apply` | reads the content or JSON from a file instead of stdin |
 | `--<option>-from <file>` | any optional text option (`--old-from`, `--new-from`, `--message-from`) | reads the option's value from a file |
@@ -941,8 +1111,8 @@ Every call is one attempt. After `Unknown`, read the state with `list`,
 (`sandbox close … --force`) is true; `--force=false` is false.
 
 `store push` and `store pull` report their phases (`check`, `snapshot`,
-`send`, `verify`, `install`, `record`, `retire`) as `{"progress": {"phase",
-"done", "total"}}`: `done` and `total` are bytes during `send` and null in
+`send`, `verify`, `install`, `record`, `retire`) as `{"phase", "done",
+"total"}`: `done` and `total` are bytes during `send` and null in
 the other phases. `project init` reports the same shape on every route:
 `check`, `send` (only into a sqlite Store on another machine, while the
 folder is copied), `install` (Init adds the folder) and `record` (from
@@ -986,7 +1156,7 @@ current form; the answers follow from the code but were not rerun:
 
 ```console
 $ layerfs commit list shop/api agent --scope /src --scope-project shop/api
-{"code":"InvalidInput","message":"out of scope: history","detail":null}
+{"error":"InvalidInput","message":"out of scope: history"}
 $ layerfs file list shop/api agent /src --scope /src --scope-project shop/api
-{"code":"InvalidInput","message":"out of scope: branch","detail":null}
+{"error":"InvalidInput","message":"out of scope: branch"}
 ```

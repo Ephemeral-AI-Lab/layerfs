@@ -12,18 +12,51 @@ What a call answers when it does not succeed, and what a running call sends its 
 
 Every call answers `Outcome = Result<SdkValue, SdkRefusal>`
 ([`outcome.rs`](../../../../control/crates/layerfs-home/src/outcome.rs)). A
-refusal is `{ code, message, detail }`: `code` is a stable text, `message` is
-for people and names the next call where there is one, `detail` is null or a
-map (`{entity, phase, op}`, `{missing}`, `{needed, free}`, `{path}`, ...). The
-front ends carry it unchanged.
+refusal is `{ code, message, detail }` inside the library: `code` is a stable
+text, `message` is for people and names the next call where there is one,
+`detail` is null or a map (`{entity, phase, op}`, `{missing}`,
+`{needed, free}`, `{path}`, ...).
+
+At the call boundary (call surface 2.0) the dispatcher folds the code into
+one of **thirteen public codes** (`outcome::CODES`, `FOLDS`, `public_code`;
+[`calls/refusal.rs`](../../../../api/crates/layerfs-api/src/calls/refusal.rs)
+`public`) and every front end prints or raises one map
+(`refusal::value`): `{ error, message }`, then `fix` when there is one, then
+the fields the next call needs, flat. The long form (the call asked
+`detail`) always has `fix`, and adds `detail`: what the refusing code
+recorded, with the raised code as `detail.code` when it was folded. The
+call log keeps the raised code.
 
 ```text
- SdkRefusal { code, message, detail }
-   Node:    throws LayerFSError (code, message, detail)
-   Python:  raises layerfs.LayerFSError (.code, .message, .detail)
-   CLI:     JSON on stderr, exit 125
-   text:    {"refused": {"code", "message", "detail"}}   (call_json)
+ SdkRefusal { code, message, detail }        detail.fix, detail.next: conventions
+   dispatcher:  code -> public code (the raised one kept as detail.code)
+   short:       {"error", "message", "fix"?, ...next fields}
+   long:        {"error", "message", "fix", ...next fields, "detail"}
+   Node:    throws LayerFSError (error = code, message, fix, fields, detail)
+   Python:  raises layerfs.LayerFSError (.error = .code, .message, .fix, .fields, .detail)
+   CLI:     one JSON line on stderr, exit 125 (2 for a wrong command line)
+   MCP:     isError, the same map as text
+   text:    {"refused": <the map>}   (call_json)
 ```
+
+Control code attaches the two extras with `outcome::with_fix(refusal, "one
+shell line")` and `outcome::with_next(refusal, "commit", head)`; they travel
+in `detail` under the keys `fix` and `next`, so a refusal that crosses a
+worker frame keeps them, and `refusal::value` lifts them out.
+
+| Public code | Raised codes it holds (`FOLDS`) |
+| --- | --- |
+| `NotFound` | `NoSuchStore`, `NoSuchProject`, `NoSuchBranch`, `NoSuchCommit`, `NoSuchPath`, `NoSuchSandbox`, `NoStore`, `NoCommit`, `NotInHistory`, `NotMounted`, `Removed`, `NoMatch` |
+| `Exists` | `NameTaken` |
+| `InUse` | `MountsActive` |
+| `Conflict` | `HeadMoved` |
+| `InvalidInput` | `NotFile`, `IsDirectory`, `NotDirectory`, `NotEmpty`, `Binary`, `ReservedName`, `ReadOnly`, `NoMergeBase`, `TooLarge`, `AmbiguousMatch` |
+| `Capacity` | `NoSpace` |
+| `Unavailable` | `Denied`, `Unauthorized`, `StaleSandbox`, `StaleStore`, `Timeout` |
+| `Failed` | `UnknownMethod`, and any code neither list names |
+
+`Busy`, `Unresolved`, `Dirty`, `Unsupported` and `Unknown` hold only
+themselves. The table below lists the codes as they are raised.
 
 | Code | Meaning | Raised in (examples) |
 | --- | --- | --- |
@@ -124,8 +157,10 @@ staged copy when its Init ends
 
 Every call gets one event sink, [`Context`](../../../../api/crates/layerfs-api/src/calls/context.rs),
 over [`Events`](../../../../control/crates/layerfs-home/src/events.rs):
-`progress(v)` sends `{ progress: v }`, `event(e)` passes a worker's event as
-it came, `output(stream, bytes)` sends `{ stream, bytes }`. Events are sent on
+`progress(v)` sends `{ progress: v }`, `phase(phase, done, total, extra)`
+sends the call surface's event `{ progress: { phase, done, total, … } }`
+(`done` and `total` null where the phase has no count), `event(e)` passes a
+worker's event as it came, `output(stream, bytes)` sends `{ stream, bytes }`. Events are sent on
 the call's own thread, before it returns.
 
 Twelve calls declare the shared `PROGRESS` option (`on_progress`; CLI
@@ -171,7 +206,7 @@ event.
 | --- | --- | --- | --- |
 | Node | `on_progress(event.progress)`, the payload only. The addon counts queued events and the call settles only after all are delivered | a synchronous throw becomes `LayerFSHandlerWarning` and later events still arrive; an `async` handler's rejected promise is not awaited, so Node's unhandled-rejection rule applies | [`index.js`](../../../../api/node/src/index.js), [`layerfs-node/src/call.rs`](../../../../api/crates/layerfs-node/src/call.rs) |
 | Python | `on_progress(event["progress"])` on the calling thread; aio queues on the loop and awaits a barrier behind the events before returning | `sys.unraisablehook`; aio: the loop's exception handler; later events still arrive | [`_client.py`](../../../../api/python/src/layerfs/_client.py), [`aio.py`](../../../../api/python/src/layerfs/aio.py), [`layerfs-python/src/call.rs`](../../../../api/crates/layerfs-python/src/call.rs) |
-| CLI | with `--progress`: a status line on a terminal stderr, else (or with `LAYERFS_PROGRESS_JSON` set) the whole event as one JSON line on stderr; written before the result | a write that fails is ignored; the exit code is the outcome's | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) |
+| CLI | with `--progress`: a status line on a terminal stderr, else (or with `LAYERFS_PROGRESS_JSON` set) the event itself as one JSON line on stderr (`{"phase","done","total",…}`, without the `progress` wrapper); written before the result | a write that fails is ignored; the exit code is the outcome's | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) |
 
 Without a function (SDK) or `--progress` (CLI), progress events are dropped.
 An event with neither a `progress` nor a `stream` key reaches no function in

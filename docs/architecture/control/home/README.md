@@ -79,10 +79,13 @@ id its caller sent
 | Records one intent | a multi-step operation writes `op` before its first effect and drops it with its result in one write | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) |
 | Checks names | each kind of name is a type checked once by `parse` | [`names.rs`](../../../../control/crates/layerfs-home/src/names.rs) |
 | Resolves secrets | password references resolved per call; worker secret and daemon keys in 0600 files | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) |
-| Streams events | one event stream per running call: progress, a worker's events, command output | [`events.rs`](../../../../control/crates/layerfs-home/src/events.rs) |
+| Says a state | the one state of a machine, Store, project, Sandbox or Workspace: `ready`, `busy`, `stopped`, `blocked`, `broken` or `unknown`, each with its companion keys and no other (`op`, `blocked_by`, `reason` and `fix`, `observed_at`); `State::write` sets them on a result, and `State::blocks` gives what needs a thing its `blocked` state, naming the root of the block | [`state.rs`](../../../../control/crates/layerfs-home/src/state.rs) |
+| Counts record changes | `generation`, a number that moves when a record of the home is written or removed ([below](#the-generation-counter)) | [`home/generation.rs`](../../../../control/crates/layerfs-home/src/home/generation.rs) |
+| Folds refusal codes | the thirteen public codes and the raised codes each holds; a refusal's `fix` line and the flat fields its next call needs | [`outcome.rs`](../../../../control/crates/layerfs-home/src/outcome.rs) `CODES`, `FOLDS`, `with_fix`, `with_next` |
+| Streams events | one event stream per running call: progress (`phase`: `{ phase, done, total }`), a worker's events, command output | [`events.rs`](../../../../control/crates/layerfs-home/src/events.rs) |
 | Names this process | pid, kernel start time and boot id, so a reused pid does not keep an `op`, lease or forward alive | [`process.rs`](../../../../control/crates/layerfs-home/src/process.rs) |
 | Writes traces and the call log | `LAYERFS_TRACE` lines and `trace/calls.jsonl` | [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs), [`logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs) |
-| Reads a log by cursor | one window of a log file and the one file it rotates to: its last lines, or the lines after or before a cursor that names the file's identity; shared by `logs.list` (identity and cursor text) and the inspect route | [`tail.rs`](../../../../control/crates/layerfs-home/src/tail.rs), [Inspection](../sandboxes/inspect.md#the-cursor) |
+| Reads a log by cursor | one window of a log file and the one file it rotates to: its last lines, or the lines after or before a cursor that names the file's identity; shared by `home.log` (identity and cursor text) and the inspect route | [`tail.rs`](../../../../control/crates/layerfs-home/src/tail.rs), [Inspection](../sandboxes/inspect.md#the-cursor) |
 | Prints JSON | whole numbers only; non-UTF-8 bytes as `{"base64": ..}`; worker frames carry byte values as attachments | [`json.rs`](../../../../control/crates/layerfs-home/src/json.rs) |
 
 ### Entities
@@ -142,7 +145,7 @@ is in the home; a worker's root that holds a sqlite Store's file keeps
 
 | Names | Whose | Source |
 | --- | --- | --- |
-| `layerfs.json`, `layerfs.lock`, `machine/`, `store/`, `sandbox/`, `backup/`, `log/`, `trace/` | LayerFS's: every path it builds in a home starts with one of them | [`home/paths.rs`](../../../../control/crates/layerfs-home/src/home/paths.rs) |
+| `layerfs.json`, `layerfs.lock`, `generation`, `machine/`, `store/`, `sandbox/`, `backup/`, `log/`, `trace/` | LayerFS's: every path it builds in a home starts with one of them | [`home/paths.rs`](../../../../control/crates/layerfs-home/src/home/paths.rs) |
 | `secret/`, `runtime/`, `job/`, `stat/`, `preset/` | an integration's. LayerFS creates none of them, and neither `doctor`'s scan (four fixed folders) nor its leftover walk (which never lists the home itself) lists, reads or reports them | [`doctor/scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `scan`, [`doctor/leftovers.rs`](../../../../control/crates/layerfs-control/src/doctor/leftovers.rs) |
 
 ### The `op` intent
@@ -173,6 +176,10 @@ is in the home; a worker's root that holds a sqlite Store's file keeps
 | `sandbox/<n>/lock` | the Sandbox and Workspace records | 120 s, `Unavailable` | [`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) |
 | `sandbox/<n>/serve.lock` | a Sandbox start, Workspace mount or close (the discovery turn) | 60 s, `Busy` | [`project/discovery.rs`](../../../../control/crates/layerfs-store/src/project/discovery.rs) |
 | `store/<s>/open/<pid>` | a lease: this process uses the Store | taken under the Store lock | [`lease.rs`](../../../../control/crates/layerfs-store/src/lease.rs) |
+
+`generation` is a seventh lock file, a leaf: its `flock` is taken last, for
+one read and one write, and nothing is taken while it is held
+([the generation counter](#the-generation-counter)).
 
 Waits are readiness waits, not retries. Within one process, calls take
 turns before the file lock (a `flock` belongs to the open file
@@ -240,6 +247,29 @@ No call moves or copies a home, and nothing rewrites a path a record holds.
 | A record may name a file outside the home: `image_archive` and `daemon` of a machine record, `file_1_1_0` of a placed Store, a `file:` secret reference | these are neither moved nor copied with it | [`migrate/import_env.rs`](../../../../control/crates/layerfs-control/src/migrate/import_env.rs), [`migrate/volume.rs`](../../../../control/crates/layerfs-control/src/migrate/volume.rs), [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) |
 | The id in `layerfs.json` is written once and read as it is | a copy has the original's id, so the same `layerfs-<id8>-` prefix and the same recorded `vm_name`s: both homes drive the same VMs, containers and volumes (a `docker` start replaces the worker container of that name and mounts the same volume), and on a machine a Sandbox of one name has the same record and run folder for both | [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs), [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) `start` |
 
+### The generation counter
+
+`<home>/generation` holds one decimal number. It moves by one each time a
+record of the home is written or removed, and never for a read, so a client
+that keeps what `home get --with tree` answered reads the records again only
+when `home.get`'s `generation` differs. It is not a version of any record
+and orders nothing: two changes may share one read.
+
+| Moves it | Where |
+| --- | --- |
+| a machine, Store, project, bucket, Sandbox or Workspace record written | `MachineRecord::write`, `StoreRecord::write`, `ProjectRecord::write`, `discovery::save_project`, `BucketRecord::write`, `SandboxRecord::write_in`, `WorkspaceRecord::write` |
+| one of those removed | the machine, Store, project, bucket, Sandbox and Workspace removals, and the rollbacks of a create that had published its record |
+
+A write moves it by calling `generation::moved(home)` (or `moved_above(path)`
+where the writer holds only a record's path), so a write opts out by not
+calling it: `layerfs.json`, secrets, a command's `exec` record, a lease, an
+observation a later package may keep in a file, and the conversion of an
+older home (which writes records through `write_record` directly) do not
+move it. Under a machine's worker root there is no `layerfs.json`, and
+nothing is counted. Counting is best effort under the file's own `flock`:
+a count that cannot be written changes no outcome. A reader takes no lock
+and reads 0 until the first change.
+
 ### Traces and the call log
 
 | Output | Written when | Source |
@@ -258,22 +288,24 @@ No call moves or copies a home, and nothing rewrites a path a record holds.
 | `at`, `ms` | wall-clock start (ms since the epoch) and duration on a monotonic clock |
 | `client` | `cli`, `node`, `python` or `rust` |
 | `argv` | the CLI words that would make the same call, rendered from the call table and the checked arguments ([`render.rs`](../../../../api/crates/layerfs-api/src/calls/render.rs)); a call refused before its arguments were checked logs `[family, call]` |
-| `outcome` | `"ok"` or the refusal code; messages and `detail` are never logged |
-| `kind`, `commit`, `layer` | the result's `kind` and the Commit or Layer a saving call saved or names; no other result value |
+| `outcome` | `"ok"` or the refusal code as it was raised (`home.log` answers its public code); messages and `detail` are never logged |
+| `kind`, `commit`, `layer` | the result's word (a capitalized `kind`, or a migrated call's `outcome`) and the Commit or Layer a saving call saved or names; no other result value |
 | `tag` | per-call `log_tag`, else `LAYERFS_LOGS_TAG`; at most 128 bytes, no control characters, else dropped |
 
-Values are cut to 200 characters. Content and Json arguments and the Text
-arguments `command`, `message`, `old`, `new`, `password`, `url` and every
-path argument (`path`, `left_path`, `right_path`, `from_path`, `to_path`,
-`path_prefix`) are logged as `<N bytes>` of the normalized form, one leading
-`/` stripped (`/a` and `a` are both `<1 bytes>`); a glob or grep `pattern`
-counts its own bytes. A refusal contributes only its code: its message and
+Values are cut to 200 characters. Content and Json arguments and every
+argument its table entry flags `redact` (today the Text arguments `command`,
+`message`, `old`, `new`, `password`, `url`, `pattern` and every path
+argument: `path`, `left_path`, `right_path`, `from_path`, `to_path`,
+`path_prefix`) are logged as `<N bytes>`; a path counts its normalized form,
+one leading `/` stripped (`/a` and `a` are both `<1 bytes>`), and a glob or
+grep `pattern` counts its own bytes. A refusal contributes only its code: its message and
 `detail` are never logged.
 
 No line is written for a running or killed call, worker requests, a
 call's internal parts, commands outside the call table (`help`,
-`--version`, `worker`, `import-env`, `doctor`), usage errors or the `logs`
-calls. `LAYERFS_LOGS=0` turns the log off for the process; it is
+`--version`, `worker`, `import-env`, `doctor`), usage errors or a call
+whose entry is `quiet` (`home.get`, `home.log`, `home.clear_log`, the `logs`
+calls and the monitoring reads). `LAYERFS_LOGS=0` turns the log off for the process; it is
 independent of `LAYERFS_TRACE`.
 
 ## Invariants
@@ -307,9 +339,9 @@ independent of `LAYERFS_TRACE`.
 | Sandbox name ending in `.root` | `InvalidInput`: `<name>.root` in the run root is another Sandbox's private root | [`create.rs`](../../../../control/crates/layerfs-sandbox/src/create.rs) |
 | Password reference unset or unreadable | `Unavailable`; a password that is not a reference is `InvalidInput` | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) |
 | Home of a newer layout | `Unsupported` | [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs) |
-| Call log size | rotates past 16 MiB to the one `calls.1.jsonl` under a non-blocking `flock` on `calls.lock`; `logs.reset` waits for that lock, truncates in place and removes the rotated file | [`logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs) |
+| Call log size | rotates past 16 MiB to the one `calls.1.jsonl` under a non-blocking `flock` on `calls.lock`; `home.clear_log` waits for that lock, truncates in place and removes the rotated file | [`logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs) |
 | Other log sizes | One rule: past 16 MiB a log moves once to its `.1` name, replacing the one before. `log/*.jsonl` (`leases`, `migration-failures`, `import-env`, and `exec` on the side that keeps the command records): a writer opens, appends one line and closes, and a log then past the size is renamed to `<name>.1.jsonl` under a non-blocking `flock` on `log/rotate.lock`; a writer that does not get the lock skips it. `log/uncertain.jsonl` never rotates: it is the only record of uncertain outcomes. `machine/<m>/forward.log` is checked when a forward starts: it is copied to `forward.1.log` and emptied in place, never renamed, since the machine's other forwards hold it open ([forwards](../machines/workers-and-reach.md#forwards)). A machine's `/layerfs/data/log/worker.log` is renamed to `worker.1.log` only when a worker starts, never while one runs ([workers](../machines/workers-and-reach.md#the-workers-log)). A Sandbox's `daemon.log` is new with its run folder and goes with it: it is never rotated and there is no `daemon.1.log` ([Backends](../sandboxes/backends.md#local-one-daemon-process-on-this-kernel)) | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) `log_line`, [`log_file.rs`](../../../../engine/crates/layerfs-bridge/src/log_file.rs), [`setup/forward.rs`](../../../../control/crates/layerfs-platform/src/setup/forward.rs), [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) `log_start` |
-| `logs.list` page | default 100, at most 1000 lines; a cursor after a rotation or reset is stale (`InvalidInput`); a torn line is counted in `skipped` | same |
+| `home.log` page | default 200, at most 1000 lines, and at most 64 KiB of rows before it ends early with a cursor; a cursor carries its call and filters (another call's, or one given with different filters, is `InvalidInput`); a cursor after a rotation or clear is stale (`InvalidInput`); a torn line is counted in `skipped` | same |
 
 ## Demonstration
 

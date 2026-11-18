@@ -47,7 +47,10 @@ const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", fo
   any call.
 - Results are plain objects with snake_case keys. Bytes are `Buffer`s;
   content to write may be a string or a `Buffer`.
-- A refusal throws `LayerFSError` with `code`, `message` and `detail`.
+- A refusal throws `LayerFSError` with `error` (also readable as `code`),
+  `message`, `fix` and the fields the next call needs; `detail` is set when
+  the call asked the long form (`{ detail: true }`). See
+  [the form of an answer](calls.md#the-form-of-an-answer).
 - `table` is the call table, `[{ family, call, args, options, help }]`;
   `families` lists the twelve families.
 - `layerfs.doctor({ home })` (also a named export) is
@@ -103,8 +106,10 @@ lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/web", "folder": "
   `InvalidInput`.
 - Results are dicts with snake_case keys. File content is `str` or
   `bytes`.
-- A refusal raises `layerfs.LayerFSError` with `.code`, `.message` and
-  `.detail`.
+- A refusal raises `layerfs.LayerFSError` with `.error` (also `.code`),
+  `.message`, `.fix` and the fields the next call needs (attributes, and
+  the `.fields` dict); `.detail` is set when the call asked the long form
+  (`detail=True`). `with` is a Python keyword, so the option is `with_`.
 - `layerfs.TABLE` is the call table and `layerfs.FAMILIES` the nine
   families.
 - `layerfs.doctor(home=None)` is [`layerfs doctor`](calls.md#layerfs-doctor),

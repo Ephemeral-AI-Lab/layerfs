@@ -290,7 +290,7 @@ and examples.
 
 | Family | Calls |
 | --- | --- |
-| home (admin) | `init()`, `get()`: create or convert this home, and read the bundle and daemon this build would use; no skill page yet, see `docs/architecture/api/sdk/home.md` in the repository |
+| home (admin) | `init()`, `get({ with, detail })`, `log({ call, project, client, tag, outcome, since, limit, cursor, detail })`, `clear_log()`: create or convert this home, read its state (with `with: ["tree"]`, everything in it), and read or clear its call log ([logs](references/methods/logs.md)); no skill page of its own, see `docs/architecture/api/sdk/home.md` in the repository |
 | [project](references/methods/project.md) | `init(project, folder, { timeout, on_progress })`, `list(store?, { page_size, page_pos })`, `get(project)`, `stats(project, branch?, commit?)`, `export(project, destination, { branch, on_progress })`, `delete(project)`, `remove_file(project, path)` |
 | [branch](references/methods/branch.md) | `list(project, { page_size, page_pos, page })`, `get(project, branch)`, `commits(project, branch, { page, page_size, at_commit, include_storage })`, `get_commit(project, branch, commit)`, `fork(project, name, from_branch, from_commit?)`, `merge(project, name, a, b, { message, units })`, `publish(project, branch, commit?)`, `diff(project, from_branch, to_branch, { paths_only, page_size, page_pos, cursor, page, from_commit, to_commit, path_prefix, include_attribution, continuation })`, `remove(project, branch)` |
 | [commit](references/methods/commit.md) | `list(project, branch, { page_size, page_pos })`, `get(project, branch, commit)`, `diff(project, from_commit, to_commit, { paths_only, page_size, page_pos, cursor })` |
@@ -300,7 +300,7 @@ and examples.
 | [machine](references/methods/machine.md) | `list()`, `platforms()`, `get(name)`, `images(name)`, `load(name, image, { on_progress })`, `prune(name, image?, { unused })`, `status(name)`, `stats(machine)`, `space(machine)`, `files(machine, path?, { depth, cursor, limit, offset, length })`, `start(name, { on_progress })`, `stop(name, { force })`, `create(name, platform, { cpus, memory, disk, image, os_image, on_progress })`, `remove(name)`, `update(name, { cpus, memory, image, docker, wsl, daemon })` |
 | [store](references/methods/store.md) | `list()`, `get(name)`, `status(name)`, `stats(name)`, `create(name)`, `connect(name, url, { password, synchronous_commit })`, `attach(name, machine, { url, password })`, `detach(name, machine)`, `push(name, machine, { on_progress })`, `pull(name, { on_progress })`, `remove(name)`, `compact(name)`, `disconnect(name)` |
 | [backup](references/methods/backup.md) | `connect(name, url, { key, region, part_size })`, `disconnect(name)`, `list(bucket?)`, `create(store, bucket, file?, { on_progress })`, `restore(store, bucket, file?, { on_progress })` |
-| [logs](references/methods/logs.md) | `list({ op, project, client, tag, outcome, since, cursor, limit })`, `reset()`, `machine(machine, { cursor, before, limit })`, `sandbox(sandbox, { cursor, before, limit })` |
+| [logs](references/methods/logs.md) | `machine(machine, { cursor, before, limit })`, `sandbox(sandbox, { cursor, before, limit })` |
 | [doctor](references/methods/doctor.md) | `fix(id)` |
 
 One top-level function is outside the families: `doctor({ home })` (shell
