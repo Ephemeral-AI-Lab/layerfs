@@ -42,7 +42,7 @@ check and proves a missing, renamed or extra call is reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-85 calls in 10 families, counted from the Node table. Calls present: Node 85, Python 85, Python `aio` 85, CLI 85, MCP 85 (17 in `work`, 68 admin only; 0 UI only, in no profile).
+85 calls in 10 families, counted from the Node table. Calls present: Node 85, Python 85, Python `aio` 85, CLI 85, MCP 85 (17 in `work`, 68 admin only).
 
 Argument names that are Python keywords: from.
 

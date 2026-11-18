@@ -261,7 +261,8 @@ test("CLI export help and parser: two positionals, branch/progress, no commit", 
     const help = shell(f.home, ["help", "project", "export"]);
     assert.equal(help.status, 0, help.stderr);
     assert.match(help.stdout, /project export <project> <destination>/);
-    assert.match(help.stdout, /\[--branch <branch>\].*\[--progress\]/);
+    // 2.0 usage: an option value is a short word (`[--branch B] [--at C]`)
+    assert.match(help.stdout, /\[--branch B\] \[--at C\] \[--progress\]/);
     assert.doesNotMatch(help.stdout, /--commit/);
     for (const words of [["project", "export", "shop/api"],
       ["project", "export", "shop/api", "/exports/api", "--commit", "abc"],

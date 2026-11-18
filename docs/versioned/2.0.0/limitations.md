@@ -136,7 +136,7 @@ step commits.
   on the id it reports was tested with a stand-in `docker`
   only; a real Engine (Docker Desktop's classic or containerd image store)
   was not used.
-- **Images from Docker** (`sandbox create --image <ref>`, `machine load`).
+- **Images from Docker** (`sandbox create --image <ref>`, `machine load-image`).
   Tested with a stand-in `docker` and live on the `docker` machine with
   Docker Desktop's containerd store. An image runs the daemon inside its
   own root, so images without glibc 2.34, libssl3 and bash (alpine,
