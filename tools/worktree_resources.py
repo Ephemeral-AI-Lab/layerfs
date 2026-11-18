@@ -184,6 +184,11 @@ def docker_build(record, command, extra=(), network="none"):
         f"type=volume,src={record['linux_target_volume']},dst=/work/target,volume-nocopy",
         "--mount",
         f"type=volume,src={record['linux_cargo_volume']},dst=/cargo-home,volume-nocopy",
+        # an anonymous volume (ext4 in the Docker VM, removed with the
+        # container): a Store opened under the temp folder needs a filesystem
+        # LayerFS supports, and the image's own /tmp is overlayfs
+        "--mount",
+        "type=volume,dst=/tmp",
         *[v for k, value in env.items() for v in ("-e", k + "=" + value)],
         *extra,
         "-w",

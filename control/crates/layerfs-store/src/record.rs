@@ -5,12 +5,13 @@
 //! [`StoreKind`]; no caller compares a record's `kind` text, and no caller
 //! reads or writes a Store record's fields but through [`StoreRecord`].
 use crate::backup::record::StoreLink;
+use crate::intent;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 pub use layerfs_bridge::StoreKind;
 use layerfs_home::home::entity_lock::{self, EntityLock};
 use layerfs_home::home::{self, paths, read_record, with_field, write_entity};
-use layerfs_home::op::{self, Op, Standing};
-use layerfs_home::outcome::{failed, refused, View};
+use layerfs_home::op::{self, Op};
+use layerfs_home::outcome::{failed, refused, with_fix, with_next};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -166,42 +167,11 @@ pub struct StoreRecord {
     fields: SdkValue,
 }
 
-/// What a Store's result shows beside its record.
+/// What a Store's record view shows beside its record.
 #[derive(Clone, Debug, Default)]
 pub struct StoreDerived {
     /// The names of its projects' records, sorted.
     pub projects: Vec<String>,
-    /// Its state, shown by a list item (a get shows none).
-    pub state: Option<StoreState>,
-}
-
-/// A Store's state (#536 §7.2), as `store.status` and each `store.list`
-/// item show it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum StoreState {
-    /// No other process holds it.
-    Idle,
-    /// Another live process holds its lease.
-    InUse,
-    /// A live process runs an operation on it (its record's `op`).
-    Busy,
-    /// Its machine did not answer (a sqlite Store's file could not be read).
-    Down,
-    /// A gone process left an operation on it whose outcome is not known.
-    Unresolved,
-}
-
-impl StoreState {
-    /// The state's name in results.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Idle => "idle",
-            Self::InUse => "in_use",
-            Self::Busy => "busy",
-            Self::Down => "down",
-            Self::Unresolved => "unresolved",
-        }
-    }
 }
 
 /// Takes Store `name`'s lock, `store/<name>/lock` (#536 §8): it guards the
@@ -319,25 +289,44 @@ impl StoreRecord {
         Op::of(&self.fields)
     }
 
-    /// Refuses a new operation, a lease or a Store call while the record's
-    /// `op` holds the Store: `Busy` while its process lives (this process
-    /// included: a push's or pull's own steps take no lease and make no Store call,
+    /// Refuses a lease or a Store call while the record's `op` holds the
+    /// Store to itself (a move or a remove, and any operation this build
+    /// does not name): `Busy` while its process lives (this process
+    /// included: a move's own steps take no lease and make no Store call,
     /// so nothing else in its process may either), `Unresolved` once a gone
     /// process left its outcome unknown. A gone process's certain failure
-    /// holds nothing. An unresolved push or pull names a new one as the
-    /// call that clears it (H6), anything else `store remove`.
+    /// holds nothing, and neither does a compaction or a backup: each is
+    /// recorded so every client sees `busy`, and the Store's own admission
+    /// decides what may run beside it.
     pub fn unblocked(&self) -> Result<()> {
-        let Some(op) = self.op() else {
-            return Ok(());
-        };
-        let clear = clearing_call(&op, &self.name);
-        op.blocks("store", &self.name, "store status", "store remove")
+        match self.op() {
+            Some(op) if intent::exclusive(op.name()) => self.refuse(&op),
+            _ => Ok(()),
+        }
+    }
+
+    /// Refuses a new operation while the record's `op` holds the Store,
+    /// whatever the operation: [`Self::unblocked`], and a compaction or a
+    /// backup too.
+    pub fn unheld(&self) -> Result<()> {
+        self.op().map_or(Ok(()), |op| self.refuse(&op))
+    }
+
+    /// The refusal `op` makes of a new operation: `Busy` or `Unresolved`,
+    /// naming the call that clears an unresolved one as its `fix`, with the
+    /// operation as the caller's next step reads it.
+    fn refuse(&self, op: &Op) -> Result<()> {
+        let clear = intent::clearing(op, &self.name);
+        op.blocks("store", &self.name, "store get", "store remove")
             .map_err(|mut refusal| {
                 let named = format!("`layerfs store remove {}`", self.name);
                 refusal.message = refusal
                     .message
                     .replace(&named, &format!("`layerfs {clear}`"));
-                refusal
+                if refusal.code == "Unresolved" {
+                    refusal = with_fix(refusal, format!("layerfs {clear}"));
+                }
+                with_next(refusal, op::FIELD, intent::shown(op))
             })
     }
 
@@ -394,23 +383,6 @@ impl StoreRecord {
         }
     }
 
-    /// The Store's state from its record, whether its machine answered
-    /// (`down`) and the live processes other than this one that hold it.
-    pub fn state(&self, down: bool, holders: &[u32]) -> StoreState {
-        match self.op().map(|op| op.standing()) {
-            Some(Standing::Running) => return StoreState::Busy,
-            Some(Standing::Unresolved) => return StoreState::Unresolved,
-            _ => {}
-        }
-        if down {
-            StoreState::Down
-        } else if holders.is_empty() {
-            StoreState::Idle
-        } else {
-            StoreState::InUse
-        }
-    }
-
     /// The Store's link to each bucket, `(bucket, link)` in record order.
     pub fn links(&self) -> Vec<(String, StoreLink)> {
         let links = self.raw_links().iter();
@@ -446,11 +418,12 @@ impl StoreRecord {
         Some(self.with("backups", kept))
     }
 
-    /// The Store as `store.get` and each `store.list` item show it: the
-    /// record's fields with `name` first, never its cursor key, binding or
-    /// `v`, its `op` as H6 shows it, then its projects; a list item then
-    /// its `state`.
-    pub fn to_sdk(&self, view: View, derived: &StoreDerived) -> Result<SdkValue> {
+    /// The Store's record as the PostgreSQL calls not yet on the 2.0 call
+    /// surface answer it (`store.connect`, `store.update`): the record's
+    /// fields with `name` first, never its cursor key, binding or `v`, its
+    /// `op` as H6 shows it, then its projects. `store.get` and `store.list`
+    /// answer [`crate::get`]'s map instead.
+    pub fn to_sdk(&self, derived: &StoreDerived) -> Result<SdkValue> {
         let SdkValue::Map(fields) = &self.fields else {
             return Err(refused(
                 "Failed",
@@ -476,21 +449,18 @@ impl StoreRecord {
         }
         let names = derived.projects.iter().map(SdkValue::text).collect();
         out.push(("projects".to_owned(), SdkValue::List(names)));
-        if let (View::List, Some(state)) = (view, derived.state) {
-            out.push(("state".to_owned(), SdkValue::text(state.as_str())));
-        }
         Ok(SdkValue::Map(out))
     }
 
-    /// A new sqlite Store's record on `native`: this record (its identity)
-    /// with its machine, profile, creation time and SQLite version.
-    pub fn created_on_native(self, sqlite_version: &str) -> Self {
+    /// A new sqlite Store's record on `machine`: this record (its identity)
+    /// with its machine, profile and creation time; its SQLite version is
+    /// added once its file is made ([`Self::with`] `sqlite`).
+    pub fn created_on(self, machine: &str) -> Self {
         let mut record = self;
         for (field, value) in [
-            ("machine", SdkValue::text("native")),
+            ("machine", SdkValue::text(machine)),
             ("profile", SdkValue::text("disposable")),
             ("created", SdkValue::Int(home::now_ms())),
-            ("sqlite", SdkValue::text(sqlite_version)),
         ] {
             record = record.with(field, value);
         }
@@ -538,15 +508,9 @@ impl StoreRecord {
 }
 
 /// The call that clears Store `name`'s intent `op` once its process is
-/// gone, with its arguments: a new `store push <name> <machine>` or `store
-/// pull <name>` for a push or pull (it deletes the copy the record does not
-/// name first), else `store remove <name>`.
+/// gone, with its arguments ([`intent::clearing`]): what the doctor names.
 pub fn clearing_call(op: &Op, name: &str) -> String {
-    match (op.name(), op.args().get_text("to")) {
-        ("store.push", Some(to)) => format!("store push {name} {to}"),
-        ("store.pull", _) => format!("store pull {name}"),
-        _ => format!("store remove {name}"),
-    }
+    intent::clearing(op, name)
 }
 
 /// The full URL of a PostgreSQL Store's record, its password resolved now.

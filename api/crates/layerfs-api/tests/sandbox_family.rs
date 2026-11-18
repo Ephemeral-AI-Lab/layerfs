@@ -61,7 +61,7 @@ fn named_sandboxes_on_native() {
         &[
             ("project", t("shop/api")),
             ("name", t("dev")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     write_record(
@@ -304,8 +304,8 @@ fn named_sandboxes_on_native() {
     assert_eq!(
         call(
             &home,
-            "store.push",
-            &[("name", t("shop")), ("machine", t("box"))]
+            "store.move",
+            &[("store", t("shop")), ("machine", t("box"))]
         )
         .unwrap_err()
         .0,

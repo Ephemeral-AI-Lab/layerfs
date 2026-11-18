@@ -2,11 +2,8 @@
 //! to its engine method and arguments: snake_case to the engine's camelCase,
 //! an absent option not sent. Both routes send these (in this process, or in
 //! a `store.call` frame to the Store's worker).
-use super::branch::{
-    BranchCommits, BranchDiff, BranchFork, BranchGetCommit, BranchMerge, BranchPublish,
-    BranchRemove,
-};
-use super::commit::CommitDiff;
+use super::branch::{BranchFork, BranchMerge, BranchPublish, BranchRemove};
+use super::commit::{CommitGet, CommitPage, DiffPage};
 use super::file::{
     FileApply, FileBlame, FileCp, FileDiff, FileEdit, FileGlob, FileGrep, FileList, FileMkdir,
     FileMv, FileRead, FileRevision, FileRm, FileStat, FileWrite, Side,
@@ -15,7 +12,7 @@ use crate::call::store_call;
 use crate::resolve::target;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::outcome::{with_next, Outcome};
 use std::path::Path;
 
 /// One page of a list: its size and position, each when sent.
@@ -29,15 +26,15 @@ pub struct Page {
     pub pos: Option<i64>,
 }
 
-/// A diff's options.
-#[derive(Clone, Debug, Default)]
-pub struct DiffOptions {
-    /// Its page.
-    pub page: Page,
-    /// `cursor`.
-    pub cursor: Option<String>,
-    /// `paths_only`: whether it leaves out hunks.
-    pub paths_only: Option<bool>,
+/// Which Branches one page of `branch.list` reads, by name.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Names<'a> {
+    /// Only names that start with this.
+    pub prefix: Option<&'a str>,
+    /// No name that starts with this.
+    pub exclude_prefix: Option<&'a str>,
+    /// Only names after this one: where the page before ended.
+    pub after: Option<&'a str>,
 }
 
 /// File content: text or bytes.
@@ -66,24 +63,25 @@ pub enum StoreOp<'a> {
     /// `project.remove_file`: hide one path from every node at or below its
     /// marker frontier.
     RemoveFile(&'a super::project::ProjectRemoveFile),
-    /// `project.list_branches`: the Branch `name`, or one page.
+    /// `project.list_branches`: the Branch `name`, or, without one, the
+    /// first page of `page.size` Branches.
     ListBranches {
         /// The one Branch it lists.
         name: Option<&'a str>,
         /// The page.
         page: Page,
     },
-    /// `branch.list_commits`: one page of a Branch's Commits.
-    ListCommits {
-        /// The Branch.
-        branch: &'a str,
-        /// The page.
-        page: Page,
+    /// `project.list_branches`: one page of Branches by name.
+    Branches {
+        /// Which names.
+        names: Names<'a>,
+        /// The most rows.
+        limit: i64,
     },
-    /// `branch.commits`: pinned saved history, including main Layers.
-    BranchCommits(&'a BranchCommits),
-    /// `branch.get_commit`: one saved record in its branch context.
-    BranchGetCommit(&'a BranchGetCommit),
+    /// `branch.list_commits`: one page of a Branch's Commits.
+    ListCommits(&'a CommitPage),
+    /// `branch.get_commit`: one Commit of the project.
+    GetCommit(&'a CommitGet),
     /// `fs.revision`: saved changes to one path.
     Revision(&'a FileRevision),
     /// `branch.fork`.
@@ -94,10 +92,8 @@ pub enum StoreOp<'a> {
     Publish(&'a BranchPublish),
     /// `branch.remove`.
     BranchRemove(&'a BranchRemove),
-    /// `branch.diff_branches`.
-    DiffBranches(&'a BranchDiff),
-    /// `branch.diff_commits`.
-    DiffCommits(&'a CommitDiff),
+    /// `commit.diff`: one page of the paths that differ.
+    Diff(&'a DiffPage),
     /// `fs.read`.
     Read(&'a FileRead),
     /// `fs.stat`.
@@ -177,17 +173,6 @@ impl Args {
             .int("page", page.number)
     }
 
-    /// A diff's page and whether it carries hunks (`paths_only` is its
-    /// opposite).
-    fn diff(&mut self, options: &DiffOptions) -> &mut Self {
-        self.page(options.page)
-            .opt("cursor", options.cursor.as_deref());
-        match options.paths_only {
-            Some(paths_only) => self.put("hunks", SdkValue::Bool(!paths_only)),
-            None => self,
-        }
-    }
-
     /// The snapshot a read names: its Branch, or the Commit when given.
     fn at(&mut self, branch: &str, commit: Option<&str>) -> &mut Self {
         self.text("branch", branch).opt("commit", commit)
@@ -243,17 +228,15 @@ impl StoreOp<'_> {
             Self::Statistics => "store.stats",
             Self::ProjectStats(_) => "project.stats",
             Self::RemoveFile(_) => "project.remove_file",
-            Self::ListBranches { .. } => "project.list_branches",
-            Self::ListCommits { .. } => "branch.list_commits",
-            Self::BranchCommits(_) => "branch.commits",
-            Self::BranchGetCommit(_) => "branch.get_commit",
+            Self::ListBranches { .. } | Self::Branches { .. } => "project.list_branches",
+            Self::ListCommits(_) => "branch.list_commits",
+            Self::GetCommit(_) => "branch.get_commit",
             Self::Revision(_) => "fs.revision",
             Self::Fork(_) => "branch.fork",
             Self::Merge(_) => "branch.merge",
             Self::Publish(_) => "branch.publish",
             Self::BranchRemove(_) => "branch.remove",
-            Self::DiffBranches(_) => "branch.diff_branches",
-            Self::DiffCommits(_) => "branch.diff_commits",
+            Self::Diff(_) => "commit.diff",
             Self::Read(_) => "fs.read",
             Self::Stat(_) => "fs.stat",
             Self::List(_) => "fs.list",
@@ -278,51 +261,58 @@ impl StoreOp<'_> {
             Self::Statistics => &mut args,
             Self::ProjectStats(r) => args.at(&r.branch, r.commit.as_deref()),
             Self::RemoveFile(r) => args.text("path", &r.path),
-            Self::ListBranches { name, page } => args.opt("name", *name).page(*page),
-            Self::ListCommits { branch, page } => args.text("branch", branch).page(*page),
-            Self::BranchCommits(r) => args
+            Self::ListBranches { name, page } => args.opt("name", *name).int("limit", page.size),
+            Self::Branches { names, limit } => args
+                .opt("prefix", names.prefix)
+                .opt("excludePrefix", names.exclude_prefix)
+                .opt("after", names.after)
+                .int("limit", Some(*limit)),
+            Self::ListCommits(r) => args
                 .text("branch", &r.branch)
-                .opt("atCommit", r.at_commit.as_deref())
-                .int("page", r.page)
-                .int("pageSize", r.page_size)
-                .boolean("includeStorage", r.include_storage),
-            Self::BranchGetCommit(r) => args.text("branch", &r.branch).text("commit", &r.commit),
+                .opt("at", r.at.as_deref())
+                .opt("after", r.after.as_deref())
+                .int("limit", Some(r.limit)),
+            Self::GetCommit(r) => args
+                .text("commit", &r.commit)
+                .opt("branch", r.branch.as_deref()),
             Self::Revision(r) => args
                 .at(&r.branch, r.at_commit.as_deref())
                 .text("path", &r.path)
                 .opt("traversal", r.traversal.as_deref())
                 .opt("continuation", r.continuation.as_deref())
                 .page(r.page),
-            Self::Fork(r) => {
-                let from = r.from_commit.as_deref().unwrap_or(&r.from_branch);
-                args.text("name", &r.name).text("from", from)
-            }
-            Self::Merge(r) => args
-                .text("branch", &r.a)
-                .text("with", &r.b)
+            Self::Fork(r) => args
                 .text("name", &r.name)
+                .opt("from", r.from.as_deref())
+                .opt("at", r.at.as_deref()),
+            Self::Merge(r) => args
+                .text("branch", &r.branch)
+                .text("with", &r.from)
+                .opt("name", r.into.as_deref())
+                .opt("expected", r.expected.as_deref())
                 .opt("message", r.message.as_deref())
                 .json("units", r.units.as_ref()),
             Self::Publish(r) => args
                 .text("branch", &r.branch)
-                .opt("commit", r.commit.as_deref())
-                .opt("expectedBase", r.expected_base.as_deref())
-                .opt("expectedHead", r.expected_head.as_deref())
+                .opt("at", r.at.as_deref())
+                .opt("expected", r.expected.as_deref())
                 .boolean("force", r.force),
             Self::BranchRemove(r) => args.text("branch", &r.branch),
-            Self::DiffBranches(r) => args
-                .text("from", &r.from_branch)
-                .text("to", &r.to_branch)
-                .opt("fromCommit", r.from_commit.as_deref())
-                .opt("toCommit", r.to_commit.as_deref())
-                .opt("pathPrefix", r.path_prefix.as_deref())
-                .opt("continuation", r.continuation.as_deref())
-                .boolean("includeAttribution", r.include_attribution)
-                .diff(&r.options),
-            Self::DiffCommits(r) => args
-                .text("from", &r.from_commit)
-                .text("to", &r.to_commit)
-                .diff(&r.options),
+            Self::Diff(r) => {
+                args.opt("ref", r.reference.as_deref())
+                    .opt("from", r.from.as_deref())
+                    .opt("path", r.path.as_deref())
+                    .boolean("hunks", Some(r.hunks))
+                    .opt("after", r.after.as_deref())
+                    .int("limit", Some(r.limit));
+                match &r.pins {
+                    Some((to, from)) => args
+                        .boolean("pinned", Some(true))
+                        .text("pinTo", to)
+                        .opt("pinFrom", from.as_deref()),
+                    None => &mut args,
+                }
+            }
             Self::Read(r) => args
                 .at(&r.branch, r.commit.as_deref())
                 .text("path", &r.path)
@@ -397,23 +387,22 @@ pub(super) fn on_project(
     store_call(home, events, &target, &op)
 }
 
-/// The items of one list page and the position of the next page, `None`
-/// after the last. A next position that does not move on is `Failed`:
-/// the list cannot go on, and it is not asked again.
-pub(super) fn page_of(
-    page: &SdkValue,
-    pos: i64,
-) -> Result<(Vec<SdkValue>, Option<i64>), SdkRefusal> {
-    let items = match page.get("items") {
-        Some(SdkValue::List(items)) => items.clone(),
-        _ => Vec::new(),
-    };
-    match page.get("nextPagePos") {
-        Some(SdkValue::Int(next)) if *next > pos => Ok((items, Some(*next))),
-        Some(SdkValue::Int(_)) => Err(refused(
-            "Failed",
-            format!("a list made no progress at page position {pos}"),
-        )),
-        _ => Ok((items, None)),
+/// `refusal` with the fields its caller's next call needs, flat beside it
+/// (call surface 2.0): the head a write expected, as `commit`, on a moved
+/// head; how many Commits a prefix matches, as `matches`; the conflicting
+/// paths of a merge, as `conflicts`.
+pub(super) fn next_fields(refusal: SdkRefusal) -> SdkRefusal {
+    let mut refusal = refusal;
+    let detail = refusal.detail.clone();
+    let carried = [
+        ("HeadMoved", "head", "commit"),
+        ("InvalidInput", "matches", "matches"),
+        ("Conflict", "conflicts", "conflicts"),
+    ];
+    for (code, held, next) in carried {
+        if let (true, Some(value)) = (refusal.code == code, detail.get(held)) {
+            refusal = with_next(refusal, next, value.clone());
+        }
     }
+    refusal
 }

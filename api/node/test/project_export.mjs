@@ -216,7 +216,7 @@ test("native Node export: default main, selected Branch, callbacks, refusals and
   try {
     assert.equal(typeof lfs.project.export, "function", "LP53a table entry required");
     await lfs.store.create("shop"); // public create selects the sole Disposable profile
-    assert.equal((await lfs.store.get("shop")).profile, "disposable");
+    assert.equal((await lfs.store.get("shop", { detail: true })).profile, "disposable");
     await lfs.project.init("shop/api", f.source);
     await lfs.branch.fork("shop/api", "agent", "main");
     await lfs.file.write("shop/api", "agent", "/branch.txt", "agent\n");

@@ -111,7 +111,7 @@ pub(super) fn run(
         "doctor.fix" => crate::doctor::leftover_fix::fix_in_worker(root, &args),
         "store.diagnose" => crate::doctor::diagnose_store_in_worker(root, args, events),
         // the check of this machine's connection to a PostgreSQL Store
-        // (`store.update`, `store.status`): the caller sends the record and
+        // (`store.update`): the caller sends the record and
         // what it dials
         "store.reach" => crate::store::reach_in_worker(&args),
         // one Store call, on the Store file under this worker's root (2.0)
@@ -130,7 +130,8 @@ pub(super) fn run(
             };
             layerfs_store::open::run(&call.method, &open, call.fields, Some(lease))
         }
-        // one step of a Store move or remove on this machine
+        // one step of a Store move, remove or create, or a live read's, on
+        // this machine
         "store.file" => {
             let frame = layerfs_store::sqlite::transfer::step::StepFrame::decode(&args)?;
             // a hashing step (snapshot, verify) reports its bytes as events

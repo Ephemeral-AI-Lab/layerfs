@@ -39,7 +39,8 @@ fn init_with_parts_sent_at_once_succeeds_with_no_busy() {
         0
     );
     // the Store answers through the same worker afterwards
-    worker_store::stats(&placed.home).unwrap_or_else(|refusal| panic!("store.stats: {refusal:?}"));
+    worker_store::stats(&placed.home)
+        .unwrap_or_else(|refusal| panic!("store.get --with stats: {refusal:?}"));
 
     // more connections at once than an Init opens: each is served, none
     // refused or made to fail

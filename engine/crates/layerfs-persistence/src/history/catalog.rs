@@ -113,6 +113,25 @@ impl HistoryCatalog for HistoryProvider {
         })
     }
 
+    fn branches_from(
+        &self,
+        stack: LayerStackId,
+        from: &str,
+        inclusive: bool,
+        limit: u16,
+    ) -> HistoryResult<Vec<BranchRecord>> {
+        self.read(|tx| branch::branches_from(tx, stack, from, inclusive, limit))
+    }
+
+    fn nodes_between(
+        &self,
+        stack: LayerStackId,
+        low: &[u8; 33],
+        high: &[u8; 33],
+    ) -> HistoryResult<(Option<NodeId>, u64)> {
+        self.read(|tx| super::identity_range::nodes_between(tx, stack, low, high))
+    }
+
     // One statement each (#95): a Commit's `logical.known` reads one row.
     fn commit(&self, id: CommitId) -> HistoryResult<Option<CommitRecord>> {
         self.read_statement(|tx| commit::commit(tx, id))
@@ -223,7 +242,11 @@ impl HistoryCatalog for HistoryProvider {
     }
 
     fn merge_branch(&self, request: &BranchMergeRequest) -> HistoryResult<BranchSnapshot> {
-        self.write(|tx| merge::merge_branch(tx, request))
+        self.write(|tx| merge::merge_branch(tx, request, merge::Into::New))
+    }
+
+    fn merge_into_branch(&self, request: &BranchMergeRequest) -> HistoryResult<BranchSnapshot> {
+        self.write(|tx| merge::merge_branch(tx, request, merge::Into::Existing))
     }
 
     fn mark_branch_removed(&self, branch: BranchId, removed_ms: i64) -> HistoryResult<()> {

@@ -226,7 +226,8 @@ fn the_checks_refuse_in_use_with_the_same_texts() {
 }
 
 #[test]
-fn push_and_pull_check_the_stores_side() {
+fn a_move_checks_the_stores_side() {
+    use layerfs_store::sqlite::transfer::resolve::can_move;
     let home = home();
     let store = |name: &str, text: &str| StoreRecord::from_record(name, parse(text).unwrap());
     let on_dev = store("shop", r#"{"name":"shop","kind":"sqlite","machine":"dev"}"#);
@@ -238,48 +239,31 @@ fn push_and_pull_check_the_stores_side() {
         "pg",
         r#"{"name":"pg","kind":"postgresql","url":"postgresql://u@h/d"}"#,
     );
-    let code = |result: Result<(), layerfs_bridge::control::SdkRefusal>| result.unwrap_err().code;
-    assert_eq!(
-        layerfs_store::sqlite::transfer::resolve::can_pull(&on_dev).unwrap(),
-        "dev"
-    );
-    assert_eq!(
-        layerfs_store::sqlite::transfer::resolve::can_pull(&here)
-            .unwrap_err()
-            .code,
-        "InvalidInput"
-    );
-    let refusal = layerfs_store::sqlite::transfer::resolve::can_pull(&pg).unwrap_err();
+    let code =
+        |result: Result<String, layerfs_bridge::control::SdkRefusal>| result.unwrap_err().code;
+    // to or from this computer: the machine it goes from
+    assert_eq!(can_move(&home, &on_dev, "native").unwrap(), "dev");
+    assert_eq!(can_move(&home, &here, "dev").unwrap(), "native");
+    assert_eq!(code(can_move(&home, &here, "native")), "InvalidInput");
+    let refusal = can_move(&home, &pg, "native").unwrap_err();
     assert!(
         refusal.message.contains("does not move"),
         "{}",
         refusal.message
     );
-    let refusal =
-        layerfs_store::sqlite::transfer::resolve::can_push(&home, &on_dev, "fc").unwrap_err();
+    // between two other machines: refused, naming the move here first (C13)
+    let refusal = can_move(&home, &on_dev, "fc").unwrap_err();
+    assert_eq!(refusal.code, "InvalidInput");
     assert!(
-        refusal.message.contains("`layerfs store pull shop`"),
+        refusal.message.contains("`layerfs store move shop native`"),
         "{}",
         refusal.message
     );
-    assert!(layerfs_store::sqlite::transfer::resolve::can_push(&home, &here, "dev").is_ok());
     assert_eq!(
-        code(layerfs_store::sqlite::transfer::resolve::can_push(
-            &home, &here, "native"
-        )),
-        "InvalidInput"
+        refusal.detail.get_text("fix"),
+        Some("layerfs store move shop native")
     );
-    assert_eq!(
-        code(layerfs_store::sqlite::transfer::resolve::can_push(
-            &home, &here, "nosuch"
-        )),
-        "NotFound"
-    );
-    assert_eq!(
-        code(layerfs_store::sqlite::transfer::resolve::can_push(
-            &home, &pg, "dev"
-        )),
-        "InvalidInput"
-    );
+    assert_eq!(code(can_move(&home, &here, "nosuch")), "NotFound");
+    assert_eq!(code(can_move(&home, &pg, "dev")), "InvalidInput");
     let _ = std::fs::remove_dir_all(&home);
 }

@@ -51,7 +51,7 @@ fn native_exec_keeps_large_binary_output_cancellation_and_effects_on_closed_stdo
         &[
             ("project", t("live/p")),
             ("name", t("dev")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     call(

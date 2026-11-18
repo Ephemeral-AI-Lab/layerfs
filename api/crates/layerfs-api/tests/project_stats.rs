@@ -65,7 +65,7 @@ fn check(home: &Path, tag: &str) {
         &[
             ("project", t("trees/p")),
             ("name", t("dev")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     call(

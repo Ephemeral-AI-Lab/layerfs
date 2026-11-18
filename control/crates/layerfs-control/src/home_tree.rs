@@ -12,9 +12,8 @@
 use crate::inventory;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
-use layerfs_home::op::{Op, Standing};
 use layerfs_home::outcome::{failed, Outcome};
-use layerfs_home::state::{Reason, State};
+use layerfs_home::state::State;
 use layerfs_machine::record::MachineRecord;
 use layerfs_sandbox::record::{SandboxRecord, WorkspaceRecord};
 use layerfs_store::record::{Placement, StoreRecord, StoreRef};
@@ -22,17 +21,6 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
-
-/// What a recorded intent says of its entity: busy while its owner lives,
-/// unresolved once a gone owner left its outcome unknown.
-fn held(op: Option<Op>) -> Option<State> {
-    let op = op?;
-    match op.standing() {
-        Standing::Running => Some(State::busy(&op)),
-        Standing::Unresolved => Some(State::broken(Reason::Unresolved, None)),
-        Standing::Stale => None,
-    }
-}
 
 /// The names of a Store's projects the home records.
 fn projects(home: &Path, store: &str) -> Result<SdkValue> {
@@ -45,11 +33,9 @@ fn projects(home: &Path, store: &str) -> Result<SdkValue> {
 /// One Store: `{ store, engine, state.., projects, connections }`. `under`
 /// is its machine's name and state, for a sqlite Store; `connections` are
 /// the machines a PostgreSQL Store has an address of its own for, null for
-/// a sqlite Store.
+/// a sqlite Store. Its state is the Store's one records-only derivation.
 fn store(home: &Path, record: &StoreRecord, under: Option<(&str, &State)>) -> Result<SdkValue> {
-    let state = held(record.op())
-        .or_else(|| under.and_then(|(machine, state)| state.blocks("machine", machine)))
-        .unwrap_or(State::Ready);
+    let state = layerfs_store::state::recorded_under(record, under.map(|(_, state)| state))?;
     let connections = match under {
         Some(_) => SdkValue::Null,
         None => {

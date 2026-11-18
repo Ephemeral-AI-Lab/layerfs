@@ -3,9 +3,10 @@
 pub mod admission;
 pub mod branch;
 pub mod deletion;
+pub mod listing;
 pub mod lookup;
-pub mod pages;
 pub mod removal;
+pub mod resolve;
 pub mod saved;
 mod units;
 
