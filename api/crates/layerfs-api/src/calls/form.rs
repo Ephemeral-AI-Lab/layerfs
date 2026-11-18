@@ -35,8 +35,18 @@ pub struct Form {
 }
 
 /// Whether the short form shows a key, from the whole map the run function
-/// answered (its fields as given).
-pub type ShortWhen = fn(&[(String, SdkValue)]) -> bool;
+/// answered (its fields as given) and the names of the sections asked for.
+pub type ShortWhen = fn(&[(String, SdkValue)], &[&str]) -> bool;
+
+/// `observed_at` in a records-only read's short form: only beside the
+/// `unknown` state it explains, or when `--with live` was asked (conformance
+/// R3 F3). The long form keeps it.
+pub const OBSERVED: (&str, ShortWhen) = ("observed_at", observed);
+
+fn observed(fields: &[(String, SdkValue)], asked: &[&str]) -> bool {
+    asked.contains(&"live")
+        || (fields.iter()).any(|(key, value)| key == "state" && *value == SdkValue::text("unknown"))
+}
 
 /// What a key with its own form holds.
 #[derive(Clone, Copy, Debug)]

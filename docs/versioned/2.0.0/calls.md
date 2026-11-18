@@ -100,7 +100,8 @@ does not.
 - A short key is one of two sorts: always there (`home`, `state`), or there
   only when it is news (`reason`, `fix`, a `state` that is not `ready`).
 - A call that changed something and has nothing to say answers
-  `{"ok":true}`; `ok` is never beside another key in the short form.
+  `{"ok":true}`; `ok` is never beside another key in the short form. A
+  call whose row has no `ok` (a read) answers `{}` when nothing is news.
 - **Sections.** `with` adds a named part of the answer that costs a read of
   its own: `home get --with platforms`, `--with tree`. A call takes only the
   sections its row lists; another name is refused `InvalidInput`, naming the
@@ -121,7 +122,9 @@ does not.
   `busy` has `op { name, phase, started_at }`, `blocked` has
   `blocked_by { <machine|store|sandbox>, reason }` (the thing at the root of
   the block), `broken` has `reason` (a code) and `fix` (one shell line, or
-  null), `unknown` has `observed_at`.
+  null), `unknown` has `observed_at`. A records-only read (`machine list`,
+  `machine get`, `store list`, `store get`) shows `observed_at` in its short
+  form only beside `unknown` or with `--with live`; the long form keeps it.
 - **Refusals.** `{"error", "message"}`, `fix` when there is one, and the
   fields the next call needs flat beside them; `detail` adds `fix` (null
   when there is none) and `detail`. See [errors](#errors-and-exit-codes).

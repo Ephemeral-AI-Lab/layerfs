@@ -72,7 +72,8 @@ const FORM: Form = Form::of(
         "last_transfer",
     ],
 )
-.parts(PARTS);
+.parts(PARTS)
+.short_when(&[crate::calls::form::OBSERVED]);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(

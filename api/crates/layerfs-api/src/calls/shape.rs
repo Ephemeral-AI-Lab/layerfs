@@ -74,8 +74,9 @@ fn undeclared(what: &str, left: &Fields) {
 struct Shaping<'a> {
     what: &'a str,
     detail: bool,
-    /// The sections asked for.
+    /// The sections asked for, and their names.
     asked: Vec<&'a Section>,
+    names: Vec<&'a str>,
     /// The keys the sections asked for put flat into each item.
     flat: Vec<&'a str>,
     /// What a section not asked for would have added to the top level, and
@@ -121,7 +122,7 @@ impl Shaping<'_> {
         let held: Vec<&str> = match self.detail {
             true => Vec::new(),
             false => (form.when.iter())
-                .filter(|(_, shows)| !shows(&fields))
+                .filter(|(_, shows)| !shows(&fields, &self.names))
                 .map(|(key, _)| *key)
                 .collect(),
         };
@@ -213,7 +214,9 @@ impl Shaping<'_> {
             if top && out.len() > 1 {
                 out.retain(|(name, _)| name != OK);
             }
-            if top && out.is_empty() {
+            // `{"ok":true}` only where the row declares `ok`; another empty
+            // answer is `{}` (conformance R3 F9)
+            if top && out.is_empty() && form.long.contains(&OK) {
                 out.push((OK.to_owned(), SdkValue::Bool(true)));
             }
             if !top && out.is_empty() {
@@ -277,6 +280,7 @@ pub fn shape(
         flat: keys(&taken, Place::Item),
         spare_item: keys(&spare, Place::Item),
         spare_top,
+        names: taken.iter().map(|section| section.name).collect(),
         asked: taken,
     };
     shaping.map(form, fields, Level::Top)

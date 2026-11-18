@@ -759,6 +759,39 @@ fn the_shaping_rules_hold_on_a_made_up_answer() {
         done(SdkValue::map([("count", SdkValue::Int(2))]), true),
         r#"{"ok":true,"commit":null,"count":2}"#
     );
+    // a row without `ok` answers nothing as `{}` (conformance R3 F9)
+    const FILES: Form = Form::of(&[], &["roots"], &["roots", "count"]);
+    let empty = SdkValue::map([("count", SdkValue::Int(0))]);
+    let shaped = layerfs_api::shape::shape("test", &FILES, &[], empty, &asked(false, &[]));
+    assert_eq!(json::print(&shaped), "{}");
+}
+
+/// `observed_at` in a records-only short form only beside `unknown` or when
+/// `--with live` was asked (conformance R3 F3); the long form keeps it.
+#[test]
+fn observed_at_is_news_only_when_unknown_or_live() {
+    const SEEN: Form = Form::of(&["state"], &["observed_at"], &["state", "observed_at"])
+        .short_when(&[layerfs_api::calls::form::OBSERVED]);
+    let live = [Section::own("live", &["holders"])];
+    let at = || SdkValue::text("2026-11-19T00:00:00Z");
+    let answer = |state: &str, with: &[&str], detail| {
+        let fields = SdkValue::map([("state", SdkValue::text(state)), ("observed_at", at())]);
+        json::print(&layerfs_api::shape::shape(
+            "test",
+            &SEEN,
+            &live,
+            fields,
+            &asked(detail, with),
+        ))
+    };
+    assert_eq!(answer("ready", &[], false), r#"{"state":"ready"}"#);
+    assert_eq!(answer("blocked", &[], false), r#"{"state":"blocked"}"#);
+    assert_eq!(
+        answer("unknown", &[], false),
+        r#"{"state":"unknown","observed_at":"2026-11-19T00:00:00Z"}"#
+    );
+    assert!(answer("ready", &["live"], false).contains("observed_at"));
+    assert!(answer("ready", &[], true).contains("observed_at"));
 }
 
 #[test]

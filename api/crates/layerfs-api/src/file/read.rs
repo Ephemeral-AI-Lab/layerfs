@@ -30,7 +30,7 @@ const FORM: Form = Form::of(
 .short_when(&[("size", binary)]);
 
 /// Whether the read file is not text.
-fn binary(fields: &[(String, SdkValue)]) -> bool {
+fn binary(fields: &[(String, SdkValue)], _asked: &[&str]) -> bool {
     (fields.iter()).any(|(key, value)| key == "binary" && *value == SdkValue::Bool(true))
 }
 

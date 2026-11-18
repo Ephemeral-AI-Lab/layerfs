@@ -38,7 +38,7 @@ const FORM: Form = Form::of(
 .short_when(&[("replaced", more_than_one)]);
 
 /// Whether more than one occurrence was replaced.
-fn more_than_one(fields: &[(String, SdkValue)]) -> bool {
+fn more_than_one(fields: &[(String, SdkValue)], _asked: &[&str]) -> bool {
     (fields.iter())
         .any(|(key, value)| key == "replaced" && matches!(value, SdkValue::Int(n) if *n > 1))
 }
