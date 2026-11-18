@@ -1,6 +1,7 @@
 //! §7 step 5: immutable verification of the staged file against the live tuple.
 
 use super::build::Built;
+use super::build::CACHE_KIB;
 use super::op::stop_at;
 use super::op::RunOp;
 use super::types::db_error;
@@ -216,6 +217,15 @@ pub(crate) fn verify(
         acquisition,
     } = input;
     let connection = open_immutable(&built.target)?;
+    // The foreign-key pass looks up the pack row of every object, in object
+    // identity order, so the lookups land on the pack table's leaf pages at
+    // random. Through the default 2 MiB cache nearly every lookup reads its
+    // page from the file again (measured on a 4.9 GB Store of 38,666 packs:
+    // 1.71 million page reads for about 62 thousand distinct pages). The
+    // build's cache size keeps the pages this pass has read.
+    connection
+        .execute_batch(&format!("PRAGMA cache_size=-{CACHE_KIB}"))
+        .map_err(db_error)?;
     schema::check(
         &connection,
         &RefCell::new(SqlWork::default()),
