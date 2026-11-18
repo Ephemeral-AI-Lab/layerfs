@@ -161,7 +161,7 @@ fn home_leftovers_lists_and_home_prune_removes_one() {
     let help = String::from_utf8(layerfs(&home, &["help", "home"]).stdout).unwrap();
     assert!(help.contains("layerfs home prune <leftover>\n"), "{help}");
     assert!(
-        help.contains("layerfs home leftovers [--machine <machine>]\n"),
+        help.contains("layerfs home leftovers [--machine M]\n"),
         "{help}"
     );
     for words in [&["help", "home", "prune"][..], &["home", "prune", "--help"]] {

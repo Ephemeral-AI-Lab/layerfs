@@ -72,7 +72,7 @@ fn the_parser_and_help_follow_the_table() {
     assert_eq!(refused.matches("--stream").count(), 1, "{refused}");
     let commit = layerfs_api::find("workspace.commit").unwrap();
     let usage = layerfs_cli::help::usage(commit);
-    assert!(usage.contains(" [-m <message>] "), "{usage}");
+    assert!(usage.contains(" [-m msg] "), "{usage}");
     // the whole run: exit 2 and nothing called
     let home = tempdir("argv-with");
     let out = run(&mut layerfs(

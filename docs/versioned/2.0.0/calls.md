@@ -1322,7 +1322,7 @@ lock, write no record, remove no stale lease and start no machine.
 ```bash
 layerfs home doctor                 # the home, then each machine, PostgreSQL Store and bucket, shallowly
 layerfs machine doctor <machine>    # the machine, then each Store and Sandbox on it
-layerfs store doctor <store> [--machine <machine>]   # the Store, then each of its projects
+layerfs store doctor <store> [--machine M]   # the Store, then each of its projects
 layerfs project doctor <project>    # the project's record against its Store's own list
 layerfs sandbox doctor <sandbox>    # the Sandbox: record, runtime, daemon; then each of its Workspaces
 layerfs backup doctor <bucket> [--full]               # the bucket's record and reach; --full writes and reads one object
@@ -1502,7 +1502,7 @@ Every call is one attempt. After `Unknown`, read the state with `list`,
 | `--stream` | `workspace exec` | passes the command's stdout and stderr through (output over 1 MiB too) and exits with its code |
 | `--from <file>` | `file write`, `file apply` | reads the content or JSON from a file instead of stdin |
 | `--<option>-from <file>` | any optional text option (`--old-from`, `--new-from`, `--message-from`) | reads the option's value from a file |
-| `-m <text>` | calls with `message` | the same as `--message`; help shows it as `[-m <message>]` |
+| `-m <text>` | calls with `message` | the same as `--message`; help shows it as `[-m msg]` |
 | `--scope <folder>` | all | a folder scope (see below); needs `--scope-project` |
 | `--scope-project <store>/<project>` | all, with `--scope` | the one project the scope is bound to |
 | `--scope-branch <name>` | all, with `--scope` | the scope's Branch namespace |

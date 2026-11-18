@@ -53,7 +53,7 @@ fn the_secret_comes_on_stdin_and_old_options_are_gone() {
     // help shows them without brackets
     let usage = layerfs_cli::help::usage(connect);
     assert!(
-        usage.ends_with("<name> <url> --access-key <access-key> --key-stdin"),
+        usage.ends_with("<name> <url> --access-key K --key-stdin"),
         "{usage}"
     );
     // restore names the bucket, its file, then the Store

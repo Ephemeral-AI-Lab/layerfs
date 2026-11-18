@@ -24,7 +24,7 @@ pub fn usage(call: &Call) -> String {
         });
     }
     for arg in call.options {
-        line.push_str(&option(arg));
+        line.push_str(&option(call, arg));
     }
     if call
         .args
@@ -41,16 +41,21 @@ pub fn usage(call: &Call) -> String {
 }
 
 /// One option as the usage line shows it: in brackets unless required;
-/// a Commit message by its short flag `-m`.
-fn option(arg: &Arg) -> String {
+/// a value word as the call's row shows it ([`crate::words`]); a Commit
+/// message by its short flag, `-m msg`.
+fn option(call: &Call, arg: &Arg) -> String {
     let word = match (arg.shell, arg.name, arg.kind) {
         (Some(flag), _, _) => flag.to_owned(),
         (_, "on_progress", _) => "--progress".to_owned(),
         (_, "stdout" | "stderr", _) => return String::new(),
-        (_, "message", Kind::Text) => "-m <message>".to_owned(),
+        (_, "message", Kind::Text) => "-m msg".to_owned(),
         (_, name, Kind::Bool | Kind::Content) => format!("--{}", shell(name)),
         (_, name, Kind::Json) if arg.repeat => return format!(" [--{} K=V]...", shell(name)),
-        (_, name, _) => format!("--{} <{}>", shell(name), shell(name)),
+        (_, name, _) => format!(
+            "--{} {}",
+            shell(name),
+            crate::words::word(&call.name(), name)
+        ),
     };
     match arg.required {
         true => format!(" {word}"),
