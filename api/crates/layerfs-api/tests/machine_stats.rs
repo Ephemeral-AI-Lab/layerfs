@@ -76,8 +76,10 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
         .expect("the call did not answer within 20 s")
 }
 
+/// `machine.stats`' long form.
 fn stats(home: &Path, machine: &str) -> Result<SdkValue, (String, String)> {
-    call(home, "machine.stats", &[("machine", t(machine))])
+    let detail = ("detail", SdkValue::Bool(true));
+    call(home, "machine.stats", &[("machine", t(machine)), detail])
 }
 
 /// `sandbox.list` with `live`: each item's `(name, state, live, live_reason)`.
@@ -360,72 +362,79 @@ fn keys(value: &SdkValue) -> Vec<&str> {
     }
 }
 
-const PARTS: [&str; 9] = [
+const PARTS: [&str; 18] = [
+    "cpus",
+    "memory_used_bytes",
+    "memory_total_bytes",
+    "disk_free_bytes",
+    "disk_total_bytes",
+    "incomplete",
+    "disk_used_bytes",
+    "reasons",
     "machine",
     "platform",
     "observed_at",
+    "scope",
+    "cpu_busy_ms",
+    "cpu_total_ms",
     "worker",
-    "resources",
     "data_disk",
     "stores",
     "sandboxes",
-    "complete",
 ];
-const RESOURCES: [&str; 9] = [
+const RESOURCES_SHORT: [&str; 5] = [
     "cpus",
-    "memory_total",
-    "memory_used",
-    "disk_total",
-    "disk_used",
-    "disk_free",
-    "cpu_busy_usec",
-    "cpu_total_usec",
-    "scope",
+    "memory_used_bytes",
+    "memory_total_bytes",
+    "disk_free_bytes",
+    "disk_total_bytes",
+];
+const RESOURCES: [&str; 6] = [
+    "cpus",
+    "memory_total_bytes",
+    "memory_used_bytes",
+    "disk_total_bytes",
+    "disk_used_bytes",
+    "disk_free_bytes",
 ];
 
-/// `resources`' fields on this system: macOS reads no processor counters
-/// (layerfs-project#182 L1), so `cpu_*` are null and `reason` says so;
-/// Linux reads `/proc/stat`, busy within all of it.
-fn resources_read(resources: &SdkValue) {
-    let mut want = RESOURCES.to_vec();
+/// The processor counters on this system: macOS reads none
+/// (layerfs-project#182 L1), so `cpu_*` are null and `reasons` says so;
+/// Linux reads `/proc/stat`, busy within all of it, in milliseconds.
+fn resources_read(got: &SdkValue) {
     if cfg!(target_os = "linux") {
-        let busy = resources.get_int("cpu_busy_usec").unwrap();
-        assert!(busy > 0 && busy <= resources.get_int("cpu_total_usec").unwrap());
-        assert!(resources.get("reason").is_none(), "{resources:?}");
+        let busy = got.get_int("cpu_busy_ms").unwrap();
+        assert!(busy > 0 && busy <= got.get_int("cpu_total_ms").unwrap());
+        assert_eq!(got.get("reasons"), Some(&SdkValue::List(Vec::new())));
     } else {
-        assert_eq!(resources.get("cpu_busy_usec"), Some(&SdkValue::Null));
-        assert_eq!(resources.get("cpu_total_usec"), Some(&SdkValue::Null));
-        assert_eq!(resources.get_text("reason"), Some("cpu_unsupported"));
-        want.push("reason");
+        assert_eq!(got.get("cpu_busy_ms"), Some(&SdkValue::Null));
+        assert_eq!(got.get("cpu_total_ms"), Some(&SdkValue::Null));
+        assert_eq!(print(got.get("reasons").unwrap()), r#"["cpu_unsupported"]"#);
     }
-    assert_eq!(keys(resources), want, "{resources:?}");
 }
 
-/// `sandboxes`' counts, and each row's name and `live` (layerfs-project#182
-/// L2): one row per recorded Sandbox, in the home's order.
+/// How many of the Sandbox rows are live, of how many, and each row's
+/// name and `live` (layerfs-project#182 L2): one row per recorded Sandbox,
+/// in the home's order.
 fn counts(got: &SdkValue) -> String {
-    let sandboxes = got.get("sandboxes").unwrap();
-    assert_eq!(
-        keys(sandboxes),
-        ["recorded", "live", "items"],
-        "{sandboxes:?}"
-    );
-    let SdkValue::List(items) = sandboxes.get("items").unwrap() else {
-        panic!("{sandboxes:?}")
+    let SdkValue::List(items) = got.get("sandboxes").unwrap() else {
+        panic!("{got:?}")
     };
-    assert_eq!(Some(items.len() as i64), sandboxes.get_int("recorded"));
+    let live = (items.iter())
+        .filter(|item| item.get("live") == Some(&SdkValue::Bool(true)))
+        .count();
     let rows: Vec<String> = (items.iter())
         .map(|item| {
             let live = item.get("live").map(print).unwrap_or_default();
-            format!("{}={live}", item.get_text("name").unwrap())
+            format!("{}={live}", item.get_text("sandbox").unwrap())
         })
         .collect();
-    format!(
-        "{} of {}: {}",
-        print(sandboxes.get("live").unwrap()),
-        print(sandboxes.get("recorded").unwrap()),
-        rows.join(" ")
-    )
+    format!("{live} of {}: {}", items.len(), rows.join(" "))
+}
+
+/// A time as answers spell it: `YYYY-MM-DDTHH:MM:SSZ`.
+fn is_time(value: Option<&str>) -> bool {
+    value.is_some_and(|at| at.len() == 20 && at.ends_with('Z') && at.as_bytes()[10] == b'T')
 }
 
 #[test]
@@ -463,7 +472,6 @@ fn native_stats_are_read_in_this_process_with_no_lock_and_nothing_written() {
     let _push = pushing(&home);
     // every file, the call log included
     let before = files(&home, false);
-    let asked = home::now_ms();
     let at = Instant::now();
     let got = stats(&home, "native").unwrap();
     // the Store's lock and the machine were held throughout
@@ -471,18 +479,13 @@ fn native_stats_are_read_in_this_process_with_no_lock_and_nothing_written() {
     assert_eq!(keys(&got), PARTS, "{got:?}");
     assert_eq!(got.get_text("machine"), Some("native"));
     assert_eq!(got.get_text("platform"), Some("native"));
-    let observed = got.get_int("observed_at").unwrap();
-    assert!(observed >= asked && observed <= home::now_ms());
+    assert!(is_time(got.get_text("observed_at")), "{got:?}");
     // no worker: its calls run in this process
     assert_eq!(got.get("worker"), Some(&SdkValue::Null));
-    let resources = got.get("resources").unwrap();
-    resources_read(resources);
-    assert_eq!(resources.get_text("scope"), Some("host"));
-    for field in &RESOURCES[..6] {
-        assert!(
-            resources.get_int(field).unwrap() > 0,
-            "{field}: {resources:?}"
-        );
+    resources_read(&got);
+    assert_eq!(got.get_text("scope"), Some("host"));
+    for field in RESOURCES {
+        assert!(got.get_int(field).unwrap() > 0, "{field}: {got:?}");
     }
     let disk = got.get("data_disk").unwrap();
     assert_eq!(keys(disk), ["path", "fs", "scope", "volume", "inodes_free"]);
@@ -491,26 +494,24 @@ fn native_stats_are_read_in_this_process_with_no_lock_and_nothing_written() {
     assert_eq!(disk.get("volume"), Some(&SdkValue::Null));
     assert_eq!(
         print(got.get("stores").unwrap()),
-        format!(r#"[{{"name":"shop","bytes":{bytes},"allocated":{allocated}}}]"#)
+        format!(r#"[{{"store":"shop","size":{bytes},"allocated_bytes":{allocated}}}]"#)
     );
     // the dead daemon is recorded, not live; each has its row, a host
     // process with no cgroup usage
     assert_eq!(counts(&got), "1 of 2: dead=false up=true");
-    let SdkValue::List(items) = got.get("sandboxes").unwrap().get("items").unwrap() else {
+    let SdkValue::List(items) = got.get("sandboxes").unwrap() else {
         unreachable!()
     };
     for item in items {
         assert_eq!(item.get("usage"), Some(&SdkValue::Null), "{item:?}");
         assert_eq!(item.get_text("usage_reason"), Some("host_process"));
     }
-    let up = items[1].get_int("started_at").unwrap();
-    assert!(
-        up <= home::now_ms() && up > home::now_ms() - 86_400_000,
-        "{up}"
-    );
+    assert!(is_time(items[1].get_text("started_at")), "{items:?}");
     assert_eq!(items[0].get("started_at"), Some(&SdkValue::Null));
-    assert_eq!(got.get("complete"), Some(&SdkValue::Bool(true)));
-    assert!(got.get("reason").is_none());
+    assert_eq!(got.get("incomplete"), Some(&SdkValue::Bool(false)));
+    // the short form: what the machine has and uses, nothing else
+    let short = call(&home, "machine.stats", &[("machine", t("native"))]).unwrap();
+    assert_eq!(keys(&short), RESOURCES_SHORT, "{short:?}");
     // nothing changed in the home: no record, lock, lease or call-log line
     assert_eq!(files(&home, false), before, "machine.stats changed a file");
     no_lease(&home);
@@ -583,6 +584,7 @@ fn a_worker_answers_its_machine_s_stats_and_who_it_is_and_writes_nothing() {
     assert_eq!(worker.get_int("pid"), Some(i64::from(std::process::id())));
     let since = worker.get_int("started_at").unwrap();
     assert!(since >= started && since <= home::now_ms(), "{since}");
+    assert_eq!(got.get_text("machine"), Some("box"));
     assert_eq!(worker.get_int("protocol"), Some(3));
     assert_eq!(worker.get("bundle"), Some(&SdkValue::Null));
     let again = stats(&home, "box").unwrap();
@@ -591,10 +593,9 @@ fn a_worker_answers_its_machine_s_stats_and_who_it_is_and_writes_nothing() {
         Some(since)
     );
     // whose numbers they are: the Engine host's, and what holds the data
-    let resources = got.get("resources").unwrap();
-    resources_read(resources);
-    assert_eq!(resources.get_text("scope"), Some("engine_host"));
-    assert!(resources.get_int("memory_total").unwrap() > 0);
+    resources_read(&got);
+    assert_eq!(got.get_text("scope"), Some("engine_host"));
+    assert!(got.get_int("memory_total_bytes").unwrap() > 0);
     let disk = got.get("data_disk").unwrap();
     assert_eq!(disk.get_text("path"), root.to_str());
     let holds = match cfg!(target_os = "linux") {
@@ -613,11 +614,11 @@ fn a_worker_answers_its_machine_s_stats_and_who_it_is_and_writes_nothing() {
     }
     assert_eq!(
         print(got.get("stores").unwrap()),
-        format!(r#"[{{"name":"shop","bytes":{bytes},"allocated":{allocated}}}]"#)
+        format!(r#"[{{"store":"shop","size":{bytes},"allocated_bytes":{allocated}}}]"#)
     );
     // the worker reads each row from its own records: `s3` it has none of
     assert_eq!(counts(&got), "1 of 3: s1=true s2=false s3=false");
-    assert_eq!(got.get("complete"), Some(&SdkValue::Bool(true)));
+    assert_eq!(got.get("incomplete"), Some(&SdkValue::Bool(false)));
 
     // neither side changed: no record, lock, lease, log or call-log line
     assert_eq!(
@@ -767,8 +768,9 @@ fn a_page_over_several_machines_asks_each_once_and_keeps_its_order() {
     std::fs::remove_dir_all(scratch).unwrap();
 }
 
-/// `machine.space` on a worker's machine: one request to its worker, which
-/// walks its own root; the home adds the platform and the disk's scope.
+/// `machine stats --with space` (`machine.space` before the call surface
+/// 2.0) on a worker's machine: one more request to its worker, which walks
+/// its own root.
 /// Neither side changes, no lease is taken, it is answered while a
 /// `machine.stop` holds the machine and a push holds the Store, and it
 /// writes no call-log line.
@@ -799,65 +801,94 @@ fn a_worker_answers_its_machine_s_space_and_writes_nothing() {
     let _push = pushing(&home);
     let (before, guest) = (files(&home, false), files(&root, false));
 
-    let got = call(&home, "machine.space", &[("machine", t("box"))]).unwrap();
+    let asked = [
+        ("machine", t("box")),
+        ("detail", SdkValue::Bool(true)),
+        ("with", SdkValue::List(vec![t("space")])),
+    ];
+    let both = call(&home, "machine.stats", &asked).unwrap();
+    assert_eq!(both.get_text("platform"), Some("docker"));
+    let got = both.get("space").unwrap();
     assert_eq!(
-        keys(&got),
+        keys(got),
         [
-            "machine",
-            "platform",
             "observed_at",
-            "disk",
-            "layerfs",
-            "outside",
+            "layerfs_bytes",
+            "outside_bytes",
             "parts",
             "stores",
             "sandboxes",
-            "unreadable",
-            "complete"
+            "unreadable_count",
+            "incomplete",
+            "reasons"
         ],
         "{got:?}"
     );
-    assert_eq!(got.get_text("platform"), Some("docker"));
-    let disk = got.get("disk").unwrap();
-    assert_eq!(keys(disk), ["total", "used", "free", "path", "fs", "scope"]);
-    assert_eq!(disk.get_text("path"), root.to_str());
-    let holds = match cfg!(target_os = "linux") {
-        true => "host_fs",
-        false => "vm_disk",
+    assert!(is_time(got.get_text("observed_at")), "{got:?}");
+    let SdkValue::List(parts) = got.get("parts").unwrap() else {
+        panic!("{got:?}")
     };
-    assert_eq!(disk.get_text("scope"), Some(holds));
+    let named: Vec<_> = parts.iter().map(|p| p.get_text("part").unwrap()).collect();
+    assert_eq!(
+        named,
+        [
+            "stores",
+            "sandboxes",
+            "images",
+            "other_runs",
+            "logs",
+            "other"
+        ]
+    );
     let SdkValue::List(stores) = got.get("stores").unwrap() else {
         panic!("{got:?}")
     };
     assert_eq!(stores.len(), 1);
-    assert!(stores[0].get_int("bytes").unwrap() >= 65_536 + 12_288);
+    assert_eq!(stores[0].get_text("store"), Some("shop"));
+    assert!(stores[0].get_int("allocated_bytes").unwrap() >= 65_536 + 12_288);
     let SdkValue::List(rows) = got.get("sandboxes").unwrap() else {
         panic!("{got:?}")
     };
     // `s1` read from the worker's record, `s2` it has none of
-    assert_eq!(rows[0].get_text("name"), Some("s1"));
-    assert!(rows[0].get_int("overlays").unwrap() >= 65_536, "{rows:?}");
-    assert!(rows[0].get_int("writes").unwrap() >= 32_768, "{rows:?}");
-    assert!(rows[0].get_int("bytes").unwrap() < 1 << 20, "{rows:?}");
-    assert_eq!(rows[1].get_text("reason"), Some("no_run_folder"));
-    let layerfs = got.get_int("layerfs").unwrap();
-    assert_eq!(
-        got.get_int("outside"),
-        Some((disk.get_int("used").unwrap() - layerfs).max(0))
+    assert_eq!(rows[0].get_text("sandbox"), Some("s1"));
+    assert!(
+        rows[0].get_int("overlays_bytes").unwrap() >= 65_536,
+        "{rows:?}"
     );
-    assert_eq!(got.get("complete"), Some(&SdkValue::Bool(true)));
+    assert!(
+        rows[0].get_int("writes_bytes").unwrap() >= 32_768,
+        "{rows:?}"
+    );
+    assert!(
+        rows[0].get_int("allocated_bytes").unwrap() < 1 << 20,
+        "{rows:?}"
+    );
+    assert_eq!(rows[1].get_text("reason"), Some("no_run_folder"));
+    let layerfs = got.get_int("layerfs_bytes").unwrap();
+    let total: i64 = parts.iter().map(|p| p.get_int("bytes").unwrap()).sum();
+    assert_eq!(layerfs, total);
+    let used = both.get_int("disk_used_bytes").unwrap();
+    let outside = got.get_int("outside_bytes").unwrap();
+    // the stats' read and the walk's are two reads of a disk in use
+    assert!(outside <= used, "{outside} of {used}");
+    assert_eq!(got.get("incomplete"), Some(&SdkValue::Bool(false)));
 
     assert_eq!(
         files(&home, false),
         before,
-        "machine.space changed the home"
+        "machine stats --with space changed the home"
     );
-    assert_eq!(files(&root, false), guest, "machine.space changed the root");
+    let changed = "machine stats --with space changed the root";
+    assert_eq!(files(&root, false), guest, "{changed}");
     no_lease(&home);
     no_lease(&root);
 
     // refusals: a name no machine has, and one that is no name
-    let (code, _) = call(&home, "machine.space", &[("machine", t("../x"))]).unwrap_err();
+    let bad = [
+        ("machine", t("../x")),
+        ("with", SdkValue::List(vec![t("space")])),
+    ];
+    let (code, _) = call(&home, "machine.stats", &bad).unwrap_err();
     assert_eq!(code, "InvalidInput");
     std::fs::remove_dir_all(scratch).unwrap();
 }

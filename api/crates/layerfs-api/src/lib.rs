@@ -59,7 +59,7 @@ pub use layerfs_control::doctor::{
 };
 #[cfg(feature = "machine")]
 #[doc(hidden)]
-pub use layerfs_machine::running;
+pub use layerfs_control::machine::running;
 /// The worker protocol (`layerfs-machine`) and its server (`layerfs-control`),
 /// as the front ends used them before the control split (layerfs-project#104).
 pub mod worker {

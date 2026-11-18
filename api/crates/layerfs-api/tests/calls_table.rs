@@ -524,23 +524,23 @@ fn the_source_is_one_file_per_call_under_its_family() {
 #[cfg(all(feature = "machine", target_os = "macos"))]
 #[test]
 fn native_machine_images_reports_host_userland_without_a_bundle() {
-    let (outcome, events) = run("machine.images", map(&[("name", t("native"))]));
+    let args = map(&[("machine", t("native")), ("detail", SdkValue::Bool(true))]);
+    let (outcome, events) = run("machine.images", args);
     let result = outcome.unwrap();
     assert_eq!(result.get_text("mode"), Some("host"));
-    assert_eq!(result.get("default"), Some(&SdkValue::Null));
-    assert_eq!(result.get("images"), Some(&SdkValue::List(vec![])));
-    assert_eq!(result.get("docker"), Some(&SdkValue::Null));
-    assert_eq!(result.get("available"), Some(&SdkValue::List(vec![])));
+    assert_eq!(result.get("items"), Some(&SdkValue::List(vec![])));
+    // the host's Docker is read only with `--with docker`
+    assert_eq!(result.get("images"), None);
     assert!(events.is_empty());
     // no image on macOS native: a load or prune is refused, naming why
     for (call, args) in [
         (
-            "machine.load",
-            map(&[("name", t("native")), ("image", t("alpine:3"))]),
+            "machine.load_image",
+            map(&[("machine", t("native")), ("image", t("alpine:3"))]),
         ),
         (
             "machine.prune",
-            map(&[("name", t("native")), ("unused", SdkValue::Bool(true))]),
+            map(&[("machine", t("native")), ("unused", SdkValue::Bool(true))]),
         ),
     ] {
         let home = tempdir();
@@ -557,7 +557,7 @@ fn sandbox_images_are_named_by_the_image_kind() {
     let image = create.options.iter().find(|a| a.name == "image").unwrap();
     assert_eq!(image.kind, Kind::Image);
     assert!(create.options.iter().all(|a| a.name != "image_archive"));
-    let load = layerfs_api::find("machine.load").unwrap();
+    let load = layerfs_api::find("machine.load_image").unwrap();
     assert_eq!(load.args[1].kind, Kind::Image);
     assert!(load.options.iter().any(|a| a.name == "on_progress"));
     let prune = layerfs_api::find("machine.prune").unwrap();
@@ -624,7 +624,23 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         .filter(|call| call.form.is_some())
         .map(|call| call.name())
         .collect();
-    assert_eq!(migrated, ["home.get", "home.log", "home.clear_log"]);
+    let machine = [
+        "machine.list",
+        "machine.get",
+        "machine.images",
+        "machine.load_image",
+        "machine.prune",
+        "machine.stats",
+        "machine.files",
+        "machine.log",
+        "machine.start",
+        "machine.stop",
+        "machine.create",
+        "machine.remove",
+        "machine.update",
+    ];
+    let home = ["home.get", "home.log", "home.clear_log"];
+    assert_eq!(migrated, [&home[..], &machine[..]].concat());
     for call in layerfs_api::calls() {
         if let Some(form) = call.form {
             // every short key is a long key, and no key is listed twice

@@ -7,6 +7,7 @@ use super::record::MachineRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::outcome::refused;
+use layerfs_home::state::Reason;
 use layerfs_platform::{
     self as adapters, Endpoint, HostOs, Lasting, MachineError, Platform, Running, Spec, Tools,
 };
@@ -66,10 +67,15 @@ fn write_built_ins(home: &Path, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// The id of the home at `home`, which names its machines at their providers.
+pub(super) fn home_id(home: &Path) -> Result<String> {
+    Ok(layerfs_home::home::opened(home)?.id)
+}
+
 /// The machine `name`'s record, or `NotFound`, for an operation on it.
-/// Refused `Busy` while a live process creates or removes it (its record's
-/// `op`), so no call starts, moves to or runs
-/// on it meanwhile; `Unresolved` once a gone one left that outcome unknown.
+/// Refused `Busy` while a live process creates, starts, stops or removes it
+/// (its record's `op`), so no call starts, moves to or runs on it
+/// meanwhile; `Unresolved` once a gone one left that outcome unknown.
 pub fn machine_of(home: &Path, name: &str) -> Result<MachineRecord> {
     let record = MachineRecord::of(home, name)?;
     record.not_held()?;
@@ -170,18 +176,32 @@ pub fn worker(home: &Path, name: &str) -> Result<Option<Endpoint>> {
 }
 
 /// Writes `worker.json` and the lasting state of a started machine; the
-/// record write that says `running` drops a create's `op` (a
-/// start runs under the machine's start lock, where no other one lives).
+/// record write that says `running` drops the `op` of the create or start
+/// that made it so, and what an earlier failure left (`reason`, `error`).
 pub fn save_running(home: &Path, name: &str, running: &Running) -> Result<()> {
     save_started(home, name, running, None)
 }
 
-/// Retains a started provider's endpoint and lasting state without claiming readiness.
-pub fn save_unready(home: &Path, name: &str, running: &Running, error: &str) -> Result<()> {
-    save_started(home, name, running, Some(error))
+/// Retains a started provider's endpoint and lasting state without
+/// claiming readiness: the machine is recorded broken for `reason` (its
+/// worker is of another build, or does not answer), with `error` as the
+/// sentence behind it, and the `op` is dropped.
+pub fn save_unready(
+    home: &Path,
+    name: &str,
+    running: &Running,
+    reason: Reason,
+    error: &str,
+) -> Result<()> {
+    save_started(home, name, running, Some((reason, error)))
 }
 
-fn save_started(home: &Path, name: &str, running: &Running, error: Option<&str>) -> Result<()> {
+fn save_started(
+    home: &Path,
+    name: &str,
+    running: &Running,
+    broken: Option<(Reason, &str)>,
+) -> Result<()> {
     let endpoint = &running.endpoint;
     write_record(
         &paths::worker_record(home, name),
@@ -200,12 +220,10 @@ fn save_started(home: &Path, name: &str, running: &Running, error: Option<&str>)
     }
     update(home, name, |record| {
         let record = record.with("lasting", SdkValue::Map(lasting));
-        match error {
-            Some(error) => record.failed_as("failed", error).without_op(),
-            None => record
-                .with("state", SdkValue::text("running"))
-                .with("error", SdkValue::Null)
-                .without_op(),
+        let record = record.with("state", SdkValue::text("running"));
+        match broken {
+            Some((reason, error)) => record.broken_as(reason, error).without_op(),
+            None => record.mended().without_op(),
         }
     })
 }

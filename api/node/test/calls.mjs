@@ -14,9 +14,9 @@ const temp = (tag) => {
   return dir;
 };
 
-test("the table: twelve families, 84 calls, each a function", () => {
+test("the table: twelve families, 81 calls, each a function", () => {
   assert.deepEqual(families, ["home", "project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs", "doctor"]);
-  assert.equal(table.length, 84);
+  assert.equal(table.length, 81);
   for (const spec of table) assert.equal(typeof layerfs[spec.family][spec.call], "function", `${spec.family}.${spec.call}`);
 });
 
@@ -75,7 +75,7 @@ test("every call reaches the library, which checks its arguments first", async (
   assert.deepEqual((await lfs.sandbox.list()).items, []);
   assert.deepEqual((await lfs.backup.list()).items, []);
   const machines = await lfs.machine.list();
-  assert.deepEqual(machines.machines.map((m) => m.name), ["docker", "native"]);
+  assert.deepEqual(machines.items.map((m) => m.machine), ["docker", "native"]);
   await assert.rejects(lfs.store.get("shop", { bogus: 1 }), /unknown option "bogus"/);
   rmSync(home, { recursive: true, force: true });
 });

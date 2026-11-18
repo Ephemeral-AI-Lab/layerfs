@@ -1,10 +1,28 @@
 //! `machine.create`: create a VM machine.
 use crate::calls::table::Kind::{Int, Name, Size, Text};
 use crate::calls::table::{a, call, opt, Call, PROGRESS};
-use crate::calls::Context;
-use crate::calls::Policy;
+use crate::calls::{Context, Form, Policy};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
+
+/// Its answer: `ok`; the long form adds what was made.
+const FORM: Form = Form::of(
+    &["ok"],
+    &[],
+    &[
+        "ok",
+        "outcome",
+        "machine",
+        "platform",
+        "backend",
+        "cpus",
+        "memory_bytes",
+        "disk_bytes",
+        "image",
+        "os_image",
+        "created_at",
+    ],
+);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -19,12 +37,14 @@ pub(crate) const CALL: Call = call(
         opt("os_image", Text),
         PROGRESS,
     ],
-    "create an enabled VM machine (apple-container, lima)",
+    "create a VM machine (lima, apple-container) and start it",
     run,
 )
-.policy(Policy::Platform("platform"));
+.policy(Policy::Platform("platform"))
+.form(&FORM);
 
-/// Runs `machine.create`.
+/// Runs `machine.create`: `{ phase, done, total }` events, phases
+/// `bundle`, `boot` and `worker`.
 #[cfg(feature = "machine")]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let text = |name: &str| args.get_text(name).map(str::to_owned);
@@ -47,6 +67,6 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 fn run(_context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
     Err(layerfs_home::outcome::refused(
         "Unsupported",
-        "machine.create is not built yet (#533 step 6)",
+        "machine.create runs on the host",
     ))
 }

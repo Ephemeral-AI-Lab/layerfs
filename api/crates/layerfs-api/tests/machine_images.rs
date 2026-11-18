@@ -22,7 +22,7 @@ fn stopped_machine_images_is_unavailable_and_preserves_state() {
     let error = call(
         Some(&home),
         "machine.images",
-        SdkValue::map([("name", SdkValue::text("image-test"))]),
+        SdkValue::map([("machine", SdkValue::text("image-test"))]),
         &mut |_| {},
     )
     .unwrap_err();

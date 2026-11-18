@@ -5,8 +5,8 @@
 //! for Sandboxes. The docker record keeps `loaded_image: { id, bundle }`;
 //! content tags in the Engine reuse the image across homes and runtime builds.
 //! A cached image is inspected before reuse; an import is one attempt.
-use super::spec::{self as record, machine_of, refusal};
-use super::status::home_id;
+use super::spec::home_id;
+use super::spec::{self as record, refusal};
 use crate::bundle::IMAGE_ARCHIVE;
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::home::lock;
@@ -20,7 +20,8 @@ use std::path::Path;
 /// time and recorded.
 pub fn docker_default(home: &Path) -> Result<String, SdkRefusal> {
     let bundle = super::bundle::bundle()?;
-    let record = machine_of(home, "docker")?;
+    // the start that calls this holds the machine's lock and its own `op`
+    let record = super::record::MachineRecord::of(home, "docker")?;
     let archive = bundle.dir.join(IMAGE_ARCHIVE);
     if !archive.is_file() {
         return Err(refused(

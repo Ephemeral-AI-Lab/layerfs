@@ -164,7 +164,7 @@ fn a_scope_refuses_every_call_it_does_not_cover() {
             &home,
             Some(&scoped),
             "machine.remove",
-            &[("name", t("box"))],
+            &[("machine", t("box"))],
         );
         assert!(refused.unwrap_err().1.contains("out of scope"));
     }
