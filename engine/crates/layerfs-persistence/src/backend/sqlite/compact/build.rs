@@ -110,6 +110,8 @@ pub(crate) struct Built {
     pub(crate) metadata: u64,
     /// The retained packs this build wrote again without their dead records.
     pub(crate) repacked: Repacked,
+    /// The body bytes of the inode value blocks the fresh file holds.
+    pub(crate) inode_blocks_bytes: u64,
 }
 
 impl Built {
@@ -148,6 +150,17 @@ pub(crate) struct BuildInput<'a> {
     pub(crate) retained: &'a [i64],
     /// The mark's retained packs that hold dead records, for [`super::repack`].
     pub(crate) partly_dead: &'a [(i64, u64)],
+    /// The inode value ordinals the mark read, for [`super::values`].
+    pub(crate) inode_ordinals: &'a [(u32, u32)],
+}
+
+/// What the mark found besides the retained packs, for the steps of the copy
+/// that leave part of a retained row set behind.
+struct Marked<'a> {
+    /// See [`BuildInput::partly_dead`].
+    partly_dead: &'a [(i64, u64)],
+    /// See [`BuildInput::inode_ordinals`].
+    inode_ordinals: &'a [(u32, u32)],
 }
 
 /// How one table's rows enter the fresh file.
@@ -212,8 +225,12 @@ UNION SELECT run FROM src.commit_lineage WHERE commit_id IN \
         "layer_stack_retired" | "path_removed" | "project_epoch" => {
             Copy::Where("layer_stack_id IN (SELECT node_id FROM src.kept_node WHERE kind='stack')")
         }
-        "inode_value_block" | "kept_node" | "scope_allocator" | "store_policy" | "store_totals"
-        | "history_meta" => Copy::All,
+        // A block is one unit: a block with any ordinal a kept leaf reads is
+        // copied whole.
+        "inode_value_block" => Copy::Where(super::values::LIVE_BLOCK),
+        "kept_node" | "scope_allocator" | "store_policy" | "store_totals" | "history_meta" => {
+            Copy::All
+        }
         "gc_intent" => Copy::Empty,
         "gc_op" | "gc_dead" | "merge_operation" | "merge_record" | "init_operation"
         | "init_entry" | "init_host_file" | "binding_hint_block" => Copy::Empty,
@@ -340,7 +357,7 @@ fn copy_rows(
     target_tables: &BTreeSet<String>,
     plan: &[Window],
     sealed: &mut ReadAhead,
-    partly_dead: &[(i64, u64)],
+    marked: &Marked<'_>,
 ) -> HistoryResult<Repacked> {
     // The pack payload is `pack.body` in a Monolithic Store and the
     // `pack_unit` rows otherwise; that table is copied window by window.
@@ -355,7 +372,9 @@ fn copy_rows(
     let copied = (|| -> HistoryResult<Repacked> {
         // Packs that hold dead records leave the whole-pack copy here and are
         // written again, without those records, once the tables are copied.
-        let repack = super::repack::plan(connection, partly_dead)?;
+        let repack = super::repack::plan(connection, marked.partly_dead)?;
+        // The ordinals the block copy below looks its blocks up in.
+        super::values::plan(connection, marked.inode_ordinals)?;
         // §7 step 4: the totals trigger invariant holds before the copy. The
         // rewrite of `store_totals` below trusts it.
         let before: (i64, i64) = connection
@@ -495,6 +514,7 @@ pub(crate) fn build(
         lengths,
         retained,
         partly_dead,
+        inode_ordinals,
     } = input;
     let store = &facts.path;
     let target = compact_path(store);
@@ -597,7 +617,10 @@ PRAGMA user_version={user_version};PRAGMA application_id={application_id};"
         &target_tables,
         &plan,
         &mut sealed,
-        partly_dead,
+        &Marked {
+            partly_dead,
+            inode_ordinals,
+        },
     )?;
     drop(sealed);
     // §11 `peakTempBytes`: the repack step added its working tables to the
@@ -655,6 +678,7 @@ WHERE sql IS NOT NULL AND substr(name,1,7)!='sqlite_' ORDER BY type,name",
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .map_err(db_error)?;
+    let inode_blocks_bytes = super::values::kept_bytes(&connection)?;
     // The schema is complete, so the header's page count is final: the file
     // ends there, whatever the load was sized for.
     let pages: i64 = connection
@@ -707,5 +731,6 @@ WHERE sql IS NOT NULL AND substr(name,1,7)!='sqlite_' ORDER BY type,name",
         stored: u64::try_from(totals.2).unwrap_or(0),
         metadata: u64::try_from(totals.3).unwrap_or(0),
         repacked,
+        inode_blocks_bytes,
     })
 }

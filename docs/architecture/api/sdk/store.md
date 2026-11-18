@@ -407,7 +407,10 @@ writes each such pack again without them: the pack keeps its id and gets a new
 digest and length, and `kept_waste.dead_in_retained_packs_bytes` reports only
 what the rebuild still kept (a prototype awaiting an owner decision,
 [`gc-42-decisions.md`](../../../../core/docs/issues/project-41/gc-42-decisions.md)
-D6). `dead_bytes_refined` equals
+D6). A SQLite rebuild also copies only the inode value blocks a kept inode
+leaf reads, and `kept_waste.inode_blocks_bytes` then reports the blocks the
+rebuilt Store holds; PostgreSQL and the `none` path report every block (a
+prototype awaiting an owner decision, D7). `dead_bytes_refined` equals
 `dead_bytes_bound` on every path, not only on `none`: the mark resolves the
 whole retained set and no second payload sweep runs (documented amendment
 #42 A10).

@@ -253,6 +253,7 @@ pub(crate) fn verify(
         return Err(HistoryError::Integrity("staged Store pack count"));
     }
     super::repack::verify(&connection, &built.repacked.packs)?;
+    super::values::verify(&connection, mark.objects().inode_ordinals())?;
     if counted(scanned.history)? != mark.history().len() as u64 {
         return Err(HistoryError::Integrity("staged Store history count"));
     }

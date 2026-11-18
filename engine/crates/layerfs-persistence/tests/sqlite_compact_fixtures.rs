@@ -161,7 +161,8 @@ fn chunked_file(f: &Fixture, bytes: &[u8]) -> ObjectId {
 
 /// One valid filesystem tree: a root directory whose only entry is a regular
 /// file whose content root is `content`. The inode leaf is pooled, so the
-/// fixture also owns `inode_value_block` rows that every rebuild keeps.
+/// fixture also owns `inode_value_block` rows; a rebuild keeps the blocks
+/// its kept trees read.
 fn tree(f: &Fixture, content: ObjectId, seed: u8) -> ObjectId {
     let directory = f
         .put(
@@ -1386,7 +1387,15 @@ fn rebuild_case() -> Json {
         receipt.kept_waste.dead_in_retained_packs_bytes, 0,
         "the rebuild writes the shared pack again without its unreached group"
     );
-    assert_eq!(receipt.kept_waste.inode_blocks_bytes, inode_blocks);
+    let inode_blocks_after = inode_block_bytes(&path);
+    assert_eq!(
+        receipt.kept_waste.inode_blocks_bytes, inode_blocks_after,
+        "the report names the inode value blocks the rebuilt Store holds"
+    );
+    assert!(
+        inode_blocks_after > 0 && inode_blocks_after < inode_blocks,
+        "the blocks only the collected trees read are left behind"
+    );
     assert_eq!(receipt.kept_waste.delta_base_references, expected_bases);
     assert!(receipt.kept_waste.delta_bases_bytes > 0);
     assert_eq!(receipt.residue.bytes, 0);

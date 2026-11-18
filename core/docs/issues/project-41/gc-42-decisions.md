@@ -323,9 +323,9 @@ frozen whole-lane exclusion; its measurements live under
 
 ## D. SQLite implementation notes: four deviations and the D2 build decision
 
-This section keeps six records. D1, D3, D4 and D5 are deviations from the
-frozen text that the shipped code still carries; D6 is a prototype that
-awaits an owner decision. D2 is the build decision that
+This section keeps seven records. D1, D3, D4 and D5 are deviations from the
+frozen text that the shipped code still carries; D6 and D7 are prototypes that
+await an owner decision. D2 is the build decision that
 replaced the whole-Store copy: the fresh-copy rebuild follows S5's "fresh
 Store" sentence but deviates from §7 step 4's payload sweep and rollback
 journal and from §11's peak-temp line, and the earlier `VACUUM INTO` + delete +
@@ -529,6 +529,49 @@ measured implementation of this branch.
   packs whole takes 1.91 s (build 1.52 s) and frees 0.9 MB.
 - **Decision requested:** accept repacking and the widened numerator for
   SQLite in 2.0, or keep the frozen pack-as-unit rebuild.
+
+### D7. §6.4 (#42 item 37): the SQLite rebuild copies only the inode value blocks a kept leaf reads
+
+- **Status:** prototype on branch `claude/gc-real-storage` (2026-11-18), not a
+  frozen-text change. It needs an owner decision before it is contract.
+- **Frozen:** §6.4 "Kept in 2.0: every `inode_value_block` row; the ordinals
+  of pooled leaves are private to core, and the blocks are small"; §7 step 4
+  copies all `inode_value_block` rows.
+- **Why it is reopened:** on the real 4.9 GB Store `qv2` the blocks are 24.4 MB
+  (9,999 rows, 604,117 values). After its large project is deleted the rebuilt
+  Store is 28,884,992 bytes, of which 27.6 MB is that project's values: the
+  kept project needs 24,726 bytes of them.
+- **Implemented (SQLite only):** the ordinals stay private to core. The mark
+  reads every reached inode leaf through the shared reader, and the reader
+  asks the mark's source for the ordinals of every body of the leaf's delta
+  chain; every member of that chain is itself reached. The mark notes each
+  ordinal it is asked for (`KeptObjects::inode_ordinals`, inclusive runs), so
+  the noted set is every ordinal a later read of a kept leaf can ask for. The
+  rebuild writes the runs to the visited scratch (`live_ordinal`) and copies
+  an `inode_value_block` row only when it holds one of them. A block is one
+  unit: it is copied whole, byte for byte, with the unread ordinals beside the
+  read ones; no value is encoded again. `store_policy.next_ordinal` is copied
+  unchanged, so an ordinal a dropped block held is never handed out again,
+  and gaps between blocks were already valid (the doctor's
+  `store.catalog.ordinal_overlap` says "reservation gaps remain valid").
+- **Report:** after a rebuild `keptWaste.inodeBlocksBytes` is the body bytes
+  of the blocks the rebuilt Store holds. On the `none` path, and from a mark
+  alone, it is every block's bytes, as before. The dropped blocks are not
+  counted towards the 10%.
+- **Verification (§7 step 6):** one ordered pass over the staged file's block
+  keys requires every ordinal the mark read to be inside a staged block.
+- **Not changed:** PostgreSQL (it keeps every block), the block format, the
+  values of a kept block that no kept leaf reads.
+- **Measured (`qv2`, one sample each, macOS, load 4 to 7):**
+  `project-b-deleted` rebuilds to 1,294,336 bytes instead of 28,884,992
+  (blocks 24,380,718 → 24,726 bytes, 9,999 → 234 rows; build 0.13 s against
+  0.16 s). With the rebuild forced on Stores that keep most of their history
+  the blocks shrink little, because most values are still read: all Branches
+  but `main` removed 24,380,718 → 21,250,030; half the Branches removed →
+  22,227,858. In every case a mark of the rebuilt Store keeps the same
+  objects and history nodes, and every kept object reads back.
+- **Decision requested:** accept dropping unread blocks for SQLite in 2.0, or
+  keep item 37.
 
 ## G. Deferred design decision (1)
 

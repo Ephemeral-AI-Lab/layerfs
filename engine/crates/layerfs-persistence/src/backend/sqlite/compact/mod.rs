@@ -25,8 +25,9 @@
 //! The module is split by phase: [`types`] (the §7/§11 shapes), [`op`] (the
 //! `.compact-op` sidecar), [`build`] with [`space`] (the fresh file's size
 //! during the load), [`window`] (the pack copy's windows and the sealed
-//! file's read-ahead) and [`repack`] (retained packs written again without
-//! their dead records), [`verify`], [`install`], [`receipt`] and [`run`] (the
+//! file's read-ahead), [`repack`] (retained packs written again without
+//! their dead records) and [`values`] (only the inode value blocks a kept leaf
+//! reads are copied), [`verify`], [`install`], [`receipt`] and [`run`] (the
 //! orchestration on `SqliteHandles`).
 
 mod build;
@@ -37,6 +38,7 @@ mod repack;
 mod run;
 mod space;
 mod types;
+mod values;
 mod verify;
 mod window;
 
@@ -51,4 +53,5 @@ pub use types::{
     CompactFailpoint, CompactKeptWaste, CompactPath, CompactReceipt, CompactRequest,
     CompactResidue, CompactZeroReason, OwnerLiveness,
 };
+pub use values::verify as verify_inode_blocks;
 pub use window::{windows, Window, GAP_BYTES, WINDOW_BYTES};

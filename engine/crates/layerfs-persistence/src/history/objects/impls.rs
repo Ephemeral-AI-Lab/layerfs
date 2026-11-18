@@ -94,6 +94,13 @@ impl KeptObjects {
         &self.partly_dead
     }
 
+    /// The inode value ordinals the reached leaves read, as inclusive runs in
+    /// ascending order. A read of a kept leaf asks for no other ordinal, so a
+    /// rebuild keeps only the `inode_value_block` rows that hold one of them.
+    pub fn inode_ordinals(&self) -> &[(u32, u32)] {
+        &self.inode_ordinals
+    }
+
     /// Whether `id` is reached.
     pub fn contains(&self, id: ObjectId) -> bool {
         self.objects.binary_search(&id).is_ok()

@@ -44,6 +44,7 @@ use std::path::Path;
 mod edges;
 mod ids;
 mod impls;
+mod ordinals;
 mod plan;
 
 use ids::{IdMap, IdSet};
@@ -86,6 +87,8 @@ pub struct KeptObjects {
     /// pack order, each with its share of
     /// [`KeptWaste::dead_in_retained_packs_bytes`].
     partly_dead: Vec<(i64, u64)>,
+    /// The inode value ordinals the reached leaves read, as inclusive runs.
+    inode_ordinals: Vec<(u32, u32)>,
 }
 
 /// One complete mark: the §6.1 history closure, the §6.2 object closure and the
@@ -269,6 +272,7 @@ fn mark_recorded(
         layouts: std::cell::RefCell::new(HashMap::new()),
         upcoming: std::cell::RefCell::default(),
         values: std::cell::RefCell::default(),
+        ordinals: std::cell::RefCell::default(),
     };
     let roots = roots(tx)?;
     let closure = walk(&source, &capacities, policy.construction(), roots, visit)?;
@@ -280,6 +284,7 @@ fn mark_recorded(
         packs: closure.packs(),
         waste,
         partly_dead,
+        inode_ordinals: source.ordinals.borrow().runs(),
     };
     Ok(MarkResult {
         history,
@@ -405,6 +410,8 @@ struct ClosureSource<'a> {
     upcoming: std::cell::RefCell<(Vec<i64>, usize)>,
     /// Inode values the engine returned ahead of need, by ordinal.
     values: std::cell::RefCell<HashMap<u32, [u8; INODE_VALUE_BYTES]>>,
+    /// Every ordinal the walk asked for ([`ordinals`]).
+    ordinals: std::cell::RefCell<ordinals::Ordinals>,
 }
 
 /// Packs announced to the engine at a time ([`ClosureSource::announce`]).
@@ -555,6 +562,7 @@ impl Source for ClosureSource<'_> {
         // One keyed map, so a page of many ordinals is not scanned per
         // ordinal. It also keeps what the engine read ahead: a walk meets
         // leaves in about the order their values were stored.
+        self.ordinals.borrow_mut().extend(ordinals);
         let mut held = self.values.borrow_mut();
         if !ordinals.iter().all(|ordinal| held.contains_key(ordinal)) {
             let mut rows = Vec::new();

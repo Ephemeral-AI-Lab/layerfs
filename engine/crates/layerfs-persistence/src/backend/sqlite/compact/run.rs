@@ -385,6 +385,7 @@ impl SqliteHandles {
                     lengths: &lengths,
                     retained: mark.objects().packs(),
                     partly_dead: mark.objects().partly_dead_packs(),
+                    inode_ordinals: mark.objects().inode_ordinals(),
                 },
                 capacity,
                 request,
@@ -404,6 +405,8 @@ impl SqliteHandles {
             kept_waste.dead_in_retained_packs_bytes = kept_waste
                 .dead_in_retained_packs_bytes
                 .saturating_sub(built.repacked.marked_dead);
+            // The rebuilt Store holds only the blocks a kept leaf reads.
+            kept_waste.inode_blocks_bytes = built.inode_blocks_bytes;
             // §9/§11: record the installed outcome's totals now that the build
             // produced them, so a crash after the rename still lets the next
             // call answer the original report instead of re-deciding.
