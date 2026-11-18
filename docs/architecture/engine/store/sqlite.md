@@ -175,11 +175,11 @@ of the retained packs, so its steps are shaped around that copy.
 | File size | macOS sizes the fresh file for the retained pack bytes before the load (one advisory `F_PREALLOCATE`, one `set_len`), because on APFS a page write that also moves the end of the file costs about four times one inside a sized file. The closed file is cut to the pages its header counts. Linux leaves the file to grow | [`space.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/space.rs) |
 | Pack copy | The table that holds the pack payload (`pack`, or `pack_unit` in the group-row layouts) is copied one window per statement: `WINDOW_BYTES` (64 MiB) of retained payload, ended early by a dead run longer than `GAP_BYTES` (8 MiB). Every other table is one statement. When that table is `pack`, each window's rows are summed for `store_totals` (`stored`, `metadata`) right after the window is written, while its pages are in the build's cache: a pass over `pack` after the load reads one page per pack back from the file, spread over the whole file (22,729 page reads on a 4.9 GB Store of 38,666 packs; 65 ms with the file in memory, 11.9 s in one run under memory pressure). The verification still recomputes both sums from the closed file | [`window.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/window.rs), [`build.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/build.rs) |
 | Read-ahead | Before each window the sealed file's matching range is asked for once, through a second read-only descriptor: `F_RDADVISE` on macOS, `POSIX_FADV_WILLNEED` in 128 KiB steps on Linux. Without it a source that is not in memory is read one pack per device round trip. The range assumes packs lie in the file in id order; a hint only, so another layout loses the benefit and nothing else | [`window.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/window.rs) |
-| Locators | The mark never holds the locator table. It reads `object_location` once in key order, 512 rows a statement (`WHERE object_id > ? ORDER BY object_id LIMIT ?`), and keeps the last identity of every block: 32 bytes per 512 objects. An object's position in that order is its rank; what the walk reached is one bit per rank. An identity is resolved by a binary search of the kept identities and one read of its block, and the walk resolves each wave's identities in identity order, so the blocks are read forward, 16 at a time. The same first pass counts each pack's located records and sorts the locators of the non-payload objects by pack for the walk. On a 4.9 GB Store of 1,693,320 objects a mark reads the table about six times (1,320 statements, 10.1 million rows, about 4 s of a 23 s mark) where one whole read took 1.5 to 2 s | [`table.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/table.rs), [`metadata/locations.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/metadata/locations.rs) |
+| Locators | The mark never holds the locator table. It reads `object_location` once in key order, 512 rows a statement (`WHERE object_id > ? ORDER BY object_id LIMIT ?`), and keeps the last identity of every block: 32 bytes per 512 objects. An object's position in that order is its rank; what the walk reached is one bit per rank. An identity is resolved by a binary search of the kept identities and one read of its block, and the walk resolves each wave's identities in identity order, so the blocks are read forward, 16 at a time. A wave with fewer identities than one in 128 of the Store's objects (the retained roots, a Store whose kept set is small) reads no blocks: each identity is one statement on the table's own key that returns its row and counts the rows between it and the end of the block before, which is its rank. The same first pass counts each pack's located records and sorts the locators of the non-payload objects by pack for the walk. On a 4.9 GB Store of 1,693,320 objects a mark reads the table about five times (8.6 million rows and 4,516 single lookups, about 3 s of an 18 to 26 s mark) where one whole read took 1.5 to 2 s; a wave that reaches more identities than the table has leaf pages cannot do better than one forward pass | [`table.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/table.rs), [`metadata/locations.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/metadata/locations.rs) |
 | Pack lengths | The decision (dead bytes against a tenth of the stored bytes) and the copy's windows need every pack's length: `gc_pack_lengths`, 4,096 packs a statement in pack order, run inside the mark's transaction after the walk. Where a pack's payload is in its row (the `Monolithic` layout), that scan visits one table page per pack, 38,680 scattered pages on a 4.9 GB Store: about 2.5 s read cold before the mark, 0.1 to 0.9 s after the walk has read the same pages for the packs it reached. The lengths are held for the run as one map entry per pack | [`run.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/run.rs), [`gc_pack_lengths.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/queries/history/gc_pack_lengths.sql) |
-| Visited scratch | The mark hands the sink no objects while it walks; what it reached is its bitmap. A `none` run writes no visited file. A `rebuild` writes `<store>.compact-visited` before the mark's transaction commits, in one transaction of its own: the locator blocks are read once more and each reached object goes to `visited` as it is met, so the rows arrive in identity order, and the retained packs go to `live_pack` in pack order, 128 rows a statement; both tables are filled by appending and nothing is listed in memory. Writing one row per object during the walk put each row on a random page of the table and took about a third of a `none` run on a 4.9 GB Store. Either path reports as `peakTempBytes` at least the most the mark's sort files held (see the mark's memory below) | [`compact_visit.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact_visit.rs) |
+| Visited scratch | The mark hands the sink no objects while it walks; what it reached is its bitmap. A `none` run writes no visited file. A `rebuild` writes `<store>.compact-visited` before the mark's transaction commits, in one transaction of its own: the locator blocks are read once more and each reached object goes to `visited` as it is met, so the rows arrive in identity order, and the retained packs go to `live_pack` in pack order from the mark's set of pack ids, 128 rows a statement; both tables are filled by appending and nothing is listed in memory. Writing one row per object during the walk put each row on a random page of the table and took about a third of a `none` run on a 4.9 GB Store. Either path reports as `peakTempBytes` at least the most the mark's sort files held at one time (see the mark's memory below) | [`compact_visit.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact_visit.rs) |
 | Repack (prototype, [decision D6](../../../../core/docs/issues/project-41/gc-42-decisions.md)) | A retained pack in which the mark found a record no reached object owns leaves `live_pack` before the pack copy and is written again after the `object_location` copy, from the kept locators in `repack_kept` (a table in the visited scratch, keyed by pack, group and record, read one pack at a time). The pack keeps its id; its bytes are built by `layerfs-storage`, and its kept objects' locators move to their new group and record numbers | [`repack.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/repack.rs) |
-| Inode value blocks (prototype, [decision D7](../../../../core/docs/issues/project-41/gc-42-decisions.md)) | The mark notes every ordinal its walk asks the Store for, which is every ordinal a read of a kept inode leaf can ask for. The build writes them as runs to `live_ordinal` in the visited scratch and copies an `inode_value_block` row only when it holds one of them, whole and unchanged; `next_ordinal` does not move. The report's `inode_blocks_bytes` is then the bytes of the blocks the rebuilt Store holds | [`values.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/values.rs), [`ordinals.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/ordinals.rs) |
+| Inode value blocks (prototype, [decision D7](../../../../core/docs/issues/project-41/gc-42-decisions.md)) | The mark notes every ordinal its walk asks the Store for, which is every ordinal a read of a kept inode leaf can ask for. The build writes them as runs to `live_ordinal` in the visited scratch and copies an `inode_value_block` row only when it holds one of them, whole and unchanged; `next_ordinal` does not move. The report's `inode_blocks_bytes` is then the bytes of the blocks the rebuilt Store holds | [`values.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/values.rs), [`idset.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/idset.rs) |
 | Verification | One `immutable=1` reader of the fresh file: the schema check, the `pack` count and sums, one statement that reads the other row counts and recomputed sums with one pass per table, the live-heads digest and the tuple. `pack` is read first and one window at a time, by the build's plan for the fresh file (the retained packs alone, in the order they were written): before a window's rows are read the file is asked for the window's range in one sequential request, when the window's packs average under 512 KiB. A pack's row is one page beside its payload, so read in one pass the rows of a file the kernel no longer holds cost one device round trip per pack (23,330 page reads on a 4.9 GB Store of 38,666 packs: 2.3 s with the file out of memory and 3.9 s as the build left it, against 0.7 s and 0.6 s window by window). The windows only place the read-ahead; the ranges read are consecutive and cover every pack identity, so the count and sums are those of one pass over the table. The rows are then in the reader's cache for the foreign-key pass. The reader has the build's 64 MiB page cache (`CACHE_KIB`): the foreign-key pass looks up the pack row of every object in object identity order, and through the default 2 MiB cache almost every lookup read its page from the file again (1.71 million page reads against 47 thousand with 256 MiB on a 4.9 GB Store of 38,666 packs). The cache is a fixed part of the compaction's memory, so it is not sized to the Store: on that Store 64 MiB took the verification from 1.7 s to 4.1 s and the build from 9.3 s to 9.6 s, and took 266 MB off the run's peak; a Store whose pack rows' pages exceed the cache pays one page read per object in that pass. Each pack written again is read back whole and hashed against its row and the build's digest, and one plain scan of `object_location` requires its locators to be exactly the records its own directories state. One ordered pass over the block keys requires every ordinal the mark read to be inside a staged block. The sealed file's tuple and digest are read back through one reader as well | [`verify.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/verify.rs), [`repack.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/repack.rs), [`values.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/values.rs) |
 | Synchronization | The op record is synchronized at each write, the fresh file before the rename and the directory after it | [`op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/op.rs), [`install.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/install.rs) |
 | Settle | The run lets go of the writer lane after the rename, removes its artifacts, then takes the lane again for the one transaction that clears its admission intent and the `kept_node` rows in the installed Store. A writer has no busy handler, so a settle that wrote beside one would leave it `Busy`; the settle waits its turn instead. The op record is removed last | [`install.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/install.rs) |
@@ -224,44 +224,98 @@ reads to 19,387, 11,479 and 0.33 GB.
 
 ### The mark's memory
 
-A mark holds a fixed amount of memory plus about four bits for each object
-the Store locates, whatever the Store's size
+A compaction's mark holds a fixed amount of memory plus about half a byte
+for each object the Store locates and one bit for each pack it retains,
+whatever the Store's size
 ([`objects.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects.rs)).
-Nothing it keeps is a table of locators, a set of identities or a list of
-what it visited.
+Nothing it keeps is a table of locators, a set of identities, a list of
+what it visited, a list of history nodes or a list of packs.
 
 | Held | Size | Source |
 | --- | --- | --- |
 | Block identities | 32 bytes per 512 located objects (half a bit an object) | [`table.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/table.rs) |
 | Reached, reached as a logical reference, reached as a delta base | three bitmaps over rank: three bits an object | same |
 | Read-ahead of locator blocks | 16 blocks of 512 rows | same |
-| Sorters | a fixed buffer each: reached identities awaiting their locator 8 MiB, the next wave's locators 8 MiB, reached records for kept waste 4 MiB, the non-payload inventory 4 MiB, located records per pack 4 MiB, group layouts 4 MiB, body reads 1 MiB | [`spill.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/spill.rs), [`records.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/records.rs) |
+| Retained packs, inode value ordinals read | one bit each, in pages of 65,536 numbers (8 KiB) allocated where a number is set | [`idset.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/idset.rs) |
+| Sorters | a fixed buffer each: reached identities awaiting their locator 8 MiB, the next wave's locators 8 MiB, reached records for kept waste 4 MiB, the non-payload inventory 4 MiB, located records per pack 4 MiB, group layouts 4 MiB, body reads 1 MiB, history nodes still to follow 1 MiB, partly dead packs 256 KiB | [`spill.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/spill.rs), [`records.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/records.rs) |
+| The non-payload inventory, once sorted | one sealed run in pack order and the pack id of every 128th row (8 bytes per 128 non-payload objects); a pack's rows are found by that index and read through one 64 KiB window, so the run is merged once and not once per wave | [`spill.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/spill.rs) |
 | The pack being walked | its non-payload objects' locators and the headers of at most 256 payload packs or 16,384 rows; bounded by the pack format (256 groups of 8,191 records), not by the Store | [`walk.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/walk.rs) |
-| Kept-waste round | the reached records of at most 256 retained packs or 262,144 records | [`waste.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/waste.rs) |
+| Kept-waste round | the reached records of at most 4,096 retained packs, 256 packs whose directory is still unread or 262,144 records | [`waste.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/waste.rs) |
 | Chain memo, inode values | 32 MiB and about 19 MiB, as above | |
-| Still per pack or per Commit | the retained roots (32 bytes a retained Commit or Layer), the retained pack ids (8 bytes a pack), the partly dead packs (16 bytes each), the run's pack lengths (one map entry a pack) and one bit per inode value ordinal read | |
+| History | one page of 1,024 `kept_node` rows, one batch of 256 nodes and its statement's rows (at most 8,192) | [`kept.rs`](../../../../engine/crates/layerfs-persistence/src/history/kept.rs) |
+
+The history closure is not one recursive statement on SQLite. Temporary
+storage is process memory here (`temp_store=2`), and the one statement
+held its edge table, an automatic index over it and the closure itself:
+about 300 bytes a Commit, 390 MB at 454 thousand Commits. The mark seeds
+`kept_node` with the live LayerStacks, their Layers and the live Branches
+(`kept_node_seed`), then follows the edges of at most 256 kept nodes a
+statement (`kept_node_expand`), which inserts what it finds and stops after
+8,192 rows. A statement that stopped there may have left nodes unfollowed,
+so its rows and its batch are followed again; one that did not leaves
+nothing. The nodes still to follow wait in a sorter. Edges are followed by
+each table's primary key, so no statement scans or sorts. The retained
+roots, the live heads and the report's history are then read from
+`kept_node` and the catalog a page at a time. The closure took 12.7 s in
+1,794 statements for 454 thousand Commits where the one statement took
+7.1 s: every node of a long chain is followed twice. A mark that lists what
+it kept (`HistoryProvider::mark`) still returns every node and object; a
+compaction's mark returns counts, the two sets and the kept waste. The
+retained packs and ordinals are also offered as lists
+(`KeptObjects::packs`, `inode_ordinals`), made on first use and eight bytes
+an entry: a caller that must stay bounded reads the sets
+(`retained_packs`, `inode_ordinal_set`). The partly dead packs stay in
+their sorter (`each_partly_dead`) and are listed only for a rebuild, which
+reads them as a list today.
 
 A sorter that fills sorts and folds what it holds and writes it as one
-sorted run to a file in the Store's directory, created and unlinked at once
-so that no name is left behind by any exit; the runs are merged through
-64 KiB windows. A wave's reached identities are sorted by identity and
-resolved in one forward pass over the locator blocks; the located rows are
-sorted by pack, group and record and walked a run of packs at a time. A
-metadata object of the pack being walked is still read in the same visit
-(the pack's non-payload locators come from the inventory sorter, merged in
-pack order). A delta base that is not in the pack being walked is found by
-one point lookup in `object_location`'s own key. Kept waste is attributed
-by merging three pack-ordered streams: the located counts, the reached
-records and the group layouts the walk saw.
+sorted run to a file in the Store's directory; the runs are merged through
+64 KiB windows. The file has no name: Linux opens it with `O_TMPFILE`, and
+where that is not available (macOS, a file system without it) it is created
+as `.layerfs-mark-<pid>-<random>-<n>` and unlinked at once. A mark killed
+between those two steps leaves that name; the next mark that needs a sort
+file removes every `.layerfs-mark-*` name in the directory first, so the
+Store's own mark cleans up and no other caller has to. The files hold
+fixed-width records in the widths the Store's limits allow (33 bytes an
+identity awaiting its locator, 54 a located row, 22 a reached record):
+about 66 bytes for each located object at the most, and the mark counts
+what they hold together, so `peakTempBytes` is the most they held at one
+time. A directory the mark may not write to fails the mark as refused I/O
+(`ContinuityUnavailable`, the class a read-only Store reports); a full
+disk, quota or file-size limit fails it as `Capacity("disk space")`; any
+other error is `Integrity`. Nothing is left behind in any of them.
 
-On the 4.9 GB Store (1,693,320 objects, 38,680 packs, 4,514 Commits; one
-sample each, macOS) a `none` compaction peaked at 173 MB of process memory
-where the mark that held its tables peaked at 1.73 GB, in 23 to 27 s against
-24 to 30 s; its sort files held 177 MB at most, about 105 bytes an object. It
-runs 167 thousand statements where the other ran 19 thousand (the locator
-blocks and 140 thousand point lookups of delta bases) and reads the same
-pack bytes. The 32 MiB memo against 64 MiB costs 7 thousand statements and
-39 MB of BLOB reads more and takes 25 MB off the peak.
+A wave's reached identities are sorted by identity and resolved in one
+forward pass over the locator blocks; the located rows are sorted by pack,
+group and record and walked a run of packs at a time. A metadata object of
+the pack being walked is still read in the same visit. A delta base that is
+not in the pack being walked is found by one point lookup in
+`object_location`'s own key. Kept waste is attributed by merging three
+pack-ordered streams: the located counts, the reached records and the
+group layouts the walk saw.
+
+One sample each, macOS, peak memory footprint of a `none` compaction:
+
+| Store | Mark that held its lists | This mark |
+| --- | --- | --- |
+| 4.9 GB, 1,693,320 objects, 38,680 packs, 4,514 Commits | 187 MB | 163 to 184 MB (three samples) |
+| the same with 450,000 more Commits | 390 MB | 188 MB |
+| the same with 3.0 million more packs of one object | 317 to 321 MB | 224 MB |
+
+In the last row the mark itself peaks at 189 MB and is back at 90 MB before
+it ends; the last 131 MB are the compaction's own map of pack lengths and
+the list of packs it asks for, which are not the mark's
+([`run.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/run.rs)).
+A rebuild of that Store with its 3.0 million packs retained peaked at
+343 MB, 114 MB of it during the mark. On the first Store the sort files
+held 112 MB at most where they held 146 MB, the mark runs 172 thousand
+statements (the locator blocks and 140 thousand point lookups of delta
+bases) and reads the same pack bytes as before. The mark that held the
+locator table and the visited set in memory peaked at 1.73 GB there, in 24
+to 30 s against 18 to 26 s. The 32 MiB memo against 64 MiB costs 7 thousand
+statements and 39 MB of BLOB reads more and takes 25 MB off the peak. What
+still grows is the half byte an object: 74 MB at one hundred times this
+Store's objects.
 
 ## Heads
 

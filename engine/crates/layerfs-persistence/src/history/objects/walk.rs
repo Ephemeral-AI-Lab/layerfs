@@ -7,7 +7,7 @@
 //! reached are the next wave, sorted by locator. The wave is then walked a
 //! bounded run of rows at a time.
 use super::records::{self, Edge, Kept, Row};
-use super::spill::{Merge, Sorter};
+use super::spill::{Sealed, Sorter};
 use super::table::{Locators, Marks};
 use super::{edges, storage, ClosureSource};
 use layerfs_content::filesystem::{FilesystemRoot, InodeScope};
@@ -26,6 +26,10 @@ use layerfs_storage::{
 
 /// Rows of a wave walked between two reads of record headers, at most.
 const RUN_ROWS: usize = 16_384;
+/// A wave that reached fewer identities than one in this many locators asks
+/// for each one alone instead of reading the locators block by block: most
+/// blocks then hold none of them.
+const SPARSE_SHARE: u64 = 128;
 
 /// The caches of the shared encoding readers, kept for the whole walk.
 struct Readers {
@@ -62,20 +66,19 @@ impl Marks {
 /// Reference-bearing metadata pages are still authenticated and decoded, but
 /// identity is not hashed a second time.
 ///
-/// Returns the most bytes the walk's own sort files held.
+/// `reached` holds the roots: the first wave.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn walk(
     source: &ClosureSource<'_>,
     table: &mut Locators,
     marks: &mut Marks,
-    inventory: &mut Sorter<Row>,
+    inventory: &mut Sealed<Row>,
     kept: &mut Sorter<Kept>,
     capacities: &StorageCapacities,
     construction: ConstructionPolicy,
-    roots: Vec<ObjectId>,
-) -> HistoryResult<u64> {
+    mut reached: Sorter<Edge>,
+) -> HistoryResult<()> {
     let mechanics = source.mechanics;
-    let directory = mechanics.scratch_directory();
     let mut readers = Readers {
         packs: PackCache::new(),
         pool: PoolReader::with_chain_memo(super::CHAIN_MEMO_BYTES),
@@ -86,34 +89,21 @@ pub(super) fn walk(
     };
     // One hash for the whole walk, not one per metadata object.
     let unscoped = InodeScope::from_object(ObjectId::for_bytes(b"gc.mark/object-closure"));
-    let mut reached: Sorter<Edge> = Sorter::new(
-        &directory,
-        super::EDGE_SORT_BYTES,
-        if mechanics.locators_by_signed_prefix() {
-            records::edges_by_signed_prefix
-        } else {
-            records::edges_by_bytes
-        },
-    );
     let mut frontier: Sorter<Row> = Sorter::new(
-        &directory,
+        &source.space,
         super::FRONTIER_SORT_BYTES,
         records::rows_by_locator,
     );
-    for id in roots {
-        reached.push(Edge {
-            id,
-            kind: records::LOGICAL,
-        })?;
-    }
     loop {
         // Locate what the last wave reached, in the order the locators are
-        // read in: each block of them is read once.
+        // read in: each block of them is read once, and a wave that reached
+        // little asks for its identities one by one.
         {
+            let sparse = reached.added().saturating_mul(SPARSE_SHARE) < table.count();
             let mut edges = reached.sorted()?;
             while let Some(edge) = edges.next()? {
                 let (rank, location) = table
-                    .find(mechanics, &edge.id)?
+                    .find(mechanics, &edge.id, sparse)?
                     .ok_or(HistoryError::Integrity("mark object locator"))?;
                 if marks.note(rank, edge.kind) {
                     frontier.push(Row { location, rank })?;
@@ -128,7 +118,6 @@ pub(super) fn walk(
             // Pack order: one body answers every object of its group, so a
             // wave sorted by locator reads each group once.
             let mut wave = frontier.sorted()?;
-            let mut inventory = inventory.sorted()?;
             let mut rows: Vec<Row> = Vec::new();
             loop {
                 // A run ends where the header reads of one call end: after
@@ -156,7 +145,7 @@ pub(super) fn walk(
                     source,
                     marks,
                     &rows,
-                    &mut inventory,
+                    inventory,
                     &mut reached,
                     kept,
                     &mut readers,
@@ -168,10 +157,7 @@ pub(super) fn walk(
         }
         frontier.clear()?;
     }
-    Ok(reached
-        .peak_file_bytes()
-        .saturating_add(frontier.peak_file_bytes())
-        .saturating_add(inventory.peak_file_bytes()))
+    Ok(())
 }
 
 /// Walks one run of a wave: reads its payload record headers, then every
@@ -181,7 +167,7 @@ fn walk_rows(
     source: &ClosureSource<'_>,
     marks: &mut Marks,
     rows: &[Row],
-    inventory: &mut Merge<'_, Row>,
+    inventory: &mut Sealed<Row>,
     reached: &mut Sorter<Edge>,
     kept: &mut Sorter<Kept>,
     readers: &mut Readers,

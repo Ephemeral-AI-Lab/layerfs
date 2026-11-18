@@ -69,7 +69,7 @@ impl VisitSink {
     /// sidecar and returns the file's size.
     pub(crate) fn finish(
         mut self,
-        packs: &[i64],
+        packs: &crate::IdSet,
         list: impl FnOnce(&mut dyn FnMut(ObjectId, i64) -> HistoryResult<()>) -> HistoryResult<()>,
     ) -> HistoryResult<u64> {
         if std::fs::symlink_metadata(&self.path).is_ok() {
@@ -122,13 +122,27 @@ BEGIN IMMEDIATE;",
         })?;
         write(&rows)?;
         drop(rows);
-        insert(
-            &connection,
-            "INSERT INTO live_pack(pack_id) VALUES",
-            "(?)",
-            packs,
-            |pack_id| [integer(*pack_id)],
-        )?;
+        // The retained packs come from the mark's set a statement's worth
+        // at a time; the whole list is never held.
+        let mut batch: Vec<i64> = Vec::with_capacity(ROWS_PER_INSERT);
+        let write = |batch: &[i64]| {
+            insert(
+                &connection,
+                "INSERT INTO live_pack(pack_id) VALUES",
+                "(?)",
+                batch,
+                |pack_id| [integer(*pack_id)],
+            )
+        };
+        for pack in packs.iter() {
+            batch.push(pack as i64);
+            if batch.len() == ROWS_PER_INSERT {
+                write(&batch)?;
+                batch.clear();
+            }
+        }
+        write(&batch)?;
+        drop(batch);
         connection.execute_batch("COMMIT").map_err(db_error)?;
         connection.close().map_err(|(_, error)| db_error(error))?;
         for sidecar in sidecars(&self.path) {

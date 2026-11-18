@@ -72,6 +72,12 @@ SLOW = {
     ("layerfs-sandbox", "inspect_admission"): 11.58,
     # Two requests wait out the 4 s soft budget (layerfs-project#164), 2026-11-16.
     ("layerfs-sandbox", "inspect_stats"): 8.30,
+    # Marks of 1.1 million objects and of 20,000 packs through sort files
+    # (layerfs-project#41), 2026-11-18.
+    ("layerfs-persistence", "kept_objects_sort_files"): 24.54,
+    # History closures of 9,000 Commits and 24,000 Branches against the one
+    # recursive statement (layerfs-project#41), 2026-11-18.
+    ("layerfs-persistence", "kept_node_closure"): 5.32,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run

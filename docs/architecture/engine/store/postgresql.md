@@ -190,6 +190,20 @@ round trip
 ([`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs),
 `locations_after`).
 
+One method decides where the sort files go
+([`seam.rs`](../../../../engine/crates/layerfs-persistence/src/backend/seam.rs),
+`Mechanics::scratch_directory`): the client's temporary directory
+(`std::env::temp_dir()`) for a PostgreSQL Store, which has no directory of
+its own. Where that directory is a memory file system (`/tmp` on many Linux
+hosts) a sort file is memory again, so the bound on the mark's memory holds
+there only when `TMPDIR` names a directory on a disk. A name a killed mark
+left in that directory is removed by the next mark of any Store that sorts
+through files there. The history closure is one recursive statement here: its
+working tables are the server's memory, which `work_mem` governs and spills
+to the server's own temporary files, not the client's. The client reads
+`kept_node` back a page of 1,024 rows at a time and holds no list of it in
+a compaction's mark.
+
 ### Generation fence
 
 The session keeps the `catalog_incarnation` its open read

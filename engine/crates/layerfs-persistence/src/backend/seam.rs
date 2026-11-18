@@ -101,10 +101,33 @@ pub(crate) trait Mechanics {
     fn locators_by_signed_prefix(&self) -> bool {
         false
     }
-    /// A local directory for the sort files of one mark: files created,
-    /// unlinked at once and gone with their handle, never Store state.
+    /// A local directory for the sort files of one mark: files without a
+    /// name, gone with their handle, never Store state. This is the one
+    /// place that decides where they go: an engine with a directory of its
+    /// own names it, and the others get the process's temporary directory,
+    /// which is memory where that directory is a memory file system.
     fn scratch_directory(&self) -> std::path::PathBuf {
         std::env::temp_dir()
+    }
+    /// The stored locator of `id` and how many stored locators lie between
+    /// `after` and `id` in the order of [`Self::locations_after`], both
+    /// excluded (from the first locator when `after` is `None`). `None`: this
+    /// engine has no such read, and the caller reads the locators between
+    /// through [`Self::locations_after`]. A mark asks this for an identity
+    /// in a block of locators it would otherwise read whole for one row.
+    fn location_after(
+        &self,
+        _after: Option<&ObjectId>,
+        _id: &ObjectId,
+    ) -> Result<Option<Ranked>, PersistenceError> {
+        Ok(None)
+    }
+    /// Whether the history closure of a mark is computed in bounded batches
+    /// of statements (`kept_node_seed`, `kept_node_expand`) instead of one
+    /// recursive statement (`kept_node_mark`). An engine whose temporary
+    /// storage is this process's memory says yes.
+    fn closure_in_batches(&self) -> bool {
+        false
     }
     fn inode_values(
         &self,
@@ -192,6 +215,14 @@ pub(crate) trait Mechanics {
             status: "pack range read".to_owned(),
         })
     }
+}
+
+/// One answer of [`Mechanics::location_after`].
+pub(crate) enum Ranked {
+    /// The Store locates no such object.
+    Absent,
+    /// The count of locators between, and the object's locator.
+    Found(u64, ObjectLocation),
 }
 
 /// A plan that selects ranges chosen before the acquisition starts.

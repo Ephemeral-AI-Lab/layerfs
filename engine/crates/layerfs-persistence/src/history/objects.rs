@@ -10,14 +10,16 @@
 //!
 //! Memory does not follow the Store's size. The locators stay in the Store:
 //! they are read in bounded pieces ([`table`]), and the walk keeps one bit
-//! per object for what it reached, not the objects. What a wave reached, the
-//! order the next wave is walked in and the records the kept-waste pass
+//! per object for what it reached, not the objects. The history closure
+//! stays in `kept_node` and is read a page at a time. What a wave reached,
+//! the order the next wave is walked in and the records the kept-waste pass
 //! attributes are sorted in bounded memory and written to unnamed files
-//! beyond it ([`spill`]). The reached objects are listed, when a caller
-//! wants them, by reading the locators once more.
+//! beyond it ([`spill`]). The retained packs and the inode value ordinals
+//! are one bit each ([`idset`]). The reached objects, the history nodes and
+//! the packs are listed, when a caller wants them, by reading them once more.
 use super::kept::{self, KeptHistory};
 use super::provider::HistoryProvider;
-use super::rows::{cell, object};
+use super::rows::cell;
 use super::transaction::Transaction;
 use crate::backend::records::Param;
 use crate::backend::sqlite::session::transaction::Completion;
@@ -33,26 +35,26 @@ use layerfs_storage::{
     source::Source,
     StorageCapacities, StorageError,
 };
-use std::collections::BTreeSet;
 use std::path::Path;
+use std::sync::{Arc, Mutex, OnceLock};
 
 mod edges;
 mod ids;
+mod idset;
 mod impls;
-mod ordinals;
 mod plan;
 mod records;
-mod spill;
+pub(crate) mod spill;
 mod table;
 mod values;
 mod walk;
 mod waste;
 
 use ids::IdMap;
+pub use idset::IdSet;
 use plan::MarkGroups;
-use spill::Sorter;
+use spill::{Sealed, Sorter, Space};
 use table::Locators;
-const ROOTS: &str = "gc_kept_roots";
 const LIVE_STACKS: &str = "gc_live_stacks";
 const LIVE_BRANCHES: &str = "gc_live_branches";
 const INODE_BLOCKS: &str = "gc_inode_blocks";
@@ -80,21 +82,47 @@ pub struct KeptWaste {
 
 /// The object half of a mark: every object and pack the retained history
 /// reaches (§6.2), in ascending order.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+///
+/// What it always holds is bounded: a count of the reached objects, one bit
+/// for each retained pack and each inode value ordinal read, and the partly
+/// dead packs in a list that leaves memory for a sort file when it is long.
+/// The lists a caller may ask for are made when it asks.
+#[derive(Clone, Debug, Default)]
 pub struct KeptObjects {
     /// The reached objects, when the mark listed them: [`HistoryProvider::mark`]
     /// does, a SQLite compaction mark writes them to its scratch instead.
     objects: Vec<ObjectId>,
     /// How many objects the mark reached, listed or not.
     count: u64,
-    packs: Vec<i64>,
+    /// The retained packs: those holding at least one reached object.
+    retained: IdSet,
+    /// [`Self::retained`] as a list, made the first time one is asked for.
+    packs: OnceLock<Vec<i64>>,
     waste: KeptWaste,
     /// Retained packs that hold a record no reached object owns, in ascending
     /// pack order, each with its share of
     /// [`KeptWaste::dead_in_retained_packs_bytes`].
-    partly_dead: Vec<(i64, u64)>,
-    /// The inode value ordinals the reached leaves read, as inclusive runs.
-    inode_ordinals: Vec<(u32, u32)>,
+    partly_dead: PartlyDead,
+    /// [`Self::partly_dead`] as a list, when the mark listed them.
+    partly_dead_listed: Vec<(i64, u64)>,
+    /// The inode value ordinals the reached leaves read.
+    ordinals: IdSet,
+    /// [`Self::ordinals`] as inclusive runs, made the first time they are
+    /// asked for.
+    inode_ordinals: OnceLock<Vec<(u32, u32)>>,
+}
+
+/// The partly dead packs of one mark with their dead bytes, ascending.
+#[derive(Clone, Default)]
+pub(in crate::history) struct PartlyDead {
+    packs: Option<Arc<Mutex<Sorter<records::Count>>>>,
+    count: u64,
+}
+
+impl std::fmt::Debug for PartlyDead {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(out, "PartlyDead({})", self.count)
+    }
 }
 
 /// One complete mark: the §6.1 history closure, the §6.2 object closure and the
@@ -109,7 +137,7 @@ pub struct MarkResult {
     objects: KeptObjects,
     live_heads_digest: [u8; 32],
     mark_bytes: u64,
-    /// The most bytes the mark's sort files held, summed over the files.
+    /// The most bytes the mark's sort files held at one time.
     scratch_bytes: u64,
 }
 
@@ -209,8 +237,11 @@ impl HistoryProvider {
             crate::backend::Engine::Sqlite(session) => session.run(true, |backend| {
                 let tx = Transaction::new(backend);
                 let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
-                let (mark, mut reach) = mark_recorded(&tx)?;
-                sink.finish(mark.objects.packs(), |row| reach.each(tx.mechanics(), row))?;
+                let (mut mark, mut reach) = mark_recorded(&tx, false)?;
+                mark.objects.list_partly_dead()?;
+                sink.finish(&mark.objects.retained, |row| {
+                    reach.each(tx.mechanics(), row)
+                })?;
                 Ok(mark)
             }),
             crate::backend::Engine::Postgres(_) => self.write_snapshot(mark),
@@ -230,9 +261,12 @@ impl HistoryProvider {
     /// separate temp database that only a kept transaction writes, after the
     /// decision and before the commit, for the rebuild's build phase.
     ///
-    /// On SQLite the result does not list the reached objects
-    /// ([`KeptObjects::objects`] is empty): they go to the scratch straight
-    /// from the Store's locators, and no copy of them is held.
+    /// On SQLite the result does not list the reached objects or the history
+    /// nodes ([`KeptObjects::objects`] and [`KeptHistory::nodes`] are
+    /// empty): the objects go to the scratch straight from the Store's
+    /// locators, the nodes stay in `kept_node`, and no copy of either is
+    /// held. [`KeptObjects::partly_dead_packs`] is listed for a kept mark
+    /// only, which is the one a rebuild reads it from.
     pub(crate) fn mark_for_compaction(
         &self,
         scratch: &Path,
@@ -244,12 +278,15 @@ impl HistoryProvider {
                 let tx = Transaction::new(backend);
                 super::admission::register_in(&tx, intent, false)?;
                 let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
-                let (mark, mut reach) = mark_recorded(&tx)?;
+                let (mut mark, mut reach) = mark_recorded(&tx, false)?;
                 let keep = decide(&tx, &mark)?;
                 let completion = if keep {
                     // Only a rebuild reads the scratch, so only a rebuild
                     // writes it; a `none` drops the sink and no file exists.
-                    sink.finish(mark.objects.packs(), |row| reach.each(tx.mechanics(), row))?;
+                    mark.objects.list_partly_dead()?;
+                    sink.finish(&mark.objects.retained, |row| {
+                        reach.each(tx.mechanics(), row)
+                    })?;
                     Completion::Commit
                 } else {
                     Completion::Rollback
@@ -265,16 +302,18 @@ impl HistoryProvider {
     }
 }
 
-/// One mark that also lists every reached object ([`KeptObjects::objects`]):
-/// 32 bytes an object, read from the Store's locators after the walk.
+/// One mark that also lists what it kept: every reached object
+/// ([`KeptObjects::objects`], 32 bytes an object, read from the Store's
+/// locators after the walk), every history node and the partly dead packs.
 fn mark(tx: &Transaction<'_>) -> HistoryResult<MarkResult> {
-    let (mut mark, mut reach) = mark_recorded(tx)?;
+    let (mut mark, mut reach) = mark_recorded(tx, true)?;
     let mut objects = Vec::with_capacity(usize::try_from(reach.count).unwrap_or(0));
     reach.each(tx.mechanics(), &mut |id, _| {
         objects.push(id);
         Ok(())
     })?;
     mark.objects.objects = objects;
+    mark.objects.list_partly_dead()?;
     Ok(mark)
 }
 
@@ -288,6 +327,9 @@ const KEPT_SORT_BYTES: usize = 4 * 1024 * 1024;
 const INVENTORY_SORT_BYTES: usize = 4 * 1024 * 1024;
 const PACK_SORT_BYTES: usize = 4 * 1024 * 1024;
 const READ_SORT_BYTES: usize = 1024 * 1024;
+const PARTLY_DEAD_BYTES: usize = 256 * 1024;
+/// Rows one read of the live heads returns.
+const HEADS_PAGE_ROWS: usize = 1024;
 
 /// The reached set of a finished walk, for listing it: the block boundaries
 /// of the Store's locators and one bit per object.
@@ -317,18 +359,21 @@ impl Reach {
     }
 }
 
-fn mark_recorded(tx: &Transaction<'_>) -> HistoryResult<(MarkResult, Reach)> {
-    let history = kept::mark(tx)?;
+/// One mark. `listed` also returns the history nodes
+/// ([`KeptHistory::nodes`]); the reached set is returned for a caller that
+/// lists the objects.
+fn mark_recorded(tx: &Transaction<'_>, listed: bool) -> HistoryResult<(MarkResult, Reach)> {
     let mechanics = tx.mechanics();
+    let space = Space::new(mechanics.scratch_directory());
+    kept::close(tx, &space)?;
     let policy = mechanics.policy().map_err(storage)?;
     let capacities = StorageCapacities::from_policy(policy).map_err(storage)?;
-    let directory = mechanics.scratch_directory();
     // Every locator is read once here, a bounded piece at a time. The pass
     // keeps the block boundaries the walk finds an identity by, counts each
     // pack's located records and puts the objects a pack visit reads
     // together (everything but file payloads) in locator order.
-    let mut located = Sorter::new(&directory, PACK_SORT_BYTES, records::counts_by_pack);
-    let mut inventory = Sorter::new(&directory, INVENTORY_SORT_BYTES, records::rows_by_locator);
+    let mut located = Sorter::new(&space, PACK_SORT_BYTES, records::counts_by_pack);
+    let mut inventory = Sorter::new(&space, INVENTORY_SORT_BYTES, records::rows_by_locator);
     let mut table = Locators::load(mechanics, |rank, location| {
         located.push(records::Count {
             pack: location.pack_id,
@@ -342,6 +387,9 @@ fn mark_recorded(tx: &Transaction<'_>) -> HistoryResult<(MarkResult, Reach)> {
         }
         Ok(())
     })?;
+    // A pack's objects are asked for each time a wave visits it: one merge
+    // now, so that a visit reads that pack's part and not the whole list.
+    let mut inventory = inventory.seal(records::row_pack)?;
     let mut marks = table::Marks {
         reached: table::Bits::new(table.count()),
         logical: table::Bits::new(table.count()),
@@ -349,16 +397,17 @@ fn mark_recorded(tx: &Transaction<'_>) -> HistoryResult<(MarkResult, Reach)> {
     };
     let source = ClosureSource {
         mechanics,
+        space: space.clone(),
         here: std::cell::RefCell::new(Here {
             pack: i64::MIN,
             rows: IdMap::default(),
         }),
         reads: std::cell::RefCell::new((
-            Sorter::new(&directory, READ_SORT_BYTES, records::reads_in_order),
+            Sorter::new(&space, READ_SORT_BYTES, records::reads_in_order),
             0,
         )),
         layouts: std::cell::RefCell::new(Sorter::new(
-            &directory,
+            &space,
             PACK_SORT_BYTES,
             records::layouts_by_group,
         )),
@@ -366,9 +415,30 @@ fn mark_recorded(tx: &Transaction<'_>) -> HistoryResult<(MarkResult, Reach)> {
         values: std::cell::RefCell::default(),
         ordinals: std::cell::RefCell::default(),
     };
-    let roots = roots(tx)?;
-    let mut kept = Sorter::new(&directory, KEPT_SORT_BYTES, records::kept_by_locator);
-    let mut scratch_bytes = walk::walk(
+    // The roots of every retained Commit and Layer, straight from
+    // `kept_node` into the first wave: the sorter folds a root named twice.
+    let mut reached: Sorter<records::Edge> = Sorter::new(
+        &space,
+        EDGE_SORT_BYTES,
+        if mechanics.locators_by_signed_prefix() {
+            records::edges_by_signed_prefix
+        } else {
+            records::edges_by_bytes
+        },
+    );
+    let mut history = KeptHistory::default();
+    kept::each(tx, |node, root| {
+        history.note(node, listed);
+        match root {
+            Some(id) => reached.push(records::Edge {
+                id,
+                kind: records::LOGICAL,
+            }),
+            None => Ok(()),
+        }
+    })?;
+    let mut kept = Sorter::new(&space, KEPT_SORT_BYTES, records::kept_by_locator);
+    walk::walk(
         &source,
         &mut table,
         &mut marks,
@@ -376,23 +446,23 @@ fn mark_recorded(tx: &Transaction<'_>) -> HistoryResult<(MarkResult, Reach)> {
         &mut kept,
         &capacities,
         policy.construction(),
-        roots,
+        reached,
     )?;
     drop(inventory);
     let found = waste::waste(tx, &source, &mut table, &marks, &mut located, &mut kept)?;
-    scratch_bytes = scratch_bytes
-        .saturating_add(located.peak_file_bytes())
-        .saturating_add(kept.peak_file_bytes());
-    let (mark_bytes, read_file_bytes) = source.read_bytes()?;
-    scratch_bytes = scratch_bytes.saturating_add(read_file_bytes);
+    drop((located, kept));
+    let mark_bytes = source.read_bytes()?;
     let digest = live_heads_digest(tx)?;
     let objects = KeptObjects {
         objects: Vec::new(),
         count: found.objects,
-        packs: found.packs,
+        retained: found.retained,
+        packs: OnceLock::new(),
         waste: found.waste,
         partly_dead: found.partly_dead,
-        inode_ordinals: source.ordinals.borrow().runs(),
+        partly_dead_listed: Vec::new(),
+        ordinals: source.ordinals.take(),
+        inode_ordinals: OnceLock::new(),
     };
     let reach = Reach {
         table,
@@ -405,20 +475,10 @@ fn mark_recorded(tx: &Transaction<'_>) -> HistoryResult<(MarkResult, Reach)> {
             objects,
             live_heads_digest: digest,
             mark_bytes,
-            scratch_bytes,
+            scratch_bytes: space.peak_bytes(),
         },
         reach,
     ))
-}
-
-/// The roots of every retained Commit and Layer, deduplicated and ordered.
-fn roots(tx: &Transaction<'_>) -> HistoryResult<Vec<ObjectId>> {
-    let rows = tx.query(ROOTS, Vec::<Param>::new())?;
-    let mut roots = BTreeSet::new();
-    for row in &rows {
-        roots.insert(object(row, 0)?);
-    }
-    Ok(roots.into_iter().collect())
 }
 
 /// The objects other than file payloads that one pack holds, by identity.
@@ -430,6 +490,8 @@ struct Here {
 /// Physical input for the shared encoding readers over one mark transaction.
 struct ClosureSource<'a> {
     mechanics: &'a dyn crate::backend::Mechanics,
+    /// Where this mark's sort files go.
+    space: Arc<Space>,
     /// The pack being walked and what it holds besides file payloads: what a
     /// reference found there is looked up in before the Store is asked.
     here: std::cell::RefCell<Here>,
@@ -449,7 +511,7 @@ struct ClosureSource<'a> {
     /// Every ordinal the walk asked for ([`ordinals`]), whether the engine or
     /// the held values answered it: the rebuild copies only the blocks these
     /// name.
-    ordinals: std::cell::RefCell<ordinals::Ordinals>,
+    ordinals: std::cell::RefCell<IdSet>,
 }
 
 /// Packs announced to the engine at a time ([`ClosureSource::announce`]).
@@ -495,31 +557,20 @@ impl ClosureSource<'_> {
     }
 
     /// Makes `pack_id` the pack being walked: takes its objects other than
-    /// file payloads from `inventory`, which is in locator order and is read
-    /// forward only, as a wave's packs are.
-    fn enter(
-        &self,
-        pack_id: i64,
-        inventory: &mut spill::Merge<'_, records::Row>,
-    ) -> HistoryResult<()> {
+    /// file payloads from `inventory`, which finds a pack's rows by its id
+    /// and reads on from where it stands when a wave's packs follow each
+    /// other.
+    fn enter(&self, pack_id: i64, inventory: &mut Sealed<records::Row>) -> HistoryResult<()> {
         let mut here = self.here.borrow_mut();
         if here.pack == pack_id {
             return Ok(());
         }
         here.pack = pack_id;
         here.rows.clear();
-        while inventory
-            .peek()
-            .is_some_and(|next| next.location.pack_id <= pack_id)
-        {
-            let Some(row) = inventory.next()? else {
-                break;
-            };
-            if row.location.pack_id == pack_id {
-                here.rows.insert(row.location.object_id, row);
-            }
-        }
-        Ok(())
+        let rows = &mut here.rows;
+        inventory.each_of(pack_id, |row| {
+            rows.insert(row.location.object_id, row);
+        })
     }
 
     /// The object `id` when the pack being walked holds it and it is not a
@@ -577,9 +628,8 @@ impl ClosureSource<'_> {
         self.layouts.borrow_mut().relieve()
     }
 
-    /// The distinct pack body bytes this mark read, and the most bytes the
-    /// list of its reads and of its layouts held in their files.
-    fn read_bytes(&self) -> HistoryResult<(u64, u64)> {
+    /// The distinct pack body bytes this mark read.
+    fn read_bytes(&self) -> HistoryResult<u64> {
         let mut reads = self.reads.borrow_mut();
         let mut total = 0u64;
         let mut pack: Option<(i64, u64)> = None;
@@ -601,14 +651,7 @@ impl ClosureSource<'_> {
             pack = Some((read.pack, entry));
         }
         drop(merged);
-        total = total.saturating_add(pack.map_or(0, |(_, entry)| entry));
-        Ok((
-            total,
-            reads
-                .0
-                .peak_file_bytes()
-                .saturating_add(self.layouts.borrow().peak_file_bytes()),
-        ))
+        Ok(total.saturating_add(pack.map_or(0, |(_, entry)| entry)))
     }
 }
 
@@ -694,7 +737,12 @@ impl Source for ClosureSource<'_> {
     }
 
     fn inode_values(&self, ordinals: &[u32]) -> Result<Vec<[u8; INODE_VALUE_BYTES]>, StorageError> {
-        self.ordinals.borrow_mut().extend(ordinals);
+        {
+            let mut read = self.ordinals.borrow_mut();
+            for ordinal in ordinals {
+                read.insert(u64::from(*ordinal));
+            }
+        }
         self.values.borrow_mut().values(self.mechanics, ordinals)
     }
 
@@ -716,11 +764,13 @@ impl Source for ClosureSource<'_> {
 /// marker-free Branches in identity order as `(branch_id, head_commit_id or 33
 /// zero bytes, base_layer_id)`. Every field is fixed width, so a retired row is
 /// absent rather than hashed as zeros and timestamps never enter the vector.
+///
+/// The rows are read a bounded page at a time, in identity order, and hashed
+/// as they come.
 fn live_heads_digest(tx: &Transaction<'_>) -> HistoryResult<[u8; 32]> {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"layerfs/live-heads/v1\0");
-    let stacks = tx.query(LIVE_STACKS, Vec::<Param>::new())?;
-    for row in &stacks {
+    live_rows(tx, LIVE_STACKS, &mut |row| {
         let id: Vec<u8> = cell(row, 0)?;
         let head: Vec<u8> = cell(row, 1)?;
         if id.len() != 17 || head.len() != 33 {
@@ -728,9 +778,9 @@ fn live_heads_digest(tx: &Transaction<'_>) -> HistoryResult<[u8; 32]> {
         }
         hasher.update(&id);
         hasher.update(&head);
-    }
-    let branches = tx.query(LIVE_BRANCHES, Vec::<Param>::new())?;
-    for row in &branches {
+        Ok(())
+    })?;
+    live_rows(tx, LIVE_BRANCHES, &mut |row| {
         let id: Vec<u8> = cell(row, 0)?;
         let head: Option<Vec<u8>> = cell(row, 1)?;
         let base: Vec<u8> = cell(row, 2)?;
@@ -744,8 +794,35 @@ fn live_heads_digest(tx: &Transaction<'_>) -> HistoryResult<[u8; 32]> {
             None => hasher.update(&[0u8; 33]),
         };
         hasher.update(&base);
-    }
+        Ok(())
+    })?;
     Ok(*hasher.finalize().as_bytes())
+}
+
+/// Hands the rows of one live-heads statement to `each`, a page at a time.
+/// The first column is the identity the pages follow.
+fn live_rows(
+    tx: &Transaction<'_>,
+    key: &str,
+    each: &mut dyn FnMut(&crate::backend::records::Record) -> HistoryResult<()>,
+) -> HistoryResult<()> {
+    let mut after: Vec<u8> = Vec::new();
+    loop {
+        let rows = tx.query(
+            key,
+            vec![
+                Param::Bytes(after.clone()),
+                Param::I64(HEADS_PAGE_ROWS as i64),
+            ],
+        )?;
+        for row in &rows {
+            each(row)?;
+        }
+        match rows.last() {
+            Some(last) if rows.len() == HEADS_PAGE_ROWS => after = cell(last, 0)?,
+            _ => return Ok(()),
+        }
+    }
 }
 
 /// One physical read failure as a mark failure; an unproven outcome is never

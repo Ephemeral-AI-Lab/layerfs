@@ -14,7 +14,7 @@
 //! What stays in memory for the whole mark: 32 bytes per [`BLOCK`] objects
 //! and three bits per object. Everything else is one window of blocks.
 use super::storage;
-use crate::backend::Mechanics;
+use crate::backend::{Mechanics, Ranked};
 use layerfs_content::ObjectId;
 use layerfs_history::error::{HistoryError, HistoryResult};
 use layerfs_storage::{location::ObjectLocation, StorageError};
@@ -44,7 +44,7 @@ pub(super) fn by_signed_prefix(left: &ObjectId, right: &ObjectId) -> Ordering {
 
 /// One bit per rank.
 #[derive(Default)]
-pub(super) struct Bits(Vec<u64>);
+pub(in crate::history) struct Bits(Vec<u64>);
 
 impl Bits {
     pub(super) fn new(count: u64) -> Self {
@@ -196,17 +196,47 @@ impl Locators {
 
     /// The rank and locator of `id`, or `None` when the Store locates no
     /// such object.
+    ///
+    /// `sparse` says the identities asked for are few beside the locators:
+    /// most blocks hold none of them. One whose block is not held is then
+    /// asked of the engine alone ([`Mechanics::location_after`]), where the
+    /// engine can: its row and the count of rows before it in its block,
+    /// instead of the block's rows.
     pub(super) fn find(
         &mut self,
         mechanics: &dyn Mechanics,
         id: &ObjectId,
+        sparse: bool,
     ) -> HistoryResult<Option<(u64, ObjectLocation)>> {
         let order = self.order;
         let block = self
             .after
             .partition_point(|last| order(last, id) == Ordering::Less) as u64;
-        if block * BLOCK as u64 >= self.count {
+        let start = block * BLOCK as u64;
+        if start >= self.count {
             return Ok(None);
+        }
+        if sparse && !(start >= self.first && start < self.first + self.held.len() as u64) {
+            let after = match block {
+                0 => None,
+                block => self.after.get(block as usize - 1),
+            };
+            match mechanics
+                .location_after(after, id)
+                .map_err(StorageError::from)
+                .map_err(storage)?
+            {
+                Some(Ranked::Absent) => return Ok(None),
+                Some(Ranked::Found(before, location)) => {
+                    // The same transaction counted the same rows the block
+                    // boundaries were taken from.
+                    if before >= BLOCK as u64 || start + before >= self.count {
+                        return Err(HistoryError::Integrity("mark object locations"));
+                    }
+                    return Ok(Some((start + before, location)));
+                }
+                None => {}
+            }
         }
         self.hold(mechanics, block)?;
         let from = (block * BLOCK as u64 - self.first) as usize;

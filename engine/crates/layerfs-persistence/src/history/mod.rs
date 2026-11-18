@@ -33,6 +33,7 @@ pub(crate) use rows::{
 
 use bindings::params;
 use layerfs_history::query;
+pub use objects::IdSet;
 pub(crate) mod facts;
 
 pub(crate) use facts::validate_stream as validate_facts_stream;

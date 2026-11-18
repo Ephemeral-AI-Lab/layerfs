@@ -340,7 +340,7 @@ fn a_mark_records_the_history_closure_on_postgresql() {
 /// The closure statement both engines shared. PostgreSQL now runs its own
 /// text, which follows each node's row by primary key instead of joining each
 /// round to every history edge.
-const SHARED_MARK: &str = include_str!("../sql/sqlite/queries/history/kept_node_mark.sql");
+const SHARED_MARK: &str = include_str!("fixtures/kept_node_one_statement.sql");
 
 #[test]
 fn the_postgresql_closure_keeps_the_nodes_the_shared_statement_keeps() {

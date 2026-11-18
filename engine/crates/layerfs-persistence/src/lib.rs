@@ -41,7 +41,7 @@ pub use config::{
     SqlitePersistenceProfile, SynchronousCommit,
 };
 pub use history::{
-    HistoryProvider, KeptHistory, KeptNode, KeptNodeId, KeptObjects, KeptWaste, MarkResult,
+    HistoryProvider, IdSet, KeptHistory, KeptNode, KeptNodeId, KeptObjects, KeptWaste, MarkResult,
 };
 pub use report::{CompactStatus, POSTGRES_COMPACT_PHASES, SQLITE_COMPACT_PHASES};
 pub(crate) use storage::provider as storage_provider;

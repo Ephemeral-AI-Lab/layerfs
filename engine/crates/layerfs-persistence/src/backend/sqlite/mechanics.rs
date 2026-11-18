@@ -48,6 +48,18 @@ impl Mechanics for Transaction<'_> {
     fn location(&self, id: &ObjectId) -> Result<Option<ObjectLocation>, PersistenceError> {
         super::metadata::locations::one(self, id)
     }
+    fn location_after(
+        &self,
+        after: Option<&ObjectId>,
+        id: &ObjectId,
+    ) -> Result<Option<crate::backend::Ranked>, PersistenceError> {
+        super::metadata::locations::ranked(self, after, id).map(Some)
+    }
+    fn closure_in_batches(&self) -> bool {
+        // Temporary storage is memory on this connection (`temp_store`), so
+        // one recursive statement over the history would hold all of it.
+        true
+    }
     fn scratch_directory(&self) -> std::path::PathBuf {
         // Beside the Store: the file system that holds the Store and its
         // rebuild has the room, and a temporary directory may be memory.

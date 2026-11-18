@@ -13,15 +13,19 @@ use super::*;
 /// Reached records of the packs one round holds, at most; a pack is never
 /// split.
 const ROUND_RECORDS: usize = 262_144;
+/// Packs one round holds, at most. Each costs its own small lists whatever
+/// it holds, so a Store of one-record packs is bounded by this and not by
+/// the records.
+const ROUND_PACKS: usize = 4_096;
 
 /// What the pass found: the kept waste, and the retained packs it met.
 pub(super) struct Found {
     pub(super) waste: KeptWaste,
     /// Retained packs that hold a record no reached object owns, ascending,
     /// each with its dead bytes.
-    pub(super) partly_dead: Vec<(i64, u64)>,
+    pub(super) partly_dead: PartlyDead,
     /// The retained packs: those holding at least one reached object.
-    pub(super) packs: Vec<i64>,
+    pub(super) retained: IdSet,
     /// How many objects the walk reached.
     pub(super) objects: u64,
 }
@@ -64,17 +68,15 @@ pub(super) fn waste(
     let mut dead_in_retained_packs_bytes = 0u64;
     let mut delta_bases_bytes = 0u64;
     let mut objects = 0u64;
-    let mut packs = Vec::new();
-    let mut partly_dead = Vec::new();
+    let mut retained = IdSet::default();
+    // Written in pack order, a pack once: the order only merges its runs.
+    let mut partly_dead = Sorter::new(&source.space, PARTLY_DEAD_BYTES, records::counts_by_pack);
+    let mut partly_dead_count = 0u64;
     let mut counted = (0i64, 0u64, false);
     // The walk is over: nothing adds to its layouts while they are read.
     let mut layouts = std::mem::replace(
         &mut *source.layouts.borrow_mut(),
-        Sorter::new(
-            &source.mechanics.scratch_directory(),
-            PACK_SORT_BYTES,
-            records::layouts_by_group,
-        ),
+        Sorter::new(&source.space, PACK_SORT_BYTES, records::layouts_by_group),
     );
     let mut layouts = layouts.sorted()?;
     let mut located = located.sorted()?;
@@ -85,7 +87,8 @@ pub(super) fn waste(
         let mut round: Vec<Retained> = Vec::new();
         let mut unread = Vec::new();
         let mut held = 0;
-        while unread.len() < edges::HEAD_PACKS && held < ROUND_RECORDS {
+        while unread.len() < edges::HEAD_PACKS && held < ROUND_RECORDS && round.len() < ROUND_PACKS
+        {
             let Some(first) = kept.next()? else {
                 break;
             };
@@ -135,9 +138,15 @@ pub(super) fn waste(
             let records = pack.records.as_slice();
             // The pack before this one is complete: record what it added.
             if counted.2 || dead_in_retained_packs_bytes > counted.1 {
-                partly_dead.push((counted.0, dead_in_retained_packs_bytes - counted.1));
+                partly_dead.push(Count {
+                    pack: counted.0,
+                    records: dead_in_retained_packs_bytes - counted.1,
+                })?;
+                partly_dead_count += 1;
             }
-            packs.push(pack_id);
+            if pack_id < 0 || !retained.insert(pack_id as u64) {
+                return Err(HistoryError::Integrity("mark pack"));
+            }
             objects += records.len() as u64;
             for kept in records {
                 if marks.bases.get(kept.rank) && !marks.logical.get(kept.rank) {
@@ -213,8 +222,13 @@ pub(super) fn waste(
         source.relieve()?;
     }
     if counted.2 || dead_in_retained_packs_bytes > counted.1 {
-        partly_dead.push((counted.0, dead_in_retained_packs_bytes - counted.1));
+        partly_dead.push(Count {
+            pack: counted.0,
+            records: dead_in_retained_packs_bytes - counted.1,
+        })?;
+        partly_dead_count += 1;
     }
+    drop((layouts, located, kept));
     // The report names at most this many kept delta bases, the first in
     // identity order. The byte total stays exact; only the list is bounded,
     // and [`KeptWaste::from_parts`] records that it was cut so the §11
@@ -246,8 +260,8 @@ pub(super) fn waste(
             delta_base_references,
             inode_blocks_bytes,
         ),
-        partly_dead,
-        packs,
+        partly_dead: PartlyDead::new(partly_dead, partly_dead_count),
+        retained,
         objects,
     })
 }

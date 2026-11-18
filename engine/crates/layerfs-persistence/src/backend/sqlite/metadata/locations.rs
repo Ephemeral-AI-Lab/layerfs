@@ -148,6 +148,34 @@ pub(crate) fn one(
     Ok(tx.mapped(LOCATOR, &[&key], 32, 1, locator)?.pop())
 }
 
+/// One locator by identity with the count of locators between `?1` and it:
+/// a seek to the row and a walk along the key from `?1`, which reads no row.
+const RANKED: &str = "SELECT object_id,pack_id,group_number,record_number,role,canonical_length,(SELECT count(*) FROM object_location WHERE object_id>?1 AND object_id<?2) FROM object_location WHERE object_id=?2";
+
+pub(crate) fn ranked(
+    tx: &Transaction<'_>,
+    after: Option<&ObjectId>,
+    id: &ObjectId,
+) -> Result<crate::backend::Ranked, PersistenceError> {
+    use crate::backend::sqlite::session::rows::error;
+    let from: &[u8] = after.map_or(&[], |id| id.as_bytes().as_slice());
+    let key = id.as_bytes().as_slice();
+    let found = tx
+        .prepare(RANKED)?
+        .mapped_bulk(&[&from, &key], 72, 1, |r| {
+            let before: i64 = r.get(6).map_err(error)?;
+            Ok((
+                u64::try_from(before).map_err(|_| BackendError::Integrity)?,
+                locator(r)?,
+            ))
+        })?
+        .pop();
+    Ok(match found {
+        Some((before, location)) => crate::backend::Ranked::Found(before, location),
+        None => crate::backend::Ranked::Absent,
+    })
+}
+
 fn typed_location(r: &rusqlite::Row<'_>) -> Result<LocatedObject, BackendError> {
     let object_id = ObjectId::from_bytes(crate::backend::sqlite::session::rows::blob(r, 0)?)
         .map_err(|_| BackendError::Integrity)?;

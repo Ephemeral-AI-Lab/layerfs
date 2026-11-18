@@ -258,9 +258,6 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "gc_epoch_lock" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_epoch_lock.sql"
         )),
-        "gc_kept_roots" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/gc_kept_roots.sql"
-        )),
         "gc_live_stacks" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_live_stacks.sql"
         )),
@@ -279,11 +276,14 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "kept_node_clear" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/kept_node_clear.sql"
         )),
-        "kept_node_mark" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/kept_node_mark.sql"
+        "kept_node_seed" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/kept_node_seed.sql"
         )),
-        "kept_node_read" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/kept_node_read.sql"
+        "kept_node_expand" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/kept_node_expand.sql"
+        )),
+        "kept_node_page" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/kept_node_page.sql"
         )),
         "kept_node_roots" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/kept_node_roots.sql"

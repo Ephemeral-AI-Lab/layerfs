@@ -140,6 +140,7 @@ pub mod sqlite {
 }
 
 pub mod doctor;
+pub mod marks;
 
 pub mod metrics;
 pub mod pg;
