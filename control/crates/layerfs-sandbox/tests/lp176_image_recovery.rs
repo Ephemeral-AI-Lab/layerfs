@@ -1927,37 +1927,38 @@ esac
     );
 }
 
+fn make_raw_header(name: &str, flag: u8, size: u64) -> [u8; 512] {
+    let mut hdr = [0u8; 512];
+    hdr[..name.len()].copy_from_slice(name.as_bytes());
+    let oct = |f: &mut [u8], v: u64| {
+        let w = f.len() - 1;
+        let t = format!("{v:0w$o}\0");
+        f.copy_from_slice(&t.as_bytes()[..f.len()]);
+    };
+    oct(&mut hdr[100..108], 0o644);
+    oct(&mut hdr[108..116], 0);
+    oct(&mut hdr[116..124], 0);
+    oct(&mut hdr[124..136], size);
+    oct(&mut hdr[136..148], 0);
+    hdr[156] = flag;
+    hdr[257..263].copy_from_slice(b"ustar\0");
+    hdr[263..265].copy_from_slice(b"00");
+    hdr[148..156].fill(b' ');
+    let sum: u64 = hdr.iter().map(|b| u64::from(*b)).sum();
+    hdr[148..156].copy_from_slice(format!("{sum:06o}\0 ").as_bytes());
+    hdr
+}
+
+fn append_raw_entry(buf: &mut Vec<u8>, name: &str, flag: u8, body: &[u8]) {
+    buf.extend_from_slice(&make_raw_header(name, flag, body.len() as u64));
+    buf.extend_from_slice(body);
+    let pad = (512 - body.len() % 512) % 512;
+    buf.resize(buf.len() + pad, 0);
+}
+
 #[test]
 fn r3_bad_sparse_eof_cross_header_caps_and_xattr_headroom() {
-    assert_eq!(EXTENDED_TOTAL_MAX, 16 << 20);
-    fn make_raw_header(name: &str, flag: u8, size: u64) -> [u8; 512] {
-        let mut hdr = [0u8; 512];
-        hdr[..name.len()].copy_from_slice(name.as_bytes());
-        let oct = |f: &mut [u8], v: u64| {
-            let w = f.len() - 1;
-            let t = format!("{v:0w$o}\0");
-            f.copy_from_slice(&t.as_bytes()[..f.len()]);
-        };
-        oct(&mut hdr[100..108], 0o644);
-        oct(&mut hdr[108..116], 0);
-        oct(&mut hdr[116..124], 0);
-        oct(&mut hdr[124..136], size);
-        oct(&mut hdr[136..148], 0);
-        hdr[156] = flag;
-        hdr[257..263].copy_from_slice(b"ustar\0");
-        hdr[263..265].copy_from_slice(b"00");
-        hdr[148..156].fill(b' ');
-        let sum: u64 = hdr.iter().map(|b| u64::from(*b)).sum();
-        hdr[148..156].copy_from_slice(format!("{sum:06o}\0 ").as_bytes());
-        hdr
-    }
-
-    fn append_raw_entry(buf: &mut Vec<u8>, name: &str, flag: u8, body: &[u8]) {
-        buf.extend_from_slice(&make_raw_header(name, flag, body.len() as u64));
-        buf.extend_from_slice(body);
-        let pad = (512 - body.len() % 512) % 512;
-        buf.resize(buf.len() + pad, 0);
-    }
+    assert_eq!(EXTENDED_TOTAL_MAX, 48 << 20);
 
     let assert_invalid = |label: &str, input: Vec<u8>, needle: &str| {
         let err = filtered_bytes(&input).expect_err(label);
@@ -2125,10 +2126,11 @@ fn r3_bad_sparse_eof_cross_header_caps_and_xattr_headroom() {
                     }
                 }
                 StreamKind::ExtendedTotal => {
-                    // 35 headers * ~512.5 KiB > 16 MiB extended header total limit.
-                    match self.index.cmp(&35) {
+                    // 64 headers * (512 + 786,944) = 50,397,184 > 48 MiB (50,331,648);
+                    // 63 headers = 49,609,728 <= 48 MiB.
+                    match self.index.cmp(&64) {
                         Ordering::Less => {
-                            let blob = "x".repeat(512 * 1024);
+                            let blob = "x".repeat(768 * 1024);
                             let body = pax_record("SCHILY.xattr.user.pad", &blob);
                             append_raw_entry(&mut self.cur, "PaxHeaders/xattr-flood", b'x', &body);
                             self.index += 1;
@@ -2211,22 +2213,23 @@ fn r3_bad_sparse_eof_cross_header_caps_and_xattr_headroom() {
         "must reject on first bad sparse x header without reading second header"
     );
 
-    // 3. Per-entry extended header total byte cap (16 MiB) catches both multi-header xattr floods
+    // 3. Per-entry extended header total byte cap (48 MiB) catches both multi-header xattr floods
     //    and zero-length empty `x` header floods without unbounded buffering.
     let mut ext_flood_reader = OnDemandFloodReader::new(StreamKind::ExtendedTotal);
     let mut ext_flood_filtered = Filtered::new(&mut ext_flood_reader);
     let err = ext_flood_filtered
         .read_to_end(&mut Vec::new())
-        .expect_err("extended headers exceeding 16 MiB must fail");
+        .expect_err("extended headers exceeding 48 MiB must fail");
     assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
     assert!(
-        err.to_string().contains("extended headers exceed"),
+        err.to_string().contains("extended headers exceed 48 MiB"),
         "unexpected error for extended total cap: {err}"
     );
     assert!(
         !ext_flood_reader.illegal_tail_read,
         "must hit extended total cap before reading trailing illegal header"
     );
+    assert_eq!(ext_flood_reader.headers_emitted, 64);
 
     struct EmptyHeaderFlood {
         emitted: usize,
@@ -2235,10 +2238,10 @@ fn r3_bad_sparse_eof_cross_header_caps_and_xattr_headroom() {
     impl Read for EmptyHeaderFlood {
         fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
             // Each zero-length `x` header adds 512 bytes to total extended budget ->
-            // > 32,768 headers exceeds 16 MiB.
+            // 98,304 headers == 48 MiB; the 98,305th exceeds 48 MiB.
             let hdr = make_raw_header("PaxHeaders/empty", b'x', 0);
             let mut n = 0;
-            while n < buf.len() && self.emitted < 40_000 {
+            while n < buf.len() && self.emitted < 105_000 {
                 let take = (512 - self.offset).min(buf.len() - n);
                 buf[n..n + take].copy_from_slice(&hdr[self.offset..self.offset + take]);
                 n += take;
@@ -2259,12 +2262,8 @@ fn r3_bad_sparse_eof_cross_header_caps_and_xattr_headroom() {
         .read_to_end(&mut Vec::new())
         .expect_err("empty extended header flood must hit total cap");
     assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-    assert!(err.to_string().contains("extended headers exceed"));
-    assert!(
-        empty_flood.emitted <= 32_769,
-        "emitted {} empty headers",
-        empty_flood.emitted
-    );
+    assert!(err.to_string().contains("extended headers exceed 48 MiB"));
+    assert_eq!(empty_flood.emitted, ((48 << 20) / 512) + 1);
 
     // 4. Realistic container entry with long path/linkpath and heavy SCHILY.xattr.* set passes
     //    both filtering and rootfs::ensure_flat without being rejected.
@@ -2332,6 +2331,360 @@ fn r3_bad_sparse_eof_cross_header_caps_and_xattr_headroom() {
             .to_string_lossy(),
         long_link_target
     );
+}
+
+#[test]
+fn r4_m1_cross_header_pax_size_override_and_final_validation() {
+    let scratch = Scratch::new("lp176-r4-m1");
+    let mut base_meta = pax_record("GNU.sparse.major", "0");
+    base_meta.extend_from_slice(&pax_record("GNU.sparse.minor", "1"));
+    base_meta.extend_from_slice(&pax_record("GNU.sparse.realsize", "8192"));
+    base_meta.extend_from_slice(&pax_record("GNU.sparse.map", "0,1"));
+
+    let mut single_meta = base_meta.clone();
+    single_meta.extend_from_slice(&pax_record("size", "1"));
+
+    // 1. Success cases: bad or overflowing PAX `size` in first `x`, overridden by `size=1` in second `x`.
+    for (idx, (label, first_size, name, byte)) in [
+        ("overflow then 1", u64::MAX.to_string(), "sp1.bin", b'A'),
+        ("bad then 1", "bad".to_owned(), "sp2.bin", b'B'),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut x1 = base_meta.clone();
+        x1.extend_from_slice(&pax_record("size", &first_size));
+        let x2 = pax_record("size", "1");
+        let input = Tar::new()
+            .raw("PaxHeaders/x1", b'x', 0o644, &x1)
+            .raw("PaxHeaders/x2", b'x', 0o644, &x2)
+            .file(name, 0o644, &[byte])
+            .finish();
+        let single = Tar::new()
+            .raw("PaxHeaders/single", b'x', 0o644, &single_meta)
+            .file(name, 0o644, &[byte])
+            .finish();
+
+        let (filtered, report) = filtered_with_report(&input).expect(label);
+        let expected_single = filtered_bytes(&single).expect("single header baseline");
+        assert_eq!(filtered, expected_single, "{label}: single-header parity");
+        assert_eq!(report.sparse_files.len(), 1, "{label}");
+        assert_eq!(report.sparse_files[0].expanded_bytes, 8192, "{label}");
+        assert_eq!(report.sparse_files[0].stored_bytes, 1, "{label}");
+
+        let tar_path = scratch.base.join(format!("ok-{idx}.tar"));
+        fs::write(&tar_path, &filtered).unwrap();
+        let (root, _) = rootfs::ensure_flat(
+            &tar_path,
+            &Image::parse(&format!("sha256:{}", format!("{idx}").repeat(64))).unwrap(),
+            &scratch.cache,
+        )
+        .unwrap();
+        let mut expected = vec![0u8; 8192];
+        expected[0] = byte;
+        assert_eq!(fs::read(root.directory().join(name)).unwrap(), expected);
+
+        // Trailing sparse `x` pair ending in `size=1` followed by zero end-blocks or clean EOF succeeds.
+        let mut with_end = Vec::new();
+        append_raw_entry(&mut with_end, "PaxHeaders/x1", b'x', &x1);
+        append_raw_entry(&mut with_end, "PaxHeaders/x2", b'x', &x2);
+        with_end.resize(with_end.len() + 1024, 0);
+        assert_eq!(
+            filtered_bytes(&with_end).expect("overridden size + end blocks"),
+            vec![0u8; 1024]
+        );
+
+        let mut clean_eof = Vec::new();
+        append_raw_entry(&mut clean_eof, "PaxHeaders/x1", b'x', &x1);
+        append_raw_entry(&mut clean_eof, "PaxHeaders/x2", b'x', &x2);
+        assert_eq!(
+            filtered_bytes(&clean_eof).expect("overridden size + clean EOF"),
+            vec![0u8; 1024]
+        );
+    }
+
+    // 2. Rejection cases: valid `size=1` in first `x`, bad or overflowing `size` in second `x`
+    //    must fail both before a real entry header and at zero end-blocks / clean EOF.
+    let assert_invalid = |label: &str, input: Vec<u8>, needle: &str| {
+        let err = filtered_bytes(&input).expect_err(label);
+        assert_eq!(
+            err.kind(),
+            std::io::ErrorKind::InvalidData,
+            "{label}: got {err:?}"
+        );
+        assert!(
+            err.to_string().contains(needle),
+            "{label}: expected `{needle}` in `{err}`"
+        );
+    };
+
+    for (label, second_size, needle) in [
+        ("1 then bad", "bad".to_owned(), "invalid pax size"),
+        ("1 then overflow", u64::MAX.to_string(), "overflow"),
+    ] {
+        let x2 = pax_record("size", &second_size);
+
+        let with_entry = Tar::new()
+            .raw("PaxHeaders/x1", b'x', 0o644, &single_meta)
+            .raw("PaxHeaders/x2", b'x', 0o644, &x2)
+            .file("sp.bin", 0o644, b"A")
+            .finish();
+        assert_invalid(&format!("{label} + entry"), with_entry, needle);
+
+        let mut with_end = Vec::new();
+        append_raw_entry(&mut with_end, "PaxHeaders/x1", b'x', &single_meta);
+        append_raw_entry(&mut with_end, "PaxHeaders/x2", b'x', &x2);
+        with_end.resize(with_end.len() + 1024, 0);
+        assert_invalid(&format!("{label} + end blocks"), with_end, needle);
+
+        let mut clean_eof = Vec::new();
+        append_raw_entry(&mut clean_eof, "PaxHeaders/x1", b'x', &single_meta);
+        append_raw_entry(&mut clean_eof, "PaxHeaders/x2", b'x', &x2);
+        assert_invalid(&format!("{label} + clean EOF"), clean_eof, needle);
+    }
+}
+
+#[test]
+fn r4_m2_long_digit_sparse_map_above_16mib_succeeds() {
+    fn push_u64(dst: &mut Vec<u8>, mut n: u64) {
+        if n == 0 {
+            dst.push(b'0');
+            return;
+        }
+        let mut digits = [0u8; 20];
+        let mut i = digits.len();
+        while n > 0 {
+            i -= 1;
+            digits[i] = b'0' + (n % 10) as u8;
+            n /= 10;
+        }
+        dst.extend_from_slice(&digits[i..]);
+    }
+
+    fn push_u64_padded11(dst: &mut Vec<u8>, mut n: u64) {
+        let mut digits = [b'0'; 11];
+        for slot in digits.iter_mut().rev() {
+            *slot = b'0' + (n % 10) as u8;
+            n /= 10;
+        }
+        dst.extend_from_slice(&digits);
+    }
+
+    fn pax_record_bytes(key: &str, value: &[u8]) -> Vec<u8> {
+        let body_len = 1 + key.len() + 1 + value.len() + 1;
+        let mut digits = 1usize;
+        let total = loop {
+            let candidate = digits + body_len;
+            let d = candidate.to_string().len();
+            if d == digits {
+                break candidate;
+            }
+            digits = d;
+        };
+        let mut out = Vec::with_capacity(total);
+        push_u64(&mut out, total as u64);
+        out.push(b' ');
+        out.extend_from_slice(key.as_bytes());
+        out.push(b'=');
+        out.extend_from_slice(value);
+        out.push(b'\n');
+        out
+    }
+
+    enum MapShape {
+        Review4HugeRealsize,
+        CompactEof,
+    }
+
+    struct LongDigitSparseTarReader {
+        shape: MapShape,
+        headers: usize,
+        per_hdr: usize,
+        payload_bytes: u64,
+        real_size: u64,
+        stage: usize,
+        cur: Vec<u8>,
+        pos: usize,
+        payload_left: u64,
+        pad_left: usize,
+        tail_left: usize,
+        extended_bytes: u64,
+    }
+
+    impl LongDigitSparseTarReader {
+        fn new(shape: MapShape) -> Self {
+            let (payload_bytes, real_size) = match shape {
+                MapShape::Review4HugeRealsize => (1_000_000_000, 12_000_000_000),
+                MapShape::CompactEof => (1_000_000, 2_000_000),
+            };
+            let pad_left = ((512 - (payload_bytes % 512)) % 512) as usize;
+            Self {
+                shape,
+                headers: 32,
+                per_hdr: 31_250,
+                payload_bytes,
+                real_size,
+                stage: 0,
+                cur: Vec::new(),
+                pos: 0,
+                payload_left: payload_bytes,
+                pad_left,
+                tail_left: 1024,
+                extended_bytes: 0,
+            }
+        }
+
+        fn build_next(&mut self) -> bool {
+            self.cur.clear();
+            self.pos = 0;
+            match self.stage.cmp(&self.headers) {
+                std::cmp::Ordering::Less => {
+                    let mut map = Vec::with_capacity(self.per_hdr * 17);
+                    let base = (self.stage as u64) * (self.per_hdr as u64);
+                    for j in 0..self.per_hdr as u64 {
+                        if j > 0 {
+                            map.push(b',');
+                        }
+                        match self.shape {
+                            MapShape::Review4HugeRealsize => {
+                                push_u64(&mut map, 10_000_000_000u64 + 2_000u64 * (base + j));
+                                map.extend_from_slice(b",1000");
+                            }
+                            MapShape::CompactEof => {
+                                push_u64_padded11(&mut map, 2u64 * (base + j));
+                                map.extend_from_slice(b",0001");
+                            }
+                        }
+                    }
+                    let mut body = Vec::with_capacity(map.len() + 256);
+                    if self.stage == 0 {
+                        body.extend_from_slice(&pax_record("GNU.sparse.major", "0"));
+                        body.extend_from_slice(&pax_record("GNU.sparse.minor", "1"));
+                        body.extend_from_slice(&pax_record("GNU.sparse.name", "big-sparse.bin"));
+                        body.extend_from_slice(&pax_record(
+                            "GNU.sparse.realsize",
+                            &self.real_size.to_string(),
+                        ));
+                        body.extend_from_slice(&pax_record(
+                            "size",
+                            &self.payload_bytes.to_string(),
+                        ));
+                    }
+                    body.extend_from_slice(&pax_record_bytes("GNU.sparse.map", &map));
+                    append_raw_entry(&mut self.cur, "PaxHeaders/long-map", b'x', &body);
+                    self.extended_bytes += self.cur.len() as u64;
+                    self.stage += 1;
+                    true
+                }
+                std::cmp::Ordering::Equal => {
+                    let hdr = make_raw_header("placeholder", b'0', self.payload_bytes);
+                    self.cur.extend_from_slice(&hdr);
+                    self.stage += 1;
+                    true
+                }
+                std::cmp::Ordering::Greater => false,
+            }
+        }
+    }
+
+    impl Read for LongDigitSparseTarReader {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.pos < self.cur.len() {
+                let n = (self.cur.len() - self.pos).min(buf.len());
+                buf[..n].copy_from_slice(&self.cur[self.pos..self.pos + n]);
+                self.pos += n;
+                return Ok(n);
+            }
+            if self.stage <= self.headers && self.build_next() {
+                let n = self.cur.len().min(buf.len());
+                buf[..n].copy_from_slice(&self.cur[..n]);
+                self.pos = n;
+                return Ok(n);
+            }
+            if self.payload_left > 0 {
+                let n = (buf.len() as u64).min(self.payload_left) as usize;
+                let fill = match self.shape {
+                    MapShape::Review4HugeRealsize => b'A',
+                    MapShape::CompactEof => b'Z',
+                };
+                buf[..n].fill(fill);
+                self.payload_left -= n as u64;
+                return Ok(n);
+            }
+            if self.pad_left > 0 {
+                let n = buf.len().min(self.pad_left);
+                buf[..n].fill(0);
+                self.pad_left -= n;
+                return Ok(n);
+            }
+            if self.tail_left > 0 {
+                let n = buf.len().min(self.tail_left);
+                buf[..n].fill(0);
+                self.tail_left -= n;
+                return Ok(n);
+            }
+            Ok(0)
+        }
+    }
+
+    // Part A: Exact Review-4 counterexample (1,000,000 11-digit/4-digit items across 32 `x`
+    // headers, ~17.0 MB > 16 MiB, realsize=12 GB, stored=1 GB). Reading the first 64 KiB
+    // exercises all Stage-1 & Stage-2 validation over all 32 extended headers and 1M chunks.
+    let mut source_a = LongDigitSparseTarReader::new(MapShape::Review4HugeRealsize);
+    let mut filtered_a = Filtered::new(&mut source_a);
+    let mut head = Vec::with_capacity(64 * 1024);
+    let mut scratch_buf = [0u8; 16 * 1024];
+    while head.len() < 64 * 1024 {
+        let n = filtered_a
+            .read(&mut scratch_buf)
+            .expect("17 MB PAX map must pass Stage 1 & Stage 2");
+        assert!(n > 0);
+        head.extend_from_slice(&scratch_buf[..n]);
+    }
+    assert_eq!(head[0..512][156], b'x');
+    assert_eq!(head[1024..1536][156], b'0');
+    assert_eq!(head[1024 + 124], 0x80);
+    assert_eq!(
+        u64::from_be_bytes(head[1024 + 128..1024 + 136].try_into().unwrap()),
+        12_000_000_000
+    );
+    assert!(head[1536..].iter().all(|b| *b == 0));
+    let report_a = filtered_a.report();
+    assert_eq!(report_a.sparse_files.len(), 1);
+    assert_eq!(report_a.sparse_files[0].path, "big-sparse.bin");
+    assert_eq!(report_a.sparse_files[0].expanded_bytes, 12_000_000_000);
+    assert_eq!(report_a.sparse_files[0].stored_bytes, 1_000_000_000);
+    assert_eq!(report_a.sparse_expanded_bytes, 12_000_000_000);
+    drop(filtered_a);
+    assert!(source_a.extended_bytes > (16 << 20));
+    assert!(source_a.extended_bytes < (48 << 20));
+
+    // Part B: Complete start-to-EOF streaming on a >16 MiB, 1M-descriptor long-digit PAX 0.1
+    // archive (11-digit offsets, 4-digit lengths, compact 2 MB realsize) verifying end-to-end
+    // payload bytes, padding, end-blocks, and report totals.
+    let mut source_b = LongDigitSparseTarReader::new(MapShape::CompactEof);
+    let mut filtered_b = Filtered::new(&mut source_b);
+    let mut out_b = Vec::new();
+    filtered_b
+        .read_to_end(&mut out_b)
+        .expect("complete 17 MB PAX 0.1 stream must succeed to EOF");
+    let out_pad = 512 - (2_000_000usize % 512);
+    assert_eq!(out_b.len(), 1536 + 2_000_000 + out_pad + 1024);
+    assert_eq!(out_b[1024 + 156], b'0');
+    for (i, &byte) in out_b[1536..1536 + 2_000_000].iter().enumerate() {
+        let expected = if i % 2 == 0 { b'Z' } else { 0 };
+        if byte != expected {
+            panic!("mismatch at expanded offset {i}: got {byte}, expected {expected}");
+        }
+    }
+    assert!(out_b[1536 + 2_000_000..].iter().all(|b| *b == 0));
+    let report_b = filtered_b.into_report();
+    assert_eq!(report_b.sparse_files.len(), 1);
+    assert_eq!(report_b.sparse_files[0].path, "big-sparse.bin");
+    assert_eq!(report_b.sparse_files[0].expanded_bytes, 2_000_000);
+    assert_eq!(report_b.sparse_files[0].stored_bytes, 1_000_000);
+    assert!(source_b.extended_bytes > (16 << 20));
+    assert!(source_b.extended_bytes < (48 << 20));
 }
 
 #[test]

@@ -149,15 +149,18 @@ impl<R: Read> Filtered<R> {
         let (mut header, ustar_size, ustar_padded, flag) = loop {
             let mut header = [0u8; BLOCK];
             if !read_block(&mut self.input, &mut header)? {
+                pending.finish_at_end()?;
                 // Stage 3a: clean EOF without end blocks (any bad sparse PAX in
-                // `pending` already errored during Stage 1).
+                // `pending` already errored during Stage 1, and final sparse
+                // `size` state is checked above).
                 self.out.extend_from_slice(&[0u8; BLOCK * 2]);
                 self.done = true;
                 return Ok(());
             }
             if header.iter().all(|b| *b == 0) {
-                // Stage 3b: two zero end blocks, nothing after (any bad sparse
-                // PAX in `pending` already errored during Stage 1).
+                pending.finish_at_end()?;
+                // Stage 3b: two zero end blocks, nothing after (same Stage-1
+                // and final sparse `size` invariants as clean EOF).
                 self.out.extend_from_slice(&[0u8; BLOCK * 2]);
                 self.done = true;
                 return Ok(());

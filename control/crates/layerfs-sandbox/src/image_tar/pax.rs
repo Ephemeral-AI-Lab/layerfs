@@ -12,10 +12,12 @@ pub(super) const EXTENDED_MAX: u64 = 1 << 20;
 /// Maximum total bytes (`512 + padded` per header) buffered across all extended
 /// headers (`x`, `L`, `K`, `g`) of a single tar entry.
 ///
-/// 16 MiB accommodates deep container paths/linkpaths plus large `SCHILY.xattr.*`
-/// sets while bounding buffered memory on header floods (even zero-length `x`
-/// headers) and exceeding the ~10 MiB PAX text of `SPARSE_CHUNKS_MAX` descriptors.
-pub const EXTENDED_TOTAL_MAX: u64 = 16 << 20;
+/// 48 MiB covers the worst-case decimal encoding of `SPARSE_CHUNKS_MAX`
+/// (`1,048,576`) descriptors in `GNU.sparse.map` (two up-to-20-digit `u64`s
+/// plus separators = 42 bytes/descriptor, ~42 MiB / 44 MB) with headroom for
+/// per-header framing/padding, long paths, and `SCHILY.xattr.*`, while keeping
+/// `512 + padded` accounting for empty and non-sparse header floods.
+pub const EXTENDED_TOTAL_MAX: u64 = 48 << 20;
 /// Hard cap on parsed sparse chunk descriptors across extended headers.
 pub(super) const SPARSE_CHUNKS_MAX: usize = 1 << 20;
 
@@ -44,7 +46,7 @@ pub(super) struct PendingHeaders {
 }
 
 impl PendingHeaders {
-    /// Stage 1 admission check: enforces per-header 1 MiB and per-entry 16 MiB
+    /// Stage 1 admission check: enforces per-header 1 MiB and per-entry 48 MiB
     /// extended-header budgets before allocating the extended header payload.
     pub(super) fn admit_header(&mut self, padded: u64) -> io::Result<()> {
         if padded > EXTENDED_MAX {
@@ -53,9 +55,9 @@ impl PendingHeaders {
         let next = self
             .total_bytes
             .checked_add((BLOCK as u64) + padded)
-            .ok_or_else(|| invalid("the image tar extended headers exceed 16 MiB"))?;
+            .ok_or_else(|| invalid("the image tar extended headers exceed 48 MiB"))?;
         if next > EXTENDED_TOTAL_MAX {
-            return Err(invalid("the image tar extended headers exceed 16 MiB"));
+            return Err(invalid("the image tar extended headers exceed 48 MiB"));
         }
         self.total_bytes = next;
         Ok(())
@@ -72,6 +74,20 @@ impl PendingHeaders {
             _ => {}
         }
         self.raw.push((header, data));
+        Ok(())
+    }
+
+    /// Stage 3 termination check: validates a pending sparse entry's final
+    /// `size` state when the archive ends before a regular entry header arrives.
+    pub(super) fn finish_at_end(&self) -> io::Result<()> {
+        if self.pax.has_sparse {
+            if self.pax.pax_size_bad {
+                return Err(invalid("invalid pax size"));
+            }
+            if let Some(sz) = self.pax.pax_size {
+                padded_size(sz)?;
+            }
+        }
         Ok(())
     }
 
@@ -349,14 +365,6 @@ impl PaxScan {
         }
         if pending_offset.is_some() {
             return Err(invalid("GNU.sparse.offset without numbytes"));
-        }
-        if self.has_sparse && self.pax_size_bad {
-            return Err(invalid("invalid pax size"));
-        }
-        if self.has_sparse {
-            if let Some(sz) = self.pax_size {
-                padded_size(sz)?;
-            }
         }
         Ok(())
     }
