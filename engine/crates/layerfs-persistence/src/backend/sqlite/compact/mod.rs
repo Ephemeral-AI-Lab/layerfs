@@ -54,4 +54,4 @@ pub use types::{
     CompactResidue, CompactZeroReason, OwnerLiveness,
 };
 pub use values::verify as verify_inode_blocks;
-pub use window::{windows, Window, GAP_BYTES, WINDOW_BYTES};
+pub use window::{staged_windows, windows, Window, GAP_BYTES, WINDOW_BYTES};

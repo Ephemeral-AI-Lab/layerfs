@@ -11,6 +11,10 @@
 //! each window asks the kernel for the part of the file the window will read,
 //! in one sequential request. The request is a hint: it changes no byte and no
 //! result, and a file laid out in another order only loses the benefit.
+//!
+//! The verification reads the fresh file's `pack` rows the same way, by
+//! [`staged_windows`]: a row is one page beside its payload, so the rows are
+//! spread over the whole file.
 
 use super::types::io_error;
 use layerfs_history::error::HistoryError;
@@ -101,6 +105,24 @@ pub fn windows(
     Ok(planned)
 }
 
+/// The windows of the file a rebuild writes. That file holds the retained
+/// packs and no other, appended in the same order, so its plan is the same cut
+/// over the retained packs alone.
+pub fn staged_windows(
+    lengths: &BTreeMap<i64, u64>,
+    retained: &[i64],
+    file_bytes: u64,
+) -> HistoryResult<Vec<Window>> {
+    let mut kept = BTreeMap::new();
+    for pack in retained {
+        let length = lengths
+            .get(pack)
+            .ok_or(HistoryError::Integrity("mark pack"))?;
+        kept.insert(*pack, *length);
+    }
+    windows(&kept, retained, file_bytes)
+}
+
 fn closed(window: Window, end: u64, slack: u64) -> Window {
     Window {
         bytes: end.saturating_sub(window.offset).saturating_add(slack),
@@ -108,9 +130,10 @@ fn closed(window: Window, end: u64, slack: u64) -> Window {
     }
 }
 
-/// The sealed file's read-ahead: a second read-only descriptor the kernel is
-/// asked through. The file is attached `immutable=1`, so SQLite holds no lock
-/// on it that closing this descriptor could drop.
+/// One file's read-ahead: a second read-only descriptor the kernel is asked
+/// through. The file (the sealed Store, or the fresh file under verification)
+/// is read `immutable=1`, so SQLite holds no lock on it that closing this
+/// descriptor could drop.
 pub(crate) struct ReadAhead {
     file: File,
     length: u64,
@@ -119,8 +142,8 @@ pub(crate) struct ReadAhead {
 }
 
 impl ReadAhead {
-    pub(crate) fn open(sealed: &Path) -> HistoryResult<Self> {
-        let file = File::open(sealed).map_err(io_error)?;
+    pub(crate) fn open(path: &Path) -> HistoryResult<Self> {
+        let file = File::open(path).map_err(io_error)?;
         let length = file.metadata().map_err(io_error)?.len();
         Ok(Self {
             file,

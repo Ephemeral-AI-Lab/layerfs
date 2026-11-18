@@ -10,7 +10,7 @@ pub use crate::backend::postgresql::compact::{
 pub use crate::backend::postgresql::session::rows::sqlstate;
 pub use crate::backend::records::BackendError;
 pub use crate::backend::sqlite::compact::{
-    cap_delta_references, io_error, peak_temp_bytes, receipt, reserve, source_mmap, trim,
-    verify_inode_blocks, verify_repacked, windows, Rewritten, Window, DELTA_BASE_REFERENCES_CAP,
-    GAP_BYTES, SRC_MMAP_BYTES, WINDOW_BYTES,
+    cap_delta_references, io_error, peak_temp_bytes, receipt, reserve, source_mmap, staged_windows,
+    trim, verify_inode_blocks, verify_repacked, windows, Rewritten, Window,
+    DELTA_BASE_REFERENCES_CAP, GAP_BYTES, SRC_MMAP_BYTES, WINDOW_BYTES,
 };
