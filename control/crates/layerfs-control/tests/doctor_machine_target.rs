@@ -1,11 +1,17 @@
-//! Target-family verification against saved records, stand-in providers and authenticated workers.
+//! A machine's own checks (`machine.doctor`'s ten frozen ids) through the
+//! doctor frame, against saved records, a stand-in `docker` and stand-in
+//! workers: a Docker Engine that does not answer is `engine_down` with the
+//! fix that starts Docker; a stopped machine gets no worker checks; an
+//! outdated worker's fix is `stop && start`, the stop forced and the
+//! Sandboxes counted while some are recorded on it; a running or
+//! unresolved operation stops the probes; a nearly full data disk is a
+//! warning. Nothing is written to the home.
 #![cfg(all(unix, feature = "machine"))]
-mod target {
-    pub use layerfs_control::doctor::target::{Budget, Checks};
-}
-#[path = "../src/doctor/machine_target.rs"]
-mod machine_target;
+#[path = "support/doctor_own.rs"]
+mod doctor_own;
+use doctor_own::{outcome, own_within, row};
 use layerfs_bridge::control::SdkValue;
+use layerfs_control::doctor::{Kind, Options};
 use layerfs_home::home::{self, paths, write_entity, write_record};
 use layerfs_machine::record::MachineRecord;
 use layerfs_machine::worker::{read_frame_within, write_frame, MAX_HELLO, PROTOCOL};
@@ -32,6 +38,7 @@ impl Fixture {
     fn new() -> Self {
         let root =
             std::env::temp_dir().join(format!("lfs-doctor-machine-target-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("bin")).unwrap();
         let home = root.join("home");
         let id = home::ensure(&home).unwrap().id;
@@ -72,34 +79,47 @@ impl Fixture {
             docker_host,
         }
     }
-    fn provider(&self, state: &str) {
-        let script = format!("#!/bin/sh\necho \"$*\" >> '{}'/calls\ncase \"$*\" in *version*) echo 29.0;; *inspect*) printf '{}\\tmachine-worker\\n';; *) exit 71;; esac\n", self.root.display(), state);
+    fn script(&self, body: &str) {
+        let script = format!(
+            "#!/bin/sh\necho \"$*\" >> '{}'/calls\ncase \"$*\" in {body} *) exit 71;; esac\n",
+            self.root.display()
+        );
         let file = self.root.join("bin/docker");
         std::fs::write(&file, script).unwrap();
         std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
-    /// A provider whose Engine answers and holds no worker container.
+    /// An Engine that answers, with the worker container in `state`.
+    fn provider(&self, state: &str) {
+        self.script(&format!(
+            "*version*) echo 29.0;; *inspect*) printf '{state}\\tmachine-worker\\n';;"
+        ));
+    }
+    /// An Engine that answers and holds no worker container.
     fn provider_missing(&self) {
-        let script = format!("#!/bin/sh\necho \"$*\" >> '{}'/calls\ncase \"$*\" in *version*) echo 29.0;; *inspect*) echo 'Error: No such object' >&2; exit 1;; *) exit 71;; esac\n", self.root.display());
-        let file = self.root.join("bin/docker");
-        std::fs::write(&file, script).unwrap();
-        std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o755)).unwrap();
+        self.script("*version*) echo 29.0;; *inspect*) echo 'Error: No such object' >&2; exit 1;;");
+    }
+    /// An Engine that does not answer: Docker is not running.
+    fn engine_down(&self) {
+        self.script("*version*) echo 'Cannot connect to the Docker daemon' >&2; exit 1;;");
     }
     fn report(&self, name: &str, timeout: Duration) -> SdkValue {
         let before = contents(&self.home);
-        let mut checks = target::Checks::new("machine", name);
-        machine_target::diagnose(
+        let shown = own_within(
             &self.home,
+            Kind::Machine,
             name,
-            &target::Budget::new(Some(timeout)),
-            &mut checks,
+            &Options::default(),
+            Some(timeout),
         );
         assert_eq!(
             before,
             contents(&self.home),
             "diagnosis modified saved home state"
         );
-        checks.to_sdk()
+        shown
+    }
+    fn calls(&self) -> Vec<u8> {
+        std::fs::read(self.root.join("calls")).unwrap_or_default()
     }
 }
 impl Drop for Fixture {
@@ -131,196 +151,199 @@ fn contents(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     }
     result
 }
-fn check<'a>(report: &'a SdkValue, id: &str) -> &'a SdkValue {
-    let Some(SdkValue::List(checks)) = report.get("checks") else {
-        panic!("missing checks")
-    };
-    checks
+fn is(report: &SdkValue, id: &str, value: Option<&str>) {
+    assert_eq!(outcome(report, id).as_deref(), value, "{id}: {report:?}");
+}
+/// The finding of check `id`: its severity, message and fix.
+fn finding(report: &SdkValue, id: &str) -> (String, String, String) {
+    let found = row(report, id).unwrap_or_else(|| panic!("no {id}: {report:?}"));
+    let text = |key: &str| found.get_text(key).unwrap_or("").to_owned();
+    (text("severity"), text("message"), text("fix"))
+}
+/// The ids the report's rows name, in order.
+fn ids(report: &SdkValue) -> Vec<String> {
+    doctor_own::rows(report)
         .iter()
-        .find(|row| row.get_text("id") == Some(id))
-        .unwrap_or_else(|| panic!("missing {id}: {report:?}"))
+        .map(|row| row.get_text("id").unwrap_or("").to_owned())
+        .collect()
 }
-fn outcome(report: &SdkValue, id: &str, value: &str) {
-    assert_eq!(
-        check(report, id).get_text("outcome"),
-        Some(value),
-        "{report:?}"
-    );
-}
+/// A machine's budget here: long enough for the stand-in's few commands
+/// on a loaded host; a report waits only as long as its probes take.
+const SECOND: Duration = Duration::from_secs(5);
 
 // One test owns PATH for the entire fixture matrix; provider child commands are recorded.
 #[test]
-fn machine_target_reports_dependencies_and_preserves_home() {
+fn machine_checks_report_in_order_and_preserve_the_home() {
     let f = Fixture::new();
-    outcome(
-        &f.report("missing", Duration::from_secs(1)),
-        "machine.record",
-        "fail",
-    );
+    is(&f.report("missing", SECOND), "machine.record", Some("fail"));
+    // native: no provider, worker or data disk
     MachineRecord::built_in("native", &f.id)
         .write(&f.home)
         .unwrap();
-    #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
-    let native = f.report("native", Duration::from_secs(1));
-    #[cfg(target_os = "macos")]
-    outcome(&native, "machine.provider", "pass");
-    #[cfg(target_os = "macos")]
-    outcome(&native, "machine.worker", "skipped");
+    let native = f.report("native", SECOND);
+    assert_eq!(
+        ids(&native),
+        ["machine.record", "machine.operation", "machine.state"]
+    );
+    assert_eq!(json(&native), r#"{"ok":true}"#);
+    // Docker is not running: engine_down, with the fix that starts it
     MachineRecord::built_in("docker", &f.id)
         .write(&f.home)
         .unwrap();
-    outcome(
-        &f.report("docker", Duration::from_secs(1)),
-        "machine.provider",
-        "fail",
+    f.engine_down();
+    let down = f.report("docker", SECOND);
+    let (severity, _, fix) = finding(&down, "machine.provider");
+    assert_eq!(severity, "error");
+    assert_eq!(fix, layerfs_machine::state::start_docker());
+    assert_eq!(
+        ids(&down),
+        [
+            "machine.record",
+            "machine.operation",
+            "machine.configuration",
+            "machine.provider"
+        ]
     );
-    // no worker container: a warning while docker never started (a stop
-    // before any start included), an error once it ran
+    // a never-started docker has no container: stopped, as its record says
     f.provider_missing();
-    for record in [
-        MachineRecord::built_in("docker", &f.id),
-        MachineRecord::built_in("docker", &f.id).with("state", SdkValue::text("stopped")),
-    ] {
-        record.write(&f.home).unwrap();
-        let never = f.report("docker", Duration::from_secs(1));
-        outcome(&never, "machine.provider", "fail");
-        assert_eq!(
-            check(&never, "machine.provider").get_text("severity"),
-            Some("warning")
-        );
-        assert_eq!(
-            check(&never, "machine.provider").get_text("message"),
-            Some("docker was never started; Start creates its worker container (`layerfs machine start docker`)")
-        );
-        outcome(&never, "machine.worker.auth", "skipped");
-    }
-    // it ran: its recorded socket is the stand-in Engine's (a machine that
-    // ran with none recorded would use Docker's default socket)
-    MachineRecord::built_in("docker", &f.id)
-        .with("state", SdkValue::text("stopped"))
-        .with("lasting", SdkValue::map([]))
-        .with(
-            "docker",
-            SdkValue::text(f.root.join("e.sock").to_str().unwrap()),
-        )
-        .write(&f.home)
-        .unwrap();
-    let lost = f.report("docker", Duration::from_secs(1));
-    outcome(&lost, "machine.provider", "fail");
+    let never = f.report("docker", SECOND);
     assert_eq!(
-        check(&lost, "machine.provider").get_text("severity"),
-        Some("error")
+        ids(&never),
+        [
+            "machine.record",
+            "machine.operation",
+            "machine.configuration",
+            "machine.provider",
+            "machine.state"
+        ],
+        "{never:?}"
     );
-    assert_eq!(
-        check(&lost, "machine.provider").get_text("message"),
-        Some("provider holds no runtime with the recorded machine identity")
-    );
+    assert_eq!(json(&never), r#"{"ok":true}"#, "stopped is not a finding");
+    // its container exited while its record says it runs: the record is
+    // out of date, and a live read records what is seen
     MachineRecord::built_in("docker", &f.id)
+        .with("state", SdkValue::text("running"))
         .write(&f.home)
         .unwrap();
     f.provider("exited");
-    let stopped = f.report("docker", Duration::from_secs(1));
-    outcome(&stopped, "machine.worker.auth", "skipped");
+    let stale = f.report("docker", SECOND);
+    is(&stale, "machine.provider", Some("pass"));
+    let (severity, message, fix) = finding(&stale, "machine.state");
+    assert_eq!(severity, "warning");
+    assert!(message.contains("stopped"), "{message}");
+    assert_eq!(fix, "layerfs machine get docker --with live");
+    is(&stale, "machine.worker.endpoint", None);
+    // a dead container
+    f.provider("dead");
+    let (severity, _, fix) = finding(&f.report("docker", SECOND), "machine.provider");
+    assert_eq!(
+        (severity.as_str(), fix.as_str()),
+        ("error", "layerfs machine start docker")
+    );
+    // running, and no worker saved
     f.provider("running");
-    let missing_endpoint = f.report("docker", Duration::from_secs(1));
-    outcome(&missing_endpoint, "machine.worker.endpoint", "fail");
-    outcome(&missing_endpoint, "machine.worker.auth", "blocked");
+    let unsaved = f.report("docker", SECOND);
+    let (_, _, fix) = finding(&unsaved, "machine.worker.endpoint");
+    assert_eq!(fix, "layerfs machine start docker");
+    is(&unsaved, "machine.worker.auth", None);
     write_record(
         &paths::worker_record(&f.home, "docker"),
         &SdkValue::map([("address", SdkValue::text("malformed"))]),
     )
     .unwrap();
-    outcome(
-        &f.report("docker", Duration::from_secs(1)),
+    is(
+        &f.report("docker", SECOND),
         "machine.worker.endpoint",
-        "fail",
+        Some("fail"),
     );
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    listener.set_nonblocking(true).unwrap();
-    write_record(
-        &paths::worker_record(&f.home, "docker"),
+    // a worker of this build whose data disk is nearly full
+    let server = worker(&f.home, "answer");
+    let running = f.report("docker", SECOND);
+    server.join().unwrap();
+    assert_eq!(ids(&running).len(), 10, "{running:?}");
+    is(&running, "machine.worker.ping", Some("pass"));
+    let (severity, message, fix) = finding(&running, "machine.capacity");
+    assert_eq!(severity, "warning");
+    assert!(message.starts_with("its data disk has "), "{message}");
+    assert_eq!(fix, "layerfs machine prune docker --unused");
+    // a worker of another build: stop and start, no request sent
+    let server = worker(&f.home, "protocol");
+    let old = f.report("docker", Duration::from_millis(250));
+    server.join().unwrap();
+    let (severity, message, fix) = finding(&old, "machine.worker.compatibility");
+    assert_eq!(severity, "error");
+    assert_eq!(message, "worker is from another build");
+    assert_eq!(
+        fix,
+        "layerfs machine stop docker && layerfs machine start docker"
+    );
+    is(&old, "machine.worker.ping", None);
+    // with a Sandbox recorded on the machine the stop is forced
+    write_entity(
+        &paths::sandbox_record(&f.home, "sb"),
         &SdkValue::map([
-            (
-                "address",
-                SdkValue::text(listener.local_addr().unwrap().to_string()),
-            ),
-            ("secret", SdkValue::text("test-secret")),
+            ("name", SdkValue::text("sb")),
+            ("project", SdkValue::text("shop/api")),
+            ("machine", SdkValue::text("docker")),
+            ("id", SdkValue::text("sb")),
         ]),
     )
     .unwrap();
-    let server = std::thread::spawn(move || {
-        let deadline = Instant::now() + Duration::from_secs(2);
-        let mut stream = loop {
-            match listener.accept() {
-                Ok((stream, _)) => break stream,
-                Err(error)
-                    if error.kind() == std::io::ErrorKind::WouldBlock
-                        && Instant::now() < deadline =>
-                {
-                    std::thread::sleep(Duration::from_millis(1))
-                }
-                Err(error) => panic!("accept: {error}"),
-            }
-        };
-        stream.set_nonblocking(false).unwrap();
-        stream
-            .set_read_timeout(Some(Duration::from_secs(1)))
-            .unwrap();
-        stream
-            .set_write_timeout(Some(Duration::from_secs(1)))
-            .unwrap();
-        assert!(read_frame_within(&mut stream, MAX_HELLO).unwrap().is_some());
-        write_frame(
-            &mut stream,
-            &SdkValue::map([
-                ("ready", SdkValue::Bool(true)),
-                ("protocol", SdkValue::Int(PROTOCOL)),
-            ]),
-        )
-        .unwrap();
-        assert_eq!(
-            read_frame_within(&mut stream, MAX_HELLO)
-                .unwrap()
-                .unwrap()
-                .get_text("op"),
-            Some("worker.ping")
-        );
-        write_frame(
-            &mut stream,
-            &SdkValue::map([(
-                "value",
-                SdkValue::map([
-                    ("kind", SdkValue::text("worker")),
-                    ("pid", SdkValue::Int(42)),
-                    ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
-                    ("free_disk", SdkValue::Int(1234)),
-                ]),
-            )]),
-        )
-        .unwrap();
-    });
-    let running = f.report("docker", Duration::from_secs(1));
-    outcome(&running, "machine.worker.ping", "pass");
-    outcome(&running, "machine.capacity", "pass");
-    assert_eq!(running.get("complete"), Some(&SdkValue::Bool(true)));
+    let server = worker(&f.home, "protocol");
+    let forced = f.report("docker", Duration::from_millis(250));
     server.join().unwrap();
-    for mode in ["protocol", "version", "refusal", "timeout"] {
-        worker_failure(&f, mode);
+    let (_, message, fix) = finding(&forced, "machine.worker.compatibility");
+    assert_eq!(message, "worker is from another build; 1 Sandbox is on it");
+    assert_eq!(
+        fix,
+        "layerfs machine stop docker --force && layerfs machine start docker"
+    );
+    std::fs::remove_dir_all(paths::sandbox_dir(&f.home, "sb")).unwrap();
+    for (mode, ping) in [
+        ("version", "fail"),
+        ("refusal", "fail"),
+        ("timeout", "unknown"),
+    ] {
+        let server = worker(&f.home, mode);
+        let report = f.report("docker", Duration::from_millis(250));
+        server.join().unwrap();
+        is(&report, "machine.worker.ping", Some(ping));
+        is(&report, "machine.capacity", None);
     }
+    // a live operation holds it: busy, and its provider is not asked
     let record = MachineRecord::of(&f.home, "docker").unwrap();
     let op = layerfs_home::op::Op::begin("machine.create", "prepare", SdkValue::Null).unwrap();
     record.with_op(&op).write(&f.home).unwrap();
-    let provider_calls = std::fs::read(f.root.join("calls")).unwrap();
-    let active = f.report("docker", Duration::from_secs(1));
-    outcome(&active, "machine.provider", "blocked");
-    assert_eq!(std::fs::read(f.root.join("calls")).unwrap(), provider_calls);
-    record_without_op(&f.home);
-    outcome(
-        &f.report("docker", Duration::ZERO),
-        "machine.provider",
-        "unknown",
-    );
-    // Corrupt record fields are concrete errors before any external probes.
+    let asked = f.calls();
+    let active = f.report("docker", SECOND);
+    is(&active, "machine.operation", Some("unknown"));
+    let busy = row(&active, "machine.operation").unwrap();
+    assert_eq!(busy.get_text("reason"), Some("busy"));
+    is(&active, "machine.provider", None);
+    assert_eq!(f.calls(), asked);
+    // an uncertain start whose owner is gone: a live read settles it (C13)
+    let unresolved = SdkValue::map([
+        ("id", SdkValue::text("op-00000000000000aa")),
+        ("name", SdkValue::text("machine.start")),
+        ("phase", SdkValue::text("start")),
+        ("owner", SdkValue::map([("pid", SdkValue::Int(0))])),
+        ("started", SdkValue::Int(1)),
+        ("uncertain", SdkValue::Bool(true)),
+    ]);
+    let record = MachineRecord::of(&f.home, "docker").unwrap().without_op();
+    record.with("op", unresolved).write(&f.home).unwrap();
+    let left = f.report("docker", SECOND);
+    let (severity, message, fix) = finding(&left, "machine.operation");
+    assert_eq!(severity, "error");
+    assert!(message.contains("is not known"), "{message}");
+    assert_eq!(fix, "layerfs machine get docker --with live");
+    assert_eq!(f.calls(), asked);
+    let record = MachineRecord::of(&f.home, "docker").unwrap().without_op();
+    record.write(&f.home).unwrap();
+    // no time left before the provider is asked: no verdict
+    let late = f.report("docker", Duration::ZERO);
+    is(&late, "machine.provider", Some("unknown"));
+    // corrupt record fields are concrete errors before any probe
     write_entity(
         &paths::machine_record(&f.home, "bad"),
         &SdkValue::map([
@@ -330,12 +353,19 @@ fn machine_target_reports_dependencies_and_preserves_home() {
         ]),
     )
     .unwrap();
-    outcome(
-        &f.report("bad", Duration::from_secs(1)),
-        "machine.record",
-        "fail",
-    );
-    // Malformed saved state and operation metadata must not become report text.
+    is(&f.report("bad", SECOND), "machine.record", Some("fail"));
+    // a removed platform: its record names one this build does not run
+    write_entity(
+        &paths::machine_record(&f.home, "fc"),
+        &SdkValue::map([
+            ("name", SdkValue::text("fc")),
+            ("platform", SdkValue::text("firecracker")),
+        ]),
+    )
+    .unwrap();
+    let (_, _, fix) = finding(&f.report("fc", SECOND), "machine.record");
+    assert_eq!(fix, "layerfs machine remove fc");
+    // malformed saved state and operation metadata must not become report text
     let sensitive = "private-saved-value-must-not-be-displayed";
     for state in [
         SdkValue::text(sensitive),
@@ -345,8 +375,8 @@ fn machine_target_reports_dependencies_and_preserves_home() {
             .with("state", state)
             .write(&f.home)
             .unwrap();
-        let report = f.report("native", Duration::from_secs(1));
-        outcome(&report, "machine.record", "fail");
+        let report = f.report("native", SECOND);
+        is(&report, "machine.record", Some("fail"));
         assert!(!format!("{report:?}").contains(sensitive));
     }
     for state in ["running", "stopped", "failed"] {
@@ -354,11 +384,7 @@ fn machine_target_reports_dependencies_and_preserves_home() {
             .with("state", SdkValue::text(state))
             .write(&f.home)
             .unwrap();
-        outcome(
-            &f.report("native", Duration::from_secs(1)),
-            "machine.record",
-            "pass",
-        );
+        is(&f.report("native", SECOND), "machine.record", Some("pass"));
     }
     let malformed_op = SdkValue::map([
         ("id", SdkValue::map([("secret", SdkValue::text(sensitive))])),
@@ -376,16 +402,30 @@ fn machine_target_reports_dependencies_and_preserves_home() {
         .with("op", malformed_op)
         .write(&f.home)
         .unwrap();
-    let report = f.report("native", Duration::from_secs(1));
-    outcome(&report, "machine.provider", "blocked");
+    let report = f.report("native", SECOND);
     assert!(!format!("{report:?}").contains(sensitive));
-    assert_eq!(std::fs::read(f.root.join("calls")).unwrap(), provider_calls);
-    assert!(home::filesystem_available(&f.home).unwrap() > 0);
+    assert_eq!(f.calls(), asked);
 }
-fn worker_failure(fixture: &Fixture, mode: &'static str) {
+
+fn json(report: &SdkValue) -> String {
+    let clean = matches!(report.get("findings"), Some(SdkValue::List(l)) if l.is_empty())
+        && matches!(report.get("not_checked"), Some(SdkValue::List(l)) if l.is_empty());
+    match clean {
+        true => r#"{"ok":true}"#.to_owned(),
+        false => layerfs_home::json::print(report),
+    }
+}
+
+/// A stand-in worker for machine `docker`, saved in its `worker.json`:
+/// `answer` is this build's worker (a ping answers 1234 free bytes);
+/// `protocol` answers hello as another build and takes no request;
+/// `version`, `refusal` and `timeout` answer the ping wrongly, refuse it
+/// or never answer it.
+fn worker(home: &Path, mode: &'static str) -> std::thread::JoinHandle<()> {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
     write_record(
-        &paths::worker_record(&fixture.home, "docker"),
+        &paths::worker_record(home, "docker"),
         &SdkValue::map([
             (
                 "address",
@@ -395,83 +435,71 @@ fn worker_failure(fixture: &Fixture, mode: &'static str) {
         ]),
     )
     .unwrap();
-    let server = std::thread::spawn(move || {
+    std::thread::spawn(move || {
         use std::io::Read;
-        let (mut stream, _) = listener.accept().unwrap();
-        stream
-            .set_read_timeout(Some(Duration::from_secs(1)))
-            .unwrap();
-        stream
-            .set_write_timeout(Some(Duration::from_secs(1)))
-            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::WouldBlock
+                        && Instant::now() < deadline =>
+                {
+                    std::thread::sleep(Duration::from_millis(1))
+                }
+                Err(error) => panic!("accept: {error}"),
+            }
+        };
+        stream.set_nonblocking(false).unwrap();
+        stream.set_read_timeout(Some(SECOND)).unwrap();
+        stream.set_write_timeout(Some(SECOND)).unwrap();
         assert!(read_frame_within(&mut stream, MAX_HELLO).unwrap().is_some());
+        let protocol = match mode {
+            "protocol" => PROTOCOL + 1,
+            _ => PROTOCOL,
+        };
         write_frame(
             &mut stream,
             &SdkValue::map([
                 ("ready", SdkValue::Bool(true)),
-                (
-                    "protocol",
-                    SdkValue::Int(if mode == "protocol" {
-                        PROTOCOL + 1
-                    } else {
-                        PROTOCOL
-                    }),
-                ),
+                ("protocol", SdkValue::Int(protocol)),
             ]),
         )
         .unwrap();
         if mode != "protocol" {
             let request = read_frame_within(&mut stream, MAX_HELLO).unwrap().unwrap();
             assert_eq!(request.get_text("op"), Some("worker.ping"));
-            if mode == "version" {
-                write_frame(
-                    &mut stream,
-                    &SdkValue::map([(
-                        "value",
-                        SdkValue::map([
-                            ("kind", SdkValue::text("worker")),
-                            ("pid", SdkValue::Int(42)),
-                            ("version", SdkValue::text("different-version")),
-                        ]),
-                    )]),
-                )
-                .unwrap();
-            } else if mode == "refusal" {
-                write_frame(
-                    &mut stream,
-                    &SdkValue::map([(
-                        "refused",
-                        SdkValue::map([
-                            ("code", SdkValue::text("Denied")),
-                            ("message", SdkValue::text("owned fixture refusal")),
-                        ]),
-                    )]),
-                )
-                .unwrap();
+            let version = match mode {
+                "version" => "different-version",
+                _ => env!("CARGO_PKG_VERSION"),
+            };
+            let answer = match mode {
+                "answer" | "version" => Some(SdkValue::map([(
+                    "value",
+                    SdkValue::map([
+                        ("kind", SdkValue::text("worker")),
+                        ("pid", SdkValue::Int(42)),
+                        ("version", SdkValue::text(version)),
+                        ("free_disk", SdkValue::Int(1234)),
+                    ]),
+                )])),
+                "refusal" => Some(SdkValue::map([(
+                    "refused",
+                    SdkValue::map([
+                        ("code", SdkValue::text("Denied")),
+                        ("message", SdkValue::text("owned fixture refusal")),
+                    ]),
+                )])),
+                _ => None,
+            };
+            if let Some(answer) = answer {
+                write_frame(&mut stream, &answer).unwrap();
             }
         }
-        // No second request and no abandoned peer after timeout or refusal.
+        if mode == "answer" {
+            return;
+        }
+        // no second request and no abandoned peer after a timeout or refusal
         assert_eq!(stream.read(&mut [0; 1]).unwrap(), 0);
-    });
-    let report = fixture.report("docker", Duration::from_millis(250));
-    if mode == "protocol" {
-        outcome(&report, "machine.worker.compatibility", "fail");
-        outcome(&report, "machine.worker.ping", "blocked");
-    } else {
-        outcome(
-            &report,
-            "machine.worker.ping",
-            if mode == "timeout" { "unknown" } else { "fail" },
-        );
-        outcome(&report, "machine.capacity", "blocked");
-    }
-    assert_eq!(report.get("complete"), Some(&SdkValue::Bool(false)));
-    server.join().unwrap();
-}
-fn record_without_op(home: &Path) {
-    MachineRecord::of(home, "docker")
-        .unwrap()
-        .without_op()
-        .write(home)
-        .unwrap();
+    })
 }

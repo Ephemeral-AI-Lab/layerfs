@@ -1,11 +1,17 @@
-//! Saved-route prerequisites and process-identity observations only.
-use super::Checks;
+//! Saved-route prerequisites and process-identity observations only:
+//! `sandbox.runtime`, and a forward's `sandbox.route` and
+//! `sandbox.forward_process`.
+use super::{remove_fix, Checks};
 use layerfs_bridge::process::{self, LocalProcess};
 use layerfs_home::home::paths;
+use layerfs_home::state::BlockedBy;
 use layerfs_sandbox::record::SandboxRecord;
 use std::path::Path;
 
+/// `sandbox.route` and `sandbox.forward_process` of a forwarded Sandbox:
+/// whether its daemon can be dialled through the saved forward.
 pub(super) fn forward(home: &Path, record: &SandboxRecord, checks: &mut Checks) -> bool {
+    let name = record.name();
     let Some(daemon) = record.daemon() else {
         return false;
     };
@@ -15,15 +21,20 @@ pub(super) fn forward(home: &Path, record: &SandboxRecord, checks: &mut Checks) 
     if forward.machine() != Some(record.machine()) || forward.address().is_none() {
         checks.fail(
             "sandbox.route",
-            "Saved forward address or machine does not match sandbox placement",
+            "its saved forward names no address, or another machine than its own",
         );
+        checks.fix("sandbox.route", remove_fix(name));
         return false;
     }
     if !paths::worker_record(home, record.machine()).is_file() {
-        checks.unknown(
-            "sandbox.route",
-            "Forwarded route requires a recorded running worker; worker record is absent",
-        );
+        let machine = record.machine();
+        let by = BlockedBy {
+            thing: "machine",
+            handle: machine.to_owned(),
+            reason: "not_answering",
+        };
+        let message = format!("its forward needs machine {machine}'s worker, which has no record");
+        checks.waits("sandbox.route", message, by);
         return false;
     }
     if let Some(pid) = forward.pid() {
@@ -37,7 +48,10 @@ pub(super) fn forward(home: &Path, record: &SandboxRecord, checks: &mut Checks) 
             .filter(|s| s.len() == 32)
             .and_then(|v| u128::from_str_radix(v, 16).ok());
         let (Ok(pid), Some(start), Some(boot)) = (u32::try_from(pid), start, boot) else {
-            checks.unknown("sandbox.route", "Forward process lacks valid PID/start/boot identity; liveness is not inferred from PID alone");
+            checks.warning(
+                "sandbox.forward_process",
+                "its forward's process has no complete identity (pid, start time, boot): whether it runs is not known",
+            );
             return false;
         };
         match observed(LocalProcess {
@@ -47,52 +61,47 @@ pub(super) fn forward(home: &Path, record: &SandboxRecord, checks: &mut Checks) 
         }) {
             Observation::Present => checks.pass(
                 "sandbox.forward_process",
-                "Forward process matches saved PID, start time and boot",
+                "its forward's process runs, with its saved pid, start time and boot",
             ),
             Observation::Gone => {
                 checks.fail(
                     "sandbox.forward_process",
-                    "Saved forward process ended or its PID was reused",
+                    "its forward's process ended, or its pid was reused",
                 );
-                checks.blocked(
-                    "sandbox.route",
-                    "Forward process is absent",
-                    "sandbox.forward_process",
-                );
+                checks.fix("sandbox.forward_process", remove_fix(name));
                 return false;
             }
             Observation::Unknown => {
                 checks.unknown(
                     "sandbox.forward_process",
-                    "Forward process identity could not be inspected",
+                    "its forward's process could not be inspected",
                 );
                 return false;
             }
         }
-    } else {
-        checks.skip(
-            "sandbox.forward_process",
-            "Shared-port forward records no carrier process",
-        );
     }
+    // a shared-port forward has no process of its own: its check does not apply
     checks.pass(
         "sandbox.route",
-        "Saved direct-forward prerequisites are present; no worker RPC or replacement forward used",
+        "its saved forward can be used; no worker was asked",
     );
     true
 }
 
-pub(super) fn local(record: &SandboxRecord, checks: &mut Checks) {
+/// `sandbox.runtime` of a runtime on this kernel: false when it was seen
+/// gone, so its daemon is not dialled.
+pub(super) fn local(record: &SandboxRecord, checks: &mut Checks) -> bool {
+    const ID: &str = "sandbox.runtime";
     let Some(daemon) = record.daemon() else {
-        checks.unknown("sandbox.runtime", "No local runtime identity was recorded");
-        return;
-    };
-    if !matches!(daemon.runtime(), Some("native" | "namespaces")) {
-        checks.unknown(
-            "sandbox.runtime",
-            "Recorded runtime is unsupported by this observational process check",
+        checks.warning(
+            ID,
+            "its record names no runtime process: whether it runs is not known",
         );
-        return;
+        return true;
+    };
+    // another runtime has no process this check can match: it does not apply
+    if !matches!(daemon.runtime(), Some("native" | "namespaces")) {
+        return true;
     }
     let process = daemon
         .pid()
@@ -105,31 +114,37 @@ pub(super) fn local(record: &SandboxRecord, checks: &mut Checks) {
                 .and_then(|s| u128::from_str_radix(s, 16).ok()),
         );
     let Some(((pid, start), boot)) = process else {
-        checks.unknown(
-            "sandbox.runtime",
-            "Runtime process lacks complete PID/start/boot identity",
+        checks.warning(
+            ID,
+            "its runtime process has no complete identity (pid, start time, boot): whether it runs is not known",
         );
-        return;
+        return true;
     };
     match observed(LocalProcess {
         pid,
         start,
         boot: Some(boot),
     }) {
-        Observation::Present => checks.pass(
-            "sandbox.runtime",
-            "Recorded daemon/init process is live with the saved start time and boot",
-        ),
-        Observation::Gone => checks.fail(
-            "sandbox.runtime",
-            "Recorded runtime process ended or its PID/start/boot identity changed",
-        ),
-        Observation::Unknown => checks.unknown(
-            "sandbox.runtime",
-            "Kernel could not establish recorded runtime process presence",
-        ),
+        Observation::Present => {
+            checks.pass(
+                ID,
+                "its runtime process runs, with its saved pid, start time and boot",
+            );
+            true
+        }
+        Observation::Gone => {
+            checks.fail(
+                ID,
+                "its runtime process ended, or its pid, start time or boot changed",
+            );
+            checks.fix(ID, remove_fix(record.name()));
+            false
+        }
+        Observation::Unknown => {
+            checks.unknown(ID, "the kernel could not say whether its runtime runs");
+            true
+        }
     }
-    checks.skip("sandbox.runtime_containment", "Process presence is observed; namespace isolation and application filesystem serving are not exercised");
 }
 
 enum Observation {

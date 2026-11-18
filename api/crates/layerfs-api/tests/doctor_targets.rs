@@ -1,8 +1,8 @@
 //! The six doctors (call surface 2.0) against temporary homes, records
 //! only: each answers the one report in its row's shape, short and long; a
-//! clean home is `{"ok":true}` alone; a stopped machine blocks what is on it
-//! without trying it; a thing that is not there is refused; no doctor makes
-//! or converts a home; and one progress event goes out per finished thing.
+//! thing that is not there is refused; no doctor makes or converts a home;
+//! and one progress event goes out per finished thing. The home's and a
+//! machine's doctors, which ask a provider, are `doctor_home_machine.rs`'s.
 use layerfs_api::home::{paths, write_entity};
 use layerfs_api::json;
 use layerfs_bridge::control::SdkValue;
@@ -144,26 +144,6 @@ fn check_pair(short: &SdkValue, long: &SdkValue) {
     assert_eq!(counted, things as i64, "{long:?}");
 }
 
-/// A home with its native daemon recorded as an executable file, so the
-/// home's daemon check has something to read.
-#[cfg(feature = "machine")]
-fn initialized(tag: &str) -> PathBuf {
-    use layerfs_api::home::{read_record, with_field};
-    let home = tempdir(tag);
-    short(&home, "home.init", &[]);
-    let daemon = home.join("layerfs-daemon");
-    std::fs::write(&daemon, "#!/bin/sh\n").unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&daemon, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let path = paths::machine_record(&home, "native");
-    let native = read_record(&path)
-        .unwrap()
-        .unwrap_or_else(|| SdkValue::map([("name", t("native")), ("platform", t("native"))]));
-    let native = with_field(native, "daemon", t(&daemon.display().to_string()));
-    write_entity(&path, &native).unwrap();
-    home
-}
-
 #[test]
 fn a_home_that_does_not_exist_is_reported_and_stays_absent() {
     let home = tempdir("absent");
@@ -192,81 +172,13 @@ fn a_home_that_does_not_exist_is_reported_and_stays_absent() {
         .filter_map(|row| row.get_text("check"))
         .collect();
     assert!(
-        !ran.contains(&"host.layout") && !ran.contains(&"host.records"),
+        !ran.contains(&"home.layout") && !ran.contains(&"home.records"),
         "{ran:?}"
     );
     assert_eq!(events.len(), 1, "one thing, one event");
     let short = short(&home, "home.doctor", &[]);
     check_pair(&short, &long);
     assert!(!home.exists());
-}
-
-#[test]
-#[cfg(feature = "machine")]
-fn a_clean_home_is_ok_alone_and_its_long_form_is_the_one_report() {
-    let home = initialized("clean");
-    let before = layerfs_api::home::read_record(&home.join("layerfs.json")).unwrap();
-    let (answer, events) = call(&home, "home.doctor", &[]);
-    let short = answer.unwrap();
-    let long = long(&home, "home.doctor", &[]);
-    check_pair(&short, &long);
-    // this build's own environment decides two of the home's checks
-    let environment = |finding: &SdkValue| {
-        matches!(
-            finding.get_text("check"),
-            Some("host.prerequisites" | "host.bundle")
-        )
-    };
-    if cfg!(target_os = "macos") {
-        assert_eq!(json::print(&short), r#"{"ok":true}"#, "{long:?}");
-    } else {
-        assert!(list(&long, "findings").iter().all(environment), "{long:?}");
-    }
-    assert_eq!(list(&long, "not_checked").len(), 0, "{long:?}");
-    // the home, then each machine shallowly: a stopped one by its records
-    let tree = long.get("tree").unwrap();
-    assert_eq!(tree.get_text("coverage"), Some("shallow"));
-    let machines = list(tree, "machines");
-    let names: Vec<&str> = machines
-        .iter()
-        .filter_map(|m| m.get_text("machine"))
-        .collect();
-    assert_eq!(names, ["docker", "native"]);
-    for machine in machines {
-        assert_eq!(
-            keys(machine),
-            [
-                "machine",
-                "status",
-                "coverage",
-                "checks",
-                "blocked_by",
-                "reason"
-            ],
-            "a shallow child has no lists of its own"
-        );
-    }
-    let docker: Vec<&str> = (list(&machines[0], "checks").iter())
-        .filter_map(|row| row.get_text("check"))
-        .collect();
-    assert_eq!(docker, ["machine.record", "machine.operation"]);
-    // one event per finished thing: the home, then its machines
-    let phases: Vec<String> = (events.iter())
-        .map(|event| {
-            let event = event.get("progress").unwrap();
-            assert_eq!(keys(event), ["phase", "done", "total", "node"]);
-            format!(
-                "{} {}/{}",
-                event.get_text("phase").unwrap(),
-                event.get_int("done").unwrap(),
-                event.get_int("total").unwrap()
-            )
-        })
-        .collect();
-    assert_eq!(phases, ["self 1/3", "machines 2/3", "machines 3/3"]);
-    let after = layerfs_api::home::read_record(&home.join("layerfs.json")).unwrap();
-    assert_eq!(before, after);
-    let _ = std::fs::remove_dir_all(home);
 }
 
 /// A sqlite Store record `name` on `machine`, with a made-up identity.
@@ -282,83 +194,6 @@ fn sqlite_store(home: &Path, name: &str, machine: &str) {
         ]),
     )
     .unwrap();
-}
-
-/// A sqlite Store `cache` and a Sandbox `sb` on the stopped built-in
-/// machine `docker`.
-#[cfg(feature = "machine")]
-fn on_docker(home: &Path) {
-    sqlite_store(home, "cache", "docker");
-    write_entity(
-        &paths::project_record(home, "cache", "site"),
-        &SdkValue::map([("name", t("site"))]),
-    )
-    .unwrap();
-    write_entity(
-        &paths::sandbox_record(home, "sb"),
-        &SdkValue::map([
-            ("name", t("sb")),
-            ("project", t("cache/site")),
-            ("machine", t("docker")),
-            ("id", t("sb")),
-        ]),
-    )
-    .unwrap();
-}
-
-#[test]
-#[cfg(feature = "machine")]
-fn a_stopped_machine_blocks_what_is_on_it_without_trying_it() {
-    let home = initialized("stopped");
-    on_docker(&home);
-    let stopped = r#"{"machine":"docker","reason":"stopped"}"#;
-    // the machine: its records checks, then each thing on it not tried
-    let short_form = short(&home, "machine.doctor", &[("machine", t("docker"))]);
-    let long_form = long(&home, "machine.doctor", &[("machine", t("docker"))]);
-    check_pair(&short_form, &long_form);
-    assert_eq!(
-        json::print(&short_form),
-        format!(
-            r#"{{"not_checked":[{{"store":"cache","blocked_by":{stopped}}},{{"sandbox":"sb","blocked_by":{stopped}}}]}}"#
-        )
-    );
-    let tree = long_form.get("tree").unwrap();
-    assert_eq!(keys(tree)[6..], ["stores", "sandboxes"]);
-    let store = &list(tree, "stores")[0];
-    assert_eq!(store.get_text("status"), Some("not_checked"));
-    assert_eq!(store.get_text("coverage"), Some("none"));
-    assert!(list(store, "checks").is_empty());
-    assert_eq!(long_form.get_text("status"), Some("not_checked"));
-    // the Store: its records checks, and its projects wait on the machine
-    let store = short(&home, "store.doctor", &[("store", t("cache"))]);
-    assert_eq!(
-        json::print(&store),
-        format!(r#"{{"not_checked":[{{"project":"cache/site","blocked_by":{stopped}}}]}}"#)
-    );
-    let long_store = long(&home, "store.doctor", &[("store", t("cache"))]);
-    check_pair(&store, &long_store);
-    let checks: Vec<&str> = (list(long_store.get("tree").unwrap(), "checks").iter())
-        .filter_map(|row| row.get_text("check"))
-        .collect();
-    assert_eq!(checks, ["store.record"]);
-    // the project and the Sandbox: nothing tried
-    for (name, word, thing) in [
-        ("project.doctor", "project", "cache/site"),
-        ("sandbox.doctor", "sandbox", "sb"),
-    ] {
-        let answer = short(&home, name, &[(word, t(thing))]);
-        assert_eq!(
-            json::print(&answer),
-            format!(r#"{{"not_checked":[{{"{word}":"{thing}","blocked_by":{stopped}}}]}}"#)
-        );
-        let long_answer = long(&home, name, &[(word, t(thing))]);
-        check_pair(&answer, &long_answer);
-        assert_eq!(
-            long_answer.get("tree").unwrap().get_text("coverage"),
-            Some("none")
-        );
-    }
-    let _ = std::fs::remove_dir_all(home);
 }
 
 #[test]

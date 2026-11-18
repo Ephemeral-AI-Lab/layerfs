@@ -584,7 +584,7 @@ fn a_layout_2_machine_removal_refuses_while_its_remover_lives_and_leaves_no_inte
 }
 
 /// D-8 (layerfs-project#111): a layout 2 home holding Sandboxes of the
-/// retired docker backend converts. Each is forgotten, as `sandbox close`
+/// retired docker backend converts. Each is forgotten, as `sandbox remove`
 /// forgets it (a record that names it and its numbered state, or numbered
 /// state alone), with a note naming its container to remove; nothing is
 /// reopened, stopped or deleted, and the call that converted it answers.

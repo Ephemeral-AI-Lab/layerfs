@@ -5,8 +5,13 @@
 //! copy (`store.sqlite.incoming`) an interrupted or certain-failed transfer
 //! left on `native` or on a push's target machine, and a copy a push or pull
 //! did not retire (from the record).
+//!
+//! A finding's `fix` is one runnable line in 2.0's call names, or empty
+//! when none repairs it (its message then says what to do). An intent a
+//! gone owner left after a certain outcome holds nothing and is no
+//! finding: every read ignores it, and the next operation replaces it.
 use super::records::Findings;
-use super::scan::Scanned;
+use super::scan::{shell, Scanned};
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::home::paths;
 use layerfs_home::op::{Op, Standing};
@@ -42,20 +47,18 @@ fn check_scope(
         let entity = ("store", name);
         let op = store.op();
         if let Some(op) = &op {
-            let (show, clear) = (
-                format!("store get {name}"),
-                layerfs_store::record::clearing_call(op, name),
-            );
-            intent(entity, op, &show, &clear, findings);
+            let clear = layerfs_store::record::clearing_call(op, name);
+            intent(entity, op, &format!("layerfs {clear}"), findings);
         }
         match store.store_ref() {
             Err(refusal) => findings.error(
                 entity,
-                format!("Store {name}'s record cannot be read: {}", refusal.message),
                 format!(
-                    "no call reads it: repair {} by hand",
+                    "Store {name}'s record cannot be read: {}; no call reads it: repair {} by hand",
+                    refusal.message,
                     paths::store_record(home, name).display()
                 ),
+                String::new(),
             ),
             Ok(StoreRef::Sqlite {
                 machine: Placement::Machine(machine),
@@ -64,8 +67,8 @@ fn check_scope(
                 if !built_in(machine) && !scanned.machine_names.contains(machine) {
                     findings.error(
                         entity,
-                        format!("Store {name} is on machine {machine}, which has no record"),
-                        format!("no call reaches it: restore machine {machine}'s record for inspection and explicit cleanup, or delete {} by hand", paths::store_dir(home, name).display()),
+                        format!("Store {name} is on machine {machine}, which has no record; no call reaches it: restore machine {machine}'s record for inspection and explicit cleanup, or delete {} by hand", paths::store_dir(home, name).display()),
+                        String::new(),
                     );
                 }
                 // a transfer running now owns its partial copy
@@ -84,19 +87,19 @@ fn check_scope(
             }) => findings.warning(
                 entity,
                 format!("Store {name} came from a 1.1.0 home and its machine is not known"),
-                "`layerfs import-env` records where its file is".to_owned(),
+                "layerfs import-env".to_owned(),
             ),
             Ok(StoreRef::Postgres { .. }) => {}
         }
         let (_, stale) = lease::read_holders(home, name)?;
         for pid in stale {
+            let lease = paths::lease_dir(home, name).join(pid.to_string());
             findings.warning(
                 entity,
-                format!("Store {name} holds a stale lease of process {pid}, which ended"),
                 format!(
-                    "nothing reads it; the next call on {name} removes it, or delete \
-                     `store/{name}/open/{pid}` by hand"
+                    "Store {name} holds a stale lease of process {pid}, which ended; nothing reads it, and the next call on {name} removes it"
                 ),
+                format!("rm {}", shell(&lease)),
             );
         }
     }
@@ -110,22 +113,17 @@ fn machines(scanned: &Scanned, findings: &mut Findings) {
     for machine in &scanned.machines {
         let name = machine.name();
         let entity = ("machine", name);
+        // its message names the call that records another
         if let Some(daemon) = machine.daemon().filter(|d| !Path::new(d).is_file()) {
             findings.error(
                 entity,
                 layerfs_sandbox::deploy::missing_daemon(name, daemon),
-                format!("`layerfs machine update {name} --daemon <path>`"),
+                String::new(),
             );
         }
         if let Some(op) = machine.op() {
-            let clear = format!("machine remove {name}");
-            intent(
-                entity,
-                &op,
-                &format!("machine status {name}"),
-                &clear,
-                findings,
-            );
+            let clear = layerfs_machine::state::settle(name, &op);
+            intent(entity, &op, &clear, findings);
         }
     }
 }
@@ -135,34 +133,30 @@ fn sandboxes(scanned: &Scanned, findings: &mut Findings) {
     for sandbox in &scanned.sandboxes {
         let name = sandbox.name();
         let entity = ("sandbox", name);
-        let close = format!("sandbox remove {name}");
+        let fix = format!("layerfs sandbox remove {name}");
         if let Some(op) = sandbox.op() {
-            intent(
-                entity,
-                &op,
-                &format!("sandbox get {name}"),
-                &close,
-                findings,
-            );
+            intent(entity, &op, &fix, findings);
         }
-        let fix = format!("`layerfs {close}`");
+        // a reference that is gone: the Sandbox cannot be used, and its
+        // removal is the one call left (the call surface's example rates it
+        // a warning)
         match sandbox.project().and_then(|p| p.split_once('/')) {
-            None => findings.error(
+            None => findings.warning(
                 entity,
-                format!("Sandbox {name}'s record names no project"),
+                "its record names no project".to_owned(),
                 fix.clone(),
             ),
-            Some((store, _)) if !scanned.store_names.contains(store) => findings.error(
+            Some((store, _)) if !scanned.store_names.contains(store) => findings.warning(
                 entity,
-                format!("Sandbox {name}'s Store {store} is gone"),
+                format!("its record names Store {store}, which has no record"),
                 fix.clone(),
             ),
             Some((store, project))
                 if !(scanned.projects).contains(&(store.to_owned(), project.to_owned())) =>
             {
-                findings.error(
+                findings.warning(
                     entity,
-                    format!("Sandbox {name}'s project {store}/{project} is gone"),
+                    format!("its record names project {store}/{project}, which has no record"),
                     fix.clone(),
                 )
             }
@@ -170,32 +164,27 @@ fn sandboxes(scanned: &Scanned, findings: &mut Findings) {
         }
         let machine = sandbox.machine();
         if !machine.is_empty() && !built_in(machine) && !scanned.machine_names.contains(machine) {
-            findings.error(
+            findings.warning(
                 entity,
-                format!("Sandbox {name} is on machine {machine}, which has no record"),
+                format!("its record names machine {machine}, which has no record"),
                 fix,
             );
         }
     }
 }
 
-/// An intent whose owner is gone: uncertain is an error naming the call
-/// that shows it and the one that clears it; certain holds nothing.
-fn intent(entity: (&str, &str), op: &Op, show: &str, clear: &str, findings: &mut Findings) {
+/// An intent whose owner is gone with its outcome not known: an error
+/// whose fix is `clear`, the call that clears it. A live owner's intent and
+/// a certain one hold nothing to report.
+fn intent(entity: (&str, &str), op: &Op, clear: &str, findings: &mut Findings) {
     let (kind, name) = entity;
     let what = format!("{} ({}, phase {})", op.name(), op.id(), op.phase());
-    match op.standing() {
-        Standing::Running => {}
-        Standing::Unresolved => findings.error(
+    if op.standing() == Standing::Unresolved {
+        findings.error(
             entity,
             format!("{kind} {name} has an unresolved {what}: its outcome is not known"),
-            format!("`layerfs {show}` shows it; `layerfs {clear}` clears it"),
-        ),
-        Standing::Stale => findings.warning(
-            entity,
-            format!("{kind} {name} still records {what}, whose process ended after a certain outcome; it holds nothing"),
-            format!("nothing to do: the next operation on {kind} {name} replaces it"),
-        ),
+            clear.to_owned(),
+        );
     }
 }
 
@@ -207,23 +196,19 @@ fn leftover(store: &StoreRecord, machine: &str, findings: &mut Findings) {
     let Some(left) = layerfs_store::sqlite::transfer::resolve::leftover(store) else {
         return;
     };
-    // the target side of a move from native holds a partial copy, not a whole one: it is
+    // the target side of a push holds a partial copy, not a whole one: it is
     // reported with its bytes by `incoming`, below
-    if left.call == "store.move" && left.from == "native" && left.to == left.on {
+    if left.call == "store.push" && left.to == left.on {
         return;
     }
     let name = store.name();
-    let next = match machine {
-        "native" => format!("store move {name} <machine>"),
-        _ => format!("store move {name} native"),
-    };
     findings.warning(
         ("store", name),
         format!(
-            "Store {name}'s {} from {} to {} did not retire the copy on {}; the record names {machine}, and nothing reads that copy",
+            "Store {name}'s {} from {} to {} did not retire the copy on {}; the record names {machine}, nothing reads that copy, and the next `layerfs store move {name}` deletes it first",
             left.call, left.from, left.to, left.on
         ),
-        format!("the next `layerfs {next}` deletes it first"),
+        String::new(),
     );
 }
 
@@ -243,21 +228,13 @@ fn incoming(
     let file = paths::store_file(home, name);
     let local_incoming = file.with_file_name("store.sqlite.incoming");
     if local_incoming.exists() {
-        let fix = if on_native {
-            format!("delete {} by hand", local_incoming.display())
-        } else {
-            format!(
-                "`layerfs store move {name} native` replaces it, or delete {} by hand",
-                local_incoming.display()
-            )
-        };
         findings.warning(
             ("store", name),
             format!(
                 "{} is a partial copy an interrupted transfer left; nothing reads it",
                 local_incoming.display()
             ),
-            fix,
+            format!("rm {}", shell(&local_incoming)),
         );
     }
     if !remote {
@@ -277,12 +254,9 @@ fn incoming(
     let Some(bytes) = stat.get_int("incoming_bytes").filter(|&bytes| bytes > 0) else {
         return;
     };
-    let fix = if on_native {
-        format!(
-            "`layerfs store move {name} {to}` replaces it, or `layerfs store remove {name}` deletes it"
-        )
-    } else {
-        format!("`layerfs store move {name} native` or `layerfs store remove {name}` removes it")
+    let fix = match on_native {
+        true => format!("layerfs store move {name} {to}"),
+        false => format!("layerfs store move {name} native"),
     };
     findings.warning(
         ("store", name),

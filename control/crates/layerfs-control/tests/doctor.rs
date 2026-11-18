@@ -1,6 +1,7 @@
-//! The home doctor's records check (`host.records`, #536 H7): a home with
+//! The home doctor's records check (`home.records`, #536 H7): a home with
 //! one of each problem gives one finding each, naming the thing it is about
-//! and the call that fixes it; a clean home has no findings; a layout 2 home
+//! and the one runnable line that fixes it (none where no line does, the
+//! message then saying what to do by hand); a clean home has no findings; a layout 2 home
 //! reports what refuses its conversion; and the doctor writes nothing in
 //! the home. The check reads records only: it dials no worker or daemon.
 #[path = "support/doctor_own.rs"]
@@ -22,7 +23,7 @@ fn doctor(home: &Path) -> Result<SdkValue, SdkRefusal> {
         panic!("no findings: {report:?}")
     };
     let found: Vec<SdkValue> = (found.iter())
-        .filter(|finding| finding.get_text("check") == Some("host.records"))
+        .filter(|finding| finding.get_text("check") == Some("home.records"))
         .map(|finding| {
             let SdkValue::Map(fields) = finding else {
                 panic!("{finding:?}")
@@ -459,65 +460,53 @@ fn each_problem_gives_one_finding_naming_its_fix() {
     assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)));
 
     let found = findings(&report);
+    // (severity, kind, name, in the message, the fix: none, or in it)
     let expect = [
-        ("error", "store", "bad", "does not parse", "by hand"),
-        ("error", "machine", "old", "\"v\" 9", "build that wrote"),
-        ("error", "bucket", "b1", "0644", "chmod 600"),
+        ("error", "store", "bad", "does not parse", None),
+        ("error", "machine", "old", "build that wrote it", None),
+        ("error", "bucket", "b1", "0644", Some("chmod 600 ")),
         (
-            "error",
+            "warning",
             "sandbox",
             "sx",
-            "Store gone is gone",
-            "`layerfs sandbox remove sx`",
+            "its record names Store gone, which has no record",
+            Some("layerfs sandbox remove sx"),
         ),
         (
             "error",
             "store",
             "s2",
-            "machine ghost",
             "restore machine ghost's record for inspection and explicit cleanup",
+            None,
         ),
-        (
-            "error",
-            "project",
-            "orphan/p",
-            "no Store record",
-            "store/orphan",
-        ),
+        ("error", "project", "orphan/p", "store/orphan", None),
         (
             "error",
             "store",
             "s3",
             "unresolved store.remove",
-            "`layerfs store remove s3`",
-        ),
-        (
-            "warning",
-            "store",
-            "s4",
-            "certain outcome",
-            "next operation",
+            Some("layerfs store remove s3"),
         ),
         (
             "warning",
             "store",
             "s5",
             "stale lease of process 99999999",
-            "`store/s5/open/99999999` by hand",
+            Some("store/s5/open/99999999"),
         ),
         (
             "error",
             "machine",
             "native",
             "recorded daemon /no/such/layerfs-daemon is not there",
-            "`layerfs machine update native --daemon <path>`",
+            None,
         ),
         (
             "warning",
             "store",
             "s6",
             "store.sqlite.incoming",
-            "`layerfs store move s6 native`",
+            Some("rm "),
         ),
     ];
     for (severity, kind, name, message, fix) in expect {
@@ -528,7 +517,17 @@ fn each_problem_gives_one_finding_naming_its_fix() {
         let (s, _, _, m, x) = matching[0];
         assert_eq!(s, severity, "{kind} {name}: {m}");
         assert!(m.contains(message), "{kind} {name}: {m}");
-        assert!(x.contains(fix), "{kind} {name}: {x}");
+        match fix {
+            None => assert!(x.is_empty(), "{kind} {name}: {x}"),
+            Some(fix) => assert!(x.contains(fix), "{kind} {name}: {x}"),
+        }
+    }
+    // a certain intent whose owner is gone holds nothing: no finding
+    assert!(!found.iter().any(|f| f.2 == "s4"), "{found:#?}");
+    // every fix is one runnable line: no prose, no quoting
+    for finding in &found {
+        let fix = &finding.4;
+        assert!(!fix.contains('`') && !fix.contains("by hand"), "{fix}");
     }
     assert_eq!(found.len(), expect.len(), "{found:#?}");
     assert!(found
@@ -567,16 +566,16 @@ fn a_layout_2_home_reports_what_refuses_its_conversion_and_converts_nothing() {
     assert_eq!(before, tree(&home), "the doctor wrote in the home");
     assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)));
     let found = findings(&report);
-    assert_eq!(found.len(), 2, "{found:#?}");
+    // the conversion still to come is home.layout's warning, not a record's
+    assert_eq!(found.len(), 1, "{found:#?}");
     let (severity, kind, name, message, fix) = &found[0];
     assert_eq!(
         (severity.as_str(), kind.as_str(), name.as_str()),
         ("error", "store", "shop")
     );
     assert!(message.contains(&holder.id().to_string()), "{message}");
-    assert!(fix.contains("end that process"), "{fix}");
-    assert_eq!(found[1].0, "warning");
-    assert!(found[1].3.contains("layout 2"), "{found:#?}");
+    assert!(message.contains("end that process"), "{message}");
+    assert!(fix.is_empty(), "{fix}");
     assert!(stale.exists());
     std::fs::remove_dir_all(home).unwrap();
 }
@@ -640,7 +639,7 @@ fn exec_records_are_checked_and_left_as_they_are() {
         ("warning", "workspace", &*format!("sb:{live}"))
     );
     assert!(
-        stale.3.contains("stale") && stale.4.contains("exec-cancel sb:w e2"),
+        stale.3.contains("stale") && stale.4 == "layerfs workspace cancel sb:w --exec e2",
         "{stale:?}"
     );
     let leftover = found.iter().find(|f| f.2 == format!("sb:{left}")).unwrap();

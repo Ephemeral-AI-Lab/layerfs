@@ -103,7 +103,7 @@ fn actual_runtime_negative_observations_preserve_records_and_ownership() {
         outcome(&r, "sandbox.daemon_instance").as_deref(),
         Some("fail")
     );
-    assert_eq!(outcome(&r, "sandbox.workspaces"), None);
+    assert_eq!(outcome(&r, "sandbox.daemon_ready"), None);
     assert_eq!(outcome(&r, "sandbox.session").as_deref(), Some("pass"));
 
     let auth = copy(&source, 2);
@@ -150,13 +150,13 @@ fn actual_runtime_negative_observations_preserve_records_and_ownership() {
         outcome(&r, "sandbox.forward_process").as_deref(),
         Some("fail")
     );
-    assert_eq!(outcome(&r, "sandbox.daemon"), None);
+    assert_eq!(outcome(&r, "sandbox.daemon_connect"), None);
 
     let missing = copy(&source, 4);
     std::fs::remove_file(paths::worker_record(&missing.0, "b6-vm")).unwrap();
     let r = report(&missing.0, Kind::Sandbox, "b6-lima-box");
     assert_eq!(outcome(&r, "sandbox.route").as_deref(), Some("unknown"));
-    assert_eq!(outcome(&r, "sandbox.daemon"), None);
+    assert_eq!(outcome(&r, "sandbox.daemon_connect"), None);
 
     let denied = copy(&source, 5);
     let path = paths::worker_record(&denied.0, "docker");
@@ -196,7 +196,7 @@ fn actual_runtime_negative_observations_preserve_records_and_ownership() {
     );
     let r = report(&gone.0, Kind::Sandbox, "b6-gone");
     assert_eq!(outcome(&r, "sandbox.runtime").as_deref(), Some("fail"));
-    assert_eq!(outcome(&r, "sandbox.daemon"), None);
+    assert_eq!(outcome(&r, "sandbox.daemon_connect"), None);
     assert!(
         records(&source) == before,
         "real source runtime records/leases changed"
