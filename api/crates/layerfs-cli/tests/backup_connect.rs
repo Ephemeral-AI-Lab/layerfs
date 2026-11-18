@@ -92,5 +92,28 @@ fn a_bucket_that_does_not_answer_is_unavailable_and_nothing_is_recorded() {
     assert!(!refusal.contains("s3cr3t"), "{refusal}");
     assert!(!home.join("backup/b1").exists());
     assert!(!home.join("secret/bucket/b1.json").exists());
+    // a bucket name S3 does not allow says what a name may be (R1 N12)
+    let out = run_with_stdin(
+        &mut layerfs(
+            &home,
+            &[
+                "backup",
+                "connect",
+                "b1",
+                "http://127.0.0.1:9/b/p",
+                "--access-key",
+                "AKID",
+                "--key-stdin",
+            ],
+        ),
+        b"s3cr3t\n",
+    );
+    assert_eq!(out.status.code(), Some(125), "{out:?}");
+    let refusal = text(&out.stderr);
+    assert!(refusal.contains("InvalidInput"), "{refusal}");
+    assert!(
+        refusal.contains("S3 bucket name \\\"b\\\" is not valid: 3 to 63 lowercase letters"),
+        "{refusal}"
+    );
     let _ = std::fs::remove_dir_all(root);
 }
