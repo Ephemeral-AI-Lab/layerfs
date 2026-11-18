@@ -1,7 +1,9 @@
 //! Secrets (#536 §9.2): a PostgreSQL URL with a saved login put into it
-//! (the login is in the home's secret folder, `home::secrets`; the full
-//! URL is never written down), worker secrets in `worker.json` and Sandbox
-//! daemon keys in `control.json`.
+//! (the login is in the home's secret folder, `home::secrets`), or, for a
+//! Store recorded before saved logins, its password reference (`env:NAME`
+//! or `file:/path`) resolved on each call; the full URL is never written
+//! down. Worker secrets in `worker.json` and Sandbox daemon keys in
+//! `control.json`.
 use crate::home::{paths, read_record, write_record};
 use crate::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -49,6 +51,53 @@ pub fn with_login(url: &str, user: &str, password: &str) -> Result<String> {
         percent(user),
         percent(password)
     ))
+}
+
+/// A password reference's value, read now: `env:NAME` or
+/// `file:/absolute/path` (its trailing newline dropped). An unset or empty
+/// variable or an unreadable file is `Unavailable`, any other text
+/// `InvalidInput`.
+pub fn resolve(reference: &str) -> Result<String> {
+    if let Some(name) = reference.strip_prefix("env:") {
+        return std::env::var(name)
+            .ok()
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| {
+                refused(
+                    "Unavailable",
+                    format!("the password variable {name} is not set"),
+                )
+            });
+    }
+    if let Some(path) = (reference.strip_prefix("file:")).filter(|p| Path::new(p).is_absolute()) {
+        let text = std::fs::read_to_string(path)
+            .map_err(|e| refused("Unavailable", format!("{path}: {e}")))?;
+        return Ok(text.trim_end_matches(['\n', '\r']).to_owned());
+    }
+    Err(refused(
+        "InvalidInput",
+        "a password is a reference: env:NAME or file:/absolute/path",
+    ))
+}
+
+/// `url`, an address with its user and no password (a PostgreSQL Store
+/// recorded before saved logins), with password reference `reference`
+/// resolved now and put in beside that user. The user stays as the URL
+/// spells it (already URL text); the password is percent-encoded. A URL
+/// with no user is `InvalidInput`.
+pub fn with_password(url: &str, reference: &str) -> Result<String> {
+    let (scheme, user, rest) = parts(url)?;
+    let user = user
+        .and_then(|u| u.split(':').next())
+        .filter(|u| !u.is_empty());
+    let user = user.ok_or_else(|| {
+        refused(
+            "InvalidInput",
+            "a URL with a password reference names its user",
+        )
+    })?;
+    let password = percent(&resolve(reference)?);
+    Ok(format!("{scheme}://{user}:{password}@{rest}"))
 }
 
 /// What a machine's `worker.json` records: its worker's address and

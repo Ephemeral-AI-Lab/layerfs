@@ -161,8 +161,11 @@ pub fn connect(
     connect::refuse_login(&request.url)?;
     connect::target(&request.url)?;
     runs_postgresql_sandboxes(home, name, machine)?;
+    // the machine's whole own connection: a password reference an older
+    // entry held goes with it
     let own = OwnConnection {
         url: Some(request.url.clone()),
+        password: None,
     };
     let trial = record.clone().with_own_connection(machine, &own);
     check_from(home, events, &trial, machine).1?;
