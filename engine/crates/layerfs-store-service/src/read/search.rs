@@ -210,6 +210,7 @@ impl Reuse {
 
     /// [`matches`] for `entry`, from a kept result when its content was
     /// scanned before in this call.
+    #[allow(clippy::too_many_arguments)]
     pub fn matches(
         &mut self,
         reader: &dyn AuthenticatedObjects,

@@ -52,7 +52,7 @@ fn bytes(n: usize) -> SdkValue {
 /// marks `redact` (exec command text, Commit messages, edit strings, Store
 /// passwords, connection URLs that may embed `user:pass@`, a glob or grep
 /// pattern), and a path argument as the count of its normalized form, so a
-/// `project.remove_file` or `file.*` path never enters the call log (#41
+/// `project.hide_path` or `file.*` path never enters the call log (#41
 /// §4.3).
 fn word(arg: &Arg, value: &SdkValue) -> Option<SdkValue> {
     Some(match (arg.kind, value) {
