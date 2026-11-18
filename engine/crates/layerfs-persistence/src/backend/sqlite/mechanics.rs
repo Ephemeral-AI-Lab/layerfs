@@ -44,6 +44,16 @@ impl Mechanics for Transaction<'_> {
     ) -> Result<(), PersistenceError> {
         super::metadata::values::read(self, ordinals, out)
     }
+    fn inode_values_ahead(
+        &self,
+        ordinals: &[u32],
+        _ahead: u32,
+        out: &mut Vec<InodeValueRow>,
+    ) -> Result<(), PersistenceError> {
+        // Nothing is read past the asked blocks: only their other values,
+        // which the read decoded anyway, come along.
+        super::metadata::values::read_blocks(self, ordinals, out)
+    }
     fn signatures(&self, out: &mut Vec<SignatureRow>) -> Result<(), PersistenceError> {
         super::metadata::signatures::read(self, out)
     }

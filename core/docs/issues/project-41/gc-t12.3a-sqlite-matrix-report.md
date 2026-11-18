@@ -266,7 +266,7 @@ AC-51 does not depend on the projection alone.
   `sqlite_compact` (37), `sqlite_compact_crash` (24),
   `sqlite_compact_fixtures` (1), `admission` (10), `path_removal` (4),
   `branch_removal` (4), `project_delete` (4), `epoch_fence` (7),
-  `gc_backfill` (5), `kept_objects` (7); the Store-service path suites
+  `gc_backfill` (5), `kept_objects` (8); the Store-service path suites
   `sdk_path_merge_removal` (6), `sdk_mount_bind_failure` (1),
   `sdk_path_whiteouts` (7), `sdk_path_hidden_semantics` (3),
   `sdk_path_removal` (5); and the `layerfs-control

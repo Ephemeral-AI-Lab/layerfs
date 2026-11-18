@@ -45,6 +45,7 @@ mod edges;
 mod ids;
 mod impls;
 mod plan;
+mod values;
 
 use ids::{IdMap, IdSet};
 use plan::MarkGroups;
@@ -398,16 +399,16 @@ struct ClosureSource<'a> {
     /// The packs the wave being walked decodes metadata from, ascending, and
     /// how many of them the engine has been told to expect.
     upcoming: std::cell::RefCell<(Vec<i64>, usize)>,
-    /// Inode values the engine returned ahead of need, by ordinal.
-    values: std::cell::RefCell<HashMap<u32, [u8; INODE_VALUE_BYTES]>>,
+    /// Inode values the engine has returned, asked for or not.
+    values: std::cell::RefCell<values::HeldValues>,
 }
 
 /// Packs announced to the engine at a time ([`ClosureSource::announce`]).
 const AHEAD_PACKS: usize = 128;
-/// Ordinals past a leaf's own that one inode value read may bring along.
-const AHEAD_VALUES: u32 = 4096;
-/// Inode values kept between reads; the map is emptied when it would pass this.
-const HELD_VALUES: usize = 65_536;
+/// Bytes of rebuilt chain elements the walk's reader keeps, so a page stored
+/// as a delta is rebuilt from the base an earlier version already rebuilt
+/// instead of from its whole chain.
+const CHAIN_MEMO_BYTES: usize = 16 * 1024 * 1024;
 
 impl ClosureSource<'_> {
     /// Notes the packs `wave`, which is in locator order, decodes metadata
@@ -547,28 +548,7 @@ impl Source for ClosureSource<'_> {
     }
 
     fn inode_values(&self, ordinals: &[u32]) -> Result<Vec<[u8; INODE_VALUE_BYTES]>, StorageError> {
-        // One keyed map, so a page of many ordinals is not scanned per
-        // ordinal. It also keeps what the engine read ahead: a walk meets
-        // leaves in about the order their values were stored.
-        let mut held = self.values.borrow_mut();
-        if !ordinals.iter().all(|ordinal| held.contains_key(ordinal)) {
-            let mut rows = Vec::new();
-            self.mechanics
-                .inode_values_ahead(ordinals, AHEAD_VALUES, &mut rows)
-                .map_err(StorageError::from)?;
-            if held.len() + rows.len() > HELD_VALUES {
-                held.clear();
-            }
-            held.extend(rows.iter().map(|row| (row.ordinal, row.value)));
-        }
-        ordinals
-            .iter()
-            .map(|ordinal| {
-                held.get(ordinal)
-                    .copied()
-                    .ok_or(StorageError::Integrity("mark inode value"))
-            })
-            .collect()
+        self.values.borrow_mut().values(self.mechanics, ordinals)
     }
 
     fn signatures(&self) -> Result<Vec<SignatureRow>, StorageError> {
@@ -600,7 +580,7 @@ fn walk(
     visit: Option<&crate::backend::sqlite::compact_visit::VisitSink>,
 ) -> HistoryResult<Closure> {
     let mut packs = PackCache::new();
-    let mut pool = PoolReader::new();
+    let mut pool = PoolReader::with_chain_memo(CHAIN_MEMO_BYTES);
     let mut groups = GroupCache::new();
     let mut workspace = DecompressionWorkspace::new().map_err(storage)?;
     let mut counters = ChainCounters::default();

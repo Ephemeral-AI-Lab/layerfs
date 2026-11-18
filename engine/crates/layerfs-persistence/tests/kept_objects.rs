@@ -28,7 +28,7 @@ use layerfs_persistence::{
 };
 use layerfs_storage::{
     encoding::{encode_full, encode_prefix, framed_record, raw_payload, CompressionWorkspace},
-    location::{ObjectLocation, PackDomain},
+    location::{InodeValueRow, ObjectLocation, PackDomain},
     pack::{assemble, build_group, layout, PackLane},
     port::{PackPersistence, Publication, PublishedPack, Reserve},
     save::SaveProfile,
@@ -660,4 +660,104 @@ fn a_delta_base_is_enqueued_and_reported() {
         "the base is kept only because the delta names it"
     );
     assert!(objects.waste().delta_bases_bytes() > 0);
+}
+
+/// One pooled leaf over `rows`, whose values are the stored `ordinals`; the
+/// record stores the values in `stored` with it.
+fn pooled_leaf(
+    f: &Fixture,
+    rows: Vec<InodeLeafRow>,
+    ordinals: &[u32],
+    stored: Vec<InodeValueRow>,
+) -> ObjectId {
+    let canonical = InodeLeaf {
+        subtree_bytes: (LEAF_ROW_BYTES * rows.len()) as u64,
+        rows,
+    }
+    .encode()
+    .unwrap();
+    let object = FinalizedObject::new(ObjectRole::InodeLeaf, canonical).unwrap();
+    let pooled = layerfs_content::inode_leaf::pooled_body(object.canonical(), ordinals).unwrap();
+    let record = layerfs_storage::encoding::pool::leaf::encode_full(&pooled).unwrap();
+    f.record(&object, PackLane::Ordinary, record, stored);
+    object.id()
+}
+
+#[test]
+fn leaves_naming_values_of_one_block_cost_one_value_read() {
+    let f = Fixture::new();
+    let contents: Vec<ObjectId> = (1..=3u64)
+        .map(|serial| whole_file(&f, &serial.to_le_bytes()).id())
+        .collect();
+    let values: Vec<[u8; 73]> = contents
+        .iter()
+        .map(|content| {
+            encode_inode_value(InodeValue {
+                kind: InodeKind::RegularFile,
+                namespace_ref_count: 1,
+                content_root: *content,
+                metadata_root: InodeMetadata::Inline(PortableMetadata {
+                    mode: 0o644,
+                    mtime_seconds: 0,
+                    mtime_nanoseconds: 0,
+                }),
+            })
+        })
+        .collect();
+    let row = |index: usize| InodeLeafRow {
+        serial: index as u64 + 1,
+        value: values[index],
+    };
+    // One leaf stores all three values together, so they share one block.
+    let first = f
+        .handles
+        .storage
+        .reserve(Reserve {
+            packs: 0,
+            ordinals: 3,
+        })
+        .unwrap()
+        .first_ordinal;
+    let ordinals = [first, first + 1, first + 2];
+    pooled_leaf(
+        &f,
+        vec![row(0), row(1), row(2)],
+        &ordinals,
+        ordinals
+            .iter()
+            .zip(&values)
+            .map(|(ordinal, value)| InodeValueRow {
+                ordinal: *ordinal,
+                value: *value,
+            })
+            .collect(),
+    );
+    // Later leaves each keep one of those values by its ordinal, as the leaf
+    // of a later Commit keeps every value it did not change.
+    let later: Vec<ObjectId> = (0..3)
+        .map(|index| pooled_leaf(&f, vec![row(index)], &ordinals[index..=index], vec![]))
+        .collect();
+    let stack = initialize(&f.handles, 1, later[0]);
+    let work = branch_id(1);
+    fork(&f.handles, stack.id, work, 1);
+    commit(&f.handles, work, later[1]);
+    commit(&f.handles, work, later[2]);
+
+    layerfs_persistence::profile_statements();
+    let mark = f.handles.history.mark().unwrap();
+    let profile = layerfs_persistence::take_statement_profile();
+    for id in &later {
+        assert!(mark.objects().contains(*id), "leaf {id} is retained");
+    }
+    for content in &contents {
+        assert!(mark.objects().contains(*content), "content {content}");
+    }
+    // The first leaf's read decodes the block; its other values answer the
+    // two leaves that follow without a statement.
+    let reads: u64 = profile
+        .iter()
+        .filter(|(sql, _)| sql.starts_with("SELECT b.first_ordinal,b.last_ordinal,"))
+        .map(|(_, cost)| cost.calls)
+        .sum();
+    assert_eq!(reads, 1, "{profile:?}");
 }
