@@ -36,6 +36,8 @@ const BRANCH_FIRST_PAGE: &str = "branch_branch_first_page";
 
 const BRANCH_NEXT_PAGE: &str = "branch_branch_next_page";
 
+const BRANCH_FROM_PAGE: &str = "branch_branch_from_page";
+
 const BRANCH_NAME_TAKEN: &str = "branch_branch_name_taken";
 
 const INSERT_BRANCH: &str = "branch_insert_branch";
@@ -292,6 +294,34 @@ pub(crate) fn branches(
         )
         .map(Some)
     })
+}
+
+/// Reads one stack's Branches in name order from `from` on (after it, or at
+/// it too when `inclusive`), at most `limit`, through the name index.
+pub(crate) fn branches_from(
+    tx: &Transaction<'_>,
+    stack: LayerStackId,
+    from: &str,
+    inclusive: bool,
+    limit: u16,
+) -> HistoryResult<Vec<BranchRecord>> {
+    if limit == 0 || limit > layerfs_history::records::MAXIMUM_PAGE_RECORDS {
+        return Err(HistoryError::InvalidInput("page limit"));
+    }
+    if super::layerstack::layer_stack(tx, stack)?.is_none() {
+        return Err(HistoryError::Missing(Missing::LayerStack));
+    }
+    let statement = if inclusive {
+        BRANCH_FROM_PAGE
+    } else {
+        BRANCH_NEXT_PAGE
+    };
+    many(
+        tx,
+        statement,
+        params![stack.as_slice(), from.to_owned(), i64::from(limit)],
+        branch_row,
+    )
 }
 
 /// Creates one Branch that shares the selected ancestry.
