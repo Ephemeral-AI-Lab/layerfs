@@ -337,6 +337,30 @@ fn list_and_get_answer_the_records_then_the_live_state() {
     let _ = std::fs::remove_dir_all(tools);
 }
 
+/// `native` is this computer: `--with live` reads the free bytes of the
+/// disk that holds the home, its data disk, and answers no provider tool
+/// and no worker (its calls run in the caller's process), so the short
+/// form shows the one value it has.
+#[test]
+fn native_with_live_answers_the_free_bytes_of_the_homes_disk() {
+    let home = tempdir("native");
+    let got = call(&home, "machine.get", &[("machine", "native")], true);
+    assert_eq!(got.get_text("state"), Some("ready"), "{got:?}");
+    let live = got.get("live").unwrap();
+    assert!(live.get_int("disk_free_bytes").unwrap() > 0, "{live:?}");
+    assert_eq!(live.get("tool_version"), Some(&SdkValue::Null));
+    assert_eq!(live.get("worker"), Some(&SdkValue::Null));
+    let args = SdkValue::map([
+        ("machine", SdkValue::text("native")),
+        ("with", SdkValue::List(vec![SdkValue::text("live")])),
+    ]);
+    let short = layerfs_api::call(Some(&home), "machine.get", args, &mut |_| {}).unwrap();
+    let live = short.get("live").unwrap();
+    assert!(live.get_int("disk_free_bytes").unwrap() > 0, "{short:?}");
+    assert_eq!(live.get("worker"), None, "{short:?}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
 /// Whether process `pid` exists, a zombie included (`kill -0` finds one).
 fn alive(pid: &str) -> bool {
     std::process::Command::new("/bin/kill")
