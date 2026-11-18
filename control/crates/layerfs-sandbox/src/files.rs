@@ -270,7 +270,9 @@ pub fn refresh_except_within(
             Ok(status) => status,
             // Unmounted by the daemon; its owner removes the record next.
             Err(failure) if absent(&failure) => continue,
-            Err(failure) => return Err(failed(failure)),
+            // its refusal, never the raw failure (an unreadable answer
+            // from a daemon of another build is a public refusal with a fix)
+            Err(failure) => return Err(crate::lifecycle::operation(failure)),
         };
         let ready = status
             .kernel

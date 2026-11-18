@@ -42,6 +42,16 @@ pub fn refusal(failure: &OperationFailure) -> Option<SdkRefusal> {
                 ("detached", SdkValue::Bool(custody.detached)),
             ]),
         }),
+        // The daemon answered something this build cannot read: a daemon of
+        // another build whose record differs. It is never shown raw.
+        OperationCause::Exchange(exchange)
+            if matches!(
+                exchange.cause,
+                crate::daemon::internal::ControlCause::Protocol(_)
+            ) =>
+        {
+            Some(unreadable(&failure.request))
+        }
         // The request was sent but no reply arrived (the daemon reclaimed or
         // expired the worker, or it died mid-operation): its effect is
         // unknown, so the caller observes `Unavailable { outcome: unknown }`
@@ -61,6 +71,30 @@ pub fn refusal(failure: &OperationFailure) -> Option<SdkRefusal> {
         }
         _ => None,
     }
+}
+
+/// The refusal of `request` whose answer this build could not read (a
+/// Sandbox daemon of another LayerFS build): `Failed` for a read, which
+/// changed nothing; `Unknown` for any other request, whose effect is not
+/// known. Its fix is the doctor that names the daemon's build.
+fn unreadable(request: &layerfs_bridge::control::Request) -> SdkRefusal {
+    use layerfs_bridge::control::Request;
+    let read = matches!(
+        request,
+        Request::Status(_) | Request::Hello(_) | Request::Sdk(_)
+    );
+    let said = "the Sandbox's daemon answered in a form this LayerFS build cannot read: it runs another build, which `layerfs home doctor` names";
+    let refusal = match read {
+        true => layerfs_home::outcome::refused("Failed", said),
+        false => SdkRefusal {
+            code: "Unknown".to_owned(),
+            message: format!(
+                "{said}; the operation's outcome is unknown, so check it before sending it again"
+            ),
+            detail: SdkValue::map([("outcome", SdkValue::text("unknown"))]),
+        },
+    };
+    layerfs_home::outcome::with_fix(refusal, "layerfs home doctor")
 }
 
 /// A retained teardown stage as the machine's unmount record writes it.
@@ -122,18 +156,6 @@ pub fn status(status: &WorkspaceStatus, current_head: Option<Option<CommitId>>) 
             }),
         ),
         ("activity", SdkValue::text(format!("{:?}", status.activity))),
-        (
-            "activityPhase",
-            SdkValue::opt_text(
-                Some(status.activity_phase.as_str()).filter(|phase| !phase.is_empty()),
-            ),
-        ),
-        (
-            "activitySinceMs",
-            status
-                .activity_since_ms
-                .map_or(SdkValue::Null, SdkValue::Int),
-        ),
         (
             "overlay",
             status.local.as_ref().map_or(SdkValue::Null, |local| {

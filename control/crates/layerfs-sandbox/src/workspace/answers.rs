@@ -140,11 +140,13 @@ fn snake(word: &str) -> String {
 
 /// A Workspace's state from its daemon's `activity` (as `sandbox.get`
 /// reads it): `idle` is ready; attaching, committing and closing are busy
-/// with that operation, in the `phase` the daemon names and since
-/// `since_ms` when it says (a daemon of another build may not: its
-/// activity's own phase word then, and no time); `uncertain` is broken
-/// `unresolved` and `local_failure` broken `failed`, each fixed by a
-/// forced unmount of handle `ws`.
+/// with that operation, in the `phase` and since `since_ms` the daemon's
+/// changed-path read names. A daemon built before that read (2.0.0
+/// runtimes up to 7d2ac982c3) names neither: the activity's own phase word
+/// then, and no time. Its Status record has the same bytes as this
+/// build's, which is what lets this side read such a daemon at all.
+/// `uncertain` is broken `unresolved` and `local_failure` broken `failed`,
+/// each fixed by a forced unmount of handle `ws`.
 pub fn state(activity: &str, phase: Option<&str>, since_ms: Option<i64>, ws: &str) -> State {
     let busy = |name: &str, first: &str| State::Busy {
         name: name.to_owned(),
@@ -201,9 +203,17 @@ pub fn status(answer: &SdkValue, ws: &str) -> SdkValue {
     }
     fields.extend([
         ("branch".to_owned(), take(answer, "branch")),
-        ("commit".to_owned(), take(answer, "base")),
+        // as `workspace.mount` names it: the Workspace's base Commit, else
+        // the Layer its Branch was forked at (a fresh fork has no Commit)
+        (
+            "commit".to_owned(),
+            or_else(take(answer, "base"), || take(answer, "baseLayer")),
+        ),
         ("base_layer".to_owned(), take(answer, "baseLayer")),
-        ("branch_head".to_owned(), take(answer, "branchHead")),
+        // the Branch's head as `branch get` names it, when it was read
+        // (`headMovedSinceMount` is null when it was not): its head Commit,
+        // else the Layer it was forked at
+        ("branch_head".to_owned(), branch_head(answer)),
         ("activity".to_owned(), SdkValue::Text(activity)),
         (
             "overlay".to_owned(),
@@ -218,4 +228,14 @@ pub fn status(answer: &SdkValue, ws: &str) -> SdkValue {
         ("pending_merge".to_owned(), SdkValue::Bool(pending)),
     ]);
     SdkValue::Map(fields)
+}
+
+/// A status's `branch_head`: the head the caller read, else, when the read
+/// found no Commit on the Branch, the Layer it was forked at; null when the
+/// head could not be read.
+fn branch_head(answer: &SdkValue) -> SdkValue {
+    match answer.get("headMovedSinceMount") {
+        None | Some(SdkValue::Null) => SdkValue::Null,
+        Some(_) => or_else(take(answer, "branchHead"), || take(answer, "baseLayer")),
+    }
 }

@@ -241,7 +241,10 @@ pub fn status_with(
     let token = state.token(required(path, "path")?)?;
     let mut control = crate::daemon::trace::control(&state.controls)?;
     let status = workspace(&mut control).status(token).map_err(operation)?;
-    let changes = changed(&mut control, required(path, "path")?, under)?;
+    let changes = match changed(&mut control, required(path, "path")?, under) {
+        Err(refusal) if refusal.code == "UnknownMethod" => None,
+        changes => Some(changes?),
+    };
     drop(control);
     let branch = lock(&state.mounts)?
         .get(required(path, "path")?)
@@ -250,11 +253,40 @@ pub fn status_with(
     let mut value = values::status(&status, head);
     if let SdkValue::Map(fields) = &mut value {
         fields.push(("branch".to_owned(), SdkValue::opt_text(branch)));
-        let held = |name: &str| changes.get(name).cloned().unwrap_or_default();
-        fields.push(("changes".to_owned(), held("entries")));
-        fields.push(("partial".to_owned(), held("partial")));
+        fields.extend(changes_of(&status, changes.as_ref()));
     }
     Ok(value)
+}
+
+/// A status's `changes`, `partial` and its activity's phase and start, from
+/// the daemon's changed-path read (`found`). The phase and start are kept
+/// only while the activity that read observed is the Status record's. A
+/// daemon built before that read (2.0.0 runtimes up to 7d2ac982c3) refuses
+/// it `UnknownMethod` (`found` is `None`): its Workspace then lists no
+/// changes, `partial` when its overlay counts any, and its activity has no
+/// phase or start of its own.
+fn changes_of(
+    status: &layerfs_bridge::control::WorkspaceStatus,
+    found: Option<&SdkValue>,
+) -> Vec<(String, SdkValue)> {
+    let Some(found) = found else {
+        let counted = (status.local.as_ref())
+            .is_some_and(|local| local.dirty_inodes > 0 || local.dirty_directory_entries > 0);
+        return vec![
+            ("changes".to_owned(), SdkValue::List(Vec::new())),
+            ("partial".to_owned(), SdkValue::Bool(counted)),
+        ];
+    };
+    let held = |name: &str| found.get(name).cloned().unwrap_or_default();
+    let mut fields = vec![
+        ("changes".to_owned(), held("entries")),
+        ("partial".to_owned(), held("partial")),
+    ];
+    if found.get_text("activity") == Some(format!("{:?}", status.activity).as_str()) {
+        fields.push(("activityPhase".to_owned(), held("activityPhase")));
+        fields.push(("activitySinceMs".to_owned(), held("activitySinceMs")));
+    }
+    fields
 }
 
 /// `workspace.commit(ws, { message?, force?, expected? })` of the

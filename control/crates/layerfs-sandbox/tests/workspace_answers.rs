@@ -1,7 +1,8 @@
-//! `workspace.mount` and `workspace.commit` long forms name the Branch's
-//! head as `branch get` does: a fresh fork has no Commit yet, so the
-//! mount's `commit` and its first Commit's `parent` are the Layer the
-//! Branch was forked at, not null.
+//! `workspace.mount`, `workspace.commit` and `workspace.status` long forms
+//! name the Branch's head as `branch get` does: a fresh fork has no Commit
+//! yet, so the mount's `commit`, its first Commit's `parent` and a status's
+//! `commit` and `branch_head` are the Layer the Branch was forked at, not
+//! null (RF re-check N-B for status).
 use layerfs_bridge::control::SdkValue;
 use layerfs_sandbox::workspace::answers;
 use layerfs_sandbox::workspace::calls::Mounted;
@@ -72,4 +73,35 @@ fn a_commit_names_its_parent_commit_else_the_fork_layer() {
         ("lwwTruncated", SdkValue::Bool(false)),
     ]));
     assert_eq!(unchanged.get("parent"), Some(&SdkValue::Null));
+}
+
+fn status(base: SdkValue, head: SdkValue, moved: SdkValue) -> SdkValue {
+    answers::status(
+        &SdkValue::map([
+            ("base", base),
+            ("baseLayer", SdkValue::text(LAYER)),
+            ("branchHead", head),
+            ("headMovedSinceMount", moved),
+            ("activity", SdkValue::text("Idle")),
+            ("changes", SdkValue::List(Vec::new())),
+        ]),
+        "box:agent",
+    )
+}
+
+#[test]
+fn a_status_names_the_head_commit_else_the_fork_layer() {
+    let fresh = status(SdkValue::Null, SdkValue::Null, SdkValue::Bool(false));
+    assert_eq!(fresh.get_text("commit"), Some(LAYER));
+    assert_eq!(fresh.get_text("branch_head"), Some(LAYER));
+    let committed = SdkValue::text(COMMIT);
+    let moved = status(SdkValue::Null, committed.clone(), SdkValue::Bool(true));
+    assert_eq!(moved.get_text("commit"), Some(LAYER));
+    assert_eq!(moved.get_text("branch_head"), Some(COMMIT));
+    let at = status(committed.clone(), committed, SdkValue::Bool(false));
+    assert_eq!(at.get_text("commit"), Some(COMMIT));
+    assert_eq!(at.get_text("branch_head"), Some(COMMIT));
+    // the head could not be read: no head is named
+    let unread = status(SdkValue::Null, SdkValue::Null, SdkValue::Null);
+    assert_eq!(unread.get("branch_head"), Some(&SdkValue::Null));
 }

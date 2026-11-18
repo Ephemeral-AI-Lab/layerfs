@@ -31,6 +31,31 @@ impl Service {
             ))
     }
 
+    /// The activity of the Workspace mounted at `directory`, the phase its
+    /// admitted operation is in (empty when none runs) and when the
+    /// activity began, in ms since the epoch; `None` when no Workspace is
+    /// mounted there. It travels in the operator's changed-path answer, not
+    /// in the Status record, whose bytes stay readable by other builds.
+    pub(crate) fn operator_activity(
+        &self,
+        directory: &str,
+    ) -> Option<(layerfs_bridge::control::Activity, &'static str, i64)> {
+        let entries = self.entries.lock().ok()?;
+        entries.values().find_map(|entry| match entry {
+            super::registry::Entry::Bound(value)
+                if value
+                    .kernel
+                    .block()
+                    .ready
+                    .as_ref()
+                    .is_some_and(|ready| ready.directory == directory) =>
+            {
+                Some((value.activity, value.phase, value.since_ms))
+            }
+            _ => None,
+        })
+    }
+
     pub(crate) fn observed_store(&self) -> Arc<crate::store::Store> {
         self.store.clone()
     }
