@@ -7508,7 +7508,7 @@
         "server_version",
         "latency_ms"
        ],
-       "help": "reads the Store where it lives, starting nothing: a sqlite Store's file through its machine, a PostgreSQL Store's server from this computer; state, its companion and observed_at at the top level then come from the read, and the record is written only when the state word or its reason changed. It settles an uncertain backup or restore whose owner is gone. holders: the pids of other live processes that hold it; phases: a running compaction's phases in order, else null; behind: the buckets whose backup is older than the Store, null for PostgreSQL; server_version and latency_ms: the PostgreSQL server's answer, null for sqlite"
+       "help": "reads the Store where it lives, starting nothing: a sqlite Store's file through its machine, a PostgreSQL Store's server from this computer; state, its companion and observed_at at the top level then come from the read, and the record is written only when the state word or its reason changed. It settles an uncertain backup or restore whose owner is gone. holders: the pids of other live processes that hold it; phases: the steps a running compaction's record can show, in order (SQLite mark, build, verify, install, cleanup; the record writes cleanup in its final step), else null; behind: the buckets whose backup is older than the Store, null for PostgreSQL; server_version and latency_ms: the PostgreSQL server's answer, null for sqlite"
       },
       "stats": {
        "keys": [
