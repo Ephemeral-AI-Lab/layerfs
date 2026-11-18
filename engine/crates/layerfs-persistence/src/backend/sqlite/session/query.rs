@@ -261,9 +261,6 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "gc_kept_roots" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_kept_roots.sql"
         )),
-        "gc_object_locations" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/gc_object_locations.sql"
-        )),
         "gc_live_stacks" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_live_stacks.sql"
         )),

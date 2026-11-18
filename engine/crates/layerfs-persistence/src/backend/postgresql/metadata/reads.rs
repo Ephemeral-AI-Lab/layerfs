@@ -93,6 +93,51 @@ fn location(r: &Record) -> Result<LocatedObject, BackendError> {
     })
 }
 
+/// Up to `limit` locators that follow `after` in the order of the prefix
+/// index: the identity's first eight bytes as a signed number, then its
+/// bytes. The table has no index on the whole identity, so the walk follows
+/// the prefix index from the prefix of `after` and orders only the rows that
+/// share a prefix. Nothing but the writer keeps an identity to one row here,
+/// so one row is returned for an identity, the one with the least locator:
+/// a second row is for Phase A to refuse, and a piece that ended between the
+/// two would lose it. The statement names the schema.
+pub(crate) fn locations_after(
+    tx: &Transaction<'_>,
+    after: Option<&ObjectId>,
+    limit: usize,
+    out: &mut Vec<ObjectLocation>,
+) -> Result<(), PersistenceError> {
+    const PREFIX: &str =
+        "(('x'||encode(substring(object_id FROM 1 FOR 8),'hex'))::bit(64)::bigint)";
+    let sql = format!(
+        "SELECT DISTINCT ON ({PREFIX},object_id) object_id,pack_id,group_number::bigint,record_number::bigint,role::bigint,canonical_length::bigint \
+         FROM {s}.object_location WHERE {PREFIX}>=$1 AND ({PREFIX}>$1 OR object_id>$2) \
+         ORDER BY {PREFIX},object_id,pack_id,group_number,record_number LIMIT $3",
+        s = tx.schema
+    );
+    let prefix = after.map_or(i64::MIN, super::super::objects::publish::prefix);
+    let key: &[u8] = after.map_or(&[], |id| id.as_bytes().as_slice());
+    let count = i64::try_from(limit).map_err(|_| BackendError::Integrity)?;
+    for row in tx.typed(&sql, &[&prefix, &key, &count], 48)? {
+        let r = super::super::session::rows::record(&row)?;
+        let number =
+            |index| usize::try_from(r.get::<i64>(index)?).map_err(|_| BackendError::Integrity);
+        out.push(ObjectLocation {
+            object_id: ObjectId::from_bytes(&r.get::<Vec<u8>>(0)?)
+                .map_err(|_| BackendError::Integrity)?,
+            pack_id: r.get(1)?,
+            group_number: number(2)?,
+            record_number: number(3)?,
+            role: ObjectRole::from_code(
+                u8::try_from(r.get::<i64>(4)?).map_err(|_| BackendError::Integrity)?,
+            )
+            .map_err(|_| BackendError::Integrity)?,
+            canonical_length: number(5)?,
+        });
+    }
+    Ok(())
+}
+
 /// Every stored value among ascending distinct ordinals, in ordinal order,
 /// in one statement that names the schema. Each run of consecutive ordinals
 /// seeks the last block starting at or before it and takes the blocks from

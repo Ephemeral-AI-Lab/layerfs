@@ -1,1 +1,1 @@
-SELECT length(body) FROM inode_value_block ORDER BY first_ordinal
+SELECT COALESCE(SUM(length(body)),0) FROM inode_value_block

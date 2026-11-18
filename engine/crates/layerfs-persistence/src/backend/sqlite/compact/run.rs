@@ -45,8 +45,11 @@ use layerfs_history::records::GcScopeKind;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-/// The history statement that reads every pack's stored length.
+/// The history statement that reads the stored lengths of the packs after
+/// one pack, a bounded piece of them.
 const PACK_LENGTHS: &str = "gc_pack_lengths";
+/// Packs one piece reads.
+const PACK_LENGTH_ROWS: i64 = 4096;
 
 impl SqliteHandles {
     /// Runs one §7 SQLite Store compaction on this Store's own machine.
@@ -207,10 +210,21 @@ impl SqliteHandles {
             // decision and before that commit.
             let decided =
                 history.mark_for_compaction(&visited_path(&store), &intent, |tx, mark| {
-                    for row in &tx.query(PACK_LENGTHS, Vec::<Param>::new())? {
-                        let length = u64::try_from(row.get::<i64>(1)?)
-                            .map_err(|_| HistoryError::Integrity("pack length"))?;
-                        lengths.insert(row.get::<i64>(0)?, length);
+                    let mut after = i64::MIN;
+                    loop {
+                        let rows = tx.query(
+                            PACK_LENGTHS,
+                            vec![Param::I64(after), Param::I64(PACK_LENGTH_ROWS)],
+                        )?;
+                        for row in &rows {
+                            let length = u64::try_from(row.get::<i64>(1)?)
+                                .map_err(|_| HistoryError::Integrity("pack length"))?;
+                            after = row.get::<i64>(0)?;
+                            lengths.insert(after, length);
+                        }
+                        if (rows.len() as i64) < PACK_LENGTH_ROWS {
+                            break;
+                        }
                     }
                     let total = total_stored_bytes(&lengths);
                     // A rebuild frees the wholly dead packs and, since it
@@ -280,7 +294,9 @@ impl SqliteHandles {
                     free.saturating_mul(page),
                     0,
                     kept_waste,
-                    0,
+                    // No scratch is written; what the mark's sorting wrote
+                    // to its unnamed files, and zero when it wrote none.
+                    mark.scratch_bytes(),
                     CompactResidue::default(),
                     total,
                     history_rows,
@@ -414,7 +430,7 @@ impl SqliteHandles {
                 backend_reusable: source_reusable,
                 physical_shrink: facts.bytes.saturating_sub(built.target_bytes),
                 kept_waste: kept_waste.clone(),
-                peak_temp: built.peak_temp_bytes(),
+                peak_temp: built.peak_temp_bytes().max(mark.scratch_bytes()),
                 total_stored: total,
             });
             stop_at(request, CompactFailpoint::AfterBuild, &op, &store)?;
@@ -505,7 +521,7 @@ impl SqliteHandles {
                 source_reusable,
                 physical_shrink,
                 kept_waste,
-                built.peak_temp_bytes(),
+                built.peak_temp_bytes().max(mark.scratch_bytes()),
                 residue,
                 total,
                 history_rows,

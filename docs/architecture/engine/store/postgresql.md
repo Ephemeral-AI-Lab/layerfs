@@ -175,6 +175,21 @@ would delete in the same call
 ([`compact/run.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/run.rs),
 [`compact/op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/op.rs)).
 
+The mark's walk holds the same bounded memory as on SQLite
+([SQLite: the mark's memory](sqlite.md#the-marks-memory)). Its locator
+blocks are read in the order of the `object_location_prefix` index: the
+signed eight-byte prefix, then the identity, 512 identities a statement,
+each after the last one of the block before. The table has no unique key on
+the identity, so a block takes one row per identity (`DISTINCT ON`, the
+least locator); a rank is a position in that order. The mark's sort files
+are unnamed files in the client's temporary directory. Two things are not
+bounded here: a compaction still takes the mark's list of reached
+identities (32 bytes a reached object) to fill `pg_temp.gc_visited` in its
+next transaction, and a delta base outside the pack being walked costs one
+round trip
+([`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs),
+`locations_after`).
+
 ### Generation fence
 
 The session keeps the `catalog_incarnation` its open read

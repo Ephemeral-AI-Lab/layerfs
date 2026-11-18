@@ -20,7 +20,6 @@
 //! its directory and one per record header. The answers are the same.
 use super::ids::IdMap;
 use super::{storage, ClosureSource};
-use layerfs_content::ObjectId;
 use layerfs_history::error::{HistoryError, HistoryResult};
 use layerfs_storage::{
     encoding::delta::edge::{
@@ -30,7 +29,6 @@ use layerfs_storage::{
     location::ObjectLocation,
     pack::layout::{self, GroupView, PackHeader},
     port::{PackRange, PACK_READ_PREFIX_BYTES},
-    source::Source,
     StorageError,
 };
 use std::collections::{BTreeMap, VecDeque};
@@ -50,7 +48,7 @@ const ROUNDS: usize = 4;
 /// cold cache. A PostgreSQL Store reads its first stored piece either way.
 const HEAD_BYTES: usize = 432;
 /// Packs whose heads one call reads.
-const HEAD_PACKS: usize = 256;
+pub(super) const HEAD_PACKS: usize = 256;
 /// Ranges one call asks for, over all its packs.
 const BATCH_RANGES: usize = 1024;
 /// Bytes one call asks for, over all its packs.
@@ -423,13 +421,10 @@ fn run_end(work: &[PackWork<'_>], from: usize, fill: usize) -> usize {
 /// absent from the result takes the decoding reader, exactly as before.
 pub(super) fn wave_edges(
     source: &ClosureSource<'_>,
-    wave: &[ObjectId],
+    wave: &[ObjectLocation],
 ) -> HistoryResult<IdMap<ChainEdge>> {
     let mut packs: Vec<(i64, Vec<ObjectLocation>)> = Vec::new();
-    for id in wave {
-        let Some(location) = source.location(*id, i64::MAX).map_err(storage)? else {
-            continue;
-        };
+    for location in wave.iter().copied() {
         if location.role.has_references() {
             continue;
         }

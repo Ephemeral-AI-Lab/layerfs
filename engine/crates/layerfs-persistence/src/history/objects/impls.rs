@@ -71,7 +71,10 @@ impl KeptWaste {
     }
 }
 impl KeptObjects {
-    /// Every reached canonical object, in ascending identity order.
+    /// Every reached canonical object, in ascending identity order, when
+    /// the mark listed them ([`crate::HistoryProvider::mark`]). A SQLite
+    /// compaction mark holds no list, and this is empty: [`Self::len`] still
+    /// counts them.
     pub fn objects(&self) -> &[ObjectId] {
         &self.objects
     }
@@ -101,19 +104,19 @@ impl KeptObjects {
         &self.inode_ordinals
     }
 
-    /// Whether `id` is reached.
+    /// Whether `id` is among the listed objects ([`Self::objects`]).
     pub fn contains(&self, id: ObjectId) -> bool {
         self.objects.binary_search(&id).is_ok()
     }
 
     /// How many objects the closure holds.
     pub fn len(&self) -> usize {
-        self.objects.len()
+        usize::try_from(self.count).unwrap_or(usize::MAX)
     }
 
     /// Whether the closure holds no object.
     pub fn is_empty(&self) -> bool {
-        self.objects.is_empty()
+        self.count == 0
     }
 }
 impl MarkResult {
@@ -145,5 +148,13 @@ impl MarkResult {
     /// SQLite does not report this value.
     pub fn mark_bytes(&self) -> u64 {
         self.mark_bytes
+    }
+
+    /// The most bytes the mark's sort files held, summed over the files. The
+    /// mark sorts what it reached in bounded memory and writes what does not
+    /// fit to unnamed files beside a SQLite Store (the temporary directory
+    /// for PostgreSQL); zero when everything fitted.
+    pub fn scratch_bytes(&self) -> u64 {
+        self.scratch_bytes
     }
 }

@@ -6,7 +6,7 @@ use crate::backend::{
 };
 use layerfs_content::ObjectId;
 use layerfs_storage::{
-    location::{InodeValueRow, LocatedObject, SignatureRow},
+    location::{InodeValueRow, LocatedObject, ObjectLocation, SignatureRow},
     port::{PersistedPack, PersistenceError},
     StoragePolicy,
 };
@@ -36,6 +36,22 @@ impl Mechanics for Transaction<'_> {
         out: &mut Vec<LocatedObject>,
     ) -> Result<(), PersistenceError> {
         super::metadata::locations::read(self, ids, out)
+    }
+    fn locations_after(
+        &self,
+        after: Option<&ObjectId>,
+        limit: usize,
+        out: &mut Vec<ObjectLocation>,
+    ) -> Result<(), PersistenceError> {
+        super::metadata::locations::after(self, after, limit, out)
+    }
+    fn location(&self, id: &ObjectId) -> Result<Option<ObjectLocation>, PersistenceError> {
+        super::metadata::locations::one(self, id)
+    }
+    fn scratch_directory(&self) -> std::path::PathBuf {
+        // Beside the Store: the file system that holds the Store and its
+        // rebuild has the room, and a temporary directory may be memory.
+        self.store_directory()
     }
     fn inode_values(
         &self,
