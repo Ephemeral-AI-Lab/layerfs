@@ -52,14 +52,6 @@
     "sandbox.close": "sandbox.remove"
   },
   "not_built": {
-    "home.doctor": [
-      "its checks keep today's `host.*` ids; `home.*` is the home package's rename (control/crates/layerfs-control/tests/doctor_checks_pending.json lists every kind's ids)",
-      "home.capacity applies no threshold yet: a nearly full disk gives no finding"
-    ],
-    "machine.doctor": [
-      "`machine.platform`, `machine.home` and `machine.provider.tool_version` are not folded into `machine.record`, `machine.configuration` and `machine.provider` yet",
-      "the outdated worker's fix is today's text: the `stop && start` line, with `--force` and the Sandbox count when Sandboxes are on it (fix 5), is the machine package's"
-    ],
     "store.doctor": [
       "`store.operation`, `store.schema` and `store.backups` are not checked yet",
       "a sqlite Store gets its records checks only (`store.record`, `store.identity`): the shallow cut that reaches it where it lives and stops after the schema check (C14, a new argument on the worker's Store diagnosis) is the Store package's",
@@ -67,10 +59,6 @@
     ],
     "project.doctor": [
       "`--full` (`project.data`, the walk of everything the project's Branches reach) is refused `Unsupported` until the P-full package builds it"
-    ],
-    "sandbox.doctor": [
-      "a Workspace node per Workspace (`workspace.mounted`, `workspace.activity`) is not built: today's `sandbox.workspaces` covers the daemon's whole list and `workspaces` in the tree is empty",
-      "`sandbox.daemon`, `sandbox.workspaces`, `sandbox.workspace_retained` and `sandbox.worker_report` keep today's ids"
     ],
     "backup.doctor": [
       "its checks keep today's `backup.*` ids; `bucket.*` is the backup package's rename"
