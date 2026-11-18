@@ -444,7 +444,16 @@ class Calls(unittest.TestCase):
                 else:
                     words.append(str(value))
             name = f"{spec['family']}.{spec['call']}"
-            self.same(name, shell(home, words, data), python(lfs, spec["family"], spec["call"], positionals))
+            from_python = python(lfs, spec["family"], spec["call"], positionals)
+            if any(o.get("required") for o in spec["options"]):
+                # a missing required option: the shell judges the line itself
+                # (exit 2, nothing called); the package's call is refused
+                from_shell = shell(home, words, data)
+                self.assertEqual(from_shell["status"], 2, name)
+                self.assertIn(" is required", from_shell["refused"], name)
+                self.assertEqual(from_python["refused"]["error"], "InvalidInput", name)
+                continue
+            self.same(name, shell(home, words, data), from_python)
         shutil.rmtree(home)
 
     @unittest.skipUnless(COMMAND.exists(), "the layerfs command is not built")

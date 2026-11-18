@@ -68,8 +68,13 @@ class Doctor(unittest.TestCase):
             os.chmod(record, 0o600)
             report = lfs.home.doctor()
             self.assertNotIn("ok", report)
-            [finding] = [found for found in report["findings"] if found.get("store") == "bad"]
-            self.assertEqual((finding["check"], finding["severity"]), ("home.records", "error"))
+            bad = [found for found in report["findings"] if found.get("store") == "bad"]
+            # the home's records check names it, and so does the Store's own
+            # record check on its broken node (conformance R4 F5)
+            [finding] = [found for found in bad if found["check"] == "home.records"]
+            self.assertEqual(finding["severity"], "error")
+            [own] = [found for found in bad if found["check"] == "store.record"]
+            self.assertEqual(own["severity"], "error")
             self.assertIn("by hand", finding["message"])
             self.assertNotIn("fix", finding)
         finally:

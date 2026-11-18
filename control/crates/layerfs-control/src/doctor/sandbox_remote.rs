@@ -52,7 +52,7 @@ pub(super) fn remote(
     };
     let duration = budget.remaining().unwrap_or(Duration::from_secs(10));
     if duration.is_zero() {
-        checks.unknown(
+        checks.timeout(
             ROUTE,
             "its time ran out before its machine's worker was dialled",
         );
@@ -69,7 +69,7 @@ pub(super) fn remote(
             return;
         }
         Err(_) => {
-            checks.unknown(
+            checks.lost(
                 ROUTE,
                 format!("machine {machine}'s worker did not answer in time"),
             );
@@ -110,7 +110,7 @@ pub(super) fn remote(
             );
             merge(report, checks, seen);
         }
-        Err(_) => checks.unknown(
+        Err(_) => checks.lost(
             ROUTE,
             format!("machine {machine}'s worker gave no whole report; not asked again"),
         ),

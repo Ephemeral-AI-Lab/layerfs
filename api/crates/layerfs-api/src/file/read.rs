@@ -9,7 +9,8 @@ use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::file::{read, FileRead};
 
 /// `text` for a text file (an empty one `""`); `binary` and `size` for one
-/// that is not text; `next_line` while lines are left.
+/// that is not text (the short form shows `size` only then, the long form
+/// always); `next_line` while lines are left.
 const FORM: Form = Form::of(
     &[],
     &["text", "next_line", "line_truncated", "binary", "size"],
@@ -25,7 +26,13 @@ const FORM: Form = Form::of(
         "start_line",
         "end_line",
     ],
-);
+)
+.short_when(&[("size", binary)]);
+
+/// Whether the read file is not text.
+fn binary(fields: &[(String, SdkValue)], _asked: &[&str]) -> bool {
+    (fields.iter()).any(|(key, value)| key == "binary" && *value == SdkValue::Bool(true))
+}
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(

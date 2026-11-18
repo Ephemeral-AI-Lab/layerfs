@@ -56,3 +56,24 @@ fn format_field_renders_matching_keys() {
     assert_eq!(layerfs_cli::output::format_field("inode", &other), "12345");
     assert_eq!(layerfs_cli::output::format_field("step", &other), "12345");
 }
+
+/// The terminal progress line counts steps as plain numbers and only a
+/// phase that moves bytes in byte units (conformance R4 F8).
+#[test]
+fn progress_counts_steps_and_bytes_apart() {
+    use layerfs_cli::output::progress_line;
+    assert_eq!(
+        progress_line("stores", Some(2), Some(4), 1.0),
+        "phase: stores  2/4"
+    );
+    assert_eq!(
+        progress_line("start", Some(0), Some(1), 0.0),
+        "phase: start  0/1"
+    );
+    assert_eq!(progress_line("lock", None, None, 0.0), "phase: lock");
+    assert_eq!(
+        progress_line("upload", Some(2048), Some(4096), 0.1),
+        "phase: upload  2 KiB/4 KiB"
+    );
+    assert!(progress_line("send", Some(2048), None, 2.0).ends_with("/s)"));
+}

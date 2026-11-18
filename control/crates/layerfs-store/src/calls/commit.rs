@@ -176,7 +176,31 @@ pub fn list(home: &Path, events: &mut Events<'_>, request: &CommitList) -> Outco
 pub fn get(home: &Path, events: &mut Events<'_>, request: &CommitGet) -> Outcome {
     let value = on_project(home, events, &request.project, StoreOp::GetCommit(request))
         .map_err(next_fields)?;
-    Ok(row(&value))
+    Ok(cut_overwritten(row(&value)))
+}
+
+/// A Commit's `overwritten` paths as an answer shows them: the first 20,
+/// and `overwrittenCount` (every decision the Commit made) only when the
+/// list was cut, by the 20 or by the Store's own byte window.
+fn cut_overwritten(value: SdkValue) -> SdkValue {
+    let paths = match value.get("overwritten") {
+        Some(SdkValue::List(paths)) => paths.clone(),
+        _ => return value,
+    };
+    let total = (value.get_int("overwrittenCount"))
+        .map_or(0, |count| usize::try_from(count).unwrap_or(usize::MAX));
+    let SdkValue::Map(mut fields) = value else {
+        return value;
+    };
+    let (paths, count) = layerfs_home::helpers::shown(paths, total, false);
+    for (key, value) in fields.iter_mut() {
+        match key.as_str() {
+            "overwritten" => *value = paths.clone(),
+            "overwrittenCount" => *value = count.clone(),
+            _ => {}
+        }
+    }
+    SdkValue::Map(fields)
 }
 
 /// `commit.diff`: one page of the paths that differ between `from` and

@@ -311,6 +311,8 @@ fn put_status(out: &mut Writer, value: &WorkspaceStatus) -> Result<(), ControlEr
         Activity::LocalFailure => 5,
         Activity::Attaching => 6,
     })?;
+    out.blob(value.activity_phase.as_bytes())?;
+    put_generation(out, value.activity_since_ms)?;
     out.put(&value.epoch.to_be_bytes())?;
     out.byte(u8::from(value.epoch_saturated))?;
     put_publication(out, &value.published)?;
@@ -347,6 +349,8 @@ fn status(input: &mut Reader<'_>) -> Result<WorkspaceStatus, ControlError> {
         6 => Activity::Attaching,
         _ => return Err(ControlError("control activity")),
     };
+    let activity_phase = input.text(32)?;
+    let activity_since_ms = generation(input)?;
     let epoch = u64::from_be_bytes(input.array()?);
     let epoch_saturated = boolean(input)?;
     let published = publication(input)?;
@@ -372,6 +376,8 @@ fn status(input: &mut Reader<'_>) -> Result<WorkspaceStatus, ControlError> {
         token,
         binding,
         activity,
+        activity_phase,
+        activity_since_ms,
         epoch,
         epoch_saturated,
         published,

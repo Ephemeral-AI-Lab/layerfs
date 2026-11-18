@@ -197,7 +197,7 @@
         "short": [
           "{\"branch\":\"agent\",\"parent\":\"12d1c0ff\",\"message\":\"fix login options\"}"
         ],
-        "long": "{\"branch\":\"agent\",\"parent\":\"12d1c0ff\",\"message\":\"fix login options\",\"commit\":\"5c77a1d0\",\"second_parent\":null,\"base\":\"32ab9e01\",\"root\":\"c41d77e2\",\"via\":\"workspace\",\"created_at\":\"2026-11-18T09:16:59Z\",\"merged_from\":null,\"displaced\":null,\"overwritten\":[],\"overwritten_count\":0,\"units\":[],\"source_branch\":null,\"source_commit\":null,\"size\":52428800,\"new_canonical_bytes\":4096,\"new_stored_bytes\":1890,\"new_metadata_bytes\":412}"
+        "long": "{\"branch\":\"agent\",\"parent\":\"12d1c0ff\",\"message\":\"fix login options\",\"commit\":\"5c77a1d0\",\"second_parent\":null,\"base\":\"32ab9e01\",\"root\":\"c41d77e2\",\"via\":\"workspace\",\"created_at\":\"2026-11-18T09:16:59Z\",\"merged_from\":null,\"displaced\":null,\"overwritten\":[],\"overwritten_count\":null,\"units\":[],\"source_branch\":null,\"source_commit\":null,\"size\":52428800,\"new_canonical_bytes\":4096,\"new_stored_bytes\":1890,\"new_metadata_bytes\":412}"
       },
       "dropped": [
         {

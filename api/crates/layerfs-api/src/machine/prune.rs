@@ -49,7 +49,6 @@ pub(crate) const CALL: Call = call(
 /// with the copy's `op`, one a Sandbox uses `InUse` (`{sandbox_count}`).
 #[cfg(feature = "machine")]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    use super::stats::count;
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     let unused = args.get_bool("unused");
     let image = args.get_text("image");
@@ -68,10 +67,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         _ => Vec::new(),
     };
     let cut = |list: &[SdkValue]| SdkValue::List(list.iter().take(SHOWN).cloned().collect());
-    let ids = match &removed {
-        SdkValue::List(ids) => ids.as_slice(),
-        _ => &[],
-    };
+    let (removed, removed_count) = super::stats::cut(removed);
     let skipped_count = match skipped.len() > SHOWN {
         true => SdkValue::Int(i64::try_from(skipped.len()).unwrap_or(i64::MAX)),
         false => SdkValue::Null,
@@ -84,8 +80,8 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         ("skipped", cut(&skipped)),
         ("outcome", SdkValue::text("pruned")),
         ("machine", SdkValue::text(machine.as_str())),
-        ("removed", cut(ids)),
-        ("removed_count", count(&removed)),
+        ("removed", removed),
+        ("removed_count", removed_count),
         ("skipped_count", skipped_count),
     ]))
 }

@@ -139,12 +139,29 @@ fn not_listed(record: &BucketRecord, bucket: &str, error: Result<RemoteError, St
 /// link last moved; each null with a `message` when it could not be read.
 /// A bucket that cannot be listed is named in `not_listed`.
 pub fn list(home: &Path, only: Option<&str>) -> Outcome {
-    let buckets = match only {
-        Some(name) => vec![BucketRecord::of(home, name)?],
+    let (mut items, mut skipped) = (Vec::new(), Vec::new());
+    let mut buckets = Vec::new();
+    match only {
+        Some(name) => buckets.push(BucketRecord::of(home, name)?),
+        // a bucket whose record cannot be read is not listed; the others are
         None => {
-            let names = paths::names(&home.join("backup")).map_err(failed)?;
-            let records = names.iter().map(|name| BucketRecord::of(home, name));
-            records.collect::<Result<_, _>>()?
+            for name in paths::names(&home.join("backup")).map_err(failed)? {
+                match BucketRecord::of(home, &name) {
+                    Ok(record) => buckets.push(record),
+                    Err(refusal) => skipped.push(SdkValue::map([
+                        ("bucket", SdkValue::text(&name)),
+                        ("blocked_by", SdkValue::Null),
+                        ("reason", SdkValue::text("lost")),
+                        (
+                            "message",
+                            SdkValue::text(format!(
+                                "the record of bucket {name} could not be read: {}",
+                                refusal.message
+                            )),
+                        ),
+                    ])),
+                }
+            }
         }
     };
     let mut links: Vec<Linked> = Vec::new();
@@ -163,7 +180,6 @@ pub fn list(home: &Path, only: Option<&str>) -> Outcome {
         }
         heads.records.insert(store, record);
     }
-    let (mut items, mut skipped) = (Vec::new(), Vec::new());
     for record in &buckets {
         let bucket = record.name().to_owned();
         let listed = match record.driver(home) {

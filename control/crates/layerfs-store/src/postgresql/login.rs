@@ -18,9 +18,6 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// The secret kind a saved login is kept as: `secret/auth/<auth>.json`.
 pub const KIND: &str = "auth";
 
-/// How many names a list of the Stores using a login shows.
-const SHOWN: usize = 20;
-
 /// One saved login. No `Debug`: it holds a password.
 pub struct Login {
     /// The PostgreSQL role.
@@ -103,13 +100,12 @@ pub fn stores_using(home: &Path, auth: &str) -> Result<Vec<String>> {
     Ok(found)
 }
 
-/// `stores` as an answer shows them: the first [`SHOWN`] names and the count.
+/// `stores` as an answer shows them: the first 20 names, and the count
+/// only when there were more.
 fn shown(stores: &[String]) -> [(&'static str, SdkValue); 2] {
-    let names = stores.iter().take(SHOWN).map(SdkValue::text).collect();
-    [
-        ("stores", SdkValue::List(names)),
-        ("stores_count", SdkValue::Int(stores.len() as i64)),
-    ]
+    let names = stores.iter().map(SdkValue::text).collect();
+    let (names, count) = layerfs_home::helpers::shown(names, 0, false);
+    [("stores", names), ("stores_count", count)]
 }
 
 /// The answer's map of `fields`.

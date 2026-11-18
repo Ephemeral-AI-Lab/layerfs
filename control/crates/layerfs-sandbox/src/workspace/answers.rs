@@ -39,12 +39,25 @@ pub fn mounted(mounted: &Mounted) -> SdkValue {
         ("path", take(answer, "path")),
         ("outcome", SdkValue::text("mounted")),
         ("branch", take(answer, "branch")),
-        ("commit", take(answer, "base")),
+        // the Branch's head as `branch get` names it: its head Commit, else
+        // the Layer it was forked at (a fresh fork has no Commit yet)
+        (
+            "commit",
+            or_else(take(answer, "base"), || take(answer, "baseLayer")),
+        ),
         ("base_layer", take(answer, "baseLayer")),
         ("root", take(answer, "root")),
         ("id", take(answer, "workspace")),
         ("namespace", take(answer, "namespace")),
     ])
+}
+
+/// `value`, or what `other` answers when it is null.
+fn or_else(value: SdkValue, other: impl FnOnce() -> SdkValue) -> SdkValue {
+    match value {
+        SdkValue::Null => other(),
+        value => value,
+    }
 }
 
 /// `workspace.commit`: `{ commit, unchanged, merged, overwritten,
@@ -74,7 +87,13 @@ pub fn committed(answer: &SdkValue) -> SdkValue {
             SdkValue::text(if unchanged { "unchanged" } else { "committed" }),
         ),
         ("branch", take(answer, "branch")),
-        ("parent", take(&made, "parent")),
+        // the node this Commit follows: the Commit before it, else the
+        // Layer the Branch was forked at (its first Commit has no parent
+        // Commit); null when no Commit was made
+        (
+            "parent",
+            or_else(take(&made, "parent"), || take(&made, "base")),
+        ),
         ("root", root),
         ("message", take(&made, "message")),
         ("created_at", created),
@@ -121,19 +140,21 @@ fn snake(word: &str) -> String {
 
 /// A Workspace's state from its daemon's `activity` (as `sandbox.get`
 /// reads it): `idle` is ready; attaching, committing and closing are busy
-/// with that operation; `uncertain` is broken `unresolved` and
-/// `local_failure` broken `failed`, each fixed by a forced unmount of
-/// handle `ws`.
-pub fn state(activity: &str, ws: &str) -> State {
-    let busy = |name: &str, phase: &str| State::Busy {
+/// with that operation, in the `phase` the daemon names and since
+/// `since_ms` when it says (a daemon of another build may not: its
+/// activity's own phase word then, and no time); `uncertain` is broken
+/// `unresolved` and `local_failure` broken `failed`, each fixed by a
+/// forced unmount of handle `ws`.
+pub fn state(activity: &str, phase: Option<&str>, since_ms: Option<i64>, ws: &str) -> State {
+    let busy = |name: &str, first: &str| State::Busy {
         name: name.to_owned(),
-        phase: phase.to_owned(),
-        started_ms: None,
+        phase: phase.unwrap_or(first).to_owned(),
+        started_ms: since_ms,
     };
     let fix = format!("layerfs workspace unmount {ws} --force");
     match activity {
         "attaching" => busy("mount", "attach"),
-        "committing" => busy("commit", "commit"),
+        "committing" => busy("commit", "publish"),
         "closing" => busy("unmount", "close"),
         "uncertain" => State::broken(Reason::Unresolved, Some(&fix)),
         "local_failure" => State::broken(Reason::Failed, Some(&fix)),
@@ -169,7 +190,8 @@ pub fn status(answer: &SdkValue, ws: &str) -> SdkValue {
             SdkValue::Bool(answer.get_bool("headMovedSinceMount")),
         ),
     ];
-    let state = state(&activity, ws);
+    let since = answer.get_int("activitySinceMs");
+    let state = state(&activity, answer.get_text("activityPhase"), since, ws);
     let companions = state.fields();
     for key in ["state", "op", "reason", "fix"] {
         let value = (companions.iter())

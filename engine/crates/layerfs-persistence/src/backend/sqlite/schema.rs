@@ -536,6 +536,28 @@ impl super::session::connection::Session {
             },
         )
     }
+    /// Whether the file records the Store identity `catalog_id` and
+    /// `binding`, read alone, without the schema checks: a doctor tells a
+    /// file of another Store from one with another schema by it.
+    pub(crate) fn identity_matches(
+        &self,
+        catalog_id: layerfs_history::CatalogId,
+        binding: &[u8],
+    ) -> Result<bool, BackendError> {
+        self.run::<_, BackendError>(false, |tx| {
+            let rows = tx.query(
+                "SELECT catalog_id,binding_key FROM history_meta WHERE id=1",
+                vec![],
+            )?;
+            let row = (rows.first())
+                .filter(|_| rows.len() == 1)
+                .ok_or(BackendError::Integrity)?;
+            Ok(
+                row.get::<Vec<u8>>(0)? == catalog_id.as_slice()
+                    && row.get::<Vec<u8>>(1)? == binding,
+            )
+        })
+    }
     pub(crate) fn validate(
         &self,
         catalog_id: layerfs_history::CatalogId,

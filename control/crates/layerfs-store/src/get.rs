@@ -21,9 +21,6 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// How many project names an answer shows; `projects_count` counts them all.
-pub const PROJECTS_SHOWN: usize = 20;
-
 /// What `store.get` was asked to read beyond the records.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct With {
@@ -162,7 +159,8 @@ pub fn summary(
 ) -> Result<SdkValue> {
     let store = record.name();
     let projects = project_names(home, store)?;
-    let shown = projects.iter().take(PROJECTS_SHOWN).map(SdkValue::text);
+    let names = projects.iter().map(SdkValue::text).collect();
+    let (shown, shown_count) = layerfs_home::helpers::shown(names, 0, false);
     let (engine, sqlite) = match record.store_ref() {
         Ok(StoreRef::Postgres { .. }) => ("postgresql", false),
         Ok(StoreRef::Sqlite { .. }) => ("sqlite", true),
@@ -188,11 +186,8 @@ pub fn summary(
             SdkValue::opt_text(crate::postgresql::login::auth_of(record)),
         ),
         ("connections", only(postgresql, connections(record))),
-        ("projects", SdkValue::List(shown.collect())),
-        (
-            "projects_count",
-            SdkValue::Int(i64::try_from(projects.len()).unwrap_or(i64::MAX)),
-        ),
+        ("projects", shown),
+        ("projects_count", shown_count),
         ("backups", SdkValue::List(backups.collect())),
         (
             "profile",

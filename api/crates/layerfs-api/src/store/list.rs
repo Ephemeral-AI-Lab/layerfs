@@ -46,7 +46,8 @@ const ITEM: Form = Form::of(
         "last_transfer",
     ],
 )
-.parts(PARTS);
+.parts(PARTS)
+.short_when(&[crate::calls::form::OBSERVED]);
 
 /// Its answer: the items, unpaged (the list is the home's Store records).
 const FORM: Form = Form::of(&["items"], &[], &["items"]).parts(&[("items", Part::Rows(&ITEM))]);

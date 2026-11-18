@@ -24,30 +24,32 @@ pub(crate) const CALL: Call = call(
     "connect",
     &[a("name", Name), a("url", Text).redact()],
     &[
-        opt("access_key", Text),
-        opt("secret_key", Content).from_stdin("--key-stdin"),
+        opt("access_key", Text).required(),
+        opt("secret_key", Content)
+            .from_stdin("--key-stdin")
+            .required(),
     ],
     "connect a bucket (r2, or an S3 endpoint) for Store backups",
     run,
 )
 .form(&FORM);
 
-/// Option `name` as text; both key options are required.
-fn required(args: &SdkValue, name: &str) -> Result<String, layerfs_bridge::control::SdkRefusal> {
-    let value = match args.get(name) {
-        Some(SdkValue::Text(text)) => Some(text.clone()),
-        Some(SdkValue::Bytes(bytes)) => Some(
-            String::from_utf8(bytes.clone())
-                .map_err(|_| refused("InvalidInput", format!("`{name}` must be UTF-8 text")))?,
-        ),
-        _ => None,
+/// Option `name` as text: bytes must be UTF-8, and it may not be empty.
+/// The table requires both key options, so a missing one is refused
+/// before the call runs.
+fn text(args: &SdkValue, name: &str) -> Result<String, layerfs_bridge::control::SdkRefusal> {
+    let text = match args.get(name) {
+        Some(SdkValue::Bytes(bytes)) => String::from_utf8(bytes.clone())
+            .map_err(|_| refused("InvalidInput", format!("`{name}` must be UTF-8 text")))?,
+        _ => args.get_text(name).unwrap_or_default().to_owned(),
     };
-    value.filter(|text| !text.is_empty()).ok_or_else(|| {
-        refused(
+    match text.is_empty() {
+        true => Err(refused(
             "InvalidInput",
-            format!("backup.connect: `{name}` is required"),
-        )
-    })
+            format!("backup.connect: `{name}` is empty"),
+        )),
+        false => Ok(text),
+    }
 }
 
 /// Runs `backup.connect`: one listing with the key before anything is
@@ -56,8 +58,8 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let request = BucketConnect {
         name: BucketName::parse(args.get_text("name").unwrap_or(""))?,
         url: args.get_text("url").unwrap_or_default().to_owned(),
-        access_key: required(args, "access_key")?,
-        secret_key: required(args, "secret_key")?,
+        access_key: text(args, "access_key")?,
+        secret_key: text(args, "secret_key")?,
     };
     connect(&context.home, &request)
 }

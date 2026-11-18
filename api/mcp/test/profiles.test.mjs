@@ -63,7 +63,8 @@ test("every generated tool is a valid MCP tool with the table's arguments and op
     if (sections.length > 0) assert.deepEqual(tool.inputSchema.properties.with.items.enum, sections);
     assert.deepEqual(
       tool.inputSchema.required,
-      spec.args.filter((arg) => !arg.optional).map((arg) => arg.name),
+      // required positionals, then the options the table marks required
+      [...spec.args.filter((arg) => !arg.optional), ...visible.filter((option) => option.required)].map((arg) => arg.name),
     );
     for (const hidden of ["on_progress", "stdout", "stderr", "stream"]) {
       assert.ok(!properties.includes(hidden), `${tool.name} exposes ${hidden}`);

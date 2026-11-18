@@ -108,9 +108,9 @@ fn the_cli_logs_its_calls_and_reads_and_clears_them() {
     assert_eq!(items[0].get_text("client"), Some("cli"));
     assert_eq!(words(&items[0]), ["store", "get", "nope"]);
     assert_eq!(lines(&home).len(), 2);
-    // a section the call does not declare is refused by the library
+    // a section the call does not declare is a wrong command line
     let (code, out) = cli(&home, &["home", "log", "--with", "tree"], None);
-    assert_eq!((code, out.as_str()), (Some(125), ""));
+    assert_eq!((code, out.as_str()), (Some(2), ""));
     // home clear-log
     let (code, out) = cli(&home, &["home", "clear-log"], None);
     assert_eq!(code, Some(0), "{out}");
@@ -168,7 +168,7 @@ fn the_cli_reads_a_sandbox_s_daemon_log_by_cursor_and_logs_no_line() {
     // the home's first call: it is logged, as `sandbox log` is not
     assert_eq!(cli(&home, &["sandbox", "list"], None).0, Some(0));
     // help: the call, with its cursor
-    let usage = "layerfs sandbox log <sandbox> [--limit <limit>] [--cursor <cursor>]\n";
+    let usage = "layerfs sandbox log <sandbox> [--limit 200] [--cursor C]\n";
     let (code, out, _) = run_cli(&home, &["help", "sandbox", "log"]);
     assert_eq!(code, Some(0));
     assert!(out.starts_with(usage), "{out}");
@@ -250,7 +250,7 @@ fn the_cli_reads_a_sandbox_s_files_and_logs_no_line() {
     let home = tempdir("files-inspect");
     // the home's first call: it is logged, as `sandbox files` is not
     assert_eq!(cli(&home, &["sandbox", "list"], None).0, Some(0));
-    let usage = "layerfs sandbox files <sandbox> [<path>] [--depth <depth>] [--limit <limit>] [--cursor <cursor>] [--byte-offset <byte-offset>] [--byte-length <byte-length>]\n";
+    let usage = "layerfs sandbox files <sandbox> [<path>] [--depth 1] [--limit 100] [--cursor C] [--byte-offset 0] [--byte-length 262144]\n";
     let (code, out, _) = run_cli(&home, &["help", "sandbox", "files"]);
     assert_eq!(code, Some(0));
     assert!(out.starts_with(usage), "{out}");
@@ -336,7 +336,7 @@ fn the_cli_reads_a_machine_s_files_and_logs_no_line() {
     let home = tempdir("machine-files");
     // the home's first call: it is logged, as `machine files` is not
     assert_eq!(cli(&home, &["sandbox", "list"], None).0, Some(0));
-    let usage = "layerfs machine files <machine> [<path>] [--depth <depth>] [--limit <limit>] [--cursor <cursor>] [--byte-offset <byte-offset>] [--byte-length <byte-length>]\n";
+    let usage = "layerfs machine files <machine> [<path>] [--depth 1] [--limit 100] [--cursor C] [--byte-offset 0] [--byte-length 262144]\n";
     let (code, out, _) = run_cli(&home, &["help", "machine", "files"]);
     assert_eq!(code, Some(0));
     assert!(out.starts_with(usage), "{out}");

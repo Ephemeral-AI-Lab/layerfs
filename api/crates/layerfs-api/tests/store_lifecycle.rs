@@ -291,7 +291,7 @@ fn a_store_on_a_stopped_machine_is_blocked_and_its_read_starts_nothing() {
     let listed = call(&home, "store.list", &[("machine", t("vm"))]).unwrap();
     assert_eq!(
         layerfs_api::json::print(&listed),
-        r#"{"items":[{"store":"shop","engine":"sqlite","state":"blocked","machine":"vm","projects_count":0,"blocked_by":{"machine":"vm","reason":"stopped"}}]}"#
+        r#"{"items":[{"store":"shop","engine":"sqlite","state":"blocked","machine":"vm","blocked_by":{"machine":"vm","reason":"stopped"}}]}"#
     );
     assert!(
         !paths::machine_dir(&home, "vm").join("start.lock").exists(),

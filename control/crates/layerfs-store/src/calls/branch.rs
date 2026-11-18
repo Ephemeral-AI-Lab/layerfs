@@ -2,10 +2,11 @@
 //! Store method that does it, its answer the call's full map (the keys of
 //! its long form; the dispatcher shapes it).
 use super::op::{next_fields, on_project, Names, StoreOp};
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::cursor;
 use layerfs_home::events::Events;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::helpers::shown;
+use layerfs_home::outcome::{refused, with_fix, Outcome};
 use std::path::Path;
 
 /// `branch.list(project, { prefix, exclude_prefix, limit, cursor })`.
@@ -205,8 +206,16 @@ pub fn get(home: &Path, events: &mut Events<'_>, request: &BranchGet) -> Outcome
 
 /// `branch.fork`: a new Branch from a Branch's head or one of its Commits.
 pub fn fork(home: &Path, events: &mut Events<'_>, request: &BranchFork) -> Outcome {
-    let value =
-        on_project(home, events, &request.project, StoreOp::Fork(request)).map_err(next_fields)?;
+    let (from, at) = (request.from.as_deref(), request.at.as_deref());
+    let again = format!(
+        "layerfs branch fork {} {}-2{}{}",
+        request.project,
+        request.name,
+        from.map(|from| format!(" {from}")).unwrap_or_default(),
+        at.map(|at| format!(" --at {at}")).unwrap_or_default(),
+    );
+    let value = on_project(home, events, &request.project, StoreOp::Fork(request))
+        .map_err(|refusal| taken(next_fields(refusal), again))?;
     let take = |key: &str| value.get(key).cloned().unwrap_or_default();
     Ok(SdkValue::map([
         ("commit", take("commit")),
@@ -217,27 +226,34 @@ pub fn fork(home: &Path, events: &mut Events<'_>, request: &BranchFork) -> Outco
     ]))
 }
 
-/// The paths of a list of `{ path, … }` rows.
-fn paths(value: Option<&SdkValue>) -> SdkValue {
-    let rows = match value {
-        Some(SdkValue::List(rows)) => rows.as_slice(),
-        _ => &[],
-    };
-    let path = |row: &SdkValue| row.get("path").cloned().unwrap_or_default();
-    SdkValue::List(rows.iter().map(path).collect())
+/// `refusal`, and when it is a taken name the call again under another
+/// name as its `fix`.
+fn taken(refusal: SdkRefusal, again: String) -> SdkRefusal {
+    match refusal.code == "NameTaken" {
+        true => with_fix(refusal, again),
+        false => refusal,
+    }
 }
 
-fn count(value: &SdkValue) -> SdkValue {
+/// The rows of a list, or none.
+fn rows(value: Option<&SdkValue>) -> Vec<SdkValue> {
     match value {
-        SdkValue::List(items) => SdkValue::Int(items.len() as i64),
-        _ => SdkValue::Int(0),
+        Some(SdkValue::List(rows)) => rows.clone(),
+        _ => Vec::new(),
     }
 }
 
 /// `branch.merge`: `from` merged into `branch`, or into a new Branch.
 pub fn merge(home: &Path, events: &mut Events<'_>, request: &BranchMerge) -> Outcome {
-    let value =
-        on_project(home, events, &request.project, StoreOp::Merge(request)).map_err(next_fields)?;
+    let again = format!(
+        "layerfs branch merge {} {} {} --into {}-2",
+        request.project,
+        request.branch,
+        request.from,
+        request.into.as_deref().unwrap_or_default(),
+    );
+    let value = on_project(home, events, &request.project, StoreOp::Merge(request))
+        .map_err(|refusal| taken(next_fields(refusal), again))?;
     let take = |key: &str| value.get(key).cloned().unwrap_or_default();
     let source = |at: usize| match value.get("sources") {
         Some(SdkValue::List(sources)) => sources
@@ -252,13 +268,20 @@ pub fn merge(home: &Path, events: &mut Events<'_>, request: &BranchMerge) -> Out
         (false, true) => "fast_forward",
         (false, false) => "merged",
     };
-    let overwritten = paths(value.get("lww"));
-    let units = take("units");
+    let path = |row: SdkValue| row.get("path").cloned().unwrap_or_default();
+    let paths = rows(value.get("lww")).into_iter().map(path).collect();
+    // each list keeps its first 20; its count only when it was cut
+    let (overwritten, overwritten_count) = shown(paths, 0, value.get_bool("lwwTruncated"));
+    let (units, units_count) = shown(
+        rows(value.get("units")),
+        0,
+        value.get_bool("unitsTruncated"),
+    );
     Ok(SdkValue::map([
         ("commit", take("commit")),
         ("unchanged", SdkValue::Bool(unchanged)),
         ("fast_forward", SdkValue::Bool(fast_forward)),
-        ("overwritten_count", count(&overwritten)),
+        ("overwritten_count", overwritten_count),
         ("overwritten", overwritten),
         ("outcome", SdkValue::text(outcome)),
         ("branch", take("branch")),
@@ -266,7 +289,7 @@ pub fn merge(home: &Path, events: &mut Events<'_>, request: &BranchMerge) -> Out
         ("second_parent", source(1)),
         ("merge_base", take("mergeBase")),
         ("root", take("root")),
-        ("units_count", count(&units)),
+        ("units_count", units_count),
         ("units", units),
     ]))
 }

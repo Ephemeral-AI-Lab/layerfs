@@ -10,6 +10,7 @@ use super::{Change, Content};
 use crate::calls::op::Args;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
+use layerfs_home::helpers::shown;
 use layerfs_home::outcome::{refused, with_fix, Outcome};
 use std::path::Path;
 
@@ -57,12 +58,14 @@ fn not_a_mode(text: &str) -> SdkRefusal {
     )
 }
 
-/// The paths of a Commit's overwritten (`.lww`) decisions.
-fn overwritten(commit: &SdkValue) -> Vec<SdkValue> {
-    match commit.get("lww") {
+/// The paths of a Commit's overwritten (`.lww`) decisions, the first 20,
+/// and their count only when the list was cut.
+fn overwritten(commit: &SdkValue) -> (SdkValue, SdkValue) {
+    let paths = match commit.get("lww") {
         Some(SdkValue::List(rows)) => rows.iter().map(|row| take(row, "path")).collect(),
         _ => Vec::new(),
-    }
+    };
+    shown(paths, 0, commit.get_bool("lwwTruncated"))
 }
 
 /// A write's answer from the Store's: `replaced` only for `file.edit`.
@@ -70,7 +73,7 @@ fn answer(value: &SdkValue, replaced: Option<SdkValue>) -> SdkValue {
     let commit = take(value, "commit");
     let committed = value.get_text("kind") == Some("Committed");
     let merged = committed && take(&commit, "mergedFrom") != SdkValue::Null;
-    let paths = overwritten(&commit);
+    let (paths, count) = overwritten(&commit);
     let outcome = match (committed, merged) {
         (false, _) => "unchanged",
         (true, true) => "merged",
@@ -91,8 +94,8 @@ fn answer(value: &SdkValue, replaced: Option<SdkValue>) -> SdkValue {
     fields.extend(replaced.map(|replaced| ("replaced", replaced)));
     fields.extend([
         ("merged", SdkValue::Bool(merged)),
-        ("overwritten_count", SdkValue::Int(paths.len() as i64)),
-        ("overwritten", SdkValue::List(paths)),
+        ("overwritten_count", count),
+        ("overwritten", paths),
         ("outcome", SdkValue::text(outcome)),
         ("branch", take(value, "branch")),
         ("parent", parent),
@@ -173,10 +176,10 @@ pub fn edit(home: &Path, events: &mut Events<'_>, request: &FileEdit) -> Outcome
             false => on_main(refusal, &request.project),
         }
     })?;
-    // without --replace-all exactly one occurrence was replaced: no news
-    let replaced = match request.replace_all {
-        true => take(&value, "replaced"),
-        false => SdkValue::Null,
+    // without --replace-all exactly one occurrence was replaced
+    let replaced = match take(&value, "replaced") {
+        SdkValue::Null => SdkValue::Int(1),
+        counted => counted,
     };
     Ok(answer(&value, Some(replaced)))
 }

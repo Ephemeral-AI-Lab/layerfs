@@ -210,6 +210,10 @@ pub struct Asked {
     /// The image `sandbox.create` names (a digest, Docker Id or Docker
     /// reference); every other call runs the Sandbox's own.
     pub image: Option<String>,
+    /// `sandbox.create`'s `start` progress event, `(done, total)`: sent once
+    /// the image is on the machine, just before the Sandbox starts, so the
+    /// image phases come first (V19-8).
+    pub start: Option<(i64, i64)>,
 }
 
 impl From<Call> for Asked {
@@ -218,6 +222,7 @@ impl From<Call> for Asked {
             call,
             message: Message::Absent,
             image: None,
+            start: None,
         }
     }
 }
@@ -272,6 +277,7 @@ fn host_op(
         call,
         message,
         image,
+        start,
     } = asked;
     let op = call.op();
     // the Sandbox's name is its identity on every machine
@@ -326,6 +332,9 @@ fn host_op(
         }
         (_, image) => (image, None),
     };
+    if let Some((done, total)) = start {
+        events.phase("start", Some(done), Some(total), Vec::new());
+    }
     // what the machine's record chooses; the side that runs the call
     // resolves the rest
     let choice = deploy::choose(&home, machine, image.as_deref())?;

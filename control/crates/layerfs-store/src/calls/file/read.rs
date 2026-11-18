@@ -346,7 +346,14 @@ pub fn grep(home: &Path, events: &mut Events<'_>, request: &FileSearch) -> Outco
         SdkValue::map([
             ("path", take(row, "path")),
             ("line", take(row, "line")),
-            ("text", take(row, "text")),
+            // the line without its end, as the row's examples show it
+            (
+                "text",
+                match row.get_text("text") {
+                    Some(text) => SdkValue::text(text.trim_end_matches(['\n', '\r'])),
+                    None => take(row, "text"),
+                },
+            ),
             (
                 "line_truncated",
                 SdkValue::Bool(row.get_bool("lineTruncated")),

@@ -18,8 +18,37 @@ pub(super) struct Binding {
     pub workspace: Arc<BoundWorkspace>,
     pub snapshot: BranchSnapshot,
     pub activity: Activity,
+    /// The phase of the admitted operation `activity` names (`attach`;
+    /// `flush`, `publish`, `invalidate`; `close`), empty when none runs.
+    pub phase: &'static str,
+    /// When `activity` began, in ms since the epoch.
+    pub since_ms: i64,
     pub epoch: u64,
     pub published: Option<CommitOutcome>,
+}
+impl Binding {
+    /// Enters `activity` at its first phase; its start time moves only when
+    /// the activity changes.
+    pub(super) fn enter(&mut self, activity: Activity) {
+        if self.activity != activity {
+            self.since_ms = now_ms();
+        }
+        self.activity = activity;
+        self.phase = match activity {
+            Activity::Attaching => "attach",
+            Activity::Committing => "flush",
+            Activity::Closing => "close",
+            _ => "",
+        };
+    }
+}
+/// This moment in ms since the epoch (0 before it).
+pub(super) fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| {
+            i64::try_from(since.as_millis()).unwrap_or(i64::MAX)
+        })
 }
 pub(super) enum Entry {
     Binding,
@@ -102,7 +131,7 @@ impl Service {
         let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
         let value = bound_mut(&mut entries, token)?;
         idle(value)?;
-        value.activity = activity;
+        value.enter(activity);
         value.epoch = value.epoch.saturating_add(1);
         Ok(value.workspace.clone())
     }

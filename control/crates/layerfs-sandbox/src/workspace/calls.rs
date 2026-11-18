@@ -237,6 +237,7 @@ fn changing(events: &mut Events<'_>, at: At, call: Call, message: Message) -> Ou
                 call,
                 message,
                 image: None,
+                start: None,
             },
             crate::workspace::dispatch::call,
         ),

@@ -219,6 +219,11 @@ pub struct WorkspaceStatus {
     pub binding: BranchSnapshot,
     /// Disposition copied coherently with that binding.
     pub activity: Activity,
+    /// The phase of the operation `activity` names (`attach`; `flush`,
+    /// `publish`, `invalidate`; `close`), empty when none runs.
+    pub activity_phase: String,
+    /// When `activity` began, in ms since the epoch, when known.
+    pub activity_since_ms: Option<i64>,
     /// Control-owner state epoch; saturation does not reject operations.
     pub epoch: u64,
     /// True when the diagnostic epoch can no longer increase.

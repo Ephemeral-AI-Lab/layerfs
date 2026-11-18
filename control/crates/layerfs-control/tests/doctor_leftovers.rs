@@ -202,7 +202,9 @@ fn reported(report: &SdkValue, machine: &str, root: &Path, id8: &str) {
     let link = std::fs::symlink_metadata(run.join(&gone).join("link-out"))
         .unwrap()
         .len() as i64;
-    expect(Kind::RunFolder, run.join(&gone), 30 + marker + link, &gone);
+    let folder = expect(Kind::RunFolder, run.join(&gone), 30 + marker + link, &gone);
+    // its quiet `owner` marker lets `home prune` remove it (R3 F7)
+    assert!(!folder.get_bool("report_only"), "{folder:?}");
     let dead = format!("layerfs-{id8}-dead");
     expect(Kind::EmptyRoot, run.join(format!("{dead}.root")), 0, &dead);
     let tmp = format!("{HEX}.2-ab12");
@@ -588,12 +590,21 @@ fn a_run_folder_in_use_is_refused() {
     // no `owner` marker: not known to be a finished start's folder
     let bare = dir(&run.join(name("bare")));
     file(&bare.join("daemon.log"), 3);
-    assert!(ids(&doctor(&home)).contains(&id("bare")));
+    // listed report-only, as the prune refuses it (R3 F7)
+    let report_only = |listed: &SdkValue, which: &str| {
+        let entry = found(listed)
+            .into_iter()
+            .find(|entry| entry.get_text("leftover") == Some(id(which).as_str()))
+            .unwrap_or_else(|| panic!("{which} not listed: {listed:?}"));
+        entry.get_bool("report_only")
+    };
+    assert!(report_only(&doctor(&home), "bare"));
     let why = refusal(prune(&home, &id("bare")), "InUse");
     assert!(why.contains("no `owner` marker"), "{why}");
     // a marker just written: its Sandbox may be starting
     let fresh = run_folder(&home, &name("fresh"), "fresh", &outside);
     aged(&fresh.join("owner"), Duration::ZERO);
+    assert!(report_only(&doctor(&home), "fresh"));
     let why = refusal(prune(&home, &id("fresh")), "InUse");
     assert!(why.contains("may be starting"), "{why}");
     // a Sandbox being created: its record is there, with no daemon yet

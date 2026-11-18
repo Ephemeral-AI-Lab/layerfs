@@ -39,21 +39,26 @@ pub fn snapshot_full(
     Ok((stack, reader, snap))
 }
 
-/// The full identity of the read's `commit` when it is an id prefix.
+/// The full identity of the read's `commit` when it is an id prefix. A
+/// `commit` is a Commit only, never a Branch name: anything but a full id
+/// or a prefix of 8 or more hex characters is refused `InvalidInput`, as
+/// `file.history` refuses it.
 pub fn pinned(
     service: &StoreService,
     stack: &LayerStackRecord,
     args: &SdkValue,
 ) -> Result<Option<String>, SdkRefusal> {
-    use crate::history::resolve::{commit, FULL, PREFIX};
+    use crate::history::resolve::{commit, FULL};
     match args.get_text("commit") {
+        // a full id opens by itself, a Commit or a publication of main
         Some(text)
-            if (PREFIX..FULL).contains(&text.len())
+            if text.len() == FULL
                 && text.bytes().all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f')) =>
         {
-            Ok(Some(commit(&service.store, stack, text)?.text()))
+            Ok(None)
         }
-        _ => Ok(None),
+        Some(text) => Ok(Some(commit(&service.store, stack, text)?.text())),
+        None => Ok(None),
     }
 }
 

@@ -283,7 +283,7 @@ impl Machine<'_> {
         let name = self.name;
         if self.budget.expired() {
             self.checks
-                .unknown(ID, "its time ran out before its provider was asked");
+                .timeout(ID, "its time ran out before its provider was asked");
             return Ok(None);
         }
         // the provider is asked of the VM alone: the worker's hello is ours
@@ -300,7 +300,10 @@ impl Machine<'_> {
                 return Err(Some("unsupported"));
             }
             Err(error) if self.budget.expired() || error.code == Code::Unknown => {
-                self.checks.unknown(ID, error.message);
+                match self.budget.expired() {
+                    true => self.checks.timeout(ID, error.message),
+                    false => self.checks.lost(ID, error.message),
+                }
                 self.checks.duration(ID, started.elapsed());
                 return Ok(None);
             }
@@ -454,7 +457,7 @@ impl Machine<'_> {
                 self.checks
                     .duration("machine.worker.auth", started.elapsed());
                 if self.budget.expired() {
-                    self.checks.unknown(
+                    self.checks.timeout(
                         "machine.worker.auth",
                         "its time ran out before the worker answered",
                     );
@@ -535,8 +538,7 @@ impl Machine<'_> {
                 if self.budget.expired()
                     || matches!(error.code.as_str(), "Timeout" | "Unavailable") =>
             {
-                self.checks
-                    .unknown(ID, "its worker's answer did not arrive");
+                self.checks.lost(ID, "its worker's answer did not arrive");
                 Err(None)
             }
             Err(error) => {

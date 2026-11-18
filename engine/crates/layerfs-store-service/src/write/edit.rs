@@ -12,7 +12,8 @@ impl Mutation<'_> {
         }
         let file = self.resolve(path)?;
         if file.kind != layerfs_content::object::inode_leaf::InodeKind::RegularFile {
-            return Err(args::refuse("NotFile", path, SdkValue::Null));
+            let message = format!("{path} is not a regular file");
+            return Err(args::refuse("NotFile", message, SdkValue::Null));
         }
         let pattern = old.as_bytes();
         let mut failure = vec![0; pattern.len()];
@@ -41,10 +42,10 @@ impl Mutation<'_> {
                 {
                     e.valid_up_to()
                 }
-                Err(_) => return Err(args::refuse("Binary", path, SdkValue::Null)),
+                Err(_) => return Err(binary(path)),
             };
             if utf8.contains(&0) {
-                return Err(args::refuse("Binary", path, SdkValue::Null));
+                return Err(binary(path));
             }
             utf8.drain(..valid);
             for (i, byte) in bytes.iter().enumerate() {
@@ -62,15 +63,15 @@ impl Mutation<'_> {
             offset += bytes.len() as u64;
         }
         if found.is_empty() || (!all && found.len() != 1) {
-            return Err(args::refuse(
-                if found.is_empty() {
-                    "NoMatch"
-                } else {
-                    "AmbiguousMatch"
-                },
-                path,
-                SdkValue::map([("matches", SdkValue::Int(found.len() as i64))]),
-            ));
+            let (code, message) = match found.len() {
+                0 => ("NoMatch", format!("the old text is not in {path}")),
+                n => (
+                    "AmbiguousMatch",
+                    format!("the old text occurs {n} times in {path}; replace all of them or give more context"),
+                ),
+            };
+            let matches = SdkValue::map([("matches", SdkValue::Int(found.len() as i64))]);
+            return Err(args::refuse(code, message, matches));
         }
         if old == new {
             return Ok(found.len() as u64);
@@ -138,4 +139,8 @@ impl Mutation<'_> {
         }
         Ok(())
     }
+}
+fn binary(path: &str) -> layerfs_bridge::control::SdkRefusal {
+    let message = format!("{path} is not UTF-8 text");
+    args::refuse("Binary", message, SdkValue::Null)
 }

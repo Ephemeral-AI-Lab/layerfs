@@ -1,5 +1,5 @@
-//! `table()`, `call(name, args, home=None, scope=None, on_event=None)`,
-//! `close()` and `doctor(home=None)`.
+//! `table()`, `call(name, args, home=None, scope=None, on_event=None)` and
+//! `close()`; the doctors are calls like any other.
 use pyo3::prelude::*;
 use std::path::PathBuf;
 

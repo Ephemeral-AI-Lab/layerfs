@@ -74,8 +74,9 @@ fn undeclared(what: &str, left: &Fields) {
 struct Shaping<'a> {
     what: &'a str,
     detail: bool,
-    /// The sections asked for.
+    /// The sections asked for, and their names.
     asked: Vec<&'a Section>,
+    names: Vec<&'a str>,
     /// The keys the sections asked for put flat into each item.
     flat: Vec<&'a str>,
     /// What a section not asked for would have added to the top level, and
@@ -116,6 +117,15 @@ impl Shaping<'_> {
     /// One map by its form.
     fn map(&self, form: &Form, mut fields: Fields, level: Level) -> SdkValue {
         let top = level == Level::Top;
+        // the short keys a test of the whole map holds back, judged before
+        // any key is taken
+        let held: Vec<&str> = match self.detail {
+            true => Vec::new(),
+            false => (form.when.iter())
+                .filter(|(_, shows)| !shows(&fields, &self.names))
+                .map(|(key, _)| *key)
+                .collect(),
+        };
         let mut out: Fields = Vec::new();
         for key in form.long {
             if *key == THING {
@@ -147,7 +157,7 @@ impl Shaping<'_> {
             let kept = self.detail
                 || match form.always.contains(key) {
                     true => value != SdkValue::Null,
-                    false => !empty(&value) && !usual(form, key, &value),
+                    false => !empty(&value) && !usual(form, key, &value) && !held.contains(key),
                 };
             if kept {
                 out.push(((*key).to_owned(), value));
@@ -168,7 +178,15 @@ impl Shaping<'_> {
         // `observed_at`) was answered in its place above
         for key in flat_keys.filter(|key| !form.long.contains(key)) {
             let value = take(&mut fields, key).unwrap_or_default();
-            let value = if self.detail { value } else { pruned(value) };
+            // a section's form may shape one of its keys (`hunks` rows)
+            let part = (self.asked.iter())
+                .filter_map(|section| section.form)
+                .find_map(|form| form.part(key));
+            let value = match part {
+                Some(part) => self.part(part, value, Level::Inner),
+                None if self.detail => value,
+                None => pruned(value),
+            };
             if self.detail || !empty(&value) {
                 out.push(((*key).to_owned(), value));
             }
@@ -181,7 +199,9 @@ impl Shaping<'_> {
                 },
                 other => other,
             };
-            if self.detail || value != SdkValue::Null {
+            // a section asked for stays out of the short form when nothing
+            // in it is news (`"live":{}`; conformance R4 F10)
+            if self.detail || !empty(&value) {
                 out.push((section.name.to_owned(), value));
             }
         }
@@ -196,7 +216,9 @@ impl Shaping<'_> {
             if top && out.len() > 1 {
                 out.retain(|(name, _)| name != OK);
             }
-            if top && out.is_empty() {
+            // `{"ok":true}` only where the row declares `ok`; another empty
+            // answer is `{}` (conformance R3 F9)
+            if top && out.is_empty() && form.long.contains(&OK) {
                 out.push((OK.to_owned(), SdkValue::Bool(true)));
             }
             if !top && out.is_empty() {
@@ -260,6 +282,7 @@ pub fn shape(
         flat: keys(&taken, Place::Item),
         spare_item: keys(&spare, Place::Item),
         spare_top,
+        names: taken.iter().map(|section| section.name).collect(),
         asked: taken,
     };
     shaping.map(form, fields, Level::Top)

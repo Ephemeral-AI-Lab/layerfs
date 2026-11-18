@@ -105,6 +105,7 @@ pub fn exec(home: &Path, events: &mut Events<'_>, request: &ExecRequest) -> Answ
         call,
         message: Message::Absent,
         image: None,
+        start: None,
     };
     let out = match &running {
         // the worker tells when the command started: its stop handle is

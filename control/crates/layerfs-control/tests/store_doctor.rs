@@ -145,6 +145,32 @@ fn a_native_store_is_reached_checked_to_its_schema_and_its_backups_compared() {
     drop(writer);
 }
 
+/// A file of another Store (its record names another id) fails
+/// `store.identity`, and its schema is then not checked (R4 F4).
+#[test]
+fn a_file_of_another_store_fails_its_identity() {
+    let f = Fixture::new();
+    let path = paths::store_file(&f.root, "two");
+    let writer = store_file(&path);
+    let record = with_field(
+        fields("two"),
+        "binding",
+        SdkValue::Bytes(b"another-store".to_vec()),
+    );
+    write_entity(&paths::store_record(&f.root, "two"), &record).unwrap();
+    let out = report(&f.root, "two");
+    let rows = rows(&out);
+    assert!(
+        rows.contains(&("store.identity".to_owned(), "error".to_owned())),
+        "{out:?}"
+    );
+    assert!(
+        !rows.iter().any(|(check, _)| check == "store.schema"),
+        "{out:?}"
+    );
+    drop(writer);
+}
+
 #[test]
 fn records_checks_come_first_and_a_missing_file_stops_at_the_connection() {
     let f = Fixture::new();
@@ -260,9 +286,10 @@ fn a_worker_makes_the_shallow_cut_and_refuses_a_request_without_one() {
     assert_eq!(found.get("found"), Some(&SdkValue::Bool(true)), "{found:?}");
     assert!(found.get("schema_error").is_none(), "{found:?}");
     assert_eq!(found.get_text("heads").map(str::len), Some(64), "{found:?}");
-    // another Store's id: the cut fails at the schema check
+    // another Store's id: the cut names the identity, not the schema
     let other = ask(args("one", b"another-store")).unwrap();
-    assert!(other.get_text("schema_error").is_some(), "{other:?}");
+    assert!(other.get_text("identity_error").is_some(), "{other:?}");
+    assert!(other.get("schema_error").is_none(), "{other:?}");
     // no file
     let none = ask(args("two", BINDING)).unwrap();
     assert_eq!(none.get("found"), Some(&SdkValue::Bool(false)));

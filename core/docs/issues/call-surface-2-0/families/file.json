@@ -831,7 +831,7 @@
           "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
           "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
         ],
-        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
       },
       "dropped": [],
       "new_work": "`--mode` as octal text (`0644`, four digits, `0000` to `7777`) is new: today it is a whole number, 0 to 4095 (420 for 0644). `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
@@ -932,7 +932,7 @@
           "--replace-all: {\"commit\":\"12d1c0ff\",\"replaced\":3}",
           "the new text equals the old: {\"commit\":\"12d1c0ff\",\"unchanged\":true}"
         ],
-        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"replaced\":1,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"replaced\":1,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
       },
       "dropped": [
         {
@@ -1028,7 +1028,7 @@
           "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
           "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
         ],
-        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
       },
       "dropped": [],
       "new_work": "`--recursive` is new: today `rm` removes a folder with everything in it. Without the option a folder that is not empty is refused `InvalidInput`, with a `fix` that adds `--recursive`. `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
@@ -1113,7 +1113,7 @@
           "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
           "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
         ],
-        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
       },
       "dropped": [],
       "new_work": "`--mode` as octal text (`0644`, four digits, `0000` to `7777`) is new: today it is a whole number, 0 to 4095 (420 for 0644). `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
@@ -1198,7 +1198,7 @@
           "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
           "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
         ],
-        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
       },
       "dropped": [
         {
@@ -1294,7 +1294,7 @@
           "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
           "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
         ],
-        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
       },
       "dropped": [
         {
@@ -1385,7 +1385,7 @@
           "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
           "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
         ],
-        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
       },
       "dropped": [],
       "new_work": "A change's fields follow the single calls' new names (`from`, `to`, `old_string`, `new_string`, `replace_all`, `recursive`): today they are `from_path`, `to_path`, `old` and `new`, and `from` and `to` are refused. A folder scope checks a change's path fields by name, so its list of names moves with them. A change's `mode` is octal text, as `--mode` is; today it is a whole number. `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."

@@ -103,12 +103,9 @@ impl Mutation<'_> {
     }
     pub fn rename(&mut self, from: &str, to: &str) -> Result<()> {
         overlap(from, to)?;
+        self.resolve(from)?;
         if self.optional(to)?.is_some() {
-            return Err(args::refuse(
-                "Exists",
-                to,
-                layerfs_bridge::control::SdkValue::Null,
-            ));
+            return Err(exists(to));
         }
         let (parent, name) = self.parent(from)?;
         let (new_parent, new_name) = self.parent(to)?;
@@ -135,11 +132,7 @@ impl Mutation<'_> {
     pub fn copy(&mut self, from: &str, to: &str, index: u64) -> Result<()> {
         overlap(from, to)?;
         if self.optional(to)?.is_some() {
-            return Err(args::refuse(
-                "Exists",
-                to,
-                layerfs_bridge::control::SdkValue::Null,
-            ));
+            return Err(exists(to));
         }
         let top = self.resolve(from)?;
         let owner = self
@@ -293,6 +286,10 @@ impl Mutation<'_> {
         }
         Ok(())
     }
+}
+fn exists(to: &str) -> layerfs_bridge::control::SdkRefusal {
+    let message = format!("{to} already exists");
+    args::refuse("Exists", message, layerfs_bridge::control::SdkValue::Null)
 }
 fn overlap(from: &str, to: &str) -> Result<()> {
     if from == to || from == "/" || to.starts_with(&format!("{from}/")) {

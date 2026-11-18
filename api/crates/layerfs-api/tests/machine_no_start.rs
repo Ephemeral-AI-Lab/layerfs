@@ -133,6 +133,15 @@ fn every_read(home: &Path) {
     assert_eq!(code, "Unavailable", "{message}");
     // D11: nothing starts a machine; the refusal names the call that does
     assert!(message.contains("layerfs machine start dev"), "{message}");
+    // and carries it as the refusal's `fix` (conformance R1 F5)
+    let args = SdkValue::map([("workspace", t("s1:w"))]);
+    let refusal =
+        layerfs_api::call(Some(home), "workspace.status", args, &mut |_| {}).expect_err("refused");
+    assert_eq!(
+        refusal.detail.get_text("fix"),
+        Some("layerfs machine start dev"),
+        "{refusal:?}"
+    );
 }
 
 fn nothing_started(home: &Path, tools: &Path) {

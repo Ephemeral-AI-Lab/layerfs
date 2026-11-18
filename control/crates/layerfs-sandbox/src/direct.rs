@@ -51,12 +51,14 @@ pub fn check(home: &Path, id: &str, daemon: &DaemonRecord) -> Result<()> {
     };
     let machine = forward.machine().unwrap_or("");
     if !paths::worker_record(home, machine).exists() {
-        return Err(refused(
+        let refusal = refused(
             "Unavailable",
             format!(
-                "machine {machine}, which runs Sandbox {id}, is not running; start it with                  `layerfs machine start {machine}`"
+                "machine {machine}, which runs Sandbox {id}, is not running; start it with `layerfs machine start {machine}`"
             ),
-        ));
+        );
+        let fix = format!("layerfs machine start {machine}");
+        return Err(layerfs_home::outcome::with_fix(refusal, fix));
     }
     if forward.pid().is_none() || forward.alive() {
         return Ok(());

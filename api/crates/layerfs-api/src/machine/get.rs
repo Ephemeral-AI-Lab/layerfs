@@ -39,7 +39,8 @@ const FORM: Form = Form::of(
         "created_at",
     ],
 )
-.parts(&super::list::ON);
+.parts(&super::list::ON)
+.short_when(&[crate::calls::form::OBSERVED]);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(

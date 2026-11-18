@@ -155,7 +155,17 @@ impl List {
                 .map(|deadline| deadline.saturating_add(INIT_GRACE_MS)),
             _ => None,
         };
-        let report_only = kind == Kind::InitCopy && removable_at.is_none();
+        // what `home prune` would refuse is listed report-only: an init copy
+        // with no deadline, a run folder without an `owner` marker quiet for
+        // a minute (the walk names when it was written; a live daemon is
+        // only known when the prune looks)
+        let quiet = super::leftover_prune::OWNER_QUIET.as_secs() as i64;
+        let report_only = match kind {
+            Kind::InitCopy => removable_at.is_none(),
+            Kind::RunFolder => (row.get_int("owner_written"))
+                .is_none_or(|written| now_ms() / 1000 - written < quiet),
+            _ => false,
+        };
         let modified = row.get_int("modified").unwrap_or(0);
         Some(SdkValue::map([
             (

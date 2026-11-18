@@ -21,8 +21,6 @@ from ._client import (
 from ._errors import LayerFSError as LayerFSError
 from ._values import (
     JSON as JSON,
-    DoctorLeftover as DoctorLeftover,
-    DoctorReport as DoctorReport,
     Progress as Progress,
     Result as Result,
     Scope as Scope,

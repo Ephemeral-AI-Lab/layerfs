@@ -23,9 +23,6 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// The most names an answer lists (`unlinked`, `projects`).
-pub const SHOWN: usize = 20;
-
 /// `backup.list`: the Store files in a bucket, or in every bucket.
 pub fn list(home: &Path, bucket: Option<&str>) -> Outcome {
     super::list::list(home, bucket)
@@ -85,7 +82,7 @@ pub fn connect(home: &Path, request: &BucketConnect) -> Outcome {
 
 /// `backup.disconnect(bucket)`: forgets a bucket, its key and every Store's
 /// link to it; its files stay. `unlinked` names the Stores whose link was
-/// removed (the first [`SHOWN`]).
+/// removed (the first 20; `unlinked_count` only when there were more).
 pub fn disconnect(home: &Path, name: &BucketName) -> Outcome {
     let name = name.as_str();
     BucketRecord::of(home, name)?;
@@ -109,12 +106,12 @@ pub fn disconnect(home: &Path, name: &BucketName) -> Outcome {
     .map_err(failed)?;
     secret::remove(home, &secret_name(name))?;
     layerfs_home::home::generation::moved(home);
-    let count = unlinked.len() as i64;
-    let shown = unlinked.iter().take(SHOWN).map(SdkValue::text);
+    let names = unlinked.iter().map(SdkValue::text).collect();
+    let (unlinked, count) = layerfs_home::helpers::shown(names, 0, false);
     Ok(SdkValue::map([
         ("ok", SdkValue::Bool(true)),
-        ("unlinked", SdkValue::List(shown.collect())),
-        ("unlinked_count", SdkValue::Int(count)),
+        ("unlinked", unlinked),
+        ("unlinked_count", count),
         ("outcome", SdkValue::text("disconnected")),
         ("bucket", SdkValue::text(name)),
     ]))

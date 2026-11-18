@@ -138,7 +138,7 @@ fn create_list_and_get() {
     let short = call(&home, "store.list", &[]).unwrap();
     assert_eq!(
         layerfs_api::json::print(&short),
-        r#"{"items":[{"store":"shop","engine":"sqlite","machine":"native","projects_count":0}]}"#
+        r#"{"items":[{"store":"shop","engine":"sqlite","machine":"native"}]}"#
     );
     let list = detail(&home, "store.list", &[]).unwrap();
     let SdkValue::List(items) = list.get("items").unwrap() else {
@@ -157,7 +157,7 @@ fn create_list_and_get() {
     let got = call(&home, "store.get", &[("store", t("shop"))]).unwrap();
     assert_eq!(
         layerfs_api::json::print(&got),
-        r#"{"engine":"sqlite","state":"ready","machine":"native","projects_count":0}"#
+        r#"{"engine":"sqlite","state":"ready","machine":"native"}"#
     );
     // a live read finds the file and nobody holding it, and notes when
     let live = detail(
@@ -171,6 +171,27 @@ fn create_list_and_get() {
     let section = live.get("live").unwrap();
     assert_eq!(section.get("holders"), Some(&SdkValue::List(vec![])));
     assert_eq!(section.get("behind"), Some(&SdkValue::List(vec![])));
+    // after that read the records hold when it was observed: a ready
+    // Store's short form leaves it out unless `--with live` asks (R3 F3);
+    // the long form keeps it
+    let got = call(&home, "store.get", &[("store", t("shop"))]).unwrap();
+    assert_eq!(got.get("observed_at"), None, "{got:?}");
+    let short = call(&home, "store.list", &[]).unwrap();
+    assert_eq!(
+        layerfs_api::json::print(&short),
+        r#"{"items":[{"store":"shop","engine":"sqlite","machine":"native"}]}"#
+    );
+    let long = detail(&home, "store.get", &[("store", t("shop"))]).unwrap();
+    assert!(long.get_text("observed_at").is_some(), "{long:?}");
+    let asked = call(
+        &home,
+        "store.get",
+        &[("store", t("shop")), ("with", t("live"))],
+    )
+    .unwrap();
+    assert!(asked.get_text("observed_at").is_some(), "{asked:?}");
+    // nothing in the live section is news: it stays out (R4 F10)
+    assert_eq!(asked.get("live"), None, "{asked:?}");
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
 }

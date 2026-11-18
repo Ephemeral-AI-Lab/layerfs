@@ -182,6 +182,10 @@ fn lost_put_and_denied_cleanup_keep_ownership_evidence_without_mutation_retries(
         .unwrap()
         .starts_with("saved/prefix/_layerfs_doctor/"));
     assert_eq!(evidence.get_text("owned_version"), Some("owned-v1"));
+    // guidance is evidence, never a prose `fix` (conformance R4 F6)
+    let fix = check(&report, "bucket.delete").get_text("fix");
+    assert!(fix.is_none_or(str::is_empty), "{fix:?}");
+    assert!(evidence.get_text("note").is_some(), "{evidence:?}");
     let state = f.server.state.lock().unwrap();
     assert_eq!(
         state

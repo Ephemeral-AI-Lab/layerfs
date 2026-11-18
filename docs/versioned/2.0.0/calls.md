@@ -100,12 +100,17 @@ does not.
 - A short key is one of two sorts: always there (`home`, `state`), or there
   only when it is news (`reason`, `fix`, a `state` that is not `ready`).
 - A call that changed something and has nothing to say answers
-  `{"ok":true}`; `ok` is never beside another key in the short form.
+  `{"ok":true}`; `ok` is never beside another key in the short form. A
+  call whose row has no `ok` (a read) answers `{}` when nothing is news.
 - **Sections.** `with` adds a named part of the answer that costs a read of
   its own: `home get --with platforms`, `--with tree`. A call takes only the
   sections its row lists; another name is refused `InvalidInput`, naming the
-  ones it takes. A section is in both forms, and only when asked for.
+  ones it takes (in the shell it is a wrong command line, exit 2). A section is there only when asked for: always in the long form, and in the short form only when it is not empty.
   Python spells the option `with_`, because `with` is a keyword.
+- **Counts.** A list inside an answer (`overwritten`, `projects`,
+  `stores`) holds its first 20 entries; its `<list>_count` is set only when
+  the list was cut, else it is left out of the short form and null in the
+  long form.
 - **Lists.** A list call answers `{ items, next_cursor }`: `next_cursor` is
   left out of the short form on the last page and null in the long form.
   Pass it back as `cursor`. It carries the filters of the call that made it:
@@ -117,7 +122,9 @@ does not.
   `busy` has `op { name, phase, started_at }`, `blocked` has
   `blocked_by { <machine|store|sandbox>, reason }` (the thing at the root of
   the block), `broken` has `reason` (a code) and `fix` (one shell line, or
-  null), `unknown` has `observed_at`.
+  null), `unknown` has `observed_at`. A records-only read (`machine list`,
+  `machine get`, `store list`, `store get`) shows `observed_at` in its short
+  form only beside `unknown` or with `--with live`; the long form keeps it.
 - **Refusals.** `{"error", "message"}`, `fix` when there is one, and the
   fields the next call needs flat beside them; `detail` adds `fix` (null
   when there is none) and `detail`. See [errors](#errors-and-exit-codes).
@@ -213,7 +220,12 @@ $ layerfs home get --with live
   broken is `blocked`, and `blocked_by` names that machine. A machine that
   only a Store or Sandbox names, with no record of its own, is listed too
   (`broken`, `missing`, unless it is `native` or `docker`), so nothing in the
-  home is left out.
+  home is left out. A record that cannot be read does not fail the tree:
+  an unreadable machine record is a `broken` `failed` machine, a Store
+  record whose machine is not known (unreadable, or of a kind this build
+  does not read) is among the `stores` on no machine with its state, and
+  an unreadable Sandbox or Workspace record is left out; each kind's
+  doctor names the record.
 - **`log`** reads the home's call log (`trace/calls.jsonl`, then the one
   file it rotates to), newest first. A row's short form is
   `{ call, outcome, logged_at }`, with `project` when the call named one and
@@ -263,7 +275,7 @@ $ layerfs home get --with live
 
   | Kind | Removed when (else `InUse`, nothing removed) |
   | --- | --- |
-  | `run_folder` | no Sandbox record names it, its `owner` marker is there and older than a minute, no daemon of it runs and nothing is mounted at or under it or its `.root` |
+  | `run_folder` | no Sandbox record names it, its `owner` marker is there and older than a minute, no daemon of it runs and nothing is mounted at or under it or its `.root`; one with no marker, or a marker under a minute old, is listed `report_only` |
   | `empty_root` | its run folder is gone and it is not a mount point; `rmdir` only |
   | `init_copy` | a line of `log/uncertain.jsonl` names the machine and the copy, and its deadline (when the lost request went out, plus the Init's `timeoutMs`) passed more than an hour ago (`removable_at`); a copy no line names is `report_only` and refused `InvalidInput` |
   | `backup_staging` | no `backup create` of that Store is running (its `backup.lock` is taken for the removal) |
@@ -350,8 +362,10 @@ records no `op`.
   (a full id or a prefix of 8 or more; a prefix more than one Commit starts
   with is `InvalidInput` with `matches`). Short: `{ file_count, dir_count,
   symlink_count, size }`, with `partial: true` when the walk stopped at its
-  work bound (`size` is the length the counted node records, whole even
-  then); long adds `partial, commit, root`.
+  work bound (`size` is the length the counted node records, less the
+  files `project hide-path` hides, as the counts leave them out; whole even
+  when the walk stops, less only the hidden files it reached); long adds
+  `partial, commit, root`.
 - **`delete`** is refused `Busy` while a Sandbox of the project is recorded
   (`detail.related` lists each as `{kind: "sandbox", name}`) or while
   another call's `op` holds the project. Short: `{"ok":true}`, or
@@ -441,7 +455,8 @@ publication answers as a Commit. Every id in an answer is the full id.
   into it without `--into` is `InvalidInput`. A conflict changes nothing and
   is `Conflict` with the conflicts in its detail. Short: `{ commit }`, with
   `unchanged`, `fast_forward`, `overwritten` (the paths one side's later
-  write took) and `overwritten_count` when they are set; long:
+  write took, the first 20) when they are set and `overwritten_count` only
+  past those; long:
   `commit, unchanged, fast_forward, overwritten, overwritten_count, outcome
   ("merged", "fast_forward" or "unchanged"), branch, parent, second_parent,
   merge_base, root, units, units_count`.
@@ -490,7 +505,8 @@ publication answers as a Commit. Every id in an answer is the full id.
   `B`'s history. Short: `{ branch, parent, message }`, each when it is set.
   The long form has the list row's keys (no `message_truncated`) and
   `displaced`, `overwritten` (the paths a merge took from the side with the
-  later write, cut at 4 KiB), `overwritten_count` and `units`.
+  later write, the first 20), `overwritten_count` (only when that list was
+  cut) and `units`.
 - **`diff`** compares `from` to `ref`. Without `--from` the side compared
   from is a Branch's fork point, a Commit's parent, the base of a Branch's
   first Commit, and for `main`'s first publication the empty tree (every
@@ -498,7 +514,10 @@ publication answers as a Commit. Every id in an answer is the full id.
   short form is `{ path, change }` (`added`, `removed`, `modified`, …);
   its long form adds `type`, `content`, `metadata` and `identity` (which of
   them differ). `--with patch` adds each changed text file's lines as
-  `hunks` and `hunks_omitted`. The answer's long form adds `from`, `to`,
+  `hunks` (rows `{op, text}`, `op` one of `' '`, `-`, `+`; both keys in
+  the short form, a blank line's empty `text` too; an added file's lines
+  all `+`, a removed file's all `-`; every `\n` ends a line) and
+  `hunks_omitted`. The answer's long form adds `from`, `to`,
   `from_root` and `to_root` (`from` and `from_root` null for the empty
   tree). The `next_cursor` carries both Commits the first page compared and
   the filters, so a later page compares the same two Commits; a cursor given
@@ -535,12 +554,14 @@ Store calls: Linux only (elsewhere `Unsupported`).
 
 - **Reads** read the Branch's head, or `--at C`: a full Commit id or a
   prefix of 8 or more of its characters (a prefix more than one Commit
-  starts with is `InvalidInput` with `matches`, a count). Every long form
+  starts with is `InvalidInput` with `matches`, a count; a Branch name or
+  a shorter prefix is `InvalidInput`, never read as a Branch). Every long form
   names the Commit read as `commit` (its full 66-character id), its `root`
   and the `path`. `read` answers `text` (an empty file `""`), `next_line`
-  while lines are left and `line_truncated` when a long line was cut; a file
-  that is not text answers `binary: true` and its `size` instead of
-  `text`. `stat` answers `type` (`file`, `dir` or `symlink`), `size` and
+  while lines are left (none after a cut last line) and `line_truncated`
+  when a long line was cut; a file that is not text answers `binary: true`
+  and its `size` instead of `text` (the short form shows `size` only then;
+  the long form always). `stat` answers `type` (`file`, `dir` or `symlink`), `size` and
   `mode` as octal text (`"0644"`); the long form adds `inode` and
   `modified_at`. `blame` answers `ranges` (`{start, end, commit}`, runs of
   lines with one owner; a range without `commit` has none found) and
@@ -554,7 +575,7 @@ Store calls: Linux only (elsewhere `Unsupported`).
   Branch moves on. A cursor given with other filters, or to another call,
   is `InvalidInput`; one whose Commit is gone, `NotFound`. A `list` row is
   `{path, type}` (long: `inode`), a `glob` row a path, a `grep` row `{path,
-  line, text}` with `line_truncated`; the long forms add `skipped_hidden`
+  line, text}` (the line without its end) with `line_truncated`; the long forms add `skipped_hidden`
   (entries `project hide-path` hides) or, for `grep`, `skipped_binary` (the
   files that are not text). `grep` searches literal text; `--ignore-case`
   folds ASCII letters. `--include` and `--exclude` take a glob in the
@@ -580,8 +601,9 @@ Store calls: Linux only (elsewhere `Unsupported`).
   folder `mkdir` makes gets its `mode`, missing parents `0755`.
 - `edit` without `--replace-all` needs exactly one occurrence: none is
   `NotFound`, more than one `InvalidInput` with `matches` and a `fix` that
-  adds `--replace-all`. With it, every occurrence is replaced and the answer
-  says how many as `replaced`. `rm` of a folder that is not empty needs
+  adds `--replace-all`. With it, every occurrence is replaced. The long
+  form says how many as `replaced` (1 for a plain edit); the short form
+  only when more than one. `rm` of a folder that is not empty needs
   `--recursive` (`InvalidInput` with a `fix` that adds it).
 - In the shell, `write` reads its content and `apply` its JSON from stdin,
   or from `--from <file>`.
@@ -691,8 +713,9 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   `--mount B` the Workspace's `workspace` (its name is the Branch's,
   lowercased, each other character `-`) and `path`. A refused mount keeps
   the Sandbox and answers the mount's refusal with `next.sandbox` and
-  `fix: layerfs workspace mount <sandbox> <B>`. Progress: `claim`, `start`
-  and, with `--mount`, `mount`. A create whose outcome is not known is
+  `fix: layerfs workspace mount <sandbox> <B>`. Progress: with `--image`, the
+  copy's `inspect, lock, export, send, unpack`; then `start` and, with
+  `--mount`, `mount`. A create whose outcome is not known is
   `Unknown`; its record keeps the `op`, uncertain.
 - On `docker` a Sandbox runs `namespaces` in the docker machine's worker
   container (D-8). Its root is the sealed bundle's `sandbox-image.tar`
@@ -814,7 +837,8 @@ handle is gone: `<sandbox>:/path` is refused `InvalidInput`.
   ordered by Sandbox then name, paged by `limit` (1 to 1000, default 100)
   and `cursor`, which carries `--sandbox`.
 - `mount` answers `{workspace, path}` (long: `outcome: mounted`, `branch`,
-  `commit` the Commit it stands on, `base_layer`, `root`, `id` the 64-hex
+  `commit` the Commit it stands on (on a fresh fork, the Layer it was
+  forked at, as `branch get` names it), `base_layer`, `root`, `id` the 64-hex
   Workspace id, `namespace`). Without `name` the name is the Branch's made
   valid: lowercased, each character outside `a-z 0-9 _ . -` replaced by
   `-`, cut to 63 and `_ . -` trimmed from the ends (`Feature/Login` mounts
@@ -850,7 +874,9 @@ handle is gone: `<sandbox>:/path` is refused `InvalidInput`.
 - `commit` answers `{commit}` (the Branch's new head) with `unchanged`,
   `merged`, `overwritten` (paths a newer-write-wins rule decided, the
   first 20) and `overwritten_count` past those; long: `outcome`, `branch`,
-  `parent`, `root`, `message`, `created_at`, `merged_from`, `displaced`.
+  `parent` (the Commit before it, or for a Branch's first Commit the
+  Layer it was forked at; null when unchanged), `root`, `message`,
+  `created_at`, `merged_from`, `displaced`.
   `--expected C` refuses `Conflict` unless the Branch's head is `C`, a
   Commit id or a prefix of 8 or more of its characters resolved as
   `commit get` resolves it (a prefix several Commits start with is
@@ -867,9 +893,15 @@ handle is gone: `<sandbox>:/path` is refused `InvalidInput`.
   `removed`) with `type: "dir"` for a folder; `changes_count` past the 20
   shown, `partial: true` at the bound, `branch_moved: true` when the
   Branch gained Commits since the mount, and `state` with its companion
-  when not ready (from the daemon's `activity`). `--path` filters within
-  the same read. A machine that is not ready refuses it `Unavailable`; it
-  starts no machine.
+  when not ready (from the daemon's `activity`); a busy Workspace's `op`
+  is `{name, phase, started_at}`: `mount` in `attach`, `commit` in `flush`,
+  `publish` (capture, construction, Save, publication and install) or
+  `invalidate`, `unmount` in `close`, and when the daemon admitted it. `--path` filters within
+  the same read. A machine that is not ready refuses it `Unavailable` with
+  `fix: layerfs machine start <machine>` (any call routed to a machine whose
+  worker is not running carries that fix; a worker of another build carries
+  `layerfs machine stop <m> && layerfs machine start <m>`); it starts no
+  machine.
 - On `lima`, `mount`, `commit`, `unmount` and `status` go from the caller
   straight to the Sandbox's daemon (#535 G4); `exec` and `cancel` go
   through the machine's worker. On `docker` every call goes through its
@@ -925,7 +957,8 @@ positional `machine`, except `create`, which takes `name` and `platform`.
 - **Item and long keys.** A `list` row and the `get` answer have `machine,
   platform, state, op, reason, fix, observed_at, backend, supports, cpus,
   memory_bytes, disk_bytes, image, os_image, docker, wsl, daemon, message,
-  stores, stores_count, sandboxes, sandboxes_count, created_at` (`get` puts
+  stores, stores_count, sandboxes, sandboxes_count, created_at` (each list
+  the first 20 names, its count only past those; `get` puts
   `platform` and `state` first). `supports` is a list of words: `sqlite`,
   `postgresql_sandbox`, and `log` when the machine has a worker whose log
   can be read.
@@ -1025,7 +1058,7 @@ $ layerfs machine list
 $ layerfs machine get docker --with live
 {"platform":"docker","state":"stopped","observed_at":"2026-11-18T15:34:11Z","live":{"tool_version":"29.5.2"}}
 $ layerfs machine get native --detail --with live
-{"platform":"native","state":"ready","op":null,"reason":null,"fix":null,"observed_at":null,"machine":"native","backend":"native","supports":["sqlite","postgresql_sandbox"],"cpus":null,"memory_bytes":null,"disk_bytes":null,"image":null,"os_image":null,"docker":null,"wsl":null,"daemon":null,"message":null,"stores":["shop"],"stores_count":1,"sandboxes":[],"sandboxes_count":0,"created_at":"2026-11-18T15:34:11Z","live":{"disk_free_bytes":null,"tool_version":null,"worker":null}}
+{"platform":"native","state":"ready","op":null,"reason":null,"fix":null,"observed_at":null,"machine":"native","backend":"native","supports":["sqlite","postgresql_sandbox"],"cpus":null,"memory_bytes":null,"disk_bytes":null,"image":null,"os_image":null,"docker":null,"wsl":null,"daemon":null,"message":null,"stores":["shop"],"stores_count":null,"sandboxes":[],"sandboxes_count":null,"created_at":"2026-11-18T15:34:11Z","live":{"disk_free_bytes":null,"tool_version":null,"worker":null}}
 $ layerfs machine start native
 {"unchanged":true}
 $ layerfs machine stats native
@@ -1051,7 +1084,7 @@ refusals, and
 | `create` | `name` | `machine` | an empty sqlite Store, on this computer or made on `machine` directly |
 | `connect` | `store`, `url` | `auth`, `machine`, `synchronous_commit` | connects a PostgreSQL database as a Store with a saved login; on a connected Store, sets its address, or with `machine` that machine's own (checked from it first) |
 | `disconnect` | `store` | `machine` | forgets a PostgreSQL Store, its data staying; with `machine`, removes only that machine's own address |
-| `save_auth` | `auth` | `user`, `password` (`--password-stdin`) | saves or replaces a PostgreSQL login in the home's secret folder |
+| `save_auth` | `auth` | `user`, `password` (both required; `--password-stdin`) | saves or replaces a PostgreSQL login in the home's secret folder |
 | `auths` | — | — | the saved logins and the Stores that use each; never a password |
 | `remove_auth` | `auth` | — | deletes a saved login no Store uses |
 | `update` | `store` | `auth`, `synchronous_commit` | a PostgreSQL Store's login or write setting |
@@ -1074,8 +1107,8 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   port, database and TLS settings, and one naming a user or holding a
   password is refused `InvalidInput`. The login goes into the URL only
   when the Store is dialled. `auths` answers `{ items }`, short `{ auth,
-  user }` with `stores` (at most 20) and `stores_count` when used, else
-  `stores_count: 0`; long
+  user }` with `stores` (at most 20) when used, and `stores_count` only
+  past 20; long
   adds `created_at, updated_at`. `remove_auth` is refused `InUse` (with
   `stores`) while a Store uses the login, `NotFound` when there is none;
   long `ok, outcome: "removed", auth`.
@@ -1083,8 +1116,9 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   `synchronous_commit` defaults to `local`. It creates the LayerFS schema
   in an empty database or reads the Store's id from it (refused `Exists`
   when another Store of this home has that id or name). Short
-  `{ projects, projects_count }` (`projects_count` alone for an empty
-  database; `{"ok":true}` when only an address changed); long `ok,
+  `{ projects }` (the first 20 names, with `projects_count` only past
+  those; `{"ok":true}` for an empty database or when only an address
+  changed); long `ok,
   projects, projects_count, outcome (connected or updated), store, engine,
   auth, connections, synchronous_commit`. On a connected Store `connect`
   checks the new address against the same Store's id and takes no `--auth`
@@ -1121,7 +1155,7 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   `connections` (the Store's own address, with no `machine`, then each
   machine's own; never a password) and `synchronous_commit`; the other
   engine's keys are null. `projects` shows at most 20 names;
-  `projects_count` counts them all. A `backups` row's long form is
+  `projects_count` counts them all, only when there are more. A `backups` row's long form is
   `bucket, file, sha256, heads_sha256, last, attempt`: `last` the last
   transfer that worked (`{ call, ended_at, size }`), `attempt` the last one
   that did not (`{ call, ended_at, error }`). `auth` is a PostgreSQL
@@ -1203,13 +1237,13 @@ Run (macOS, native; the outputs are this build's):
 $ layerfs store create shop
 {"ok":true}
 $ layerfs store list
-{"items":[{"store":"shop","engine":"sqlite","machine":"native","projects_count":0}]}
+{"items":[{"store":"shop","engine":"sqlite","machine":"native"}]}
 $ layerfs store get shop
-{"engine":"sqlite","state":"ready","machine":"native","projects_count":0}
+{"engine":"sqlite","state":"ready","machine":"native"}
 $ layerfs store get shop --with live --detail
-{"engine":"sqlite","state":"ready","machine":"native","auth":null,"connections":null,"projects":[],"projects_count":0,"backups":[],"op":null,"blocked_by":null,"reason":null,"fix":null,"observed_at":"2026-11-18T15:35:10Z","store":"shop","profile":"disposable","synchronous_commit":null,"sqlite_version":"3.53.2","created_at":"2026-11-18T15:35:10Z","last_transfer":null,"live":{"holders":[],"phases":null,"behind":[],"server_version":null,"latency_ms":null}}
+{"engine":"sqlite","state":"ready","machine":"native","auth":null,"connections":null,"projects":[],"projects_count":null,"backups":[],"op":null,"blocked_by":null,"reason":null,"fix":null,"observed_at":"2026-11-18T15:35:10Z","store":"shop","profile":"disposable","synchronous_commit":null,"sqlite_version":"3.53.2","created_at":"2026-11-18T15:35:10Z","last_transfer":null,"live":{"holders":[],"phases":null,"behind":[],"server_version":null,"latency_ms":null}}
 $ layerfs store list --with stats
-{"items":[{"store":"shop","engine":"sqlite","machine":"native","projects_count":0,"observed_at":"2026-11-18T15:35:10Z","size":270336}]}
+{"items":[{"store":"shop","engine":"sqlite","machine":"native","observed_at":"2026-11-18T15:35:10Z","size":270336}]}
 $ layerfs store compact shop
 {"freed_bytes":0}
 $ layerfs store move shop native
@@ -1221,13 +1255,13 @@ outputs):
 
 ```console
 $ printf '%s' "$PG_PASSWORD" | layerfs store save-auth pg-app --user postgres --password-stdin --detail
-{"ok":true,"outcome":"saved","auth":"pg-app","user":"postgres","stores":[],"stores_count":0}
+{"ok":true,"outcome":"saved","auth":"pg-app","user":"postgres","stores":[],"stores_count":null}
 $ layerfs store connect shop-pg 'postgresql://127.0.0.1:55231/shop?sslmode=disable' --auth pg-app --detail
-{"ok":true,"projects":[],"projects_count":0,"outcome":"connected","store":"shop-pg","engine":"postgresql","auth":"pg-app","connections":[{"machine":null,"url":"postgresql://127.0.0.1:55231/shop?sslmode=disable"}],"synchronous_commit":"local"}
+{"ok":true,"projects":[],"projects_count":null,"outcome":"connected","store":"shop-pg","engine":"postgresql","auth":"pg-app","connections":[{"machine":null,"url":"postgresql://127.0.0.1:55231/shop?sslmode=disable"}],"synchronous_commit":"local"}
 $ layerfs store auths
-{"items":[{"auth":"pg-app","user":"postgres","stores":["shop-pg"],"stores_count":1}]}
+{"items":[{"auth":"pg-app","user":"postgres","stores":["shop-pg"]}]}
 $ layerfs store get shop-pg
-{"engine":"postgresql","state":"ready","auth":"pg-app","connections":[{"url":"postgresql://127.0.0.1:55231/shop?sslmode=disable"}],"projects_count":0}
+{"engine":"postgresql","state":"ready","auth":"pg-app","connections":[{"url":"postgresql://127.0.0.1:55231/shop?sslmode=disable"}]}
 $ layerfs store connect shop-pg 'postgresql://postgres:pw@127.0.0.1:55231/shop'
 {"error":"InvalidInput","message":"the URL names a user or holds a password; give the address alone and the login with --auth (`layerfs store save-auth` saves one)"}
 $ layerfs store update shop-pg --synchronous-commit off --detail
@@ -1244,7 +1278,7 @@ See [Stores](machines-and-stores.md#stores).
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `connect` | `name`, `url` | `access_key`, `secret_key` (shell: `--key-stdin`) | connects a bucket (r2, or an S3 endpoint) for Store backups |
+| `connect` | `name`, `url` | `access_key`, `secret_key` (both required; shell: `--key-stdin`) | connects a bucket (r2, or an S3 endpoint) for Store backups |
 | `disconnect` | `bucket` | — | forgets a bucket and its key; its files stay |
 | `list` | — | `bucket` | the Store files in the connected buckets, with the Store each is linked to |
 | `create` | `store`, `bucket` | `file`, `on_progress` | backs up a sqlite Store to a bucket |
@@ -1258,6 +1292,9 @@ the Store.
 
 - **The key.** `--access-key` is the key's id; its secret comes on stdin
   with `--key-stdin` and no other way (Node and Python pass `secret_key`).
+  Both are required: a command line without one is exit 2, and a Node,
+  Python or MCP call without one is refused `InvalidInput` before anything
+  runs.
   The secret is kept in the home's secret folder (`secret/bucket/<bucket>`,
   0600), never answered, and the call log records its byte count only, as
   it does for the URL. `connect` makes one listing before it records
@@ -1299,7 +1336,7 @@ lock, write no record, remove no stale lease and start no machine.
 ```bash
 layerfs home doctor                 # the home, then each machine, PostgreSQL Store and bucket, shallowly
 layerfs machine doctor <machine>    # the machine, then each Store and Sandbox on it
-layerfs store doctor <store> [--machine <machine>]   # the Store, then each of its projects
+layerfs store doctor <store> [--machine M]   # the Store, then each of its projects
 layerfs project doctor <project> [--full]   # the project's record against its Store's own list; --full reads its data
 layerfs sandbox doctor <sandbox>    # the Sandbox: record, runtime, daemon; then each of its Workspaces
 layerfs backup doctor <bucket> [--full]               # the bucket's record and reach; --full writes and reads one object
@@ -1321,10 +1358,15 @@ every check was made and nothing was found; otherwise `findings` and
 - A `not_checked` entry names a thing, or one of its checks, that gave no
   verdict: `blocked_by` (the thing at the root of the block and its state,
   as in the lists) or `reason` (`timeout`, `busy`, `lost`), never both.
+  `lost` is only a reply that did not arrive; a check that waits on one
+  that failed is `blocked_by` that thing with `failed` (a Store whose id is
+  not its record's leaves its projects' checks `blocked_by {store,
+  reason: failed}`).
 - The long form (`--detail`) adds `status` (the worst of `error`, `warning`,
   `not_checked`, `notice`, `ok`), `counts` (things per status),
   `observed_at` and `tree`: the doctor's own thing with `status`,
-  `coverage` (`none`, `shallow` or `full`), its `checks` (`{ check,
+  `coverage` (`none`, `shallow` or `full`; `full` only when a check of
+  the Full list was made), its `checks` (`{ check,
   outcome, from }`, outcome `pass`, `notice`, `warning`, `error` or
   `not_checked`), `blocked_by`, `reason` and one list per kind of thing on
   it, each checked shallowly. Its `ok` is false whenever anything was found
@@ -1337,7 +1379,9 @@ every check was made and nothing was found; otherwise `findings` and
 - `--progress` (`on_progress`) sends one event per finished thing:
   `{ phase, done, total, node }`, `phase` `self` then the kind of thing
   (`machines`, `stores`, `projects`, `sandboxes`, `workspaces`, `buckets`).
-  `backup doctor` sends none.
+  The Full check of `project doctor` (and of `backup doctor`, which sends
+  none today) may also send `{ phase: "data", done, total }` events, with
+  no `node`, while it reads.
 - A Workspace has no doctor of its own: `sandbox doctor` reads its daemon's
   list once and gives each Workspace it lists or the home records one node,
   `<sandbox>:<name>`, with `workspace.mounted` and `workspace.activity`; a
@@ -1358,7 +1402,8 @@ every check was made and nothing was found; otherwise `findings` and
   Branches share is read once; two projects each read it. Each problem is
   one `project.data` finding naming the object and the head whose tree
   reached it (the first 64, then a count); an object that could not be read
-  is `not_checked` with `lost`. While it reads it sends `{ phase: "data",
+  (a damaged pack) is one such error finding, with no `not_checked` entry
+  beside it. While it reads it sends `{ phase: "data",
   done, total }` events counting trees. `store doctor` never runs
   `project.data`.
 - `store doctor --machine` is for a PostgreSQL Store; a sqlite Store
@@ -1377,8 +1422,9 @@ every check was made and nothing was found; otherwise `findings` and
   sqlite Store, `store.backups` (a notice per bucket whose backup heads
   differ from the Store's, `fix` `layerfs backup create <store>
   <bucket>`). That is the whole cut: no Store data is scanned. A sqlite
-  Store's id and schema are read together, so a mismatch shows as
-  `store.schema`. A PostgreSQL Store is then probed from each machine
+  Store file whose id is not the recorded one fails `store.identity`, and
+  `store.schema` is then not made; a file of the right id whose schema is
+  not this build's fails `store.schema`. A PostgreSQL Store is then probed from each machine
   that has a Sandbox of it and from `--machine` (its own address where it
   has one, else the Store's), each as one more `store.connection` row
   with `from`. A Store whose machine is not ready shows its
@@ -1388,7 +1434,10 @@ every check was made and nothing was found; otherwise `findings` and
   not checked`, or `ok` alone), then each finding, its `from` and its `fix`,
   then each `not_checked` entry.
 - Exit 0 once the report is made, whatever it finds; 125 with `NotFound`
-  when the thing is not in the home; 2 for a wrong command line. Leftovers
+  when the thing is not in the home (a machine that only a Store or Sandbox
+  record names, with no record of its own, is not: that record's own
+  check reports the reference, an error in `home.records` as in `sandbox
+  doctor`); 2 for a wrong command line. Leftovers
   of interrupted operations are in no doctor's report: `home leftovers`
   lists them and `home prune` removes one (see [`home`](#home-7)).
 
@@ -1491,18 +1540,23 @@ Every call is one attempt. After `Unknown`, read the state with `list`,
 | `--text` | all | a readable result instead of JSON |
 | `--detail` | all | the long form of a migrated call's answer, and of any call's refusal ([the form of an answer](#the-form-of-an-answer)) |
 | `--with <a,b>` | the calls whose row lists sections (`home get`) | adds the named sections to the answer |
-| `--progress` | `project init`, `project export`, `workspace exec`, `store push`, `store pull`, `backup create`, `backup restore` | progress as one JSON line per event on stderr, the event itself: `{"phase", "done", "total", …}`; for `workspace exec`, the exec id first |
+| `--progress` | `project init`, `project export`, `workspace exec`, `store push`, `store pull`, `backup create`, `backup restore` | progress as one JSON line per event on stderr, the event itself: `{"phase", "done", "total", …}`; for `workspace exec`, the exec id first. On a terminal it is one status line instead: `phase: <phase>  done/total`, in byte units (with a rate) for the byte phases `send`, `snapshot`, `hash`, `upload` and `download`, plain counts for every other phase |
 | `--stream` | `workspace exec` | passes the command's stdout and stderr through (output over 1 MiB too) and exits with its code |
 | `--from <file>` | `file write`, `file apply` | reads the content or JSON from a file instead of stdin |
 | `--<option>-from <file>` | any optional text option (`--old-from`, `--new-from`, `--message-from`) | reads the option's value from a file |
-| `-m <text>` | calls with `message` | the same as `--message` |
+| `-m <text>` | calls with `message` | the same as `--message`; help shows it as `[-m msg]` |
 | `--scope <folder>` | all | a folder scope (see below); needs `--scope-project` |
 | `--scope-project <store>/<project>` | all, with `--scope` | the one project the scope is bound to |
 | `--scope-branch <name>` | all, with `--scope` | the scope's Branch namespace |
 | `--` | all | every later word is a positional |
 
 `--option=value` works for every option. A bool option alone
-(`sandbox close … --force`) is true; `--force=false` is false.
+(`sandbox close … --force`) is true; `--force=false` is false. An option
+the table marks required (`backup connect`'s `--access-key` and
+`--key-stdin`, `store save-auth`'s `--user` and `--password-stdin`, `file
+edit`'s `--old-string` and `--new-string`) is shown without brackets in
+help, and a line without it is exit 2; the table's JSON says `required:
+true`, and the Node typings, Python stubs and MCP schemas mark it.
 
 `store push` and `store pull` report their phases (`check`, `snapshot`,
 `send`, `verify`, `install`, `record`, `retire`) as `{"phase", "done",

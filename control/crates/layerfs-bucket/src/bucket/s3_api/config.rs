@@ -46,7 +46,10 @@ impl S3Config {
             || !bucket[0].is_ascii_alphanumeric()
             || !bucket[bucket.len() - 1].is_ascii_alphanumeric()
         {
-            return invalid("bucket");
+            return Err(RemoteError::Invalid(format!(
+                "S3 bucket name {:?} is not valid: 3 to 63 lowercase letters, digits, dots and hyphens, starting and ending with a letter or digit",
+                self.bucket
+            )));
         }
         if !self.prefix.is_empty() {
             check_name(&self.prefix)?;
@@ -57,7 +60,10 @@ impl S3Config {
                 .bytes()
                 .all(|b| b.is_ascii_alphanumeric() || b == b'-')
         {
-            return invalid("region");
+            return Err(RemoteError::Invalid(format!(
+                "S3 region {:?} is not valid: letters, digits and hyphens",
+                self.region
+            )));
         }
         if self.connect_timeout.is_zero() || self.io_timeout.is_zero() {
             return invalid("timeouts");

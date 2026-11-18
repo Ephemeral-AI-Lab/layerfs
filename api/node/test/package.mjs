@@ -66,7 +66,9 @@ test("every call, argument and option of the table is in the typings", () => {
       continue;
     }
     const name = `${pascal(spec.family)}${pascal(spec.call)}Options`;
-    assert.ok(line.endsWith(`options?: ${name}): Promise<Result>;`), `${spec.family}.${spec.call}: options?.${name}`);
+    // a call with a required option may not leave its options off
+    const mark = spec.options.some((opt) => opt.required) ? "" : "?";
+    assert.ok(line.endsWith(`options${mark}: ${name}): Promise<Result>;`), `${spec.family}.${spec.call}: options${mark}.${name}`);
     const declaration = `export interface ${name} extends CallOptions {\n`;
     const at = types.indexOf(declaration);
     assert.ok(at >= 0, `${spec.family}.${spec.call}: no ${name} interface`);
@@ -74,11 +76,11 @@ test("every call, argument and option of the table is in the typings", () => {
     const wanted = spec.options.map((opt) => {
       const type = opt.kind === "function" ? FUNCTION[opt.name] : ARGUMENT[opt.kind];
       assert.ok(type, `${spec.family}.${spec.call}: no typings for ${opt.kind} option ${opt.name}`);
-      return `  ${opt.name}?: ${type};`;
+      return `  ${opt.name}${opt.required ? "" : "?"}: ${type};`;
     });
     if (sections.length > 0) wanted.push(`  with?: readonly (${sections.map((name) => JSON.stringify(name)).join(" | ")})[];`);
     assert.equal(declared, wanted.join("\n"), `${spec.family}.${spec.call}: ${name} options`);
-    for (const opt of spec.options) assert.ok(types.includes(`  ${opt.name}?: `), `${spec.family}.${spec.call} ${opt.name}`);
+    for (const opt of spec.options) assert.ok(types.includes(`  ${opt.name}${opt.required ? "" : "?"}: `), `${spec.family}.${spec.call} ${opt.name}`);
   }
 });
 

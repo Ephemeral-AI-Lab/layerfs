@@ -56,8 +56,11 @@ fn home_doctor_text_names_each_finding_and_its_fix() {
     // a report, not a refusal: exit 0
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let text = String::from_utf8(out.stdout).unwrap();
-    assert!(text.starts_with("1 error(s), "), "{text}");
+    // the home's records check names it, and so does the Store's own record
+    // check on its broken node (conformance R4 F5)
+    assert!(text.starts_with("2 error(s), "), "{text}");
     assert!(text.contains("error    store bad home.records: "), "{text}");
+    assert!(text.contains("error    store bad store.record: "), "{text}");
     // no shell line repairs a record that does not parse: no fix line
     assert!(text.contains("no call reads it"), "{text}");
     assert!(!text.contains("fix: "), "{text}");
@@ -169,7 +172,7 @@ fn home_leftovers_lists_and_home_prune_removes_one() {
     let help = String::from_utf8(layerfs(&home, &["help", "home"]).stdout).unwrap();
     assert!(help.contains("layerfs home prune <leftover>\n"), "{help}");
     assert!(
-        help.contains("layerfs home leftovers [--machine <machine>]\n"),
+        help.contains("layerfs home leftovers [--machine M]\n"),
         "{help}"
     );
     for words in [&["help", "home", "prune"][..], &["home", "prune", "--help"]] {

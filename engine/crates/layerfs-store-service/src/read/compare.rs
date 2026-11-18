@@ -203,6 +203,25 @@ pub(crate) fn change(
                 }
             }
         }
+    } else if with_hunks {
+        // an added or removed text file: every line `+`, or every line `-`
+        let side = change.right.or(change.left);
+        if let Some(text) = snapshot::text(reader, side)? {
+            let op = match change.right {
+                Some(_) => LineOp::Added,
+                None => LineOp::Removed,
+            };
+            let all: Vec<DiffLine> = (layerfs_content::compare::lines(&text).into_iter())
+                .map(|line| DiffLine {
+                    op,
+                    text: line.to_owned(),
+                })
+                .collect();
+            match hunks(&all, budget) {
+                Some(value) => lines = value,
+                None => omitted = true,
+            }
+        }
     }
     Ok(Some(SdkValue::map([
         ("path", SdkValue::text(change.path.as_str())),

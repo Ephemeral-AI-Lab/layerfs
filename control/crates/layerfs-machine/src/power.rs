@@ -146,14 +146,17 @@ pub fn with_stopped(
     sandboxes: &[String],
     workspaces: &[String],
 ) -> SdkValue {
-    let list = |items: &[String]| SdkValue::List(items.iter().map(SdkValue::text).collect());
-    let count = |items: &[String]| SdkValue::Int(i64::try_from(items.len()).unwrap_or(i64::MAX));
+    // each list keeps its first 20, its count only when it was cut
+    let list = |items: &[String]| {
+        layerfs_home::helpers::shown(items.iter().map(SdkValue::text).collect(), 0, false)
+    };
+    let (sandboxes, workspaces) = (list(sandboxes), list(workspaces));
     let mut answer = answer;
     for (key, value) in [
-        ("stopped_sandboxes", list(sandboxes)),
-        ("stopped_sandboxes_count", count(sandboxes)),
-        ("unknown_workspaces", list(workspaces)),
-        ("unknown_workspaces_count", count(workspaces)),
+        ("stopped_sandboxes", sandboxes.0),
+        ("stopped_sandboxes_count", sandboxes.1),
+        ("unknown_workspaces", workspaces.0),
+        ("unknown_workspaces_count", workspaces.1),
         ("forced", SdkValue::Bool(forced)),
     ] {
         answer = layerfs_home::home::with_field(answer, key, value);

@@ -127,6 +127,7 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
             }
             "--with" => {
                 let sections = take(&mut i)?;
+                sections_known(call, &sections)?;
                 fields.push((layerfs_api::WITH.to_owned(), SdkValue::Text(sections)));
             }
             "--progress" if call.arg("on_progress").is_some() => switches.progress = true,
@@ -153,9 +154,6 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                     }
                     if call.arg("on_progress").is_some() {
                         accepted.push("--progress".to_owned());
-                    }
-                    if call.arg("stream").is_some() {
-                        accepted.push("--stream".to_owned());
                     }
                     accepted.push("--text".to_owned());
                     accepted.push("--detail".to_owned());
@@ -309,6 +307,15 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
         }
         fields.push((arg.name.to_owned(), content(bytes)));
     }
+    for arg in call.options.iter().filter(|a| a.required) {
+        if !fields.iter().any(|(name, _)| name == arg.name) {
+            return Err(usage(format!(
+                "{}: {} is required",
+                call.name(),
+                flag_of(arg)
+            )));
+        }
+    }
     for arg in call.args.iter().filter(|a| piped(a)) {
         let bytes = match &from {
             Some(path) => read_file(path)?,
@@ -332,6 +339,38 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
         args: SdkValue::Map(fields),
         switches,
     })
+}
+
+/// The shell flag that gives option `arg`: its stdin flag for a secret.
+fn flag_of(arg: &Arg) -> String {
+    match arg.shell {
+        Some(flag) => flag.to_owned(),
+        None => format!("--{}", arg.name.replace('_', "-")),
+    }
+}
+
+/// Refuses a `--with` that names a section the call does not take: the
+/// table says which it takes, so this is a wrong command line.
+fn sections_known(call: &Call, sections: &str) -> Result<(), Usage> {
+    let names = sections.split(',').map(str::trim).filter(|n| !n.is_empty());
+    for name in names {
+        if call.section(name).is_some() {
+            continue;
+        }
+        let takes: Vec<&str> = call.with.iter().map(|section| section.name).collect();
+        return Err(usage(match takes.is_empty() {
+            true => format!(
+                "{}: --with names `{name}`, and this call takes no section",
+                call.name()
+            ),
+            false => format!(
+                "{}: --with names `{name}`; this call takes {}",
+                call.name(),
+                takes.join(", ")
+            ),
+        }));
+    }
+    Ok(())
 }
 
 fn option(

@@ -42,7 +42,8 @@ const ITEM: Form = Form::of(
         "created_at",
     ],
 )
-.parts(&ON);
+.parts(&ON)
+.short_when(&[crate::calls::form::OBSERVED]);
 const FORM: Form = Form::of(&["items"], &[], &["items"]).parts(&[("items", Part::Rows(&ITEM))]);
 
 /// Its table entry.

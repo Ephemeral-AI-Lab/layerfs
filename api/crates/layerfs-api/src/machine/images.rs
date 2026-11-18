@@ -75,11 +75,11 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 /// item per image, its state and companion from the listing.
 #[cfg(feature = "machine")]
 fn shown(answer: &SdkValue, docker: bool) -> SdkValue {
-    use super::stats::{count, field, rows};
+    use super::stats::{cut, field, rows};
     let default = answer.get_text("default");
     let items = rows(answer.get("images"), |image| {
         let id = image.get_text("id");
-        let sandboxes = field(image, "sandboxes");
+        let (sandboxes, sandboxes_count) = cut(field(image, "sandboxes"));
         SdkValue::map([
             ("image", field(image, "id")),
             ("refs", field(image, "refs")),
@@ -93,7 +93,7 @@ fn shown(answer: &SdkValue, docker: bool) -> SdkValue {
             ("staged_bytes", field(image, "staged_bytes")),
             ("architecture", field(image, "architecture")),
             ("source", field(image, "source")),
-            ("sandboxes_count", count(&sandboxes)),
+            ("sandboxes_count", sandboxes_count),
             ("sandboxes", sandboxes),
             ("last_used_at", field(image, "last_used")),
         ])

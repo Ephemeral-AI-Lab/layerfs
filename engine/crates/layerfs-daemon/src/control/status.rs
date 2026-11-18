@@ -34,13 +34,13 @@ impl Service {
         Ok(success)
     }
     pub(super) fn status(&self, token: WorkspaceToken) -> Result<Success, Failure> {
-        let (workspace, binding, activity, epoch, published, kernel) = {
+        let (workspace, binding, (activity, phase, since), epoch, published, kernel) = {
             let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
             let value = bound(&entries, token)?;
             (
                 value.workspace.clone(),
                 value.snapshot.clone(),
-                value.activity,
+                (value.activity, value.phase, value.since_ms),
                 value.epoch,
                 value.published.clone(),
                 // Copied with the control fields: maintained counters only.
@@ -74,6 +74,8 @@ impl Service {
                 token,
                 binding,
                 activity,
+                activity_phase: phase.to_owned(),
+                activity_since_ms: Some(since),
                 epoch,
                 epoch_saturated: epoch == u64::MAX,
                 published,

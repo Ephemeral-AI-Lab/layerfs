@@ -96,7 +96,7 @@ function descriptionOf(spec) {
     notes.push("The destination is a path on the machine running this MCP server, not on the caller; a folder scope refuses this call.");
   }
   if (spec.family === "workspace" && spec.call === "exec") {
-    notes.push("Output is buffered by the Node binding: text up to 1 MiB per stream is in the result; a larger stream is not delivered, and stdout_bytes, stderr_bytes and streamed=true report it.");
+    notes.push("Each stream's text is in the result up to its last 1 MiB; a longer stream answers its last 1 MiB, and stdout_file or stderr_file names the file on the machine that holds the whole stream; stdout_bytes and stderr_bytes give its full size.");
   }
   return [spec.help, ...notes].join(" ");
 }
@@ -109,7 +109,10 @@ export function toolFor(spec) {
     properties[arg.name] = propertyOf(spec, arg);
     if (!arg.optional) required.push(arg.name);
   }
-  for (const option of visibleOptions(spec)) properties[option.name] = propertyOf(spec, option);
+  for (const option of visibleOptions(spec)) {
+    properties[option.name] = propertyOf(spec, option);
+    if (option.required) required.push(option.name);
+  }
   Object.assign(properties, globalOptions(spec));
   return {
     name: `${spec.family}_${spec.call}`,

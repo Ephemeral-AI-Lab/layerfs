@@ -46,7 +46,7 @@ pub(super) fn diagnose(
 /// the records scan read, when it gave a stable verdict.
 fn layout(home: &Path, budget: &Budget, checks: &mut Checks) -> Option<super::scan::Scanned> {
     if budget.expired() {
-        checks.unknown(LAYOUT, "its time ran out before the home was read");
+        checks.timeout(LAYOUT, "its time ran out before the home was read");
         return None;
     }
     let Ok(layout) = detect(home) else {

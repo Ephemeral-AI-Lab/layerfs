@@ -137,7 +137,7 @@
           "{\"ok\":true}",
           "Stores were linked to it: {\"unlinked\":[\"shop\"]}"
         ],
-        "long": "{\"ok\":true,\"unlinked\":[\"shop\"],\"unlinked_count\":1,\"outcome\":\"disconnected\",\"bucket\":\"r2-main\"}"
+        "long": "{\"ok\":true,\"unlinked\":[\"shop\"],\"unlinked_count\":null,\"outcome\":\"disconnected\",\"bucket\":\"r2-main\"}"
       },
       "dropped": [
         {
@@ -348,7 +348,7 @@
           "{\"projects\":[\"api\",\"web\"]}",
           "an empty Store: {\"ok\":true}"
         ],
-        "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":2,\"outcome\":\"created\",\"store\":\"shop\",\"bucket\":\"r2-main\",\"file\":\"shop\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\"}"
+        "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"outcome\":\"created\",\"store\":\"shop\",\"bucket\":\"r2-main\",\"file\":\"shop\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\"}"
       },
       "dropped": [
         {

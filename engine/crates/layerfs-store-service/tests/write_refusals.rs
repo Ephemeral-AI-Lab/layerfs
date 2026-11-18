@@ -133,7 +133,7 @@ fn a_write_through_a_non_directory_is_not_directory() {
             .expect_err("the call is refused");
         assert_eq!(
             (r.code.as_str(), r.message.as_str()),
-            ("NotDirectory", *at),
+            ("NotDirectory", format!("{at} is not a folder").as_str()),
             "{method}"
         );
     }
@@ -145,6 +145,83 @@ fn a_write_through_a_non_directory_is_not_directory() {
             ("content", t("after")),
         ],
     );
+    fixture.cleanup();
+}
+
+/// A refused write says what is wrong in a plain sentence that names the
+/// path, never an engine error's debug text.
+#[test]
+fn a_write_refusal_is_a_plain_sentence() {
+    let fixture = Fixture::new("write-refusal-sentences", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        fs::write(source.join("dup.txt"), b"x x x\n").unwrap();
+        2
+    });
+    fixture.fork("feat");
+    let t = SdkValue::text;
+    let edit = |path: &'static str, old: &'static str| {
+        vec![("path", t(path)), ("oldText", t(old)), ("newText", t("y"))]
+    };
+    let cases = [
+        (
+            "fs.rm",
+            vec![("path", t("/nope"))],
+            "NoSuchPath",
+            "/nope does not exist",
+        ),
+        (
+            "fs.cp",
+            vec![("from", t("/nope")), ("to", t("/b"))],
+            "NoSuchPath",
+            "/nope does not exist",
+        ),
+        (
+            "fs.mv",
+            vec![("from", t("/nope")), ("to", t("/b"))],
+            "NoSuchPath",
+            "/nope does not exist",
+        ),
+        (
+            "fs.mv",
+            vec![("from", t("/a.txt")), ("to", t("/dup.txt"))],
+            "Exists",
+            "/dup.txt already exists",
+        ),
+        (
+            "fs.write",
+            vec![("path", t("/x/y.txt")), ("content", t("x"))],
+            "NoSuchPath",
+            "/x does not exist",
+        ),
+        (
+            "fs.mkdir",
+            vec![("path", t("/a.txt"))],
+            "NotDirectory",
+            "/a.txt is not a folder",
+        ),
+        (
+            "fs.edit",
+            edit("/a.txt", "zz"),
+            "NoMatch",
+            "the old text is not in /a.txt",
+        ),
+        (
+            "fs.edit",
+            edit("/dup.txt", "x"),
+            "AmbiguousMatch",
+            "the old text occurs 3 times in /dup.txt; replace all of them or give more context",
+        ),
+    ];
+    for (method, fields, code, message) in cases {
+        let mut fields = fields.clone();
+        fields.push(("branch", t("feat")));
+        let r = fixture.try_call(method, fields).expect_err("refused");
+        assert_eq!(
+            (r.code.as_str(), r.message.as_str()),
+            (code, message),
+            "{method}"
+        );
+    }
     fixture.cleanup();
 }
 

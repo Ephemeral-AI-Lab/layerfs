@@ -115,15 +115,13 @@ pub fn restore(
             return Err(refusal);
         }
     };
-    let count = projects.len() as i64;
-    let shown = projects.into_iter().take(super::family::SHOWN);
+    let names = projects.into_iter().map(SdkValue::text).collect();
+    // the first 20; `projects_count` only when there were more
+    let (projects, count) = layerfs_home::helpers::shown(names, 0, false);
     Ok(SdkValue::map([
         ("ok", SdkValue::Bool(true)),
-        (
-            "projects",
-            SdkValue::List(shown.map(SdkValue::text).collect()),
-        ),
-        ("projects_count", SdkValue::Int(count)),
+        ("projects", projects),
+        ("projects_count", count),
         (
             "outcome",
             SdkValue::text(match existing {

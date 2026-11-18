@@ -51,7 +51,7 @@ fn the_shell_reads_at_expected_and_force() {
     );
     assert_eq!(
         layerfs_cli::help::usage(publish()),
-        "layerfs branch publish <project> <branch> [--at <at>] [--expected <expected>] [--force]"
+        "layerfs branch publish <project> <branch> [--at C] [--expected C] [--force]"
     );
 }
 

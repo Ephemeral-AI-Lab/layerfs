@@ -8,7 +8,7 @@
 //! Workspace calls take that route in `sandbox/direct.rs`.
 use crate::record::StoreRef;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::outcome::{refused, with_fix, Outcome};
 use layerfs_machine::worker::{self, Budget, Endpoint, EventSink, Unreached};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -199,15 +199,17 @@ fn stopped(machine: &str, why: SdkRefusal) -> SdkRefusal {
             why.message,
             worker::replace_with(machine)
         );
-        return SdkRefusal { message, ..why };
+        let fix = format!("layerfs machine stop {machine} && layerfs machine start {machine}");
+        return with_fix(SdkRefusal { message, ..why }, fix);
     }
-    refused(
+    let refusal = refused(
         "Unavailable",
         format!(
             "machine {machine}'s worker did not answer ({}); start it with `layerfs machine start {machine}`",
             why.message
         ),
-    )
+    );
+    with_fix(refusal, format!("layerfs machine start {machine}"))
 }
 
 /// The worker `machine`'s `worker.json` records, starting nothing; refused
@@ -215,11 +217,15 @@ fn stopped(machine: &str, why: SdkRefusal) -> SdkRefusal {
 /// fails when called.
 fn recorded(home: &Path, machine: &str) -> Result<Endpoint> {
     let Some(worker) = layerfs_home::secrets::worker_secret(home, machine)? else {
-        return Err(refused(
+        let refusal = refused(
             "Unavailable",
             format!(
                 "machine {machine} is not running; start it with `layerfs machine start {machine}`"
             ),
+        );
+        return Err(with_fix(
+            refusal,
+            format!("layerfs machine start {machine}"),
         ));
     };
     Ok(Endpoint {

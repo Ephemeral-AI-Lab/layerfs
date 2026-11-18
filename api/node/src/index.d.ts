@@ -73,12 +73,15 @@ export interface CallForm {
   long: readonly string[];
   parts?: { readonly [key: string]: CallForm | { scalar: string } };
 }
-/** One positional or option; `shell` is the flag of a secret option the shell reads from stdin. */
+/** One positional or option; `shell` is the flag of a secret option the shell reads from stdin,
+ * `repeat` marks an option the shell takes more than once, `required` an option that must be given. */
 export interface CallArg {
   name: string;
   kind: string;
   optional: boolean;
   shell?: string;
+  repeat?: boolean;
+  required?: boolean;
 }
 export interface CallSpec {
   family: string;
@@ -96,58 +99,6 @@ export interface CallSpec {
   };
 }
 
-export interface DoctorCheck {
-  id: string;
-  code: string;
-  outcome: "pass" | "fail" | "blocked" | "skipped" | "unknown";
-  severity: "error" | "warning" | null;
-  entity: { kind: string; name: string };
-  message: string;
-  evidence: Value;
-  fix: string;
-  blocked_by: string[];
-  observed_ms: number;
-  duration_ms: number | null;
-}
-export interface DoctorOptions {
-  home?: string;
-  target?: "host" | "machine" | "sandbox" | "store.integrity" | "store.connection" | "backup.connection";
-  name?: string;
-  timeout?: string;
-  quick?: boolean;
-  write_test?: boolean;
-}
-export interface DoctorReport {
-  ok: boolean;
-  complete?: boolean;
-  checks?: DoctorCheck[];
-  truncated?: boolean;
-  counts?: Record<string, number>;
-  target?: { kind: string; name: string };
-  home?: string;
-  operation?: "diagnose" | "integrity" | "connection";
-  mode?: "full" | "quick" | "observation" | "write-test";
-  observed_at_ms?: number;
-  duration_ms?: number;
-  findings: { severity: string; entity: { kind: string; name: string }; message: string; fix: string | null; leftover?: DoctorLeftover }[];
-  /** The legacy report: each machine walked for leftovers. */
-  leftovers?: { machine: string; complete: boolean; image_locks: number; unmount_markers: number }[];
-}
-/** What an interrupted operation left, on a finding of the legacy report;
- * `doctor.fix(id)` removes it when `fixable`. */
-export interface DoctorLeftover {
-  machine: string;
-  kind: "run-folder" | "empty-root" | "init-copy" | "backup-staging" | "image-tmp" | "image-part";
-  path: string;
-  /** null when the walk's bound ended before it was measured */
-  bytes: number | null;
-  /** seconds since it last changed */
-  age: number;
-  id: string;
-  fixable: boolean;
-  /** a folder copy: ms since the epoch from which `doctor.fix` removes it */
-  not_before?: number;
-}
 
 
 /** Options of `home.get`; an unknown option is refused. */
@@ -320,8 +271,8 @@ export interface FileWriteOptions extends CallOptions {
 
 /** Options of `file.edit`; an unknown option is refused. */
 export interface FileEditOptions extends CallOptions {
-  old_string?: string;
-  new_string?: string;
+  old_string: string;
+  new_string: string;
   replace_all?: boolean;
   expected?: string;
   message?: string;
@@ -568,8 +519,8 @@ export interface StoreDisconnectOptions extends CallOptions {
 
 /** Options of `store.save_auth`; an unknown option is refused. */
 export interface StoreSaveAuthOptions extends CallOptions {
-  user?: string;
-  password?: Content;
+  user: string;
+  password: Content;
 }
 
 /** Options of `store.update`; an unknown option is refused. */
@@ -596,8 +547,8 @@ export interface StoreDoctorOptions extends CallOptions {
 
 /** Options of `backup.connect`; an unknown option is refused. */
 export interface BackupConnectOptions extends CallOptions {
-  access_key?: string;
-  secret_key?: Content;
+  access_key: string;
+  secret_key: Content;
 }
 
 /** Options of `backup.list`; an unknown option is refused. */
@@ -702,7 +653,7 @@ export interface FileFamily {
   /** write a file; one Commit */
   write(project: string, branch: string, path: string, content: Content, options?: FileWriteOptions): Promise<Result>;
   /** replace a text in a file; one Commit */
-  edit(project: string, branch: string, path: string, options?: FileEditOptions): Promise<Result>;
+  edit(project: string, branch: string, path: string, options: FileEditOptions): Promise<Result>;
   /** remove a path; one Commit */
   rm(project: string, branch: string, path: string, options?: FileRmOptions): Promise<Result>;
   /** make a folder and its missing parents; one Commit */
@@ -795,7 +746,7 @@ export interface StoreFamily {
   /** forget a PostgreSQL Store, or one machine's own address; its data stays */
   disconnect(store: string, options?: StoreDisconnectOptions): Promise<Result>;
   /** save a PostgreSQL login in the home; saving again rotates it */
-  save_auth(auth: string, options?: StoreSaveAuthOptions): Promise<Result>;
+  save_auth(auth: string, options: StoreSaveAuthOptions): Promise<Result>;
   /** the saved PostgreSQL logins and the Stores that use each */
   auths(options?: CallOptions): Promise<Result>;
   /** remove a saved PostgreSQL login no Store uses */
@@ -814,7 +765,7 @@ export interface StoreFamily {
 
 export interface BackupFamily {
   /** connect a bucket (r2, or an S3 endpoint) for Store backups */
-  connect(name: string, url: string, options?: BackupConnectOptions): Promise<Result>;
+  connect(name: string, url: string, options: BackupConnectOptions): Promise<Result>;
   /** forget a bucket; its files stay */
   disconnect(bucket: string, options?: CallOptions): Promise<Result>;
   /** the Store files in the connected buckets, with the Store each is linked to */

@@ -240,7 +240,7 @@ impl Service {
             super::detach::take(&mut value.kernel, MountPhase::Stopping)?
         };
         let prior = value.activity;
-        value.activity = Activity::Closing;
+        value.enter(Activity::Closing);
         value.epoch = value.epoch.saturating_add(1);
         Ok(Admitted {
             workspace: value.workspace.clone(),

@@ -198,6 +198,22 @@ fn writes_guard_the_head_and_edit_rm_mkdir_and_apply_take_their_new_options() {
     let (home, folder) = project();
     let made = write(&home, "/a.txt", t("x x x\n"));
     let at = head(&made);
+    // nothing was overwritten: the short form is the Commit alone, and the
+    // long form's count is null, set only beside a cut list (R2 F1)
+    assert_eq!(made, SdkValue::map([("commit", t(&at))]), "{made:?}");
+    let long = ok(
+        &home,
+        "file.write",
+        &[
+            p(),
+            dev(),
+            ("path", t("/d.txt")),
+            ("content", t("d")),
+            detail(),
+        ],
+    );
+    assert_eq!(long.get("overwritten"), Some(&SdkValue::List(Vec::new())));
+    assert_eq!(long.get("overwritten_count"), Some(&SdkValue::Null));
     // a stale `--expected` is refused `Conflict` naming the head
     write(&home, "/b.txt", t("b\n"));
     let stale = refused(
@@ -392,6 +408,12 @@ fn cursors_carry_their_filters_and_the_commit_their_first_page_read() {
         paths
     };
     assert_eq!(grep(&[]), ["/node_modules/x/c.ts", "/src/b.js"]);
+    // a hit's text is its line without the line end (R2 N3)
+    let found = ok(&home, "file.grep", &[p(), dev(), ("pattern", t("login"))]);
+    for row in items(&found) {
+        let text = row.get_text("text").unwrap_or_default();
+        assert!(text.contains("login") && !text.ends_with('\n'), "{row:?}");
+    }
     let folded = grep(&[
         ("ignore_case", SdkValue::Bool(true)),
         ("exclude", t("node_modules")),
@@ -451,6 +473,224 @@ fn cursors_carry_their_filters_and_the_commit_their_first_page_read() {
         ],
     );
     assert_eq!(items(&rest)[0].get_text("change"), Some("added"));
+    std::fs::remove_dir_all(home).unwrap();
+    std::fs::remove_dir_all(folder).unwrap();
+}
+
+/// A list's `_count` companion is set only when the list was cut at 20
+/// (conformance R1 F2): a merge that overwrote nothing answers its Commit
+/// alone, and its long form and `commit.get`'s carry null counts.
+#[test]
+fn a_merge_answers_counts_only_beside_cut_lists() {
+    let (home, folder) = project();
+    ok(
+        &home,
+        "branch.fork",
+        &[p(), ("name", t("agent")), ("from", t("dev"))],
+    );
+    write(&home, "/x.txt", t("x\n"));
+    ok(
+        &home,
+        "file.write",
+        &[
+            p(),
+            ("branch", t("agent")),
+            ("path", t("/y.txt")),
+            ("content", t("y\n")),
+        ],
+    );
+    let merged = ok(&home, "branch.merge", &[p(), dev(), ("from", t("agent"))]);
+    let commit = head(&merged);
+    assert_eq!(
+        merged,
+        SdkValue::map([("commit", t(&commit))]),
+        "{merged:?}"
+    );
+    let again = ok(
+        &home,
+        "branch.merge",
+        &[p(), dev(), ("from", t("agent")), detail()],
+    );
+    assert_eq!(again.get_text("outcome"), Some("unchanged"), "{again:?}");
+    for key in ["overwritten_count", "units_count"] {
+        assert_eq!(again.get(key), Some(&SdkValue::Null), "{key}: {again:?}");
+    }
+    let got = ok(
+        &home,
+        "commit.get",
+        &[p(), ("commit", t(&commit)), detail()],
+    );
+    assert_eq!(
+        got.get("overwritten_count"),
+        Some(&SdkValue::Null),
+        "{got:?}"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+    std::fs::remove_dir_all(folder).unwrap();
+}
+
+/// A taken Branch name (conformance R1 N5) is refused `Exists` in a plain
+/// sentence, with the call again under another name as its `fix`.
+#[test]
+fn a_taken_branch_name_says_so_and_offers_another() {
+    let (home, folder) = project();
+    let taken = refused(&home, "branch.fork", &[p(), ("name", t("dev"))]);
+    assert_eq!(taken.code, "Exists", "{taken:?}");
+    assert_eq!(
+        taken.message, "the name dev is taken by a Branch; choose another name",
+        "{taken:?}"
+    );
+    assert_eq!(fix(&taken), "layerfs branch fork shop/api dev-2");
+    let into = [p(), dev(), ("from", t("main")), ("into", t("dev"))];
+    let taken = refused(&home, "branch.merge", &into);
+    assert_eq!(taken.code, "Exists", "{taken:?}");
+    assert_eq!(
+        fix(&taken),
+        "layerfs branch merge shop/api dev main --into dev-2"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+    std::fs::remove_dir_all(folder).unwrap();
+}
+
+/// `commit.diff --with patch` (conformance R1 F7): every hunk row keeps
+/// `op` and `text` in the short form, a blank line's empty `text` too, and
+/// an added text file answers its lines as `+` hunks.
+#[test]
+fn a_patch_keeps_blank_lines_and_covers_added_files() {
+    let (home, folder) = project();
+    write(&home, "/README.md", t("hello\n\nworld\n"));
+    write(&home, "/n.txt", t("x\ny\n"));
+    let diff = ok(
+        &home,
+        "commit.diff",
+        &[p(), ("ref", t("dev")), ("with", t("patch"))],
+    );
+    let rows = items(&diff);
+    let hunks = |path: &str| {
+        let row = (rows.iter())
+            .find(|row| row.get_text("path") == Some(path))
+            .unwrap_or_else(|| panic!("{path}: {diff:?}"));
+        row.get("hunks").cloned().unwrap_or_default()
+    };
+    let line = |op: &str, text: &str| SdkValue::map([("op", t(op)), ("text", t(text))]);
+    assert_eq!(
+        hunks("/README.md"),
+        // the Store's lines: every `\n` ends one, the rest is the last
+        SdkValue::List(vec![
+            line(" ", "hello"),
+            line(" ", ""),
+            line("+", "world"),
+            line("+", ""),
+        ]),
+        "{diff:?}"
+    );
+    assert_eq!(
+        hunks("/n.txt"),
+        SdkValue::List(vec![line("+", "x"), line("+", "y"), line("+", "")]),
+        "{diff:?}"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+    std::fs::remove_dir_all(folder).unwrap();
+}
+
+/// `file.read`'s short form (conformance R2 F3, F4, F6): `size` only for a
+/// file that is not text; `next_line` only while a line is left, so a cut
+/// last line has none; `file.edit`'s `replaced` always in the long form,
+/// in the short form only past 1.
+#[test]
+fn reads_answer_size_and_next_line_only_when_they_are_news() {
+    let (home, folder) = project();
+    let read = |path: &str, extra: &[(&str, SdkValue)]| {
+        let mut args = vec![p(), dev(), ("path", t(path))];
+        args.extend(extra.iter().cloned());
+        ok(&home, "file.read", &args)
+    };
+    write(&home, "/a.txt", t("one\ntwo\n"));
+    let text = read("/a.txt", &[]);
+    assert_eq!(text.get("size"), None, "{text:?}");
+    assert_eq!(read("/a.txt", &[detail()]).get_int("size"), Some(8));
+    write(&home, "/bin", SdkValue::Bytes(vec![0, 255, 1]));
+    let binary = read("/bin", &[]);
+    assert_eq!(binary.get_int("size"), Some(3), "{binary:?}");
+    // one line longer than a reply: cut, and no line after it
+    let long = "x".repeat(70_000);
+    write(&home, "/long.txt", t(&long));
+    let cut = read("/long.txt", &[]);
+    assert_eq!(
+        cut.get("line_truncated"),
+        Some(&SdkValue::Bool(true)),
+        "{:?}",
+        cut.get("next_line")
+    );
+    assert_eq!(cut.get("next_line"), None);
+    // a cut first line with a second after it: the second is next
+    write(&home, "/two.txt", t(&format!("{long}\nsecond\n")));
+    let first = read("/two.txt", &[]);
+    assert_eq!(
+        first.get_int("next_line"),
+        Some(2),
+        "{:?}",
+        first.get("next_line")
+    );
+    // file.edit: a plain edit replaced one, said only in the long form
+    let edit = |path: &str, extra: &[(&str, SdkValue)]| {
+        let mut args = vec![
+            p(),
+            dev(),
+            ("path", t(path)),
+            ("old_string", t("o")),
+            ("new_string", t("0")),
+        ];
+        args.extend(extra.iter().cloned());
+        ok(&home, "file.edit", &args)
+    };
+    write(&home, "/e.txt", t("one\n"));
+    let plain = edit("/e.txt", &[detail()]);
+    assert_eq!(plain.get_int("replaced"), Some(1), "{plain:?}");
+    write(&home, "/f.txt", t("one\n"));
+    let single = edit("/f.txt", &[("replace_all", SdkValue::Bool(true))]);
+    assert_eq!(single.get("replaced"), None, "{single:?}");
+    write(&home, "/g.txt", t("oo\n"));
+    let both = edit("/g.txt", &[("replace_all", SdkValue::Bool(true))]);
+    assert_eq!(both.get_int("replaced"), Some(2), "{both:?}");
+    std::fs::remove_dir_all(home).unwrap();
+    std::fs::remove_dir_all(folder).unwrap();
+}
+
+/// `--at` names a Commit only (conformance R2 F5): a Branch name or a
+/// prefix shorter than 8 is refused `InvalidInput`, on every read.
+#[test]
+fn at_names_a_commit_never_a_branch() {
+    let (home, folder) = project();
+    let made = write(&home, "/a.txt", t("a\n"));
+    let at = head(&made);
+    for name in ["file.read", "file.stat", "file.list", "file.blame"] {
+        let path = if name == "file.list" { "/" } else { "/a.txt" };
+        let args = |value: &str| vec![p(), dev(), ("path", t(path)), ("at", t(value))];
+        for bad in ["main", "dev", &at[..7]] {
+            let refusal = refused(&home, name, &args(bad));
+            assert_eq!(
+                layerfs_home::outcome::public_code(&refusal.code),
+                "InvalidInput",
+                "{name} --at {bad}: {refusal:?}"
+            );
+        }
+        ok(&home, name, &args(&at[..8]));
+        ok(&home, name, &args(&at));
+    }
+    for name in ["file.glob", "file.grep"] {
+        let pattern = if name == "file.glob" { "*.txt" } else { "a" };
+        let refusal = refused(
+            &home,
+            name,
+            &[p(), dev(), ("pattern", t(pattern)), ("at", t("main"))],
+        );
+        assert_eq!(
+            layerfs_home::outcome::public_code(&refusal.code),
+            "InvalidInput",
+            "{name}: {refusal:?}"
+        );
+    }
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(folder).unwrap();
 }

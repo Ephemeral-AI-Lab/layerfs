@@ -245,10 +245,21 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
         CONNECTION,
         format!("its file is reached on machine {machine}"),
     );
+    // a file of another Store is `store.identity`, and its schema is then
+    // not checked; a file of this Store that does not open is `store.schema`
+    // (conformance R4 F4)
+    if let Some(why) = text("identity_error") {
+        checks.fail(
+            IDENTITY,
+            format!("its file records another Store's id than its record: {why}"),
+        );
+        return;
+    }
     if let Some(why) = text("schema_error") {
+        checks.pass(IDENTITY, "the id in its file is the id in its record");
         checks.fail(
             SCHEMA,
-            format!("its file does not open with this Store's id and the schema this build reads: {why}"),
+            format!("its file does not open with the schema this build reads: {why}"),
         );
         return;
     }
@@ -282,8 +293,8 @@ fn backups(record: &StoreRecord, now: Option<String>, error: Option<String>, che
 }
 
 /// The shallow cut of the sqlite file at `path`, as this process or a
-/// worker makes it: `{ found, compaction, unsupported, schema_error, heads,
-/// heads_error }`, `compaction` the run its `<store>.compact-op` records
+/// worker makes it: `{ found, compaction, unsupported, identity_error,
+/// schema_error, heads, heads_error }`, `compaction` the run its `<store>.compact-op` records
 /// (`report::compact_status`), its heads read only when `heads` and the
 /// schema check passed.
 fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
@@ -298,7 +309,10 @@ fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
         Err(error) if error.code == "Unsupported" => {
             fields.push(("unsupported", SdkValue::Text(error.message)))
         }
-        Err(error) => fields.push(("schema_error", SdkValue::Text(error.message))),
+        Err(error) => match diagnostic::sqlite_identity(path, identity) {
+            Ok(false) => fields.push(("identity_error", SdkValue::Text(error.message))),
+            _ => fields.push(("schema_error", SdkValue::Text(error.message))),
+        },
         Ok(()) if heads => match layerfs_bucket::backup::heads(path) {
             Ok(now) => fields.push((
                 "heads",
@@ -468,7 +482,7 @@ fn fold(record: &StoreRecord, seen: &[Observation], checks: &mut Checks) {
             format!("this computer reaches the server at {host}"),
         ),
         (None, None) => {
-            checks.unknown(CONNECTION, "the connection gave no answer");
+            checks.lost(CONNECTION, "the connection gave no answer");
             return;
         }
     }

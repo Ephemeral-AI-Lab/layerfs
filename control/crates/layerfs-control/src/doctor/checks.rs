@@ -138,15 +138,15 @@ fn sandboxes(scanned: &Scanned, findings: &mut Findings) {
             intent(entity, &op, &fix, findings);
         }
         // a reference that is gone: the Sandbox cannot be used, and its
-        // removal is the one call left (the call surface's example rates it
-        // a warning)
+        // removal is the one call left; an error, as its own doctor's
+        // reference checks say (conformance R4)
         match sandbox.project().and_then(|p| p.split_once('/')) {
-            None => findings.warning(
+            None => findings.error(
                 entity,
                 "its record names no project".to_owned(),
                 fix.clone(),
             ),
-            Some((store, _)) if !scanned.store_names.contains(store) => findings.warning(
+            Some((store, _)) if !scanned.store_names.contains(store) => findings.error(
                 entity,
                 format!("its record names Store {store}, which has no record"),
                 fix.clone(),
@@ -154,7 +154,7 @@ fn sandboxes(scanned: &Scanned, findings: &mut Findings) {
             Some((store, project))
                 if !(scanned.projects).contains(&(store.to_owned(), project.to_owned())) =>
             {
-                findings.warning(
+                findings.error(
                     entity,
                     format!("its record names project {store}/{project}, which has no record"),
                     fix.clone(),
@@ -164,7 +164,7 @@ fn sandboxes(scanned: &Scanned, findings: &mut Findings) {
         }
         let machine = sandbox.machine();
         if !machine.is_empty() && !built_in(machine) && !scanned.machine_names.contains(machine) {
-            findings.warning(
+            findings.error(
                 entity,
                 format!("its record names machine {machine}, which has no record"),
                 fix,

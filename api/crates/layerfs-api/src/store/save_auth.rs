@@ -19,30 +19,24 @@ pub(crate) const CALL: Call = call(
     "save_auth",
     &[a("auth", Name)],
     &[
-        opt("user", Text),
-        opt("password", Content).from_stdin("--password-stdin"),
+        opt("user", Text).required(),
+        opt("password", Content)
+            .from_stdin("--password-stdin")
+            .required(),
     ],
     "save a PostgreSQL login in the home; saving again rotates it",
     run,
 )
 .form(&FORM);
 
-/// Runs `store.save_auth`: `user` and `password` are required.
+/// Runs `store.save_auth`; the table requires `user` and `password`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let auth = args.get_text("auth").unwrap_or("");
-    let user = args
-        .get_text("user")
-        .ok_or_else(|| refused("InvalidInput", "--user is required"))?;
+    let user = args.get_text("user").unwrap_or_default();
     let password = match args.get("password") {
-        Some(SdkValue::Text(text)) => text.clone(),
         Some(SdkValue::Bytes(bytes)) => String::from_utf8(bytes.clone())
             .map_err(|_| refused("InvalidInput", "the password is not UTF-8 text"))?,
-        _ => {
-            return Err(refused(
-                "InvalidInput",
-                "the password is required: give it on stdin with --password-stdin",
-            ))
-        }
+        _ => args.get_text("password").unwrap_or_default().to_owned(),
     };
     layerfs_store::postgresql::login::save(&context.home, auth, user, &password)
 }

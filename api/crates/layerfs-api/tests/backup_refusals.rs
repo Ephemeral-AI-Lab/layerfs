@@ -388,3 +388,28 @@ fn a_second_create_of_a_store_is_busy() {
         .is_some_and(|at| at.ends_with('Z')));
     let _ = std::fs::remove_dir_all(home);
 }
+
+/// A bucket whose record cannot be read (conformance R1 N10) is named in
+/// `not_listed`; it does not fail the listing of the others.
+#[test]
+fn an_unreadable_bucket_record_is_not_listed() {
+    let home = tempdir("unreadable-record");
+    home::open(&home).unwrap();
+    let record = paths::bucket_record(&home, "broken");
+    std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+    std::fs::write(&record, b"{ not json").unwrap();
+    let listed = ok(&home, "backup.list", &[]);
+    let skipped = match listed.get("not_listed") {
+        Some(SdkValue::List(rows)) => rows.clone(),
+        other => panic!("not_listed: {other:?}"),
+    };
+    assert_eq!(skipped.len(), 1, "{listed:?}");
+    assert_eq!(skipped[0].get_text("bucket"), Some("broken"));
+    assert_eq!(skipped[0].get_text("reason"), Some("lost"));
+    let message = skipped[0].get_text("message").unwrap_or_default();
+    assert!(
+        message.starts_with("the record of bucket broken could not be read: "),
+        "{message}"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}

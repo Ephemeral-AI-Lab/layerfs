@@ -94,10 +94,17 @@ export async function collect({ python, cli }) {
 /** A usage line's words as `{ positionals, options, from }`; names in snake_case. */
 function usage(words) {
   const out = { positionals: [], options: [], from: false };
-  // an option is `[--name]` or `[--name <value>]`, a repeated object option `[--name K=V]...`
-  const pattern = /\[<([\w-]+)>\]|<([\w-]+)>|\[--([\w-]+)(?: <([\w-]+)>)?\]|\[--([\w-]+) K=V\]\.\.\./g;
-  for (const [, optionalPositional, positional, single, value, repeated] of words.matchAll(pattern)) {
-    const flag = single ?? repeated;
+  // an option is `[--name]` or `[--name WORD]` (the row's value word, a
+  // default, or `<name>`), a required one the same without brackets, a
+  // repeated object option `[--name K=V]...`; a Commit message shows as
+  // `[-m msg]`; `[--with a,b]` lists the sections, no option
+  const pattern =
+    /\[<([\w-]+)>\]|\[--([\w-]+) K=V\]\.\.\.|\[(--[\w-]+|-m)(?: (<[\w-]+>|[^\s\][<]+))?\]|(?<=\s)(--[\w-]+)(?: (<[\w-]+>|[^\s\][<-][^\s\][]*))?(?=\s|$)|<([\w-]+)>/g;
+  const flagName = (word) => (word === "-m" ? "message" : word?.replace(/^--/, ""));
+  for (const [, optionalPositional, repeated, bracketed, bracketedValue, bare, bareValue, positional] of words.matchAll(pattern)) {
+    const flag = repeated ?? flagName(bracketed ?? bare);
+    const value = (bracketedValue ?? bareValue)?.replace(/^<(.*)>$/, "$1");
+    if (flag === "with") continue;
     const snake = (text) => text.replaceAll("-", "_");
     if (optionalPositional) out.positionals.push({ name: snake(optionalPositional), optional: true });
     else if (positional) out.positionals.push({ name: snake(positional), optional: false });
