@@ -145,11 +145,13 @@ also reads ahead, because each statement costs a round trip:
 | --- | --- | --- | --- |
 | Pack heads and record ranges of payload packs | 256 packs; 1,024 ranges or 512 KiB | `HEAD_PACKS`, `BATCH_RANGES`, `BATCH_BYTES` | [`edges.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/edges.rs) |
 | Metadata packs the walk decodes | the next 128 packs of the wave, each up to 32 KiB (a longer pack is read alone) | `AHEAD_PACKS`, `AHEAD_BYTES` | [`objects.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects.rs), [`read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/read.rs) |
-| Inode values of a leaf | the blocks holding up to 4,096 ordinals past the leaf's own; at most 65,536 values kept | `AHEAD_VALUES`, `HELD_VALUES` | [`objects.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects.rs), [`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
+| Inode values of a leaf | the blocks holding the ordinals the walk does not hold yet and up to 4,096 ordinals past the last of them; at most 262,144 values kept, in two generations | `AHEAD_VALUES`, `HELD_VALUES` | [`values.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/values.rs), [`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
 
-A SQLite Store ignores the pack hint and reads no values ahead. Rows read
-ahead are the rows the single reads return, so the mark's result and its
-`mark_bytes` do not change.
+A SQLite Store ignores the pack hint and reads no block ahead; it returns
+every value of the blocks it does read
+([SQLite: the mark's reads](sqlite.md#the-marks-reads)). Rows read ahead are
+the rows the single reads return, so the mark's result and its `mark_bytes`
+do not change.
 
 ### Generation fence
 

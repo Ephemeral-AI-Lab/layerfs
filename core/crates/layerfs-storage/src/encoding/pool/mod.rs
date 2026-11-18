@@ -6,6 +6,7 @@ pub mod branch;
 pub mod counters;
 pub mod delta;
 pub mod leaf;
+mod memo;
 pub mod read;
 
 pub use counters::PoolReadCounters;

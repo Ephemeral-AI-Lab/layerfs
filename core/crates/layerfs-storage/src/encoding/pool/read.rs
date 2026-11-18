@@ -19,6 +19,7 @@ use layerfs_content::inode_leaf::{
 use layerfs_content::ObjectId;
 
 use crate::encoding::codec::DecompressionWorkspace;
+use crate::encoding::pool::memo::{ChainMemo, Known};
 use crate::encoding::pool::{delta, leaf, PoolReadCounters};
 use crate::encoding::GroupCache;
 use crate::error::{StorageError, StorageResult};
@@ -45,6 +46,9 @@ pub struct PoolReader {
     /// ordinals all have their values in `values`; taken by the leaf's own
     /// reconstruction. At most one window ([`PREPARED_LEAVES`]).
     prepared: BTreeMap<ObjectId, Rebuilt>,
+    /// Chain elements this reader rebuilt and authenticated, when its owner
+    /// asked for them to be kept ([`Self::with_chain_memo`]).
+    pub(super) memo: Option<ChainMemo>,
     pub(super) counters: PoolReadCounters,
 }
 
@@ -52,11 +56,37 @@ pub struct PoolReader {
 /// charged.
 #[derive(Debug)]
 struct Rebuilt {
+    /// The elements this rebuild read, root first.
     chain: Vec<ObjectLocation>,
+    /// The body of every element of `chain`, root last, after the body of
+    /// the known base when the walk stopped at one.
     bodies: Vec<Vec<u8>>,
+    /// Whether `bodies` starts with a base the reader had already rebuilt
+    /// and authenticated, which `chain` does not list.
+    known: bool,
+    /// For every element of `chain`, root last: the chain facts a full walk
+    /// measures down from it.
+    facts: Vec<Facts>,
     root: Option<ObjectId>,
     canonical_work: u64,
     encoded_work: u64,
+}
+
+/// What a full walk measures from one element down to the end of its chain.
+#[derive(Clone, Copy, Debug)]
+struct Facts {
+    depth: u8,
+    canonical: u64,
+    encoded: u64,
+    highest_pack: i64,
+}
+
+impl Rebuilt {
+    /// The bodies this rebuild read itself, base first: those whose
+    /// canonical identity is still to be checked.
+    fn read_bodies(&self) -> &[Vec<u8>] {
+        &self.bodies[usize::from(self.known)..]
+    }
 }
 
 /// Stored values the reader retains at most.
@@ -73,6 +103,18 @@ impl PoolReader {
     /// Empty reader.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// An empty reader that keeps up to `limit` bytes of the chain elements
+    /// it rebuilds and authenticates, so a later chain through one of them
+    /// stops there. For an owner that reads many versions of the same pages
+    /// in one operation; every answer and every refusal is the same with or
+    /// without it.
+    pub fn with_chain_memo(limit: usize) -> Self {
+        Self {
+            memo: Some(ChainMemo::new(limit)),
+            ..Self::default()
+        }
     }
 
     /// Actual work accumulated over this reader's lifetime.
@@ -156,9 +198,13 @@ impl PoolReader {
         root: ObjectLocation,
         mut caches: Option<PooledCaches<'_>>,
     ) -> StorageResult<Rebuilt> {
-        let mut chain: Vec<ObjectLocation> =
-            Vec::with_capacity(usize::from(capacities.metadata_delta_max_depth) + 1);
+        let cap = usize::from(capacities.metadata_delta_max_depth);
+        let mut chain: Vec<ObjectLocation> = Vec::with_capacity(cap + 1);
         let mut current = root;
+        // The base the walk stopped at because this reader already rebuilt
+        // and authenticated it. The root is always read: its canonical bytes
+        // are rebuilt and checked by the caller either way.
+        let mut known: Option<Known> = None;
         loop {
             if current.pack_id > ceiling {
                 return Err(StorageError::VisibilityCeiling {
@@ -168,6 +214,21 @@ impl PoolReader {
             }
             if chain.iter().any(|row| row.object_id == current.object_id) {
                 return Err(StorageError::Integrity("pooled dependency cycle"));
+            }
+            if !chain.is_empty() {
+                let held = self
+                    .memo
+                    .as_mut()
+                    .and_then(|memo| memo.get(&current.object_id, root.role, ceiling));
+                if let Some(held) = held {
+                    // The depth a full walk would have reached, under the
+                    // same cap.
+                    if chain.len() + usize::from(held.depth) > cap {
+                        return Err(StorageError::Integrity("pooled chain depth"));
+                    }
+                    known = Some(held);
+                    break;
+                }
             }
             chain.push(current);
             let record = self.record(connection, workspace, &current, caches.as_mut())?;
@@ -195,7 +256,7 @@ impl PoolReader {
             self.counters.chain_edges = self.counters.chain_edges.saturating_add(1);
             current = location;
         }
-        let mut bodies: Vec<Vec<u8>> = Vec::with_capacity(chain.len());
+        let mut bodies: Vec<Vec<u8>> = Vec::with_capacity(chain.len() + 1);
         // Identity of the element decoded immediately before this one, which is
         // this element's base whenever the record says it has one. The record's
         // own base identity is checked against it, so the edge the walk followed
@@ -203,6 +264,20 @@ impl PoolReader {
         let mut decoded_id: Option<ObjectId> = None;
         let mut canonical_work = 0_u64;
         let mut encoded_work = 0_u64;
+        let mut facts: Vec<Facts> = Vec::with_capacity(chain.len());
+        let mut depth = 0_u8;
+        let mut highest_pack = 0_i64;
+        let stopped = known.is_some();
+        if let Some(held) = known {
+            // A known base brings the work its own chain charged, so the
+            // allowance checks below are those of a full walk.
+            decoded_id = Some(current.object_id);
+            canonical_work = held.canonical;
+            encoded_work = held.encoded;
+            depth = held.depth.saturating_add(1);
+            highest_pack = held.highest_pack;
+            bodies.push(held.bytes);
+        }
         for location in chain.iter().rev() {
             let record = self.record(connection, workspace, location, caches.as_mut())?;
             canonical_work = canonical_work.saturating_add(location.canonical_length as u64);
@@ -235,10 +310,20 @@ impl PoolReader {
             };
             bodies.push(body);
             decoded_id = Some(location.object_id);
+            highest_pack = highest_pack.max(location.pack_id);
+            facts.push(Facts {
+                depth,
+                canonical: canonical_work,
+                encoded: encoded_work,
+                highest_pack,
+            });
+            depth = depth.saturating_add(1);
         }
         Ok(Rebuilt {
             chain,
             bodies,
+            known: stopped,
+            facts,
             root: decoded_id,
             canonical_work,
             encoded_work,
@@ -293,7 +378,7 @@ impl PoolReader {
             });
             let rebuilt =
                 self.rebuild(connection, capacities, ceiling, workspace, *root, caches)?;
-            let ordinals = body_ordinals(&rebuilt.bodies)?;
+            let ordinals = body_ordinals(rebuilt.read_bodies())?;
             let more: Vec<u32> = ordinals.difference(&wanted).copied().collect();
             let size: usize = rebuilt.bodies.iter().map(Vec::len).sum();
             if !self.prepared.is_empty()
@@ -375,26 +460,46 @@ impl PoolReader {
         };
         self.chain_canonical = rebuilt.canonical_work;
         self.chain_encoded = rebuilt.encoded_work;
-        let Rebuilt {
-            chain,
-            mut bodies,
-            root: decoded_id,
-            ..
-        } = rebuilt;
-        // One lookup resolves the ordinals of every body of the chain. Each
-        // element is then rebuilt to canonical bytes and checked against its
-        // own identity, the root last: a valid dependent cannot hide a wrong
-        // base, and a wrong stored value can only fail the read.
-        let ordinals: Vec<u32> = body_ordinals(&bodies)?.into_iter().collect();
+        // One lookup resolves the ordinals of every body this rebuild read.
+        // Each of those elements is then rebuilt to canonical bytes and
+        // checked against its own identity, the root last: a valid dependent
+        // cannot hide a wrong base, and a wrong stored value can only fail
+        // the read. A known base passed the same check when it was kept.
+        let ordinals: Vec<u32> = body_ordinals(rebuilt.read_bodies())?.into_iter().collect();
         let values: BTreeMap<u32, [u8; INODE_VALUE_BYTES]> = ordinals
             .iter()
             .copied()
             .zip(self.stored_values(connection, &ordinals)?)
             .collect();
         let mut canonical = None;
-        for (location, body) in chain.iter().rev().zip(&bodies) {
+        for ((location, body), facts) in rebuilt
+            .chain
+            .iter()
+            .rev()
+            .zip(rebuilt.read_bodies())
+            .zip(&rebuilt.facts)
+        {
             canonical = Some(canonical_from_body(*location, body, &values)?);
+            if let Some(memo) = self.memo.as_mut() {
+                // Authenticated just above, with the chain facts up to here.
+                memo.insert(
+                    location.object_id,
+                    Known {
+                        role: root.role,
+                        bytes: body.clone(),
+                        depth: facts.depth,
+                        canonical: facts.canonical,
+                        encoded: facts.encoded,
+                        highest_pack: facts.highest_pack,
+                    },
+                );
+            }
         }
+        let Rebuilt {
+            mut bodies,
+            root: decoded_id,
+            ..
+        } = rebuilt;
         if decoded_id != Some(root.object_id) {
             return Err(StorageError::Integrity("pooled canonical root"));
         }

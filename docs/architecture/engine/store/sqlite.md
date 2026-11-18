@@ -183,6 +183,44 @@ of the retained packs, so its steps are shaped around that copy.
 | Synchronization | The op record is synchronized at each write, the fresh file before the rename and the directory after it | [`op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/op.rs), [`install.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/install.rs) |
 | Settle | The run lets go of the writer lane after the rename, removes its artifacts, then takes the lane again for the one transaction that clears its admission intent and the `kept_node` rows in the installed Store. A writer has no busy handler, so a settle that wrote beside one would leave it `Busy`; the settle waits its turn instead. The op record is removed last | [`install.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/compact/install.rs) |
 
+### The mark's reads
+
+The mark walks every retained Commit's tree in waves, each in pack order.
+A metadata object reached in the pack being walked (anything but a file
+payload) is read in that same visit instead of waiting for the next wave: a
+Commit's root, inode pages, directory pages, file states and extent pages
+are written into one pack, so a pack is acquired once and not once per tree
+level. File payloads and objects of other packs wait for the next wave,
+where payload record headers are read a pack at a time
+([`objects.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects.rs),
+`ClosureSource::admit`).
+
+The walk also meets many versions of the same pages and leaves. Two things
+it has already read are kept for the length of one mark, so that the cost
+follows the number of objects and not the number of times a later version
+leans on an earlier one:
+
+| Kept | Rule | Bound | Source |
+| --- | --- | --- | --- |
+| Rebuilt chain elements | A page or pooled leaf stored as a delta is rebuilt from its direct base when the walk's reader has already rebuilt and authenticated that base, instead of from its whole chain (up to eight records, programs and identity hashes deep). The kept element carries its chain's depth and charged bytes, so the depth cap and chain budgets refuse what they refused before. A base that has left the memo is read from its own pack again | `CHAIN_MEMO_BYTES` (64 MiB) | [`objects.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects.rs), [`pool/memo.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/memo.rs) |
+| Inode values | A read of `inode_value_block` decodes each block whole to answer one ordinal, so the mark keeps every value of the blocks it read, by runs of consecutive ordinals. A leaf of a later Commit names the ordinals of the values it did not change, and those are answered without a statement | `HELD_VALUES` (262,144 values, about 19 MiB), in two generations | [`values.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/values.rs), [`metadata/values.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/metadata/values.rs) |
+
+None of this changes what the mark keeps or verifies: the closure is the
+same fixpoint in any order, a rebuilt page is still checked against the
+identity its locator states, and a leaf's canonical bytes, values included,
+are still hashed. On a 4.9 GB Store with 4,514 Commits (one sample, macOS)
+the kept values and chain elements took the walk's pooled record reads from
+674,209 to 175,199, its group decompressions from 3.09 GB to 0.43 GB, the
+pack bodies it read to decode metadata from 1.29 GB to 0.40 GB and its
+`inode_value_block` statements from 28,969 to 10,025 for 9,999 blocks.
+Those figures are with a 16 MiB memo and one wave per tree level. Reading
+a pack's metadata in one visit took the walk from eight waves to four and,
+with the memo at 64 MiB, its pack acquisitions from 27,682 to 9,792 and its
+group decompressions to 0.21 GB; in that order a page's base is met less
+soon after it was rebuilt, so the pooled record reads are 209,480. A whole
+mark went from 84,286 statements, 57,001 BLOB handles and 1.46 GB of BLOB
+reads to 19,387, 11,479 and 0.33 GB.
+
 ## Heads
 
 | Function | Returns | Source |

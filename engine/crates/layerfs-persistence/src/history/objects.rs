@@ -46,6 +46,7 @@ mod ids;
 mod impls;
 mod ordinals;
 mod plan;
+mod values;
 
 use ids::{IdMap, IdSet};
 use plan::MarkGroups;
@@ -426,18 +427,23 @@ struct ClosureSource<'a> {
     /// The packs the wave being walked decodes metadata from, ascending, and
     /// how many of them the engine has been told to expect.
     upcoming: std::cell::RefCell<(Vec<i64>, usize)>,
-    /// Inode values the engine returned ahead of need, by ordinal.
-    values: std::cell::RefCell<HashMap<u32, [u8; INODE_VALUE_BYTES]>>,
-    /// Every ordinal the walk asked for ([`ordinals`]).
+    /// Inode values the engine has returned, asked for or not.
+    values: std::cell::RefCell<values::HeldValues>,
+    /// Every ordinal the walk asked for ([`ordinals`]), whether the engine or
+    /// the held values answered it: the rebuild copies only the blocks these
+    /// name.
     ordinals: std::cell::RefCell<ordinals::Ordinals>,
 }
 
 /// Packs announced to the engine at a time ([`ClosureSource::announce`]).
 const AHEAD_PACKS: usize = 128;
-/// Ordinals past a leaf's own that one inode value read may bring along.
-const AHEAD_VALUES: u32 = 4096;
-/// Inode values kept between reads; the map is emptied when it would pass this.
-const HELD_VALUES: usize = 65_536;
+/// Bytes of rebuilt chain elements the walk's reader keeps, so a page stored
+/// as a delta is rebuilt from the base an earlier version already rebuilt
+/// instead of from its whole chain. The base of a page is the version an
+/// earlier Commit wrote, any number of packs back, and a pack's visit keeps
+/// every page of its Commit: a base that has left the memo is read from its
+/// own pack again, chain and all.
+const CHAIN_MEMO_BYTES: usize = 64 * 1024 * 1024;
 
 impl ClosureSource<'_> {
     /// Notes the packs `wave`, which is in locator order, decodes metadata
@@ -469,6 +475,31 @@ impl ClosureSource<'_> {
         self.mechanics
             .expect_scoped_packs(&packs[at..*told])
             .map_err(StorageError::from)
+    }
+
+    /// Queues a newly reached object. An object stored in the pack being
+    /// walked joins `local`, which the walk empties before it leaves the
+    /// pack: a Commit's root, inode pages, directory pages, file states and
+    /// extent pages are written into one pack, so they are read in one visit
+    /// of it and not in one visit per tree level. A file payload always waits
+    /// for the next wave, where payload headers are read a pack at a time; so
+    /// does an object of any other pack.
+    fn admit(
+        &self,
+        id: ObjectId,
+        pack_id: i64,
+        local: &mut Vec<ObjectId>,
+        next: &mut Vec<ObjectId>,
+    ) {
+        let here = self.locations.get(&id).is_some_and(|found| {
+            found.pack_id == pack_id
+                && !matches!(found.role, ObjectRole::WholeFile | ObjectRole::Chunk)
+        });
+        if here {
+            local.push(id)
+        } else {
+            next.push(id)
+        }
     }
 
     /// Keeps the group extents the walk read for `pack_id`.
@@ -577,29 +608,8 @@ impl Source for ClosureSource<'_> {
     }
 
     fn inode_values(&self, ordinals: &[u32]) -> Result<Vec<[u8; INODE_VALUE_BYTES]>, StorageError> {
-        // One keyed map, so a page of many ordinals is not scanned per
-        // ordinal. It also keeps what the engine read ahead: a walk meets
-        // leaves in about the order their values were stored.
         self.ordinals.borrow_mut().extend(ordinals);
-        let mut held = self.values.borrow_mut();
-        if !ordinals.iter().all(|ordinal| held.contains_key(ordinal)) {
-            let mut rows = Vec::new();
-            self.mechanics
-                .inode_values_ahead(ordinals, AHEAD_VALUES, &mut rows)
-                .map_err(StorageError::from)?;
-            if held.len() + rows.len() > HELD_VALUES {
-                held.clear();
-            }
-            held.extend(rows.iter().map(|row| (row.ordinal, row.value)));
-        }
-        ordinals
-            .iter()
-            .map(|ordinal| {
-                held.get(ordinal)
-                    .copied()
-                    .ok_or(StorageError::Integrity("mark inode value"))
-            })
-            .collect()
+        self.values.borrow_mut().values(self.mechanics, ordinals)
     }
 
     fn signatures(&self) -> Result<Vec<SignatureRow>, StorageError> {
@@ -621,8 +631,10 @@ impl Source for ClosureSource<'_> {
 /// The walk is metadata-only: a role that names no other object
 /// ([`ObjectRole::has_references`]) costs one record header read, not a payload
 /// decode, and each wave is processed in locator order so one pack body answers
-/// every object of its group. Reference-bearing metadata pages are still
-/// authenticated and decoded, but identity is not hashed a second time.
+/// every object of its group. A metadata object reached in the pack being
+/// walked is read in that same visit ([`ClosureSource::admit`]).
+/// Reference-bearing metadata pages are still authenticated and decoded, but
+/// identity is not hashed a second time.
 fn walk(
     source: &ClosureSource<'_>,
     capacities: &StorageCapacities,
@@ -631,7 +643,7 @@ fn walk(
     visit: Option<&crate::backend::sqlite::compact_visit::VisitSink>,
 ) -> HistoryResult<Closure> {
     let mut packs = PackCache::new();
-    let mut pool = PoolReader::new();
+    let mut pool = PoolReader::with_chain_memo(CHAIN_MEMO_BYTES);
     let mut groups = GroupCache::new();
     let mut workspace = DecompressionWorkspace::new().map_err(storage)?;
     let mut counters = ChainCounters::default();
@@ -661,77 +673,82 @@ fn walk(
         // at a time, and leave the payload unread.
         let mut headers = edges::wave_edges(source, &frontier)?;
         let mut next = Vec::new();
+        // Objects admitted while their pack is being walked: see `admit`.
+        let mut local = Vec::new();
         for id in std::mem::take(&mut frontier) {
-            let location = source
-                .location(id, i64::MAX)
-                .map_err(storage)?
-                .ok_or(HistoryError::Integrity("mark object locator"))?;
-            let role = location.role;
-            let references = if role.has_references() {
-                let canonical = {
-                    let mut resolver = Resolver::new(
+            local.push(id);
+            while let Some(id) = local.pop() {
+                let location = source
+                    .location(id, i64::MAX)
+                    .map_err(storage)?
+                    .ok_or(HistoryError::Integrity("mark object locator"))?;
+                let role = location.role;
+                let references = if role.has_references() {
+                    let canonical = {
+                        let mut resolver = Resolver::new(
+                            source,
+                            i64::MAX,
+                            capacities,
+                            BodyCaches {
+                                packs: &mut packs,
+                                pool: &mut pool,
+                            },
+                            &mut groups,
+                            &mut workspace,
+                            &mut counters,
+                        );
+                        resolver.resolve_at(location).map_err(storage)?.0
+                    };
+                    let scope = if role == ObjectRole::FilesystemRoot {
+                        FilesystemRoot::decode(&canonical)
+                            .map_err(|_| HistoryError::Integrity("mark root scope"))?
+                            .scope()
+                    } else {
+                        // No other admitted role reads the scope; the leaf encoders
+                        // that derive references ignore it.
+                        unscoped
+                    };
+                    decode_references(role, &canonical, construction, scope)
+                        .map_err(|_| HistoryError::Integrity("mark object references"))?
+                } else {
+                    Vec::new()
+                };
+                for reference in references {
+                    closure.logical.insert(reference);
+                    if queued.insert(reference) {
+                        source.admit(reference, location.pack_id, &mut local, &mut next);
+                    }
+                }
+                // The base identity lives in the record header. An encoded group
+                // has no header to read on its own, so its edge borrows the group.
+                let edge = match headers.remove(&id) {
+                    Some(edge) => edge,
+                    // The walk's own decoded-group cache: a compressed group is
+                    // decompressed once, not once more for each record's edge.
+                    None => stored_edge(
                         source,
-                        i64::MAX,
-                        capacities,
-                        BodyCaches {
-                            packs: &mut packs,
-                            pool: &mut pool,
-                        },
+                        &mut packs,
                         &mut groups,
                         &mut workspace,
-                        &mut counters,
-                    );
-                    resolver.resolve_at(location).map_err(storage)?.0
+                        &mut edge_decodes,
+                        &location,
+                    )
+                    .map_err(storage)?,
                 };
-                let scope = if role == ObjectRole::FilesystemRoot {
-                    FilesystemRoot::decode(&canonical)
-                        .map_err(|_| HistoryError::Integrity("mark root scope"))?
-                        .scope()
-                } else {
-                    // No other admitted role reads the scope; the leaf encoders
-                    // that derive references ignore it.
-                    unscoped
-                };
-                decode_references(role, &canonical, construction, scope)
-                    .map_err(|_| HistoryError::Integrity("mark object references"))?
-            } else {
-                Vec::new()
-            };
-            for reference in references {
-                closure.logical.insert(reference);
-                if queued.insert(reference) {
-                    next.push(reference);
+                closure.widths.insert(id, edge.width);
+                if let Some(base) = edge.base {
+                    closure.bases.insert(base);
+                    if queued.insert(base) {
+                        source.admit(base, location.pack_id, &mut local, &mut next);
+                    }
                 }
-            }
-            // The base identity lives in the record header. An encoded group
-            // has no header to read on its own, so its edge borrows the group.
-            let edge = match headers.remove(&id) {
-                Some(edge) => edge,
-                // The walk's own decoded-group cache: a compressed group is
-                // decompressed once, not once more for each record's edge.
-                None => stored_edge(
-                    source,
-                    &mut packs,
-                    &mut groups,
-                    &mut workspace,
-                    &mut edge_decodes,
-                    &location,
-                )
-                .map_err(storage)?,
-            };
-            closure.widths.insert(id, edge.width);
-            if let Some(base) = edge.base {
-                closure.bases.insert(base);
-                if queued.insert(base) {
-                    next.push(base);
+                if let Some(visit) = visit {
+                    // The sink keeps the row; it writes the scratch only once
+                    // the run is known to rebuild.
+                    visit.visit(id, location.pack_id)?;
                 }
+                closure.visited.insert(id, location);
             }
-            if let Some(visit) = visit {
-                // The sink keeps the row; it writes the scratch only once the
-                // run is known to rebuild.
-                visit.visit(id, location.pack_id)?;
-            }
-            closure.visited.insert(id, location);
         }
         frontier = next;
     }
