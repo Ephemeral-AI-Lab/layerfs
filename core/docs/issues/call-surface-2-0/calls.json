@@ -1,6 +1,6 @@
 {
- "version": 18,
- "frozen": "2026-11-18",
+ "version": 19,
+ "frozen": "2026-11-19",
  "base": "caff58a43b",
  "states": [
   "ready",
@@ -43,7 +43,8 @@
      "failed",
      "unresolved",
      "lost",
-     "unsupported"
+     "unsupported",
+     "partial"
     ],
     "is": "why it is broken, as a code; the sentence is the long form's message"
    },
@@ -257,7 +258,7 @@
     },
     {
      "check": "store.operation",
-     "what": "no operation on it is half-finished or left with its outcome not known, and no lease is stale",
+     "what": "no operation on it is half-finished or left with its outcome not known, in the home's record or, for a sqlite Store, beside its file on its machine; and no lease is stale",
      "full_only": false
     },
     {
@@ -585,7 +586,8 @@
    "failed",
    "unresolved",
    "lost",
-   "unsupported"
+   "unsupported",
+   "partial"
   ],
   "counts": [
    "ok",
@@ -2799,7 +2801,7 @@
        "{\"ok\":true}",
        "with --mount agent: {\"workspace\":\"tests:agent\",\"path\":\"/workspaces/1\"}"
       ],
-      "long": "{\"ok\":true,\"workspace\":\"tests:agent\",\"path\":\"/workspaces/1\",\"outcome\":\"created\",\"sandbox\":\"tests\",\"project\":\"shop/api\",\"machine\":\"dev\",\"platform\":\"lima\",\"image\":\"node:22\",\"backend\":\"namespaces\",\"route\":\"fuse\",\"state\":\"ready\",\"created_at\":\"2026-11-18T09:16:59Z\",\"forward_failed\":null}"
+      "long": "{\"ok\":true,\"workspace\":\"tests:agent\",\"path\":\"/workspaces/1\",\"outcome\":\"created\",\"sandbox\":\"tests\",\"project\":\"shop/api\",\"machine\":\"dev\",\"platform\":\"lima\",\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"backend\":\"namespaces\",\"route\":\"fuse\",\"state\":\"ready\",\"created_at\":\"2026-11-18T09:16:59Z\",\"forward_failed\":null}"
      },
      "dropped": [
       {
@@ -2808,7 +2810,7 @@
        "why": "anything optional is an option"
       }
      ],
-     "new_work": "`--mount` is new: today create and mount are two calls. One call must start the Sandbox, record it, then run the mount; a refused mount must leave the Sandbox recorded and ready and answer a refusal that carries `sandbox` and a `fix` (`layerfs workspace mount <sandbox> <branch>`). The mount's default name (the Branch's name made valid) is new work of `workspace.mount`; this call takes no name option. `ok` is true in every long answer; `workspace` and `path` are null there without `--mount`. The default machine is today's: the sqlite Store's machine, else `native`. The record's `runtime` (the same word as `backend`) and `id` leave the answer; `created` (milliseconds) becomes `created_at`.",
+     "new_work": "`--mount` is new: today create and mount are two calls. One call must start the Sandbox, record it, then run the mount; a refused mount must leave the Sandbox recorded and ready and answer a refusal that carries `sandbox` and a `fix` (`layerfs workspace mount <sandbox> <branch>`). The mount's default name (the Branch's name made valid) is new work of `workspace.mount`; this call takes no name option. `ok` is true in every long answer; `workspace` and `path` are null there without `--mount`. The default machine is today's: the sqlite Store's machine, else `native`. The record's `runtime` (the same word as `backend`) and `id` leave the answer; `created` (milliseconds) becomes `created_at`. v19: the image copy's lock is held until the Sandbox is built on the image (today it is let go when the copy ends, and a `machine prune --unused` in between removes the image just copied); the `lock` phase and the load-image refusal shapes are as `machine load-image`'s.",
      "refusals": [
       {
        "error": "the mount's own code (NotFound, Exists, Capacity, InvalidInput, Unavailable, ...)",
@@ -2816,6 +2818,13 @@
        "adds": [
         "sandbox",
         "fix"
+       ]
+      },
+      {
+       "error": "every code machine load-image refuses (Capacity, Unsupported, InvalidInput, Unavailable, InUse, Failed)",
+       "when": "the --image copy is refused; nothing is started",
+       "adds": [
+        "as machine load-image"
        ]
       }
      ],
@@ -5991,12 +6000,13 @@
      "examples": {
       "short": [
        "{\"items\":[{\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344},{\"leftover\":\"dev:init_copy:shop-9a1f\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":524288000,\"report_only\":true}]}",
-       "a machine was not walked: {\"items\":[{\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344}],\"not_listed\":[{\"machine\":\"docker\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"},\"message\":\"machine docker is stopped\"}]}"
+       "a machine was not walked: {\"items\":[{\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344}],\"not_listed\":[{\"machine\":\"docker\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"},\"message\":\"machine docker is stopped\"}]}",
+       "Docker is not running: {\"items\":[{\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344}],\"not_listed\":[{\"machine\":\"native\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"engine_down\"},\"message\":\"Docker does not answer; its export containers were not listed\"}]}"
       ],
       "long": "{\"items\":[{\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344,\"report_only\":false,\"removable_at\":null,\"kind\":\"run_folder\",\"machine\":\"native\",\"path\":\"/Users/me/.layerfs/machine/native/run/tests-5f0c7a1e\"}],\"not_listed\":[],\"observed_at\":\"2026-11-18T09:16:59Z\"}"
      },
      "dropped": [],
-     "new_work": "The call is new; the walk is not. Today the list is part of the shell's `layerfs doctor` report (`findings[].leftover` and a `leftovers` row per machine): one bounded walk on `native` and one through each running machine's worker, with stopped and unanswering machines passed over in silence. New: a table call with `--machine`, and `not_listed` for a machine that was passed over or whose walk was cut (`complete: false` today). The kinds are snake_case, in `kind` and inside the id (`run-folder` and the rest have hyphens today). Renames per entry: `id` to `leftover`, `bytes` to `size`, `age` (seconds) to `modified_at`, `fixable: false` to `report_only: true`, `not_before` (milliseconds) to `removable_at`. The per-machine counts of image locks and unmount markers leave the answer.",
+     "new_work": "The call is new; the walk is not. Today the list is part of the shell's `layerfs doctor` report (`findings[].leftover` and a `leftovers` row per machine): one bounded walk on `native` and one through each running machine's worker, with stopped and unanswering machines passed over in silence. New: a table call with `--machine`, and `not_listed` for a machine that was passed over or whose walk was cut (`complete: false` today). The kinds are snake_case, in `kind` and inside the id (`run-folder` and the rest have hyphens today). Renames per entry: `id` to `leftover`, `bytes` to `size`, `age` (seconds) to `modified_at`, `fixable: false` to `report_only: true`, `not_before` (milliseconds) to `removable_at`. The per-machine counts of image locks and unmount markers leave the answer. v19: the kind `export_container` is new (today a killed copy's export container is reclaimed only by the next load of the same image, or by a manual `docker rm`); `image_part` leaves the kinds (`machine images` and `machine prune` own parts, under the copy's lock).",
      "nested": {
       "not_listed": {
        "short": {
@@ -6023,7 +6033,7 @@
       "init_copy",
       "backup_staging",
       "image_tmp",
-      "image_part"
+      "export_container"
      ]
     },
     {
@@ -6078,7 +6088,7 @@
        "why": "a thing goes by its own word"
       }
      ],
-     "new_work": "No new capability: the call moves from the `doctor` family. `bytes` becomes `freed_bytes`, `id` becomes `leftover`, `removed: true` becomes `outcome: removed`. The id carries the snake_case kind (`native:run_folder:...`)."
+     "new_work": "No new capability: the call moves from the `doctor` family. `bytes` becomes `freed_bytes`, `id` becomes `leftover`, `removed: true` becomes `outcome: removed`. The id carries the snake_case kind (`native:run_folder:...`). v19: removing an `export_container` (`docker rm -v` under the image's copy lock) is new; `image_part` is no longer a leftover (it was removed by its age, without the copy's lock)."
     }
    ]
   },
@@ -6318,7 +6328,7 @@
         "reason",
         "message"
        ],
-       "help": "reads the host's Docker. images: the host's Docker images the machine does not hold, each {image, refs, size, os, architecture, usable, needed_bytes, fits, unusable: {kind, value}} (kind is os or arch); reason and message say why Docker did not answer, and images is then empty"
+       "help": "reads the host's Docker. images: the host's Docker images the machine does not hold ready (a partial one is offered again), each {image, refs, size, os, architecture, usable, needed_bytes, fits, unusable: {kind, value}} (kind is os or arch); reason and message say why Docker did not answer, and images is then empty"
       }
      },
      "paging": null,
@@ -6346,7 +6356,11 @@
        "sometimes": [
         "refs",
         "size",
-        "default"
+        "default",
+        "state",
+        "op",
+        "reason",
+        "fix"
        ]
       },
       "long": [
@@ -6354,6 +6368,12 @@
        "refs",
        "size",
        "default",
+       "state",
+       "op",
+       "reason",
+       "fix",
+       "message",
+       "staged_bytes",
        "architecture",
        "source",
        "sandboxes",
@@ -6363,9 +6383,11 @@
      },
      "examples": {
       "short": [
-       "{\"items\":[{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"refs\":[\"node:22\"],\"size\":412000000,\"default\":true},{\"image\":\"sha256:7777777777777777777777777777777777777777777777777777777777777777\",\"refs\":[\"postgres:17-bookworm\"],\"size\":455000000}]}"
+       "{\"items\":[{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"refs\":[\"node:22\"],\"size\":412000000,\"default\":true},{\"image\":\"sha256:7777777777777777777777777777777777777777777777777777777777777777\",\"refs\":[\"postgres:17-bookworm\"],\"size\":455000000}]}",
+       "a copy is running: {\"items\":[{\"image\":\"sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"state\":\"busy\",\"op\":{\"name\":\"load_image\",\"phase\":\"send\",\"started_at\":\"2026-11-18T09:16:59Z\"}}]}",
+       "a copy stopped partway: {\"items\":[{\"image\":\"sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"state\":\"broken\",\"reason\":\"partial\",\"fix\":\"layerfs machine load-image dev sha256:8888888888888888888888888888888888888888888888888888888888888888\"}]}"
       ],
-      "long": "{\"items\":[{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"refs\":[\"node:22\"],\"size\":412000000,\"default\":true,\"architecture\":\"arm64\",\"source\":\"imported\",\"sandboxes\":[\"tests\"],\"sandboxes_count\":1,\"last_used_at\":\"2026-11-18T09:15:59Z\"}],\"machine\":\"dev\",\"mode\":\"images\",\"architecture\":\"arm64\",\"disk_free_bytes\":52613349376}"
+      "long": "{\"items\":[{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"refs\":[\"node:22\"],\"size\":412000000,\"default\":true,\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"message\":null,\"staged_bytes\":null,\"architecture\":\"arm64\",\"source\":\"imported\",\"sandboxes\":[\"tests\"],\"sandboxes_count\":1,\"last_used_at\":\"2026-11-18T09:15:59Z\"},{\"image\":\"sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"refs\":[],\"size\":null,\"default\":false,\"state\":\"broken\",\"op\":null,\"reason\":\"partial\",\"fix\":\"layerfs machine load-image dev sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"message\":\"a copy of this image stopped after 104857600 bytes; load-image resumes it\",\"staged_bytes\":104857600,\"architecture\":null,\"source\":\"imported\",\"sandboxes\":[],\"sandboxes_count\":0,\"last_used_at\":null}],\"machine\":\"dev\",\"mode\":\"images\",\"architecture\":\"arm64\",\"disk_free_bytes\":52613349376}"
      },
      "dropped": [
       {
@@ -6374,7 +6396,15 @@
        "why": "an existing thing is named by its own word, never `name`"
       }
      ],
-     "new_work": "`sandboxes` as names is new: today the row answers how many Sandbox records name the image; the same read gives their names. Reading the host's Docker only on request is new: today every call reads it."
+     "new_work": "`sandboxes` as names is new: today the row answers how many Sandbox records name the image; the same read gives their names. Reading the host's Docker only on request is new: today every call reads it. Item states are new in v19: today a part a copy holds, a part left partway and a stranded unpack are rows with `source` `staged` or `stranded` and the flags `staged`, `stranded`, `resumable` and `age`; they become `busy` (op `load_image`) and `broken` (reason `partial`) on the item, with `message` and `staged_bytes`, one item per image, and `--with docker` counts only `ready` items as held. `staged`, `stranded`, `resumable`, `age`, `variant` and the image's `Env` stay out of the answer.",
+     "states": {
+      "reasons": [
+       "partial"
+      ],
+      "ops": [
+       "load_image"
+      ]
+     }
     },
     {
      "call": "machine.load_image",
@@ -6406,24 +6436,29 @@
        "image"
       ],
       "sometimes": [
-       "reused"
+       "reused",
+       "dropped"
       ]
      },
      "long": [
       "image",
       "reused",
+      "dropped",
       "outcome",
       "machine",
       "refs",
-      "size"
+      "size",
+      "dropped_count",
+      "expanded_bytes"
      ],
      "item": null,
      "examples": {
       "short": [
        "{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\"}",
-       "already there: {\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"reused\":true}"
+       "already there: {\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"reused\":true}",
+       "a FIFO left out: {\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"dropped\":[\"run/initctl\"]}"
       ],
-      "long": "{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"reused\":false,\"outcome\":\"loaded\",\"machine\":\"dev\",\"refs\":[\"node:22\"],\"size\":412000000}"
+      "long": "{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"reused\":false,\"dropped\":[\"run/initctl\"],\"outcome\":\"loaded\",\"machine\":\"dev\",\"refs\":[\"node:22\"],\"size\":412000000,\"dropped_count\":null,\"expanded_bytes\":0}"
      },
      "dropped": [
       {
@@ -6432,7 +6467,58 @@
        "why": "an existing thing is named by its own word, never `name`"
       }
      ],
-     "new_work": null
+     "new_work": "v19: `dropped` (the FIFO and device paths, first 20, with `dropped_count`) and `expanded_bytes` come from the copy's tar filter report, which today's answer carries as `dropped {fifos, devices, init}` and `sparse`; init files leave the answer. The `lock` phase is `{phase: lock}` without today's `waiting` and `holder` (a pid). `Capacity` carries the prune fix and `{needed_bytes, free_bytes, path}` (today `{needed, free, where}`); `Unsupported` carries `{architecture}` or `{os}` (today `{reason, value}`); an ambiguous reference carries `{images}` (today `{reason, ref, ids}`); a staged part that does not match and a frame out of order are `Failed` (today `InvalidInput`). A reused image's `size` is the tar bytes its sidecar records, never Docker's own size.",
+     "refusals": [
+      {
+       "error": "Capacity",
+       "when": "the machine has no room for the image (checked before the first effect)",
+       "adds": [
+        "fix"
+       ],
+       "fix": "layerfs machine prune <m> --unused",
+       "detail": [
+        "needed_bytes",
+        "free_bytes",
+        "path"
+       ]
+      },
+      {
+       "error": "Unsupported",
+       "when": "the image is for another architecture or OS; macOS native runs no image",
+       "adds": [],
+       "detail": [
+        "architecture | os"
+       ]
+      },
+      {
+       "error": "InvalidInput",
+       "when": "a reference more than one held image claims (detail `images`), or Docker has no such image",
+       "adds": [],
+       "detail": [
+        "images"
+       ]
+      },
+      {
+       "error": "Unavailable",
+       "when": "Docker or the machine's worker cannot be reached",
+       "adds": [],
+       "detail": [
+        "what"
+       ]
+      },
+      {
+       "error": "InUse",
+       "when": "a stranded unpack of the image is in use",
+       "adds": [],
+       "detail": []
+      },
+      {
+       "error": "Failed",
+       "when": "the export failed or changed while it was sent, a staged part does not match what was sent, or a frame arrived out of order (the last two were InvalidInput)",
+       "adds": [],
+       "detail": []
+      }
+     ]
     },
     {
      "call": "machine.prune",
@@ -6470,22 +6556,27 @@
       "always": [
        "freed_bytes"
       ],
-      "sometimes": []
+      "sometimes": [
+       "skipped"
+      ]
      },
      "long": [
       "freed_bytes",
+      "skipped",
       "outcome",
       "machine",
       "removed",
-      "removed_count"
+      "removed_count",
+      "skipped_count"
      ],
      "item": null,
      "examples": {
       "short": [
        "{\"freed_bytes\":2147483648}",
-       "nothing to remove: {\"freed_bytes\":0}"
+       "nothing to remove: {\"freed_bytes\":0}",
+       "a copy lock could not be checked: {\"freed_bytes\":0,\"skipped\":[{\"image\":\"sha256:7777777777777777777777777777777777777777777777777777777777777777\",\"message\":\"its copy lock cannot be read: Permission denied\"}]}"
       ],
-      "long": "{\"freed_bytes\":2147483648,\"outcome\":\"pruned\",\"machine\":\"dev\",\"removed\":[\"sha256:7777777777777777777777777777777777777777777777777777777777777777\"],\"removed_count\":1}"
+      "long": "{\"freed_bytes\":2147483648,\"skipped\":[],\"outcome\":\"pruned\",\"machine\":\"dev\",\"removed\":[\"sha256:7777777777777777777777777777777777777777777777777777777777777777\"],\"removed_count\":1,\"skipped_count\":null}"
      },
      "dropped": [
       {
@@ -6494,7 +6585,46 @@
        "why": "an existing thing is named by its own word, never `name`"
       }
      ],
-     "new_work": null
+     "new_work": "v19: `skipped` and `skipped_count` reach the answer (today the worker's `skipped` rows, `{id, reason}`, are dropped). A named image a live copy holds is `Busy` with the copy's `op` (today `InUse` with `count`); one a Sandbox uses carries `{sandbox_count}` (today `count`). A part no copy holds is removed even when a Sandbox uses its image (today it is kept with the image).",
+     "nested": {
+      "skipped": {
+       "short": {
+        "always": [
+         "image",
+         "message"
+        ],
+        "sometimes": []
+       },
+       "long": [
+        "image",
+        "message"
+       ]
+      }
+     },
+     "refusals": [
+      {
+       "error": "Busy",
+       "when": "the named image is held by a live copy (a machine load-image or sandbox create --image)",
+       "adds": [
+        "op"
+       ],
+       "detail": []
+      },
+      {
+       "error": "InUse",
+       "when": "a Sandbox uses the named image",
+       "adds": [],
+       "detail": [
+        "sandbox_count"
+       ]
+      },
+      {
+       "error": "Failed",
+       "when": "the named image's copy lock cannot be checked",
+       "adds": [],
+       "detail": []
+      }
+     ]
     },
     {
      "call": "machine.stats",
@@ -7029,7 +7159,7 @@
        "why": "an existing thing is named by its own word, never `name`"
       }
      ],
-     "new_work": "Progress events on a remove are new: today's call takes no on_progress. Removing the machine's own PostgreSQL addresses is new: today the remove deletes only the machine's folder, so a PostgreSQL Store's record keeps the removed machine's address (`machines.<machine>`), which nothing then uses or cleans."
+     "new_work": "Progress events on a remove are new: today's call takes no on_progress. Removing the machine's own PostgreSQL addresses is new: today the remove deletes only the machine's folder, so a PostgreSQL Store's record keeps the removed machine's address (`machines.<machine>`), which nothing then uses or cleans. Deleting the home's image copy locks of the machine (`run/image-lock/<machine>/`) is new (v19): today they stay after the machine is gone."
     },
     {
      "call": "machine.update",
@@ -7164,7 +7294,7 @@
       "long": "{\"ok\":false,\"findings\":[{\"machine\":\"demo-build\",\"check\":\"machine.worker.compatibility\",\"severity\":\"error\",\"message\":\"worker is from another build; 1 Sandbox is on it\",\"fix\":\"layerfs machine stop demo-build --force && layerfs machine start demo-build\",\"from\":null,\"evidence\":{\"protocol\":3}}],\"not_checked\":[{\"store\":\"demo-build-cache\",\"check\":null,\"blocked_by\":{\"machine\":\"demo-build\",\"reason\":\"outdated\"},\"reason\":null},{\"sandbox\":\"build-1\",\"check\":null,\"blocked_by\":{\"machine\":\"demo-build\",\"reason\":\"outdated\"},\"reason\":null}],\"status\":\"error\",\"counts\":{\"ok\":0,\"notice\":0,\"warning\":0,\"error\":1,\"not_checked\":2},\"observed_at\":\"2026-11-18T09:16:59Z\",\"tree\":{\"machine\":\"demo-build\",\"status\":\"error\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"machine.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.operation\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.configuration\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.provider\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.state\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.worker.endpoint\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.worker.auth\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.worker.compatibility\",\"outcome\":\"error\",\"from\":null}],\"blocked_by\":null,\"reason\":null,\"stores\":[{\"store\":\"demo-build-cache\",\"status\":\"not_checked\",\"coverage\":\"none\",\"checks\":[],\"blocked_by\":{\"machine\":\"demo-build\",\"reason\":\"outdated\"},\"reason\":null}],\"sandboxes\":[{\"sandbox\":\"build-1\",\"status\":\"not_checked\",\"coverage\":\"none\",\"checks\":[],\"blocked_by\":{\"machine\":\"demo-build\",\"reason\":\"outdated\"},\"reason\":null}]}}"
      },
      "dropped": [],
-     "new_work": "The call is new on the table; its own checks exist as today's `layerfs doctor machine <machine>`. New: the shallow check of each Store and Sandbox on the machine in the same call (today one call is one target), the one answer shape (findings, not_checked, tree) in place of today's per-check report with pass, fail, unknown, skipped and blocked, a time budget per thing in place of one --timeout for the call, and one progress event per finished thing: {phase: self|stores|sandboxes, done, total, node}. The shallow Store check is new work (C14; see store.doctor). The `--force` form of the outdated fix, with the Sandbox count in the message, is new.",
+     "new_work": "The call is new on the table; its own checks exist as today's `layerfs doctor machine <machine>`. New: the shallow check of each Store and Sandbox on the machine in the same call (today one call is one target), the one answer shape (findings, not_checked, tree) in place of today's per-check report with pass, fail, unknown, skipped and blocked, a time budget per thing in place of one --timeout for the call, and one progress event per finished thing: {phase: self|stores|sandboxes, done, total, node}. The shallow Store check is new work (C14; see store.doctor). The `--force` form of the outdated fix, with the Sandbox count in the message, is new. `reclaimable_image_bytes` in `machine.capacity`'s evidence, read from the machine's image listing, is new (v19); no new check id.",
      "off_table": [
       {
        "today": "layerfs doctor machine <machine>",
@@ -7461,7 +7591,7 @@
        "why": "whether one machine reaches a Store is a check, and the doctor makes it"
       }
      ],
-     "new_work": "Records-only state with the six states is new: today store.get answers no state and store.status always reads the leases, the file or the server. So that every client sees `busy`, store.compact, backup.create and backup.restore must record an `op` in the Store's record; today only a move and a remove do (a compaction keeps its own record beside the Store, backup.create holds a file lock). `live.behind` is new: it reads the Store's heads where it lives, through its worker on a machine (today backup.list compares them on native only). `attempt` on a backup row is new: today a link is written only after a transfer succeeds. `auth` and `connections` are new (see store.save_auth, store.connect). The reason codes `missing` and `unreachable` replace today's `down_reason` sentence. A live read writing the record when the state word or reason changes, and the observation file for `observed_at`, are new (today a read writes nothing). Clearing an uncertain operation: a move by the same move or `store remove`, a remove by `store remove`, and a compaction by the next `store compact` all exist today (store.status names the clearing call). A backup and a restore record no `op` today, so nothing needs clearing; once they record one, `store get --with live` settling an uncertain backup or restore whose owner is gone is new work: a backup changes nothing in the Store and a restore installs by one rename, so the read sees which file is there, drops the `op` and writes what was tried to the link's `attempt`.",
+     "new_work": "Records-only state with the six states is new: today store.get answers no state and store.status always reads the leases, the file or the server. So that every client sees `busy`, store.compact, backup.create and backup.restore must record an `op` in the Store's record; today only a move and a remove do (a compaction keeps its own record beside the Store, backup.create holds a file lock). `live.behind` is new: it reads the Store's heads where it lives, through its worker on a machine (today backup.list compares them on native only). `attempt` on a backup row is new: today a link is written only after a transfer succeeds. `auth` and `connections` are new (see store.save_auth, store.connect). The reason codes `missing` and `unreachable` replace today's `down_reason` sentence. A live read writing the record when the state word or reason changes, and the observation file for `observed_at`, are new (today a read writes nothing). Clearing an uncertain operation: a move by the same move or `store remove`, a remove by `store remove`, and a compaction by the next `store compact` all exist today (store.status names the clearing call). A backup and a restore record no `op` today, so nothing needs clearing; once they record one, `store get --with live` settling an uncertain backup or restore whose owner is gone is new work: a backup changes nothing in the Store and a restore installs by one rename, so the read sees which file is there, drops the `op` and writes what was tried to the link's `attempt`. v19: a live read lets a compaction live on the Store's machine win over this home's `unresolved` record of it (after a lost reply), and answers `blocked` before any read while the machine is stopped.",
      "states": {
       "reasons": [
        "unresolved",
@@ -8065,7 +8195,64 @@
        "why": "an existing thing is named by its own word, never `name`"
       }
      ],
-     "new_work": null
+     "new_work": "v19: the worker route (#739) compacts a sqlite Store on another machine in that machine's worker, with the same phases and the Store's `op` written in the caller's home. The refusal `fix` lines, the `op` on a `Busy` from a live run, and the worker's message naming that machine (today \"in this process\") are new.",
+     "refusals": [
+      {
+       "error": "Unavailable",
+       "when": "the Store's machine is stopped, records no worker, or its worker does not answer",
+       "adds": [
+        "fix"
+       ],
+       "fix": "layerfs machine start M",
+       "state": "blocked, blocked_by {machine, reason}"
+      },
+      {
+       "error": "Unavailable",
+       "when": "the machine's worker is of another build",
+       "adds": [
+        "fix"
+       ],
+       "fix": "layerfs machine stop M && layerfs machine start M (--force on the stop when Sandboxes are on it)",
+       "state": "blocked, reason outdated"
+      },
+      {
+       "error": "Busy",
+       "when": "a machine operation holds the machine",
+       "adds": [
+        "op"
+       ]
+      },
+      {
+       "error": "Unknown",
+       "when": "the reply was lost after the request went out",
+       "adds": [
+        "fix"
+       ],
+       "fix": "layerfs store compact <store>",
+       "state": "broken, reason unresolved"
+      },
+      {
+       "error": "Busy",
+       "when": "a compaction of the Store runs, here or in the worker",
+       "adds": [
+        "op"
+       ],
+       "op": "{name: compact, phase, started_at}"
+      },
+      {
+       "error": "InUse",
+       "when": "Workspaces of the Store are mounted (MountsActive)",
+       "adds": []
+      },
+      {
+       "error": "Unresolved",
+       "when": "an earlier run left its outcome unknown",
+       "adds": [
+        "fix"
+       ],
+       "fix": "layerfs store compact <store>"
+      }
+     ]
     },
     {
      "call": "store.doctor",
@@ -8116,13 +8303,13 @@
        "a project the Store does not list: {\"findings\":[{\"project\":\"qv2-store/qv2-probe\",\"check\":\"project.listed\",\"severity\":\"notice\",\"message\":\"on record, but the Store does not list it\",\"fix\":\"layerfs project delete qv2-store/qv2-probe\"}]}",
        "a backup is behind: {\"findings\":[{\"store\":\"shop\",\"check\":\"store.backups\",\"severity\":\"notice\",\"message\":\"its backup in r2-main is behind\",\"fix\":\"layerfs backup create shop r2-main\"}]}",
        "a check ran out of time: {\"not_checked\":[{\"project\":\"qv2-store/qv2-strata\",\"check\":\"project.listed\",\"reason\":\"timeout\"}]}",
-       "its machine is stopped: {\"not_checked\":[{\"store\":\"sim-website\",\"check\":\"store.connection\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}},{\"project\":\"sim-website/website\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}",
+       "its machine is stopped: {\"not_checked\":[{\"store\":\"sim-website\",\"check\":\"store.operation\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}},{\"store\":\"sim-website\",\"check\":\"store.connection\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}},{\"project\":\"sim-website/website\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}",
        "PostgreSQL, one machine cannot reach it: {\"findings\":[{\"store\":\"shop-pg\",\"check\":\"store.connection\",\"severity\":\"error\",\"message\":\"machine lab cannot reach the server at db.internal:5432\",\"from\":\"lab\"}]}"
       ],
       "long": "{\"ok\":false,\"findings\":[{\"project\":\"qv2-store/qv2-probe\",\"check\":\"project.listed\",\"severity\":\"notice\",\"message\":\"on record, but the Store does not list it\",\"fix\":\"layerfs project delete qv2-store/qv2-probe\",\"from\":null,\"evidence\":{\"recorded\":true,\"listed\":false}}],\"not_checked\":[],\"status\":\"notice\",\"counts\":{\"ok\":2,\"notice\":1,\"warning\":0,\"error\":0,\"not_checked\":0},\"observed_at\":\"2026-11-18T09:16:59Z\",\"tree\":{\"store\":\"qv2-store\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"store.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.operation\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.connection\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.identity\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.schema\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null,\"projects\":[{\"project\":\"qv2-store/qv2-strata\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"project.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"project.listed\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null},{\"project\":\"qv2-store/qv2-probe\",\"status\":\"notice\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"project.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"project.listed\",\"outcome\":\"notice\",\"from\":null}],\"blocked_by\":null,\"reason\":null}]}}"
      },
      "dropped": [],
-     "new_work": "The call is new on the table. The shallow Store check is new work (C14): today's cheapest Store mode still scans the file, so it needs a cut that stops after the schema check and a new argument on the worker's Store diagnosis that an older worker will not know. Probing a PostgreSQL Store from each machine that has a Sandbox of it is new; the probe itself exists (store.status --machine uses it). `store.operation` and `store.backups` are new check ids: the first reads the record's `op` and the leases, the second reads the Store's heads where it lives (the same read as store.get --with live `behind`) and compares them with each link. `store.record`, `store.identity`, `store.connection` and `store.schema` exist. The project record comparison exists (project.get makes it); reporting it as a notice is new. One answer shape, a time budget per thing and one progress event per finished thing ({phase: self|projects, done, total, node}) are new.",
+     "new_work": "The call is new on the table. The shallow Store check is new work (C14): today's cheapest Store mode still scans the file, so it needs a cut that stops after the schema check and a new argument on the worker's Store diagnosis that an older worker will not know. Probing a PostgreSQL Store from each machine that has a Sandbox of it is new; the probe itself exists (store.status --machine uses it). `store.operation` and `store.backups` are new check ids: the first reads the record's `op` and the leases, the second reads the Store's heads where it lives (the same read as store.get --with live `behind`) and compares them with each link. `store.record`, `store.identity`, `store.connection` and `store.schema` exist. The project record comparison exists (project.get makes it); reporting it as a notice is new. One answer shape, a time budget per thing and one progress event per finished thing ({phase: self|projects, done, total, node}) are new. v19: `store.operation` also reads a sqlite Store's compaction record through its machine (the shallow cut answers it), and is `not_checked` with `blocked_by` under a stopped machine.",
      "off_table": [
       {
        "today": "layerfs doctor store integrity <store> · layerfs doctor store connection <store>",
@@ -8154,7 +8341,7 @@
        },
        {
         "check": "store.operation",
-        "what": "no operation on it is half-finished or left with its outcome not known, and no lease is stale",
+        "what": "no operation on it is half-finished or left with its outcome not known, in the home's record or, for a sqlite Store, beside its file on its machine; and no lease is stale",
         "full_only": false
        },
        {

@@ -281,9 +281,16 @@ fn one_copy_of_an_image_per_machine() {
     wait_for("the second copy to say it waits", || {
         !phases(&second_events, "lock").is_empty()
     });
+    // v19: the wait is the plain `{phase: lock}` event; who it waits for is
+    // the owner record, which `machine images` shows as the busy item
     let waited = &phases(&second_events, "lock")[0];
-    assert_eq!(waited.get_text("waiting"), Some("lock"));
-    let holder = waited.get("holder").expect("the wait names its holder");
+    assert_eq!(waited.get("waiting"), None, "the event names no holder");
+    assert_eq!(waited.get("holder"), None, "the event names no holder");
+    let holder = ImageLock::holder(&home, "docker", HEX).expect("the holder's record");
+    assert!(
+        matches!(holder.get_text("phase"), Some("export" | "send")),
+        "the holder records where it is: {holder:?}"
+    );
     assert_eq!(
         holder.get_int("pid"),
         Some(std::process::id() as i64),
@@ -444,13 +451,10 @@ fn a_dead_owner_is_taken_over_and_a_reused_pid_holds_nothing() {
         !phases(&events, "lock").is_empty()
     });
     assert!(!waiter.is_finished(), "a live owner is waited for");
-    let holder = &phases(&events, "lock")[0];
     assert_eq!(
-        holder
-            .get("holder")
-            .and_then(|record| record.get_int("pid")),
+        ImageLock::holder(&home, "docker", HEX).and_then(|record| record.get_int("pid")),
         Some(helper.id() as i64),
-        "the wait names the other process"
+        "the owner record names the other process"
     );
     // killed: no drop runs in it, so its record stays and its lock is freed
     let mut helper = helper;
@@ -491,8 +495,8 @@ fn a_short_machine_is_refused_before_any_effect() {
     let events = Arc::new(Mutex::new(Vec::new()));
     let error = copy(&standin.docker(), &home, "docker", "demo/app:1", &events).unwrap_err();
     assert_eq!(error.code, "Capacity", "{}", error.message);
-    let needed = error.detail.get_int("needed").unwrap();
-    let free = error.detail.get_int("free").unwrap();
+    let needed = error.detail.get_int("needed_bytes").unwrap();
+    let free = error.detail.get_int("free_bytes").unwrap();
     assert!(needed > free, "{needed} {free}");
     assert_eq!(
         needed as u64,
@@ -500,9 +504,13 @@ fn a_short_machine_is_refused_before_any_effect() {
         "a fresh copy needs the whole image"
     );
     assert_eq!(
-        error.detail.get_text("where"),
+        error.detail.get_text("path"),
         Some(cache::cache(&home).to_string_lossy().as_ref()),
         "the refusal names the filesystem it measured"
+    );
+    assert_eq!(
+        error.detail.get_text("fix"),
+        Some("layerfs machine prune docker --unused")
     );
     assert!(error.message.contains("more bytes"), "{}", error.message);
     // nothing was created on the machine or in the home
@@ -524,23 +532,23 @@ fn a_resumed_copy_needs_only_the_bytes_it_has_not_staged() {
     let fresh = Arc::new(Mutex::new(Vec::new()));
     let error = copy(&standin.docker(), &home, "docker", "demo/app:1", &fresh).unwrap_err();
     assert_eq!(error.code, "Capacity", "{}", error.message);
-    let whole = error.detail.get_int("needed").unwrap();
+    let whole = error.detail.get_int("needed_bytes").unwrap();
     assert_eq!(whole as u64, docker::need(big));
-    assert!(error.detail.get_int("free").unwrap() < whole);
+    assert!(error.detail.get_int("free_bytes").unwrap() < whole);
     // 3 of the tar's 4 MiB are staged; the copy needs those 3 MiB less
     let staged = 3 << 20;
     cache::write(&cache::cache(&home), HEX, 0, &bytes[..staged]).unwrap();
     let events = Arc::new(Mutex::new(Vec::new()));
     let error = copy(&standin.docker(), &home, "docker", "demo/app:1", &events).unwrap_err();
     assert_eq!(error.code, "Capacity", "{}", error.message);
-    let left = error.detail.get_int("needed").unwrap();
+    let left = error.detail.get_int("needed_bytes").unwrap();
     assert_eq!(
         whole - left,
         staged as i64,
         "the staged bytes are not counted twice"
     );
     assert!(
-        error.detail.get_int("free").is_some(),
+        error.detail.get_int("free_bytes").is_some(),
         "a refusal names the free bytes"
     );
     // and a refusal changes nothing: no container, no export, same part

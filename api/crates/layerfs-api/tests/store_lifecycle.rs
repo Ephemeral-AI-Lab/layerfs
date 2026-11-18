@@ -300,6 +300,43 @@ fn a_store_on_a_stopped_machine_is_blocked_and_its_read_starts_nothing() {
     std::fs::remove_dir_all(home).unwrap();
 }
 
+/// v19: a live read answers `blocked` first while the Store's machine is
+/// not ready, even when this home's record holds an op left unresolved;
+/// the records-only read keeps the held state first.
+#[test]
+fn a_live_read_is_blocked_first_even_over_a_held_op() {
+    let home = home_with_stopped(t("vm"));
+    let path = paths::store_record(&home, "shop");
+    let held = home::with_field(
+        read_record(&path).unwrap().unwrap(),
+        "op",
+        this_process_pushing(1, true),
+    );
+    write_record(&path, &held).unwrap();
+    let live = call(
+        &home,
+        "store.get",
+        &[("store", t("shop")), ("with", t("live"))],
+    )
+    .unwrap();
+    assert_eq!(live.get_text("state"), Some("blocked"), "{live:?}");
+    assert_eq!(
+        live.get("blocked_by"),
+        Some(&SdkValue::map([
+            ("machine", t("vm")),
+            ("reason", t("stopped"))
+        ]))
+    );
+    let recorded = call(&home, "store.get", &[("store", t("shop"))]).unwrap();
+    assert_eq!(recorded.get_text("state"), Some("broken"), "{recorded:?}");
+    assert_eq!(recorded.get_text("reason"), Some("unresolved"));
+    assert!(
+        !paths::machine_dir(&home, "vm").join("start.lock").exists(),
+        "no start was attempted"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
 #[test]
 fn remove_refuses_a_store_whose_machine_is_unknown() {
     let home = home_with_stopped(SdkValue::Null);

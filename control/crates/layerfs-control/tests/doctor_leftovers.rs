@@ -212,18 +212,18 @@ fn reported(report: &SdkValue, machine: &str, root: &Path, id8: &str) {
         40,
         &tmp,
     );
-    let part = expect(
-        Kind::ImagePart,
-        run.join("images").join(format!(".recv-{HEX}.part")),
-        50,
-        HEX,
-    );
-    // the modification time of the part itself, set two hours back
-    let at = part.get_text("modified_at").unwrap().to_owned();
-    let now = home::now_ms();
+    // a received image part is not a leftover (spec v19): `machine images`
+    // shows it and `machine prune` removes it, under the copy's lock
+    assert!(run
+        .join("images")
+        .join(format!(".recv-{HEX}.part"))
+        .is_file());
     assert!(
-        iso(now - 7_400_000) <= at && at <= iso(now - 7_195_000),
-        "{at}"
+        !found(report)
+            .iter()
+            .any(|entry| entry.get_text("kind") == Some("image_part")),
+        "{:?}",
+        found(report)
     );
     expect(
         Kind::BackupStaging,
@@ -241,7 +241,7 @@ fn reported(report: &SdkValue, machine: &str, root: &Path, id8: &str) {
     assert!(copy.get_bool("report_only"), "{copy:?}");
     assert_eq!(copy.get("removable_at"), Some(&SdkValue::Null), "{copy:?}");
     // the lock files and the unmount marker are never listed
-    assert_eq!(found(report).len(), 6, "{:?}", found(report));
+    assert_eq!(found(report).len(), 5, "{:?}", found(report));
     // the walk ended: the machine is not named as passed over
     assert!(!not_listed(report).iter().any(|(name, _)| name == machine));
 }
@@ -254,7 +254,6 @@ fn fixed(home: &Path, machine: &str, root: &Path, outside: &Path) {
         Kind::RunFolder,
         Kind::EmptyRoot,
         Kind::ImageTmp,
-        Kind::ImagePart,
         Kind::BackupStaging,
     ] {
         let left = one(&doctor(home), machine, kind);
@@ -435,7 +434,7 @@ fn a_stopped_or_silent_machine_is_not_listed_and_a_lost_answer_unknown() {
     };
     // recorded, with no worker: stopped
     machine("off");
-    let id = format!("off:image_part:{HEX}");
+    let id = format!("off:image_tmp:{HEX}.2-ab12");
     let why = refusal(prune(&home, &id), "Unavailable");
     assert!(why.contains("machine start off"), "{why}");
     refusal(
@@ -494,7 +493,10 @@ fn a_stopped_or_silent_machine_is_not_listed_and_a_lost_answer_unknown() {
         worker::write_frame(&mut stream, &Hello::own().to_frame()).unwrap();
         worker::read_frame(&mut stream).ok().flatten()
     });
-    let why = refusal(prune(&home, &format!("lost:image_part:{HEX}")), "Unknown");
+    let why = refusal(
+        prune(&home, &format!("lost:image_tmp:{HEX}.2-ab12")),
+        "Unknown",
+    );
     assert!(
         why.contains("not resent") || why.contains("may have run"),
         "{why}"
@@ -503,8 +505,11 @@ fn a_stopped_or_silent_machine_is_not_listed_and_a_lost_answer_unknown() {
     assert_eq!(request.get_text("op"), Some("home.prune"));
     let args = request.get("args").unwrap();
     // a kind and a name travel, never a path
-    assert_eq!(args.get_text("kind"), Some("image_part"));
-    assert_eq!(args.get_text("name"), Some(HEX));
+    assert_eq!(args.get_text("kind"), Some("image_tmp"));
+    assert_eq!(
+        args.get_text("name"),
+        Some(format!("{HEX}.2-ab12").as_str())
+    );
     assert!(args.get("path").is_none(), "{args:?}");
     std::fs::remove_dir_all(home.parent().unwrap()).unwrap();
 }
@@ -658,11 +663,12 @@ fn guards_held_by_another_are_in_use() {
     assert!(why.contains("lock"), "{why}");
     drop(lock);
 
-    // an image part written within the hour may still be received
+    // an image part is no leftover (spec v19): no id removes it here
     let part = cache.join(format!(".recv-{HEX}.part"));
-    aged(&part, Duration::from_secs(600));
-    let why = refusal(prune(&home, &format!("native:image_part:{HEX}")), "InUse");
-    assert!(why.contains("unchanged"), "{why}");
+    refusal(
+        prune(&home, &format!("native:image_part:{HEX}")),
+        "NotFound",
+    );
 
     // nothing was removed, and with each guard free again all of it goes
     for path in [
@@ -672,8 +678,8 @@ fn guards_held_by_another_are_in_use() {
     ] {
         assert!(path.is_file(), "{}", path.display());
     }
-    aged(&part, Duration::from_secs(7200));
     fixed(&home, "native", &home, &outside);
+    assert!(part.is_file(), "a part stays for `machine prune`");
 
     // an image's lock file and a Workspace's unmount marker are no
     // leftover: no id names them, and nothing removes them
@@ -705,7 +711,7 @@ fn a_crafted_id_removes_nothing_outside_its_entry() {
     .unwrap();
     std::os::unix::fs::symlink(&outside, home.join("incoming/init-ffffffffffffffff")).unwrap();
     let before = ids(&doctor(&home));
-    assert_eq!(before.len(), 6, "a link is never a leftover: {before:?}");
+    assert_eq!(before.len(), 5, "a link is never a leftover: {before:?}");
 
     let absolute = format!("native:run_folder:{}", outside.display());
     let gone = format!("native:run-folder:layerfs-{id8}-gone");
@@ -759,7 +765,7 @@ fn a_crafted_id_removes_nothing_outside_its_entry() {
         (Kind::EmptyRoot, "x/../.."),
         (Kind::BackupStaging, "../outside/backup.staging"),
         (Kind::ImageTmp, "../../x"),
-        (Kind::ImagePart, "../x"),
+        (Kind::ExportContainer, "../x"),
     ] {
         refusal(prune_on(&home, kind, name, &[]), "NotFound");
     }
@@ -805,7 +811,7 @@ fn a_walk_past_its_bound_says_it_is_not_complete() {
         Some(SdkValue::List(rows)) => rows.len(),
         _ => panic!("{walked:?}"),
     };
-    assert_eq!(count(&whole), 6);
+    assert_eq!(count(&whole), 5);
     // too few entries: it stops, says so, and measures nothing it did not
     // finish
     let few = Bounds {
@@ -814,7 +820,7 @@ fn a_walk_past_its_bound_says_it_is_not_complete() {
     };
     let cut = leftovers::walk(&home, &[], few);
     assert!(!cut.get_bool("complete"), "{cut:?}");
-    assert!(count(&cut) < 6, "{cut:?}");
+    assert!(count(&cut) < 5, "{cut:?}");
     // no time at all
     let none = Bounds {
         within: Duration::ZERO,

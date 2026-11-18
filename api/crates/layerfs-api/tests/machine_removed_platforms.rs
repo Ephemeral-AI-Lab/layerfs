@@ -133,7 +133,12 @@ fn a_removed_platform_is_shown_refused_and_forgotten() {
 
     for (name, platform, _) in &machines {
         let reason = removed_reason(platform).unwrap();
+        // v19: the home's image copy locks of the machine go with it
+        let locks = home.join("run/image-lock").join(name);
+        std::fs::create_dir_all(&locks).unwrap();
+        std::fs::write(locks.join(format!("{}.lock", "a".repeat(64))), b"").unwrap();
         let removed = call(&home, "machine.remove", &[("machine", t(name))]).unwrap();
+        assert!(!locks.exists(), "{name}'s image copy locks are removed");
         assert_eq!(removed.get_text("machine"), Some(*name));
         assert_eq!(removed.get("forgotten"), Some(&SdkValue::Bool(true)));
         assert_eq!(removed.get_text("outcome"), Some("forgotten"));

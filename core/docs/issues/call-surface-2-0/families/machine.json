@@ -225,7 +225,7 @@
     {
       "call": "machine.images",
       "badge": "reshaped",
-      "note": "<code>image</code> is the id <code>machine prune</code> and <code>sandbox create --image</code> take; <code>default:true</code> marks the machine's default image. <code>mode</code> is <code>images</code>, or <code>host</code> on macOS <code>native</code>, which runs no image. The host's Docker is read only with <code>--with docker</code>. Unpaged: a machine holds a handful of images. A machine that does not answer is <code>Unavailable</code>; nothing starts it",
+      "note": "<code>image</code> is the id <code>machine prune</code> and <code>sandbox create --image</code> take; <code>default:true</code> marks the machine's default image. <code>mode</code> is <code>images</code>, or <code>host</code> on macOS <code>native</code>, which runs no image. A copy that runs or stopped partway is a state on its item (v19), not a <code>source</code>: a published image is <code>ready</code>, left out of the row; a part a live copy holds is <code>busy</code> with <code>op</code> <code>{name: load_image, phase, started_at}</code> (<code>started_at</code> is when that copy took the image's lock); a part no copy holds, or an unpack that stopped before it was recorded, is <code>broken</code> with <code>reason: partial</code> and <code>fix</code> <code>layerfs machine load-image &lt;m&gt; sha256:&lt;hex&gt;</code>, which resumes the part or rebuilds the unpack. A partial image's <code>size</code> is null; <code>staged_bytes</code> is how much of it is staged. One item per image: a stale part beside a published image is in that image's row (<code>staged_bytes</code>), which stays <code>ready</code>, and <code>machine prune --unused</code> removes the part. <code>source</code> stays <code>bundle</code>, <code>machine</code> or <code>imported</code>. The host's Docker is read only with <code>--with docker</code>, and an image the machine does not hold <code>ready</code> is offered there. Unpaged: a machine holds a handful of images. A machine that does not answer is <code>Unavailable</code>; nothing starts it",
       "today": [
         "machine.images"
       ],
@@ -246,7 +246,7 @@
             "reason",
             "message"
           ],
-          "help": "reads the host's Docker. images: the host's Docker images the machine does not hold, each {image, refs, size, os, architecture, usable, needed_bytes, fits, unusable: {kind, value}} (kind is os or arch); reason and message say why Docker did not answer, and images is then empty"
+          "help": "reads the host's Docker. images: the host's Docker images the machine does not hold ready (a partial one is offered again), each {image, refs, size, os, architecture, usable, needed_bytes, fits, unusable: {kind, value}} (kind is os or arch); reason and message say why Docker did not answer, and images is then empty"
         }
       },
       "paging": null,
@@ -274,7 +274,11 @@
           "sometimes": [
             "refs",
             "size",
-            "default"
+            "default",
+            "state",
+            "op",
+            "reason",
+            "fix"
           ]
         },
         "long": [
@@ -282,6 +286,12 @@
           "refs",
           "size",
           "default",
+          "state",
+          "op",
+          "reason",
+          "fix",
+          "message",
+          "staged_bytes",
           "architecture",
           "source",
           "sandboxes",
@@ -291,9 +301,11 @@
       },
       "examples": {
         "short": [
-          "{\"items\":[{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"refs\":[\"node:22\"],\"size\":412000000,\"default\":true},{\"image\":\"sha256:7777777777777777777777777777777777777777777777777777777777777777\",\"refs\":[\"postgres:17-bookworm\"],\"size\":455000000}]}"
+          "{\"items\":[{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"refs\":[\"node:22\"],\"size\":412000000,\"default\":true},{\"image\":\"sha256:7777777777777777777777777777777777777777777777777777777777777777\",\"refs\":[\"postgres:17-bookworm\"],\"size\":455000000}]}",
+          "a copy is running: {\"items\":[{\"image\":\"sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"state\":\"busy\",\"op\":{\"name\":\"load_image\",\"phase\":\"send\",\"started_at\":\"2026-11-18T09:16:59Z\"}}]}",
+          "a copy stopped partway: {\"items\":[{\"image\":\"sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"state\":\"broken\",\"reason\":\"partial\",\"fix\":\"layerfs machine load-image dev sha256:8888888888888888888888888888888888888888888888888888888888888888\"}]}"
         ],
-        "long": "{\"items\":[{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"refs\":[\"node:22\"],\"size\":412000000,\"default\":true,\"architecture\":\"arm64\",\"source\":\"imported\",\"sandboxes\":[\"tests\"],\"sandboxes_count\":1,\"last_used_at\":\"2026-11-18T09:15:59Z\"}],\"machine\":\"dev\",\"mode\":\"images\",\"architecture\":\"arm64\",\"disk_free_bytes\":52613349376}"
+        "long": "{\"items\":[{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"refs\":[\"node:22\"],\"size\":412000000,\"default\":true,\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"message\":null,\"staged_bytes\":null,\"architecture\":\"arm64\",\"source\":\"imported\",\"sandboxes\":[\"tests\"],\"sandboxes_count\":1,\"last_used_at\":\"2026-11-18T09:15:59Z\"},{\"image\":\"sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"refs\":[],\"size\":null,\"default\":false,\"state\":\"broken\",\"op\":null,\"reason\":\"partial\",\"fix\":\"layerfs machine load-image dev sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"message\":\"a copy of this image stopped after 104857600 bytes; load-image resumes it\",\"staged_bytes\":104857600,\"architecture\":null,\"source\":\"imported\",\"sandboxes\":[],\"sandboxes_count\":0,\"last_used_at\":null}],\"machine\":\"dev\",\"mode\":\"images\",\"architecture\":\"arm64\",\"disk_free_bytes\":52613349376}"
       },
       "dropped": [
         {
@@ -302,12 +314,20 @@
           "why": "an existing thing is named by its own word, never `name`"
         }
       ],
-      "new_work": "`sandboxes` as names is new: today the row answers how many Sandbox records name the image; the same read gives their names. Reading the host's Docker only on request is new: today every call reads it."
+      "new_work": "`sandboxes` as names is new: today the row answers how many Sandbox records name the image; the same read gives their names. Reading the host's Docker only on request is new: today every call reads it. Item states are new in v19: today a part a copy holds, a part left partway and a stranded unpack are rows with `source` `staged` or `stranded` and the flags `staged`, `stranded`, `resumable` and `age`; they become `busy` (op `load_image`) and `broken` (reason `partial`) on the item, with `message` and `staged_bytes`, one item per image, and `--with docker` counts only `ready` items as held. `staged`, `stranded`, `resumable`, `age`, `variant` and the image's `Env` stay out of the answer.",
+      "states": {
+        "reasons": [
+          "partial"
+        ],
+        "ops": [
+          "load_image"
+        ]
+      }
     },
     {
       "call": "machine.load_image",
       "badge": "renamed",
-      "note": "was <code>load</code>. <code>image</code> is a digest, a Docker image Id or a Docker reference, copied from the host's Docker (C6); the answer's <code>image</code> is its id on the machine. <code>reused:true</code> when the machine held it already and nothing was sent. Progress phases: inspect, export, send (bytes), unpack. macOS <code>native</code> is <code>Unsupported</code>",
+      "note": "was <code>load</code>. <code>image</code> is a digest, a Docker image Id or a Docker reference, copied from the host's Docker (C6); the answer's <code>image</code> is its id on the machine. <code>reused:true</code> when the machine held it already and nothing was sent. <code>size</code> is the image's tar bytes on the machine (null when the machine holds it only in an archive that does not say). <code>dropped</code> lists the FIFO and device paths the copy left out, first 20 (<code>dropped_count</code> only beside a cut list); the container's init files (<code>.dockerenv</code>, <code>etc/hosts</code> and the rest) are always left out and never listed. <code>expanded_bytes</code> is the total of the image's sparse files once written out. Progress phases: inspect, lock (<code>{phase: lock}</code>, sent once a second while another copy of the image holds its lock; that copy is the <code>busy</code> item of <code>machine images --detail</code>), export, send (bytes), unpack. macOS <code>native</code> is <code>Unsupported</code>",
       "today": [
         "machine.load"
       ],
@@ -335,24 +355,29 @@
           "image"
         ],
         "sometimes": [
-          "reused"
+          "reused",
+          "dropped"
         ]
       },
       "long": [
         "image",
         "reused",
+        "dropped",
         "outcome",
         "machine",
         "refs",
-        "size"
+        "size",
+        "dropped_count",
+        "expanded_bytes"
       ],
       "item": null,
       "examples": {
         "short": [
           "{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\"}",
-          "already there: {\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"reused\":true}"
+          "already there: {\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"reused\":true}",
+          "a FIFO left out: {\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"dropped\":[\"run/initctl\"]}"
         ],
-        "long": "{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"reused\":false,\"outcome\":\"loaded\",\"machine\":\"dev\",\"refs\":[\"node:22\"],\"size\":412000000}"
+        "long": "{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"reused\":false,\"dropped\":[\"run/initctl\"],\"outcome\":\"loaded\",\"machine\":\"dev\",\"refs\":[\"node:22\"],\"size\":412000000,\"dropped_count\":null,\"expanded_bytes\":0}"
       },
       "dropped": [
         {
@@ -361,12 +386,63 @@
           "why": "an existing thing is named by its own word, never `name`"
         }
       ],
-      "new_work": null
+      "new_work": "v19: `dropped` (the FIFO and device paths, first 20, with `dropped_count`) and `expanded_bytes` come from the copy's tar filter report, which today's answer carries as `dropped {fifos, devices, init}` and `sparse`; init files leave the answer. The `lock` phase is `{phase: lock}` without today's `waiting` and `holder` (a pid). `Capacity` carries the prune fix and `{needed_bytes, free_bytes, path}` (today `{needed, free, where}`); `Unsupported` carries `{architecture}` or `{os}` (today `{reason, value}`); an ambiguous reference carries `{images}` (today `{reason, ref, ids}`); a staged part that does not match and a frame out of order are `Failed` (today `InvalidInput`). A reused image's `size` is the tar bytes its sidecar records, never Docker's own size.",
+      "refusals": [
+        {
+          "error": "Capacity",
+          "when": "the machine has no room for the image (checked before the first effect)",
+          "adds": [
+            "fix"
+          ],
+          "fix": "layerfs machine prune <m> --unused",
+          "detail": [
+            "needed_bytes",
+            "free_bytes",
+            "path"
+          ]
+        },
+        {
+          "error": "Unsupported",
+          "when": "the image is for another architecture or OS; macOS native runs no image",
+          "adds": [],
+          "detail": [
+            "architecture | os"
+          ]
+        },
+        {
+          "error": "InvalidInput",
+          "when": "a reference more than one held image claims (detail `images`), or Docker has no such image",
+          "adds": [],
+          "detail": [
+            "images"
+          ]
+        },
+        {
+          "error": "Unavailable",
+          "when": "Docker or the machine's worker cannot be reached",
+          "adds": [],
+          "detail": [
+            "what"
+          ]
+        },
+        {
+          "error": "InUse",
+          "when": "a stranded unpack of the image is in use",
+          "adds": [],
+          "detail": []
+        },
+        {
+          "error": "Failed",
+          "when": "the export failed or changed while it was sent, a staged part does not match what was sent, or a frame arrived out of order (the last two were InvalidInput)",
+          "adds": [],
+          "detail": []
+        }
+      ]
     },
     {
       "call": "machine.prune",
       "badge": "reshaped",
-      "note": "as today (C4): one image by its id, or with <code>--unused</code> every image no Sandbox uses but the default; one of the two is required. An image a Sandbox uses is <code>InUse</code>. <code>removed</code> shows its first 20 ids",
+      "note": "as today (C4): one image by its id, or with <code>--unused</code> every image no Sandbox uses but the default; one of the two is required. <code>--unused</code> also removes what copies left: parts no copy holds (even beside an image a Sandbox uses), unpacks that stopped before they were recorded, sidecars with no image and <code>.tmp-*</code> unpack folders; each image they belong to is in <code>removed</code>. A named image a live copy holds is <code>Busy</code> with that copy's <code>op</code>; one a Sandbox uses is <code>InUse</code> with detail <code>{sandbox_count}</code>; a copy lock that cannot be checked is <code>Failed</code>. What <code>--unused</code> could not remove is in <code>skipped</code> (<code>[{image, message}]</code>, first 20, <code>skipped_count</code> beside a cut list). <code>removed</code> shows its first 20 ids",
       "today": [
         "machine.prune"
       ],
@@ -400,22 +476,27 @@
         "always": [
           "freed_bytes"
         ],
-        "sometimes": []
+        "sometimes": [
+          "skipped"
+        ]
       },
       "long": [
         "freed_bytes",
+        "skipped",
         "outcome",
         "machine",
         "removed",
-        "removed_count"
+        "removed_count",
+        "skipped_count"
       ],
       "item": null,
       "examples": {
         "short": [
           "{\"freed_bytes\":2147483648}",
-          "nothing to remove: {\"freed_bytes\":0}"
+          "nothing to remove: {\"freed_bytes\":0}",
+          "a copy lock could not be checked: {\"freed_bytes\":0,\"skipped\":[{\"image\":\"sha256:7777777777777777777777777777777777777777777777777777777777777777\",\"message\":\"its copy lock cannot be read: Permission denied\"}]}"
         ],
-        "long": "{\"freed_bytes\":2147483648,\"outcome\":\"pruned\",\"machine\":\"dev\",\"removed\":[\"sha256:7777777777777777777777777777777777777777777777777777777777777777\"],\"removed_count\":1}"
+        "long": "{\"freed_bytes\":2147483648,\"skipped\":[],\"outcome\":\"pruned\",\"machine\":\"dev\",\"removed\":[\"sha256:7777777777777777777777777777777777777777777777777777777777777777\"],\"removed_count\":1,\"skipped_count\":null}"
       },
       "dropped": [
         {
@@ -424,7 +505,46 @@
           "why": "an existing thing is named by its own word, never `name`"
         }
       ],
-      "new_work": null
+      "new_work": "v19: `skipped` and `skipped_count` reach the answer (today the worker's `skipped` rows, `{id, reason}`, are dropped). A named image a live copy holds is `Busy` with the copy's `op` (today `InUse` with `count`); one a Sandbox uses carries `{sandbox_count}` (today `count`). A part no copy holds is removed even when a Sandbox uses its image (today it is kept with the image).",
+      "nested": {
+        "skipped": {
+          "short": {
+            "always": [
+              "image",
+              "message"
+            ],
+            "sometimes": []
+          },
+          "long": [
+            "image",
+            "message"
+          ]
+        }
+      },
+      "refusals": [
+        {
+          "error": "Busy",
+          "when": "the named image is held by a live copy (a machine load-image or sandbox create --image)",
+          "adds": [
+            "op"
+          ],
+          "detail": []
+        },
+        {
+          "error": "InUse",
+          "when": "a Sandbox uses the named image",
+          "adds": [],
+          "detail": [
+            "sandbox_count"
+          ]
+        },
+        {
+          "error": "Failed",
+          "when": "the named image's copy lock cannot be checked",
+          "adds": [],
+          "detail": []
+        }
+      ]
     },
     {
       "call": "machine.stats",
@@ -916,7 +1036,7 @@
     {
       "call": "machine.remove",
       "badge": "reshaped",
-      "note": "deletes a VM machine and its disk, under a recorded <code>op</code> (name <code>remove</code>), as today. Refused <code>InUse</code> while it holds Stores or Sandboxes; a built-in machine is <code>InvalidInput</code>. A machine of a platform removed in 2.0 is only forgotten: <code>forgotten:true</code>, and <code>message</code> says what was left on its host. It clears an unresolved create or remove. It also removes the machine's own address from every PostgreSQL Store that has one; the Stores themselves are never touched. Phases: check, delete",
+      "note": "deletes a VM machine and its disk, under a recorded <code>op</code> (name <code>remove</code>), as today. Refused <code>InUse</code> while it holds Stores or Sandboxes; a built-in machine is <code>InvalidInput</code>. A machine of a platform removed in 2.0 is only forgotten: <code>forgotten:true</code>, and <code>message</code> says what was left on its host. It clears an unresolved create or remove. It also removes the machine's own address from every PostgreSQL Store that has one; the Stores themselves are never touched. The home's image copy locks of the machine (<code>run/image-lock/&lt;machine&gt;/</code>) go with it. Phases: check, delete",
       "today": [
         "machine.remove"
       ],
@@ -964,7 +1084,7 @@
           "why": "an existing thing is named by its own word, never `name`"
         }
       ],
-      "new_work": "Progress events on a remove are new: today's call takes no on_progress. Removing the machine's own PostgreSQL addresses is new: today the remove deletes only the machine's folder, so a PostgreSQL Store's record keeps the removed machine's address (`machines.<machine>`), which nothing then uses or cleans."
+      "new_work": "Progress events on a remove are new: today's call takes no on_progress. Removing the machine's own PostgreSQL addresses is new: today the remove deletes only the machine's folder, so a PostgreSQL Store's record keeps the removed machine's address (`machines.<machine>`), which nothing then uses or cleans. Deleting the home's image copy locks of the machine (`run/image-lock/<machine>/`) is new (v19): today they stay after the machine is gone."
     },
     {
       "call": "machine.update",
@@ -1057,7 +1177,7 @@
     {
       "call": "machine.doctor",
       "badge": "new",
-      "note": "the machine itself, by the ten checks of <code>checks.machine</code> in order, then a shallow check of each sqlite Store and each Sandbox on it: that kind's own list (<code>store doctor</code>'s, <code>sandbox doctor</code>'s) and nothing beneath it. A check that does not apply is left out: <code>native</code> has no provider, worker or separate data disk, and a stopped machine's worker checks are not made (stopped on purpose is not a finding). After a failed check the ones that need it are not made. Under a stopped, outdated or unanswering machine nothing beneath it is tried: one <code>not_checked</code> entry each, with <code>blocked_by</code>. The <code>fix</code> for <code>outdated</code> is <code>layerfs machine stop &lt;m&gt; &amp;&amp; layerfs machine start &lt;m&gt;</code> when no Sandbox is recorded on the machine, and <code>layerfs machine stop &lt;m&gt; --force &amp;&amp; layerfs machine start &lt;m&gt;</code> when some are; the <code>message</code> then names how many (they cannot be removed first: no call is sent through a mismatched worker). The <code>tree</code> is the machine's node with <code>stores</code> and <code>sandboxes</code>. No options (R4). Today's ids fold as follows: <code>machine.platform</code> into <code>machine.record</code>, <code>machine.home</code> into <code>machine.configuration</code>, <code>machine.provider.tool_version</code> into the evidence of <code>machine.provider</code>; <code>machine.worker</code> (a marker that <code>native</code> has no worker) is dropped. Exits 0 once the report is made. <code>--progress</code> sends one event per finished thing, with its node",
+      "note": "the machine itself, by the ten checks of <code>checks.machine</code> in order, then a shallow check of each sqlite Store and each Sandbox on it: that kind's own list (<code>store doctor</code>'s, <code>sandbox doctor</code>'s) and nothing beneath it. A check that does not apply is left out: <code>native</code> has no provider, worker or separate data disk, and a stopped machine's worker checks are not made (stopped on purpose is not a finding). After a failed check the ones that need it are not made. Under a stopped, outdated or unanswering machine nothing beneath it is tried: one <code>not_checked</code> entry each, with <code>blocked_by</code>. The <code>fix</code> for <code>outdated</code> is <code>layerfs machine stop &lt;m&gt; &amp;&amp; layerfs machine start &lt;m&gt;</code> when no Sandbox is recorded on the machine, and <code>layerfs machine stop &lt;m&gt; --force &amp;&amp; layerfs machine start &lt;m&gt;</code> when some are; the <code>message</code> then names how many (they cannot be removed first: no call is sent through a mismatched worker). The <code>tree</code> is the machine's node with <code>stores</code> and <code>sandboxes</code>. No options (R4). Today's ids fold as follows: <code>machine.platform</code> into <code>machine.record</code>, <code>machine.home</code> into <code>machine.configuration</code>, <code>machine.provider.tool_version</code> into the evidence of <code>machine.provider</code>; <code>machine.worker</code> (a marker that <code>native</code> has no worker) is dropped. <code>machine.capacity</code>'s evidence adds <code>reclaimable_image_bytes</code>, the bytes of its image cache that <code>layerfs machine prune &lt;m&gt; --unused</code> frees (images no Sandbox uses but the default, and what copies left); that prune is the check's fix only when there are such bytes. Exits 0 once the report is made. <code>--progress</code> sends one event per finished thing, with its node",
       "today": [],
       "help": "check a machine, then each Store and Sandbox on it",
       "cli": "layerfs machine doctor <machine>",
@@ -1101,7 +1221,7 @@
         "long": "{\"ok\":false,\"findings\":[{\"machine\":\"demo-build\",\"check\":\"machine.worker.compatibility\",\"severity\":\"error\",\"message\":\"worker is from another build; 1 Sandbox is on it\",\"fix\":\"layerfs machine stop demo-build --force && layerfs machine start demo-build\",\"from\":null,\"evidence\":{\"protocol\":3}}],\"not_checked\":[{\"store\":\"demo-build-cache\",\"check\":null,\"blocked_by\":{\"machine\":\"demo-build\",\"reason\":\"outdated\"},\"reason\":null},{\"sandbox\":\"build-1\",\"check\":null,\"blocked_by\":{\"machine\":\"demo-build\",\"reason\":\"outdated\"},\"reason\":null}],\"status\":\"error\",\"counts\":{\"ok\":0,\"notice\":0,\"warning\":0,\"error\":1,\"not_checked\":2},\"observed_at\":\"2026-11-18T09:16:59Z\",\"tree\":{\"machine\":\"demo-build\",\"status\":\"error\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"machine.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.operation\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.configuration\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.provider\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.state\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.worker.endpoint\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.worker.auth\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.worker.compatibility\",\"outcome\":\"error\",\"from\":null}],\"blocked_by\":null,\"reason\":null,\"stores\":[{\"store\":\"demo-build-cache\",\"status\":\"not_checked\",\"coverage\":\"none\",\"checks\":[],\"blocked_by\":{\"machine\":\"demo-build\",\"reason\":\"outdated\"},\"reason\":null}],\"sandboxes\":[{\"sandbox\":\"build-1\",\"status\":\"not_checked\",\"coverage\":\"none\",\"checks\":[],\"blocked_by\":{\"machine\":\"demo-build\",\"reason\":\"outdated\"},\"reason\":null}]}}"
       },
       "dropped": [],
-      "new_work": "The call is new on the table; its own checks exist as today's `layerfs doctor machine <machine>`. New: the shallow check of each Store and Sandbox on the machine in the same call (today one call is one target), the one answer shape (findings, not_checked, tree) in place of today's per-check report with pass, fail, unknown, skipped and blocked, a time budget per thing in place of one --timeout for the call, and one progress event per finished thing: {phase: self|stores|sandboxes, done, total, node}. The shallow Store check is new work (C14; see store.doctor). The `--force` form of the outdated fix, with the Sandbox count in the message, is new.",
+      "new_work": "The call is new on the table; its own checks exist as today's `layerfs doctor machine <machine>`. New: the shallow check of each Store and Sandbox on the machine in the same call (today one call is one target), the one answer shape (findings, not_checked, tree) in place of today's per-check report with pass, fail, unknown, skipped and blocked, a time budget per thing in place of one --timeout for the call, and one progress event per finished thing: {phase: self|stores|sandboxes, done, total, node}. The shallow Store check is new work (C14; see store.doctor). The `--force` form of the outdated fix, with the Sandbox count in the message, is new. `reclaimable_image_bytes` in `machine.capacity`'s evidence, read from the machine's image listing, is new (v19); no new check id.",
       "off_table": [
         {
           "today": "layerfs doctor machine <machine>",

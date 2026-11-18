@@ -9,7 +9,7 @@ use crate::inventory;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::names::{MachineName, StoreName};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::outcome::{refused, with_fix, Outcome, FIX};
 use layerfs_machine::worker::Unreached;
 use layerfs_store::place::{self, Executor};
 use layerfs_store::postgresql::check;
@@ -21,9 +21,43 @@ use std::path::Path;
 pub use layerfs_store::close_idle;
 
 /// `store.compact`: reclaim one Store's dead bytes, answering the
-/// flattened report (`layerfs_store::report::compact_report`).
+/// flattened report (`layerfs_store::report::compact_report`). A refusal
+/// gets the call that clears it as its `fix` (spec v19): starting a sqlite
+/// Store's machine whose worker was not reached, or replacing a worker of
+/// another build (the stop forced when Sandboxes are on the machine); the
+/// same `store compact` after a lost reply or an unresolved earlier run.
 pub fn compact(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcome {
-    layerfs_store::compact::compact(home, events, name.as_str())
+    let store = name.as_str();
+    layerfs_store::compact::compact(home, events, store).map_err(|refusal| {
+        if refusal
+            .detail
+            .get(FIX)
+            .is_some_and(|fix| *fix != SdkValue::Null)
+        {
+            return refusal;
+        }
+        let machine = || {
+            let record = StoreRecord::read(home, store).ok().flatten()?;
+            let machine = record.machine().ok()?;
+            (record.kind().ok()? == StoreKind::Sqlite && machine != "native").then_some(machine)
+        };
+        let fix = match refusal.code.as_str() {
+            "Unavailable" => match machine() {
+                Some(machine) if layerfs_machine::worker::is_mismatch(&refusal) => {
+                    let on = inventory::sandboxes_on(home, &machine).map_or(0, |on| on.len());
+                    Some(layerfs_machine::state::replace_worker(&machine, on))
+                }
+                Some(machine) => Some(format!("layerfs machine start {machine}")),
+                None => None,
+            },
+            "Unknown" | "Unresolved" => Some(format!("layerfs store compact {store}")),
+            _ => None,
+        };
+        match fix {
+            Some(fix) => with_fix(refusal, fix),
+            None => refusal,
+        }
+    })
 }
 
 /// Who uses a Store or a project, read from the Sandbox records.

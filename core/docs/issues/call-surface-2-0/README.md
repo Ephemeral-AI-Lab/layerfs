@@ -1,6 +1,7 @@
 # LayerFS 2.0 call surface: frozen spec
 
-> **Status:** Frozen specification, version 18, 2026-11-18. Base `layerfs_v2_0_0` @ `caff58a43b`.
+> **Status:** Frozen specification, version 19, 2026-11-19 (version 18 of 2026-11-18 brought up to
+> `layerfs_v2_0_0` @ `ff114a5265`, #738–#741). Base `layerfs_v2_0_0` @ `caff58a43b`.
 > Target behavior, not implemented behavior: source and the call table establish what is built.
 
 The public call table of LayerFS 2.0, reshaped: two-level `family.call` names, a
@@ -12,7 +13,7 @@ dsh-layerfs plugin.
 | --- | --- |
 | [calls.json](calls.json) | The contract as data: every call's name, positionals, options, `--with` sections, short keys, long keys, examples; the state, refusal, list, progress and doctor shapes. Generated; the contract test reads it. |
 | [families/](families/) | The source of `calls.json`: one JSON file per family. [SCHEMA.md](families/SCHEMA.md) is their format. |
-| [DECISIONS.md](DECISIONS.md) | Rulings R1–R9, corrections C1–C14 and every other decision applied at the freeze. |
+| [DECISIONS.md](DECISIONS.md) | Rulings R1–R9, corrections C1–C14, every other decision applied at the freeze, and the version 19 changes. |
 | [layerfs-call-surface.html](layerfs-call-surface.html) | The readable page, generated. |
 | [status.html](status.html), [pg.html](pg.html) | The status model with the Doctor section, and PostgreSQL Stores (sources of the page). |
 | [today-table.json](today-table.json) | The call table of the base commit, extracted from the code. |

@@ -11,19 +11,28 @@ use layerfs_home::outcome::Outcome;
 #[cfg(feature = "machine")]
 const SHOWN: usize = 20;
 
-/// Its answer: the bytes freed; the long form adds what was removed.
+/// One image `--unused` could not remove, and why.
+const SKIPPED: Form = Form::of(&["image", "message"], &[], &["image", "message"]);
+
+/// Its answer: the bytes freed, and what could not be removed; the long
+/// form adds what was removed.
 const FORM: Form = Form::of(
     &["freed_bytes"],
-    &[],
+    &["skipped"],
     &[
         "freed_bytes",
+        "skipped",
         "outcome",
         "machine",
         "removed",
         "removed_count",
+        "skipped_count",
     ],
 )
-.parts(&[("removed", Part::Scalars("image"))]);
+.parts(&[
+    ("removed", Part::Scalars("image")),
+    ("skipped", Part::Rows(&SKIPPED)),
+]);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -36,7 +45,8 @@ pub(crate) const CALL: Call = call(
 )
 .form(&FORM);
 
-/// Runs `machine.prune`.
+/// Runs `machine.prune`: a named image a live copy holds is refused `Busy`
+/// with the copy's `op`, one a Sandbox uses `InUse` (`{sandbox_count}`).
 #[cfg(feature = "machine")]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     use super::stats::count;
@@ -45,19 +55,38 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let image = args.get_text("image");
     let pruned = layerfs_control::machine::prune(&context.home, &machine, image, unused)?;
     let removed = pruned.get("removed").cloned().unwrap_or_default();
-    let shown = match &removed {
-        SdkValue::List(ids) => SdkValue::List(ids.iter().take(SHOWN).cloned().collect()),
-        _ => SdkValue::List(Vec::new()),
+    let skipped: Vec<SdkValue> = match pruned.get("skipped") {
+        Some(SdkValue::List(rows)) => rows
+            .iter()
+            .map(|row| {
+                SdkValue::map([
+                    ("image", row.get("id").cloned().unwrap_or_default()),
+                    ("message", row.get("reason").cloned().unwrap_or_default()),
+                ])
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    let cut = |list: &[SdkValue]| SdkValue::List(list.iter().take(SHOWN).cloned().collect());
+    let ids = match &removed {
+        SdkValue::List(ids) => ids.as_slice(),
+        _ => &[],
+    };
+    let skipped_count = match skipped.len() > SHOWN {
+        true => SdkValue::Int(i64::try_from(skipped.len()).unwrap_or(i64::MAX)),
+        false => SdkValue::Null,
     };
     Ok(SdkValue::map([
         (
             "freed_bytes",
             SdkValue::Int(pruned.get_int("freed").unwrap_or(0)),
         ),
+        ("skipped", cut(&skipped)),
         ("outcome", SdkValue::text("pruned")),
         ("machine", SdkValue::text(machine.as_str())),
-        ("removed", shown),
+        ("removed", cut(ids)),
         ("removed_count", count(&removed)),
+        ("skipped_count", skipped_count),
     ]))
 }
 

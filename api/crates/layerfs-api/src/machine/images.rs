@@ -1,5 +1,7 @@
-//! `machine.images`: the Sandbox images a machine holds; with `--with
-//! docker`, the host's Docker images it could copy.
+//! `machine.images`: the Sandbox images a machine holds, one item per image
+//! with its state (spec v19: `busy` while a copy holds it, `broken`
+//! `partial` when a copy stopped partway); with `--with docker`, the host's
+//! Docker images it could copy.
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call};
 use crate::calls::{Context, Form, Part, Section};
@@ -8,15 +10,21 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
 
-/// One image the machine holds.
+/// One image the machine holds, with its state.
 const ITEM: Form = Form::of(
     &["image"],
-    &["refs", "size", "default"],
+    &["refs", "size", "default", "state", "op", "reason", "fix"],
     &[
         "image",
         "refs",
         "size",
         "default",
+        "state",
+        "op",
+        "reason",
+        "fix",
+        "message",
+        "staged_bytes",
         "architecture",
         "source",
         "sandboxes",
@@ -63,23 +71,13 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     Ok(shown(&answer, docker))
 }
 
-/// The answer of `layerfs_sandbox::images::list` as the row names it.
+/// The answer of `layerfs_sandbox::images::list` as the row names it: one
+/// item per image, its state and companion from the listing.
 #[cfg(feature = "machine")]
 fn shown(answer: &SdkValue, docker: bool) -> SdkValue {
     use super::stats::{count, field, rows};
     let default = answer.get_text("default");
-    // Until an image carries its own state, a staged part (a copy still
-    // running, or one left partway) and a stranded unpack are not images the
-    // machine holds ready: they are left out rather than shown as ready.
-    let ready = match answer.get("images") {
-        Some(SdkValue::List(images)) => images
-            .iter()
-            .filter(|image| !image.get_bool("staged") && !image.get_bool("stranded"))
-            .cloned()
-            .collect(),
-        _ => Vec::new(),
-    };
-    let items = rows(Some(&SdkValue::List(ready)), |image| {
+    let items = rows(answer.get("images"), |image| {
         let id = image.get_text("id");
         let sandboxes = field(image, "sandboxes");
         SdkValue::map([
@@ -87,6 +85,12 @@ fn shown(answer: &SdkValue, docker: bool) -> SdkValue {
             ("refs", field(image, "refs")),
             ("size", field(image, "size")),
             ("default", SdkValue::Bool(id.is_some() && id == default)),
+            ("state", field(image, "state")),
+            ("op", field(image, "op")),
+            ("reason", field(image, "reason")),
+            ("fix", field(image, "fix")),
+            ("message", field(image, "message")),
+            ("staged_bytes", field(image, "staged_bytes")),
             ("architecture", field(image, "architecture")),
             ("source", field(image, "source")),
             ("sandboxes_count", count(&sandboxes)),
