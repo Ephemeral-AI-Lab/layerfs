@@ -83,6 +83,10 @@ fn progress_counts_steps_and_bytes_apart() {
         "phase: export  116.2 KiB"
     );
     assert_eq!(
+        progress_line("finalize", Some(8), None, 0.1),
+        "phase: finalize  8 B"
+    );
+    assert_eq!(
         progress_line("verify", Some(4096), Some(4096), 0.1),
         "phase: verify  4 KiB/4 KiB"
     );

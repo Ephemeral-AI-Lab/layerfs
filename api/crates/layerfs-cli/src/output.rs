@@ -173,11 +173,12 @@ pub fn format_time(ms: i64) -> String {
 /// project's parts or an image sent to a machine (`send`), a Store move's
 /// `snapshot` and `verify` (each hashes the file), a backup's `hash`,
 /// `upload` and `download`, and the bytes `project.export` wrote
-/// (`export`; an image copy's `export` carries no counts). Every other
+/// (`export` and its last event `finalize`; an image copy's `export`
+/// carries no counts). Every other
 /// phase with counts counts steps or things: a doctor's, a create's,
 /// a start's, a remove's.
-const BYTE_PHASES: [&str; 7] = [
-    "send", "snapshot", "verify", "hash", "upload", "download", "export",
+const BYTE_PHASES: [&str; 8] = [
+    "send", "snapshot", "verify", "hash", "upload", "download", "export", "finalize",
 ];
 
 /// One progress event as the terminal line shows it, `elapsed` seconds
