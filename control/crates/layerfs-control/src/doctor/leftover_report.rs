@@ -15,7 +15,7 @@
 //! ([`named_copies`]); any other copy may belong to an Init that is still
 //! running, and is reported only.
 use super::leftovers::{self, Kind, BOUNDS};
-use super::report::Findings;
+use super::records::Findings;
 use super::scan::Scanned;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::paths;

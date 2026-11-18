@@ -19,5 +19,6 @@ pub(crate) fn calls() -> Calls {
         export::CALL,
         delete::CALL,
         remove_file::CALL,
+        crate::doctor::project::CALL,
     ]
 }

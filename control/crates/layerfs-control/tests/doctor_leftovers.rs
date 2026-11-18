@@ -173,8 +173,10 @@ fn row(report: &SdkValue, machine: &str) -> SdkValue {
         .clone()
 }
 
+/// What interrupted operations left in `home`, the list `doctor.fix`
+/// takes its ids from.
 fn doctor(home: &Path) -> SdkValue {
-    layerfs_control::doctor::doctor(home).unwrap()
+    layerfs_control::doctor::leftovers(home).unwrap()
 }
 
 fn refusal(outcome: Result<SdkValue, SdkRefusal>, code: &str) -> String {

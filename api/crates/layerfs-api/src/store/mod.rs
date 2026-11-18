@@ -31,5 +31,6 @@ pub(crate) fn calls() -> Calls {
         remove::CALL,
         compact::CALL,
         disconnect::CALL,
+        crate::doctor::store::CALL,
     ]
 }

@@ -22,6 +22,11 @@ pub struct Form {
     /// `engine` is `sqlite` unless it says otherwise. (A `state` of `ready`
     /// is never news in a `sometimes` key; no form needs to say so.)
     pub usual: &'static [(&'static str, &'static str)],
+    /// The words that may name the map's thing where its keys say
+    /// [`THING`]: the map holds exactly one of them, and both forms show
+    /// it under its own word (a doctor's finding names a machine, a Store
+    /// or a Workspace alike).
+    pub things: &'static [&'static str],
 }
 
 /// What a key with its own form holds.
@@ -46,7 +51,13 @@ impl Form {
             long,
             parts: &[],
             usual: &[],
+            things: &[],
         }
+    }
+
+    /// This form, its [`THING`] key held by one of `things`.
+    pub const fn things(self, things: &'static [&'static str]) -> Form {
+        Form { things, ..self }
     }
 
     /// This form, each of these `sometimes` keys left out of the short
@@ -77,6 +88,9 @@ impl Form {
     }
 }
 
+/// The key that stands for the thing a map names, by its own word (see
+/// [`Form::things`]).
+pub const THING: &str = "<thing>";
 /// The key a list call answers its rows under.
 pub const ITEMS: &str = "items";
 /// The key a paged call answers the next page's cursor under.

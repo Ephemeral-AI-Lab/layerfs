@@ -1,7 +1,7 @@
-//! `layerfs doctor` (#536 H7): a top-level command beside `import-env`
-//! that prints the report (JSON, or `--text`), exits 0 whatever it finds,
-//! and changes nothing; and `layerfs doctor fix <id>`, the table call that
-//! removes one leftover the report listed (layerfs-project#180).
+//! The doctors on the command line (call surface 2.0): `layerfs home
+//! doctor` prints the one report (JSON, or `--text`), exits 0 whatever it
+//! finds and changes nothing; and `layerfs doctor fix <id>`, the table call
+//! that removes one leftover (layerfs-project#180).
 use layerfs_api::home::{self, paths, private_dir};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -24,41 +24,56 @@ fn layerfs(home: &Path, words: &[&str]) -> std::process::Output {
 }
 
 #[test]
-fn doctor_reports_a_clean_home_and_makes_none() {
+fn home_doctor_reports_an_absent_home_and_makes_none() {
     let home = home_path("clean");
-    let out = layerfs(&home, &["doctor"]);
+    let out = layerfs(&home, &["home", "doctor", "--detail"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
-    let stdout = String::from_utf8(out.stdout).unwrap();
-    assert_eq!(stdout.trim(), r#"{"ok":true,"findings":[]}"#);
+    let report = layerfs_api::json::parse(String::from_utf8(out.stdout).unwrap().trim()).unwrap();
+    let tree = report.get("tree").unwrap();
+    assert_eq!(tree.get_text("coverage"), Some("shallow"));
     assert!(!home.exists(), "the doctor made the home");
-    let text = layerfs(&home, &["doctor", "--text"]);
+    let text = layerfs(&home, &["home", "doctor", "--text"]);
     assert_eq!(text.status.code(), Some(0));
-    assert!(String::from_utf8_lossy(&text.stdout).starts_with("ok"));
+    let text = String::from_utf8(text.stdout).unwrap();
+    // the count line, or `ok` alone when nothing was found
+    assert!(
+        text.starts_with("ok") || text.contains(" error(s), "),
+        "{text}"
+    );
+    assert!(!home.exists(), "the doctor made the home");
 }
 
 #[test]
-fn doctor_text_names_each_finding_and_its_fix() {
+fn home_doctor_text_names_each_finding_and_its_fix() {
     let home = home_path("bad");
     home::open(&home).unwrap();
     let bad = paths::store_record(&home, "bad");
     private_dir(bad.parent().unwrap()).unwrap();
     std::fs::write(&bad, "{not json").unwrap();
     std::fs::set_permissions(&bad, std::fs::Permissions::from_mode(0o600)).unwrap();
-    let out = layerfs(&home, &["doctor", "--text"]);
-    // a report, not a refusal: exit 0, `ok` false
+    let out = layerfs(&home, &["home", "doctor", "--text"]);
+    // a report, not a refusal: exit 0
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let text = String::from_utf8(out.stdout).unwrap();
-    assert!(text.starts_with("1 error(s), 0 warning(s)"), "{text}");
-    assert!(text.contains("error    store bad:"), "{text}");
+    assert!(text.starts_with("1 error(s), "), "{text}");
+    assert!(text.contains("error    store bad host.records: "), "{text}");
     assert!(text.contains("fix: no call reads it"), "{text}");
-    let json = layerfs(&home, &["doctor"]);
-    assert!(String::from_utf8_lossy(&json.stdout).starts_with(r#"{"ok":false,"#));
-    assert_eq!(layerfs(&home, &["doctor", "--all"]).status.code(), Some(2));
+    let json = layerfs(&home, &["home", "doctor"]);
+    let json = String::from_utf8_lossy(&json.stdout).into_owned();
+    assert!(json.starts_with(r#"{"findings":["#), "{json}");
+    assert!(
+        json.contains(r#"{"store":"bad","check":"host.records","severity":"error","#),
+        "{json}"
+    );
+    assert_eq!(
+        layerfs(&home, &["home", "doctor", "--all"]).status.code(),
+        Some(2)
+    );
     std::fs::remove_dir_all(home).unwrap();
 }
 
 #[test]
-fn doctor_fix_removes_the_leftover_the_report_listed() {
+fn doctor_fix_removes_one_leftover_by_its_id() {
     let home = home_path("fix");
     home::open(&home).unwrap();
     // a partly received image, last written two hours ago, and its lock
@@ -82,21 +97,8 @@ fn doctor_fix_removes_the_leftover_the_report_listed() {
     std::fs::write(&lock, "").unwrap();
     let id = format!("native:image-part:{digest}");
 
-    // the report: a warning with the command that removes it, exit 0
-    let text = layerfs(&home, &["doctor", "--text"]);
-    assert_eq!(text.status.code(), Some(0), "{text:?}");
-    let text = String::from_utf8(text.stdout).unwrap();
-    assert!(text.starts_with("0 error(s), 1 warning(s)"), "{text}");
-    assert!(text.contains("warning  machine native:"), "{text}");
-    assert!(
-        text.contains(&format!("`layerfs doctor fix {id}`")),
-        "{text}"
-    );
-    let json = String::from_utf8(layerfs(&home, &["doctor"]).stdout).unwrap();
-    assert!(json.contains(&format!(r#""id":"{id}""#)), "{json}");
-    assert!(json.contains(r#""bytes":50"#), "{json}");
-    assert!(json.contains(r#""image_locks":1"#), "{json}");
-
+    // no doctor's report lists a leftover (layerfs-project#180): its id is
+    // the one the leftover walk gives
     // wrong command lines exit 2, refusals 125 with their code
     assert_eq!(layerfs(&home, &["doctor", "fix"]).status.code(), Some(2));
     assert_eq!(
@@ -132,8 +134,6 @@ fn doctor_fix_removes_the_leftover_the_report_listed() {
     );
     assert!(!part.exists(), "the part is still there");
     assert!(lock.is_file(), "the lock file was removed");
-    let after = String::from_utf8(layerfs(&home, &["doctor"]).stdout).unwrap();
-    assert!(after.starts_with(r#"{"ok":true,"findings":[],"#), "{after}");
     assert_eq!(
         layerfs(&home, &["doctor", "fix", &id]).status.code(),
         Some(125)

@@ -21,27 +21,6 @@ except ImportError as err:
     ) from err
 from ._client import FAMILIES, TABLE, Client, client
 from ._errors import LayerFSError
-from ._values import decode, encode, path_text
-
-
-def doctor(home=None, *, target=None, name=None, timeout=None, quick=None, write_test=None):
-    """``layerfs doctor``: what is wrong in ``home`` (default ``LAYERFS_HOME``,
-    else ``~/.layerfs``), without changing LayerFS state or starting a machine. Returns
-    ``{"ok": ..., "findings": [{"severity", "entity": {"kind", "name"},
-    "message", "fix"}]}``; ``ok`` is false when a finding is an error.
-    Explicit target/name options select one diagnostic scope and add check
-    outcomes and completeness. timeout uses positive ms/s/m/h duration strings.
-    quick applies only to store.integrity; write_test only to backup.connection.
-    Explicit backup write_test may create and delete its own temporary S3 version.
-    Outside the call table. The report also lists what interrupted operations
-    left (``leftovers``, and ``leftover`` on such a finding); ``doctor.fix(id)``,
-    the ``doctor`` family's one call, removes one of them under its guard."""
-    options = {key: value for key, value in {"target": target, "name": name, "timeout": timeout, "quick": quick, "write_test": write_test}.items() if value is not None}
-    answer = decode(_native.doctor(path_text(home), encode(options)))
-    refused = answer.get("refused")
-    if refused is not None:
-        raise LayerFSError(refused["code"], refused["message"], refused.get("detail"))
-    return answer["value"]
 
 
 def close():
@@ -67,10 +46,7 @@ machine = _default.machine
 store = _default.store
 backup = _default.backup
 logs = _default.logs
-# the module's `doctor` is the report, and carries the `doctor` family's
-# calls: `layerfs.doctor()` and `layerfs.doctor.fix(id)`. A client made by
-# `client()` has the family alone: `lfs.doctor.fix(id)`.
-doctor.fix = _default.doctor.fix
+doctor = _default.doctor
 
 __all__ = [
     "FAMILIES",

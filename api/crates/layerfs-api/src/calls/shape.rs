@@ -9,7 +9,7 @@
 //! panics in a debug build, so the author sees it, and is dropped in a
 //! release build. What a declared section would add is not such a key: when
 //! the section was not asked for it is left out without a word.
-use super::form::{Asked, Form, Part, Place, Section, ITEMS, OK};
+use super::form::{Asked, Form, Part, Place, Section, ITEMS, OK, THING};
 use layerfs_bridge::control::SdkValue;
 
 type Fields = Vec<(String, SdkValue)>;
@@ -118,6 +118,14 @@ impl Shaping<'_> {
         let top = level == Level::Top;
         let mut out: Fields = Vec::new();
         for key in form.long {
+            if *key == THING {
+                // the one word that names the thing, in both forms
+                let named = fields
+                    .iter()
+                    .position(|(name, _)| form.things.contains(&name.as_str()));
+                out.extend(named.map(|at| fields.remove(at)));
+                continue;
+            }
             let short = form.always.contains(key) || form.sometimes.contains(key);
             let given = take(&mut fields, key);
             if !self.detail && !short {

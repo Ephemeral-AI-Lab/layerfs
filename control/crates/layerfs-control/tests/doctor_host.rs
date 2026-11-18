@@ -1,6 +1,9 @@
-//! Explicit host diagnostics observe records without opening or changing a home.
+//! The home's own checks observe records without opening or changing a home.
+#[path = "support/doctor_own.rs"]
+mod doctor_own;
+use doctor_own::{complete, outcome, own, own_within};
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::doctor::{doctor_target, DoctorRequest, DoctorTarget};
+use layerfs_control::doctor::{Kind, Options};
 use layerfs_home::home::{paths, private_dir, write_entity, write_record};
 use layerfs_home::op::Op;
 use std::collections::BTreeMap;
@@ -21,17 +24,11 @@ fn temp() -> PathBuf {
 fn t(text: &str) -> SdkValue {
     SdkValue::text(text)
 }
-fn request(timeout: Duration) -> DoctorRequest {
-    DoctorRequest {
-        target: DoctorTarget::Host,
-        timeout: Some(timeout),
-        quick: false,
-        write_test: false,
-        build: Default::default(),
-    }
-}
 fn run(home: &Path) -> SdkValue {
-    doctor_target(home, &request(Duration::from_secs(5))).unwrap()
+    checked(home, &Options::default())
+}
+fn checked(home: &Path, options: &Options) -> SdkValue {
+    own(home, Kind::Home, &home.display().to_string(), options)
 }
 fn home(layout: i64) -> PathBuf {
     let home = temp();
@@ -71,9 +68,10 @@ fn absent_home_stays_absent_and_reports_uninitialized() {
     let home = temp();
     let report = run(&home);
     assert!(!home.exists());
-    assert!(contains(&report, "not initialized"));
-    assert!(contains(&report, "host.native_daemon"));
-    assert!(contains(&report, "host.artifacts"));
+    // a home not made yet has no layout or records to check
+    assert_eq!(outcome(&report, "host.layout"), None, "{report:?}");
+    assert_eq!(outcome(&report, "host.records"), None, "{report:?}");
+    assert!(outcome(&report, "host.native_daemon").is_some());
 }
 #[test]
 fn current_and_previous_layouts_are_observed_without_conversion_or_files() {
@@ -82,14 +80,11 @@ fn current_and_previous_layouts_are_observed_without_conversion_or_files() {
         let before = tree(&home);
         let report = run(&home);
         assert_eq!(before, tree(&home));
-        assert!(contains(
-            &report,
-            if layout == 2 {
-                "requires conversion"
-            } else {
-                "Current home layout"
-            }
-        ));
+        if layout == 2 {
+            assert!(contains(&report, "requires conversion"));
+        } else {
+            assert_eq!(outcome(&report, "host.layout").as_deref(), Some("pass"));
+        }
         std::fs::remove_dir_all(home).unwrap();
     }
 }
@@ -103,8 +98,9 @@ fn malformed_layout_has_a_blocked_record_check_and_changes_nothing() {
     .unwrap();
     let before = tree(&home);
     let report = run(&home);
-    assert!(contains(&report, "blocked"));
-    assert!(contains(&report, "host.layout"));
+    assert_eq!(outcome(&report, "host.layout").as_deref(), Some("fail"));
+    // the records check waits on the layout: it does not apply
+    assert_eq!(outcome(&report, "host.records"), None, "{report:?}");
     assert_eq!(before, tree(&home));
     std::fs::remove_dir_all(home).unwrap();
 }
@@ -193,11 +189,17 @@ fn arbitrary_version_value_is_not_echoed_and_timeout_is_incomplete() {
     let report = run(&home);
     assert!(!contains(&report, "secret-token-value"));
     assert!(contains(&report, "non-integer"));
-    let invalid = doctor_target(&home, &request(Duration::ZERO)).unwrap_err();
-    assert_eq!(invalid.code, "InvalidInput");
-    // Positive budgets are valid even when exhausted before local inspection.
-    let timed = doctor_target(&home, &request(Duration::from_nanos(1))).unwrap();
-    assert!(!timed.get_bool("complete"));
+    // a budget exhausted before local inspection leaves checks not made
+    let shown = home.display().to_string();
+    let options = Options::default();
+    let timed = own_within(
+        &home,
+        Kind::Home,
+        &shown,
+        &options,
+        Some(Duration::from_nanos(1)),
+    );
+    assert!(!complete(&timed), "{timed:?}");
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -214,13 +216,7 @@ fn runtime_mount_and_log_subtrees_are_outside_record_fingerprinting() {
     private_dir(&trap).unwrap();
     std::fs::set_permissions(&trap, std::fs::Permissions::from_mode(0o0)).unwrap();
     let report = run(&home);
-    let Some(SdkValue::List(checks)) = report.get("checks") else {
-        panic!("checks")
-    };
-    assert!(checks
-        .iter()
-        .any(|row| row.get_text("id") == Some("host.records")
-            && row.get_text("outcome") == Some("pass")));
+    assert_eq!(outcome(&report, "host.records").as_deref(), Some("pass"));
     assert_eq!(std::fs::metadata(&trap).unwrap().mode() & 0o777, 0);
     std::fs::set_permissions(&trap, std::fs::Permissions::from_mode(0o700)).unwrap();
     std::fs::remove_dir_all(home).unwrap();
@@ -259,26 +255,14 @@ fn concurrent_management_record_rewrites_leave_consistency_incomplete() {
     let report = run(&home);
     done.store(true, Ordering::Relaxed);
     assert!(writer.join().unwrap() > 0);
-    let Some(SdkValue::List(checks)) = report.get("checks") else {
-        panic!("checks")
-    };
-    assert!(checks
-        .iter()
-        .any(|row| row.get_text("id") == Some("host.records")
-            && row.get_text("outcome") == Some("unknown")));
-    assert!(!report.get_bool("complete"));
+    assert_eq!(outcome(&report, "host.records").as_deref(), Some("unknown"));
+    assert!(!complete(&report));
     std::fs::remove_dir_all(home).unwrap();
 }
 
 /// The row `id` of a report.
-fn row<'a>(report: &'a SdkValue, id: &str) -> &'a SdkValue {
-    let Some(SdkValue::List(checks)) = report.get("checks") else {
-        panic!("{report:?}")
-    };
-    checks
-        .iter()
-        .find(|c| c.get_text("id") == Some(id))
-        .unwrap_or_else(|| panic!("no {id}: {report:?}"))
+fn row(report: &SdkValue, id: &str) -> SdkValue {
+    doctor_own::row(report, id).unwrap_or_else(|| panic!("no {id}: {report:?}"))
 }
 
 #[test]
@@ -306,14 +290,14 @@ fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
     )
     .unwrap();
     let with = |commit: &'static str| {
-        let request = DoctorRequest {
+        let options = Options {
             build: Build {
                 commit: Some(commit),
                 dirty: false,
             },
-            ..request(Duration::from_secs(5))
+            ..Options::default()
         };
-        doctor_target(&home, &request).unwrap()
+        checked(&home, &options)
     };
     // another commit: home.get's DaemonMismatch words, as a warning
     let other = with(ours);
@@ -336,26 +320,13 @@ fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
     let same = with(theirs);
     let check = row(&same, "host.native_daemon");
     assert_eq!(check.get_text("outcome"), Some("pass"), "{check:?}");
-    assert_eq!(
-        check.get("evidence").unwrap().get("matches"),
-        Some(&SdkValue::Bool(true))
-    );
-    // a build that names no commit cannot compare: it passes, saying so
+    // a build that names no commit cannot compare: it passes
     let unknown = run(&home);
     let check = row(&unknown, "host.native_daemon");
     assert_eq!(check.get_text("outcome"), Some("pass"), "{check:?}");
-    assert!(check
-        .get_text("message")
-        .unwrap()
-        .contains("cannot be compared"));
     // the native machine's daemon is reported here alone, not by host.artifacts
-    let artifacts = unknown.get("checks").and_then(|c| match c {
-        SdkValue::List(rows) => Some(rows.clone()),
-        _ => None,
-    });
     assert!(
-        !artifacts
-            .unwrap()
+        !doctor_own::rows(&unknown)
             .iter()
             .any(|r| r.get_text("id") == Some("host.artifacts")
                 && r.get_text("message").is_some_and(|m| m.contains("native"))),

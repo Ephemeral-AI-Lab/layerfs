@@ -170,7 +170,9 @@ export const steps = [
   ok("project get", "flow", "project.get", [P]),
   ok("projects", "flow", "project.list", []),
   ok("stores", "flow", "store.list", []),
-  ok("doctor", "flow", "doctor", [], {}, { check: (v) => assert.equal(typeof v.ok, "boolean") }),
+  ok("doctor", "flow", "home.doctor", [], {}, {
+    check: (v) => assert.ok(v.ok === true || Array.isArray(v.findings) || Array.isArray(v.not_checked)),
+  }),
 
   // --- project.export: a fresh directory, the default and an explicit Branch, and refusals
   ok("export main", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-main`], {}, {

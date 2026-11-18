@@ -16,7 +16,7 @@ import { mkdtempSync, writeFileSync, chmodSync, rmSync, existsSync } from "node:
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { client, doctor, close, table, LayerFSError } from "../src/index.js";
+import { client, close, table, LayerFSError } from "../src/index.js";
 import { encode, decode } from "../src/values.js";
 import { steps, P } from "./contract/cases.mjs";
 import { refusalOf } from "./contract/refusal.mjs";
@@ -69,10 +69,6 @@ async function runNode(ctx) {
   const out = [];
   for (const step of steps) {
     try {
-      if (step.call === "doctor") {
-        out.push({ ok: await doctor({ home: ctx.home }) });
-        continue;
-      }
       const [family, call] = step.call.split(".");
       const given = resolveArgs(step, ctx);
       out.push({ ok: await lfs[family][call](...given, ...(hasOptions(step) ? [step.opts] : [])) });
@@ -123,7 +119,7 @@ function cliWords(spec, step, ctx) {
 function runCli(ctx) {
   return steps.map((step) => {
     if (step.cli === "skip") return { skipped: true };
-    const { words, input } = step.call === "doctor" ? { words: ["doctor"] } : cliWords(specs.get(step.call), step, ctx);
+    const { words, input } = cliWords(specs.get(step.call), step, ctx);
     const run = spawnSync(command, words, { env: { ...process.env, LAYERFS_HOME: ctx.home }, input: input ?? "", timeout: 60_000 });
     assert.equal(run.error, undefined, `${step.id}: ${run.error}`);
     const lines = run.stderr.toString().trim().split("\n");

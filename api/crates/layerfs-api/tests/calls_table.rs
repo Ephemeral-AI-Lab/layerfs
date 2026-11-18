@@ -505,10 +505,9 @@ fn the_source_is_one_file_per_call_under_its_family() {
             .collect();
         files.push("mod.rs".to_owned());
         if family.name == "doctor" {
-            // the report itself (explicit options and its run) stays
-            // outside the table and the home dispatcher, beside the family's
-            // one call
-            files.extend(["options.rs".to_owned(), "run.rs".to_owned()]);
+            // the six doctors' one answer, beside the family's one call;
+            // each doctor's entry is in its own family's folder
+            files.push("answer.rs".to_owned());
         }
         files.sort();
         assert_eq!(names(&src.join(family.name)), files, "{}", family.name);
@@ -607,7 +606,7 @@ fn the_call_log_calls_moved_to_home_with_no_alias() {
         .iter()
         .map(|call| call.call)
         .collect();
-    assert_eq!(home, ["init", "get", "log", "clear_log"]);
+    assert_eq!(home, ["init", "get", "log", "clear_log", "doctor"]);
 }
 
 #[test]
@@ -632,8 +631,9 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "machine.create",
         "machine.remove",
         "machine.update",
+        "machine.doctor",
     ];
-    let home = ["home.get", "home.log", "home.clear_log"];
+    let home = ["home.get", "home.log", "home.clear_log", "home.doctor"];
     let branch = [
         "branch.list",
         "branch.get",
@@ -643,9 +643,20 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "branch.remove",
     ];
     let commit = ["commit.list", "commit.get", "commit.diff"];
+    let after = ["store.doctor", "backup.doctor"];
+    // in family order: home, project, branch, commit, file, sandbox, …
     assert_eq!(
         migrated,
-        [&home[..], &branch[..], &commit[..], &machine[..]].concat()
+        [
+            &home[..],
+            &["project.doctor"][..],
+            &branch[..],
+            &commit[..],
+            &["sandbox.doctor"][..],
+            &machine[..],
+            &after[..],
+        ]
+        .concat()
     );
     for call in layerfs_api::calls() {
         if let Some(form) = call.form {

@@ -63,22 +63,28 @@ class Progress(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.home, True)
         self.addCleanup(shutil.rmtree, self.folder, True)
 
-    def test_the_table_fourteen_calls_take_on_progress(self):
+    def test_the_table_nineteen_calls_take_on_progress(self):
+        # five of them doctors: each finished thing is one event
         self.assertEqual(
             declaring("on_progress"),
             [
+                "home.doctor",
                 "project.init",
                 "project.export",
+                "project.doctor",
                 "sandbox.create",
+                "sandbox.doctor",
                 "workspace.exec",
                 "machine.load_image",
                 "machine.start",
                 "machine.stop",
                 "machine.create",
                 "machine.remove",
+                "machine.doctor",
                 "store.push",
                 "store.pull",
                 "store.compact",
+                "store.doctor",
                 "backup.create",
                 "backup.restore",
             ],
