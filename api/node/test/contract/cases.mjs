@@ -32,25 +32,25 @@ const bad = (id, group, call, args, expect, opts = {}, more = {}) => ({ id, grou
 export const steps = [
   // --- setup: a Store, a project from a folder, a Branch
   ok("store", "setup", "store.create", ["shop"], { detail: true }, { check: (v) => assert.equal(v.profile, "disposable") }),
-  ok("init", "setup", "project.init", (ctx) => [P, ctx.folder], {}, { check: (v) => assert.equal(v.project, P) }),
+  ok("init", "setup", "project.init", (ctx) => [P, ctx.folder], { detail: true }, { check: (v) => assert.equal(v.project, P) }),
   ok("fork", "setup", "branch.fork", [P, B, "main"], { detail: true }, { check: (v) => assert.equal(v.outcome, "forked") }),
 
   // --- required and optional arguments, defaults, omitted and null
   bad("missing path", "args", "file.read", [P, B], "InvalidInput", {}, { cli: "usage", loose: true, check: (v) => assert.match(v.message ?? v.usage, /path|positional/) }),
   bad("missing all", "args", "file.read", [], "InvalidInput", {}, { cli: "usage", loose: true }),
-  ok("read default", "args", "file.read", [P, B, "/README.md"], {}, {
-    check: (v) => assert.deepEqual([v.text, v.start_line, v.end_line, v.truncated, v.next_line], ["hello\nsecond\n", 1, 2, false, null]),
+  ok("read default", "args", "file.read", [P, B, "/README.md"], { detail: true }, {
+    check: (v) => assert.deepEqual([v.text, v.start_line, v.end_line, v.line_truncated, v.next_line], ["hello\nsecond\n", 1, 2, false, null]),
   }),
-  ok("read null commit", "args", "file.read", [P, B, "/README.md", null], {}, { cli: "skip", sameAs: "read default" }),
-  ok("read null options", "args", "file.read", [P, B, "/README.md"], { start_line: null, end_line: null }, { cli: "skip", sameAs: "read default" }),
-  ok("read window", "args", "file.read", [P, B, "/README.md"], { start_line: 2 }, { check: (v) => assert.deepEqual([v.text, v.start_line], ["second\n", 2]) }),
+  ok("read null at", "args", "file.read", [P, B, "/README.md"], { at: null, detail: true }, { cli: "skip", sameAs: "read default" }),
+  ok("read null options", "args", "file.read", [P, B, "/README.md"], { line: null, limit: null, detail: true }, { cli: "skip", sameAs: "read default" }),
+  ok("read window", "args", "file.read", [P, B, "/README.md"], { line: 2 }, { check: (v) => assert.deepEqual([v.text, v.next_line], ["second\n", undefined]) }),
   ok("branches default", "args", "branch.list", [P], {}, { check: (v) => assert.deepEqual([v.items.length, v.next_cursor ?? null], [2, null]) }),
   ok("branches page", "args", "branch.list", [P], { limit: 1 }, { check: (v) => assert.deepEqual([v.items.length, typeof v.next_cursor], [1, "string"]) }),
   bad("branches page 0", "args", "branch.list", [P], "InvalidInput", { limit: 0 }, { check: (v) => assert.match(v.message, /limit/) }),
-  ok("write default message", "args", "file.write", [P, B, "/dflt.txt", "x\n"], {}, { check: (v) => assert.equal(typeof v.commit.message, "string") }),
-  ok("write message", "args", "file.write", [P, B, "/msg.txt", "x\n"], { message: "say so" }, { check: (v) => assert.equal(v.commit.message, "say so") }),
-  ok("write mode", "args", "file.write", [P, B, "/mode.txt", "x\n"], { mode: 0o600 }),
-  ok("stat mode", "args", "file.stat", [P, B, "/mode.txt"], {}, { check: (v) => assert.equal(v.mode, 0o600) }),
+  ok("write default message", "args", "file.write", [P, B, "/dflt.txt", "x\n"], { detail: true }, { check: (v) => assert.equal(typeof v.message, "string") }),
+  ok("write message", "args", "file.write", [P, B, "/msg.txt", "x\n"], { message: "say so", detail: true }, { check: (v) => assert.equal(v.message, "say so") }),
+  ok("write mode", "args", "file.write", [P, B, "/mode.txt", "x\n"], { mode: "0600" }),
+  ok("stat mode", "args", "file.stat", [P, B, "/mode.txt"], {}, { check: (v) => assert.equal(v.mode, "0600") }),
   bad("write no content", "args", "file.write", [P, B, "/nc.txt"], "InvalidInput", {}, { cli: "skip", check: (v) => assert.match(v.message, /content/) }),
 
   // --- unknown options and extra arguments are refused before any effect
@@ -98,7 +98,7 @@ export const steps = [
   // --- binary data, Unicode, empty values and nested JSON, stored and read back
   ok("write bytes", "values", "file.write", [P, B, "/all.bin", BYTES]),
   ok("stat bytes", "values", "file.stat", [P, B, "/all.bin"], {}, { check: (v) => assert.equal(v.size, 256) }),
-  bad("read bytes", "values", "file.read", [P, B, "/all.bin"], "InvalidInput"),
+  ok("read bytes", "values", "file.read", [P, B, "/all.bin"], {}, { check: (v) => assert.deepEqual([v.binary, v.size, v.text], [true, 256, undefined]) }),
   ok("write utf8 bytes", "values", "file.write", [P, B, "/utf8.txt", Buffer.from(UNICODE, "utf8")]),
   ok("read utf8 bytes", "values", "file.read", [P, B, "/utf8.txt"], {}, { check: (v) => assert.equal(v.text, UNICODE) }),
   ok("write unicode", "values", "file.write", [P, B, "/é☃𝄞.txt", UNICODE]),
@@ -108,55 +108,56 @@ export const steps = [
   ok("stat NFC", "values", "file.stat", [P, B, "/nfc.txt"], {}, { check: (v) => assert.equal(v.size, 2) }),
   ok("stat NFD", "values", "file.stat", [P, B, "/nfd.txt"], {}, { check: (v) => assert.equal(v.size, 3) }),
   ok("write empty", "values", "file.write", [P, B, "/empty.txt", ""]),
-  ok("read empty", "values", "file.read", [P, B, "/empty.txt"], {}, { check: (v) => assert.deepEqual([v.text, v.size, v.end_line], ["", 0, null]) }),
+  ok("read empty", "values", "file.read", [P, B, "/empty.txt"], { detail: true }, { check: (v) => assert.deepEqual([v.text, v.size, v.end_line], ["", 0, null]) }),
   ok("write empty message", "values", "file.write", [P, B, "/emptymsg.txt", "x"], { message: "" }),
-  bad("edit empty old", "values", "file.edit", [P, B, "/utf8.txt"], "InvalidInput", { old: "", new: "x" }),
+  bad("edit empty old", "values", "file.edit", [P, B, "/utf8.txt"], "InvalidInput", { old_string: "", new_string: "x" }),
   ok("apply nested", "values", "file.apply", [P, B, [
     { op: "mkdir", path: "/d" },
     { op: "write", path: "/d/é☃.json", content: NESTED },
     { op: "write", path: "/d/raw.bin", content: Buffer.from([0, 255, 1]) },
     { op: "write", path: "/d/abc.txt", content: { base64: "QUJD" } },
     { op: "write", path: "/d/empty.txt", content: "" },
-    { op: "edit", path: "/d/é☃.json", old: '"s":"é☃"', new: '"s":""' },
-    { op: "cp", from_path: "/d/abc.txt", to_path: "/d/abc2.txt" },
-    { op: "mv", from_path: "/d/abc2.txt", to_path: "/d/moved.txt" },
-    { op: "chmod", path: "/d/moved.txt", mode: 0o755 },
-  ]], { message: "nested" }, { check: (v) => assert.deepEqual([v.kind, v.commit.message], ["Committed", "nested"]) }),
+    { op: "edit", path: "/d/é☃.json", old_string: '"s":"é☃"', new_string: '"s":""' },
+    { op: "cp", from: "/d/abc.txt", to: "/d/abc2.txt" },
+    { op: "mv", from: "/d/abc2.txt", to: "/d/moved.txt" },
+    { op: "chmod", path: "/d/moved.txt", mode: "0755" },
+  ]], { message: "nested", detail: true }, { check: (v) => assert.deepEqual([v.outcome, v.message], ["committed", "nested"]) }),
   ok("read nested", "values", "file.read", [P, B, "/d/é☃.json"], {}, { check: (v) => assert.equal(v.text, NESTED.replace('"s":"é☃"', '"s":""')) }),
   ok("read base64 wrapper", "values", "file.read", [P, B, "/d/abc.txt"], {}, { check: (v) => assert.equal(v.text, "ABC") }),
   ok("read moved", "values", "file.read", [P, B, "/d/moved.txt"], {}, { check: (v) => assert.equal(v.text, "ABC") }),
-  ok("stat moved", "values", "file.stat", [P, B, "/d/moved.txt"], {}, { check: (v) => assert.equal(v.mode, 0o755) }),
-  bad("read raw", "values", "file.read", [P, B, "/d/raw.bin"], "InvalidInput"),
+  ok("stat moved", "values", "file.stat", [P, B, "/d/moved.txt"], {}, { check: (v) => assert.equal(v.mode, "0755") }),
+  ok("read raw", "values", "file.read", [P, B, "/d/raw.bin"], {}, { check: (v) => assert.deepEqual([v.binary, v.size], [true, 3]) }),
   bad("apply base64 not base64", "values", "file.apply", [P, B, [{ op: "write", path: "/q.txt", content: { base64: "not base64!" } }]], "InvalidInput", { detail: true }, { check: (v) => assert.deepEqual(v.detail, { index: 0 }) }),
-  ok("apply empty list", "values", "file.apply", [P, B, []], {}, { check: (v) => assert.equal(v.kind, "UpToDate") }),
+  ok("apply empty list", "values", "file.apply", [P, B, []], {}, { check: (v) => assert.equal(v.unchanged, true) }),
   bad("lone surrogate text", "values", "file.write", [P, B, "/s.txt", "a\ud800b"], "InvalidInput", {}, { cli: "skip", loose: true }),
   bad("lone surrogate path", "values", "file.stat", [P, B, "/a\ud800"], "InvalidInput", {}, { cli: "skip", loose: true }),
   ok("listing", "values", "file.list", [P, B, "/d"], {}, { check: (v) => assert.equal(v.items.length, 5) }),
-  ok("grep unicode", "values", "file.grep", [P, B, "/", "☃"], {}),
-  ok("glob unicode", "values", "file.glob", [P, B, "/", "**/*.json"], {}),
-  bad("whole numbers only", "values", "file.read", [P, B, "/README.md"], "InvalidInput", { start_line: 1.5 }, { cli: "usage", loose: true }),
-  ok("whole float", "values", "file.read", [P, B, "/README.md"], { start_line: 2.0 }, {
+  ok("grep unicode", "values", "file.grep", [P, B, "☃", "/"], {}),
+  ok("glob unicode", "values", "file.glob", [P, B, "**/*.json", "/"], {}),
+  bad("whole numbers only", "values", "file.read", [P, B, "/README.md"], "InvalidInput", { line: 1.5 }, { cli: "usage", loose: true }),
+  ok("whole float", "values", "file.read", [P, B, "/README.md"], { line: 2.0 }, {
     // JavaScript has no 2.0 apart from 2; a Python float is not a whole number, even 2.0
-    pythonOpts: { start_line: { $float: "2.0" } },
+    pythonOpts: { line: { $float: "2.0" } },
     differs: { node: "ok", python: "InvalidInput", aio: "InvalidInput", cli: "ok" },
   }),
 
   // --- large integers: exact where an argument takes them, else refused outright
   ok("lines", "ints", "file.write", [P, B, "/lines.txt", "l1\nl2\nl3\n"]),
-  ok("line 3", "ints", "file.read", [P, B, "/lines.txt"], { start_line: 3 }, { check: (v) => assert.deepEqual([v.text, v.start_line], ["l3\n", 3]) }),
-  ok("line safe max", "ints", "file.read", [P, B, "/lines.txt"], { start_line: MAX_SAFE }, { check: (v) => assert.equal(v.start_line, Number.MAX_SAFE_INTEGER) }),
-  bad("line 2^53", "ints", "file.read", [P, B, "/lines.txt"], "InvalidInput", { start_line: MAX_SAFE + 1n }, { check: (v) => assert.match(v.message, /safe integer/) }),
-  bad("line 2^62+1", "ints", "file.read", [P, B, "/lines.txt"], "InvalidInput", { start_line: 2n ** 62n + 1n }, { check: (v) => assert.match(v.message, /safe integer/) }),
+  ok("line 3", "ints", "file.read", [P, B, "/lines.txt"], { line: 3 }, { check: (v) => assert.equal(v.text, "l3\n") }),
+  ok("line safe max", "ints", "file.read", [P, B, "/lines.txt"], { line: MAX_SAFE, detail: true }, { check: (v) => assert.equal(v.start_line, Number.MAX_SAFE_INTEGER) }),
+  bad("line 2^53", "ints", "file.read", [P, B, "/lines.txt"], "InvalidInput", { line: MAX_SAFE + 1n }, { check: (v) => assert.match(v.message, /safe integer/) }),
+  bad("line 2^62+1", "ints", "file.read", [P, B, "/lines.txt"], "InvalidInput", { line: 2n ** 62n + 1n }, { check: (v) => assert.match(v.message, /safe integer/) }),
   // 2^63-1 reaches the library unchanged (its answer is the engine's, not "out of range"): a
   // conversion through a double would round it up to 2^63
-  bad("line i64 max", "ints", "file.read", [P, B, "/lines.txt"], "InvalidInput", { start_line: 2n ** 63n - 1n }, { check: (v) => assert.match(v.message, /safe integer/) }),
-  bad("line i64 max + 1", "ints", "file.read", [P, B, "/lines.txt"], "InvalidInput", { start_line: 2n ** 63n }, { cli: "usage", loose: true, check: (v) => assert.match(v.message ?? v.usage, /out of range|whole number/) }),
-  bad("line unsafe number", "ints", "file.read", [P, B, "/lines.txt"], "InvalidInput", { start_line: Number.MAX_SAFE_INTEGER + 2 }, { cli: "skip", loose: true, check: (v) => assert.match(v.message, /safe integer/) }),
+  bad("line i64 max", "ints", "file.read", [P, B, "/lines.txt"], "InvalidInput", { line: 2n ** 63n - 1n }, { check: (v) => assert.match(v.message, /safe integer/) }),
+  bad("line i64 max + 1", "ints", "file.read", [P, B, "/lines.txt"], "InvalidInput", { line: 2n ** 63n }, { cli: "usage", loose: true, check: (v) => assert.match(v.message ?? v.usage, /out of range|whole number/) }),
+  bad("line unsafe number", "ints", "file.read", [P, B, "/lines.txt"], "InvalidInput", { line: Number.MAX_SAFE_INTEGER + 2 }, { cli: "skip", loose: true, check: (v) => assert.match(v.message, /safe integer/) }),
   bad("limit 2^62", "ints", "branch.list", [P], "InvalidInput", { limit: 2n ** 62n }, { check: (v) => assert.match(v.message, /`limit` is 1 to 1000/) }),
-  bad("mode 2^62", "ints", "file.write", [P, B, "/big.txt", "x"], "InvalidInput", { mode: 2n ** 62n }, { check: (v) => assert.match(v.message, /mode/) }),
-  bad("mode i64 max + 1", "ints", "file.write", [P, B, "/big.txt", "x"], "InvalidInput", { mode: 2n ** 63n }, { cli: "usage", loose: true }),
+  // `mode` is octal text: a binding refuses a number for it, the command line reads the digits as text
+  bad("mode 2^62", "ints", "file.write", [P, B, "/big.txt", "x"], "InvalidInput", { mode: 2n ** 62n }, { loose: true, check: (v) => assert.match(v.message, /mode/) }),
+  bad("mode i64 max + 1", "ints", "file.write", [P, B, "/big.txt", "x"], "InvalidInput", { mode: 2n ** 63n }, { loose: true }),
   bad("apply mode 2^63", "ints", "file.apply", [P, B, [{ op: "chmod", path: "/lines.txt", mode: 2n ** 63n }]], "InvalidInput", {}, { cli: "usage", loose: true }),
-  bad("apply mode 2^62", "ints", "file.apply", [P, B, [{ op: "chmod", path: "/lines.txt", mode: 2n ** 62n }]], "InvalidInput", { detail: true }, { check: (v) => assert.deepEqual(v.detail, { index: 0 }) }),
+  bad("apply mode 2^62", "ints", "file.apply", [P, B, [{ op: "chmod", path: "/lines.txt", mode: 2n ** 62n }]], "InvalidInput", {}, { check: (v) => assert.match(v.message, /octal/) }),
   bad("big written nothing", "ints", "file.stat", [P, B, "/big.txt"], "NotFound"),
 
   // --- a real flow across Branches, then the same answers from every front end
@@ -175,11 +176,11 @@ export const steps = [
   }),
 
   // --- project.export: a fresh directory, the default and an explicit Branch, and refusals
-  ok("export main", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-main`], {}, {
-    check: (v) => assert.deepEqual([v.branch, v.files, v.directories, v.symlinks], ["main", 1, 0, 0]),
+  ok("export main", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-main`], { detail: true }, {
+    check: (v) => assert.deepEqual([typeof v.commit, v.file_count, v.dir_count, v.symlink_count], ["string", 1, 0, 0]),
   }),
-  ok("export merged", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-merged`], { branch: "merged" }, {
-    check: (v) => assert.equal(v.branch, "merged"),
+  ok("export merged", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-merged`], { branch: "merged", detail: true }, {
+    check: (v) => assert.equal(typeof v.commit, "string"),
   }),
   bad("export nonempty", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-main`], "InvalidInput"),
   bad("export commit option", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-commit`], "InvalidInput", { commit: "main" }, { cli: "usage" }),

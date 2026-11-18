@@ -1,13 +1,39 @@
-//! `file.edit`: replace one unique text in a file; one Commit.
+//! `file.edit`: replace a text in a file; one Commit.
+use super::write::EXPECTED;
+use super::{guard, text};
 use crate::calls::scope::Rule;
-use crate::calls::table::Kind::{Name, Project, Text};
+use crate::calls::table::Kind::{Bool, Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call, MESSAGE};
-use crate::calls::Context;
-use crate::calls::Policy;
-use crate::calls::Saves;
+use crate::calls::{Context, Form, Policy, Saves};
 use layerfs_bridge::control::SdkValue;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store::calls::file::{edit, FileEdit};
+
+/// A write's answer and, with `--replace-all`, how many were `replaced`.
+const FORM: Form = Form::of(
+    &["commit"],
+    &[
+        "unchanged",
+        "replaced",
+        "merged",
+        "overwritten",
+        "overwritten_count",
+    ],
+    &[
+        "commit",
+        "unchanged",
+        "replaced",
+        "merged",
+        "overwritten",
+        "overwritten_count",
+        "outcome",
+        "branch",
+        "parent",
+        "root",
+        "message",
+        "created_at",
+    ],
+);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -19,27 +45,39 @@ pub(crate) const CALL: Call = call(
         a("path", Text).redact_path(),
     ],
     &[
-        opt("old", Text).redact(),
-        opt("new", Text).redact(),
+        opt("old_string", Text).redact(),
+        opt("new_string", Text).redact(),
+        opt("replace_all", Bool),
+        EXPECTED,
         MESSAGE,
     ],
-    "replace one unique text in a file; one Commit",
+    "replace a text in a file; one Commit",
     run,
 )
 .scoped(Rule::File(&["path"]))
 .policy(Policy::Project("project"))
-.saves(Saves::Commit);
+.saves(Saves::Commit)
+.form(&FORM)
+.agent();
 
-/// Runs `file.edit`.
+/// Runs `file.edit`; `--old-string` and `--new-string` are required.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    let text = |name: &str| args.get_text(name).map(str::to_owned);
+    let required = |name: &str| {
+        text(args, name).ok_or_else(|| {
+            refused(
+                "InvalidInput",
+                format!("file.edit needs `{name}` (`--{}`)", name.replace('_', "-")),
+            )
+        })
+    };
     let request = FileEdit {
-        project: text("project").unwrap_or_default(),
-        branch: text("branch").unwrap_or_default(),
-        path: text("path").unwrap_or_default(),
-        old: text("old"),
-        new: text("new"),
-        message: text("message"),
+        project: text(args, "project").unwrap_or_default(),
+        branch: text(args, "branch").unwrap_or_default(),
+        path: text(args, "path").unwrap_or_default(),
+        old_string: required("old_string")?,
+        new_string: required("new_string")?,
+        replace_all: args.get_bool("replace_all"),
+        guard: guard(args),
     };
     let (home, events) = context.parts();
     edit(home, events, &request)

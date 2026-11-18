@@ -63,11 +63,15 @@ fn call_with_events(
     args: &[(&str, SdkValue)],
     events: &mut dyn FnMut(SdkValue),
 ) -> Result<SdkValue, (String, String)> {
-    let args = SdkValue::Map(
-        args.iter()
-            .map(|(n, v)| ((*n).to_owned(), v.clone()))
-            .collect(),
-    );
+    let mut args: Vec<(String, SdkValue)> = args
+        .iter()
+        .map(|(n, v)| ((*n).to_owned(), v.clone()))
+        .collect();
+    // an export's counts beyond `file_count` and `size` are its long form's
+    if name == "project.export" {
+        args.push(("detail".to_owned(), SdkValue::Bool(true)));
+    }
+    let args = SdkValue::Map(args);
     layerfs_api::call(Some(home), name, args, events).map_err(|r| (r.code, r.message))
 }
 
@@ -238,23 +242,12 @@ fn export_fidelity_progress_and_empty_destination_on_local_sqlite() {
     )
     .unwrap();
 
-    assert_eq!(res.get_text("project"), Some("shop/app"));
-    assert_eq!(res.get_text("store"), Some("shop"));
-    assert_eq!(res.get_text("name"), Some("app"));
-    assert_eq!(res.get_text("kind"), Some("sqlite"));
-    assert_eq!(res.get_text("machine"), Some("native"));
-    assert_eq!(res.get_text("branch"), Some("main"));
-    assert!(res.get_text("snapshot").unwrap_or("").starts_with("main@"));
-    assert_eq!(res.get_text("node").unwrap_or("").len(), 66);
+    assert_eq!(res.get_text("commit").unwrap_or("").len(), 66);
     assert_eq!(res.get_text("root").unwrap_or("").len(), 64);
-    assert_eq!(
-        res.get_text("destination"),
-        Some(dest.display().to_string().as_str())
-    );
-    assert_eq!(res.get_int("files"), Some(9));
-    assert_eq!(res.get_int("directories"), Some(7));
-    assert_eq!(res.get_int("symlinks"), Some(2));
-    assert!(res.get_int("bytes").unwrap() > big.len() as i64);
+    assert_eq!(res.get_int("file_count"), Some(9));
+    assert_eq!(res.get_int("dir_count"), Some(7));
+    assert_eq!(res.get_int("symlink_count"), Some(2));
+    assert!(res.get_int("size").unwrap() > big.len() as i64);
 
     assert_same_tree(&source, &dest);
 
@@ -269,11 +262,15 @@ fn export_fidelity_progress_and_empty_destination_on_local_sqlite() {
         .collect();
     assert_eq!(phases.first().map(String::as_str), Some("prepare"));
     assert_eq!(phases.last().map(String::as_str), Some("finalize"));
+    // each event is the public shape and nothing else: `{ phase, done, total }`
+    for event in &events {
+        let SdkValue::Map(fields) = event.get("progress").unwrap() else {
+            panic!("{event:?}")
+        };
+        let keys: Vec<&str> = fields.iter().map(|(key, _)| key.as_str()).collect();
+        assert_eq!(keys, ["phase", "done", "total"], "{event:?}");
+    }
     let prepare_prog = events.first().and_then(|e| e.get("progress")).unwrap();
-    assert_eq!(prepare_prog.get_int("files"), Some(0));
-    assert_eq!(prepare_prog.get_int("directories"), Some(0));
-    assert_eq!(prepare_prog.get_int("symlinks"), Some(0));
-    assert_eq!(prepare_prog.get_int("bytes"), Some(0));
     assert_eq!(prepare_prog.get("done"), Some(&SdkValue::Null));
 
     let export_events: Vec<&SdkValue> = events
@@ -285,32 +282,16 @@ fn export_fidelity_progress_and_empty_destination_on_local_sqlite() {
         export_events.len() >= 2,
         "expected multiple export progress updates for >9 MiB tree: {export_events:?}"
     );
-    let mut prev = (0i64, 0i64, 0i64, 0i64);
+    let mut prev = 0i64;
     for p in &export_events {
-        let cur = (
-            p.get_int("files").unwrap(),
-            p.get_int("directories").unwrap(),
-            p.get_int("symlinks").unwrap(),
-            p.get_int("bytes").unwrap(),
-        );
-        assert_eq!(p.get_int("done"), Some(cur.3));
-        assert!(
-            cur.0 >= prev.0 && cur.1 >= prev.1 && cur.2 >= prev.2 && cur.3 >= prev.3,
-            "non-monotonic progress: {prev:?} -> {cur:?}"
-        );
+        let cur = p.get_int("done").unwrap();
+        assert!(cur >= prev, "non-monotonic progress: {prev} -> {cur}");
         prev = cur;
     }
-    assert_eq!(prev.0, 9);
-    assert_eq!(prev.1, 7);
-    assert_eq!(prev.2, 2);
-    assert_eq!(prev.3, res.get_int("bytes").unwrap());
+    assert_eq!(prev, res.get_int("size").unwrap());
 
     let finalize_prog = events.last().and_then(|e| e.get("progress")).unwrap();
-    assert_eq!(finalize_prog.get_int("files"), Some(9));
-    assert_eq!(finalize_prog.get_int("directories"), Some(7));
-    assert_eq!(finalize_prog.get_int("symlinks"), Some(2));
-    assert_eq!(finalize_prog.get_int("bytes"), res.get_int("bytes"));
-    assert_eq!(finalize_prog.get_int("done"), res.get_int("bytes"));
+    assert_eq!(finalize_prog.get_int("done"), res.get_int("size"));
 
     // Exporting into an already existing empty directory succeeds too
     let empty_dest = out_parent.join("preexisting-empty");
@@ -323,7 +304,7 @@ fn export_fidelity_progress_and_empty_destination_on_local_sqlite() {
             ("destination", t(&empty_dest.display().to_string())),
         ],
     );
-    assert_eq!(res2.get_int("files"), Some(9));
+    assert_eq!(res2.get_int("file_count"), Some(9));
     assert_same_tree(&source, &empty_dest);
 
     unlock_readonly(&source);
@@ -395,10 +376,10 @@ fn symlink_aliases_keep_targets_and_never_follow_outside_staging() {
             ("destination", t(&dest.display().to_string())),
         ],
     );
-    assert_eq!(res.get_int("files"), Some(1));
-    assert_eq!(res.get_int("directories"), Some(0));
-    assert_eq!(res.get_int("symlinks"), Some(4));
-    assert_eq!(res.get_int("bytes"), Some(7));
+    assert_eq!(res.get_int("file_count"), Some(1));
+    assert_eq!(res.get_int("dir_count"), Some(0));
+    assert_eq!(res.get_int("symlink_count"), Some(4));
+    assert_eq!(res.get_int("size"), Some(7));
 
     for name in ["rel_a", "rel_alias", "rel_dup"] {
         let path = dest.join(name);
@@ -812,7 +793,12 @@ fn branch_selection_and_pinned_snapshot_under_concurrent_writes() {
             ("destination", t(&main_out.display().to_string())),
         ],
     );
-    assert_eq!(main_res.get_text("branch"), Some("main"));
+    let main_head = ok(
+        &home,
+        "branch.get",
+        &[("project", t("shop/app")), ("branch", t("main"))],
+    );
+    assert_eq!(main_res.get_text("commit"), main_head.get_text("commit"));
     assert_eq!(
         std::fs::read_to_string(main_out.join("base.txt")).unwrap(),
         "v1\n"
@@ -860,7 +846,7 @@ fn branch_selection_and_pinned_snapshot_under_concurrent_writes() {
     )
     .unwrap();
     assert!(mutated_mid_export);
-    assert_eq!(feat_res.get_text("branch"), Some("feat"));
+    assert_ne!(feat_res.get_text("commit"), main_res.get_text("commit"));
     assert_eq!(
         std::fs::read_to_string(feat_out.join("base.txt")).unwrap(),
         "v2-on-feat\n"
@@ -1023,10 +1009,9 @@ fn worker_sqlite_export_and_midstream_disconnect_cleanup() {
         &mut |e| events.push(e),
     )
     .unwrap();
-    assert_eq!(exported.get_text("machine"), Some("box"));
-    assert_eq!(exported.get_int("files"), Some(9));
-    assert_eq!(exported.get_int("directories"), Some(7));
-    assert_eq!(exported.get_int("symlinks"), Some(2));
+    assert_eq!(exported.get_int("file_count"), Some(9));
+    assert_eq!(exported.get_int("dir_count"), Some(7));
+    assert_eq!(exported.get_int("symlink_count"), Some(2));
     assert_same_tree(&source, &dest);
     assert!(events.len() >= 4, "{events:?}");
     assert_eq!(
@@ -1322,7 +1307,7 @@ fn shared_store_lease_and_concurrent_remove_admission() {
                         ("destination", t(&second_dest.display().to_string())),
                     ],
                 );
-                assert_eq!(second_res.get_int("files"), Some(2));
+                assert_eq!(second_res.get_int("file_count"), Some(2));
 
                 // Exclusive Store operations (`store.remove`, `store.push`) are refused `InUse`
                 let (rm_code, rm_msg) =
@@ -1339,17 +1324,13 @@ fn shared_store_lease_and_concurrent_remove_admission() {
                 // `project.delete` retires the LayerStack and removes the home
                 // entry; the already-pinned export continues without corruption.
                 let removed = ok(&home, "project.delete", &[("project", t("shop/app"))]);
-                assert_eq!(removed.get_text("kind"), Some("Removed"));
-                assert_eq!(
-                    removed.get("home_entry_removed"),
-                    Some(&SdkValue::Bool(true))
-                );
+                assert_eq!(removed, SdkValue::map([("ok", SdkValue::Bool(true))]));
             }
         },
     )
     .unwrap();
     assert!(checked_mid_export);
-    assert_eq!(first_res.get_int("files"), Some(2));
+    assert_eq!(first_res.get_int("file_count"), Some(2));
     assert_same_tree(&source, &first_dest);
     assert_same_tree(&source, &second_dest);
     let _ = std::fs::remove_file(&other_lease);
@@ -1596,7 +1577,7 @@ fn export_progress_events_follow_time_not_entry_count() {
     })
     .unwrap();
     let elapsed = started.elapsed().as_millis();
-    assert_eq!(res.get_int("files"), Some(3000));
+    assert_eq!(res.get_int("file_count"), Some(3000));
     assert!(
         exports <= 2 + elapsed / 200,
         "{exports} export events in {elapsed} ms"
@@ -1607,7 +1588,7 @@ fn export_progress_events_follow_time_not_entry_count() {
 }
 
 #[test]
-fn export_omits_a_path_hidden_by_remove_file() {
+fn export_omits_a_path_hidden_by_hide_path() {
     let home = private_home("removed-home");
     ok(&home, "store.create", &[("name", t("shop"))]);
     let source = tempdir("removed-src");
@@ -1625,7 +1606,7 @@ fn export_omits_a_path_hidden_by_remove_file() {
     );
 
     // The marker is written through the Store engine, the route the fs calls
-    // use; `project.remove_file` is not on this crate's call table yet.
+    // use (engine method `project.remove_file`, the call `project.hide_path`).
     layerfs_store::service::with_service(
         &layerfs_store::open_args::OpenArgs {
             home: Some(home.clone()),
@@ -1664,9 +1645,9 @@ fn export_omits_a_path_hidden_by_remove_file() {
         std::fs::read_to_string(dest.join("dir/c.txt")).unwrap(),
         "c\n"
     );
-    assert_eq!(res.get_int("files"), Some(2));
-    assert_eq!(res.get_int("directories"), Some(1));
-    assert_eq!(res.get_int("symlinks"), Some(0));
+    assert_eq!(res.get_int("file_count"), Some(2));
+    assert_eq!(res.get_int("dir_count"), Some(1));
+    assert_eq!(res.get_int("symlink_count"), Some(0));
 
     for d in [home, source, out_parent] {
         let _ = std::fs::remove_dir_all(d);

@@ -2,9 +2,9 @@
 mod delete;
 mod export;
 mod get;
+mod hide_path;
 mod init;
 mod list;
-mod remove_file;
 mod stats;
 
 use crate::calls::Calls;
@@ -18,7 +18,7 @@ pub(crate) fn calls() -> Calls {
         stats::CALL,
         export::CALL,
         delete::CALL,
-        remove_file::CALL,
+        hide_path::CALL,
         crate::doctor::project::CALL,
     ]
 }

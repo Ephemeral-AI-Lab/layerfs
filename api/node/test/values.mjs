@@ -127,16 +127,16 @@ test("through the library: i64 max arrives exactly, an unsafe number is refused 
   // then refuses as a line number ("positive safe integer"); rounded to a
   // Number it would be 2^63, which the library cannot read at all
   // ("number out of range"). So the message tells exact from rounded.
-  await assert.rejects(lfs.file.read("shop/api", "main", "/README.md", { start_line: I64_MAX }), /startLine must be a positive safe integer/);
-  await assert.rejects(lfs.file.read("shop/api", "main", "/README.md", { start_line: I64_MAX + 1n }), /number out of range/);
-  await assert.rejects(lfs.file.read("shop/api", "main", "/README.md", { start_line: I64_MIN }), /positive safe integer/);
-  await assert.rejects(lfs.file.read("shop/api", "main", "/README.md", { start_line: Number(2n ** 53n) + 2 }), (error) => {
+  await assert.rejects(lfs.file.read("shop/api", "main", "/README.md", { line: I64_MAX }), /startLine must be a positive safe integer/);
+  await assert.rejects(lfs.file.read("shop/api", "main", "/README.md", { line: I64_MAX + 1n }), /number out of range/);
+  await assert.rejects(lfs.file.read("shop/api", "main", "/README.md", { line: I64_MIN }), /`line` is 1-based/);
+  await assert.rejects(lfs.file.read("shop/api", "main", "/README.md", { line: Number(2n ** 53n) + 2 }), (error) => {
     assert.ok(error instanceof LayerFSError);
     assert.equal(error.code, "InvalidInput");
     assert.match(error.message, /not a safe integer/, "refused by the package, not the library");
     return true;
   });
-  assert.equal((await lfs.file.read("shop/api", "main", "/README.md", { start_line: 1n })).text, "hello\n");
+  assert.equal((await lfs.file.read("shop/api", "main", "/README.md", { line: 1n })).text, "hello\n");
   await assert.rejects(lfs.file.apply("shop/api", "main", [{ op: "write", path: "/m", content: new Map() }]), /"content": Map cannot be sent/);
   rmSync(home, { recursive: true, force: true });
   rmSync(folder, { recursive: true, force: true });

@@ -1,5 +1,6 @@
 //! The one local writer: applies streamed records strictly into staging,
-//! counts them and emits `prepare`, `export` and `finalize` progress.
+//! counts them and emits `prepare`, `export` and `finalize` progress, each
+//! `{ phase, done, total }`.
 use crate::project::staged;
 use crate::project::tree::{Reader, Record};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -51,13 +52,12 @@ impl LocalWriter {
         context.progress(self.phase_event(phase, done));
     }
 
+    /// One progress event of the public shape, `{ phase, done, total }`:
+    /// `done` is the bytes written so far (none while preparing); the
+    /// total is not known ahead of the walk.
     fn phase_event(&self, phase: &str, done: SdkValue) -> SdkValue {
         SdkValue::map([
             ("phase", SdkValue::text(phase)),
-            ("files", SdkValue::Int(self.files as i64)),
-            ("directories", SdkValue::Int(self.directories as i64)),
-            ("symlinks", SdkValue::Int(self.symlinks as i64)),
-            ("bytes", SdkValue::Int(self.bytes as i64)),
             ("done", done),
             ("total", SdkValue::Null),
         ])

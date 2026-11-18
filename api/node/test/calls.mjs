@@ -14,9 +14,9 @@ const temp = (tag) => {
   return dir;
 };
 
-test("the table: ten families, 86 calls, each a function", () => {
+test("the table: ten families, 85 calls, each a function", () => {
   assert.deepEqual(families, ["home", "project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup"]);
-  assert.equal(table.length, 86);
+  assert.equal(table.length, 85);
   for (const spec of table) assert.equal(typeof layerfs[spec.family][spec.call], "function", `${spec.family}.${spec.call}`);
 });
 
@@ -87,9 +87,9 @@ test("a Store, an Init with progress, files, Branches and a folder scope", async
   const lfs = client({ home });
   await lfs.store.create("shop");
   const progress = [];
-  const made = await lfs.project.init("shop/api", folder, { on_progress: (p) => progress.push(p) });
+  const made = await lfs.project.init("shop/api", folder, { on_progress: (p) => progress.push(p), detail: true });
   assert.equal(made.project, "shop/api");
-  const read = await lfs.file.read("shop/api", "main", "/README.md");
+  const read = await lfs.file.read("shop/api", "main", "/README.md", { detail: true });
   assert.equal(read.text, "hello node\n");
   assert.equal(read.start_line, 1, "results are snake_case");
   await lfs.branch.fork("shop/api", "agent.main", "main");

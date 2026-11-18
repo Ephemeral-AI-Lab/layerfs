@@ -7,7 +7,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::StoreManifest;
 use layerfs_bridge::sdk_values::unhex;
 use layerfs_home::home::{now_ms, paths, read_record, with_field, write_entity};
-use layerfs_home::outcome::View;
+use layerfs_home::op::Op;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -96,31 +96,50 @@ impl ProjectRecord {
         &self.fields
     }
 
-    /// The project as `project.get`, each `project.list` item and Init
-    /// show it, from its Store's record `store`: a Store kind LayerFS does
-    /// not write shows none, a sqlite Store's machine is `native` when its
-    /// record names none.
-    pub fn to_sdk(&self, _view: View, store: &StoreRecord) -> SdkValue {
-        let kind = store
-            .kind()
-            .map(|kind| SdkValue::text(kind.as_str()))
-            .unwrap_or_default();
-        SdkValue::map([
+    /// The operation this record holds while an Init or a delete of the
+    /// project runs (`op`), if any.
+    pub fn op(&self) -> Option<Op> {
+        Op::of(&self.fields)
+    }
+
+    /// This record with `field` set to `value`.
+    pub fn with(self, field: &str, value: SdkValue) -> Self {
+        let fields = with_field(self.fields, field, value);
+        Self { fields, ..self }
+    }
+
+    /// This record without `field`.
+    pub fn without(self, field: &str) -> Self {
+        let fields = match self.fields {
+            SdkValue::Map(fields) => SdkValue::Map(
+                fields
+                    .into_iter()
+                    .filter(|(name, _)| name != field)
+                    .collect(),
+            ),
+            other => other,
+        };
+        Self { fields, ..self }
+    }
+
+    /// What every project answer says of the project, from its Store's
+    /// record `store` (call surface 2.0): `project` (`<store>/<name>`),
+    /// `store`, `engine` (none for a kind LayerFS does not read), `machine`
+    /// (a sqlite Store's, `native` when its record names none; none for a
+    /// PostgreSQL Store, which is on no machine) and `created_at`.
+    pub fn answer(&self, store: &StoreRecord) -> Vec<(&'static str, SdkValue)> {
+        let engine = store.kind().ok().map(|kind| kind.as_str().to_owned());
+        let machine = crate::state::placed(store).map(str::to_owned);
+        let created = self.fields.get_int("created").map(layerfs_home::time::iso);
+        vec![
             (
                 "project",
                 SdkValue::text(format!("{}/{}", self.store, self.name)),
             ),
             ("store", SdkValue::text(&self.store)),
-            ("name", SdkValue::text(&self.name)),
-            ("kind", kind),
-            (
-                "machine",
-                store
-                    .field("machine")
-                    .cloned()
-                    .unwrap_or_else(|| SdkValue::text("native")),
-            ),
-            ("created", self.created().cloned().unwrap_or_default()),
-        ])
+            ("engine", SdkValue::opt_text(engine)),
+            ("machine", SdkValue::opt_text(machine)),
+            ("created_at", SdkValue::opt_text(created)),
+        ]
     }
 }

@@ -2,10 +2,12 @@
 //! listing is the Store's own filtered one, read in the machine's worker
 //! (the same `layerfs_project::store::projects` a local Store uses), so a
 //! project retired there is not listed and is `NoSuchProject` from
-//! project.get; a live project still lists and gets, and a worker's refusal
-//! is the call's.
+//! project.get; a live project still lists and gets. A Store whose worker
+//! refuses the listing, or does not answer, blocks its projects (call
+//! surface 2.0): they are listed `blocked`, naming the Store, and
+//! project.get answers the same, never a refusal.
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::control::SdkValue;
 use layerfs_bridge::sdk_values::hex;
 use layerfs_history::LayerStackId;
 use layerfs_machine::worker::{self, read_frame, read_frame_within, write_frame, Hello, MAX_HELLO};
@@ -50,25 +52,29 @@ fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
     call(home, name, args).unwrap_or_else(|e| panic!("{name}: {e:?}"))
 }
 
-/// The whole refusal, so a test can read its `detail`.
-fn refusal(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkRefusal {
-    let args = SdkValue::Map(
-        args.iter()
-            .map(|(n, v)| ((*n).to_owned(), v.clone()))
-            .collect(),
-    );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).expect_err("the call is refused")
-}
-
 fn names(list: &SdkValue) -> Vec<String> {
     let SdkValue::List(items) = list.get("items").unwrap() else {
         panic!("{list:?}")
     };
     items
         .iter()
-        .filter_map(|item| item.get_text("name"))
+        .filter_map(|item| item.get_text("project"))
+        .filter_map(|project| project.strip_prefix("shop/"))
         .map(str::to_owned)
         .collect()
+}
+
+/// Every row of `list` and the answer `get` are `blocked` by Store `shop`
+/// for `reason`.
+fn blocked_by_shop(list: &SdkValue, get: &SdkValue, reason: &str) {
+    let by = SdkValue::map([("store", t("shop")), ("reason", t(reason))]);
+    let SdkValue::List(items) = list.get("items").unwrap() else {
+        panic!("{list:?}")
+    };
+    for item in items.iter().chain([get]) {
+        assert_eq!(item.get_text("state"), Some("blocked"), "{item:?}");
+        assert_eq!(item.get("blocked_by"), Some(&by), "{item:?}");
+    }
 }
 
 /// Marks Store project `stack` retired (the `project.delete` write path,
@@ -144,7 +150,13 @@ fn shop_on_box(tag: &str, listener: &TcpListener, root: Option<&Path>) -> PathBu
     );
     write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+        // running, as its record says: a machine the record says is stopped
+        // blocks its Stores' projects with no worker asked
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("state", t("running")),
+        ]),
     )
     .unwrap();
     let address = listener.local_addr().unwrap().to_string();
@@ -263,7 +275,9 @@ fn a_worker_s_filtered_listing_hides_a_retired_project() {
         call(&home, "project.get", &[("project", t("shop/retired"))]).unwrap_err();
     assert_eq!(code, "NotFound", "{message}");
     let live = ok(&home, "project.get", &[("project", t("shop/live"))]);
-    assert_eq!(live.get_text("project"), Some("shop/live"));
+    // the short form: its Store and its state
+    assert_eq!(live.get_text("store"), Some("shop"), "{live:?}");
+    assert_eq!(live.get_text("state"), Some("ready"), "{live:?}");
     // Both home entries are still there; the Store, not the home, hides one.
     for name in ["live", "retired"] {
         assert!(
@@ -286,7 +300,7 @@ fn a_worker_s_filtered_listing_hides_a_retired_project() {
 }
 
 #[test]
-fn a_worker_refusal_is_the_calls_refusal() {
+fn a_worker_refusal_blocks_the_stores_projects() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let home = shop_on_box("fake-refusal", &listener, None);
     let _seen = fake_worker(listener, |_| {
@@ -300,15 +314,17 @@ fn a_worker_refusal_is_the_calls_refusal() {
         )])
     });
 
-    // project.get propagates the refusal, never the unfiltered record.
-    let (code, message) = call(&home, "project.get", &[("project", t("shop/live"))]).unwrap_err();
-    assert_eq!(code, "Busy");
-    assert_eq!(message, "the Store is held");
-    // The named listing reports it; the all-Stores one omits the Store.
-    let (code, _) = call(&home, "project.list", &[("store", t("shop"))]).unwrap_err();
-    assert_eq!(code, "Busy");
-    let list = ok(&home, "project.list", &[]);
-    assert!(names(&list).is_empty(), "{list:?}");
+    // project.get answers the project blocked by its Store, never the
+    // refusal; the listings keep every recorded project of the Store, the
+    // Store's list being unread
+    let get = ok(&home, "project.get", &[("project", t("shop/live"))]);
+    for list in [
+        ok(&home, "project.list", &[("store", t("shop"))]),
+        ok(&home, "project.list", &[]),
+    ] {
+        assert_eq!(names(&list), vec!["live", "retired"], "{list:?}");
+        blocked_by_shop(&list, &get, "busy");
+    }
     let _ = std::fs::remove_dir_all(home);
 }
 
@@ -329,51 +345,28 @@ fn a_worker_store_lists_only_its_live_projects() {
         call(&home, "project.get", &[("project", t("shop/retired"))]).unwrap_err();
     assert_eq!(code, "NotFound", "{message}");
     let live = ok(&home, "project.get", &[("project", t("shop/live"))]);
-    assert_eq!(live.get_text("project"), Some("shop/live"));
+    // the short form: its Store and its state
+    assert_eq!(live.get_text("store"), Some("shop"), "{live:?}");
+    assert_eq!(live.get_text("state"), Some("ready"), "{live:?}");
     assert!(paths::project_record(&home, "shop", "retired").exists());
     let _ = std::fs::remove_dir_all(home);
     let _ = std::fs::remove_dir_all(root);
 }
 
-/// F43R3-1: a stale worker's lost listing answer is `Unknown`, and the call
-/// names the Store it listed: `{entity: {kind, name}, phase, op}` (spec
-/// §10 A6), not a null detail.
+/// A stale worker's lost listing answer blocks the Store's projects, the
+/// Store `not_answering` (it was `Unknown` naming the Store before call
+/// surface 2.0, F43R3-1).
 #[test]
-fn a_lost_worker_answer_names_the_store_in_the_unknown_detail() {
+fn a_lost_worker_answer_blocks_the_stores_projects() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let home = shop_on_box("fake-lost", &listener, None);
     let seen = fake_lost_worker(listener);
 
-    for (method, args) in [
-        ("project.get", vec![("project", t("shop/live"))]),
-        ("project.list", vec![("store", t("shop"))]),
-    ] {
-        let refused = refusal(&home, method, &args);
-        assert_eq!(refused.code, "Unknown", "{method}: {refused:?}");
-        let entity = refused.detail.get("entity").expect("entity detail");
-        assert_eq!(
-            entity.get_text("kind"),
-            Some("store"),
-            "{method}: {entity:?}"
-        );
-        assert_eq!(
-            entity.get_text("name"),
-            Some("shop"),
-            "{method}: {entity:?}"
-        );
-        assert!(
-            refused.detail.get("phase").expect("phase") == &SdkValue::Null,
-            "{method}: a lost listing has no phase"
-        );
-        assert!(
-            refused.detail.get("op").expect("op") == &SdkValue::Null,
-            "{method}: a listing holds no durable operation"
-        );
-    }
-
-    // The all-Stores listing omits a Store it cannot list.
+    let get = ok(&home, "project.get", &[("project", t("shop/live"))]);
+    let list = ok(&home, "project.list", &[("store", t("shop"))]);
+    blocked_by_shop(&list, &get, "not_answering");
     let list = ok(&home, "project.list", &[]);
-    assert!(names(&list).is_empty(), "{list:?}");
+    blocked_by_shop(&list, &get, "not_answering");
 
     // Every read went to the worker as the Store listing's own frame.
     let requests = seen.lock().unwrap();
@@ -385,11 +378,11 @@ fn a_lost_worker_answer_names_the_store_in_the_unknown_detail() {
     let _ = std::fs::remove_dir_all(home);
 }
 
-/// F43R4-1: a worker that refuses with the bare empty-map `Unknown` detail (a
-/// Store listing that could not be read) still names the Store in the
-/// `Unknown` detail, exactly as a lost answer does.
+/// A worker that refuses with the bare empty-map `Unknown` detail (a Store
+/// listing that could not be read) blocks the Store's projects exactly as
+/// a lost answer does (F43R4-1 named the Store in an `Unknown` refusal).
 #[test]
-fn a_worker_unknown_with_the_empty_map_detail_names_the_store() {
+fn a_worker_unknown_with_the_empty_map_detail_blocks_the_stores_projects() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let home = shop_on_box("fake-empty-unknown", &listener, None);
     let _seen = fake_worker(listener, |_| {
@@ -403,35 +396,8 @@ fn a_worker_unknown_with_the_empty_map_detail_names_the_store() {
         )])
     });
 
-    for (method, args) in [
-        ("project.get", vec![("project", t("shop/live"))]),
-        ("project.list", vec![("store", t("shop"))]),
-    ] {
-        let refused = refusal(&home, method, &args);
-        assert_eq!(refused.code, "Unknown", "{method}: {refused:?}");
-        let entity = refused.detail.get("entity").expect("entity detail");
-        assert_eq!(
-            entity.get_text("kind"),
-            Some("store"),
-            "{method}: {entity:?}"
-        );
-        assert_eq!(
-            entity.get_text("name"),
-            Some("shop"),
-            "{method}: {entity:?}"
-        );
-        assert!(
-            refused.detail.get("phase").expect("phase") == &SdkValue::Null,
-            "{method}: a listing has no phase"
-        );
-        assert!(
-            refused.detail.get("op").expect("op") == &SdkValue::Null,
-            "{method}: a listing holds no durable operation"
-        );
-    }
-
-    // The all-Stores listing omits a Store it cannot list.
-    let list = ok(&home, "project.list", &[]);
-    assert!(names(&list).is_empty(), "{list:?}");
+    let get = ok(&home, "project.get", &[("project", t("shop/live"))]);
+    let list = ok(&home, "project.list", &[("store", t("shop"))]);
+    blocked_by_shop(&list, &get, "not_answering");
     let _ = std::fs::remove_dir_all(home);
 }

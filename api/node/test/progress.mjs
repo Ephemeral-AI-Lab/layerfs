@@ -57,6 +57,7 @@ test("project.init in this process: check, install, record with null counts, whi
     let settled = false;
     const result = await lfs.project.init("shop/api", folder, {
       on_progress: (p) => events.push({ at: performance.now(), settled, p }),
+      detail: true,
     });
     settled = true;
     const returned = performance.now();
@@ -98,10 +99,11 @@ test("a throwing on_progress does not stop Init: every event is still delivered,
         phases.push(p.phase);
         throw new Error(`boom at ${p.phase}`);
       },
+      detail: true,
     });
     assert.deepEqual(phases, ["check", "install", "record"]);
     assert.equal(result.project, "shop/api");
-    assert.equal((await lfs.project.get("shop/api")).project, "shop/api", "the Init happened");
+    assert.equal((await lfs.project.get("shop/api", { detail: true })).project, "shop/api", "the Init happened");
     await new Promise((r) => setImmediate(r));
     const mine = warnings.filter((w) => w.name === "LayerFSHandlerWarning");
     assert.equal(mine.length, 3, warnings.map(String).join("\n"));

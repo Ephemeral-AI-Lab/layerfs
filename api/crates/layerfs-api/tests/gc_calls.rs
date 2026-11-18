@@ -82,7 +82,7 @@ fn the_four_gc_calls_take_ids_only() {
         ),
         ("project.delete", &[("project", Kind::Project)]),
         (
-            "project.remove_file",
+            "project.hide_path",
             &[("project", Kind::Project), ("path", Kind::Text)],
         ),
         ("store.compact", &[("store", Kind::Name)]),
@@ -114,7 +114,7 @@ fn wrong_kinds_and_unknown_options_are_refused_before_any_effect() {
         ),
         ("project.delete", &[("project", SdkValue::Int(1))]),
         (
-            "project.remove_file",
+            "project.hide_path",
             &[("project", t("shop/api")), ("path", SdkValue::Int(1))],
         ),
         ("store.compact", &[("store", SdkValue::Int(1))]),
@@ -138,7 +138,7 @@ fn wrong_kinds_and_unknown_options_are_refused_before_any_effect() {
             &[("project", t("shop/api")), ("force", SdkValue::Bool(true))],
         ),
         (
-            "project.remove_file",
+            "project.hide_path",
             &[
                 ("project", t("shop/api")),
                 ("path", t("/base.txt")),
@@ -201,12 +201,12 @@ fn branch_remove_refuses_reserved_and_absent_branches() {
 }
 
 #[test]
-fn project_remove_file_checks_its_path_grammar_then_reports_markers() {
+fn project_hide_path_checks_its_path_grammar_then_reports_markers() {
     let (home, folder) = project();
     for bad in [
         "", "/", "//a", "a//b", "a/", "./a", "a/./b", ".", "..", "\\",
     ] {
-        let (code, message) = refused(&home, "project.remove_file", &[p(), ("path", t(bad))]);
+        let (code, message) = refused(&home, "project.hide_path", &[p(), ("path", t(bad))]);
         assert_eq!(code, "InvalidInput", "{bad:?}: {message}");
     }
     // no effect: the file the bad calls named is still readable
@@ -217,23 +217,28 @@ fn project_remove_file_checks_its_path_grammar_then_reports_markers() {
     );
     assert_eq!(read.get_text("text"), Some("hello\n"));
 
+    let detail = ("detail", SdkValue::Bool(true));
     let removed = ok(
         &home,
-        "project.remove_file",
-        &[p(), ("path", t("/base.txt"))],
+        "project.hide_path",
+        &[p(), ("path", t("/base.txt")), detail.clone()],
     );
-    assert_eq!(removed.get_text("kind"), Some("Removed"));
-    // the same full project name the caller passed
-    assert_eq!(removed.get_text("project"), Some("shop/api"));
+    assert_eq!(removed.get_text("outcome"), Some("hidden"));
+    assert_eq!(removed.get("unchanged"), Some(&SdkValue::Bool(false)));
+    assert_eq!(removed.get_text("path"), Some("/base.txt"));
     assert!(removed.get_int("frontier_serial").is_some());
-    assert!(removed.get_int("removed_ms").is_some_and(|ms| ms >= 0));
-    // a repeat at the same frontier is UpToDate
+    assert!(removed
+        .get_text("hidden_at")
+        .is_some_and(|at| at.ends_with('Z')));
+    // a repeat at the same frontier is unchanged; its short form says so
+    let short = ok(&home, "project.hide_path", &[p(), ("path", t("/base.txt"))]);
+    assert_eq!(short, SdkValue::map([("unchanged", SdkValue::Bool(true))]));
     let repeat = ok(
         &home,
-        "project.remove_file",
-        &[p(), ("path", t("/base.txt"))],
+        "project.hide_path",
+        &[p(), ("path", t("/base.txt")), detail],
     );
-    assert_eq!(repeat.get_text("kind"), Some("UpToDate"));
+    assert_eq!(repeat.get_text("outcome"), Some("unchanged"));
     assert_eq!(
         repeat.get_int("frontier_serial"),
         removed.get_int("frontier_serial")
@@ -254,11 +259,17 @@ fn project_delete_reports_removal_and_retires_the_entry() {
     let (home, folder) = project();
     let (code, message) = refused(&home, "project.delete", &[("project", t("shop/ghost"))]);
     assert_eq!(code, "NotFound", "{message}");
-    let removed = ok(&home, "project.delete", &[p()]);
-    assert_eq!(removed.get_text("kind"), Some("Removed"));
-    assert_eq!(removed.get_text("project"), Some("shop/api"));
-    assert!(removed.get_int("deleted_ms").is_some_and(|ms| ms >= 0));
-    assert!(removed.get_bool("home_entry_removed"));
+    let removed = ok(
+        &home,
+        "project.delete",
+        &[p(), ("detail", SdkValue::Bool(true))],
+    );
+    assert_eq!(removed.get_text("outcome"), Some("deleted"));
+    assert_eq!(removed.get("ok"), Some(&SdkValue::Bool(true)));
+    assert!(removed
+        .get_text("deleted_at")
+        .is_some_and(|at| at.ends_with('Z')));
+    assert_eq!(removed.get("home_entry_kept"), Some(&SdkValue::Bool(false)));
     let (code, _) = refused(&home, "project.get", &[p()]);
     assert_eq!(code, "NotFound");
     std::fs::remove_dir_all(home).unwrap();
@@ -408,7 +419,7 @@ fn a_bare_project_name_is_refused_by_every_project_call() {
         ),
         ("project.delete", &[("project", t("api"))]),
         (
-            "project.remove_file",
+            "project.hide_path",
             &[("project", t("api")), ("path", t("/base.txt"))],
         ),
     ];

@@ -1,7 +1,7 @@
 //! `project.list_branches`, `project.stats` and `project.remove_file`.
 use crate::methods::args::{invalid, project, text, Answer};
 use crate::{
-    history::{listing, lookup},
+    history::{listing, lookup, resolve},
     store::Store,
     StoreService,
 };
@@ -34,16 +34,19 @@ pub fn list_branches(service: &StoreService, args: &SdkValue) -> Answer {
     listing::branches(&service.store, &stack, names, listing::limit(args)?)
 }
 
-/// `project.stats`: resolve the Branch-qualified immutable pin once, then count it.
+/// `project.stats`: resolve the Branch-qualified immutable pin once, then
+/// count it. The pin (`commit`) is a full id or a prefix of 8 or more
+/// characters, resolved by the catalog in one read; it must be in the
+/// Branch's history.
 pub fn stats(service: &StoreService, args: &SdkValue) -> Answer {
     let stack = project(service, args)?;
     let branch = args.get_text("branch").unwrap_or("main");
-    let node = crate::history::saved::resolve_context(
-        &service.store,
-        &stack,
-        branch,
-        args.get_text("commit"),
-    )?;
+    let pin = match args.get_text("commit") {
+        Some(text) => Some(resolve::commit(&service.store, &stack, text)?.text()),
+        None => None,
+    };
+    let node =
+        crate::history::saved::resolve_context(&service.store, &stack, branch, pin.as_deref())?;
     let reader = crate::read::snapshot::reader(&service.store, &stack);
     let snap = crate::read::snapshot::resolve(
         &service.store,

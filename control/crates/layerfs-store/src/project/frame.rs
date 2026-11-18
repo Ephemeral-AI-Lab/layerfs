@@ -40,6 +40,9 @@ pub struct ExportFrame {
     pub project: String,
     /// The Branch; `main` when absent.
     pub branch: Option<String>,
+    /// The Commit of the Branch's history exported instead of its head: a
+    /// full id or a prefix of 8 or more characters.
+    pub at: Option<String>,
     /// The Store's record.
     pub store_record: Option<SdkValue>,
 }
@@ -188,7 +191,7 @@ impl StageFrame {
 }
 
 impl ExportFrame {
-    /// The `project.export` frame: `{ store, project, branch?,
+    /// The `project.export` frame: `{ store, project, branch?, at?,
     /// store_record? }`.
     pub fn encode(&self) -> SdkValue {
         let mut fields = vec![
@@ -200,6 +203,7 @@ impl ExportFrame {
                 .as_deref()
                 .map(|b| ("branch", SdkValue::text(b))),
         );
+        fields.extend(self.at.as_deref().map(|at| ("at", SdkValue::text(at))));
         fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
         map(fields)
     }
@@ -213,6 +217,7 @@ impl ExportFrame {
             store: StoreName::parse(store)?,
             project,
             branch: frame.get_text("branch").map(str::to_owned),
+            at: frame.get_text("at").map(str::to_owned),
             store_record: frame.get("store_record").cloned(),
         })
     }
@@ -535,6 +540,9 @@ pub struct ListingFrame {
     pub store: StoreName,
     /// The Store's record: it opens the Store under the worker's root.
     pub store_record: Option<SdkValue>,
+    /// Whether each project's `size` is read too (`project list --with
+    /// stats`): one Layer record per project.
+    pub stats: bool,
 }
 
 /// One project a worker's Store listing names.
@@ -544,10 +552,14 @@ pub struct ListedProject {
     pub name: String,
     /// Its LayerStack.
     pub stack: LayerStackId,
+    /// Main's head Layer, its full 66-character id.
+    pub head: Option<String>,
+    /// The length main's head Layer records, when it was asked for.
+    pub size: Option<i64>,
 }
 
 /// `project.list` worker reply: `{ kind: "Listed", projects: [{ name,
-/// stack_id }] }`, in the Store's name order.
+/// stack_id, head, size? }] }`, in the Store's name order.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ListingReply {
     /// The Store's live projects.
@@ -555,10 +567,13 @@ pub struct ListingReply {
 }
 
 impl ListingFrame {
-    /// The `project.list` frame: `{ store, store_record? }`.
+    /// The `project.list` frame: `{ store, store_record?, stats? }`.
     pub fn encode(&self) -> SdkValue {
         let mut fields = vec![("store", SdkValue::text(self.store.as_str()))];
         fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
+        if self.stats {
+            fields.push(("stats", SdkValue::Bool(true)));
+        }
         map(fields)
     }
 
@@ -567,6 +582,7 @@ impl ListingFrame {
         Ok(Self {
             store: StoreName::parse(required(frame.get_text("store"), "store")?)?,
             store_record: frame.get("store_record").cloned(),
+            stats: frame.get("stats") == Some(&SdkValue::Bool(true)),
         })
     }
 }
@@ -581,6 +597,8 @@ impl ListingReply {
                 map(vec![
                     ("name", SdkValue::text(&project.name)),
                     ("stack_id", SdkValue::text(hex(&project.stack.to_bytes()))),
+                    ("head", SdkValue::opt_text(project.head.clone())),
+                    ("size", project.size.map_or(SdkValue::Null, SdkValue::Int)),
                 ])
             })
             .collect();
@@ -609,7 +627,14 @@ impl ListingReply {
                 .ok_or_else(|| refused("InvalidInput", "reply project has no `name`"))?
                 .to_owned();
             let stack = stack_id(required(item.get_text("stack_id"), "stack_id")?)?;
-            projects.push(ListedProject { name, stack });
+            let head = item.get_text("head").map(str::to_owned);
+            let size = item.get_int("size");
+            projects.push(ListedProject {
+                name,
+                stack,
+                head,
+                size,
+            });
         }
         Ok(Self { projects })
     }

@@ -89,7 +89,7 @@ fn progress_is_json_lines_on_stderr_before_the_result_on_stdout() {
     // stdout: the result alone, one JSON value
     let result = String::from_utf8(stdout).unwrap();
     assert_eq!(result.lines().count(), 1, "{result}");
-    assert!(result.contains("\"project\":\"shop/api\""), "{result}");
+    assert!(result.contains("{\"commit\":\""), "{result}");
     assert!(!result.contains("progress"), "{result}");
 
     // stderr: one `{phase,done,total}` line per event, in order
@@ -121,7 +121,7 @@ fn without_progress_stderr_is_empty() {
         "{}",
         String::from_utf8_lossy(&run.stderr)
     );
-    assert!(String::from_utf8_lossy(&run.stdout).contains("\"project\":\"shop/api\""));
+    assert!(String::from_utf8_lossy(&run.stdout).contains("{\"commit\":\""));
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&folder);
 }
@@ -139,7 +139,7 @@ fn a_closed_stderr_does_not_fail_the_call() {
         .output()
         .unwrap();
     assert_eq!(run.status.code(), Some(0), "{run:?}");
-    assert!(String::from_utf8_lossy(&run.stdout).contains("\"project\":\"shop/api\""));
+    assert!(String::from_utf8_lossy(&run.stdout).contains("{\"commit\":\""));
     assert!(run.stderr.is_empty());
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&folder);

@@ -17,7 +17,7 @@ use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{AuthenticatedObjects, ContentError};
 use layerfs_history::NodeId;
 use layerfs_home::outcome::refused;
-use layerfs_store_service::history::{lookup, MAIN};
+use layerfs_store_service::history::{lookup, resolve, saved, MAIN};
 use layerfs_store_service::read::cached::Cached;
 use layerfs_store_service::read::visibility::Visibility;
 use layerfs_store_service::store::StorePorts;
@@ -51,19 +51,27 @@ pub(super) struct PinnedSnapshot {
     visibility: Visibility,
 }
 
-/// Resolves `(project, branch)` once into an immutable `(NodeId, ObjectId,
-/// TreeTable)` snapshot.
+/// Resolves `(project, branch, at)` once into an immutable `(NodeId,
+/// ObjectId, TreeTable)` snapshot: the Branch's head, or the Commit `at`
+/// names (a full id or a prefix of 8 or more characters, resolved in one
+/// read), which must be in the Branch's history.
 pub(super) fn pin_snapshot(
     service: &StoreService,
     project: &str,
     branch: &str,
+    at: Option<&str>,
 ) -> Result<PinnedSnapshot> {
     let stack = lookup::project(&service.store, project)?;
-    let node = if branch == MAIN {
-        NodeId::Layer(stack.head_layer)
-    } else {
-        let branch_rec = lookup::branch(&service.store, &stack, branch)?;
-        lookup::branch_node(&branch_rec)
+    let node = match (at, branch == MAIN) {
+        (Some(at), _) => {
+            let full = resolve::commit(&service.store, &stack, at)?.text();
+            saved::resolve_context(&service.store, &stack, branch, Some(&full))?
+        }
+        (None, true) => NodeId::Layer(stack.head_layer),
+        (None, false) => {
+            let branch_rec = lookup::branch(&service.store, &stack, branch)?;
+            lookup::branch_node(&branch_rec)
+        }
     };
     let label = format!("{branch}@{}", short(node));
     let root = lookup::root(&service.store, node)?;

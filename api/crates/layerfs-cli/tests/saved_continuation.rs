@@ -38,8 +38,8 @@ fn invalid(home: &Path, words: &[&str]) {
 }
 fn check(home: &Path, source: &Path) {
     call(home, &["project", "init", "q/p", source.to_str().unwrap()]);
-    let base = call(home, &["project", "stats", "q/p"]);
-    let layer = base.get("at").unwrap().get_text("id").unwrap();
+    let base = call(home, &["project", "stats", "q/p", "--detail"]);
+    let layer = base.get_text("commit").unwrap();
     call(home, &["branch", "fork", "q/p", "dev", "main"]);
     // Three paths in the first Commit; this is also the first-Commit/base-Layer case.
     for (path, value) in [("/a", "one"), ("/b", "two"), ("/c", "three")] {
@@ -49,8 +49,11 @@ fn check(home: &Path, source: &Path) {
         );
         assert!(out.status.success(), "{}", text(&out.stderr));
     }
-    let saved = call(home, &["project", "stats", "q/p", "dev"]);
-    let commit = saved.get("at").unwrap().get_text("id").unwrap();
+    let saved = call(
+        home,
+        &["project", "stats", "q/p", "--branch", "dev", "--detail"],
+    );
+    let commit = saved.get_text("commit").unwrap();
     // `commit` (dev's head, the third write) from `layer`; by default from
     // its parent, which lacks only the last write
     let changed = call(home, &["commit", "diff", "q/p", commit, "--from", layer]);
@@ -87,8 +90,8 @@ fn check(home: &Path, source: &Path) {
     altered.insert(0, '!');
     invalid(home, &[&query[..], &["--cursor", &altered]].concat());
     call(home, &["branch", "publish", "q/p", "dev"]);
-    let published = call(home, &["project", "stats", "q/p"]);
-    let new_layer = published.get("at").unwrap().get_text("id").unwrap();
+    let published = call(home, &["project", "stats", "q/p", "--detail"]);
+    let new_layer = published.get_text("commit").unwrap();
     assert_eq!(
         items(&call(
             home,
@@ -105,79 +108,69 @@ fn check(home: &Path, source: &Path) {
         );
         assert!(out.status.success(), "{}", text(&out.stderr));
     }
-    let saved = call(home, &["project", "stats", "q/p", "dev"]);
-    let tip = saved.get("at").unwrap().get_text("id").unwrap();
+    let saved = call(
+        home,
+        &["project", "stats", "q/p", "--branch", "dev", "--detail"],
+    );
+    let tip = saved.get_text("commit").unwrap();
     let revisions = [
-        "file",
-        "revision",
-        "q/p",
-        "dev",
-        "/a",
-        "--at-commit",
-        tip,
-        "--page-size",
-        "1",
+        "file", "history", "q/p", "dev", "/a", "--at", tip, "--limit", "1",
     ];
     let all = call(
         home,
         &[
-            "file",
-            "revision",
-            "q/p",
-            "dev",
-            "/a",
-            "--at-commit",
-            tip,
-            "--page-size",
-            "100",
+            "file", "history", "q/p", "dev", "/a", "--at", tip, "--limit", "100",
         ],
     );
+    // one Commit a page, each next page in a new process, by the cursor
     let mut page = call(home, &revisions);
-    let mut refs = Vec::new();
+    let mut commits = Vec::new();
     for _ in 0..10 {
-        refs.extend(items(&page).iter().map(|i| i.get("ref").unwrap().clone()));
-        assert!(
-            page.get("scan")
-                .unwrap()
-                .get_int("candidates_examined")
-                .unwrap()
-                <= 5
+        commits.extend(
+            items(&page)
+                .iter()
+                .map(|i| i.get("commit").unwrap().clone()),
         );
-        let Some(token) = page.get_text("continuation") else {
+        let Some(token) = page.get_text("next_cursor") else {
             break;
         };
-        page = call(home, &[&revisions[..], &["--continuation", token]].concat());
+        page = call(home, &[&revisions[..], &["--cursor", token]].concat());
     }
-    assert_eq!(
-        refs,
-        items(&all)
-            .iter()
-            .map(|i| i.get("ref").unwrap().clone())
-            .collect::<Vec<_>>()
+    let listed: Vec<SdkValue> = (items(&all).iter())
+        .map(|i| i.get("commit").unwrap().clone())
+        .collect();
+    assert_eq!(commits, listed);
+    assert!(listed.len() >= 4, "{all:?}");
+    // full ids, and the first page pinned at `--at` by a prefix of it
+    assert!(
+        matches!(&listed[0], SdkValue::Text(id) if id.len() == 66),
+        "{listed:?}"
     );
+    let prefixed = call(
+        home,
+        &["file", "history", "q/p", "dev", "/a", "--at", &tip[..12]],
+    );
+    assert_eq!(items(&prefixed), items(&all));
+    // a cursor given another path, traversal or call is refused
     let first = call(home, &revisions);
-    let token = first.get_text("continuation").unwrap();
-    let changed_path = [
-        "file",
-        "revision",
-        "q/p",
-        "dev",
-        "/b",
-        "--at-commit",
-        tip,
-        "--page-size",
-        "1",
-        "--continuation",
-        token,
-    ];
-    invalid(home, &changed_path);
+    let token = first.get_text("next_cursor").unwrap();
+    invalid(
+        home,
+        &[
+            "file", "history", "q/p", "dev", "/b", "--limit", "1", "--cursor", token,
+        ],
+    );
     invalid(
         home,
         &[
             &revisions[..],
-            &["--continuation", token, "--traversal", "branch"],
+            &["--cursor", token, "--traversal", "branch"],
         ]
         .concat(),
+    );
+    invalid(
+        home,
+        &["file", "list", "q/p", "dev", "/", "--cursor", token],
     );
 }
 #[test]

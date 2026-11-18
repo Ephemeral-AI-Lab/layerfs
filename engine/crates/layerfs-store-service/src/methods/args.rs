@@ -21,12 +21,49 @@ pub fn project(service: &StoreService, args: &SdkValue) -> Result<LayerStackReco
     crate::operator::args::project(&service.store, args)
 }
 
-/// The project, its reader and the snapshot a read names, in that order.
+/// The project, its reader and the snapshot a read names, in that order:
+/// its `commit` when given, else its `branch`. A `commit` shaped as an
+/// id prefix (8 to 65 hex characters) is resolved to its Commit first, a
+/// prefix more than one Commit starts with refused `InvalidInput` with
+/// `matches`.
 pub fn snapshot_full(
     service: &StoreService,
     args: &SdkValue,
 ) -> Result<(LayerStackRecord, Arc<StorePorts>, Snap), SdkRefusal> {
-    crate::operator::args::snapshot(&service.store, args)
+    let stack = project(service, args)?;
+    let name = match pinned(service, &stack, args)? {
+        Some(full) => full,
+        None => crate::operator::args::snapshot_name(args)?.to_owned(),
+    };
+    let (reader, snap) = crate::read::snapshot::open(&service.store, &stack, &name)?;
+    Ok((stack, reader, snap))
+}
+
+/// The full identity of the read's `commit` when it is an id prefix.
+pub fn pinned(
+    service: &StoreService,
+    stack: &LayerStackRecord,
+    args: &SdkValue,
+) -> Result<Option<String>, SdkRefusal> {
+    use crate::history::resolve::{commit, FULL, PREFIX};
+    match args.get_text("commit") {
+        Some(text)
+            if (PREFIX..FULL).contains(&text.len())
+                && text.bytes().all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f')) =>
+        {
+            Ok(Some(commit(&service.store, stack, text)?.text()))
+        }
+        _ => Ok(None),
+    }
+}
+
+/// An optional boolean argument; `default` when absent or null.
+pub fn flag(args: &SdkValue, name: &str, default: bool) -> Result<bool, SdkRefusal> {
+    match args.get(name) {
+        None | Some(SdkValue::Null) => Ok(default),
+        Some(SdkValue::Bool(value)) => Ok(*value),
+        Some(_) => Err(invalid(format!("{name} must be a boolean"))),
+    }
 }
 
 /// The required absolute path argument `name`, checked.
@@ -126,6 +163,7 @@ pub fn change(change: &SdkValue) -> Arg<Change<'_>> {
             path: p("path")?,
             old: text(change, "oldText")?,
             new: text(change, "newText")?,
+            all: flag(change, "replaceAll", false)?,
         },
         "mkdir" => Change::Mkdir {
             path: p("path")?,
@@ -135,7 +173,11 @@ pub fn change(change: &SdkValue) -> Arg<Change<'_>> {
             path: p("path")?,
             mode: mode(change)?.ok_or_else(|| invalid("chmod needs a mode"))?,
         },
-        "rm" => Change::Rm { path: p("path")? },
+        // a folder with everything in it unless `recursive` is false
+        "rm" => Change::Rm {
+            path: p("path")?,
+            recursive: flag(change, "recursive", true)?,
+        },
         "cp" => Change::Cp {
             from: p("from")?,
             to: p("to")?,
@@ -169,5 +211,6 @@ pub fn commit(service: &StoreService, args: &SdkValue, changes: &[SdkValue]) -> 
         text(args, "branch"),
         &changes,
         args.get_text("message"),
+        args.get_text("expected"),
     )
 }

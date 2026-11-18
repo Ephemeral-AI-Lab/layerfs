@@ -11,7 +11,7 @@ fn saved_history_calls_are_refused_before_dispatch_even_for_root_folder_scopes()
             ("branch", SdkValue::text("agent")),
         ]))
         .unwrap();
-        for name in ["commit.list", "commit.get", "commit.diff", "file.revision"] {
+        for name in ["commit.list", "commit.get", "commit.diff", "file.history"] {
             let args = SdkValue::map([
                 ("project", SdkValue::text("shop/api")),
                 ("branch", SdkValue::text("main")),

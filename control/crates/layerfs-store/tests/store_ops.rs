@@ -4,8 +4,7 @@
 use layerfs_bridge::control::SdkValue;
 use layerfs_store::calls::branch::{BranchFork, BranchMerge, BranchPublish};
 use layerfs_store::calls::commit::{CommitGet, CommitPage, DiffPage};
-use layerfs_store::calls::file::{FileApply, FileDiff, FileRead, FileWrite, Side};
-use layerfs_store::calls::{Change, Content, Names, Page, StoreOp};
+use layerfs_store::calls::{Names, Page, StoreOp};
 
 fn names(op: &StoreOp<'_>) -> Vec<String> {
     op.engine_args().into_iter().map(|(name, _)| name).collect()
@@ -53,17 +52,6 @@ fn absent_options_are_not_sent_and_names_keep_their_order() {
         names(&StoreOp::Merge(&merge)),
         ["branch", "with", "name", "expected"]
     );
-    let read = FileRead {
-        branch: t("main"),
-        path: t("/a"),
-        commit: Some(t("c")),
-        end_line: Some(3),
-        ..FileRead::default()
-    };
-    assert_eq!(
-        names(&StoreOp::Read(&read)),
-        ["branch", "commit", "path", "endLine"]
-    );
     let page = StoreOp::ListBranches {
         name: None,
         page: Page {
@@ -108,76 +96,10 @@ fn a_diff_sends_its_sides_and_a_later_page_its_pins() {
         names(&StoreOp::Diff(&later)),
         ["hunks", "after", "limit", "pinned", "pinTo"]
     );
-    // a file diff's side is its Commit, else its Branch; an empty side null
-    let files = FileDiff {
-        left: Side {
-            branch: Some(t("main")),
-            commit: Some(t("c1")),
-            path: Some(t("/a")),
-        },
-        ..FileDiff::default()
-    };
-    let args = StoreOp::DiffFiles(&files).engine_args();
-    assert_eq!(
-        args[0].1,
-        SdkValue::map([
-            ("commit", SdkValue::text("c1")),
-            ("path", SdkValue::text("/a"))
-        ])
-    );
-    assert_eq!(
-        args[1].1,
-        SdkValue::map([("commit", SdkValue::Null), ("path", SdkValue::Null)])
-    );
 }
 
 #[test]
-fn bytes_content_is_sent_as_bytes() {
-    let write = FileWrite {
-        project: t("s/p"),
-        branch: t("main"),
-        path: t("/a"),
-        content: Content::Bytes(vec![1, 2]),
-        message: None,
-        mode: Some(0o644),
-    };
-    let args = StoreOp::Write(&write).engine_args();
-    assert_eq!(
-        args,
-        vec![
-            (t("branch"), SdkValue::text("main")),
-            (t("path"), SdkValue::text("/a")),
-            (t("mode"), SdkValue::Int(0o644)),
-            (t("bytes"), SdkValue::Bytes(vec![1, 2])),
-        ]
-    );
-    let apply = FileApply {
-        branch: t("main"),
-        changes: vec![Change {
-            fields: vec![
-                (t("op"), SdkValue::text("write")),
-                (t("to_path"), SdkValue::text("/b")),
-                (t("content"), SdkValue::Bytes(vec![3])),
-                (t("old"), SdkValue::text("x")),
-            ],
-        }],
-        ..FileApply::default()
-    };
-    let args = StoreOp::Apply(&apply).engine_args();
-    assert_eq!(
-        args[1].1,
-        SdkValue::List(vec![SdkValue::map([
-            ("op", SdkValue::text("write")),
-            ("to", SdkValue::text("/b")),
-            ("bytes", SdkValue::Bytes(vec![3])),
-            ("oldText", SdkValue::text("x")),
-        ])])
-    );
-}
-
-#[test]
-fn history_pages_and_file_selectors_are_forwarded_without_resolving_heads() {
-    use layerfs_store::calls::file::{FileBlame, FileRevision};
+fn history_pages_are_forwarded_without_resolving_heads() {
     let history = CommitPage {
         branch: t("main"),
         at: Some(t("saved")),
@@ -204,49 +126,6 @@ fn history_pages_and_file_selectors_are_forwarded_without_resolving_heads() {
     };
     assert_eq!(StoreOp::GetCommit(&detail).method(), "branch.get_commit");
     assert_eq!(names(&StoreOp::GetCommit(&detail)), ["commit"]);
-    let numbered = Page {
-        number: Some(2),
-        size: Some(5),
-        pos: None,
-    };
-    let revision = FileRevision {
-        branch: t("feature"),
-        path: t("/src/a"),
-        at_commit: Some(t("a")),
-        traversal: Some(t("provenance")),
-        page: numbered,
-        ..FileRevision::default()
-    };
-    assert_eq!(StoreOp::Revision(&revision).method(), "fs.revision");
-    assert_eq!(
-        names(&StoreOp::Revision(&revision)),
-        ["branch", "commit", "path", "traversal", "pageSize", "page"]
-    );
-    let blame = FileBlame {
-        line_count: Some(7),
-        ..FileBlame::default()
-    };
-    assert_eq!(
-        names(&StoreOp::Blame(&blame)),
-        ["branch", "path", "lineCount"]
-    );
-    let file_diff = FileDiff {
-        include_attribution: Some(true),
-        allow_missing: Some(true),
-        page: numbered,
-        ..FileDiff::default()
-    };
-    assert_eq!(
-        names(&StoreOp::DiffFiles(&file_diff)),
-        [
-            "left",
-            "right",
-            "includeAttribution",
-            "allowMissing",
-            "pageSize",
-            "page"
-        ]
-    );
 }
 
 #[test]

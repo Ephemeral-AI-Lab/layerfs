@@ -297,58 +297,108 @@ $ layerfs home clear-log --detail
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `init` | `project`, `folder` | `timeout` (ms, default 1 hour), `on_progress` | imports a folder on the caller's host as a new project into an existing Store |
-| `list` | `[store]` | `page_size`, `page_pos` | every project in the home, or one Store's |
-| `get` | `project` | — | a project's record: its Store, kind and machine |
-| `stats` | `project`, `[branch]`, `[commit]` | — | entry counts of one pinned saved tree |
-| `export` | `project`, `destination` | `branch` (default `main`), `on_progress` | exports a pinned committed Branch snapshot to a local directory |
+| `init` | `project`, `folder` | `timeout` (ms, default 1 hour), `on_progress` | imports a folder on this computer as a new project into an existing Store |
+| `list` | — | `store`, `limit`, `cursor`, `--with stats` | every project in the home, or one Store's |
+| `get` | `project` | — | one project: its Store, state and main's head |
+| `stats` | `project` | `branch` (default `main`), `at` | entry counts and size of the tree at a Branch's head or a Commit |
+| `export` | `project`, `destination` | `branch` (default `main`), `at`, `on_progress` | exports a Branch's committed tree to a folder on this computer |
 | `delete` | `project` | — | retires one project in its Store and removes its home entry |
-| `remove_file` | `project`, `path` | — | hides one absolute path from every node at or below its marker frontier |
+| `hide_path` | `project`, `path` | — | hides one absolute path from the project's whole history; frees no bytes |
 
-- `init` never creates a Store; a missing one is `NotFound`. `folder` is
-  always on the caller's host. Into a sqlite Store on `native` or a
-  PostgreSQL Store, Init runs in the caller's process. Into a sqlite Store
-  on another machine (which must be running), the caller copies the folder
-  to that machine's worker, which runs Init on the copy and then deletes it
-  (#536 H11, H11a): the machine needs free room for the copy while Init
-  runs (`Capacity` otherwise), and progress shows phase `send` with bytes
-  sent before Init's own counts. A missing folder, or one with a socket,
-  FIFO or device file, is refused before anything is sent. Run: answers
-  `project`, `store`, `name`, `kind`, `machine`, `created`, `layer` and
-  `root`.
-- `delete` is refused `Busy` while a Sandbox of the project is recorded
-  (`detail.related` lists each as `{kind: "sandbox", name}`).
-- `remove_file` is visibility-only in 2.0: it hides the path across the
-  project's history and frees no bytes; the marker frontier governs later
-  re-creations.
+A project's `state` is `ready`, `busy` (an Init or a delete of it runs:
+`op {name, phase, started_at}`, `name` being `init` or `delete`),
+`blocked` (its Store, or that Store's machine, is not ready, or the Store
+cannot be read: `blocked_by {store | machine, reason}`) or `broken` with
+`reason: unresolved` (a delete, or an Init, that stopped part-way, with
+`fix: layerfs project delete <project>`). A project is never `stopped` or
+`unknown`. While a call runs on a project its record holds the call's `op`;
+a Store whose records say it is not ready is not asked, and any other
+Store's own list is read where its calls run. A project on record that its
+Store does not list is hidden from `list` and `NotFound` to `get`, as
+before (`project doctor` reports it as a notice). An export is a read and
+records no `op`.
+
+- **`init`** never creates a Store; a missing one is `NotFound`. `folder`
+  is an absolute path on this computer. Into a sqlite Store on `native` or
+  a PostgreSQL Store, Init runs in the caller's process. Into a sqlite
+  Store on another machine (which must be running), the caller copies the
+  folder to that machine's worker, which runs Init on the copy and then
+  deletes it (#536 H11, H11a): the machine needs free room for the copy
+  while Init runs (`Capacity` otherwise). A missing folder, or one with a
+  socket, FIFO or device file, is refused before anything is sent. The
+  project's entry is claimed first (a name the home already holds is
+  `Exists`), so the project is listed `busy` while Init runs; a refusal
+  removes the entry, and an outcome that is not known (a lost reply) keeps
+  it `broken` `unresolved`. Progress events are `{phase, done, total}`:
+  `check`, `send` (bytes, to a worker only), `install`, `record`. Short:
+  `{ commit }`, main's first Layer; long: `commit, outcome ("created"),
+  project, store, engine, machine, root, created_at`.
+- **`list`** pages by Store, then name: `limit` is 1 to 1000, 100 by
+  default, and a page also ends early past 64 KiB of rows. The
+  `next_cursor` carries the `--store` filter only; one given with another
+  filter, or to another call, is `InvalidInput`. A row's short form is
+  `{ project }` with its `state` and companion when not `ready`; its long
+  form adds `store, engine, machine, commit` (main's head, null for a
+  project whose Store was not read) and `created_at`. `--with stats` adds
+  `size` to each row: the length main's head Layer records, one record per
+  project and no tree walk; it is left out for a blocked project.
+- **`get`** short: `{ store, state }` with `commit` (main's head) and the
+  state's companion; long: `store, state, commit, op, blocked_by, reason,
+  fix, project, engine, machine, created_at`. It takes no `--with`.
+- **`stats`** counts files, folders and symlinks by a bounded walk of the
+  tree at the Branch's head or, with `--at`, at one Commit of its history
+  (a full id or a prefix of 8 or more; a prefix more than one Commit starts
+  with is `InvalidInput` with `matches`). Short: `{ file_count, dir_count,
+  symlink_count, size }`, with `partial: true` when the walk stopped at its
+  work bound (`size` is the length the counted node records, whole even
+  then); long adds `partial, commit, root`.
+- **`delete`** is refused `Busy` while a Sandbox of the project is recorded
+  (`detail.related` lists each as `{kind: "sandbox", name}`) or while
+  another call's `op` holds the project. Short: `{"ok":true}`, or
+  `{"home_entry_kept":true}` when the home's entry could not be removed
+  (the project is retired; run `delete` again to remove the entry); long:
+  `ok, home_entry_kept, outcome ("deleted"), deleted_at`. Running it again
+  clears a `broken` `unresolved` project, including the entry of an Init
+  that never reached the Store.
+- **`hide_path`** (was `remove_file`, removed with no alias) writes a
+  marker, not a Commit: it hides the path across the project's history and
+  frees no bytes; the marker frontier governs later re-creations. Short:
+  `{"ok":true}`, or `{"unchanged":true}` for a path already hidden; long:
+  `ok, unchanged, outcome ("hidden" or "unchanged"), path,
+  frontier_serial, hidden_at`.
+- `list`'s `[store]`, `page_size` and `page_pos` became `--store`,
+  `--limit` and `--cursor`; `stats`'s `[branch]` and `[commit]` became
+  `--branch` and `--at`.
 
 `project export` ([reference](../../architecture/api/sdk/project.md#projectexport)) exports a committed Branch snapshot. `destination` is an absolute path
-on the caller’s host, even for a worker Store. It must be absent or an empty
+on this computer, even for a worker Store. It must be absent or an empty
 real directory, outside the home, with an existing parent. A nonempty destination
 is `InvalidInput` (raised as `NotEmpty`); files and symlinks are refused. Same-parent staging is published
 by atomic rename only after all bytes and metadata are written; failures clean
 up this call’s staging without deleting unrelated files.
 
-Export takes a Branch name, with no `commit` option or `--commit` flag. It pins
-the node/root once, excludes uncommitted Workspace changes and is unaffected by
-later publications. SQLite reads locally or streams bounded frames from its
-worker; PostgreSQL reads in the caller’s process, for local or remote servers.
-A required stopped worker is `Unavailable` and is never started automatically.
-The fidelity contract includes binary files, empty directories, `.git`, ignored
-files, symlinks, permission bits and nanosecond `mtime` where the host supports
-them. Host name/case collisions are `Conflict`, rather than silent overwrites.
+Export takes a Branch (`main` by default) and pins its head, or with `--at`
+one Commit of its history (a full id or a prefix of 8 or more, as `stats`
+takes it). It pins the node/root once, excludes uncommitted Workspace
+changes and is unaffected by later publications. SQLite reads locally or
+streams bounded frames from its worker; PostgreSQL reads in the caller’s
+process, for local or remote servers. A required stopped worker is
+`Unavailable` and is never started automatically. The fidelity contract
+includes binary files, empty directories, `.git`, ignored files, symlinks,
+permission bits and nanosecond `mtime` where the host supports them. Host
+name/case collisions are `Conflict`, rather than silent overwrites.
 
 ```bash
 # Example, not run: /exports exists and /exports/api is absent or empty.
 layerfs project export shop/api /exports/api --branch agent --progress
 ```
 
-The final JSON result contains `project`, `store`, `name`, `kind`, `machine`,
-`branch`, `snapshot`, `node`, `root`, `destination`, `files`, `directories`,
-`symlinks` and `bytes`. Progress on stderr is JSON Lines with `prepare`, `export`,
-`finalize`, local `files`/`directories`/`symlinks`/`bytes`, `done = bytes` during
-writing and `total: null`; `finalize` is the last event and comes only once the
-folder is in place. Events arrive at most every 200 ms.
+Short: `{ file_count, size }` (`size` the bytes written); long adds
+`dir_count, symlink_count, commit` (the exported node, its full id) and
+`root`. Progress on stderr is JSON Lines of `{phase, done, total}`:
+`prepare`, `export` and `finalize`, `done` the bytes written so far and
+`total` null; `finalize` is the last event and comes only once the folder
+is in place. Events arrive at most every 200 ms.
 
 ### `branch` (6)
 
@@ -461,53 +511,99 @@ publication answers as a Commit. Every id in an answer is the full id.
   `paths_only`, `page_size` and `page_pos` became `ref`, `--from`, `--with
   patch`, `limit` and `cursor`).
 
-### `file` (15)
+### `file` (14)
 
 1.1.0's `fs` family, renamed (O13). Paths are absolute, starting with `/`.
+Store calls: Linux only (elsewhere `Unsupported`).
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `read` | `project`, `branch`, `path`, `[commit]` | `start_line`, `end_line` | reads a text file, or a window of its lines |
-| `stat` | `project`, `branch`, `path`, `[commit]` | — | a path's kind, size and mode |
-| `list` | `project`, `branch`, `path`, `[commit]` | `page_size`, `page_pos` | a folder's entries |
-| `glob` | `project`, `branch`, `path`, `pattern`, `[commit]` | `page_size`, `page_pos` | paths under `path` matching a glob |
-| `grep` | `project`, `branch`, `path`, `pattern`, `[commit]` | `page_size`, `page_pos` | lines under `path` matching a regular expression |
-| `revision` | `project`, `branch`, `path` | `at_commit`, `traversal`, `page`, `page_size`, `continuation` | the saved changes to one literal path, oldest first |
-| `blame` | `project`, `branch`, `path`, `[commit]` | `from_line` | the Commit of each line |
-| `diff` | `project`, `left_branch`, `left_path`, `right_branch`, `right_path` | `left_commit`, `right_commit` | the difference between two files (O29) |
-| `write` | `project`, `branch`, `path`, `content` | `message`, `mode` | writes a file; one Commit |
-| `edit` | `project`, `branch`, `path` | `old`, `new`, `message` | replaces one unique text in a file; one Commit |
-| `rm` | `project`, `branch`, `path` | `message` | removes a path; one Commit |
-| `mkdir` | `project`, `branch`, `path` | `message`, `mode` | makes a folder; one Commit |
-| `mv` | `project`, `branch`, `from_path`, `to_path` | `message` | moves a path; one Commit |
-| `cp` | `project`, `branch`, `from_path`, `to_path` | `message` | copies a path; one Commit |
-| `apply` | `project`, `branch`, `changes` (JSON) | `message` | applies a list of changes; one Commit, all or none |
+| `read` | `project`, `branch`, `path` | `at`, `line` (1), `limit` (2000) | read a text file, or a window of its lines |
+| `stat` | `project`, `branch`, `path` | `at` | a path's type, size and mode |
+| `list` | `project`, `branch`, `path` | `at`, `limit` (100), `cursor` | a folder's entries |
+| `glob` | `project`, `branch`, `pattern`, `[path]` (`/`) | `exclude`, `at`, `limit` (100), `cursor` | paths under a folder that match a glob |
+| `grep` | `project`, `branch`, `pattern`, `[path]` (`/`) | `include`, `exclude`, `ignore_case`, `at`, `limit` (100), `cursor` | lines under a folder that contain a literal text |
+| `history` | `project`, `branch`, `path` | `at`, `traversal` (`provenance`), `limit` (100), `cursor` | the Commits that changed one path, newest first |
+| `blame` | `project`, `branch`, `path` | `at`, `line` (1), `limit` (2000) | the Commit that last changed each line of a text file |
+| `write` | `project`, `branch`, `path`, `content` | `mode`, `expected`, `message` | write a file; one Commit |
+| `edit` | `project`, `branch`, `path` | `old_string`, `new_string` (both required), `replace_all`, `expected`, `message` | replace a text in a file; one Commit |
+| `rm` | `project`, `branch`, `path` | `recursive`, `expected`, `message` | remove a path; one Commit |
+| `mkdir` | `project`, `branch`, `path` | `mode`, `expected`, `message` | make a folder and its missing parents; one Commit |
+| `mv` | `project`, `branch`, `from`, `to` | `expected`, `message` | move a path; one Commit |
+| `cp` | `project`, `branch`, `from`, `to` | `expected`, `message` | copy a path, a folder with everything in it; one Commit |
+| `apply` | `project`, `branch`, `changes` (JSON) | `expected`, `message` | apply a list of changes; one Commit, all or none |
 
-- Reads answer `kind: "ok"`, the `snapshot` they read (such as
-  `agent@3a54ebd60426`), its `root` and the call's fields. `read` answers
-  `text`, `start_line`, `end_line`, `truncated`, `next_line` and `size`.
-  A file that is not text is refused `InvalidInput` (raised as `Binary`).
-- Writes answer `{kind: "Committed", branch, head, commit}`. Without a
-  message, the Commit message is `Apply filesystem changes`.
-- `mode` is a whole number permission mode, 0 to 0o7777 (in the shell, a
-  decimal number such as `420` for 0644).
+- **Reads** read the Branch's head, or `--at C`: a full Commit id or a
+  prefix of 8 or more of its characters (a prefix more than one Commit
+  starts with is `InvalidInput` with `matches`, a count). Every long form
+  names the Commit read as `commit` (its full 66-character id), its `root`
+  and the `path`. `read` answers `text` (an empty file `""`), `next_line`
+  while lines are left and `line_truncated` when a long line was cut; a file
+  that is not text answers `binary: true` and its `size` instead of
+  `text`. `stat` answers `type` (`file`, `dir` or `symlink`), `size` and
+  `mode` as octal text (`"0644"`); the long form adds `inode` and
+  `modified_at`. `blame` answers `ranges` (`{start, end, commit}`, runs of
+  lines with one owner; a range without `commit` has none found) and
+  `commits` (each owner once: `{commit, message}`, the long form adds
+  `created_at`), `next_line`, and `partial` when its history budget ran out
+  or a line was cut.
+- **Pages**: `list`, `glob`, `grep` and `history` answer `items` and
+  `next_cursor`. `limit` is 1 to 1000; a page also ends early at the reply
+  budget, with a cursor. The cursor carries the call's filters and the
+  Commit its first page read, so a later page reads the same tree while the
+  Branch moves on. A cursor given with other filters, or to another call,
+  is `InvalidInput`; one whose Commit is gone, `NotFound`. A `list` row is
+  `{path, type}` (long: `inode`), a `glob` row a path, a `grep` row `{path,
+  line, text}` with `line_truncated`; the long forms add `skipped_hidden`
+  (entries `project hide-path` hides) or, for `grep`, `skipped_binary` (the
+  files that are not text). `grep` searches literal text; `--ignore-case`
+  folds ASCII letters. `--include` and `--exclude` take a glob in the
+  `.lww` rules syntax that matches a path or one of its folders, so
+  `--exclude node_modules` leaves out every `node_modules` folder (and the
+  walk does not enter it). A `history` row is `{commit, change}` with its
+  `message`; `change` is `added`, `modified` or `removed`; the long row adds
+  `parent`, `created_at`, the path's `type`, `size` and `mode` after the
+  Commit, and which of `content`, `metadata` and `identity` changed.
+  `--traversal branch` stays on the Branch's own Commits.
+- **Writes** never write `main` (refused with a `fix` that forks a
+  Branch). Each answers `commit`, the new Commit's full id; `unchanged`
+  when nothing changed (`commit` is then the head); `merged` when the
+  Branch moved during the call and the change was merged; `overwritten`
+  (and its count) for the paths `.lww` rules took. The long form adds
+  `outcome` (`committed`, `merged` or `unchanged`), `branch`, `parent`,
+  `root`, `message` and `created_at`. `--expected C` is the head guard: the
+  head the call's private Workspace bound to must be `C` (an id or prefix),
+  else `Conflict` naming the head as `commit`. Without a message, the
+  Commit message is `Apply filesystem changes` (`-m` in the shell).
+- `mode` is octal text, four digits `0000` to `7777` (`0644`), as `stat`
+  answers it. A new file is `0644` and an existing one keeps its mode; a
+  folder `mkdir` makes gets its `mode`, missing parents `0755`.
+- `edit` without `--replace-all` needs exactly one occurrence: none is
+  `NotFound`, more than one `InvalidInput` with `matches` and a `fix` that
+  adds `--replace-all`. With it, every occurrence is replaced and the answer
+  says how many as `replaced`. `rm` of a folder that is not empty needs
+  `--recursive` (`InvalidInput` with a `fix` that adds it).
 - In the shell, `write` reads its content and `apply` its JSON from stdin,
-  or from `--from <file>`. `edit` also takes `--old-from <file>` and
-  `--new-from <file>`.
-- `apply`'s changes are objects with an `op`: `write` (`path`, `content`
-  as text or bytes, `mode`), `mkdir` (`path`, `mode`), `chmod` (`path`,
-  `mode`), `rm` (`path`), `cp` and `mv` (`from_path`, `to_path`), and `edit`
-  (`path`, `old`, `new`), the same names as the single calls
-  (`engine/crates/layerfs-api/src/family/files.rs` maps them to the Store's).
-  The Store's own names (`from`, `to`, `oldText`, `newText`, `bytes`) are
-  refused `InvalidInput`, so a folder scope sees every path.
+  or from `--from <file>`.
+- `apply`'s changes are objects with an `op` and that single call's fields:
+  `write` (`path`, `content` as text or bytes, `mode`), `mkdir` (`path`,
+  `mode`), `chmod` (`path`, `mode`), `rm` (`path`, `recursive`), `cp` and
+  `mv` (`from`, `to`), and `edit` (`path`, `old_string`, `new_string`,
+  `replace_all`). Any other field is refused `InvalidInput`, so a folder
+  scope sees every path.
+- `file.history` was `file.revision` (`at_commit`, `page`, `page_size` and
+  `continuation` became `--at`, `limit` and `cursor`); `file.diff` is gone:
+  one path between two Commits is `commit diff --path`. Reads lost their
+  optional `[commit]` positional for `--at`, the windows `start_line`,
+  `end_line`, `from_line` and `line_count` became `--line` and `--limit`,
+  and `page_size`/`page_pos` became `--limit` and `--cursor`.
 
 Run:
 
 ```console
-$ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","path":"/src"},{"op":"mv","from_path":"/docs/a.txt","to_path":"/src/a.txt"}]' \
+$ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","path":"/src"},{"op":"mv","from":"/docs/a.txt","to":"/src/a.txt"}]' \
     | layerfs file apply shop/api agent -m batch
-{"kind":"Committed","branch":"agent","head":"1271…","commit":{…,"message":"batch",…}}
+{"commit":"1271…"}
 ```
 
 ### `sandbox` (7)

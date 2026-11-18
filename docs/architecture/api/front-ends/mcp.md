@@ -116,7 +116,7 @@ built addon).
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
-86 calls: 28 in `work`, 58 in `admin` only, 0 in no profile (`ui`), 0 no tool; `--profile admin` lists 86.
+85 calls: 17 in `work`, 68 in `admin` only, 0 in no profile (`ui`), 0 no tool; `--profile admin` lists 85.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
@@ -128,12 +128,12 @@ built addon).
 | `home.leftovers` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
 | `home.prune` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
 | `project.init` | admin | admin | import a host folder into a Store; administration |
-| `project.list` | work | work, admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
-| `project.get` | work | work, admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
-| `project.stats` | work | work, admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
-| `project.export` | work | work, admin | export a Branch snapshot to a local folder under a launch-time --export-root; a folder scope refuses it |
+| `project.list` | admin | admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
+| `project.get` | admin | admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
+| `project.stats` | admin | admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
+| `project.export` | admin | admin | export a Branch snapshot to a local folder under a launch-time --export-root; a folder scope refuses it |
 | `project.delete` | admin | admin | retire a project in its Store and remove its home entry; administration; a folder scope refuses it |
-| `project.remove_file` | admin | admin | hide one absolute path from every node at or below its marker frontier; administration; a folder scope refuses it |
+| `project.hide_path` | admin | admin | hide one absolute path from the project's whole history; administration; a folder scope refuses it |
 | `project.doctor` | admin | admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
 | `branch.list` | admin | admin | work on Branches: list, read, fork, merge, publish and diff |
 | `branch.get` | admin | admin | work on Branches: list, read, fork, merge, publish and diff |
@@ -145,20 +145,19 @@ built addon).
 | `commit.get` | admin | admin | read a Branch's Commit history |
 | `commit.diff` | work | work, admin | read a Branch's Commit history |
 | `file.read` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.stat` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
+| `file.stat` | admin | admin | read and change files in a Branch; each write is one explicit Commit |
 | `file.list` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
 | `file.glob` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
 | `file.grep` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.revision` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.blame` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.diff` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
+| `file.history` | admin | admin | read and change files in a Branch; each write is one explicit Commit |
+| `file.blame` | admin | admin | read and change files in a Branch; each write is one explicit Commit |
 | `file.write` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
 | `file.edit` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
 | `file.rm` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.mkdir` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
+| `file.mkdir` | admin | admin | read and change files in a Branch; each write is one explicit Commit |
 | `file.mv` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.cp` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.apply` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
+| `file.cp` | admin | admin | read and change files in a Branch; each write is one explicit Commit |
+| `file.apply` | admin | admin | read and change files in a Branch; each write is one explicit Commit |
 | `sandbox.create` | work | work, admin | start a Sandbox, and with --mount mount a Branch in it; work |
 | `sandbox.list` | admin | admin | start a Sandbox (work); read, remove and inspect one (administration) |
 | `sandbox.get` | admin | admin | start a Sandbox (work); read, remove and inspect one (administration) |

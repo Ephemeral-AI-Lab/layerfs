@@ -10,7 +10,7 @@ lfs = layerfs.client()
 async def run() -> None:
     aio.store.create("shop")  # E: a coroutine nobody awaits
     await aio.store.create(1)  # E: a name is text
-    await aio.file.read("shop/api", "main", "/a", start_line="2")  # E: a line is a number
+    await aio.file.read("shop/api", "main", "/a", line="2")  # E: a line is a number
 
 
 layerfs.store.create(1)  # E: a name is text

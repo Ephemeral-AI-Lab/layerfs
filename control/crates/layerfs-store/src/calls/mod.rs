@@ -8,4 +8,5 @@ pub mod file;
 mod op;
 pub mod project;
 
-pub use op::{Change, Content, Names, Page, StoreOp};
+pub use file::{Change, Content};
+pub use op::{Names, Page, StoreOp};

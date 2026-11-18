@@ -4,7 +4,9 @@ use crate::history::lookup as args;
 use layerfs_bridge::control::SdkValue;
 use layerfs_workspace::Operation;
 impl Mutation<'_> {
-    pub fn edit(&mut self, path: &str, old: &str, new: &str) -> Result<()> {
+    /// Replaces `old` with `new` in the file at `path`: its one occurrence,
+    /// or with `all` every one; answers how many were replaced.
+    pub fn edit(&mut self, path: &str, old: &str, new: &str, all: bool) -> Result<u64> {
         if old.is_empty() {
             return Err(args::invalid("oldText is empty"));
         }
@@ -24,8 +26,7 @@ impl Mutation<'_> {
             }
             failure[i] = j;
         }
-        let (mut offset, mut state, mut matches, mut found, mut utf8) =
-            (0u64, 0usize, 0usize, 0u64, Vec::new());
+        let (mut offset, mut state, mut found, mut utf8) = (0u64, 0usize, Vec::new(), Vec::new());
         while offset < file.logical_len {
             let bytes = self.read(file.serial, offset, 32768)?;
             if bytes.is_empty() {
@@ -54,59 +55,87 @@ impl Mutation<'_> {
                     state += 1;
                 }
                 if state == pattern.len() {
-                    matches += 1;
-                    found = offset + i as u64 + 1 - pattern.len() as u64;
+                    found.push(offset + i as u64 + 1 - pattern.len() as u64);
                     state = 0;
                 }
             }
             offset += bytes.len() as u64;
         }
-        if matches != 1 {
+        if found.is_empty() || (!all && found.len() != 1) {
             return Err(args::refuse(
-                if matches == 0 {
+                if found.is_empty() {
                     "NoMatch"
                 } else {
                     "AmbiguousMatch"
                 },
                 path,
-                SdkValue::map([("matches", SdkValue::Int(matches as i64))]),
+                SdkValue::map([("matches", SdkValue::Int(found.len() as i64))]),
             ));
         }
         if old == new {
-            return Ok(());
+            return Ok(found.len() as u64);
         }
-        let tail = found + old.len() as u64;
-        let length = file.logical_len as i128 + new.len() as i128 - old.len() as i128;
+        let length = file.logical_len as i128
+            + (new.len() as i128 - old.len() as i128) * found.len() as i128;
         let length = u64::try_from(length).map_err(args::failed)?;
-        let delta = new.len() as i128 - old.len() as i128;
-        match delta.cmp(&0) {
-            std::cmp::Ordering::Greater => {
-                let mut end = file.logical_len;
-                while end > tail {
-                    let start = tail.max(end.saturating_sub(32768));
-                    let bytes = self.read(file.serial, start, (end - start) as u32)?;
-                    self.write_at(file.serial, (start as i128 + delta) as u64, &bytes)?;
-                    end = start;
-                }
-            }
-            std::cmp::Ordering::Less => {
-                let mut start = tail;
-                while start < file.logical_len {
-                    let count = 32768.min(file.logical_len - start);
-                    let bytes = self.read(file.serial, start, count as u32)?;
-                    self.write_at(file.serial, (start as i128 + delta) as u64, &bytes)?;
-                    start += count;
-                }
-            }
-            std::cmp::Ordering::Equal => {}
-        }
-        self.write_at(file.serial, found, new.as_bytes())?;
+        self.rewrite(file.serial, file.logical_len, &found, old.len() as u64, new)?;
         self.apply(Operation::SetAttributes {
             serial: file.serial,
             mode: None,
             mtime: None,
             size: Some(length),
         })?;
+        Ok(found.len() as u64)
+    }
+
+    /// Replaces the `old`-long text at each of `found` (in order, apart)
+    /// with `new` in one pass over the file: shifted left from the front
+    /// when the file shrinks, shifted right from the back when it grows,
+    /// so no byte is overwritten before it is read.
+    fn rewrite(&mut self, serial: u64, len: u64, found: &[u64], old: u64, new: &str) -> Result<()> {
+        let delta = new.len() as i128 - old as i128;
+        // segment k runs from the end of match k-1 to match k (the last one
+        // to the end of the file); it moves by `delta * k`
+        let segment = |k: usize| {
+            let start = if k == 0 { 0 } else { found[k - 1] + old };
+            (start, found.get(k).copied().unwrap_or(len))
+        };
+        let moved = |at: u64, k: usize| (at as i128 + delta * k as i128) as u64;
+        match delta.cmp(&0) {
+            std::cmp::Ordering::Less => {
+                for k in 0..=found.len() {
+                    let (mut start, end) = segment(k);
+                    while k > 0 && start < end {
+                        let count = 32768.min(end - start);
+                        let bytes = self.read(serial, start, count as u32)?;
+                        self.write_at(serial, moved(start, k), &bytes)?;
+                        start += count;
+                    }
+                    if k < found.len() {
+                        self.write_at(serial, moved(found[k], k), new.as_bytes())?;
+                    }
+                }
+            }
+            std::cmp::Ordering::Greater => {
+                for k in (0..=found.len()).rev() {
+                    if k < found.len() {
+                        self.write_at(serial, moved(found[k], k), new.as_bytes())?;
+                    }
+                    let (start, mut end) = segment(k);
+                    while k > 0 && end > start {
+                        let from = start.max(end.saturating_sub(32768));
+                        let bytes = self.read(serial, from, (end - from) as u32)?;
+                        self.write_at(serial, moved(from, k), &bytes)?;
+                        end = from;
+                    }
+                }
+            }
+            std::cmp::Ordering::Equal => {
+                for at in found {
+                    self.write_at(serial, *at, new.as_bytes())?;
+                }
+            }
+        }
         Ok(())
     }
 }

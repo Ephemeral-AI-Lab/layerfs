@@ -9,12 +9,16 @@ pub mod family;
 pub mod frame;
 pub mod init;
 pub mod listing;
+pub mod live;
+pub mod op;
 pub mod parts;
 pub mod postgres_init;
+pub mod read;
 #[doc(hidden)]
 pub mod record;
 pub mod send;
 pub mod staged;
+pub mod state;
 pub mod tree;
 pub use layerfs_project::store::{
     InitError, InitFailure, InitRequest, InstallError, InstallFailure, InstallWork, Installed,

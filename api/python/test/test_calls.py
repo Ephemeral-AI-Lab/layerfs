@@ -403,7 +403,7 @@ class Calls(unittest.TestCase):
             layerfs.FAMILIES,
             ["home", "project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup"],
         )
-        self.assertEqual(len(layerfs.TABLE), 86)
+        self.assertEqual(len(layerfs.TABLE), 85)
         for spec in layerfs.TABLE:
             self.assertTrue(callable(getattr(getattr(layerfs, spec["family"]), spec["call"])))
         # the options of `branch publish` (2.0 row: at, expected, force) are in
@@ -454,7 +454,7 @@ class Calls(unittest.TestCase):
         lfs = layerfs.client(home=home)
         lfs.store.create("shop")
         progress = []
-        made = lfs.project.init("shop/api", folder, on_progress=progress.append)
+        made = lfs.project.init("shop/api", folder, on_progress=progress.append, detail=True)
         self.assertEqual(made["project"], "shop/api")
         lfs.branch.fork("shop/api", "agent", "main")
         lfs.file.write("shop/api", "agent", "/b.bin", b"\x00\xff\x01", message="bytes")
@@ -468,15 +468,15 @@ class Calls(unittest.TestCase):
             ["file", "read", "shop/api", "agent", "/a.txt"],
             ["file", "read", "shop/api", "agent", "/b.bin"],
             ["file", "list", "shop/api", "agent", "/"],
-            ["file", "grep", "shop/api", "agent", "/", "hello"],
+            ["file", "grep", "shop/api", "agent", "hello", "/"],
             ["commit", "diff", "shop/api", "agent"],
         ]:
             self.same(
                 f"{family}.{call}", shell(home, [family, call, *positionals]), python(lfs, family, call, positionals)
             )
-        # an optional positional as a keyword, and a folder scope
+        # a Commit id as `at` reads that history, and a folder scope
         first = lfs.commit.list("shop/api", "agent")["items"][-1]["commit"]
-        self.assertEqual(lfs.file.read("shop/api", "agent", "/README.md", commit=first)["text"], "hello python\n")
+        self.assertEqual(lfs.file.read("shop/api", "agent", "/README.md", at=first)["text"], "hello python\n")
         scoped = layerfs.client(home=home, scope={"project": "shop/api", "folder": "/web"})
         with self.assertRaisesRegex(layerfs.LayerFSError, "out of scope: path"):
             scoped.file.stat("shop/api", "main", "/README.md")
@@ -553,7 +553,7 @@ class Calls(unittest.TestCase):
         at_cancel = asyncio.run(run())
         self.assertGreaterEqual(at_cancel, 1)
         self.assertEqual(len(seen), at_cancel, "no function ran after the cancel")
-        self.assertEqual(layerfs.client(home=home).project.get("shop/api")["project"], "shop/api")
+        self.assertEqual(layerfs.client(home=home).project.get("shop/api", detail=True)["project"], "shop/api")
         shutil.rmtree(home)
         shutil.rmtree(folder)
 

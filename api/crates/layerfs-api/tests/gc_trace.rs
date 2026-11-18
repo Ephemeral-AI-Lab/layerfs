@@ -1,5 +1,5 @@
 //! T-G2: the call log redacts every path argument (#41 §4.3). A
-//! `project.remove_file` or a hidden `file.read`/`stat`/`list`/`glob` path is
+//! `project.hide_path` or a hidden `file.read`/`stat`/`list`/`glob` path is
 //! logged as `<N bytes>` of its normalized form (one leading `/` stripped),
 //! the `Removed` refusal still echoes the request path, the salted trace key
 //! changes with the salt, and a `store.compact` report's artifact names never
@@ -136,17 +136,13 @@ fn removed_path(refusal: &SdkRefusal) -> &str {
 fn path_arguments_are_byte_counts_in_the_call_log() {
     let _env = serial();
     let (home, folder) = project();
-    let removed = ok(
-        &home,
-        "project.remove_file",
-        &[p(), ("path", t("/base.txt"))],
-    );
-    assert_eq!(removed.get_text("kind"), Some("Removed"));
+    let removed = ok(&home, "project.hide_path", &[p(), ("path", t("/base.txt"))]);
+    assert_eq!(removed, SdkValue::map([("ok", SdkValue::Bool(true))]));
     assert_eq!(
         argv(&last(&home)),
         [
             "project".to_owned(),
-            "remove-file".into(),
+            "hide-path".into(),
             "shop/api".into(),
             bytes("base.txt".len()),
         ]
@@ -180,9 +176,14 @@ fn path_arguments_are_byte_counts_in_the_call_log() {
     let listed = ok(
         &home,
         "file.list",
-        &[p(), ("branch", t("main")), ("path", t("/"))],
+        &[
+            p(),
+            ("branch", t("main")),
+            ("path", t("/")),
+            ("detail", SdkValue::Bool(true)),
+        ],
     );
-    assert_eq!(listed.get_int("removed_count"), Some(1));
+    assert_eq!(listed.get_int("skipped_hidden"), Some(1));
     assert_eq!(argv(&last(&home))[4], bytes(0));
 
     let globbed = ok(
@@ -191,14 +192,15 @@ fn path_arguments_are_byte_counts_in_the_call_log() {
         &[
             p(),
             ("branch", t("main")),
-            ("path", t("/")),
             ("pattern", t("*.txt")),
+            ("path", t("/")),
+            ("detail", SdkValue::Bool(true)),
         ],
     );
-    assert_eq!(globbed.get_int("removed_count"), Some(1));
+    assert_eq!(globbed.get_int("skipped_hidden"), Some(1));
     let words = argv(&last(&home));
-    assert_eq!(words[4], bytes(0));
-    assert_eq!(words[5], bytes("*.txt".len()));
+    assert_eq!(words[4], bytes("*.txt".len()));
+    assert_eq!(words[5], bytes(0));
 
     let text = log_text(&home);
     assert!(!text.contains("/base.txt"), "raw path in the log:\n{text}");
@@ -211,11 +213,7 @@ fn path_arguments_are_byte_counts_in_the_call_log() {
 fn a_removed_refusal_echoes_the_path_the_log_does_not() {
     let _env = serial();
     let (home, folder) = project();
-    ok(
-        &home,
-        "project.remove_file",
-        &[p(), ("path", t("/base.txt"))],
-    );
+    ok(&home, "project.hide_path", &[p(), ("path", t("/base.txt"))]);
     let refusal = refused(
         &home,
         "file.read",
@@ -237,14 +235,7 @@ fn a_removed_refusal_echoes_the_path_the_log_does_not() {
 fn the_redacted_set_covers_every_path_bearing_call() {
     // every argument of these names is logged only as a byte count: its
     // table entry says so (the flag replaced the dispatcher's name list)
-    for name in [
-        "path",
-        "left_path",
-        "right_path",
-        "from_path",
-        "to_path",
-        "pattern",
-    ] {
+    for name in ["path", "pattern"] {
         let named = (layerfs_api::calls().into_iter())
             .flat_map(|call| call.args.iter().chain(call.options))
             .filter(|arg| arg.name == name);
@@ -256,14 +247,14 @@ fn the_redacted_set_covers_every_path_bearing_call() {
         assert!(seen > 0, "no call takes {name}");
     }
     for (name, args) in [
-        ("project.remove_file", &["path"][..]),
+        ("project.hide_path", &["path"][..]),
         ("file.read", &["path"][..]),
         ("file.stat", &["path"][..]),
         ("file.list", &["path"][..]),
         ("file.glob", &["path", "pattern"][..]),
-        ("file.diff", &["left_path", "right_path"][..]),
-        ("file.cp", &["from_path", "to_path"][..]),
-        ("file.mv", &["from_path", "to_path"][..]),
+        ("file.grep", &["path", "pattern"][..]),
+        ("file.cp", &["from", "to"][..]),
+        ("file.mv", &["from", "to"][..]),
         ("commit.diff", &["path"][..]),
     ] {
         let spec = layerfs_api::find(name).unwrap_or_else(|| panic!("{name} is missing"));

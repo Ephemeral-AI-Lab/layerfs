@@ -274,10 +274,11 @@ fn file_family() {
         ])
     )
     .contains("`content` must be text or bytes"));
-    // a change names its paths as the table does, so a folder scope sees them
+    // a change names its fields as the single calls do (`from`, `to`), so
+    // a folder scope sees its paths; the old names are refused
     let moved = SdkValue::List(vec![map(&[
         ("op", t("mv")),
-        ("from", t("/a")),
+        ("from_path", t("/a")),
         ("to", t("/b")),
     ])]);
     assert!(code(
@@ -288,7 +289,45 @@ fn file_family() {
             ("changes", moved)
         ])
     )
-    .contains("`from` is not a change field"));
+    .contains("`from_path` is not a change field"));
+    // `--mode` is octal text, as `file stat` answers it
+    assert!(code(
+        "file.mkdir",
+        map(&[
+            ("project", t("shop/api")),
+            ("branch", t("dev")),
+            ("path", t("/d")),
+            ("mode", t("644"))
+        ])
+    )
+    .contains("`mode` is octal text"));
+    // a window is 1 to 2000 lines; `--old-string` is required
+    let read = |limit: &str| {
+        code(
+            "file.read",
+            map(&[
+                ("project", t("shop/api")),
+                ("branch", t("main")),
+                ("path", t("/a")),
+                ("limit", SdkValue::Int(limit.parse().unwrap())),
+            ]),
+        )
+    };
+    assert!(
+        read("2001").contains("`limit` is 1 to 2000"),
+        "{}",
+        read("2001")
+    );
+    assert!(code(
+        "file.edit",
+        map(&[
+            ("project", t("shop/api")),
+            ("branch", t("dev")),
+            ("path", t("/a")),
+            ("new_string", t("x"))
+        ])
+    )
+    .contains("needs `old_string`"));
     let reached = code(
         "file.read",
         map(&[
@@ -601,7 +640,7 @@ fn the_four_gc_calls_take_only_ids() {
         ),
         ("project.delete", &[("project", Kind::Project)]),
         (
-            "project.remove_file",
+            "project.hide_path",
             &[("project", Kind::Project), ("path", Kind::Text)],
         ),
         ("store.compact", &[("store", Kind::Name)]),
@@ -693,6 +732,32 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "branch.remove",
     ];
     let commit = ["commit.list", "commit.get", "commit.diff"];
+    let file = [
+        "file.read",
+        "file.stat",
+        "file.list",
+        "file.glob",
+        "file.grep",
+        "file.history",
+        "file.blame",
+        "file.write",
+        "file.edit",
+        "file.rm",
+        "file.mkdir",
+        "file.mv",
+        "file.cp",
+        "file.apply",
+    ];
+    let project = [
+        "project.init",
+        "project.list",
+        "project.get",
+        "project.stats",
+        "project.export",
+        "project.delete",
+        "project.hide_path",
+        "project.doctor",
+    ];
     let sandbox = [
         "sandbox.create",
         "sandbox.list",
@@ -739,9 +804,10 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         migrated,
         [
             &home[..],
-            &["project.doctor"][..],
+            &project[..],
             &branch[..],
             &commit[..],
+            &file[..],
             &sandbox[..],
             &workspace[..],
             &machine[..],
@@ -761,9 +827,10 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
                     call.name()
                 );
             }
-            // a paged call answers items and a cursor
+            // a paged call answers items (maps, or `file.glob`'s paths)
+            // and a cursor
             if call.paging == Paging::Cursor {
-                assert!(form.item().is_some(), "{}", call.name());
+                assert!(form.part("items").is_some(), "{}", call.name());
                 assert!(form.sometimes.contains(&"next_cursor"), "{}", call.name());
                 assert!(call.arg("limit").is_some() && call.arg("cursor").is_some());
             }

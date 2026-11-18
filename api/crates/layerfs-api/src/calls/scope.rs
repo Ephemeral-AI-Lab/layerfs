@@ -189,6 +189,12 @@ impl Scope {
                     _ => &[],
                 };
                 for field in paths {
+                    // an optional folder left off (`file glob`, `file
+                    // grep`) is the scope's folder, not `/`
+                    let optional = call.arg(field).is_some_and(|arg| arg.optional);
+                    if optional && args.get(field).is_none() {
+                        set(&mut args, field, self.folder.clone());
+                    }
                     if !self.inside(args.get_text(field).unwrap_or("")) {
                         return Err(out("path"));
                     }
@@ -198,7 +204,7 @@ impl Scope {
                         return Err(out("path"));
                     };
                     for change in changes {
-                        for field in ["path", "from_path", "to_path"] {
+                        for field in ["path", "from", "to"] {
                             if let Some(path) = change.get_text(field) {
                                 if !self.inside(path) {
                                     return Err(out("path"));
@@ -207,17 +213,9 @@ impl Scope {
                         }
                     }
                 }
-                for field in [
-                    "branch",
-                    "commit",
-                    "left_branch",
-                    "right_branch",
-                    "left_commit",
-                    "right_commit",
-                ] {
-                    if let Some(given) = args.get_text(field).map(str::to_owned) {
-                        set(&mut args, field, self.reference(&given)?);
-                    }
+                // `at` and `expected` name Commits and are never composed
+                if let Some(given) = args.get_text("branch").map(str::to_owned) {
+                    set(&mut args, "branch", self.reference(&given)?);
                 }
             }
             Rule::BranchList => {

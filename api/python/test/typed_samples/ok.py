@@ -26,11 +26,10 @@ def sync_flow() -> None:
     lfs.branch.commits("shop/api", "agent", page=1, page_size=50, at_commit="saved-id")
     lfs.branch.get_commit("shop/api", "main", "layer-id")
     lfs.branch.diff("shop/api", "main", "agent", from_commit="layer-id", to_commit="saved-id", include_attribution=True, page=1)
-    lfs.file.revision("shop/api", "agent", "/README.md", at_commit="saved-id", page=1, page_size=10)
-    lfs.file.diff("shop/api", "main", "/README.md", "agent", "/README.md", include_attribution=True, allow_missing=True, page=1)
+    lfs.file.history("shop/api", "agent", "/README.md", at="saved-id", limit=10)
     lfs.file.write("shop/api", "agent", "/a.bin", b"\x00\xff", message="bytes")
     lfs.file.write("shop/api", "agent", "/a.txt", "text\n")
-    text = lfs.file.read("shop/api", "agent", "/a.txt", start_line=2)["text"]
+    text = lfs.file.read("shop/api", "agent", "/a.txt", line=2)["text"]
     print(text)
     lfs.file.apply("shop/api", "agent", [{"op": "write", "path": "/x", "content": "y"}], message="apply")
     lfs.branch.merge("shop/api", "m", "a", "b", units=["*.py", {"name": "u", "patterns": ["*"]}])
@@ -47,7 +46,7 @@ def sync_flow() -> None:
         message: str = error.message
         print(code, message, error.detail)
     layerfs.project.list()
-    layerfs.file.read("shop/api", "main", "/a", commit="c1")
+    layerfs.file.read("shop/api", "main", "/a", at="c1")
     closed: int = layerfs.close()
     print(closed, layerfs.FAMILIES, len(layerfs.TABLE))
 
@@ -58,7 +57,7 @@ async def async_flow() -> None:
     await lfs.project.init("shop/api", "/src/api", on_progress=on_progress)
     await lfs.branch.commits("shop/api", "main", page=1, page_size=10)
     await lfs.branch.get_commit("shop/api", "agent", "saved-id")
-    await lfs.file.revision("shop/api", "agent", "/README.md", at_commit="saved-id", page=1)
+    await lfs.file.history("shop/api", "agent", "/README.md", at="saved-id", limit=10)
     listed = await lfs.project.list("shop", page_size=10)
     print(listed["items"])
     await asyncio.gather(lfs.store.create("a"), lfs.store.create("b"))

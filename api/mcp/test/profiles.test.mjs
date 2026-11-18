@@ -13,10 +13,10 @@ const nameOf = (spec) => `${spec.family}.${spec.call}`;
 
 test("every call is in exactly one bucket, and admin adds the work bucket", () => {
   assert.deepEqual(check(table), []);
-  assert.equal(table.length, 86);
+  assert.equal(table.length, 85);
   const buckets = table.map(bucketOf);
-  assert.equal(buckets.filter((bucket) => bucket === "work").length, 28);
-  assert.equal(buckets.filter((bucket) => bucket === "admin").length, 58);
+  assert.equal(buckets.filter((bucket) => bucket === "work").length, 17);
+  assert.equal(buckets.filter((bucket) => bucket === "admin").length, 68);
   assert.ok(buckets.every((bucket) => bucket === "work" || bucket === "admin" || bucket === "ui" || bucket === "none"));
   // no call is in the `none` bucket since the doctor family left (`home.prune` is admin)
   assert.deepEqual(table.filter((spec) => bucketOf(spec) === "none").map(nameOf), []);
@@ -29,8 +29,8 @@ test("every call is in exactly one bucket, and admin adds the work bucket", () =
 
   const work = tools(table, "work").map(nameOf);
   const admin = tools(table, "admin").map(nameOf);
-  assert.equal(work.length, 28);
-  assert.equal(admin.length, 86);
+  assert.equal(work.length, 17);
+  assert.equal(admin.length, 85);
   for (const name of work) assert.ok(admin.includes(name), `${name} is in work but not admin`);
   assert.ok(!admin.some((name) => name.startsWith("doctor.")), "a doctor call is a tool");
   assert.throws(() => tools(table, "root"), /unknown profile/);
