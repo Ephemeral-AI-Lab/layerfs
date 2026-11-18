@@ -144,8 +144,9 @@ also reads ahead, because each statement costs a round trip:
 | Read | One statement covers | Bound | Source |
 | --- | --- | --- | --- |
 | Pack heads and record ranges of payload packs | 256 packs; 1,024 ranges or 512 KiB | `HEAD_PACKS`, `BATCH_RANGES`, `BATCH_BYTES` | [`edges.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/edges.rs) |
-| Metadata packs the walk decodes | the announced packs of the wave not held yet, up to 256 packs or 8 MiB of pack heads (a head is at most `PACK_LIMIT`, 256 KiB); a pack row is fetched once and kept, at most 96 MiB in two generations | `AHEAD_PACKS`, `AHEAD_BYTES`, `HELD_PACK_BYTES` | [`objects.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects.rs), [`read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/read.rs) |
-| Inode values of a leaf | the blocks holding the ordinals the walk does not hold yet and up to 4,096 ordinals past the last of them, less the blocks this transaction already fetched; a block is fetched once and kept, at most 64 MiB in two generations | `AHEAD_VALUES`, `HELD_VALUES`, `HELD_BLOCK_BYTES` | [`values.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/values.rs), [`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
+| Metadata packs the walk decodes | the announced packs of the wave not held yet, up to 256 packs or 8 MiB of pack heads (a head is at most `PACK_LIMIT`, 256 KiB); a pack row is fetched once and kept, at most 32 MiB in two generations | `AHEAD_PACKS`, `AHEAD_BYTES`, `HELD_PACK_BYTES` | [`objects.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects.rs), [`read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/read.rs) |
+| Inode values of a leaf | the blocks holding the ordinals the walk does not hold yet and up to 4,096 ordinals past the last of them, less the blocks this transaction already fetched; a block is fetched once and kept, at most 16 MiB in two generations | `AHEAD_VALUES`, `HELD_VALUES`, `HELD_BLOCK_BYTES` | [`values.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/values.rs), [`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
+| Locators of delta bases | the bases one level of a pack group's chains names outside the pack, up to 4,096 identities; a locator is kept until 16,384 newer ones were, in two generations | `LOCATE_IDS`, `HELD_LOCATIONS` | [`walk.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/walk.rs) (`expect_bases`), [`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
 
 The ranged read takes a pack's ranges sorted and disjoint and joins those at
 most 8 KiB apart (`SPAN_FILL`) into spans. The server fetches each span from the pack body
@@ -154,41 +155,74 @@ of record headers are read once per span and not once per range. The rows
 that come back are exactly the ranges asked for: the bytes between two
 ranges of a span never leave the server.
 
-The kept pack rows and value blocks belong to the transaction and go with
-it. They are filled only inside a transaction (one snapshot), and pack rows
-only after the walk has announced packs, so an autocommit read keeps
-nothing.
+A page stored as a delta is rebuilt from its base, and the reader asks for
+the base's locator one identity at a time: the base sits in an earlier
+Commit's pack, so the walk no longer has its locator at hand. One lookup is
+one round trip, and a real Store asked for about 145,000 of them in one mark.
+Before the walk rebuilds a record of a pack group it therefore reads the
+base each metadata record of the group names, from the group it is about to
+decode anyway, and sends the bases outside the pack to the server in one
+statement. It then does the same for the bases those records name, and so
+on down the chains, stopping at any element the reader's chain memo already
+holds, because a rebuild stops there too. A group's lookups cost one
+statement a level instead of one a record. This is a hint: a lookup that
+was not announced, because the memo dropped an element in between, is still
+made on its own (`Mechanics::expect_locations`, told only to an engine whose
+`batches_locations` says a lookup costs a round trip).
 
-A SQLite Store ignores the pack hint and reads no block ahead; it returns
-every value of the blocks it does read
+The kept pack rows, value blocks and locators belong to the transaction and
+go with it. They are filled only inside a transaction (one snapshot), and
+pack rows only after the walk has announced packs, so an autocommit read
+keeps nothing. A kept pack row is a copy of the descriptor and the body's
+head: the driver cuts its rows out of the buffers it received them in, so
+keeping the driver's row would keep a whole receive buffer for one small
+pack, and the bound would not be the memory held. The sizes are chosen so a
+whole mark stays near 200 MB on the client: on a real Store of 1.69 million
+objects, 96 MiB of pack rows and 64 MiB of value blocks peaked at 290 MB
+and sent 14,229 statements; 32 MiB and 16 MiB peaked at 206 and 215 MB in
+two samples and send 15,558.
+
+A SQLite Store ignores the pack hint and the locator hint and reads no
+block ahead; it returns every value of the blocks it does read
 ([SQLite: the mark's reads](sqlite.md#the-marks-reads)). Rows read ahead are
 the rows the single reads return, so the mark's result and its `mark_bytes`
 do not change.
 
-A compaction round decides between `none` and `rebuild` from the mark's live
-packs alone, so it sends the server the live pack ids first
-(`gc_live_pack`) and decides. Only a rebuild then sends the
-visited object ids (`gc_visited`) and fills `gc_dead`; a `none` round writes
-the `gc_op` row at phase `mark`, empties `gc_dead` and clears the op, as the
-specification asks, without ever sending the ids or computing a dead set it
-would delete in the same call
-([`compact/run.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/run.rs),
-[`compact/op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/op.rs)).
+A compaction round's mark, its decision and a rebuild's visited ids are one
+repeatable-read transaction
+([`compact/op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/op.rs)
+`mark`). After the walk it sends the server the live pack ids
+(`gc_live_pack`), sums their bytes and decides between `none` and `rebuild`
+over that same snapshot. Only a rebuild then fills the visited ids
+(`gc_visited`): the mark keeps one bit an object over the Store's locator
+order, never the identities, so the fill reads the locators again a block
+at a time and sends back the reached ones, 8,192 a statement, in ascending
+identity order. A locator's rank is its position in the snapshot the walk
+read, which is why the fill stays in that transaction: a publication that
+lands while the mark runs is in neither the walk nor the fill, and moves the
+Store tuple that Phase B checks. A `none` round then writes the `gc_op` row
+at phase `mark`, empties `gc_dead` and clears the op, as the specification
+asks, without ever sending the ids or computing a dead set it would delete
+in the same call; a rebuild fills `gc_dead` with its op row
+([`compact/run.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/run.rs)).
+Phase A's batches of about 1 GiB of pack bodies are cut by the server, which
+returns the first and last pack id and the pack count of each: the client
+holds one row a batch and no list of live packs
+([`compact/build.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/build.rs)).
 
 The mark's walk holds the same bounded memory as on SQLite
 ([SQLite: the mark's memory](sqlite.md#the-marks-memory)). Its locator
 blocks are read in the order of the `object_location_prefix` index: the
-signed eight-byte prefix, then the identity, 512 identities a statement,
-each after the last one of the block before. The table has no unique key on
+signed eight-byte prefix, then the identity, 512 identities a block and up
+to sixteen blocks (8,192 identities) a statement, each after the last one of
+the statement before. The table has no unique key on
 the identity, so a block takes one row per identity (`DISTINCT ON`, the
 least locator); a rank is a position in that order. The mark's sort files
-are unnamed files in the client's temporary directory. Two things are not
-bounded here: a compaction still takes the mark's list of reached
-identities (32 bytes a reached object) to fill `pg_temp.gc_visited` in its
-next transaction, and a delta base outside the pack being walked costs one
-round trip
-([`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs),
-`locations_after`).
+are unnamed files in the client's temporary directory. What still grows
+with the Store on the client is what the shared mark result carries: the
+retained pack ids (8 bytes a live pack), the retained history nodes and
+their roots, and the block boundaries and bits of the locator order (32
+bytes for every 512 objects and three bits an object).
 
 ### Generation fence
 

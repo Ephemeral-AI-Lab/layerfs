@@ -117,6 +117,14 @@ impl PoolReader {
         }
     }
 
+    /// Whether the chain memo holds the rebuilt element `id` right now, so a
+    /// chain that reaches it would stop there. A hint for a caller that
+    /// prepares the lookups below an element: the answer may change with the
+    /// next reconstruction, and no read depends on it.
+    pub fn remembers(&self, id: &ObjectId) -> bool {
+        self.memo.as_ref().is_some_and(|memo| memo.holds(id))
+    }
+
     /// Actual work accumulated over this reader's lifetime.
     pub fn counters(&self) -> PoolReadCounters {
         self.counters

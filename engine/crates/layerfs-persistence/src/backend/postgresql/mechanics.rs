@@ -84,6 +84,24 @@ impl Mechanics for Transaction<'_> {
     ) -> Result<(), PersistenceError> {
         metadata::reads::locations_after(self, after, limit, out)
     }
+    fn location(&self, id: &ObjectId) -> Result<Option<ObjectLocation>, PersistenceError> {
+        if let Some(held) = metadata::reads::held_location(self, id) {
+            return Ok(Some(held));
+        }
+        let mut found = Vec::with_capacity(1);
+        metadata::reads::locate(self, std::slice::from_ref(id), &mut found)?;
+        Ok(found
+            .first()
+            .map(|located| located.location)
+            .filter(|location| location.object_id == *id))
+    }
+    fn expect_locations(&self, ids: &[ObjectId]) -> Result<(), PersistenceError> {
+        metadata::reads::expect_locations(self, ids)
+    }
+    fn batches_locations(&self) -> bool {
+        // An autocommit read keeps nothing between its statements.
+        self.unfenced()
+    }
     fn locators_by_signed_prefix(&self) -> bool {
         true
     }

@@ -7,7 +7,7 @@ use layerfs_storage::{
     port::PersistenceError,
     StoragePolicy,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 pub(crate) fn policy(tx: &Transaction<'_>) -> Result<StoragePolicy, PersistenceError> {
     let rows = tx.query("SELECT format_profile,small_file_threshold_bytes,whole_file_delta_max_depth,chunk_delta_max_depth,metadata_delta_max_depth,schema_version FROM store_policy WHERE id=1", vec![])?;
@@ -93,6 +93,73 @@ fn location(r: &Record) -> Result<LocatedObject, BackendError> {
     })
 }
 
+/// Locators one transaction keeps between [`expect_locations`] and the
+/// lookups it announced, in two generations: when the young one holds half
+/// of this, the old one is dropped. About 120 bytes each.
+const HELD_LOCATIONS: usize = 16_384;
+/// Identities one [`expect_locations`] statement carries.
+const LOCATE_IDS: usize = 4096;
+
+/// The locators a transaction was told to expect lookups of.
+///
+/// A published locator never changes inside one snapshot, so a held one is
+/// the row a lookup would return. A walk that rebuilds the records of a pack
+/// asks for the locator of each one's delta base, one identity at a time;
+/// announced together they cost one round trip and not one each.
+#[derive(Default)]
+pub(crate) struct HeldLocations {
+    young: HashMap<ObjectId, ObjectLocation>,
+    old: HashMap<ObjectId, ObjectLocation>,
+}
+
+impl HeldLocations {
+    fn get(&self, id: &ObjectId) -> Option<ObjectLocation> {
+        self.young.get(id).or_else(|| self.old.get(id)).copied()
+    }
+
+    fn keep(&mut self, location: ObjectLocation) {
+        if self.young.len() >= HELD_LOCATIONS / 2 {
+            self.old = std::mem::take(&mut self.young);
+        }
+        // The first row found for an identity answers for it, as it does
+        // for a lookup on its own.
+        self.young.entry(location.object_id).or_insert(location);
+    }
+}
+
+/// Finds the locators of `ids` this transaction does not hold, a bounded
+/// piece per statement, and keeps them for [`held_location`]. Inside a
+/// transaction only: an autocommit statement is fenced on its own.
+pub(crate) fn expect_locations(
+    tx: &Transaction<'_>,
+    ids: &[ObjectId],
+) -> Result<(), PersistenceError> {
+    if !tx.unfenced() {
+        return Ok(());
+    }
+    let missing: Vec<ObjectId> = {
+        let held = tx.located.borrow();
+        ids.iter()
+            .copied()
+            .filter(|id| held.get(id).is_none())
+            .collect()
+    };
+    for ids in missing.chunks(LOCATE_IDS) {
+        let mut found = Vec::with_capacity(ids.len());
+        locate(tx, ids, &mut found)?;
+        let mut held = tx.located.borrow_mut();
+        for located in found {
+            held.keep(located.location);
+        }
+    }
+    Ok(())
+}
+
+/// The locator of `id` when this transaction holds it.
+pub(crate) fn held_location(tx: &Transaction<'_>, id: &ObjectId) -> Option<ObjectLocation> {
+    tx.located.borrow().get(id)
+}
+
 /// Up to `limit` locators that follow `after` in the order of the prefix
 /// index: the identity's first eight bytes as a signed number, then its
 /// bytes. The table has no index on the whole identity, so the walk follows
@@ -156,7 +223,7 @@ pub(crate) fn inode_values(
 /// has reached half of this, the next call drops the old one. A call never
 /// drops a block it read, so what it keeps can exceed this by its own
 /// statement.
-const HELD_BLOCK_BYTES: usize = 64 * 1024 * 1024;
+const HELD_BLOCK_BYTES: usize = 16 * 1024 * 1024;
 
 /// The value blocks one transaction has read, by first ordinal, each with
 /// its last ordinal and body.

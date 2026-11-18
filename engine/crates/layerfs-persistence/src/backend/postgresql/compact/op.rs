@@ -2,6 +2,7 @@
 
 use super::report::decode_kept_waste;
 use super::report::encode_kept_waste;
+use super::types::takes_rebuild_path;
 use super::types::DeadTotals;
 use super::types::OpRow;
 use super::types::SCRATCH_PREFIX;
@@ -13,7 +14,9 @@ use crate::backend::sqlite::compact::CompactFailpoint;
 use crate::backend::sqlite::compact::CompactKeptWaste;
 use crate::backend::sqlite::compact::CompactRequest;
 use crate::history::GcTuple;
+use crate::history::Reach;
 use crate::MarkResult;
+use layerfs_content::ObjectId;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
 use std::sync::Arc;
@@ -184,58 +187,114 @@ pub(crate) fn stop(
     Err(HistoryError::UnknownOutcome)
 }
 
-/// Object ids one statement of [`load_visited`] carries: about 300 KiB.
+/// Object ids one statement of [`load_visited`] carries: about 300 KiB, and
+/// the most reached identities a compaction holds at a time.
 const VISITED_IDS: usize = 8192;
-/// Pack ids one statement of [`load_visited`] carries.
+/// Pack ids one statement of [`load_live_packs`] carries.
 const VISITED_PACKS: usize = 32_768;
+
+/// What Phase M's mark transaction hands the round.
+pub(crate) struct Marked {
+    pub(crate) mark: MarkResult,
+    pub(crate) tuple: GcTuple,
+    /// The stored bytes of the packs the mark retained.
+    pub(crate) live: i64,
+    /// The §3 decision; the visited ids are loaded only when it is true.
+    pub(crate) rebuild: bool,
+}
+
+/// Phase M's mark: the Store tuple, the closure, the live packs, the §3
+/// decision and, for a rebuild, the visited ids, all in the mark's one
+/// repeatable-read transaction.
+///
+/// The reached identities are never listed in this process: the mark keeps a
+/// bit per object over the Store's locator order, and the visited table is
+/// filled by reading the locators again a block at a time and sending back
+/// the reached ones. A locator's rank is its position in this snapshot, so
+/// the fill reads the snapshot the walk read; a publication that lands while
+/// the mark runs is in neither, and moves the tuple Phase B checks.
+pub(crate) fn mark(session: &Arc<Session>, schema: &str) -> HistoryResult<Marked> {
+    session.run_snapshot(|tx| {
+        let (mark, tuple, mut reach) = crate::history::mark_gc_reached(tx)?;
+        load_live_packs(tx, &mark)?;
+        // §3 decides over the mark's own snapshot, never a later Store
+        // total: a publication after the mark raises `pack` bytes, and
+        // reading them later would flip a `none` decision into a rebuild
+        // the mark never judged.
+        let live = live_stored(tx, schema)?;
+        let rebuild = takes_rebuild_path(tuple.stored, live);
+        // The visited ids and the dead set are a rebuild's inputs alone: a
+        // `none` round writes its op row and clears it, and loads neither.
+        if rebuild {
+            load_visited(tx, &mut reach)?;
+        }
+        Ok(Marked {
+            mark,
+            tuple,
+            live,
+            rebuild,
+        })
+    })
+}
 
 /// The live pack ids, as a session temporary table: what the §3 decision
 /// sums, and what the Phase A copy joins.
-pub(crate) fn load_live_packs(session: &Arc<Session>, mark: &MarkResult) -> HistoryResult<()> {
-    stage(session, |tx| {
-        tx.batch(
-            "DROP TABLE IF EXISTS pg_temp.gc_live_pack;\
-             CREATE TEMP TABLE pg_temp.gc_live_pack(pack_id bigint PRIMARY KEY) ON COMMIT PRESERVE ROWS;",
+fn load_live_packs(tx: &Transaction<'_>, mark: &MarkResult) -> HistoryResult<()> {
+    tx.batch(
+        "DROP TABLE IF EXISTS pg_temp.gc_live_pack;\
+         CREATE TEMP TABLE pg_temp.gc_live_pack(pack_id bigint PRIMARY KEY) ON COMMIT PRESERVE ROWS;",
+    )?;
+    for packs in mark.objects().packs().chunks(VISITED_PACKS) {
+        tx.typed(
+            "INSERT INTO pg_temp.gc_live_pack(pack_id) SELECT unnest($1::bigint[])",
+            &[&packs],
+            packs.len() as u64 * 8,
         )?;
-        for packs in mark.objects().packs().chunks(VISITED_PACKS) {
-            tx.typed(
-                "INSERT INTO pg_temp.gc_live_pack(pack_id) SELECT unnest($1::bigint[])",
-                &[&packs],
-                packs.len() as u64 * 8,
-            )?;
-        }
-        // The decision's sum and the Phase A copy read the set; analyze it
-        // after the load so the planner sees the real cardinality.
-        tx.batch("ANALYZE pg_temp.gc_live_pack;")?;
-        Ok(())
-    })
+    }
+    // The decision's sum and the Phase A copy read the set; analyze it
+    // after the load so the planner sees the real cardinality.
+    tx.batch("ANALYZE pg_temp.gc_live_pack;")?;
+    Ok(())
 }
 
 /// The live object ids, as a session temporary table the dead-set query and
 /// the Phase A copy read. Only a round that rebuilds loads it: a `none`
 /// decision needs the live packs alone.
-pub(crate) fn load_visited(session: &Arc<Session>, mark: &MarkResult) -> HistoryResult<()> {
-    stage(session, |tx| {
-        tx.batch(
-            "DROP TABLE IF EXISTS pg_temp.gc_visited;\
-             CREATE TEMP TABLE pg_temp.gc_visited(object_id bytea PRIMARY KEY) ON COMMIT PRESERVE ROWS;",
-        )?;
-        // A large visited set is loaded as arrays of ids, a bounded piece
-        // per statement. A binary COPY was tried first and spent about four
-        // microseconds per row handing rows to the driver one at a time; an
-        // array is encoded once and the server unnests it. The ids are in
-        // ascending order, so the key's index is built by appending.
-        for ids in mark.objects().objects().chunks(VISITED_IDS) {
-            let ids: Vec<&[u8]> = ids.iter().map(|id| id.as_bytes().as_slice()).collect();
-            tx.typed(
-                "INSERT INTO pg_temp.gc_visited(object_id) SELECT unnest($1::bytea[])",
-                &[&ids],
-                ids.len() as u64 * 36,
-            )?;
+///
+/// The ids come from the mark's reached set in ascending identity order, a
+/// bounded piece per statement, so the key's index is built by appending. A
+/// binary COPY was tried first and spent about four microseconds per row
+/// handing rows to the driver one at a time; an array is encoded once and
+/// the server unnests it.
+fn load_visited(tx: &Transaction<'_>, reach: &mut Reach) -> HistoryResult<()> {
+    tx.batch(
+        "DROP TABLE IF EXISTS pg_temp.gc_visited;\
+         CREATE TEMP TABLE pg_temp.gc_visited(object_id bytea PRIMARY KEY) ON COMMIT PRESERVE ROWS;",
+    )?;
+    let send = |ids: &[ObjectId]| -> HistoryResult<()> {
+        if ids.is_empty() {
+            return Ok(());
         }
-        tx.batch("ANALYZE pg_temp.gc_visited;")?;
+        let ids: Vec<&[u8]> = ids.iter().map(|id| id.as_bytes().as_slice()).collect();
+        tx.typed(
+            "INSERT INTO pg_temp.gc_visited(object_id) SELECT unnest($1::bytea[])",
+            &[&ids],
+            ids.len() as u64 * 36,
+        )?;
         Ok(())
-    })
+    };
+    let mut ids: Vec<ObjectId> = Vec::with_capacity(VISITED_IDS);
+    reach.each(tx, &mut |id, _| {
+        ids.push(id);
+        if ids.len() == VISITED_IDS {
+            send(&ids)?;
+            ids.clear();
+        }
+        Ok(())
+    })?;
+    send(&ids)?;
+    tx.batch("ANALYZE pg_temp.gc_visited;")?;
+    Ok(())
 }
 
 /// The `gc_dead` set of one mark, and the `logical` bytes of its dead Commit
@@ -370,10 +429,10 @@ pub(crate) fn clear_round(session: &Arc<Session>, schema: &str) -> HistoryResult
     })
 }
 
-/// The stored bytes of every pack the mark retained, in the current Store.
-pub(crate) fn live_stored(session: &Arc<Session>, schema: &str) -> HistoryResult<i64> {
-    scalar_session(
-        session,
+/// The stored bytes of every pack the mark retained.
+fn live_stored(tx: &Transaction<'_>, schema: &str) -> HistoryResult<i64> {
+    scalar(
+        tx,
         &format!(
             "SELECT COALESCE(SUM(p.length)::bigint,0) FROM {schema}.pack p \
              WHERE EXISTS (SELECT 1 FROM pg_temp.gc_live_pack v WHERE v.pack_id=p.pack_id)"
