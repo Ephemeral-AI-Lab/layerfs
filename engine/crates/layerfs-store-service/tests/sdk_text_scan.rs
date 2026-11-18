@@ -454,6 +454,7 @@ fn grep_and_read_give_the_window_scan_results() {
                 path,
                 Ok(start),
                 Ok(end.unwrap_or(9_007_199_254_740_991)),
+                false,
             );
             match (&public, &got) {
                 (Ok(public), Ok(raw)) => assert_pinned_window(public, raw, &at, start),

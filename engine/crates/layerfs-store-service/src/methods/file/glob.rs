@@ -1,7 +1,7 @@
 //! `fs.glob`.
 use crate::methods::args::{optional_path, paging, snapshot_full, text, Answer};
 use crate::{
-    read::{paged_reads, query, reads, snapshot, visibility},
+    read::{paged_reads, query, reads, search, snapshot, visibility},
     StoreService,
 };
 use layerfs_bridge::control::SdkValue;
@@ -20,7 +20,13 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
     // The page-independent `removed_count`: the hidden entries this pattern
     // would return anywhere under `path`, not only direct children.
     let removed = seen.hidden_matches(&reader, &snap, &path, pattern)?;
+    let filters = search::Filters::of(args)?;
     if args.get("page").is_some() {
+        if filters.any() {
+            return Err(crate::methods::args::invalid(
+                "page cannot be combined with include, exclude or ignoreCase",
+            ));
+        }
         return paged_reads::pin(
             &service.store,
             &snap,
@@ -40,7 +46,7 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
     paged_reads::pin(
         &service.store,
         &snap,
-        reads::glob(&reader, &snap, pattern, &path, &seen, limit, pos)
+        reads::glob(&reader, &snap, pattern, &path, &seen, &filters, limit, pos)
             .map(|value| visibility::settle(value, &seen, removed)),
     )
 }

@@ -38,11 +38,13 @@ pub enum Change<'a> {
         bytes: &'a [u8],
         mode: Option<u32>,
     },
-    /// Replace the one occurrence of `old` with `new`.
+    /// Replace the one occurrence of `old` with `new`, or with `all`
+    /// every occurrence.
     Edit {
         path: String,
         old: &'a str,
         new: &'a str,
+        all: bool,
     },
     /// Create the directory and its missing parents. A created `path` gets
     /// `mode` (default 0o755); missing parents get 0o755, and an existing
@@ -50,8 +52,8 @@ pub enum Change<'a> {
     Mkdir { path: String, mode: Option<u32> },
     /// Set the entry's permission bits.
     Chmod { path: String, mode: u32 },
-    /// Remove the entry, recursively.
-    Rm { path: String },
+    /// Remove the entry; a folder that is not empty only when `recursive`.
+    Rm { path: String, recursive: bool },
     /// Copy the entry, recursively.
     Cp { from: String, to: String },
     /// Rename the entry.
@@ -61,16 +63,20 @@ pub enum Change<'a> {
 /// Applies `changes` in order to a private Workspace on Branch `branch` of
 /// `project` and commits them once, with `message` or the default one. A
 /// change the caller refused is refused at its index, after the changes
-/// before it.
+/// before it. With `expected` (a Commit id or prefix), the head the
+/// private Workspace bound to must be that Commit, else the call is
+/// refused `HeadMoved` naming the head, before any change; a head that
+/// moves after the bind merges as without it.
 pub fn commit(
     service: &StoreService,
     project: &str,
     branch: Arg<&str>,
     changes: &[Arg<Change<'_>>],
     message: Option<&str>,
+    expected: Option<&str>,
 ) -> Answer {
     let store = &service.store;
-    let (branch_name, branch) = crate::telemetry::timed("files.resolve", |_| {
+    let (branch_name, branch, stack) = crate::telemetry::timed("files.resolve", |_| {
         let stack = args::project(store, project)?;
         let branch_name = branch?;
         if branch_name == "main" {
@@ -80,7 +86,8 @@ pub fn commit(
                 SdkValue::Null,
             ));
         }
-        Ok((branch_name, args::branch(store, &stack, branch_name)?))
+        let branch = args::branch(store, &stack, branch_name)?;
+        Ok((branch_name, branch, stack))
     })?;
     let id = WorkspaceId::from_authority(
         layerfs_bridge::duplex::generate_keypair()
@@ -91,10 +98,25 @@ pub fn commit(
     let workspace =
         crate::telemetry::timed("files.bind", |timing| service.bind(id, branch.id, timing))
             .map_err(args::failed)?;
+    if let Some(expected) = expected {
+        let bound = workspace
+            .snapshot()
+            .map_err(crate::write::mutation::failure);
+        let guard = bound.and_then(|base| {
+            let head = crate::removal::node_of(&base);
+            let what = format!("Branch {branch_name}");
+            crate::history::resolve::expect(store, &stack, Some(expected), &what, head)
+        });
+        if let Err(refusal) = guard {
+            close(service, &workspace)?;
+            return Err(refusal);
+        }
+    }
     let result = crate::telemetry::timed("files.change", |_| change(&workspace, changes))?;
     if result.as_ref().is_err_and(|e| e.code == "Unknown") {
-        return result.map(|()| SdkValue::Null);
+        return result.map(|_| SdkValue::Null);
     }
+    let replaced = *result.as_ref().unwrap_or(&0);
     if let Err(error) = result {
         close(service, &workspace)?;
         return Err(error);
@@ -184,6 +206,7 @@ pub fn commit(
             ("branch", SdkValue::text(branch_name)),
             ("head", SdkValue::text(args::hex(record.id.as_slice()))),
             ("commit", args::commit_value(&record, Some(branch_name))),
+            ("replaced", SdkValue::Int(replaced as i64)),
         ]),
         CommitOutcome::UpToDate { head, root } => SdkValue::map([
             ("kind", SdkValue::text("UpToDate")),
@@ -193,16 +216,18 @@ pub fn commit(
                 SdkValue::opt_text(head.map(|id| args::hex(id.as_slice()))),
             ),
             ("root", SdkValue::text(args::hex(root.as_bytes()))),
+            ("replaced", SdkValue::Int(replaced as i64)),
         ]),
     })
 }
 
-/// Applies `changes` to the private Workspace: the first refused change's
-/// refusal, after the changes before it are finished in the overlay.
+/// Applies `changes` to the private Workspace: how many texts its edits
+/// replaced, or the first refused change's refusal, after the changes
+/// before it are finished in the overlay.
 fn change(
     workspace: &crate::store::BoundWorkspace,
     changes: &[Arg<Change<'_>>],
-) -> Result<Result<(), SdkRefusal>, SdkRefusal> {
+) -> Result<Result<u64, SdkRefusal>, SdkRefusal> {
     // The bound node's raw tree and markers: the private Workspace's overlay
     // already whiteouts a hidden path, so its absence there is ambiguous.
     // The base view distinguishes a hidden path (a `Removed` refusal for
@@ -230,21 +255,30 @@ fn change(
             .map(|frontier| Visibility::refusal(path, frontier)))
     };
     let mut mutation = Mutation::new(workspace)?;
-    let mut result = Ok(());
+    let (mut result, mut replaced) = (Ok(()), 0u64);
     for (index, change) in changes.iter().enumerate() {
         result = (|| match change.as_ref().map_err(Clone::clone)? {
             Change::Write { path, bytes, mode } => mutation.write(path, bytes, *mode),
-            Change::Edit { path, old, new } => match mutation.edit(path, old, new) {
+            Change::Edit {
+                path,
+                old,
+                new,
+                all,
+            } => match mutation.edit(path, old, new, *all) {
+                Ok(count) => {
+                    replaced += count;
+                    Ok(())
+                }
                 Err(refusal) if refusal.code == "NoSuchPath" => match removed(path)? {
                     Some(hidden) => Err(hidden),
                     None => Err(refusal),
                 },
-                other => other,
+                Err(refusal) => Err(refusal),
             },
             Change::Mkdir { path, mode } => mutation.mkdir(path, *mode),
             Change::Chmod { path, mode } => mutation.chmod(path, *mode),
             // `rm` treats a hidden path as absent for the same reason.
-            Change::Rm { path } => mutation.remove(path),
+            Change::Rm { path, recursive } => mutation.remove(path, *recursive),
             Change::Cp { from, to } => match mutation.copy(from, to, index as u64) {
                 Err(refusal) if refusal.code == "NoSuchPath" => match removed(from)? {
                     Some(hidden) => Err(hidden),
@@ -270,10 +304,10 @@ fn change(
         }
     }
     if result.as_ref().is_err_and(|e| e.code == "Unknown") {
-        return Ok(result);
+        return Ok(result.map(|()| replaced));
     }
     mutation.finish()?;
-    Ok(result)
+    Ok(result.map(|()| replaced))
 }
 
 /// Closes the call's private Workspace and discards its overlay.

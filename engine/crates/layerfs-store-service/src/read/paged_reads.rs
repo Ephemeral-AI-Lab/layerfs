@@ -342,8 +342,15 @@ pub fn grep(
         if entry.value.kind != InodeKind::RegularFile {
             continue;
         }
-        let result =
-            search::matches_bounded(reader, &entry, None, 1024, pattern, bytes, |n, line| {
+        let result = search::matches_bounded(
+            reader,
+            &entry,
+            None,
+            1024,
+            pattern,
+            false,
+            bytes,
+            |n, line| {
                 if boundary.is_some_and(|b| b.path == file && n <= b.line) {
                     return Ok(true);
                 }
@@ -369,7 +376,8 @@ pub fn grep(
                     ("lineTruncated", SdkValue::Bool(line.truncated)),
                 ]));
                 Ok(true)
-            });
+            },
+        );
         match result {
             Err(e) if e.code == "Binary" => {
                 // Binary scans disclose actual delivered bytes, including the failing window.

@@ -29,6 +29,11 @@ fn parent(
     })
 }
 
+/// The bytes of one page's rows: the reply budget less room for the
+/// header and the continuation. A page that reaches it ends early with a
+/// continuation; it is never refused for its size.
+const ROW_BYTES: usize = super::window::BYTES - 12 * 1024;
+
 /// The matching-result query and its optional stateless position.
 pub struct Request<'a> {
     pub path: &'a str,
@@ -115,6 +120,7 @@ pub fn list(
     let replay_skip = if cached.is_some() { 0 } else { page.skip };
     let (mut next, mut examined, mut matches, mut items, mut more) =
         (initial, 0usize, 0u64, Vec::new(), false);
+    let (mut spent, mut early) = (0usize, false);
     let mut boundary = Boundary {
         next: None,
         candidate,
@@ -184,7 +190,7 @@ pub fn list(
             break;
         }
         let record = saved::record(store, node)?;
-        items.push(SdkValue::map([
+        let item = SdkValue::map([
             (
                 "candidateIndex",
                 SdkValue::Int((candidate + examined as u64 - 1) as i64),
@@ -223,7 +229,18 @@ pub fn list(
                 "timeStatus",
                 record.get("timeStatus").cloned().unwrap_or_default(),
             ),
-        ]));
+        ]);
+        let cost = file_facts::value_bytes(&item);
+        if !items.is_empty() && spent + cost > ROW_BYTES {
+            (more, early) = (true, true);
+            boundary = Boundary {
+                next: Some(node),
+                candidate: candidate + examined as u64 - 1,
+            };
+            break;
+        }
+        spent += cost;
+        items.push(item);
     }
     let count = items.len();
     let continuation = if more {
@@ -279,6 +296,10 @@ pub fn list(
             "revision page exceeds reply budget; reduce page_size",
         ));
     }
-    revision_pages::keep(store, &key, page.skip + count as u64, boundary);
+    // a page cut short by its bytes does not hold `page.limit` rows: its
+    // boundary is no numbered page's
+    if !early {
+        revision_pages::keep(store, &key, page.skip + count as u64, boundary);
+    }
     Ok(answer)
 }

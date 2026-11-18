@@ -176,6 +176,14 @@ impl<'a> Walker<'a> {
         })
     }
 
+    /// Does not descend into the folder `path`, the entry [`Self::next`]
+    /// just answered: a folder a search leaves out is not read.
+    pub fn skip(&mut self, path: &str) {
+        if self.stack.last().is_some_and(|frame| frame.path == path) {
+            self.stack.pop();
+        }
+    }
+
     #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Result<Option<(String, EntryFacts)>, SdkRefusal> {
         if let Some(top) = self.top.take() {
@@ -237,6 +245,29 @@ pub fn walk(
     visit: impl FnMut(&str, EntryFacts) -> Result<bool, SdkRefusal>,
 ) -> Result<(), SdkRefusal> {
     walk_within(reader, snap, path, None, visit)
+}
+
+/// [`walk_within`], leaving out every path `excluded` says, and not
+/// descending into an excluded folder.
+pub fn walk_excluding(
+    pages: &dyn AuthenticatedObjects,
+    snap: &snapshot::Snap,
+    path: &str,
+    within: Option<String>,
+    excluded: impl Fn(&str) -> bool,
+    mut visit: impl FnMut(&str, EntryFacts) -> Result<bool, SdkRefusal>,
+) -> Result<(), SdkRefusal> {
+    let mut walker = Walker::within(pages, snap, path, within)?;
+    while let Some((path, entry)) = walker.next()? {
+        if excluded(&path) {
+            walker.skip(&path);
+            continue;
+        }
+        if !visit(&path, entry)? {
+            break;
+        }
+    }
+    Ok(())
 }
 
 /// [`walk`] through a [`Walker::within`].
