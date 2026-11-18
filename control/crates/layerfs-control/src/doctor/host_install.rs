@@ -109,7 +109,7 @@ pub(super) fn artifacts(records: &Scanned, budget: &super::Budget, checks: &mut 
     const ID: &str = "home.artifacts";
     for machine in records.machines.iter().filter(|m| m.name() != "native") {
         if budget.expired() {
-            checks.unknown(ID, "its time ran out while the daemon files were read");
+            checks.timeout(ID, "its time ran out while the daemon files were read");
             return;
         }
         let Some(path) = machine.daemon() else {

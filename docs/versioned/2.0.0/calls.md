@@ -1356,8 +1356,13 @@ every check was made and nothing was found; otherwise `findings` and
 - The long form (`--detail`) adds `status` (the worst of `error`, `warning`,
   `not_checked`, `notice`, `ok`), `counts` (things per status),
   `observed_at` and `tree`: the doctor's own thing with `status`,
-  `coverage` (`none`, `shallow` or `full`), its `checks` (`{ check,
+  `coverage` (`none`, `shallow` or `full`; `full` only when a check of
+  the Full list was made), its `checks` (`{ check,
   outcome, from }`, outcome `pass`, `notice`, `warning`, `error` or
+  `lost` is only a reply that did not arrive; a check that waits on one
+  that failed is `blocked_by` that thing with `failed` (a Store whose id is
+  not its record's leaves its projects' checks `blocked_by {store,
+  reason: failed}`).
   `not_checked`), `blocked_by`, `reason` and one list per kind of thing on
   it, each checked shallowly. Its `ok` is false whenever anything was found
   or could not be checked.
@@ -1390,7 +1395,8 @@ every check was made and nothing was found; otherwise `findings` and
   Branches share is read once; two projects each read it. Each problem is
   one `project.data` finding naming the object and the head whose tree
   reached it (the first 64, then a count); an object that could not be read
-  is `not_checked` with `lost`. While it reads it sends `{ phase: "data",
+  (a damaged pack) is one such error finding, with no `not_checked` entry
+  beside it. While it reads it sends `{ phase: "data",
   done, total }` events counting trees. `store doctor` never runs
   `project.data`.
 - `store doctor --machine` is for a PostgreSQL Store; a sqlite Store
@@ -1409,8 +1415,9 @@ every check was made and nothing was found; otherwise `findings` and
   sqlite Store, `store.backups` (a notice per bucket whose backup heads
   differ from the Store's, `fix` `layerfs backup create <store>
   <bucket>`). That is the whole cut: no Store data is scanned. A sqlite
-  Store's id and schema are read together, so a mismatch shows as
-  `store.schema`. A PostgreSQL Store is then probed from each machine
+  Store file whose id is not the recorded one fails `store.identity`, and
+  `store.schema` is then not made; a file of the right id whose schema is
+  not this build's fails `store.schema`. A PostgreSQL Store is then probed from each machine
   that has a Sandbox of it and from `--machine` (its own address where it
   has one, else the Store's), each as one more `store.connection` row
   with `from`. A Store whose machine is not ready shows its

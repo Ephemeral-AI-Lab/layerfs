@@ -192,9 +192,27 @@ impl Checks {
         let index = self.latest.get(id).copied().flatten()?;
         self.checks.get(index).map(|c| &c.evidence)
     }
-    /// This requested check could not establish an answer.
+    /// This requested check could not establish an answer, for no reason
+    /// of the closed list: it is `not_checked`, blocked by its own thing
+    /// `failed` (never `lost`, which only a reply that did not arrive is;
+    /// conformance R4 F3).
     pub fn unknown(&mut self, id: &str, message: impl Into<String>) {
         self.add(id, "unknown", None, message.into(), vec![]);
+    }
+    /// The probe's reply did not arrive: `not_checked`, reason `lost`.
+    pub fn lost(&mut self, id: &str, message: impl Into<String>) {
+        self.add(id, "unknown", None, message.into(), vec![]);
+        if let Some(c) = self.retained(id) {
+            c.reason = Some(NoVerdict::Lost);
+        }
+    }
+    /// The thing's time ran out before the check gave a verdict:
+    /// `not_checked`, reason `timeout`.
+    pub fn timeout(&mut self, id: &str, message: impl Into<String>) {
+        self.add(id, "unknown", None, message.into(), vec![]);
+        if let Some(c) = self.retained(id) {
+            c.reason = Some(NoVerdict::Timeout);
+        }
     }
     /// Intentionally excluded or not applicable to the requested mode.
     pub fn skip(&mut self, id: &str, message: impl Into<String>) {
@@ -316,8 +334,9 @@ impl Checks {
     /// Reads the observations into `node`, the thing they checked: one row
     /// per check (and per machine it was made from), its outcome the worst
     /// observed; a failure is a finding, an answer that did not come is a
-    /// `not_checked` entry (`timeout` when `expired`, the thing's budget
-    /// having run out, else `lost`, unless the check said `busy`), and a
+    /// `not_checked` entry (the reason the check gave: `busy`, `lost` or
+    /// `timeout`; else `timeout` when `expired`, the thing's budget having
+    /// run out; else blocked by its own thing `failed`), and a
     /// check kept from running by something outside the thing is one with
     /// `blocked_by`. A skipped check, or one a failed check of the same
     /// thing kept from running, does not apply and is left out. A check id
@@ -357,16 +376,23 @@ impl Checks {
                 Verdict::Notice => Severity::Notice,
                 Verdict::Pass => continue,
                 Verdict::NotChecked => {
-                    let reason = match (&check.waits, check.reason, expired) {
-                        (Some(_), _, _) => None,
-                        (None, Some(reason), _) => Some(reason),
-                        (None, None, true) => Some(NoVerdict::Timeout),
-                        (None, None, false) => Some(NoVerdict::Lost),
+                    // a check with no reason of the closed list is blocked
+                    // by its own thing having failed it, not `lost`
+                    let failed = || BlockedBy {
+                        thing: node.thing.kind.word(),
+                        handle: node.thing.name.clone(),
+                        reason: "failed",
+                    };
+                    let (blocked_by, reason) = match (&check.waits, check.reason, expired) {
+                        (Some(by), _, _) => (Some(by.clone()), None),
+                        (None, Some(reason), _) => (None, Some(reason)),
+                        (None, None, true) => (None, Some(NoVerdict::Timeout)),
+                        (None, None, false) => (Some(failed()), None),
                     };
                     node.not_checked.push(NotChecked {
                         thing: node.thing.clone(),
                         check: Some(check.id.clone()),
-                        blocked_by: check.waits.clone(),
+                        blocked_by,
                         reason,
                     });
                     continue;

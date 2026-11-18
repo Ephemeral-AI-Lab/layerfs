@@ -147,7 +147,14 @@ fn not_made(home: &Path, store: &StoreRecord, id: &str, refusal: SdkRefusal, che
             );
             checks.waits(id, message, by("machine", machine, "not_answering"));
         }
-        _ => checks.unknown(id, refusal.message),
+        // any other refusal of the Store's route (a Store whose id is not
+        // the one recorded, one that cannot be opened): the Store failed
+        // it, which its own doctor explains; never `lost` (R4 F3)
+        _ => checks.waits(
+            id,
+            refusal.message,
+            by("store", store.name().to_owned(), "failed"),
+        ),
     }
 }
 
@@ -244,14 +251,12 @@ impl Found {
         }
     }
 
-    /// Each kept problem as one observation of `project.data`: a concrete
-    /// one a finding, one that could not be read a `not_checked` entry.
+    /// Each kept problem as one finding of `project.data`: an object the
+    /// walk could not read (a corrupt pack) is as much a problem of the data
+    /// as a wrong one, and is never also a `not_checked` entry (R4 F3).
     fn fill(&self, checks: &mut Checks) {
-        for (outcome, message) in &self.kept {
-            match outcome {
-                Outcome::Fail => checks.fail(DATA, message.clone()),
-                _ => checks.unknown(DATA, message.clone()),
-            }
+        for (_, message) in &self.kept {
+            checks.fail(DATA, message.clone());
         }
         if self.more > 0 {
             checks.fail(

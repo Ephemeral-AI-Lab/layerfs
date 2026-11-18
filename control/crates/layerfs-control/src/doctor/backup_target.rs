@@ -106,7 +106,7 @@ pub(super) fn diagnose(
             if matches!(error, RemoteError::Refused { .. }) {
                 checks.pass("bucket.transport", "configured endpoint returned an HTTP response; authentication is not independently established");
             } else {
-                checks.unknown("bucket.transport", "DNS, connection, configured TLS or reply could not be established within the diagnostic budget");
+                checks.lost("bucket.transport", "DNS, connection, configured TLS or reply could not be established within the diagnostic budget");
             }
             failure(checks, "bucket.list", &error);
         }
@@ -227,15 +227,20 @@ fn retained(checks: &mut Checks, id: &str, key: &str, version: Option<&str>) {
                 "owned_version",
                 version.map_or(SdkValue::Null, SdkValue::text),
             ),
+            // guidance, not a command: a finding's `fix` is a runnable line
+            // or absent (conformance R4 F6)
+            (
+                "note",
+                SdkValue::text("inspect only this key and owned version; do not delete by prefix or retry an uncertain mutation"),
+            ),
         ]),
     );
-    checks.fix(id, "Inspect only the exact generated diagnostic key and owned version, if known; do not delete by prefix or retry an uncertain mutation automatically.");
 }
 fn failure(checks: &mut Checks, id: &str, error: &RemoteError) {
     match error {
         RemoteError::Refused { status, .. } => checks.fail(id, format!("S3 request refused with HTTP {status}; authentication or permission failure is not inferred more precisely than the response")),
         RemoteError::Integrity(_) => checks.fail(id, "S3 response failed diagnostic prefix, version, token or byte-integrity checks"),
-        RemoteError::Uncertain(_) => checks.unknown(id, "sent request outcome is uncertain; no mutation was resent"),
+        RemoteError::Uncertain(_) => checks.lost(id, "sent request outcome is uncertain; no mutation was resent"),
         RemoteError::Unsupported(_) => checks.unknown(id, "required safe diagnostic capability is unsupported; no fallback was attempted"),
         _ => checks.unknown(id, "request could not complete within its configured diagnostic path or budget"),
     }

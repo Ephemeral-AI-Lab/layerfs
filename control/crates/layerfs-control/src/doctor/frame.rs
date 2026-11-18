@@ -17,7 +17,7 @@
 //! the function that makes them), so a kind's package changes its own list
 //! and functions and nothing here. The real kinds are in `kinds`; a test
 //! hands [`run_with`] made-up ones.
-use super::report::{Coverage, Kind, NoVerdict, Node, NotChecked, Report, Thing};
+use super::report::{Coverage, Kind, NoVerdict, Node, NotChecked, Report, Thing, Verdict};
 use super::target::Budget;
 use crate::home::Build;
 use layerfs_bridge::control::SdkRefusal;
@@ -247,7 +247,17 @@ fn visit(
             reason: Some(NoVerdict::Timeout),
         });
     }
-    node.coverage = match (node.blocked_by.is_none() && node.reason.is_none(), full) {
+    // Full only when a check of the Full list was actually made, not merely
+    // asked (conformance R4 F2)
+    let made_full = full
+        && (node.rows.iter()).any(|row| {
+            row.outcome != Verdict::NotChecked
+                && (doctor.checks.iter()).any(|check| check.full_only && check.id == row.check)
+        });
+    node.coverage = match (
+        node.blocked_by.is_none() && node.reason.is_none(),
+        made_full,
+    ) {
         (false, _) => Coverage::None,
         (true, true) => Coverage::Full,
         (true, false) => Coverage::Shallow,

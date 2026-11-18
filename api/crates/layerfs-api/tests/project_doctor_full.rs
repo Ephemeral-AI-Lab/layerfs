@@ -392,3 +392,55 @@ fn find_store_file(home: &Path) -> Option<PathBuf> {
 fn hex(bytes: &[u8]) -> String {
     layerfs_bridge::sdk_values::hex(bytes)
 }
+
+/// A Store whose file is not the one its record names (another id): the
+/// project's checks of it are blocked by the Store `failed`, never `lost`,
+/// and `--full` whose data check could not be made reports `shallow`
+/// coverage, not `full` (conformance R4 F2, F3).
+#[test]
+fn a_store_of_another_id_blocks_the_project_checks_and_full_is_not_claimed() {
+    let home = folder("other-id");
+    let created = layerfs_api::call(
+        Some(&home),
+        "store.create",
+        SdkValue::map([("name", t("shop"))]),
+        &mut |_| {},
+    );
+    if let Err(refusal) = &created {
+        if refusal.code == "Unsupported" {
+            eprintln!("NOT_RUN: this host opens no sqlite Store: {refusal:?}");
+            let _ = std::fs::remove_dir_all(&home);
+            return;
+        }
+    }
+    created.unwrap();
+    let tree = source("source-other-id");
+    call(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/app")),
+            ("folder", t(tree.to_str().unwrap())),
+        ],
+    );
+    let path = layerfs_api::home::paths::store_record(&home, "shop");
+    let record = layerfs_api::home::read_record(&path).unwrap().unwrap();
+    let record = layerfs_api::home::with_field(record, "binding", SdkValue::Bytes(b"x".to_vec()));
+    layerfs_api::home::write_record(&path, &record).unwrap();
+    let (report, _) = doctor(&home, "shop/app", true);
+    let node = report.get("tree").unwrap();
+    assert_ne!(node.get_text("coverage"), Some("full"), "{report:?}");
+    let entries = list(&report, "not_checked");
+    assert!(!entries.is_empty(), "{report:?}");
+    for entry in entries {
+        assert_ne!(entry.get_text("reason"), Some("lost"), "{entry:?}");
+    }
+    let listed = (entries.iter())
+        .find(|entry| entry.get_text("check") == Some("project.listed"))
+        .unwrap_or_else(|| panic!("project.listed not_checked: {report:?}"));
+    let by = listed.get("blocked_by").expect("blocked_by");
+    assert_eq!(by.get_text("store"), Some("shop"), "{listed:?}");
+    assert_eq!(by.get_text("reason"), Some("failed"), "{listed:?}");
+    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(&tree);
+}

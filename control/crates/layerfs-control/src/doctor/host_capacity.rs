@@ -20,7 +20,7 @@ pub(super) fn check(home: &Path, budget: &Budget, checks: &mut Checks) {
     }
     let wait = budget.limit(Duration::from_secs(5));
     if wait.is_zero() {
-        checks.unknown(ID, "its time ran out before the disk was measured");
+        checks.timeout(ID, "its time ran out before the disk was measured");
         return;
     }
     let started = Instant::now();
@@ -42,7 +42,7 @@ pub(super) fn check(home: &Path, budget: &Budget, checks: &mut Checks) {
             _ => {
                 let _ = child.kill();
                 let _ = child.wait();
-                checks.unknown(ID, "`df` did not answer in time");
+                checks.timeout(ID, "`df` did not answer in time");
                 return;
             }
         }

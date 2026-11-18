@@ -80,7 +80,7 @@ pub(super) fn observe(
     const CONNECT: &str = "sandbox.daemon_connect";
     let duration = budget.remaining().unwrap_or(Duration::from_secs(10));
     if duration.is_zero() {
-        checks.unknown(CONNECT, "its time ran out before its daemon was dialled");
+        checks.timeout(CONNECT, "its time ran out before its daemon was dialled");
         return nothing;
     }
     let deadline = Instant::now() + duration;
@@ -96,7 +96,7 @@ pub(super) fn observe(
             return nothing;
         }
         Err(_) => {
-            checks.unknown(CONNECT, "its daemon's saved endpoint was not reached");
+            checks.lost(CONNECT, "its daemon's saved endpoint was not reached");
             return nothing;
         }
     };
@@ -115,7 +115,7 @@ pub(super) fn observe(
         }
         Err(_) => {
             // a full admission queue and a lost transport look the same here
-            checks.unknown(AUTH, "the handshake with its daemon did not complete");
+            checks.lost(AUTH, "the handshake with its daemon did not complete");
             return nothing;
         }
     };
@@ -124,7 +124,7 @@ pub(super) fn observe(
     let observed = inspect(sandbox, &mut control, instance, deadline, checks);
     const SESSION: &str = "sandbox.session";
     if control.is_failed() || Instant::now() >= deadline {
-        checks.unknown(
+        checks.lost(
             SESSION,
             "the doctor's session ended uncertain or out of time; nothing was sent again",
         );
@@ -134,7 +134,7 @@ pub(super) fn observe(
     // filesystem ownership. The original socket deadline still applies.
     match control.call(Request::EndSession) {
         Ok(Reply::SessionEnded) => checks.pass(SESSION, "the doctor's own session ended cleanly"),
-        _ => checks.unknown(
+        _ => checks.lost(
             SESSION,
             "the end of the doctor's own session was not acknowledged; not sent again",
         ),
@@ -188,7 +188,7 @@ fn inspect(
             return nothing;
         }
         _ => {
-            checks.unknown(
+            checks.lost(
                 READY,
                 "its daemon's readiness reply was lost; not asked again",
             );
