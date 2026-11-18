@@ -1,0 +1,635 @@
+{
+ "family": "workspace",
+ "who": "agents",
+ "old_count": 6,
+ "blurb": "A Branch mounted in a Sandbox. The handle is <code>sandbox:name</code>, and the name defaults to the Branch: <code>tests:agent</code>.",
+ "reasons": [
+  "<b>Why exec is two fields:</b> an agent needs the exit code and the output. Everything else (the exec id, byte counts, how it is stopped) is in the long form.",
+  "<b>Why the CLI exits with the command's code:</b> a shell script can write <code>layerfs workspace exec tests:agent \"npm test\" &amp;&amp; …</code> and it works. The result JSON is still on stdout; a refusal exits 125.",
+  "<b>Why long output is a tail and a file:</b> the end of a build log is the part that says what failed. The whole stream is kept in a file, so nothing is capped and nothing is lost.",
+  "<b>Why status lists paths:</b> the question before a Commit is which files changed. A count answers nothing an agent can act on.",
+  "<b>Why cancel needs no exec id:</b> the caller that wants a Workspace quiet rarely holds the id; <code>--exec</code> stays for ending one command of several.",
+  "<b>Why the handle has no path form:</b> every Workspace has a name, so one spelling names it everywhere."
+ ],
+ "calls": [
+  {
+   "call": "workspace.list",
+   "badge": "new",
+   "note": "the handle of every mounted Workspace, to find one again. It reads Workspace records and asks no daemon: the home's own for a Sandbox on <code>native</code> or one reached directly, and one request to each other ready machine's worker for the records it keeps. A Sandbox whose machine is stopped, or whose worker did not answer, has no rows; it is named in <code>not_listed</code> with <code>blocked_by</code>, or with <code>reason</code> (<code>timeout</code>, <code>busy</code>, <code>lost</code>). Rows carry no state: <code>workspace status</code> and <code>sandbox get</code> ask the daemon. Ordered by Sandbox, then name",
+   "today": [],
+   "help": "every mounted Workspace, or one Sandbox's",
+   "cli": "layerfs workspace list [--sandbox S] [--limit 100] [--cursor C]",
+   "positionals": [],
+   "options": [
+    {
+     "name": "sandbox",
+     "kind": "Name",
+     "help": "list only this Sandbox's Workspaces"
+    },
+    {
+     "name": "limit",
+     "kind": "Int",
+     "help": "the most rows in one page, 1 to 1000",
+     "default": 100
+    },
+    {
+     "name": "cursor",
+     "kind": "Text",
+     "help": "the `next_cursor` of the page before; it carries the filters"
+    }
+   ],
+   "stdin": null,
+   "with": {},
+   "paging": "cursor",
+   "progress": false,
+   "quiet": false,
+   "profile": "agent",
+   "short": {
+    "always": [
+     "items"
+    ],
+    "sometimes": [
+     "next_cursor",
+     "not_listed"
+    ]
+   },
+   "long": [
+    "items",
+    "next_cursor",
+    "not_listed"
+   ],
+   "item": {
+    "short": {
+     "always": [
+      "workspace",
+      "branch"
+     ],
+     "sometimes": []
+    },
+    "long": [
+     "workspace",
+     "branch",
+     "sandbox",
+     "project",
+     "path",
+     "mounted_at"
+    ]
+   },
+   "examples": {
+    "short": [
+     "{\"items\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\"}]}",
+     "a Sandbox on a stopped machine: {\"items\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\"}],\"not_listed\":[{\"sandbox\":\"sim-1\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}",
+     "a worker did not answer: {\"items\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\"}],\"not_listed\":[{\"sandbox\":\"build-1\",\"reason\":\"lost\"}]}",
+     "more pages: {\"items\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\"}],\"next_cursor\":\"dGVzdHM6YWdlbnQ\"}"
+    ],
+    "long": "{\"items\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\",\"sandbox\":\"tests\",\"project\":\"shop/api\",\"path\":\"/workspaces/1\",\"mounted_at\":\"2026-11-18T09:02:11Z\"}],\"next_cursor\":null,\"not_listed\":[]}"
+   },
+   "dropped": [],
+   "new_work": "The call is new. The home's Workspace records (`workspace/<id>.json`: name, branch, path, created) cover a Sandbox on `native` and one reached directly; for every other Sandbox the machine's worker keeps them, and a new worker request must list the records of the named Sandboxes (today a worker lists Workspaces only by asking one Sandbox's daemon). One request per ready machine in the page; a machine that is not ready is not contacted. Every Workspace needs a name for its handle: the default name is new work of `workspace.mount`. `not_listed` entries are {sandbox, blocked_by} or {sandbox, reason}; the long form carries both keys.",
+   "nested": {
+    "not_listed": {
+     "short": {
+      "always": [
+       "sandbox"
+      ],
+      "sometimes": [
+       "blocked_by",
+       "reason"
+      ]
+     },
+     "long": [
+      "sandbox",
+      "blocked_by",
+      "reason"
+     ]
+    }
+   }
+  },
+  {
+   "call": "workspace.mount",
+   "badge": "reshaped",
+   "note": "answers the handle every Workspace call takes, <code>sandbox:name</code>, and the directory the daemon mounted it at. The name defaults to the Branch; a name in use is <code>Exists</code>, so a second mount of the same Branch needs <code>--name</code>. There is no <code>--path</code>: the daemon assigns the directory (<code>/workspaces/&lt;n&gt;</code> in the Sandbox; a folder under its run folder on macOS <code>native</code>). <code>main</code> is refused <code>InvalidInput</code> with a <code>fix</code> naming <code>branch fork</code>; a seventeenth Workspace is <code>Capacity</code>. <code>commit</code> is the Commit the Workspace stands on",
+   "today": [
+    "workspace.mount"
+   ],
+   "help": "mount a Branch in a Sandbox",
+   "cli": "layerfs workspace mount <sandbox> <branch> [--name N]",
+   "positionals": [
+    {
+     "name": "sandbox",
+     "kind": "Name"
+    },
+    {
+     "name": "branch",
+     "kind": "Name"
+    }
+   ],
+   "options": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "help": "the Workspace's name within its Sandbox (1 to 63 lowercase letters, digits, `_`, `.` or `-`); default: the Branch's name"
+    }
+   ],
+   "stdin": null,
+   "with": {},
+   "paging": null,
+   "progress": false,
+   "quiet": false,
+   "profile": "full",
+   "short": {
+    "always": [
+     "workspace",
+     "path"
+    ],
+    "sometimes": []
+   },
+   "long": [
+    "workspace",
+    "path",
+    "outcome",
+    "branch",
+    "commit",
+    "base_layer",
+    "root",
+    "id",
+    "namespace"
+   ],
+   "item": null,
+   "examples": {
+    "short": [
+     "{\"workspace\":\"tests:agent\",\"path\":\"/workspaces/1\"}",
+     "--name second: {\"workspace\":\"tests:second\",\"path\":\"/workspaces/2\"}"
+    ],
+    "long": "{\"workspace\":\"tests:agent\",\"path\":\"/workspaces/1\",\"outcome\":\"mounted\",\"branch\":\"agent\",\"commit\":\"5c77a1d0\",\"base_layer\":\"a1e4c7d2\",\"root\":\"c41d77e2\",\"id\":\"5f0c7a1e9b3d4826a7c0e15d92b46f38c1a7e05b3d9f24687a0c1e5b9d3f7a26\",\"namespace\":1}"
+   },
+   "dropped": [],
+   "new_work": "The default name is new: today a mount without `name` has none and its handle is `<sandbox>:<path>`. With the default, every handle is `<sandbox>:<name>` and the path form of the handle goes (the parser accepts both today). A Branch name that is not a valid Workspace name (uppercase, `/`, longer than 63) is refused `InvalidInput` with a `fix` naming `--name`. Renames: `ws` to `workspace`, the 64-hex `workspace` to `id`, `base` to `commit`, `kind: Mounted` to `outcome: mounted`. `sandbox`, `container`, `image`, `platform`, `runtime` and `name` leave the answer (`sandbox get` answers the Sandbox's facts; the name is in the handle)."
+  },
+  {
+   "call": "workspace.exec",
+   "badge": "reshaped",
+   "note": "runs one bash command in the Workspace's directory and waits for it. Short: <code>exit_code</code>, and <code>stdout</code> and <code>stderr</code> only when not empty. A stream of at most 1 MiB is answered whole; a longer one answers its last 1 MiB and names the file that holds all of it (<code>stdout_file</code>, <code>stderr_file</code>: a path <code>sandbox files</code> reads, kept until the Workspace is unmounted). No total is capped. The shell exits with the command's own code and prints the result JSON on stdout; a refusal exits 125. A cancelled command answers <code>cancelled:true</code> and exit code 128 plus the signal. <code>--cwd</code> is a folder of the Workspace, as a path from its root; <code>--env K=V</code> repeats, and Node and Python pass one object; <code>--stdin</code> gives the command the caller's stdin, read whole before it starts (without it the command reads <code>/dev/null</code>); <code>--stream</code> writes the command's output to the caller's stdout and stderr and prints no result (Node and Python: the <code>stdout</code> and <code>stderr</code> functions), after the command ends, as today. <code>--progress</code> sends one event before the command starts, <code>{\"phase\":\"start\",\"done\":0,\"total\":1,\"exec\":\"exec-…\"}</code>: the id <code>workspace cancel --exec</code> takes. There is no timeout. The shell's <code>--events</code> is gone",
+   "today": [
+    "workspace.exec"
+   ],
+   "help": "run one bash command in a Workspace",
+   "cli": "layerfs workspace exec <workspace> <command> [--cwd D] [--env K=V] [--stdin] [--stream]",
+   "positionals": [
+    {
+     "name": "workspace",
+     "kind": "Text"
+    },
+    {
+     "name": "command",
+     "kind": "Text"
+    }
+   ],
+   "options": [
+    {
+     "name": "cwd",
+     "kind": "Text",
+     "help": "the folder the command starts in, as a path from the Workspace's root; default: the root"
+    },
+    {
+     "name": "env",
+     "kind": "Json",
+     "repeat": true,
+     "help": "one environment variable for the command, `K=V`; repeat the option for more (Node and Python: one object of names to text)"
+    },
+    {
+     "name": "stdin",
+     "kind": "Content",
+     "help": "the command's stdin: in the shell, this process's stdin read whole; in Node and Python, text or bytes"
+    },
+    {
+     "name": "stream",
+     "kind": "Bool",
+     "help": "write the command's output to this process's stdout and stderr instead of answering it; the shell prints no result"
+    },
+    {
+     "name": "stdout",
+     "kind": "Function",
+     "help": "Node and Python: a function given the command's stdout"
+    },
+    {
+     "name": "stderr",
+     "kind": "Function",
+     "help": "Node and Python: a function given the command's stderr"
+    }
+   ],
+   "stdin": "content",
+   "with": {},
+   "paging": null,
+   "progress": true,
+   "quiet": false,
+   "profile": "agent",
+   "short": {
+    "always": [
+     "exit_code"
+    ],
+    "sometimes": [
+     "stdout",
+     "stderr",
+     "stdout_file",
+     "stderr_file",
+     "cancelled"
+    ]
+   },
+   "long": [
+    "exit_code",
+    "stdout",
+    "stderr",
+    "stdout_file",
+    "stderr_file",
+    "cancelled",
+    "exec",
+    "stop",
+    "stdout_bytes",
+    "stderr_bytes",
+    "duration_ms"
+   ],
+   "item": null,
+   "examples": {
+    "short": [
+     "{\"exit_code\":0,\"stdout\":\"42 passing\\n\"}",
+     "no output: {\"exit_code\":0}",
+     "the command failed: {\"exit_code\":1,\"stdout\":\"41 passing\\n\",\"stderr\":\"1 failing: login rejects an empty user\\n\"}",
+     "more than 1 MiB of stdout: {\"exit_code\":0,\"stdout\":\"…\\nDone in 212.4s.\\n\",\"stdout_file\":\"/run/layerfs/tests/exec/exec-9c0f2a7b41d6e803.stdout\"}",
+     "cancelled: {\"exit_code\":143,\"stdout\":\"installing…\\n\",\"cancelled\":true}"
+    ],
+    "long": "{\"exit_code\":0,\"stdout\":\"42 passing\\n\",\"stderr\":\"\",\"stdout_file\":null,\"stderr_file\":null,\"cancelled\":false,\"exec\":\"exec-9c0f2a7b41d6e803\",\"stop\":\"cgroup\",\"stdout_bytes\":11,\"stderr_bytes\":0,\"duration_ms\":8120}"
+   },
+   "dropped": [
+    {
+     "today": "<ws>",
+     "now": "<workspace>",
+     "why": "a thing goes by its own word; the handle is always `sandbox:name`"
+    },
+    {
+     "today": "--message",
+     "now": "",
+     "why": "it was only echoed back in the result"
+    },
+    {
+     "today": "--exec-id",
+     "now": "",
+     "why": "LayerFS makes the id (`exec-` and 16 hex digits); the progress event and the long form name it"
+    }
+   ],
+   "new_work": "`--cwd`, `--env` and `--stdin` are new. The backend's request has the fields (`environment`, `directory`, `stdin`), but the control layer always sends `HOME` only, the mount directory and `stdin: false`; both backends refuse `stdin: true` (a command reads `/dev/null`); and the frame to a machine's worker carries a directory and no environment or stdin. Feeding stdin is new in both backends. Output files are new: today a stream over the 1 MiB inline window goes only to a sink (`--stream`, the `stdout`/`stderr` functions) through an unlinked spool file and is otherwise not kept, and the reply has that stream null with `streamed: true`. The spool must become a named file beside the Sandbox's daemon log that `sandbox files` reads and unmount deletes, and the reply must carry the stream's last 1 MiB. `stdout_bytes` and `stderr_bytes` in every long answer, `duration_ms` and `cancelled` as a key (`kind: cancelled` today) are new. The shell exits with the command's code in every form (only with `--stream` today). The progress event's shape is new (`{exec: {id}}` today). `kind`, `truncated` and `message` leave the answer; `exec_id` becomes `exec`. Output that is not UTF-8 stays bytes, as today."
+  },
+  {
+   "call": "workspace.cancel",
+   "badge": "renamed",
+   "note": "was <code>workspace.exec_cancel</code>. Ends every command running in the Workspace, or the one <code>--exec</code> names: SIGTERM to everything it started, then SIGKILL after 5 s. Three short forms. <code>{\"signal\":\"SIGTERM\"}</code>: a command was signalled and has ended; <code>signal</code> is the last one sent. <code>{\"already_ended\":true}</code>: nothing was running (the named command had finished, or has no record). <code>{\"unknown\":true}</code>: the machine's worker was not reached or did not answer, so nothing is known to have changed; cancel again once it answers. With several commands <code>signal</code> and <code>unknown</code> can stand together, and the long form's <code>commands</code> says which. All three exit 0. The cancelled command's own <code>exec</code> answers <code>cancelled:true</code>",
+   "today": [
+    "workspace.exec_cancel"
+   ],
+   "help": "end the commands running in a Workspace, or one of them",
+   "cli": "layerfs workspace cancel <workspace> [--exec E]",
+   "positionals": [
+    {
+     "name": "workspace",
+     "kind": "Text"
+    }
+   ],
+   "options": [
+    {
+     "name": "exec",
+     "kind": "Text",
+     "help": "end only this command: the exec id from its progress event, `sandbox get` or the long form; default: every running command"
+    }
+   ],
+   "stdin": null,
+   "with": {},
+   "paging": null,
+   "progress": false,
+   "quiet": false,
+   "profile": "agent",
+   "short": {
+    "always": [],
+    "sometimes": [
+     "signal",
+     "already_ended",
+     "unknown"
+    ]
+   },
+   "long": [
+    "signal",
+    "already_ended",
+    "unknown",
+    "outcome",
+    "commands"
+   ],
+   "item": null,
+   "examples": {
+    "short": [
+     "{\"signal\":\"SIGTERM\"}",
+     "it outlived the grace: {\"signal\":\"SIGKILL\"}",
+     "nothing was running: {\"already_ended\":true}",
+     "the worker did not answer: {\"unknown\":true}"
+    ],
+    "long": "{\"signal\":\"SIGTERM\",\"already_ended\":false,\"unknown\":false,\"outcome\":\"cancelled\",\"commands\":[{\"exec\":\"exec-9c0f2a7b41d6e803\",\"outcome\":\"cancelled\",\"signal\":\"SIGTERM\"}]}"
+   },
+   "dropped": [
+    {
+     "today": "<ws>",
+     "now": "<workspace>",
+     "why": "a thing goes by its own word; the handle is always `sandbox:name`"
+    },
+    {
+     "today": "<exec_id>",
+     "now": "--exec E",
+     "why": "optional now: the default is every running command"
+    },
+    {
+     "today": "--grace-ms",
+     "now": "",
+     "why": "one grace, 5000 ms, today's default"
+    }
+   ],
+   "new_work": "Cancelling without an exec id is new on the call: the code that ends every live command of a Workspace exists (forced unmount and forced Sandbox removal use it) but no call reaches it. `outcome` is `cancelled`, `already_ended` (`ended` today) or `unknown`; with several commands it is the worst of `commands[].outcome` (unknown, then cancelled, then already_ended). The short keys replace today's `{outcome, signal}`. `commands` is new.",
+   "nested": {
+    "commands": {
+     "long": [
+      "exec",
+      "outcome",
+      "signal"
+     ]
+    }
+   }
+  },
+  {
+   "call": "workspace.commit",
+   "badge": "extended",
+   "note": "commits everything changed in the Workspace since its base, whichever process changed it. <code>commit</code> is the Branch's new head. When the Branch moved since the mount the changes are merged first (<code>merged:true</code>; <code>overwritten</code> lists the paths a newer-write-wins rule decided, the first 20, then <code>overwritten_count</code>); <code>--force</code> commits over the moved head instead, and the long form's <code>displaced</code> is the head it replaced. Nothing to commit answers the head with <code>unchanged:true</code>. A conflict is the refusal <code>Conflict</code>, which names the head as <code>commit</code> and lists <code>conflicts</code>; <code>--expected</code> refuses the same way before anything is merged. The Workspace stays mounted",
+   "today": [
+    "workspace.commit"
+   ],
+   "help": "commit a Workspace's changes to its Branch",
+   "cli": "layerfs workspace commit <workspace> [-m msg] [--expected C] [--force]",
+   "positionals": [
+    {
+     "name": "workspace",
+     "kind": "Text"
+    }
+   ],
+   "options": [
+    {
+     "name": "message",
+     "kind": "Text",
+     "help": "the Commit message; `-m` in the shell"
+    },
+    {
+     "name": "expected",
+     "kind": "Name",
+     "help": "refuse `Conflict` unless the Branch's head is this Commit"
+    },
+    {
+     "name": "force",
+     "kind": "Bool",
+     "help": "commit over a head that moved since the mount instead of merging with it"
+    }
+   ],
+   "stdin": null,
+   "with": {},
+   "paging": null,
+   "progress": false,
+   "quiet": false,
+   "profile": "agent",
+   "short": {
+    "always": [
+     "commit"
+    ],
+    "sometimes": [
+     "unchanged",
+     "merged",
+     "overwritten",
+     "overwritten_count"
+    ]
+   },
+   "long": [
+    "commit",
+    "unchanged",
+    "merged",
+    "overwritten",
+    "overwritten_count",
+    "outcome",
+    "branch",
+    "parent",
+    "root",
+    "message",
+    "created_at",
+    "merged_from",
+    "displaced"
+   ],
+   "item": null,
+   "examples": {
+    "short": [
+     "{\"commit\":\"5c77a1d0\"}",
+     "nothing to commit: {\"commit\":\"32ab9e01\",\"unchanged\":true}",
+     "the Branch had moved: {\"commit\":\"8d2e44f1\",\"merged\":true}",
+     "a rule decided a path: {\"commit\":\"8d2e44f1\",\"merged\":true,\"overwritten\":[\"/package-lock.json\"]}"
+    ],
+    "long": "{\"commit\":\"5c77a1d0\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"c41d77e2\",\"message\":\"fix login options\",\"created_at\":\"2026-11-18T09:16:59Z\",\"merged_from\":null,\"displaced\":null}"
+   },
+   "dropped": [
+    {
+     "today": "<ws>",
+     "now": "<workspace>",
+     "why": "a thing goes by its own word; the handle is always `sandbox:name`"
+    }
+   ],
+   "new_work": "`--expected` is new: today the call has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path conflicts. Renames on what the call answers today: `head` to `commit`, `kind: UpToDate` to `unchanged: true`, `merged {from, head}` to `merged: true` with `merged_from` (the head merged in), `lww` to `overwritten` (paths) with `lww_truncated` as `overwritten_count`, `displaced_head` to `displaced`, the Commit's `time` to `created_at`. The Commit's other facts (`second_parent`, `base`, `via`, `logical`, the new-bytes counts) are `commit get`'s. The `Conflict` refusal carries `commit` (the head), `conflicts` (paths, the first 20) and `conflicts_count` (`detail.head`, `detail.conflicts`, `detail.conflicts_truncated` today).",
+   "refusals": [
+    {
+     "error": "Conflict",
+     "when": "a path conflicts, or the head is not --expected; nothing is committed",
+     "adds": [
+      "commit",
+      "conflicts",
+      "conflicts_count"
+     ]
+    }
+   ]
+  },
+  {
+   "call": "workspace.unmount",
+   "badge": "kept",
+   "note": "ends the Workspace and deletes its overlay; the Branch's history stays. Refused <code>Dirty</code> while it has uncommitted changes (the refusal lists the paths as <code>changes</code>, with a <code>fix</code> naming <code>workspace commit</code>); <code>--discard</code> drops them. Refused <code>Busy</code> while a command runs (it lists the exec ids as <code>running</code>); <code>--force</code> cancels each one first and aborts the Workspace's connection, and a cancel that is not confirmed refuses it <code>Unknown</code>",
+   "today": [
+    "workspace.unmount"
+   ],
+   "help": "end a Workspace",
+   "cli": "layerfs workspace unmount <workspace> [--discard] [--force]",
+   "positionals": [
+    {
+     "name": "workspace",
+     "kind": "Text"
+    }
+   ],
+   "options": [
+    {
+     "name": "discard",
+     "kind": "Bool",
+     "help": "drop its uncommitted changes"
+    },
+    {
+     "name": "force",
+     "kind": "Bool",
+     "help": "cancel its running commands and abort its connection"
+    }
+   ],
+   "stdin": null,
+   "with": {},
+   "paging": null,
+   "progress": false,
+   "quiet": false,
+   "profile": "full",
+   "short": {
+    "always": [
+     "ok"
+    ],
+    "sometimes": []
+   },
+   "long": [
+    "ok",
+    "outcome",
+    "abort",
+    "detach",
+    "cleanup"
+   ],
+   "item": null,
+   "examples": {
+    "short": [
+     "{\"ok\":true}"
+    ],
+    "long": "{\"ok\":true,\"outcome\":\"unmounted\",\"abort\":null,\"detach\":null,\"cleanup\":null}"
+   },
+   "dropped": [
+    {
+     "today": "<ws>",
+     "now": "<workspace>",
+     "why": "a thing goes by its own word; the handle is always `sandbox:name`"
+    }
+   ],
+   "new_work": "No new capability. `outcome` is `unmounted` or `force_unmounted` (`kind` today); `abort`, `detach` and `cleanup` are a forced unmount's three steps as it answers them today, lowercase, and null otherwise. The `Dirty` refusal carries `changes` (paths, the first 20), `changes_count` and `pending_merge` (`detail.changed`, `detail.truncated` today); the `Busy` refusal carries `running` (`detail.execs` today).",
+   "refusals": [
+    {
+     "error": "Dirty",
+     "when": "uncommitted changes and no --discard",
+     "adds": [
+      "changes",
+      "changes_count",
+      "pending_merge"
+     ]
+    },
+    {
+     "error": "Busy",
+     "when": "a command runs and no --force",
+     "adds": [
+      "running"
+     ]
+    },
+    {
+     "error": "Unknown",
+     "when": "--force, and a command's cancel was not confirmed",
+     "adds": [
+      "running"
+     ]
+    }
+   ]
+  },
+  {
+   "call": "workspace.status",
+   "badge": "reshaped",
+   "note": "what a Commit would capture now: each changed path with its <code>change</code> (<code>added</code>, <code>modified</code>, <code>deleted</code>), the first 20, then <code>changes_count</code>; <code>--path</code> narrows it to one folder. A clean Workspace answers <code>{\"changes\":[]}</code>. <code>branch_moved:true</code> when the Branch gained Commits since the mount (a Commit will merge). <code>state</code> is left out when <code>ready</code>: <code>busy</code> with its <code>op</code> while it mounts, commits or unmounts, <code>broken</code> with a <code>fix</code> after a failure. On a machine that is not ready the call is refused <code>Unavailable</code> with a <code>fix</code> naming <code>machine start</code>; it starts no machine",
+   "today": [
+    "workspace.status"
+   ],
+   "help": "a Workspace's uncommitted changes, and whether its Branch moved",
+   "cli": "layerfs workspace status <workspace> [--path P]",
+   "positionals": [
+    {
+     "name": "workspace",
+     "kind": "Text"
+    }
+   ],
+   "options": [
+    {
+     "name": "path",
+     "kind": "Text",
+     "help": "list only changes under this folder of the Workspace"
+    }
+   ],
+   "stdin": null,
+   "with": {},
+   "paging": null,
+   "progress": false,
+   "quiet": false,
+   "profile": "agent",
+   "short": {
+    "always": [
+     "changes"
+    ],
+    "sometimes": [
+     "changes_count",
+     "branch_moved",
+     "state",
+     "op",
+     "reason",
+     "fix"
+    ]
+   },
+   "long": [
+    "changes",
+    "changes_count",
+    "branch_moved",
+    "state",
+    "op",
+    "reason",
+    "fix",
+    "branch",
+    "commit",
+    "base_layer",
+    "branch_head",
+    "activity",
+    "overlay",
+    "pending_merge"
+   ],
+   "item": null,
+   "examples": {
+    "short": [
+     "{\"changes\":[{\"path\":\"/src/app.ts\",\"change\":\"modified\"},{\"path\":\"/src/login.test.ts\",\"change\":\"added\"}]}",
+     "the Branch moved: {\"changes\":[{\"path\":\"/src/app.ts\",\"change\":\"modified\"}],\"branch_moved\":true}",
+     "more than 20 paths: {\"changes\":[{\"path\":\"/node_modules/.package-lock.json\",\"change\":\"added\"}],\"changes_count\":4812}",
+     "a Commit is running: {\"changes\":[{\"path\":\"/src/app.ts\",\"change\":\"modified\"}],\"state\":\"busy\",\"op\":{\"name\":\"commit\",\"phase\":\"publish\",\"started_at\":\"2026-11-18T09:16:59Z\"}}"
+    ],
+    "long": "{\"changes\":[{\"path\":\"/src/app.ts\",\"change\":\"modified\"}],\"changes_count\":1,\"branch_moved\":false,\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"branch\":\"agent\",\"commit\":\"5c77a1d0\",\"base_layer\":\"a1e4c7d2\",\"branch_head\":\"5c77a1d0\",\"activity\":\"idle\",\"overlay\":{\"inode_count\":3,\"entry_count\":4},\"pending_merge\":false}"
+   },
+   "dropped": [
+    {
+     "today": "<ws>",
+     "now": "<workspace>",
+     "why": "a thing goes by its own word; the handle is always `sandbox:name`"
+    }
+   ],
+   "new_work": "The path list is new: today the call answers counts only (`overlay {inodes, entries, pending_merge}`). The daemon can name changed paths, but only inside the `Dirty` refusal: at most 256, in path order, with no change kind and no folder filter. A status request that answers the first 20 paths with each one's kind, the total count and a `--path` filter is new in the daemon and on the worker frame; it must stay bounded for a Workspace with many changes. `state` is new, from `activity` as in `sandbox.get`; `activity` stays in the long form as the daemon's own word (`idle`, `attaching`, `committing`, `closing`, `uncertain`, `local_failure`). Renames: `base` to `commit`, `head_moved_since_mount` to `branch_moved`, `overlay.inodes` and `overlay.entries` to `inode_count` and `entry_count`, `overlay.pending_merge` to `pending_merge`; `kind` leaves the answer.",
+   "nested": {
+    "changes": {
+     "long": [
+      "path",
+      "change"
+     ]
+    },
+    "overlay": {
+     "long": [
+      "inode_count",
+      "entry_count"
+     ]
+    }
+   }
+  }
+ ]
+}

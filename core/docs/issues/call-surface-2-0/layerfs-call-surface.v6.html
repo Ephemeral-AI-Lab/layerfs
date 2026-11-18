@@ -1,0 +1,838 @@
+<title>LayerFS 2.0 Call Surface</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: reference sheet. Sticky index on the left (stacks on phones), one table per family, rules and evidence around them. */
+:root {
+  --paper: #f5f7f6;
+  --sheet: #ffffff;
+  --ink: #16211e;
+  --muted: #5b6b66;
+  --rule: #d9e1de;
+  --accent: #0d6e62;
+  --accent-soft: #e2f1ee;
+  --code-bg: #eef2f1;
+  --b-kept-bg: #eceff0; --b-kept-fg: #4e5a5f;
+  --b-merged-bg: #fdf0d8; --b-merged-fg: #7a4b00;
+  --b-renamed-bg: #ece8fb; --b-renamed-fg: #4a3a99;
+  --b-extended-bg: #e0eefc; --b-extended-fg: #1f4f86;
+  --b-new-bg: #dcf3e6; --b-new-fg: #17613a;
+  --b-gone-bg: #fbe3e1; --b-gone-fg: #8a2a20;
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1513; --sheet: #151d1a; --ink: #e3ebe8; --muted: #93a39e; --rule: #2a3632;
+    --accent: #4cc2b0; --accent-soft: #173029; --code-bg: #1b2522;
+    --b-kept-bg: #232c2b; --b-kept-fg: #a9b6b3;
+    --b-merged-bg: #3a2c10; --b-merged-fg: #f2c46b;
+    --b-renamed-bg: #2b2546; --b-renamed-fg: #c3b6ff;
+    --b-extended-bg: #17304a; --b-extended-fg: #9cc8f5;
+    --b-new-bg: #143523; --b-new-fg: #87dba9;
+    --b-gone-bg: #3d1c19; --b-gone-fg: #f3a197;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1513; --sheet: #151d1a; --ink: #e3ebe8; --muted: #93a39e; --rule: #2a3632;
+  --accent: #4cc2b0; --accent-soft: #173029; --code-bg: #1b2522;
+  --b-kept-bg: #232c2b; --b-kept-fg: #a9b6b3;
+  --b-merged-bg: #3a2c10; --b-merged-fg: #f2c46b;
+  --b-renamed-bg: #2b2546; --b-renamed-fg: #c3b6ff;
+  --b-extended-bg: #17304a; --b-extended-fg: #9cc8f5;
+  --b-new-bg: #143523; --b-new-fg: #87dba9;
+  --b-gone-bg: #3d1c19; --b-gone-fg: #f3a197;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+}
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 40px; }
+@media (max-width: 900px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 24px; } }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(28px, 4vw, 40px); font-weight: 700; }
+h2 { font-size: 24px; font-weight: 600; }
+h3 { font-size: 17px; font-weight: 600; }
+p { margin: 0; max-width: 76ch; }
+a { color: var(--accent); }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+.eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+
+nav.index { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; display: grid; gap: 3px; font-size: 14px; max-height: calc(100vh - 48px); overflow-y: auto; }
+nav.index a { text-decoration: none; color: var(--ink); display: flex; justify-content: space-between; gap: 8px; padding: 3px 8px; border-radius: 6px; }
+nav.index a:hover, nav.index a:focus-visible { background: var(--accent-soft); outline: none; }
+nav.index .n { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+nav.index .sep { height: 1px; background: var(--rule); margin: 6px 0; }
+@media (max-width: 900px) {
+  nav.index { position: static; display: flex; flex-wrap: wrap; gap: 6px; max-height: none; }
+  nav.index a { border: 1px solid var(--rule); background: var(--sheet); }
+  nav.index .sep { display: none; }
+}
+
+main { display: grid; gap: 48px; min-width: 0; }
+header.top { display: grid; gap: 14px; }
+.meta { color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.meta span { font-family: var(--font-mono); font-size: 12px; }
+.counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.count { background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
+.count .v { font-family: var(--font-display); font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.count .v s { color: var(--muted); font-weight: 500; text-decoration-thickness: 1px; }
+.count .l { font-size: 13px; color: var(--muted); }
+
+section { display: grid; gap: 16px; min-width: 0; }
+.why-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.why { background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 18px; display: grid; gap: 8px; align-content: start; }
+.why p { font-size: 14px; }
+.why .ev { font-size: 13px; color: var(--muted); }
+
+.forms { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.form { background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.form pre { margin: 0; font-family: var(--font-mono); font-size: 12.5px; background: var(--code-bg); border-radius: 8px; padding: 10px 12px; white-space: pre-wrap; word-break: break-word; }
+.form .tag { font-size: 12px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
+
+.rules { display: grid; background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.rule { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 16px; padding: 12px 18px; border-top: 1px solid var(--rule); }
+.rule:first-child { border-top: 0; }
+.rule .k { font-weight: 600; font-size: 14px; }
+.rule .d { font-size: 14px; display: grid; gap: 4px; }
+@media (max-width: 640px) { .rule { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+
+.tools { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.tools input[type="search"] { font: inherit; font-size: 14px; padding: 8px 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); color: var(--ink); min-width: 0; width: min(360px, 100%); }
+.tools input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tools label { font-size: 14px; display: flex; gap: 6px; align-items: center; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.fam { display: grid; gap: 12px; scroll-margin-top: 24px; }
+.fam-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.fam-head .c { font-family: var(--font-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.fam-head p { color: var(--muted); font-size: 14px; flex-basis: 100%; }
+.who { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.tbl { overflow-x: auto; background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; min-width: 980px; font-size: 13.5px; }
+th { text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 10px 14px; border-bottom: 1px solid var(--rule); background: var(--sheet); }
+td { padding: 10px 14px; border-top: 1px solid var(--rule); vertical-align: top; }
+tr:first-child td { border-top: 0; }
+td.call { font-family: var(--font-mono); font-weight: 500; white-space: nowrap; font-size: 13px; }
+td.cli, td.out, td.long { font-family: var(--font-mono); font-size: 12.5px; white-space: pre-wrap; word-break: break-word; }
+td.cli { width: 27%; }
+td.out { width: 31%; }
+td.long { width: 20%; color: var(--muted); }
+td.chg { width: 14%; font-size: 13px; }
+td.chg .note { display: block; color: var(--muted); margin-top: 4px; }
+td.plain { font-family: var(--font-body); }
+.badge { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+.b-kept { background: var(--b-kept-bg); color: var(--b-kept-fg); }
+.b-merged { background: var(--b-merged-bg); color: var(--b-merged-fg); }
+.b-renamed { background: var(--b-renamed-bg); color: var(--b-renamed-fg); }
+.b-extended { background: var(--b-extended-bg); color: var(--b-extended-fg); }
+.b-new { background: var(--b-new-bg); color: var(--b-new-fg); }
+.b-gone { background: var(--b-gone-bg); color: var(--b-gone-fg); }
+.fam-why { display: grid; gap: 6px; font-size: 14px; padding-left: 18px; margin: 0; }
+.fam-why li { max-width: 82ch; }
+.fam-why li::marker { color: var(--accent); }
+
+.decisions { display: grid; gap: 10px; }
+.decision { background: var(--sheet); border: 1px solid var(--rule); border-left: 3px solid var(--b-merged-fg); border-radius: 8px; padding: 12px 16px; display: grid; gap: 4px; font-size: 14px; }
+.decision b { font-weight: 600; }
+.small { font-size: 13px; color: var(--muted); }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.pair-head { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+.pair-head .call { font-family: var(--font-mono); font-weight: 600; font-size: 13px; }
+.pair-head code { background: transparent; padding: 0; color: var(--muted); font-size: 12px; word-break: break-word; }
+.side { padding: 10px 14px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.side.long { border-left: 1px solid var(--rule); background: var(--code-bg); }
+.side-l { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.side .tag { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+.side.long .tag { color: var(--muted); }
+.side .bytes { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.side pre { margin: 0; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+@media (max-width: 760px) { .pair { grid-template-columns: minmax(0, 1fr); } .side.long { border-left: 0; border-top: 1px solid var(--rule); } }
+.pairs { display: grid; gap: 12px; }
+.pairs h3 { margin-top: 10px; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="wrap">
+  <nav class="index" aria-label="Contents">
+    <a href="#forms">Short and long form</a>
+    <a href="#side">Side by side</a>
+    <a href="#why">Why this shape</a>
+    <a href="#rules">Rules for every call</a>
+    <a href="#agent">Agent profile</a>
+    <div class="sep"></div>
+    <a href="#f-project">project <span class="n">7→7</span></a>
+    <a href="#f-file">file <span class="n">15→15</span></a>
+    <a href="#f-sandbox">sandbox <span class="n">5→7</span></a>
+    <a href="#f-workspace">workspace <span class="n">6→7</span></a>
+    <a href="#f-branch">branch <span class="n">9→6</span></a>
+    <a href="#f-commit">commit <span class="n">3→3</span></a>
+    <a href="#f-home">home <span class="n">2→6</span></a>
+    <a href="#f-machine">machine <span class="n">15→14</span></a>
+    <a href="#f-store">store <span class="n">12→8</span></a>
+    <a href="#f-backup">backup <span class="n">5→6</span></a>
+    <a href="#f-gone">logs, doctor <span class="n">5→0</span></a>
+    <div class="sep"></div>
+    <a href="#learned">What we took from others</a>
+    <a href="#states">States in the UI</a>
+    <a href="#backups">Backup status</a>
+    <a href="#cache">Cache and freshness</a>
+    <div class="sep"></div>
+    <a href="#map">Old → new map</a>
+    <a href="#open">Open decisions</a>
+  </nav>
+
+  <main>
+    <header class="top">
+      <div class="eyebrow">Proposal · not built · version 5</div>
+      <h1>LayerFS 2.0 Call Surface</h1>
+      <p>A consolidated, agent-first call table for <code>layerfs_v2_0_0</code>. Every call answers a <b>short form</b> by default, for agents, and a <b>long form</b> with <code>--detail</code>. Each family shows the shell command, the short JSON line it prints, what the long form adds, and why it changed.</p>
+      <div class="meta">
+        <div>LayerFS <span>layerfs_v2_0_0 @ 4c296e9297</span></div>
+        <div>dsh-layerfs <span>layerfs_v2_0_0 @ 176324d</span></div>
+        <div>Updated <span>2026-11-18</span></div>
+      </div>
+      <div class="counts">
+        <div class="count"><div class="v"><s>84</s> 79</div><div class="l">calls in the table</div></div>
+        <div class="count"><div class="v"><s>12</s> 10</div><div class="l">families</div></div>
+        <div class="count"><div class="v"><s>~650</s> 79 B</div><div class="l">a file write's result (short form, full-length id)</div></div>
+        <div class="count"><div class="v"><s>138</s> ~40 B</div><div class="l">workspace.exec's envelope around stdout/stderr</div></div>
+        <div class="count"><div class="v"><s>7</s> 1</div><div class="l">paging conventions</div></div>
+        <div class="count"><div class="v"><s>~10</s> 1</div><div class="l">ways a result names a Commit: a plain <code>commit</code> id</div></div>
+      </div>
+      <p class="small">Owner, 2026-11-18: no new environment variables for context; project, Branch and Workspace stay explicit on every call. Version 5: the short form drops the <code>kind</code> tag; actions with nothing to return answer <code>{"ok":true}</code>; refusals carry <code>error</code>. Version 3: short and long forms for every call; a Commit in a result is a plain id named <code>commit</code> (the full reference moved to the long form); echoed inputs and empty fields left out; <code>--at</code> pins a Commit; agent context can be set once; <code>workspace.list</code> added; <code>project.hide_path</code> and <code>file.history</code> renamed; outputs checked against mirage, drive9 and cloudflare/computer.</p>
+    </header>
+
+    <section id="forms">
+      <h2>Short form and long form</h2>
+      <div class="forms">
+        <div class="form">
+          <span class="tag">Short form · default</span>
+          <p>For agents. Only what the call produced: the id or handle the next call takes, and anything that changed. No result tag, since the call already says what was done. No echoed inputs. Fields that are null, false or empty are left out. An action with nothing to return answers <code>{"ok":true}</code>.</p>
+          <pre>$ layerfs file write shop/api agent /src/app.ts &lt; app.ts
+{"commit":"12d1c0ffee58"}</pre>
+        </div>
+        <div class="form">
+          <span class="tag">Long form · --detail</span>
+          <p>For UIs, operators and debugging. Names the outcome in <code>outcome</code> and adds fields that were already read: full Commit references, internal ids, hashes, timestamps, record bookkeeping. It costs no extra I/O. It shows every field of its schema, nulls and empty lists included, so a UI reads a stable shape.</p>
+          <pre>$ layerfs file write shop/api agent /src/app.ts --detail &lt; app.ts
+{"outcome":"Committed","branch":"agent",
+ "commit":{"id":"12d1c0ffee58…","kind":"Commit","branch":"agent","root":"9f…"},
+ "parent":"7a0b…","message":"Apply filesystem changes","created_at":1794985419000}</pre>
+        </div>
+        <div class="form">
+          <span class="tag">Cost options · named for what they fetch</span>
+          <p>Anything that probes a machine, walks a disk or reads more of the Store is its own option, so neither form is ever slow by surprise: <code>--live</code>, <code>--stats</code>, <code>--space</code>, <code>--usage</code>, <code>--docker</code>, <code>--platforms</code>, <code>--include-storage</code>, <code>--patch</code>. Each answers under its own key.</p>
+          <pre>$ layerfs store get shop --live
+{"name":"shop","type":"sqlite","machine":"dev",…,
+ "live":{"state":"idle","observed_at":1794985419000}}</pre>
+        </div>
+      </div>
+      <p class="small">In Node and Python the long form is <code>{ detail: true }</code> / <code>detail=True</code>. A UI asks for <code>--detail</code> once, in its client, and every agent gets the short form without asking.</p>
+    </section>
+
+    <section id="side">
+      <h2>Short and long, side by side</h2>
+      <p>Nineteen calls, each with its short form (default) and its long form (<code>--detail</code>). Byte counts are measured on these exact examples with full-length ids (66 hex for a Commit); the text here shortens ids for reading. Across all nineteen, the short forms total <b>2,563 B</b> and the long forms <b>8,128 B</b>, under a third.</p>
+      <div class="pairs">
+      <h3>Files on a Branch</h3>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.read</span><code>layerfs file read /src/app.ts --offset 40 --limit 3</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">181 B</span></div><pre>{&quot;commit&quot;:&quot;32ab9e01…&quot;,&quot;size&quot;:5120,&quot;text&quot;:&quot;\nexport function login(user) {\n  const s = await open(user)\n&quot;,&quot;next_offset&quot;:43}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">364 B</span></div><pre>{&quot;commit&quot;:{&quot;id&quot;:&quot;32ab9e01…&quot;,&quot;kind&quot;:&quot;Commit&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;root&quot;:&quot;9f3c0b7a…&quot;},&quot;path&quot;:&quot;/src/app.ts&quot;,&quot;size&quot;:5120,&quot;mode&quot;:&quot;0644&quot;,&quot;lines&quot;:180,&quot;text&quot;:&quot;\nexport function login(user) {\n  const s = await open(user)\n&quot;,&quot;offset&quot;:40,&quot;limit&quot;:3,&quot;next_offset&quot;:43}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.edit</span><code>layerfs file edit /src/app.ts --old-string &#x27;login(user)&#x27; --new-string &#x27;login(user, opts)&#x27; --expected 32ab9e01</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">103 B</span></div><pre>{&quot;commit&quot;:&quot;12d1c0ff…&quot;,&quot;first_changed_line&quot;:42}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">530 B</span></div><pre>{&quot;outcome&quot;:&quot;Committed&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;commit&quot;:{&quot;id&quot;:&quot;12d1c0ff…&quot;,&quot;kind&quot;:&quot;Commit&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;root&quot;:&quot;9f3c0b7a…&quot;},&quot;parent&quot;:&quot;32ab9e01…&quot;,&quot;message&quot;:&quot;Apply filesystem changes&quot;,&quot;created_at&quot;:1794985419000,&quot;via&quot;:&quot;file&quot;,&quot;first_changed_line&quot;:42,&quot;diff&quot;:&quot;@@ -42 +42 @@\n-export function login(user) {\n+export function login(user, opts) {\n&quot;,&quot;merged&quot;:false,&quot;lww&quot;:[]}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.write</span><code>echo hi | layerfs file write /docs/a.txt</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">79 B</span></div><pre>{&quot;commit&quot;:&quot;12d1c0ff…&quot;}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">411 B</span></div><pre>{&quot;outcome&quot;:&quot;Committed&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;commit&quot;:{&quot;id&quot;:&quot;12d1c0ff…&quot;,&quot;kind&quot;:&quot;Commit&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;root&quot;:&quot;9f3c0b7a…&quot;},&quot;parent&quot;:&quot;32ab9e01…&quot;,&quot;message&quot;:&quot;Apply filesystem changes&quot;,&quot;created_at&quot;:1794985419000,&quot;via&quot;:&quot;file&quot;,&quot;merged&quot;:false,&quot;lww&quot;:[]}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.list</span><code>layerfs file list /src</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">177 B</span></div><pre>{&quot;commit&quot;:&quot;32ab9e01…&quot;,&quot;items&quot;:[{&quot;path&quot;:&quot;/src/app.ts&quot;,&quot;type&quot;:&quot;file&quot;},{&quot;path&quot;:&quot;/src/db&quot;,&quot;type&quot;:&quot;dir&quot;}],&quot;next_cursor&quot;:null}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">385 B</span></div><pre>{&quot;commit&quot;:{&quot;id&quot;:&quot;32ab9e01…&quot;,&quot;kind&quot;:&quot;Commit&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;root&quot;:&quot;9f3c0b7a…&quot;},&quot;path&quot;:&quot;/src&quot;,&quot;items&quot;:[{&quot;name&quot;:&quot;app.ts&quot;,&quot;path&quot;:&quot;/src/app.ts&quot;,&quot;type&quot;:&quot;file&quot;,&quot;size&quot;:5120,&quot;mode&quot;:&quot;0644&quot;},{&quot;name&quot;:&quot;db&quot;,&quot;path&quot;:&quot;/src/db&quot;,&quot;type&quot;:&quot;dir&quot;,&quot;size&quot;:null,&quot;mode&quot;:&quot;0755&quot;}],&quot;next_cursor&quot;:null}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.grep</span><code>layerfs file grep &#x27;login(&#x27; /src --exclude node_modules</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">180 B</span></div><pre>{&quot;commit&quot;:&quot;32ab9e01…&quot;,&quot;items&quot;:[{&quot;path&quot;:&quot;/src/app.ts&quot;,&quot;line&quot;:42,&quot;text&quot;:&quot;export function login(user) {&quot;}],&quot;next_cursor&quot;:null}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">364 B</span></div><pre>{&quot;commit&quot;:{&quot;id&quot;:&quot;32ab9e01…&quot;,&quot;kind&quot;:&quot;Commit&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;root&quot;:&quot;9f3c0b7a…&quot;},&quot;path&quot;:&quot;/src&quot;,&quot;pattern&quot;:&quot;login(&quot;,&quot;items&quot;:[{&quot;path&quot;:&quot;/src/app.ts&quot;,&quot;line&quot;:42,&quot;text&quot;:&quot;export function login(user) {&quot;}],&quot;skipped&quot;:{&quot;binary&quot;:2,&quot;oversized&quot;:0},&quot;next_cursor&quot;:null}</pre></div>
+      </div>
+      <h3>History</h3>
+      <div class="pair">
+        <div class="pair-head"><span class="call">commit.list</span><code>layerfs commit list shop/api agent --page-size 2</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">317 B</span></div><pre>{&quot;items&quot;:[{&quot;commit&quot;:&quot;5c77a1d0…&quot;,&quot;message&quot;:&quot;fix login options&quot;,&quot;created_at&quot;:1794985419000},{&quot;commit&quot;:&quot;12d1c0ff…&quot;,&quot;message&quot;:&quot;Apply filesystem changes&quot;,&quot;created_at&quot;:1794985359000}],&quot;next_cursor&quot;:&quot;q1\u2026&quot;}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">808 B</span></div><pre>{&quot;branch&quot;:&quot;agent&quot;,&quot;items&quot;:[{&quot;commit&quot;:{&quot;id&quot;:&quot;5c77a1d0…&quot;,&quot;kind&quot;:&quot;Commit&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;root&quot;:&quot;9f3c0b7a…&quot;},&quot;parent&quot;:&quot;12d1c0ff…&quot;,&quot;message&quot;:&quot;fix login options&quot;,&quot;message_truncated&quot;:false,&quot;merged_from&quot;:null,&quot;created_at&quot;:1794985419000},{&quot;commit&quot;:{&quot;id&quot;:&quot;12d1c0ff…&quot;,&quot;kind&quot;:&quot;Commit&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;root&quot;:&quot;9f3c0b7a…&quot;},&quot;parent&quot;:&quot;32ab9e01…&quot;,&quot;message&quot;:&quot;Apply filesystem changes&quot;,&quot;message_truncated&quot;:false,&quot;merged_from&quot;:null,&quot;created_at&quot;:1794985359000}],&quot;next_cursor&quot;:&quot;q1\u2026&quot;}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">commit.get</span><code>layerfs commit get shop/api 5c77a1d0</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">231 B</span></div><pre>{&quot;commit&quot;:&quot;5c77a1d0…&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;parent&quot;:&quot;12d1c0ff…&quot;,&quot;message&quot;:&quot;fix login options&quot;,&quot;created_at&quot;:1794985419000}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">596 B</span></div><pre>{&quot;commit&quot;:{&quot;id&quot;:&quot;5c77a1d0…&quot;,&quot;kind&quot;:&quot;Commit&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;root&quot;:&quot;9f3c0b7a…&quot;},&quot;branch&quot;:&quot;agent&quot;,&quot;parent&quot;:&quot;12d1c0ff…&quot;,&quot;second_parent&quot;:null,&quot;base&quot;:&quot;32ab9e01…&quot;,&quot;via&quot;:&quot;workspace&quot;,&quot;message&quot;:&quot;fix login options&quot;,&quot;merged_from&quot;:null,&quot;created_at&quot;:1794985419000,&quot;logical&quot;:52428800,&quot;new_canonical&quot;:5120,&quot;new_stored&quot;:1890,&quot;new_metadata&quot;:412,&quot;displaced&quot;:null,&quot;lww&quot;:[],&quot;lww_count&quot;:0}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">branch.list</span><code>layerfs branch list shop/api</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">146 B</span></div><pre>{&quot;items&quot;:[{&quot;name&quot;:&quot;agent&quot;,&quot;commit&quot;:&quot;5c77a1d0…&quot;,&quot;forked_from&quot;:&quot;main&quot;}],&quot;next_cursor&quot;:null}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">488 B</span></div><pre>{&quot;items&quot;:[{&quot;name&quot;:&quot;agent&quot;,&quot;id&quot;:&quot;b7777777…&quot;,&quot;commit&quot;:{&quot;id&quot;:&quot;5c77a1d0…&quot;,&quot;kind&quot;:&quot;Commit&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;root&quot;:&quot;9f3c0b7a…&quot;},&quot;base&quot;:{&quot;id&quot;:&quot;32ab9e01…&quot;,&quot;kind&quot;:&quot;Layer&quot;,&quot;branch&quot;:&quot;main&quot;,&quot;root&quot;:&quot;9f3c0b7a…&quot;},&quot;forked_from&quot;:&quot;main&quot;}],&quot;next_cursor&quot;:null}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">project.get</span><code>layerfs project get shop/api</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">142 B</span></div><pre>{&quot;project&quot;:&quot;shop/api&quot;,&quot;store&quot;:&quot;shop&quot;,&quot;commit&quot;:&quot;32ab9e01…&quot;,&quot;updated_at&quot;:1794985419000}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">329 B</span></div><pre>{&quot;project&quot;:&quot;shop/api&quot;,&quot;store&quot;:&quot;shop&quot;,&quot;name&quot;:&quot;api&quot;,&quot;type&quot;:&quot;sqlite&quot;,&quot;machine&quot;:&quot;native&quot;,&quot;created_at&quot;:1794899019000,&quot;updated_at&quot;:1794985419000,&quot;commit&quot;:{&quot;id&quot;:&quot;32ab9e01…&quot;,&quot;kind&quot;:&quot;Layer&quot;,&quot;branch&quot;:&quot;main&quot;,&quot;root&quot;:&quot;9f3c0b7a…&quot;}}</pre></div>
+      </div>
+      <h3>Sandbox and Workspace</h3>
+      <div class="pair">
+        <div class="pair-head"><span class="call">sandbox.create</span><code>layerfs sandbox create shop/api tests --mount agent</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">61 B</span></div><pre>{&quot;sandbox&quot;:&quot;tests&quot;,&quot;machine&quot;:&quot;dev&quot;,&quot;workspace&quot;:&quot;tests:agent&quot;}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">287 B</span></div><pre>{&quot;outcome&quot;:&quot;Created&quot;,&quot;sandbox&quot;:&quot;tests&quot;,&quot;project&quot;:&quot;shop/api&quot;,&quot;machine&quot;:&quot;dev&quot;,&quot;platform&quot;:&quot;docker&quot;,&quot;image&quot;:&quot;sha256:44444444…&quot;,&quot;backend&quot;:&quot;namespaces&quot;,&quot;route&quot;:&quot;fuse&quot;,&quot;state&quot;:&quot;running&quot;,&quot;created_at&quot;:1794985419000,&quot;workspace&quot;:&quot;tests:agent&quot;}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">sandbox.get</span><code>layerfs sandbox get tests</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">133 B</span></div><pre>{&quot;sandbox&quot;:&quot;tests&quot;,&quot;state&quot;:&quot;running&quot;,&quot;workspaces&quot;:[{&quot;workspace&quot;:&quot;tests:agent&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;running&quot;:[&quot;exec-9c0f1a2b3c4d5e6f&quot;]}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">486 B</span></div><pre>{&quot;sandbox&quot;:&quot;tests&quot;,&quot;project&quot;:&quot;shop/api&quot;,&quot;machine&quot;:&quot;dev&quot;,&quot;platform&quot;:&quot;docker&quot;,&quot;image&quot;:&quot;sha256:44444444…&quot;,&quot;backend&quot;:&quot;namespaces&quot;,&quot;route&quot;:&quot;fuse&quot;,&quot;state&quot;:&quot;running&quot;,&quot;created_at&quot;:1794985419000,&quot;workspace_capacity&quot;:16,&quot;workspaces&quot;:[{&quot;workspace&quot;:&quot;tests:agent&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;path&quot;:&quot;/workspace&quot;,&quot;commit&quot;:&quot;3a54ebd6…&quot;,&quot;mounted_at&quot;:1794985419000,&quot;running&quot;:[&quot;exec-9c0f1a2b3c4d5e6f&quot;]}]}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">workspace.mount</span><code>layerfs workspace mount tests agent</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">125 B</span></div><pre>{&quot;workspace&quot;:&quot;tests:agent&quot;,&quot;path&quot;:&quot;/workspace&quot;,&quot;commit&quot;:&quot;3a54ebd6…&quot;}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">412 B</span></div><pre>{&quot;outcome&quot;:&quot;Mounted&quot;,&quot;workspace&quot;:&quot;tests:agent&quot;,&quot;path&quot;:&quot;/workspace&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;commit&quot;:{&quot;id&quot;:&quot;3a54ebd6…&quot;,&quot;kind&quot;:&quot;Commit&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;root&quot;:&quot;9f3c0b7a…&quot;},&quot;base_layer&quot;:&quot;32ab9e01…&quot;,&quot;id&quot;:&quot;5e1f9a0c…&quot;,&quot;namespace&quot;:7}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">workspace.exec</span><code>layerfs workspace exec &quot;npm test&quot;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">51 B</span></div><pre>{&quot;exit_code&quot;:0,&quot;stdout&quot;:&quot;42 passing\n&quot;,&quot;stderr&quot;:&quot;&quot;}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">155 B</span></div><pre>{&quot;exit_code&quot;:0,&quot;stdout&quot;:&quot;42 passing\n&quot;,&quot;stderr&quot;:&quot;&quot;,&quot;exec_id&quot;:&quot;exec-9c0f1a2b3c4d5e6f&quot;,&quot;stop&quot;:&quot;cgroup&quot;,&quot;stdout_bytes&quot;:11,&quot;stderr_bytes&quot;:0,&quot;duration_ms&quot;:8123}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">workspace.status</span><code>layerfs workspace status</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">152 B</span></div><pre>{&quot;commit&quot;:&quot;3a54ebd6…&quot;,&quot;changes&quot;:[{&quot;path&quot;:&quot;/src/app.ts&quot;,&quot;change&quot;:&quot;Modified&quot;}],&quot;changes_count&quot;:1}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">527 B</span></div><pre>{&quot;commit&quot;:{&quot;id&quot;:&quot;3a54ebd6…&quot;,&quot;kind&quot;:&quot;Commit&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;root&quot;:&quot;9f3c0b7a…&quot;},&quot;base_layer&quot;:&quot;32ab9e01…&quot;,&quot;branch_head&quot;:&quot;3a54ebd6…&quot;,&quot;branch_moved&quot;:false,&quot;changes&quot;:[{&quot;path&quot;:&quot;/src/app.ts&quot;,&quot;change&quot;:&quot;Modified&quot;}],&quot;changes_count&quot;:1,&quot;activity&quot;:&quot;Idle&quot;,&quot;overlay&quot;:{&quot;inodes&quot;:412,&quot;entries&quot;:388,&quot;pending_merge&quot;:0}}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">workspace.commit</span><code>layerfs workspace commit -m &#x27;fix login options&#x27;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">79 B</span></div><pre>{&quot;commit&quot;:&quot;5c77a1d0…&quot;}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">422 B</span></div><pre>{&quot;outcome&quot;:&quot;Committed&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;commit&quot;:{&quot;id&quot;:&quot;5c77a1d0…&quot;,&quot;kind&quot;:&quot;Commit&quot;,&quot;branch&quot;:&quot;agent&quot;,&quot;root&quot;:&quot;9f3c0b7a…&quot;},&quot;parent&quot;:&quot;12d1c0ff…&quot;,&quot;message&quot;:&quot;fix login options&quot;,&quot;created_at&quot;:1794985419000,&quot;merged&quot;:false,&quot;displaced&quot;:null,&quot;lww&quot;:[],&quot;lww_count&quot;:0}</pre></div>
+      </div>
+      <h3>Machines, Stores, doctors, refusals</h3>
+      <div class="pair">
+        <div class="pair-head"><span class="call">machine.get</span><code>layerfs machine get dev</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">129 B</span></div><pre>{&quot;name&quot;:&quot;dev&quot;,&quot;platform&quot;:&quot;lima&quot;,&quot;state&quot;:&quot;running&quot;,&quot;live&quot;:{&quot;state&quot;:&quot;running&quot;,&quot;disk_free&quot;:52613349376,&quot;observed_at&quot;:1794985419000}}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">400 B</span></div><pre>{&quot;name&quot;:&quot;dev&quot;,&quot;platform&quot;:&quot;lima&quot;,&quot;backend&quot;:&quot;namespaces&quot;,&quot;state&quot;:&quot;running&quot;,&quot;cpus&quot;:4,&quot;memory&quot;:8589934592,&quot;disk&quot;:68719476736,&quot;supports&quot;:{&quot;sqlite&quot;:true,&quot;postgresql_sandbox&quot;:true,&quot;log&quot;:true,&quot;resize&quot;:true,&quot;images&quot;:true},&quot;stores&quot;:[&quot;shop&quot;],&quot;sandboxes&quot;:[&quot;tests&quot;],&quot;op&quot;:null,&quot;tool_version&quot;:&quot;limactl version 2.2.1&quot;,&quot;live&quot;:{&quot;state&quot;:&quot;running&quot;,&quot;disk_free&quot;:52613349376,&quot;down_reason&quot;:null,&quot;observed_at&quot;:1794985419000}}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">store.get</span><code>layerfs store get shop</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">120 B</span></div><pre>{&quot;name&quot;:&quot;shop&quot;,&quot;type&quot;:&quot;sqlite&quot;,&quot;machine&quot;:&quot;dev&quot;,&quot;projects&quot;:[&quot;api&quot;,&quot;web&quot;],&quot;backups&quot;:[{&quot;bucket&quot;:&quot;r2-main&quot;,&quot;behind&quot;:false}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">509 B</span></div><pre>{&quot;name&quot;:&quot;shop&quot;,&quot;type&quot;:&quot;sqlite&quot;,&quot;machine&quot;:&quot;dev&quot;,&quot;profile&quot;:&quot;disposable&quot;,&quot;sqlite&quot;:&quot;3.53.2&quot;,&quot;created_at&quot;:1794899019000,&quot;projects&quot;:[&quot;api&quot;,&quot;web&quot;],&quot;backups&quot;:[{&quot;bucket&quot;:&quot;r2-main&quot;,&quot;file&quot;:&quot;shop&quot;,&quot;behind&quot;:false,&quot;heads&quot;:&quot;88888888…&quot;,&quot;sha256&quot;:&quot;88888888…&quot;,&quot;last&quot;:{&quot;op&quot;:&quot;create&quot;,&quot;at&quot;:1794981819000,&quot;bytes&quot;:213263952}}],&quot;last_transfer&quot;:{&quot;call&quot;:&quot;push&quot;,&quot;from&quot;:&quot;native&quot;,&quot;to&quot;:&quot;dev&quot;,&quot;at&quot;:1794978219000,&quot;bytes&quot;:213263952}}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">machine.doctor</span><code>layerfs machine doctor dev</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">11 B</span></div><pre>{&quot;ok&quot;:true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">325 B</span></div><pre>{&quot;ok&quot;:true,&quot;complete&quot;:true,&quot;target&quot;:{&quot;kind&quot;:&quot;machine&quot;,&quot;name&quot;:&quot;dev&quot;},&quot;observed_at&quot;:1794985419000,&quot;counts&quot;:{&quot;pass&quot;:4,&quot;warning&quot;:0,&quot;error&quot;:0},&quot;checks&quot;:[{&quot;check&quot;:&quot;worker.reachable&quot;,&quot;severity&quot;:&quot;pass&quot;},{&quot;check&quot;:&quot;worker.build&quot;,&quot;severity&quot;:&quot;pass&quot;},{&quot;check&quot;:&quot;disk.free&quot;,&quot;severity&quot;:&quot;pass&quot;},{&quot;check&quot;:&quot;daemon.capacity&quot;,&quot;severity&quot;:&quot;pass&quot;}]}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">a refusal</span><code>layerfs file write /src/app.ts --expected 32ab9e01 &lt; app.ts</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · default</span><span class="bytes">146 B</span></div><pre>{&quot;error&quot;:&quot;Conflict&quot;,&quot;message&quot;:&quot;agent moved since 32ab9e01; head is now 7a0b11c2&quot;,&quot;fix&quot;:&quot;read the file again, then write with --expected 7a0b11c2&quot;}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · --detail</span><span class="bytes">330 B</span></div><pre>{&quot;error&quot;:&quot;Conflict&quot;,&quot;message&quot;:&quot;agent moved since 32ab9e01; head is now 7a0b11c2&quot;,&quot;fix&quot;:&quot;read the file again, then write with --expected 7a0b11c2&quot;,&quot;detail&quot;:{&quot;branch&quot;:&quot;agent&quot;,&quot;expected&quot;:&quot;32ab9e01…&quot;,&quot;head&quot;:&quot;7a0b11c2…&quot;}}</pre></div>
+      </div>
+      </div>
+    </section>
+
+    <section id="why">
+      <h2>Why this shape</h2>
+      <div class="why-grid">
+        <div class="why">
+          <h3>Agents pay for every byte</h3>
+          <p>An agent reads every result into its context, on every call. Today a file write answers about 650 B for one id, and <code>workspace.exec</code> wraps every command's output in 138 B of fields an agent never reads.</p>
+          <p class="ev">mirage, drive9 and cloudflare/computer all answer writes with the path or one id, and command runs with exit code and output.</p>
+        </div>
+        <div class="why">
+          <h3>A result feeds the next call</h3>
+          <p>The id a call returns is named like the argument the next call takes: <code>commit</code> out, <code>commit</code> or <code>--at</code> in; <code>workspace</code> from mount, <code>workspace</code> into exec.</p>
+          <p class="ev">Today <code>workspace.mount</code> answers a 32-hex token in <code>workspace</code>, which exec does not accept; the handle is in <code>ws</code>.</p>
+        </div>
+        <div class="why">
+          <h3>One question, one call</h3>
+          <p>Three pairs of calls answered the same question with different shapes (<code>commit.*</code>/<code>branch.*</code> history), and Store kinds were split into separate calls. Kind and platform are data on the record, not part of the name.</p>
+          <p class="ev"><code>commit.get</code> pages a Branch's history on the caller's side, about 21 Store calls for a 1000-Commit history.</p>
+        </div>
+        <div class="why">
+          <h3>A screen gets what it needs in one call</h3>
+          <p>Every UI call is a CLI process in a lane of 4. The Storage list makes four reads per project plus a size call per row; the History tab can read about 625 pages; the Machines view probes every machine every 5 s.</p>
+          <p class="ev">So list calls carry the summary a row shows, and probes are explicit options.</p>
+        </div>
+        <div class="why">
+          <h3>Simple, but not by dropping history</h3>
+          <p>The simple examples have no Branches, Commits, shared Store or several machines. LayerFS keeps all of these; it hides them behind defaults, short ids and the long form, not by removing them.</p>
+          <p class="ev">Their automatic retries, idle shutdown and output files inside the workspace break LayerFS rules and are not copied.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="rules">
+      <h2>Rules for every call</h2>
+      <div class="rules">
+        <div class="rule"><div class="k">Call form</div><div class="d"><span><code>layerfs &lt;family&gt; &lt;call&gt; &lt;positionals&gt; [--options]</code>. Two levels only. Positionals go from the outside in: owner, Branch, path or new name, other inputs.</span></div></div>
+        <div class="rule"><div class="k">Short and long</div><div class="d"><span>Default is the short form. <code>--detail</code> adds fields already read. Cost options add reads and answer under their own key.</span></div></div>
+        <div class="rule"><div class="k">Argument names</div><div class="d"><span>An existing thing is named by its own word: <code>project</code>, <code>branch</code>, <code>workspace</code>, <code>sandbox</code>, <code>machine</code>, <code>store</code>, <code>bucket</code>. <code>name</code> only for the thing a call creates.</span></div></div>
+        <div class="rule"><div class="k">Commits in</div><div class="d"><span>Reads pin a Commit with <code>--at &lt;commit&gt;</code> (a full id or a prefix of 8+ characters, resolved by the Store). Writes take <code>--expected &lt;commit&gt;</code> and refuse <code>Conflict</code>, naming the current head, if the Branch moved.</span></div></div>
+        <div class="rule"><div class="k">Commits out</div><div class="d"><span>A plain id string named <code>commit</code>, the same word as the input, so it can be passed straight back. The full <code>{id, kind, branch, root}</code> reference is in the long form only.</span></div></div>
+        <div class="rule"><div class="k">No echo, no empties</div><div class="d"><span>A single-target result doesn't repeat the project, Branch, path or name it was given; list items always carry their identity. Null, false and empty fields are left out of the short form.</span></div></div>
+        <div class="rule"><div class="k">Paging</div><div class="d"><span>In: <code>--page-size N --cursor C</code>, default 100, at most 1000. Out: <code>{"items":[…],"next_cursor":"…"|null}</code>. A page ends early at 64 KiB and returns a cursor; it is never refused <code>Capacity</code>. The cursor alone continues: it carries the pins and filters.</span></div></div>
+        <div class="rule"><div class="k">Windows</div><div class="d"><span>Text by lines: <code>--offset N --limit N</code> (default 2000 lines), answering <code>next_offset</code>. Logs by lines: <code>--cursor</code>/<code>--before</code> and <code>--limit</code>, with <code>has_more</code>. Bytes (UI file views): <code>--byte-offset</code>/<code>--byte-length</code>.</span></div></div>
+        <div class="rule"><div class="k">Inline lists</div><div class="d"><span>A list inside a result (conflicts, LWW facts, overwritten Layers, changes) shows its first 20 entries plus <code>&lt;field&gt;_count</code>. The rest comes from the call that owns the list, with a cursor. A field never changes type when cut.</span></div></div>
+        <div class="rule"><div class="k">No result tag</div><div class="d"><span>The short form has no <code>kind</code>. A write answers its <code>commit</code>; a create answers the new handle; an action with nothing to return answers <code>{"ok":true}</code>. When an outcome can differ, a plain field says how: <code>unchanged</code>, <code>merged</code>, <code>cancelled</code>, <code>conflicts</code>, <code>auto_resolved</code>. The long form names it in <code>outcome</code>.</span></div></div>
+        <div class="rule"><div class="k">Result fields</div><div class="d"><span>A Store's engine is <code>type</code>. Times are <code>*_at</code> in epoch ms; durations <code>*_ms</code>. Free disk is <code>disk_free</code>. Lists are <code>items</code>. Plain words over jargon: <code>auto_resolved</code>, not <code>lww</code>.</span></div></div>
+        <div class="rule"><div class="k">Refusals</div><div class="d"><span><code>{"error","message","fix"}</code>: <code>error</code> holds the code, so failure is the presence of <code>error</code> (and a non-zero exit). <code>detail</code> only in the long form. <code>fix</code> names the next call, e.g. <code>layerfs branch fork shop/api mywork main</code> for a write to <code>main</code>. A wrong argument count prints the usage line.</span></div></div>
+        <div class="rule"><div class="k">Errors</div><div class="d"><span>One code per meaning: <code>NotFound</code>, <code>Exists</code>, <code>Capacity</code>, <code>Conflict</code>, <code>Busy</code>, <code>Unavailable</code>, <code>Unknown</code>.</span></div></div>
+        <div class="rule"><div class="k">Progress</div><div class="d"><span><code>--progress</code> (<code>on_progress</code>) on every call that can take seconds, one event shape <code>{"phase","done","total"}</code>.</span></div></div>
+      </div>
+    </section>
+
+    <section id="agent">
+      <h2>Agent profile</h2>
+      <p>Agents get a small set of tools. Operators and UIs keep the full table. Every call names its project and Branch, or its Workspace, explicitly, as today: LayerFS adds no environment variables or bound context.</p>
+      <div class="rules">
+        <div class="rule"><div class="k">Branch tools</div><div class="d"><span><code>file.read</code>, <code>file.list</code>, <code>file.glob</code>, <code>file.grep</code>, <code>file.write</code>, <code>file.edit</code>, <code>file.rm</code>, <code>file.mv</code>, <code>commit.list</code>, <code>commit.diff</code>. Each write is one Commit on the named Branch. For small changes without a Sandbox.</span></div></div>
+        <div class="rule"><div class="k">Workspace tools</div><div class="d"><span><code>workspace.exec</code>, <code>workspace.status</code>, <code>workspace.commit</code>, plus <code>sandbox.create --mount</code> to get one. Files are read and written through the mount by the commands the agent runs.</span></div></div>
+        <div class="rule"><div class="k">Hidden by default</div><div class="d"><span>machine, store, backup, home and the doctors, behind the MCP server's full profile. Write tools are hidden when the caller cannot write; a write to <code>main</code> is refused with a <code>fix</code> naming <code>branch fork</code>.</span></div></div>
+      </div>
+    </section>
+
+    <section aria-label="Families">
+      <div class="tools">
+        <input type="search" id="filter" placeholder="Filter calls, e.g. exec or cursor" aria-label="Filter calls">
+        <label><input type="checkbox" id="changed"> Changed only</label>
+        <div class="legend">
+          <span class="badge b-kept">kept</span>
+          <span class="badge b-extended">extended</span>
+          <span class="badge b-renamed">renamed / reshaped</span>
+          <span class="badge b-merged">merged</span>
+          <span class="badge b-new">new</span>
+        </div>
+      </div>
+      <p class="small">Outputs are the proposed shape, one line of JSON on stdout. Field names come from today's results, renamed by the rules. Ids are shortened here for reading; JSON carries them in full (<code>--text</code> shortens them to 12 characters). Example values are illustrative.</p>
+    </section>
+
+    <!-- PROJECT -->
+    <section class="fam" id="f-project">
+      <div class="fam-head"><h2>project</h2><span class="who">agents</span><span class="c">7 → 7</span><p>Projects in the home. Rows carry what a list shows; the Store's engine and machine come from the Store.</p></div>
+      <div class="tbl"><table>
+        <thead><tr><th>Call</th><th>Input (CLI)</th><th>Short form (default)</th><th>Long form adds</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr data-changed><td class="call">project.init</td><td class="cli">layerfs project init &lt;project&gt; &lt;folder&gt; [--timeout 1h] [--progress]</td><td class="out">{"project":"shop/api","commit":"32ab9e01"}</td><td class="long">store, type, machine, created_at, full reference</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">project.list</td><td class="cli">layerfs project list [store] [--include-storage] [--page-size 100] [--cursor C]</td><td class="out">{"items":[{"project":"shop/api","updated_at":1794985419000}],"next_cursor":null}</td><td class="long">created_at, main's commit; <code>--include-storage</code>: files, bytes</td><td class="chg"><span class="badge b-extended">extended</span><span class="note">no Store engine or machine on rows</span></td></tr>
+          <tr data-changed><td class="call">project.get</td><td class="cli">layerfs project get &lt;project&gt; [--include-storage]</td><td class="out">{"project":"shop/api","store":"shop","commit":"32ab9e01","updated_at":…}</td><td class="long">created_at, type, machine</td><td class="chg"><span class="badge b-extended">extended</span></td></tr>
+          <tr data-changed><td class="call">project.stats</td><td class="cli">layerfs project stats &lt;project&gt; [branch] [--at C]</td><td class="out">{"commit":"32ab9e01","files":1834,"directories":212,"symlinks":3,"bytes":52428800}</td><td class="long">full reference; <code>complete:false</code> and <code>reason</code> always shown when partial</td><td class="chg"><span class="badge b-renamed">reshaped</span><span class="note"><code>logical</code> → <code>bytes</code></span></td></tr>
+          <tr data-changed><td class="call">project.export</td><td class="cli">layerfs project export &lt;project&gt; &lt;destination&gt; [branch] [--progress]</td><td class="out">{"commit":"32ab9e01","files":1834,"bytes":52428800}</td><td class="long">directories, symlinks, node, root</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">project.delete</td><td class="cli">layerfs project delete &lt;project&gt; [--progress]</td><td class="out">{"ok":true}</td><td class="long">—</td><td class="chg"><span class="badge b-extended">progress</span><span class="note">adds <code>"home_entry_removed":false</code> when the home entry stayed, so a second call is needed</span></td></tr>
+          <tr data-changed><td class="call">project.hide_path</td><td class="cli">layerfs project hide-path &lt;project&gt; &lt;path&gt;</td><td class="out">{"ok":true}</td><td class="long">—</td><td class="chg"><span class="badge b-renamed">renamed</span><span class="note">was <code>remove_file</code></span></td></tr>
+        </tbody>
+      </table></div>
+      <ul class="fam-why">
+        <li><b>Why <code>hide_path</code>:</b> an agent meeting <code>remove_file</code> cold will use it like <code>file.rm</code>, and hide a path from the project's whole history.</li>
+        <li><b>Why no engine or machine on rows:</b> they belong to the Store and repeat on every project. The UI already joins Store state separately.</li>
+        <li><b>Why storage is opt-in:</b> files and bytes need accounting kept at publish, or a tree walk. A walk with a 10,000-entry budget comes back partial for any repo with <code>node_modules</code>.</li>
+      </ul>
+    </section>
+
+    <!-- FILE -->
+    <section class="fam" id="f-file">
+      <div class="fam-head"><h2>file</h2><span class="who">agents</span><span class="c">15 → 15</span><p>Files on a Branch. Names match the tools agents already know (read, list, glob, grep, write, edit). Each write is one Commit.</p></div>
+      <div class="tbl"><table>
+        <thead><tr><th>Call</th><th>Input (CLI)</th><th>Short form (default)</th><th>Long form adds</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr data-changed><td class="call">file.read</td><td class="cli">layerfs file read &lt;project&gt; &lt;branch&gt; &lt;path&gt; [--at C] [--offset 0] [--limit 2000]</td><td class="out">{"commit":"12d1c0ff","size":5120,"text":"…","next_offset":null}
+binary: {"commit":"12d1c0ff","size":90112,"binary":true}</td><td class="long">mode, full reference, line count</td><td class="chg"><span class="badge b-renamed">reshaped</span><span class="note"><code>commit</code> is what <code>--expected</code> takes on the next write</span></td></tr>
+          <tr data-changed><td class="call">file.stat</td><td class="cli">layerfs file stat &lt;project&gt; &lt;branch&gt; &lt;path&gt; [--at C]</td><td class="out">{"commit":"12d1c0ff","type":"file","size":5120,"mode":"0644"}</td><td class="long">modified_at, full reference</td><td class="chg"><span class="badge b-renamed">reshaped</span><span class="note">mode as an octal string</span></td></tr>
+          <tr data-changed><td class="call">file.list</td><td class="cli">layerfs file list &lt;project&gt; &lt;branch&gt; &lt;path&gt; [--at C] [--page-size 100] [--cursor C]</td><td class="out">{"commit":"12d1c0ff","items":[{"path":"/src/app.ts","type":"file"}],"next_cursor":null}</td><td class="long">size, mode per entry</td><td class="chg"><span class="badge b-renamed">paging</span></td></tr>
+          <tr data-changed><td class="call">file.glob</td><td class="cli">layerfs file glob &lt;project&gt; &lt;branch&gt; &lt;pattern&gt; [path] [--exclude node_modules] [--at C] [--page-size 100]</td><td class="out">{"commit":"12d1c0ff","items":["/src/app.ts","/src/db.ts"],"next_cursor":null}</td><td class="long">—</td><td class="chg"><span class="badge b-renamed">reshaped</span><span class="note">pattern first, path defaults to <code>/</code>; items are paths</span></td></tr>
+          <tr data-changed><td class="call">file.grep</td><td class="cli">layerfs file grep &lt;project&gt; &lt;branch&gt; &lt;pattern&gt; [path] [--include '*.ts'] [--exclude node_modules] [--ignore-case] [--at C] [--page-size 100]</td><td class="out">{"commit":"12d1c0ff","items":[{"path":"/src/app.ts","line":42,"text":"…"}],"next_cursor":null}</td><td class="long">skipped (binary/oversized files)</td><td class="chg"><span class="badge b-extended">extended</span><span class="note">today the pattern is literal while help says regex; see open decisions</span></td></tr>
+          <tr data-changed><td class="call">file.history</td><td class="cli">layerfs file history &lt;project&gt; &lt;branch&gt; &lt;path&gt; [--at C] [--page-size 100] [--cursor C]</td><td class="out">{"items":[{"commit":"12d1c0ff","change":"Modified","message":"fix login","created_at":…}],"next_cursor":null}</td><td class="long">before/after facts, scan block</td><td class="chg"><span class="badge b-renamed">renamed</span><span class="note">was <code>revision</code></span></td></tr>
+          <tr data-changed><td class="call">file.blame</td><td class="cli">layerfs file blame &lt;project&gt; &lt;branch&gt; &lt;path&gt; [--at C] [--offset 0] [--limit 2000]</td><td class="out">{"commit":"12d1c0ff","ranges":[{"from":1,"to":40,"commit":"7a0b11c2"}],
+ "commits":{"7a0b11c2":{"message":"init","created_at":…}},"next_offset":null}</td><td class="long">the line text</td><td class="chg"><span class="badge b-renamed">reshaped</span><span class="note">runs of lines, each Commit's message once</span></td></tr>
+          <tr data-changed><td class="call">file.diff</td><td class="cli">layerfs file diff &lt;project&gt; &lt;path&gt; &lt;from&gt; &lt;to&gt; [--to-path P]</td><td class="out">{"change":"Modified","patch":"@@ -1 +1 @@\n-one\n+uno\n"}</td><td class="long">per-line attribution rows</td><td class="chg"><span class="badge b-renamed">reshaped</span><span class="note"><code>from</code>/<code>to</code> are Branches or Commits; was five positionals</span></td></tr>
+          <tr data-changed><td class="call">file.write</td><td class="cli">echo hi | layerfs file write &lt;project&gt; &lt;branch&gt; &lt;path&gt; [--mode 0644] [--expected C] [-m MSG]</td><td class="out">{"commit":"12d1c0ff"}</td><td class="long">branch, parent, message, created_at, full reference</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">file.edit</td><td class="cli">layerfs file edit &lt;project&gt; &lt;branch&gt; &lt;path&gt; --old-string T --new-string T [--replace-all] [--expected C] [-m MSG]</td><td class="out">{"commit":"12d1c0ff","first_changed_line":42}</td><td class="long">a short unified diff</td><td class="chg"><span class="badge b-extended">extended</span><span class="note">agents' own Edit names; SDK also takes <code>edits:[{old_string,new_string}]</code></span></td></tr>
+          <tr data-changed><td class="call">file.rm</td><td class="cli">layerfs file rm &lt;project&gt; &lt;branch&gt; &lt;path&gt; [--expected C] [-m MSG]</td><td class="out">{"commit":"12d1c0ff"}</td><td class="long">as write</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">file.mkdir</td><td class="cli">layerfs file mkdir &lt;project&gt; &lt;branch&gt; &lt;path&gt; [--mode 0755] [-m MSG]</td><td class="out">{"commit":"12d1c0ff"}</td><td class="long">as write</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">file.mv</td><td class="cli">layerfs file mv &lt;project&gt; &lt;branch&gt; &lt;from_path&gt; &lt;to_path&gt; [--expected C] [-m MSG]</td><td class="out">{"commit":"12d1c0ff"}</td><td class="long">as write</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">file.cp</td><td class="cli">layerfs file cp &lt;project&gt; &lt;branch&gt; &lt;from_path&gt; &lt;to_path&gt; [--expected C] [-m MSG]</td><td class="out">{"commit":"12d1c0ff"}</td><td class="long">as write</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">file.apply</td><td class="cli">layerfs file apply &lt;project&gt; &lt;branch&gt; [--expected C] [-m MSG] &lt; changes.json</td><td class="out">{"commit":"12d1c0ff"}</td><td class="long">as write</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+        </tbody>
+      </table></div>
+      <ul class="fam-why">
+        <li><b>Why the short write result:</b> today a write answers <code>branch</code>, <code>head</code> and the full Commit record, which holds the head again (~650 B). An agent needs only the id.</li>
+        <li><b>Why <code>commit</code> on reads and <code>--expected</code> on writes:</b> an agent that read a file can write it back only if nothing changed since. This is mirage's stale-write guard, made stateless for separate CLI processes.</li>
+        <li><b>Why <code>--exclude</code>:</b> a LayerFS Workspace keeps <code>node_modules</code> and <code>.git</code>. Skipping a whole folder, rather than walking and filtering, matters more here than anywhere else.</li>
+        <li><b>Why the single writes stay:</b> agents use them as tools named for the action. Folding them into <code>file.apply</code> would save six calls and cost ease of use.</li>
+        <li><b>Why <code>file.read</code> answers <code>size</code>:</b> opening a file in the UI is <code>file.stat</code> then <code>file.read</code>, two serial processes, today.</li>
+      </ul>
+    </section>
+
+    <!-- SANDBOX -->
+    <section class="fam" id="f-sandbox">
+      <div class="fam-head"><h2>sandbox</h2><span class="who">agents</span><span class="c">5 → 7</span><p>A place to run commands. One call can start it and mount a Branch.</p></div>
+      <div class="tbl"><table>
+        <thead><tr><th>Call</th><th>Input (CLI)</th><th>Short form (default)</th><th>Long form adds</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr data-changed><td class="call">sandbox.create</td><td class="cli">layerfs sandbox create &lt;project&gt; &lt;name&gt; [machine] [--image I] [--mount BRANCH] [--progress]</td><td class="out">{"sandbox":"tests","machine":"dev"}
+with --mount: …,"workspace":"tests:agent"}</td><td class="long">platform, image digest, backend, route, created_at</td><td class="chg"><span class="badge b-extended">extended</span><span class="note"><code>--mount</code>: create then exec in one step</span></td></tr>
+          <tr data-changed><td class="call">sandbox.list</td><td class="cli">layerfs sandbox list [project] [--live] [--page-size 100] [--cursor C]</td><td class="out">{"items":[{"sandbox":"tests","project":"shop/api","state":"running","workspaces":["agent"]}],"next_cursor":null}</td><td class="long">machine, created_at, image</td><td class="chg"><span class="badge b-extended">extended</span></td></tr>
+          <tr data-changed><td class="call">sandbox.get</td><td class="cli">layerfs sandbox get &lt;sandbox&gt; [--usage]</td><td class="out">{"sandbox":"tests","state":"running","workspaces":[{"workspace":"tests:agent","branch":"agent","running":["exec-9c0f"]}]}</td><td class="long">record fields; <code>--usage</code>: daemon, memory, overlay bytes (dials the daemon)</td><td class="chg"><span class="badge b-renamed">reshaped</span><span class="note">no paging (≤ 16 Workspaces)</span></td></tr>
+          <tr data-changed><td class="call">sandbox.close</td><td class="cli">layerfs sandbox close &lt;sandbox&gt; [--force] [--progress]</td><td class="out">{"ok":true}</td><td class="long"><code>unknown</code> always shown when non-empty</td><td class="chg"><span class="badge b-extended">progress</span></td></tr>
+          <tr data-changed><td class="call">sandbox.files</td><td class="cli">layerfs sandbox files &lt;sandbox&gt; [path] [--depth 2] [--page-size 100] [--cursor C] [--byte-offset 0] [--byte-length 262144]</td><td class="out">{"type":"folder","items":[{"name":"src","type":"folder"}],"next_cursor":null}</td><td class="long">size, mode, modified_at, role, depth</td><td class="chg"><span class="badge b-renamed">reshaped</span><span class="note">quiet; UI only</span></td></tr>
+          <tr data-changed><td class="call">sandbox.log</td><td class="cli">layerfs sandbox log &lt;sandbox&gt; [--cursor C | --before C] [--limit 200]</td><td class="out">{"lines":["…"],"next_cursor":"…","has_more":false}</td><td class="long">prev_cursor, continued flags</td><td class="chg"><span class="badge b-renamed">moved</span><span class="note">was logs.sandbox</span></td></tr>
+          <tr data-changed><td class="call">sandbox.doctor</td><td class="cli">layerfs sandbox doctor &lt;sandbox&gt; [--timeout 30s]</td><td class="out">{"ok":true}  or  {"ok":false,"findings":[{"check":"daemon.reachable","severity":"error","message":"…","fix":"layerfs sandbox close tests --force"}]}</td><td class="long">passing checks, evidence, counts, observed_at</td><td class="chg"><span class="badge b-new">new</span></td></tr>
+        </tbody>
+      </table></div>
+      <ul class="fam-why">
+        <li><b>Why <code>--mount</code> on create:</b> the common agent path is "start, mount, run". cloudflare/computer has no setup step at all; LayerFS keeps explicit steps but lets one call do the first two. <code>workspace.mount</code> stays for a second Branch.</li>
+        <li><b>Why the short Sandbox record:</b> today a record repeats <code>runtime</code> as <code>backend</code>, and list rows, get and create are the same full record because the view argument is ignored.</li>
+        <li><b>Why <code>--usage</code>:</b> <code>sandbox.get</code> always dials the daemon today. The UI's Sandboxes tab calls it for every Sandbox only to show Workspace names.</li>
+      </ul>
+    </section>
+
+    <!-- WORKSPACE -->
+    <section class="fam" id="f-workspace">
+      <div class="fam-head"><h2>workspace</h2><span class="who">agents</span><span class="c">6 → 7</span><p>A Branch mounted in a Sandbox. The handle is <code>sandbox:name</code>, and the name defaults to the Branch: <code>tests:agent</code>.</p></div>
+      <div class="tbl"><table>
+        <thead><tr><th>Call</th><th>Input (CLI)</th><th>Short form (default)</th><th>Long form adds</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr data-changed><td class="call">workspace.list</td><td class="cli">layerfs workspace list [sandbox]</td><td class="out">{"items":[{"workspace":"tests:agent","branch":"agent"}]}</td><td class="long">path, base commit, mounted_at</td><td class="chg"><span class="badge b-new">new</span><span class="note">the call an agent will guess</span></td></tr>
+          <tr data-changed><td class="call">workspace.mount</td><td class="cli">layerfs workspace mount &lt;sandbox&gt; &lt;branch&gt; [--name N]</td><td class="out">{"workspace":"tests:agent","path":"/workspace","commit":"3a54ebd6"}</td><td class="long">id, namespace, base layer, root</td><td class="chg"><span class="badge b-renamed">reshaped</span><span class="note"><code>workspace</code> is now the handle exec takes</span></td></tr>
+          <tr data-changed><td class="call">workspace.exec</td><td class="cli">layerfs workspace exec &lt;workspace&gt; "npm test" [--stream] [--progress]</td><td class="out">{"exit_code":0,"stdout":"…","stderr":""}
+long output: last 2000 lines or 64 KiB, plus "stdout_log":"/…/exec-9c0f.stdout"
+cancelled: …,"cancelled":true}</td><td class="long">exec_id, stop scope, stdout_bytes, duration_ms</td><td class="chg"><span class="badge b-renamed">reshaped</span><span class="note">exec id stays the first progress event</span></td></tr>
+          <tr data-changed><td class="call">workspace.exec_cancel</td><td class="cli">layerfs workspace exec-cancel &lt;workspace&gt; &lt;exec_id&gt; [--grace-ms 5000]</td><td class="out">{"cancelled":true,"signal":"SIGTERM"}  or  {"cancelled":false,"reason":"already ended"}</td><td class="long">—</td><td class="chg"><span class="badge b-renamed">reshaped</span><span class="note">an unknown outcome becomes the <code>Unknown</code> refusal</span></td></tr>
+          <tr data-changed><td class="call">workspace.commit</td><td class="cli">layerfs workspace commit &lt;workspace&gt; [-m MSG] [--force] [--progress]</td><td class="out">{"commit":"3a54ebd6"}
+after a merge: …,"merged":true,"auto_resolved":2}</td><td class="long">full reference, LWW list (first 20), displaced head</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">workspace.unmount</td><td class="cli">layerfs workspace unmount &lt;workspace&gt; [--discard] [--force]</td><td class="out">{"ok":true}</td><td class="long">force facts</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">workspace.status</td><td class="cli">layerfs workspace status &lt;workspace&gt;</td><td class="out">{"commit":"3a54ebd6","changes":[{"path":"/src/app.ts","change":"Modified"}],"changes_count":1}
+when the Branch moved: …,"branch_moved":true}</td><td class="long">base layer, overlay counters, activity</td><td class="chg"><span class="badge b-extended">extended</span><span class="note">today it gives counts, not paths</span></td></tr>
+        </tbody>
+      </table></div>
+      <ul class="fam-why">
+        <li><b>Why exec is three fields:</b> today every command also carries <code>kind:"exit:0"</code> (repeats <code>exit_code</code>), <code>message</code> (echoes the input), <code>stop</code>, and <code>truncated</code>, which the code always sets to false. That is 138 B on every call an agent makes.</li>
+        <li><b>Why tail plus a log path:</b> an agent needs the end of a failing build, not 1 MiB of it. The full output stays readable, in the Sandbox's run folder through <code>sandbox.files</code>, never inside the Workspace, where the next Commit would capture it. This is a display limit, not a cap: <code>--stream</code> still gets every byte.</li>
+        <li><b>Why status lists paths:</b> "what did I change?" is the question before a Commit. The daemon already builds a bounded path list for its Dirty refusal.</li>
+        <li><b>Why <code>workspace.list</code>:</b> an agent will try it. It costs one call and avoids reading Workspaces out of <code>sandbox.get</code>.</li>
+      </ul>
+    </section>
+
+    <!-- BRANCH -->
+    <section class="fam" id="f-branch">
+      <div class="fam-head"><h2>branch</h2><span class="who">agents</span><span class="c">9 → 6</span><p>Branches as names and heads. Reading history moved to <code>commit</code>.</p></div>
+      <div class="tbl"><table>
+        <thead><tr><th>Call</th><th>Input (CLI)</th><th>Short form (default)</th><th>Long form adds</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr data-changed><td class="call">branch.list</td><td class="cli">layerfs branch list &lt;project&gt; [--prefix agent.] [--exclude-prefix dsh.] [--page-size 100] [--cursor C]</td><td class="out">{"items":[{"name":"agent","commit":"12d1c0ff","forked_from":"main"}],"next_cursor":null}</td><td class="long">base, full references, id</td><td class="chg"><span class="badge b-extended">extended</span><span class="note">one <code>commit</code> replaces head/saved_head/base</span></td></tr>
+          <tr data-changed><td class="call">branch.get</td><td class="cli">layerfs branch get &lt;project&gt; &lt;branch&gt;</td><td class="out">{"name":"agent","commit":"12d1c0ff","forked_from":"main"}</td><td class="long">as list</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">branch.fork</td><td class="cli">layerfs branch fork &lt;project&gt; &lt;name&gt; &lt;from_branch&gt; [--at C]</td><td class="out">{"commit":"32ab9e01"}</td><td class="long">base, full references</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">branch.merge</td><td class="cli">layerfs branch merge &lt;project&gt; &lt;name&gt; &lt;a&gt; &lt;b&gt; [--units JSON] [-m MSG] [--progress]</td><td class="out">{"commit":"5c77a1d0"}
+with conflicts or automatic resolutions: …,"conflicts":3,"auto_resolved":2}</td><td class="long">fast_forward, merge_base, sources, conflicts and LWW (first 20 each)</td><td class="chg"><span class="badge b-extended">progress</span></td></tr>
+          <tr data-changed><td class="call">branch.publish</td><td class="cli">layerfs branch publish &lt;project&gt; &lt;branch&gt; [--at C] [--expected-base C] [--expected-head C] [--force]</td><td class="out">{"commit":"32cd0a11"}
+nothing new to publish: {"commit":"32ab9e01","unchanged":true}
+with --force: …,"previous":"32ab9e01","overwritten":3}</td><td class="long">source, based_on, overwritten Layers (first 20)</td><td class="chg"><span class="badge b-renamed">reshaped</span><span class="note">the rest: <code>commit list … main --at &lt;previous&gt;</code></span></td></tr>
+          <tr><td class="call">branch.remove</td><td class="cli">layerfs branch remove &lt;project&gt; &lt;branch&gt;</td><td class="out">{"ok":true}</td><td class="long">—</td><td class="chg"><span class="badge b-kept">kept</span></td></tr>
+        </tbody>
+      </table></div>
+      <ul class="fam-why">
+        <li><b>Why one <code>commit</code> per Branch row:</b> today each row carries three full references (~550 B). What a Branch reads now is one id.</li>
+        <li><b>Why the prefix filters:</b> the UI fetches every Branch, then drops the internal <code>dsh.*</code> ones; the project picker reads every page to find one Branch.</li>
+        <li><b>Why counts on merge and publish:</b> today these lists are cut with a <code>*_truncated</code> flag and no way to fetch the rest. A count plus the owning call fixes both.</li>
+      </ul>
+    </section>
+
+    <!-- COMMIT -->
+    <section class="fam" id="f-commit">
+      <div class="fam-head"><h2>commit</h2><span class="who">agents</span><span class="c">3 → 3</span><p>The only place history is read. Rows read like <code>git log --oneline</code>.</p></div>
+      <div class="tbl"><table>
+        <thead><tr><th>Call</th><th>Input (CLI)</th><th>Short form (default)</th><th>Long form adds</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr data-changed><td class="call">commit.list</td><td class="cli">layerfs commit list &lt;project&gt; &lt;branch&gt; [--at C] [--include-storage] [--page-size 100] [--cursor C]</td><td class="out">{"items":[{"commit":"12d1c0ff","message":"fix login","created_at":…}],"next_cursor":"…"}</td><td class="long">parent, merged_from, message_truncated, full reference; <code>--include-storage</code>: new bytes</td><td class="chg"><span class="badge b-merged">merged</span><span class="note">+ branch.commits</span></td></tr>
+          <tr data-changed><td class="call">commit.get</td><td class="cli">layerfs commit get &lt;project&gt; &lt;commit&gt; [--branch B]</td><td class="out">{"commit":"12d1c0ff","branch":"agent","parent":"7a0b11c2","message":"fix login","created_at":…}</td><td class="long">storage counters, displaced, LWW (first 20 + <code>lww_count</code>, cursor for the rest)</td><td class="chg"><span class="badge b-merged">merged</span><span class="note">+ branch.get_commit; Branch optional</span></td></tr>
+          <tr data-changed><td class="call">commit.diff</td><td class="cli">layerfs commit diff &lt;project&gt; &lt;from&gt; &lt;to&gt; [--patch] [--path-prefix /src] [--page-size 100] [--cursor C]</td><td class="out">{"items":[{"path":"/src/a.ts","change":"Modified"}],"next_cursor":null}</td><td class="long">type when not a file, attribution; <code>--patch</code>: bounded unified hunks</td><td class="chg"><span class="badge b-merged">merged</span><span class="note">+ branch.diff; paths by default</span></td></tr>
+        </tbody>
+      </table></div>
+      <ul class="fam-why">
+        <li><b>Why <code>commit get &lt;project&gt; &lt;commit&gt;</code>:</b> that is what an agent will type. The id already says which Branch it is on.</li>
+        <li><b>Why the Store resolves prefixes:</b> today <code>commit.get</code> pages history on the caller's side, about 21 Store calls for 1000 Commits.</li>
+        <li><b>Why paths by default:</b> a diff of 100 paths is ~25 KB today. Most callers ask "what changed"; <code>--patch</code> answers "how".</li>
+      </ul>
+    </section>
+
+    <!-- HOME -->
+    <section class="fam" id="f-home">
+      <div class="fam-head"><h2>home</h2><span class="c">2 → 6</span><p>The home itself: its state, its call log, and the whole-home doctor.</p></div>
+      <div class="tbl"><table>
+        <thead><tr><th>Call</th><th>Input (CLI)</th><th>Short form (default)</th><th>Long form adds</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr data-changed><td class="call">home.init</td><td class="cli">layerfs home init</td><td class="out">{"home":"/Users/me/.layerfs"}</td><td class="long">layout, converted</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">home.get</td><td class="cli">layerfs home get [--platforms]</td><td class="out">{"home":"/Users/me/.layerfs","bundle":"2.0.0-…","daemon":"…"}</td><td class="long">cache, warnings; <code>--platforms</code>: each platform's readiness (probes tools)</td><td class="chg"><span class="badge b-extended">extended</span><span class="note">absorbs machine.platforms</span></td></tr>
+          <tr data-changed><td class="call">home.log</td><td class="cli">layerfs home log [--op file.write] [--project shop/api] [--since T] [--page-size 100] [--cursor C]</td><td class="out">{"items":[{"op":"workspace.exec","project":"shop/api","outcome":"ok","at":…}],"next_cursor":"…"}</td><td class="long">client, tag, argv, duration_ms</td><td class="chg"><span class="badge b-renamed">moved</span><span class="note">was logs.list</span></td></tr>
+          <tr data-changed><td class="call">home.clear_log</td><td class="cli">layerfs home clear-log</td><td class="out">{"ok":true}</td><td class="long">—</td><td class="chg"><span class="badge b-renamed">moved</span><span class="note">was logs.reset</span></td></tr>
+          <tr data-changed><td class="call">home.doctor</td><td class="cli">layerfs home doctor [--timeout 30s]</td><td class="out">{"ok":false,"findings":[{"check":"store.lease","severity":"warning","message":"…","fix":"layerfs store …"}]}</td><td class="long">passing checks, evidence, leftovers per machine, counts</td><td class="chg"><span class="badge b-new">new</span><span class="note">replaces off-table <code>layerfs doctor</code></span></td></tr>
+          <tr data-changed><td class="call">home.fix</td><td class="cli">layerfs home fix native:image-part:&lt;64 hex&gt;</td><td class="out">{"freed":50}</td><td class="long">machine, type, path</td><td class="chg"><span class="badge b-renamed">moved</span><span class="note">was doctor.fix</span></td></tr>
+        </tbody>
+      </table></div>
+      <ul class="fam-why">
+        <li><b>One doctor shape for all five doctors:</b> <code>{ok, findings:[{check, severity, message, fix}]}</code>, findings capped at 200. Today checks and findings repeat each other and every row repeats its entity.</li>
+      </ul>
+    </section>
+
+    <!-- MACHINE -->
+    <section class="fam" id="f-machine">
+      <div class="fam-head"><h2>machine</h2><span class="c">15 → 14</span><p>Where Sandboxes and sqlite Stores run. Default reads use records only; probes are <code>--live</code>.</p></div>
+      <div class="tbl"><table>
+        <thead><tr><th>Call</th><th>Input (CLI)</th><th>Short form (default)</th><th>Long form adds</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr data-changed><td class="call">machine.list</td><td class="cli">layerfs machine list [--live]</td><td class="out">{"items":[{"name":"dev","platform":"lima","state":"running"}]}</td><td class="long">supports, stores, sandboxes, cpus, memory, disk; <code>--live</code>: <code>live:{state,disk_free,down_reason,observed_at}</code></td><td class="chg"><span class="badge b-extended">extended</span><span class="note">today it probes every VM by default, up to 10 s</span></td></tr>
+          <tr data-changed><td class="call">machine.get</td><td class="cli">layerfs machine get &lt;machine&gt;</td><td class="out">{"name":"dev","platform":"lima","state":"running","live":{"state":"running","disk_free":…,"observed_at":…}}</td><td class="long">record fields, tool_version, op</td><td class="chg"><span class="badge b-merged">merged</span><span class="note">+ machine.status</span></td></tr>
+          <tr data-changed><td class="call">machine.images</td><td class="cli">layerfs machine images &lt;machine&gt; [--docker]</td><td class="out">{"items":[{"id":"sha256:…","refs":["postgres:17-bookworm"],"size":…}],"default":"sha256:…"}</td><td class="long">architecture, source, last_used_at; <code>--docker</code>: host images it could copy</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">machine.load</td><td class="cli">layerfs machine load &lt;machine&gt; &lt;image&gt; [--progress]</td><td class="out">{"image":"sha256:…"}</td><td class="long">refs, size, reused</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">machine.prune</td><td class="cli">layerfs machine prune &lt;machine&gt; [image] [--unused]</td><td class="out">{"freed":…}</td><td class="long">removed ids</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">machine.stats</td><td class="cli">layerfs machine stats &lt;machine&gt; [--space]</td><td class="out">{"observed_at":…,"cpus":14,"memory_used":…,"disk_free":…,"sandboxes_live":1}</td><td class="long">resources, data disk, Stores' sizes, Sandbox rows; <code>--space</code>: the disk walk</td><td class="chg"><span class="badge b-merged">merged</span><span class="note">+ machine.space; quiet</span></td></tr>
+          <tr data-changed><td class="call">machine.files</td><td class="cli">layerfs machine files &lt;machine&gt; [path] [--depth 2] [--page-size 100] [--cursor C] [--byte-offset 0] [--byte-length 262144]</td><td class="out">{"type":"folder","items":[{"name":"store","type":"folder"}],"next_cursor":null}</td><td class="long">size, mode, modified_at, role</td><td class="chg"><span class="badge b-renamed">reshaped</span><span class="note">same shape as sandbox.files</span></td></tr>
+          <tr data-changed><td class="call">machine.log</td><td class="cli">layerfs machine log &lt;machine&gt; [--cursor C | --before C] [--limit 200]</td><td class="out">{"lines":["…"],"next_cursor":"…","has_more":false}</td><td class="long">prev_cursor</td><td class="chg"><span class="badge b-renamed">moved</span><span class="note">was logs.machine</span></td></tr>
+          <tr data-changed><td class="call">machine.start</td><td class="cli">layerfs machine start &lt;machine&gt; [--progress]</td><td class="out">{"state":"running"}</td><td class="long">the record</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">machine.stop</td><td class="cli">layerfs machine stop &lt;machine&gt; [--force] [--progress]</td><td class="out">{"state":"stopped"}</td><td class="long">the record</td><td class="chg"><span class="badge b-extended">progress</span></td></tr>
+          <tr data-changed><td class="call">machine.create</td><td class="cli">layerfs machine create &lt;name&gt; &lt;platform&gt; [--cpus 4] [--memory 8G] [--disk 64G] [--image I] [--os-image I] [--progress]</td><td class="out">{"state":"stopped"}</td><td class="long">the record</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">machine.remove</td><td class="cli">layerfs machine remove &lt;machine&gt; [--progress]</td><td class="out">{"ok":true}</td><td class="long">disk_deleted</td><td class="chg"><span class="badge b-extended">progress</span></td></tr>
+          <tr data-changed><td class="call">machine.update</td><td class="cli">layerfs machine update &lt;machine&gt; [--cpus N] [--memory 8G] [--image I] [--docker SOCK] [--wsl DIST] [--daemon PATH] [--progress]</td><td class="out">{"ok":true}</td><td class="long">the record</td><td class="chg"><span class="badge b-extended">extended</span><span class="note">options checked against the platform</span></td></tr>
+          <tr data-changed><td class="call">machine.doctor</td><td class="cli">layerfs machine doctor &lt;machine&gt; [--timeout 30s]</td><td class="out">{"ok":true}</td><td class="long">worker build, capacity, passing checks</td><td class="chg"><span class="badge b-new">new</span></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <!-- STORE -->
+    <section class="fam" id="f-store">
+      <div class="fam-head"><h2>store</h2><span class="c">12 → 8</span><p>One call per action, whatever the engine. Default reads use the home's records; <code>--live</code> and <code>--stats</code> read more.</p></div>
+      <div class="tbl"><table>
+        <thead><tr><th>Call</th><th>Input (CLI)</th><th>Short form (default)</th><th>Long form adds</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr data-changed><td class="call">store.list</td><td class="cli">layerfs store list [--live]</td><td class="out">{"items":[{"name":"shop","type":"sqlite","machine":"dev","projects":2}]}</td><td class="long">supports, created_at; <code>--live</code>: <code>live:{state,observed_at}</code></td><td class="chg"><span class="badge b-extended">extended</span><span class="note">today it stats every sqlite file by default</span></td></tr>
+          <tr data-changed><td class="call">store.get</td><td class="cli">layerfs store get &lt;store&gt; [--live] [--stats]</td><td class="out">{"name":"shop","type":"sqlite","machine":"dev","projects":["api","web"],"backups":[{"bucket":"r2-main","behind":false}]}</td><td class="long">created_at, profile, link hashes, last transfer; <code>--live</code>: state, holders, file bytes; <code>--stats</code>: counters</td><td class="chg"><span class="badge b-merged">merged</span><span class="note">+ status, stats</span></td></tr>
+          <tr data-changed><td class="call">store.create</td><td class="cli">layerfs store create &lt;name&gt; [postgres://host/db] [--password P] [--synchronous-commit off]</td><td class="out">{"type":"sqlite"}</td><td class="long">the record</td><td class="chg"><span class="badge b-merged">merged</span><span class="note">+ connect: a URL means PostgreSQL</span></td></tr>
+          <tr data-changed><td class="call">store.update</td><td class="cli">layerfs store update &lt;store&gt; [--machine dev] [--url U] [--password P] [--synchronous-commit S] [--clear]</td><td class="out">{"ok":true}</td><td class="long">the record</td><td class="chg"><span class="badge b-renamed">reshaped</span><span class="note">kept apart from create: a typo must not create a Store</span></td></tr>
+          <tr data-changed><td class="call">store.move</td><td class="cli">layerfs store move &lt;store&gt; &lt;machine&gt; [--progress]</td><td class="out">{"bytes":213263952}</td><td class="long">from, to, heads</td><td class="chg"><span class="badge b-merged">merged</span><span class="note">push + pull</span></td></tr>
+          <tr data-changed><td class="call">store.remove</td><td class="cli">layerfs store remove &lt;store&gt;</td><td class="out">{"data_deleted":true}</td><td class="long">—</td><td class="chg"><span class="badge b-merged">merged</span><span class="note">+ disconnect; open decision</span></td></tr>
+          <tr data-changed><td class="call">store.compact</td><td class="cli">layerfs store compact &lt;store&gt; [--progress]</td><td class="out">{"freed":120000000}</td><td class="long">the report, counts only (never the id list)</td><td class="chg"><span class="badge b-extended">progress</span><span class="note">today up to ~69 KB of ids</span></td></tr>
+          <tr data-changed><td class="call">store.doctor</td><td class="cli">layerfs store doctor &lt;store&gt; [--integrity [--quick]] [--machine dev] [--timeout 10s]</td><td class="out">{"ok":true}</td><td class="long">connection latency, integrity report</td><td class="chg"><span class="badge b-new">new</span><span class="note">also the reachability probe from a machine</span></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <!-- BACKUP -->
+    <section class="fam" id="f-backup">
+      <div class="fam-head"><h2>backup</h2><span class="c">5 → 6</span><p>Buckets and the Store files in them.</p></div>
+      <div class="tbl"><table>
+        <thead><tr><th>Call</th><th>Input (CLI)</th><th>Short form (default)</th><th>Long form adds</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr data-changed><td class="call">backup.connect</td><td class="cli">layerfs backup connect &lt;name&gt; &lt;url&gt; [--key K] [--region auto] [--part-size 64M]</td><td class="out">{"provider":"r2"}</td><td class="long">the bucket record (no secrets)</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">backup.disconnect</td><td class="cli">layerfs backup disconnect &lt;bucket&gt;</td><td class="out">{"unlinked":["shop"]}</td><td class="long">—</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">backup.list</td><td class="cli">layerfs backup list [bucket] [--page-size 50] [--cursor C]</td><td class="out">no bucket: {"items":[{"bucket":"r2-main","provider":"r2"}]}
+a bucket: {"items":[{"file":"shop","store":"shop","state":"current","modified_at":…}],"next_cursor":null}</td><td class="long">bytes, heads, sha256, exported_from, reason</td><td class="chg"><span class="badge b-extended">extended</span><span class="note">no bucket = local records, no network; one bad bucket no longer fails the call</span></td></tr>
+          <tr data-changed><td class="call">backup.create</td><td class="cli">layerfs backup create &lt;store&gt; &lt;bucket&gt; [file] [--progress]</td><td class="out">{"file":"shop","bytes":213263952}</td><td class="long">object, pieces, sha256, heads</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">backup.restore</td><td class="cli">layerfs backup restore &lt;store&gt; &lt;bucket&gt; [file] [--progress]</td><td class="out">{"projects":["api"]}</td><td class="long">bytes, sha256, heads</td><td class="chg"><span class="badge b-renamed">reshaped</span></td></tr>
+          <tr data-changed><td class="call">backup.doctor</td><td class="cli">layerfs backup doctor &lt;bucket&gt; [--write-test] [--timeout 10s]</td><td class="out">{"ok":true}</td><td class="long">reachability, write test result</td><td class="chg"><span class="badge b-new">new</span></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <!-- GONE -->
+    <section class="fam" id="f-gone">
+      <div class="fam-head"><h2>logs, doctor</h2><span class="c">5 → 0</span><p>Both families are gone. Each call moved to the family whose thing it reads or fixes.</p></div>
+      <div class="tbl"><table style="min-width:640px">
+        <thead><tr><th>Old call</th><th>Now</th><th>Reason</th></tr></thead>
+        <tbody>
+          <tr data-changed><td class="call">logs.list</td><td class="call">home.log</td><td class="plain">The call log is the home's.</td></tr>
+          <tr data-changed><td class="call">logs.reset</td><td class="call">home.clear_log</td><td class="plain">Same log.</td></tr>
+          <tr data-changed><td class="call">logs.machine</td><td class="call">machine.log</td><td class="plain">The worker's log, beside the machine's other views.</td></tr>
+          <tr data-changed><td class="call">logs.sandbox</td><td class="call">sandbox.log</td><td class="plain">The daemon's log, beside the Sandbox's files.</td></tr>
+          <tr data-changed><td class="call">doctor.fix</td><td class="call">home.fix</td><td class="plain">A leftover's id already names its machine.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="learned">
+      <h2>What we took from others</h2>
+      <p>Three agent-facing projects the owner pointed to. Read from their public repositories on 2026-11-18.</p>
+      <div class="tbl"><table style="min-width:820px">
+        <thead><tr><th>Project</th><th>What it is</th><th>Taken</th><th>Not taken, and why</th></tr></thead>
+        <tbody>
+          <tr><td class="call">strukto-ai/mirage</td><td class="plain">A virtual terminal over mounted sources. Agents see seven tools: shell, read, write, edit, ls, grep, glob.</td><td class="plain">Tool names agents already know; <code>old_string</code>/<code>new_string</code>/<code>replace_all</code>; refusals that state the fix; stale-write guard (as <code>--expected</code>); 2000-line read windows; write tools hidden when nothing is writable.</td><td class="plain">A session bound once (LayerFS keeps project and Branch explicit on every call). No paging at all, which a UI needs. In-memory sessions, which separate CLI processes don't have. Create-or-adopt sessions, which would replay a mount whose reply was lost.</td></tr>
+          <tr><td class="call">mem9-ai/drive9</td><td class="plain">A server-side workspace for agents, reached mainly through a mount plus a small CLI taught by a skill.</td><td class="plain">A write prints one id; searches return a small capped page; Commits pinned with a flag (<code>--at</code>), not a trailing positional; conflicts that name the current revision.</td><td class="plain">Implicit context (<code>ctx use</code>): LayerFS keeps project and Branch explicit and adds no environment variables. One mutable tree per context, no Branch history or merge. Non-atomic commit and automatic retries, which LayerFS rules forbid. Its SDK behind the simple CLI has about 100 methods.</td></tr>
+          <tr><td class="call">cloudflare/computer</td><td class="plain">A virtual filesystem in a Durable Object with one exec call; nine agent tools bound to one workspace.</td><td class="plain">Exec answers exit code and output only; long output as the last 2000 lines or 64 KiB plus the full log's path; <code>--exclude</code> that skips whole folders; one call from nothing to running.</td><td class="plain">Tools bound to one workspace (LayerFS keeps the Workspace explicit). No Commits or history; idle shutdown; one reconnect retry; full output saved inside the workspace (in LayerFS the next Commit would capture it); 2 MiB write cap (LayerFS has no file caps).</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="states">
+      <h2>States in the UI</h2>
+      <p>The dsh-layerfs UI (branch <code>layerfs_v2_0_0</code> at <code>176324d</code>) often can't tell <b>"LayerFS reported X"</b> from <b>"we couldn't read it"</b>. A short network blip then becomes a confident wrong label. The rule: the label comes only from LayerFS's own answer, and a failed read is shown as a separate freshness mark.</p>
+      <h3>A removed machine, today and proposed</h3>
+      <div class="tbl"><table style="min-width:760px">
+        <thead><tr><th>What happened</th><th>LayerFS answers</th><th>UI today</th><th>Proposed</th></tr></thead>
+        <tbody>
+          <tr><td class="plain">machine remove succeeded</td><td class="cli">no record</td><td class="plain">row disappears within about 15 s, nothing says why</td><td class="plain">grey <b>Removed at HH:MM</b> for about a minute (own action, or missing from the next list), then the row drops</td></tr>
+          <tr><td class="plain">remove in progress</td><td class="cli">removing + op</td><td class="plain">Removing, but Remove and New Sandbox still offered</td><td class="plain">Removing, no actions</td></tr>
+          <tr><td class="plain">remove reply lost</td><td class="cli">unresolved</td><td class="plain">Unresolved + clearing call</td><td class="plain">unchanged</td></tr>
+          <tr><td class="plain">Lima or Apple Container VM deleted outside LayerFS</td><td class="cli">missing</td><td class="plain">Missing</td><td class="plain">unchanged; Remove only</td></tr>
+          <tr><td class="plain">docker worker container deleted outside LayerFS</td><td class="cli">stopped</td><td class="plain">Stopped, the same as a clean stop</td><td class="plain">[API] answer <code>missing</code>, as the VM platforms do</td></tr>
+          <tr><td class="plain">machine on a removed platform</td><td class="cli">unsupported</td><td class="plain">raw "unsupported", grey, New Sandbox offered</td><td class="plain"><b>Platform removed</b>, amber, Remove only</td></tr>
+          <tr><td class="plain">started from another client</td><td class="cli">stopped + "worker does not answer"</td><td class="plain">red Not answering + Restart, for the whole boot</td><td class="plain">[API] start and stop record an op; UI shows <b>Starting…</b></td></tr>
+          <tr><td class="plain">its status read failed</td><td class="cli">(the read failed)</td><td class="plain">Not answering: the error text becomes the down reason</td><td class="plain">keep the last label, marked "unreachable since T"; then <b>Unknown</b></td></tr>
+        </tbody>
+      </table></div>
+      <p class="small">More of the same: a Store on a machine you stopped shows red <b>Down</b>, because <code>down</code> is tested before "machine stopped". A Sandbox on a stopped machine reads <b>Running</b>. Projects of a disconnected PostgreSQL Store read <b>Removed</b>. A failed first Sandbox list makes every card say <b>closed</b>. LayerFS's <code>lost</code> shows as the raw word.</p>
+      <h3>Labels per entity</h3>
+      <div class="tbl"><table style="min-width:760px">
+        <thead><tr><th>Entity</th><th>Label</th><th>Means</th><th>Allowed actions</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="11" class="call">machine</td><td><span class="badge b-new">Running</span></td><td class="plain">worker answers</td><td class="plain">Stop, New Sandbox, Remove</td></tr>
+          <tr><td><span class="badge b-kept">Stopped</span></td><td class="plain">stopped by <code>machine stop</code>, or created and never started</td><td class="plain">Start, Remove</td></tr>
+          <tr><td><span class="badge b-merged">Starting… / Stopping…</span></td><td class="plain">a start or stop op is held</td><td class="plain">none</td></tr>
+          <tr><td><span class="badge b-gone">Not answering</span></td><td class="plain">runs, but its worker doesn't answer</td><td class="plain">Restart worker, Stop</td></tr>
+          <tr><td><span class="badge b-merged">Docker not running</span></td><td class="plain">the built-in docker machine's engine is down (reason code)</td><td class="plain">Start Docker</td></tr>
+          <tr><td><span class="badge b-merged">Creating / Removing</span></td><td class="plain">create or remove op held</td><td class="plain">none</td></tr>
+          <tr><td><span class="badge b-gone">Unresolved</span></td><td class="plain">a create or remove lost its reply</td><td class="plain">Remove</td></tr>
+          <tr><td><span class="badge b-gone">Missing / Failed</span></td><td class="plain">the VM or container is gone or broken</td><td class="plain">Remove</td></tr>
+          <tr><td><span class="badge b-merged">Platform removed</span></td><td class="plain">record of firecracker, ssh or microsandbox</td><td class="plain">Remove (forgets the record)</td></tr>
+          <tr><td><span class="badge b-kept">Unknown</span></td><td class="plain">no fresh reading after the keep window</td><td class="plain">Refresh</td></tr>
+          <tr><td><span class="badge b-kept">Removed</span></td><td class="plain">seen removed, kept about a minute</td><td class="plain">none</td></tr>
+          <tr><td rowspan="7" class="call">store</td><td><span class="badge b-new">Idle</span></td><td class="plain">free</td><td class="plain">all</td></tr>
+          <tr><td><span class="badge b-extended">In use</span></td><td class="plain">a lease is held</td><td class="plain">none</td></tr>
+          <tr><td><span class="badge b-merged">Busy · op</span></td><td class="plain">move, remove or compact running</td><td class="plain">none</td></tr>
+          <tr><td><span class="badge b-kept">Machine stopped</span></td><td class="plain"><code>down</code> with reason <code>machine_stopped</code></td><td class="plain">Start machine</td></tr>
+          <tr><td><span class="badge b-gone">Down</span></td><td class="plain"><code>down</code> with reason <code>worker_unreachable</code> or <code>worker_outdated</code></td><td class="plain">none</td></tr>
+          <tr><td><span class="badge b-gone">Unresolved</span></td><td class="plain">a move or remove lost its reply</td><td class="plain">the clearing call</td></tr>
+          <tr><td><span class="badge b-gone">Server unreachable</span></td><td class="plain">PostgreSQL does not answer</td><td class="plain">none</td></tr>
+          <tr><td rowspan="6" class="call">sandbox</td><td><span class="badge b-merged">Creating / Closing</span></td><td class="plain">op held</td><td class="plain">none</td></tr>
+          <tr><td><span class="badge b-new">Running</span></td><td class="plain">daemon runs and its machine is running</td><td class="plain">all</td></tr>
+          <tr><td><span class="badge b-kept">Machine stopped</span></td><td class="plain">[API] <code>machine_state</code> on sandbox list/get</td><td class="plain">none</td></tr>
+          <tr><td><span class="badge b-gone">Lost</span></td><td class="plain">the machine says it no longer runs</td><td class="plain">Close</td></tr>
+          <tr><td><span class="badge b-kept">Gone</span></td><td class="plain">no id</td><td class="plain">Close</td></tr>
+          <tr><td><span class="badge b-gone">Unresolved</span></td><td class="plain">a create or close lost its reply</td><td class="plain">Close</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="backups">
+      <h2>Backup status</h2>
+      <p>Today the host keeps each bucket's last <code>backup.list</code> in memory and lists again only on List, on opening the Backups dialog, or at the end of a backup or restore. So "up to date" means "as of the last listing", which can be any age.</p>
+      <ul class="fam-why">
+        <li><b>Commits after a backup</b> leave the badge and the Store's Health row on "up to date" until someone lists again. The Health row also turns green when nothing was checked.</li>
+        <li><b>A failed listing</b> keeps the old rows but resets the time, so it reads "listed just now". Only the bucket page shows the error.</li>
+        <li><b>A lost reply on an upload that landed</b> reads "Bucket changed… another Store or home". Every later backup to that file is <code>Conflict</code>, because the link was never saved.</li>
+        <li><b>Reconnecting a bucket</b> suggests the old file name, and that backup is refused every time. A restore is counted as a backup in coverage.</li>
+        <li><b>A VM Store costs 1 + 2N CLI calls per listing,</b> because <code>backup.list</code> reads heads on native only. The host's own fingerprint is wrong both ways.</li>
+      </ul>
+      <div class="rules">
+        <div class="rule"><div class="k">Store ahead of backup?</div><div class="d"><span>[API] <code>store.get</code> answers <code>behind</code> for each backup link (link heads ≠ current heads). A local read, no network, correct on every refresh, including VM Stores through their worker.</span></div></div>
+        <div class="rule"><div class="k">Bucket copy intact?</div><div class="d"><span>Needs the network, so only this half is cached, shown with its age and last error. [API] <code>backup.list</code> items add <code>sha256</code>, <code>exported_from</code> and a binding match in the long form.</span></div></div>
+        <div class="rule"><div class="k">Last attempt</div><div class="d"><span>[API] the link records <code>attempt: {op, at, outcome, phase, sha256}</code>, kept on <code>Unknown</code>, so an uncertain upload that landed can be adopted instead of <code>Conflict</code> forever.</span></div></div>
+        <div class="rule"><div class="k">Labels</div><div class="d"><span>Up to date · Behind · Never backed up · Backup file exists, not linked · Bucket unreachable since T · Last attempt failed / uncertain (T) · Copy changed by another writer · Restored (not counted as a backup)</span></div></div>
+      </div>
+    </section>
+
+    <section id="cache">
+      <h2>Cache and freshness</h2>
+      <p>The host and client have 17 cache layers, lasting from 2 s up to forever. They fail both ways: one failed read becomes a state, two slow reads turn every project in the sidebar to "Machine unavailable", a Sandbox recreated under the same name inherits old history and metrics, and other clients' changes arrive only by polling or not at all.</p>
+      <div class="rules">
+        <div class="rule"><div class="k">Freshness envelope</div><div class="d"><span>Every cached value is <code>{value, observed_at, failure: {code, since, count}}</code>; <code>observed_at</code> is when the read began.</span></div></div>
+        <div class="rule"><div class="k">Bounded keep</div><div class="d"><span>Keep the last good answer for about 60 s or 3 failures, labelled "unreachable since T"; then show <b>Unknown</b>. A failure never becomes Down, Stopped, Removed, empty or 0.</span></div></div>
+        <div class="rule"><div class="k">Errors are not state</div><div class="d"><span>A failed read goes in its own field; only LayerFS's answer sets the label. Remove the 30 s <code>Busy</code> cache, or tie it to the op id.</span></div></div>
+        <div class="rule"><div class="k">Key by identity</div><div class="d"><span>Name plus <code>created</code> (Sandboxes: <code>id</code>), so a recreated thing never inherits old data.</span></div></div>
+        <div class="rule"><div class="k">Invalidate on change</div><div class="d"><span>Bump a write generation when a write finishes and drop results read under an older one. Clear caches on call-log events, which see every writer.</span></div></div>
+        <div class="rule"><div class="k">Show the age</div><div class="d"><span>Every view that can be stale shows how old it is.</span></div></div>
+        <div class="rule"><div class="k">LayerFS asks</div><div class="d"><span>[API] <code>observed_at</code> on every live read; reason codes on <code>down_reason</code>; one home-wide change counter; "observed down" distinct from "could not observe"; a <code>created</code> id on machine records.</span></div></div>
+      </div>
+    </section>
+
+    <section id="map">
+      <h2>Old → new map</h2>
+      <div class="tbl"><table style="min-width:640px">
+        <thead><tr><th>Today</th><th>Proposed</th><th>How to call it now</th></tr></thead>
+        <tbody>
+          <tr><td class="call">branch.commits</td><td class="call">commit.list</td><td class="cli">layerfs commit list shop/api agent</td></tr>
+          <tr><td class="call">branch.get_commit</td><td class="call">commit.get</td><td class="cli">layerfs commit get shop/api 3a54ebd6</td></tr>
+          <tr><td class="call">branch.diff</td><td class="call">commit.diff</td><td class="cli">layerfs commit diff shop/api main agent</td></tr>
+          <tr><td class="call">file.revision</td><td class="call">file.history</td><td class="cli">layerfs file history shop/api agent /src/app.ts</td></tr>
+          <tr><td class="call">project.remove_file</td><td class="call">project.hide_path</td><td class="cli">layerfs project hide-path shop/api /secrets.env</td></tr>
+          <tr><td class="call">machine.platforms</td><td class="call">home.get</td><td class="cli">layerfs home get --platforms</td></tr>
+          <tr><td class="call">machine.status</td><td class="call">machine.get</td><td class="cli">layerfs machine get dev</td></tr>
+          <tr><td class="call">machine.space</td><td class="call">machine.stats</td><td class="cli">layerfs machine stats dev --space</td></tr>
+          <tr><td class="call">store.status</td><td class="call">store.get</td><td class="cli">layerfs store get shop --live</td></tr>
+          <tr><td class="call">store.stats</td><td class="call">store.get</td><td class="cli">layerfs store get shop --stats</td></tr>
+          <tr><td class="call">store.connect</td><td class="call">store.create</td><td class="cli">layerfs store create pg postgres://host/db</td></tr>
+          <tr><td class="call">store.disconnect</td><td class="call">store.remove</td><td class="cli">layerfs store remove pg</td></tr>
+          <tr><td class="call">store.push / pull</td><td class="call">store.move</td><td class="cli">layerfs store move shop dev   ·   layerfs store move shop native</td></tr>
+          <tr><td class="call">logs.list / reset</td><td class="call">home.log / clear_log</td><td class="cli">layerfs home log --project shop/api</td></tr>
+          <tr><td class="call">logs.machine / sandbox</td><td class="call">machine.log / sandbox.log</td><td class="cli">layerfs sandbox log tests</td></tr>
+          <tr><td class="call">doctor.fix, layerfs doctor</td><td class="call">home.fix, home.doctor</td><td class="cli">layerfs home doctor</td></tr>
+          <tr><td class="call">doctor targets</td><td class="call">machine/sandbox/store/backup.doctor</td><td class="cli">layerfs store doctor shop --integrity</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Argument renames</h3>
+      <div class="tbl"><table style="min-width:560px">
+        <thead><tr><th>Today</th><th>Proposed</th><th>Where</th></tr></thead>
+        <tbody>
+          <tr><td class="cli">name (existing thing)</td><td class="cli">machine · store · sandbox · bucket</td><td class="plain">machine, store, sandbox and backup calls on an existing thing</td></tr>
+          <tr><td class="cli">ws</td><td class="cli">workspace</td><td class="plain">every workspace call</td></tr>
+          <tr><td class="cli">[commit] positional · at_commit · from_commit</td><td class="cli">--at C</td><td class="plain">every read, branch fork, branch publish</td></tr>
+          <tr><td class="cli">--old · --new</td><td class="cli">--old-string · --new-string · --replace-all</td><td class="plain">file edit</td></tr>
+          <tr><td class="cli">left_* · right_*</td><td class="cli">&lt;path&gt; &lt;from&gt; &lt;to&gt; [--to-path]</td><td class="plain">file diff</td></tr>
+          <tr><td class="cli">--start-line · --end-line · --from-line · --line-count</td><td class="cli">--offset · --limit</td><td class="plain">file read, file blame</td></tr>
+          <tr><td class="cli">page_pos · page · continuation</td><td class="cli">--cursor · --page-size</td><td class="plain">every paged call</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="open">
+      <h2>Open decisions</h2>
+      <div class="decisions">
+        <div class="decision"><b>Text for agent reads</b><span>Should the agent profile (MCP, and the CLI with <code>--text</code>) answer <code>file.read</code> as raw text and list/glob/grep as one line per entry, as drive9 and mirage do? JSON stays the default for the UI.</span></div>
+        <div class="decision"><b>exec's CLI exit code</b><span>Today <code>layerfs workspace exec</code> exits 0 even when the command fails, unless <code>--stream</code>. Agents check the shell's exit code. Mirror the command's code? It must not collide with the refusal exit codes.</span></div>
+        <div class="decision"><b>grep: literal or regex</b><span>Today the pattern is literal while help says "regular expression". Support regex, or rename the positional to <code>text</code> and say "literal"?</span></div>
+        <div class="decision"><b>Workspace file tools</b><span><code>file.*</code> reads a Branch's committed state, not a Workspace's live edits. Should the Workspace profile add read/write/grep tools on the live mount, or keep files to the commands an agent runs?</span></div>
+        <div class="decision"><b>store.remove on both engines</b><span>One verb would delete a sqlite Store's file but only forget a PostgreSQL Store's record (<code>data_deleted</code> says which). Or keep <code>remove</code> and <code>disconnect</code> apart (80 calls).</span></div>
+        <div class="decision"><b>Doctor CLI pairing</b><span><code>layerfs doctor</code> / <code>doctor fix</code> (#536 H7) become <code>layerfs home doctor</code> / <code>home fix</code>. Keep a CLI-only alias?</span></div>
+        <div class="decision"><b>Old paging in 2.0.0</b><span>Accept <code>page_pos</code>, <code>page</code> and <code>continuation</code> for 2.0.0, or replace them outright?</span></div>
+      </div>
+      <p class="small">Not changed on purpose: two-level names, the single <code>file.*</code> writes, the <code>backup</code> family, <code>project.delete</code>'s verb, the separate <code>images</code>/<code>load</code>/<code>prune</code>, explicit Commit and unmount, one attempt per call. Sources: the call table in <code>api/crates/layerfs-api/src</code>, <code>docs/versioned/2.0.0/calls.md</code>, <code>docs/architecture/api/sdk/*.md</code>, dsh-layerfs <code>src/host</code> and <code>src/client</code>, and the three public repositories above.</p>
+    </section>
+  </main>
+</div>
+
+<script>
+(function () {
+  var input = document.getElementById('filter');
+  var onlyChanged = document.getElementById('changed');
+  var fams = Array.prototype.slice.call(document.querySelectorAll('.fam'));
+  function apply() {
+    var q = (input.value || '').trim().toLowerCase();
+    var changed = onlyChanged.checked;
+    fams.forEach(function (fam) {
+      var rows = fam.querySelectorAll('tbody tr');
+      var shown = 0;
+      rows.forEach(function (tr) {
+        var ok = (!q || tr.textContent.toLowerCase().indexOf(q) !== -1) && (!changed || tr.hasAttribute('data-changed'));
+        tr.hidden = !ok;
+        if (ok) shown++;
+      });
+      fam.hidden = shown === 0;
+    });
+  }
+  input.addEventListener('input', apply);
+  onlyChanged.addEventListener('change', apply);
+})();
+</script>

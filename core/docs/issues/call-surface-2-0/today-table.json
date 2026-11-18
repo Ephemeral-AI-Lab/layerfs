@@ -1,0 +1,2345 @@
+{
+ "base": "caff58a43b",
+ "source": "api/crates/layerfs-api/src/<family>/<call>.rs",
+ "families": [
+  {
+   "family": "home",
+   "calls": 2
+  },
+  {
+   "family": "project",
+   "calls": 7
+  },
+  {
+   "family": "branch",
+   "calls": 9
+  },
+  {
+   "family": "commit",
+   "calls": 3
+  },
+  {
+   "family": "file",
+   "calls": 15
+  },
+  {
+   "family": "sandbox",
+   "calls": 5
+  },
+  {
+   "family": "workspace",
+   "calls": 6
+  },
+  {
+   "family": "machine",
+   "calls": 15
+  },
+  {
+   "family": "store",
+   "calls": 12
+  },
+  {
+   "family": "backup",
+   "calls": 5
+  },
+  {
+   "family": "logs",
+   "calls": 4
+  },
+  {
+   "family": "doctor",
+   "calls": 1
+  }
+ ],
+ "calls": [
+  {
+   "family": "home",
+   "call": "init",
+   "positionals": [],
+   "options": [],
+   "quiet": false,
+   "help": "create this home, or convert an older one; a current home is left as it is"
+  },
+  {
+   "family": "home",
+   "call": "get",
+   "positionals": [],
+   "options": [],
+   "quiet": true,
+   "help": "the home's state, and the Linux bundle and daemon this build would use; changes nothing"
+  },
+  {
+   "family": "project",
+   "call": "init",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "folder",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "timeout",
+     "kind": "Int"
+    },
+    {
+     "name": "on_progress",
+     "kind": "Function"
+    }
+   ],
+   "quiet": false,
+   "help": "import a host folder as a new project into an existing Store"
+  },
+  {
+   "family": "project",
+   "call": "list",
+   "positionals": [
+    {
+     "name": "store",
+     "kind": "Name",
+     "optional": true
+    }
+   ],
+   "options": [
+    {
+     "name": "page_size",
+     "kind": "Int"
+    },
+    {
+     "name": "page_pos",
+     "kind": "Int"
+    }
+   ],
+   "quiet": false,
+   "help": "every project in the home, or one Store's"
+  },
+  {
+   "family": "project",
+   "call": "get",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "a project's record: its Store, kind and machine"
+  },
+  {
+   "family": "project",
+   "call": "stats",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": true
+    },
+    {
+     "name": "commit",
+     "kind": "Name",
+     "optional": true
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "entry counts of one pinned saved tree"
+  },
+  {
+   "family": "project",
+   "call": "export",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "destination",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "branch",
+     "kind": "Name"
+    },
+    {
+     "name": "on_progress",
+     "kind": "Function"
+    }
+   ],
+   "quiet": false,
+   "help": "export a project's snapshot from its Store to a local folder"
+  },
+  {
+   "family": "project",
+   "call": "delete",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "retire one project in its Store and remove its home entry"
+  },
+  {
+   "family": "project",
+   "call": "remove_file",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "path",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "hide one absolute path from every node at or below its marker frontier"
+  },
+  {
+   "family": "branch",
+   "call": "list",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "page_size",
+     "kind": "Int"
+    },
+    {
+     "name": "page_pos",
+     "kind": "Int"
+    },
+    {
+     "name": "page",
+     "kind": "Int"
+    }
+   ],
+   "quiet": false,
+   "help": "a project's Branches"
+  },
+  {
+   "family": "branch",
+   "call": "get",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "one Branch and its head Commit"
+  },
+  {
+   "family": "branch",
+   "call": "commits",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "page",
+     "kind": "Int"
+    },
+    {
+     "name": "page_size",
+     "kind": "Int"
+    },
+    {
+     "name": "at_commit",
+     "kind": "Text"
+    },
+    {
+     "name": "include_storage",
+     "kind": "Bool"
+    }
+   ],
+   "quiet": false,
+   "help": "saved branch commits or main publications, newest first"
+  },
+  {
+   "family": "branch",
+   "call": "get_commit",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "commit",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "one saved Commit or main publication"
+  },
+  {
+   "family": "branch",
+   "call": "fork",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "from_branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "from_commit",
+     "kind": "Name",
+     "optional": true
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "a new Branch from another Branch's head or Commit"
+  },
+  {
+   "family": "branch",
+   "call": "merge",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "a",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "b",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "message",
+     "kind": "Text"
+    },
+    {
+     "name": "units",
+     "kind": "Json"
+    }
+   ],
+   "quiet": false,
+   "help": "merge two Branches into a new one"
+  },
+  {
+   "family": "branch",
+   "call": "publish",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "commit",
+     "kind": "Name",
+     "optional": true
+    }
+   ],
+   "options": [
+    {
+     "name": "expected_base",
+     "kind": "Name"
+    },
+    {
+     "name": "expected_head",
+     "kind": "Name"
+    },
+    {
+     "name": "force",
+     "kind": "Bool"
+    }
+   ],
+   "quiet": false,
+   "help": "a Branch's head or Commit as main's next Layer, refusing a stale base"
+  },
+  {
+   "family": "branch",
+   "call": "diff",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "from_branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "to_branch",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "paths_only",
+     "kind": "Bool"
+    },
+    {
+     "name": "page_size",
+     "kind": "Int"
+    },
+    {
+     "name": "page_pos",
+     "kind": "Int"
+    },
+    {
+     "name": "cursor",
+     "kind": "Text"
+    },
+    {
+     "name": "page",
+     "kind": "Int"
+    },
+    {
+     "name": "from_commit",
+     "kind": "Text"
+    },
+    {
+     "name": "to_commit",
+     "kind": "Text"
+    },
+    {
+     "name": "path_prefix",
+     "kind": "Text"
+    },
+    {
+     "name": "include_attribution",
+     "kind": "Bool"
+    },
+    {
+     "name": "continuation",
+     "kind": "Text"
+    }
+   ],
+   "quiet": false,
+   "help": "files that differ between two Branches' heads"
+  },
+  {
+   "family": "branch",
+   "call": "remove",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "soft-remove one Branch; its name stays taken until compaction"
+  },
+  {
+   "family": "commit",
+   "call": "list",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "page_size",
+     "kind": "Int"
+    },
+    {
+     "name": "page_pos",
+     "kind": "Int"
+    }
+   ],
+   "quiet": false,
+   "help": "a Branch's Commits, newest first"
+  },
+  {
+   "family": "commit",
+   "call": "get",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "commit",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "one Commit of a Branch"
+  },
+  {
+   "family": "commit",
+   "call": "diff",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "from_commit",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "to_commit",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "paths_only",
+     "kind": "Bool"
+    },
+    {
+     "name": "page_size",
+     "kind": "Int"
+    },
+    {
+     "name": "page_pos",
+     "kind": "Int"
+    },
+    {
+     "name": "cursor",
+     "kind": "Text"
+    }
+   ],
+   "quiet": false,
+   "help": "files that differ between two Commits"
+  },
+  {
+   "family": "file",
+   "call": "read",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "path",
+     "kind": "Text",
+     "optional": false
+    },
+    {
+     "name": "commit",
+     "kind": "Name",
+     "optional": true
+    }
+   ],
+   "options": [
+    {
+     "name": "start_line",
+     "kind": "Int"
+    },
+    {
+     "name": "end_line",
+     "kind": "Int"
+    }
+   ],
+   "quiet": false,
+   "help": "read a file"
+  },
+  {
+   "family": "file",
+   "call": "stat",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "path",
+     "kind": "Text",
+     "optional": false
+    },
+    {
+     "name": "commit",
+     "kind": "Name",
+     "optional": true
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "a path's kind, size and mode"
+  },
+  {
+   "family": "file",
+   "call": "list",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "path",
+     "kind": "Text",
+     "optional": false
+    },
+    {
+     "name": "commit",
+     "kind": "Name",
+     "optional": true
+    }
+   ],
+   "options": [
+    {
+     "name": "page_size",
+     "kind": "Int"
+    },
+    {
+     "name": "page",
+     "kind": "Int"
+    },
+    {
+     "name": "page_pos",
+     "kind": "Int"
+    }
+   ],
+   "quiet": false,
+   "help": "a folder's entries"
+  },
+  {
+   "family": "file",
+   "call": "glob",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "path",
+     "kind": "Text",
+     "optional": false
+    },
+    {
+     "name": "pattern",
+     "kind": "Text",
+     "optional": false
+    },
+    {
+     "name": "commit",
+     "kind": "Name",
+     "optional": true
+    }
+   ],
+   "options": [
+    {
+     "name": "page_size",
+     "kind": "Int"
+    },
+    {
+     "name": "page",
+     "kind": "Int"
+    },
+    {
+     "name": "page_pos",
+     "kind": "Int"
+    }
+   ],
+   "quiet": false,
+   "help": "paths under `path` matching a glob"
+  },
+  {
+   "family": "file",
+   "call": "grep",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "path",
+     "kind": "Text",
+     "optional": false
+    },
+    {
+     "name": "pattern",
+     "kind": "Text",
+     "optional": false
+    },
+    {
+     "name": "commit",
+     "kind": "Name",
+     "optional": true
+    }
+   ],
+   "options": [
+    {
+     "name": "page_size",
+     "kind": "Int"
+    },
+    {
+     "name": "page",
+     "kind": "Int"
+    },
+    {
+     "name": "page_pos",
+     "kind": "Int"
+    }
+   ],
+   "quiet": false,
+   "help": "lines under `path` matching a regular expression"
+  },
+  {
+   "family": "file",
+   "call": "revision",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "path",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "at_commit",
+     "kind": "Name"
+    },
+    {
+     "name": "traversal",
+     "kind": "Text"
+    },
+    {
+     "name": "page",
+     "kind": "Int"
+    },
+    {
+     "name": "page_size",
+     "kind": "Int"
+    },
+    {
+     "name": "continuation",
+     "kind": "Text"
+    }
+   ],
+   "quiet": false,
+   "help": "saved changes to a literal path"
+  },
+  {
+   "family": "file",
+   "call": "blame",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "path",
+     "kind": "Text",
+     "optional": false
+    },
+    {
+     "name": "commit",
+     "kind": "Name",
+     "optional": true
+    }
+   ],
+   "options": [
+    {
+     "name": "from_line",
+     "kind": "Int"
+    },
+    {
+     "name": "line_count",
+     "kind": "Int"
+    }
+   ],
+   "quiet": false,
+   "help": "the Commit of each line"
+  },
+  {
+   "family": "file",
+   "call": "diff",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "left_branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "left_path",
+     "kind": "Text",
+     "optional": false
+    },
+    {
+     "name": "right_branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "right_path",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "left_commit",
+     "kind": "Name"
+    },
+    {
+     "name": "right_commit",
+     "kind": "Name"
+    },
+    {
+     "name": "include_attribution",
+     "kind": "Bool"
+    },
+    {
+     "name": "allow_missing",
+     "kind": "Bool"
+    },
+    {
+     "name": "page",
+     "kind": "Int"
+    },
+    {
+     "name": "page_size",
+     "kind": "Int"
+    }
+   ],
+   "quiet": false,
+   "help": "the difference between two files"
+  },
+  {
+   "family": "file",
+   "call": "write",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "path",
+     "kind": "Text",
+     "optional": false
+    },
+    {
+     "name": "content",
+     "kind": "Content",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "message",
+     "kind": "Text"
+    },
+    {
+     "name": "mode",
+     "kind": "Int"
+    }
+   ],
+   "quiet": false,
+   "help": "write a file; one Commit"
+  },
+  {
+   "family": "file",
+   "call": "edit",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "path",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "old",
+     "kind": "Text"
+    },
+    {
+     "name": "new",
+     "kind": "Text"
+    },
+    {
+     "name": "message",
+     "kind": "Text"
+    }
+   ],
+   "quiet": false,
+   "help": "replace one unique text in a file; one Commit"
+  },
+  {
+   "family": "file",
+   "call": "rm",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "path",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "message",
+     "kind": "Text"
+    }
+   ],
+   "quiet": false,
+   "help": "remove a path; one Commit"
+  },
+  {
+   "family": "file",
+   "call": "mkdir",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "path",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "message",
+     "kind": "Text"
+    },
+    {
+     "name": "mode",
+     "kind": "Int"
+    }
+   ],
+   "quiet": false,
+   "help": "make a folder; one Commit"
+  },
+  {
+   "family": "file",
+   "call": "mv",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "from_path",
+     "kind": "Text",
+     "optional": false
+    },
+    {
+     "name": "to_path",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "message",
+     "kind": "Text"
+    }
+   ],
+   "quiet": false,
+   "help": "move a path; one Commit"
+  },
+  {
+   "family": "file",
+   "call": "cp",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "from_path",
+     "kind": "Text",
+     "optional": false
+    },
+    {
+     "name": "to_path",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "message",
+     "kind": "Text"
+    }
+   ],
+   "quiet": false,
+   "help": "copy a path; one Commit"
+  },
+  {
+   "family": "file",
+   "call": "apply",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "changes",
+     "kind": "Json",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "message",
+     "kind": "Text"
+    }
+   ],
+   "quiet": false,
+   "help": "apply a list of changes; one Commit"
+  },
+  {
+   "family": "sandbox",
+   "call": "create",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": false
+    },
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "machine",
+     "kind": "Name",
+     "optional": true
+    }
+   ],
+   "options": [
+    {
+     "name": "image",
+     "kind": "Image"
+    },
+    {
+     "name": "on_progress",
+     "kind": "Function"
+    }
+   ],
+   "quiet": false,
+   "help": "start a named Sandbox of a project on a machine (default: its sqlite Store's, or native)"
+  },
+  {
+   "family": "sandbox",
+   "call": "list",
+   "positionals": [
+    {
+     "name": "project",
+     "kind": "Project",
+     "optional": true
+    }
+   ],
+   "options": [
+    {
+     "name": "page_size",
+     "kind": "Int"
+    },
+    {
+     "name": "page_pos",
+     "kind": "Int"
+    },
+    {
+     "name": "live",
+     "kind": "Bool"
+    }
+   ],
+   "quiet": false,
+   "help": "every Sandbox in the home, or one project's"
+  },
+  {
+   "family": "sandbox",
+   "call": "get",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "page_size",
+     "kind": "Int"
+    },
+    {
+     "name": "page_pos",
+     "kind": "Int"
+    }
+   ],
+   "quiet": false,
+   "help": "a Sandbox and its Workspaces"
+  },
+  {
+   "family": "sandbox",
+   "call": "close",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "force",
+     "kind": "Bool"
+    }
+   ],
+   "quiet": false,
+   "help": "stop a Sandbox"
+  },
+  {
+   "family": "sandbox",
+   "call": "files",
+   "positionals": [
+    {
+     "name": "sandbox",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "path",
+     "kind": "Text",
+     "optional": true
+    }
+   ],
+   "options": [
+    {
+     "name": "depth",
+     "kind": "Int"
+    },
+    {
+     "name": "cursor",
+     "kind": "Text"
+    },
+    {
+     "name": "limit",
+     "kind": "Int"
+    },
+    {
+     "name": "offset",
+     "kind": "Int"
+    },
+    {
+     "name": "length",
+     "kind": "Int"
+    }
+   ],
+   "quiet": true,
+   "help": "a Sandbox's files: its roots, or a folder or file under its home or in its root"
+  },
+  {
+   "family": "workspace",
+   "call": "mount",
+   "positionals": [
+    {
+     "name": "sandbox",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "branch",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "name",
+     "kind": "Name"
+    }
+   ],
+   "quiet": false,
+   "help": "mount a Branch in a Sandbox"
+  },
+  {
+   "family": "workspace",
+   "call": "exec",
+   "positionals": [
+    {
+     "name": "ws",
+     "kind": "Text",
+     "optional": false
+    },
+    {
+     "name": "command",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "message",
+     "kind": "Text"
+    },
+    {
+     "name": "stream",
+     "kind": "Bool"
+    },
+    {
+     "name": "stdout",
+     "kind": "Function"
+    },
+    {
+     "name": "stderr",
+     "kind": "Function"
+    },
+    {
+     "name": "exec_id",
+     "kind": "Text"
+    },
+    {
+     "name": "on_progress",
+     "kind": "Function"
+    }
+   ],
+   "quiet": false,
+   "help": "run one bash command in a Workspace"
+  },
+  {
+   "family": "workspace",
+   "call": "exec_cancel",
+   "positionals": [
+    {
+     "name": "ws",
+     "kind": "Text",
+     "optional": false
+    },
+    {
+     "name": "exec_id",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "grace_ms",
+     "kind": "Int"
+    }
+   ],
+   "quiet": false,
+   "help": "end a running command: SIGTERM, then SIGKILL after grace_ms"
+  },
+  {
+   "family": "workspace",
+   "call": "commit",
+   "positionals": [
+    {
+     "name": "ws",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "message",
+     "kind": "Text"
+    },
+    {
+     "name": "force",
+     "kind": "Bool"
+    }
+   ],
+   "quiet": false,
+   "help": "commit a Workspace's changes to its Branch"
+  },
+  {
+   "family": "workspace",
+   "call": "unmount",
+   "positionals": [
+    {
+     "name": "ws",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "discard",
+     "kind": "Bool"
+    },
+    {
+     "name": "force",
+     "kind": "Bool"
+    }
+   ],
+   "quiet": false,
+   "help": "end a Workspace"
+  },
+  {
+   "family": "workspace",
+   "call": "status",
+   "positionals": [
+    {
+     "name": "ws",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "a Workspace's changes since its base"
+  },
+  {
+   "family": "machine",
+   "call": "list",
+   "positionals": [],
+   "options": [],
+   "quiet": false,
+   "help": "every machine, with what it supports"
+  },
+  {
+   "family": "machine",
+   "call": "platforms",
+   "positionals": [],
+   "options": [],
+   "quiet": false,
+   "help": "the platforms this host and build support, and what each is missing"
+  },
+  {
+   "family": "machine",
+   "call": "get",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "a machine's record"
+  },
+  {
+   "family": "machine",
+   "call": "images",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "the Sandbox images a machine holds, and the host's Docker images it can copy"
+  },
+  {
+   "family": "machine",
+   "call": "load",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "image",
+     "kind": "Image",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "on_progress",
+     "kind": "Function"
+    }
+   ],
+   "quiet": false,
+   "help": "copy an image from the host's Docker to a machine without creating a Sandbox"
+  },
+  {
+   "family": "machine",
+   "call": "prune",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "image",
+     "kind": "Image",
+     "optional": true
+    }
+   ],
+   "options": [
+    {
+     "name": "unused",
+     "kind": "Bool"
+    }
+   ],
+   "quiet": false,
+   "help": "remove a Sandbox image from a machine, or every unused one"
+  },
+  {
+   "family": "machine",
+   "call": "status",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "a machine's live state, free disk and tool version"
+  },
+  {
+   "family": "machine",
+   "call": "stats",
+   "positionals": [
+    {
+     "name": "machine",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": true,
+   "help": "a machine's observed processors, memory and data disk, its Stores' sizes and live Sandboxes"
+  },
+  {
+   "family": "machine",
+   "call": "space",
+   "positionals": [
+    {
+     "name": "machine",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": true,
+   "help": "where a machine's data disk goes: its Stores, Sandboxes, images and logs, and what is not LayerFS's"
+  },
+  {
+   "family": "machine",
+   "call": "files",
+   "positionals": [
+    {
+     "name": "machine",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "path",
+     "kind": "Text",
+     "optional": true
+    }
+   ],
+   "options": [
+    {
+     "name": "depth",
+     "kind": "Int"
+    },
+    {
+     "name": "cursor",
+     "kind": "Text"
+    },
+    {
+     "name": "limit",
+     "kind": "Int"
+    },
+    {
+     "name": "offset",
+     "kind": "Int"
+    },
+    {
+     "name": "length",
+     "kind": "Int"
+    }
+   ],
+   "quiet": true,
+   "help": "a machine's files: its LayerFS folders by role, or a folder or file of the machine"
+  },
+  {
+   "family": "machine",
+   "call": "start",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "on_progress",
+     "kind": "Function"
+    }
+   ],
+   "quiet": false,
+   "help": "start a stopped machine and its worker; a running one answers at once"
+  },
+  {
+   "family": "machine",
+   "call": "stop",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "force",
+     "kind": "Bool"
+    }
+   ],
+   "quiet": false,
+   "help": "stop a machine's worker and VM; its disks stay"
+  },
+  {
+   "family": "machine",
+   "call": "create",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "platform",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "cpus",
+     "kind": "Int"
+    },
+    {
+     "name": "memory",
+     "kind": "Size"
+    },
+    {
+     "name": "disk",
+     "kind": "Size"
+    },
+    {
+     "name": "image",
+     "kind": "Text"
+    },
+    {
+     "name": "os_image",
+     "kind": "Text"
+    },
+    {
+     "name": "on_progress",
+     "kind": "Function"
+    }
+   ],
+   "quiet": false,
+   "help": "create an enabled VM machine (apple-container, lima)"
+  },
+  {
+   "family": "machine",
+   "call": "remove",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "delete a VM machine and its disk; one of a removed platform is only forgotten"
+  },
+  {
+   "family": "machine",
+   "call": "update",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "cpus",
+     "kind": "Int"
+    },
+    {
+     "name": "memory",
+     "kind": "Size"
+    },
+    {
+     "name": "image",
+     "kind": "Text"
+    },
+    {
+     "name": "docker",
+     "kind": "Text"
+    },
+    {
+     "name": "wsl",
+     "kind": "Text"
+    },
+    {
+     "name": "daemon",
+     "kind": "Text"
+    }
+   ],
+   "quiet": false,
+   "help": "resize a VM, or set a built-in machine's image, Docker socket and daemon"
+  },
+  {
+   "family": "store",
+   "call": "list",
+   "positionals": [],
+   "options": [],
+   "quiet": false,
+   "help": "every Store, from the home's records"
+  },
+  {
+   "family": "store",
+   "call": "get",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "a Store's record"
+  },
+  {
+   "family": "store",
+   "call": "status",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "machine",
+     "kind": "Name"
+    }
+   ],
+   "quiet": false,
+   "help": "a Store's live state; with a machine, whether it reaches a PostgreSQL Store"
+  },
+  {
+   "family": "store",
+   "call": "stats",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "Store-wide publication and allocation counters"
+  },
+  {
+   "family": "store",
+   "call": "create",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "an empty sqlite Store on native"
+  },
+  {
+   "family": "store",
+   "call": "connect",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "url",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "password",
+     "kind": "Text"
+    },
+    {
+     "name": "synchronous_commit",
+     "kind": "Text"
+    }
+   ],
+   "quiet": false,
+   "help": "connect a PostgreSQL database as a Store"
+  },
+  {
+   "family": "store",
+   "call": "update",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "machine",
+     "kind": "Name"
+    },
+    {
+     "name": "url",
+     "kind": "Text"
+    },
+    {
+     "name": "password",
+     "kind": "Text"
+    },
+    {
+     "name": "synchronous_commit",
+     "kind": "Text"
+    },
+    {
+     "name": "clear",
+     "kind": "Bool"
+    }
+   ],
+   "quiet": false,
+   "help": "change a PostgreSQL Store's connection, or the one a machine alone dials"
+  },
+  {
+   "family": "store",
+   "call": "push",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "machine",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "on_progress",
+     "kind": "Function"
+    }
+   ],
+   "quiet": false,
+   "help": "send a sqlite Store from native to a machine"
+  },
+  {
+   "family": "store",
+   "call": "pull",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "on_progress",
+     "kind": "Function"
+    }
+   ],
+   "quiet": false,
+   "help": "bring a sqlite Store from its machine to native"
+  },
+  {
+   "family": "store",
+   "call": "remove",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "delete a sqlite Store with every project in it"
+  },
+  {
+   "family": "store",
+   "call": "compact",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "on_progress",
+     "kind": "Function"
+    }
+   ],
+   "quiet": false,
+   "help": "reclaim dead bytes from one Store"
+  },
+  {
+   "family": "store",
+   "call": "disconnect",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "forget a PostgreSQL Store; its data stays"
+  },
+  {
+   "family": "backup",
+   "call": "connect",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "url",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "key",
+     "kind": "Text"
+    },
+    {
+     "name": "region",
+     "kind": "Text"
+    },
+    {
+     "name": "part_size",
+     "kind": "Size"
+    }
+   ],
+   "quiet": false,
+   "help": "connect an r2 or MinIO bucket"
+  },
+  {
+   "family": "backup",
+   "call": "disconnect",
+   "positionals": [
+    {
+     "name": "name",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "forget a bucket and this home's links to it"
+  },
+  {
+   "family": "backup",
+   "call": "list",
+   "positionals": [
+    {
+     "name": "bucket",
+     "kind": "Name",
+     "optional": true
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "every Store file on the connected buckets"
+  },
+  {
+   "family": "backup",
+   "call": "create",
+   "positionals": [
+    {
+     "name": "store",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "bucket",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "file",
+     "kind": "Name",
+     "optional": true
+    }
+   ],
+   "options": [
+    {
+     "name": "on_progress",
+     "kind": "Function"
+    }
+   ],
+   "quiet": false,
+   "help": "upload a sqlite Store to a bucket"
+  },
+  {
+   "family": "backup",
+   "call": "restore",
+   "positionals": [
+    {
+     "name": "store",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "bucket",
+     "kind": "Name",
+     "optional": false
+    },
+    {
+     "name": "file",
+     "kind": "Name",
+     "optional": true
+    }
+   ],
+   "options": [
+    {
+     "name": "on_progress",
+     "kind": "Function"
+    }
+   ],
+   "quiet": false,
+   "help": "download a backup as a sqlite Store on native"
+  },
+  {
+   "family": "logs",
+   "call": "list",
+   "positionals": [],
+   "options": [
+    {
+     "name": "op",
+     "kind": "Text"
+    },
+    {
+     "name": "project",
+     "kind": "Project"
+    },
+    {
+     "name": "client",
+     "kind": "Name"
+    },
+    {
+     "name": "tag",
+     "kind": "Text"
+    },
+    {
+     "name": "outcome",
+     "kind": "Text"
+    },
+    {
+     "name": "since",
+     "kind": "Int"
+    },
+    {
+     "name": "cursor",
+     "kind": "Text"
+    },
+    {
+     "name": "limit",
+     "kind": "Int"
+    }
+   ],
+   "quiet": false,
+   "help": "the calls made against this home, newest first"
+  },
+  {
+   "family": "logs",
+   "call": "reset",
+   "positionals": [],
+   "options": [],
+   "quiet": false,
+   "help": "clear this home's call log"
+  },
+  {
+   "family": "logs",
+   "call": "machine",
+   "positionals": [
+    {
+     "name": "machine",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "cursor",
+     "kind": "Text"
+    },
+    {
+     "name": "before",
+     "kind": "Text"
+    },
+    {
+     "name": "limit",
+     "kind": "Int"
+    }
+   ],
+   "quiet": false,
+   "help": "a machine's worker log: its last lines, or the lines after or before a cursor"
+  },
+  {
+   "family": "logs",
+   "call": "sandbox",
+   "positionals": [
+    {
+     "name": "sandbox",
+     "kind": "Name",
+     "optional": false
+    }
+   ],
+   "options": [
+    {
+     "name": "cursor",
+     "kind": "Text"
+    },
+    {
+     "name": "before",
+     "kind": "Text"
+    },
+    {
+     "name": "limit",
+     "kind": "Int"
+    }
+   ],
+   "quiet": false,
+   "help": "a Sandbox's daemon log: its last lines, or the lines after or before a cursor"
+  },
+  {
+   "family": "doctor",
+   "call": "fix",
+   "positionals": [
+    {
+     "name": "id",
+     "kind": "Text",
+     "optional": false
+    }
+   ],
+   "options": [],
+   "quiet": false,
+   "help": "remove one leftover `layerfs doctor` listed, under its guard"
+  }
+ ],
+ "off_table_source": "api/crates/layerfs-cli/src/capabilities.rs",
+ "off_table": [
+  {
+   "command": "doctor",
+   "positionals": [],
+   "options": [
+    "--text"
+   ]
+  },
+  {
+   "command": "doctor host",
+   "positionals": [],
+   "options": [
+    "--timeout",
+    "--text"
+   ]
+  },
+  {
+   "command": "doctor machine",
+   "positionals": [
+    "machine"
+   ],
+   "options": [
+    "--timeout",
+    "--text"
+   ]
+  },
+  {
+   "command": "doctor sandbox",
+   "positionals": [
+    "sandbox"
+   ],
+   "options": [
+    "--timeout",
+    "--text"
+   ]
+  },
+  {
+   "command": "doctor store integrity",
+   "positionals": [
+    "store"
+   ],
+   "options": [
+    "--quick",
+    "--timeout",
+    "--text"
+   ]
+  },
+  {
+   "command": "doctor store connection",
+   "positionals": [
+    "store"
+   ],
+   "options": [
+    "--timeout",
+    "--text"
+   ]
+  },
+  {
+   "command": "doctor backup connection",
+   "positionals": [
+    "bucket"
+   ],
+   "options": [
+    "--write-test",
+    "--timeout",
+    "--text"
+   ]
+  },
+  {
+   "command": "import-env",
+   "positionals": [],
+   "options": []
+  },
+  {
+   "command": "worker",
+   "positionals": [],
+   "options": []
+  },
+  {
+   "command": "help",
+   "positionals": [
+    "[family]",
+    "[call]"
+   ],
+   "options": [
+    "--json"
+   ]
+  },
+  {
+   "command": "--version",
+   "positionals": [],
+   "options": [
+    "--json"
+   ]
+  }
+ ]
+}

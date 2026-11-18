@@ -1,0 +1,880 @@
+{
+  "family": "store",
+  "who": null,
+  "old_count": 12,
+  "blurb": "A sqlite Store is created and removed; a PostgreSQL database is connected and disconnected, with a saved login. Default reads use the home's records.",
+  "reasons": [
+    "<b>Why <code>engine</code>:</b> <code>type</code> means file, dir or symlink everywhere else.",
+    "<b>Why rows list projects:</b> a project count needs a name for the number; the short list of names answers both.",
+    "<b>Why secrets come on stdin:</b> a password in an argument lands in shell history and process listings.",
+    "<b>Why <code>connect</code> is not <code>create</code>:</b> LayerFS makes and deletes a sqlite file; a PostgreSQL database exists outside LayerFS and stays when it is disconnected.",
+    "<b>Why a saved login without an address:</b> the address is the part that differs per machine and per proxy; the login is the part that is the same everywhere.",
+    "<b>Why the auth calls live in <code>store</code>:</b> a top-level <code>layerfs auth</code> would read like logging in to LayerFS itself.",
+    "<b>Why <code>move</code> names the destination:</b> push and pull were one operation with two names. <code>store move shop dev</code> sends it; <code>store move shop native</code> brings it back.",
+    "<b>Why no default machine on a PostgreSQL Store:</b> no machine owns it. Where a Sandbox runs is chosen at <code>sandbox create</code>."
+  ],
+  "calls": [
+    {
+      "call": "store.list",
+      "badge": "extended",
+      "note": "today it asks each machine for a <code>stat</code> of every sqlite file; now it reads records, and sizes are <code>--with stats</code>. A row leaves <code>state</code> out when <code>ready</code>. Each item has <code>store.get</code>'s keys. <code>--machine</code> lists the sqlite Stores on that machine. <code>projects</code> shows the first 20 names. Unpaged: the list is the home's Store records",
+      "today": [
+        "store.list"
+      ],
+      "help": "every Store, from the home's records",
+      "cli": "layerfs store list [--machine M] [--with stats]",
+      "positionals": [],
+      "options": [
+        {
+          "name": "machine",
+          "kind": "Name",
+          "help": "only the sqlite Stores on this machine"
+        }
+      ],
+      "stdin": null,
+      "with": {
+        "stats": {
+          "where": "item",
+          "keys": [
+            "size"
+          ],
+          "help": "the bytes of the Store's file with its write-ahead log, from one stat on its machine, starting nothing; null for a PostgreSQL Store and for a machine that does not answer"
+        }
+      },
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "items"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "items"
+      ],
+      "item": {
+        "short": {
+          "always": [
+            "store",
+            "engine"
+          ],
+          "sometimes": [
+            "state",
+            "machine",
+            "auth",
+            "connections",
+            "projects",
+            "projects_count",
+            "backups",
+            "op",
+            "blocked_by",
+            "reason",
+            "fix",
+            "observed_at"
+          ]
+        },
+        "long": [
+          "store",
+          "engine",
+          "state",
+          "machine",
+          "auth",
+          "connections",
+          "projects",
+          "projects_count",
+          "backups",
+          "op",
+          "blocked_by",
+          "reason",
+          "fix",
+          "observed_at",
+          "profile",
+          "synchronous_commit",
+          "sqlite_version",
+          "created_at",
+          "last_transfer"
+        ]
+      },
+      "examples": {
+        "short": [
+          "{\"items\":[{\"store\":\"shop\",\"engine\":\"sqlite\",\"machine\":\"dev\",\"projects\":[\"api\",\"web\"],\"backups\":[{\"bucket\":\"r2-main\"}]},{\"store\":\"sim-website\",\"engine\":\"sqlite\",\"machine\":\"docker\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"},\"projects\":[\"website\"]},{\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"auth\":\"pg-app\",\"connections\":[{\"url\":\"postgres://db.internal:5432/shop\"}],\"projects\":[\"abc\"]}]}"
+        ],
+        "long": "{\"items\":[{\"store\":\"shop\",\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"auth\":null,\"connections\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":2,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":null,\"profile\":\"disposable\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}},{\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"state\":\"ready\",\"machine\":null,\"auth\":\"pg-app\",\"connections\":[{\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\"},{\"machine\":\"lab\",\"url\":\"postgres://proxy.lab:6432/shop\"}],\"projects\":[\"api\",\"web\"],\"projects_count\":2,\"backups\":[],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":null,\"profile\":null,\"synchronous_commit\":\"local\",\"sqlite_version\":null,\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":null}]}"
+      },
+      "dropped": [],
+      "new_work": "A records-only state is new: today each item's state comes from the leases and a `stat` on the Store's machine, and is idle, in_use, busy, down or unresolved. `--machine` is a new filter. `blocked` with `blocked_by` replaces `down`."
+    },
+    {
+      "call": "store.get",
+      "badge": "merged",
+      "note": "+ <code>store.status</code>, <code>store.stats</code>. <code>state</code> comes from the home's records, with no probe. A sqlite Store is <code>ready</code>, <code>blocked</code> with <code>blocked_by</code> <code>{machine, reason}</code> when its machine is not ready, <code>busy</code> with <code>op</code> <code>{name, phase, started_at}</code> (name is move, remove, compact, backup or restore), or <code>broken</code> with <code>reason</code> <code>unresolved</code> and the clearing call as <code>fix</code>. A PostgreSQL Store is <code>ready</code>, <code>busy</code> or <code>broken</code>; it waits on no machine. Only <code>--with live</code> can answer <code>broken</code> with <code>missing</code> (no file where the record says; the fix restores a backup or removes the Store) or <code>unreachable</code> (this computer cannot reach the PostgreSQL server; the fix is <code>layerfs store doctor &lt;store&gt;</code>), or <code>unknown</code> with <code>observed_at</code>. A sqlite Store answers <code>machine</code>; a PostgreSQL Store answers <code>auth</code> and <code>connections</code> (the one without a <code>machine</code> is the one every machine uses) and has no default machine. The other engine's keys are null in the long form. <code>projects</code> shows the first 20 names. Each <code>backups</code> row is <code>{bucket}</code>, and in the long form <code>{bucket, file, sha256, heads_sha256, last, attempt}</code>: <code>last</code> is the last transfer that worked (<code>{call, at, size}</code>), <code>attempt</code> one that did not (<code>{call, at, error}</code>, else null). <code>heads_sha256</code> was <code>heads</code>. Whether a machine reaches a PostgreSQL Store is the doctor's to say (<code>store doctor</code>), not this call's",
+      "today": [
+        "store.get",
+        "store.status",
+        "store.stats"
+      ],
+      "help": "a Store's record and state",
+      "cli": "layerfs store get <store> [--with live,stats]",
+      "positionals": [
+        {
+          "name": "store",
+          "kind": "Name"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {
+        "live": {
+          "keys": [
+            "observed_at",
+            "holders",
+            "phases",
+            "behind",
+            "server_version",
+            "latency_ms"
+          ],
+          "help": "reads the Store where it lives, starting nothing: a sqlite Store's file through its machine, a PostgreSQL Store's server from this computer; state and its companion then come from the read. holders: the pids of other live processes that hold it; phases: a running compaction's phases in order, else null; behind: the buckets whose backup is older than the Store, null for PostgreSQL; server_version and latency_ms: the PostgreSQL server's answer, null for sqlite"
+        },
+        "stats": {
+          "keys": [
+            "size",
+            "logical_bytes",
+            "canonical_bytes",
+            "stored_bytes",
+            "metadata_bytes",
+            "file_bytes",
+            "free_bytes",
+            "dedupe",
+            "compression",
+            "init"
+          ],
+          "help": "opens the Store where it lives. size: the file with its write-ahead log (sqlite), the schema (PostgreSQL); logical_bytes, canonical_bytes, stored_bytes, metadata_bytes: the Store's publication counters; file_bytes: the database's pages; free_bytes: reusable pages, null for PostgreSQL; dedupe and compression: ratios as text, six decimals; init: {entries, files, size, canonical_bytes, stored_bytes, metadata_bytes, duration_ms} of the first project init, or null"
+        }
+      },
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "engine",
+          "state"
+        ],
+        "sometimes": [
+          "machine",
+          "auth",
+          "connections",
+          "projects",
+          "projects_count",
+          "backups",
+          "op",
+          "blocked_by",
+          "reason",
+          "fix",
+          "observed_at"
+        ]
+      },
+      "long": [
+        "engine",
+        "state",
+        "machine",
+        "auth",
+        "connections",
+        "projects",
+        "projects_count",
+        "backups",
+        "op",
+        "blocked_by",
+        "reason",
+        "fix",
+        "observed_at",
+        "store",
+        "profile",
+        "synchronous_commit",
+        "sqlite_version",
+        "created_at",
+        "last_transfer"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"projects\":[\"api\",\"web\"],\"backups\":[{\"bucket\":\"r2-main\"}]}",
+          "its machine is stopped: {\"engine\":\"sqlite\",\"state\":\"blocked\",\"machine\":\"docker\",\"projects\":[\"website\"],\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}",
+          "moving: {\"engine\":\"sqlite\",\"state\":\"busy\",\"machine\":\"native\",\"projects\":[\"api\",\"web\"],\"op\":{\"name\":\"move\",\"phase\":\"send\",\"started_at\":\"2026-11-18T09:16:59Z\"}}",
+          "lost reply on a move: {\"engine\":\"sqlite\",\"state\":\"broken\",\"machine\":\"native\",\"projects\":[\"api\",\"web\"],\"reason\":\"unresolved\",\"fix\":\"layerfs store move shop dev\"}",
+          "PostgreSQL: {\"engine\":\"postgresql\",\"state\":\"ready\",\"auth\":\"pg-app\",\"connections\":[{\"url\":\"postgres://db.internal:5432/shop\"},{\"machine\":\"lab\",\"url\":\"postgres://proxy.lab:6432/shop\"}],\"projects\":[\"api\",\"web\"]}"
+        ],
+        "long": "{\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"auth\":null,\"connections\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":2,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":null,\"store\":\"shop\",\"profile\":\"disposable\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}}"
+      },
+      "dropped": [
+        {
+          "today": "<name> (store.get, store.status, store.stats)",
+          "now": "<store>",
+          "why": "an existing thing is named by its own word, never `name`"
+        },
+        {
+          "today": "--machine (store.status)",
+          "now": "store doctor <store> --machine M",
+          "why": "whether one machine reaches a Store is a check, and the doctor makes it"
+        }
+      ],
+      "new_work": "Records-only state with the six states is new: today store.get answers no state and store.status always reads the leases, the file or the server. So that every client sees `busy`, store.compact, backup.create and backup.restore must record an `op` in the Store's record; today only a move and a remove do (a compaction keeps its own record beside the Store, backup.create holds a file lock). `live.behind` is new: it reads the Store's heads where it lives, through its worker on a machine (today backup.list compares them on native only). `attempt` on a backup row is new: today a link is written only after a transfer succeeds. `auth` and `connections` are new (see store.save_auth, store.connect). The reason codes `missing` and `unreachable` replace today's `down_reason` sentence."
+    },
+    {
+      "call": "store.create",
+      "badge": "extended",
+      "note": "sqlite only: an empty Store on this computer, or with <code>--machine</code> made on that machine directly. <code>Exists</code> when a Store has the name",
+      "today": [
+        "store.create"
+      ],
+      "help": "an empty sqlite Store",
+      "cli": "layerfs store create <name> [--machine M]",
+      "positionals": [
+        {
+          "name": "name",
+          "kind": "Name"
+        }
+      ],
+      "options": [
+        {
+          "name": "machine",
+          "kind": "Name",
+          "help": "make it on this machine; this computer (native) when left out"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "ok"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "ok",
+        "outcome",
+        "store",
+        "engine",
+        "machine",
+        "profile",
+        "sqlite_version",
+        "created_at"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}"
+        ],
+        "long": "{\"ok\":true,\"outcome\":\"created\",\"store\":\"shop\",\"engine\":\"sqlite\",\"machine\":\"native\",\"profile\":\"disposable\",\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      },
+      "dropped": [],
+      "new_work": "`--machine` is new: today store.create makes the Store on native only, and a Store reaches a machine by store.push."
+    },
+    {
+      "call": "store.connect",
+      "badge": "reshaped",
+      "note": "PostgreSQL. The URL holds host, port, database and TLS options; one with a user or a password is refused <code>InvalidInput</code>. <b>First connect:</b> <code>--auth</code> is required, here and only here; it is made from this computer, which gives an empty database the LayerFS schema and its id, or reads them, and answers the projects found. The URL is the address every machine uses. <b>On a connected Store:</b> with <code>--machine</code> the URL becomes that machine's own address, proven from that machine; without it, it replaces the address every machine uses, proven from this computer. Either must read the Store's id (<code>Unavailable</code> otherwise) and refuses <code>--auth</code> and <code>--synchronous-commit</code> (<code>InvalidInput</code>: a machine never has its own login; both change with <code>store update</code>). A Store has at most one address for every machine and one per machine. A database whose id another Store of this home holds is <code>Exists</code>. <code>projects</code> shows the first 20 names. A running Sandbox keeps its route",
+      "today": [
+        "store.connect"
+      ],
+      "help": "connect a PostgreSQL database as a Store, or set an address of a connected one",
+      "cli": "layerfs store connect <store> <url> [--auth A] [--machine M] [--synchronous-commit local]",
+      "positionals": [
+        {
+          "name": "store",
+          "kind": "Name"
+        },
+        {
+          "name": "url",
+          "kind": "Text"
+        }
+      ],
+      "options": [
+        {
+          "name": "auth",
+          "kind": "Name",
+          "help": "the saved login; required on a Store's first connect, refused afterwards"
+        },
+        {
+          "name": "machine",
+          "kind": "Name",
+          "help": "on a connected Store: the address is this machine's own"
+        },
+        {
+          "name": "synchronous_commit",
+          "kind": "Text",
+          "help": "off, local, remote_write, on or remote_apply; first connect only",
+          "default": "local"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [],
+        "sometimes": [
+          "ok",
+          "projects",
+          "projects_count"
+        ]
+      },
+      "long": [
+        "ok",
+        "projects",
+        "projects_count",
+        "outcome",
+        "store",
+        "engine",
+        "auth",
+        "connections",
+        "synchronous_commit"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "first connect: {\"projects\":[\"api\",\"web\"]}",
+          "an empty database, or an address set: {\"ok\":true}"
+        ],
+        "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":2,\"outcome\":\"connected\",\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"auth\":\"pg-app\",\"connections\":[{\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\"}],\"synchronous_commit\":\"local\"}"
+      },
+      "dropped": [
+        {
+          "today": "<name>",
+          "now": "<store>",
+          "why": "an existing thing is named by its own word, never `name`"
+        },
+        {
+          "today": "--password",
+          "now": "--auth",
+          "why": "a login is saved once in the home and named by any number of Stores"
+        }
+      ],
+      "new_work": "Saved logins and a URL with no user are new: today the record holds the URL with its user and a password reference (env:NAME or file:/path) per Store. A machine's own address through connect replaces store.update --machine --url, and no longer takes a password; the proof from that machine exists. Replacing the address every machine uses is store.update --url today. The id-only uniqueness check is a change: today a second Store is also refused when its URL names the same host, port and database. `outcome` is connected for a new Store and updated for an address."
+    },
+    {
+      "call": "store.disconnect",
+      "badge": "reshaped",
+      "note": "PostgreSQL. Without <code>--machine</code> the Store is forgotten and its data stays; refused <code>InUse</code> while a process holds it or a Sandbox of its projects exists. With <code>--machine</code>, that machine's own address is removed and it dials the Store's again; refused <code>NotFound</code> when the machine has none. A sqlite Store is <code>InvalidInput</code>, naming <code>store remove</code>",
+      "today": [
+        "store.disconnect"
+      ],
+      "help": "forget a PostgreSQL Store, or one machine's own address; its data stays",
+      "cli": "layerfs store disconnect <store> [--machine M]",
+      "positionals": [
+        {
+          "name": "store",
+          "kind": "Name"
+        }
+      ],
+      "options": [
+        {
+          "name": "machine",
+          "kind": "Name",
+          "help": "remove only this machine's own address"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "ok"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "ok",
+        "outcome",
+        "store",
+        "machine"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}"
+        ],
+        "long": "{\"ok\":true,\"outcome\":\"disconnected\",\"store\":\"shop-pg\",\"machine\":null}"
+      },
+      "dropped": [
+        {
+          "today": "<name>",
+          "now": "<store>",
+          "why": "an existing thing is named by its own word, never `name`"
+        }
+      ],
+      "new_work": "`--machine` moves here from store.update --machine --clear; the capability exists."
+    },
+    {
+      "call": "store.save_auth",
+      "badge": "new",
+      "note": "a login saved once in the home: a user and a password, no address. The password is read from stdin, kept in the home's secret folder (0600) and never answered or logged. Saving again under the same name rotates it: every Store and machine using it picks it up at its next connection, and running Sandboxes keep their session",
+      "today": [],
+      "help": "save a PostgreSQL login in the home; saving again rotates it",
+      "cli": "layerfs store save-auth <auth> --user U --password-stdin",
+      "positionals": [
+        {
+          "name": "auth",
+          "kind": "Name"
+        }
+      ],
+      "options": [
+        {
+          "name": "user",
+          "kind": "Text",
+          "help": "the PostgreSQL role; required",
+          "required": true
+        },
+        {
+          "name": "password_stdin",
+          "kind": "Bool",
+          "help": "read the password from stdin; required",
+          "required": true
+        }
+      ],
+      "stdin": "secret",
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "ok"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "ok",
+        "outcome",
+        "auth",
+        "user",
+        "stores",
+        "stores_count"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}"
+        ],
+        "long": "{\"ok\":true,\"outcome\":\"saved\",\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[],\"stores_count\":0}"
+      },
+      "dropped": [],
+      "new_work": "All of it: saved logins, the home's secret folder and reading a secret from stdin do not exist. Today each Store records its own password reference (env:NAME or file:/path), resolved by the caller on each call."
+    },
+    {
+      "call": "store.auths",
+      "badge": "new",
+      "note": "never the password. <code>stores</code> are the Stores that name the login (first 20). Unpaged: a home holds a handful of logins",
+      "today": [],
+      "help": "the saved PostgreSQL logins and the Stores that use each",
+      "cli": "layerfs store auths",
+      "positionals": [],
+      "options": [],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "items"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "items"
+      ],
+      "item": {
+        "short": {
+          "always": [
+            "auth",
+            "user"
+          ],
+          "sometimes": [
+            "stores",
+            "stores_count"
+          ]
+        },
+        "long": [
+          "auth",
+          "user",
+          "stores",
+          "stores_count",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "examples": {
+        "short": [
+          "{\"items\":[{\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[\"shop-pg\",\"analytics\"]},{\"auth\":\"pg-ro\",\"user\":\"reader\"}]}"
+        ],
+        "long": "{\"items\":[{\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[\"shop-pg\",\"analytics\"],\"stores_count\":2,\"created_at\":\"2026-11-17T09:16:59Z\",\"updated_at\":\"2026-11-18T09:16:59Z\"}]}"
+      },
+      "dropped": [],
+      "new_work": "All of it (see store.save_auth)."
+    },
+    {
+      "call": "store.remove_auth",
+      "badge": "new",
+      "note": "refused <code>InUse</code> while a Store names it, listing those Stores",
+      "today": [],
+      "help": "remove a saved PostgreSQL login no Store uses",
+      "cli": "layerfs store remove-auth <auth>",
+      "positionals": [
+        {
+          "name": "auth",
+          "kind": "Name"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "ok"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "ok",
+        "outcome",
+        "auth"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}"
+        ],
+        "long": "{\"ok\":true,\"outcome\":\"removed\",\"auth\":\"pg-ro\"}"
+      },
+      "dropped": [],
+      "new_work": "All of it (see store.save_auth)."
+    },
+    {
+      "call": "store.update",
+      "badge": "reshaped",
+      "note": "PostgreSQL: another saved login, or the setting; one of the two is required. A new login is checked once, on the Store's connection, before it is saved, and must read the same id. An address change is a <code>store connect</code>; a machine's own address is removed with <code>store disconnect --machine</code>. A running Sandbox keeps the connection it started with",
+      "today": [
+        "store.update"
+      ],
+      "help": "change a PostgreSQL Store's saved login or its synchronous_commit",
+      "cli": "layerfs store update <store> [--auth A] [--synchronous-commit S]",
+      "positionals": [
+        {
+          "name": "store",
+          "kind": "Name"
+        }
+      ],
+      "options": [
+        {
+          "name": "auth",
+          "kind": "Name",
+          "help": "another saved login"
+        },
+        {
+          "name": "synchronous_commit",
+          "kind": "Text",
+          "help": "off, local, remote_write, on or remote_apply"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "ok"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "ok",
+        "outcome",
+        "store",
+        "auth",
+        "synchronous_commit"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}"
+        ],
+        "long": "{\"ok\":true,\"outcome\":\"updated\",\"store\":\"shop-pg\",\"auth\":\"pg-app-2\",\"synchronous_commit\":\"local\"}"
+      },
+      "dropped": [
+        {
+          "today": "<name>",
+          "now": "<store>",
+          "why": "an existing thing is named by its own word, never `name`"
+        },
+        {
+          "today": "--url",
+          "now": "store connect <store> <url>",
+          "why": "an address change is a connect, checked like one"
+        },
+        {
+          "today": "--machine",
+          "now": "store connect <store> <url> --machine M",
+          "why": "a machine's own address is a connect; the login is the Store's"
+        },
+        {
+          "today": "--password",
+          "now": "--auth, or store save-auth to rotate",
+          "why": "the login is saved once and named"
+        },
+        {
+          "today": "--clear",
+          "now": "store disconnect <store> --machine M",
+          "why": "removing an address is a disconnect"
+        }
+      ],
+      "new_work": "`--auth` is new (see store.save_auth). `--synchronous-commit` exists today."
+    },
+    {
+      "call": "store.move",
+      "badge": "merged",
+      "note": "+ <code>store.push</code>, <code>store.pull</code> (<code>store pull shop</code> is now <code>store move shop native</code>). A sqlite Store goes to or from this computer only (C13): <code>&lt;machine&gt;</code> is where it goes, and it or the Store's machine must be <code>native</code>. Between two other machines it is refused <code>InvalidInput</code> with the fix <code>layerfs store move &lt;store&gt; native</code>. Refused <code>InUse</code> while a process holds it or a Sandbox of its projects exists. Phases: check, snapshot, send (bytes), verify, install, record, retire; a failure names its phase and keeps what exists. A lost reply keeps both copies and leaves <code>broken</code>, <code>unresolved</code>; a new <code>store move</code> clears it",
+      "today": [
+        "store.push",
+        "store.pull"
+      ],
+      "help": "move a sqlite Store between this computer and a machine",
+      "cli": "layerfs store move <store> <machine>",
+      "positionals": [
+        {
+          "name": "store",
+          "kind": "Name"
+        },
+        {
+          "name": "machine",
+          "kind": "Name"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": true,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "moved_bytes"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "moved_bytes",
+        "outcome",
+        "store",
+        "from",
+        "to",
+        "heads_sha256"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"moved_bytes\":213263952}"
+        ],
+        "long": "{\"moved_bytes\":213263952,\"outcome\":\"moved\",\"store\":\"shop\",\"from\":\"native\",\"to\":\"dev\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\"}"
+      },
+      "dropped": [
+        {
+          "today": "<name> (store.push, store.pull)",
+          "now": "<store>",
+          "why": "an existing thing is named by its own word, never `name`"
+        }
+      ],
+      "new_work": null
+    },
+    {
+      "call": "store.remove",
+      "badge": "reshaped",
+      "note": "sqlite only: deletes the file and every project in it. Refused <code>InUse</code> while a process holds it or a Sandbox of its projects exists. It clears an unresolved move or remove. A PostgreSQL Store is <code>InvalidInput</code>, naming <code>store disconnect</code>",
+      "today": [
+        "store.remove"
+      ],
+      "help": "delete a sqlite Store with every project in it",
+      "cli": "layerfs store remove <store>",
+      "positionals": [
+        {
+          "name": "store",
+          "kind": "Name"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "ok"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "ok",
+        "outcome",
+        "store"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}"
+        ],
+        "long": "{\"ok\":true,\"outcome\":\"removed\",\"store\":\"shop\"}"
+      },
+      "dropped": [
+        {
+          "today": "<name>",
+          "now": "<store>",
+          "why": "an existing thing is named by its own word, never `name`"
+        }
+      ],
+      "new_work": null
+    },
+    {
+      "call": "store.compact",
+      "badge": "reshaped",
+      "note": "<code>freed_bytes</code> is how much the Store's file or database shrank. The long form is today's report with byte totals named <code>_bytes</code>: <code>discarded_bytes</code> (logical_discarded), <code>reusable_bytes</code> (backend_reusable), <code>dead_bytes</code> (bound and refined are equal), <code>generation_before</code> and <code>generation_after</code>, <code>residue_*</code>; outcome is <code>compacted</code> or <code>unchanged</code> (today's path rebuild or none). <code>delta_base_references</code> shows its first 20 ids: today up to 1024, about 69 KB. Phases: mark, build, verify, install, cleanup (sqlite); mark, build, swap, cleanup (PostgreSQL). A sqlite Store on another machine is <code>Unsupported</code>: run it on that machine",
+      "today": [
+        "store.compact"
+      ],
+      "help": "reclaim dead bytes from one Store",
+      "cli": "layerfs store compact <store>",
+      "positionals": [
+        {
+          "name": "store",
+          "kind": "Name"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": true,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "freed_bytes"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "freed_bytes",
+        "outcome",
+        "store",
+        "generation_before",
+        "generation_after",
+        "dead_bytes",
+        "discarded_bytes",
+        "reusable_bytes",
+        "kept_waste",
+        "delta_base_references",
+        "delta_base_references_count",
+        "peak_temp_bytes",
+        "residue_bytes",
+        "residue_artifacts",
+        "residue_reason",
+        "estimate",
+        "zero_reasons"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"freed_bytes\":73400320}",
+          "nothing to reclaim: {\"freed_bytes\":0}"
+        ],
+        "long": "{\"freed_bytes\":73400320,\"outcome\":\"compacted\",\"store\":\"shop\",\"generation_before\":41,\"generation_after\":42,\"dead_bytes\":81264640,\"discarded_bytes\":195035136,\"reusable_bytes\":4096,\"kept_waste\":{\"dead_in_retained_packs_bytes\":1048576,\"delta_bases_bytes\":524288,\"inode_blocks_bytes\":0},\"delta_base_references\":[\"12d1c0ffee58aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"],\"delta_base_references_count\":1,\"peak_temp_bytes\":139862016,\"residue_bytes\":0,\"residue_artifacts\":[],\"residue_reason\":null,\"estimate\":false,\"zero_reasons\":[{\"field\":\"residue_bytes\",\"reason\":\"settled\"}]}"
+      },
+      "dropped": [
+        {
+          "today": "<name>",
+          "now": "<store>",
+          "why": "an existing thing is named by its own word, never `name`"
+        }
+      ],
+      "new_work": null
+    },
+    {
+      "call": "store.doctor",
+      "badge": "new",
+      "note": "the Store, in this order: <code>store.record</code>, <code>store.operation</code> (no half-finished move, no stale lease), <code>store.connection</code> (it is reached where it lives), <code>store.identity</code> (the id in its data against the record), <code>store.schema</code>; then a shallow check of each project (<code>project.listed</code>: its record against the Store's own list; a notice with a fix, not an error). It stops after the schema check and reads no data: <code>project doctor --full</code> reads data. A PostgreSQL Store is also probed from each machine that has a Sandbox of it (R9): one <code>store.connection</code> check per machine, with <code>from</code> naming the machine, on the check entry and on its finding. <code>--machine</code> adds a probe from one more machine, Sandbox or not; it is for the command line and is refused <code>InvalidInput</code> for a sqlite Store. Under a stopped machine the records checks are made and the rest are <code>not_checked</code> with <code>blocked_by</code>. The <code>tree</code> is the Store's node with <code>projects</code>. Replaces the off-table <code>layerfs doctor --target store.integrity --name S</code> and <code>--target store.connection</code>, with no alias (R1); <code>--quick</code> and the whole-Store scan it shortened are gone, and so is <code>--timeout</code>. Exits 0 once the report is made",
+      "today": [],
+      "help": "check a Store, then each of its projects",
+      "cli": "layerfs store doctor <store> [--machine M]",
+      "positionals": [
+        {
+          "name": "store",
+          "kind": "Name"
+        }
+      ],
+      "options": [
+        {
+          "name": "machine",
+          "kind": "Name",
+          "help": "also probe a PostgreSQL Store's connection from this machine"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": true,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [],
+        "sometimes": [
+          "ok",
+          "findings",
+          "not_checked"
+        ]
+      },
+      "long": [
+        "ok",
+        "findings",
+        "not_checked",
+        "status",
+        "counts",
+        "observed_at",
+        "tree"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}",
+          "a project the Store does not list: {\"findings\":[{\"project\":\"qv2-store/qv2-probe\",\"check\":\"project.listed\",\"severity\":\"notice\",\"message\":\"on record, but the Store does not list it\",\"fix\":\"layerfs project delete qv2-store/qv2-probe\"}]}",
+          "a check ran out of time: {\"not_checked\":[{\"project\":\"qv2-store/qv2-strata\",\"check\":\"project.listed\",\"reason\":\"timeout\"}]}",
+          "its machine is stopped: {\"not_checked\":[{\"store\":\"sim-website\",\"check\":\"store.connection\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}},{\"project\":\"sim-website/website\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}",
+          "PostgreSQL, one machine cannot reach it: {\"findings\":[{\"store\":\"shop-pg\",\"check\":\"store.connection\",\"severity\":\"error\",\"message\":\"machine lab cannot reach the server at db.internal:5432\",\"from\":\"lab\"}]}"
+        ],
+        "long": "{\"ok\":false,\"findings\":[{\"project\":\"qv2-store/qv2-probe\",\"check\":\"project.listed\",\"severity\":\"notice\",\"message\":\"on record, but the Store does not list it\",\"fix\":\"layerfs project delete qv2-store/qv2-probe\",\"from\":null,\"evidence\":{\"recorded\":true,\"listed\":false}}],\"not_checked\":[],\"status\":\"notice\",\"counts\":{\"ok\":2,\"notice\":1,\"warning\":0,\"error\":0,\"not_checked\":0},\"observed_at\":\"2026-11-18T09:16:59Z\",\"tree\":{\"store\":\"qv2-store\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"store.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.operation\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.connection\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.identity\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.schema\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null,\"projects\":[{\"project\":\"qv2-store/qv2-strata\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"project.listed\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null},{\"project\":\"qv2-store/qv2-probe\",\"status\":\"notice\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"project.listed\",\"outcome\":\"notice\",\"from\":null}],\"blocked_by\":null,\"reason\":null}]}}"
+      },
+      "dropped": [],
+      "new_work": "The call is new on the table. The shallow Store check is new work (C14): today's cheapest Store mode still scans the file, so it needs a cut that stops after the schema check and a new argument on the worker's Store diagnosis that an older worker will not know. Probing a PostgreSQL Store from each machine that has a Sandbox of it is new; the probe itself exists (store.status --machine uses it). `store.schema` and `store.operation` are new check ids; `store.record`, `store.identity` and `store.connection` exist. The project record comparison exists (project.get makes it); reporting it as a notice is new. One answer shape, a time budget per thing and one progress event per finished thing ({phase: self|projects, done, total, node}) are new."
+    }
+  ]
+}

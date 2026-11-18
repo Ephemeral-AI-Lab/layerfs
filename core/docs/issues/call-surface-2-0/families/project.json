@@ -1,0 +1,533 @@
+{
+  "family": "project",
+  "who": "agents",
+  "old_count": 7,
+  "blurb": "Projects in the home. The Store's engine and machine come from the Store.",
+  "reasons": [
+    "<b>Why <code>hide_path</code>:</b> an agent meeting <code>remove_file</code> cold will use it like <code>file.rm</code>, and hide a path from the project's whole history.",
+    "<b>Why stats has no <code>commit</code>:</b> the caller named the Branch or <code>--at</code>; the Commit it counted is in the long form.",
+    "<b>Why sizes are opt-in on the list:</b> a file count and a size per project need a count kept at publish, or a tree walk that comes back partial for any repo with <code>node_modules</code>. <code>project list --with stats</code> asks for them; <code>project get</code> takes no <code>--with</code>.",
+    "<b>Why <code>file_count</code>, not <code>files</code>:</b> a plural noun is always a list, so a number is never named with one.",
+    "<b>Why only a project has two doctor depths:</b> the shallow check reads records; <code>--full</code> reads the data its Branches reach, which can take minutes."
+  ],
+  "calls": [
+    {
+      "call": "project.init",
+      "badge": "reshaped",
+      "note": "<code>commit</code> is main's first Layer (today's <code>layer</code>); <code>folder</code> is an absolute path on the caller's computer; <code>--timeout</code> stays a whole number of milliseconds, as today",
+      "today": [
+        "project.init"
+      ],
+      "help": "import a folder on this computer as a new project into an existing Store",
+      "cli": "layerfs project init <project> <folder> [--timeout 3600000]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "folder",
+          "kind": "Text"
+        }
+      ],
+      "options": [
+        {
+          "name": "timeout",
+          "kind": "Int",
+          "help": "the time limit in milliseconds",
+          "default": 3600000
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": true,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "commit"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "commit",
+        "outcome",
+        "project",
+        "store",
+        "engine",
+        "machine",
+        "root",
+        "created_at"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"commit\":\"32ab9e01\"}"
+        ],
+        "long": "{\"commit\":\"32ab9e01\",\"outcome\":\"created\",\"project\":\"shop/api\",\"store\":\"shop\",\"engine\":\"sqlite\",\"machine\":\"native\",\"root\":\"9f3c0b7a\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      },
+      "dropped": [],
+      "new_work": null
+    },
+    {
+      "call": "project.list",
+      "badge": "extended",
+      "note": "keeps the recorded projects of a Store it cannot open, marked <code>blocked</code>; <code>[store]</code> → <code>--store</code>; a row leaves <code>state</code> out when <code>ready</code>; a project on record that its Store does not list stays hidden, as today (<code>project doctor</code> reports it)",
+      "today": [
+        "project.list"
+      ],
+      "help": "every project in the home, or one Store's",
+      "cli": "layerfs project list [--store S] [--with stats] [--limit 100] [--cursor C]",
+      "positionals": [],
+      "options": [
+        {
+          "name": "store",
+          "kind": "Name",
+          "help": "list only this Store's projects"
+        },
+        {
+          "name": "limit",
+          "kind": "Int",
+          "help": "the most rows in one page, 1 to 1000",
+          "default": 100
+        },
+        {
+          "name": "cursor",
+          "kind": "Text",
+          "help": "the `next_cursor` of the page before; it carries the pinned Commit and the filters"
+        }
+      ],
+      "stdin": null,
+      "with": {
+        "stats": {
+          "where": "item",
+          "keys": [
+            "file_count",
+            "size"
+          ],
+          "help": "each project's file count and size in bytes at main's head; left out for a blocked project"
+        }
+      },
+      "paging": "cursor",
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "items"
+        ],
+        "sometimes": [
+          "next_cursor"
+        ]
+      },
+      "long": [
+        "items",
+        "next_cursor"
+      ],
+      "item": {
+        "short": {
+          "always": [
+            "project"
+          ],
+          "sometimes": [
+            "state",
+            "op",
+            "blocked_by",
+            "reason",
+            "fix"
+          ]
+        },
+        "long": [
+          "project",
+          "state",
+          "op",
+          "blocked_by",
+          "reason",
+          "fix",
+          "store",
+          "engine",
+          "machine",
+          "commit",
+          "created_at"
+        ]
+      },
+      "examples": {
+        "short": [
+          "{\"items\":[{\"project\":\"shop/api\"},{\"project\":\"sim-website/website\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}",
+          "more pages: {\"items\":[{\"project\":\"shop/api\"}],\"next_cursor\":\"b3A6MQ\"}"
+        ],
+        "long": "{\"items\":[{\"project\":\"shop/api\",\"state\":\"ready\",\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"store\":\"shop\",\"engine\":\"sqlite\",\"machine\":\"native\",\"commit\":\"32ab9e01\",\"created_at\":\"2026-11-17T09:16:59Z\"},{\"project\":\"sim-website/website\",\"state\":\"blocked\",\"op\":null,\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"},\"reason\":null,\"fix\":null,\"store\":\"sim-website\",\"engine\":\"sqlite\",\"machine\":\"docker\",\"commit\":null,\"created_at\":\"2026-11-17T09:16:59Z\"}],\"next_cursor\":null}"
+      },
+      "dropped": [
+        {
+          "today": "[store]",
+          "now": "--store S",
+          "why": "anything optional is an option"
+        },
+        {
+          "today": "--page-size",
+          "now": "--limit",
+          "why": "one paging convention"
+        },
+        {
+          "today": "--page-pos",
+          "now": "--cursor",
+          "why": "one paging convention"
+        }
+      ],
+      "new_work": "`state` and its companions (`op`, `blocked_by`, `reason`, `fix`) are new: a project has no state today. They come from the home's records (the Store's and its machine's state, a recorded delete or Init), with no probe. Listing the projects of a Store that cannot be opened is new: today an all-Stores listing leaves that Store out and a named one is refused. `commit` (main's head) per row is new in the answer: the listing already reads each project's stack record, which holds it, but keeps only the name and stack id, and the worker's listing reply does not carry it. `--with stats` is new: no call lists a size per project today, and a file count needs a count kept at publish (`project.stats` walks the tree and can stop at its work bound). `--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor must carry the Commit the first page read and the call's filters."
+    },
+    {
+      "call": "project.get",
+      "badge": "reshaped",
+      "note": "<code>commit</code> is main's head; a project of a Store that cannot be opened answers <code>blocked</code>, not a refusal; no <code>--with</code>",
+      "today": [
+        "project.get"
+      ],
+      "help": "one project: its Store, state and main's head",
+      "cli": "layerfs project get <project>",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "store",
+          "state"
+        ],
+        "sometimes": [
+          "commit",
+          "op",
+          "blocked_by",
+          "reason",
+          "fix"
+        ]
+      },
+      "long": [
+        "store",
+        "state",
+        "commit",
+        "op",
+        "blocked_by",
+        "reason",
+        "fix",
+        "project",
+        "engine",
+        "machine",
+        "created_at"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"store\":\"shop\",\"state\":\"ready\",\"commit\":\"32ab9e01\"}",
+          "its machine is stopped: {\"store\":\"sim-website\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}"
+        ],
+        "long": "{\"store\":\"shop\",\"state\":\"ready\",\"commit\":\"32ab9e01\",\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"project\":\"shop/api\",\"engine\":\"sqlite\",\"machine\":\"native\",\"created_at\":\"2026-11-17T09:16:59Z\"}"
+      },
+      "dropped": [],
+      "new_work": "`state` and its companions (`op`, `blocked_by`, `reason`, `fix`) are new: a project has no state today. They come from the home's records (the Store's and its machine's state, a recorded delete or Init), with no probe. Answering `blocked` for a project whose Store cannot be opened is new (a refusal today). `commit` is new in the answer: the call already lists the Store's stack records, which hold main's head."
+    },
+    {
+      "call": "project.stats",
+      "badge": "reshaped",
+      "note": "no <code>commit</code>; <code>logical</code> → <code>size</code>; counts are <code>file_count</code>, <code>dir_count</code>, <code>symlink_count</code> (a plural is always a list); <code>partial</code> when the count stopped at its work bound; Branch defaults to main",
+      "today": [
+        "project.stats"
+      ],
+      "help": "entry counts and size of the tree at a Branch's head or a Commit",
+      "cli": "layerfs project stats <project> [--branch B] [--at C]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        }
+      ],
+      "options": [
+        {
+          "name": "branch",
+          "kind": "Name",
+          "help": "the Branch counted",
+          "default": "main"
+        },
+        {
+          "name": "at",
+          "kind": "Name",
+          "help": "read as of this Commit: a full id, or a prefix of 8 or more characters"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "file_count",
+          "dir_count",
+          "symlink_count",
+          "size"
+        ],
+        "sometimes": [
+          "partial"
+        ]
+      },
+      "long": [
+        "file_count",
+        "dir_count",
+        "symlink_count",
+        "size",
+        "partial",
+        "commit",
+        "root"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"file_count\":1834,\"dir_count\":212,\"symlink_count\":3,\"size\":52428800}",
+          "a tree larger than the work bound: {\"file_count\":50000,\"dir_count\":4210,\"symlink_count\":12,\"size\":912680550,\"partial\":true}"
+        ],
+        "long": "{\"file_count\":1834,\"dir_count\":212,\"symlink_count\":3,\"size\":52428800,\"partial\":false,\"commit\":\"32ab9e01\",\"root\":\"9f3c0b7a\"}"
+      },
+      "dropped": [
+        {
+          "today": "[branch]",
+          "now": "--branch B",
+          "why": "anything optional is an option"
+        },
+        {
+          "today": "[commit]",
+          "now": "--at C",
+          "why": "one way to pin a read"
+        }
+      ],
+      "new_work": "An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`."
+    },
+    {
+      "call": "project.export",
+      "badge": "reshaped",
+      "note": "<code>destination</code> is an absolute path on the caller's computer, absent or an empty folder",
+      "today": [
+        "project.export"
+      ],
+      "help": "export a Branch's committed tree to a folder on this computer",
+      "cli": "layerfs project export <project> <destination> [--branch B] [--at C]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "destination",
+          "kind": "Text"
+        }
+      ],
+      "options": [
+        {
+          "name": "branch",
+          "kind": "Name",
+          "help": "the Branch exported",
+          "default": "main"
+        },
+        {
+          "name": "at",
+          "kind": "Name",
+          "help": "export this Commit instead of the Branch's head: a full id, or a prefix of 8 or more characters"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": true,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "file_count",
+          "size"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "file_count",
+        "size",
+        "dir_count",
+        "symlink_count",
+        "commit",
+        "root"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"file_count\":1834,\"size\":52428800}"
+        ],
+        "long": "{\"file_count\":1834,\"size\":52428800,\"dir_count\":212,\"symlink_count\":3,\"commit\":\"5c77a1d0\",\"root\":\"9f3c0b7a\"}"
+      },
+      "dropped": [],
+      "new_work": "`--at` is new: today export takes a Branch and pins its head, with no Commit argument. Progress events with only `phase`, `done` and `total` are a reshaping: today's events also carry running counts."
+    },
+    {
+      "call": "project.delete",
+      "badge": "reshaped",
+      "note": "answers <code>{\"home_entry_kept\":true}</code> in place of <code>{\"ok\":true}</code> when a second call is needed to remove the home's entry",
+      "today": [
+        "project.delete"
+      ],
+      "help": "retire one project in its Store and remove its home entry",
+      "cli": "layerfs project delete <project>",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [],
+        "sometimes": [
+          "ok",
+          "home_entry_kept"
+        ]
+      },
+      "long": [
+        "ok",
+        "home_entry_kept",
+        "outcome",
+        "deleted_at"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}",
+          "the home's entry could not be removed: {\"home_entry_kept\":true}"
+        ],
+        "long": "{\"ok\":true,\"home_entry_kept\":false,\"outcome\":\"deleted\",\"deleted_at\":\"2026-11-18T09:16:59Z\"}"
+      },
+      "dropped": [],
+      "new_work": null
+    },
+    {
+      "call": "project.hide_path",
+      "badge": "renamed",
+      "note": "was <code>remove_file</code>; it writes a marker, not a Commit, so it takes no <code>-m</code> and answers no <code>commit</code>; a path already hidden answers <code>{\"unchanged\":true}</code>",
+      "today": [
+        "project.remove_file"
+      ],
+      "help": "hide one absolute path from the project's whole history; frees no bytes",
+      "cli": "layerfs project hide-path <project> <path>",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "path",
+          "kind": "Text"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [],
+        "sometimes": [
+          "ok",
+          "unchanged"
+        ]
+      },
+      "long": [
+        "ok",
+        "unchanged",
+        "outcome",
+        "path",
+        "frontier_serial",
+        "hidden_at"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}",
+          "already hidden: {\"unchanged\":true}"
+        ],
+        "long": "{\"ok\":true,\"unchanged\":false,\"outcome\":\"hidden\",\"path\":\"/secrets.env\",\"frontier_serial\":412,\"hidden_at\":\"2026-11-18T09:16:59Z\"}"
+      },
+      "dropped": [],
+      "new_work": null
+    },
+    {
+      "call": "project.doctor",
+      "badge": "new",
+      "note": "shallow: its record (<code>project.record</code>) and its record against the Store's own list (<code>project.listed</code>); <code>--full</code> also reads everything reachable from main's head and each Branch's head (<code>project.data</code>). A project on record that the Store does not list is a <code>notice</code> with the fix <code>layerfs project delete &lt;project&gt;</code>, not an error. A <code>not_checked</code> entry carries <code>blocked_by</code> or <code>reason</code> (<code>timeout</code>, <code>busy</code>, <code>lost</code>). The answer is the one doctor shape; the project node's <code>coverage</code> is <code>shallow</code>, <code>full</code> with <code>--full</code>, or <code>none</code> when it could not be checked",
+      "today": [],
+      "help": "check one project's record; with --full, also read and check its data",
+      "cli": "layerfs project doctor <project> [--full]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        }
+      ],
+      "options": [
+        {
+          "name": "full",
+          "kind": "Bool",
+          "help": "also read and check everything the project's Branches reach; can take minutes"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": true,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [],
+        "sometimes": [
+          "ok",
+          "findings",
+          "not_checked"
+        ]
+      },
+      "long": [
+        "ok",
+        "findings",
+        "not_checked",
+        "status",
+        "counts",
+        "observed_at",
+        "tree"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}",
+          "a problem: {\"findings\":[{\"project\":\"shop/old\",\"check\":\"project.listed\",\"severity\":\"notice\",\"message\":\"on record, but the Store does not list it\",\"fix\":\"layerfs project delete shop/old\"}]}",
+          "its machine is stopped: {\"not_checked\":[{\"project\":\"sim-website/website\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}"
+        ],
+        "long": "{\"ok\":true,\"findings\":[],\"not_checked\":[],\"status\":\"ok\",\"counts\":{\"ok\":1,\"notice\":0,\"warning\":0,\"error\":0,\"not_checked\":0},\"observed_at\":\"2026-11-18T09:16:59Z\",\"tree\":{\"project\":\"shop/api\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"project.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"project.listed\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}}"
+      },
+      "dropped": [],
+      "new_work": "The call and its answer shape are new. The record check is not: `project.get` and `project.list` already compare a project's record with the Store's own list (and hide a project the Store does not list); the doctor reports that case as a notice with a fix. `--full` is new work: a streamed, bounded-memory, read-only walk of everything reachable from main's head and the head of each Branch, on both engines and through a machine's worker; today's integrity check has no scope smaller than a Store. Progress events are new. The fix `layerfs project delete <project>` finishes a delete that kept the home's entry; no call today removes the entry of a project that was deleted from another home."
+    }
+  ]
+}

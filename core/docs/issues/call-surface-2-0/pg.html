@@ -1,0 +1,105 @@
+    <section id="postgres">
+      <h2>PostgreSQL: one Store, many routes</h2>
+      <p>A machine can use any number of PostgreSQL Stores, and a Store can be used from any number of machines, each reaching it its own way: directly, through a proxy, through a tunnel. So nothing is configured per pair. The connection a machine uses is put together from three parts that vary independently.</p>
+      <div class="tbl"><table style="min-width:680px">
+        <thead><tr><th>Part</th><th>Says</th><th>Comes from</th><th>Typed how often</th></tr></thead>
+        <tbody>
+          <tr><td class="call">Address</td><td class="plain">where: host, port, TLS options</td><td class="plain">the machine's own connection, else the Store's default one</td><td class="plain">once per Store, plus once for a machine that needs its own route</td></tr>
+          <tr><td class="call">Login</td><td class="plain">who: user and password</td><td class="plain">a saved login (<code>auth</code>) in the home, named by the Store</td><td class="plain">once; any number of Stores and machines reuse it</td></tr>
+          <tr><td class="call">Database</td><td class="plain">which data</td><td class="plain">the Store</td><td class="plain">once per Store</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Identity and ownership</h3>
+      <div class="rules">
+        <div class="rule"><div class="k">A Store is its data</div><div class="d"><span>A Store is identified only by the id LayerFS writes into the database at first connect (the branch calls it the binding). Never by its address, which differs per machine and per proxy; never by its login, which is shared and rotates; never by its name, which is a label in one home.</span></div></div>
+        <div class="rule"><div class="k">Every route is proven</div><div class="d"><span>Each connect is checked from the machine that will dial, and must read the same id. That is what makes two addresses "the same Store". This check exists on the branch today.</span></div></div>
+        <div class="rule"><div class="k">The server owns the data</div><div class="d"><span>LayerFS connects to a database it did not make and never deletes it. <code>disconnect</code> forgets the home's records; the data stays. That is why the verbs differ from sqlite's <code>create</code> and <code>remove</code>.</span></div></div>
+        <div class="rule"><div class="k">The home owns the records</div><div class="d"><span>The Store's name, its saved login, its connections and a local copy of its project list. The project list is checked against the live Store on each read, so it can be shown, marked <code>blocked</code>, when the Store cannot be reached.</span></div></div>
+        <div class="rule"><div class="k">No machine owns a Store</div><div class="d"><span>A machine owns only its own connection and its Sandboxes. Any connected machine reads and writes; the database arbitrates writers. Removing a machine removes its connections and never touches a Store.</span></div></div>
+        <div class="rule"><div class="k">No default machine</div><div class="d"><span>A PostgreSQL Store records no machine: no "runs on" and no default for its Sandboxes. The machine is chosen when a Sandbox is created, with <code>sandbox create --machine</code>; without it the Sandbox runs on this computer, as today.</span></div></div>
+        <div class="rule"><div class="k">A Sandbox keeps its route</div><div class="d"><span>A running Sandbox keeps the connection it started with. Editing a connection affects new Sandboxes only.</span></div></div>
+        <div class="rule"><div class="k">Two homes, one database</div><div class="d"><span>Allowed. Each home has its own name, login and connections for it; the id in the data is the same.</span></div></div>
+      </div>
+
+      <h3>The calls</h3>
+      <div class="exs">
+        <div><span class="mock-cap">Save a login once, connect two databases</span>
+<pre class="ex">$ layerfs store save-auth pg-app --user app --password-stdin
+$ layerfs store connect shop postgres://db.internal:5432/shop --auth pg-app
+$ layerfs store connect shop2 postgres://db.internal:5432/shop2 --auth pg-app</pre></div>
+        <div><span class="mock-cap">One machine reaches the same Store through a proxy</span>
+<pre class="ex">$ layerfs store connect shop postgres://proxy.lab:6432/shop --machine lab
+$ layerfs store connect shop postgres://proxy.lab:6432/shop --machine lab --auth pg-app
+{"error":"InvalidInput","message":"a machine's own connection takes no --auth; shop uses pg-app"}
+$ layerfs store disconnect shop --machine lab</pre></div>
+        <div><span class="mock-cap">Is it reachable from where Sandboxes run?</span>
+<pre class="ex">$ layerfs store doctor shop                  # probes from each machine with a Sandbox of shop
+$ layerfs store doctor shop --machine lab    # and from lab, Sandbox or not
+$ layerfs sandbox create shop/api tests --machine lab</pre></div>
+      </div>
+      <div class="rules">
+        <div class="rule"><div class="k">URL is where, auth is who</div><div class="d"><span>The URL holds host, port, database and TLS options. A URL with a user or a password in it is refused. The saved login holds the user and password and no address, so one login covers every database and every route.</span></div></div>
+        <div class="rule"><div class="k">First connect</div><div class="d"><span><code>store connect &lt;store&gt; &lt;url&gt; --auth A</code>. It names the Store's saved login, sets the connection every machine uses, and is made from this computer, which reads or writes the id and the project list. <code>--auth</code> is required here and only here. A Store with a different login is changed with <code>store update --auth</code>.</span></div></div>
+        <div class="rule"><div class="k">A machine's own address</div><div class="d"><span><code>store connect &lt;store&gt; &lt;url&gt; --machine M</code>, on a Store that is already connected. It sets the address that one machine dials and is proven from that machine. It refuses <code>--auth</code>: a machine never has its own login. A Store has at most one default connection and one per machine. Without its own, a machine dials the default by itself (<code>localhost</code> is rewritten to the machine's name for this computer, as today).</span></div></div>
+        <div class="rule"><div class="k">Rotation</div><div class="d"><span><code>save-auth</code> again under the same name. Every Store and machine using it picks it up; running Sandboxes keep their session.</span></div></div>
+        <div class="rule"><div class="k">Reach is observed</div><div class="d"><span>Whether a machine reaches a Store is never configured. <code>store doctor &lt;store&gt;</code> probes from each machine that has a Sandbox of that Store, so the Doctor page's Check all sees a Sandbox whose machine cannot reach its Store. <code>--machine M</code> probes from one more machine and stays a command-line option. <code>sandbox create</code> on a machine that can't reach refuses with the one address to set.</span></div></div>
+        <div class="rule"><div class="k">This computer needs a route</div><div class="d"><span>File, Branch and Commit calls on a PostgreSQL Store run in the caller's process on this computer. There is no worker route for browsing a Store this computer cannot reach.</span></div></div>
+        <div class="rule"><div class="k">Proxies</div><div class="d"><span>A pass-through proxy (a tunnel, a TCP forwarder, a pooler in session mode) is fine. A pooler in transaction mode is not supported, because compaction relies on session-level locks. This is documented, not detected.</span></div></div>
+      </div>
+
+      <h3>In the UI</h3>
+      <p>The list is Stores, not servers: with proxies one Store has several addresses, so an address can't be a group header. The login is a chip on each card; addresses live inside a card's connections.</p>
+      <div class="mocks">
+        <div class="mock" role="img" aria-label="Mock-up: a PostgreSQL Store card opened to show its two connections">
+          <span class="mock-cap">Store card, opened</span>
+          <div class="card">
+            <div class="kv"><h4>shop</h4><span class="chip"><span class="m" style="color:var(--muted)">login</span> pg-app</span></div>
+            <div class="kv" style="justify-content:flex-start">
+              <span class="chip"><span class="dot ok"></span> This Mac</span>
+              <span class="chip"><span class="dot ok"></span> demo-build</span>
+              <span class="chip"><span class="dot off"></span> docker</span>
+              <span class="chip" style="border-color:var(--accent)"><span class="dot ok"></span> lab <small style="color:var(--accent)">own</small></span>
+            </div>
+            <div class="foot kv"><span><b>All machines</b> <code>db.internal:5432</code></span><span class="btn">Edit</span></div>
+            <div class="kv"><span><b>lab only</b> <code>proxy.lab:6432</code></span><span><span class="btn">Edit</span> <span class="btn">Remove</span></span></div>
+            <div class="kv"><span class="btn">Connect a machine</span></div>
+          </div>
+        </div>
+        <div class="mock" role="img" aria-label="Mock-up: a Store one machine cannot reach, and the saved logins view">
+          <span class="mock-cap">A machine that can't reach · Logins view</span>
+          <div class="card">
+            <div class="kv"><h4>analytics</h4><span class="chip"><span class="m" style="color:var(--muted)">login</span> pg-app</span></div>
+            <div class="kv" style="justify-content:flex-start">
+              <span class="chip"><span class="dot ok"></span> This Mac</span>
+              <span class="chip"><span class="dot bad"></span> demo-build</span> <span class="btn">Set address</span>
+              <span class="chip"><span class="dot off"></span> docker</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="kv"><h4>pg-app</h4><span><span class="btn">Rotate</span> <span class="btn dis">Remove</span></span></div>
+            <div class="kv"><span class="m">user app · shop, analytics</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="rules">
+        <div class="rule"><div class="k">Machine chips</div><div class="d"><span>One per machine: green reached, hollow grey machine stopped, red can't reach with Set address for that machine only, a dash for not probed. A machine on its own connection carries a small mark; the tip shows the address and latency. The dots come from the Store's doctor, which probes the machines that have a Sandbox of the Store.</span></div></div>
+        <div class="rule"><div class="k">Logins</div><div class="d"><span>The second half of the tab's switch ("Stores | Logins"), as SQLite has "Stores | Buckets". Each row: name, user, the Stores using it, Rotate, Remove (disabled while used). Not a page of its own.</span></div></div>
+        <div class="rule"><div class="k">Connect dialog</div><div class="d"><span>For a new Store: name, address and saved login (a picker with New login inline). For "Connect a machine" on a connected Store: the machine and its address only, with no login field. The address is prefilled from the last one used with that login. It then checks from the machine that will dial and fills in its dot.</span></div></div>
+        <div class="rule"><div class="k">Gone from the page</div><div class="d"><span>The address header with "Reachable · 3 ms" (this computer's view only), and "Runs on · Change" (one machine per Store, kept by the UI, not by LayerFS). Where a new Sandbox runs is chosen when it is created.</span></div></div>
+      </div>
+
+      <h3>What the branch does today, and what changes</h3>
+      <div class="tbl"><table style="min-width:760px">
+        <thead><tr><th>Today (<code>layerfs_v2_0_0</code>)</th><th>Frozen</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td class="plain">Each Store records its own URL and password reference (<code>store connect &lt;name&gt; &lt;url&gt; --password REF</code>); two databases on one server are two unrelated logins. The UI copies the password file to work around it.</td><td class="plain">A saved login named by any number of Stores: <code>store save-auth</code>, then <code>--auth</code> on the first connect.</td><td class="plain">Enter a login once.</td></tr>
+          <tr><td class="plain"><code>store.connect</code> must reach the server from this computer first.</td><td class="plain">Unchanged. The first connect is made from this computer.</td><td class="plain">Browsing a Store needs a route from this computer anyway.</td></tr>
+          <tr><td class="plain"><code>store update --machine M --url U --password REF</code> gives one machine its own URL and password for one Store; <code>--clear</code> removes it.</td><td class="plain"><code>store connect &lt;store&gt; &lt;url&gt; --machine M</code>: its own address only, with <code>--auth</code> refused. <code>store disconnect &lt;store&gt; --machine M</code> removes it.</td><td class="plain">It is a connect, not an update, and a machine never has its own login.</td></tr>
+          <tr><td class="plain">A second Store is refused when its URL names the same host, port and database, and again when the id matches.</td><td class="plain">Only the id check.</td><td class="plain"><code>localhost:5432/shop</code> seen from two machines can be two servers; the same database behind a proxy has another address.</td></tr>
+          <tr><td class="plain">The password is a reference (<code>env:NAME</code> or <code>file:/path</code>) resolved by the caller on each call and sent with the request.</td><td class="plain">Unchanged in how it travels. <code>--password-stdin</code> saves it in the home's secret folder.</td><td class="plain">A machine never stores or asks for a login.</td></tr>
+          <tr><td class="plain"><code>store status &lt;name&gt; --machine M</code> says whether one machine reaches the Store.</td><td class="plain"><code>store doctor &lt;store&gt;</code> probes from every machine that has a Sandbox of it; <code>--machine M</code> adds one.</td><td class="plain">Check all must not read "All clear" while a Sandbox's machine cannot reach its Store.</td></tr>
+        </tbody>
+      </table></div>
+      <p class="small">Not supported, on purpose: one Store with a different login per machine (only the address varies per machine), a default machine on a Store, and a worker route for browsing. Not checked in this review: what happens to a sqlite Store when its machine is removed, and how two homes compacting one database coordinate (the operation is recorded in the database).</p>
+    </section>

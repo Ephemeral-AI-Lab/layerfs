@@ -1,0 +1,834 @@
+{
+ "family": "home",
+ "who": null,
+ "old_count": 2,
+ "blurb": "The home itself: its state, its call log, what is left behind in it, and the whole-home doctor.",
+ "reasons": [
+  "<b>One doctor shape:</b> the six doctors answer the same keys, so a UI draws them with one component and an agent reads them with one rule: <code>{\"ok\":true}</code>, or what was found and what could not be checked.",
+  "<b>Why <code>--with tree</code>:</b> a page that shows everything in the home needs one read that contacts nothing. Opening the Doctor page runs no doctor; it reads the tree and shows each thing as not checked.",
+  "<b>Why leftovers are their own call:</b> listing them walks disks, on this computer and through each machine's worker. That is neither a state read nor a health check, and <code>home prune</code> needs the list's ids.",
+  "<b>Why <code>prune</code>:</b> the call removes one leftover and repairs nothing; <code>doctor fix</code> promised more than that.",
+  "<b>Why the call log lives here:</b> it is the home's own file. A machine's and a Sandbox's logs are read from their own families."
+ ],
+ "calls": [
+  {
+   "call": "home.init",
+   "badge": "reshaped",
+   "note": "creates the home, or converts an older layout; a current home is left as it is and answers <code>unchanged:true</code>. No <code>[path]</code>: the home is the folder <code>LAYERFS_HOME</code> names, else <code>~/.layerfs</code>, as for every call. A folder this build cannot read as a home (a newer layout, or not a home) is refused <code>Unsupported</code> and left untouched",
+   "today": [
+    "home.init"
+   ],
+   "help": "create this home, or convert an older one; a current home is left as it is",
+   "cli": "layerfs home init",
+   "positionals": [],
+   "options": [],
+   "stdin": null,
+   "with": {},
+   "paging": null,
+   "progress": false,
+   "quiet": false,
+   "profile": "full",
+   "short": {
+    "always": [
+     "home"
+    ],
+    "sometimes": [
+     "unchanged",
+     "converted"
+    ]
+   },
+   "long": [
+    "home",
+    "unchanged",
+    "converted",
+    "outcome",
+    "layout",
+    "version"
+   ],
+   "item": null,
+   "examples": {
+    "short": [
+     "{\"home\":\"/Users/me/.layerfs\"}",
+     "already a current home: {\"home\":\"/Users/me/.layerfs\",\"unchanged\":true}",
+     "an older home, converted: {\"home\":\"/Users/me/.layerfs\",\"converted\":true}"
+    ],
+    "long": "{\"home\":\"/Users/me/.layerfs\",\"unchanged\":false,\"converted\":false,\"outcome\":\"created\",\"layout\":3,\"version\":\"2.0.0\"}"
+   },
+   "dropped": [],
+   "new_work": "No new capability. `outcome` is `created`, `converted` or `unchanged`, from today's `created` and `converted` booleans; `unchanged` is new as a key; `version` is the build's version. No `created_at`: the home's own file (`layerfs.json`) records its layout and id and no time."
+  },
+  {
+   "call": "home.get",
+   "badge": "merged",
+   "note": "+ <code>machine.platforms</code> (<code>--with platforms</code>). Reads the home and changes nothing; it writes no call-log line. <code>state</code> is <code>ready</code>, or <code>broken</code> with <code>reason: missing</code> (no home yet) or <code>reason: outdated</code> (an older layout), each with <code>fix: layerfs home init</code>; a folder this build cannot read as a home is refused <code>Unsupported</code>. <code>generation</code> is a number that moves when any record in the home changes: a UI polls it and re-reads only when it moves. It does not move for a Workspace the home does not record. <code>--with tree</code> is the whole home from records only, with no machine contacted: every machine with its sqlite Stores and its Sandboxes, then the PostgreSQL Stores and the buckets. A node goes by its own word and leaves <code>state</code> out when <code>ready</code>; a Store's <code>engine</code> is left out when sqlite; a project (its name within the Store, as <code>store list</code> gives it) and a Workspace (its handle) are plain strings and take their Store's or Sandbox's state. Workspaces are listed only where the home keeps their records (a Sandbox on <code>native</code>, or one reached directly); elsewhere the node says <code>workspaces_not_listed:true</code> while that machine is ready. On a stopped machine a Store and a Sandbox answer <code>blocked</code> with <code>blocked_by</code> naming the machine, and no Workspaces are listed. Leftovers are not a section here: <code>home leftovers</code> is its own call",
+   "today": [
+    "home.get",
+    "machine.platforms"
+   ],
+   "help": "the home's state and build; with --with, the platforms this computer supports or the tree of everything in the home",
+   "cli": "layerfs home get [--with platforms,tree]",
+   "positionals": [],
+   "options": [],
+   "stdin": null,
+   "with": {
+    "platforms": {
+     "keys": [
+      "host",
+      "items"
+     ],
+     "help": "what `machine.platforms` answers today: `host` is this computer's system, `items` one row per platform this build knows, each with what it is missing here. Rows are not paged (the list is the build's own, under ten). Short form: a row is {platform, ready} plus `missing` when not empty; the long form has every key",
+     "item": {
+      "short": {
+       "always": [
+        "platform",
+        "ready"
+       ],
+       "sometimes": [
+        "missing"
+       ]
+      },
+      "long": [
+       "platform",
+       "how",
+       "backend",
+       "route",
+       "sqlite",
+       "postgresql",
+       "ready",
+       "missing",
+       "version",
+       "options",
+       "description",
+       "socket",
+       "candidates"
+      ]
+     },
+     "nested": {
+      "postgresql": [
+       "store_calls",
+       "sandbox",
+       "reason"
+      ],
+      "options": [
+       "option",
+       "kind",
+       "default"
+      ],
+      "socket": [
+       "path",
+       "source",
+       "state"
+      ],
+      "candidates": [
+       "path",
+       "host",
+       "source",
+       "usable"
+      ]
+     },
+     "example": {
+      "host": "macos",
+      "items": [
+       {
+        "platform": "lima",
+        "how": "created",
+        "backend": "namespaces",
+        "route": "fuse",
+        "sqlite": "worker",
+        "postgresql": {
+         "store_calls": "in_process",
+         "sandbox": true,
+         "reason": null
+        },
+        "ready": true,
+        "missing": [],
+        "version": "limactl version 2.2.1",
+        "options": [
+         {
+          "option": "cpus",
+          "kind": "int",
+          "default": null
+         }
+        ],
+        "description": "a Linux VM that Lima runs",
+        "socket": null,
+        "candidates": null
+       }
+      ]
+     }
+    },
+    "tree": {
+     "keys": [
+      "machines",
+      "stores",
+      "buckets"
+     ],
+     "help": "everything in the home, from its records only: `machines` (each with its sqlite `stores` and its `sandboxes`), `stores` (the PostgreSQL Stores, which live on no machine) and `buckets`. Each node's keys are in `nodes`; a state and its companions follow the state table",
+     "nodes": {
+      "machine": {
+       "short": {
+        "always": [
+         "machine"
+        ],
+        "sometimes": [
+         "state",
+         "op",
+         "reason",
+         "fix",
+         "stores",
+         "sandboxes"
+        ]
+       },
+       "long": [
+        "machine",
+        "platform",
+        "state",
+        "op",
+        "reason",
+        "fix",
+        "stores",
+        "sandboxes"
+       ]
+      },
+      "store": {
+       "short": {
+        "always": [
+         "store"
+        ],
+        "sometimes": [
+         "engine",
+         "projects",
+         "state",
+         "op",
+         "blocked_by",
+         "reason",
+         "fix"
+        ]
+       },
+       "long": [
+        "store",
+        "engine",
+        "state",
+        "op",
+        "blocked_by",
+        "reason",
+        "fix",
+        "projects"
+       ]
+      },
+      "sandbox": {
+       "short": {
+        "always": [
+         "sandbox"
+        ],
+        "sometimes": [
+         "workspaces",
+         "workspaces_not_listed",
+         "state",
+         "op",
+         "blocked_by",
+         "reason",
+         "fix"
+        ]
+       },
+       "long": [
+        "sandbox",
+        "project",
+        "state",
+        "op",
+        "blocked_by",
+        "reason",
+        "fix",
+        "workspaces",
+        "workspaces_not_listed"
+       ]
+      },
+      "bucket": {
+       "short": {
+        "always": [
+         "bucket"
+        ],
+        "sometimes": []
+       },
+       "long": [
+        "bucket",
+        "provider"
+       ]
+      },
+      "projects": {
+       "scalar": "project"
+      },
+      "workspaces": {
+       "scalar": "workspace"
+      }
+     },
+     "example": {
+      "machines": [
+       {
+        "machine": "native",
+        "platform": "native",
+        "state": "ready",
+        "op": null,
+        "reason": null,
+        "fix": null,
+        "stores": [
+         {
+          "store": "qv2-store",
+          "engine": "sqlite",
+          "state": "ready",
+          "op": null,
+          "blocked_by": null,
+          "reason": null,
+          "fix": null,
+          "projects": [
+           "qv2-strata",
+           "qv2-probe"
+          ]
+         }
+        ],
+        "sandboxes": [
+         {
+          "sandbox": "tests",
+          "project": "qv2-store/qv2-strata",
+          "state": "ready",
+          "op": null,
+          "blocked_by": null,
+          "reason": null,
+          "fix": null,
+          "workspaces": [
+           "tests:agent"
+          ],
+          "workspaces_not_listed": false
+         }
+        ]
+       },
+       {
+        "machine": "docker",
+        "platform": "docker",
+        "state": "stopped",
+        "op": null,
+        "reason": null,
+        "fix": null,
+        "stores": [
+         {
+          "store": "sim-website",
+          "engine": "sqlite",
+          "state": "blocked",
+          "op": null,
+          "blocked_by": {
+           "machine": "docker",
+           "reason": "stopped"
+          },
+          "reason": null,
+          "fix": null,
+          "projects": [
+           "website"
+          ]
+         }
+        ],
+        "sandboxes": [
+         {
+          "sandbox": "sim-1",
+          "project": "sim-website/website",
+          "state": "blocked",
+          "op": null,
+          "blocked_by": {
+           "machine": "docker",
+           "reason": "stopped"
+          },
+          "reason": null,
+          "fix": null,
+          "workspaces": null,
+          "workspaces_not_listed": false
+         }
+        ]
+       }
+      ],
+      "stores": [
+       {
+        "store": "demo-experiments",
+        "engine": "postgresql",
+        "state": "ready",
+        "op": null,
+        "blocked_by": null,
+        "reason": null,
+        "fix": null,
+        "projects": [
+         "abc"
+        ]
+       }
+      ],
+      "buckets": [
+       {
+        "bucket": "r2-main",
+        "provider": "r2"
+       }
+      ]
+     }
+    }
+   },
+   "paging": null,
+   "progress": false,
+   "quiet": true,
+   "profile": "full",
+   "short": {
+    "always": [
+     "home",
+     "state",
+     "version"
+    ],
+    "sometimes": [
+     "generation",
+     "reason",
+     "fix"
+    ]
+   },
+   "long": [
+    "home",
+    "state",
+    "version",
+    "generation",
+    "reason",
+    "fix",
+    "message",
+    "layout",
+    "mode",
+    "bundle",
+    "daemon",
+    "cache"
+   ],
+   "item": null,
+   "examples": {
+    "short": [
+     "{\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182}",
+     "no home yet: {\"home\":\"/Users/me/.layerfs\",\"state\":\"broken\",\"version\":\"2.0.0\",\"reason\":\"missing\",\"fix\":\"layerfs home init\"}",
+     "an older layout: {\"home\":\"/Users/me/.layerfs\",\"state\":\"broken\",\"version\":\"2.0.0\",\"reason\":\"outdated\",\"fix\":\"layerfs home init\"}",
+     "--with tree: {\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182,\"tree\":{\"machines\":[{\"machine\":\"native\",\"stores\":[{\"store\":\"qv2-store\",\"projects\":[\"qv2-strata\",\"qv2-probe\"]}],\"sandboxes\":[{\"sandbox\":\"tests\",\"workspaces\":[\"tests:agent\"]}]},{\"machine\":\"demo-build\",\"sandboxes\":[{\"sandbox\":\"build-1\",\"workspaces_not_listed\":true}]},{\"machine\":\"docker\",\"state\":\"stopped\",\"stores\":[{\"store\":\"sim-website\",\"projects\":[\"website\"],\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}],\"sandboxes\":[{\"sandbox\":\"sim-1\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}],\"stores\":[{\"store\":\"demo-experiments\",\"engine\":\"postgresql\",\"projects\":[\"abc\"]}],\"buckets\":[{\"bucket\":\"r2-main\"}]}}"
+    ],
+    "long": "{\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182,\"reason\":null,\"fix\":null,\"message\":null,\"layout\":3,\"mode\":\"0700\",\"bundle\":{\"path\":\"/Users/me/Library/Caches/layerfs/2.0.0/linux\",\"source\":\"cache\",\"present\":true,\"commit\":\"caff58a43b\",\"dirty\":false,\"matches\":true},\"daemon\":{\"path\":\"/Users/me/Library/Caches/layerfs/2.0.0/darwin/layerfs-daemon\",\"source\":\"default\",\"present\":true,\"commit\":\"caff58a43b\",\"dirty\":false,\"matches\":true},\"cache\":{\"path\":\"/Users/me/Library/Caches/layerfs\"}}"
+   },
+   "dropped": [],
+   "new_work": "`generation` is new: a counter kept in the home and moved under the home's lock by every record write (machines, Stores, projects, Sandboxes, the Workspaces the home records, buckets, saved logins). `state` with `reason` and `fix` is new: today `home.state` is `missing`, `current`, `needs_conversion` or `unknown`, and a home it cannot read is answered as `unknown`, not refused. `version` is new in the answer (the build has it). `--with tree` is new: one read of the home's records that derives each node's state as `machine get`, `store get` and `sandbox list` derive it, with no probe. `--with platforms` is today's `machine.platforms` answer under `platforms`, with `platforms` as `items`, `kernel` as `route` and `options[].name` as `option`. Flattening: `home {path, state, layout, mode}` becomes the top-level `home` (the path), `state`, `layout` and `mode`; `bundle.dir` becomes `bundle.path`. `warnings` and `home.mode_ok` leave the answer: `bundle.present`, `bundle.matches` and `daemon.matches` carry the facts, and `home doctor` reports them as findings. `daemon` is null where this computer runs no native daemon, as today. `message` is the sentence behind a `broken` state (today's `HomeMissing` or `HomeNeedsConversion` warning text) and null when `ready`.",
+   "nested": {
+    "bundle": {
+     "long": [
+      "path",
+      "source",
+      "present",
+      "commit",
+      "dirty",
+      "matches"
+     ]
+    },
+    "daemon": {
+     "long": [
+      "path",
+      "source",
+      "present",
+      "commit",
+      "dirty",
+      "matches"
+     ]
+    },
+    "cache": {
+     "long": [
+      "path"
+     ]
+    }
+   }
+  },
+  {
+   "call": "home.log",
+   "badge": "moved",
+   "note": "was <code>logs.list</code>: the calls made against this home, newest first; <code>next_cursor</code> reads older ones. All six filters stay (the UI uses each). <code>op</code> is the call's name; <code>outcome</code> is the result's own word (<code>committed</code>, <code>mounted</code>, …), <code>ok</code> when the result names none, or <code>refused</code> with <code>error</code> holding the refusal code; <code>--outcome</code> matches either. <code>client</code> is <code>cli</code>, <code>node</code>, <code>python</code> or <code>rust</code>. The long form's <code>skipped</code> counts lines that could not be read. A cursor from before <code>home clear-log</code> is refused <code>InvalidInput</code>. Writes no call-log line",
+   "today": [
+    "logs.list"
+   ],
+   "help": "the calls made against this home, newest first",
+   "cli": "layerfs home log [--op O] [--project P] [--client C] [--tag T] [--outcome O] [--since T] [--limit 200] [--cursor C]",
+   "positionals": [],
+   "options": [
+    {
+     "name": "op",
+     "kind": "Text",
+     "help": "only this call, such as `file.write`"
+    },
+    {
+     "name": "project",
+     "kind": "Project",
+     "help": "only calls that named this project"
+    },
+    {
+     "name": "client",
+     "kind": "Name",
+     "help": "only calls from this front end: cli, node, python or rust"
+    },
+    {
+     "name": "tag",
+     "kind": "Text",
+     "help": "only calls made with this log tag"
+    },
+    {
+     "name": "outcome",
+     "kind": "Text",
+     "help": "only calls with this outcome word or refusal code"
+    },
+    {
+     "name": "since",
+     "kind": "Int",
+     "help": "only calls at or after this time, in milliseconds since 1970, as today"
+    },
+    {
+     "name": "limit",
+     "kind": "Int",
+     "help": "the most lines in one page, 1 to 1000",
+     "default": 200
+    },
+    {
+     "name": "cursor",
+     "kind": "Text",
+     "help": "the `next_cursor` of the page before; it carries the filters"
+    }
+   ],
+   "stdin": null,
+   "with": {},
+   "paging": "cursor",
+   "progress": false,
+   "quiet": true,
+   "profile": "full",
+   "short": {
+    "always": [
+     "items"
+    ],
+    "sometimes": [
+     "next_cursor"
+    ]
+   },
+   "long": [
+    "items",
+    "next_cursor",
+    "skipped"
+   ],
+   "item": {
+    "short": {
+     "always": [
+      "op",
+      "outcome",
+      "logged_at"
+     ],
+     "sometimes": [
+      "project",
+      "error"
+     ]
+    },
+    "long": [
+     "op",
+     "outcome",
+     "logged_at",
+     "project",
+     "error",
+     "duration_ms",
+     "client",
+     "argv",
+     "commit",
+     "tag"
+    ]
+   },
+   "examples": {
+    "short": [
+     "{\"items\":[{\"op\":\"file.write\",\"outcome\":\"committed\",\"logged_at\":\"2026-11-18T09:16:59Z\",\"project\":\"shop/api\"},{\"op\":\"workspace.commit\",\"outcome\":\"refused\",\"logged_at\":\"2026-11-18T09:02:11Z\",\"project\":\"shop/api\",\"error\":\"Conflict\"}]}",
+     "more pages: {\"items\":[{\"op\":\"sandbox.create\",\"outcome\":\"created\",\"logged_at\":\"2026-11-18T09:02:11Z\",\"project\":\"shop/api\"}],\"next_cursor\":\"MTc5NDc4MTM3NjU0MA\"}"
+    ],
+    "long": "{\"items\":[{\"op\":\"file.write\",\"outcome\":\"committed\",\"logged_at\":\"2026-11-18T09:16:59Z\",\"project\":\"shop/api\",\"error\":null,\"duration_ms\":41,\"client\":\"cli\",\"argv\":[\"file\",\"write\",\"shop/api\",\"agent\",\"/src/app.ts\"],\"commit\":\"12d1c0ff\",\"tag\":null}],\"next_cursor\":null,\"skipped\":0}"
+   },
+   "dropped": [],
+   "new_work": "The call moves from the `logs` family; the reader and its filters are today's. Changes to a row: `at` (milliseconds) to `logged_at`, `ms` to `duration_ms`, `lines` to `items`, `next` and `has_more` to `next_cursor`. `op` and `project` are new as keys: a line stores the call's `argv`, and the filters already derive both from it. `outcome` splits: today it is `ok` or the refusal code, with the result's word in `kind`; now the word is `outcome` and the code is `error`. `v` and `layer` leave the row. The default page is 200 lines (100 today)."
+  },
+  {
+   "call": "home.clear_log",
+   "badge": "moved",
+   "note": "was <code>logs.reset</code>: clears the home's call log. Machine and Sandbox logs are not touched. Writes no call-log line, as today",
+   "today": [
+    "logs.reset"
+   ],
+   "help": "clear this home's call log",
+   "cli": "layerfs home clear-log",
+   "positionals": [],
+   "options": [],
+   "stdin": null,
+   "with": {},
+   "paging": null,
+   "progress": false,
+   "quiet": true,
+   "profile": "full",
+   "short": {
+    "always": [
+     "ok"
+    ],
+    "sometimes": []
+   },
+   "long": [
+    "ok",
+    "outcome",
+    "line_count"
+   ],
+   "item": null,
+   "examples": {
+    "short": [
+     "{\"ok\":true}"
+    ],
+    "long": "{\"ok\":true,\"outcome\":\"cleared\",\"line_count\":1204}"
+   },
+   "dropped": [],
+   "new_work": "No new capability: `kind: Reset` becomes `outcome: cleared`, and `removed` (a number) becomes `line_count`."
+  },
+  {
+   "call": "home.doctor",
+   "badge": "new",
+   "note": "replaces the shell's <code>layerfs doctor</code> (no alias). Checks the home itself (this build, its prerequisites, the Linux bundle, the home folder and its layout, free disk, and every record in the home), then gives each machine, PostgreSQL Store and bucket its own shallow check. It goes no deeper: a Store on a machine and a Sandbox are <code>machine doctor</code>'s. The records check (<code>home.records</code>) reads references between records, file modes, leases and half-finished operations, and its finding names the thing it is about, at any depth. Short: <code>{\"ok\":true}</code>, or <code>findings</code> and <code>not_checked</code>; a <code>not_checked</code> entry carries <code>blocked_by</code> or <code>reason</code> (<code>timeout</code>, <code>busy</code>, <code>lost</code>). A stopped machine is not a problem: its record and state are checked, and the checks that need it running do not apply. No option changes what it checks, and there is no <code>--timeout</code> (each thing has its own time budget), no leftovers (<code>home leftovers</code>). <code>--progress</code> sends one event per finished thing. The call repairs nothing and exits 0 once its report is made",
+   "today": [],
+   "help": "check the home, then each machine, PostgreSQL Store and bucket, shallowly",
+   "cli": "layerfs home doctor",
+   "positionals": [],
+   "options": [],
+   "stdin": null,
+   "with": {},
+   "paging": null,
+   "progress": true,
+   "quiet": false,
+   "profile": "full",
+   "short": {
+    "always": [],
+    "sometimes": [
+     "ok",
+     "findings",
+     "not_checked"
+    ]
+   },
+   "long": [
+    "ok",
+    "findings",
+    "not_checked",
+    "status",
+    "counts",
+    "observed_at",
+    "tree"
+   ],
+   "item": null,
+   "examples": {
+    "short": [
+     "{\"ok\":true}",
+     "problems: {\"findings\":[{\"machine\":\"demo-build\",\"check\":\"machine.worker.compatibility\",\"severity\":\"error\",\"message\":\"worker is from another build\",\"fix\":\"layerfs machine stop demo-build && layerfs machine start demo-build\"},{\"sandbox\":\"old-run\",\"check\":\"home.records\",\"severity\":\"warning\",\"message\":\"its record names machine lab, which has no record\",\"fix\":\"layerfs sandbox remove old-run\"}]}",
+     "a check gave no verdict: {\"not_checked\":[{\"store\":\"demo-experiments\",\"check\":\"store.connection\",\"reason\":\"timeout\"}]}"
+    ],
+    "long": "{\"ok\":true,\"findings\":[],\"not_checked\":[],\"status\":\"ok\",\"counts\":{\"ok\":5,\"notice\":0,\"warning\":0,\"error\":0,\"not_checked\":0},\"observed_at\":\"2026-11-18T09:16:59Z\",\"tree\":{\"home\":\"/Users/me/.layerfs\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"home.build\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.prerequisites\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.bundle\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.layout\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.records\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.capacity\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null,\"machines\":[{\"machine\":\"native\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"machine.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.state\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.capacity\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null},{\"machine\":\"docker\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"machine.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.state\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}],\"stores\":[{\"store\":\"demo-experiments\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"store.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.schema\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.connection\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}],\"buckets\":[{\"bucket\":\"r2-main\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"bucket.configuration\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"bucket.credentials\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"bucket.transport\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"bucket.list\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}]}}"
+   },
+   "dropped": [],
+   "new_work": "The table call and the one doctor shape are new: today `layerfs doctor` is a shell command outside the call table that answers two reports (the whole-home sweep `{ok, findings, leftovers}` and the per-target `{checks, findings, counts, ...}`). The home's own checks exist as the `host` target and are renamed `home.*` (`checks.home`); `host.remote`, which is always skipped today, is left out. Outcomes map: `pass` to `ok`, `fail` to its finding's severity, `unknown` and `skipped` to `not_checked` with a `reason` (or left out when the check does not apply), `blocked` to `not_checked` with `blocked_by`. New work: running the shallow check of each machine, PostgreSQL Store and bucket inside this call (today one call is one target), each with its own time budget; one event per finished thing; a records finding named by the thing's own word (today `entity {kind, name}`). The leftover list leaves the report for `home.leftovers`.",
+   "off_table": [
+    {
+     "today": "layerfs doctor",
+     "now": "layerfs home doctor",
+     "why": "the whole-home check is the home's doctor (no alias, R1)"
+    },
+    {
+     "today": "layerfs doctor host",
+     "now": "layerfs home doctor",
+     "why": "the same call"
+    },
+    {
+     "today": "layerfs doctor machine <machine>",
+     "now": "layerfs machine doctor <machine>",
+     "why": "one doctor per thing, a call of its family"
+    },
+    {
+     "today": "layerfs doctor sandbox <sandbox>",
+     "now": "layerfs sandbox doctor <sandbox>",
+     "why": "one doctor per thing, a call of its family"
+    },
+    {
+     "today": "layerfs doctor store integrity <store> · layerfs doctor store connection <store>",
+     "now": "layerfs store doctor <store>",
+     "why": "one Store doctor"
+    },
+    {
+     "today": "layerfs doctor backup connection <bucket>",
+     "now": "layerfs backup doctor <bucket>",
+     "why": "one bucket doctor"
+    },
+    {
+     "today": "--timeout",
+     "now": "",
+     "why": "each thing has its own time budget (30 s for a whole call today, 10 s for a connection check)"
+    },
+    {
+     "today": "--quick",
+     "now": "",
+     "why": "the whole-Store scan leaves the doctors; `store doctor` stops after the schema check"
+    },
+    {
+     "today": "--write-test",
+     "now": "layerfs backup doctor <bucket> --full",
+     "why": "R5"
+    },
+    {
+     "today": "--text",
+     "now": "--text",
+     "why": "the global option, as on every call"
+    }
+   ],
+   "checks": {
+    "home": [
+     "home.build",
+     "home.prerequisites",
+     "home.bundle",
+     "home.bundle_hashes",
+     "home.native_daemon",
+     "home.artifacts",
+     "home.layout",
+     "home.records",
+     "home.capacity"
+    ]
+   }
+  },
+  {
+   "call": "home.leftovers",
+   "badge": "new",
+   "note": "what earlier runs left behind: on this computer (<code>native</code>) and on each running machine, or on the one <code>--machine</code> names. <code>leftover</code> is the id <code>home prune</code> takes (<code>&lt;machine&gt;:&lt;kind&gt;:&lt;name&gt;</code>); <code>kind</code> is <code>run-folder</code>, <code>empty-root</code>, <code>init-copy</code>, <code>backup-staging</code>, <code>image-tmp</code> or <code>image-part</code>; <code>size</code> is left out when it was not measured; <code>report_only:true</code> marks one <code>home prune</code> would refuse now (the copy of an Init whose outcome is not settled; the long form's <code>removable_at</code> says when, if known). Not paged: each machine is one bounded walk (20,000 entries or 2 s). A machine that was not walked, or whose walk hit its bound, is in <code>not_checked</code> with <code>blocked_by</code>, or with <code>reason</code> (<code>timeout</code>, <code>busy</code>, <code>lost</code>); a stopped machine is not started. Nothing left answers <code>{\"items\":[]}</code>. No doctor reports leftovers",
+   "today": [],
+   "help": "what earlier runs left behind on this computer and on each running machine",
+   "cli": "layerfs home leftovers [--machine M]",
+   "positionals": [],
+   "options": [
+    {
+     "name": "machine",
+     "kind": "Name",
+     "help": "list only this machine's leftovers; `native` is this computer"
+    }
+   ],
+   "stdin": null,
+   "with": {},
+   "paging": null,
+   "progress": false,
+   "quiet": false,
+   "profile": "full",
+   "short": {
+    "always": [
+     "items"
+    ],
+    "sometimes": [
+     "not_checked"
+    ]
+   },
+   "long": [
+    "items",
+    "not_checked",
+    "observed_at"
+   ],
+   "item": {
+    "short": {
+     "always": [
+      "leftover",
+      "modified_at"
+     ],
+     "sometimes": [
+      "size",
+      "report_only"
+     ]
+    },
+    "long": [
+     "leftover",
+     "modified_at",
+     "size",
+     "report_only",
+     "removable_at",
+     "kind",
+     "machine",
+     "path"
+    ]
+   },
+   "examples": {
+    "short": [
+     "{\"items\":[{\"leftover\":\"native:run-folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344},{\"leftover\":\"dev:init-copy:shop-9a1f\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":524288000,\"report_only\":true}]}",
+     "a machine was not walked: {\"items\":[{\"leftover\":\"native:run-folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344}],\"not_checked\":[{\"machine\":\"docker\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}"
+    ],
+    "long": "{\"items\":[{\"leftover\":\"native:run-folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344,\"report_only\":false,\"removable_at\":null,\"kind\":\"run-folder\",\"machine\":\"native\",\"path\":\"/Users/me/.layerfs/machine/native/run/tests-5f0c7a1e\"}],\"not_checked\":[],\"observed_at\":\"2026-11-18T09:16:59Z\"}"
+   },
+   "dropped": [],
+   "new_work": "The call is new; the walk is not. Today the list is part of the shell's `layerfs doctor` report (`findings[].leftover` and a `leftovers` row per machine): one bounded walk on `native` and one through each running machine's worker, with stopped and unanswering machines passed over in silence. New: a table call with `--machine`, and `not_checked` for a machine that was passed over or whose walk was cut (`complete: false` today). Renames per entry: `id` to `leftover`, `bytes` to `size`, `age` (seconds) to `modified_at`, `fixable: false` to `report_only: true`, `not_before` (milliseconds) to `removable_at`. The per-machine counts of image locks and unmount markers leave the answer.",
+   "nested": {
+    "not_checked": {
+     "short": {
+      "always": [
+       "machine"
+      ],
+      "sometimes": [
+       "blocked_by",
+       "reason"
+      ]
+     },
+     "long": [
+      "machine",
+      "blocked_by",
+      "reason"
+     ]
+    }
+   }
+  },
+  {
+   "call": "home.prune",
+   "badge": "moved",
+   "note": "was <code>doctor.fix</code>: removes one leftover <code>home leftovers</code> listed, under the same guard as today (it is looked up again and must still be a leftover). <code>freed_bytes</code> is left out when its size was not measured. Refused <code>NotFound</code> when it is no longer there, <code>InvalidInput</code> for one marked <code>report_only</code>, <code>InUse</code> when something holds it, <code>Unavailable</code> when its machine does not answer",
+   "today": [
+    "doctor.fix"
+   ],
+   "help": "remove one leftover that home leftovers listed",
+   "cli": "layerfs home prune <leftover>",
+   "positionals": [
+    {
+     "name": "leftover",
+     "kind": "Text"
+    }
+   ],
+   "options": [],
+   "stdin": null,
+   "with": {},
+   "paging": null,
+   "progress": false,
+   "quiet": false,
+   "profile": "full",
+   "short": {
+    "always": [],
+    "sometimes": [
+     "ok",
+     "freed_bytes"
+    ]
+   },
+   "long": [
+    "ok",
+    "freed_bytes",
+    "outcome",
+    "leftover",
+    "kind",
+    "machine",
+    "path"
+   ],
+   "item": null,
+   "examples": {
+    "short": [
+     "{\"freed_bytes\":11833344}",
+     "its size was not measured: {\"ok\":true}"
+    ],
+    "long": "{\"ok\":true,\"freed_bytes\":11833344,\"outcome\":\"removed\",\"leftover\":\"native:run-folder:tests-5f0c7a1e\",\"kind\":\"run-folder\",\"machine\":\"native\",\"path\":\"/Users/me/.layerfs/machine/native/run/tests-5f0c7a1e\"}"
+   },
+   "dropped": [
+    {
+     "today": "<id>",
+     "now": "<leftover>",
+     "why": "a thing goes by its own word"
+    }
+   ],
+   "new_work": "No new capability: the call moves from the `doctor` family. `bytes` becomes `freed_bytes`, `id` becomes `leftover`, `removed: true` becomes `outcome: removed`."
+  }
+ ]
+}
