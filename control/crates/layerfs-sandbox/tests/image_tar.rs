@@ -98,18 +98,19 @@ fn two_exports_differing_only_in_the_init_layer_filter_to_the_same_bytes() {
 
 #[test]
 fn pax_time_stripping_handles_empty_malformed_xattr_and_all_time_blocks_byte_for_byte() {
-    // 1. Empty PAX `x` block: kept intact (header mtime zeroed on directories, untouched on files).
+    // 1. Empty PAX `x` block: kept intact (header mtime zeroed on init-layer
+    //    directories such as `etc/`, untouched on files).
     let empty_pax_dir = Tar::new()
         .at(1_700_000_123)
         .raw("PaxHeaders/empty", b'x', 0o644, b"")
-        .directory("dir/", 0o755)
+        .directory("etc/", 0o755)
         .raw("PaxHeaders/emptyf", b'x', 0o644, b"")
         .file("file.txt", 0o644, b"ok")
         .finish();
     let expected_empty_pax = Tar::new()
         .at(0)
         .raw("PaxHeaders/empty", b'x', 0o644, b"")
-        .directory("dir/", 0o755)
+        .directory("etc/", 0o755)
         .at(1_700_000_123)
         .raw("PaxHeaders/emptyf", b'x', 0o644, b"")
         .file("file.txt", 0o644, b"ok")
@@ -127,12 +128,12 @@ fn pax_time_stripping_handles_empty_malformed_xattr_and_all_time_blocks_byte_for
         let input = Tar::new()
             .at(1_700_000_456)
             .raw("PaxHeaders/bad", b'x', 0o644, malformed)
-            .directory("dir/", 0o755)
+            .directory("dev/", 0o755)
             .finish();
         let expected = Tar::new()
             .at(0)
             .raw("PaxHeaders/bad", b'x', 0o644, malformed)
-            .directory("dir/", 0o755)
+            .directory("dev/", 0o755)
             .finish();
         assert_eq!(filtered(&input), expected);
     }
@@ -144,16 +145,17 @@ fn pax_time_stripping_handles_empty_malformed_xattr_and_all_time_blocks_byte_for
     let input_only_times = Tar::new()
         .at(1_700_000_789)
         .raw("PaxHeaders/times", b'x', 0o644, &only_times)
-        .directory("dir/", 0o755)
+        .directory("proc/", 0o755)
         .finish();
-    let expected_only_times = Tar::new().at(0).directory("dir/", 0o755).finish();
+    let expected_only_times = Tar::new().at(0).directory("proc/", 0o755).finish();
     assert_eq!(filtered(&input_only_times), expected_only_times);
 
     // 4. PAX `x` block mixing times with SCHILY.xattr.* (and path): only time records are stripped on
-    //    directories while SCHILY.xattr.* stays intact; regular files keep all PAX records untouched.
+    //    init-layer directories while SCHILY.xattr.* stays intact; regular files keep all PAX
+    //    records untouched.
     let xattr_cap = pax_record("SCHILY.xattr.security.capability", "cap_net_bind");
     let xattr_user = pax_record("SCHILY.xattr.user.note", "kept-value");
-    let dir_path = pax_record("path", "var/with-xattr/");
+    let dir_path = pax_record("path", "sys/");
 
     let mut mixed_dir_pax = Vec::new();
     mixed_dir_pax.extend_from_slice(&dir_path);
@@ -194,7 +196,9 @@ fn pax_time_stripping_handles_empty_malformed_xattr_and_all_time_blocks_byte_for
 fn consecutive_pax_x_interleaved_g_long_paths_and_dir_times_match_baseline() {
     let long_gnu_name = format!("gnu/long/{}/dir/", "a".repeat(120));
     let long_dir_1 = format!("var/tmp/{}/", "b".repeat(120));
-    let long_dir_2 = format!("opt/data/{}/", "c".repeat(135));
+    // the last `path` decides the entry: an init-layer directory, so every
+    // pending `x` block loses its time records
+    let long_dir_2 = "etc/".to_owned();
     let long_sym_path = format!("usr/local/share/{}/link", "d".repeat(125));
     let long_sym_target = format!("/opt/targets/{}/real-bin", "e".repeat(130));
     let long_keep_file = format!("srv/app/{}/keep.bin", "f".repeat(120));
@@ -328,4 +332,34 @@ fn consecutive_pax_x_interleaved_g_long_paths_and_dir_times_match_baseline() {
         .finish();
 
     assert_eq!(filtered(&input), expected);
+}
+
+#[test]
+fn only_init_layer_directories_lose_their_times() {
+    let mut times = pax_record("mtime", "1700000100.5");
+    times.extend_from_slice(&pax_record("atime", "1700000200.5"));
+    let build = |init: u64| {
+        Tar::new()
+            .at(init)
+            .directory("./", 0o755)
+            .directory("etc/", 0o755)
+            .directory("sys/", 0o755)
+            .at(1_650_000_000)
+            .raw("PaxHeaders/cache", b'x', 0o644, &times)
+            .directory("var/cache/fontconfig/", 0o755)
+            .directory("usr/", 0o755)
+            .finish()
+    };
+    let expected = Tar::new()
+        .at(0)
+        .directory("./", 0o755)
+        .directory("etc/", 0o755)
+        .directory("sys/", 0o755)
+        .at(1_650_000_000)
+        .raw("PaxHeaders/cache", b'x', 0o644, &times)
+        .directory("var/cache/fontconfig/", 0o755)
+        .directory("usr/", 0o755)
+        .finish();
+    assert_eq!(filtered(&build(1_700_000_010)), expected);
+    assert_eq!(filtered(&build(1_700_000_025)), expected);
 }

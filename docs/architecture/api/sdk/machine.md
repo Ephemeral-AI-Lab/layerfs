@@ -33,7 +33,7 @@ The `machine` calls: list, inspect, create, start, stop, update and remove the m
 | [`machine.platforms`](#machineplatforms) | `{ host, platforms: [row] }` |
 | [`machine.get`](#machineget) | summary |
 | [`machine.images`](#machineimages) | `{ machine, mode, architecture, default, free, images, docker, available }` |
-| [`machine.load`](#machineload) | `{ id, refs, size, reused }` |
+| [`machine.load`](#machineload) | `{ id, refs, size, reused, dropped?, sparse? }` |
 | [`machine.prune`](#machineprune) | `{ removed: [id], freed }` |
 | [`machine.status`](#machinestatus) | `{ name, platform, state, free_disk, tool_version, down_reason, stores, op? }` |
 | [`machine.stats`](#machinestats) | `{ machine, platform, observed_at, worker, resources, data_disk, stores, sandboxes, complete, reason? }` |
@@ -186,9 +186,11 @@ still hold (`bundle`, `machine`, `staged: false`), staged partial downloads
 in seconds, and `resumable` true only when a non-empty regular file is not yet
 published and not held by a live `ImageLock` or `.2.lock`), and any stranded
 unpacked directories left without a sidecar (`source: "stranded"`,
-`staged: false`, `stranded: true`). `variant` and `config` (such as `Env`,
-`WorkingDir`, `User`) are recorded on import/publish and surfaced without
-being applied. `id` is the Docker image Id for an
+`staged: false`, `stranded: true`). `variant` and `config` (`Env`,
+`WorkingDir`, `User`, `Entrypoint`, `Cmd`) are recorded on import/publish and
+surfaced without being applied; `config.Env` lists the variable names only,
+never their values (a value can be a secret), while the sidecar on the machine
+keeps them. `id` is the Docker image Id for an
 imported image and the config digest for an archive's. `sandboxes` counts
 the Sandbox records on this machine naming that `id`; `last_used` is the
 last create's time (RFC 3339) or null. `default` is the record's image, else
@@ -227,7 +229,10 @@ on that machine at a time holds `<home>/run/image-lock/<machine>/<hex>.lock`
 beside it), so a second copy waits — `{phase: "lock", waiting: "lock",
 holder}` each second, with no deadline — and then reuses what the first
 published; a copy whose owner died takes the lock over at once, because the
-kernel released it, and a record naming a reused pid holds nothing. The
+kernel released it, and a record naming a reused pid holds nothing. Holding
+the lock, a copy passes the machine's prune gate (an exclusive `flock` on
+`<home>/run/image-lock/<machine>/` that `machine.prune` holds while it runs)
+before it creates or writes anything, so it waits for a prune under way. The
 machine's free bytes are checked before anything is created on either side:
 `Capacity` `{needed, free, where}` refuses a machine too small for the copy,
 with no export container, no staged byte and no cache folder, `needed`
@@ -249,12 +254,13 @@ streaming (enforcing `image_tar::SPARSE_MAX` on per-entry `realsize` and
 cumulative expanded bytes, bounding oldgnu/PAX `0.x` chunk counts by entry
 `size`, requiring `payload_needed == size` after padding, refusing malformed PAX
 records after `GNU.sparse.*` keys with `InvalidData`, counting expanded bytes
-written to `.part` against `Capacity`, and recording dropped counts/paths and
-expanded sparse bytes in `image_tar::TarReport`), and normalizes directory
-modification times
-to epoch 0 (`1970-01-01T00:00:00Z`, PAX time records stripped and
-header checksum recomputed, so exports separated in time are byte-identical for
-resume) in 1 MiB `image.artifact` frames to `.recv-<hex>.part`;
+written to `.part` against `Capacity`, and answering the dropped paths and
+expanded sparse files as `dropped` and `sparse`), and normalizes the
+modification times of the directories the init layer stamps (the root, `dev/`,
+`etc/`, `proc/`, `sys/`) to epoch 0 (`1970-01-01T00:00:00Z`, PAX time records
+stripped and header checksum recomputed, so exports separated in time are
+byte-identical for resume; every other directory keeps the image's time) in
+1 MiB `image.artifact` frames to `.recv-<hex>.part`;
 the machine checks its size and sha256, unpacks it
 once into `<hex>.2/`, strips the newly claimed `refs` from other cached
 sidecars (skipping corrupt unrelated sidecars) so moved tags cannot select stale
@@ -276,7 +282,10 @@ A staged
 tar left by a copy that is not running is resumed when its bytes hash as this
 export's prefix, else restarted; `size` is the bytes sent, else the sidecar's,
 else the layers' unpacked size, and the export container's `SizeRootFs` only
-refines the progress estimate. Progress: `inspect`, `lock`, `export`, `send`
+refines the progress estimate. A copy that sent the image also answers
+`dropped: {fifos, devices, init}` (the paths left out) and `sparse: {files:
+[{path, expanded_bytes, stored_bytes}], expanded_bytes}`; a reused one has
+neither. Progress: `inspect`, `lock`, `export`, `send`
 (`done`, `total`: an estimate, never below `done`, until the last `send`
 event, whose `done` and `total` are both the bytes sent), `unpack`. Errors:
 `Unsupported` `{reason: "host"}`
@@ -300,17 +309,15 @@ An image is in use while a Sandbox directory's `config/helper.spec`
 `lower=` names it, while a create holds `.2.lock`, or while a live process
 holds `ImageLock` (`<home>/run/image-lock/<machine>/<hex>.lock`): a named one
 is refused `InUse` (`detail.count`), and `unused` leaves its artifacts
-untouched. On `native`, `unused` guards each candidate hex with `ImageLock::try_hold`
-(taking `flock` without writing an owner record so disk-full cleanups still
-proceed), and if probing or guarding a single hex fails (for example an
-unwritable lock directory or a bad `.lock` file), `unused` skips that hex,
-continues cleaning the rest, and returns `skipped: [{ id, reason }]` when any
-were skipped (naming that image directly returns the error). On worker routes
-(`lima`, `apple-container`), `prune` skips images based on the `ImageLock`
-snapshot taken at the start of the call; a concurrent `load` that starts after
-that snapshot may have its `.part` or un-sidecared `<hex>.2/` removed and fail
-(`write` offset mismatch or missing data, without corrupting cached data).
-Otherwise `prune` removes unpacked directories (including stranded
+untouched. `prune` holds the machine's prune gate (an exclusive `flock` on the
+folder `<home>/run/image-lock/<machine>/`, creating no file, so disk-full
+cleanups still proceed) from before it reads the `ImageLock`s until its
+removals are done, on every route: a `load` passes the gate after taking its
+`ImageLock` and before it writes, so it either holds its lock when `prune`
+reads them or waits until `prune` is over. If probing a single hex's lock fails
+(a bad `.lock` file), `unused` skips that hex, continues cleaning the rest, and
+returns `skipped: [{ id, reason }]` when any were skipped (naming that image
+directly returns the error). Otherwise `prune` removes unpacked directories (including stranded
 `<hex>.2` without `<hex>.2.json`), dangling `<hex>.2.json` sidecars, unheld
 `.recv-<hex>.part` staged files, and temporary `.tmp-<hex>.2-*` unpack
 directories (`unused` keeps valid unpacked copies of the machine's default).

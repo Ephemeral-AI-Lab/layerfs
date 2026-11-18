@@ -8,7 +8,7 @@
 //! no image (`mode: 'host'`).
 use crate::deploy::{self, Choice, Side};
 use crate::image_artifact::{self as cache, SidecarInfo};
-use crate::image_load::ImageLock;
+use crate::image_lock::{ImageLock, PruneGate};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home;
 use layerfs_home::names::MachineName;
@@ -206,7 +206,7 @@ fn listing(machine: &str, side: &Side<'_>, choice: &Choice) -> Outcome {
     let published: BTreeSet<String> = rows.iter().map(|r| r.sidecar.id.clone()).collect();
     let mut images: Vec<SdkValue> = rows
         .into_iter()
-        .map(|row| home::with_field(row.to_value(), "staged", SdkValue::Bool(false)))
+        .map(|row| home::with_field(env_names(row.to_value()), "staged", SdkValue::Bool(false)))
         .collect();
     append_cache_leftovers(root, machine, &dir, &published, &mut images)?;
     images.sort_by(|a, b| {
@@ -226,6 +226,28 @@ fn listing(machine: &str, side: &Side<'_>, choice: &Choice) -> Outcome {
         ),
         ("images", SdkValue::List(images)),
     ]))
+}
+
+/// A listing row whose `config.Env` keeps only the variable names: a value can
+/// be a secret (`ENV TOKEN=...`) that the answer, its traces and a UI would
+/// carry. The sidecar on the machine keeps the whole record.
+fn env_names(row: SdkValue) -> SdkValue {
+    let Some(SdkValue::Map(config)) = row.get("config").cloned() else {
+        return row;
+    };
+    let name = |var: SdkValue| match var {
+        SdkValue::Text(text) => SdkValue::text(text.split('=').next().unwrap_or("")),
+        _ => SdkValue::Null,
+    };
+    let config = config
+        .into_iter()
+        .map(|(field, value)| match (field.as_str(), value) {
+            ("Env", SdkValue::List(vars)) => {
+                (field, SdkValue::List(vars.into_iter().map(name).collect()))
+            }
+            (_, value) => (field, value),
+        });
+    home::with_field(row, "config", SdkValue::Map(config.collect()))
 }
 
 /// Appends staged `.recv-<hex>.part` rows and stranded `<hex>.2` rows found in `dir`.
@@ -321,6 +343,9 @@ pub fn prune(home: &Path, name: &MachineName, image: Option<&str>, unused: bool)
     if host_mode(&executor) {
         return Err(host_only(machine));
     }
+    // no copy starts writing until this prune is over, so the copy locks read
+    // here are every copy it must leave alone, on a worker machine too
+    let _gate = PruneGate::hold(home, machine)?;
     let (locked, lock_errors) = scan_image_locks(&ImageLock::dir(home, machine))?;
     let _target_lock = if let Some(target) = image {
         if let Some(reason) = lock_errors.get(target) {
@@ -495,25 +520,6 @@ fn pruning(side: &Side<'_>, args: &SdkValue) -> Outcome {
             continue;
         }
         let is_default = target.is_none() && unused && default.as_deref() == Some(id.as_str());
-        let _local_guard = if target.is_none()
-            && matches!(side, Side::Home(_))
-            && !machine.is_empty()
-            && ImageLock::dir(root, machine).is_dir()
-        {
-            match ImageLock::try_hold(root, machine, &id) {
-                Ok(Some(guard)) => Some(guard),
-                Ok(None) => continue,
-                Err(err) => {
-                    skipped.push(SdkValue::map([
-                        ("id", SdkValue::text(&id)),
-                        ("reason", SdkValue::text(err.message)),
-                    ]));
-                    continue;
-                }
-            }
-        } else {
-            None
-        };
         let mut removed_any = false;
         let mut temp_held = false;
         for temp_name in &item.temps {

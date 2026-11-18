@@ -1283,11 +1283,24 @@ fn real_docker_and_small_tar_preserve_mtime_mode_sha_and_record_config() {
         .find(|r| r.get_text("id") == Some(id.as_str()))
         .unwrap();
     assert_eq!(row.get_text("variant"), Some("v8"));
+    // machine.images shows the Env names, never their values; the sidecar
+    // on the machine keeps the whole record
+    let listed = SdkValue::map([
+        (
+            "Env",
+            SdkValue::List(vec![SdkValue::text("LP176_TEST_VAR")]),
+        ),
+        ("WorkingDir", SdkValue::text("/srv/work")),
+        ("User", SdkValue::text("nobody")),
+    ]);
     assert_eq!(
         row.get("config"),
-        Some(&cfg),
-        "config must be visible in machine.images: {row:?}"
+        Some(&listed),
+        "config must be visible in machine.images without Env values: {row:?}"
     );
+    assert!(!format!("{row:?}").contains("recorded_only"), "{row:?}");
+    let kept = cache::SidecarInfo::read(&cache_dir, &hex).unwrap().unwrap();
+    assert_eq!(kept.sidecar.config, cfg);
 
     // Also test real Docker image with ENV/WORKDIR/USER/FIFO/mode/mtime.
     if docker_available() {
@@ -1352,8 +1365,8 @@ fn prune_skips_unwritable_lock_dir_and_bad_lock_symlinks_while_reclaiming_others
     use std::os::unix::fs::symlink;
 
     // 1. Unwritable lock dir (simulates ENOSPC / EACCES for record/file creation):
-    //    pre-existing `.lock` is still guarded via try_hold (no .json written) and reclaimed,
-    //    while a hex needing a new `.lock` is skipped with a reason rather than aborting prune.
+    //    prune's gate is a lock on the folder itself and creates no file, so prune does not
+    //    abort and reclaims both the hex with a pre-existing `.lock` and one without.
     let scratch1 = Scratch::new("lp176-r1-lock-ro");
     let home1 = scratch1.base.join("home");
     fs::create_dir_all(&home1).unwrap();
@@ -1381,17 +1394,17 @@ fn prune_skips_unwritable_lock_dir_and_bad_lock_symlinks_while_reclaiming_others
 
     let out1 = images::prune(&home1, &native_name(), None, true).unwrap();
     let removed1 = cache::texts(out1.get("removed"));
-    assert_eq!(removed1, vec![id_existing.clone()], "{out1:?}");
+    assert_eq!(
+        removed1,
+        vec![id_existing.clone(), id_new.clone()],
+        "{out1:?}"
+    );
     assert!(!cache1.join(format!(".recv-{hex_existing}.part")).exists());
-    assert!(cache1.join(format!(".recv-{hex_new}.part")).exists());
-    let skipped1 = match out1.get("skipped") {
-        Some(SdkValue::List(items)) => items.clone(),
-        other => panic!("expected skipped entry for unwritable lock dir: {other:?}"),
-    };
+    assert!(!cache1.join(format!(".recv-{hex_new}.part")).exists());
+    assert!(out1.get("skipped").is_none(), "{out1:?}");
     assert!(
-        skipped1.iter().any(|s| s.get_text("id") == Some(&id_new)
-            && s.get_text("reason").is_some_and(|r| !r.is_empty())),
-        "expected skip reason for {id_new}: {skipped1:?}"
+        !ImageLock::path(&home1, "native", &hex_new).exists(),
+        "prune creates no lock file"
     );
     drop(_mode_guard);
 

@@ -343,16 +343,19 @@ fn pax_and_directory_mtimes_are_normalized_with_valid_checksums() {
     let pax_only_mtime = pax_record("mtime", "1700000999.5");
     let pax_file = pax_record("mtime", "1700000555.25");
 
+    // the init layer's directories (`dev/`, `etc/`, `proc/`) differ between
+    // exports; the image's own (`var/`, `var/cache/dir/`) keep their times
     let build = |dir_sec: u64| {
         Tar::new()
             .at(dir_sec)
             .directory("dev/", 0o755)
             .directory("etc/", 0o755)
+            .raw("PaxHeaders/dir2", b'x', 0o644, &pax_only_mtime)
+            .directory("proc/", 0o755)
+            .at(1_650_000_000)
+            .directory("var/", 0o755)
             .raw("PaxHeaders/dir1", b'x', 0o644, &pax_dir)
             .directory("placeholder-dir", 0o755)
-            .raw("PaxHeaders/dir2", b'x', 0o644, &pax_only_mtime)
-            .directory("var/", 0o755)
-            .at(1_650_000_000)
             .raw("PaxHeaders/file1", b'x', 0o644, &pax_file)
             .file("etc/app.conf", 0o644, b"hello\n")
             .symlink("etc/link", "/etc/app.conf")
@@ -404,6 +407,21 @@ fn pax_and_directory_mtimes_are_normalized_with_valid_checksums() {
             .unwrap()
             .as_secs(),
         0
+    );
+    let secs = |path: &str| {
+        fs::symlink_metadata(root.directory().join(path))
+            .unwrap()
+            .modified()
+            .unwrap()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    };
+    assert_eq!(secs("var"), 1_650_000_000, "the image's own directory");
+    assert_eq!(
+        secs("var/cache/dir"),
+        1_700_000_123,
+        "its pax mtime is kept"
     );
 }
 

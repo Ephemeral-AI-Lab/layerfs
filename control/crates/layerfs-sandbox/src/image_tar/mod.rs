@@ -3,7 +3,8 @@
 //! out (`.dockerenv`, `etc/hosts`, `etc/hostname`, `etc/resolv.conf`,
 //! `etc/mtab`, everything under `dev/`), every device node and FIFO (which
 //! the unpacker refuses), hardlinks targeting dropped entries refused clearly,
-//! sparse entries expanded to regular files, and directory modification times
+//! sparse entries expanded to regular files, and the modification times of the
+//! directories that layer stamps (the root, `dev/`, `etc/`, `proc/`, `sys/`)
 //! normalized to 0 with recomputed header checksums. Those are the bytes that
 //! differ between two exports of one image; what is left is the image's own
 //! tree. The filter streams: it holds at most one entry's extended headers and

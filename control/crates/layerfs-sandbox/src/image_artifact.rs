@@ -8,7 +8,7 @@
 //! The host keeps nothing; Docker is the source. A staged file is resumed
 //! from its length when its bytes are a prefix of the next export
 //! (`probe`'s `prefix_sha256`). Whether another copy is still writing it is
-//! the copy's own lock in the home (`image_load::ImageLock`), never the
+//! the copy's own lock in the home (`image_lock::ImageLock`), never the
 //! staged file's age.
 use crate::deploy::{self, Side};
 use crate::host::Deploy;
