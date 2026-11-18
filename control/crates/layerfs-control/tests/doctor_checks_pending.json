@@ -40,21 +40,13 @@
       "order": false
     },
     "sandbox": {
-      "today": [
-        "sandbox.worker_report",
-        "sandbox.daemon",
-        "sandbox.workspaces",
-        "sandbox.workspace_retained"
-      ],
+      "today": [],
       "missing": [],
       "order": false
     },
     "workspace": {
       "today": [],
-      "missing": [
-        "workspace.mounted",
-        "workspace.activity"
-      ],
+      "missing": [],
       "order": false
     },
     "bucket": {

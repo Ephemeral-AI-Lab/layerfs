@@ -33,6 +33,7 @@ pub use report::{Kind, Node, Report, Thing};
 mod host_target;
 mod machine_target;
 mod sandbox_target;
+mod workspace_target;
 pub(crate) use sandbox_target::worker_diagnose as diagnose_worker_sandbox;
 mod backup_target;
 mod store_target;

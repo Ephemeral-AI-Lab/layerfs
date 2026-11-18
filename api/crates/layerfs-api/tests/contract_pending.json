@@ -68,10 +68,6 @@
     "project.doctor": [
       "`--full` (`project.data`, the walk of everything the project's Branches reach) is refused `Unsupported` until the P-full package builds it"
     ],
-    "sandbox.doctor": [
-      "a Workspace node per Workspace (`workspace.mounted`, `workspace.activity`) is not built: today's `sandbox.workspaces` covers the daemon's whole list and `workspaces` in the tree is empty",
-      "`sandbox.daemon`, `sandbox.workspaces`, `sandbox.workspace_retained` and `sandbox.worker_report` keep today's ids"
-    ],
     "backup.doctor": [
       "its checks keep today's `backup.*` ids; `bucket.*` is the backup package's rename"
     ]
