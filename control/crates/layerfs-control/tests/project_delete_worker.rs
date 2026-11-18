@@ -507,6 +507,11 @@ fn caller_home(tag: &str, address: &str, stack: LayerStackId) -> PathBuf {
     )
     .unwrap();
     home::write_record(
+        &paths::machine_record(&home, "box"),
+        &SdkValue::map([("name", text("box")), ("platform", text("lima"))]),
+    )
+    .unwrap();
+    home::write_record(
         &paths::worker_record(&home, "box"),
         &SdkValue::map([("address", text(address)), ("secret", text("k"))]),
     )
