@@ -348,12 +348,22 @@ impl Walk<'_> {
             return;
         };
         let (bytes, newest) = self.measure(&path, skip);
+        // a run folder's `owner` marker, which `home prune` needs (and needs
+        // quiet for a minute): when it was written, in seconds, else null
+        let owner = match kind {
+            Kind::RunFolder => std::fs::symlink_metadata(path.join(OWNER))
+                .ok()
+                .filter(|found| found.is_file())
+                .map_or(SdkValue::Null, |found| SdkValue::Int(found.mtime())),
+            _ => SdkValue::Null,
+        };
         self.found.push(SdkValue::map([
             ("kind", SdkValue::text(kind.as_str())),
             ("name", SdkValue::text(name)),
             ("path", SdkValue::text(path.display().to_string())),
             ("bytes", bytes.map_or(SdkValue::Null, SdkValue::Int)),
             ("modified", SdkValue::Int(newest)),
+            ("owner_written", owner),
         ]));
     }
 

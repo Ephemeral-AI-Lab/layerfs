@@ -147,58 +147,6 @@ export interface CallSpec {
   };
 }
 
-export interface DoctorCheck {
-  id: string;
-  code: string;
-  outcome: "pass" | "fail" | "blocked" | "skipped" | "unknown";
-  severity: "error" | "warning" | null;
-  entity: { kind: string; name: string };
-  message: string;
-  evidence: Value;
-  fix: string;
-  blocked_by: string[];
-  observed_ms: number;
-  duration_ms: number | null;
-}
-export interface DoctorOptions {
-  home?: string;
-  target?: "host" | "machine" | "sandbox" | "store.integrity" | "store.connection" | "backup.connection";
-  name?: string;
-  timeout?: string;
-  quick?: boolean;
-  write_test?: boolean;
-}
-export interface DoctorReport {
-  ok: boolean;
-  complete?: boolean;
-  checks?: DoctorCheck[];
-  truncated?: boolean;
-  counts?: Record<string, number>;
-  target?: { kind: string; name: string };
-  home?: string;
-  operation?: "diagnose" | "integrity" | "connection";
-  mode?: "full" | "quick" | "observation" | "write-test";
-  observed_at_ms?: number;
-  duration_ms?: number;
-  findings: { severity: string; entity: { kind: string; name: string }; message: string; fix: string | null; leftover?: DoctorLeftover }[];
-  /** The legacy report: each machine walked for leftovers. */
-  leftovers?: { machine: string; complete: boolean; image_locks: number; unmount_markers: number }[];
-}
-/** What an interrupted operation left, on a finding of the legacy report;
- * \`doctor.fix(id)\` removes it when \`fixable\`. */
-export interface DoctorLeftover {
-  machine: string;
-  kind: "run-folder" | "empty-root" | "init-copy" | "backup-staging" | "image-tmp" | "image-part";
-  path: string;
-  /** null when the walk's bound ended before it was measured */
-  bytes: number | null;
-  /** seconds since it last changed */
-  age: number;
-  id: string;
-  fixable: boolean;
-  /** a folder copy: ms since the epoch from which \`doctor.fix\` removes it */
-  not_before?: number;
-}
 
 `];
   for (const spec of table) {

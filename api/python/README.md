@@ -36,7 +36,7 @@ The package ships `py.typed` and `.pyi` stubs for `layerfs` and `layerfs.aio`:
 every call has typed keyword arguments (`on_progress`, `stdout` and `stderr`
 where the call declares them) and `aio` has the coroutine variants. The call
 table has argument kinds and no result schema, so every call returns the loose
-`Result` (a JSON value: a dict for most calls). `Scope`, `DoctorReport`,
+`Result` (a JSON value: a dict for most calls). `Scope`,
 `Progress`, `JSON` and `Result` are for annotations only (import them under
 `TYPE_CHECKING`; they are not defined at run time). The stubs of the families
 are generated from the table; after the table changes, rewrite them with the

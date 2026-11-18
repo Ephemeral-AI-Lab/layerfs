@@ -270,7 +270,7 @@ $ layerfs home get --with live
 
   | Kind | Removed when (else `InUse`, nothing removed) |
   | --- | --- |
-  | `run_folder` | no Sandbox record names it, its `owner` marker is there and older than a minute, no daemon of it runs and nothing is mounted at or under it or its `.root` |
+  | `run_folder` | no Sandbox record names it, its `owner` marker is there and older than a minute, no daemon of it runs and nothing is mounted at or under it or its `.root`; one with no marker, or a marker under a minute old, is listed `report_only` |
   | `empty_root` | its run folder is gone and it is not a mount point; `rmdir` only |
   | `init_copy` | a line of `log/uncertain.jsonl` names the machine and the copy, and its deadline (when the lost request went out, plus the Init's `timeoutMs`) passed more than an hour ago (`removable_at`); a copy no line names is `report_only` and refused `InvalidInput` |
   | `backup_staging` | no `backup create` of that Store is running (its `backup.lock` is taken for the removal) |

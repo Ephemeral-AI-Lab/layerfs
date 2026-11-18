@@ -160,8 +160,6 @@ def render(entries):
         "from ._errors import LayerFSError as LayerFSError\n"
         "from ._values import (\n"
         "    JSON as JSON,\n"
-        "    DoctorLeftover as DoctorLeftover,\n"
-        "    DoctorReport as DoctorReport,\n"
         "    Progress as Progress,\n"
         "    Result as Result,\n"
         "    Scope as Scope,\n"
