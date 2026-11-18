@@ -181,8 +181,8 @@ impl HistoryProvider {
     }
 
     /// The §6.3 compaction mark: the same closure and digest, with every
-    /// reached object streamed into the compaction's temp-file visited table
-    /// (`<store>.compact-visited`) as it is discovered. The §7 build attaches
+    /// reached object written to the compaction's temp-file visited table
+    /// (`<store>.compact-visited`) when the walk is done. The §7 build attaches
     /// that same file, so it never rebuilds an in-memory `object_id -> pack`
     /// map from a second `object_location` scan. On PostgreSQL the visited set
     /// is the `pg_temp` table the Phase M mark fills, so the path is unused.
@@ -210,9 +210,9 @@ impl HistoryProvider {
     /// registers the exclusive operation intent inside the same transaction, so
     /// a rollback takes it with the closure: the live Store then keeps no
     /// `kept_node` row, no `gc_intent` row and no committed WAL frame, and the
-    /// §3 `none` path writes nothing that survives the call. The §6.3 visited
-    /// scratch is a separate temp database on both paths; the caller deletes it
-    /// after a rollback and keeps it for the rebuild's build phase.
+    /// §3 `none` path writes nothing at all. The §6.3 visited scratch is a
+    /// separate temp database that only a kept transaction writes, after the
+    /// decision and before the commit, for the rebuild's build phase.
     pub(crate) fn mark_for_compaction(
         &self,
         scratch: &Path,
@@ -225,9 +225,11 @@ impl HistoryProvider {
                 super::admission::register_in(&tx, intent, false)?;
                 let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
                 let mark = mark_recorded(&tx, Some(&sink))?;
-                sink.finish()?;
                 let keep = decide(&mark)?;
                 let completion = if keep {
+                    // Only a rebuild reads the scratch, so only a rebuild
+                    // writes it; a `none` drops the sink and no file exists.
+                    sink.finish()?;
                     Completion::Commit
                 } else {
                     Completion::Rollback
@@ -696,8 +698,8 @@ fn walk(
                 }
             }
             if let Some(visit) = visit {
-                // Streaming rows as objects are discovered keeps the scratch a
-                // complete §6.2 closure at every step, not a post-pass copy.
+                // The sink keeps the row; it writes the scratch only once the
+                // run is known to rebuild.
                 visit.visit(id, location.pack_id)?;
             }
             closure.visited.insert(id, location);

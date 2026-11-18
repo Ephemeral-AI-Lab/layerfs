@@ -32,7 +32,7 @@
       },
       "logicalDiscarded": 0,
       "path": "none",
-      "peakTempBytes": 12288,
+      "peakTempBytes": 0,
       "physicalShrink": 0,
       "residue": {
         "artifacts": [],
@@ -63,6 +63,10 @@
         {
           "field": "keptWaste",
           "reason": "no-waste"
+        },
+        {
+          "field": "peakTempBytes",
+          "reason": "none-path"
         }
       ]
     },
@@ -117,7 +121,7 @@
       },
       "logicalDiscarded": 0,
       "path": "none",
-      "peakTempBytes": 12288,
+      "peakTempBytes": 0,
       "physicalShrink": 0,
       "residue": {
         "artifacts": [],
@@ -139,6 +143,10 @@
         },
         {
           "field": "physicalShrink",
+          "reason": "none-path"
+        },
+        {
+          "field": "peakTempBytes",
           "reason": "none-path"
         }
       ]

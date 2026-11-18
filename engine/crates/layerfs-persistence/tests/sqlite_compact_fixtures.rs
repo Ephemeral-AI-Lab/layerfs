@@ -951,9 +951,9 @@ fn empty_none_case() -> Json {
     assert_eq!(receipt.dead_bytes_refined, 0);
     assert_eq!(receipt.logical_discarded, 0);
     assert_eq!(receipt.physical_shrink, 0);
-    assert!(
-        receipt.peak_temp_bytes > 0,
-        "the none path's visited scratch counts in peakTempBytes (§6.3)"
+    assert_eq!(
+        receipt.peak_temp_bytes, 0,
+        "the none path writes no visited scratch (§6.3)"
     );
     assert!(receipt.estimate);
     assert!(receipt.kept_waste.is_empty());
@@ -1041,9 +1041,9 @@ fn no_dead_none_case() -> Json {
         "the none path collects nothing"
     );
     assert_eq!(receipt.physical_shrink, 0);
-    assert!(
-        receipt.peak_temp_bytes > 0,
-        "the none path's visited scratch counts in peakTempBytes (§6.3)"
+    assert_eq!(
+        receipt.peak_temp_bytes, 0,
+        "the none path writes no visited scratch (§6.3)"
     );
     assert!(receipt.estimate);
     assert!(receipt.residue.artifacts.is_empty());

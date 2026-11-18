@@ -166,10 +166,10 @@ impl SqliteHandles {
             )
             .with_phase(Some("mark"));
             // The op record is written before the mark so a crash inside the
-            // mark transaction (which creates the §6.3 visited scratch before
-            // it decides) leaves a *recorded* run for the next call to adopt,
-            // never an unrecorded staged name (§9). The mark phase overwrites
-            // it once the mark's tuple and digest are known.
+            // mark transaction (which writes the §6.3 visited scratch before
+            // a rebuild's commit) leaves a *recorded* run for the next call to
+            // adopt, never an unrecorded staged name (§9). The mark phase
+            // overwrites it once the mark's tuple and digest are known.
             let mut op = RunOp {
                 op_id,
                 generation: live.generation,
@@ -209,7 +209,8 @@ impl SqliteHandles {
             // rolls it back, so §3's `nothing is written` holds in the Store's
             // own file: no `kept_node` row, no `gc_intent` row and no committed
             // WAL frame survive the call. The visited scratch is the separate
-            // temp database §6.3 allows; `none` deletes it below.
+            // temp database §6.3 allows; only a `rebuild` writes it, after the
+            // decision and before that commit.
             let decided = history.mark_for_compaction(&visited_path(&store), &intent, decide);
             let (mark, rebuild) = match decided {
                 Ok(decided) => decided,
@@ -242,20 +243,9 @@ impl SqliteHandles {
             if !rebuild {
                 // §3/§6.3 `none`: the mark's write transaction was rolled back,
                 // so the live Store keeps no mark state and no admission
-                // intent. Only the visited scratch was written, and it counts
-                // in `peakTempBytes` until it is deleted before the reply.
-                let scratch = visited_path(&store);
-                let visited_bytes = match std::fs::metadata(&scratch) {
-                    Ok(metadata) => metadata.len(),
-                    Err(_) => {
-                        abort_before_install(&store, &op_id, false);
-                        return Err(HistoryError::Integrity("visited scratch"));
-                    }
-                };
-                if let Err(error) = remove_scratch(&scratch) {
-                    abort_before_install(&store, &op_id, false);
-                    return Err(error);
-                }
+                // intent. The visited scratch is written only for a rebuild,
+                // so this path created no temporary file and `peakTempBytes`
+                // is 0 with the `none-path` reason.
                 let (free, page) = match live_page_metrics(&session) {
                     Ok(metrics) => metrics,
                     Err(error) => {
@@ -279,7 +269,7 @@ impl SqliteHandles {
                     free.saturating_mul(page),
                     0,
                     kept_waste,
-                    visited_bytes,
+                    0,
                     CompactResidue::default(),
                     total,
                     history_rows,

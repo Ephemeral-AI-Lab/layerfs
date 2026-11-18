@@ -1694,7 +1694,8 @@ fn a_returned_residue_is_judged_by_the_next_run() {
 /// write transaction, and the `none` decision rolls it back: no `kept_node`
 /// row, no `gc_intent` row and no WAL frame is committed, so the Store file's
 /// `(size, mtime, change counter)` is unchanged. The §6.3 visited scratch is
-/// created, counted in `peakTempBytes` and deleted before the reply.
+/// written only for a rebuild, so this path creates no temporary file and
+/// reports `peakTempBytes` 0 with the `none-path` reason.
 #[test]
 fn a_none_path_leaves_no_mark_state() {
     let (_temp, handles, path) = create_store();
@@ -1708,13 +1709,21 @@ fn a_none_path_leaves_no_mark_state() {
     assert_eq!(table_count(&path, "kept_node"), 0);
     let receipt = handles.compact(&request(0x75)).unwrap();
     assert_eq!(receipt.path, CompactPath::None);
+    assert_eq!(
+        receipt.peak_temp_bytes, 0,
+        "the none path writes no visited scratch"
+    );
     assert!(
-        receipt.peak_temp_bytes > 0,
-        "the none path's visited scratch counts in peakTempBytes"
+        receipt
+            .zero_reasons
+            .iter()
+            .any(|zero| zero.field == "peakTempBytes" && zero.reason == "none-path"),
+        "a zero peakTempBytes names its reason: {:?}",
+        receipt.zero_reasons
     );
     assert!(
         !visited_path(&path).exists(),
-        "the none path deletes its visited scratch"
+        "the none path leaves no visited scratch"
     );
     assert!(!op_path(&path).exists());
     assert_eq!(
@@ -1929,10 +1938,11 @@ fn acquisition_layout_opens_compacts_and_clears_working_rows() {
     clean(&final_handles);
 }
 
-/// §6.3: the mark itself streams the visited set into `<store>.compact-visited`
-/// as it discovers objects, so the build has no second in-memory map to write.
+/// §6.3: the mark writes the visited set into `<store>.compact-visited`, one
+/// row per reached object, and the retained packs are exactly those rows'
+/// packs.
 #[test]
-fn the_mark_streams_its_visited_set_into_the_scratch_table() {
+fn the_mark_writes_its_visited_set_into_the_scratch_table() {
     let (_temp, handles, path) = create_store();
     let live = filesystem_root(&handles, 1);
     initialize(&handles, 1, live);
@@ -1959,6 +1969,20 @@ fn the_mark_streams_its_visited_set_into_the_scratch_table() {
         mark.objects().packs().len() as u64,
         "one row per retained pack"
     );
+    let (visited_packs, unlisted): (i64, i64) = connection
+        .query_row(
+            "SELECT count(DISTINCT pack_id),\
+                    count(*) FILTER (WHERE pack_id NOT IN (SELECT pack_id FROM live_pack)) \
+               FROM visited",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(
+        visited_packs, packs,
+        "every retained pack holds a visited row"
+    );
+    assert_eq!(unlisted, 0, "every visited row's pack is retained");
     let present: i64 = connection
         .query_row(
             "SELECT count(*) FROM visited WHERE object_id=?1",
