@@ -58,7 +58,7 @@ use layerfs_storage::encoding::delta::read::record_width;
 use layerfs_storage::encoding::{CompressionWorkspace, DecompressionWorkspace};
 use layerfs_storage::location::ObjectLocation;
 use layerfs_storage::pack::layout;
-use layerfs_storage::pack::repack::{record_counts, retain_records};
+use layerfs_storage::pack::repack::retain_records;
 use layerfs_storage::port::ObjectKey;
 use rusqlite::{params, Connection};
 
@@ -179,16 +179,16 @@ pub(crate) fn plan(connection: &Connection, partly_dead: &[(i64, u64)]) -> Histo
 }
 
 /// One stored pack row with its complete body.
-struct Source {
+pub(super) struct Source {
     domain: i64,
-    digest: Vec<u8>,
-    body: Vec<u8>,
+    pub(super) digest: Vec<u8>,
+    pub(super) body: Vec<u8>,
 }
 
 /// Reads one pack whole from `schema` (`src`, the sealed Store, or `main`, a
 /// staged file) and checks it against the length and SHA-256 its row records.
 /// `None` is a pack whose stored bytes are not the ones its row describes.
-fn read(
+pub(super) fn read(
     connection: &Connection,
     schema: &str,
     pack_id: i64,
@@ -505,114 +505,6 @@ pub(crate) fn apply(connection: &Connection, plan: &Plan, units: bool) -> Histor
         return Err(HistoryError::Integrity("repack plan incomplete"));
     }
     Ok(done)
-}
-
-/// Whether the staged file keeps pack payload in `pack_unit` rows.
-fn unit_layout(connection: &Connection) -> HistoryResult<bool> {
-    let tables: i64 = connection
-        .query_row(
-            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='pack_unit'",
-            params![],
-            |row| row.get(0),
-        )
-        .map_err(db_error)?;
-    Ok(tables == 1)
-}
-
-/// A staged pack or locator that is not what the build wrote.
-const STAGED_PACK: HistoryError = HistoryError::Integrity("staged Store repacked pack");
-const STAGED_LOCATOR: HistoryError = HistoryError::Integrity("staged Store repacked locators");
-
-/// §7 step 6 for the packs written again, read back from the staged file.
-///
-/// Each pack's stored bytes are read whole and hashed: they must carry the
-/// SHA-256 and length of their row, and both must be the ones the build
-/// computed. The pack's own directories then state how many records each
-/// group holds (a compressed group is decoded for its count), and the staged
-/// locators that name the pack must be exactly those records: every
-/// `(group, record)` in range and named once, none left unnamed.
-///
-/// The locators are read in one plain scan of `object_location`, which has no
-/// index by pack; the scan keeps no SQLite temporary structure. This pass
-/// holds one pack body at a time, and for all rewritten packs together one
-/// count per group and one bit per record.
-///
-/// `packs` ascends by pack id, as [`apply`] reports it.
-pub fn verify(connection: &Connection, packs: &[Rewritten]) -> HistoryResult<()> {
-    let (Some(first), Some(last)) = (packs.first(), packs.last()) else {
-        return Ok(());
-    };
-    let units = unit_layout(connection)?;
-    let mut decompression = DecompressionWorkspace::new().map_err(storage)?;
-    // Per pack, where its groups start in `ends`; per group, the records the
-    // pack holds up to and including it. A record's bit is its pack's first
-    // bit plus the records before its group plus its own number.
-    let mut slots: Vec<(usize, usize)> = Vec::with_capacity(packs.len());
-    let mut ends: Vec<u32> = Vec::new();
-    let mut records = 0usize;
-    for pack in packs {
-        let stored = read(connection, "main", pack.pack_id, units)?.ok_or(STAGED_PACK)?;
-        if stored.digest.as_slice() != pack.digest.as_slice()
-            || stored.body.len() as u64 != pack.length
-        {
-            return Err(STAGED_PACK);
-        }
-        let counts = record_counts(&stored.body, &mut decompression).map_err(|_| STAGED_PACK)?;
-        slots.push((ends.len(), records));
-        let mut held = 0usize;
-        for count in counts {
-            held += count;
-            ends.push(u32::try_from(held).map_err(|_| STAGED_PACK)?);
-        }
-        if held as u64 != pack.records {
-            return Err(STAGED_PACK);
-        }
-        records += held;
-    }
-    slots.push((ends.len(), records));
-    let mut named = vec![0u64; records.div_ceil(64)];
-    let mut seen = 0usize;
-    let mut statement = connection
-        .prepare(
-            "SELECT pack_id,group_number,record_number FROM object_location \
-WHERE pack_id BETWEEN ?1 AND ?2",
-        )
-        .map_err(db_error)?;
-    let mut rows = statement
-        .query(params![first.pack_id, last.pack_id])
-        .map_err(db_error)?;
-    while let Some(row) = rows.next().map_err(db_error)? {
-        let pack_id: i64 = row.get(0).map_err(db_error)?;
-        let Ok(at) = packs.binary_search_by_key(&pack_id, |pack| pack.pack_id) else {
-            continue;
-        };
-        let group = usize::try_from(row.get::<_, i64>(1).map_err(db_error)?);
-        let record = usize::try_from(row.get::<_, i64>(2).map_err(db_error)?);
-        let (Ok(group), Ok(record)) = (group, record) else {
-            return Err(STAGED_LOCATOR);
-        };
-        let (groups_at, first_bit) = slots[at];
-        let groups = &ends[groups_at..slots[at + 1].0];
-        let end = *groups.get(group).ok_or(STAGED_LOCATOR)? as usize;
-        let start = if group == 0 {
-            0
-        } else {
-            groups[group - 1] as usize
-        };
-        if record >= end - start {
-            return Err(STAGED_LOCATOR);
-        }
-        let bit = first_bit + start + record;
-        if named[bit / 64] & (1 << (bit % 64)) != 0 {
-            return Err(STAGED_LOCATOR);
-        }
-        named[bit / 64] |= 1 << (bit % 64);
-        seen += 1;
-    }
-    if seen != records {
-        return Err(STAGED_LOCATOR);
-    }
-    Ok(())
 }
 
 /// A pack that cannot be read or rebuilt stops the rebuild; the sealed Store

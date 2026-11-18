@@ -482,3 +482,73 @@ fn the_pack_lengths_of_a_large_store_are_read_back_from_a_file() {
     );
     std::fs::remove_dir(&directory).unwrap();
 }
+
+/// The verification's locators are sorted in bounded memory: past 524,288 of
+/// them the sorter writes 8 MiB runs to an unnamed file, exactly the bytes
+/// the report counts beforehand, and the pass by pack reads them back merged
+/// with the rest. Every pack takes its locators, and a pack that is gone
+/// leaves its locators as the foreign-key failure.
+#[test]
+fn the_staged_locators_of_a_large_store_are_sorted_through_a_file() {
+    use layerfs_persistence::internals::StagedLocators;
+
+    const PACKS: i64 = 3_000;
+    const RECORDS: i64 = 200;
+    let directory =
+        std::env::temp_dir().join(format!("layerfs-staged-locators-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).unwrap();
+    let connection = rusqlite::Connection::open(directory.join("staged.sqlite")).unwrap();
+    // The two tables the pass reads, with the columns it reads; locators are
+    // stored in an order that is not pack order, as object identities are.
+    connection
+        .execute_batch(&format!(
+            "PRAGMA journal_mode=OFF;PRAGMA synchronous=OFF;\
+CREATE TABLE pack(pack_id INTEGER PRIMARY KEY,length INTEGER,domain INTEGER);\
+CREATE TABLE object_location(n INTEGER PRIMARY KEY,pack_id INTEGER,\
+group_number INTEGER,record_number INTEGER,canonical_length INTEGER);\
+WITH RECURSIVE p(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM p WHERE i<{PACKS}) \
+INSERT INTO pack SELECT i*2,100+i,i%2 FROM p;\
+WITH RECURSIVE o(i) AS (SELECT 0 UNION ALL SELECT i+1 FROM o WHERE i<{}) \
+INSERT INTO object_location SELECT i,((i*7919)%{PACKS}+1)*2,i%3,i,5 FROM o;",
+            PACKS * RECORDS - 1
+        ))
+        .unwrap();
+    let objects = (PACKS * RECORDS) as u64;
+    assert_eq!(StagedLocators::sort_file_bytes(objects), 8 * 1024 * 1024);
+    assert_eq!(StagedLocators::sort_file_bytes(524_287), 0);
+    let run = |connection: &rusqlite::Connection| {
+        let mut locators = StagedLocators::read(connection, &directory)?;
+        assert_eq!(
+            (locators.objects, locators.canonical),
+            (objects, 5 * objects as i64)
+        );
+        assert_eq!(
+            locators.peak_file_bytes(),
+            StagedLocators::sort_file_bytes(objects)
+        );
+        let mut none = std::iter::empty();
+        let mut pass = locators.pass(connection, &mut none)?;
+        pass.through(PACKS)?;
+        pass.finish()
+    };
+    let scan = run(&connection).unwrap();
+    let lengths: i64 = (1..=PACKS).map(|pack| 100 + pack).sum();
+    let metadata: i64 = (1..=PACKS)
+        .filter(|pack| pack % 2 == 0)
+        .map(|pack| 100 + pack)
+        .sum();
+    assert_eq!(
+        (scan.packs, scan.stored, scan.metadata),
+        (PACKS, lengths, metadata)
+    );
+    connection
+        .execute("DELETE FROM pack WHERE pack_id=?1", [PACKS])
+        .unwrap();
+    assert!(matches!(
+        run(&connection).unwrap_err(),
+        HistoryError::Integrity("staged Store foreign key")
+    ));
+    drop(connection);
+    std::fs::remove_file(directory.join("staged.sqlite")).unwrap();
+    std::fs::remove_dir(&directory).unwrap();
+}

@@ -22,7 +22,7 @@ use layerfs_content::{
     FinalizedObject, ObjectId, ObjectRole,
 };
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, HistoryError, StackInitialization};
-use layerfs_persistence::internals::{verify_repacked, Rewritten};
+use layerfs_persistence::internals::{Rewritten, StagedLocators};
 use layerfs_persistence::{
     CompactFailpoint, CompactPath, CompactRequest, PersistenceConfig, SqliteAcquisitionSchema,
     SqliteHandles, SqlitePackLayout, SqlitePersistenceProfile,
@@ -1036,6 +1036,19 @@ fn the_working_tables_live_in_the_visited_scratch_and_count_as_temp_bytes() {
     );
 }
 
+/// The product's pass over a staged file's packs, for `packs` as the build
+/// reported them: one scan of the locators, then the pack rows in one range.
+fn verify_repacked(
+    connection: &rusqlite::Connection,
+    packs: &[Rewritten],
+) -> Result<(), HistoryError> {
+    let directory = std::env::temp_dir();
+    let mut locators = StagedLocators::read(connection, &directory)?;
+    let mut rewritten = packs.iter().cloned().map(Ok);
+    let pass = locators.pass(connection, &mut rewritten)?;
+    pass.finish().map(|_| ())
+}
+
 /// What a build reports for the packs it wrote again, read here from a staged
 /// file that is known to be good.
 fn rewritten(staged: &rusqlite::Connection, packs: &[i64]) -> Vec<Rewritten> {
@@ -1165,6 +1178,129 @@ WHERE pack_id={pack}"
     wrong[0].length -= 1;
     assert!(verify_repacked(&connection, &wrong).is_err());
     assert!(verify_repacked(&connection, &packs).is_ok());
+}
+
+/// Every locator names a pack the staged file holds. The verification checks
+/// that by reading the locators in pack order beside the `pack` rows, so a
+/// locator whose pack is gone is found wherever its pack would have been:
+/// before another row, or after the last one. A pack the build says it wrote
+/// must be there as well, and the pass counts what one scan of each table
+/// counts.
+#[test]
+fn the_pass_by_pack_finds_a_locator_whose_pack_the_file_does_not_hold() {
+    let (temp, handles, path) = create(SqlitePackLayout::Monolithic);
+    let fixture = mixed_store(&handles);
+    let halted = handles.compact(&CompactRequest {
+        op_id: [0x62; 16],
+        failpoint: Some(CompactFailpoint::AfterBuild),
+        ..CompactRequest::default()
+    });
+    assert!(halted.is_err());
+    let staged = artifact(&path, ".compact");
+    let good = rusqlite::Connection::open(&staged).unwrap();
+    let packs = rewritten(&good, &fixture.packs);
+    let (first, last): (i64, i64) = good
+        .query_row("SELECT min(pack_id),max(pack_id) FROM pack", [], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
+        .unwrap();
+    assert!(first < last);
+    let counted: (i64, i64, i64, i64, i64) = good
+        .query_row(
+            "SELECT (SELECT count(*) FROM pack),(SELECT sum(length) FROM pack),\
+(SELECT COALESCE(sum(length),0) FROM pack WHERE domain=0),\
+(SELECT count(*) FROM object_location),(SELECT sum(canonical_length) FROM object_location)",
+            [],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
+        )
+        .unwrap();
+    // The staged file as built, read in three ranges: one scan of each table.
+    {
+        let mut locators = StagedLocators::read(&good, temp.path()).unwrap();
+        assert_eq!(
+            (locators.objects as i64, locators.canonical),
+            (counted.3, counted.4)
+        );
+        let mut rewritten = packs.iter().cloned().map(Ok);
+        let mut pass = locators.pass(&good, &mut rewritten).unwrap();
+        pass.through(first).unwrap();
+        pass.through(first).unwrap();
+        pass.through(last - 1).unwrap();
+        let scan = pass.finish().unwrap();
+        assert_eq!(
+            (scan.packs, scan.stored, scan.metadata),
+            (counted.0, counted.1, counted.2)
+        );
+    }
+    drop(good);
+
+    let mut case = 0u8;
+    let mut tampered = |change: &str, packs: &[Rewritten]| -> Result<(), HistoryError> {
+        case += 1;
+        let copy = temp.path().join(format!("gone-{case}.sqlite"));
+        std::fs::copy(&staged, &copy).unwrap();
+        let connection = rusqlite::Connection::open(&copy).unwrap();
+        connection
+            .execute_batch(&format!(
+                "PRAGMA foreign_keys=OFF;PRAGMA journal_mode=DELETE;\
+DROP TRIGGER pack_immutable_delete;{change}"
+            ))
+            .unwrap();
+        verify_repacked(&connection, packs)
+    };
+    const FOREIGN_KEY: HistoryError = HistoryError::Integrity("staged Store foreign key");
+    const PACK: HistoryError = HistoryError::Integrity("staged Store repacked pack");
+    assert_eq!(tampered("SELECT 1", &packs), Ok(()));
+    assert_eq!(tampered("SELECT 1", &[]), Ok(()), "no pack written again");
+    // The first pack's row is gone: its locators come before every row.
+    assert_eq!(
+        tampered(&format!("DELETE FROM pack WHERE pack_id={first}"), &[]),
+        Err(FOREIGN_KEY)
+    );
+    // The last pack's row is gone: its locators are left after every row.
+    assert_eq!(
+        tampered(&format!("DELETE FROM pack WHERE pack_id={last}"), &[]),
+        Err(FOREIGN_KEY)
+    );
+    // One locator names a pack past every row.
+    assert_eq!(
+        tampered(
+            &format!(
+                "UPDATE object_location SET pack_id={} WHERE object_id=\
+(SELECT object_id FROM object_location LIMIT 1)",
+                last + 7
+            ),
+            &[]
+        ),
+        Err(FOREIGN_KEY)
+    );
+    // A pack the build wrote again, gone with its locators.
+    let written = packs[0].pack_id;
+    assert_eq!(
+        tampered(
+            &format!(
+                "DELETE FROM object_location WHERE pack_id={written};\
+DELETE FROM pack WHERE pack_id={written}"
+            ),
+            &packs
+        ),
+        Err(PACK)
+    );
+    // A pack the build names that was never in the file.
+    let mut more = packs.clone();
+    more.push(Rewritten {
+        pack_id: last + 9,
+        ..packs[0].clone()
+    });
+    assert_eq!(tampered("SELECT 1", &more), Err(PACK));
 }
 
 /// Runs one statement batch against the Store file while no session is open.

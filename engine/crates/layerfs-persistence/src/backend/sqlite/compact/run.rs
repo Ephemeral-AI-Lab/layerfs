@@ -22,6 +22,7 @@ use super::op::visited_path;
 use super::op::InstalledReport;
 use super::op::RunOp;
 use super::receipt::receipt;
+use super::staged::StagedLocators;
 use super::types::seal_error;
 use super::types::CompactFailpoint;
 use super::types::CompactKeptWaste;
@@ -425,11 +426,13 @@ impl SqliteHandles {
                 .saturating_add(built.repacked.bases_after);
             // The rebuilt Store holds only the blocks a kept leaf reads.
             kept_waste.inode_blocks_bytes = built.inode_blocks_bytes;
-            // §11 `peakTempBytes`: the fresh file and the scratch, or what the
-            // mark's sorting wrote when that was more, and beside either the
-            // file of the pack lengths when they needed one.
+            // §11 `peakTempBytes`: the fresh file, the scratch and the
+            // verification's sorted locators, or what the mark's sorting wrote
+            // when that was more, and beside either the file of the pack
+            // lengths when they needed one.
             let peak_temp = built
                 .peak_temp_bytes()
+                .saturating_add(StagedLocators::sort_file_bytes(mark.objects().len() as u64))
                 .max(mark.scratch_bytes())
                 .saturating_add(lengths.peak_file_bytes());
             // §9/§11: record the installed outcome's totals now that the build

@@ -28,7 +28,8 @@
 //! memory), [`window`] (the pack copy's windows and the sealed file's
 //! read-ahead), [`repack`] (retained packs written again without
 //! their dead records) and [`values`] (only the inode value blocks a kept leaf
-//! reads are copied), [`verify`], [`install`], [`receipt`] and [`run`] (the
+//! reads are copied), [`verify`] with [`staged`] (the pass over the staged
+//! packs and their locators), [`install`], [`receipt`] and [`run`] (the
 //! orchestration on `SqliteHandles`).
 
 mod build;
@@ -39,6 +40,7 @@ mod receipt;
 mod repack;
 mod run;
 mod space;
+mod staged;
 mod types;
 mod values;
 mod verify;
@@ -48,8 +50,9 @@ pub use build::{peak_temp_bytes, source_mmap, SRC_MMAP_BYTES};
 pub use lengths::PackLengths;
 pub use op::{compact_op_status, CompactOpStatus};
 pub use receipt::receipt;
-pub use repack::{verify as verify_repacked, Rewritten};
+pub use repack::Rewritten;
 pub use space::{reserve, trim};
+pub use staged::{PackScan, StagedLocators};
 pub use types::io_error;
 pub use types::{cap_delta_references, DELTA_BASE_REFERENCES_CAP};
 pub use types::{
