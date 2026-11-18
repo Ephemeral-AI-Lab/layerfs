@@ -32,8 +32,11 @@ case "$1" in
     f="$D/history/$(key "$ref")"
     if [ -f "$f" ]; then cat "$f"; exit 0; fi
     echo "Error: No such image: $ref" >&2; exit 1 ;;
-  rm) rm -f "$D/containers/$3" ;;
-  ps) ;;
+  rm)
+    echo "$*" >> "$D/rms"
+    for name in "$@"; do :; done
+    rm -f "$D/containers/$name" ;;
+  ps) cat "$D/ps.txt" 2>/dev/null; exit 0 ;;
   *) echo "unexpected: $*" >&2; exit 2 ;;
 esac
 "#;
@@ -104,6 +107,18 @@ impl Standin {
         fs::read_to_string(self.dir.join("exports"))
             .map(|t| t.lines().count())
             .unwrap_or(0)
+    }
+
+    /// Every `docker rm` the copy ran, one argument line each.
+    pub fn rms(&self) -> Vec<String> {
+        fs::read_to_string(self.dir.join("rms"))
+            .map(|t| t.lines().map(str::to_owned).collect())
+            .unwrap_or_default()
+    }
+
+    /// `docker ps` answers these lines.
+    pub fn ps(&self, lines: &str) {
+        fs::write(self.dir.join("ps.txt"), lines).unwrap();
     }
 
     pub fn set_rootfs_size(&self, size: u64) {

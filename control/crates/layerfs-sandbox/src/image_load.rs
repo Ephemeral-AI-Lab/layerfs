@@ -249,7 +249,7 @@ pub fn load(
         ("architecture", SdkValue::text(&inspected.architecture)),
         ("config", inspected.config.clone()),
     ]))?;
-    let _ = docker.read(&["rm", "-f", &container], docker::READ);
+    let _ = docker.read(&["rm", "-f", "-v", &container], docker::READ);
     Ok(Loaded {
         id: id.clone(),
         refs: refs.clone(),
@@ -328,7 +328,7 @@ fn remove_stale(docker: &Docker, keep: &str) {
             .parse::<u64>()
             .is_ok_and(|t| now.saturating_sub(t) > STALE_SECS);
         if name != keep && name.starts_with("layerfs-export-") && old {
-            let _ = docker.read(&["rm", "-f", name], docker::READ);
+            let _ = docker.read(&["rm", "-f", "-v", name], docker::READ);
         }
     }
 }
