@@ -6,6 +6,7 @@ use super::cleanup::resolve_lost_commit;
 use super::cleanup::settle_leftover;
 use super::op::clear_round;
 use super::op::live_stored;
+use super::op::load_live_packs;
 use super::op::load_visited;
 use super::op::persist_mark;
 use super::op::read_generation;
@@ -49,7 +50,7 @@ pub(crate) fn round(
     let (mark, tuple) = handles.history.mark_gc()?;
     // §11 `markBytes`: the distinct live-pack body bytes this mark read.
     metrics.mark_bytes = Some(mark.mark_bytes());
-    load_visited(session, schema, &mark)?;
+    load_live_packs(session, &mark)?;
     // §3 decides over the mark's own snapshot, never a later Store total: a
     // publication after the mark raises `pack` bytes, and reading them here
     // would flip a `none` decision into a rebuild the mark never judged.
@@ -59,10 +60,15 @@ pub(crate) fn round(
     // The scratch name is the Store's catalog identity, not this caller's
     // operation id: a crash on another machine can still name the artifact.
     let scratch = scratch_name(handles.history.catalog_id.as_slice());
-    let mark_dead = persist_mark(session, schema, &mark, &tuple, &scratch, request)?;
+    let rebuild = takes_rebuild_path(tuple.stored, live);
+    // The visited ids and the dead set are a rebuild's inputs alone: a `none`
+    // round writes its op row and clears it, and loads neither.
+    if rebuild {
+        load_visited(session, &mark)?;
+    }
+    let mark_dead = persist_mark(session, schema, &mark, &tuple, &scratch, request, rebuild)?;
     let generation = u64::try_from(tuple.generation).unwrap_or(0);
     let kept = CompactKeptWaste::from_waste(mark.objects().waste());
-    let rebuild = takes_rebuild_path(tuple.stored, live);
     if !rebuild {
         metrics.end_phase();
         clear_round(session, schema)?;

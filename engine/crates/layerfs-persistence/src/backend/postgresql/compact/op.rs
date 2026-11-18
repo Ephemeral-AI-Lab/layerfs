@@ -189,19 +189,36 @@ const VISITED_IDS: usize = 8192;
 /// Pack ids one statement of [`load_visited`] carries.
 const VISITED_PACKS: usize = 32_768;
 
-/// The set of live object ids and live pack ids, as session temporary tables
-/// the Phase A copy and the dead-set query read.
-pub(crate) fn load_visited(
-    session: &Arc<Session>,
-    schema: &str,
-    mark: &MarkResult,
-) -> HistoryResult<()> {
+/// The live pack ids, as a session temporary table: what the §3 decision
+/// sums, and what the Phase A copy joins.
+pub(crate) fn load_live_packs(session: &Arc<Session>, mark: &MarkResult) -> HistoryResult<()> {
+    stage(session, |tx| {
+        tx.batch(
+            "DROP TABLE IF EXISTS pg_temp.gc_live_pack;\
+             CREATE TEMP TABLE pg_temp.gc_live_pack(pack_id bigint PRIMARY KEY) ON COMMIT PRESERVE ROWS;",
+        )?;
+        for packs in mark.objects().packs().chunks(VISITED_PACKS) {
+            tx.typed(
+                "INSERT INTO pg_temp.gc_live_pack(pack_id) SELECT unnest($1::bigint[])",
+                &[&packs],
+                packs.len() as u64 * 8,
+            )?;
+        }
+        // The decision's sum and the Phase A copy read the set; analyze it
+        // after the load so the planner sees the real cardinality.
+        tx.batch("ANALYZE pg_temp.gc_live_pack;")?;
+        Ok(())
+    })
+}
+
+/// The live object ids, as a session temporary table the dead-set query and
+/// the Phase A copy read. Only a round that rebuilds loads it: a `none`
+/// decision needs the live packs alone.
+pub(crate) fn load_visited(session: &Arc<Session>, mark: &MarkResult) -> HistoryResult<()> {
     stage(session, |tx| {
         tx.batch(
             "DROP TABLE IF EXISTS pg_temp.gc_visited;\
-             DROP TABLE IF EXISTS pg_temp.gc_live_pack;\
-             CREATE TEMP TABLE pg_temp.gc_visited(object_id bytea PRIMARY KEY) ON COMMIT PRESERVE ROWS;\
-             CREATE TEMP TABLE pg_temp.gc_live_pack(pack_id bigint PRIMARY KEY) ON COMMIT PRESERVE ROWS;",
+             CREATE TEMP TABLE pg_temp.gc_visited(object_id bytea PRIMARY KEY) ON COMMIT PRESERVE ROWS;",
         )?;
         // A large visited set is loaded as arrays of ids, a bounded piece
         // per statement. A binary COPY was tried first and spent about four
@@ -216,19 +233,57 @@ pub(crate) fn load_visited(
                 ids.len() as u64 * 36,
             )?;
         }
-        for packs in mark.objects().packs().chunks(VISITED_PACKS) {
-            tx.typed(
-                "INSERT INTO pg_temp.gc_live_pack(pack_id) SELECT unnest($1::bigint[])",
-                &[&packs],
-                packs.len() as u64 * 8,
-            )?;
-        }
-        // The Phase A copy and the dead-set query read both sets; analyze
-        // them after the bulk load so the planner sees the real cardinality.
-        tx.batch("ANALYZE pg_temp.gc_visited; ANALYZE pg_temp.gc_live_pack;")?;
-        let _ = schema;
+        tx.batch("ANALYZE pg_temp.gc_visited;")?;
         Ok(())
     })
+}
+
+/// The `gc_dead` set of one mark, and the `logical` bytes of its dead Commit
+/// and Layer rows.
+fn persist_dead(tx: &Transaction<'_>, schema: &str) -> HistoryResult<i64> {
+    tx.batch(&format!(
+        "INSERT INTO {schema}.gc_dead(kind,id) \
+         SELECT 'commit',c.commit_id FROM {schema}.\"commit\" c \
+          WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='commit' AND k.node_id=c.commit_id) \
+         UNION ALL \
+         SELECT 'layer',l.layer_id FROM {schema}.layer l \
+          WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='layer' AND k.node_id=l.layer_id) \
+         UNION ALL \
+         SELECT 'branch',b.branch_id FROM {schema}.branch b \
+          WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='branch' AND k.node_id=b.branch_id) \
+         UNION ALL \
+         SELECT 'stack',s.layer_stack_id FROM {schema}.layer_stack s \
+          WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='stack' AND k.node_id=s.layer_stack_id) \
+         UNION ALL \
+         SELECT 'signature',int8send(cs.slot)||int8send(cs.stamp) FROM {schema}.content_signature cs \
+          WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=cs.object_id) \
+         UNION ALL \
+         SELECT DISTINCT 'digest',fd.root FROM {schema}.file_digest fd \
+          WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=fd.root) \
+         UNION ALL \
+         SELECT 'layer_lineage',ll.layer_id FROM {schema}.layer_lineage ll \
+          WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='layer' AND k.node_id=ll.layer_id) \
+         UNION ALL \
+         SELECT 'commit_lineage',cl.commit_id FROM {schema}.commit_lineage cl \
+          WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='commit' AND k.node_id=cl.commit_id) \
+         UNION ALL \
+         SELECT 'absorbed',a.run||int8send(a.depth) FROM {schema}.absorbed a \
+          WHERE NOT EXISTS (SELECT 1 FROM {schema}.commit_lineage cl JOIN {schema}.kept_node k ON k.kind='commit' AND k.node_id=cl.commit_id WHERE cl.run=a.run) \
+         UNION ALL \
+         SELECT 'reach',r.key||int8send(r.x) FROM {schema}.reach r \
+          WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='stack' AND k.node_id=r.key) \
+            AND NOT EXISTS (SELECT 1 FROM {schema}.commit_lineage cl JOIN {schema}.kept_node k ON k.kind='commit' AND k.node_id=cl.commit_id WHERE cl.run=r.key)"
+    ))?;
+    scalar(
+        tx,
+        &format!(
+            "SELECT COALESCE((SELECT SUM(c.logical)::bigint FROM {schema}.\"commit\" c \
+               WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='commit' AND d.id=c.commit_id)),0) \
+              + COALESCE((SELECT SUM(l.logical)::bigint FROM {schema}.layer l \
+               WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='layer' AND d.id=l.layer_id)),0)"
+        ),
+        Vec::new(),
+    )
 }
 
 /// Phase M: write `gc_op` (phase mark) and the persisted `gc_dead` set in
@@ -242,6 +297,10 @@ pub(crate) fn load_visited(
 /// run || int8send(depth) and key || int8send(x). A digest root is recorded
 /// once however many `file_digest` rows name it; every other arm selects its
 /// table's own key.
+///
+/// With `rebuild` false (a `none` decision, §3) only the op row is written
+/// and `gc_dead` is left empty: nothing reads the set of a round that
+/// installs nothing, and the caller clears the op row before it replies.
 pub(crate) fn persist_mark(
     session: &Arc<Session>,
     schema: &str,
@@ -249,53 +308,16 @@ pub(crate) fn persist_mark(
     tuple: &GcTuple,
     scratch: &str,
     request: &CompactRequest,
+    rebuild: bool,
 ) -> HistoryResult<DeadTotals> {
     let digest = mark.live_heads_digest().to_vec();
     stage(session, |tx| {
         tx.query(&format!("DELETE FROM {schema}.gc_dead"), Vec::new())?;
-        tx.batch(&format!(
-            "INSERT INTO {schema}.gc_dead(kind,id) \
-             SELECT 'commit',c.commit_id FROM {schema}.\"commit\" c \
-              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='commit' AND k.node_id=c.commit_id) \
-             UNION ALL \
-             SELECT 'layer',l.layer_id FROM {schema}.layer l \
-              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='layer' AND k.node_id=l.layer_id) \
-             UNION ALL \
-             SELECT 'branch',b.branch_id FROM {schema}.branch b \
-              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='branch' AND k.node_id=b.branch_id) \
-             UNION ALL \
-             SELECT 'stack',s.layer_stack_id FROM {schema}.layer_stack s \
-              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='stack' AND k.node_id=s.layer_stack_id) \
-             UNION ALL \
-             SELECT 'signature',int8send(cs.slot)||int8send(cs.stamp) FROM {schema}.content_signature cs \
-              WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=cs.object_id) \
-             UNION ALL \
-             SELECT DISTINCT 'digest',fd.root FROM {schema}.file_digest fd \
-              WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=fd.root) \
-             UNION ALL \
-             SELECT 'layer_lineage',ll.layer_id FROM {schema}.layer_lineage ll \
-              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='layer' AND k.node_id=ll.layer_id) \
-             UNION ALL \
-             SELECT 'commit_lineage',cl.commit_id FROM {schema}.commit_lineage cl \
-              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='commit' AND k.node_id=cl.commit_id) \
-             UNION ALL \
-             SELECT 'absorbed',a.run||int8send(a.depth) FROM {schema}.absorbed a \
-              WHERE NOT EXISTS (SELECT 1 FROM {schema}.commit_lineage cl JOIN {schema}.kept_node k ON k.kind='commit' AND k.node_id=cl.commit_id WHERE cl.run=a.run) \
-             UNION ALL \
-             SELECT 'reach',r.key||int8send(r.x) FROM {schema}.reach r \
-              WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='stack' AND k.node_id=r.key) \
-                AND NOT EXISTS (SELECT 1 FROM {schema}.commit_lineage cl JOIN {schema}.kept_node k ON k.kind='commit' AND k.node_id=cl.commit_id WHERE cl.run=r.key)"
-        ))?;
-        let logical = scalar(
-            tx,
-            &format!(
-                "SELECT COALESCE((SELECT SUM(c.logical)::bigint FROM {schema}.\"commit\" c \
-                   WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='commit' AND d.id=c.commit_id)),0) \
-                  + COALESCE((SELECT SUM(l.logical)::bigint FROM {schema}.layer l \
-                   WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='layer' AND d.id=l.layer_id)),0)"
-            ),
-            Vec::new(),
-        )?;
+        let logical = if rebuild {
+            persist_dead(tx, schema)?
+        } else {
+            0
+        };
         let started = now_ms();
         let kept_waste = encode_kept_waste(&CompactKeptWaste::from_waste(mark.objects().waste()));
         let fingerprint = format!(

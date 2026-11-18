@@ -165,6 +165,16 @@ every value of the blocks it does read
 the rows the single reads return, so the mark's result and its `mark_bytes`
 do not change.
 
+A compaction round decides between `none` and `rebuild` from the mark's live
+packs alone, so it sends the server the live pack ids first
+(`gc_live_pack`) and decides. Only a rebuild then sends the
+visited object ids (`gc_visited`) and fills `gc_dead`; a `none` round writes
+the `gc_op` row at phase `mark`, empties `gc_dead` and clears the op, as the
+specification asks, without ever sending the ids or computing a dead set it
+would delete in the same call
+([`compact/run.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/run.rs),
+[`compact/op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/op.rs)).
+
 ### Generation fence
 
 The session keeps the `catalog_incarnation` its open read

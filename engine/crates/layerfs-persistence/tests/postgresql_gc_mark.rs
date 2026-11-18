@@ -891,6 +891,58 @@ fn a_transaction_reads_each_value_block_once() {
     }
 }
 
+/// A round that installs nothing decides from the live packs alone: it
+/// sends the server neither the visited object ids nor a dead set. The bytes
+/// it binds beyond the mark's own stay far below the ids' width, and the
+/// Store carries no mark state afterwards.
+#[test]
+fn a_none_round_sends_no_visited_ids() {
+    use layerfs_persistence::{CompactPath, CompactRequest};
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "none_no_visited");
+    // Its own catalog identity: the compaction's advisory key derives from it.
+    let handles: PostgresHandles = schema.create(b"postgresql-gc-mark-none", CURSOR);
+    let (genesis_root, mut saved) = save_tree(&handles, 1, 99);
+    let (shop, work, _genesis) = project_with_genesis(&handles.history, 1, genesis_root);
+    for seed in 2..=4u32 {
+        let (root, ids) = save_tree(&handles, seed, 99);
+        commit_with(&handles.history, work, root);
+        publish(&handles.history, shop, work);
+        saved.extend(ids);
+    }
+    saved.sort();
+    saved.dedup();
+
+    let before = handles.diagnostics().unwrap();
+    let mark = handles.history.mark().expect("the mark");
+    let marked = handles.diagnostics().unwrap().since(&before);
+    assert_eq!(mark.objects().len(), saved.len());
+    let before = handles.diagnostics().unwrap();
+    let receipt = handles
+        .compact(&CompactRequest {
+            op_id: [7; 16],
+            ..CompactRequest::default()
+        })
+        .expect("the round");
+    let round = handles.diagnostics().unwrap().since(&before);
+    assert_eq!(receipt.path, CompactPath::None);
+
+    let ids = 36 * saved.len() as u64;
+    let beyond = round.bound_bytes - marked.bound_bytes;
+    assert!(
+        beyond < ids / 2,
+        "a none round binds {beyond} bytes beyond its mark; the visited ids alone are {ids}"
+    );
+    let mut admin = schema.admin();
+    for table in ["gc_dead", "gc_op", "kept_node"] {
+        let rows: i64 = admin
+            .query_one(&format!("SELECT count(*) FROM {table}"), &[])
+            .unwrap()
+            .get(0);
+        assert_eq!(rows, 0, "{table} is empty after a none round");
+    }
+}
+
 const POSTGRESQL_MARK: &str = include_str!("../sql/postgresql/queries/history/kept_node_mark.sql");
 
 /// `(from kind, to kind, column)` of every edge the shared text follows: one
