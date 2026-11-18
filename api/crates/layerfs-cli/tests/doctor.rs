@@ -114,7 +114,7 @@ fn doctor_fix_removes_the_leftover_the_report_listed() {
         assert_eq!(out.status.code(), Some(125), "{out:?}");
         let refusal = String::from_utf8_lossy(&out.stderr).into_owned();
         assert!(
-            refusal.contains(&format!(r#""code":"{code}""#)),
+            refusal.contains(&format!(r#""error":"{code}""#)),
             "{refusal}"
         );
     }

@@ -134,7 +134,7 @@ fn a_retired_or_absent_store_project_is_not_listed_or_got() {
             &[("project", t(&format!("shop/{name}")))],
         )
         .unwrap_err();
-        assert_eq!(code, "NoSuchProject", "{name}: {message}");
+        assert_eq!(code, "NotFound", "{name}: {message}");
     }
     let live = ok(&home, "project.get", &[("project", t("shop/live"))]);
     assert_eq!(live.get_text("project"), Some("shop/live"));

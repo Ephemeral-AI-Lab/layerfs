@@ -66,7 +66,7 @@ fn cli_refuses_every_new_work_route_before_contacting_the_machine() {
                 common::text(&out.stderr)
             );
             let refusal = json::parse(common::text(&out.stderr).trim()).unwrap();
-            assert_eq!(refusal.get_text("code"), Some("Unsupported"), "{name}");
+            assert_eq!(refusal.get_text("error"), Some("Unsupported"), "{name}");
             assert_eq!(refusal.get_text("message"), Some(reason.as_str()), "{name}");
             assert!(
                 matches!(listener.accept(), Err(e) if e.kind() == std::io::ErrorKind::WouldBlock)

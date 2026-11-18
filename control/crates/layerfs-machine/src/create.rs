@@ -215,6 +215,7 @@ pub fn create(
         Ok(spec) => spec,
         Err(refusal) => {
             let _ = std::fs::remove_dir_all(paths::machine_dir(&home, name));
+            layerfs_home::home::generation::moved(&home);
             return Err(refusal);
         }
     };
@@ -280,6 +281,7 @@ fn finish(
         }
         Err(error) => {
             std::fs::remove_dir_all(paths::machine_dir(home, name)).map_err(failed)?;
+            layerfs_home::home::generation::moved(home);
             Err(refusal(error))
         }
     }

@@ -2,7 +2,8 @@
 //! family (`<family>/<call>.rs`: the call's entry and the function that runs
 //! it, one call of a control crate), each family's calls listed in its
 //! `mod.rs`, and the call machinery in `calls/` (argument checks, folder
-//! scope, the one dispatcher; layerfs-project#107). Only this crate speaks
+//! scope, the one dispatcher, and the forms of an answer and a refusal;
+//! layerfs-project#107, call surface 2.0). Only this crate speaks
 //! the SDK; the control crates' public paths the front ends use are
 //! re-exported here. The `branch`, `commit` and `file`
 //! calls reach the Store engine's SDK facade (layerfs-store-service
@@ -35,8 +36,9 @@ use layerfs_home::outcome::Outcome;
 use std::path::Path;
 
 pub use calls::{
-    home, json, keys, size, Arg, Call, CallRef, Calls, Client, Context, Families, Family, Kind,
-    Run, Scope,
+    asks_detail, home, json, keys, refusal, shape, size, Arg, Asked, Call, CallRef, Calls, Client,
+    Context, Families, Family, Form, Kind, Paging, Part, Place, Policy, Profile, Redact, Run,
+    Saves, Scope, Section, DETAIL, WITH,
 };
 pub use layerfs_home::names;
 /// The home (`layerfs-home`), with opening and converting it

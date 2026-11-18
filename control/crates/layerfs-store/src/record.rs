@@ -271,7 +271,9 @@ impl StoreRecord {
 
     /// Writes the record to `store/<name>/record.json` under `home`.
     pub fn write(&self, home: &Path) -> Result<()> {
-        write_entity(&paths::store_record(home, &self.name), &self.fields)
+        write_entity(&paths::store_record(home, &self.name), &self.fields)?;
+        home::generation::moved(home);
+        Ok(())
     }
 
     /// The record's field `field` as written.

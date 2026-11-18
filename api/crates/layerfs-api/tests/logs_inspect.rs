@@ -304,7 +304,8 @@ fn the_table_lists_both_calls_with_a_cursor_window() {
         .filter(|c| c.get_text("family") == Some("logs"))
         .map(|c| c.get_text("call").unwrap())
         .collect();
-    assert_eq!(logs, ["list", "reset", "machine", "sandbox"]);
+    // the call log's own two calls are `home.log` and `home.clear_log`
+    assert_eq!(logs, ["machine", "sandbox"]);
 }
 
 #[test]
@@ -373,7 +374,7 @@ fn a_native_sandbox_s_log_is_read_here_with_no_lock_and_nothing_written() {
     };
     assert_eq!(code, unknown);
     let (code, _) = call(&home, "logs.sandbox", &[("sandbox", t("nobody"))]).unwrap_err();
-    assert_eq!(code, "NoSuchSandbox");
+    assert_eq!(code, "NotFound");
     let stale = [("sandbox", t("s1")), ("cursor", t("c1.0.1.2.3"))];
     let (code, message) = call(&home, "logs.sandbox", &stale).unwrap_err();
     assert_eq!(code, "InvalidInput", "{message}");
@@ -466,7 +467,7 @@ fn a_worker_reads_its_log_and_its_sandboxes_logs_and_writes_nothing() {
     // a Sandbox the worker holds no run folder for
     std::fs::remove_dir_all(paths::sandbox_dir(&root, "s1")).unwrap();
     let (code, message) = call(&home, "logs.sandbox", &[("sandbox", t("s1"))]).unwrap_err();
-    assert_eq!(code, "NoSuchSandbox", "{message}");
+    assert_eq!(code, "NotFound", "{message}");
     std::fs::remove_dir_all(scratch).unwrap();
 }
 

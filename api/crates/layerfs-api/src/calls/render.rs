@@ -2,47 +2,13 @@
 //! words that would make the same call, rendered from its table entry and
 //! its checked arguments before the scope rewrites them; and the saved
 //! version its result names. Free text and credentials are logged only as
-//! byte counts, and no other result value is kept.
-use super::table::{Call, Kind};
+//! byte counts (each argument's entry says so: `redact`), and no other
+//! result value is kept.
+use super::form::Asked;
+use super::table::{Arg, Call, Kind, Redact};
 use super::Scope;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::Outcome;
-
-/// The `Text` arguments logged only as `<N bytes>`: exec command text,
-/// Commit messages, edit strings, Store passwords, connection URLs that may
-/// embed `user:pass@`, every path argument (`path`, `left_path`,
-/// `right_path`, `from_path`, `to_path`, `path_prefix`) and a glob or grep
-/// `pattern`. A path is counted in its normalized form ([`PATHS`]), so a
-/// `project.remove_file` or `file.*` path never enters the call log (#41
-/// §4.3). A new call with such an argument adds its name.
-pub const REDACTED: [&str; 13] = [
-    "command",
-    "message",
-    "old",
-    "new",
-    "password",
-    "url",
-    "path",
-    "left_path",
-    "right_path",
-    "from_path",
-    "to_path",
-    "path_prefix",
-    "pattern",
-];
-
-/// The arguments that name a path: they log the length of the normalized
-/// path, one leading `/` stripped, so `/a` and `a` count the same and a root
-/// `/` counts as 0 (#41 §4.3). A `pattern` is not a path and keeps every
-/// byte it has.
-const PATHS: [&str; 6] = [
-    "path",
-    "left_path",
-    "right_path",
-    "from_path",
-    "to_path",
-    "path_prefix",
-];
 
 /// A path argument's logged byte length: the §4.3 normalization (strip one
 /// leading `/`) applied before counting.
@@ -53,17 +19,22 @@ fn path_len(text: &str) -> usize {
 /// The most characters a logged value keeps.
 const CUT: usize = 200;
 
-/// The calls whose `Committed` or `UpToDate` result names a Commit.
-const SAVING: [&str; 8] = [
-    "file.write",
-    "file.edit",
-    "file.apply",
-    "file.rm",
-    "file.mkdir",
-    "file.mv",
-    "file.cp",
-    "workspace.commit",
-];
+/// Which saved version a call's log line names, from its result; its
+/// table entry says which. For a call that is not migrated yet: a migrated
+/// call's line names its `outcome` word and its `commit`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Saves {
+    /// None.
+    Nothing,
+    /// The Commit a `Committed` or `UpToDate` result names.
+    Commit,
+    /// The head, else the base Layer, of a `Forked` result.
+    Fork,
+    /// The head of a `Merged` result.
+    Merge,
+    /// The Layer a publish added or found.
+    Publish,
+}
 
 fn cut(text: &str) -> String {
     match text.char_indices().nth(CUT) {
@@ -76,16 +47,23 @@ fn bytes(n: usize) -> SdkValue {
     SdkValue::Text(format!("<{n} bytes>"))
 }
 
-/// One argument's value as a word, or none when it is left out.
-fn word(name: &str, kind: Kind, value: &SdkValue) -> Option<SdkValue> {
-    Some(match (kind, value) {
+/// One argument's value as a word, or none when it is left out. Content
+/// and JSON are logged only as a byte count; so is an argument its entry
+/// marks `redact` (exec command text, Commit messages, edit strings, Store
+/// passwords, connection URLs that may embed `user:pass@`, a glob or grep
+/// pattern), and a path argument as the count of its normalized form, so a
+/// `project.remove_file` or `file.*` path never enters the call log (#41
+/// §4.3).
+fn word(arg: &Arg, value: &SdkValue) -> Option<SdkValue> {
+    Some(match (arg.kind, value) {
         (Kind::Function, _) => return None,
         (Kind::Content, SdkValue::Text(text)) => bytes(text.len()),
         (Kind::Content, SdkValue::Bytes(raw)) => bytes(raw.len()),
         (Kind::Content | Kind::Json, value) => bytes(layerfs_home::json::print(value).len()),
-        (Kind::Text, SdkValue::Text(text)) if PATHS.contains(&name) => bytes(path_len(text)),
-        (Kind::Text, SdkValue::Text(text)) if REDACTED.contains(&name) => bytes(text.len()),
+        (_, SdkValue::Text(text)) if arg.redact == Redact::Path => bytes(path_len(text)),
+        (_, SdkValue::Text(text)) if arg.redact == Redact::Bytes => bytes(text.len()),
         (_, SdkValue::Text(text)) => SdkValue::Text(cut(text)),
+        (_, value) if arg.redact != Redact::No => bytes(layerfs_home::json::print(value).len()),
         (_, SdkValue::Int(n)) => SdkValue::Text(n.to_string()),
         (_, SdkValue::Bool(b)) => SdkValue::Text(b.to_string()),
         (_, value) => bytes(layerfs_home::json::print(value).len()),
@@ -110,13 +88,14 @@ pub fn bare(name: &str) -> Vec<SdkValue> {
 
 /// The call's `argv` from its checked arguments (in table order): its
 /// positionals while present, then each option as `--name value` (a Bool
-/// option as a bare flag when true), then the folder scope.
-pub fn argv(spec: &Call, args: &SdkValue, scope: Option<&Scope>) -> Vec<SdkValue> {
+/// option as a bare flag when true), then `--detail` and `--with` as asked,
+/// then the folder scope.
+pub fn argv(spec: &Call, args: &SdkValue, asked: &Asked, scope: Option<&Scope>) -> Vec<SdkValue> {
     let mut words = bare(&spec.name());
     for arg in spec.args {
         match args.get(arg.name) {
             None | Some(SdkValue::Null) => break,
-            Some(value) => words.extend(word(arg.name, arg.kind, value)),
+            Some(value) => words.extend(word(arg, value)),
         }
     }
     for option in spec.options {
@@ -130,10 +109,17 @@ pub fn argv(spec: &Call, args: &SdkValue, scope: Option<&Scope>) -> Vec<SdkValue
             }
             continue;
         }
-        if let Some(value) = word(option.name, option.kind, value) {
+        if let Some(value) = word(option, value) {
             words.push(SdkValue::Text(flag(option.name)));
             words.push(value);
         }
+    }
+    if asked.detail {
+        words.push(SdkValue::text("--detail"));
+    }
+    if !asked.with.is_empty() {
+        words.push(SdkValue::text("--with"));
+        words.push(SdkValue::Text(cut(&asked.with.join(","))));
     }
     if let Some(scope) = scope {
         words.push(SdkValue::text("--scope"));
@@ -163,10 +149,25 @@ fn id(value: Option<&SdkValue>) -> Option<String> {
     }
 }
 
-/// The result's `kind` and the saved version it names (§4.2): `commit` or
-/// `layer`, only for the calls and kinds that save or name one.
-pub fn saved(name: &str, value: &SdkValue) -> Vec<(String, SdkValue)> {
-    let Some(kind) = value.get_text("kind") else {
+/// The result's word and the saved version it names (§4.2), as the line's
+/// `kind` and `commit` or `layer`. A migrated call's full result names its
+/// word as `outcome` and its Commit as `commit`; any other's names its word
+/// as `kind`, and `saves` says where its saved version is.
+pub fn saved(spec: &Call, value: &SdkValue) -> Vec<(String, SdkValue)> {
+    if spec.form.is_some() {
+        let mut fields = Vec::new();
+        if let Some(word) = value.get_text("outcome") {
+            fields.push(("kind".to_owned(), SdkValue::Text(cut(word))));
+        }
+        if let Some(commit) = id(value.get("commit")) {
+            fields.push(("commit".to_owned(), SdkValue::Text(commit)));
+        }
+        return fields;
+    }
+    // a result's word is capitalized (`Committed`, `Forked`); a record's
+    // lowercase `kind` (a Store's `sqlite`) is what it is, not what happened
+    let word = |kind: &&str| kind.starts_with(|first: char| first.is_ascii_uppercase());
+    let Some(kind) = value.get_text("kind").filter(word) else {
         return Vec::new();
     };
     let inner = |outer: &str| value.get(outer).and_then(|v| v.get("id"));
@@ -175,15 +176,14 @@ pub fn saved(name: &str, value: &SdkValue) -> Vec<(String, SdkValue)> {
         (None, Some(layer)) => Some(("layer", layer)),
         _ => None,
     };
-    let saving = SAVING.contains(&name);
-    let version = match (name, kind) {
-        (_, "Committed") if saving => either(id(inner("commit")).or(id(value.get("head"))), None),
-        (_, "UpToDate") if saving => either(id(value.get("head")), id(value.get("base"))),
-        ("branch.fork", "Forked") => either(id(value.get("head")), id(value.get("base"))),
-        ("branch.merge", "Merged") => either(id(value.get("head")), None),
-        ("branch.publish", "Added") => either(None, id(inner("published_layer"))),
-        ("branch.publish", "UpToDate") => either(None, id(value.get("layer"))),
-        ("branch.publish", "NoChanges") => either(None, id(value.get("head_layer"))),
+    let version = match (spec.saves, kind) {
+        (Saves::Commit, "Committed") => either(id(inner("commit")).or(id(value.get("head"))), None),
+        (Saves::Commit, "UpToDate") => either(id(value.get("head")), id(value.get("base"))),
+        (Saves::Fork, "Forked") => either(id(value.get("head")), id(value.get("base"))),
+        (Saves::Merge, "Merged") => either(id(value.get("head")), None),
+        (Saves::Publish, "Added") => either(None, id(inner("published_layer"))),
+        (Saves::Publish, "UpToDate") => either(None, id(value.get("layer"))),
+        (Saves::Publish, "NoChanges") => either(None, id(value.get("head_layer"))),
         _ => None,
     };
     let mut fields = vec![("kind".to_owned(), SdkValue::Text(cut(kind)))];
@@ -194,14 +194,15 @@ pub fn saved(name: &str, value: &SdkValue) -> Vec<(String, SdkValue)> {
 }
 
 /// One line: `{ v, at, ms, client, argv, outcome, kind?, commit?, layer?,
-/// tag? }`.
+/// tag? }`. `outcome` is `ok` or the refusal's code; `saved` is what
+/// [`saved`] found in the call's full result.
 pub fn line(
     at: i64,
     ms: i64,
     client: &str,
     argv: Vec<SdkValue>,
-    name: &str,
     outcome: &Outcome,
+    saved: Vec<(String, SdkValue)>,
     tag: Option<&str>,
 ) -> SdkValue {
     let mut fields = vec![
@@ -212,9 +213,9 @@ pub fn line(
         ("argv".to_owned(), SdkValue::List(argv)),
     ];
     match outcome {
-        Ok(value) => {
+        Ok(_) => {
             fields.push(("outcome".to_owned(), SdkValue::text("ok")));
-            fields.extend(saved(name, value));
+            fields.extend(saved);
         }
         Err(SdkRefusal { code, .. }) => {
             fields.push(("outcome".to_owned(), SdkValue::Text(cut(code))));

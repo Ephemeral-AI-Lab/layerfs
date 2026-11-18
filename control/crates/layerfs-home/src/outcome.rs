@@ -1,5 +1,9 @@
 //! What one host operation answers: a value, or a refusal with a stable
-//! code. Moved from layerfs-node's job.rs (#533 step 2).
+//! code. Moved from layerfs-node's job.rs (#533 step 2). The public
+//! refusal codes, the fold of every other code into them and what a refusal
+//! carries for the caller's next step (`fix`, flat fields) are declared
+//! here once (call surface 2.0).
+use crate::home::with_field;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 
 /// What one operation answers.
@@ -27,4 +31,111 @@ pub enum View {
     Full,
     /// One item of the entity's list.
     List,
+}
+
+/// The thirteen refusal codes a caller can meet, the closed list of the
+/// call surface.
+pub const CODES: [&str; 13] = [
+    "NotFound",
+    "Exists",
+    "InUse",
+    "Busy",
+    "Unresolved",
+    "Conflict",
+    "Dirty",
+    "Capacity",
+    "InvalidInput",
+    "Unsupported",
+    "Unavailable",
+    "Failed",
+    "Unknown",
+];
+
+/// The codes the control and engine crates refuse with that are not public:
+/// each public code and the codes folded into it at the call boundary.
+pub const FOLDS: [(&str, &[&str]); 8] = [
+    (
+        "NotFound",
+        &[
+            "NoSuchStore",
+            "NoSuchProject",
+            "NoSuchBranch",
+            "NoSuchCommit",
+            "NoSuchPath",
+            "NoSuchSandbox",
+            "NoStore",
+            "NoCommit",
+            "NotInHistory",
+            "NotMounted",
+            "Removed",
+            "NoMatch",
+        ],
+    ),
+    ("Exists", &["NameTaken"]),
+    ("InUse", &["MountsActive"]),
+    ("Conflict", &["HeadMoved"]),
+    (
+        "InvalidInput",
+        &[
+            "NotFile",
+            "IsDirectory",
+            "NotDirectory",
+            "NotEmpty",
+            "Binary",
+            "ReservedName",
+            "ReadOnly",
+            "NoMergeBase",
+            "TooLarge",
+            "AmbiguousMatch",
+        ],
+    ),
+    ("Capacity", &["NoSpace"]),
+    (
+        "Unavailable",
+        &[
+            "Denied",
+            "Unauthorized",
+            "StaleSandbox",
+            "StaleStore",
+            "Timeout",
+        ],
+    ),
+    ("Failed", &["UnknownMethod"]),
+];
+
+/// The public code `code` is answered as: itself when it is one of
+/// [`CODES`], the code [`FOLDS`] folds it into, and `Failed` for a code
+/// neither names.
+pub fn public_code(code: &str) -> &'static str {
+    if let Some(public) = CODES.iter().find(|public| **public == code) {
+        return public;
+    }
+    FOLDS
+        .iter()
+        .find(|(_, folded)| folded.contains(&code))
+        .map_or("Failed", |(public, _)| public)
+}
+
+/// The key of a refusal's detail that holds its fix line.
+pub const FIX: &str = "fix";
+/// The key of a refusal's detail that holds the fields the next call needs.
+pub const NEXT: &str = "next";
+
+/// `refusal` with its `fix`: one runnable shell line (two commands joined
+/// with `&&`) that the call boundary answers beside `error` and `message`.
+pub fn with_fix(mut refusal: SdkRefusal, fix: impl Into<String>) -> SdkRefusal {
+    refusal.detail = with_field(refusal.detail, FIX, SdkValue::Text(fix.into()));
+    refusal
+}
+
+/// `refusal` with one field the caller's next call needs, answered flat
+/// beside `error` and `message`: the head as `commit` on a `Conflict`, the
+/// `op` on a `Busy` or `Unresolved`, the `paths` on a `Dirty`.
+pub fn with_next(mut refusal: SdkRefusal, name: &str, value: SdkValue) -> SdkRefusal {
+    let next = match refusal.detail.get(NEXT) {
+        Some(next @ SdkValue::Map(_)) => next.clone(),
+        _ => SdkValue::Map(Vec::new()),
+    };
+    refusal.detail = with_field(refusal.detail, NEXT, with_field(next, name, value));
+    refusal
 }

@@ -15,8 +15,8 @@ pub(crate) const CALL: Call = call(
     &[a("name", Name)],
     &[
         opt("machine", Name),
-        opt("url", Text),
-        opt("password", Text),
+        opt("url", Text).redact(),
+        opt("password", Text).redact(),
         opt("synchronous_commit", Text),
         opt("clear", Bool),
     ],

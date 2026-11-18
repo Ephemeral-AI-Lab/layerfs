@@ -2,6 +2,7 @@
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call, PROGRESS};
 use crate::calls::Context;
+use crate::calls::Policy;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::sqlite::family::StorePush;
@@ -14,7 +15,8 @@ pub(crate) const CALL: Call = call(
     &[PROGRESS],
     "send a sqlite Store from native to a machine",
     run,
-);
+)
+.policy(Policy::TransferTo("name"));
 
 /// Runs `store.push`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

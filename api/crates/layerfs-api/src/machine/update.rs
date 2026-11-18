@@ -2,6 +2,7 @@
 use crate::calls::table::Kind::{Int, Name, Size, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
+use crate::calls::Policy;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 
@@ -20,7 +21,8 @@ pub(crate) const CALL: Call = call(
     ],
     "resize a VM, or set a built-in machine's image, Docker socket and daemon",
     run,
-);
+)
+.policy(Policy::Machine("name"));
 
 /// Runs `machine.update`.
 #[cfg(feature = "machine")]

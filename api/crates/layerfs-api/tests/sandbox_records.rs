@@ -150,7 +150,7 @@ fn sandbox_records_without_a_sandbox() {
         call(&home, "sandbox.close", &[("name", t("lost"))])
             .unwrap_err()
             .0,
-        "NoSuchSandbox"
+        "NotFound"
     );
 
     // sandbox.list pages

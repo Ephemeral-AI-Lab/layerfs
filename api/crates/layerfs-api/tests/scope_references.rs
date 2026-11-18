@@ -197,7 +197,7 @@ fn fork_refuses_every_reference_outside_the_namespace_before_any_effect() {
         // namespace and name no Branch, so the Store refuses them as
         // `NoSuchBranch`; the others are refused by the scope before dispatch.
         let expected = if n == 0 || n == 3 {
-            "NoSuchBranch"
+            "NotFound"
         } else {
             "InvalidInput"
         };
@@ -298,7 +298,7 @@ fn publish_refuses_a_commit_outside_the_namespace_before_any_effect() {
         &[p(), ("branch", t("other"))],
     )
     .unwrap_err();
-    assert_eq!(refused.0, "NoSuchBranch", "{refused:?}");
+    assert_eq!(refused.0, "NotFound", "{refused:?}");
     assert_eq!(main_base(&home), base, "main moved");
     cleanup(home, folder);
 }
@@ -347,7 +347,7 @@ fn the_json_form_refuses_like_the_table_call() {
     )
     .unwrap_err();
     assert!(
-        answer.contains(&format!("\"code\":\"{}\"", direct.0)),
+        answer.contains(&format!("\"error\":\"{}\"", direct.0)),
         "{answer}"
     );
     assert!(answer.contains("out of scope: branch"), "{answer}");

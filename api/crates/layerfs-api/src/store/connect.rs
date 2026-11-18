@@ -11,8 +11,11 @@ use layerfs_store::postgresql::connect::{connect, StoreConnect};
 pub(crate) const CALL: Call = call(
     "store",
     "connect",
-    &[a("name", Name), a("url", Text)],
-    &[opt("password", Text), opt("synchronous_commit", Text)],
+    &[a("name", Name), a("url", Text).redact()],
+    &[
+        opt("password", Text).redact(),
+        opt("synchronous_commit", Text),
+    ],
     "connect a PostgreSQL database as a Store",
     run,
 );

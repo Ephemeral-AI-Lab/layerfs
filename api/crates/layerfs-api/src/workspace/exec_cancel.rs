@@ -1,4 +1,5 @@
 //! `workspace.exec_cancel`: end a running command (compute-plane 2.0 §5.1).
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Int, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
@@ -14,7 +15,8 @@ pub(crate) const CALL: Call = call(
     &[opt("grace_ms", Int)],
     "end a running command: SIGTERM, then SIGKILL after grace_ms",
     run,
-);
+)
+.scoped(Rule::Workspace);
 
 /// Runs `workspace.exec_cancel`: `{ outcome, signal? }`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

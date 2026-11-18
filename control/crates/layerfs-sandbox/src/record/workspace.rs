@@ -98,7 +98,9 @@ impl WorkspaceRecord {
 
     /// Writes the record at `path`, with its version.
     pub fn write(&self, path: &Path) -> Result<()> {
-        write_entity(path, &self.fields.encode())
+        write_entity(path, &self.fields.encode())?;
+        layerfs_home::home::generation::moved_above(path);
+        Ok(())
     }
 
     fn text(&self, pick: fn(&Field) -> Option<&String>) -> Option<&str> {

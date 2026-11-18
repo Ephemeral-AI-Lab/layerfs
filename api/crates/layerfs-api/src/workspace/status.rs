@@ -1,4 +1,5 @@
 //! `workspace.status`: a Workspace's changes since its base.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::Text;
 use crate::calls::table::{a, call, Call};
 use crate::calls::Context;
@@ -14,7 +15,8 @@ pub(crate) const CALL: Call = call(
     &[],
     "a Workspace's changes since its base",
     run,
-);
+)
+.scoped(Rule::Workspace);
 
 /// Runs `workspace.status`: its side's answer.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

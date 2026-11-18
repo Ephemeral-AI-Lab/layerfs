@@ -65,7 +65,7 @@ fn the_reach_check_finds_the_binding_and_the_project_on_one_session() {
         &[("project", t("pg/ghost")), ("name", t("g1"))],
     )
     .unwrap_err();
-    assert_eq!(code, "NoSuchProject", "{message}");
+    assert_eq!(code, "NotFound", "{message}");
     assert_eq!(
         message, "no project ghost in the PostgreSQL Store's schema layerfs",
         "{message}"

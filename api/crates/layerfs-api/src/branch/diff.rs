@@ -1,4 +1,5 @@
 //! `branch.diff`: files that differ between two Branches' heads.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Bool, Int, Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
@@ -24,13 +25,14 @@ pub(crate) const CALL: Call = call(
         opt("page", Int),
         opt("from_commit", Text),
         opt("to_commit", Text),
-        opt("path_prefix", Text),
+        opt("path_prefix", Text).redact_path(),
         opt("include_attribution", Bool),
         opt("continuation", Text),
     ],
     "files that differ between two Branches' heads",
     run,
-);
+)
+.scoped(Rule::History);
 
 /// Runs `branch.diff`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

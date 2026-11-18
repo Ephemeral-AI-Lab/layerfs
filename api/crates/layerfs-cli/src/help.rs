@@ -36,10 +36,17 @@ pub fn usage(call: &Call) -> String {
     if call.arg("stdout").is_some() {
         line.push_str(" [--events]");
     }
+    if !call.with.is_empty() {
+        let sections: Vec<&str> = call.with.iter().map(|section| section.name).collect();
+        line.push_str(&format!(" [--with {}]", sections.join(",")));
+    }
     line
 }
 
 fn option(arg: &Arg) -> String {
+    if let Some(flag) = arg.shell {
+        return format!(" [{flag}]");
+    }
     match (arg.name, arg.kind) {
         ("on_progress", _) => " [--progress]".to_owned(),
         ("stdout" | "stderr", _) => String::new(),
@@ -54,7 +61,7 @@ pub fn print(topic: &[&str]) -> ExitCode {
         ["--json"] => crate::capabilities::help(),
         [] => {
             let mut text = format!(
-                "{}layerfs <family> <call> <arguments> [--options] [--text]\n\n",
+                "{}layerfs <family> <call> <arguments> [--options] [--detail] [--with <sections>] [--text]\n\n",
                 crate::banner::banner()
             );
             // `doctor`'s one call is shown with the doctor's own line below
@@ -86,7 +93,8 @@ pub fn print(topic: &[&str]) -> ExitCode {
                 "\n  {:<10} report what is wrong in the home, changing nothing [--text]; `doctor fix <id>` removes one leftover it listed\n  {:<10} write this environment's 1.1.0 settings as records, once\n  {:<10} serve this machine's worker (inside a machine)\n  {:<10} this help; `layerfs help <family> [<call>]` for more\n\n",
                 doc_title, imp_title, wrk_title, hlp_title
             ));
-            text.push_str("The home is LAYERFS_HOME, else ~/.layerfs. Exit 0: done; 2: wrong command line; 125: refused.\n");
+            text.push_str("A result is one line of JSON: the short form, or with --detail the long form with every key. --with a,b adds the named sections a call lists.\n");
+            text.push_str("The home is LAYERFS_HOME, else ~/.layerfs. Exit 0: done; 2: wrong command line; 125: refused, with {\"error\",\"message\",\"fix\"} on stderr.\n");
             output::print(&text)
         }
         ["doctor", "fix"] => match layerfs_api::find("doctor.fix") {

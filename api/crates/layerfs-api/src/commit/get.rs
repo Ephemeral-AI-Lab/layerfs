@@ -1,4 +1,5 @@
 //! `commit.get`: one Commit of a Branch.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Name, Project};
 use crate::calls::table::{a, call, Call};
 use crate::calls::Context;
@@ -14,7 +15,8 @@ pub(crate) const CALL: Call = call(
     &[],
     "one Commit of a Branch",
     run,
-);
+)
+.scoped(Rule::History);
 
 /// Runs `commit.get`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

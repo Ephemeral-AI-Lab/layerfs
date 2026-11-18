@@ -8,14 +8,17 @@
 //! A line that cannot be written is dropped: it changes no outcome and is
 //! not retried. `LAYERFS_LOGS=0` turns the log off for the process.
 //!
-//! `logs.list` reads the two files by cursor with the pair reader of
-//! [`crate::tail`], which the log calls of a machine and a Sandbox share.
+//! `home.log` reads the two files by cursor with the pair reader of
+//! [`crate::tail`], which the log calls of a machine and a Sandbox share,
+//! and answers each stored line as a row of the call surface (2.0): the
+//! stored format, `{ v, at, ms, client, argv, outcome, kind?, commit?,
+//! layer?, tag? }`, does not change.
 //!
 //! The lines of `log/*.jsonl` rotate the same way ([`rotate`], under
 //! `log/rotate.lock`; layerfs-project#180), all but `log/uncertain.jsonl`.
 use crate::home::{flock, paths};
 use crate::json;
-use crate::outcome::{failed, refused, Outcome};
+use crate::outcome::{failed, public_code, refused, Outcome};
 use crate::tail::{Backward, Cursor, Identity, Pair};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::log_file;
@@ -27,10 +30,13 @@ use std::path::Path;
 /// The size past which `calls.jsonl` rotates to `calls.1.jsonl`, as every
 /// log does.
 pub const ROTATE_AT: u64 = log_file::ROTATE_AT;
-/// The page `logs.list` answers when no limit is given.
-pub const DEFAULT_LIMIT: i64 = 100;
-/// The largest page `logs.list` answers.
+/// The page `home.log` answers when no limit is given.
+pub const DEFAULT_LIMIT: i64 = 200;
+/// The largest page `home.log` answers.
 pub const MAX_LIMIT: i64 = 1000;
+/// The size past which a page ends early with a cursor, in bytes of its
+/// rows as JSON text.
+pub const PAGE_BYTES: usize = 64 << 10;
 /// The longest tag a line carries, in bytes.
 pub const MAX_TAG: usize = 128;
 
@@ -154,40 +160,49 @@ fn count(path: &Path) -> Result<u64, SdkRefusal> {
     Ok(lines)
 }
 
-/// Which lines `logs.list` answers; every field given must match.
-#[derive(Clone, Debug, Default)]
+/// Which lines `home.log` answers; every field given must match.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Filter {
     /// `family` or `family.call`.
-    pub op: Option<String>,
+    pub call: Option<String>,
     /// A project the line's `argv` names.
     pub project: Option<String>,
     /// `cli`, `node`, `python` or `rust`.
     pub client: Option<String>,
     /// An exact tag, or a prefix ending in `:`.
     pub tag: Option<String>,
-    /// `ok` or a refusal code.
+    /// An outcome word (`ok`, `committed`, `refused`) or a refusal code.
     pub outcome: Option<String>,
     /// Lines whose `at` is at or after this time (ms).
     pub since: Option<i64>,
 }
 
+/// The call a cursor of this reader belongs to; one given to another call,
+/// or another call's given here, is refused.
+const CURSOR_FOR: &str = "home.log";
+
+/// The filter's text fields with their names, in one order for the cursor.
+const TEXT_FILTERS: [&str; 5] = ["call", "project", "client", "tag", "outcome"];
+
 impl Filter {
-    fn matches(&self, line: &SdkValue) -> bool {
-        let argv: Vec<&str> = match line.get("argv") {
-            Some(SdkValue::List(words)) => words
-                .iter()
-                .map(|word| match word {
-                    SdkValue::Text(text) => text.as_str(),
-                    _ => "",
-                })
-                .collect(),
-            _ => Vec::new(),
-        };
+    fn text(&mut self, name: &str) -> &mut Option<String> {
+        match name {
+            "call" => &mut self.call,
+            "project" => &mut self.project,
+            "client" => &mut self.client,
+            "tag" => &mut self.tag,
+            _ => &mut self.outcome,
+        }
+    }
+
+    /// Whether the stored `line`, answered as `row`, is one of these.
+    fn matches(&self, line: &SdkValue, row: &SdkValue) -> bool {
+        let argv = words(line);
         let same_call = |a: &str, b: &str| a.replace('-', "_") == b.replace('-', "_");
-        if let Some(op) = &self.op {
-            let (family, call) = match op.split_once('.') {
+        if let Some(named) = &self.call {
+            let (family, call) = match named.split_once('.') {
                 Some((family, call)) => (family, Some(call)),
-                None => (op.as_str(), None),
+                None => (named.as_str(), None),
             };
             if argv.first() != Some(&family) {
                 return false;
@@ -203,12 +218,16 @@ impl Filter {
                 return false;
             }
         }
-        let field = |name: &str, want: &Option<String>| match want {
-            Some(want) => line.get_text(name) == Some(want.as_str()),
-            None => true,
-        };
-        if !field("client", &self.client) || !field("outcome", &self.outcome) {
-            return false;
+        if let Some(client) = &self.client {
+            if line.get_text("client") != Some(client.as_str()) {
+                return false;
+            }
+        }
+        if let Some(outcome) = &self.outcome {
+            let want = Some(outcome.as_str());
+            if row.get_text("outcome") != want && row.get_text("error") != want {
+                return false;
+            }
         }
         if let Some(want) = &self.tag {
             let Some(tag) = line.get_text("tag") else {
@@ -228,19 +247,150 @@ impl Filter {
             None => true,
         }
     }
+
+    /// The `next_cursor` of a page that ended at `last`: the place and
+    /// these filters, as one opaque word.
+    fn cursor(&self, last: &Cursor) -> String {
+        let mut fields = vec![
+            ("for".to_owned(), SdkValue::text(CURSOR_FOR)),
+            ("at".to_owned(), SdkValue::Text(last.text())),
+        ];
+        let mut this = self.clone();
+        for name in TEXT_FILTERS {
+            if let Some(text) = this.text(name).take() {
+                fields.push((name.to_owned(), SdkValue::Text(text)));
+            }
+        }
+        if let Some(since) = self.since {
+            fields.push(("since".to_owned(), SdkValue::Int(since)));
+        }
+        json::base64(json::print(&SdkValue::Map(fields)).as_bytes())
+            .trim_end_matches('=')
+            .to_owned()
+    }
+
+    /// The place `cursor` names and the filters of the call that made it,
+    /// which this call continues: a filter given again must be the same.
+    fn resume(&self, cursor: &str) -> Result<(Cursor, Filter), SdkRefusal> {
+        let padded = format!("{cursor}{}", "=".repeat((4 - cursor.len() % 4) % 4));
+        let made = json::unbase64(&padded)
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .and_then(|text| json::parse(&text).ok())
+            .filter(|value| value.get_text("for") == Some(CURSOR_FOR))
+            .ok_or_else(|| {
+                refused(
+                    "InvalidInput",
+                    "home.log: `cursor` is not the `next_cursor` of a home.log page",
+                )
+            })?;
+        let place = made
+            .get_text("at")
+            .and_then(Cursor::parse)
+            .ok_or_else(stale)?;
+        let mut carried = Filter {
+            since: made.get_int("since"),
+            ..Filter::default()
+        };
+        for name in TEXT_FILTERS {
+            *carried.text(name) = made.get_text(name).map(str::to_owned);
+        }
+        let mut given = self.clone();
+        let differs = TEXT_FILTERS
+            .iter()
+            .any(|name| given.text(name).is_some() && given.text(name) != carried.text(name))
+            || (self.since.is_some() && self.since != carried.since);
+        if differs {
+            return Err(refused(
+                "InvalidInput",
+                "home.log: the cursor carries the filters of the call that made it; give the same filters or none",
+            ));
+        }
+        Ok((place, carried))
+    }
+}
+
+/// A stored line's `argv` words.
+fn words(line: &SdkValue) -> Vec<&str> {
+    match line.get("argv") {
+        Some(SdkValue::List(words)) => words
+            .iter()
+            .map(|word| match word {
+                SdkValue::Text(text) => text.as_str(),
+                _ => "",
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// `UpToDate` as `up_to_date`: a stored result word as an outcome word.
+fn outcome_word(kind: &str) -> String {
+    let mut word = String::with_capacity(kind.len() + 4);
+    for (at, c) in kind.chars().enumerate() {
+        if c.is_ascii_uppercase() && at > 0 {
+            word.push('_');
+        }
+        word.push(c.to_ascii_lowercase());
+    }
+    word
+}
+
+/// One stored line as `home.log` answers it: `{ call, outcome, logged_at,
+/// project, error, duration_ms, client, argv, commit, tag }`. `call` and
+/// `project` come from the line's `argv`; a refused call's `outcome` is
+/// `refused` and its code, folded to a public one, is `error`; any other
+/// call's `outcome` is its result's word, `ok` when it had none.
+fn row(line: &SdkValue) -> SdkValue {
+    let argv = words(line);
+    let call = match (argv.first(), argv.get(1)) {
+        (Some(family), Some(call)) => {
+            SdkValue::Text(format!("{family}.{}", call.replace('-', "_")))
+        }
+        (Some(family), None) => SdkValue::text(*family),
+        _ => SdkValue::Null,
+    };
+    let project = argv
+        .iter()
+        .skip(2)
+        .find(|word| !word.starts_with('-') && crate::names::project(word).is_ok());
+    let (outcome, error) = match line.get_text("outcome") {
+        Some("ok") | None => (
+            line.get_text("kind").map_or("ok".to_owned(), outcome_word),
+            SdkValue::Null,
+        ),
+        Some(code) => ("refused".to_owned(), SdkValue::text(public_code(code))),
+    };
+    let copied = |name: &str| line.get(name).cloned().unwrap_or_default();
+    SdkValue::map([
+        ("call", call),
+        ("outcome", SdkValue::Text(outcome)),
+        (
+            "logged_at",
+            line.get_int("at")
+                .map_or(SdkValue::Null, |at| SdkValue::Text(crate::time::iso(at))),
+        ),
+        ("project", SdkValue::opt_text(project.copied())),
+        ("error", error),
+        ("duration_ms", copied("ms")),
+        ("client", copied("client")),
+        ("argv", copied("argv")),
+        ("commit", copied("commit")),
+        ("tag", copied("tag")),
+    ])
 }
 
 /// One page of the call log, newest first across `calls.jsonl` then
-/// `calls.1.jsonl`: `{ lines, next?, has_more, skipped }`. `cursor` is a
-/// previous page's `next`; after a rotation or reset it is stale and
-/// refused `InvalidInput`. A line that does not parse is counted in
-/// `skipped`, not answered.
-pub fn read(home: &Path, filter: &Filter, cursor: Option<&str>, limit: Option<i64>) -> Outcome {
+/// `calls.1.jsonl`: `{ items, next_cursor, skipped }`, `next_cursor` null at
+/// the end. `cursor` is a previous page's `next_cursor`: it carries that
+/// call's filters, and after a rotation or reset it is stale and refused
+/// `InvalidInput`. A page ends early past [`PAGE_BYTES`]. A line that does
+/// not parse is counted in `skipped`, not answered.
+pub fn page(home: &Path, filter: &Filter, cursor: Option<&str>, limit: Option<i64>) -> Outcome {
     let limit = limit.unwrap_or(DEFAULT_LIMIT);
     if !(1..=MAX_LIMIT).contains(&limit) {
         return Err(refused(
             "InvalidInput",
-            format!("logs.list: `limit` is 1 to {MAX_LIMIT}"),
+            format!("home.log: `limit` is 1 to {MAX_LIMIT}"),
         ));
     }
     let limit = limit as usize;
@@ -248,14 +398,18 @@ pub fn read(home: &Path, filter: &Filter, cursor: Option<&str>, limit: Option<i6
         current: paths::calls_file(home),
         rotated: paths::calls_rotated(home),
     };
-    let start = match cursor {
-        Some(text) => Some(Cursor::parse(text).ok_or_else(stale)?),
-        None => None,
+    let (start, filter) = match cursor {
+        Some(text) => {
+            let (place, carried) = filter.resume(text)?;
+            (Some(place), carried)
+        }
+        None => (None, filter.clone()),
     };
-    let mut lines = Vec::new();
+    let mut items = Vec::new();
+    let mut bytes = 0usize;
     let mut skipped = 0i64;
     let mut last: Option<Cursor> = None;
-    let mut has_more = false;
+    let mut more = false;
     let first = start.as_ref().map_or(0, |cursor| cursor.file);
     'files: for (index, path) in pair.files().into_iter().enumerate().skip(first) {
         let file = match File::open(path) {
@@ -280,19 +434,21 @@ pub fn read(home: &Path, filter: &Filter, cursor: Option<&str>, limit: Option<i6
             _ => size,
         };
         let mut reader = Backward::new(&file, end);
-        while let Some((offset, bytes)) = reader.next_line().map_err(failed)? {
-            let Some(line) = parse(&bytes) else {
+        while let Some((offset, raw)) = reader.next_line().map_err(failed)? {
+            let Some(line) = parse(&raw) else {
                 skipped += 1;
                 continue;
             };
-            if !filter.matches(&line) {
+            let row = row(&line);
+            if !filter.matches(&line, &row) {
                 continue;
             }
-            if lines.len() == limit {
-                has_more = true;
+            if items.len() == limit || bytes > PAGE_BYTES {
+                more = true;
                 break 'files;
             }
-            lines.push(line);
+            bytes += raw.len();
+            items.push(row);
             last = Some(Cursor {
                 file: index,
                 offset,
@@ -300,19 +456,21 @@ pub fn read(home: &Path, filter: &Filter, cursor: Option<&str>, limit: Option<i6
             });
         }
     }
-    let mut answer = vec![("lines".to_owned(), SdkValue::List(lines))];
-    if let (true, Some(last)) = (has_more, last) {
-        answer.push(("next".to_owned(), SdkValue::Text(last.text())));
-    }
-    answer.push(("has_more".to_owned(), SdkValue::Bool(has_more)));
-    answer.push(("skipped".to_owned(), SdkValue::Int(skipped)));
-    Ok(SdkValue::Map(answer))
+    let next = match (more, last) {
+        (true, Some(last)) => SdkValue::Text(filter.cursor(&last)),
+        _ => SdkValue::Null,
+    };
+    Ok(SdkValue::map([
+        ("items", SdkValue::List(items)),
+        ("next_cursor", next),
+        ("skipped", SdkValue::Int(skipped)),
+    ]))
 }
 
 fn stale() -> SdkRefusal {
     refused(
         "InvalidInput",
-        "logs.list: the cursor is stale (the call log was rotated or reset); list from the start",
+        "home.log: the cursor is stale (the call log was rotated or cleared); read from the start",
     )
 }
 

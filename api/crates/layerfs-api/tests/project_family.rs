@@ -150,7 +150,7 @@ fn init_files_branches_move_and_remove() {
     // A named Store the home does not record is `NoSuchStore`, the same code
     // every other project call reports (spec §4.2).
     let refused = call(&home, "project.list", &[("store", t("nope"))]).unwrap_err();
-    assert_eq!(refused.0, "NoSuchStore", "{refused:?}");
+    assert_eq!(refused.0, "NotFound", "{refused:?}");
     // project.list pages with `has_more` (#611)
     let web = tempdir("web");
     std::fs::write(web.join("index.html"), "<h1>shop</h1>\n").unwrap();
@@ -350,7 +350,7 @@ fn init_files_branches_move_and_remove() {
     );
     assert_eq!(
         call(&home, "project.get", &[p()]).unwrap_err().0,
-        "NoSuchProject"
+        "NotFound"
     );
 
     std::fs::remove_dir_all(home).unwrap();
@@ -387,7 +387,7 @@ fn a_private_home_may_be_passable_and_nothing_more() {
     for (name, open) in [("a", 0o750), ("b", 0o711), ("c", 0o705), ("d", 0o702)] {
         set(&home, open);
         let (code, message) = init(name).unwrap_err();
-        assert_eq!(code, "Unauthorized", "{open:o}: {message}");
+        assert_eq!(code, "Unavailable", "{open:o}: {message}");
         assert!(
             message.contains("must be owned by this user and private"),
             "{message}"
@@ -444,7 +444,7 @@ fn project_init_name_collision_reports_holder_and_source() {
             ("folder", t(&folder.display().to_string())),
         ],
     );
-    assert_eq!(home_taken.code, "NameTaken", "{}", home_taken.message);
+    assert_eq!(home_taken.code, "Exists", "{}", home_taken.message);
     let holder = home_taken.detail.get("holder").expect("holder detail");
     assert_eq!(holder.get_text("kind"), Some("project"));
     assert_eq!(holder.get_text("name"), Some("api"));
@@ -461,7 +461,7 @@ fn project_init_name_collision_reports_holder_and_source() {
             ("folder", t(&folder.display().to_string())),
         ],
     );
-    assert_eq!(store_taken.code, "NameTaken", "{}", store_taken.message);
+    assert_eq!(store_taken.code, "Exists", "{}", store_taken.message);
     let holder = store_taken.detail.get("holder").expect("holder detail");
     assert_eq!(holder.get_text("kind"), Some("project"));
     assert_eq!(holder.get_text("name"), Some("api"));
@@ -571,7 +571,7 @@ fn a_retired_source_branch_still_renders_on_its_layers() {
         &[("project", t("shop/api")), ("branch", t("work"))],
     )
     .unwrap_err();
-    assert_eq!(code, "NoSuchBranch", "{message}");
+    assert_eq!(code, "NotFound", "{message}");
 
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);

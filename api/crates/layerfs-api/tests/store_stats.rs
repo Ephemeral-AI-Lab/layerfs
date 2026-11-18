@@ -99,7 +99,7 @@ fn check(home: &Path, kind: &str, test: &str) {
         &mut |_| {},
     )
     .unwrap_err();
-    assert_eq!(gone.code, "NoSuchProject");
+    assert_eq!(gone.code, "NotFound");
     assert!(!paths::project_record(home, "stats", test).exists());
     layerfs_api::close_idle(std::time::Duration::ZERO);
     std::fs::remove_dir_all(source).unwrap();

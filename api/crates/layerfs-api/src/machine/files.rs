@@ -13,7 +13,7 @@ use layerfs_sandbox::inspect::{machine_files, FilesRequest};
 pub(crate) const CALL: Call = call(
     "machine",
     "files",
-    &[a("machine", Name), opt("path", Text)],
+    &[a("machine", Name), opt("path", Text).redact_path()],
     &FILES,
     "a machine's files: its LayerFS folders by role, or a folder or file of the machine",
     run,

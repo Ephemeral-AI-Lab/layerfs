@@ -261,7 +261,7 @@ fn a_worker_s_filtered_listing_hides_a_retired_project() {
     // project.get refuses the retired entry and gets the live one.
     let (code, message) =
         call(&home, "project.get", &[("project", t("shop/retired"))]).unwrap_err();
-    assert_eq!(code, "NoSuchProject", "{message}");
+    assert_eq!(code, "NotFound", "{message}");
     let live = ok(&home, "project.get", &[("project", t("shop/live"))]);
     assert_eq!(live.get_text("project"), Some("shop/live"));
     // Both home entries are still there; the Store, not the home, hides one.
@@ -327,7 +327,7 @@ fn a_worker_store_lists_only_its_live_projects() {
     assert_eq!(names(&ok(&home, "project.list", &[])), vec!["live"]);
     let (code, message) =
         call(&home, "project.get", &[("project", t("shop/retired"))]).unwrap_err();
-    assert_eq!(code, "NoSuchProject", "{message}");
+    assert_eq!(code, "NotFound", "{message}");
     let live = ok(&home, "project.get", &[("project", t("shop/live"))]);
     assert_eq!(live.get_text("project"), Some("shop/live"));
     assert!(paths::project_record(&home, "shop", "retired").exists());

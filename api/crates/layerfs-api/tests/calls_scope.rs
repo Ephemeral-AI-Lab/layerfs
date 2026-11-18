@@ -226,16 +226,24 @@ fn a_scoped_workspace_call_needs_a_sandbox_of_its_project() {
         ("workspace.unmount", map(&[("ws", t("nosuch:/w"))])),
         ("workspace.commit", map(&[("ws", t("no-colon"))])),
     ] {
-        let refused = scoped.owns(&home, call_name, &args).unwrap_err();
+        let refused = scoped
+            .owns(&home, layerfs_api::find(call_name).unwrap(), &args)
+            .unwrap_err();
         assert!(
             refused.message.contains("out of scope: sandbox"),
             "{call_name}"
         );
     }
     let mine = map(&[("ws", t("mine:/w"))]);
-    scoped.owns(&home, "workspace.status", &mine).unwrap();
     scoped
-        .owns(&home, "workspace.mount", &map(&[("sandbox", t("mine"))]))
+        .owns(&home, layerfs_api::find("workspace.status").unwrap(), &mine)
+        .unwrap();
+    scoped
+        .owns(
+            &home,
+            layerfs_api::find("workspace.mount").unwrap(),
+            &map(&[("sandbox", t("mine"))]),
+        )
         .unwrap();
     // through the call: refused before dispatch
     let refused = call(

@@ -1,4 +1,5 @@
 //! `file.stat`: a path's kind, size and mode.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
@@ -13,13 +14,14 @@ pub(crate) const CALL: Call = call(
     &[
         a("project", Project),
         a("branch", Name),
-        a("path", Text),
+        a("path", Text).redact_path(),
         opt("commit", Name),
     ],
     &[],
     "a path's kind, size and mode",
     run,
-);
+)
+.scoped(Rule::File(&["path"]));
 
 /// Runs `file.stat`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

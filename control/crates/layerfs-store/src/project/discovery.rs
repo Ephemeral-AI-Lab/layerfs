@@ -267,7 +267,9 @@ pub fn save_project(path: &Path, project: &Project) -> Result<()> {
             }
         }
     }
-    layerfs_home::home::write_entity(&path.join("record.json"), &record)
+    layerfs_home::home::write_entity(&path.join("record.json"), &record)?;
+    layerfs_home::home::generation::moved_above(path);
+    Ok(())
 }
 /// Project `name` of Store `store` (by default, the Store of its own name)
 /// in `home` (by default, `LAYERFS_HOME`), read from its entry.

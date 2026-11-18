@@ -131,7 +131,10 @@ fn well_formed_lines_reach_the_library() {
         assert_eq!(code, Some(125), "{words:?}: {err}");
         assert!(out.is_empty(), "{words:?}: {out}");
         assert!(err.starts_with("{"), "{words:?}: {err}");
-        assert!(err.contains("\"code\":\"NoSuchStore\""), "{words:?}: {err}");
+        assert!(
+            err.contains("\"error\":\"NotFound\"") && err.contains("no Store named shop"),
+            "{words:?}: {err}"
+        );
     }
     std::fs::remove_dir_all(home).unwrap();
 }
@@ -150,7 +153,7 @@ fn a_bare_project_is_refused_and_the_four_are_out_of_scope() {
         assert!(out.is_empty(), "{words:?}: {out}");
         assert!(err.starts_with("{"), "{words:?}: {err}");
         assert!(
-            err.contains("\"code\":\"InvalidInput\""),
+            err.contains("\"error\":\"InvalidInput\""),
             "{words:?}: {err}"
         );
         assert!(err.contains("with its Store"), "{words:?}: {err}");

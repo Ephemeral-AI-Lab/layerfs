@@ -1,7 +1,10 @@
 //! `workspace.commit`: commit a Workspace's changes to its Branch.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Bool, Text};
 use crate::calls::table::{a, call, opt, Call, MESSAGE};
 use crate::calls::Context;
+use crate::calls::Policy;
+use crate::calls::Saves;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_sandbox::host::Message;
@@ -15,7 +18,10 @@ pub(crate) const CALL: Call = call(
     &[MESSAGE, opt("force", Bool)],
     "commit a Workspace's changes to its Branch",
     run,
-);
+)
+.scoped(Rule::Workspace)
+.policy(Policy::Workspace("ws"))
+.saves(Saves::Commit);
 
 /// Runs `workspace.commit`: its side's answer.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

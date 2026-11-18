@@ -1,7 +1,10 @@
 //! `branch.publish`: a Branch's head or Commit as main's next Layer.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Bool, Name, Project};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
+use crate::calls::Policy;
+use crate::calls::Saves;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::branch::{publish, BranchPublish};
@@ -22,7 +25,10 @@ pub(crate) const CALL: Call = call(
     ],
     "a Branch's head or Commit as main's next Layer, refusing a stale base",
     run,
-);
+)
+.scoped(Rule::BranchPublish)
+.policy(Policy::Project("project"))
+.saves(Saves::Publish);
 
 /// Runs `branch.publish`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

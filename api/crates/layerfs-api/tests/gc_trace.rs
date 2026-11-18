@@ -4,7 +4,7 @@
 //! the `Removed` refusal still echoes the request path, the salted trace key
 //! changes with the salt, and a `store.compact` report's artifact names never
 //! reach the log.
-use layerfs_api::calls::REDACTED;
+use layerfs_api::Redact;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::path::{path_key, trace_key};
 use layerfs_history::LayerStackId;
@@ -158,7 +158,7 @@ fn path_arguments_are_byte_counts_in_the_call_log() {
         "file.read",
         &[p(), ("branch", t("main")), ("path", t("/base.txt"))],
     );
-    assert_eq!(read.code, "Removed");
+    assert_eq!(read.code, "NotFound");
     assert_eq!(
         argv(&last(&home)),
         [
@@ -174,7 +174,7 @@ fn path_arguments_are_byte_counts_in_the_call_log() {
         "file.stat",
         &[p(), ("branch", t("main")), ("path", t("/base.txt"))],
     );
-    assert_eq!(stat.code, "Removed");
+    assert_eq!(stat.code, "NotFound");
     assert_eq!(argv(&last(&home))[4], bytes("base.txt".len()));
 
     let listed = ok(
@@ -221,7 +221,7 @@ fn a_removed_refusal_echoes_the_path_the_log_does_not() {
         "file.read",
         &[p(), ("branch", t("main")), ("path", t("/base.txt"))],
     );
-    assert_eq!(refusal.code, "Removed");
+    assert_eq!(refusal.code, "NotFound");
     assert_eq!(removed_path(&refusal), "/base.txt");
     let line = last(&home);
     assert_eq!(line.get_text("outcome"), Some("Removed"));
@@ -235,6 +235,8 @@ fn a_removed_refusal_echoes_the_path_the_log_does_not() {
 
 #[test]
 fn the_redacted_set_covers_every_path_bearing_call() {
+    // every argument of these names is logged only as a byte count: its
+    // table entry says so (the flag replaced the dispatcher's name list)
     for name in [
         "path",
         "left_path",
@@ -244,7 +246,15 @@ fn the_redacted_set_covers_every_path_bearing_call() {
         "path_prefix",
         "pattern",
     ] {
-        assert!(REDACTED.contains(&name), "{name} is not redacted");
+        let named = (layerfs_api::calls().into_iter())
+            .flat_map(|call| call.args.iter().chain(call.options))
+            .filter(|arg| arg.name == name);
+        let mut seen = 0;
+        for arg in named {
+            assert!(arg.redacted(), "{name} is not redacted");
+            seen += 1;
+        }
+        assert!(seen > 0, "no call takes {name}");
     }
     for (name, args) in [
         ("project.remove_file", &["path"][..]),
@@ -260,12 +270,22 @@ fn the_redacted_set_covers_every_path_bearing_call() {
         let spec = layerfs_api::find(name).unwrap_or_else(|| panic!("{name} is missing"));
         for arg in args {
             assert!(spec.arg(arg).is_some(), "{name} has no {arg}");
-            assert!(REDACTED.contains(arg), "{name}'s {arg} is not redacted");
+            let declared = spec.arg(arg).unwrap();
+            assert!(declared.redacted(), "{name}'s {arg} is not redacted");
+            // a path is counted in its normalized form (#41 §4.3)
+            if *arg != "pattern" {
+                assert_eq!(declared.redact, Redact::Path, "{name}'s {arg}");
+            }
         }
     }
     // text that is not a path stays visible
-    for name in ["project", "branch", "name", "commit", "content", "changes"] {
-        assert!(!REDACTED.contains(&name), "{name} is redacted");
+    for name in ["project", "branch", "name", "commit"] {
+        let named = (layerfs_api::calls().into_iter())
+            .flat_map(|call| call.args.iter().chain(call.options))
+            .filter(|arg| arg.name == name);
+        for arg in named {
+            assert_eq!(arg.redact, Redact::No, "{name} is redacted");
+        }
     }
 }
 

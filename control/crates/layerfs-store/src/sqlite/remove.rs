@@ -107,5 +107,6 @@ pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
     let _lock = home::lock::take(home)?;
     let _store = record::lock(home, name)?;
     std::fs::remove_dir_all(paths::store_dir(home, name)).map_err(failed)?;
+    layerfs_home::home::generation::moved(home);
     Ok(SdkValue::map([("removed", SdkValue::text(name))]))
 }

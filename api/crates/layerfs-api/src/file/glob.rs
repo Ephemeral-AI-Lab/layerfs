@@ -1,4 +1,5 @@
 //! `file.glob`: paths under `path` matching a glob.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Int, Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
@@ -14,8 +15,8 @@ pub(crate) const CALL: Call = call(
     &[
         a("project", Project),
         a("branch", Name),
-        a("path", Text),
-        a("pattern", Text),
+        a("path", Text).redact_path(),
+        a("pattern", Text).redact(),
         opt("commit", Name),
     ],
     &[
@@ -25,7 +26,8 @@ pub(crate) const CALL: Call = call(
     ],
     "paths under `path` matching a glob",
     run,
-);
+)
+.scoped(Rule::File(&["path"]));
 
 /// Runs `file.glob`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

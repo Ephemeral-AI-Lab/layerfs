@@ -1,4 +1,5 @@
 //! `branch.get`: one Branch and its head Commit.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Name, Project};
 use crate::calls::table::{a, call, Call};
 use crate::calls::Context;
@@ -14,7 +15,8 @@ pub(crate) const CALL: Call = call(
     &[],
     "one Branch and its head Commit",
     run,
-);
+)
+.scoped(Rule::BranchGet);
 
 /// Runs `branch.get`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

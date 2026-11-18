@@ -105,7 +105,7 @@ fn import_env() -> ExitCode {
         layerfs_api::home(None).and_then(|home| layerfs_api::home::import_env(&home, &env));
     match outcome {
         Ok(value) => output::result(&value, false),
-        Err(refusal) => output::refusal(&refusal),
+        Err(refusal) => output::refusal(&layerfs_api::refusal::public(refusal), false),
     }
 }
 
@@ -139,9 +139,9 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
         Ok(scope) => scope,
         Err(refusal) => {
             return if switches.events {
-                crate::framed::finish(Err(refusal), false)
+                crate::framed::finish(Err(refusal), false, switches.detail)
             } else {
-                output::refusal(&refusal)
+                output::refusal(&refusal, switches.detail)
             }
         }
     };
@@ -192,8 +192,10 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
                 last_progress_len = len;
                 let _ = write!(err, "\r{status}{pad}");
                 let _ = err.flush();
-            } else {
-                let _ = writeln!(err, "{}", layerfs_api::json::print(&event));
+            } else if let Some(progress) = event.get("progress") {
+                // one event, one line: `{"phase","done","total"}` and what
+                // else the call sends beside them
+                let _ = writeln!(err, "{}", layerfs_api::json::print(progress));
             }
         } else if stream {
             let bytes = match event.get("bytes") {
@@ -230,10 +232,10 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
     // retained failures (layerfs-project#181). Bounded; the result is ready.
     layerfs_api::end_idle_sessions(layerfs_api::SESSION_END);
     if switches.events {
-        return crate::framed::finish(outcome, framing_failed);
+        return crate::framed::finish(outcome, framing_failed, switches.detail);
     }
     match outcome {
-        Err(refusal) => output::refusal(&refusal),
+        Err(refusal) => output::refusal(&refusal, switches.detail),
         Ok(value) if stream => {
             let _ = std::io::stdout().flush();
             // the command's own exit code, as 1.1.0 passed it through; a

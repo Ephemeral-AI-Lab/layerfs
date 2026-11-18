@@ -2,6 +2,7 @@
 use crate::calls::table::Kind::{Int, Project, Text};
 use crate::calls::table::{a, call, opt, Call, PROGRESS};
 use crate::calls::Context;
+use crate::calls::Policy;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::names::ProjectRef;
 use layerfs_home::outcome::Outcome;
@@ -15,7 +16,8 @@ pub(crate) const CALL: Call = call(
     &[opt("timeout", Int), PROGRESS],
     "import a host folder as a new project into an existing Store",
     run,
-);
+)
+.policy(Policy::Project("project"));
 
 /// Runs `project.init`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

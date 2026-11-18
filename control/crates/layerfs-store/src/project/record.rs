@@ -59,7 +59,9 @@ impl ProjectRecord {
         write_entity(
             &paths::project_record(home, &self.store, &self.name),
             &self.fields,
-        )
+        )?;
+        layerfs_home::home::generation::moved(home);
+        Ok(())
     }
 
     /// This record with each of `other`'s fields set over its own.

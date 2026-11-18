@@ -98,7 +98,7 @@ fn a_sandbox_killed_behind_controls_back_is_lost_until_closed() {
         call(&home, "sandbox.get", &[("name", t("s1"))])
             .unwrap_err()
             .0,
-        "NoSuchSandbox"
+        "NotFound"
     );
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&folder);

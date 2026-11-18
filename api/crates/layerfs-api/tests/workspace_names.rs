@@ -104,7 +104,7 @@ fn a_name_is_unique_in_its_sandbox() {
     );
     // another name gets past the check, to the Sandbox itself
     let (code, message) = mount("other").unwrap_err();
-    assert_eq!(code, "NoSuchSandbox", "{message}");
+    assert_eq!(code, "NotFound", "{message}");
     assert!(message.contains("no daemon keys"), "{message}");
     // a name is a name: not a path, not upper case
     for bad in ["Dev", "a/b", "-x"] {
@@ -131,11 +131,11 @@ fn every_workspace_call_takes_the_name_or_the_path() {
         // the name and the path reach the same Sandbox
         for ws in ["one:dev", "one:/w/1"] {
             let (code, message) = run(ws).unwrap_err();
-            assert_eq!(code, "NoSuchSandbox", "{call_name} {ws}: {message}");
+            assert_eq!(code, "NotFound", "{call_name} {ws}: {message}");
         }
         // a name no Workspace record carries is not mounted
         let (code, message) = run("one:nope").unwrap_err();
-        assert_eq!(code, "NotMounted", "{call_name}: {message}");
+        assert_eq!(code, "NotFound", "{call_name}: {message}");
         assert!(message.contains("one:nope is not mounted"), "{message}");
         // neither form, or a bad name, is refused before any call
         for bad in ["one", "one:", "one:Dev"] {

@@ -14,7 +14,8 @@ pub(crate) const CALL: Call = call(
     &WINDOW,
     "a Sandbox's daemon log: its last lines, or the lines after or before a cursor",
     run,
-);
+)
+.quiet();
 
 /// Runs `logs.sandbox`: `{ lines: [{ text, continued? }], cursor, before?,
 /// has_more }`, read where the Sandbox's run folder is. It takes no lock

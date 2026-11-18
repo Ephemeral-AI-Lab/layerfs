@@ -1,4 +1,5 @@
 //! `workspace.unmount`: end a Workspace.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Bool, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
@@ -14,7 +15,8 @@ pub(crate) const CALL: Call = call(
     &[opt("discard", Bool), opt("force", Bool)],
     "end a Workspace",
     run,
-);
+)
+.scoped(Rule::Workspace);
 
 /// Runs `workspace.unmount`: its side's answer.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

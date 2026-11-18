@@ -359,6 +359,7 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     owner.delete().map_err(failed)?;
     lock(&SANDBOXES)?.remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(failed)?;
+    layerfs_home::home::generation::moved_above(&directory);
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Closed")),
         ("sandbox", SdkValue::text(&id)),
@@ -377,6 +378,7 @@ fn forget(id: &str, directory: &Path, recorded: &DaemonRecord) -> Outcome {
     let _guard = layerfs_store::project::discovery::guard(directory)?;
     let container = discard(directory, recorded)?;
     std::fs::remove_dir_all(directory).map_err(failed)?;
+    layerfs_home::home::generation::moved_above(directory);
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Forgotten")),
         ("sandbox", SdkValue::text(id)),
@@ -440,6 +442,7 @@ pub fn reclaim(host: &Host, container: &str, stopped: bool) -> Outcome {
     }
     lock(&SANDBOXES)?.remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(failed)?;
+    layerfs_home::home::generation::moved_above(&directory);
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Reclaimed")),
         ("id", SdkValue::text(id)),

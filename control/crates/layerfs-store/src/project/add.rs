@@ -286,6 +286,7 @@ pub fn add_failure(error: InitError, entry: Option<&Path>, name: &str, store: &s
     };
     if let Some(entry) = entry {
         let _ = std::fs::remove_dir_all(entry);
+        layerfs_home::home::generation::moved_above(entry);
     }
     refusal
 }

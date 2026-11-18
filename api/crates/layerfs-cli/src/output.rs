@@ -6,14 +6,11 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::io::{IsTerminal, Write};
 use std::process::ExitCode;
 
-/// Prints `refusal` as `{"code","message","detail"}` on stderr.
-pub fn refusal(refusal: &SdkRefusal) -> ExitCode {
-    let value = SdkValue::map([
-        ("code", SdkValue::text(&refusal.code)),
-        ("message", SdkValue::text(&refusal.message)),
-        ("detail", refusal.detail.clone()),
-    ]);
-    diagnostic(&json::print(&value));
+/// Prints `refusal` as one line of JSON on stderr: `{"error","message"}`,
+/// `fix` when there is one and the fields the next call needs; with
+/// `detail` (`--detail`) its long form, which adds `detail`.
+pub fn refusal(refusal: &SdkRefusal, detail: bool) -> ExitCode {
+    diagnostic(&json::print(&layerfs_api::refusal::value(refusal, detail)));
     ExitCode::from(REFUSED)
 }
 

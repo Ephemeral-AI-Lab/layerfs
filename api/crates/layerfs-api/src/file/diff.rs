@@ -1,4 +1,5 @@
 //! `file.diff`: the difference between two files.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Bool, Int, Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
@@ -14,9 +15,9 @@ pub(crate) const CALL: Call = call(
     &[
         a("project", Project),
         a("left_branch", Name),
-        a("left_path", Text),
+        a("left_path", Text).redact_path(),
         a("right_branch", Name),
-        a("right_path", Text),
+        a("right_path", Text).redact_path(),
     ],
     &[
         opt("left_commit", Name),
@@ -28,7 +29,8 @@ pub(crate) const CALL: Call = call(
     ],
     "the difference between two files",
     run,
-);
+)
+.scoped(Rule::File(&["left_path", "right_path"]));
 
 /// Runs `file.diff`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

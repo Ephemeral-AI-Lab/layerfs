@@ -66,7 +66,10 @@ fn with_stream_a_command_exit_of_2_or_125_looks_like_usage_or_refusal() {
     assert_eq!((refused, command), (Some(125), Some(125)));
     // ... told apart only by what is on stderr
     assert!(usage_err.starts_with("layerfs: "), "{usage_err}");
-    assert!(refusal.starts_with(r#"{"code":"#), "{refusal}");
+    assert!(
+        refusal.starts_with(r#"{"error":"NotFound","message":"#),
+        "{refusal}"
+    );
     assert_eq!(command_err, "err\n");
     std::fs::remove_dir_all(home).unwrap();
 }

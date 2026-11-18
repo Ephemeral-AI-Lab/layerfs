@@ -1,4 +1,5 @@
 //! `branch.get_commit`: one saved branch record, using a complete immutable ID.
+use crate::calls::scope::Rule;
 use crate::calls::{
     table::{
         a, call, Call,
@@ -17,7 +18,8 @@ pub(crate) const CALL: Call = call(
     &[],
     "one saved Commit or main publication",
     run,
-);
+)
+.scoped(Rule::History);
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let request = BranchGetCommit {
         project: args.get_text("project").unwrap_or_default().into(),

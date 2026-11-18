@@ -1,4 +1,5 @@
 //! `branch.commits`: pinned saved Commit or publication history.
+use crate::calls::scope::Rule;
 use crate::calls::{
     table::{
         a, call, opt, Call,
@@ -22,7 +23,8 @@ pub(crate) const CALL: Call = call(
     ],
     "saved branch commits or main publications, newest first",
     run,
-);
+)
+.scoped(Rule::History);
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let request = BranchCommits {
         project: args.get_text("project").unwrap_or_default().into(),

@@ -63,8 +63,8 @@ fn read(home: &std::path::Path, project: &str) -> Result<SdkValue, (String, Stri
 #[test]
 fn a_missing_store_or_project_keeps_the_1_1_0_codes() {
     let home = home_with(sqlite_record(t("native")));
-    assert_eq!(read(&home, "nope/api").unwrap_err().0, "NoSuchStore");
-    assert_eq!(read(&home, "shop/web").unwrap_err().0, "NoSuchProject");
+    assert_eq!(read(&home, "nope/api").unwrap_err().0, "NotFound");
+    assert_eq!(read(&home, "shop/web").unwrap_err().0, "NotFound");
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -129,7 +129,7 @@ fn a_store_on_another_machine_goes_to_its_worker_with_its_record() {
     // naming its path (or, on a kernel that cannot open sqlite Stores
     // directly, Unsupported)
     assert!(
-        matches!(code.as_str(), "NoStore" | "Unsupported" | "Failed"),
+        matches!(code.as_str(), "NotFound" | "Unsupported" | "Failed"),
         "{code}: {message}"
     );
     if code != "Unsupported" {

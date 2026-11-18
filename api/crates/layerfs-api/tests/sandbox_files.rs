@@ -407,9 +407,10 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
     assert_eq!(args, [("sandbox", false), ("path", true)]);
     let options: Vec<_> = call.options.iter().map(|a| a.name).collect();
     assert_eq!(options, ["depth", "cursor", "limit", "offset", "length"]);
-    // it, `home.get` (a setup poll), `machine.stats` (layerfs-project#164),
-    // `machine.space` and `machine.files` carry the flag; the `logs` calls
-    // are skipped by family
+    // it, `home.get` (a setup poll), the home's call log calls,
+    // `machine.stats` (layerfs-project#164), `machine.space`,
+    // `machine.files` and the two `logs` calls carry the flag: no family is
+    // skipped by its name
     let quiet: Vec<_> = layerfs_api::calls()
         .into_iter()
         .filter(|call| call.quiet)
@@ -419,10 +420,14 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
         quiet,
         [
             "home.get",
+            "home.log",
+            "home.clear_log",
             "sandbox.files",
             "machine.stats",
             "machine.space",
-            "machine.files"
+            "machine.files",
+            "logs.machine",
+            "logs.sandbox"
         ]
     );
     let table = layerfs_api::json::parse(&layerfs_api::table_json()).unwrap();
@@ -467,7 +472,7 @@ fn a_native_sandbox_s_files_are_read_here_with_no_lock_line_or_write() {
     );
     reads_its_home(&home, &folder);
     let (code, _) = call(&home, "sandbox.files", &[("sandbox", t("nobody"))]).unwrap_err();
-    assert_eq!(code, "NoSuchSandbox");
+    assert_eq!(code, "NotFound");
 
     // nothing changed in the home: no record, lock or lease, and not one
     // call-log line, for an answer or for a refusal
@@ -524,7 +529,7 @@ fn a_worker_reads_its_sandbox_s_files_and_neither_side_changes() {
     // a Sandbox the worker holds no run folder for
     std::fs::remove_dir_all(paths::sandbox_dir(&root, "s1")).unwrap();
     let (code, message) = call(&home, "sandbox.files", &[("sandbox", t("s1"))]).unwrap_err();
-    assert_eq!(code, "NoSuchSandbox", "{message}");
+    assert_eq!(code, "NotFound", "{message}");
     std::fs::remove_dir_all(scratch).unwrap();
 }
 

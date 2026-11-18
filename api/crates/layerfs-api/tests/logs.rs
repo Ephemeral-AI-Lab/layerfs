@@ -1,7 +1,7 @@
 //! The call log (#659): one line per call in `trace/calls.jsonl`, its
 //! `argv` rendered from the table before the scope rewrites the arguments,
 //! free text and credentials as byte counts, the saved version a result
-//! names, and `logs.list` / `logs.reset`. The environment is shared by the
+//! names, and `home.log` / `home.clear_log`. The environment is shared by the
 //! test threads, so every test here takes one lock.
 use layerfs_api::Scope;
 use layerfs_bridge::control::SdkValue;
@@ -508,8 +508,8 @@ fn the_tag_comes_from_the_environment_or_the_call() {
 fn the_logs_calls_and_logs_off_write_nothing() {
     let _env = serial();
     let home = home();
-    ok(&home, "logs.list", &[]);
-    ok(&home, "logs.reset", &[]);
+    ok(&home, "home.log", &[]);
+    ok(&home, "home.clear_log", &[]);
     assert!(lines(&home).is_empty());
     std::env::set_var("LAYERFS_LOGS", "0");
     ok(&home, "store.list", &[]);
@@ -547,7 +547,7 @@ fn eight_threads_appending_leave_whole_lines() {
     });
     let all = lines(&home);
     assert_eq!(all.len(), 8 * 201);
-    let page = ok(&home, "logs.list", &[("limit", SdkValue::Int(1000))]);
+    let page = ok(&home, "home.log", &[("limit", SdkValue::Int(1000)), DETAIL]);
     assert_eq!(page.get_int("skipped"), Some(0));
     std::fs::remove_dir_all(home).unwrap();
 }
@@ -567,40 +567,52 @@ fn the_log_rotates_past_16_mib_and_reset_clears_both_files() {
     ok(&home, "store.list", &[]);
     assert_eq!(lines(&home).len(), 1);
     // newest first across both files
-    let page = ok(&home, "logs.list", &[("limit", SdkValue::Int(3))]);
-    let SdkValue::List(items) = page.get("lines").unwrap() else {
-        panic!("no lines")
+    let page = ok(&home, "home.log", &[("limit", SdkValue::Int(3)), DETAIL]);
+    let SdkValue::List(items) = page.get("items").unwrap() else {
+        panic!("no items")
     };
     let words: Vec<_> = items.iter().map(|l| argv(l)[0].clone()).collect();
     assert_eq!(words, ["store", "store", "old"]);
-    let reset = ok(&home, "logs.reset", &[]);
-    assert_eq!(reset.get_text("kind"), Some("Reset"));
-    assert_eq!(reset.get_int("removed"), Some(count as i64 + 2));
+    let reset = ok(&home, "home.clear_log", &[DETAIL]);
+    assert_eq!(reset.get_text("outcome"), Some("cleared"));
+    assert_eq!(reset.get("ok"), Some(&SdkValue::Bool(true)));
+    assert_eq!(reset.get_int("line_count"), Some(count as i64 + 2));
     assert!(!paths::calls_rotated(&home).exists());
     assert_eq!(
         std::fs::metadata(paths::calls_file(&home)).unwrap().len(),
         0
     );
-    let reset = ok(&home, "logs.reset", &[]);
-    assert_eq!(reset.get_int("removed"), Some(0));
+    let reset = ok(&home, "home.clear_log", &[DETAIL]);
+    assert_eq!(reset.get_int("line_count"), Some(0));
+    // the short form has nothing to say
+    let short = ok(&home, "home.clear_log", &[]);
+    assert_eq!(short, map(&[("ok", SdkValue::Bool(true))]));
     std::fs::remove_dir_all(home).unwrap();
 }
 
+/// The long form, asked of a call.
+const DETAIL: (&str, SdkValue) = ("detail", SdkValue::Bool(true));
+
+/// One page of `home.log` in its long form: its rows, its `next_cursor`,
+/// whether more remain and how many lines it skipped.
 fn page(home: &Path, args: &[(&str, SdkValue)]) -> (Vec<SdkValue>, Option<String>, bool, i64) {
-    let page = ok(home, "logs.list", args);
-    let SdkValue::List(items) = page.get("lines").unwrap().clone() else {
-        panic!("no lines")
+    let mut asked = args.to_vec();
+    asked.push(DETAIL);
+    let page = ok(home, "home.log", &asked);
+    let SdkValue::List(items) = page.get("items").unwrap().clone() else {
+        panic!("no items")
     };
+    let next = page.get_text("next_cursor").map(str::to_owned);
     (
         items,
-        page.get_text("next").map(str::to_owned),
-        page.get("has_more") == Some(&SdkValue::Bool(true)),
+        next.clone(),
+        next.is_some(),
         page.get_int("skipped").unwrap(),
     )
 }
 
 #[test]
-fn logs_list_filters_pages_and_refuses_a_stale_cursor() {
+fn home_log_filters_pages_and_refuses_a_stale_cursor() {
     let _env = serial();
     let (home, folder) = project();
     let since = layerfs_home::home::now_ms();
@@ -615,11 +627,22 @@ fn logs_list_filters_pages_and_refuses_a_stale_cursor() {
         "file.read",
         &[p(), ("branch", t("main")), ("path", t("/README.md"))],
     );
-    // op, project, tag prefix and exact tag, outcome, client, since
-    let (items, ..) = page(&home, &[("op", t("store.list"))]);
+    // call, project, tag prefix and exact tag, outcome, client, since
+    let (items, ..) = page(&home, &[("call", t("store.list"))]);
     assert_eq!(items.len(), 5);
-    let (items, ..) = page(&home, &[("op", t("file"))]);
+    let (items, ..) = page(&home, &[("call", t("file"))]);
     assert_eq!(items.len(), 1);
+    // a row names its call and its project from the line's argv, and
+    // splits the outcome word from the refusal code
+    assert_eq!(items[0].get_text("call"), Some("file.read"));
+    assert_eq!(items[0].get_text("project"), Some("shop/api"));
+    assert_eq!(items[0].get_text("outcome"), Some("ok"));
+    assert_eq!(items[0].get("error"), Some(&SdkValue::Null));
+    let at = items[0].get_text("logged_at").unwrap();
+    assert!(
+        at.len() == 20 && at.ends_with('Z') && at.contains('T'),
+        "{at}"
+    );
     let (items, ..) = page(&home, &[("project", t("shop/api"))]);
     assert_eq!(items.len(), 2, "project.init and file.read");
     let (items, ..) = page(&home, &[("tag", t("dsh:s0:"))]);
@@ -629,6 +652,10 @@ fn logs_list_filters_pages_and_refuses_a_stale_cursor() {
     let (items, ..) = page(&home, &[("tag", t("dsh:s1"))]);
     assert!(items.is_empty(), "a tag without `:` is exact");
     let (items, ..) = page(&home, &[("outcome", t("NotFound"))]);
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].get_text("outcome"), Some("refused"));
+    assert_eq!(items[0].get_text("error"), Some("NotFound"));
+    let (items, ..) = page(&home, &[("outcome", t("refused"))]);
     assert_eq!(items.len(), 1);
     let (items, ..) = page(&home, &[("client", t("cli"))]);
     assert!(items.is_empty());
@@ -642,6 +669,25 @@ fn logs_list_filters_pages_and_refuses_a_stale_cursor() {
     let (second, _, more, _) = page(&home, &[("limit", SdkValue::Int(3)), ("cursor", t(&next))]);
     assert!(more);
     assert_eq!(second[0].get_text("tag"), Some("dsh:s1:r3"));
+    // a cursor carries its call's filters: given with other filters it is refused
+    assert_eq!(
+        call(
+            &home,
+            "home.log",
+            &[("cursor", t(&next)), ("client", t("cli"))]
+        ),
+        Err("InvalidInput".into())
+    );
+    // and a filtered walk keeps its filter on the next page without repeating it
+    let (one, next_tagged, ..) = page(&home, &[("tag", t("dsh:s0:")), ("limit", SdkValue::Int(1))]);
+    assert_eq!(one[0].get_text("tag"), Some("dsh:s0:r4"));
+    let (rest, last_cursor, ..) = page(&home, &[("cursor", t(&next_tagged.unwrap()))]);
+    let tags: Vec<_> = rest
+        .iter()
+        .map(|row| row.get_text("tag").unwrap())
+        .collect();
+    assert_eq!(tags, ["dsh:s0:r2", "dsh:s0:r0"]);
+    assert!(last_cursor.is_none());
     let (all, next_all, more, _) = page(&home, &[]);
     assert_eq!(all.len(), 9);
     assert!(!more && next_all.is_none());
@@ -652,7 +698,7 @@ fn logs_list_filters_pages_and_refuses_a_stale_cursor() {
         (vec![("cursor", t("bogus"))], "a malformed cursor"),
     ] {
         assert_eq!(
-            call(&home, "logs.list", &args),
+            call(&home, "home.log", &args),
             Err("InvalidInput".into()),
             "{why}"
         );
@@ -667,13 +713,13 @@ fn logs_list_filters_pages_and_refuses_a_stale_cursor() {
     let (items, _, _, skipped) = page(&home, &[]);
     assert_eq!((items.len(), skipped), (9, 1));
     // after a reset the cursor is stale
-    ok(&home, "logs.reset", &[]);
+    ok(&home, "home.clear_log", &[]);
     ok(&home, "store.list", &[]);
     ok(&home, "store.list", &[]);
     ok(&home, "store.list", &[]);
     ok(&home, "store.list", &[]);
     assert_eq!(
-        call(&home, "logs.list", &[("cursor", t(&next))]),
+        call(&home, "home.log", &[("cursor", t(&next))]),
         Err("InvalidInput".into())
     );
     std::fs::remove_dir_all(home).unwrap();

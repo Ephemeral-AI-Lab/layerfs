@@ -1,6 +1,7 @@
 //! The call log from the `layerfs` command (#659): its lines name the
-//! client `cli`, `LAYERFS_LOGS_TAG` lands in `tag`, `layerfs logs list` and
-//! `layerfs logs reset` answer as JSON like every call, and a usage error
+//! client `cli`, `LAYERFS_LOGS_TAG` lands in `tag`, `layerfs home log` and
+//! `layerfs home clear-log` (the call surface 2.0's names for `logs list`
+//! and `logs reset`) answer as JSON like every call, and a usage error
 //! (exit 2, nothing called) writes no line. And `layerfs logs machine` and
 //! `layerfs logs sandbox` (layerfs-project#178): their usage, a Sandbox's
 //! daemon log read by cursor on a native home, their refusals, and no
@@ -49,7 +50,7 @@ fn words(line: &SdkValue) -> Vec<&str> {
 }
 
 #[test]
-fn the_cli_logs_its_calls_and_lists_and_resets_them() {
+fn the_cli_logs_its_calls_and_reads_and_clears_them() {
     let home = tempdir("logs");
     assert_eq!(cli(&home, &["store", "create", "shop"], None).0, Some(0));
     assert_eq!(
@@ -70,37 +71,57 @@ fn the_cli_logs_its_calls_and_lists_and_resets_them() {
         &["store", "get"][..],
         &["store", "list", "--bogus"],
         &["nope", "x"],
-        &["logs", "list", "--limit", "many"],
+        &["home", "log", "--limit", "many"],
+        // the old names are gone, with no alias
+        &["logs", "list"],
+        &["logs", "reset"],
     ] {
         assert_eq!(cli(&home, usage, None).0, Some(2), "{usage:?}");
     }
     assert_eq!(lines(&home).len(), 2);
-    // logs list: newest first, filtered, as JSON; it writes no line
-    let (code, out) = cli(&home, &["logs", "list", "--op", "store.get"], None);
+    // home log: newest first, filtered, as JSON; it writes no line. The
+    // short form is the row's three facts and what went wrong
+    let (code, out) = cli(&home, &["home", "log", "--call", "store.get"], None);
     assert_eq!(code, Some(0), "{out}");
     let page = json::parse(out.trim()).unwrap();
-    let Some(SdkValue::List(items)) = page.get("lines") else {
+    let Some(SdkValue::List(items)) = page.get("items") else {
         panic!("{out}")
     };
     assert_eq!(items.len(), 1);
-    assert_eq!(items[0], all[1]);
-    assert_eq!(page.get("has_more"), Some(&SdkValue::Bool(false)));
+    assert_eq!(items[0].get_text("call"), Some("store.get"));
+    assert_eq!(items[0].get_text("outcome"), Some("refused"));
+    assert_eq!(items[0].get_text("error"), Some("NotFound"));
+    assert!(items[0].get_text("logged_at").unwrap().ends_with('Z'));
+    assert!(items[0].get("argv").is_none() && page.get("next_cursor").is_none());
+    // the long form has every key of the row and of the page
+    let long = ["home", "log", "--tag", "t:", "--limit", "5", "--detail"];
+    let (code, out) = cli(&home, &long, None);
+    assert_eq!(code, Some(0), "{out}");
+    let page = json::parse(out.trim()).unwrap();
+    assert_eq!(page.get("next_cursor"), Some(&SdkValue::Null));
     assert_eq!(page.get_int("skipped"), Some(0));
-    let (code, out) = cli(
-        &home,
-        &["logs", "list", "--tag", "t:", "--limit", "5"],
-        None,
-    );
-    assert_eq!(code, Some(0), "{out}");
-    assert!(out.contains("\"t:1\""), "{out}");
+    let Some(SdkValue::List(items)) = page.get("items") else {
+        panic!("{out}")
+    };
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].get_text("tag"), Some("t:1"));
+    assert_eq!(items[0].get_text("client"), Some("cli"));
+    assert_eq!(words(&items[0]), ["store", "get", "nope"]);
     assert_eq!(lines(&home).len(), 2);
-    // logs reset
-    let (code, out) = cli(&home, &["logs", "reset"], None);
+    // a section the call does not declare is refused by the library
+    let (code, out) = cli(&home, &["home", "log", "--with", "tree"], None);
+    assert_eq!((code, out.as_str()), (Some(125), ""));
+    // home clear-log
+    let (code, out) = cli(&home, &["home", "clear-log"], None);
     assert_eq!(code, Some(0), "{out}");
-    let reset = json::parse(out.trim()).unwrap();
-    assert_eq!(reset.get_text("kind"), Some("Reset"));
-    assert_eq!(reset.get_int("removed"), Some(2));
+    assert_eq!(out.trim(), r#"{"ok":true}"#);
     assert!(lines(&home).is_empty());
+    let (code, out) = cli(&home, &["home", "clear-log", "--detail"], None);
+    assert_eq!(code, Some(0), "{out}");
+    assert_eq!(
+        out.trim(),
+        r#"{"ok":true,"outcome":"cleared","line_count":0}"#
+    );
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -228,7 +249,7 @@ fn the_cli_reads_a_sandbox_s_daemon_log_by_cursor_and_logs_no_line() {
     for (words, code) in [
         (&["logs", "machine", "native"][..], "Unsupported"),
         (&["logs", "machine", "nobody"], "NotFound"),
-        (&["logs", "sandbox", "nobody"], "NoSuchSandbox"),
+        (&["logs", "sandbox", "nobody"], "NotFound"),
         (&["logs", "sandbox", "s1", "--limit", "0"], "InvalidInput"),
         (
             &["logs", "sandbox", "s1", "--cursor", "c1.0.1.2.3"],
@@ -318,7 +339,7 @@ fn the_cli_reads_a_sandbox_s_files_and_logs_no_line() {
     // refusals are JSON on stderr, exit 125
     let log = folder.join("daemon.log").display().to_string();
     for (words, code) in [
-        (&["sandbox", "files", "nobody"][..], "NoSuchSandbox"),
+        (&["sandbox", "files", "nobody"][..], "NotFound"),
         (&["sandbox", "files", "s1", "/etc/hosts"], "InvalidInput"),
         (&["sandbox", "files", "s1", &log], "InvalidInput"),
         (&["sandbox", "files", "s1", "relative"], "InvalidInput"),

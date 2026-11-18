@@ -1,4 +1,5 @@
 //! `file.revision`: saved changes to one literal path.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Int, Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
@@ -10,7 +11,11 @@ use layerfs_store::calls::Page;
 pub(crate) const CALL: Call = call(
     "file",
     "revision",
-    &[a("project", Project), a("branch", Name), a("path", Text)],
+    &[
+        a("project", Project),
+        a("branch", Name),
+        a("path", Text).redact_path(),
+    ],
     &[
         opt("at_commit", Name),
         opt("traversal", Text),
@@ -20,7 +25,8 @@ pub(crate) const CALL: Call = call(
     ],
     "saved changes to a literal path",
     run,
-);
+)
+.scoped(Rule::History);
 
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let text = |name: &str| args.get_text(name).map(str::to_owned);

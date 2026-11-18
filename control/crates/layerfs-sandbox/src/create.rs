@@ -184,6 +184,9 @@ pub fn remove_folder(dir: &Path) -> Result<(), SdkRefusal> {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
             Err(layerfs_home::outcome::failed(error))
         }
-        _ => Ok(()),
+        _ => {
+            layerfs_home::home::generation::moved_above(dir);
+            Ok(())
+        }
     }
 }

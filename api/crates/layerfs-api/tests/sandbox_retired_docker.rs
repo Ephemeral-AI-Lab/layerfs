@@ -191,7 +191,7 @@ fn a_retired_docker_sandbox_is_refused_and_close_forgets_it() {
         assert!(!paths::sandbox_dir(&home, "d1").exists());
         // the name is free: a get says so
         let (code, _) = call(&home, "sandbox.get", &[("name", t("d1"))]).unwrap_err();
-        assert_eq!(code, "NoSuchSandbox");
+        assert_eq!(code, "NotFound");
         std::fs::remove_dir_all(home).unwrap();
     }
 }

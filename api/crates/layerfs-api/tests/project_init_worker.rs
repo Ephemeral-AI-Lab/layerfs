@@ -238,7 +238,7 @@ fn init_into_a_worker_s_store_copies_the_caller_s_folder() {
         &mut |_| {},
     )
     .unwrap_err();
-    assert_eq!(again.code, "NameTaken", "{}", again.message);
+    assert_eq!(again.code, "Exists", "{}", again.message);
     let holder = again.detail.get("holder").expect("holder detail");
     assert_eq!(holder.get_text("kind"), Some("project"), "{again:?}");
     assert_eq!(holder.get_text("name"), Some("web"));

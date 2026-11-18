@@ -15,7 +15,8 @@ pub(crate) const CALL: Call = call(
     &WINDOW,
     "a machine's worker log: its last lines, or the lines after or before a cursor",
     run,
-);
+)
+.quiet();
 
 /// Runs `logs.machine`: `{ lines: [{ text, continued? }], cursor, before?,
 /// has_more }`, read in the machine's worker. It takes no lock or lease,

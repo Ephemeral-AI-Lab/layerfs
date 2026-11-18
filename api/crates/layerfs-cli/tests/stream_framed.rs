@@ -85,7 +85,11 @@ fn refusal_and_usage_are_distinct_and_output_failure_is_125() {
     assert!(out.stderr.is_empty());
     let frames = frames(&out.stdout);
     assert_eq!(frames.len(), 1);
-    assert!(frames[0].get("refusal").unwrap().get_text("code").is_some());
+    assert!(frames[0]
+        .get("refusal")
+        .unwrap()
+        .get_text("error")
+        .is_some());
     for flag in ["--text", "--stream", "--bogus"] {
         let args = [&args[..], &[flag]].concat();
         let out = run(&mut layerfs(&home, &args));

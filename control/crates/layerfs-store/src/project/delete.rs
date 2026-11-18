@@ -614,7 +614,10 @@ pub fn delete_with(
 /// Removes a directory tree, treating an absent entry as removed.
 fn remove_tree(entry: &Path) -> Result<()> {
     match fs::remove_dir_all(entry) {
-        Ok(()) => Ok(()),
+        Ok(()) => {
+            layerfs_home::home::generation::moved_above(entry);
+            Ok(())
+        }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(failed(format!("removing {}: {error}", entry.display()))),
     }

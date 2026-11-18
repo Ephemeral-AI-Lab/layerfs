@@ -2,7 +2,9 @@
 //! §2.2): positionals in the table's order, then `--options`. A content or
 //! JSON positional (`file write`'s content, `file apply`'s changes) is read
 //! from stdin, or from `--from <file>`; a text option `--x` also takes
-//! `--x-from <file>`. Anything wrong here is exit 2, before any call.
+//! `--x-from <file>`. A secret option (`password`) is read from stdin when
+//! its own flag is given (`--password-stdin`) and taken no other way.
+//! Anything wrong here is exit 2, before any call.
 use layerfs_api::{json, Arg, Call, Kind};
 use layerfs_bridge::control::SdkValue;
 use std::io::Read;
@@ -25,6 +27,8 @@ pub struct Switches {
     /// `--scope <folder>` with `--scope-project <store>/<project>` and
     /// `--scope-branch <name>` (O32).
     pub scope: Option<SdkValue>,
+    /// `--detail`: the long form, of the result and of a refusal.
+    pub detail: bool,
 }
 
 /// One parsed call: its named arguments and the switches.
@@ -88,6 +92,7 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
     let mut scope_folder: Option<String> = None;
     let mut scope_branch: Option<String> = None;
     let mut scope_project: Option<String> = None;
+    let mut secret: Option<&Arg> = None;
     let mut i = 0;
     let mut only_positionals = false;
     while i < words.len() {
@@ -117,6 +122,16 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
         };
         match flag {
             "--text" => switches.text = true,
+            // the global options of every call (call surface 2.0): the
+            // library takes them out of the arguments and checks them
+            "--detail" if inline.is_none() => {
+                switches.detail = true;
+                fields.push((layerfs_api::DETAIL.to_owned(), SdkValue::Bool(true)));
+            }
+            "--with" => {
+                let sections = take(&mut i)?;
+                fields.push((layerfs_api::WITH.to_owned(), SdkValue::Text(sections)));
+            }
             "--events" if call.arg("stdout").is_some() => switches.events = true,
             "--progress" if call.arg("on_progress").is_some() => switches.progress = true,
             "--stream" if call.arg("stream").is_some() => {
@@ -147,8 +162,14 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                         accepted.push("--stream".to_owned());
                     }
                     accepted.push("--text".to_owned());
+                    accepted.push("--detail".to_owned());
+                    if !call.with.is_empty() {
+                        accepted.push("--with".to_owned());
+                    }
                     for opt in call.options {
-                        if opt.kind != Kind::Function && opt.name != "message" {
+                        if let Some(flag) = opt.shell {
+                            accepted.push(flag.to_owned());
+                        } else if opt.kind != Kind::Function && opt.name != "message" {
                             accepted.push(format!("--{}", opt.name.replace('_', "-")));
                         }
                     }
@@ -165,6 +186,17 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                         ))
                     }
                 };
+                // a secret's own flag: its value is all of stdin
+                if let Some(arg) = call.options.iter().find(|a| a.shell == Some(flag)) {
+                    if inline.is_some() {
+                        return Err(usage(format!(
+                            "{}: {flag} takes no value; the value is read from stdin",
+                            call.name()
+                        )));
+                    }
+                    secret = Some(arg);
+                    continue;
+                }
                 let Some(name) = flag.strip_prefix("--") else {
                     return Err(fail());
                 };
@@ -177,6 +209,14 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                     }
                 }
                 match call.options.iter().find(|a| a.name == name) {
+                    Some(arg) if arg.shell.is_some() => {
+                        return Err(usage(format!(
+                            "{}: `{}` is read from stdin only; pass {}",
+                            call.name(),
+                            arg.name.replace('_', "-"),
+                            arg.shell.unwrap_or_default()
+                        )));
+                    }
                     Some(arg) if arg.kind == Kind::Bool && inline.is_none() => {
                         fields.push((name, SdkValue::Bool(true)))
                     }
@@ -225,6 +265,27 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
     }
     for (arg, word) in on_line.iter().zip(&positionals) {
         fields.push((arg.name.to_owned(), value(call, arg, word)?));
+    }
+    if let Some(arg) = secret {
+        if from.is_none() && call.args.iter().any(piped) {
+            return Err(usage(format!(
+                "{}: stdin holds `{}`; give the content with --from <file>",
+                call.name(),
+                arg.name.replace('_', "-")
+            )));
+        }
+        let mut bytes = Vec::new();
+        stdin
+            .read_to_end(&mut bytes)
+            .map_err(|why| usage(format!("cannot read stdin: {why}")))?;
+        // one line ending is the terminal's or `echo`'s, not the secret's
+        if bytes.ends_with(b"\n") {
+            bytes.pop();
+            if bytes.ends_with(b"\r") {
+                bytes.pop();
+            }
+        }
+        fields.push((arg.name.to_owned(), content(bytes)));
     }
     for arg in call.args.iter().filter(|a| piped(a)) {
         let bytes = match &from {

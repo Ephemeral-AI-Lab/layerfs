@@ -1,0 +1,241 @@
+{
+  "about": "What the call surface 2.0 contract test (tests/contract.rs) still excuses. `calls`: the calls of calls.json this build has not migrated (an entry with no form, or no entry yet). `old_names`: the calls of this build's table that calls.json does not name, each with the call that replaces it; every one is removed, with no alias, by a later package (the one that migrates its replacement or, where the replacement is already migrated, the one that owns the old call's family). `spec_sync`: where this build is ahead of calls.json version 18 (the review fixes); each entry leaves when calls.json says the same, and the test fails while a stale one stays. The test's PENDING_MUST_BE_EMPTY switch requires all three empty.",
+  "calls": [
+    "project.init",
+    "project.list",
+    "project.get",
+    "project.stats",
+    "project.export",
+    "project.delete",
+    "project.hide_path",
+    "project.doctor",
+    "file.read",
+    "file.stat",
+    "file.list",
+    "file.glob",
+    "file.grep",
+    "file.history",
+    "file.blame",
+    "file.write",
+    "file.edit",
+    "file.rm",
+    "file.mkdir",
+    "file.mv",
+    "file.cp",
+    "file.apply",
+    "sandbox.create",
+    "sandbox.list",
+    "sandbox.get",
+    "sandbox.remove",
+    "sandbox.files",
+    "sandbox.log",
+    "sandbox.doctor",
+    "workspace.list",
+    "workspace.mount",
+    "workspace.exec",
+    "workspace.cancel",
+    "workspace.commit",
+    "workspace.unmount",
+    "workspace.status",
+    "branch.list",
+    "branch.get",
+    "branch.fork",
+    "branch.merge",
+    "branch.publish",
+    "branch.remove",
+    "commit.list",
+    "commit.get",
+    "commit.diff",
+    "home.init",
+    "home.doctor",
+    "home.leftovers",
+    "home.prune",
+    "machine.list",
+    "machine.get",
+    "machine.images",
+    "machine.load_image",
+    "machine.prune",
+    "machine.stats",
+    "machine.files",
+    "machine.log",
+    "machine.start",
+    "machine.stop",
+    "machine.create",
+    "machine.remove",
+    "machine.update",
+    "machine.doctor",
+    "store.list",
+    "store.get",
+    "store.create",
+    "store.connect",
+    "store.disconnect",
+    "store.save_auth",
+    "store.auths",
+    "store.remove_auth",
+    "store.update",
+    "store.move",
+    "store.remove",
+    "store.compact",
+    "store.doctor",
+    "backup.connect",
+    "backup.disconnect",
+    "backup.list",
+    "backup.create",
+    "backup.restore",
+    "backup.doctor"
+  ],
+  "old_names": {
+    "branch.commits": "commit.list",
+    "branch.diff": "commit.diff",
+    "branch.get_commit": "commit.get",
+    "doctor.fix": "home.prune",
+    "file.diff": "commit.diff",
+    "file.revision": "file.history",
+    "logs.machine": "machine.log",
+    "logs.sandbox": "sandbox.log",
+    "machine.load": "machine.load_image",
+    "machine.platforms": "home.get",
+    "machine.space": "machine.stats",
+    "machine.status": "machine.get",
+    "project.remove_file": "project.hide_path",
+    "sandbox.close": "sandbox.remove",
+    "store.pull": "store.move",
+    "store.push": "store.move",
+    "store.stats": "store.get",
+    "store.status": "store.get",
+    "workspace.exec_cancel": "workspace.cancel"
+  },
+  "spec_sync": {
+    "folds": {
+      "NotFound": [
+        "NoMatch"
+      ],
+      "InvalidInput": [
+        "AmbiguousMatch"
+      ],
+      "Capacity": [
+        "NoSpace"
+      ],
+      "Unavailable": [
+        "Timeout"
+      ]
+    },
+    "renames": {
+      "home.log": {
+        "op": "call"
+      }
+    },
+    "nodes": {
+      "home.get": {
+        "tree": {
+          "machine": {
+            "short": {
+              "always": [
+                "machine"
+              ],
+              "sometimes": [
+                "state",
+                "op",
+                "reason",
+                "fix",
+                "stores",
+                "sandboxes"
+              ]
+            },
+            "long": [
+              "machine",
+              "platform",
+              "cpus",
+              "memory_bytes",
+              "state",
+              "op",
+              "reason",
+              "fix",
+              "stores",
+              "sandboxes"
+            ]
+          },
+          "store": {
+            "short": {
+              "always": [
+                "store"
+              ],
+              "sometimes": [
+                "engine",
+                "projects",
+                "connections",
+                "state",
+                "op",
+                "blocked_by",
+                "reason",
+                "fix"
+              ]
+            },
+            "long": [
+              "store",
+              "engine",
+              "state",
+              "op",
+              "blocked_by",
+              "reason",
+              "fix",
+              "projects",
+              "connections"
+            ]
+          },
+          "sandbox": {
+            "short": {
+              "always": [
+                "sandbox"
+              ],
+              "sometimes": [
+                "workspaces",
+                "state",
+                "op",
+                "blocked_by",
+                "reason",
+                "fix"
+              ]
+            },
+            "long": [
+              "sandbox",
+              "project",
+              "image",
+              "state",
+              "op",
+              "blocked_by",
+              "reason",
+              "fix",
+              "workspaces"
+            ]
+          },
+          "workspace": {
+            "short": {
+              "always": [
+                "workspace",
+                "branch"
+              ],
+              "sometimes": []
+            },
+            "long": [
+              "workspace",
+              "branch"
+            ]
+          },
+          "bucket": {
+            "short": {
+              "always": [
+                "bucket"
+              ],
+              "sometimes": []
+            },
+            "long": [
+              "bucket",
+              "provider"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -2,6 +2,7 @@
 use crate::calls::table::Kind::{Image, Name, Project};
 use crate::calls::table::{a, call, opt, Call, PROGRESS};
 use crate::calls::Context;
+use crate::calls::Policy;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::with_field;
 use layerfs_home::outcome::{Outcome, View};
@@ -15,7 +16,8 @@ pub(crate) const CALL: Call = call(
     &[opt("image", Image), PROGRESS],
     "start a named Sandbox of a project on a machine (default: its sqlite Store's, or native)",
     run,
-);
+)
+.policy(Policy::NewSandbox);
 
 /// Runs `sandbox.create`: the Sandbox's record, with why its forward did
 /// not open (`forward_failed`) when it did not.

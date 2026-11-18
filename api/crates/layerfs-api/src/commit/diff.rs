@@ -1,4 +1,5 @@
 //! `commit.diff`: files that differ between two Commits.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Name, Project};
 use crate::calls::table::{a, call, Call, DIFF};
 use crate::calls::Context;
@@ -19,7 +20,8 @@ pub(crate) const CALL: Call = call(
     &DIFF,
     "files that differ between two Commits",
     run,
-);
+)
+.scoped(Rule::History);
 
 /// Runs `commit.diff`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

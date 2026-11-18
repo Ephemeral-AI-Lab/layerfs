@@ -1,4 +1,5 @@
 //! `commit.list`: a Branch's Commits, newest first.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Name, Project};
 use crate::calls::table::{a, call, Call, PAGE};
 use crate::calls::Context;
@@ -15,7 +16,8 @@ pub(crate) const CALL: Call = call(
     &PAGE,
     "a Branch's Commits, newest first",
     run,
-);
+)
+.scoped(Rule::History);
 
 /// Runs `commit.list`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

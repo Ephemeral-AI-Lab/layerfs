@@ -1,7 +1,10 @@
 //! `file.rm`: remove a path; one Commit.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Name, Project, Text};
 use crate::calls::table::{a, call, Call, MESSAGE};
 use crate::calls::Context;
+use crate::calls::Policy;
+use crate::calls::Saves;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::file::{rm, FileRm};
@@ -10,11 +13,18 @@ use layerfs_store::calls::file::{rm, FileRm};
 pub(crate) const CALL: Call = call(
     "file",
     "rm",
-    &[a("project", Project), a("branch", Name), a("path", Text)],
+    &[
+        a("project", Project),
+        a("branch", Name),
+        a("path", Text).redact_path(),
+    ],
     &[MESSAGE],
     "remove a path; one Commit",
     run,
-);
+)
+.scoped(Rule::File(&["path"]))
+.policy(Policy::Project("project"))
+.saves(Saves::Commit);
 
 /// Runs `file.rm`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

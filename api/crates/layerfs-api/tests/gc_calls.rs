@@ -165,11 +165,11 @@ fn wrong_kinds_and_unknown_options_are_refused_before_any_effect() {
 fn branch_remove_refuses_reserved_and_absent_branches() {
     let (home, folder) = project();
     let (code, message) = refused(&home, "branch.remove", &[p(), ("branch", t("main"))]);
-    assert_eq!(code, "ReservedName", "{message}");
+    assert_eq!(code, "InvalidInput", "{message}");
     // nothing ran: main is still there
     ok(&home, "branch.get", &[p(), ("branch", t("main"))]);
     let (code, message) = refused(&home, "branch.remove", &[p(), ("branch", t("ghost"))]);
-    assert_eq!(code, "NoSuchBranch", "{message}");
+    assert_eq!(code, "NotFound", "{message}");
     // a live Branch is hidden by the marker and reported as `Removed`
     ok(
         &home,
@@ -183,7 +183,7 @@ fn branch_remove_refuses_reserved_and_absent_branches() {
     assert_eq!(removed.get_text("branch"), Some("work"));
     assert!(removed.get_int("removed_ms").is_some_and(|ms| ms >= 0));
     let (code, message) = refused(&home, "branch.get", &[p(), ("branch", t("work"))]);
-    assert_eq!(code, "NoSuchBranch", "{message}");
+    assert_eq!(code, "NotFound", "{message}");
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }
@@ -232,7 +232,7 @@ fn project_remove_file_checks_its_path_grammar_then_reports_markers() {
         "file.read",
         &[p(), ("branch", t("main")), ("path", t("/base.txt"))],
     );
-    assert_eq!(code, "Removed", "{message}");
+    assert_eq!(code, "NotFound", "{message}");
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }
@@ -241,14 +241,14 @@ fn project_remove_file_checks_its_path_grammar_then_reports_markers() {
 fn project_delete_reports_removal_and_retires_the_entry() {
     let (home, folder) = project();
     let (code, message) = refused(&home, "project.delete", &[("project", t("shop/ghost"))]);
-    assert_eq!(code, "NoSuchProject", "{message}");
+    assert_eq!(code, "NotFound", "{message}");
     let removed = ok(&home, "project.delete", &[p()]);
     assert_eq!(removed.get_text("kind"), Some("Removed"));
     assert_eq!(removed.get_text("project"), Some("shop/api"));
     assert!(removed.get_int("deleted_ms").is_some_and(|ms| ms >= 0));
     assert!(removed.get_bool("home_entry_removed"));
     let (code, _) = refused(&home, "project.get", &[p()]);
-    assert_eq!(code, "NoSuchProject");
+    assert_eq!(code, "NotFound");
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }
@@ -270,7 +270,7 @@ fn project_init_after_delete_is_nametaken_deleted() {
         &mut |_| {},
     )
     .unwrap_err();
-    assert_eq!(refusal.code, "NameTaken", "{}", refusal.message);
+    assert_eq!(refusal.code, "Exists", "{}", refusal.message);
     let holder = refusal.detail.get("holder").expect("holder detail");
     assert_eq!(holder.get_text("kind"), Some("project"), "{refusal:?}");
     assert_eq!(holder.get_text("name"), Some("api"));
@@ -321,7 +321,7 @@ fn store_compact_refuses_an_unknown_store_and_reports_a_run() {
     let home = tempdir("compact-none");
     layerfs_api::home::open(&home).unwrap();
     let (code, message) = refused(&home, "store.compact", &[("name", t("ghost"))]);
-    assert_eq!(code, "NoSuchStore", "{message}");
+    assert_eq!(code, "NotFound", "{message}");
     std::fs::remove_dir_all(home).unwrap();
 
     let (home, folder) = project();

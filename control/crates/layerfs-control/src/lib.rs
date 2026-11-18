@@ -9,6 +9,7 @@
 pub mod backup;
 pub mod doctor;
 pub mod home;
+mod home_tree;
 #[doc(hidden)]
 pub mod inventory;
 #[cfg(feature = "machine")]

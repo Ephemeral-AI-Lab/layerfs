@@ -2,6 +2,7 @@
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call, PROGRESS};
 use crate::calls::Context;
+use crate::calls::Policy;
 use layerfs_bridge::control::SdkValue;
 #[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
@@ -15,7 +16,8 @@ pub(crate) const CALL: Call = call(
     &[PROGRESS],
     "start a stopped machine and its worker; a running one answers at once",
     run,
-);
+)
+.policy(Policy::Machine("name"));
 
 /// Runs `machine.start`.
 #[cfg(feature = "machine")]

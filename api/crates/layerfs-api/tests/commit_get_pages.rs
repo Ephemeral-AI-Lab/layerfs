@@ -1,6 +1,7 @@
 //! `commit.get` pages a Branch's Commits to the end, past the reply budget
-//! of one page; `branch.get` and `commit.get` keep 1.1.0's `NoSuch*` codes
-//! (S §2.9). #533 review, group calls.
+//! of one page; an absent Commit or Branch is refused `NotFound` (their
+//! `NoSuch*` codes fold into it since the call surface 2.0). #533 review,
+//! group calls.
 use layerfs_api::home;
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
@@ -66,7 +67,7 @@ fn project() -> (PathBuf, PathBuf) {
 }
 
 #[test]
-fn commit_get_pages_to_the_end_and_codes_stay_no_such() {
+fn commit_get_pages_to_the_end_and_an_absent_commit_or_branch_is_not_found() {
     let (home, folder) = project();
     let p = || ("project", t("shop/api"));
     ok(
@@ -125,9 +126,9 @@ fn commit_get_pages_to_the_end_and_codes_stay_no_such() {
         "commit.get",
         &[p(), ("branch", t("fix")), ("commit", t(&nosuch))],
     );
-    assert_eq!(refused.unwrap_err().0, "NoSuchCommit");
+    assert_eq!(refused.unwrap_err().0, "NotFound");
     let refused = call(&home, "branch.get", &[p(), ("branch", t("nosuch"))]);
-    assert_eq!(refused.unwrap_err().0, "NoSuchBranch");
+    assert_eq!(refused.unwrap_err().0, "NotFound");
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(folder).unwrap();
 }

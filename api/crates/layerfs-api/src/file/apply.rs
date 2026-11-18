@@ -1,7 +1,10 @@
 //! `file.apply`: apply a list of changes; one Commit.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Json, Name, Project};
 use crate::calls::table::{a, call, Call, MESSAGE};
 use crate::calls::Context;
+use crate::calls::Policy;
+use crate::calls::Saves;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store::calls::file::{apply, FileApply};
@@ -15,7 +18,10 @@ pub(crate) const CALL: Call = call(
     &[MESSAGE],
     "apply a list of changes; one Commit",
     run,
-);
+)
+.scoped(Rule::FileChanges)
+.policy(Policy::Project("project"))
+.saves(Saves::Commit);
 
 /// Runs `file.apply`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

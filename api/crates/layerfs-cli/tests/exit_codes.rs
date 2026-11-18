@@ -34,7 +34,22 @@ fn usage_error_refusal_and_success_have_their_own_codes() {
     let (c, out, err) = code(&home, &["store", "get", "nope"]);
     assert_eq!(c, Some(125));
     assert!(out.is_empty(), "{out}");
-    assert!(err.starts_with(r#"{"code":"NotFound""#), "{err}");
+    // one line: `error`, one of the public codes, then the message
+    assert_eq!(
+        err,
+        "{\"error\":\"NotFound\",\"message\":\"no Store named nope\"}\n"
+    );
+    // the long form adds `fix` and `detail`, null when there is none
+    let (c, _, err) = code(&home, &["store", "get", "nope", "--detail"]);
+    assert_eq!(c, Some(125));
+    assert!(err.ends_with("\"fix\":null,\"detail\":null}\n"), "{err}");
+    // a code the library raises under its own name leaves under its public
+    // one; the long form keeps the raised one
+    let words = ["file", "read", "nope/p", "main", "/a", "--detail"];
+    let (c, _, err) = code(&home, &words);
+    assert_eq!(c, Some(125));
+    assert!(err.starts_with(r#"{"error":"NotFound","#), "{err}");
+    assert!(err.contains(r#""detail":{"code":"NoSuchStore"}"#), "{err}");
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -81,7 +96,7 @@ fn stdin_and_from_feed_the_content_and_json_positionals() {
     // valid JSON on stdin is read and the call made: refused, no such Store
     let out = run_with_stdin(&mut layerfs(&home, &call), json);
     assert_eq!(out.status.code(), Some(125), "{}", text(&out.stderr));
-    assert!(text(&out.stderr).contains("NoSuchStore"));
+    assert!(text(&out.stderr).contains("no Store named s"));
     // JSON that is not JSON, or not UTF-8, is a wrong command line
     let out = run_with_stdin(&mut layerfs(&home, &call), b"{x");
     assert_eq!(out.status.code(), Some(2), "{}", text(&out.stderr));
@@ -100,7 +115,7 @@ fn stdin_and_from_feed_the_content_and_json_positionals() {
         b"{x",
     );
     assert_eq!(out.status.code(), Some(125), "{}", text(&out.stderr));
-    assert!(text(&out.stderr).contains("NoSuchStore"));
+    assert!(text(&out.stderr).contains("no Store named s"));
     // a file that cannot be read is a wrong command line
     let missing = home.join("missing.json");
     let words = [&call[..], &["--from", missing.to_str().unwrap()]].concat();
@@ -117,7 +132,7 @@ fn binary_stdin_is_content_and_never_a_usage_error() {
     for bytes in [&b"\xff\xfe\x00z"[..], b"", b"plain\n"] {
         let out = run_with_stdin(&mut layerfs(&home, &call), bytes);
         assert_eq!(out.status.code(), Some(125), "{bytes:?}: {:?}", out.stderr);
-        assert!(text(&out.stderr).contains("NoSuchStore"), "{bytes:?}");
+        assert!(text(&out.stderr).contains("no Store named s"), "{bytes:?}");
     }
     std::fs::remove_dir_all(home).unwrap();
 }

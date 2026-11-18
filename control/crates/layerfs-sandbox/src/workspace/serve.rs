@@ -330,8 +330,9 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
         let cleanup = (|| {
             let _guard = layerfs_store::project::discovery::guard(&state.directory)?;
             let _sandbox = crate::record::lock_in(&state.directory, &state.id)?;
-            match std::fs::remove_file(crate::files::workspace_file(&state, token)) {
-                Ok(()) => {}
+            let record = crate::files::workspace_file(&state, token);
+            match std::fs::remove_file(&record) {
+                Ok(()) => layerfs_home::home::generation::moved_above(&record),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return Err(failed(error)),
             }

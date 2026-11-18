@@ -12,7 +12,7 @@ use layerfs_sandbox::inspect::{sandbox_files, FilesRequest};
 pub(crate) const CALL: Call = call(
     "sandbox",
     "files",
-    &[a("sandbox", Name), opt("path", Text)],
+    &[a("sandbox", Name), opt("path", Text).redact_path()],
     &FILES,
     "a Sandbox's files: its roots, or a folder or file under its home or in its root",
     run,

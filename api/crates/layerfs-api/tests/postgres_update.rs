@@ -329,7 +329,7 @@ fn a_machine_s_own_connection_is_checked_before_it_is_saved() {
             ("password", t("env:LAYERFS_TEST_PG_LIMITED_PASSWORD")),
         ]);
         let (code, message) = call(&home, "store.update", &args).unwrap_err();
-        assert_eq!(code, "Denied", "{message}");
+        assert_eq!(code, "Unavailable", "{message}");
         assert!(message.contains(" lacks "), "{message}");
         assert_eq!(record_text(&home, "pg"), before);
     } else {

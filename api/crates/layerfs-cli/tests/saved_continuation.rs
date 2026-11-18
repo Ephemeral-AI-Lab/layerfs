@@ -32,7 +32,7 @@ fn invalid(home: &Path, words: &[&str]) {
     assert_eq!(
         json::parse(text(&out.stderr).trim())
             .unwrap()
-            .get_text("code"),
+            .get_text("error"),
         Some("InvalidInput")
     );
 }

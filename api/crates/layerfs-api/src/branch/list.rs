@@ -1,4 +1,5 @@
 //! `branch.list`: a project's Branches.
+use crate::calls::scope::Rule;
 use crate::calls::scope::NAMESPACE;
 use crate::calls::table::Kind::Project;
 use crate::calls::table::{a, call, opt, Call, Kind::Int};
@@ -20,7 +21,8 @@ pub(crate) const CALL: Call = call(
     ],
     "a project's Branches",
     run,
-);
+)
+.scoped(Rule::BranchList);
 
 /// Runs `branch.list`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

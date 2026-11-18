@@ -68,6 +68,7 @@ pub fn disconnect(home: &Path, name: &BucketName) -> Outcome {
             .expect("in a folder"),
     )
     .map_err(failed)?;
+    layerfs_home::home::generation::moved(home);
     Ok(SdkValue::map([
         ("disconnected", SdkValue::text(name)),
         ("unlinked", SdkValue::List(unlinked)),

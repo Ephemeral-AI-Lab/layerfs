@@ -1,7 +1,9 @@
 //! `workspace.exec`: run one bash command in a Workspace.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Bool, Function, Text};
 use crate::calls::table::{a, call, opt, Call, MESSAGE, PROGRESS};
 use crate::calls::Context;
+use crate::calls::Policy;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_sandbox::host::Message;
@@ -11,7 +13,7 @@ use layerfs_sandbox::workspace::exec::{exec, ExecRequest};
 pub(crate) const CALL: Call = call(
     "workspace",
     "exec",
-    &[a("ws", Text), a("command", Text)],
+    &[a("ws", Text), a("command", Text).redact()],
     &[
         MESSAGE,
         opt("stream", Bool),
@@ -22,7 +24,9 @@ pub(crate) const CALL: Call = call(
     ],
     "run one bash command in a Workspace",
     run,
-);
+)
+.scoped(Rule::WorkspaceExec)
+.policy(Policy::Workspace("ws"));
 
 /// Runs `workspace.exec`: its side's answer.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

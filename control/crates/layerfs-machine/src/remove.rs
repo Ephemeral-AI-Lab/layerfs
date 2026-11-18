@@ -51,6 +51,7 @@ fn take_down(home: &Path, name: &MachineName, related: Related) -> Outcome {
     }
     let _lock = lock::take(&home)?;
     std::fs::remove_dir_all(paths::machine_dir(&home, name)).map_err(failed)?;
+    layerfs_home::home::generation::moved(&home);
     Ok(SdkValue::map([
         ("name", SdkValue::text(name.as_str())),
         ("removed", SdkValue::Bool(true)),
@@ -89,6 +90,7 @@ fn forget(home: &Path, name: &MachineName, reason: &str, related: Related) -> Ou
         _ => "nothing on its host was touched".to_owned(),
     };
     std::fs::remove_dir_all(paths::machine_dir(home, name)).map_err(failed)?;
+    layerfs_home::home::generation::moved(home);
     Ok(SdkValue::map([
         ("name", SdkValue::text(name.as_str())),
         ("removed", SdkValue::Bool(true)),

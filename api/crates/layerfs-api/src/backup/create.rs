@@ -2,6 +2,7 @@
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, opt, Call, PROGRESS};
 use crate::calls::Context;
+use crate::calls::Policy;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::backup::family::{create, BackupCreate};
@@ -14,7 +15,8 @@ pub(crate) const CALL: Call = call(
     &[PROGRESS],
     "upload a sqlite Store to a bucket",
     run,
-);
+)
+.policy(Policy::Store("store"));
 
 /// Runs `backup.create`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

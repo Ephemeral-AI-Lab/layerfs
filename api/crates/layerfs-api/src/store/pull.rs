@@ -2,6 +2,7 @@
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call, PROGRESS};
 use crate::calls::Context;
+use crate::calls::Policy;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 
@@ -13,7 +14,8 @@ pub(crate) const CALL: Call = call(
     &[PROGRESS],
     "bring a sqlite Store from its machine to native",
     run,
-);
+)
+.policy(Policy::Transfer("name"));
 
 /// Runs `store.pull`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

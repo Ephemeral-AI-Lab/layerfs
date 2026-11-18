@@ -11,7 +11,7 @@ pub fn event(value: &SdkValue) -> std::io::Result<()> {
     out.flush()
 }
 
-pub fn finish(outcome: Result<SdkValue, SdkRefusal>, failed: bool) -> ExitCode {
+pub fn finish(outcome: Result<SdkValue, SdkRefusal>, failed: bool, detail: bool) -> ExitCode {
     if failed {
         return ExitCode::from(REFUSED);
     }
@@ -19,11 +19,7 @@ pub fn finish(outcome: Result<SdkValue, SdkRefusal>, failed: bool) -> ExitCode {
         Ok(value) => ("result", value, ExitCode::SUCCESS),
         Err(refusal) => (
             "refusal",
-            SdkValue::map([
-                ("code", SdkValue::text(refusal.code)),
-                ("message", SdkValue::text(refusal.message)),
-                ("detail", refusal.detail),
-            ]),
+            layerfs_api::refusal::value(&refusal, detail),
             ExitCode::from(REFUSED),
         ),
     };

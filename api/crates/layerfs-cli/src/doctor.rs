@@ -32,7 +32,7 @@ pub fn main(words: &[String]) -> ExitCode {
     {
         Ok(report) if text => output::findings(&report),
         Ok(report) => output::result(&report, false),
-        Err(r) => output::refusal(&r),
+        Err(r) => output::refusal(&layerfs_api::refusal::public(r), false),
     }
 }
 

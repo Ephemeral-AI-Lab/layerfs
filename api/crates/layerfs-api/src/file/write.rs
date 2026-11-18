@@ -1,7 +1,10 @@
 //! `file.write`: write a file; one Commit.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Content, Int, Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call, MESSAGE};
 use crate::calls::Context;
+use crate::calls::Policy;
+use crate::calls::Saves;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::file::{write, FileWrite};
@@ -14,13 +17,16 @@ pub(crate) const CALL: Call = call(
     &[
         a("project", Project),
         a("branch", Name),
-        a("path", Text),
+        a("path", Text).redact_path(),
         a("content", Content),
     ],
     &[MESSAGE, opt("mode", Int)],
     "write a file; one Commit",
     run,
-);
+)
+.scoped(Rule::File(&["path"]))
+.policy(Policy::Project("project"))
+.saves(Saves::Commit);
 
 /// Runs `file.write`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

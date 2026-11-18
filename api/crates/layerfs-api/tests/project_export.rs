@@ -686,7 +686,7 @@ fn destination_and_argument_refusals_have_no_side_effects() {
         ],
     )
     .unwrap_err();
-    assert_eq!(code, "NotEmpty");
+    assert_eq!(code, "InvalidInput");
     assert_eq!(
         std::fs::read_to_string(non_empty.join("existing.txt")).unwrap(),
         "untouched\n"
@@ -720,7 +720,7 @@ fn destination_and_argument_refusals_have_no_side_effects() {
         ],
     )
     .unwrap_err();
-    assert_eq!(code, "NoSuchBranch");
+    assert_eq!(code, "NotFound");
     assert!(!valid_dest.exists());
 
     // 10. Folder scope refuses `project.export` as out of scope
@@ -1365,7 +1365,7 @@ fn shared_store_lease_and_concurrent_remove_admission() {
         ],
     )
     .unwrap_err();
-    assert_eq!(code, "NoSuchProject");
+    assert_eq!(code, "NotFound");
     assert!(!after_rm_dest.exists());
 
     // Re-init a new project (`shop/app` stays a retired name) and verify
@@ -1546,7 +1546,7 @@ fn finalize_follows_publication_and_never_a_failed_publish() {
         }
     })
     .unwrap_err();
-    assert_eq!(code, "NotEmpty");
+    assert_eq!(code, "InvalidInput");
     assert!(!phases.iter().any(|p| p == "finalize"), "{phases:?}");
     assert_eq!(std::fs::read(taken.join("mine.txt")).unwrap(), b"mine\n");
     let left: Vec<_> = std::fs::read_dir(&parent)

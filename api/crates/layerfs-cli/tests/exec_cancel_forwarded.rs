@@ -408,10 +408,12 @@ fn a_worker_not_reached_keeps_the_stale_record_as_it_was() {
         ["sandbox", "close", "b1"].as_slice(),
         ["sandbox", "close", "b1", "--force"].as_slice(),
     ] {
-        let (code, _, err) = cli(&home, words);
+        // the commands it names are in the refusal's long form
+        let words = [words, &["--detail"]].concat();
+        let (code, _, err) = cli(&home, &words);
         assert_eq!(code, Some(125), "{words:?}: {err}");
         assert!(
-            err.contains("\"code\":\"Unknown\"") && err.contains("\"execs\":[\"e1\"]"),
+            err.contains("\"error\":\"Unknown\"") && err.contains("\"execs\":[\"e1\"]"),
             "{words:?}: {err}"
         );
         assert_eq!(kept(), bytes, "{words:?}");
@@ -426,7 +428,7 @@ fn a_worker_not_reached_keeps_the_stale_record_as_it_was() {
         &["workspace", "exec", "b1:one", "true", "--exec-id", "e1"],
     );
     assert_eq!(code, Some(125), "{err}");
-    assert!(err.contains("\"code\":\"Exists\""), "{err}");
+    assert!(err.contains("\"error\":\"Exists\""), "{err}");
     assert_eq!(kept(), bytes);
     std::fs::remove_dir_all(home).unwrap();
 }

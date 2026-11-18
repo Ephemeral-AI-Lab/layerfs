@@ -2,6 +2,7 @@
 use crate::calls::table::Kind::{Int, Name, Size, Text};
 use crate::calls::table::{a, call, opt, Call, PROGRESS};
 use crate::calls::Context;
+use crate::calls::Policy;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 
@@ -20,7 +21,8 @@ pub(crate) const CALL: Call = call(
     ],
     "create an enabled VM machine (apple-container, lima)",
     run,
-);
+)
+.policy(Policy::Platform("platform"));
 
 /// Runs `machine.create`.
 #[cfg(feature = "machine")]

@@ -12,7 +12,7 @@ use layerfs_store::backup::record::BucketConnect;
 pub(crate) const CALL: Call = call(
     "backup",
     "connect",
-    &[a("name", Name), a("url", Text)],
+    &[a("name", Name), a("url", Text).redact()],
     &[
         opt("key", Text),
         opt("region", Text),

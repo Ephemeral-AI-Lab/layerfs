@@ -127,8 +127,12 @@ fn check(home: &Path, tag: &str) {
         &mut |_| {},
     )
     .unwrap_err();
+    assert_eq!(bad.code, "NotFound", "{bad:?}");
     assert!(
-        matches!(bad.code.as_str(), "NoSuchCommit" | "NotInHistory"),
+        matches!(
+            bad.detail.get_text("code"),
+            Some("NoSuchCommit" | "NotInHistory")
+        ),
         "{bad:?}"
     );
     let empty = folder(&format!("empty-{tag}"));

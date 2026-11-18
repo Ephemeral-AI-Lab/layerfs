@@ -1,4 +1,5 @@
 //! `file.blame`: the Commit of each line.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Int, Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
@@ -13,13 +14,14 @@ pub(crate) const CALL: Call = call(
     &[
         a("project", Project),
         a("branch", Name),
-        a("path", Text),
+        a("path", Text).redact_path(),
         opt("commit", Name),
     ],
     &[opt("from_line", Int), opt("line_count", Int)],
     "the Commit of each line",
     run,
-);
+)
+.scoped(Rule::File(&["path"]));
 
 /// Runs `file.blame`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

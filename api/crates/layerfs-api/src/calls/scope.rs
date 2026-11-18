@@ -4,11 +4,13 @@
 //! project, or a Sandbox of it. It allows only the calls it covers (an
 //! allow list): the `file` calls, `branch` list, get, fork, merge and
 //! publish, and the `workspace` calls; every other call is refused, history
-//! calls included. Paths must be canonical and beneath `folder`; Branch
+//! calls included. Each table entry says which [`Rule`] it falls under, so
+//! no call name is written here. Paths must be canonical and beneath `folder`; Branch
 //! names are relative to the `branch` namespace and composed as
 //! `<branch>.<name>`. A scope guards calls; it is not filesystem isolation
 //! (a command can still `cd` anywhere in the mounted tree). Every refusal
 //! comes before dispatch.
+use super::table::Call;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::with_field;
 use layerfs_home::outcome::refused;
@@ -17,6 +19,39 @@ use std::path::Path;
 /// The argument a scoped `branch.list` carries to its family: the Branch
 /// namespace, which only a scope sets (the table has no such argument).
 pub const NAMESPACE: &str = "namespace";
+
+/// What a folder scope does with one call; its table entry says which.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Rule {
+    /// Not covered: refused, naming the call. Stores, machines, backups,
+    /// projects, Sandboxes, and the GC calls, which retire or compact a
+    /// whole entity and never one folder (§10).
+    Outside,
+    /// A history call: refused as `history`.
+    History,
+    /// A `file` call: its project is the scope's, each of these path
+    /// arguments is beneath the folder, and its Branch and Commit
+    /// references are composed.
+    File(&'static [&'static str]),
+    /// `file.apply`: a `file` call whose paths are in its `changes`.
+    FileChanges,
+    /// The Branches of the scope's namespace.
+    BranchList,
+    /// A fork inside the namespace.
+    BranchFork,
+    /// A merge inside the namespace.
+    BranchMerge,
+    /// One Branch of the namespace, answered by its name relative to it.
+    BranchGet,
+    /// One Branch of the namespace, published.
+    BranchPublish,
+    /// A mount of the namespace's `main`, in a Sandbox of the project.
+    WorkspaceMount,
+    /// A command, started in the scope's folder of its Workspace.
+    WorkspaceExec,
+    /// Any other call on a Workspace of a Sandbox of the project.
+    Workspace,
+}
 
 /// A checked scope.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -133,9 +168,8 @@ impl Scope {
         }
     }
 
-    /// The call's arguments under this scope, or its refusal.
-    pub fn apply(&self, name: &str, args: SdkValue) -> Result<SdkValue, SdkRefusal> {
-        let (family, call) = name.split_once('.').unwrap_or((name, ""));
+    /// The arguments of `call` under this scope, or its refusal.
+    pub fn apply(&self, call: &Call, args: SdkValue) -> Result<SdkValue, SdkRefusal> {
         let mut args = args;
         let set = |args: &mut SdkValue, field: &str, value: String| {
             *args = with_field(std::mem::take(args), field, SdkValue::Text(value));
@@ -145,31 +179,21 @@ impl Scope {
             Some(project) if project == self.project => Ok(()),
             _ => Err(out("project")),
         };
-        match (family, call) {
-            ("commit", _)
-            | ("branch", "diff" | "commits" | "get_commit")
-            | ("file", "revision") => {
-                return Err(out("history"));
-            }
-            // GC retires or compacts a whole entity, never one folder:
-            // a scope refuses these instead of widening them (§10).
-            ("branch", "remove") | ("project", "delete" | "remove_file") | ("store", "compact") => {
-                return Err(out(name));
-            }
-            ("file", _) => {
+        match call.scope {
+            Rule::History => return Err(out("history")),
+            Rule::Outside => return Err(out(&call.name())),
+            Rule::File(_) | Rule::FileChanges => {
                 bound(&args)?;
-                let paths: &[&str] = match call {
-                    "cp" | "mv" => &["from_path", "to_path"],
-                    "diff" => &["left_path", "right_path"],
-                    "apply" => &[],
-                    _ => &["path"],
+                let paths = match call.scope {
+                    Rule::File(paths) => paths,
+                    _ => &[],
                 };
                 for field in paths {
                     if !self.inside(args.get_text(field).unwrap_or("")) {
                         return Err(out("path"));
                     }
                 }
-                if call == "apply" {
+                if call.scope == Rule::FileChanges {
                     let Some(SdkValue::List(changes)) = args.get("changes") else {
                         return Err(out("path"));
                     };
@@ -196,13 +220,13 @@ impl Scope {
                     }
                 }
             }
-            ("branch", "list") => {
+            Rule::BranchList => {
                 bound(&args)?;
                 self.compose("main")?;
                 let namespace = self.branch.clone().unwrap_or_default();
                 set(&mut args, NAMESPACE, namespace);
             }
-            ("branch", "fork") => {
+            Rule::BranchFork => {
                 bound(&args)?;
                 for field in ["name", "from_branch"] {
                     let given = args.get_text(field).unwrap_or("").to_owned();
@@ -214,14 +238,14 @@ impl Scope {
                     set(&mut args, "from_commit", self.reference(&given)?);
                 }
             }
-            ("branch", "merge") => {
+            Rule::BranchMerge => {
                 bound(&args)?;
                 for field in ["name", "a", "b"] {
                     let given = args.get_text(field).unwrap_or("").to_owned();
                     set(&mut args, field, self.compose(&given)?);
                 }
             }
-            ("branch", "get" | "publish") => {
+            Rule::BranchGet | Rule::BranchPublish => {
                 bound(&args)?;
                 let given = args.get_text("branch").unwrap_or("").to_owned();
                 set(&mut args, "branch", self.compose(&given)?);
@@ -229,33 +253,47 @@ impl Scope {
                     set(&mut args, "commit", self.reference(&given)?);
                 }
             }
-            ("workspace", "mount") => {
+            Rule::WorkspaceMount => {
                 if args.get_text("branch").is_some_and(|b| b != "main") {
                     return Err(out("branch"));
                 }
                 set(&mut args, "branch", self.compose("main")?);
             }
-            ("workspace", "exec") => {
+            Rule::WorkspaceExec => {
                 // the command starts in the scope's folder of the Workspace
                 let command = args.get_text("command").unwrap_or("").to_owned();
                 let folder = format!(".{}", self.folder).replace('\'', "'\\''");
                 set(&mut args, "command", format!("cd '{folder}' && {command}"));
             }
-            ("workspace", "commit" | "unmount" | "status" | "exec_cancel") => {}
-            // every call the scope does not cover: Stores, machines,
-            // backups, projects, Sandboxes
-            _ => return Err(out(name)),
+            Rule::Workspace => {}
         }
         Ok(args)
+    }
+
+    /// What `call` answered, under this scope: a Branch read by its scoped
+    /// name is answered by that name, relative to the namespace.
+    pub fn answer(&self, call: &Call, value: SdkValue) -> SdkValue {
+        if call.scope != Rule::BranchGet {
+            return value;
+        }
+        let prefix = format!("{}.", self.branch.as_deref().unwrap_or(""));
+        match value
+            .get_text("name")
+            .and_then(|n| n.strip_prefix(&prefix))
+            .map(str::to_owned)
+        {
+            Some(name) => with_field(value, "name", SdkValue::Text(name)),
+            None => value,
+        }
     }
 
     /// A `workspace` call's Sandbox must be one of the scope's project:
     /// its record names that project. Checked in `home` before dispatch;
     /// other calls pass.
-    pub fn owns(&self, home: &Path, name: &str, args: &SdkValue) -> Result<(), SdkRefusal> {
-        let sandbox = match name {
-            "workspace.mount" => args.get_text("sandbox").unwrap_or(""),
-            n if n.starts_with("workspace.") => args
+    pub fn owns(&self, home: &Path, call: &Call, args: &SdkValue) -> Result<(), SdkRefusal> {
+        let sandbox = match call.scope {
+            Rule::WorkspaceMount => args.get_text("sandbox").unwrap_or(""),
+            Rule::WorkspaceExec | Rule::Workspace => args
                 .get_text("ws")
                 .and_then(|ws| ws.split_once(':'))
                 .map_or("", |(sandbox, _)| sandbox),

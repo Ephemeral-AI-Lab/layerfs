@@ -1,7 +1,10 @@
 //! `file.mv`: move a path; one Commit.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Name, Project, Text};
 use crate::calls::table::{a, call, Call, MESSAGE};
 use crate::calls::Context;
+use crate::calls::Policy;
+use crate::calls::Saves;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::file::{mv, FileMv};
@@ -13,13 +16,16 @@ pub(crate) const CALL: Call = call(
     &[
         a("project", Project),
         a("branch", Name),
-        a("from_path", Text),
-        a("to_path", Text),
+        a("from_path", Text).redact_path(),
+        a("to_path", Text).redact_path(),
     ],
     &[MESSAGE],
     "move a path; one Commit",
     run,
-);
+)
+.scoped(Rule::File(&["from_path", "to_path"]))
+.policy(Policy::Project("project"))
+.saves(Saves::Commit);
 
 /// Runs `file.mv`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

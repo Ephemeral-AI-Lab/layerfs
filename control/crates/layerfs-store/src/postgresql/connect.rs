@@ -302,6 +302,7 @@ pub fn disconnect(home: &Path, name: &StoreName, related: Related) -> Outcome {
     (related.store_idle)(home, name)?;
     crate::open::close(&record.postgresql_key(home, name))?;
     std::fs::remove_dir_all(paths::store_dir(home, name)).map_err(failed)?;
+    layerfs_home::home::generation::moved(home);
     Ok(SdkValue::map([(
         "disconnected",
         SdkValue::text(name.as_str()),

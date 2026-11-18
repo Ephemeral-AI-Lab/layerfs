@@ -2,7 +2,7 @@
 //! the pair a rotation makes (`calls.jsonl` and `calls.1.jsonl`,
 //! `worker.log` and `worker.1.log`), which file a cursor was made in
 //! ([`Identity`]), and the two readers over it. [`Backward`] gives whole
-//! lines from the end, however long, for `logs.list`. [`read`] follows a
+//! lines from the end, however long, for `home.log`. [`read`] follows a
 //! log a process is still writing, for `logs.machine` and `logs.sandbox`:
 //! one window of at most [`CHUNK`] bytes per call, oldest line first,
 //! forward from a cursor or backward from one, with a line longer than

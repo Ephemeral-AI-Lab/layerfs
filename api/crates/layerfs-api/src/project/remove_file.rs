@@ -11,7 +11,7 @@ use layerfs_store::calls::project::{remove_file, ProjectRemoveFile};
 pub(crate) const CALL: Call = call(
     "project",
     "remove_file",
-    &[a("project", Project), a("path", Text)],
+    &[a("project", Project), a("path", Text).redact_path()],
     &[],
     "hide one absolute path from every node at or below its marker frontier",
     run,

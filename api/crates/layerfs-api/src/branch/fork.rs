@@ -1,7 +1,10 @@
 //! `branch.fork`: a new Branch from another Branch's head or Commit.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Name, Project};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
+use crate::calls::Policy;
+use crate::calls::Saves;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::branch::{fork, BranchFork};
@@ -19,7 +22,10 @@ pub(crate) const CALL: Call = call(
     &[],
     "a new Branch from another Branch's head or Commit",
     run,
-);
+)
+.scoped(Rule::BranchFork)
+.policy(Policy::Project("project"))
+.saves(Saves::Fork);
 
 /// Runs `branch.fork`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

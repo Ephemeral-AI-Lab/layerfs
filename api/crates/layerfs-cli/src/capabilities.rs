@@ -63,6 +63,8 @@ pub fn help() -> ExitCode {
     };
     let mut switches = vec![
         switch("--text", all()),
+        switch("--detail", all()),
+        switch("--with", selected(|c| !c.with.is_empty())),
         switch("-h", all()),
         switch("--help", all()),
         switch("--", all()),

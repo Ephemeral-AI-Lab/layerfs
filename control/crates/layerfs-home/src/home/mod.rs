@@ -6,6 +6,7 @@ pub use capacity::{filesystem, filesystem_available, Filesystem};
 pub mod entity_lock;
 pub mod fields;
 pub mod flock;
+pub mod generation;
 pub mod guest;
 pub mod layout;
 pub mod lock;

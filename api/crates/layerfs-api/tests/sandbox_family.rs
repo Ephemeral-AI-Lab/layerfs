@@ -93,7 +93,7 @@ fn named_sandboxes_on_native() {
         )
         .unwrap_err()
         .0,
-        "NoSuchSandbox"
+        "NotFound"
     );
     assert_eq!(
         call(&home, "workspace.status", &[("ws", t("t1"))])
@@ -273,7 +273,7 @@ fn named_sandboxes_on_native() {
     // #533 review P1-21 (O31): a Sandbox holding Workspaces closes only
     // with `force`, which reports each one it could not drain as Unknown
     let (code, _) = call(&home, "sandbox.close", &[("name", t("t1"))]).unwrap_err();
-    assert_eq!(code, "MountsActive");
+    assert_eq!(code, "InUse");
     let closed = ok(
         &home,
         "sandbox.close",

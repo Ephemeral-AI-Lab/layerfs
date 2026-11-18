@@ -1,5 +1,5 @@
 //! The call table and its dispatcher (#533 step 2): 84 calls in twelve
-//! families, arguments checked before any effect, one test per family that
+//! families (three of them migrated to the call surface 2.0's forms), arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::{families, json, keys, size, Call, Kind};
 use layerfs_bridge::control::SdkValue;
@@ -75,7 +75,9 @@ fn the_table_has_twelve_families_and_84_calls() {
         }
     }
     let counts: Vec<usize> = families().iter().map(|f| f.calls().len()).collect();
-    assert_eq!(counts, [2, 7, 9, 3, 15, 5, 6, 15, 12, 5, 4, 1]);
+    // `home` holds the call log's two calls since the call surface 2.0;
+    // `logs` keeps a machine's and a Sandbox's
+    assert_eq!(counts, [4, 7, 9, 3, 15, 5, 6, 15, 12, 5, 2, 1]);
 }
 
 #[test]
@@ -592,6 +594,121 @@ fn the_four_gc_calls_take_only_ids() {
             assert_eq!(options, [("on_progress", Kind::Function)], "{name}");
         } else {
             assert!(options.is_empty(), "{name} takes no option");
+        }
+    }
+}
+
+#[test]
+fn the_call_log_calls_moved_to_home_with_no_alias() {
+    // ruling R1: an old name is gone, not kept beside the new one
+    for gone in ["logs.list", "logs.reset"] {
+        assert!(layerfs_api::find(gone).is_none(), "{gone}");
+        assert_eq!(
+            code(gone, SdkValue::Null),
+            format!("InvalidInput: no call named `{gone}`")
+        );
+    }
+    let home: Vec<_> = (families().iter())
+        .find(|family| family.name == "home")
+        .unwrap()
+        .calls()
+        .iter()
+        .map(|call| call.call)
+        .collect();
+    assert_eq!(home, ["init", "get", "log", "clear_log"]);
+}
+
+#[test]
+fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
+    use layerfs_api::{Paging, Profile};
+    let migrated: Vec<String> = layerfs_api::calls()
+        .into_iter()
+        .filter(|call| call.form.is_some())
+        .map(|call| call.name())
+        .collect();
+    assert_eq!(migrated, ["home.get", "home.log", "home.clear_log"]);
+    for call in layerfs_api::calls() {
+        if let Some(form) = call.form {
+            // every short key is a long key, and no key is listed twice
+            for key in form.always.iter().chain(form.sometimes) {
+                assert!(form.long.contains(key), "{}: {key}", call.name());
+                assert!(
+                    !(form.always.contains(key) && form.sometimes.contains(key)),
+                    "{}: {key}",
+                    call.name()
+                );
+            }
+            // a paged call answers items and a cursor
+            if call.paging == Paging::Cursor {
+                assert!(form.item().is_some(), "{}", call.name());
+                assert!(form.sometimes.contains(&"next_cursor"), "{}", call.name());
+                assert!(call.arg("limit").is_some() && call.arg("cursor").is_some());
+            }
+        } else {
+            // not migrated: nothing of the new surface is declared yet
+            assert!(call.with.is_empty(), "{}", call.name());
+            assert_eq!(call.paging, Paging::None, "{}", call.name());
+            assert_eq!(call.profile, Profile::Full, "{}", call.name());
+        }
+    }
+    let get = layerfs_api::find("home.get").unwrap();
+    let sections: Vec<_> = get.with.iter().map(|section| section.name).collect();
+    assert_eq!(sections, ["platforms", "tree"]);
+}
+
+#[test]
+fn the_global_options_are_taken_out_before_the_check_on_every_call() {
+    // `detail` is accepted by a call that is not migrated and changes nothing
+    let reached = code("store.list", map(&[("detail", SdkValue::Bool(true))]));
+    assert!(reached.starts_with("ok "), "{reached}");
+    assert!(code("store.list", map(&[("detail", t("yes"))]))
+        .starts_with("InvalidInput: store.list: `detail` must be true or false"));
+    // a section the entry does not declare is refused, naming what it takes
+    let refused = code(
+        "home.get",
+        map(&[("with", SdkValue::List(vec![t("live")]))]),
+    );
+    assert_eq!(
+        refused,
+        "InvalidInput: home.get: `with` names `live`; this call takes platforms, tree"
+    );
+    let refused = code("store.list", map(&[("with", t("live"))]));
+    assert_eq!(
+        refused,
+        "InvalidInput: store.list: `with` names `live`, and this call takes no section"
+    );
+    // an empty list asks for nothing
+    let reached = code("store.list", map(&[("with", SdkValue::List(vec![]))]));
+    assert!(reached.starts_with("ok "), "{reached}");
+}
+
+#[test]
+fn every_argument_the_old_name_list_redacted_is_flagged_on_its_entry() {
+    // the dispatcher's name list is gone: until its family is migrated, an
+    // argument of one of its names keeps its flag, so no value it hid
+    // enters the call log
+    use layerfs_api::Redact;
+    let bytes = [
+        "command", "message", "old", "new", "password", "url", "pattern",
+    ];
+    let paths = [
+        "path",
+        "left_path",
+        "right_path",
+        "from_path",
+        "to_path",
+        "path_prefix",
+    ];
+    for call in layerfs_api::calls() {
+        for arg in call.args.iter().chain(call.options) {
+            if arg.kind != Kind::Text {
+                continue;
+            }
+            if bytes.contains(&arg.name) {
+                assert_eq!(arg.redact, Redact::Bytes, "{} {}", call.name(), arg.name);
+            } else if paths.contains(&arg.name) {
+                assert_eq!(arg.redact, Redact::Path, "{} {}", call.name(), arg.name);
+            }
         }
     }
 }
