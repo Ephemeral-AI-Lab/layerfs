@@ -2,11 +2,11 @@
 //! Store method that does it, its answer the call's full map (the keys of
 //! its long form; the dispatcher shapes it).
 use super::op::{next_fields, on_project, Names, StoreOp};
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::cursor;
 use layerfs_home::events::Events;
 use layerfs_home::helpers::shown;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::outcome::{refused, with_fix, Outcome};
 use std::path::Path;
 
 /// `branch.list(project, { prefix, exclude_prefix, limit, cursor })`.
@@ -206,8 +206,16 @@ pub fn get(home: &Path, events: &mut Events<'_>, request: &BranchGet) -> Outcome
 
 /// `branch.fork`: a new Branch from a Branch's head or one of its Commits.
 pub fn fork(home: &Path, events: &mut Events<'_>, request: &BranchFork) -> Outcome {
-    let value =
-        on_project(home, events, &request.project, StoreOp::Fork(request)).map_err(next_fields)?;
+    let (from, at) = (request.from.as_deref(), request.at.as_deref());
+    let again = format!(
+        "layerfs branch fork {} {}-2{}{}",
+        request.project,
+        request.name,
+        from.map(|from| format!(" {from}")).unwrap_or_default(),
+        at.map(|at| format!(" --at {at}")).unwrap_or_default(),
+    );
+    let value = on_project(home, events, &request.project, StoreOp::Fork(request))
+        .map_err(|refusal| taken(next_fields(refusal), again))?;
     let take = |key: &str| value.get(key).cloned().unwrap_or_default();
     Ok(SdkValue::map([
         ("commit", take("commit")),
@@ -216,6 +224,15 @@ pub fn fork(home: &Path, events: &mut Events<'_>, request: &BranchFork) -> Outco
         ("base", take("base")),
         ("root", take("root")),
     ]))
+}
+
+/// `refusal`, and when it is a taken name the call again under another
+/// name as its `fix`.
+fn taken(refusal: SdkRefusal, again: String) -> SdkRefusal {
+    match refusal.code == "NameTaken" {
+        true => with_fix(refusal, again),
+        false => refusal,
+    }
 }
 
 /// The rows of a list, or none.
@@ -228,8 +245,15 @@ fn rows(value: Option<&SdkValue>) -> Vec<SdkValue> {
 
 /// `branch.merge`: `from` merged into `branch`, or into a new Branch.
 pub fn merge(home: &Path, events: &mut Events<'_>, request: &BranchMerge) -> Outcome {
-    let value =
-        on_project(home, events, &request.project, StoreOp::Merge(request)).map_err(next_fields)?;
+    let again = format!(
+        "layerfs branch merge {} {} {} --into {}-2",
+        request.project,
+        request.branch,
+        request.from,
+        request.into.as_deref().unwrap_or_default(),
+    );
+    let value = on_project(home, events, &request.project, StoreOp::Merge(request))
+        .map_err(|refusal| taken(next_fields(refusal), again))?;
     let take = |key: &str| value.get(key).cloned().unwrap_or_default();
     let source = |at: usize| match value.get("sources") {
         Some(SdkValue::List(sources)) => sources

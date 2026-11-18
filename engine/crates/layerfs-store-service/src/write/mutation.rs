@@ -51,23 +51,38 @@ fn permitted(path: &str, kind: InodeKind, mode: u32) -> Result<u32> {
     }
     Ok(mode)
 }
+/// The refusal an engine error is to a call, with a plain sentence for each
+/// definite refusal; only an unexpected engine error keeps its own text.
 pub fn failure(e: WorkspaceError) -> SdkRefusal {
-    let code = match &e {
+    use layerfs_workspace::Refusal as R;
+    let (code, message) = match &e {
         WorkspaceError::Refused(r) => match r {
-            layerfs_workspace::Refusal::Missing => "NoSuchPath",
-            layerfs_workspace::Refusal::Exists => "Exists",
-            layerfs_workspace::Refusal::IsDirectory => "IsDirectory",
-            layerfs_workspace::Refusal::NotDirectory => "NotDirectory",
-            layerfs_workspace::Refusal::NotEmpty => "NotEmpty",
-            _ => "InvalidInput",
+            R::Missing => ("NoSuchPath", "no such file or folder"),
+            R::Exists => ("Exists", "the destination already exists"),
+            R::IsDirectory => ("IsDirectory", "expected a file, found a folder"),
+            R::NotDirectory => ("NotDirectory", "a parent in the path is not a folder"),
+            R::NotEmpty => ("NotEmpty", "the folder is not empty"),
+            R::TooLarge => ("InvalidInput", "the file would pass the largest size"),
+            R::Invalid => ("InvalidInput", "the change is not valid here"),
+            _ => ("InvalidInput", "the change is not allowed on this entry"),
         },
-        layerfs_workspace::WorkspaceError::Content(layerfs_content::ContentError::PathNotFound) => {
-            "NoSuchPath"
+        WorkspaceError::Content(layerfs_content::ContentError::PathNotFound) => {
+            ("NoSuchPath", "no such file or folder")
         }
-        WorkspaceError::Service(inner) if capacity(inner.as_ref()) => "Capacity",
-        _ => "Unknown",
+        WorkspaceError::Service(inner) if capacity(inner.as_ref()) => {
+            ("Capacity", "the Store has no space for this change")
+        }
+        _ => return args::refuse("Unknown", e.to_string(), SdkValue::Null),
     };
-    args::refuse(code, e.to_string(), SdkValue::Null)
+    args::refuse(code, message, SdkValue::Null)
+}
+/// `NotDirectory` at `at`, an entry that is not a folder.
+pub fn not_folder(at: &str) -> SdkRefusal {
+    args::refuse(
+        "NotDirectory",
+        format!("{at} is not a folder"),
+        SdkValue::Null,
+    )
 }
 /// A refused view read. A read changes nothing in the overlay, so an engine
 /// error is a known `Failed`, never the uncertain `Unknown` that keeps the
@@ -171,14 +186,18 @@ impl<'a> Mutation<'a> {
         for name in path.split('/').filter(|s| !s.is_empty()) {
             let name = checked(path, name)?;
             if stat.kind != layerfs_content::object::inode_leaf::InodeKind::Directory {
-                return Err(args::refuse("NotDirectory", at, SdkValue::Null));
+                return Err(not_folder(&at));
             }
             at.push('/');
             at.push_str(name.as_str());
-            stat = self
-                .view
+            stat = (self.view)
                 .lookup(self.op.overlay(), stat.serial, &name)
-                .map_err(read_failure)?;
+                .map_err(|e| match read_failure(e) {
+                    r if r.code == "NoSuchPath" => {
+                        args::refuse("NoSuchPath", format!("{at} does not exist"), SdkValue::Null)
+                    }
+                    r => r,
+                })?;
         }
         Ok(stat)
     }
@@ -306,7 +325,7 @@ impl<'a> Mutation<'a> {
             at.push_str(name);
             match self.optional(&at)? {
                 Some(s) if s.kind == InodeKind::Directory => {}
-                Some(_) => return Err(args::refuse("NotDirectory", at, SdkValue::Null)),
+                Some(_) => return Err(not_folder(&at)),
                 None => {
                     let (parent, name) = self.parent(&at)?;
                     let mode = if names.peek().is_none() { mode } else { 0o755 };

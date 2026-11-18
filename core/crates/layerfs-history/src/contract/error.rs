@@ -238,7 +238,23 @@ impl std::fmt::Display for HistoryError {
             Self::InvalidInput(what) => write!(formatter, "invalid input: {what}"),
             Self::Missing(what) => write!(formatter, "missing {what:?}"),
             Self::Unsupported(what) => write!(formatter, "unsupported: {what}"),
-            Self::NameTaken(state) => write!(formatter, "name taken: {:?}", state.holder),
+            Self::NameTaken(state) => {
+                let holder = &state.holder;
+                let kind = match holder.kind {
+                    HolderKind::Branch => "Branch",
+                    HolderKind::Project => "project",
+                };
+                let held = match holder.state {
+                    HolderState::Live => "",
+                    HolderState::Retired => " (removed; the name stays taken until compaction)",
+                    HolderState::Deleted => " (deleted; the name stays taken until compaction)",
+                };
+                write!(
+                    formatter,
+                    "the name {} is taken by a {kind}{held}; choose another name",
+                    holder.name
+                )
+            }
             Self::Removed(state) => write!(formatter, "removed: {} paths", state.paths.len()),
             Self::Exists(what) => write!(formatter, "exists: {what}"),
             Self::Conflict(what) => write!(formatter, "conflict: {what}"),

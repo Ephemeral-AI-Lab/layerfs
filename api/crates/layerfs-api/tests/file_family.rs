@@ -529,6 +529,29 @@ fn a_merge_answers_counts_only_beside_cut_lists() {
 #[test]
 fn a_patch_keeps_blank_lines_and_covers_added_files() {
     let (home, folder) = project();
+/// A taken Branch name (conformance R1 N5) is refused `Exists` in a plain
+/// sentence, with the call again under another name as its `fix`.
+#[test]
+fn a_taken_branch_name_says_so_and_offers_another() {
+    let (home, folder) = project();
+    let taken = refused(&home, "branch.fork", &[p(), ("name", t("dev"))]);
+    assert_eq!(taken.code, "Exists", "{taken:?}");
+    assert_eq!(
+        taken.message, "the name dev is taken by a Branch; choose another name",
+        "{taken:?}"
+    );
+    assert_eq!(fix(&taken), "layerfs branch fork shop/api dev-2");
+    let into = [p(), dev(), ("from", t("main")), ("into", t("dev"))];
+    let taken = refused(&home, "branch.merge", &into);
+    assert_eq!(taken.code, "Exists", "{taken:?}");
+    assert_eq!(
+        fix(&taken),
+        "layerfs branch merge shop/api dev main --into dev-2"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+    std::fs::remove_dir_all(folder).unwrap();
+}
+
     write(&home, "/README.md", t("hello\n\nworld\n"));
     write(&home, "/n.txt", t("x\ny\n"));
     let diff = ok(
