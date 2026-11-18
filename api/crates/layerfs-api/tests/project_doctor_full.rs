@@ -119,7 +119,7 @@ fn sqlite_full_reads_main_and_each_branch_and_names_a_damaged_object_in_each_pro
         }
     }
     created.unwrap();
-    check(&home, &|home| {
+    check(&home, "sqlite", &|home| {
         // the Store loses the largest object, which every head of both
         // projects reaches
         let file = home.join("store/shop/store.sqlite");
@@ -190,7 +190,19 @@ fn postgresql_full_reads_main_and_each_branch_and_names_a_damaged_object_in_each
             ("synchronous_commit", t("off")),
         ],
     );
-    check(&home, &|_| {
+    // the Store doctor reaches the same Store through the shared admission
+    let (store, _) = call_events(
+        &home,
+        "store.doctor",
+        &[("store", t("shop")), ("detail", SdkValue::Bool(true))],
+    );
+    let store_rows = rows(&store);
+    eprintln!("store doctor: {store_rows:?}");
+    assert!(
+        !store_rows.is_empty() && store_rows.iter().all(|(_, outcome)| outcome == "pass"),
+        "{store_rows:?}"
+    );
+    check(&home, "pg", &|_| {
         let mut client = postgres::Client::connect(&store_url, postgres::NoTls).unwrap();
         let row = client
             .query_one(
@@ -218,8 +230,9 @@ fn postgresql_full_reads_main_and_each_branch_and_names_a_damaged_object_in_each
 /// Two projects of Store `shop` in `home`, two Branches of one; the doctor
 /// without and with `--full`; then `damage` makes the Store lose one object
 /// both projects reach (answering its id) and each project names it once.
-fn check(home: &Path, damage: &dyn Fn(&Path) -> String) {
-    let tree = source("source");
+fn check(home: &Path, engine: &str, damage: &dyn Fn(&Path) -> String) {
+    // each case its own source: the cases run in parallel
+    let tree = source(&format!("source-{engine}"));
     let folder_text = t(tree.to_str().unwrap());
     for project in ["shop/app", "shop/twin"] {
         call(
