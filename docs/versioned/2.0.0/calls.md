@@ -504,7 +504,10 @@ publication answers as a Commit. Every id in an answer is the full id.
   short form is `{ path, change }` (`added`, `removed`, `modified`, …);
   its long form adds `type`, `content`, `metadata` and `identity` (which of
   them differ). `--with patch` adds each changed text file's lines as
-  `hunks` and `hunks_omitted`. The answer's long form adds `from`, `to`,
+  `hunks` (rows `{op, text}`, `op` one of `' '`, `-`, `+`; both keys in
+  the short form, a blank line's empty `text` too; an added file's lines
+  all `+`, a removed file's all `-`; every `\n` ends a line) and
+  `hunks_omitted`. The answer's long form adds `from`, `to`,
   `from_root` and `to_root` (`from` and `from_root` null for the empty
   tree). The `next_cursor` carries both Commits the first page compared and
   the filters, so a later page compares the same two Commits; a cursor given

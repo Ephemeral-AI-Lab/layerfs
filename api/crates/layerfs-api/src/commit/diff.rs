@@ -13,6 +13,16 @@ const ROW: Form = Form::of(
     &[],
     &["path", "change", "type", "content", "metadata", "identity"],
 );
+/// One line of a `--with patch` hunk list: `op` and `text` in both forms,
+/// a blank line's empty `text` too.
+const HUNK: Form = Form::of(&["op", "text"], &[], &["op", "text"]);
+/// What `--with patch` adds to an item.
+const PATCH: Form = Form::of(
+    &[],
+    &["hunks", "hunks_omitted"],
+    &["hunks", "hunks_omitted"],
+)
+.parts(&[("hunks", Part::Rows(&HUNK))]);
 const FORM: Form = Form::of(
     &["items"],
     &["next_cursor"],
@@ -36,7 +46,7 @@ pub(crate) const CALL: Call = call(
 )
 .scoped(Rule::History)
 .form(&FORM)
-.with(&[Section::item("patch", &["hunks", "hunks_omitted"])])
+.with(&[Section::item("patch", &["hunks", "hunks_omitted"]).shaped(&PATCH)])
 .paged(Paging::Cursor)
 .agent();
 

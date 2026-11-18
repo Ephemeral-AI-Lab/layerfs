@@ -522,3 +522,44 @@ fn a_merge_answers_counts_only_beside_cut_lists() {
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(folder).unwrap();
 }
+
+/// `commit.diff --with patch` (conformance R1 F7): every hunk row keeps
+/// `op` and `text` in the short form, a blank line's empty `text` too, and
+/// an added text file answers its lines as `+` hunks.
+#[test]
+fn a_patch_keeps_blank_lines_and_covers_added_files() {
+    let (home, folder) = project();
+    write(&home, "/README.md", t("hello\n\nworld\n"));
+    write(&home, "/n.txt", t("x\ny\n"));
+    let diff = ok(
+        &home,
+        "commit.diff",
+        &[p(), ("ref", t("dev")), ("with", t("patch"))],
+    );
+    let rows = items(&diff);
+    let hunks = |path: &str| {
+        let row = (rows.iter())
+            .find(|row| row.get_text("path") == Some(path))
+            .unwrap_or_else(|| panic!("{path}: {diff:?}"));
+        row.get("hunks").cloned().unwrap_or_default()
+    };
+    let line = |op: &str, text: &str| SdkValue::map([("op", t(op)), ("text", t(text))]);
+    assert_eq!(
+        hunks("/README.md"),
+        // the Store's lines: every `\n` ends one, the rest is the last
+        SdkValue::List(vec![
+            line(" ", "hello"),
+            line(" ", ""),
+            line("+", "world"),
+            line("+", ""),
+        ]),
+        "{diff:?}"
+    );
+    assert_eq!(
+        hunks("/n.txt"),
+        SdkValue::List(vec![line("+", "x"), line("+", "y"), line("+", "")]),
+        "{diff:?}"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+    std::fs::remove_dir_all(folder).unwrap();
+}

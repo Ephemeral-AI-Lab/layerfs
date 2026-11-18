@@ -168,7 +168,15 @@ impl Shaping<'_> {
         // `observed_at`) was answered in its place above
         for key in flat_keys.filter(|key| !form.long.contains(key)) {
             let value = take(&mut fields, key).unwrap_or_default();
-            let value = if self.detail { value } else { pruned(value) };
+            // a section's form may shape one of its keys (`hunks` rows)
+            let part = (self.asked.iter())
+                .filter_map(|section| section.form)
+                .find_map(|form| form.part(key));
+            let value = match part {
+                Some(part) => self.part(part, value, Level::Inner),
+                None if self.detail => value,
+                None => pruned(value),
+            };
             if self.detail || !empty(&value) {
                 out.push(((*key).to_owned(), value));
             }
