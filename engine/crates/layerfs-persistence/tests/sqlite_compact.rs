@@ -507,12 +507,37 @@ fn a_wholly_dead_pack_is_rebuilt_away() {
     clean(&reopened);
 }
 
+/// The windows the product cuts for a file of `file` bytes whose packs are
+/// `lengths`: of the sealed file, or (`staged`) of the file a rebuild writes.
+fn cut_windows(
+    staged: bool,
+    lengths: &std::collections::BTreeMap<i64, u64>,
+    retained: &[i64],
+    file: u64,
+) -> layerfs_history::error::HistoryResult<Vec<layerfs_persistence::internals::Window>> {
+    use layerfs_persistence::internals::{staged_windows, windows};
+    let packs = lengths.iter().map(|(pack, length)| Ok((*pack, *length)));
+    let mut cut = Vec::new();
+    let mut each = |window| {
+        cut.push(window);
+        Ok(())
+    };
+    if staged {
+        let kept: u64 = retained.iter().filter_map(|pack| lengths.get(pack)).sum();
+        staged_windows(packs, retained, file.saturating_sub(kept), &mut each)?;
+    } else {
+        let total: u64 = lengths.values().sum();
+        windows(packs, retained, file.saturating_sub(total), &mut each)?;
+    }
+    Ok(cut)
+}
+
 /// The pack copy runs one window of retained packs per statement, and a long
 /// run of dead packs ends a window. Retained packs on both sides of such a run
 /// are two windows, and both arrive in the rebuilt Store.
 #[test]
 fn retained_packs_on_both_sides_of_a_long_dead_run_are_all_copied() {
-    use layerfs_persistence::internals::{windows, GAP_BYTES};
+    use layerfs_persistence::internals::GAP_BYTES;
     use std::collections::{BTreeMap, BTreeSet};
 
     let (_temp, handles, path) = create_store();
@@ -576,7 +601,7 @@ fn retained_packs_on_both_sides_of_a_long_dead_run_are_all_copied() {
     };
     assert!(dead_bytes > GAP_BYTES, "the dead run is {dead_bytes} bytes");
     let file = std::fs::metadata(&path).unwrap().len();
-    let plan = windows(&lengths, &retained, file).unwrap();
+    let plan = cut_windows(false, &lengths, &retained, file).unwrap();
     assert_eq!(plan.len(), 2, "{plan:?}");
     assert!(plan[0].last < plan[1].first);
 
@@ -617,7 +642,7 @@ fn retained_packs_on_both_sides_of_a_long_dead_run_are_all_copied() {
 /// the run installs, and the installed totals are the sums over its packs.
 #[test]
 fn a_rebuild_keeping_more_than_one_window_is_verified_window_by_window() {
-    use layerfs_persistence::internals::{staged_windows, windows, WINDOW_BYTES};
+    use layerfs_persistence::internals::WINDOW_BYTES;
     use std::collections::BTreeMap;
 
     // A whole-file object holds at most 131,071 raw bytes.
@@ -690,9 +715,12 @@ fn a_rebuild_keeping_more_than_one_window_is_verified_window_by_window() {
     let kept: u64 = lengths.values().sum();
     assert!(kept > WINDOW_BYTES, "{kept} bytes kept");
     let bytes = std::fs::metadata(&path).unwrap().len();
-    let plan = staged_windows(&lengths, &retained, bytes).unwrap();
+    let plan = cut_windows(true, &lengths, &retained, bytes).unwrap();
     assert!(plan.len() > 1, "{plan:?}");
-    assert_eq!(plan, windows(&lengths, &retained, bytes).unwrap());
+    assert_eq!(
+        plan,
+        cut_windows(false, &lengths, &retained, bytes).unwrap()
+    );
     assert_eq!(plan.first().unwrap().first, retained[0]);
     assert_eq!(plan.last().unwrap().last, *retained.last().unwrap());
     let (totals, sums) = pack_totals_and_sums(&path);

@@ -42,7 +42,7 @@ mod impls;
 mod ordinals;
 mod plan;
 mod records;
-mod spill;
+pub(crate) mod spill;
 mod table;
 mod values;
 mod walk;

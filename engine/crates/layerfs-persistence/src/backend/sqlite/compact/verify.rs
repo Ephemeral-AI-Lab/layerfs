@@ -2,12 +2,14 @@
 
 use super::build::Built;
 use super::build::CACHE_KIB;
+use super::lengths::PackLengths;
 use super::op::stop_at;
 use super::op::RunOp;
 use super::types::db_error;
 use super::types::CompactFailpoint;
 use super::types::CompactRequest;
 use super::types::MarkTuple;
+use super::window::staged_windows;
 use super::window::ReadAhead;
 use crate::backend::records::BackendError;
 use crate::backend::sqlite::schema;
@@ -200,18 +202,23 @@ struct PackScan {
 
 /// Counts and sums the staged file's `pack` rows, one window at a time.
 ///
-/// `built.windows` says where each run of retained packs lies in the fresh
-/// file. Read in one pass without it, the rows of a file the kernel no longer
+/// The windows say where each run of retained packs lies in the fresh file.
+/// Read in one pass without them, the rows of a file the kernel no longer
 /// holds cost one device round trip per pack (measured on a 4.9 GB Store of
 /// 38,666 packs with the file out of memory: 2.3 s, against 0.7 s window by
 /// window). The windows only place the read-ahead: the ranges read are
 /// consecutive and cover every identity, so the sums are those of one pass
 /// over the table, and a row outside every window is counted too. The file is
-/// immutable to this reader, so the statements see one state. Without windows
-/// (the group-row layouts keep `pack` small and in one place) one range reads
-/// the table.
-fn scan_packs(connection: &Connection, built: &Built, retained: &[i64]) -> HistoryResult<PackScan> {
-    let plan = &built.windows;
+/// immutable to this reader, so the statements see one state. They are cut
+/// from the stream of pack lengths and each is read as soon as it is cut.
+/// Without windows (the group-row layouts keep `pack` small and in one place)
+/// one range reads the table.
+fn scan_packs(
+    connection: &Connection,
+    built: &Built,
+    lengths: &mut PackLengths,
+    retained: &[i64],
+) -> HistoryResult<PackScan> {
     // What a window's range holds beyond its own payload (see `windows`).
     let slack = built.target_bytes.saturating_sub(built.stored);
     let mut ahead = ReadAhead::open(&built.target)?;
@@ -228,25 +235,23 @@ fn scan_packs(connection: &Connection, built: &Built, retained: &[i64]) -> Histo
         scan.metadata = scan.metadata.saturating_add(metadata);
         Ok(())
     };
-    let mut first = i64::MIN;
-    let mut before = 0usize;
-    for (index, window) in plan.iter().enumerate() {
-        let through = retained.partition_point(|pack| *pack <= window.last);
-        let packs = (through - before) as u64;
-        before = through;
-        if window.bytes.saturating_sub(slack) < packs.saturating_mul(DENSE_PACK_BYTES) {
-            ahead.ask(window);
-        }
-        let last = if index + 1 == plan.len() {
-            i64::MAX
-        } else {
-            window.last
-        };
-        read(first, last)?;
-        first = last.saturating_add(1);
+    // The first identity no range has read yet.
+    let mut first = Some(i64::MIN);
+    if built.payload_in_pack {
+        staged_windows(lengths.packs()?, retained, slack, &mut |window| {
+            if window.bytes.saturating_sub(slack) < window.packs.saturating_mul(DENSE_PACK_BYTES) {
+                ahead.ask(&window);
+            }
+            if let Some(from) = first {
+                read(from, window.last)?;
+            }
+            first = window.last.checked_add(1);
+            Ok(())
+        })?;
     }
-    if plan.is_empty() {
-        read(i64::MIN, i64::MAX)?;
+    // Every identity after the last window, or the whole table without one.
+    if let Some(from) = first {
+        read(from, i64::MAX)?;
     }
     Ok(scan)
 }
@@ -264,6 +269,8 @@ struct Scan {
 pub(crate) struct VerifyInput<'a> {
     pub(crate) store: &'a Path,
     pub(crate) built: &'a Built,
+    /// Every pack of the sealed Store and its stored length.
+    pub(crate) lengths: &'a mut PackLengths,
     pub(crate) mark: &'a MarkResult,
     pub(crate) tuple: &'a MarkTuple,
     pub(crate) layout: crate::SqlitePackLayout,
@@ -284,6 +291,7 @@ pub(crate) fn verify(
     let VerifyInput {
         store,
         built,
+        lengths,
         mark,
         tuple,
         layout,
@@ -308,7 +316,7 @@ pub(crate) fn verify(
     .map_err(HistoryError::from)?;
     // `pack` first: its rows are then in this reader's cache for the
     // foreign-key pass below.
-    let packs = scan_packs(&connection, built, mark.objects().packs())?;
+    let packs = scan_packs(&connection, built, lengths, mark.objects().packs())?;
     // One statement and one pass over each other table: the row counts the
     // mark fixes and the sums the totals row must equal come from the same
     // scan.

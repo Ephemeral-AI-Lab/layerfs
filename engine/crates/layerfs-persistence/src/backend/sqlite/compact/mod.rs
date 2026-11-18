@@ -24,14 +24,16 @@
 //!
 //! The module is split by phase: [`types`] (the §7/§11 shapes), [`op`] (the
 //! `.compact-op` sidecar), [`build`] with [`space`] (the fresh file's size
-//! during the load), [`window`] (the pack copy's windows and the sealed
-//! file's read-ahead), [`repack`] (retained packs written again without
+//! during the load), [`lengths`] (every pack's stored length, in bounded
+//! memory), [`window`] (the pack copy's windows and the sealed file's
+//! read-ahead), [`repack`] (retained packs written again without
 //! their dead records) and [`values`] (only the inode value blocks a kept leaf
 //! reads are copied), [`verify`], [`install`], [`receipt`] and [`run`] (the
 //! orchestration on `SqliteHandles`).
 
 mod build;
 mod install;
+mod lengths;
 mod op;
 mod receipt;
 mod repack;
@@ -43,6 +45,7 @@ mod verify;
 mod window;
 
 pub use build::{peak_temp_bytes, source_mmap, SRC_MMAP_BYTES};
+pub use lengths::PackLengths;
 pub use op::{compact_op_status, CompactOpStatus};
 pub use receipt::receipt;
 pub use repack::{verify as verify_repacked, Rewritten};

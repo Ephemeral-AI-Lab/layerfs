@@ -8,6 +8,7 @@
 //! in-place rewrite: `VACUUM INTO` + delete + `VACUUM` would write the retained
 //! bytes about four times over (measured), while this path writes them once.
 
+use super::lengths::PackLengths;
 use super::op::compact_path;
 use super::op::hex;
 use super::op::stop_at;
@@ -21,10 +22,8 @@ use super::types::CompactFailpoint;
 use super::types::CompactRequest;
 use super::types::MarkTuple;
 use super::verify::immutable_uri;
-use super::window::staged_windows;
 use super::window::windows;
 use super::window::ReadAhead;
-use super::window::Window;
 use crate::backend::records::BackendError;
 use crate::backend::sqlite::lifecycle::seal::SealedFacts;
 use crate::backend::sqlite::session::connection::Session;
@@ -33,7 +32,6 @@ use layerfs_history::error::HistoryResult;
 use rusqlite::params;
 use rusqlite::Connection;
 use rusqlite::OpenFlags;
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -89,9 +87,10 @@ pub(crate) fn live_page_metrics(session: &Arc<Session>) -> HistoryResult<(u64, u
 pub(crate) struct Built {
     pub(crate) target: PathBuf,
     pub(crate) target_bytes: u64,
-    /// Where the retained packs lie in the fresh file, when `pack` holds their
-    /// payload: the verification's read-ahead plan.
-    pub(crate) windows: Vec<Window>,
+    /// Whether `pack` holds the payload of the fresh file's packs, so that
+    /// its rows lie spread over the whole file: the verification then reads
+    /// them window by window.
+    pub(crate) payload_in_pack: bool,
     pub(crate) visited_bytes: u64,
     pub(crate) logical: u64,
     pub(crate) canonical: u64,
@@ -134,7 +133,7 @@ pub(crate) struct BuildInput<'a> {
     /// about to write, known before the fresh file holds a row.
     pub(crate) payload_bytes: u64,
     /// Every pack of the sealed Store and its stored length.
-    pub(crate) lengths: &'a BTreeMap<i64, u64>,
+    pub(crate) lengths: &'a mut PackLengths,
     /// The packs the mark retains, ascending.
     pub(crate) retained: &'a [i64],
     /// The mark's retained packs that hold dead records, for [`super::repack`].
@@ -146,6 +145,12 @@ pub(crate) struct BuildInput<'a> {
 /// What the mark found besides the retained packs, for the steps of the copy
 /// that leave part of a retained row set behind.
 struct Marked<'a> {
+    /// See [`BuildInput::lengths`].
+    lengths: &'a mut PackLengths,
+    /// See [`BuildInput::retained`].
+    retained: &'a [i64],
+    /// The bytes of the sealed file that are not pack payload.
+    slack: u64,
     /// See [`BuildInput::partly_dead`].
     partly_dead: &'a [(i64, u64)],
     /// See [`BuildInput::inode_ordinals`].
@@ -270,7 +275,7 @@ fn add_pack_sums(
 fn copy_packs(
     connection: &Connection,
     table: &str,
-    plan: &[Window],
+    marked: &mut Marked<'_>,
     sealed: &mut ReadAhead,
     totals: &mut (i64, i64),
 ) -> HistoryResult<()> {
@@ -288,16 +293,23 @@ fn copy_packs(
 (SELECT pack_id FROM scratch.live_pack WHERE pack_id BETWEEN ?1 AND ?2)"
         ))
         .map_err(db_error)?;
-    for window in plan {
-        sealed.ask(window);
-        statement
-            .execute(params![window.first, window.last])
-            .map_err(db_error)?;
-        if let Some(sums) = sums.as_mut() {
-            add_pack_sums(sums, (window.first, window.last), totals)?;
-        }
-    }
-    Ok(())
+    // The windows are cut from the stream of pack lengths and each is copied
+    // as soon as it is cut, so no plan is held.
+    windows(
+        marked.lengths.packs()?,
+        marked.retained,
+        marked.slack,
+        &mut |window| {
+            sealed.ask(&window);
+            statement
+                .execute(params![window.first, window.last])
+                .map_err(db_error)?;
+            if let Some(sums) = sums.as_mut() {
+                add_pack_sums(sums, (window.first, window.last), totals)?;
+            }
+            Ok(())
+        },
+    )
 }
 
 /// The `store_policy` columns the rebuild copies, named explicitly: the fresh
@@ -385,9 +397,8 @@ fn copy_rows(
     op: &RunOp,
     generation: i64,
     target_tables: &BTreeSet<String>,
-    plan: &[Window],
     sealed: &mut ReadAhead,
-    marked: &Marked<'_>,
+    marked: &mut Marked<'_>,
 ) -> HistoryResult<Repacked> {
     // The pack payload is `pack.body` in a Monolithic Store and the
     // `pack_unit` rows otherwise; that table is copied window by window.
@@ -428,7 +439,7 @@ fn copy_rows(
                 continue;
             }
             if table == payload {
-                copy_packs(connection, table, plan, sealed, &mut pack_totals)?;
+                copy_packs(connection, table, marked, sealed, &mut pack_totals)?;
                 continue;
             }
             let name = identifier(table);
@@ -660,16 +671,17 @@ PRAGMA user_version={user_version};PRAGMA application_id={application_id};"
     let page_bytes = u64::try_from(page_size).unwrap_or(0);
     space::reserve(&target, payload_bytes, page_bytes)?;
     let target_tables = main_tables(&connection)?;
-    let plan = windows(lengths, retained, facts.bytes)?;
     let mut sealed = ReadAhead::open(store)?;
     let repacked = copy_rows(
         &connection,
         op,
         tuple.generation + 1,
         &target_tables,
-        &plan,
         &mut sealed,
-        &Marked {
+        &mut Marked {
+            slack: facts.bytes.saturating_sub(lengths.total()),
+            lengths,
+            retained,
             partly_dead,
             inode_ordinals,
         },
@@ -774,16 +786,11 @@ WHERE sql IS NOT NULL AND substr(name,1,7)!='sqlite_' ORDER BY type,name",
         }
     }
     let target_bytes = space::trim(&target, u64::try_from(pages).unwrap_or(0), page_bytes)?;
-    // `pack` holds the payload unless the layout has `pack_unit` rows.
-    let staged = if target_tables.contains("pack_unit") {
-        Vec::new()
-    } else {
-        staged_windows(lengths, retained, target_bytes)?
-    };
     Ok(Built {
         target,
         target_bytes,
-        windows: staged,
+        // `pack` holds the payload unless the layout has `pack_unit` rows.
+        payload_in_pack: !target_tables.contains("pack_unit"),
         visited_bytes,
         logical: u64::try_from(totals.0).unwrap_or(0),
         canonical: u64::try_from(totals.1).unwrap_or(0),
