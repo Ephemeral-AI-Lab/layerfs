@@ -181,15 +181,27 @@ block ahead; it returns every value of the blocks it does read
 the rows the single reads return, so the mark's result and its `mark_bytes`
 do not change.
 
-A compaction round decides between `none` and `rebuild` from the mark's live
-packs alone, so it sends the server the live pack ids first
-(`gc_live_pack`) and decides. Only a rebuild then sends the
-visited object ids (`gc_visited`) and fills `gc_dead`; a `none` round writes
-the `gc_op` row at phase `mark`, empties `gc_dead` and clears the op, as the
-specification asks, without ever sending the ids or computing a dead set it
-would delete in the same call
-([`compact/run.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/run.rs),
-[`compact/op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/op.rs)).
+A compaction round's mark, its decision and a rebuild's visited ids are one
+repeatable-read transaction
+([`compact/op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/op.rs)
+`mark`). After the walk it sends the server the live pack ids
+(`gc_live_pack`), sums their bytes and decides between `none` and `rebuild`
+over that same snapshot. Only a rebuild then fills the visited ids
+(`gc_visited`): the mark keeps one bit an object over the Store's locator
+order, never the identities, so the fill reads the locators again a block
+at a time and sends back the reached ones, 8,192 a statement, in ascending
+identity order. A locator's rank is its position in the snapshot the walk
+read, which is why the fill stays in that transaction: a publication that
+lands while the mark runs is in neither the walk nor the fill, and moves the
+Store tuple that Phase B checks. A `none` round then writes the `gc_op` row
+at phase `mark`, empties `gc_dead` and clears the op, as the specification
+asks, without ever sending the ids or computing a dead set it would delete
+in the same call; a rebuild fills `gc_dead` with its op row
+([`compact/run.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/run.rs)).
+Phase A's batches of about 1 GiB of pack bodies are cut by the server, which
+returns the first and last pack id and the pack count of each: the client
+holds one row a batch and no list of live packs
+([`compact/build.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/build.rs)).
 
 The mark's walk holds the same bounded memory as on SQLite
 ([SQLite: the mark's memory](sqlite.md#the-marks-memory)). Its locator
@@ -198,11 +210,11 @@ signed eight-byte prefix, then the identity, 512 identities a statement,
 each after the last one of the block before. The table has no unique key on
 the identity, so a block takes one row per identity (`DISTINCT ON`, the
 least locator); a rank is a position in that order. The mark's sort files
-are unnamed files in the client's temporary directory
-([`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs),
-`locations_after`). One thing is not bounded here: a compaction still takes
-the mark's list of reached identities (32 bytes a reached object) to fill
-`pg_temp.gc_visited` in its next transaction.
+are unnamed files in the client's temporary directory. What still grows
+with the Store on the client is what the shared mark result carries: the
+retained pack ids (8 bytes a live pack), the retained history nodes and
+their roots, and the block boundaries and bits of the locator order (32
+bytes for every 512 objects and three bits an object).
 
 ### Generation fence
 

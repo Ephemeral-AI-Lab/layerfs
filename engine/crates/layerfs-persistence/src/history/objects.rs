@@ -163,6 +163,20 @@ fn mark_gc(tx: &Transaction<'_>) -> HistoryResult<(MarkResult, GcTuple)> {
     Ok((mark, tuple))
 }
 
+/// [`HistoryProvider::mark_gc`] inside a caller's engine transaction, with the
+/// reached set instead of a list of it ([`KeptObjects::objects`] is empty).
+/// A PostgreSQL compaction decides and fills its visited table from
+/// [`Reach::each`] in the transaction that walked, so the reached identities
+/// are never held: the ranks a `Reach` names are those of this snapshot only.
+pub(crate) fn mark_gc_reached(
+    backend: &dyn crate::backend::HistoryStatements,
+) -> HistoryResult<(MarkResult, GcTuple, Reach)> {
+    let tx = Transaction::new(backend);
+    let tuple = gc_tuple(&tx)?;
+    let (mark, reach) = mark_recorded(&tx)?;
+    Ok((mark, tuple, reach))
+}
+
 fn gc_tuple(tx: &Transaction<'_>) -> HistoryResult<GcTuple> {
     let rows = tx.query(TUPLE, Vec::<Param>::new())?;
     if rows.len() != 1 {

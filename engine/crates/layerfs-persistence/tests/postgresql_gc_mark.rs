@@ -943,6 +943,73 @@ fn a_none_round_sends_no_visited_ids() {
     }
 }
 
+/// A rebuild's visited ids are listed from the mark's reached set, a block
+/// of the Store's locators at a time, and sent a bounded piece per
+/// statement. With more live objects than one statement carries, and more
+/// than one read of locators returns, the rebuilt Store must hold exactly
+/// the objects the mark reached: an identity lost or repeated between two
+/// pieces fails the copy's count or the mark that follows.
+#[test]
+fn a_rebuild_visits_more_objects_than_one_statement_carries() {
+    use layerfs_persistence::{CompactPath, CompactRequest};
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "rebuild_visited_pieces");
+    // Its own catalog identity: the compaction's advisory key derives from it.
+    let handles: PostgresHandles = schema.create(b"postgresql-gc-mark-pieces", CURSOR);
+    let (genesis_root, mut saved) = save_tree(&handles, 1, 99);
+    let (shop, work, _genesis) = project_with_genesis(&handles.history, 1, genesis_root);
+    for seed in 2..=92u32 {
+        let (root, ids) = save_tree(&handles, seed, 99);
+        commit_with(&handles.history, work, root);
+        publish(&handles.history, shop, work);
+        saved.extend(ids);
+    }
+    saved.sort();
+    saved.dedup();
+    assert!(saved.len() > 8_192 + 512, "live objects: {}", saved.len());
+    // Unreferenced trees: wholly dead packs worth more than a tenth of the Store.
+    let mut dead = Vec::new();
+    for seed in 1_000..1_016u32 {
+        dead.extend(save_tree(&handles, seed, 99).1);
+    }
+    dead.retain(|id| saved.binary_search(id).is_err());
+    assert!(dead.len() > 1_000, "dead objects: {}", dead.len());
+
+    let receipt = handles
+        .compact(&CompactRequest {
+            op_id: [9; 16],
+            ..CompactRequest::default()
+        })
+        .expect("the round");
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+
+    let mut admin = schema.admin();
+    let located: i64 = admin
+        .query_one("SELECT count(*) FROM object_location", &[])
+        .unwrap()
+        .get(0);
+    assert_eq!(located, saved.len() as i64, "exactly the live objects");
+    let gone: i64 = admin
+        .query_one(
+            "SELECT count(*) FROM object_location WHERE object_id = ANY($1::bytea[])",
+            &[&dead
+                .iter()
+                .map(|id| id.as_bytes().as_slice())
+                .collect::<Vec<_>>()],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(gone, 0, "no dead object is located");
+    let mark = handles
+        .history
+        .mark()
+        .expect("the mark of the rebuilt Store");
+    assert_eq!(mark.objects().len(), saved.len());
+    for id in &saved {
+        assert!(mark.objects().contains(*id), "a live object is reached");
+    }
+}
+
 /// Objects the inode-table writer emits, in order.
 #[derive(Default)]
 struct Emitted(Vec<layerfs_content::FinalizedObject>);
