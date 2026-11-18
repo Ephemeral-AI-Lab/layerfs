@@ -50,17 +50,21 @@ pub fn ensure_built_ins(home: &Path, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Writes each built-in machine's record that is not there. A record that
+/// is there but cannot be read is left as it is, for its doctor to name
+/// (`machine.record`), and fails no call: every other machine, Store and
+/// Sandbox stays usable (RF re-check N-D).
 fn write_built_ins(home: &Path, id: &str) -> Result<()> {
-    let missing = |name: &str| -> Result<bool> { Ok(MachineRecord::read(home, name)?.is_none()) };
+    let missing = |name: &str| matches!(MachineRecord::read(home, name), Ok(None));
     if !layerfs_home::names::BUILT_IN
         .iter()
-        .any(|name| missing(name).unwrap_or(true))
+        .any(|name| missing(name))
     {
         return Ok(());
     }
     let _lock = home::lock::take(home)?;
     for name in layerfs_home::names::BUILT_IN {
-        if missing(name)? {
+        if missing(name) {
             MachineRecord::built_in(name, id).write(home)?;
         }
     }

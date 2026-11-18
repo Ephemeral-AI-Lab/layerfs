@@ -128,7 +128,7 @@ pub(super) fn doctor(probe: &Probe<'_>, node: &mut Node) {
         }
         return;
     }
-    node.children = workspace_target::nodes(&seen.workspaces, seen.listing);
+    node.children = workspace_target::nodes(name, &seen.workspaces, seen.listing);
 }
 
 /// `blocked_by` the Sandbox `sandbox`, for `reason`.
