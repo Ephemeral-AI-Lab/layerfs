@@ -16,7 +16,7 @@ const temp = (tag) => {
 
 test("close drops this process's leases, and a later call opens its Store again", async () => {
   assert.equal(layerfs.close, close);
-  // outside the table: its families keep only their own calls (sandbox.close is one)
+  // outside the table: its families keep only their own calls (sandbox.remove is one)
   assert.ok(table.every((spec) => spec.family !== "close"));
   const home = temp("close");
   const folder = temp("close-folder");

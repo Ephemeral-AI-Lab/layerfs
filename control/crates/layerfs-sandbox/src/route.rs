@@ -312,7 +312,6 @@ fn host_op(
             };
             let loaded =
                 crate::image_load::load(&docker, events, &mut target, archive.as_deref(), &named)?;
-            events.progress(SdkValue::map([("phase", SdkValue::text("start"))]));
             Some(loaded.id)
         }
         (_, image) => image,

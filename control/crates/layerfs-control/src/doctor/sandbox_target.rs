@@ -18,7 +18,6 @@ use layerfs_home::home::{paths, read_record, RECORD_VERSION};
 use layerfs_home::names::{self, MachineName, SandboxName};
 use layerfs_home::op::Standing;
 use layerfs_home::state::{BlockedBy, Reason, State};
-use layerfs_machine::record::MachineRecord;
 use layerfs_sandbox::record::SandboxRecord;
 use layerfs_store::record::{Placement, StoreRecord, StoreRef};
 use std::path::Path;
@@ -67,33 +66,12 @@ fn remove_fix(sandbox: &str) -> String {
     format!("layerfs sandbox remove {sandbox}")
 }
 
-/// The Sandbox's state from its records and its machine's records.
-///
-/// SWITCH POINT (package F-sbx): replace this body with
-/// `layerfs_sandbox::state::state(home, record)` (its
-/// `SandboxRecord::status` over the machine's records-only state) once it
-/// is on `call-surface-2-0`. This is a stand-in for it and the only place
-/// the doctor derives a Sandbox's state.
+/// The Sandbox's state from its records and its machine's records: the
+/// Sandbox package's one derivation (`layerfs_sandbox::state::state`), so
+/// the doctor and `sandbox get` agree. Its machine's record that cannot be
+/// read is `sandbox.machine_reference`'s finding, not a state here.
 fn recorded_state(home: &Path, record: &SandboxRecord) -> State {
-    let broken = |reason| State::broken(reason, Some(&remove_fix(record.name())));
-    if let Some(op) = record.op() {
-        match op.standing() {
-            Standing::Running => return State::busy(&op),
-            Standing::Unresolved => return broken(Reason::Unresolved),
-            Standing::Stale => {}
-        }
-    }
-    if record.machine_stopped() || record.id().is_none() {
-        return broken(Reason::Missing);
-    }
-    let machine = record.machine();
-    let state = MachineRecord::read(home, machine)
-        .and_then(|found| crate::inventory::machine_state(home, machine, found.as_ref()));
-    match state {
-        Ok(state) => state.blocks("machine", machine).unwrap_or(State::Ready),
-        // its machine's record cannot be read: `sandbox.machine_reference` says so
-        Err(_) => State::Ready,
-    }
+    layerfs_sandbox::state::state(home, record).unwrap_or(State::Ready)
 }
 
 /// The `sandbox` kind's run: its checks into `node`, then its Workspaces'

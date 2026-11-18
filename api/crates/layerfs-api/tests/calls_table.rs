@@ -312,10 +312,17 @@ fn sandbox_family() {
     );
     assert!(!reached.contains("`machine`"), "{reached}");
     let reached = code(
-        "sandbox.close",
-        map(&[("name", t("tests")), ("force", SdkValue::Bool(true))]),
+        "sandbox.remove",
+        map(&[("sandbox", t("tests")), ("force", SdkValue::Bool(true))]),
     );
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
+    // ruling R1: the old names are gone, with no alias
+    for gone in ["sandbox.close", "logs.sandbox"] {
+        assert_eq!(
+            code(gone, SdkValue::Null),
+            format!("InvalidInput: no call named `{gone}`")
+        );
+    }
 }
 
 #[test]
@@ -678,6 +685,15 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "branch.remove",
     ];
     let commit = ["commit.list", "commit.get", "commit.diff"];
+    let sandbox = [
+        "sandbox.create",
+        "sandbox.list",
+        "sandbox.get",
+        "sandbox.remove",
+        "sandbox.files",
+        "sandbox.log",
+        "sandbox.doctor",
+    ];
     let workspace = [
         "workspace.list",
         "workspace.mount",
@@ -705,7 +721,7 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
             &["project.doctor"][..],
             &branch[..],
             &commit[..],
-            &["sandbox.doctor"][..],
+            &sandbox[..],
             &workspace[..],
             &machine[..],
             &store[..],

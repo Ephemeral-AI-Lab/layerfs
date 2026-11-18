@@ -1,25 +1,28 @@
 //! `sandbox.get` takes no Store lease, opens no Store and writes no record
-//! (layerfs-project#181), on each side that runs its two reads: this
-//! process for a `native` Sandbox, a machine's worker, and this process
-//! again for a Sandbox whose daemon's port is forwarded here. Its answer is
-//! the daemon's Workspace list as before, for 0, 1 and 4 Workspaces and
-//! from a daemon that predates the Workspaces-only option, and its record
-//! alone for a stopped machine.
+//! of a ready Sandbox (layerfs-project#181), on each side that runs its two
+//! reads: this process for a `native` Sandbox, a machine's worker, and this
+//! process again for a Sandbox whose daemon's port is forwarded here. Its
+//! answer is the daemon's Workspace list, for 0, 1 and 4 Workspaces and
+//! from a daemon that predates the Workspaces-only option, and its records
+//! alone for a stopped machine. The one file a get that reached the daemon
+//! writes is `observed.json` beside the record (call surface 2.0), which
+//! these comparisons leave out.
 //!
 //! The fields of layerfs-project#178 ride the same reads and add none:
 //! `workspace_capacity` (16, whatever the Sandbox's state), each Workspace's
-//! `running` (the commands another client started, from the exec records on
-//! the side that keeps them, with their `tag` and `program`; one that ended
-//! or whose owner is gone is not listed) and `overlay_bytes` (the size of
-//! its overlay file where that side has the run folder, by path alone; null
-//! for a forwarded Sandbox). A get still changes no file on either side.
+//! `running` and `commands` (the commands another client started, from the
+//! exec records on the side that keeps them, with their `tag` and
+//! `program`; one that ended or whose owner is gone is not listed) and,
+//! with `--with stats`, its `overlay_bytes` (the size of its overlay file
+//! where that side has the run folder, by path alone; null for a forwarded
+//! Sandbox).
 //!
-//! The fields of layerfs-project#164 ride them too: `daemon` (`{ pid,
-//! started_at }` of the process the daemon record names, `started_at` null
-//! once it is gone) and `usage` (the Sandbox's cgroup, null with
-//! `usage_reason` for a host-process Sandbox), read on the side that runs
-//! the Sandbox; a forwarded Sandbox's come from its machine's worker with
-//! its overlay sizes, in the one inspect request.
+//! The fields of layerfs-project#164 ride them too, under `stats`: `daemon`
+//! (`{ pid, started_at }` of the process the daemon record names) and
+//! `usage` (the Sandbox's cgroup, null with `usage_reason` for a
+//! host-process Sandbox), read on the side that runs the Sandbox; a
+//! forwarded Sandbox's come from its machine's worker with its overlay
+//! sizes, in the one inspect request.
 //!
 //! Nothing runs: a stand-in daemon answers the Workspace list and the
 //! capacity model, and the worker is this build's own server on a scratch
@@ -90,7 +93,11 @@ fn get(home: &Path) -> Result<SdkValue, (String, String)> {
     let home = home.to_owned();
     let (sender, answer) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let args = map(&[("name", t("s1"))]);
+        let args = map(&[
+            ("sandbox", t("s1")),
+            ("detail", SdkValue::Bool(true)),
+            ("with", SdkValue::List(vec![t("stats")])),
+        ]);
         let got = layerfs_api::call(Some(&home), "sandbox.get", args, &mut |_| {});
         let _ = sender.send(got.map_err(|r| (r.code, r.message)));
     });
@@ -126,52 +133,55 @@ fn name_of(n: i64) -> Option<String> {
     (n % 2 == 0).then(|| format!("w{n}"))
 }
 
-/// `name` as every front end shows a result key: snake_case.
-fn snake(name: &str) -> String {
-    let mut out = String::new();
-    for c in name.chars() {
-        if c.is_ascii_uppercase() {
-            out.push('_');
-        }
-        out.push(c.to_ascii_lowercase());
-    }
-    out
-}
+/// The keys of a Workspace that [`shown`] compares; `mounted_at` (the
+/// record's own time) is left out.
+const COMPARED: [&str; 12] = [
+    "workspace",
+    "branch",
+    "running",
+    "state",
+    "path",
+    "commit",
+    "base_layer",
+    "branch_moved",
+    "pending_merge",
+    "commands",
+    "id",
+    "op",
+];
 
-/// What `sandbox.get` shows for the daemon's `items`: each item as the
-/// daemon answered it (its keys in snake_case, as the call surface shows
-/// every result), with its `path`, `name` and `ws`, no command `running`
-/// in it, no `overlay_bytes` (these fixtures have no run folder) and no
-/// cgroup `usage`, for `reason`: the Sandbox's own `usage_reason`
-/// (`host_process` for these host-process Sandboxes, `not_observed` when
-/// the side that runs one did not answer).
-fn shown(items: &[SdkValue], reason: &str) -> Vec<BTreeMap<String, SdkValue>> {
+/// What `sandbox.get --detail` shows of the daemon's `items`: each by its
+/// handle (`s1:<name>`, or `s1:<path>` when its record gives it no name),
+/// its Branch, ready, with no command in it, and what its daemon said of
+/// it under the rows' names.
+fn shown(items: &[SdkValue]) -> Vec<BTreeMap<String, SdkValue>> {
     items
         .iter()
         .map(|item| {
-            let SdkValue::Map(fields) = item else {
-                panic!("{item:?}")
-            };
-            let mut fields: BTreeMap<String, SdkValue> = fields
-                .iter()
-                .map(|(name, value)| (snake(name), value.clone()))
-                .collect();
             let path = item.get_text("directory").unwrap().to_owned();
             let name = name_of(item.get_int("namespace").unwrap());
             let ws = format!("s1:{}", name.as_deref().unwrap_or(&path));
-            fields.insert("path".to_owned(), t(&path));
-            fields.insert("name".to_owned(), SdkValue::opt_text(name));
-            fields.insert("ws".to_owned(), t(&ws));
-            fields.insert("running".to_owned(), SdkValue::List(Vec::new()));
-            fields.insert("overlay_bytes".to_owned(), SdkValue::Null);
-            fields.insert("usage".to_owned(), SdkValue::Null);
-            fields.insert("usage_reason".to_owned(), t(reason));
-            fields
+            let field = |name: &str| item.get(name).cloned().unwrap();
+            BTreeMap::from([
+                ("workspace".to_owned(), t(&ws)),
+                ("branch".to_owned(), field("branch")),
+                ("running".to_owned(), SdkValue::List(Vec::new())),
+                ("state".to_owned(), t("ready")),
+                ("path".to_owned(), t(&path)),
+                ("commit".to_owned(), field("base")),
+                ("base_layer".to_owned(), field("baseLayer")),
+                ("branch_moved".to_owned(), field("headMovedSinceMount")),
+                ("pending_merge".to_owned(), field("pendingMerge")),
+                ("commands".to_owned(), SdkValue::List(Vec::new())),
+                ("id".to_owned(), field("workspace")),
+                ("op".to_owned(), SdkValue::Null),
+            ])
         })
         .collect()
 }
 
-/// The `workspaces` of answer `got`, each as a name-keyed map.
+/// The `workspaces` of answer `got`, each as a name-keyed map of the keys
+/// [`shown`] compares.
 fn workspaces(got: &SdkValue) -> Vec<BTreeMap<String, SdkValue>> {
     let Some(SdkValue::List(items)) = got.get("workspaces") else {
         panic!("no workspaces in {got:?}")
@@ -179,8 +189,30 @@ fn workspaces(got: &SdkValue) -> Vec<BTreeMap<String, SdkValue>> {
     items
         .iter()
         .map(|item| match item {
-            SdkValue::Map(fields) => fields.iter().cloned().collect(),
+            SdkValue::Map(fields) => (fields.iter().cloned())
+                .filter(|(name, _)| COMPARED.contains(&name.as_str()))
+                .collect(),
             other => panic!("{other:?}"),
+        })
+        .collect()
+}
+
+/// The `stats` section of answer `got`.
+fn stats(got: &SdkValue) -> &SdkValue {
+    got.get("stats")
+        .unwrap_or_else(|| panic!("no stats in {got:?}"))
+}
+
+/// Field `name` of each Workspace in `got`'s `stats`, in order.
+fn each_stat(got: &SdkValue, name: &str) -> Vec<SdkValue> {
+    let Some(SdkValue::List(items)) = stats(got).get("workspaces") else {
+        panic!("no stats.workspaces in {got:?}")
+    };
+    (items.iter())
+        .map(|item| {
+            item.get(name)
+                .cloned()
+                .unwrap_or_else(|| panic!("no {name}"))
         })
         .collect()
 }
@@ -290,19 +322,20 @@ fn serve(stream: std::net::TcpStream, items: &[SdkValue], old: bool, seen: &Seen
 }
 
 /// The home's records: machine `machine` on `platform` (its daemon an
-/// existing file, so nothing looks for a bundle), its `worker` record when
-/// it runs, sqlite Store `shop` on it and project `api`.
+/// existing file, so nothing looks for a bundle), recorded `running` with
+/// its `worker` record when it runs, sqlite Store `shop` on it and project
+/// `api`.
 fn home_records(home: &Path, machine: &str, platform: &str, worker: Option<(SocketAddr, &str)>) {
     let daemon = std::env::current_exe().unwrap().display().to_string();
-    write_record(
-        &paths::machine_record(home, machine),
-        &map(&[
-            ("name", t(machine)),
-            ("platform", t(platform)),
-            ("daemon", t(&daemon)),
-        ]),
-    )
-    .unwrap();
+    let mut fields = vec![
+        ("name", t(machine)),
+        ("platform", t(platform)),
+        ("daemon", t(&daemon)),
+    ];
+    if worker.is_some() {
+        fields.push(("state", t("running")));
+    }
+    write_record(&paths::machine_record(home, machine), &map(&fields)).unwrap();
     if let Some((address, secret)) = worker {
         write_record(
             &paths::worker_record(home, machine),
@@ -402,7 +435,8 @@ fn sandbox_named(root: &Path, name: &str, endpoint: SocketAddr, items: &[SdkValu
 /// Every file under `root` with its inode, modification time and size:
 /// each record, key file, lock and lease. The call log (`trace/`) is left
 /// out: the call surface appends one line to it for every public call
-/// (#659), a get included, and that is not this change's.
+/// (#659), a get included, and that is not this change's. So is each
+/// `observed.json`: a get that reached the daemon notes when there.
 fn files(root: &Path) -> BTreeMap<PathBuf, (u64, i64, i64, u64)> {
     let mut found = BTreeMap::new();
     let mut folders = vec![root.to_owned()];
@@ -410,7 +444,7 @@ fn files(root: &Path) -> BTreeMap<PathBuf, (u64, i64, i64, u64)> {
         for entry in std::fs::read_dir(&folder).unwrap() {
             let path = entry.unwrap().path();
             let meta = std::fs::symlink_metadata(&path).unwrap();
-            if path == root.join("trace") {
+            if path == root.join("trace") || path.file_name() == Some("observed.json".as_ref()) {
                 continue;
             }
             if meta.is_dir() {
@@ -472,25 +506,37 @@ fn untouched(root: &Path) {
 
 /// The answer's fields a client reads for a running Sandbox that answered.
 fn running(got: &SdkValue, items: &[SdkValue]) {
-    assert_eq!(got.get_text("name"), Some("s1"), "{got:?}");
+    assert_eq!(got.get_text("sandbox"), Some("s1"), "{got:?}");
     assert_eq!(got.get_text("project"), Some("shop/api"), "{got:?}");
-    assert_eq!(got.get_text("state"), Some("running"), "{got:?}");
-    let reason = got.get_text("usage_reason").unwrap_or("");
-    assert_eq!(workspaces(got), shown(items, reason), "{got:?}");
-    assert_eq!(got.get("next_page_pos"), Some(&SdkValue::Null), "{got:?}");
-    assert!(got.get("down_reason").is_none(), "{got:?}");
-    assert!(got.get("down").is_none(), "{got:?}");
-    let capacity = got
+    assert_eq!(got.get_text("state"), Some("ready"), "{got:?}");
+    assert_eq!(workspaces(got), shown(items), "{got:?}");
+    for gone in ["name", "next_page_pos", "down_reason", "down", "daemon"] {
+        assert!(got.get(gone).is_none(), "{gone}: {got:?}");
+    }
+    let stats = stats(got);
+    let capacity = stats
         .get("daemon_capacity")
         .unwrap_or_else(|| panic!("{got:?}"));
     let admission = capacity.get("admission").unwrap();
     assert_eq!(admission.get_int("pool_vacant"), Some(7), "{capacity:?}");
     assert_eq!(got.get_int("workspace_capacity"), Some(16), "{got:?}");
+    // each Workspace's stats, by handle, in the list's order: no overlay
+    // file (these fixtures have no run folder) and no cgroup of its own,
+    // for the Sandbox's own `usage_reason` (`host_process` for these
+    // host-process Sandboxes, `not_observed` when the side that runs one
+    // did not answer)
+    let handles: Vec<SdkValue> = (shown(items).into_iter())
+        .map(|workspace| workspace["workspace"].clone())
+        .collect();
+    assert_eq!(each_stat(got, "workspace"), handles, "{got:?}");
+    let reason = stats.get("usage_reason").cloned().unwrap_or_default();
+    assert_eq!(each_stat(got, "usage_reason"), vec![reason; items.len()]);
+    assert_eq!(each_stat(got, "usage"), vec![SdkValue::Null; items.len()]);
     // what only reopens the Sandbox is never shown: `daemon` is the process
     // a monitoring read saw (layerfs-project#164), `{ pid, started_at }`,
     // or null when the side that runs it did not say; never the record's
     // directory, port, runtime id or forward
-    match got.get("daemon") {
+    match stats.get("daemon") {
         Some(SdkValue::Map(fields)) => {
             let names: Vec<&str> = fields.iter().map(|(name, _)| name.as_str()).collect();
             assert_eq!(names, ["pid", "started_at"], "{got:?}");
@@ -539,7 +585,7 @@ fn a_native_sandbox_s_get_takes_no_lease_and_writes_nothing() {
         asked_workspaces_only(&seen);
         // a second get is the same answer, from the connection it kept
         let again = get(&home).unwrap();
-        assert_eq!(workspaces(&again), shown(&items, "host_process"));
+        assert_eq!(workspaces(&again), shown(&items));
         assert_eq!(seen.connections.load(Ordering::SeqCst), 1);
         assert_eq!(files(&home), before);
         untouched(&home);
@@ -828,16 +874,17 @@ fn a_stopped_machine_s_get_is_its_record_and_touches_nothing() {
     let _push = pushing(&home);
     let before = files(&home);
     let got = get(&home).unwrap();
-    assert_eq!(got.get_text("state"), Some("running"), "{got:?}");
-    assert_eq!(got.get("workspaces"), Some(&SdkValue::List(Vec::new())));
-    let why = got
-        .get_text("down_reason")
-        .unwrap_or_else(|| panic!("{got:?}"));
-    assert!(why.contains("layerfs machine start box"), "{why}");
-    assert!(got.get("daemon_capacity").is_none(), "{got:?}");
-    // control's own constant: there whatever answered
-    assert_eq!(got.get_int("workspace_capacity"), Some(16), "{got:?}");
-    assert_eq!(got.get("next_page_pos"), Some(&SdkValue::Null), "{got:?}");
+    // blocked by its stopped machine, and not asked: no Workspaces, no stats
+    assert_eq!(got.get_text("state"), Some("blocked"), "{got:?}");
+    let by = got.get("blocked_by").unwrap_or_else(|| panic!("{got:?}"));
+    assert_eq!(
+        (by.get_text("machine"), by.get_text("reason")),
+        (Some("box"), Some("stopped")),
+        "{got:?}"
+    );
+    let why = got.get_text("message").unwrap_or_else(|| panic!("{got:?}"));
+    assert!(why.contains("machine box is stopped"), "{why}");
+    unasked(&got);
     assert_eq!(files(&home), before, "a get changed a file in the home");
     untouched(&home);
     std::fs::remove_dir_all(home).unwrap();
@@ -856,14 +903,25 @@ fn a_stopped_machine_s_get_is_its_record_and_touches_nothing() {
     let _push = pushing(&home);
     let before = files(&home);
     let got = get(&home).unwrap();
-    assert_eq!(got.get_text("state"), Some("gone"), "{got:?}");
-    assert_eq!(got.get("workspaces"), Some(&SdkValue::List(Vec::new())));
-    assert!(got.get("daemon_capacity").is_none(), "{got:?}");
-    assert_eq!(got.get_int("workspace_capacity"), Some(16), "{got:?}");
+    // broken, its runtime missing: the fix is to remove it
+    assert_eq!(got.get_text("state"), Some("broken"), "{got:?}");
+    assert_eq!(got.get_text("reason"), Some("missing"), "{got:?}");
+    assert_eq!(got.get_text("fix"), Some("layerfs sandbox remove s1"));
+    unasked(&got);
     assert_eq!(seen.connections.load(Ordering::SeqCst), 0, "{got:?}");
     assert_eq!(files(&home), before, "a get changed a file in the home");
     untouched(&home);
     std::fs::remove_dir_all(home).unwrap();
+}
+
+/// A get whose daemon was not asked: no Workspaces and no stats, and
+/// control's own constant `workspace_capacity` there all the same.
+fn unasked(got: &SdkValue) {
+    for field in ["workspaces", "stats"] {
+        let value = got.get(field).unwrap_or(&SdkValue::Null);
+        assert_eq!(value, &SdkValue::Null, "{field}: {got:?}");
+    }
+    assert_eq!(got.get_int("workspace_capacity"), Some(16), "{got:?}");
 }
 
 /// The three sides a get's Workspace list is built on.
@@ -945,14 +1003,19 @@ impl Drop for Client {
     }
 }
 
-/// One command `sandbox.get` lists under `running`.
+/// One command `sandbox.get` lists under `commands`.
 fn command(exec_id: &str, started: i64, tag: Option<&str>, program: Option<&str>) -> SdkValue {
     map(&[
-        ("exec_id", t(exec_id)),
-        ("started", SdkValue::Int(started)),
-        ("tag", SdkValue::opt_text(tag.map(str::to_owned))),
+        ("exec", t(exec_id)),
+        ("started_at", t(&layerfs_home::time::iso(started))),
         ("program", SdkValue::opt_text(program.map(str::to_owned))),
+        ("tag", SdkValue::opt_text(tag.map(str::to_owned))),
     ])
+}
+
+/// The exec ids `ids` as a Workspace's `running` lists them.
+fn execs(ids: &[&str]) -> SdkValue {
+    SdkValue::List(ids.iter().map(|id| t(id)).collect())
 }
 
 #[test]
@@ -1001,11 +1064,11 @@ fn a_get_lists_the_commands_another_client_runs_in_each_workspace() {
         let before = (files(&home), files(&root));
 
         let got = get(&home).unwrap();
-        assert_eq!(got.get_text("state"), Some("running"), "{side}: {got:?}");
+        assert_eq!(got.get_text("state"), Some("ready"), "{side}: {got:?}");
         assert_eq!(got.get_int("workspace_capacity"), Some(16), "{side}");
         let none = SdkValue::List(Vec::new());
         assert_eq!(
-            each(&got, "running"),
+            each(&got, "commands"),
             [
                 none.clone(),
                 SdkValue::List(vec![
@@ -1013,6 +1076,16 @@ fn a_get_lists_the_commands_another_client_runs_in_each_workspace() {
                     command("e-tagged", 2_000, Some("dsh:s9:t1"), Some("npm")),
                 ]),
                 SdkValue::List(vec![command("e-before", 3_000, None, None)]),
+                none.clone(),
+            ],
+            "{side}: {got:?}"
+        );
+        assert_eq!(
+            each(&got, "running"),
+            [
+                none.clone(),
+                execs(&["e-plain", "e-tagged"]),
+                execs(&["e-before"]),
                 none.clone(),
             ],
             "{side}: {got:?}"
@@ -1030,16 +1103,18 @@ fn a_get_lists_the_commands_another_client_runs_in_each_workspace() {
         std::fs::remove_file(&tagged).unwrap();
         let got = get(&home).unwrap();
         assert_eq!(
-            each(&got, "running")[1],
+            each(&got, "commands")[1],
             SdkValue::List(vec![command("e-plain", 1_000, None, Some("sleep"))]),
             "{side}: {got:?}"
         );
+        assert_eq!(each(&got, "running")[1], execs(&["e-plain"]), "{side}");
 
         // the other client is gone: what it left is stale, listed no more
         // and still there for the cancel, unmount or close that ends it
         other.end();
         let got = get(&home).unwrap();
-        assert_eq!(each(&got, "running"), vec![none; 4], "{side}: {got:?}");
+        assert_eq!(each(&got, "running"), vec![none.clone(); 4], "{side}");
+        assert_eq!(each(&got, "commands"), vec![none; 4], "{side}: {got:?}");
         assert!(stale.exists() && file(&folder, &format!("{:064x}", 3), "e-before").exists());
         std::fs::remove_dir_all(scratch).unwrap();
     }
@@ -1077,7 +1152,7 @@ fn a_get_sizes_each_workspace_s_overlay_file_by_path() {
         let before = (files(&home), files(&root));
 
         let got = get(&home).unwrap();
-        assert_eq!(got.get_text("state"), Some("running"), "{side}: {got:?}");
+        assert_eq!(got.get_text("state"), Some("ready"), "{side}: {got:?}");
         let sizes = match side {
             "forwarded" => vec![SdkValue::Null; 4],
             _ => vec![
@@ -1087,7 +1162,7 @@ fn a_get_sizes_each_workspace_s_overlay_file_by_path() {
                 SdkValue::Null,
             ],
         };
-        assert_eq!(each(&got, "overlay_bytes"), sizes, "{side}: {got:?}");
+        assert_eq!(each_stat(&got, "overlay_bytes"), sizes, "{side}: {got:?}");
         assert_eq!((files(&home), files(&root)), before, "{side}");
         assert!(!paths::lease_dir(&home, "shop").exists(), "{side}");
         std::fs::remove_dir_all(scratch).unwrap();
@@ -1132,18 +1207,18 @@ fn a_forwarded_get_sizes_its_overlays_in_its_machine_or_leaves_them_null() {
     let before = (files(&home), files(&root));
 
     let got = get(&home).unwrap();
-    assert_eq!(got.get_text("state"), Some("running"), "{got:?}");
+    assert_eq!(got.get_text("state"), Some("ready"), "{got:?}");
     let ids: Vec<SdkValue> = (items.iter())
         .map(|item| item.get("workspace").unwrap().clone())
         .collect();
-    assert_eq!(each(&got, "workspace"), ids, "{got:?}");
+    assert_eq!(each(&got, "id"), ids, "{got:?}");
     let sizes = vec![
         SdkValue::Int(8192),
         SdkValue::Int(20_480),
         SdkValue::Null,
         SdkValue::Null,
     ];
-    assert_eq!(each(&got, "overlay_bytes"), sizes, "{got:?}");
+    assert_eq!(each_stat(&got, "overlay_bytes"), sizes, "{got:?}");
     assert_eq!((files(&home), files(&root)), before);
     assert!(!paths::lease_dir(&home, "shop").exists());
     assert!(!paths::lease_dir(&root, "shop").exists());
@@ -1163,27 +1238,18 @@ fn a_forwarded_get_sizes_its_overlays_in_its_machine_or_leaves_them_null() {
     let at = std::time::Instant::now();
     let got = get(&home).unwrap();
     assert!(at.elapsed() < Duration::from_secs(15), "{:?}", at.elapsed());
-    assert_eq!(got.get_text("state"), Some("running"), "{got:?}");
     running(&got, &items);
-    assert_eq!(each(&got, "overlay_bytes"), vec![SdkValue::Null; 4]);
+    assert_eq!(each_stat(&got, "overlay_bytes"), vec![SdkValue::Null; 4]);
     assert_eq!(files(&home), before);
     drop(silent);
     std::fs::remove_dir_all(scratch).unwrap();
 }
 
-/// `sandbox.get`'s `daemon`, `usage` and `usage_reason` as JSON text.
-fn process(got: &SdkValue) -> (String, String, Option<String>) {
-    let text = |field: &str| {
-        let value = got
-            .get(field)
-            .unwrap_or_else(|| panic!("no {field}: {got:?}"));
-        layerfs_api::json::print(value)
-    };
-    (
-        text("daemon"),
-        text("usage"),
-        got.get_text("usage_reason").map(str::to_owned),
-    )
+/// Whether ISO time `at` (`started_at`) is within the last day.
+fn recent(at: &str) -> bool {
+    let now = home::now_ms();
+    let iso = layerfs_home::time::iso;
+    at > iso(now - 86_400_000).as_str() && at <= iso(now + 2_000).as_str()
 }
 
 /// The record in `root` of Sandbox `s1`, with its `daemon` changed by `change`.
@@ -1206,16 +1272,15 @@ fn a_get_shows_the_daemon_process_as_the_side_that_runs_it_sees_it() {
         let got = get(&home).unwrap();
         running(&got, &items);
         // the record names this test's process: a host process, since when
-        let daemon = got.get("daemon").unwrap();
+        let daemon = stats(&got).get("daemon").unwrap();
         assert_eq!(daemon.get_int("pid"), Some(i64::from(me.pid)), "{side}");
-        let started = daemon.get_int("started_at").unwrap();
-        let now = home::now_ms();
-        assert!(
-            started <= now + 2_000 && started > now - 86_400_000,
-            "{started}"
-        );
+        let started = daemon.get_text("started_at").unwrap();
+        assert!(recent(started), "{started}");
         assert_eq!(
-            (got.get("usage"), got.get_text("usage_reason")),
+            (
+                stats(&got).get("usage"),
+                stats(&got).get_text("usage_reason")
+            ),
             (Some(&SdkValue::Null), Some("host_process")),
             "{side}: {got:?}"
         );
@@ -1231,7 +1296,10 @@ fn a_get_shows_the_daemon_process_as_the_side_that_runs_it_sees_it() {
         let v2 = Path::new("/sys/fs/cgroup/cgroup.controllers").is_file();
         let why = if v2 { "no_cgroup" } else { "cgroup_v1" };
         assert_eq!(
-            (got.get("usage"), got.get_text("usage_reason")),
+            (
+                stats(&got).get("usage"),
+                stats(&got).get_text("usage_reason")
+            ),
             (Some(&SdkValue::Null), Some(why)),
             "{side}: {got:?}"
         );
@@ -1239,8 +1307,11 @@ fn a_get_shows_the_daemon_process_as_the_side_that_runs_it_sees_it() {
     }
 }
 
+/// A Sandbox whose daemon process ended is `broken` `lost` once a get
+/// asks for it: its record says so from then on, and no stats are shown,
+/// since only a ready Sandbox's are. A stopped machine's is not asked.
 #[test]
-fn a_get_of_a_sandbox_whose_daemon_ended_says_its_process_is_gone() {
+fn a_get_of_a_sandbox_whose_daemon_ended_finds_it_lost() {
     // a process that ended, as the daemon record names it
     let mut other = Client::start();
     let owner = other.owner();
@@ -1251,51 +1322,35 @@ fn a_get_of_a_sandbox_whose_daemon_ended_says_its_process_is_gone() {
         let daemon = home::with_field(daemon, "start", start);
         home::with_field(daemon, "boot", owner.get("pid_boot").unwrap().clone())
     };
-    let pid = owner.get_int("pid").unwrap();
+    for side in ["native", "worker"] {
+        let (scratch, home, root) = on_side(side, "ended", &[item(1)]);
+        redaemon(&root, dead);
+        settle(&home);
+        let got = get(&home).unwrap();
+        assert_eq!(got.get_text("state"), Some("broken"), "{side}: {got:?}");
+        assert_eq!(got.get_text("reason"), Some("lost"), "{side}: {got:?}");
+        assert_eq!(got.get_text("fix"), Some("layerfs sandbox remove s1"));
+        assert_eq!(got.get("stats"), Some(&SdkValue::Null), "{side}: {got:?}");
+        // the reason is the record's now: a list that asks nothing says it
+        let record = read_record(&paths::sandbox_record(&home, "s1")).unwrap();
+        assert_eq!(record.unwrap().get_text("reason"), Some("lost"), "{side}");
+        let listed = layerfs_api::call(Some(&home), "sandbox.list", SdkValue::Null, &mut |_| {});
+        let row = match listed.unwrap().get("items") {
+            Some(SdkValue::List(rows)) => rows[0].clone(),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(row.get_text("reason"), Some("lost"), "{side}: {row:?}");
+        std::fs::remove_dir_all(scratch).unwrap();
+    }
 
-    // native: the list is refused, and this home's own record answers
-    let (scratch, home, root) = on_side("native", "ended", &[item(1)]);
-    redaemon(&root, dead);
-    settle(&home);
-    let before = files(&home);
-    let got = get(&home).unwrap();
-    assert_eq!(got.get_text("state"), Some("lost"), "{got:?}");
-    assert_eq!(
-        process(&got),
-        (
-            format!(r#"{{"pid":{pid},"started_at":null}}"#),
-            "null".to_owned(),
-            Some("host_process".to_owned())
-        )
-    );
-    assert_eq!(files(&home), before, "a get changed a file in the home");
-    std::fs::remove_dir_all(scratch).unwrap();
-
-    // a worker's: its list is refused there, and the home holds no daemon
-    // record of its own, so the process is not observed by this get
-    // (`sandbox.list`'s `live` asks the worker for it)
-    let (scratch, home, root) = on_side("worker", "ended", &[item(1)]);
-    redaemon(&root, dead);
-    settle(&home);
-    let got = get(&home).unwrap();
-    assert_eq!(got.get_text("state"), Some("lost"), "{got:?}");
-    assert_eq!(
-        process(&got),
-        (
-            "null".to_owned(),
-            "null".to_owned(),
-            Some("not_observed".to_owned())
-        )
-    );
-    std::fs::remove_dir_all(scratch).unwrap();
-
-    // a stopped machine: not observed either
+    // a stopped machine: not asked, no stats
     let home = tempdir("ended-stopped");
     home::open(&home).unwrap();
     home_records(&home, "box", "docker", None);
     worker_sandbox(&home);
     let got = get(&home).unwrap();
-    assert_eq!(process(&got).2.as_deref(), Some("not_observed"), "{got:?}");
+    assert_eq!(got.get_text("state"), Some("blocked"), "{got:?}");
+    unasked(&got);
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -1329,14 +1384,14 @@ fn a_forwarded_sandbox_s_process_comes_from_its_machine_s_worker() {
         let before = (files(&home), files(&root));
         let got = get(&home).unwrap();
         running(&got, &items);
-        let daemon = got.get("daemon").unwrap();
+        let daemon = stats(&got).get("daemon").unwrap();
         assert_eq!(
             daemon.get_int("pid"),
             Some(i64::from(std::process::id())),
             "{count}: {got:?}"
         );
-        assert!(daemon.get_int("started_at").is_some(), "{got:?}");
-        assert_eq!(got.get_text("usage_reason"), Some("host_process"));
+        assert!(daemon.get_text("started_at").is_some_and(recent), "{got:?}");
+        assert_eq!(stats(&got).get_text("usage_reason"), Some("host_process"));
         assert_eq!((files(&home), files(&root)), before, "{count}");
         untouched(&home);
         std::fs::remove_dir_all(scratch).unwrap();

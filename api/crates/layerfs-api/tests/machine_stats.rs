@@ -1,4 +1,5 @@
-//! `machine.stats` and `sandbox.list`'s `live` option (layerfs-project#164)
+//! `machine.stats` (layerfs-project#164; `sandbox.list`'s `live` option is
+//! gone in the call surface 2.0, where a list answers from records)
 //! on the two routes of an inspect request: this process for `native`, and
 //! a machine's worker (this build's own server on a scratch root) for
 //! every other machine, a Sandbox whose daemon the home reaches directly
@@ -80,40 +81,6 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
 fn stats(home: &Path, machine: &str) -> Result<SdkValue, (String, String)> {
     let detail = ("detail", SdkValue::Bool(true));
     call(home, "machine.stats", &[("machine", t(machine)), detail])
-}
-
-/// `sandbox.list` with `live`: each item's `(name, state, live, live_reason)`.
-fn live(home: &Path) -> Vec<(String, String, SdkValue, Option<String>)> {
-    let listed = call(home, "sandbox.list", &[("live", SdkValue::Bool(true))]).unwrap();
-    let Some(SdkValue::List(items)) = listed.get("items") else {
-        panic!("{listed:?}")
-    };
-    items
-        .iter()
-        .map(|item| {
-            (
-                item.get_text("name").unwrap().to_owned(),
-                item.get_text("state").unwrap().to_owned(),
-                item.get("live")
-                    .cloned()
-                    .unwrap_or_else(|| panic!("{item:?}")),
-                item.get_text("live_reason").map(str::to_owned),
-            )
-        })
-        .collect()
-}
-
-fn seen(
-    name: &str,
-    live: Option<bool>,
-    reason: Option<&str>,
-) -> (String, String, SdkValue, Option<String>) {
-    (
-        name.to_owned(),
-        "running".to_owned(),
-        live.map_or(SdkValue::Null, SdkValue::Bool),
-        reason.map(str::to_owned),
-    )
 }
 
 /// Machine `machine` on `platform` in the home, with its `worker` record
@@ -438,17 +405,15 @@ fn is_time(value: Option<&str>) -> bool {
 }
 
 #[test]
-fn the_table_lists_machine_stats_and_the_live_option() {
+fn the_table_lists_machine_stats_and_no_live_list() {
     let call = layerfs_api::find("machine.stats").expect("machine.stats");
     let args: Vec<_> = call.args.iter().map(|a| (a.name, a.optional)).collect();
     assert_eq!(args, [("machine", false)]);
     assert!(call.options.is_empty());
-    let list = layerfs_api::find("sandbox.list").unwrap();
-    let options: Vec<_> = list.options.iter().map(|a| a.name).collect();
-    assert_eq!(options, ["page_size", "page_pos", "live"]);
-    // an option that is no flag is refused before any effect
+    // `sandbox.list` answers from records alone (call surface 2.0): its
+    // `live` option is gone, and refused before any effect
     let home = tempdir("table");
-    let (code, message) = call_err(&home, "sandbox.list", &[("live", t("yes"))]);
+    let (code, message) = call_err(&home, "sandbox.list", &[("live", SdkValue::Bool(true))]);
     assert_eq!(code, "InvalidInput", "{message}");
     std::fs::remove_dir_all(home).unwrap();
 }
@@ -515,31 +480,6 @@ fn native_stats_are_read_in_this_process_with_no_lock_and_nothing_written() {
     // nothing changed in the home: no record, lock, lease or call-log line
     assert_eq!(files(&home, false), before, "machine.stats changed a file");
     no_lease(&home);
-
-    // `sandbox.list` with `live`: the same check, per Sandbox
-    let before = files(&home, true);
-    assert_eq!(
-        live(&home),
-        [
-            seen("dead", Some(false), None),
-            seen("up", Some(true), None)
-        ]
-    );
-    assert_eq!(files(&home, true), before, "a live list changed a file");
-    no_lease(&home);
-
-    // without the option the call is what it was: no `live` anywhere, and
-    // `live: false` is the same answer
-    let plain = call(&home, "sandbox.list", &[]).unwrap();
-    assert_eq!(
-        print(&plain),
-        concat!(
-            r#"{"items":[{"name":"dead","project":"shop/api","machine":"native","id":"dead","runtime":"native","state":"running"},"#,
-            r#"{"name":"up","project":"shop/api","machine":"native","id":"up","runtime":"native","state":"running"}],"next_page_pos":null}"#
-        )
-    );
-    let off = call(&home, "sandbox.list", &[("live", SdkValue::Bool(false))]).unwrap();
-    assert_eq!(print(&off), print(&plain));
 
     // refusals: a name no machine has, and one that is no name
     let (code, _) = call_err(&home, "machine.stats", &[("machine", t("nobody"))]);
@@ -631,19 +571,6 @@ fn a_worker_answers_its_machine_s_stats_and_who_it_is_and_writes_nothing() {
     no_lease(&root);
     assert!(!paths::store_record(&root, "shop").exists());
 
-    // per Sandbox, where its process is: live, dead, and one the machine
-    // has no record of
-    let before = files(&home, true);
-    assert_eq!(
-        live(&home),
-        [
-            seen("s1", Some(true), None),
-            seen("s2", Some(false), None),
-            seen("s3", Some(false), None)
-        ]
-    );
-    assert_eq!(files(&home, true), before);
-    assert_eq!(files(&root, false), guest);
     std::fs::remove_dir_all(scratch).unwrap();
 }
 
@@ -663,16 +590,6 @@ fn a_stopped_machine_is_unavailable_and_its_sandboxes_are_not_known() {
     assert_eq!(code, "Unavailable", "{message}");
     assert!(message.contains("layerfs machine start box"), "{message}");
     assert_eq!(files(&home, false), before);
-    // `state` is the record's; `live` is not known, and says why
-    let before = files(&home, true);
-    assert_eq!(
-        live(&home),
-        [
-            seen("s1", None, Some("machine_stopped")),
-            seen("s2", None, Some("machine_stopped"))
-        ]
-    );
-    assert_eq!(files(&home, true), before);
     std::fs::remove_dir_all(home).unwrap();
 
     // a machine whose recorded worker is gone: refused at the connection
@@ -692,7 +609,6 @@ fn a_stopped_machine_is_unavailable_and_its_sandboxes_are_not_known() {
     assert_eq!(code, "Unavailable", "{message}");
     assert!(at.elapsed() < Duration::from_secs(3), "{:?}", at.elapsed());
     assert_eq!(files(&home, false), before);
-    assert_eq!(live(&home), [seen("s1", None, Some("unavailable"))]);
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -706,65 +622,12 @@ fn a_forwarded_sandbox_s_process_is_checked_in_its_machine() {
     local_sandbox(&root, "s1", "native", me());
     settle(&home);
     let (before, guest) = (files(&home, true), files(&root, false));
-    assert_eq!(live(&home), [seen("s1", Some(true), None)]);
     assert_eq!(counts(&stats(&home, "box").unwrap()), "1 of 1: s1=true");
     assert_eq!(files(&home, true), before);
     assert_eq!(files(&root, false), guest);
     // its daemon ended in the machine
     local_sandbox(&root, "s1", "native", ended());
-    assert_eq!(live(&home), [seen("s1", Some(false), None)]);
     assert_eq!(counts(&stats(&home, "box").unwrap()), "0 of 1: s1=false");
-    std::fs::remove_dir_all(scratch).unwrap();
-}
-
-#[test]
-fn a_page_over_several_machines_asks_each_once_and_keeps_its_order() {
-    let _turn = serial();
-    let (scratch, home, root) = boxed("several");
-    machine_record(&home, "native", "native", None);
-    machine_record(&home, "off", "docker", None);
-    // in the home's order: a, b, c, d, e over three machines
-    local_sandbox(&home, "a", "native", me());
-    worker_sandbox(&home, "b", "box", false);
-    worker_sandbox(&home, "c", "off", false);
-    local_sandbox(&home, "d", "native", ended());
-    worker_sandbox(&home, "e", "box", false);
-    local_sandbox(&root, "b", "native", ended());
-    local_sandbox(&root, "e", "native", me());
-    settle(&home);
-    let at = Instant::now();
-    assert_eq!(
-        live(&home),
-        [
-            seen("a", Some(true), None),
-            seen("b", Some(false), None),
-            seen("c", None, Some("machine_stopped")),
-            seen("d", Some(false), None),
-            seen("e", Some(true), None)
-        ]
-    );
-    assert!(at.elapsed() < Duration::from_secs(4), "{:?}", at.elapsed());
-    // one page of it: only that page's machines are asked
-    let page = [
-        ("live", SdkValue::Bool(true)),
-        ("page_size", SdkValue::Int(2)),
-    ];
-    let first = call(&home, "sandbox.list", &page).unwrap();
-    let Some(SdkValue::List(items)) = first.get("items") else {
-        panic!("{first:?}")
-    };
-    let shown: Vec<_> = items
-        .iter()
-        .map(|item| (item.get_text("name").unwrap(), item.get("live").cloned()))
-        .collect();
-    assert_eq!(
-        shown,
-        [
-            ("a", Some(SdkValue::Bool(true))),
-            ("b", Some(SdkValue::Bool(false)))
-        ]
-    );
-    assert_eq!(first.get_int("next_page_pos"), Some(2));
     std::fs::remove_dir_all(scratch).unwrap();
 }
 

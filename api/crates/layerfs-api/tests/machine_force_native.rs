@@ -112,8 +112,8 @@ fn live_case(home: &Path, name: &str, machine: bool) {
         );
         assert_eq!(stopped.get_text("state"), Some("ready"));
         assert_eq!(
-            call(home, "sandbox.get", &[("name", t(name))]).get_text("state"),
-            Some("gone")
+            call(home, "sandbox.get", &[("sandbox", t(name))]).get_text("reason"),
+            Some("missing")
         );
         // An explicit second stop of retained terminal records is an idempotent no-op.
         let again = call(
@@ -125,13 +125,13 @@ fn live_case(home: &Path, name: &str, machine: bool) {
     } else {
         let closed = call(
             home,
-            "sandbox.close",
-            &[("name", t(name)), ("force", SdkValue::Bool(true))],
+            "sandbox.remove",
+            &[("sandbox", t(name)), ("force", SdkValue::Bool(true))],
         );
         assert!(!paths::sandbox_record(home, name).exists());
         assert!(
-            closed.get("unknown").is_some(),
-            "active Workspace frontier is explicitly unknown"
+            closed.get("unmounted").is_some(),
+            "the Workspaces the remove ended are named"
         );
     }
     assert!(
@@ -208,8 +208,8 @@ fn identity_case(home: &Path) {
     write_record(&path, &original).unwrap();
     call(
         home,
-        "sandbox.close",
-        &[("name", t("moved")), ("force", SdkValue::Bool(true))],
+        "sandbox.remove",
+        &[("sandbox", t("moved")), ("force", SdkValue::Bool(true))],
     );
     assert!(!real.alive(), "the restored record's daemon ended");
 }

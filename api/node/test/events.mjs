@@ -111,7 +111,7 @@ test("exec output: the stdout and stderr functions, and stream: true without the
   assert.equal(imported.status, 0, String(imported.stderr));
   await lfs.project.init("shop/api", folder);
   await lfs.branch.fork("shop/api", "dev", "main");
-  await lfs.sandbox.create("shop/api", "s1", "native");
+  await lfs.sandbox.create("shop/api", "s1", { machine: "native" });
   let ws;
   try {
     ({ workspace: ws } = await lfs.workspace.mount("s1", "dev"));
@@ -137,7 +137,7 @@ test("exec output: the stdout and stderr functions, and stream: true without the
     assert.equal(String(child.stderr), "oops\n");
   } finally {
     if (ws) await lfs.workspace.unmount(ws);
-    await lfs.sandbox.close("s1");
+    await lfs.sandbox.remove("s1");
     rmSync(home, { recursive: true, force: true });
     rmSync(folder, { recursive: true, force: true });
   }

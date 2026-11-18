@@ -185,7 +185,7 @@ fn actual_runtime_negative_observations_preserve_records_and_ownership() {
     );
     let gone = copy(&source, 6);
     let closed = std::process::Command::new(&cli)
-        .args(["sandbox", "close", "b6-gone"])
+        .args(["sandbox", "remove", "b6-gone"])
         .env("LAYERFS_HOME", &source)
         .env("LAYERFS_CONSTRUCTION_WORKERS", "1")
         .output()

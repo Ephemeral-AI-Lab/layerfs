@@ -99,7 +99,7 @@ fn explicit_force_options_are_discoverable_alongside_existing_integration_calls(
     let Some(SdkValue::List(calls)) = value.get("calls") else {
         panic!("calls list");
     };
-    for (family, name) in [("machine", "stop"), ("sandbox", "close")] {
+    for (family, name) in [("machine", "stop"), ("sandbox", "remove")] {
         let call = calls
             .iter()
             .find(|call| {

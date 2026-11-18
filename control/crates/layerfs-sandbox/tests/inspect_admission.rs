@@ -278,7 +278,7 @@ fn the_local_route_reads_a_native_sandbox_s_log_from_its_recorded_run_folder() {
     assert_eq!(stale.code, "InvalidInput", "{stale:?}");
     assert!(stale
         .message
-        .starts_with("logs.sandbox: the cursor is stale"));
+        .starts_with("sandbox.log: the cursor is stale"));
 
     // a native machine has no worker, so no worker log
     let native = MachineName::parse("native").unwrap();

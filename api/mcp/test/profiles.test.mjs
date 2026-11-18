@@ -22,7 +22,7 @@ test("every call is in exactly one bucket, and admin adds the work bucket", () =
   assert.deepEqual(table.filter((spec) => bucketOf(spec) === "none").map(nameOf), []);
   // the monitoring calls a UI polls are offered to no agent (layerfs-project#178 D2, #164)
   const ui = table.filter((spec) => bucketOf(spec) === "ui").map(nameOf);
-  assert.deepEqual(ui, ["sandbox.files", "machine.stats", "machine.files", "machine.log", "logs.sandbox"]);
+  assert.deepEqual(ui, ["machine.stats", "machine.files", "machine.log"]);
   for (const profile of ["work", "admin"]) {
     const listed = tools(table, profile).map(nameOf);
     for (const name of ui) assert.ok(!listed.includes(name), `${name} is in the ${profile} profile`);

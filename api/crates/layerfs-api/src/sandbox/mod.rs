@@ -1,9 +1,14 @@
-//! The `sandbox` family: 5 calls, one file each.
-mod close;
+//! The `sandbox` family: 7 calls, one file each (call surface 2.0;
+//! `sandbox.close` is `sandbox remove`, `logs.sandbox` is `sandbox log`, and
+//! `sandbox doctor` is the doctor family's). `get` also holds the small
+//! helpers that answer a Sandbox's state and Workspaces under the rows'
+//! names.
 mod create;
 mod files;
 mod get;
 mod list;
+mod log;
+mod remove;
 
 use crate::calls::Calls;
 
@@ -13,8 +18,9 @@ pub(crate) fn calls() -> Calls {
         create::CALL,
         list::CALL,
         get::CALL,
-        close::CALL,
+        remove::CALL,
         files::CALL,
+        log::CALL,
         crate::doctor::sandbox::CALL,
     ]
 }

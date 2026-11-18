@@ -15,7 +15,7 @@ fn declaring(option: &str) -> Vec<String> {
 }
 
 #[test]
-fn eighteen_calls_declare_on_progress_and_one_declares_the_exec_sinks() {
+fn nineteen_calls_declare_on_progress_and_one_declares_the_exec_sinks() {
     // five of them doctors: each finished thing is one event
     assert_eq!(
         declaring("on_progress"),
@@ -25,6 +25,7 @@ fn eighteen_calls_declare_on_progress_and_one_declares_the_exec_sinks() {
             "project.export",
             "project.doctor",
             "sandbox.create",
+            "sandbox.remove",
             "sandbox.doctor",
             "workspace.exec",
             "machine.load_image",
@@ -52,7 +53,7 @@ fn eighteen_calls_declare_on_progress_and_one_declares_the_exec_sinks() {
                 .count()
         })
         .sum();
-    assert_eq!(functions, 18 + 2);
+    assert_eq!(functions, 19 + 2);
 }
 
 #[test]

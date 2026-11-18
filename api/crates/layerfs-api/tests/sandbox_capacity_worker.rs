@@ -4,9 +4,9 @@
 //! as it was made — `Capacity` on `daemon_control_slot`, with the vacant
 //! slots and retained failures the admission notice carried, and no `code`.
 //! The get reads that refusal the way it reads a forwarded daemon's: the
-//! record with the Sandbox down, the refusal's own words as `down_reason`,
-//! what it observed as the partial `down` counts, and no `daemon_capacity`
-//! (a notice is never mapped into that model) — never a failed call.
+//! Sandbox `broken` `not_answering`, its `message` the refusal's own words
+//! with what it observed, and no `daemon_capacity` (a notice is never
+//! mapped into that model) — never a failed call.
 //!
 //! The worker here is a stand-in: it answers the secret, reads one request
 //! and answers the refusal that its machine's daemon gave. What it does not
@@ -62,12 +62,28 @@ fn map(fields: &[(&str, SdkValue)]) -> SdkValue {
     )
 }
 
+/// `sandbox.get s1 --detail --with stats`.
+fn get(home: &Path) -> Result<SdkValue, (String, String)> {
+    let with = SdkValue::List(vec![t("stats")]);
+    let args = [
+        ("sandbox", t("s1")),
+        ("detail", SdkValue::Bool(true)),
+        ("with", with),
+    ];
+    call(home, "sandbox.get", &args)
+}
+
 /// Machine `box` (a `docker` machine, so its Sandboxes run in its worker),
-/// its Worker record at `worker`, Store `shop` and project `api`.
+/// recorded running with its Worker record at `worker`, Store `shop` and
+/// project `api`.
 fn home_records(home: &Path, worker: SocketAddr) {
     write_record(
         &paths::machine_record(home, "box"),
-        &map(&[("name", t("box")), ("platform", t("docker"))]),
+        &map(&[
+            ("name", t("box")),
+            ("platform", t("docker")),
+            ("state", t("running")),
+        ]),
     )
     .unwrap();
     write_record(
@@ -178,38 +194,27 @@ fn a_full_pool_s_get_reads_the_worker_route_like_the_forwarded_one() {
     home_records(&home, endpoint);
     sandbox_record(&home);
     // the record is answered, not refused: a full pool is why a get exists
-    let got = call(&home, "sandbox.get", &[("name", t("s1"))]).unwrap();
+    let got = get(&home).unwrap();
     assert_eq!(asked.load(Ordering::SeqCst), 1, "asked {asked:?} times");
-    assert_eq!(got.get_text("state"), Some("running"), "{got:?}");
-    // the Workspace list is what was refused, so there is no page to show
-    assert_eq!(
-        got.get("workspaces"),
-        Some(&SdkValue::List(Vec::new())),
-        "{got:?}"
+    assert_eq!(got.get_text("state"), Some("broken"), "{got:?}");
+    assert_eq!(got.get_text("reason"), Some("not_answering"), "{got:?}");
+    // the Workspace list is what was refused, so there are none to show
+    assert_eq!(got.get("workspaces"), Some(&SdkValue::Null), "{got:?}");
+    // the refusal's words and its counts, in the sentence the forwarded
+    // route answers too
+    let said = got.get_text("message").unwrap_or_else(|| panic!("{got:?}"));
+    assert!(said.contains("no vacant control slot"), "{said}");
+    assert!(
+        said.contains(
+            "(Capacity on daemon_control_slot: 0 pool and 1 reserved slots vacant, \
+             3 failures retained)"
+        ),
+        "{said}"
     );
-    let reason = got
-        .get_text("down_reason")
-        .unwrap_or_else(|| panic!("{got:?}"));
-    assert!(reason.contains("no vacant control slot"), "{reason}");
-    // and the counts are readable, in the same partial model the forwarded
-    // route answers: the notice's five keys and nothing else
-    let down = got.get("down").unwrap_or_else(|| panic!("{got:?}"));
-    assert_eq!(down.get_text("code"), Some("Capacity"), "{down:?}");
-    assert_eq!(
-        down.get_text("resource"),
-        Some("daemon_control_slot"),
-        "{down:?}"
-    );
-    assert_eq!(down.get_int("pool_vacant"), Some(0), "{down:?}");
-    assert_eq!(down.get_int("reserved_vacant"), Some(1), "{down:?}");
-    assert_eq!(down.get_int("retained"), Some(3), "{down:?}");
-    let SdkValue::Map(fields) = down else {
-        panic!("{down:?}")
-    };
-    assert_eq!(fields.len(), 5, "{down:?}");
     // the notice is partial: it is never dressed up as the full model, and
     // the get dials nothing for one
-    assert!(got.get("daemon_capacity").is_none(), "{got:?}");
+    assert_eq!(got.get("stats"), Some(&SdkValue::Null), "{got:?}");
+    assert!(got.get("down").is_none(), "{got:?}");
     assert_eq!(asked.load(Ordering::SeqCst), 1, "asked {asked:?} times");
     std::fs::remove_dir_all(home).unwrap();
 }
@@ -218,7 +223,7 @@ fn a_full_pool_s_get_reads_the_worker_route_like_the_forwarded_one() {
 fn another_capacity_or_a_busy_refusal_still_fails_the_get() {
     // only a full pool's own refusal reads as a down Sandbox: `Capacity` on
     // another resource and a refusal with another code are the refusals they
-    // are, so a get never hides one behind `down_reason`
+    // are, so a get never hides one behind a broken state
     for (code, detail) in [
         ("Capacity", SdkValue::map([("resource", t("store_lock"))])),
         ("Busy", SdkValue::Null),
@@ -228,7 +233,7 @@ fn another_capacity_or_a_busy_refusal_still_fails_the_get() {
         home::open(&home).unwrap();
         home_records(&home, endpoint);
         sandbox_record(&home);
-        let error = call(&home, "sandbox.get", &[("name", t("s1"))]).unwrap_err();
+        let error = get(&home).unwrap_err();
         assert_eq!(asked.load(Ordering::SeqCst), 1, "asked {asked:?} times");
         assert_eq!(error.0, code, "{error:?}");
         assert_eq!(error.1, "the pool says so", "{error:?}");
@@ -241,14 +246,14 @@ fn a_capacity_on_a_slot_that_observed_no_counts_still_fails_the_get() {
     // a `Capacity` an admitted connection returned is collapsed to `{phase}`
     // by `values::refusal` (#547 slice 6): it names no pool and carries no
     // counts, so it is not a full pool's notice and the get must fail as it
-    // did before rather than answer an invented down
+    // did before rather than answer an invented `not_answering`
     let detail = SdkValue::map([("phase", t("receive"))]);
     let (endpoint, asked) = refusing_worker(refused("Capacity", "a slot said so", detail));
     let home = tempdir("phase");
     home::open(&home).unwrap();
     home_records(&home, endpoint);
     sandbox_record(&home);
-    let error = call(&home, "sandbox.get", &[("name", t("s1"))]).unwrap_err();
+    let error = get(&home).unwrap_err();
     assert_eq!(asked.load(Ordering::SeqCst), 1, "asked {asked:?} times");
     assert_eq!(error.0, "Capacity", "{error:?}");
     assert_eq!(error.1, "a slot said so", "{error:?}");

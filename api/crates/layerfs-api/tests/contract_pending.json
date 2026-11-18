@@ -22,12 +22,6 @@
     "file.mv",
     "file.cp",
     "file.apply",
-    "sandbox.create",
-    "sandbox.list",
-    "sandbox.get",
-    "sandbox.remove",
-    "sandbox.files",
-    "sandbox.log",
     "store.connect",
     "store.disconnect",
     "store.save_auth",
@@ -43,9 +37,7 @@
   "old_names": {
     "file.diff": "commit.diff",
     "file.revision": "file.history",
-    "logs.sandbox": "sandbox.log",
-    "project.remove_file": "project.hide_path",
-    "sandbox.close": "sandbox.remove"
+    "project.remove_file": "project.hide_path"
   },
   "not_built": {
     "store.doctor": [
