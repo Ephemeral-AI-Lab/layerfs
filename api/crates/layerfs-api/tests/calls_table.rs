@@ -678,6 +678,16 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "branch.remove",
     ];
     let commit = ["commit.list", "commit.get", "commit.diff"];
+    let project = [
+        "project.init",
+        "project.list",
+        "project.get",
+        "project.stats",
+        "project.export",
+        "project.delete",
+        "project.hide_path",
+        "project.doctor",
+    ];
     let workspace = [
         "workspace.list",
         "workspace.mount",
@@ -702,7 +712,7 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         migrated,
         [
             &home[..],
-            &["project.doctor"][..],
+            &project[..],
             &branch[..],
             &commit[..],
             &["sandbox.doctor"][..],
