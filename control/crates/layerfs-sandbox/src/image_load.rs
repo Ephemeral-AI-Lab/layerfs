@@ -2,10 +2,19 @@
 //! `machine.load`; R1, R3): the image named by digest, Docker Id or Docker
 //! reference is resolved, and when the machine does not hold it yet, it is
 //! exported from the host's Docker as one flat root filesystem tar
-//! ([`crate::image_tar`]), sent in 1 MiB frames and unpacked once there
-//! ([`crate::image_artifact`]). The machine is asked first, so an image it
-//! holds needs neither Docker nor a byte sent. Progress phases are
-//! `inspect`, `export`, `send` (`done`/`total` bytes) and `unpack`.
+//! ([`crate::image_tar`], with directory mtimes normalized to epoch 0 so exports
+//! >=2 s apart are byte-identical for resume), sent in 1 MiB frames and unpacked
+//! once there ([`crate::image_artifact`]). The machine is asked first, so an
+//! image it holds needs neither Docker nor a byte sent. One copy per image and
+//! machine at a time: the second one waits in [`ImageLock`], and a copy whose
+//! owner died is taken over at once (#175 R01). Each export uses its own
+//! container (`layerfs-export-<home8>-<machine>-<nonce>`) labeled with the
+//! home, machine, image and nonce, and removes only that container and its
+//! anonymous volumes on exit or error; residual containers of this home left
+//! by killed copies can be enumerated ([`owned_containers`]) and are reclaimed
+//! under [`ImageLock`] via [`cleanup_owned`] on subsequent loads in that home. Progress phases are `inspect`,
+//! `lock` (`waiting: "lock"` while another copy holds it), `export`, `send`
+//! (`done`/`total` bytes) and `unpack`.
 use crate::deploy::Side;
 use crate::docker::{self, Docker, Failure, Inspected};
 use crate::image_artifact::{self as cache, CHUNK};
@@ -13,36 +22,82 @@ use crate::image_tar::Filtered;
 use crate::images::{refused_with, stopped};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
+use layerfs_home::home::{self, private_dir, read_record, write_record};
 use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::process;
 use layerfs_store::place::Worker;
 use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
+use std::fs::{File, OpenOptions};
 use std::io::Read;
-use std::path::Path;
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::{Path, PathBuf};
+use std::process::Child;
 use std::time::{Duration, Instant};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// How long a copy waits for another caller's copy of the same image.
-const WAIT: Duration = Duration::from_secs(600);
-/// A leftover export container older than this is removed by the next copy.
-const STALE_SECS: u64 = 3600;
+/// Docker `layerfs.role` label marking an ephemeral image-export container.
+pub const EXPORT_ROLE: &str = "image-export";
+/// How often a waiting copy looks at the lock again: one look every 200 ms
+/// reacts to a released or taken-over lock, and to a killed waiter, at once.
+const LOCK_POLL: Duration = Duration::from_millis(200);
+/// How often a waiting copy says so: the longest silence of a wait is this.
+const WAIT_REPORT: Duration = Duration::from_secs(1);
 
-/// The side an image is copied to.
-pub enum Target<'a> {
-    /// A machine's worker.
-    Worker(&'a mut Worker),
-    /// This process (native Linux), with the home at the path.
-    Local(&'a Path),
+/// The side an image is copied to: the image cache of `machine`, reached
+/// through its worker or in this process (native Linux), and the `home` that
+/// keeps the copy's lock.
+pub struct Target<'a> {
+    home: &'a Path,
+    machine: &'a str,
+    place: Place<'a>,
 }
 
-impl Target<'_> {
+/// Where the bytes are written.
+pub enum Place<'a> {
+    /// This process, whose root is the home at the path.
+    Local,
+    /// The machine's worker.
+    Worker(&'a mut Worker),
+}
+
+impl<'a> Target<'a> {
+    /// A copy into this process's own image cache (`native` on Linux).
+    pub fn local(home: &'a Path, machine: &'a str) -> Self {
+        Target {
+            home,
+            machine,
+            place: Place::Local,
+        }
+    }
+
+    /// A copy into `machine`'s image cache through its worker.
+    pub fn worker(home: &'a Path, machine: &'a str, worker: &'a mut Worker) -> Self {
+        Target {
+            home,
+            machine,
+            place: Place::Worker(worker),
+        }
+    }
+
+    /// The home that keeps this copy's lock.
+    pub fn home(&self) -> &Path {
+        self.home
+    }
+
+    /// The machine whose image cache the copy fills.
+    pub fn machine(&self) -> &str {
+        self.machine
+    }
+
     /// One `image.artifact` step there.
     fn step(&mut self, args: SdkValue) -> Outcome {
-        match self {
-            Target::Worker(worker) => worker
+        match &mut self.place {
+            Place::Worker(worker) => worker
                 .attempt("image.artifact", args, &mut |_| {})
                 .map_err(|unreached| stopped(unreached.0))?,
-            Target::Local(home) => cache::step(&Side::Home(home), &args),
+            Place::Local => cache::step(&Side::Home(self.home), &args),
         }
     }
 
@@ -173,21 +228,39 @@ pub fn load(
             ]),
         ));
     }
-    // another caller is sending the same image: wait for it (bounded)
-    let start = Instant::now();
-    while !held(&probe) && probe.get_bool("receiving") && start.elapsed() < WAIT {
-        std::thread::sleep(Duration::from_secs(1));
-        probe = target.probe(Some(id), None, archive)?;
-    }
     if held(&probe) {
         let size = kept(&probe).or(Some(inspected.size));
         return Ok(reused(id, refs.clone(), size));
     }
-    let hex = &id["sha256:".len()..];
-    let container = format!("layerfs-export-{hex}");
+    // one copy at a time of this image on this machine (#175 R01): a second
+    // copy waits here, and takes over at once from one whose owner died
+    let machine = target.machine().to_owned();
+    let _lock = ImageLock::take(target.home(), &machine, id, events)?;
+    // under the lock: the copy that held it may have published the image
+    if let Some(home_id) = existing_home_id(target.home())? {
+        if let Ok(residual) = owned_for_home_id(docker, &home_id, Some(&machine), Some(id)) {
+            for entry in residual {
+                remove_container(docker, &entry.name);
+            }
+        }
+        // Reclaim any other unheld residual export containers in this home
+        // (such as killed loads for other images or machines) without waiting
+        // on another copy's lock.
+        let _ = cleanup_owned(docker, target.home(), None, None);
+    }
+    probe = target.probe(Some(id), None, archive)?;
+    if held(&probe) {
+        let size = kept(&probe).or(Some(inspected.size));
+        return Ok(reused(id, refs.clone(), size));
+    }
+    // capacity before the first effect on the machine (#175 R03): no export
+    // container, no staged byte and no cache folder; a resumed copy counts
+    // the bytes it already staged once
+    let staged = probe.get_int("offset").unwrap_or(0).max(0) as u64;
+    capacity(&machine, &probe, id, inspected.size, staged)?;
+    let home_id = ensure_home_id(target.home())?;
     phase(events, "export", None);
-    remove_stale(docker, &container);
-    created(docker, &container, id)?;
+    let container = ExportContainer::create(docker, &home_id, &machine, id)?;
     let unpacked = docker
         .read(
             &[
@@ -196,45 +269,38 @@ pub fn load(
                 "--size",
                 "--format",
                 "{{.SizeRootFs}}",
-                &container,
+                container.name(),
             ],
             docker::READ,
         )
         .ok()
         .and_then(|out| out.trim().parse::<u64>().ok())
         .filter(|n| *n > 0);
-    // the larger of what the layers unpack to and the container's root
-    let size = unpacked.unwrap_or(0).max(inspected.size);
-    let estimate = Some(size).filter(|n| *n > 0);
-    let free = probe.get_int("free").map(|n| n.max(0) as u64);
-    if let Some(free) = free {
-        let need = docker::need(size);
-        if need > free {
-            return Err(refused_with(
-                "NoSpace",
-                format!("copying image {image} needs {need} bytes on the machine; {free} are free"),
-                SdkValue::map([
-                    ("need", SdkValue::Int(need as i64)),
-                    ("free", SdkValue::Int(free as i64)),
-                ]),
-            ));
-        }
-    }
-    let staged = probe.get_int("offset").unwrap_or(0).max(0) as u64;
+    // the container's root refines the progress estimate only: the capacity
+    // decision above is taken before anything is created
+    let estimate = Some(unpacked.unwrap_or(0).max(inspected.size)).filter(|n| *n > 0);
     let prefix = probe.get_text("prefix_sha256").map(str::to_owned);
     let (sent, sha256) = match send(
         docker,
         events,
         target,
-        &container,
-        id,
+        (&probe, inspected.size),
+        (container.name(), id),
         (staged, prefix),
         estimate,
     )? {
         Some(done) => done,
         // the staged bytes are not this export's prefix: start over
-        None => send(docker, events, target, &container, id, (0, None), estimate)?
-            .ok_or_else(|| refused("Failed", "the image export changed while it was sent"))?,
+        None => send(
+            docker,
+            events,
+            target,
+            (&probe, inspected.size),
+            (container.name(), id),
+            (0, None),
+            estimate,
+        )?
+        .ok_or_else(|| refused("Failed", "the image export changed while it was sent"))?,
     };
     phase(events, "unpack", None);
     target.step(SdkValue::map([
@@ -249,7 +315,7 @@ pub fn load(
         ("architecture", SdkValue::text(&inspected.architecture)),
         ("config", inspected.config.clone()),
     ]))?;
-    let _ = docker.read(&["rm", "-f", &container], docker::READ);
+    container.remove();
     Ok(Loaded {
         id: id.clone(),
         refs: refs.clone(),
@@ -267,68 +333,515 @@ fn reused(id: &str, refs: Vec<String>, size: Option<u64>) -> Loaded {
     }
 }
 
-/// The export container `name` of image `id`: the one a failed copy kept
-/// (so a retry exports identical bytes), else a new one. Nothing runs in it.
-fn created(docker: &Docker, name: &str, id: &str) -> Result<()> {
-    if docker
-        .read(
-            &["container", "inspect", "--format", "{{.Id}}", name],
-            docker::READ,
-        )
-        .is_ok()
-    {
-        return Ok(());
-    }
-    let started = format!(
-        "layerfs.export.started={}",
-        layerfs_home::home::now_ms() / 1000
-    );
-    docker
-        .read(
-            &[
-                "create",
-                "--name",
-                name,
-                "--label",
-                &started,
-                "--network",
-                "none",
-                "--entrypoint",
-                "/layerfs-export",
-                id,
-            ],
-            Duration::from_secs(60),
-        )
-        .map(drop)
-        .map_err(|f| f.refusal(id))
+/// The lock of one image on one machine, in the home:
+/// `<home>/run/image-lock/<machine>/<hex>.lock`, an exclusive `flock` held
+/// for the whole copy, with its owner recorded beside it in `<hex>.json`
+/// (pid, its kernel start time and boot, the machine and the image; #175
+/// R01 and #176's intent).
+///
+/// The lock is the exclusion and the record is not: a waiter reads the record
+/// only to say whom it waits for. An owner that dies releases the kernel
+/// lock, so the next copy takes it over and resumes the staged part; a record
+/// whose pid another process now holds does not keep the lock, because the
+/// lock is not that process's. There is no deadline: a live owner is waited
+/// for as long as it lives and the wait says `waiting: "lock"` every second.
+/// Interrupting a waiting copy today means killing it, which leaves nothing
+/// to undo — a released kernel lock and at most its record, which the next
+/// copy replaces; a wait a shared Cancel can end is X01's, not this card's.
+pub struct ImageLock {
+    file: File,
+    record: Option<PathBuf>,
 }
 
-/// Removes export containers other copies left more than an hour ago.
-fn remove_stale(docker: &Docker, keep: &str) {
-    let Ok(listed) = docker.read(
-        &[
-            "ps",
-            "-a",
-            "--filter",
-            "label=layerfs.export.started",
-            "--format",
-            "{{.Names}} {{.Label \"layerfs.export.started\"}}",
-        ],
-        docker::READ,
-    ) else {
-        return;
+impl Drop for ImageLock {
+    fn drop(&mut self) {
+        // the copy is over; a copy that died left its record behind for the
+        // next owner to replace
+        if let Some(record) = &self.record {
+            let _ = std::fs::remove_file(record);
+        }
+        layerfs_home::home::flock::unlock(&self.file);
+    }
+}
+
+impl ImageLock {
+    /// The folder of machine `machine`'s image locks in `home`.
+    pub fn dir(home: &Path, machine: &str) -> PathBuf {
+        home.join("run").join("image-lock").join(machine)
+    }
+
+    /// The lock file of `hex` on `machine`.
+    pub fn path(home: &Path, machine: &str, hex: &str) -> PathBuf {
+        Self::dir(home, machine).join(format!("{hex}.lock"))
+    }
+
+    /// The owner record beside it.
+    pub fn record_path(home: &Path, machine: &str, hex: &str) -> PathBuf {
+        Self::dir(home, machine).join(format!("{hex}.json"))
+    }
+
+    /// Opens (creating if absent) the lock file of `hex` on `machine`.
+    fn open_file(home: &Path, machine: &str, hex: &str) -> Result<File> {
+        private_dir(&Self::dir(home, machine))?;
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(Self::path(home, machine, hex))
+            .map_err(failed)
+    }
+
+    /// Opens `<hex>.lock` and tries an exclusive `flock` without waiting.
+    fn try_lock_file(home: &Path, machine: &str, id: &str) -> Result<Option<(File, String)>> {
+        let hex = hex_of(id).ok_or_else(|| refused("InvalidInput", "image id"))?;
+        let file = Self::open_file(home, machine, hex)?;
+        if !layerfs_home::home::flock::try_lock(&file, true).map_err(failed)? {
+            return Ok(None);
+        }
+        Ok(Some((file, hex.to_owned())))
+    }
+
+    /// Takes the lock of image `id` on `machine` without waiting or writing an
+    /// owner record (`machine.prune` guard); returns `Ok(None)` when another
+    /// live owner currently holds it.
+    pub fn try_hold(home: &Path, machine: &str, id: &str) -> Result<Option<Self>> {
+        Ok(Self::try_lock_file(home, machine, id)?.map(|(file, _)| Self { file, record: None }))
+    }
+
+    /// Takes the lock of image `id` on `machine` without waiting; returns
+    /// `Ok(None)` when another live copy currently holds it.
+    pub fn try_take(home: &Path, machine: &str, id: &str) -> Result<Option<Self>> {
+        let Some((file, hex)) = Self::try_lock_file(home, machine, id)? else {
+            return Ok(None);
+        };
+        Self::with_record(file, home, machine, &hex, id).map(Some)
+    }
+
+    /// Takes the lock of image `id` on `machine`, waiting while a live copy
+    /// holds it and recording this copy as the owner. `events` say
+    /// `{phase: "lock", waiting: "lock", holder}` once a second meanwhile.
+    pub fn take(home: &Path, machine: &str, id: &str, events: &mut Events<'_>) -> Result<Self> {
+        let hex = hex_of(id).ok_or_else(|| refused("InvalidInput", "image id"))?;
+        let file = Self::open_file(home, machine, hex)?;
+        let mut reported: Option<Instant> = None;
+        loop {
+            if layerfs_home::home::flock::try_lock(&file, true).map_err(failed)? {
+                break;
+            }
+            if reported.is_none_or(|at| at.elapsed() >= WAIT_REPORT) {
+                let record = Self::record_path(home, machine, hex);
+                events.progress(SdkValue::map([
+                    ("phase", SdkValue::text("lock")),
+                    ("waiting", SdkValue::text("lock")),
+                    (
+                        "holder",
+                        read_record(&record)
+                            .ok()
+                            .flatten()
+                            .unwrap_or(SdkValue::Null),
+                    ),
+                ]));
+                reported = Some(Instant::now());
+            }
+            std::thread::sleep(LOCK_POLL);
+        }
+        Self::with_record(file, home, machine, hex, id)
+    }
+
+    /// Wraps `file` with its owner record path and writes the owner record.
+    fn with_record(file: File, home: &Path, machine: &str, hex: &str, id: &str) -> Result<Self> {
+        let path = Self::record_path(home, machine, hex);
+        let now = home::now_ms();
+        let mut fields = process::identity();
+        fields.extend([
+            ("machine", SdkValue::text(machine)),
+            ("image", SdkValue::text(id)),
+            ("since", SdkValue::text(cache::utc(now))),
+            ("since_ms", SdkValue::Int(now)),
+        ]);
+        let record = SdkValue::Map(
+            fields
+                .into_iter()
+                .map(|(name, value)| (name.to_owned(), value))
+                .collect(),
+        );
+        write_record(&path, &record)?;
+        Ok(Self {
+            file,
+            record: Some(path),
+        })
+    }
+}
+
+/// An export container owned by a LayerFS home (`layerfs.role=image-export`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OwnedContainer {
+    /// Docker container name (`layerfs-export-<home8>-<machine>-<nonce>`).
+    pub name: String,
+    /// Full 32-hex home id (`layerfs.home`).
+    pub home_id: String,
+    /// Target machine name (`layerfs.machine`).
+    pub machine: String,
+    /// Docker image Id (`layerfs.image`).
+    pub image: String,
+    /// One-time export nonce (`layerfs.export.nonce`).
+    pub nonce: String,
+}
+
+/// Outcome of recovering residual export containers owned by a home.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Cleanup {
+    /// Container names (with their anonymous volumes) removed under [`ImageLock`].
+    pub removed: Vec<String>,
+    /// Container names left alone because a live copy holds their [`ImageLock`].
+    pub active: Vec<String>,
+    /// Container names (or their anonymous volumes) that failed to be removed.
+    pub failed: Vec<String>,
+}
+
+/// Reads `home`'s 32-hex id without creating files when `home` is empty.
+fn existing_home_id(home: &Path) -> Result<Option<String>> {
+    if home::guest::is_root(home) {
+        return Ok(Some(home::guest::file(home)?.id));
+    }
+    match home::detect(home)? {
+        home::Layout::Current(file) | home::Layout::Previous(file) => Ok(Some(file.id)),
+        home::Layout::Empty => Ok(None),
+        home::Layout::Old => Err(refused(
+            "InvalidInput",
+            format!(
+                "{} is a LayerFS 1.1.0 home; it is converted on its first 2.0 call that writes",
+                home.display()
+            ),
+        )),
+    }
+}
+
+/// Returns `home`'s 32-hex id, creating `layerfs.json` under the home lock when
+/// `home` is an empty folder (such as an isolated test home).
+fn ensure_home_id(home: &Path) -> Result<String> {
+    if let Some(id) = existing_home_id(home)? {
+        return Ok(id);
+    }
+    let _guard = home::lock::take(home)?;
+    Ok(home::ensure(home)?.id)
+}
+
+fn export_nonce() -> Result<String> {
+    let bytes = layerfs_home::helpers::random()?;
+    Ok(layerfs_bridge::sdk_values::hex(&bytes[..8]))
+}
+
+fn container_name(home_id: &str, machine: &str, nonce: &str) -> String {
+    let home8 = &home_id[..8.min(home_id.len())];
+    format!("layerfs-export-{home8}-{machine}-{nonce}")
+}
+
+/// Enumerates residual export containers owned by `home` (never another home's).
+pub fn owned_containers(docker: &Docker, home: &Path) -> Result<Vec<OwnedContainer>> {
+    let Some(home_id) = existing_home_id(home)? else {
+        return Ok(Vec::new());
     };
-    let now = (layerfs_home::home::now_ms() / 1000) as u64;
+    owned_for_home_id(docker, &home_id, None, None)
+}
+
+fn owned_for_home_id(
+    docker: &Docker,
+    home_id: &str,
+    machine: Option<&str>,
+    image: Option<&str>,
+) -> Result<Vec<OwnedContainer>> {
+    let role_filter = format!("label=layerfs.role={EXPORT_ROLE}");
+    let home_filter = format!("label=layerfs.home={home_id}");
+    let mut args = vec![
+        "ps",
+        "-a",
+        "--filter",
+        &role_filter,
+        "--filter",
+        &home_filter,
+    ];
+    let machine_filter = machine.map(|m| format!("label=layerfs.machine={m}"));
+    if let Some(filter) = &machine_filter {
+        args.extend(["--filter", filter.as_str()]);
+    }
+    let image_filter = image.map(|i| format!("label=layerfs.image={i}"));
+    if let Some(filter) = &image_filter {
+        args.extend(["--filter", filter.as_str()]);
+    }
+    let format = "{{.Names}}\t{{.Label \"layerfs.home\"}}\t{{.Label \"layerfs.machine\"}}\t{{.Label \"layerfs.image\"}}\t{{.Label \"layerfs.export.nonce\"}}";
+    args.extend(["--format", format]);
+    let listed = docker
+        .read(&args, docker::READ)
+        .map_err(|f| f.refusal(""))?;
+    let prefix = format!("layerfs-export-{}-", &home_id[..8.min(home_id.len())]);
+    let mut found = Vec::new();
     for line in listed.lines() {
-        let mut words = line.split_whitespace();
-        let (Some(name), Some(started)) = (words.next(), words.next()) else {
+        let mut cols = line.split('\t');
+        let (Some(name), Some(l_home), Some(l_machine), Some(l_image), Some(l_nonce)) = (
+            cols.next(),
+            cols.next(),
+            cols.next(),
+            cols.next(),
+            cols.next(),
+        ) else {
             continue;
         };
-        let old = started
-            .parse::<u64>()
-            .is_ok_and(|t| now.saturating_sub(t) > STALE_SECS);
-        if name != keep && name.starts_with("layerfs-export-") && old {
-            let _ = docker.read(&["rm", "-f", name], docker::READ);
+        if l_home != home_id
+            || !name.starts_with(&prefix)
+            || l_machine.is_empty()
+            || !cache::digest(l_image)
+            || l_nonce.is_empty()
+        {
+            continue;
+        }
+        if machine.is_some_and(|m| m != l_machine) || image.is_some_and(|i| i != l_image) {
+            continue;
+        }
+        found.push(OwnedContainer {
+            name: name.to_owned(),
+            home_id: l_home.to_owned(),
+            machine: l_machine.to_owned(),
+            image: l_image.to_owned(),
+            nonce: l_nonce.to_owned(),
+        });
+    }
+    found.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(found)
+}
+
+/// Removes residual export containers owned by `home` (optionally scoped to
+/// `machine` and/or `image`) under I01's [`ImageLock`], skipping any whose lock
+/// is currently held by a live copy.
+pub fn cleanup_owned(
+    docker: &Docker,
+    home: &Path,
+    machine: Option<&str>,
+    image: Option<&str>,
+) -> Result<Cleanup> {
+    let Some(home_id) = existing_home_id(home)? else {
+        return Ok(Cleanup::default());
+    };
+    let owned = owned_for_home_id(docker, &home_id, machine, image)?;
+    let mut by_key: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
+    for entry in owned {
+        by_key
+            .entry((entry.machine, entry.image))
+            .or_default()
+            .push(entry.name);
+    }
+    let mut out = Cleanup::default();
+    for ((m, img), names) in by_key {
+        match ImageLock::try_take(home, &m, &img)? {
+            Some(_lock) => {
+                for name in names {
+                    if remove_container(docker, &name) {
+                        out.removed.push(name);
+                    } else {
+                        out.failed.push(name);
+                    }
+                }
+            }
+            None => out.active.extend(names),
+        }
+    }
+    Ok(out)
+}
+
+/// `id`'s 64 hex digits, the name of its files under the cache and the lock.
+fn hex_of(id: &str) -> Option<&str> {
+    cache::digest(id).then(|| &id["sha256:".len()..])
+}
+
+/// Refuses `Capacity` before the copy creates anything on the machine or in
+/// the home (#175 R03): `needed` is what the copy still has to find room for
+/// — the bytes already staged for a resumed copy are on the machine's
+/// filesystem and are counted once — `free` is what it has, and `where` names
+/// the filesystem that was measured.
+fn capacity(machine: &str, probe: &SdkValue, id: &str, size: u64, staged: u64) -> Result<()> {
+    // a machine that does not say how much room it has cannot be refused
+    let Some(free) = probe.get_int("free").map(|n| n.max(0) as u64) else {
+        return Ok(());
+    };
+    let needed = docker::need(size).saturating_sub(staged);
+    if needed <= free {
+        return Ok(());
+    }
+    let at = probe.get_text("root").unwrap_or(machine);
+    let staged_note = if staged > 0 {
+        format!(" ({staged} bytes are already staged and are not counted again)")
+    } else {
+        String::new()
+    };
+    let int = |n: u64| SdkValue::Int(n.min(i64::MAX as u64) as i64);
+    Err(refused_with(
+        "Capacity",
+        format!(
+            "machine {machine} needs {needed} more bytes in {at} to copy image {id}; {free} are free{staged_note}"
+        ),
+        SdkValue::map([
+            ("needed", int(needed)),
+            ("free", int(free)),
+            ("where", SdkValue::text(at)),
+        ]),
+    ))
+}
+
+/// Ephemeral export container owned by one copy; removed (with its anonymous
+/// volumes) on exit, error, or unwind.
+struct ExportContainer<'a> {
+    docker: &'a Docker,
+    name: String,
+    active: bool,
+}
+
+impl<'a> ExportContainer<'a> {
+    fn create(docker: &'a Docker, home_id: &str, machine: &str, id: &str) -> Result<Self> {
+        let nonce = export_nonce()?;
+        let name = container_name(home_id, machine, &nonce);
+        create_container(docker, &name, home_id, machine, id, &nonce)?;
+        Ok(Self {
+            docker,
+            name,
+            active: true,
+        })
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn remove(mut self) {
+        self.active = false;
+        remove_container(self.docker, &self.name);
+    }
+}
+
+impl Drop for ExportContainer<'_> {
+    fn drop(&mut self) {
+        if self.active {
+            self.active = false;
+            remove_container(self.docker, &self.name);
+        }
+    }
+}
+
+fn create_container(
+    docker: &Docker,
+    name: &str,
+    home_id: &str,
+    machine: &str,
+    id: &str,
+    nonce: &str,
+) -> Result<()> {
+    let role_label = format!("layerfs.role={EXPORT_ROLE}");
+    let home_label = format!("layerfs.home={home_id}");
+    let machine_label = format!("layerfs.machine={machine}");
+    let image_label = format!("layerfs.image={id}");
+    let nonce_label = format!("layerfs.export.nonce={nonce}");
+    let result = docker.read(
+        &[
+            "create",
+            "--name",
+            name,
+            "--label",
+            &role_label,
+            "--label",
+            &home_label,
+            "--label",
+            &machine_label,
+            "--label",
+            &image_label,
+            "--label",
+            &nonce_label,
+            "--network",
+            "none",
+            "--entrypoint",
+            "/layerfs-export",
+            id,
+        ],
+        Duration::from_secs(60),
+    );
+    if let Err(Failure::NotRunning(_)) = &result {
+        // A timed-out `docker create` may still have created the container.
+        remove_container(docker, name);
+    }
+    result.map(drop).map_err(|f| f.refusal(id))
+}
+
+fn is_missing_error(err: &Failure) -> bool {
+    if matches!(err, Failure::Missing(_)) {
+        return true;
+    }
+    let lower = err.message().to_lowercase();
+    lower.contains("no such container") || lower.contains("no such volume")
+}
+
+fn remove_container(docker: &Docker, name: &str) -> bool {
+    // Remove the created export container together with its anonymous volumes.
+    let _ = docker.read(&["rm", "-v", name], docker::READ);
+    // If still present (for instance with a stand-in `docker` that only handles
+    // `rm -f <name>`, or a container requiring force), clean volumes then `-f`.
+    match docker.read(
+        &["container", "inspect", "--format", "{{.Id}}", name],
+        docker::READ,
+    ) {
+        Err(err) if is_missing_error(&err) => return true,
+        Err(_) => return false,
+        Ok(_) => {}
+    }
+    let Some(volumes) = anonymous_volumes(docker, name) else {
+        let _ = docker.read(&["rm", "-f", name], docker::READ);
+        return false;
+    };
+    if let Err(err) = docker.read(&["rm", "-f", name], docker::READ) {
+        if !is_missing_error(&err) {
+            return false;
+        }
+    }
+    let mut removed = true;
+    for volume in volumes {
+        if let Err(err) = docker.read(&["volume", "rm", &volume], docker::READ) {
+            if !is_missing_error(&err) {
+                removed = false;
+            }
+        }
+    }
+    removed
+}
+
+fn anonymous_volumes(docker: &Docker, name: &str) -> Option<Vec<String>> {
+    let out = docker
+        .read(
+            &[
+                "container",
+                "inspect",
+                "--format",
+                "{{range .Mounts}}{{if eq .Type \"volume\"}}{{.Name}}{{\"\\n\"}}{{end}}{{end}}",
+                name,
+            ],
+            docker::READ,
+        )
+        .ok()?;
+    Some(
+        out.lines()
+            .map(str::trim)
+            .filter(|v| v.len() == 64 && v.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
+            .map(str::to_owned)
+            .collect(),
+    )
+}
+
+struct ExportChild(Option<Child>);
+
+impl Drop for ExportChild {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.0.take() {
+            let _ = child.kill();
+            let _ = child.wait();
         }
     }
 }
@@ -340,15 +853,20 @@ fn send(
     docker: &Docker,
     events: &mut Events<'_>,
     target: &mut Target<'_>,
-    container: &str,
-    id: &str,
+    (probe, checked): (&SdkValue, u64),
+    (container, id): (&str, &str),
     (staged, prefix): (u64, Option<String>),
     total: Option<u64>,
 ) -> Result<Option<(u64, String)>> {
-    let mut child = docker
-        .stream(&["export", container])
-        .map_err(|f| f.refusal(id))?;
+    let mut child = ExportChild(Some(
+        docker
+            .stream(&["export", container])
+            .map_err(|f| f.refusal(id))?,
+    ));
     let stdout = child
+        .0
+        .as_mut()
+        .expect("export child still held")
         .stdout
         .take()
         .ok_or_else(|| refused("Failed", "docker export gave no output"))?;
@@ -372,8 +890,6 @@ fn send(
         let matched =
             left == 0 && Some(layerfs_bridge::sdk_values::hex(&head.finalize())) == prefix;
         if !matched {
-            let _ = child.kill();
-            let _ = child.wait();
             return Ok(None);
         }
     }
@@ -387,6 +903,10 @@ fn send(
         if n == 0 {
             break;
         }
+        let next = offset + n as u64;
+        if next > checked {
+            capacity(target.machine(), probe, id, next, staged)?;
+        }
         whole.update(&buffer[..n]);
         target.step(SdkValue::map([
             ("step", SdkValue::text("write")),
@@ -394,13 +914,18 @@ fn send(
             ("offset", SdkValue::Int(offset as i64)),
             ("bytes", SdkValue::Bytes(buffer[..n].to_vec())),
         ]))?;
-        offset += n as u64;
+        offset = next;
         if last.elapsed() >= Duration::from_millis(200) {
             phase(events, "send", shown(offset));
             last = Instant::now();
         }
     }
-    let status = child.wait().map_err(failed)?;
+    let status = child
+        .0
+        .take()
+        .expect("export child still held")
+        .wait()
+        .map_err(failed)?;
     if !status.success() {
         return Err(refused(
             "Failed",
@@ -447,10 +972,20 @@ pub fn machine_load(
     let docker = Docker::of(home)?;
     let archive = choice.archive.as_deref();
     let loaded = match &mut executor {
-        Executor::Local => load(&docker, events, &mut Target::Local(home), archive, image)?,
-        Executor::Worker(worker) => {
-            load(&docker, events, &mut Target::Worker(worker), archive, image)?
-        }
+        Executor::Local => load(
+            &docker,
+            events,
+            &mut Target::local(home, machine),
+            archive,
+            image,
+        )?,
+        Executor::Worker(worker) => load(
+            &docker,
+            events,
+            &mut Target::worker(home, machine, worker),
+            archive,
+            image,
+        )?,
     };
     Ok(loaded.to_value())
 }

@@ -307,8 +307,10 @@ fn host_op(
             let archive = deploy::choose(&home, machine, None)?.archive;
             let docker = crate::docker::Docker::of(&home)?;
             let mut target = match &mut executor {
-                Executor::Local => crate::image_load::Target::Local(&home),
-                Executor::Worker(worker) => crate::image_load::Target::Worker(worker),
+                Executor::Local => crate::image_load::Target::local(&home, machine),
+                Executor::Worker(worker) => {
+                    crate::image_load::Target::worker(&home, machine, worker)
+                }
             };
             let loaded =
                 crate::image_load::load(&docker, events, &mut target, archive.as_deref(), &named)?;

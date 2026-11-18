@@ -279,16 +279,26 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   (unpacked, or in its archive) starts at once; any other is resolved with
   `docker image inspect` through the `docker` machine's recorded socket
   (else Docker's default context), refused `Unsupported`
-  `{reason: "arch", value}` for another architecture, `NoSpace`
-  `{need, free}` when `2 × size × 1.05` is over the machine's free bytes
-  (`size`: what the image's layers unpack to, the sum of `docker history`'s
-  layer sizes, or the export container's root if larger),
-  and otherwise exported once (`docker create` + `docker export`, without
-  the init layer's files), sent in 1 MiB frames and unpacked on the
+  `{reason: "arch", value}` for another architecture, `Capacity`
+  `{needed, free, where}` when `2 × size × 1.05`, less the bytes a resumed
+  copy already staged, is over the machine's free bytes (`size`: what the
+  image's layers unpack to, the sum of `docker history`'s layer sizes),
+  and otherwise exported once into an exclusive per-export container (`docker
+  create` + `docker export`, without the init layer's files and with directory
+  mtimes normalized to epoch 0 (`1970-01-01`) so resume across separate exports
+  sees identical bytes; the container and its anonymous volumes are removed on
+  completion or error, and any residual containers left after `SIGKILL` are
+  reclaimed under `ImageLock` on the next `load` in the same home without
+  waiting on active locks; legacy `layerfs-export-<machine>-<hex>` containers
+  labeled `layerfs.export.started` are no longer swept and require manual
+  `docker rm`), sent in 1 MiB frames and unpacked on the
   machine under `machines/native/run/images/<hex>.2/` with a sidecar
   `<hex>.2.json`; the staged tar is deleted. Docker unreachable is
   `Unavailable` `{what: "docker"}`, the machine stopped `Unavailable`
-  `{what: "machine"}`. `--progress` reports `inspect`, `export`, `send`
+  `{what: "machine"}`. One copy of an image on one machine at a time: a
+  second waits for the first (phase `lock`, `waiting: "lock"`, the holder
+  in `holder`), then reuses what it published. `--progress` reports
+  `inspect`, `lock`, `export`, `send`
   (`done`, `total`; `total` is an estimate until the last `send` event,
   which has `done` equal to `total`, the bytes sent), `unpack` and `start`. The record keeps the image's id,
   and every create sets its sidecar's `last_used`. The worker container's own
@@ -489,9 +499,9 @@ form.
 | `list` | — | — | every machine, with what it supports (`supports`: `sqlite`, `postgresql_sandbox`, `reason`, and `log`, whether it has a worker whose log can be read; never on `native`) |
 | `platforms` | — | — | the platforms this host and build support: backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox runs and why not, readiness and options (#535; the rows of `control/SUPPORT.json`) |
 | `get` | `name` | — | a machine's record |
-| `images` | `name` | — | the Sandbox images the machine holds (`images`: `id`, `refs`, `size`, `architecture`, `source` `bundle`/`machine`/`imported`, `sandboxes`, `last_used`), its `default`, `free` bytes and `architecture`; and the host's tagged Docker images it could copy (`docker`, `available`: `id`, `refs`, `size`, `os`, `architecture`, `usable`, `reason`, `need`, `fits`). macOS `native` answers `mode: "host"` with none. Never starts a machine |
-| `load` | `name`, `image` | `on_progress` | copies an image to the machine as `sandbox create --image` does, without a Sandbox: `{id, refs, size, reused}` |
-| `prune` | `name`, `image`? | `unused` | removes one unpacked image, or with `unused` every one no Sandbox uses but the machine's default: `{removed, freed}` (`freed` measured on the filesystem); an image in use is `InUse` |
+| `images` | `name` | — | the Sandbox images and staged parts the machine holds (`images`: `id`, `refs`, `size`, `architecture`, `source` `bundle`/`machine`/`imported`/`staged`/`stranded`, `variant`, `config`, `sandboxes`, `last_used`, `staged`, and for parts `age`, `resumable`), its `default`, `free` bytes and `architecture`; and the host's tagged Docker images it could copy (`docker`, `available`: `id`, `refs`, `size`, `os`, `architecture`, `usable`, `reason`, `need`, `fits`). macOS `native` answers `mode: "host"` with none. Never starts a machine |
+| `load` | `name`, `image` | `on_progress` | copies an image to the machine as `sandbox create --image` does, without a Sandbox: `{id, refs, size, reused}`; removes stranded `<hex>.2` without `.2.json` on publish, strips moved `refs` from older sidecars, records `variant`/`config` without applying, drops FIFOs/devices/init files, expands sparse entries, and refuses hardlinks to dropped targets or ambiguous refs |
+| `prune` | `name`, `image`? | `unused` | removes one image's artifacts or with `unused` every unheld unpacked image, stranded unpack, dangling sidecar, staged `.part` and `.tmp-*` dir except the machine's default: `{removed, freed, skipped?}` (`freed` measured on the filesystem); live `ImageLock` or `InUse` entries (and on `unused` entries whose lock guard/probe errors, listed in `skipped`) are skipped on `unused` and refused `InUse`/error by name |
 | `status` | `name` | — | a machine's live state, free disk and tool version; `op` while a create or remove holds it (#536 H6) |
 | `stats` | `machine` | — | what a machine has and uses now: processors, memory and data disk, each sqlite Store's size, how many of its Sandboxes have a running daemon (#164). For a UI that polls: it writes no call-log line |
 | `space` | `machine` | — | where a machine's data disk goes: each Store, each Sandbox's run folder, the image cache and LayerFS's logs, and what the disk uses that is not LayerFS's. For a UI: it writes no call-log line |
@@ -915,7 +925,7 @@ Codes seen in the 2.0 library include:
 | `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret |
 | `Conflict` | a merge or Commit conflict; for `backup.restore`, the Store changed since its last backup or restore |
 | `Binary` | `file.read` of a file that is not text |
-| `Capacity` | a Sandbox's Workspace limit; a `store push` or `store pull` target without room for the Store (`detail.needed`, `detail.free`) |
+| `Capacity` | a Sandbox's Workspace limit; a `store push` or `store pull` target without room for the Store (`detail.needed`, `detail.free`); copying an image to a machine without room for it (`detail.needed`, `detail.free`, `detail.where`) |
 | `Failed` | it was tried and did not happen; whatever exists is kept |
 | `Unknown` | the outcome is not known; both sides are kept and logged in `log/uncertain.jsonl`, and the entity keeps an uncertain `op` (later calls on it are `Unresolved`) |
 
