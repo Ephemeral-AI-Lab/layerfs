@@ -25,16 +25,6 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
-/// Whether the process a compaction record names still runs on this machine.
-/// The kernel start time and boot id, when recorded, keep a reused id from
-/// passing as the owner.
-fn owner_alive(op: &layerfs_persistence::CompactOpStatus) -> bool {
-    let Some(pid) = op.owner_pid else {
-        return false;
-    };
-    layerfs_home::process::alive_as(pid, op.owner_pid_start, op.owner_pid_boot)
-}
-
 fn length(path: &Path) -> Result<u64, SdkRefusal> {
     match std::fs::metadata(path) {
         Ok(meta) => Ok(meta.len()),
@@ -111,6 +101,18 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
     layerfs_home::names::StoreName::parse(store)?;
     let file = paths::store_file(root, store);
     let incoming = with_suffix(&file, ".incoming");
+    // a compaction running here (its caller's lease may be gone after a
+    // lost reply) keeps the file from being copied, replaced or deleted
+    if matches!(
+        frame.step,
+        StoreStep::Snapshot
+            | StoreStep::Stage
+            | StoreStep::Install
+            | StoreStep::Retire
+            | StoreStep::Remove
+    ) {
+        crate::compact::refuse_while_running(&file, store)?;
+    }
     if matches!(
         frame.step,
         StoreStep::Snapshot | StoreStep::Install | StoreStep::Retire | StoreStep::Remove
@@ -175,7 +177,9 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
         // its op and phase without opening the Store database or an artifact
         StoreStep::CompactOp => match layerfs_persistence::compact_op_status(&file) {
             None => Ok(SdkValue::Null),
-            Some(op) => Ok(crate::report::compact_status(&op.status(owner_alive(&op)))),
+            Some(op) => Ok(crate::report::compact_status(
+                &op.status(crate::compact::owner_alive(&op)),
+            )),
         },
         // snapshot: the idle Store's bytes, sha256 and history heads. A Store
         // nobody holds has no write-ahead log left unless a process crashed;

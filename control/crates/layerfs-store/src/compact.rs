@@ -199,6 +199,49 @@ pub fn compact(home: &Path, events: &mut Events<'_>, store: &str) -> Outcome {
 /// The worker operation that compacts a sqlite Store on its machine.
 pub const WORKER_OP: &str = "store.compact";
 
+/// Whether the process a compaction record names still runs on this machine.
+/// The kernel start time and boot id, when recorded, keep a reused id from
+/// passing as the owner.
+pub fn owner_alive(op: &layerfs_persistence::CompactOpStatus) -> bool {
+    let Some(pid) = op.owner_pid else {
+        return false;
+    };
+    layerfs_home::process::alive_as(pid, op.owner_pid_start, op.owner_pid_boot)
+}
+
+/// Refuses `Busy` while `<store>.compact-op` beside Store file `file`
+/// names a run that is live on this machine (its owner runs and it has not
+/// returned). The refusal carries the run as `op`, `{ name: compact, phase,
+/// started_at }`. A step that reads, replaces or deletes the file (a move's
+/// or remove's) asks this first: after a lost reply the caller's lease is
+/// gone, so only the record the run keeps beside the file can stop it.
+pub fn refuse_while_running(file: &Path, store: &str) -> Result<(), SdkRefusal> {
+    let Some(op) = layerfs_persistence::compact_op_status(file) else {
+        return Ok(());
+    };
+    let status = op.status(owner_alive(&op));
+    if status.state != "busy" {
+        return Ok(());
+    }
+    let refusal = refused(
+        "Busy",
+        format!(
+            "Store {store} is being compacted on this machine (phase {}); it can be moved or \
+             removed once that run ends",
+            status.phase
+        ),
+    );
+    let op = SdkValue::map([
+        ("name", SdkValue::text("compact")),
+        ("phase", SdkValue::text(&status.phase)),
+        (
+            "started_at",
+            SdkValue::Text(layerfs_home::time::iso(status.started)),
+        ),
+    ]);
+    Err(layerfs_home::outcome::with_next(refusal, "op", op))
+}
+
 /// The worker's side of `store.compact`: `{ store, store_record }`, the
 /// Store file under the worker's `root` (the machine's data disk), never a
 /// path the caller sends. The worker holds the Store's lease under its root
