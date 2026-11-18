@@ -99,6 +99,83 @@ pub(crate) fn read(
     Ok(())
 }
 
+/// The locators that follow `after` in identity order, one bounded piece.
+/// An identity is the table's key, so the piece is one seek and a walk along
+/// the key, and an empty key precedes every identity.
+const AFTER: &str = "SELECT object_id,pack_id,group_number,record_number,role,canonical_length FROM object_location WHERE object_id>?1 ORDER BY object_id LIMIT ?2";
+/// One locator by identity, without its pack's descriptor.
+const LOCATOR: &str = "SELECT object_id,pack_id,group_number,record_number,role,canonical_length FROM object_location WHERE object_id=?1";
+
+fn locator(r: &rusqlite::Row<'_>) -> Result<ObjectLocation, BackendError> {
+    use crate::backend::sqlite::session::rows::{blob, error};
+    let number = |index| {
+        usize::try_from(r.get::<_, i64>(index).map_err(error)?).map_err(|_| BackendError::Integrity)
+    };
+    Ok(ObjectLocation {
+        object_id: ObjectId::from_bytes(blob(r, 0)?).map_err(|_| BackendError::Integrity)?,
+        pack_id: r.get(1).map_err(error)?,
+        group_number: number(2)?,
+        record_number: number(3)?,
+        role: ObjectRole::from_code(
+            u8::try_from(r.get::<_, i64>(4).map_err(error)?)
+                .map_err(|_| BackendError::Integrity)?,
+        )
+        .map_err(|_| BackendError::Integrity)?,
+        canonical_length: number(5)?,
+    })
+}
+
+pub(crate) fn after(
+    tx: &Transaction<'_>,
+    after: Option<&ObjectId>,
+    limit: usize,
+    out: &mut Vec<ObjectLocation>,
+) -> Result<(), PersistenceError> {
+    let key: &[u8] = after.map_or(&[], |id| id.as_bytes().as_slice());
+    let count = i64::try_from(limit).map_err(|_| BackendError::Integrity)?;
+    let found = tx
+        .prepare(AFTER)?
+        .mapped_bulk(&[&key, &count], 40, limit, locator)?;
+    out.extend(found);
+    Ok(())
+}
+
+pub(crate) fn one(
+    tx: &Transaction<'_>,
+    id: &ObjectId,
+) -> Result<Option<ObjectLocation>, PersistenceError> {
+    let key = id.as_bytes().as_slice();
+    Ok(tx.mapped(LOCATOR, &[&key], 32, 1, locator)?.pop())
+}
+
+/// One locator by identity with the count of locators between `?1` and it:
+/// a seek to the row and a walk along the key from `?1`, which reads no row.
+const RANKED: &str = "SELECT object_id,pack_id,group_number,record_number,role,canonical_length,(SELECT count(*) FROM object_location WHERE object_id>?1 AND object_id<?2) FROM object_location WHERE object_id=?2";
+
+pub(crate) fn ranked(
+    tx: &Transaction<'_>,
+    after: Option<&ObjectId>,
+    id: &ObjectId,
+) -> Result<crate::backend::Ranked, PersistenceError> {
+    use crate::backend::sqlite::session::rows::error;
+    let from: &[u8] = after.map_or(&[], |id| id.as_bytes().as_slice());
+    let key = id.as_bytes().as_slice();
+    let found = tx
+        .prepare(RANKED)?
+        .mapped_bulk(&[&from, &key], 72, 1, |r| {
+            let before: i64 = r.get(6).map_err(error)?;
+            Ok((
+                u64::try_from(before).map_err(|_| BackendError::Integrity)?,
+                locator(r)?,
+            ))
+        })?
+        .pop();
+    Ok(match found {
+        Some((before, location)) => crate::backend::Ranked::Found(before, location),
+        None => crate::backend::Ranked::Absent,
+    })
+}
+
 fn typed_location(r: &rusqlite::Row<'_>) -> Result<LocatedObject, BackendError> {
     let object_id = ObjectId::from_bytes(crate::backend::sqlite::session::rows::blob(r, 0)?)
         .map_err(|_| BackendError::Integrity)?;

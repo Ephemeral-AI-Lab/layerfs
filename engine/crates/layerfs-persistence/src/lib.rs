@@ -42,6 +42,7 @@ pub use config::{
 };
 pub use history::{
     HistoryProvider, KeptHistory, KeptNode, KeptNodeId, KeptObjects, KeptWaste, MarkResult,
+    Sequence, Spans,
 };
 pub use report::{CompactStatus, POSTGRES_COMPACT_PHASES, SQLITE_COMPACT_PHASES};
 pub(crate) use storage::provider as storage_provider;

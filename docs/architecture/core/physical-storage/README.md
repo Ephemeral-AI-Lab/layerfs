@@ -87,7 +87,12 @@ A pack's key is `ObjectKey`, the SHA-256 of all its bytes, computed once by
 | Fit | `append_fits`: ≤ 16 groups and ≤ the lane's pack limit, charged exactly | [`pack/layout.rs`](../../../../core/crates/layerfs-storage/src/pack/layout.rs) |
 | Place | next pack id from the Save's reserved block, one-pass assembly, one SHA-256 | `Packer::place` in [`save/seal.rs`](../../../../core/crates/layerfs-storage/src/save/seal.rs) |
 
-A sealed pack is never appended to. On read, the header and directory are
+A sealed pack is never appended to. A Store compaction may build it again
+from the records it keeps: `retain_records` in
+[`pack/repack.rs`](../../../../core/crates/layerfs-storage/src/pack/repack.rs)
+copies each kept record as stored, frames changed groups through the same
+group builders, and returns the new pack only after it validates and every
+kept record compares equal to its source. On read, the header and directory are
 checked before any body: magic, version, reserved word, group count, `used`
 length, directory continuity, codec per lane, strictly increasing record ends.
 

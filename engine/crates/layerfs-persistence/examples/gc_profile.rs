@@ -1,31 +1,67 @@
-//! Where one GC mark, or one whole compaction, spends its time on a kept
-//! `gc_bench` Store: wall time, this thread's SQL work counters, and the
-//! statements that cost the most.
+//! Where one GC mark, or one whole compaction, spends its time: wall time,
+//! this thread's SQL work counters, and the statements that cost the most.
 //!
 //! ```text
 //! cargo run -p layerfs-persistence --release --example gc_bench -- --keep --tmpdir DIR
 //! cargo run -p layerfs-persistence --release --example gc_profile -- DIR/<run>/store.sqlite
 //! ```
 //!
-//! `--marks N` runs N marks (default 2: the second shows a warm cache).
-//! `--compact` then runs one compaction; it changes the Store. `--top N`
-//! prints the N costliest statements (default 12). The rebuild's copy runs on
-//! its own connection, so its statements are not in the profile; its time is
-//! the compaction's wall time less the profiled statements.
+//! `--marks N` runs N marks (default 2: the second shows a warm cache; 0 runs
+//! none). `--compact` then runs one compaction and prints a line for each of
+//! its phases as well; it changes the Store. `--top N` prints the N costliest
+//! statements (default 12). The rebuild's copy and the visited scratch run on
+//! their own connections, so their statements are not in the profile; their
+//! time is the phase's wall time less its profiled statements.
+//!
+//! The Store is a kept `gc_bench` Store unless `GC_BINDING_HEX` and
+//! `GC_CURSOR_HEX` name another Store's binding and its 32-byte cursor key, in
+//! hex. A mark writes `kept_node` and a compaction can rebuild the file, so
+//! profile a copy of a real Store, never the Store itself.
 #![allow(dead_code)]
 #[path = "gc_bench/gc_fixture.rs"]
 mod gc_fixture;
 
 use layerfs_persistence::{
     profile_statements, take_statement_profile, thread_work, CompactPath, CompactRequest,
+    PersistenceConfig, SqlWork, SqliteHandles, SqlitePersistenceProfile,
 };
+use std::path::Path;
 use std::time::Instant;
 
-fn counters(label: &str, wall_ms: f64, work: &layerfs_persistence::SqlWork) {
+fn unhex(name: &str, text: &str) -> Vec<u8> {
+    assert!(text.len() % 2 == 0, "{name} is not hex");
+    (0..text.len() / 2)
+        .map(|at| u8::from_str_radix(&text[2 * at..2 * at + 2], 16))
+        .collect::<Result<_, _>>()
+        .unwrap_or_else(|_| panic!("{name} is not hex"))
+}
+
+/// Opens a `gc_bench` Store, or the Store whose keys the environment names.
+fn open(store: &Path) -> SqliteHandles {
+    let (Ok(binding), Ok(cursor)) = (
+        std::env::var("GC_BINDING_HEX"),
+        std::env::var("GC_CURSOR_HEX"),
+    ) else {
+        return gc_fixture::reopen(store);
+    };
+    let cursor: [u8; 32] = unhex("GC_CURSOR_HEX", &cursor)
+        .try_into()
+        .expect("GC_CURSOR_HEX is 32 bytes");
+    SqliteHandles::open_writable(
+        PersistenceConfig::sqlite(store.to_path_buf())
+            .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        &unhex("GC_BINDING_HEX", &binding),
+        cursor,
+    )
+    .expect("Store open")
+}
+
+fn counters(label: &str, wall_ms: f64, work: &SqlWork) {
     println!(
         "{label}: wall_ms={wall_ms:.1} statements={} statement_ms={:.1} vm_steps={} \
          fullscan_steps={} sorts={} autoindex_rows={} returned_rows={} blob_opens={} \
-         blob_reads={} blob_read_bytes={} blob_read_ms={:.1} transactions={} commit_ms={:.1}",
+         blob_reads={} blob_read_bytes={} blob_read_ms={:.1} transactions={} \
+         write_transactions={} commits={} rollbacks={} commit_ms={:.1}",
         work.statements,
         work.statement_ns as f64 / 1e6,
         work.vm_steps,
@@ -38,6 +74,9 @@ fn counters(label: &str, wall_ms: f64, work: &layerfs_persistence::SqlWork) {
         work.blob_read_bytes,
         work.blob_read_ns as f64 / 1e6,
         work.transactions,
+        work.write_transactions,
+        work.commits,
+        work.rollbacks,
         work.commit_ns as f64 / 1e6
     );
 }
@@ -78,7 +117,7 @@ fn main() {
         }
     }
     let store = store.expect("usage: gc_profile STORE [--marks N] [--top N] [--compact]");
-    let handles = gc_fixture::reopen(&store);
+    let handles = open(&store);
     for index in 1..=marks {
         let before = thread_work();
         profile_statements();
@@ -103,14 +142,33 @@ fn main() {
         let before = thread_work();
         profile_statements();
         let started = Instant::now();
+        // Each phase as it starts: its name, the time and the work so far.
+        let mut phases: Vec<(&'static str, f64, SqlWork)> = Vec::new();
         let receipt = handles
-            .compact(&CompactRequest {
-                op_id: [0xC7; 16],
-                ..CompactRequest::default()
-            })
+            .compact_observed(
+                &CompactRequest {
+                    op_id: [0xC7; 16],
+                    ..CompactRequest::default()
+                },
+                &mut |phase| {
+                    phases.push((phase, started.elapsed().as_secs_f64() * 1e3, thread_work()));
+                },
+            )
             .expect("compact");
         let wall = started.elapsed().as_secs_f64() * 1e3;
-        counters("compact", wall, &thread_work().since(&before));
+        let done = thread_work();
+        counters("compact", wall, &done.since(&before));
+        // What runs before the first phase is the admission: the leftover
+        // check, the Store tuple and the op record.
+        let mut current = ("admission", 0.0, before);
+        for next in phases.into_iter().chain([("", wall, done)]) {
+            counters(
+                &format!("  phase {}", current.0),
+                next.1 - current.1,
+                &next.2.since(&current.2),
+            );
+            current = next;
+        }
         println!(
             "  path={} physical_shrink={} peak_temp_bytes={}",
             match receipt.path {

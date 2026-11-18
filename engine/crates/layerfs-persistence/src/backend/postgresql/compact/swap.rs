@@ -3,7 +3,6 @@
 use super::build::relation_bytes;
 use super::build::relation_bytes_tx;
 use super::cleanup::drop_scratch;
-use super::op::digest;
 use super::op::hex;
 use super::op::quote_ident;
 use super::op::scalar;
@@ -68,8 +67,9 @@ pub(crate) fn swap(
             return Err(HistoryError::Conflict("Store moved after the mark"));
         }
         // Read once: the lock is held from here to COMMIT, so the heads this
-        // digest covers cannot move again inside this transaction.
-        if digest(tx)? != mark.live_heads_digest() {
+        // digest covers cannot move again inside this transaction. The mark's
+        // own statements read them, a bounded page at a time.
+        if crate::history::live_heads_digest_in(tx)? != mark.live_heads_digest() {
             return Err(HistoryError::Conflict("live heads moved after the mark"));
         }
         // The ACL lives on the tables this transaction drops, so read it
@@ -515,7 +515,7 @@ pub(crate) fn verify_scratch(
     let metadata: i64 = row.get(5)?;
     if objects != mark.objects().len() as i64
         || distinct != objects
-        || packs != mark.objects().packs().len() as i64
+        || packs != mark.objects().retained_packs().len() as i64
     {
         return Err(HistoryError::Integrity("compaction swapped count"));
     }

@@ -4,7 +4,7 @@ use super::records::{BackendError, Param, Record};
 use layerfs_content::ObjectId;
 use layerfs_storage::{
     location::PackInfo,
-    location::{InodeValueRow, LocatedObject, SignatureRow},
+    location::{InodeValueRow, LocatedObject, ObjectLocation, SignatureRow},
     port::{
         AcquiredPackRead, PackRange, PackReadChoice, PackReadPlan, PersistedPack, PersistenceError,
     },
@@ -74,6 +74,74 @@ pub(crate) trait Mechanics {
         ids: &[ObjectId],
         out: &mut Vec<LocatedObject>,
     ) -> Result<(), PersistenceError>;
+    /// Up to `limit` stored locators that follow `after` in this engine's
+    /// locator order, or the first `limit` when `after` is `None`, in that
+    /// order. The order is fixed for one transaction: identities by their
+    /// bytes, or as [`Self::locators_by_signed_prefix`] says. A mark reads
+    /// the locators through this in bounded pieces and never holds them all.
+    fn locations_after(
+        &self,
+        after: Option<&ObjectId>,
+        limit: usize,
+        out: &mut Vec<ObjectLocation>,
+    ) -> Result<(), PersistenceError>;
+    /// The stored locator of one object, or `None`, without the descriptor
+    /// of its pack.
+    fn location(&self, id: &ObjectId) -> Result<Option<ObjectLocation>, PersistenceError> {
+        let mut found = Vec::with_capacity(1);
+        self.locate(std::slice::from_ref(id), &mut found)?;
+        Ok(found
+            .first()
+            .map(|located| located.location)
+            .filter(|location| location.object_id == *id))
+    }
+    /// A hint that objects of `ids` are about to be asked through
+    /// [`Self::location`], inside this transaction. An engine that pays a
+    /// round trip per lookup may find them all in one and keep the answers;
+    /// every answer is the same with or without the hint. Only an engine
+    /// that says so ([`Self::batches_locations`]) is told.
+    fn expect_locations(&self, _ids: &[ObjectId]) -> Result<(), PersistenceError> {
+        Ok(())
+    }
+    /// Whether [`Self::expect_locations`] saves this engine anything. A
+    /// caller that must read ahead to learn the ids does so only then.
+    fn batches_locations(&self) -> bool {
+        false
+    }
+    /// Whether [`Self::locations_after`] orders identities by their first
+    /// eight bytes read as a signed big-endian number, then by their bytes,
+    /// instead of by their bytes alone.
+    fn locators_by_signed_prefix(&self) -> bool {
+        false
+    }
+    /// A local directory for the sort files of one mark: files without a
+    /// name, gone with their handle, never Store state. This is the one
+    /// place that decides where they go: an engine with a directory of its
+    /// own names it, and the others get the process's temporary directory,
+    /// which is memory where that directory is a memory file system.
+    fn scratch_directory(&self) -> std::path::PathBuf {
+        std::env::temp_dir()
+    }
+    /// The stored locator of `id` and how many stored locators lie between
+    /// `after` and `id` in the order of [`Self::locations_after`], both
+    /// excluded (from the first locator when `after` is `None`). `None`: this
+    /// engine has no such read, and the caller reads the locators between
+    /// through [`Self::locations_after`]. A mark asks this for an identity
+    /// in a block of locators it would otherwise read whole for one row.
+    fn location_after(
+        &self,
+        _after: Option<&ObjectId>,
+        _id: &ObjectId,
+    ) -> Result<Option<Ranked>, PersistenceError> {
+        Ok(None)
+    }
+    /// Whether the history closure of a mark is computed in bounded batches
+    /// of statements (`kept_node_seed`, `kept_node_expand`) instead of one
+    /// recursive statement (`kept_node_mark`). An engine whose temporary
+    /// storage is this process's memory says yes.
+    fn closure_in_batches(&self) -> bool {
+        false
+    }
     fn inode_values(
         &self,
         ordinals: &[u32],
@@ -120,6 +188,14 @@ pub(crate) trait Mechanics {
     ) -> Result<(), PersistenceError> {
         ranges_by_acquisition(self, requests, out)
     }
+    /// The widest gap between two wanted ranges of one pack that costs this
+    /// engine less to read through than to skip. A caller of
+    /// [`Self::pack_ranges`] may join ranges no further apart than this into
+    /// one, and take the bytes between them as well. `0`: every byte asked
+    /// for is transferred at its own cost, so ask for exactly what is wanted.
+    fn pack_range_fill(&self) -> usize {
+        0
+    }
     /// A hint that each pack of `ids` is about to be asked through
     /// [`Self::read_scoped_pack`], in this order, inside this transaction.
     /// An engine that pays a round trip per pack may read the small ones
@@ -152,6 +228,14 @@ pub(crate) trait Mechanics {
             status: "pack range read".to_owned(),
         })
     }
+}
+
+/// One answer of [`Mechanics::location_after`].
+pub(crate) enum Ranked {
+    /// The Store locates no such object.
+    Absent,
+    /// The count of locators between, and the object's locator.
+    Found(u64, ObjectLocation),
 }
 
 /// A plan that selects ranges chosen before the acquisition starts.

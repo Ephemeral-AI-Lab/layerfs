@@ -11,11 +11,19 @@
 //! each window asks the kernel for the part of the file the window will read,
 //! in one sequential request. The request is a hint: it changes no byte and no
 //! result, and a file laid out in another order only loses the benefit.
+//!
+//! The verification reads the fresh file's `pack` rows the same way, by
+//! [`staged_windows`]: a row is one page beside its payload, so the rows are
+//! spread over the whole file.
+//!
+//! Neither plan is held: the packs arrive as a stream in pack order (the
+//! run's [`super::lengths::PackLengths`]) and a window is used as soon as it
+//! is cut.
 
 use super::types::io_error;
+use crate::Sequence;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
-use std::collections::BTreeMap;
 use std::fs::File;
 use std::path::Path;
 
@@ -32,73 +40,107 @@ pub struct Window {
     pub first: i64,
     /// The last retained pack of the run.
     pub last: i64,
+    /// How many retained packs the run holds.
+    pub packs: u64,
     /// Where the run's payload cannot start before, in file bytes.
     pub offset: u64,
     /// How far past `offset` the run's payload can reach.
     pub bytes: u64,
 }
 
-/// Cuts the retained packs into windows, in pack order.
+/// Cuts the retained packs into windows, in pack order, and hands each to
+/// `each` as soon as it is closed: no plan is held, so a Store of any number
+/// of packs is cut in the memory of one window.
 ///
-/// `lengths` is every pack of the sealed Store and `retained` the ascending
-/// packs the mark keeps. A Store's packs are appended in id order, so pack
-/// `p`'s payload starts no earlier than the summed lengths of the packs before
-/// it and no later than that plus every byte of the file that is not pack
-/// payload; a window's range is that bound over its packs.
+/// `packs` is every pack of the sealed Store with its stored length,
+/// ascending, and `retained` the packs the mark keeps. A Store's
+/// packs are appended in id order, so pack `p`'s payload starts no earlier
+/// than the summed lengths of the packs before it and no later than that plus
+/// `slack`, every byte of the file that is not pack payload; a window's range
+/// is that bound over its packs.
 pub fn windows(
-    lengths: &BTreeMap<i64, u64>,
-    retained: &[i64],
-    file_bytes: u64,
-) -> HistoryResult<Vec<Window>> {
-    let total = lengths.values().copied().fold(0u64, u64::saturating_add);
-    let slack = file_bytes.saturating_sub(total);
-    let mut planned = Vec::new();
+    packs: impl Iterator<Item = HistoryResult<(i64, u64)>>,
+    retained: &Sequence,
+    slack: u64,
+    each: &mut dyn FnMut(Window) -> HistoryResult<()>,
+) -> HistoryResult<()> {
+    cut(packs, retained, slack, false, each)
+}
+
+/// The windows of the file a rebuild writes. That file holds the retained
+/// packs and no other, appended in the same order, so its plan is the same cut
+/// over the retained packs alone: `slack` is what that file holds beyond them.
+pub fn staged_windows(
+    packs: impl Iterator<Item = HistoryResult<(i64, u64)>>,
+    retained: &Sequence,
+    slack: u64,
+    each: &mut dyn FnMut(Window) -> HistoryResult<()>,
+) -> HistoryResult<()> {
+    cut(packs, retained, slack, true, each)
+}
+
+fn cut(
+    mut packs: impl Iterator<Item = HistoryResult<(i64, u64)>>,
+    retained: &Sequence,
+    slack: u64,
+    staged: bool,
+    each: &mut dyn FnMut(Window) -> HistoryResult<()>,
+) -> HistoryResult<()> {
     // The open run: its window so far, the payload offset it ends at and the
     // retained bytes it holds.
     let mut open: Option<(Window, u64, u64)> = None;
-    let mut wanted = retained.iter().copied().peekable();
     let mut before = 0u64;
-    for (&pack, &length) in lengths {
-        if wanted.peek() == Some(&pack) {
-            wanted.next();
-            if let Some((window, end, held)) = open {
-                if held >= WINDOW_BYTES || before.saturating_sub(end) > GAP_BYTES {
-                    planned.push(closed(window, end, slack));
-                    open = None;
+    retained.each(&mut |wanted| {
+        // The packs before the wanted one are dead: they move the offsets
+        // of the sealed file and are not in the file a rebuild writes.
+        let (pack, length) = loop {
+            match packs.next().transpose()? {
+                Some((pack, length)) if u64::try_from(pack).is_ok_and(|pack| pack < wanted) => {
+                    if !staged {
+                        before = before.saturating_add(length);
+                    }
                 }
+                Some((pack, length)) if u64::try_from(pack) == Ok(wanted) => break (pack, length),
+                // A retained pack the Store does not hold.
+                _ => return Err(HistoryError::Integrity("mark pack")),
             }
-            let end = before.saturating_add(length);
-            open = Some(match open {
-                Some((window, _, held)) => (
-                    Window {
-                        last: pack,
-                        ..window
-                    },
-                    end,
-                    held.saturating_add(length),
-                ),
-                None => (
-                    Window {
-                        first: pack,
-                        last: pack,
-                        offset: before,
-                        bytes: 0,
-                    },
-                    end,
-                    length,
-                ),
-            });
+        };
+        if let Some((window, end, held)) = open {
+            if held >= WINDOW_BYTES || before.saturating_sub(end) > GAP_BYTES {
+                each(closed(window, end, slack))?;
+                open = None;
+            }
         }
-        before = before.saturating_add(length);
-    }
-    if wanted.next().is_some() {
-        // A retained pack the Store does not hold, or an unordered mark.
-        return Err(HistoryError::Integrity("mark pack"));
-    }
+        let end = before.saturating_add(length);
+        open = Some(match open {
+            Some((window, _, held)) => (
+                Window {
+                    last: pack,
+                    packs: window.packs + 1,
+                    ..window
+                },
+                end,
+                held.saturating_add(length),
+            ),
+            None => (
+                Window {
+                    first: pack,
+                    last: pack,
+                    packs: 1,
+                    offset: before,
+                    bytes: 0,
+                },
+                end,
+                length,
+            ),
+        });
+        before = end;
+        Ok(())
+    })?;
     if let Some((window, end, _)) = open {
-        planned.push(closed(window, end, slack));
+        each(closed(window, end, slack))?;
     }
-    Ok(planned)
+    Ok(())
 }
 
 fn closed(window: Window, end: u64, slack: u64) -> Window {
@@ -108,9 +150,10 @@ fn closed(window: Window, end: u64, slack: u64) -> Window {
     }
 }
 
-/// The sealed file's read-ahead: a second read-only descriptor the kernel is
-/// asked through. The file is attached `immutable=1`, so SQLite holds no lock
-/// on it that closing this descriptor could drop.
+/// One file's read-ahead: a second read-only descriptor the kernel is asked
+/// through. The file (the sealed Store, or the fresh file under verification)
+/// is read `immutable=1`, so SQLite holds no lock on it that closing this
+/// descriptor could drop.
 pub(crate) struct ReadAhead {
     file: File,
     length: u64,
@@ -119,8 +162,8 @@ pub(crate) struct ReadAhead {
 }
 
 impl ReadAhead {
-    pub(crate) fn open(sealed: &Path) -> HistoryResult<Self> {
-        let file = File::open(sealed).map_err(io_error)?;
+    pub(crate) fn open(path: &Path) -> HistoryResult<Self> {
+        let file = File::open(path).map_err(io_error)?;
         let length = file.metadata().map_err(io_error)?.len();
         Ok(Self {
             file,

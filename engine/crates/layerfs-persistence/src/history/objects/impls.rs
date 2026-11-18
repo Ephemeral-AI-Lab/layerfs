@@ -3,12 +3,17 @@
 //! Kept in a submodule so `objects.rs` stays within the product source-line
 //! boundary; the types stay next to their construction.
 
+use super::records::Count;
 use super::KeptObjects;
 use super::KeptWaste;
 use super::MarkResult;
+use super::PartlyDead;
 use super::MAX_KEPT_WASTE_REFERENCES;
+use super::{Sequence, Spans};
 use crate::history::kept::KeptHistory;
 use layerfs_content::ObjectId;
+use layerfs_history::error::{HistoryError, HistoryResult};
+use std::sync::{Arc, Mutex};
 
 impl KeptWaste {
     /// One mark's kept-waste accounting. The reference list is the full set the
@@ -70,15 +75,44 @@ impl KeptWaste {
             && self.inode_blocks_bytes == 0
     }
 }
+/// Two marks kept the same when their counts and what they listed agree:
+/// the retained packs, the partly dead packs and the inode value ordinals
+/// are compared as slices, which only a mark that lists what it kept fills.
+impl PartialEq for KeptObjects {
+    fn eq(&self, other: &Self) -> bool {
+        self.objects == other.objects
+            && self.count == other.count
+            && self.retained.len() == other.retained.len()
+            && self.packs == other.packs
+            && self.waste == other.waste
+            && self.partly_dead.count == other.partly_dead.count
+            && self.partly_dead_listed == other.partly_dead_listed
+            && self.inode_ordinals == other.inode_ordinals
+    }
+}
+impl Eq for KeptObjects {}
 impl KeptObjects {
-    /// Every reached canonical object, in ascending identity order.
+    /// Every reached canonical object, in ascending identity order, when
+    /// the mark listed them ([`crate::HistoryProvider::mark`]). A SQLite
+    /// compaction mark holds no list, and this is empty: [`Self::len`] still
+    /// counts them.
     pub fn objects(&self) -> &[ObjectId] {
         &self.objects
     }
 
-    /// Every pack holding a reached object, in ascending pack order.
+    /// Every pack holding a reached object, in ascending pack order, when
+    /// the mark listed them ([`crate::HistoryProvider::mark`],
+    /// `mark_with_scratch`); eight bytes a pack. A compaction's own mark,
+    /// on SQLite and on PostgreSQL, leaves it empty and reads
+    /// [`Self::retained_packs`].
     pub fn packs(&self) -> &[i64] {
         &self.packs
+    }
+
+    /// The packs holding a reached object, ascending, in bounded memory:
+    /// a count and a read that may be repeated.
+    pub fn retained_packs(&self) -> &Sequence {
+        &self.retained
     }
 
     /// The bytes the mark keeps without a retained root needing them.
@@ -86,19 +120,102 @@ impl KeptObjects {
         &self.waste
     }
 
-    /// Whether `id` is reached.
+    /// Every retained pack that holds a record no reached object owns, in
+    /// ascending pack order, with the bytes it adds to
+    /// [`KeptWaste::dead_in_retained_packs_bytes`]. A pack named with zero
+    /// bytes holds an unreached record inside a compressed group.
+    ///
+    /// Listed by a mark that lists what it kept
+    /// ([`crate::HistoryProvider::mark`], `mark_with_scratch`); a
+    /// compaction's own mark leaves it empty, while
+    /// [`Self::partly_dead_count`] and [`Self::each_partly_dead`] always
+    /// answer.
+    pub fn partly_dead_packs(&self) -> &[(i64, u64)] {
+        &self.partly_dead_listed
+    }
+
+    /// How many retained packs hold a record no reached object owns.
+    pub fn partly_dead_count(&self) -> u64 {
+        self.partly_dead.count
+    }
+
+    /// Hands every partly dead pack and its dead bytes to `each`, in
+    /// ascending pack order, without holding the list: beyond a bound the
+    /// mark keeps it in a sort file.
+    pub fn each_partly_dead(
+        &self,
+        each: &mut dyn FnMut(i64, u64) -> HistoryResult<()>,
+    ) -> HistoryResult<()> {
+        let Some(packs) = &self.partly_dead.packs else {
+            return Ok(());
+        };
+        let mut packs = packs
+            .lock()
+            .map_err(|_| HistoryError::Integrity("mark pack list"))?;
+        let mut sorted = packs.sorted()?;
+        while let Some(pack) = sorted.next()? {
+            each(pack.pack, pack.records)?;
+        }
+        Ok(())
+    }
+
+    /// Fills [`Self::packs`].
+    pub(in crate::history) fn list_packs(&mut self) -> HistoryResult<()> {
+        let mut packs = Vec::with_capacity(usize::try_from(self.retained.len()).unwrap_or(0));
+        self.retained.each(&mut |pack| {
+            packs.push(pack as i64);
+            Ok(())
+        })?;
+        self.packs = packs;
+        Ok(())
+    }
+
+    /// Fills the slices: [`Self::packs`], [`Self::partly_dead_packs`] and
+    /// [`Self::inode_ordinals`].
+    pub(in crate::history) fn list(&mut self) -> HistoryResult<()> {
+        self.list_packs()?;
+        let mut listed = Vec::with_capacity(usize::try_from(self.partly_dead.count).unwrap_or(0));
+        self.each_partly_dead(&mut |pack, bytes| {
+            listed.push((pack, bytes));
+            Ok(())
+        })?;
+        self.partly_dead_listed = listed;
+        let mut runs = Vec::new();
+        self.ordinals.each(&mut |first, last| {
+            runs.push((first, last));
+            Ok(())
+        })?;
+        self.inode_ordinals = runs;
+        Ok(())
+    }
+
+    /// The inode value ordinals the reached leaves read, as inclusive runs in
+    /// ascending order, when the mark listed them (as [`Self::packs`]). A
+    /// read of a kept leaf asks for no other ordinal, so a rebuild keeps
+    /// only the `inode_value_block` rows that hold one of them.
+    pub fn inode_ordinals(&self) -> &[(u32, u32)] {
+        &self.inode_ordinals
+    }
+
+    /// The inode value ordinals the reached leaves read, in bounded memory:
+    /// their runs in ascending order, read as often as asked.
+    pub fn inode_ordinal_runs(&self) -> &Spans {
+        &self.ordinals
+    }
+
+    /// Whether `id` is among the listed objects ([`Self::objects`]).
     pub fn contains(&self, id: ObjectId) -> bool {
         self.objects.binary_search(&id).is_ok()
     }
 
     /// How many objects the closure holds.
     pub fn len(&self) -> usize {
-        self.objects.len()
+        usize::try_from(self.count).unwrap_or(usize::MAX)
     }
 
     /// Whether the closure holds no object.
     pub fn is_empty(&self) -> bool {
-        self.objects.is_empty()
+        self.count == 0
     }
 }
 impl MarkResult {
@@ -130,5 +247,51 @@ impl MarkResult {
     /// SQLite does not report this value.
     pub fn mark_bytes(&self) -> u64 {
         self.mark_bytes
+    }
+
+    /// The most bytes the mark's sort files held at one time. The mark sorts
+    /// what it reached in bounded memory and writes what does not fit to
+    /// unnamed files beside a SQLite Store (a local temporary directory for
+    /// PostgreSQL); zero when everything fitted. A compaction's own sort
+    /// files are in the same space and count here from then on.
+    pub fn scratch_bytes(&self) -> u64 {
+        self.space.peak_bytes()
+    }
+
+    /// What the mark's paged arrays did ([`super::Space::paging`]): the
+    /// pages asked for that were not in memory, the pages read back from a
+    /// file, the pages written to one and how often a page was asked for. A
+    /// measurement, not part of what the mark found.
+    #[doc(hidden)]
+    pub fn paging(&self) -> [u64; 4] {
+        self.space.paging()
+    }
+
+    /// Where the sort files of this mark went: the one space every sort
+    /// file of a compaction is created in and counted by.
+    pub(crate) fn sort_space(&self) -> &Arc<super::Space> {
+        &self.space
+    }
+}
+
+/// Two marks are equal when they kept the same and read the same; where
+/// their sort files went is not part of what they found.
+impl PartialEq for MarkResult {
+    fn eq(&self, other: &Self) -> bool {
+        self.history == other.history
+            && self.objects == other.objects
+            && self.live_heads_digest == other.live_heads_digest
+            && self.mark_bytes == other.mark_bytes
+    }
+}
+impl Eq for MarkResult {}
+
+impl PartlyDead {
+    /// The list a kept-waste pass adds to, in ascending pack order.
+    pub(super) fn new(packs: super::Sorter<Count>, count: u64) -> Self {
+        Self {
+            packs: Some(Arc::new(Mutex::new(packs))),
+            count,
+        }
     }
 }

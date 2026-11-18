@@ -3,16 +3,23 @@
 //!
 //! A file payload has no logical references, so the mark needs only its
 //! record's base and stored width. Both sit in the record's first bytes and in
-//! its group's directory, so this reads those ranges and never the payload: a
-//! mark costs a few hundred bytes per pack instead of the pack. Compressed
-//! groups and the `Ordinary` lane answer `None` and keep the decoding reader.
+//! its group's directory, so this asks for those ranges and decodes no
+//! payload. Compressed groups and the `Ordinary` lane answer `None` and keep
+//! the decoding reader.
 //!
 //! Reads are per wave, not per pack: one call for the heads of many packs,
 //! then at most a few calls for whatever ranges those packs still need. A
 //! pack costs no statement and no round trip of its own.
+//!
+//! How much comes back depends on the engine
+//! ([`crate::backend::Mechanics::pack_range_fill`]). One that pays for every
+//! byte it transfers is asked for the exact ranges: a few hundred bytes per
+//! pack. One that reads a local file is asked for the stretch between two
+//! nearby ranges as well, and for a whole group whose wanted records are
+//! close together: one sequential read of the group instead of a read for
+//! its directory and one per record header. The answers are the same.
 use super::ids::IdMap;
 use super::{storage, ClosureSource};
-use layerfs_content::ObjectId;
 use layerfs_history::error::{HistoryError, HistoryResult};
 use layerfs_storage::{
     encoding::delta::edge::{
@@ -22,7 +29,6 @@ use layerfs_storage::{
     location::ObjectLocation,
     pack::layout::{self, GroupView, PackHeader},
     port::{PackRange, PACK_READ_PREFIX_BYTES},
-    source::Source,
     StorageError,
 };
 use std::collections::{BTreeMap, VecDeque};
@@ -42,11 +48,14 @@ const ROUNDS: usize = 4;
 /// cold cache. A PostgreSQL Store reads its first stored piece either way.
 const HEAD_BYTES: usize = 432;
 /// Packs whose heads one call reads.
-const HEAD_PACKS: usize = 256;
+pub(super) const HEAD_PACKS: usize = 256;
 /// Ranges one call asks for, over all its packs.
 const BATCH_RANGES: usize = 1024;
 /// Bytes one call asks for, over all its packs.
 const BATCH_BYTES: usize = 512 * 1024;
+/// Declared bytes of the packs settled together when the engine fills
+/// ranges: the most pack bytes one wave holds at a time.
+const SETTLE_BYTES: usize = 16 * 1024 * 1024;
 
 /// The pack bytes held so far, by pack offset.
 ///
@@ -99,13 +108,15 @@ enum Answer {
     Pending,
 }
 
-/// Sorts `needs` and joins the ranges that overlap or touch.
-fn merged(mut needs: Vec<PackRange>) -> Vec<PackRange> {
+/// Sorts `needs` and joins the ranges that overlap, touch or lie within
+/// `fill` bytes of each other: the bytes between two joined ranges are read
+/// with them ([`crate::backend::Mechanics::pack_range_fill`]).
+fn merged(mut needs: Vec<PackRange>, fill: usize) -> Vec<PackRange> {
     needs.sort_unstable_by_key(|range| (range.offset, range.length));
     let mut merged: Vec<PackRange> = Vec::with_capacity(needs.len());
     for range in needs {
         match merged.last_mut() {
-            Some(last) if range.offset <= last.offset + last.length => {
+            Some(last) if range.offset <= last.offset + last.length + fill => {
                 last.length = last.length.max(range.offset + range.length - last.offset);
             }
             _ => merged.push(range),
@@ -119,16 +130,22 @@ fn merged(mut needs: Vec<PackRange>) -> Vec<PackRange> {
 ///
 /// `items` are in locator order, so a group's records are adjacent and its
 /// directory is parsed once for all of them, not once per record.
+///
+/// With a `fill`, a group whose directory is not held and whose wanted
+/// records lie on average no more than `fill` bytes apart is asked for whole:
+/// its directory and every header then come in one sequential read, instead
+/// of a directory read followed by a read per record.
 fn resolve(
     header: PackHeader,
     views: &[GroupView],
     items: &[ObjectLocation],
     held: &Pieces,
     answers: &mut [Answer],
+    fill: usize,
 ) -> Result<Vec<PackRange>, StorageError> {
     let mut needs: Vec<PackRange> = Vec::new();
     let mut group: Option<(usize, Option<RecordDirectory>)> = None;
-    for (item, answer) in items.iter().zip(answers.iter_mut()) {
+    for (index, (item, answer)) in items.iter().zip(answers.iter_mut()).enumerate() {
         if !matches!(answer, Answer::Pending) {
             continue;
         }
@@ -144,7 +161,19 @@ fn resolve(
                 match sparse_directory(view, |offset, length| held.held(offset, length))? {
                     Sparse::Ready(directory) => Some(directory),
                     Sparse::Need(range) => {
-                        needs.push(range);
+                        let wanted = items[index..]
+                            .iter()
+                            .take_while(|next| next.group_number == item.group_number)
+                            .count();
+                        let extent = view.end - view.start;
+                        needs.push(if extent <= wanted.saturating_mul(fill) {
+                            PackRange {
+                                offset: view.start,
+                                length: extent,
+                            }
+                        } else {
+                            range
+                        });
                         None
                     }
                 };
@@ -160,7 +189,7 @@ fn resolve(
             Sparse::Need(range) => needs.push(range),
         }
     }
-    Ok(merged(needs))
+    Ok(merged(needs, fill))
 }
 
 /// One request of a round: the pack, its declared length, and the ranges.
@@ -248,7 +277,7 @@ pub(super) fn group_directories(
         if needs.is_empty() {
             return Ok(directories);
         }
-        let request = [(pack_id, usize::MAX, merged(needs))];
+        let request = [(pack_id, usize::MAX, merged(needs, 0))];
         let mut read = 0u64;
         for (range, bytes) in request[0]
             .2
@@ -324,7 +353,7 @@ impl<'a> PackWork<'a> {
 
 /// Answers every record of `work`: each round resolves what the held bytes
 /// can and reads, in one bounded set of calls, what all the packs still need.
-fn settle(source: &ClosureSource<'_>, work: &mut [PackWork<'_>]) -> HistoryResult<()> {
+fn settle(source: &ClosureSource<'_>, work: &mut [PackWork<'_>], fill: usize) -> HistoryResult<()> {
     for round in 0..=ROUNDS {
         let mut requests: Vec<Request> = Vec::new();
         let mut owners = Vec::new();
@@ -338,6 +367,7 @@ fn settle(source: &ClosureSource<'_>, work: &mut [PackWork<'_>]) -> HistoryResul
                 pack.items,
                 &pack.held,
                 &mut pack.answers,
+                fill,
             )
             .map_err(storage)?;
             if needs.is_empty() {
@@ -368,6 +398,22 @@ fn settle(source: &ClosureSource<'_>, work: &mut [PackWork<'_>]) -> HistoryResul
     Err(HistoryError::Integrity("mark edge read"))
 }
 
+/// The end of the run of packs from `from` that one [`settle`] holds: every
+/// pack when the engine reads exact ranges, which are small; otherwise as
+/// many as declare no more than [`SETTLE_BYTES`] together, and at least one.
+fn run_end(work: &[PackWork<'_>], from: usize, fill: usize) -> usize {
+    if fill == 0 {
+        return work.len();
+    }
+    let mut end = from;
+    let mut bytes = 0usize;
+    while end < work.len() && (end == from || bytes + work[end].length <= SETTLE_BYTES) {
+        bytes += work[end].length;
+        end += 1;
+    }
+    end
+}
+
 /// The header-read edges of one wave: every object of `wave` whose role names
 /// no other object and whose record sits in an uncompressed payload group.
 ///
@@ -375,13 +421,10 @@ fn settle(source: &ClosureSource<'_>, work: &mut [PackWork<'_>]) -> HistoryResul
 /// absent from the result takes the decoding reader, exactly as before.
 pub(super) fn wave_edges(
     source: &ClosureSource<'_>,
-    wave: &[ObjectId],
+    wave: &[ObjectLocation],
 ) -> HistoryResult<IdMap<ChainEdge>> {
     let mut packs: Vec<(i64, Vec<ObjectLocation>)> = Vec::new();
-    for id in wave {
-        let Some(location) = source.location(*id, i64::MAX).map_err(storage)? else {
-            continue;
-        };
+    for location in wave.iter().copied() {
         if location.role.has_references() {
             continue;
         }
@@ -390,6 +433,7 @@ pub(super) fn wave_edges(
             _ => packs.push((location.pack_id, vec![location])),
         }
     }
+    let fill = source.mechanics.pack_range_fill();
     let mut edges = IdMap::default();
     for batch in packs.chunks(HEAD_PACKS) {
         let ids: Vec<i64> = batch.iter().map(|(pack_id, _)| *pack_id).collect();
@@ -406,7 +450,17 @@ pub(super) fn wave_edges(
         for ((pack_id, items), (length, head)) in batch.iter().zip(heads) {
             work.push(PackWork::open(source, *pack_id, items, length, head)?);
         }
-        settle(source, &mut work)?;
+        // An engine that fills may hand back whole packs: settle a bounded
+        // run of them and let its bytes go before the next run is read.
+        let mut settled = 0;
+        while settled < work.len() {
+            let end = run_end(&work, settled, fill);
+            settle(source, &mut work[settled..end], fill)?;
+            for pack in &mut work[settled..end] {
+                pack.held = Pieces::default();
+            }
+            settled = end;
+        }
         for pack in work {
             for (item, answer) in pack.items.iter().zip(pack.answers) {
                 match answer {

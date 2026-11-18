@@ -4,7 +4,7 @@ use crate::backend::{
     records::{BackendError, Param},
     Transaction,
 };
-use crate::blocks::values::{encode, pick};
+use crate::blocks::values::{encode, every, pick};
 use layerfs_storage::{location::InodeValueRow, port::*};
 
 /// Ascending distinct ordinals as one JSON array of inclusive runs.
@@ -38,6 +38,30 @@ pub(crate) fn read(
     ordinals: &[u32],
     out: &mut Vec<InodeValueRow>,
 ) -> Result<(), PersistenceError> {
+    pick(ordinals, blocks(tx, ordinals)?, out)?;
+    Ok(())
+}
+
+/// [`read`], and every other value of the blocks that hold the asked
+/// ordinals: a block is decoded whole to answer one of its ordinals, so its
+/// other values cost the caller that keeps them nothing more.
+pub(crate) fn read_blocks(
+    tx: &Transaction<'_>,
+    ordinals: &[u32],
+    out: &mut Vec<InodeValueRow>,
+) -> Result<(), PersistenceError> {
+    every(blocks(tx, ordinals)?, out)?;
+    Ok(())
+}
+
+/// One stored block: its first and last ordinal and its body.
+type ValueBlock = Result<(u32, u32, Vec<u8>), BackendError>;
+
+/// The stored blocks covering `ordinals`, in ascending first-ordinal order.
+fn blocks(
+    tx: &Transaction<'_>,
+    ordinals: &[u32],
+) -> Result<impl Iterator<Item = ValueBlock>, PersistenceError> {
     let rows = tx.query(
         "SELECT b.first_ordinal,b.last_ordinal,CASE WHEN (CASE WHEN typeof(b.body)='blob' THEN length(CAST(b.body AS BLOB)) ELSE NULL END)<=4000 THEN b.body END FROM inode_value_block b WHERE b.first_ordinal IN (\
          SELECT x.first_ordinal FROM json_each(?1) r JOIN inode_value_block x \
@@ -47,18 +71,13 @@ pub(crate) fn read(
         vec![Param::Text(runs(ordinals))],
     )?;
     let ordinal = |v: i64| u32::try_from(v).map_err(|_| BackendError::Integrity);
-    pick(
-        ordinals,
-        rows.into_iter().map(|mut row| {
-            Ok((
-                ordinal(row.get::<i64>(0)?)?,
-                ordinal(row.get::<i64>(1)?)?,
-                row.take_bytes(2)?,
-            ))
-        }),
-        out,
-    )?;
-    Ok(())
+    Ok(rows.into_iter().map(move |mut row| {
+        Ok((
+            ordinal(row.get::<i64>(0)?)?,
+            ordinal(row.get::<i64>(1)?)?,
+            row.take_bytes(2)?,
+        ))
+    }))
 }
 
 /// Inserts the values as new blocks in bounded multi-row statements. A
