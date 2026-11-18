@@ -37,7 +37,7 @@ async function main(): Promise<void> {
   });
   await lfs.machine.load("lima1", `sha256:${"a".repeat(64)}`, { on_progress: (p) => progress.push(p) });
   await lfs.machine.prune("lima1", null, { unused: true });
-  await lfs.backup.create("shop", "bucket", "file", { on_progress: () => {} });
+  await lfs.backup.create("shop", "bucket", { file: "file", on_progress: () => {} });
   const exported: Result = await lfs.project.export("shop/api", "/exports/api", {
     branch: "main", on_progress: (p) => progress.push(p),
   });

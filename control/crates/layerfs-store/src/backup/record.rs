@@ -1,12 +1,16 @@
 //! A bucket's record, `backup/<bucket>/record.json` (#536 §9.2): an r2 or
-//! MinIO bucket and prefix with a key reference, never a secret, made from
-//! the URL `backup.connect` is given; and the driver it names. Also each
-//! Store's link to a bucket, which the Store's record holds.
+//! S3-endpoint bucket and prefix with its key's id, made from the URL
+//! `backup.connect` is given, and the driver it names. The key's secret is
+//! in the home's secret folder ([`super::secret`]), never in the record. A
+//! record written before 2.0 (or converted from a 1.1.0 home) names a key
+//! reference (`key`, `env:` or `file:`) instead, which is still read. Also
+//! each Store's link to a bucket, which the Store's record holds.
+use super::secret;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup::Provider;
 use layerfs_bucket::bucket::minio::{MinioSettings, DEFAULT_PART_SIZE};
 use layerfs_bucket::bucket::r2::R2Settings;
-use layerfs_bucket::bucket::{pieces, CredentialRef, Driver, RemoteError};
+use layerfs_bucket::bucket::{pieces, CredentialRef, Credentials, Driver, RemoteError};
 use layerfs_home::home::{self, paths, read_record, write_entity};
 use layerfs_home::names::BucketName;
 use layerfs_home::outcome::{refused, View};
@@ -31,6 +35,11 @@ pub fn remote_error(error: RemoteError) -> SdkRefusal {
     }
 }
 
+/// The name of bucket `bucket`'s secret in the home's secret folder.
+pub fn secret_name(bucket: &str) -> String {
+    format!("bucket/{bucket}")
+}
+
 impl BucketRecord {
     /// Bucket `name`'s record `value`, as read.
     pub fn from_record(name: &str, value: SdkValue) -> Self {
@@ -53,12 +62,17 @@ impl BucketRecord {
         write_entity(&paths::bucket_record(home, &self.name), &self.fields)
     }
 
+    /// The bucket's name in this home.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     /// The record as written.
     pub fn to_record(&self) -> &SdkValue {
         &self.fields
     }
 
-    /// The bucket as `backup.connect` answers it: its record (never a `v`).
+    /// The record's fields, never its `v`.
     pub fn to_sdk(&self, _view: View) -> SdkValue {
         match &self.fields {
             SdkValue::Map(fields) => {
@@ -68,14 +82,77 @@ impl BucketRecord {
         }
     }
 
-    /// The driver of this bucket. Resolves its key now; sends nothing.
-    pub fn driver(&self) -> Result<Box<dyn Driver>> {
-        driver(&self.fields)
+    /// The bucket as `backup.connect` answers it (its long form): its
+    /// name, provider, URL and key id, never the secret.
+    pub fn answer(&self, outcome: &str) -> SdkValue {
+        SdkValue::map([
+            ("ok", SdkValue::Bool(true)),
+            ("outcome", SdkValue::text(outcome)),
+            ("bucket", SdkValue::text(&self.name)),
+            (
+                "provider",
+                SdkValue::opt_text(self.fields.get_text("provider")),
+            ),
+            ("url", SdkValue::text(self.url())),
+            (
+                "access_key",
+                SdkValue::opt_text(self.fields.get_text("access_key")),
+            ),
+        ])
     }
 
-    /// Diagnostic S3 client from the exact saved provider settings; sends nothing.
-    pub fn diagnostic_client(&self) -> Result<layerfs_bucket::bucket::s3_api::S3Client> {
-        match provider(&self.fields)? {
+    /// The URL the record was made from: `r2://<account>/<bucket>/<prefix>`
+    /// (with `?jurisdiction=`) or `<endpoint>/<bucket>/<prefix>`.
+    pub fn url(&self) -> String {
+        let text = |name: &str| self.fields.get_text(name).unwrap_or("");
+        let mut path = text("bucket").to_owned();
+        if !text("prefix").is_empty() {
+            path = format!("{path}/{}", text("prefix"));
+        }
+        match self.fields.get_text("provider") {
+            Some("r2") => {
+                let url = format!("r2://{}/{path}", text("account"));
+                match text("jurisdiction") {
+                    "" => url,
+                    j => format!("{url}?jurisdiction={j}"),
+                }
+            }
+            _ => format!("{}/{path}", text("endpoint")),
+        }
+    }
+
+    /// The bucket's key: its id from the record and its secret from the
+    /// home's secret folder, or the key reference an older record names.
+    pub fn credentials(&self, home: &Path) -> Result<CredentialRef> {
+        match self.fields.get_text("access_key") {
+            Some(access_key) => Ok(CredentialRef::Given(Credentials {
+                access_key: access_key.to_owned(),
+                secret_key: secret::read(home, &secret_name(&self.name))?,
+            })),
+            None => CredentialRef::parse(self.fields.get_text("key").unwrap_or(""))
+                .map_err(remote_error),
+        }
+    }
+
+    /// The driver of this bucket. Reads its key now; sends nothing.
+    pub fn driver(&self, home: &Path) -> Result<Box<dyn Driver>> {
+        self.driver_with(self.credentials(home)?)
+    }
+
+    /// The driver of this bucket with key `credentials`; sends nothing.
+    pub fn driver_with(&self, credentials: CredentialRef) -> Result<Box<dyn Driver>> {
+        provider(&self.fields, credentials)?
+            .driver()
+            .map_err(remote_error)
+    }
+
+    /// Diagnostic S3 client from the exact saved provider settings and key
+    /// `credentials`; sends nothing.
+    pub fn diagnostic_client(
+        &self,
+        credentials: CredentialRef,
+    ) -> Result<layerfs_bucket::bucket::s3_api::S3Client> {
+        match provider(&self.fields, credentials)? {
             Provider::Minio(settings) => {
                 layerfs_bucket::bucket::minio::connect(&settings).map_err(remote_error)
             }
@@ -84,43 +161,46 @@ impl BucketRecord {
             }
             Provider::LocalFolder(_) => Err(refused(
                 "Unsupported",
-                "backup connection diagnosis requires an S3-compatible provider",
+                "a bucket's checks need an S3-compatible provider",
             )),
         }
     }
 
     /// A bucket record from `request`'s URL:
-    /// `http(s)://host:port/<bucket>/<prefix>` for MinIO,
+    /// `http(s)://host:port/<bucket>/<prefix>` for an S3 endpoint,
     /// `r2://<account>/<bucket>/<prefix>[?jurisdiction=eu|fedramp]` for r2.
     pub fn from_url(request: &BucketConnect) -> Result<Self> {
         Ok(Self::from_record(&request.name, bucket_record(request)?))
     }
 }
 
-/// `backup.connect(name, url, { key, region, part_size })`. No `Debug`, as
-/// with every request that names a key, though this one is a reference.
+/// `backup.connect(name, url, { access_key, secret_key })`. No `Debug`: it
+/// holds a secret.
 #[derive(Clone)]
 pub struct BucketConnect {
     /// The bucket's name in this home.
     pub name: BucketName,
     /// Its URL.
     pub url: String,
-    /// Its key's reference, `env:LAYERFS_BUCKET_<NAME>` by default.
-    pub key: Option<String>,
-    /// A MinIO bucket's region, `us-east-1` by default.
-    pub region: Option<String>,
-    /// The upload piece size in bytes.
-    pub part_size: Option<i64>,
+    /// The key's id.
+    pub access_key: String,
+    /// The key's secret.
+    pub secret_key: String,
 }
 
-/// The driver of a bucket record.
-fn driver(record: &SdkValue) -> Result<Box<dyn Driver>> {
-    provider(record)?.driver().map_err(remote_error)
+impl BucketConnect {
+    /// The key it names.
+    pub fn credentials(&self) -> CredentialRef {
+        CredentialRef::Given(Credentials {
+            access_key: self.access_key.clone(),
+            secret_key: self.secret_key.clone(),
+        })
+    }
 }
 
-fn provider(record: &SdkValue) -> Result<Provider> {
+fn provider(record: &SdkValue, credentials: CredentialRef) -> Result<Provider> {
     let text = |name: &str| record.get_text(name).unwrap_or("").to_owned();
-    let credentials = CredentialRef::parse(&text("key")).map_err(remote_error)?;
+    // a record from before 2.0 may name its own piece size
     let part_size = record
         .get_int("part_size")
         .map(|n| n as u64)
@@ -157,17 +237,11 @@ fn bucket_path(path: &str) -> Result<(String, String)> {
     Ok((bucket.to_owned(), prefix.trim_end_matches('/').to_owned()))
 }
 
-/// The fields of a bucket record from `request`.
+/// The fields of a bucket record from `request`: r2 is always region
+/// `auto` and an S3 endpoint `us-east-1`; the piece size is the default.
 fn bucket_record(request: &BucketConnect) -> Result<SdkValue> {
     let (name, url) = (request.name.as_str(), request.url.as_str());
-    let key = request.key.clone().unwrap_or_else(|| {
-        format!(
-            "env:LAYERFS_BUCKET_{}",
-            name.to_uppercase().replace(['-', '.'], "_")
-        )
-    });
-    CredentialRef::parse(&key).map_err(remote_error)?;
-    let part_size = SdkValue::Int(request.part_size.unwrap_or(DEFAULT_PART_SIZE as i64));
+    let key = SdkValue::text(&request.access_key);
     if let Some(rest) = url.strip_prefix("r2://") {
         let (rest, query) = rest.split_once('?').unwrap_or((rest, ""));
         let (account, path) = rest.split_once('/').unwrap_or((rest, ""));
@@ -181,8 +255,7 @@ fn bucket_record(request: &BucketConnect) -> Result<SdkValue> {
             ("bucket", SdkValue::text(bucket)),
             ("prefix", SdkValue::text(prefix)),
             ("region", SdkValue::text("auto")),
-            ("key", SdkValue::text(key)),
-            ("part_size", part_size),
+            ("access_key", key),
         ]));
     }
     let scheme = if url.starts_with("http://") {
@@ -201,12 +274,8 @@ fn bucket_record(request: &BucketConnect) -> Result<SdkValue> {
         ("endpoint", SdkValue::text(format!("{scheme}{host}"))),
         ("bucket", SdkValue::text(bucket)),
         ("prefix", SdkValue::text(prefix)),
-        (
-            "region",
-            SdkValue::text(request.region.as_deref().unwrap_or("us-east-1")),
-        ),
-        ("key", SdkValue::text(key)),
-        ("part_size", part_size),
+        ("region", SdkValue::text("us-east-1")),
+        ("access_key", key),
     ]))
 }
 
@@ -273,5 +342,27 @@ impl StoreLink {
     /// The link as written.
     pub fn to_record(&self) -> &SdkValue {
         &self.fields
+    }
+
+    /// Whether a transfer through it ever worked (it records a `last`): a
+    /// link written only for a failed first attempt has none.
+    pub fn transferred(&self) -> bool {
+        matches!(self.fields.get("last"), Some(SdkValue::Map(_)))
+    }
+
+    /// This link with `attempt` recording a transfer `call` (`create` or
+    /// `restore`) that did not work, and why: `{call, at, error}`. A link
+    /// that did not exist yet names `file` and nothing else.
+    pub fn with_attempt(link: Option<Self>, file: &str, call: &str, error: &str) -> Self {
+        let fields = link.map_or_else(
+            || SdkValue::map([("file", SdkValue::text(file))]),
+            |link| link.fields,
+        );
+        let attempt = SdkValue::map([
+            ("call", SdkValue::text(call)),
+            ("at", SdkValue::Int(home::now_ms())),
+            ("error", SdkValue::text(error)),
+        ]);
+        Self::from_record(home::with_field(fields, crate::get::ATTEMPT, attempt))
     }
 }

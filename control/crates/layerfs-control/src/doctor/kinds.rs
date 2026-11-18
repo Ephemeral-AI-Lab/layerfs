@@ -2,9 +2,8 @@
 //! its checks give, in the order they run, and the function that runs the
 //! checks of one thing into its node. The home's and a machine's lists are
 //! the frozen ones (`calls.json` `doctor.checks`); ids of kinds not renamed
-//! yet keep today's names (`backup.*`, …); the per-kind packages rename
-//! them, and a test compares every list with the frozen one through a
-//! pending list.
+//! yet keep today's names; the per-kind packages rename them, and a test
+//! compares every list with the frozen one through a pending list.
 //!
 //! Where things are comes from the home's records (`home_tree`): what is on
 //! a thing and its recorded state. A machine blocks what is on it with what
@@ -84,18 +83,17 @@ const SANDBOX: &[CheckId] = &[
     own("sandbox.observation"),
 ];
 
-/// A bucket's checks, today's `backup connection` target; the write test is
-/// its Full check.
+/// A bucket's checks; the write test is its Full check.
 const BUCKET: &[CheckId] = &[
-    own("backup.configuration"),
-    own("backup.credentials"),
-    own("backup.transport"),
-    own("backup.list"),
-    full("backup.write_capability"),
-    full("backup.put"),
-    full("backup.get"),
-    full("backup.delete"),
-    full("backup.reconcile"),
+    own("bucket.configuration"),
+    own("bucket.credentials"),
+    own("bucket.transport"),
+    own("bucket.list"),
+    full("bucket.write_capability"),
+    full("bucket.put"),
+    full("bucket.get"),
+    full("bucket.delete"),
+    full("bucket.reconcile"),
 ];
 
 /// The real kinds. A Workspace has no doctor of its own: its Sandbox's
@@ -262,7 +260,7 @@ fn listed(probe: &Probe<'_>, handle: &str, store: &str, checks: &mut Checks) {
 
 fn bucket(probe: &Probe<'_>, node: &mut Node) {
     let name = probe.thing.name.as_str();
-    let mut checks = Checks::new("backup", name);
+    let mut checks = Checks::new("bucket", name);
     super::backup_target::diagnose(probe.home, name, probe.full, probe.budget, &mut checks);
     checks.fill(node, probe.checks, probe.budget.expired());
 }

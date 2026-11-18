@@ -131,7 +131,11 @@ fn a_scope_refuses_every_call_it_does_not_cover() {
         ("project.list", &[]),
         (
             "backup.restore",
-            &[("store", t("shop")), ("bucket", t("b"))],
+            &[
+                ("bucket", t("b")),
+                ("file", t("shop")),
+                ("store", t("shop")),
+            ],
         ),
         ("backup.list", &[]),
         ("sandbox.remove", &[("sandbox", t("s1"))]),

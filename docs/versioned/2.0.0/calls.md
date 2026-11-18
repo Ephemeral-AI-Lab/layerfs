@@ -1082,17 +1082,56 @@ $ layerfs store disconnect shop-pg --detail
 
 See [Stores](machines-and-stores.md#stores).
 
-### `backup` (5)
+### `backup` (6)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `connect` | `name`, `url` | `key`, `region`, `part_size` (size) | connects an r2 or MinIO bucket |
-| `disconnect` | `name` | — | forgets a bucket and this home's links to it |
-| `list` | `[bucket]` | — | every Store file on the connected buckets |
-| `create` | `store`, `bucket`, `[file]` | `on_progress` | uploads a sqlite Store to a bucket |
-| `restore` | `store`, `bucket`, `[file]` | `on_progress` | downloads a backup as a sqlite Store on `native` |
+| `connect` | `name`, `url` | `access_key`, `secret_key` (shell: `--key-stdin`) | connects a bucket (r2, or an S3 endpoint) for Store backups |
+| `disconnect` | `bucket` | — | forgets a bucket and its key; its files stay |
+| `list` | — | `bucket` | the Store files in the connected buckets, with the Store each is linked to |
+| `create` | `store`, `bucket` | `file`, `on_progress` | backs up a sqlite Store to a bucket |
+| `restore` | `bucket`, `file`, `store` | `on_progress` | restores a Store file from a bucket as a sqlite Store on this computer |
+| `doctor` | `bucket` | `full` | checks a bucket; `--full` also tests a write |
 
-See [backups](machines-and-stores.md#backups). Not run for this manual.
+All six are migrated. Today's `--key` reference (`env:` or `file:`),
+`--region` and `--part-size` are gone with no alias; `list`'s bucket and
+`create`'s file are options, and `restore` names the bucket, its file, then
+the Store.
+
+- **The key.** `--access-key` is the key's id; its secret comes on stdin
+  with `--key-stdin` and no other way (Node and Python pass `secret_key`).
+  The secret is kept in the home's secret folder (`secret/bucket/<bucket>`,
+  0600), never answered, and the call log records its byte count only, as
+  it does for the URL. `connect` makes one listing before it records
+  anything: a bucket that does not answer or refuses the key is
+  `Unavailable`; a name that is taken is `Exists` (to change a key,
+  disconnect and connect). A bucket connected before 2.0 keeps the key
+  reference its record names.
+- **`list`** answers one row per Store file in each bucket, and one per
+  link whose file the bucket does not hold (`missing: true`). `behind` says
+  the Store changed since its last backup (its heads read where it lives:
+  in this process on this computer, through the machine's worker
+  otherwise); `changed` says the bucket's file is not the one the link last
+  moved; each is null with a `message` when it could not be read. A bucket
+  that cannot be listed is named in `not_listed` (`reason` `refused`,
+  `timeout` or `lost`) and the others are still listed.
+- **`create` and `restore`** are recorded as the Store's `op` (`backup`,
+  or `restore` when it replaces a Store), so every client reads the Store
+  `busy`; a backup runs beside the Store's readers, a restore holds the
+  Store. Progress is `{ phase, done, total }`: `check`, `snapshot`, `send`
+  (from a machine), `hash`, `upload` for a backup; `check`, `download`,
+  `verify`, `install` for a restore. A failure leaves the link as it was
+  and writes what was tried to its `attempt` (`store get --detail` shows
+  it); a lost reply to the upload, or a restore killed at its install,
+  leaves the Store `broken` `unresolved` until `layerfs store get <store>
+  --with live` settles it.
+- **`doctor`** runs the `bucket.*` checks: `bucket.configuration`,
+  `bucket.credentials`, `bucket.transport`, `bucket.list`; `--full` adds
+  the write test (`bucket.write_capability`, `bucket.put`, `bucket.get`,
+  `bucket.delete`, and `bucket.reconcile` after a put whose reply was
+  lost). Without `--full` those checks are left out of the report.
+
+See [backups](machines-and-stores.md#backups).
 
 ## The doctors
 

@@ -1,4 +1,6 @@
-//! Where a remote's secret lives. Settings keep a reference, never the secret.
+//! Where a remote's secret lives. Settings files keep a reference, never
+//! the secret; a caller that read the secret itself (a bucket's key from the
+//! home's secret folder) hands it over as [`CredentialRef::Given`].
 use crate::bucket::error::{local, RemoteError};
 use std::fmt;
 use std::path::PathBuf;
@@ -16,9 +18,14 @@ impl fmt::Debug for Credentials {
     }
 }
 
-/// A reference to credentials, safe to store in settings.
+/// A reference to credentials, safe to store in settings, or credentials
+/// the caller already read ([`CredentialRef::Given`], never written to
+/// settings; `Debug` redacts them).
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CredentialRef {
+    /// Credentials the caller read itself; [`CredentialRef::text`] names
+    /// none of their bytes.
+    Given(Credentials),
     /// `env:PREFIX`: `PREFIX_ACCESS_KEY` and `PREFIX_SECRET_KEY`; the prefix
     /// starts with `LAYERFS_` (LayerFS reads only its own settings).
     Env(String),
@@ -53,12 +60,14 @@ impl CredentialRef {
         match self {
             Self::Env(prefix) => format!("env:{prefix}"),
             Self::File(path) => format!("file:{}", path.display()),
+            Self::Given(_) => "given".to_owned(),
         }
     }
 
     /// Reads the referenced credentials.
     pub fn resolve(&self) -> Result<Credentials, RemoteError> {
         let (access_key, secret_key) = match self {
+            Self::Given(given) => (given.access_key.clone(), given.secret_key.clone()),
             Self::Env(prefix) => {
                 let read = |suffix: &str| {
                     let name = format!("{prefix}_{suffix}");

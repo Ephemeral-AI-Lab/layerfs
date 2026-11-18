@@ -21,12 +21,7 @@
     "file.mkdir",
     "file.mv",
     "file.cp",
-    "file.apply",
-    "backup.connect",
-    "backup.disconnect",
-    "backup.list",
-    "backup.create",
-    "backup.restore"
+    "file.apply"
   ],
   "old_names": {
     "file.diff": "commit.diff",
@@ -36,9 +31,6 @@
   "not_built": {
     "project.doctor": [
       "`--full` (`project.data`, the walk of everything the project's Branches reach) is refused `Unsupported` until the P-full package builds it"
-    ],
-    "backup.doctor": [
-      "its checks keep today's `backup.*` ids; `bucket.*` is the backup package's rename"
     ]
   },
   "spec_sync": {

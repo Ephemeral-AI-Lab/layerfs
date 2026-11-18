@@ -35,10 +35,10 @@ fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
     call(home, name, args).unwrap_or_else(|e| panic!("{name}: {e:?}"))
 }
 
-/// A connected bucket whose endpoint answers nothing.
+/// A connected bucket whose endpoint answers nothing; its key's secret is
+/// in the home's secret folder.
 fn dead_bucket(home: &Path) {
-    std::env::set_var("LAYERFS_TEST_DEAD_ACCESS_KEY", "user");
-    std::env::set_var("LAYERFS_TEST_DEAD_SECRET_KEY", "secret");
+    layerfs_store::backup::secret::write(home, "bucket/dead", "secret").unwrap();
     write_record(
         &paths::bucket_record(home, "dead"),
         &SdkValue::map([
@@ -48,8 +48,7 @@ fn dead_bucket(home: &Path) {
             ("bucket", t("nothing")),
             ("prefix", t("")),
             ("region", t("us-east-1")),
-            ("key", t("env:LAYERFS_TEST_DEAD")),
-            ("part_size", SdkValue::Int(64 << 20)),
+            ("access_key", t("user")),
         ]),
     )
     .unwrap();
@@ -97,7 +96,11 @@ fn restore_over_a_store_with_a_running_sandbox_is_in_use() {
     let refused = call(
         &home,
         "backup.restore",
-        &[("store", t("shop")), ("bucket", t("dead"))],
+        &[
+            ("bucket", t("dead")),
+            ("file", t("shop")),
+            ("store", t("shop")),
+        ],
     )
     .unwrap_err();
     assert_eq!(refused.0, "InUse", "{refused:?}");
@@ -110,11 +113,22 @@ fn restore_over_a_store_with_a_running_sandbox_is_in_use() {
     let failed = call(
         &home,
         "backup.restore",
-        &[("store", t("shop")), ("bucket", t("dead"))],
+        &[
+            ("bucket", t("dead")),
+            ("file", t("shop")),
+            ("store", t("shop")),
+        ],
     )
     .unwrap_err();
     assert_ne!(failed.0, "InUse", "{failed:?}");
     assert!(paths::project_record(&home, "shop", "api").is_file());
+    // the replace was the Store's `op` while it ran; its certain failure
+    // dropped it and left what was tried on the link
+    let record = read_record(&path).unwrap().unwrap();
+    assert!(record.get("op").is_none(), "{record:?}");
+    let attempt = record.get("backups").unwrap().get("dead").unwrap();
+    let attempt = attempt.get("attempt").expect("an attempt");
+    assert_eq!(attempt.get_text("call"), Some("restore"));
     // the failed download left no staging folder behind
     let hidden: Vec<_> = std::fs::read_dir(home.join("store"))
         .unwrap()
@@ -144,7 +158,11 @@ fn restore_refuses_a_store_folder_that_is_not_private() {
         call(
             &home,
             "backup.restore",
-            &[("store", t("open-dir")), ("bucket", t("dead"))],
+            &[
+                ("bucket", t("dead")),
+                ("file", t("open-dir")),
+                ("store", t("open-dir")),
+            ],
         )
         .unwrap_err()
     };
@@ -276,7 +294,11 @@ fn the_next_restore_removes_a_killed_restores_folder() {
     let failed = call(
         &home,
         "backup.restore",
-        &[("store", t("fresh")), ("bucket", t("dead"))],
+        &[
+            ("bucket", t("dead")),
+            ("file", t("fresh")),
+            ("store", t("fresh")),
+        ],
     )
     .unwrap_err();
     assert_ne!(failed.0, "Exists", "{failed:?}");
@@ -340,5 +362,29 @@ fn a_second_create_of_a_store_is_busy() {
     )
     .unwrap_err();
     assert_ne!(next.0, "Busy", "{next:?}");
+    // the backup was the Store's `op`; its failure dropped it and wrote
+    // what was tried to the link's `attempt`, which store.get reads
+    let record = read_record(&paths::store_record(&home, "shop"))
+        .unwrap()
+        .unwrap();
+    assert!(record.get("op").is_none(), "{record:?}");
+    let got = layerfs_api::call(
+        Some(&home),
+        "store.get",
+        SdkValue::map([("store", t("shop")), ("detail", SdkValue::Bool(true))]),
+        &mut |_| {},
+    )
+    .unwrap();
+    let Some(SdkValue::List(rows)) = got.get("backups") else {
+        panic!("{got:?}")
+    };
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].get_text("bucket"), Some("dead"));
+    assert_eq!(rows[0].get("last"), Some(&SdkValue::Null));
+    let attempt = rows[0].get("attempt").unwrap();
+    assert_eq!(attempt.get_text("call"), Some("create"));
+    assert!(attempt
+        .get_text("ended_at")
+        .is_some_and(|at| at.ends_with('Z')));
     let _ = std::fs::remove_dir_all(home);
 }
