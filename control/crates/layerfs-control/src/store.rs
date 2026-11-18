@@ -2,8 +2,9 @@
 //! each runs `layerfs-store`'s call with the checks from
 //! [`crate::inventory`]. The Store calls proper (`branch`, `commit`, `file`)
 //! and the rest (`store.list`, `store.get`, `store.create`) are
-//! `layerfs-store`'s own. `store.update --machine` also reads the machine
-//! and reaches it as a Sandbox call would.
+//! `layerfs-store`'s own. `store.connect --machine` and
+//! `store.disconnect --machine` also read the machine, and the first
+//! reaches it as a Sandbox call would.
 use crate::inventory;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
@@ -11,7 +12,8 @@ use layerfs_home::names::{MachineName, StoreName};
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::Unreached;
 use layerfs_store::place::{self, Executor};
-use layerfs_store::postgresql::{check, connect, update as store_update};
+use layerfs_store::postgresql::check;
+use layerfs_store::postgresql::connect::{self, StoreConnect};
 use layerfs_store::record::{OwnConnection, StoreKind, StoreRecord};
 use layerfs_store::Related;
 use std::path::Path;
@@ -50,28 +52,86 @@ pub fn move_to(home: &Path, events: &mut Events<'_>, store: &str, machine: &str)
     layerfs_store::sqlite::family::move_to(home, events, store, machine, RELATED)
 }
 
-/// `store.disconnect`: forget a PostgreSQL Store; its data stays.
-pub fn disconnect(home: &Path, name: &StoreName) -> Outcome {
-    layerfs_store::postgresql::connect::disconnect(home, name, RELATED)
+/// `store.disconnect(store, { machine })`: without `machine`, forget a
+/// PostgreSQL Store (its data stays), refused `InUse` while a process
+/// holds it or a Sandbox of its projects exists; with it, remove that
+/// machine's own address, after which it dials the Store's again
+/// (`NotFound` when it has none). A sqlite Store is `InvalidInput`, naming
+/// `store remove`.
+pub fn disconnect(home: &Path, name: &StoreName, machine: Option<&MachineName>) -> Outcome {
+    let Some(machine) = machine.map(|m| m.as_str()) else {
+        return connect::disconnect(home, name, RELATED);
+    };
+    let record = check::postgresql_record(home, name)?;
+    if record.own_connection(machine).is_none() {
+        return Err(refused(
+            "NotFound",
+            format!("machine {machine} has no address of its own for Store {name}"),
+        ));
+    }
+    check::save_own(
+        home,
+        name,
+        machine,
+        &OwnConnection::default(),
+        record.binding(),
+    )?;
+    Ok(connect::disconnected(name, Some(machine)))
 }
 
-/// `store.update(name, { machine, url, password, synchronous_commit,
-/// clear })`. No `Debug`: it names a password reference.
-#[derive(Clone)]
-pub struct StoreUpdate {
-    /// The PostgreSQL Store.
-    pub name: StoreName,
-    /// The machine whose own connection is set or cleared; none for the
-    /// Store's own.
-    pub machine: Option<MachineName>,
-    /// The new URL (no password).
-    pub url: Option<String>,
-    /// The password's new reference.
-    pub password: Option<String>,
-    /// The Store's new `synchronous_commit`.
-    pub synchronous_commit: Option<String>,
-    /// Remove the machine's own connection.
-    pub clear: bool,
+/// `store.connect(store, url, { auth, machine, synchronous_commit })`. A
+/// Store not connected yet is connected from this process (`--auth`
+/// required, `--machine` refused). On a connected Store the URL becomes
+/// the address every machine dials, proven from this process, or with
+/// `machine` that machine's own, proven from that machine; either refuses
+/// `--auth` and `--synchronous-commit`. A sqlite Store of the name is
+/// `Exists`.
+pub fn connect(
+    home: &Path,
+    events: &mut Events<'_>,
+    request: &StoreConnect,
+    machine: Option<&MachineName>,
+) -> Outcome {
+    let name = request.store.as_str();
+    let Some(record) = StoreRecord::read(home, name)? else {
+        if let Some(machine) = machine {
+            return Err(refused(
+                "InvalidInput",
+                format!(
+                    "Store {name} is not connected: connect it first without --machine, then `layerfs store connect {name} <url> --machine {machine}`"
+                ),
+            ));
+        }
+        return connect::connect(home, request);
+    };
+    if record.kind()? != StoreKind::Postgresql {
+        return Err(refused(
+            "Exists",
+            format!("a sqlite Store named {name} exists"),
+        ));
+    }
+    let Some(machine) = machine.map(|m| m.as_str()) else {
+        return connect::readdress(home, request);
+    };
+    if request.auth.is_some() {
+        let uses = record.text("auth").unwrap_or("no saved login");
+        return Err(refused(
+            "InvalidInput",
+            format!("a machine's own connection takes no --auth; {name} uses {uses}"),
+        ));
+    }
+    connect::refuse_settings(name, request)?;
+    connect::refuse_login(&request.url)?;
+    connect::target(&request.url)?;
+    runs_postgresql_sandboxes(home, name, machine)?;
+    let own = OwnConnection {
+        url: Some(request.url.clone()),
+    };
+    let trial = record.clone().with_own_connection(machine, &own);
+    check_from(home, events, &trial, machine).1?;
+    check::save_own(home, &request.store, machine, &own, record.binding())?;
+    let saved = StoreRecord::of(home, name)?;
+    Ok(connect::answer(&saved, "updated", None))
 }
 
 /// Refused unless machine `machine` exists and its platform runs
@@ -182,91 +242,10 @@ pub(crate) fn check_from(
     (Some(host), checked)
 }
 
-/// `store.update`: changes PostgreSQL Store `name`'s own connection
-/// (`layerfs-store`'s part), or with `machine` the connection that machine
-/// alone dials: `url` and `password` replace the ones it has (either may
-/// be given alone), checked from that machine before they are saved, and
-/// `clear` removes its own connection, dialling nothing. Every refusal of
-/// the input comes before any connection; a failed check saves nothing.
-/// Answers the Store as `store.get` shows it.
-pub fn update(home: &Path, events: &mut Events<'_>, request: &StoreUpdate) -> Outcome {
-    let name = &request.name;
-    let Some(machine) = request.machine.as_ref().map(|m| m.as_str()) else {
-        if request.clear {
-            return Err(refused(
-                "InvalidInput",
-                "--clear removes a machine's own connection; name it with --machine",
-            ));
-        }
-        return store_update::update(
-            home,
-            &store_update::StoreUpdate {
-                name: name.clone(),
-                url: request.url.clone(),
-                password: request.password.clone(),
-                synchronous_commit: request.synchronous_commit.clone(),
-            },
-        );
-    };
-    let record = check::postgresql_record(home, name)?;
-    if request.synchronous_commit.is_some() {
-        return Err(refused(
-            "InvalidInput",
-            "synchronous_commit is the Store's setting; update it without --machine",
-        ));
-    }
-    let given = request.url.is_some() || request.password.is_some();
-    let current = record.own_connection(machine);
-    if request.clear {
-        if given {
-            return Err(refused(
-                "InvalidInput",
-                "--clear takes no --url or --password",
-            ));
-        }
-        if current.is_none() {
-            return Err(refused(
-                "InvalidInput",
-                format!("machine {machine} has no connection of its own to Store {name}"),
-            ));
-        }
-        check::save_own(
-            home,
-            name,
-            machine,
-            &OwnConnection::default(),
-            record.binding(),
-        )?;
-        return layerfs_store::sqlite::family::get(home, name);
-    }
-    if !given {
-        return Err(refused(
-            "InvalidInput",
-            "nothing to update: give --url or --password for the machine, or --clear",
-        ));
-    }
-    runs_postgresql_sandboxes(home, name, machine)?;
-    if let Some(url) = &request.url {
-        connect::refuse_password(url)?;
-        connect::target(url)?;
-    }
-    if let Some(password) = &request.password {
-        layerfs_home::secrets::resolve(password)?;
-    }
-    let current = current.unwrap_or_default();
-    let own = OwnConnection {
-        url: request.url.clone().or(current.url),
-        password: request.password.clone().or(current.password),
-    };
-    let trial = record.clone().with_own_connection(machine, &own);
-    check_from(home, events, &trial, machine).1?;
-    check::save_own(home, name, machine, &own, record.binding())?;
-    layerfs_store::sqlite::family::get(home, name)
-}
-
 /// `store.reach` in a machine's worker: `{ store, store_record, postgresql }`
-/// from the caller, which resolved the password and the URL this machine
-/// dials. Answers the check `store.update --machine` asks for.
+/// from the caller, which put the saved login into the URL this machine
+/// dials. Answers the check `store.connect --machine` and `store.doctor`
+/// ask for.
 pub fn reach_in_worker(args: &SdkValue) -> Outcome {
     let store = args.get_text("store").unwrap_or("");
     StoreName::parse(store)?;

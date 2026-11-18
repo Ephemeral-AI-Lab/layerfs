@@ -230,7 +230,7 @@ pub fn create(host: &Host, named: Option<&str>) -> Outcome {
                 return Err(refused(
                     "Exists",
                     format!(
-                        "a Sandbox is recorded at {} on this machine; `sandbox.close` closes it",
+                        "a Sandbox is recorded at {} on this machine; `sandbox.remove` removes it",
                         directory.display()
                     ),
                 ));
@@ -266,7 +266,7 @@ pub fn create(host: &Host, named: Option<&str>) -> Outcome {
     Ok(started.encode())
 }
 
-/// `sandbox.close(sandbox, { force })`: stops Sandbox `sandbox` now, under
+/// `sandbox.remove(sandbox, { force })`: stops Sandbox `sandbox` now, under
 /// its folder's guard. Refused `NoSuchSandbox` when nothing is recorded,
 /// and, unless `force`, `MountsActive` while a Workspace is mounted in it.
 /// Forced (O31), it stops the Sandbox through its backend anyway and

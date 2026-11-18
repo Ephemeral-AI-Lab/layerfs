@@ -12,9 +12,8 @@
 use crate::inventory;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
-use layerfs_home::op::{Op, Standing};
 use layerfs_home::outcome::{failed, Outcome};
-use layerfs_home::state::{Reason, State};
+use layerfs_home::state::State;
 use layerfs_machine::record::MachineRecord;
 use layerfs_sandbox::record::{SandboxRecord, WorkspaceRecord};
 use layerfs_store::record::{Placement, StoreRecord, StoreRef};
@@ -22,17 +21,6 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
-
-/// What a recorded intent says of its entity: busy while its owner lives,
-/// unresolved once a gone owner left its outcome unknown.
-fn held(op: Option<Op>) -> Option<State> {
-    let op = op?;
-    match op.standing() {
-        Standing::Running => Some(State::busy(&op)),
-        Standing::Unresolved => Some(State::broken(Reason::Unresolved, None)),
-        Standing::Stale => None,
-    }
-}
 
 /// The names of a Store's projects the home records.
 fn projects(home: &Path, store: &str) -> Result<SdkValue> {
@@ -114,19 +102,7 @@ fn workspaces(home: &Path, sandbox: &str) -> Result<Vec<SdkValue>> {
 /// `workspaces_not_listed` says.
 fn sandbox(home: &Path, record: &SandboxRecord, machine: &State) -> Result<SdkValue> {
     let name = record.name();
-    let state = match record.state(false) {
-        "creating" | "closing" => held(record.op()).unwrap_or(State::Ready),
-        "unresolved" => State::broken(Reason::Unresolved, None),
-        // it ended, or its create never recorded a runtime: only removing
-        // its record is left
-        "gone" => State::broken(
-            Reason::Missing,
-            Some(&format!("layerfs sandbox close {name}")),
-        ),
-        _ => machine
-            .blocks("machine", record.machine())
-            .unwrap_or(State::Ready),
-    };
+    let state = record.status(machine);
     // only `native` and a Sandbox reached directly record them here
     let recorded = record.machine() == "native" || layerfs_sandbox::direct::forwarded(record);
     let (listed, not_listed) = match state {

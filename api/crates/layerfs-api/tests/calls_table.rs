@@ -312,10 +312,17 @@ fn sandbox_family() {
     );
     assert!(!reached.contains("`machine`"), "{reached}");
     let reached = code(
-        "sandbox.close",
-        map(&[("name", t("tests")), ("force", SdkValue::Bool(true))]),
+        "sandbox.remove",
+        map(&[("sandbox", t("tests")), ("force", SdkValue::Bool(true))]),
     );
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
+    // ruling R1: the old names are gone, with no alias
+    for gone in ["sandbox.close", "logs.sandbox"] {
+        assert_eq!(
+            code(gone, SdkValue::Null),
+            format!("InvalidInput: no call named `{gone}`")
+        );
+    }
 }
 
 #[test]
@@ -376,6 +383,14 @@ fn store_family() {
 #[test]
 fn backup_family() {
     assert!(code("backup.create", map(&[("store", t("shop"))])).contains("`bucket` is required"));
+    assert!(code(
+        "backup.restore",
+        map(&[("bucket", t("b")), ("store", t("shop"))])
+    )
+    .contains("`file` is required"));
+    // the key's secret is an option; both key options are required
+    let connect = map(&[("name", t("b")), ("url", t("http://127.0.0.1:9/b"))]);
+    assert!(code("backup.connect", connect).contains("`access_key` is required"));
     let reached = code("backup.list", SdkValue::Null);
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
 }
@@ -688,6 +703,15 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "project.hide_path",
         "project.doctor",
     ];
+    let sandbox = [
+        "sandbox.create",
+        "sandbox.list",
+        "sandbox.get",
+        "sandbox.remove",
+        "sandbox.files",
+        "sandbox.log",
+        "sandbox.doctor",
+    ];
     let workspace = [
         "workspace.list",
         "workspace.mount",
@@ -701,12 +725,25 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "store.list",
         "store.get",
         "store.create",
+        "store.connect",
+        "store.disconnect",
+        "store.save_auth",
+        "store.auths",
+        "store.remove_auth",
+        "store.update",
         "store.move",
         "store.remove",
         "store.compact",
         "store.doctor",
     ];
-    let after = ["backup.doctor"];
+    let after = [
+        "backup.connect",
+        "backup.disconnect",
+        "backup.list",
+        "backup.create",
+        "backup.restore",
+        "backup.doctor",
+    ];
     // in family order: home, project, branch, commit, file, sandbox, …
     assert_eq!(
         migrated,
@@ -715,7 +752,7 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
             &project[..],
             &branch[..],
             &commit[..],
-            &["sandbox.doctor"][..],
+            &sandbox[..],
             &workspace[..],
             &machine[..],
             &store[..],

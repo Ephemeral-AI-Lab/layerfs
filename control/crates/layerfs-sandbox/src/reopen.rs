@@ -45,7 +45,7 @@ pub fn gone(id: &str, container: &str, stopped: bool) -> SdkRefusal {
         ]),
     }
 }
-/// The refusal of every call but `sandbox.close` on Sandbox `id`, recorded
+/// The refusal of every call but `sandbox.remove` on Sandbox `id`, recorded
 /// under the retired docker backend (D-8, layerfs-project#111): its
 /// container `container` is never reopened, stopped or deleted here.
 pub fn retired(id: &str, container: &str) -> SdkRefusal {
@@ -54,7 +54,7 @@ pub fn retired(id: &str, container: &str) -> SdkRefusal {
         format!(
             "Sandbox {id} was created on the docker Sandbox backend, which this build no longer \
              runs (a docker machine's Sandboxes now run in namespaces in its worker): \
-             `layerfs sandbox close {id}` forgets it, `docker rm -f {container}` removes its \
+             `layerfs sandbox remove {id}` forgets it, `docker rm -f {container}` removes its \
              container, and `layerfs sandbox create` makes it again"
         ),
     )

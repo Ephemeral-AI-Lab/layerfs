@@ -1,6 +1,9 @@
 //! `sandbox.create`: the name claimed under the home lock with the create's
 //! `op` intent (#536 §7.1), the Sandbox started on its machine, and its
-//! result recorded with the intent dropped in one write.
+//! result recorded with the intent dropped in one write. Its progress is
+//! its op's phases, `claim` and `start`, and `mount` when the caller mounts
+//! a Branch next (`sandbox create --mount`, which the call surface runs
+//! after this, with the Workspace calls).
 use super::direct;
 use super::record::{self, SandboxRecord};
 use crate::host::{Call, Message, Started};
@@ -26,6 +29,15 @@ pub struct CreateRequest {
     /// The image a namespaces Sandbox runs: a digest, Docker image Id or
     /// Docker reference, copied to the machine when it does not hold it.
     pub image: Option<String>,
+    /// Whether the caller mounts a Branch once it started: its progress
+    /// then counts a `mount` phase, which the caller reports.
+    pub mount: bool,
+}
+
+/// Sends progress event `phase` of a create: `done` of `total` phases.
+fn phase(events: &mut Events<'_>, phase: &str, done: i64, mount: bool) {
+    let total = if mount { 3 } else { 2 };
+    events.phase(phase, Some(done), Some(total), Vec::new());
 }
 
 /// A Sandbox just started, as recorded.
@@ -122,6 +134,7 @@ pub fn create(
         return Err(refused("Exists", format!("a Sandbox named {name} exists")));
     }
     let op = Op::begin("sandbox.create", "claim", SdkValue::Null)?;
+    phase(events, "claim", 0, request.mount);
     home::private_dir(&dir)?;
     let record = SandboxRecord::creating(name, project, machine, &op);
     let claimed = record::lock(&home, name).and_then(|_sandbox| record.write(&home));
@@ -132,6 +145,7 @@ pub fn create(
     }
     drop(_lock);
     let op = op.at("start");
+    phase(events, "start", 1, request.mount);
     {
         let _sandbox = record::lock(&home, name)?;
         record.clone().with_op(&op).write(&home)?;
@@ -157,13 +171,16 @@ pub fn create(
                 record = direct::save(&home, record, opened)?;
             }
             record.write(&home)?;
+            if !request.mount {
+                phase(events, "start", 2, false);
+            }
             Ok(Created {
                 record,
                 forward_failed: opened.and_then(|opened| opened.failed),
             })
         }
         // its outcome is not known: the intent stays, uncertain, until
-        // `sandbox.close` clears it
+        // `sandbox.remove` clears it
         Err(refusal) if refusal.code == "Unknown" => {
             let op = op.as_uncertain();
             record.with_op(&op).write(&home)?;

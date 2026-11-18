@@ -315,9 +315,9 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
         &home,
         "store.connect",
         &[
-            ("name", t("pg")),
-            ("url", t("postgres://u:secret@db/x")),
-            ("password", t("hunter2")),
+            ("store", t("pg")),
+            ("url", t("postgres://db.internal/x")),
+            ("auth", t("pg-app")),
         ],
     );
     let words = argv(&last(&home));
@@ -328,10 +328,23 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
             "connect".into(),
             "pg".into(),
             bytes(24),
-            "--password".into(),
-            bytes(7)
+            "--auth".into(),
+            "pg-app".into()
         ]
     );
+    let _ = call(
+        &home,
+        "store.save_auth",
+        &[
+            ("auth", t("pg-app")),
+            ("user", t("app")),
+            ("password", t("hunter2")),
+        ],
+    );
+    let line = last(&home);
+    let printed = layerfs_api::json::print(&line);
+    assert!(!printed.contains("hunter2"), "{printed}");
+    assert!(argv(&line).contains(&bytes(7)), "{printed}");
     let _ = call(
         &home,
         "workspace.exec",
@@ -351,6 +364,23 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
     for secret in ["secret", "hunter2", "make", "add a"] {
         assert!(!text.contains(secret), "{secret} logged");
     }
+    // a bucket's URL and its key's secret are byte counts; the key id is not
+    // (after the scan above: the option's own name says `secret`)
+    let _ = call(
+        &home,
+        "backup.connect",
+        &[
+            ("name", t("b1")),
+            ("url", t("http://127.0.0.1:9/b/p")),
+            ("access_key", t("AKID")),
+            ("secret_key", t("s3cr3t-key")),
+        ],
+    );
+    let words = argv(&last(&home));
+    assert_eq!(&words[..4], ["backup", "connect", "b1", &bytes(22)]);
+    assert!(words.contains(&"AKID".to_owned()), "{words:?}");
+    assert!(words.contains(&bytes(10)), "{words:?}");
+    assert!(!words.iter().any(|w| w.contains("s3cr3t")), "{words:?}");
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(folder).unwrap();
 }

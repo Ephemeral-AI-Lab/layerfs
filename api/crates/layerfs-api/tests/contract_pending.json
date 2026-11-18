@@ -14,42 +14,15 @@
     "file.mkdir",
     "file.mv",
     "file.cp",
-    "file.apply",
-    "sandbox.create",
-    "sandbox.list",
-    "sandbox.get",
-    "sandbox.remove",
-    "sandbox.files",
-    "sandbox.log",
-    "store.connect",
-    "store.disconnect",
-    "store.save_auth",
-    "store.auths",
-    "store.remove_auth",
-    "store.update",
-    "backup.connect",
-    "backup.disconnect",
-    "backup.list",
-    "backup.create",
-    "backup.restore"
+    "file.apply"
   ],
   "old_names": {
     "file.diff": "commit.diff",
-    "file.revision": "file.history",
-    "logs.sandbox": "sandbox.log",
-    "sandbox.close": "sandbox.remove"
+    "file.revision": "file.history"
   },
   "not_built": {
-    "store.doctor": [
-      "`store.operation`, `store.schema` and `store.backups` are not checked yet",
-      "a sqlite Store gets its records checks only (`store.record`, `store.identity`): the shallow cut that reaches it where it lives and stops after the schema check (C14, a new argument on the worker's Store diagnosis) is the Store package's",
-      "a PostgreSQL Store's connection from this computer keeps today's step ids (`store.connection.*`), not folded into one `store.connection` yet; the probes from each machine with a Sandbox of it and from `--machine` are one `store.connection` check each, with `from`"
-    ],
     "project.doctor": [
       "`--full` (`project.data`, the walk of everything the project's Branches reach) is refused `Unsupported` until the P-full package builds it"
-    ],
-    "backup.doctor": [
-      "its checks keep today's `backup.*` ids; `bucket.*` is the backup package's rename"
     ]
   },
   "spec_sync": {

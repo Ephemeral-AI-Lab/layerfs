@@ -1,5 +1,5 @@
 //! Cancel (compute-plane 2.0 §5.1, §5.4): `workspace.cancel` on the
-//! side that keeps the command's record ([`cancel`]), and what `sandbox.close`
+//! side that keeps the command's record ([`cancel`]), and what `sandbox.remove`
 //! and `workspace.unmount` do with the records of theirs ([`settle`]): refuse
 //! `Busy` while one is live, or with `force` cancel each first. A record
 //! whose owner is gone is stale: it is ended through its stop handle if its
@@ -214,7 +214,7 @@ fn logged(dir: &Path, found: &ExecRecord, outcome: Outcome, kept: bool) {
     }
 }
 
-/// What a `sandbox.close` (`workspace` `None`) or a `workspace.unmount` of
+/// What a `sandbox.remove` (`workspace` `None`) or a `workspace.unmount` of
 /// Workspace `workspace` does with the command records in Sandbox
 /// `sandbox`'s folder `dir`: stale ones are ended and removed ([`stale`],
 /// [`stale_remote`]); live ones refuse it `Busy`, or with `force` are each

@@ -66,7 +66,7 @@ pub fn check(home: &Path, id: &str, daemon: &DaemonRecord) -> Result<()> {
         format!(
             "the forward to Sandbox {id}'s daemon (pid {}) has ended: machine {machine} \
              stopped or the forward was ended. Start the machine if it is stopped \
-             (`layerfs machine start {machine}`), then `layerfs sandbox close {id}`",
+             (`layerfs machine start {machine}`), then `layerfs sandbox remove {id}`",
             forward.pid().unwrap_or(0)
         ),
     ))
@@ -105,7 +105,7 @@ pub fn unanswered(id: &str, daemon: &DaemonRecord, refusal: SdkRefusal) -> SdkRe
         .unwrap_or_default();
     let message = format!(
         "Sandbox {id}'s daemon does not answer at {at}: {}; `layerfs sandbox get {id}` \
-         shows whether it runs, `layerfs sandbox close {id}` closes it",
+         shows whether it runs, `layerfs sandbox remove {id}` removes it",
         refusal.message
     );
     SdkRefusal {

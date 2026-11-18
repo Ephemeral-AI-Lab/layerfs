@@ -1,7 +1,8 @@
 //! `backup.create`: a snapshot on the Store's machine, uploaded by this process.
-use super::family::{hex, save_link};
+use super::family::hex;
 use super::progress::Shown;
 use super::record::{remote_error, BucketRecord, StoreLink};
+use crate::intent;
 use crate::lease;
 use crate::place::{self, Executor};
 use crate::record::{StoreRecord, StoreRef};
@@ -50,7 +51,9 @@ pub struct BackupCreate {
 /// consistent snapshot beside the Store (`store.file` `stage`, in this
 /// process for `native`); this process uploads it with its sha256, heads,
 /// binding and `layerfs-exported-from`. A worker's snapshot comes here in
-/// pieces first: the worker never sees the key.
+/// pieces first: the worker never sees the key. The backup is the Store's
+/// `op` (`backup`) from its check to its end ([`intent`]); phases `check`,
+/// `snapshot`, `send` (from a machine, bytes), `hash` and `upload` (bytes).
 pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> Outcome {
     let home = home.to_path_buf();
     let (store, bucket) = (request.store.as_str(), request.bucket.as_str());
@@ -67,7 +70,7 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
         ));
     }
     record.unblocked()?;
-    let driver = bucket_record.driver()?;
+    let driver = bucket_record.driver(&home)?;
     let expected = expected(&record, bucket, &file);
     let machine = store_ref.machine()?.to_owned();
     let executor = place::plan(&home, store_ref)?;
@@ -78,10 +81,13 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
     let executor = std::cell::RefCell::new(executor);
     let _lease = lease::hold(&home, store)?;
     let _creating = Creating::take(&home, store)?;
+    let args = SdkValue::map([
+        ("bucket", SdkValue::text(bucket)),
+        ("file", SdkValue::text(&file)),
+    ]);
+    let mut op = intent::begin(&home, store, intent::BACKUP, "check", args)?;
     let mut shown = Shown::new();
     shown.phase(events, "check");
-    check(driver.as_ref(), &object, expected, &home_id)?;
-    shown.phase(events, "snapshot");
     let step = |step: StoreStep| {
         let frame = StepFrame {
             store: store.to_owned(),
@@ -90,7 +96,6 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
         };
         crate::sqlite::family::step(&home, &mut executor.borrow_mut(), &frame)
     };
-    let staged = step(StoreStep::Stage)?;
     // `native` stages beside the Store; a worker's copy comes here
     let local = match local_steps {
         true => {
@@ -100,8 +105,15 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
         }
         false => paths::store_dir(&home, store).join("backup.staging"),
     };
+    let mut staged_any = false;
     let result = (|| {
+        check(driver.as_ref(), &object, expected, &home_id)?;
+        intent::advance(&home, store, &mut op, "snapshot")?;
+        shown.phase(events, "snapshot");
+        staged_any = true;
+        let staged = step(StoreStep::Stage)?;
         if !local_steps {
+            intent::advance(&home, store, &mut op, "send")?;
             let total = staged.get_int("bytes").map(|n| n as u64);
             shown.bytes(events, "send", 0, total);
             fetch_staged(&step, &local, &mut |done| {
@@ -130,9 +142,10 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
         if let Some(heads) = &heads {
             metadata.insert(remote::HEADS.to_owned(), pieces::hex(heads));
         }
-        shown.phase(events, "check");
+        // the bucket may have changed while the snapshot was made
         check(driver.as_ref(), &object, expected, &home_id)?;
-        // `hash`, then `upload` with its bytes and pieces
+        intent::advance(&home, store, &mut op, "upload")?;
+        // `hash`, then `upload` with its bytes
         let moved = shown
             .transfer(events, || {
                 pieces::upload(driver.as_ref(), &object, &local, &metadata)
@@ -143,19 +156,27 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
     if !local_steps {
         let _ = std::fs::remove_file(&local);
     }
-    let _ = step(StoreStep::Unstage);
-    let (moved, heads) = result?;
+    if staged_any {
+        let _ = step(StoreStep::Unstage);
+    }
+    let (moved, heads) = match result {
+        Ok(done) => done,
+        Err(refusal) => {
+            super::ended::failed(&home, store, &op, (bucket, &file, "create"), &refusal);
+            return Err(refusal);
+        }
+    };
     let saved = StoreLink::new(&file, "create", moved.bytes, &moved.sha256, heads.as_ref());
-    save_link(&home, store, bucket, saved)?;
+    super::ended::finished(&home, store, &op, bucket, &saved)?;
     Ok(SdkValue::map([
+        ("file", SdkValue::text(&file)),
+        ("size", SdkValue::Int(moved.bytes as i64)),
+        ("outcome", SdkValue::text("created")),
         ("store", SdkValue::text(store)),
         ("bucket", SdkValue::text(bucket)),
-        ("file", SdkValue::text(&file)),
         ("object", SdkValue::text(&object)),
-        ("bytes", SdkValue::Int(moved.bytes as i64)),
-        ("pieces", SdkValue::Int(moved.pieces as i64)),
         ("sha256", hex(&moved.sha256)),
-        ("heads", heads.as_ref().map(hex).unwrap_or_default()),
+        ("heads_sha256", heads.as_ref().map(hex).unwrap_or_default()),
     ]))
 }
 

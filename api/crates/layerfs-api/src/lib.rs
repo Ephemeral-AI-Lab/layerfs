@@ -23,7 +23,6 @@ mod file;
 // the `home` family's folder; `home` itself names the re-exported home module below
 #[path = "home/mod.rs"]
 mod home_family;
-mod logs;
 mod machine;
 mod project;
 mod sandbox;
@@ -77,7 +76,7 @@ pub use layerfs_sandbox::{
     BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
 };
 
-/// The eleven families, in the order help lists them, the same from the
+/// The ten families, in the order help lists them, the same from the
 /// `layerfs` binary, Node and Python.
 pub fn families() -> Families {
     &[
@@ -120,10 +119,6 @@ pub fn families() -> Families {
         Family {
             name: "backup",
             list: backup::calls,
-        },
-        Family {
-            name: "logs",
-            list: logs::calls,
         },
     ]
 }

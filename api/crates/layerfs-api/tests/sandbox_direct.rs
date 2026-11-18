@@ -255,7 +255,7 @@ fn ssh_is_refused_and_docker_goes_through_its_worker() {
         ops(&log),
         ["sandbox.create", "backend.daemon.workspace.status"]
     );
-    call(&home, "sandbox.close", &[("name", t("d1"))]).unwrap();
+    call(&home, "sandbox.remove", &[("sandbox", t("d1"))]).unwrap();
 
     std::fs::remove_dir_all(&home).unwrap();
     std::fs::remove_dir_all(&cache).unwrap();

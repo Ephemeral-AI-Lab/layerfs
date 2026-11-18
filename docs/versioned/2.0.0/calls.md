@@ -551,41 +551,94 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 {"kind":"Committed","branch":"agent","head":"1271…","commit":{…,"message":"batch",…}}
 ```
 
-### `sandbox` (5)
+### `sandbox` (7)
+
+The family is migrated: each call answers its short form, `--detail` its
+long form (see [the form of an answer](#the-form-of-an-answer)).
+`sandbox.doctor` is one of [the doctors](#the-doctors). Removed with no
+alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
+`logs` family is gone (`logs.machine` is `machine log`). Every call but
+`create` names the Sandbox by the positional `sandbox`.
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `create` | `project`, `name`, `machine` (optional) | `image` | starts a named Sandbox of a project on a machine; with none, its sqlite Store's machine, or `native` for a PostgreSQL Store |
-| `list` | `[project]` | `page_size`, `page_pos`, `live` | every Sandbox in the home, or one project's; with `live`, whether each one's daemon process runs now |
-| `get` | `name` | `page_size`, `page_pos` | a Sandbox and its Workspaces |
-| `close` | `name` | `force` | stops a Sandbox |
-| `files` | `sandbox`, `[path]` | `depth`, `cursor`, `limit`, `offset`, `length` (int) | a Sandbox's roots, one page of a folder, or one window of a file, in its home or (a Sandbox with a root of its own) its root |
+| `create` | `project`, `name` | `machine`, `image`, `mount`, `on_progress` | starts a named Sandbox of a project on a machine; with `--mount B`, also mounts Branch `B` in it |
+| `list` | — | `project`, `machine`, `limit` (100), `cursor` | every Sandbox in the home, or one project's or one machine's, from records |
+| `get` | `sandbox` | `--with stats` | one Sandbox: its state and its Workspaces, a live read of its daemon |
+| `remove` | `sandbox` | `force`, `on_progress` | stops a Sandbox and removes it |
+| `files` | `sandbox`, `[path]` | `depth` (1), `limit` (100), `cursor`, `byte_offset` (0), `byte_length` (262144) | a Sandbox's roots, one page of a folder, or one byte window of a file |
+| `log` | `sandbox` | `limit` (200), `cursor` | a Sandbox's daemon log: its last lines, then the lines before a cursor |
+| `doctor` | `sandbox` | — | checks one Sandbox (see [the doctors](#the-doctors)) |
 
-- `create` answers the Sandbox's record: `name`, `project`, `machine`,
-  `created`, `id` (the Sandbox's name, as its machine knows it),
-  `platform`, `runtime`, `image`, `backend`, `route` (the kernel route,
-  `fuse` or `nfs`) and `state`. A Sandbox name taken anywhere in the home
-  is `Exists`. The Store's machine, a running `store push` or `store pull` and the name
-  are checked under one home lock, where the create claims the name with
-  its `op` intent (#536 §7.1); its success records the result and drops
-  the `op` in one write, a refused start removes the record. A create
-  whose outcome is not known (its machine's answer was lost) is `Unknown`
-  and its record keeps the `op`, marked `uncertain`.
-- Every Sandbox's `state` is derived, never stored: `creating` or
-  `closing` while that call's process runs it, `unresolved` once a create
-  or close lost its answer and its process ended, `gone` with no id (or
-  when `get` hears from its machine that it no longer runs), else
-  `running`. While a create or close runs, `close` and the `workspace`
-  calls but `status` are `Busy`; an `unresolved` Sandbox refuses them
-  `Unresolved`, naming `layerfs sandbox get <name>` and `layerfs sandbox
-  close <name>`, the call that clears it.
-- `lost` (layerfs-project#113): the record has an id but the Sandbox no
-  longer runs. `get` reports it when the Sandbox's process tree was ended
-  outside LayerFS (on `native`, its recorded daemon is gone); `list` reads
-  only records and does not ask the machine. `sandbox close` clears it:
-  the record goes and the name is free (`was_gone: true`).
-- A sqlite project's Sandbox runs on the machine that holds its Store;
-  another machine is `Unsupported`, naming the Store's machine.
+- **State from records.** A Sandbox's `state` is derived from its record
+  and its machine's record, with no probe, in this order: `busy` with `op
+  { name, phase, started_at }` while a `create` or `remove` runs;
+  `broken` `unresolved` once one lost its answer and its process ended (or
+  a machine stop's outcome was not known); `broken` `missing` with no
+  runtime id, or a runtime a confirmed machine stop ended; `blocked` with
+  `blocked_by { machine, reason }` while its machine is not ready;
+  `broken` `unsupported` for the retired docker backend; `broken` `lost` or
+  `not_answering` when a `get` recorded it; else `ready`. Every broken
+  Sandbox's `fix` is `layerfs sandbox remove <sandbox>`; the long form's
+  `message` says why. `list` reads records only and asks no machine or
+  daemon; `list` and `get` start no machine (#535 P4).
+- **`get`** starts from the records and, for a Sandbox they say is ready
+  (or `lost`, or `not_answering`), asks its daemon for its Workspaces once,
+  on the route its other calls take. A list is `ready`; a machine that says
+  the Sandbox does not run is `broken` `lost`; a daemon that admits no
+  control connection is `broken` `not_answering`, its `message` carrying
+  the refusal's counts (`(Capacity on daemon_control_slot: 0 pool and 1
+  reserved slots vacant, 3 failures retained)`); a machine or forward that
+  does not answer is `unknown`, with `observed_at` (when its state was last
+  known) and why in `message`. The record is written only when that
+  changes its `reason` (which moves the home's `generation`); when it was
+  observed is kept in `observed.json` beside the record, which does not.
+  Reading never clears an `op`.
+- **`get`'s Workspaces**: each by its handle `workspace`
+  (`<sandbox>:<name>` when named, else `<sandbox>:<path>`), `branch`, the
+  exec ids `running` in it now (whichever client started them; one whose
+  client is gone is not listed) and, when not ready, its `state` (`busy`
+  with `op.name` `mount`, `commit` or `unmount`; `broken` with `fix:
+  layerfs workspace unmount <ws> --discard --force`). The long form adds
+  `path`, `commit`, `base_layer`, `mounted_at`, `branch_moved`,
+  `pending_merge`, `commands` (`[{exec, started_at, program, tag}]`: no
+  argument and no environment value is shown) and `id`. The Sandbox's long
+  form adds `sandbox, project, machine, platform, image, backend, route,
+  created_at` and `workspace_capacity` (16, whatever its state).
+  ```text
+  $ layerfs sandbox get s1
+  {"workspaces":[{"workspace":"s1:w","branch":"dev","running":["exec-9c0f6f0d2a1b4e77"]}]}
+  ```
+- **`get --with stats`** adds `stats`, null unless the Sandbox is ready:
+  `daemon` (`{pid, started_at}` of the process its record names),
+  `usage` (`{cpu_ms, memory_bytes, memory_peak_bytes, memory_file_bytes,
+  pid_count, oom_kill_count}` of its cgroup, or null with `usage_reason`:
+  `host_process`, `not_supported`, `cgroup_v1`, `no_cgroup`,
+  `not_observed`, `no_controller`), `daemon_capacity` (the daemon's
+  control-capacity model, one more bounded call) and `workspaces`
+  (`[{workspace, overlay_bytes, usage, usage_reason}]`; `overlay_bytes` is
+  the overlay file's size from its folder entry, null when it could not be
+  read).
+- **`list`** answers `items` by name, each with `sandbox`, `project`, the
+  Workspaces this home records (`[{workspace, branch}]`) and its state
+  when not ready; `workspaces_not_listed` is true for a Sandbox whose
+  Workspace records live in its machine. The long form adds `message,
+  machine, platform, image, created_at`. A page ends after `limit` rows
+  (1 to 1000) or early at 64 KiB, with `next_cursor`, which carries the
+  filters; a cursor of other filters is `InvalidInput`.
+- **`create`** checks the Store's machine, a running `store push` or
+  `store pull` and the name under one home lock, where it claims the name
+  with its `op` (`create`, #536 §7.1); its success records the result and
+  drops the `op` in one write, a refused start removes the record. A name
+  taken anywhere in the home is `Exists`. With no `machine` it runs on its
+  sqlite Store's machine, else on `native`; another machine than a sqlite
+  Store's is `Unsupported`. Its short answer is `{"ok":true}`, or with
+  `--mount B` the Workspace's `workspace` (its name is the Branch's,
+  lowercased, each other character `-`) and `path`. A refused mount keeps
+  the Sandbox and answers the mount's refusal with `next.sandbox` and
+  `fix: layerfs workspace mount <sandbox> <B>`. Progress: `claim`, `start`
+  and, with `--mount`, `mount`. A create whose outcome is not known is
+  `Unknown`; its record keeps the `op`, uncertain.
 - On `docker` a Sandbox runs `namespaces` in the docker machine's worker
   container (D-8). Its root is the sealed bundle's `sandbox-image.tar`
   unless `image` names another. `image` (call-table kind `image`) is a
@@ -612,113 +665,61 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   archive, loaded into Docker once and recorded on the docker machine as
   `loaded_image` (`{id, bundle}`; another bundle's image is loaded again).
   A bundle without the archive is `Unsupported`, naming it (#535 P5).
-  A Sandbox recorded under the retired docker backend is refused
-  `Unsupported`, asking to recreate it; `sandbox close` forgets it and
-  names its container for `docker rm`.
-- `list` and `get` page: `list` its Sandboxes, `get` the Sandbox's
-  `workspaces` (`page_size` 1 to 1000, default 50; `page_pos`), with
-  `next_page_pos`, `null` after the last page. Both show each Sandbox's
-  `state` and, while it has one, its `op` (`{id, name, phase, started,
-  uncertain}`, H6); reading never clears it. `get` asks no daemon for a
-  Sandbox with no id. Each Workspace carries `ws`
-  (`<sandbox>:<name>` when named, else `<sandbox>:<path>`), `name` (or
-  `null`) and `path`, beside the daemon's fields.
-- `get` also answers `workspace_capacity`, how many Workspaces one Sandbox
-  holds at once (16), whatever the Sandbox's state, and for each Workspace:
-  - `running`: the commands running in it now, oldest first, whichever
-    client started them: `[{exec_id, started, tag, program}]`. `started`
-    is ms since the epoch; `tag` is the log tag of the `workspace exec`
-    call that started it (`log_tag`, else `LAYERFS_LOGS_TAG`) or `null`;
-    `program` is the command's first word that is not a `NAME=value`
-    assignment, or `null`. No argument and no environment value is shown.
-    A command that ended is not listed, nor is one whose client is gone
-    (the next cancel, unmount or close ends that one). `null` when the
-    command records could not be read.
-  - `overlay_bytes`: the size of the Workspace's overlay file, read from
-    its folder entry (the file is not opened). It includes the size of
-    the empty overlay and only grows until the Workspace is unmounted.
-    `null` when it could not be read. For a Sandbox on a `lima` machine
-    whose daemon this host reaches directly, the sizes are read by that
-    machine's worker, and are `null` when it does not answer.
-  - `usage`: what the Workspace's commands have used, in the shape of the
-    Sandbox's `usage` below, from the Workspace's own cgroup in a
-    `namespaces` Sandbox (the Sandbox's own processes are in a leaf group,
-    so its Workspace groups get the memory and pids controllers it has).
-    `null` with `usage_reason` `no_command` when no command runs in the
-    Workspace, and with the Sandbox's own reason when none of its
-    Workspaces can have a cgroup; a Sandbox an earlier build started keeps
-    only `cpu_usec` per Workspace (`no_controller`).
-  They come from files, with no daemon call. A machine whose worker runs
-  an earlier build answers Workspaces without these fields.
+  A Sandbox recorded under the retired docker backend is `broken`
+  `unsupported`; every call on it but `get` and `remove` is refused
+  `Unsupported`, asking to recreate it; `sandbox remove` forgets it
+  (`outcome: "forgotten"`) and answers its `container` with `fix: docker rm
+  -f <container>`.
+- **`remove`** records its `op` (`remove`) before it stops the Sandbox
+  and removes the record at the end; progress is its phases `cancel` (with
+  `force`, one event per command this home records), `stop` and `delete`.
+  Without `force` it is `Busy` while a command runs (`next.running` lists
+  their exec ids) and `InUse` while a Workspace is mounted
+  (`next.workspaces` lists their handles). With `force`, each running
+  command is cancelled first (a cancel not confirmed refuses it `Unknown`),
+  then the Sandbox is stopped anyway: `unmounted` lists the Workspaces it
+  ended, whose uncommitted changes end with it. `outcome` (long form) is
+  `removed`, `already_gone` (its runtime was gone, or it never recorded
+  one; `left` says what may remain) or `forgotten` (the retired docker
+  backend). A lost answer keeps the record with the `op` uncertain
+  (`broken` `unresolved`) until another `remove`; any other refusal leaves
+  the Sandbox as it was.
+- **`files`**, with no path, answers the Sandbox's roots, each with a
+  `role` (long form): one `workspace` per mounted Workspace (`not_read:
+  mount`, its handle in `workspace`), `home` (the folder that is `HOME`
+  for its commands), `log` (its daemon's log, read with `sandbox log`)
+  and, for a Sandbox with a root of its own (every one but a native macOS
+  Sandbox), `/` with role `root`. With the path of a folder it answers
+  `items` (`path`, `type` `file`, `dir`, `symlink` or `other`, `size` and,
+  for an entry listed and not read, `not_read`: `system`, `mount`,
+  `unreadable` or `restricted`; the long form adds `role, depth, mode,
+  modified_at, target, fs, workspace`) in tree order to `depth` levels, at
+  most `limit` (1 to 1000) a page, with `next_cursor`. With the path of a
+  file it answers a window: `text` and `next_byte_offset` while more
+  remains, or `binary: true` with its `size`. A path is absolute, as the
+  Sandbox's commands see it; under its home no link is followed and no
+  mount entered, and outside it the path is read in the Sandbox's root
+  (`/proc`, `/sys`, `/dev` are `system`; a Workspace mount is never
+  entered). A log is refused `InvalidInput` (it is read with `sandbox
+  log`), so is a path with `..`, a link on the way, a FIFO, socket or
+  device, and a file LayerFS keeps private. A path that is not there is
+  `NotFound`.
   ```text
-  {"name":"s1","project":"shop/api","machine":"native",…,"state":"running","workspaces":[{"workspace":"5f…","namespace":1,"branch":"dev",…,"path":"/…/workspaces/1","name":"w","ws":"s1:w","running":[{"exec_id":"exec-9c0f6f0d2a1b4e77","started":1794000000000,"tag":"dsh:s9:t1","program":"npm"}],"overlay_bytes":188416}],"daemon_capacity":{…},"workspace_capacity":16,"next_page_pos":null}
+  $ layerfs sandbox files s1 "$HOME_PATH" --depth 2 --limit 2
+  {"items":[{"path":"/…/tmp/a.txt","type":"file","size":6},{"path":"/…/tmp/src","type":"dir"}],"next_cursor":"/…/tmp/src"}
   ```
-- `get` also answers the Sandbox's daemon process and what its cgroup has
-  used (#164), read with `overlay_bytes` on the side that runs the Sandbox,
-  with no daemon call and no further round trip:
-  - `daemon`: `{pid, started_at}` of the process the Sandbox's record
-    names (the daemon of a `native` Sandbox; the supervisor a
-    `namespaces` Sandbox's daemon runs under), with `started_at` in ms
-    since the epoch, to about a second, while the process runs and
-    `null` once it has ended; `null`
-    when its machine did not answer.
-  - `usage`: `{cpu_usec, memory_current, memory_peak, memory_file, pids,
-    oom_kills}` of the Sandbox's own cgroup, the daemon and every command
-    in it (`memory_file`: file cache and tmpfs, inside `memory_current`;
-    `oom_kills`: out-of-memory kills in it and its Workspace and command
-    groups; #182); a value the
-    kernel does not keep there is `null`, and when that is the memory
-    or the process count `usage_reason` is `no_controller` (where the
-    machine gives Sandboxes no memory or pids controller; docker, Lima and
-    Apple Container machines of this build give both). `usage` is
-    `null`, with `usage_reason`, for a `native` Sandbox, which is a plain process
-    (`host_process`), for a runtime this build reads no usage of
-    (`not_supported`), on a machine without cgroup v2 (`cgroup_v1`), when
-    the cgroup is not there (`no_cgroup`) and when the machine did not
-    answer (`not_observed`).
-  ```text
-  {"name":"s1",…,"state":"running","workspaces":[],"daemon_capacity":{…},"workspace_capacity":16,"daemon":{"pid":37823,"started_at":1794776690403},"usage":null,"usage_reason":"host_process","next_page_pos":null}
-  ```
-- `list --live` adds `live` to each Sandbox of the page (#164): `true`
-  when the process its daemon record names still runs, `false` when it has
-  ended, `null` with `live_reason` when that is not known
-  (`machine_stopped`, `deadline`, or the refusal its machine's request
-  met, as `unavailable`). `state` is unchanged: it comes from records, so
-  a Sandbox whose daemon died reads `state: "running"`, `live: false`
-  until `get` or `close`. Each machine among the page's Sandboxes is asked
-  once; a machine that does not answer fails no list. Without `--live`
-  the answer has no such field.
-  ```text
-  $ layerfs sandbox list --live
-  {"items":[{"name":"s1","project":"shop/api","machine":"native",…,"state":"running","live":true}],"next_page_pos":null}
-  ```
-- `list` and `get` start no machine (#535 P4). `get` on a Sandbox whose
-  machine is down answers its record with `workspaces: []` and
-  `down_reason`, the reason its worker was not reached.
-- `close` records its `op` (`sandbox.close`) before it stops the
-  Sandbox and removes the record at the end; a lost answer (`Unknown`)
-  keeps the record with the `op` uncertain until another `close`, and any
-  other refusal leaves the Sandbox as it was.
-- `close` without `force` is `Busy` while a command runs in one of its
-  Workspaces (`detail.execs` names their exec ids), and `MountsActive`
-  while a Workspace is mounted. With `force`, each running command is
-  cancelled first, as `workspace exec-cancel` does with its default grace;
-  a cancel that is not confirmed refuses the close `Unknown` and nothing
-  more is done.
-  With `force` (O31) it stops the Sandbox through its backend anyway and
-  answers `{kind: "Closed", sandbox, unknown}`: `unknown` lists every
-  Workspace still mounted, since a forced close drains none of them; their
-  uncommitted changes and processes end with the Sandbox. Closing a Sandbox that is already gone answers
-  `{closed, was_gone: true}`; a gone native Sandbox's stopped runtime and
-  local directory are deleted by that close.
-- A record with no id yet (a create in flight, one whose outcome was
-  unknown, or one whose process ended) is closed too: `Busy` while the
-  creating process lives, else the record goes and the name is free
-  (`{closed, was}`, `was` being `gone` or `unresolved`; for
-  `unresolved`, `left` says a Sandbox may remain on its machine). A Sandbox the layout 3 conversion found ended is closed this
-  way too, with `was: "gone"` ([the home](home.md#a-layout-2-home)).
-- Not run for this manual. See
-  [limitations](limitations.md#not-built-refused-as-unsupported).
+- **`log`** answers `items` (`[{text, continued?}]`), oldest first: the
+  last `limit` lines (200 by default, 1 to 1000), or with `cursor` the
+  lines before it, at most 64 KiB a call; `next_cursor` continues with
+  older lines and is absent at the start of the log. Control characters in
+  `text` are escaped (`\u{1b}`).
+- `files` and `log` take no lock or lease, ask no daemon, start nothing
+  and write nothing, the call log included; at most two inspection reads
+  run on a machine at a time (`Busy`), and a machine that is stopped or
+  does not answer within 8 s is `Unavailable`. The MCP server lists them
+  in its admin profile.
+- Run for this manual on a scratch home: `sandbox list`, `get`, `files`
+  and `log` of a recorded native Sandbox.
 
 ### `workspace` (7)
 
@@ -951,24 +952,61 @@ See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals, and
 [removed platforms](machines-and-stores.md#removed-platforms-firecracker-microsandbox-and-ssh).
 
-### `store` (9)
+### `store` (12)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `list` | — | `machine`, `--with stats` | every Store, from the home's records |
 | `get` | `store` | `--with live,stats` | a Store's record and state; with `--with`, read where it lives or opened for its counters |
 | `create` | `name` | `machine` | an empty sqlite Store, on this computer or made on `machine` directly |
-| `connect` | `name`, `url` | `password`, `synchronous_commit` | connects a PostgreSQL database as a Store; its Sandboxes run on every machine that supports them |
-| `update` | `name` | `machine`, `url`, `password`, `synchronous_commit`, `clear` | changes a PostgreSQL Store's connection; with `machine`, gives that machine a connection of its own (checked from it first), or removes it with `clear` |
+| `connect` | `store`, `url` | `auth`, `machine`, `synchronous_commit` | connects a PostgreSQL database as a Store with a saved login; on a connected Store, sets its address, or with `machine` that machine's own (checked from it first) |
+| `disconnect` | `store` | `machine` | forgets a PostgreSQL Store, its data staying; with `machine`, removes only that machine's own address |
+| `save_auth` | `auth` | `user`, `password` (`--password-stdin`) | saves or replaces a PostgreSQL login in the home's secret folder |
+| `auths` | — | — | the saved logins and the Stores that use each; never a password |
+| `remove_auth` | `auth` | — | deletes a saved login no Store uses |
+| `update` | `store` | `auth`, `synchronous_commit` | a PostgreSQL Store's login or write setting |
 | `move` | `store`, `machine` | `on_progress` | moves a sqlite Store between this computer and a machine |
 | `remove` | `store` | — | deletes a sqlite Store with every project in it |
 | `compact` | `store` | `on_progress` | reclaims the dead bytes of one Store |
-| `disconnect` | `name` | — | forgets a PostgreSQL Store; its data stays |
 
-`list`, `get`, `create`, `move`, `remove` and `compact` are migrated;
-`connect`, `update` and `disconnect` are not yet. `store.status` and
-`store.stats` are gone into `store get` (`--with live`, `--with stats`),
-and `store.push` and `store.pull` into `store move`, with no alias.
+All twelve are migrated. `store.status` and `store.stats` are gone into
+`store get` (`--with live`, `--with stats`), `store.push` and `store.pull`
+into `store move`, a password in a Store's record or URL into saved
+logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
+`connect` and `disconnect` with `machine`, with no alias.
+
+- **Saved logins.** `store save-auth <auth> --user <role>
+  --password-stdin` writes `secret/auth/<auth>.json` (mode 0600, in a
+  0700 folder) and moves the home's `generation`; the password is read from
+  stdin only and never answered, logged or traced. Short `{"ok":true}`;
+  long `ok, outcome (saved or rotated), auth, user, stores, stores_count`.
+  A Store records only the login's name (`auth`); its URL holds host,
+  port, database and TLS settings, and one naming a user or holding a
+  password is refused `InvalidInput`. The login goes into the URL only
+  when the Store is dialled. `auths` answers `{ items }`, short `{ auth,
+  user }` with `stores` (at most 20) and `stores_count` when used, else
+  `stores_count: 0`; long
+  adds `created_at, updated_at`. `remove_auth` is refused `InUse` (with
+  `stores`) while a Store uses the login, `NotFound` when there is none;
+  long `ok, outcome: "removed", auth`.
+- **`connect`**, first time: `--auth` is required and must be saved;
+  `synchronous_commit` defaults to `local`. It creates the LayerFS schema
+  in an empty database or reads the Store's id from it (refused `Exists`
+  when another Store of this home has that id or name). Short
+  `{ projects, projects_count }` (`projects_count` alone for an empty
+  database; `{"ok":true}` when only an address changed); long `ok,
+  projects, projects_count, outcome (connected or updated), store, engine,
+  auth, connections, synchronous_commit`. On a connected Store `connect`
+  checks the new address against the same Store's id and takes no `--auth`
+  or `--synchronous-commit` (`InvalidInput`, naming `store update`); with
+  `--machine M` the address is `M`'s own, checked from `M` with the
+  Store's login. `projects` is null when only an address changed.
+- **`update`** changes the login (checked against the same Store) or
+  `synchronous_commit`; at least one. Long `ok, outcome: "updated", store,
+  auth, synchronous_commit`.
+- **`disconnect`** long `ok, outcome: "disconnected", store, machine`;
+  refused `InUse` while a Sandbox or Workspace uses the Store, and
+  `NotFound` for a machine with no address of its own.
 
 - **A Store's state** comes from its records only, with no probe: `busy`
   while an operation it records (`op: { name, phase, started_at }`: a
@@ -996,8 +1034,8 @@ and `store.push` and `store.pull` into `store move`, with no alias.
   `projects_count` counts them all. A `backups` row's long form is
   `bucket, file, sha256, heads_sha256, last, attempt`: `last` the last
   transfer that worked (`{ call, ended_at, size }`), `attempt` the last one
-  that did not (`{ call, ended_at, error }`). `auth` is null until saved
-  logins land.
+  that did not (`{ call, ended_at, error }`). `auth` is a PostgreSQL
+  Store's saved login, by name.
 - **`get --with live`** reads the Store where it lives, starting nothing: a
   sqlite Store's file through its machine (in this process on `native`,
   else its recorded worker), a PostgreSQL Store's server from this
@@ -1070,104 +1108,80 @@ $ layerfs store move shop native
 {"error":"InvalidInput","message":"store move, check: Store shop is already on native"}
 ```
 
-See [Stores](machines-and-stores.md#stores).
+PostgreSQL, against a local `postgres:17` (macOS, native; this build's
+outputs):
 
-### `backup` (5)
-
-| Call | Positionals | Options | Does |
-| --- | --- | --- | --- |
-| `connect` | `name`, `url` | `key`, `region`, `part_size` (size) | connects an r2 or MinIO bucket |
-| `disconnect` | `name` | — | forgets a bucket and this home's links to it |
-| `list` | `[bucket]` | — | every Store file on the connected buckets |
-| `create` | `store`, `bucket`, `[file]` | `on_progress` | uploads a sqlite Store to a bucket |
-| `restore` | `store`, `bucket`, `[file]` | `on_progress` | downloads a backup as a sqlite Store on `native` |
-
-See [backups](machines-and-stores.md#backups). Not run for this manual.
-
-### `logs` (2)
-
-Two reads for a UI that shows a machine or Sandbox log and follows it
-(layerfs-project#178), in the
-[architecture guide](../../architecture/api/sdk/logs.md). The home's own
-call log is [`home.log` and `home.clear_log`](#home-4).
-
-| Call | Positionals | Options | Does |
-| --- | --- | --- | --- |
-| `machine` | `machine` | `cursor`, `before`, `limit` (int) | one window of a machine's worker log |
-| `sandbox` | `sandbox` | `cursor`, `before`, `limit` (int) | one window of a Sandbox's daemon log |
-
-Each answers `{ lines: [{ text, continued? }], cursor, before?, has_more }`:
-with no option the last `limit` lines (200 by default, 1000 at most), with
-`cursor` the lines written after it, with `before` the lines before it.
-Control characters in `text` are escaped (`\u{1b}`). They take no lock,
-start nothing, write nothing and add no line to the call log; at most two
-run on a machine at a time (`Busy`), and a machine that is stopped or does
-not answer within 8 s is `Unavailable`. `logs machine` on a machine with no
-worker (`native`) is `Unsupported`. The MCP server lists neither. Run for
-this manual on a scratch home: `layerfs logs sandbox s1`, then `--cursor`.
-
-### `sandbox`: `files`
-
-One more read for a UI: what is in a Sandbox (layerfs-project#178). It is
-in the `sandbox` family, after `close`; the whole call is in the
-[architecture guide](../../architecture/api/sdk/sandbox.md#sandboxfiles).
-
-```bash
-layerfs sandbox files s1                       # its roots: Workspaces, home, log, and / where it has one
-layerfs sandbox files s1 "$HOME_PATH" --depth 2 --limit 100
-layerfs sandbox files s1 "$HOME_PATH/notes.txt" --offset 0 --length 4096
+```console
+$ printf '%s' "$PG_PASSWORD" | layerfs store save-auth pg-app --user postgres --password-stdin --detail
+{"ok":true,"outcome":"saved","auth":"pg-app","user":"postgres","stores":[],"stores_count":0}
+$ layerfs store connect shop-pg 'postgresql://127.0.0.1:55231/shop?sslmode=disable' --auth pg-app --detail
+{"ok":true,"projects":[],"projects_count":0,"outcome":"connected","store":"shop-pg","engine":"postgresql","auth":"pg-app","connections":[{"machine":null,"url":"postgresql://127.0.0.1:55231/shop?sslmode=disable"}],"synchronous_commit":"local"}
+$ layerfs store auths
+{"items":[{"auth":"pg-app","user":"postgres","stores":["shop-pg"],"stores_count":1}]}
+$ layerfs store get shop-pg
+{"engine":"postgresql","state":"ready","auth":"pg-app","connections":[{"url":"postgresql://127.0.0.1:55231/shop?sslmode=disable"}],"projects_count":0}
+$ layerfs store connect shop-pg 'postgresql://postgres:pw@127.0.0.1:55231/shop'
+{"error":"InvalidInput","message":"the URL names a user or holds a password; give the address alone and the login with --auth (`layerfs store save-auth` saves one)"}
+$ layerfs store update shop-pg --synchronous-commit off --detail
+{"ok":true,"outcome":"updated","store":"shop-pg","auth":"pg-app","synchronous_commit":"off"}
+$ layerfs store remove-auth pg-app
+{"error":"InUse","message":"the login pg-app is used by shop-pg: `layerfs store update <store> --auth <other>` or `layerfs store disconnect <store>` first","stores":["shop-pg"]}
+$ layerfs store disconnect shop-pg --detail
+{"ok":true,"outcome":"disconnected","store":"shop-pg","machine":null}
 ```
 
-- With no path it answers the Sandbox's roots, each with a `role`: one
-  `workspace` per mounted Workspace (kind `mount`, with the Workspace's id
-  in `workspace`; taken from the Workspace records and never opened),
-  `home` (the folder that is `HOME` for its commands), `log` (its
-  daemon's log, which `logs sandbox` reads) and, for a Sandbox with a root
-  of its own (every one but a native macOS Sandbox), `/` with role `root`.
-  ```text
-  {"kind":"folder","entries":[{"path":"/…/workspaces/1","depth":1,"kind":"mount","size":null,"mode":null,"mtime":null,"role":"workspace","workspace":"5f…"},{"path":"/…/tmp","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794000000000,"role":"home"},{"path":"/…/daemon.log","depth":1,"kind":"file","size":10,"mode":420,"mtime":1794000000000,"role":"log"}],"next":null,"has_more":false}
-  ```
-- With the path of a folder it answers one page of its entries: names in
-  byte order, a folder's entries after it, down `depth` levels (1 by
-  default, 32 at most), at most `limit` entries (500 by default, 1000 at
-  most). `next` is the path of the page's last entry; while `has_more`,
-  pass it as `cursor` for the entries after it. `reason` says why a page
-  ended early: `limit`, or `deadline` when the read used its four seconds.
-  An entry's `kind` is `file`, `folder`, `symlink` (with its `target`,
-  never followed), `mount`, `restricted` or `other`; `size` (regular files
-  only), `mode` (permission bits) and `mtime` (milliseconds) come from the
-  entry's own `stat`.
-- With the path of a file it answers one window: `{kind: "file", size,
-  offset, content, binary, next}`, 256 KiB from `offset` by default,
-  `length` at most 1 MiB. `content` is text: bytes that are not UTF-8 are
-  U+FFFD and control characters other than line breaks and tabs are escaped
-  (`\u{1b}`). `binary` is true when the window holds a NUL byte; `content`
-  is then empty. `next` is the next window's offset, `null` at the end.
-- A path is absolute, as the Sandbox's commands see it. Under the
-  Sandbox's home no link is followed and no mount entered. Refused
-  `InvalidInput` there: a path with `..`, a symbolic link on the way or at
-  the end, a FIFO, a socket, a device, a mount point, a file LayerFS keeps
-  private (`store.sqlite*`) and a file with several names that the
-  Sandbox's commands do not own. A path that is not there is `NotFound`.
-- A path outside the home is read in the Sandbox's root, when its roots
-  offer `/`: what its commands see, read through the root of the Sandbox's
-  init process on its machine. A link on the way resolves inside the root
-  (`/lib/...` opens in a merged-`/usr` image) and the last name is never
-  followed; `/proc`, `/sys` and `/dev` are `system`; a mount is entered
-  only when it is a local disk or memory, so a Workspace mount is `mount`
-  (with the Workspace's id) and is never entered; the run folder's
-  `config/` and `overlay/` and a bound Store's `store.sqlite` are
-  `restricted`, by their own path or through a link. A Sandbox that has
-  stopped answers `Unavailable` for its root and still reads its home. A
-  kernel without `openat2`, or a reader that is not root (a native Linux
-  home), answers `Unsupported` with its reason. A Sandbox with no root of
-  its own (native macOS) refuses a path outside its home `InvalidInput`.
-- It takes no lock, asks no daemon, starts nothing and writes nothing, the
-  call log included; a Sandbox whose daemon has ended keeps its home
-  readable. At most two inspection reads run on a machine at a time
-  (`Busy`); a machine that is stopped or does not answer within 8 s is
-  `Unavailable`. The MCP server does not list it. Run for this manual on a
-  scratch home: the three commands above.
+See [Stores](machines-and-stores.md#stores).
+
+### `backup` (6)
+
+| Call | Positionals | Options | Does |
+| --- | --- | --- | --- |
+| `connect` | `name`, `url` | `access_key`, `secret_key` (shell: `--key-stdin`) | connects a bucket (r2, or an S3 endpoint) for Store backups |
+| `disconnect` | `bucket` | — | forgets a bucket and its key; its files stay |
+| `list` | — | `bucket` | the Store files in the connected buckets, with the Store each is linked to |
+| `create` | `store`, `bucket` | `file`, `on_progress` | backs up a sqlite Store to a bucket |
+| `restore` | `bucket`, `file`, `store` | `on_progress` | restores a Store file from a bucket as a sqlite Store on this computer |
+| `doctor` | `bucket` | `full` | checks a bucket; `--full` also tests a write |
+
+All six are migrated. Today's `--key` reference (`env:` or `file:`),
+`--region` and `--part-size` are gone with no alias; `list`'s bucket and
+`create`'s file are options, and `restore` names the bucket, its file, then
+the Store.
+
+- **The key.** `--access-key` is the key's id; its secret comes on stdin
+  with `--key-stdin` and no other way (Node and Python pass `secret_key`).
+  The secret is kept in the home's secret folder (`secret/bucket/<bucket>`,
+  0600), never answered, and the call log records its byte count only, as
+  it does for the URL. `connect` makes one listing before it records
+  anything: a bucket that does not answer or refuses the key is
+  `Unavailable`; a name that is taken is `Exists` (to change a key,
+  disconnect and connect). A bucket connected before 2.0 keeps the key
+  reference its record names.
+- **`list`** answers one row per Store file in each bucket, and one per
+  link whose file the bucket does not hold (`missing: true`). `behind` says
+  the Store changed since its last backup (its heads read where it lives:
+  in this process on this computer, through the machine's worker
+  otherwise); `changed` says the bucket's file is not the one the link last
+  moved; each is null with a `message` when it could not be read. A bucket
+  that cannot be listed is named in `not_listed` (`reason` `refused`,
+  `timeout` or `lost`) and the others are still listed.
+- **`create` and `restore`** are recorded as the Store's `op` (`backup`,
+  or `restore` when it replaces a Store), so every client reads the Store
+  `busy`; a backup runs beside the Store's readers, a restore holds the
+  Store. Progress is `{ phase, done, total }`: `check`, `snapshot`, `send`
+  (from a machine), `hash`, `upload` for a backup; `check`, `download`,
+  `verify`, `install` for a restore. A failure leaves the link as it was
+  and writes what was tried to its `attempt` (`store get --detail` shows
+  it); a lost reply to the upload, or a restore killed at its install,
+  leaves the Store `broken` `unresolved` until `layerfs store get <store>
+  --with live` settles it.
+- **`doctor`** runs the `bucket.*` checks: `bucket.configuration`,
+  `bucket.credentials`, `bucket.transport`, `bucket.list`; `--full` adds
+  the write test (`bucket.write_capability`, `bucket.put`, `bucket.get`,
+  `bucket.delete`, and `bucket.reconcile` after a put whose reply was
+  lost). Without `--full` those checks are left out of the report.
+
+See [backups](machines-and-stores.md#backups).
 
 ## The doctors
 
@@ -1225,6 +1239,23 @@ every check was made and nothing was found; otherwise `findings` and
   worker), and none is tried.
 - `project doctor --full` is refused `Unsupported` (not built yet). `store
   doctor --machine` is for a PostgreSQL Store; a sqlite Store refuses it.
+- A Store's checks, in this order: `store.record` (its record reads and
+  names it), `store.operation` (an operation whose owner is gone with its
+  outcome unknown is an error whose `fix` is the call that clears it),
+  `store.connection` (a sqlite Store's file is where its record says,
+  read through its machine; a PostgreSQL Store's server answers this
+  computer with the saved login), `store.identity` (the Store's id is the
+  recorded one), `store.schema` (its schema is this build's) and, for a
+  sqlite Store, `store.backups` (a notice per bucket whose backup heads
+  differ from the Store's, `fix` `layerfs backup create <store>
+  <bucket>`). That is the whole cut: no Store data is scanned. A sqlite
+  Store's id and schema are read together, so a mismatch shows as
+  `store.schema`. A PostgreSQL Store is then probed from each machine
+  that has a Sandbox of it and from `--machine` (its own address where it
+  has one, else the Store's), each as one more `store.connection` row
+  with `from`. A Store whose machine is not ready shows its
+  `store.connection` as `not_checked` with `blocked_by`, and nothing after
+  it is tried.
 - `--text` prints a count line (`N error(s), N warning(s), N notice(s), N
   not checked`, or `ok` alone), then each finding, its `from` and its `fix`,
   then each `not_checked` entry.

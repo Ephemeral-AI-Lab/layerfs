@@ -183,8 +183,10 @@ pub fn summary(
     }
     fields.extend([
         ("machine", placed(record)),
-        // a saved login is package F-pg's: null until it lands
-        ("auth", SdkValue::Null),
+        (
+            "auth",
+            SdkValue::opt_text(crate::postgresql::login::auth_of(record)),
+        ),
         ("connections", only(postgresql, connections(record))),
         ("projects", SdkValue::List(shown.collect())),
         (
