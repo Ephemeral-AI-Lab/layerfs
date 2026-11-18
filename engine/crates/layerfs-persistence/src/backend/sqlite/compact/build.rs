@@ -43,6 +43,12 @@ use std::sync::Arc;
 /// more than this, and the cache is taken after the mark has let go.
 pub(crate) const CACHE_KIB: i64 = 65_536;
 
+/// The cache while the secondary indexes are built, 8 MiB. SQLite sorts an
+/// index's keys in memory up to its cache size before it writes a run to a
+/// temporary file, so this is also the most one index sort holds; the load
+/// is committed by then and the index pages are written in key order.
+pub(crate) const INDEX_CACHE_KIB: i64 = 8_192;
+
 /// §7 step 2's large window for the attached sealed source. The session default
 /// is no mmap (`session/profile.rs:86-87`), so the bulk copy would page the old
 /// file through the 2 MiB pager cache; a 256 MiB window maps the ordered pack
@@ -672,7 +678,7 @@ pub(crate) fn build(
         .execute_batch(&format!(
             "PRAGMA page_size={page_size};PRAGMA auto_vacuum={auto_vacuum};\
 PRAGMA journal_mode=OFF;PRAGMA synchronous=OFF;PRAGMA foreign_keys=OFF;\
-PRAGMA temp_store=MEMORY;PRAGMA cache_size=-{CACHE_KIB};\
+PRAGMA temp_store=FILE;PRAGMA cache_size=-{CACHE_KIB};\
 PRAGMA user_version={user_version};PRAGMA application_id={application_id};"
         ))
         .map_err(db_error)?;
@@ -727,7 +733,15 @@ PRAGMA user_version={user_version};PRAGMA application_id={application_id};"
 
     // §7 step 4: the secondary indexes and the immutability/logical triggers
     // are built after the bulk load, so the load writes no index page and fires
-    // no trigger.
+    // no trigger. The connection's temporary storage is files
+    // (`temp_store=FILE`): an index over the Commits, the Layers or the pack
+    // units is sorted through runs in SQLite's temporary directory once its
+    // keys pass the cache size set here, and a statement of the copy that
+    // SQLite answers from a temporary table spills the same way. In memory
+    // (the earlier `temp_store=MEMORY`) each held every key at once.
+    connection
+        .execute_batch(&format!("PRAGMA cache_size=-{INDEX_CACHE_KIB}"))
+        .map_err(db_error)?;
     for sql in &schema.secondary {
         connection.execute_batch(sql).map_err(db_error)?;
     }
