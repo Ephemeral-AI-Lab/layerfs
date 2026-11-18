@@ -23,7 +23,7 @@ from layerfs import aio  # noqa: E402
 
 class Close(unittest.TestCase):
     def test_close_is_outside_the_table_and_closes_nothing_when_nothing_is_open(self):
-        # outside the table: its families keep only their own calls (sandbox.close is one)
+        # outside the table: its families keep only their own calls (sandbox.remove is one)
         self.assertNotIn("close", [spec["family"] for spec in layerfs.TABLE])
         layerfs.close()
         self.assertEqual(layerfs.close(), 0)

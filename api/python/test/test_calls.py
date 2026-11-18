@@ -568,7 +568,7 @@ class Calls(unittest.TestCase):
         self.assertEqual(imported.returncode, 0, imported.stderr)
         lfs.project.init("shop/api", folder)
         lfs.branch.fork("shop/api", "dev", "main")
-        lfs.sandbox.create("shop/api", "s1", "native")
+        lfs.sandbox.create("shop/api", "s1", machine="native")
         ws = None
         try:
             ws = lfs.workspace.mount("s1", "dev")["ws"]
@@ -595,7 +595,7 @@ class Calls(unittest.TestCase):
         finally:
             if ws:
                 lfs.workspace.unmount(ws)
-            lfs.sandbox.close("s1")
+            lfs.sandbox.remove("s1")
             shutil.rmtree(home)
             shutil.rmtree(folder)
 

@@ -121,7 +121,7 @@ try {
     await step("store.push", () => lfs.store.push(storeName, machine));
     pushed = true;
   }
-  out.sandbox = (await step("sandbox.create", () => lfs.sandbox.create(project, name, machine))).value;
+  out.sandbox = (await step("sandbox.create", () => lfs.sandbox.create(project, name, { machine }))).value;
   sandbox = name;
   const line = timedLine(command(cell));
   if (CF[cell][1]) {
@@ -175,7 +175,7 @@ try {
       (error) => out.steps.push({ name: "cleanup.unmount", ok: false, error: errorOf(error) }),
     );
   }
-  if (sandbox) await step("sandbox.close", () => lfs.sandbox.close(sandbox)).catch((error) => { out.closeError = error.message; });
+  if (sandbox) await step("sandbox.remove", () => lfs.sandbox.remove(sandbox)).catch((error) => { out.closeError = error.message; });
   if (pgUrl) {
     // its data stays in the server; the home forgets it
     await step("store.disconnect", () => lfs.store.disconnect(storeName)).catch((error) => { out.removeError = error.message; });

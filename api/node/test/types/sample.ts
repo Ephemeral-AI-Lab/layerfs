@@ -30,7 +30,8 @@ async function main(): Promise<void> {
   await lfs.workspace.exec("ws", "ls", { stream: true, stdout: (bytes) => process.stdout.write(bytes), stderr: (bytes) => void bytes });
   await lfs.machine.create("vm", "lima", { cpus: 2, memory: "8G", disk: 8589934592n });
   await lfs.machine.images("lima1");
-  await lfs.sandbox.create("shop/api", "dev", "lima1", {
+  await lfs.sandbox.create("shop/api", "dev", {
+    machine: "lima1",
     image: "postgres:17-bookworm",
     on_progress: (p) => progress.push(p),
   });
