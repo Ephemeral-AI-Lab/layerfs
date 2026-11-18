@@ -527,6 +527,29 @@ measured implementation of this branch.
   rounding over more, smaller packs. A 1.16 GB Store with half of every pack dead
   rebuilds to 580,763,648 bytes in 2.05 s (build 1.68 s); copying the same
   packs whole takes 1.91 s (build 1.52 s) and frees 0.9 MB.
+- **Measured on a real Store (`qv2`, 4.9 GB, one sample each, macOS, load 3 to
+  5, commits ported to branch `claude/gc-real-storage`; file sizes include
+  D7's block change, which is 3.1 MB or less in these rows):**
+
+  | Store | Rebuild without repack | With repack | Whole call without | With |
+  | --- | ---: | ---: | ---: | ---: |
+  | 210 of 211 Branches removed, old history unreferenced (5,129,699,328 bytes, 11.7% in wholly dead packs) | 4,529,102,848 | 4,448,587,776 | 60.6 s (build 9.9, verify 3.9) | 51.5 s (build 6.3, verify 2.3) |
+  | 210 of 211 Branches removed (4,927,729,664 bytes, 7.97%), rebuild forced | 4,529,123,328 | 4,448,608,256 | 51.5 s (build 9.4, verify 2.4) | 63.6 s (build 9.8, verify 1.9) |
+  | half the Branches removed (4,927,729,664 bytes, 4.48%), rebuild forced | 4,700,323,840 | 4,650,729,472 | 77.1 s (build 11.6, verify 15.4) | 56.7 s (build 8.9, verify 2.0) |
+
+  The repack returns 76.9 MB and 47.1 MB more pack bytes (the mark's
+  `deadInRetainedPacksBytes` said 75.2 MB and 45.6 MB; the rest sits in
+  compressed groups). That is 13% to 22% more than the whole-pack rebuild
+  returns, and 1.0% to 1.6% of the file. The mark is 39 to 52 s of every call
+  and moves by more than the build between two samples, so the calls do not
+  order by arm; build plus verify is 8.6 to 11.7 s with repack and 11.8 to
+  27.0 s without. The widened numerator changed no decision on this Store:
+  the forced rows stay under 10% with it (9.55% and 5.44%).
+- **A reason to repack in the same rebuild:** a mixed compressed group shows
+  its dead records only through locators the walk did not reach. A rebuild
+  that copies the pack whole deletes those locators, so a later mark no
+  longer sees that pack as partly dead (817 packs before, 536 after, on the
+  half-removed Store) and its dead records stay for good.
 - **Decision requested:** accept repacking and the widened numerator for
   SQLite in 2.0, or keep the frozen pack-as-unit rebuild.
 
@@ -562,13 +585,13 @@ measured implementation of this branch.
   keys requires every ordinal the mark read to be inside a staged block.
 - **Not changed:** PostgreSQL (it keeps every block), the block format, the
   values of a kept block that no kept leaf reads.
-- **Measured (`qv2`, one sample each, macOS, load 4 to 7):**
+- **Measured (`qv2`, one sample each, macOS, load 3 to 5):**
   `project-b-deleted` rebuilds to 1,294,336 bytes instead of 28,884,992
-  (blocks 24,380,718 → 24,726 bytes, 9,999 → 234 rows; build 0.13 s against
-  0.16 s). With the rebuild forced on Stores that keep most of their history
-  the blocks shrink little, because most values are still read: all Branches
-  but `main` removed 24,380,718 → 21,250,030; half the Branches removed →
-  22,227,858. In every case a mark of the rebuilt Store keeps the same
+  (blocks 24,380,718 → 24,726 bytes, 9,999 → 234 rows; whole call 6.1 s
+  against 5.9 s, build 0.15 s against 0.20 s). On Stores that keep most of
+  their history the blocks shrink little, because most values are still
+  read: all Branches but `main` removed 24,380,718 → 21,250,030; half the
+  Branches removed → 22,227,858. In every case a mark of the rebuilt Store keeps the same
   objects and history nodes, and every kept object reads back.
 - **Decision requested:** accept dropping unread blocks for SQLite in 2.0, or
   keep item 37.
