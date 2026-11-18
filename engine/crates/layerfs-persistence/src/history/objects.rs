@@ -2,43 +2,38 @@
 //! digest.
 //!
 //! A mark starts at the roots of every Commit and Layer the §6.1 history
-//! closure retained. Every locator is loaded once, unsorted, and the walk
-//! follows each object's direct logical references and its record-header delta
-//! base to the fixpoint. The walk is metadata-only: a role that names no other
-//! object costs one header read, not a payload decode, and reference-bearing
-//! pages are decoded without a second identity hash. The retained pack of every
-//! reached object is recorded, and the bytes of records in those packs that no
-//! reached object owns are reported as `keptWaste` from a bounded directory
-//! prefix read. Nothing is deleted, rewritten or compacted here; the closure is
-//! kept in memory for the rebuild path to use.
+//! closure retained and follows each object's direct logical references and
+//! its record-header delta base to the fixpoint. The walk is metadata-only: a
+//! role that names no other object costs one header read, not a payload
+//! decode, and reference-bearing pages are decoded without a second identity
+//! hash. Nothing is deleted, rewritten or compacted here.
+//!
+//! Memory does not follow the Store's size. The locators stay in the Store:
+//! they are read in bounded pieces ([`table`]), and the walk keeps one bit
+//! per object for what it reached, not the objects. What a wave reached, the
+//! order the next wave is walked in and the records the kept-waste pass
+//! attributes are sorted in bounded memory and written to unnamed files
+//! beyond it ([`spill`]). The reached objects are listed, when a caller
+//! wants them, by reading the locators once more.
 use super::kept::{self, KeptHistory};
 use super::provider::HistoryProvider;
 use super::rows::{cell, object};
 use super::transaction::Transaction;
 use crate::backend::records::Param;
 use crate::backend::sqlite::session::transaction::Completion;
-use layerfs_content::filesystem::{FilesystemRoot, InodeScope};
 use layerfs_content::inode_leaf::INODE_VALUE_BYTES;
-use layerfs_content::object::decode_references;
-use layerfs_content::{ConstructionPolicy, ObjectId, ObjectRole};
+use layerfs_content::{ObjectId, ObjectRole};
 use layerfs_history::error::{HistoryError, HistoryResult};
 use layerfs_history::records::GcIntent;
 use layerfs_storage::{
-    encoding::pool::PoolReader,
-    encoding::{
-        delta::{
-            edge::RecordDirectory,
-            read::{locator_key, stored_edge, BodyCaches, ChainCounters, Resolver},
-        },
-        DecompressionWorkspace, GroupCache, PackAcquisition, PackCache, PackUnit,
-    },
+    encoding::{delta::edge::RecordDirectory, PackAcquisition, PackUnit},
     location::{ObjectLocation, SignatureRow},
     pack::layout::{self, GroupCodec},
     port::AcquiredPackRead,
     source::Source,
     StorageCapacities, StorageError,
 };
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::BTreeSet;
 use std::path::Path;
 
 mod edges;
@@ -46,13 +41,18 @@ mod ids;
 mod impls;
 mod ordinals;
 mod plan;
+mod records;
+mod spill;
+mod table;
 mod values;
+mod walk;
 mod waste;
 
-use ids::{IdMap, IdSet};
+use ids::IdMap;
 use plan::MarkGroups;
+use spill::Sorter;
+use table::Locators;
 const ROOTS: &str = "gc_kept_roots";
-const LOCATIONS: &str = "gc_object_locations";
 const LIVE_STACKS: &str = "gc_live_stacks";
 const LIVE_BRANCHES: &str = "gc_live_branches";
 const INODE_BLOCKS: &str = "gc_inode_blocks";
@@ -82,7 +82,11 @@ pub struct KeptWaste {
 /// reaches (§6.2), in ascending order.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct KeptObjects {
+    /// The reached objects, when the mark listed them: [`HistoryProvider::mark`]
+    /// does, a SQLite compaction mark writes them to its scratch instead.
     objects: Vec<ObjectId>,
+    /// How many objects the mark reached, listed or not.
+    count: u64,
     packs: Vec<i64>,
     waste: KeptWaste,
     /// Retained packs that hold a record no reached object owns, in ascending
@@ -105,6 +109,8 @@ pub struct MarkResult {
     objects: KeptObjects,
     live_heads_digest: [u8; 32],
     mark_bytes: u64,
+    /// The most bytes the mark's sort files held, summed over the files.
+    scratch_bytes: u64,
 }
 
 /// The Store tuple a compaction records as its mark's first statement and
@@ -203,8 +209,8 @@ impl HistoryProvider {
             crate::backend::Engine::Sqlite(session) => session.run(true, |backend| {
                 let tx = Transaction::new(backend);
                 let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
-                let mark = mark_recorded(&tx, Some(&sink))?;
-                sink.finish()?;
+                let (mark, mut reach) = mark_recorded(&tx)?;
+                sink.finish(mark.objects.packs(), |row| reach.each(tx.mechanics(), row))?;
                 Ok(mark)
             }),
             crate::backend::Engine::Postgres(_) => self.write_snapshot(mark),
@@ -223,6 +229,10 @@ impl HistoryProvider {
     /// §3 `none` path writes nothing at all. The §6.3 visited scratch is a
     /// separate temp database that only a kept transaction writes, after the
     /// decision and before the commit, for the rebuild's build phase.
+    ///
+    /// On SQLite the result does not list the reached objects
+    /// ([`KeptObjects::objects`] is empty): they go to the scratch straight
+    /// from the Store's locators, and no copy of them is held.
     pub(crate) fn mark_for_compaction(
         &self,
         scratch: &Path,
@@ -234,12 +244,12 @@ impl HistoryProvider {
                 let tx = Transaction::new(backend);
                 super::admission::register_in(&tx, intent, false)?;
                 let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
-                let mark = mark_recorded(&tx, Some(&sink))?;
+                let (mark, mut reach) = mark_recorded(&tx)?;
                 let keep = decide(&tx, &mark)?;
                 let completion = if keep {
                     // Only a rebuild reads the scratch, so only a rebuild
                     // writes it; a `none` drops the sink and no file exists.
-                    sink.finish()?;
+                    sink.finish(mark.objects.packs(), |row| reach.each(tx.mechanics(), row))?;
                     Completion::Commit
                 } else {
                     Completion::Rollback
@@ -255,48 +265,150 @@ impl HistoryProvider {
     }
 }
 
+/// One mark that also lists every reached object ([`KeptObjects::objects`]):
+/// 32 bytes an object, read from the Store's locators after the walk.
 fn mark(tx: &Transaction<'_>) -> HistoryResult<MarkResult> {
-    mark_recorded(tx, None)
+    let (mut mark, mut reach) = mark_recorded(tx)?;
+    let mut objects = Vec::with_capacity(usize::try_from(reach.count).unwrap_or(0));
+    reach.each(tx.mechanics(), &mut |id, _| {
+        objects.push(id);
+        Ok(())
+    })?;
+    mark.objects.objects = objects;
+    Ok(mark)
 }
 
-fn mark_recorded(
-    tx: &Transaction<'_>,
-    visit: Option<&crate::backend::sqlite::compact_visit::VisitSink>,
-) -> HistoryResult<MarkResult> {
+/// Bytes of items each sorter of a mark holds before it writes a run
+/// ([`spill`]): the identities a wave reached, the next wave by locator, the
+/// reached records by locator, the Store's objects other than file payloads
+/// by locator, and the small per-pack lists.
+const EDGE_SORT_BYTES: usize = 8 * 1024 * 1024;
+const FRONTIER_SORT_BYTES: usize = 8 * 1024 * 1024;
+const KEPT_SORT_BYTES: usize = 4 * 1024 * 1024;
+const INVENTORY_SORT_BYTES: usize = 4 * 1024 * 1024;
+const PACK_SORT_BYTES: usize = 4 * 1024 * 1024;
+const READ_SORT_BYTES: usize = 1024 * 1024;
+
+/// The reached set of a finished walk, for listing it: the block boundaries
+/// of the Store's locators and one bit per object.
+pub(crate) struct Reach {
+    table: Locators,
+    reached: table::Bits,
+    count: u64,
+}
+
+impl Reach {
+    /// Every reached object and its pack, in ascending identity order, read
+    /// from the Store's locators a block at a time.
+    pub(crate) fn each(
+        &mut self,
+        mechanics: &dyn crate::backend::Mechanics,
+        each: &mut dyn FnMut(ObjectId, i64) -> HistoryResult<()>,
+    ) -> HistoryResult<()> {
+        let mut listed = 0u64;
+        self.table.each_set(mechanics, &self.reached, |row| {
+            listed += 1;
+            each(row.object_id, row.pack_id)
+        })?;
+        if listed != self.count {
+            return Err(HistoryError::Integrity("mark object locations"));
+        }
+        Ok(())
+    }
+}
+
+fn mark_recorded(tx: &Transaction<'_>) -> HistoryResult<(MarkResult, Reach)> {
     let history = kept::mark(tx)?;
-    let policy = tx.mechanics().policy().map_err(storage)?;
+    let mechanics = tx.mechanics();
+    let policy = mechanics.policy().map_err(storage)?;
     let capacities = StorageCapacities::from_policy(policy).map_err(storage)?;
-    // Every locator is loaded once. The walk's queue and the kept-waste
-    // attribution share that one read, so a mark never asks the engine for a
-    // single object location again.
-    let located = locate_all(tx)?;
+    let directory = mechanics.scratch_directory();
+    // Every locator is read once here, a bounded piece at a time. The pass
+    // keeps the block boundaries the walk finds an identity by, counts each
+    // pack's located records and puts the objects a pack visit reads
+    // together (everything but file payloads) in locator order.
+    let mut located = Sorter::new(&directory, PACK_SORT_BYTES, records::counts_by_pack);
+    let mut inventory = Sorter::new(&directory, INVENTORY_SORT_BYTES, records::rows_by_locator);
+    let mut table = Locators::load(mechanics, |rank, location| {
+        located.push(records::Count {
+            pack: location.pack_id,
+            records: 1,
+        })?;
+        if !matches!(location.role, ObjectRole::WholeFile | ObjectRole::Chunk) {
+            inventory.push(records::Row {
+                location: *location,
+                rank,
+            })?;
+        }
+        Ok(())
+    })?;
+    let mut marks = table::Marks {
+        reached: table::Bits::new(table.count()),
+        logical: table::Bits::new(table.count()),
+        bases: table::Bits::new(table.count()),
+    };
     let source = ClosureSource {
-        mechanics: tx.mechanics(),
-        locations: &located.locations,
-        read_bytes: std::cell::RefCell::new(HashMap::new()),
-        layouts: std::cell::RefCell::new(HashMap::new()),
+        mechanics,
+        here: std::cell::RefCell::new(Here {
+            pack: i64::MIN,
+            rows: IdMap::default(),
+        }),
+        reads: std::cell::RefCell::new((
+            Sorter::new(&directory, READ_SORT_BYTES, records::reads_in_order),
+            0,
+        )),
+        layouts: std::cell::RefCell::new(Sorter::new(
+            &directory,
+            PACK_SORT_BYTES,
+            records::layouts_by_group,
+        )),
         upcoming: std::cell::RefCell::default(),
         values: std::cell::RefCell::default(),
         ordinals: std::cell::RefCell::default(),
     };
     let roots = roots(tx)?;
-    let closure = walk(&source, &capacities, policy.construction(), roots, visit)?;
-    let (waste, partly_dead) = waste::waste(tx, &source, &located, &closure)?;
-    let mark_bytes = source.read_bytes();
+    let mut kept = Sorter::new(&directory, KEPT_SORT_BYTES, records::kept_by_locator);
+    let mut scratch_bytes = walk::walk(
+        &source,
+        &mut table,
+        &mut marks,
+        &mut inventory,
+        &mut kept,
+        &capacities,
+        policy.construction(),
+        roots,
+    )?;
+    drop(inventory);
+    let found = waste::waste(tx, &source, &mut table, &marks, &mut located, &mut kept)?;
+    scratch_bytes = scratch_bytes
+        .saturating_add(located.peak_file_bytes())
+        .saturating_add(kept.peak_file_bytes());
+    let (mark_bytes, read_file_bytes) = source.read_bytes()?;
+    scratch_bytes = scratch_bytes.saturating_add(read_file_bytes);
     let digest = live_heads_digest(tx)?;
     let objects = KeptObjects {
-        objects: closure.objects(),
-        packs: closure.packs(),
-        waste,
-        partly_dead,
+        objects: Vec::new(),
+        count: found.objects,
+        packs: found.packs,
+        waste: found.waste,
+        partly_dead: found.partly_dead,
         inode_ordinals: source.ordinals.borrow().runs(),
     };
-    Ok(MarkResult {
-        history,
-        objects,
-        live_heads_digest: digest,
-        mark_bytes,
-    })
+    let reach = Reach {
+        table,
+        reached: marks.reached,
+        count: found.objects,
+    };
+    Ok((
+        MarkResult {
+            history,
+            objects,
+            live_heads_digest: digest,
+            mark_bytes,
+            scratch_bytes,
+        },
+        reach,
+    ))
 }
 
 /// The roots of every retained Commit and Layer, deduplicated and ordered.
@@ -309,123 +421,27 @@ fn roots(tx: &Transaction<'_>) -> HistoryResult<Vec<ObjectId>> {
     Ok(roots.into_iter().collect())
 }
 
-/// Every stored locator, read once in the table's own key order.
-///
-/// An object has one locator row (its identity is the table's key), so no
-/// order is needed to pick a winner, and asking for pack order made the
-/// engine sort every row of the table for each mark. `locations` is keyed by
-/// identity and needs no order; `inventory` is built from the rows sorted here
-/// by locator, because filling three nested ordered maps in identity order
-/// puts every row in a different pack's map.
-///
-/// `locations` answers the walk; `inventory` answers kept-waste attribution.
-/// They are two views of the same single `gc_object_locations` read, so the
-/// mark no longer loads `object_location` twice (once per object and once for
-/// the waste inventory).
-struct Located {
-    /// The locator of every object, keyed by identity.
-    locations: IdMap<ObjectLocation>,
-    /// pack -> group -> (record, object): the pack/object inventory.
-    inventory: BTreeMap<i64, BTreeMap<usize, BTreeMap<usize, ObjectId>>>,
-}
-
-fn locate_all(tx: &Transaction<'_>) -> HistoryResult<Located> {
-    let rows = tx.query(LOCATIONS, Vec::<Param>::new())?;
-    let mut locations = IdMap::with_capacity_and_hasher(rows.len(), ids::IdState::default());
-    let mut placed: Vec<(i64, usize, usize, ObjectId)> = Vec::with_capacity(rows.len());
-    for row in &rows {
-        let id = object(row, 0)?;
-        let pack: i64 = cell(row, 1)?;
-        let group = usize::try_from(cell::<i64>(row, 2)?)
-            .map_err(|_| HistoryError::Integrity("mark pack inventory"))?;
-        let record = usize::try_from(cell::<i64>(row, 3)?)
-            .map_err(|_| HistoryError::Integrity("mark pack inventory"))?;
-        let role = ObjectRole::from_code(
-            u8::try_from(cell::<i64>(row, 4)?)
-                .map_err(|_| HistoryError::Integrity("mark object role"))?,
-        )
-        .map_err(|_| HistoryError::Integrity("mark object role"))?;
-        let canonical_length = usize::try_from(cell::<i64>(row, 5)?)
-            .map_err(|_| HistoryError::Integrity("mark object length"))?;
-        placed.push((pack, group, record, id));
-        locations.entry(id).or_insert(ObjectLocation {
-            object_id: id,
-            role,
-            canonical_length,
-            pack_id: pack,
-            group_number: group,
-            record_number: record,
-        });
-    }
-    drop(rows);
-    // Each map is collected from a run that is already in its key order. A
-    // record holds one object; were two rows to name one record, the greater
-    // identity is kept.
-    placed.sort_unstable();
-    let inventory = placed
-        .chunk_by(|left, right| left.0 == right.0)
-        .map(|pack| {
-            let groups = pack
-                .chunk_by(|left, right| left.1 == right.1)
-                .map(|group| {
-                    let records = group.iter().map(|placed| (placed.2, placed.3)).collect();
-                    (group[0].1, records)
-                })
-                .collect();
-            (pack[0].0, groups)
-        })
-        .collect();
-    Ok(Located {
-        locations,
-        inventory,
-    })
-}
-
-/// The in-memory closure of one mark, before `keptWaste` is attributed.
-struct Closure {
-    /// Every reached object and its locator.
-    visited: IdMap<ObjectLocation>,
-    /// The stored width a read charges each reached object's record.
-    widths: IdMap<u64>,
-    /// Objects reached as a direct delta base.
-    bases: IdSet,
-    /// Objects reached as a root or through a logical reference.
-    logical: IdSet,
-}
-
-impl Closure {
-    /// Every reached object, in ascending identity order.
-    fn objects(&self) -> Vec<ObjectId> {
-        let mut objects: Vec<ObjectId> = self.visited.keys().copied().collect();
-        objects.sort_unstable();
-        objects
-    }
-
-    /// The retained packs: those holding at least one reached object.
-    fn packs(&self) -> Vec<i64> {
-        self.visited
-            .values()
-            .map(|location| location.pack_id)
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect()
-    }
+/// The objects other than file payloads that one pack holds, by identity.
+struct Here {
+    pack: i64,
+    rows: IdMap<records::Row>,
 }
 
 /// Physical input for the shared encoding readers over one mark transaction.
 struct ClosureSource<'a> {
     mechanics: &'a dyn crate::backend::Mechanics,
-    /// Every locator, exactly as the one `gc_object_locations` read returned it.
-    locations: &'a IdMap<ObjectLocation>,
-    /// pack -> the body bytes this mark read from it: a whole body, or the
-    /// disjoint group extents it acquired. The sum is
-    /// [`MarkResult::mark_bytes`]: a pack read in several groups counts each
-    /// extent once, and a later whole-body read replaces the partial sum.
-    read_bytes: std::cell::RefCell<HashMap<i64, u64>>,
-    /// pack -> its group extents, kept from the walk's own read of the pack's
-    /// directory so the kept-waste pass does not read it a second time.
-    layouts: std::cell::RefCell<HashMap<i64, Vec<layout::GroupView>>>,
-    /// The packs the wave being walked decodes metadata from, ascending, and
+    /// The pack being walked and what it holds besides file payloads: what a
+    /// reference found there is looked up in before the Store is asked.
+    here: std::cell::RefCell<Here>,
+    /// Every read of pack body bytes this mark made, and how many. Folded per
+    /// pack in the order made, they give [`MarkResult::mark_bytes`]: a pack
+    /// read in several groups counts each extent once, and a later whole-body
+    /// read replaces the partial sum.
+    reads: std::cell::RefCell<(Sorter<records::BodyRead>, u64)>,
+    /// The group extents of every pack whose directory the walk read, kept so
+    /// the kept-waste pass does not read it a second time.
+    layouts: std::cell::RefCell<Sorter<records::Layout>>,
+    /// The packs the rows being walked decode metadata from, ascending, and
     /// how many of them the engine has been told to expect.
     upcoming: std::cell::RefCell<(Vec<i64>, usize)>,
     /// Inode values the engine has returned, asked for or not.
@@ -443,24 +459,24 @@ const AHEAD_PACKS: usize = 128;
 /// instead of from its whole chain. The base of a page is the version an
 /// earlier Commit wrote, any number of packs back, and a pack's visit keeps
 /// every page of its Commit: a base that has left the memo is read from its
-/// own pack again, chain and all.
-const CHAIN_MEMO_BYTES: usize = 64 * 1024 * 1024;
+/// own pack again, chain and all. The size is the largest single part of
+/// what a mark holds.
+const CHAIN_MEMO_BYTES: usize = 32 * 1024 * 1024;
 
 impl ClosureSource<'_> {
-    /// Notes the packs `wave`, which is in locator order, decodes metadata
+    /// Notes the packs `rows`, which are in locator order, decode metadata
     /// from: the packs the walk reads one scoped acquisition at a time.
-    fn expect_wave(&self, wave: &[ObjectId]) {
-        let mut packs: Vec<i64> = wave
+    fn expect_rows(&self, rows: &[records::Row]) {
+        let mut packs: Vec<i64> = rows
             .iter()
-            .filter_map(|id| self.locations.get(id))
-            .filter(|location| location.role.has_references())
-            .map(|location| location.pack_id)
+            .filter(|row| row.location.role.has_references())
+            .map(|row| row.location.pack_id)
             .collect();
         packs.dedup();
         *self.upcoming.borrow_mut() = (packs, 0);
     }
 
-    /// Before `pack_id` is acquired: tells the engine which of the wave's
+    /// Before `pack_id` is acquired: tells the engine which of the expected
     /// packs follow it, a window at a time, so an engine that pays a round
     /// trip per pack can read the window in one.
     fn announce(&self, pack_id: i64) -> Result<(), StorageError> {
@@ -478,42 +494,71 @@ impl ClosureSource<'_> {
             .map_err(StorageError::from)
     }
 
-    /// Queues a newly reached object. An object stored in the pack being
-    /// walked joins `local`, which the walk empties before it leaves the
-    /// pack: a Commit's root, inode pages, directory pages, file states and
-    /// extent pages are written into one pack, so they are read in one visit
-    /// of it and not in one visit per tree level. A file payload always waits
-    /// for the next wave, where payload headers are read a pack at a time; so
-    /// does an object of any other pack.
-    fn admit(
+    /// Makes `pack_id` the pack being walked: takes its objects other than
+    /// file payloads from `inventory`, which is in locator order and is read
+    /// forward only, as a wave's packs are.
+    fn enter(
         &self,
-        id: ObjectId,
         pack_id: i64,
-        local: &mut Vec<ObjectId>,
-        next: &mut Vec<ObjectId>,
-    ) {
-        let here = self.locations.get(&id).is_some_and(|found| {
-            found.pack_id == pack_id
-                && !matches!(found.role, ObjectRole::WholeFile | ObjectRole::Chunk)
-        });
-        if here {
-            local.push(id)
-        } else {
-            next.push(id)
+        inventory: &mut spill::Merge<'_, records::Row>,
+    ) -> HistoryResult<()> {
+        let mut here = self.here.borrow_mut();
+        if here.pack == pack_id {
+            return Ok(());
         }
+        here.pack = pack_id;
+        here.rows.clear();
+        while inventory
+            .peek()
+            .is_some_and(|next| next.location.pack_id <= pack_id)
+        {
+            let Some(row) = inventory.next()? else {
+                break;
+            };
+            if row.location.pack_id == pack_id {
+                here.rows.insert(row.location.object_id, row);
+            }
+        }
+        Ok(())
+    }
+
+    /// The object `id` when the pack being walked holds it and it is not a
+    /// file payload: a Commit's root, inode pages, directory pages, file
+    /// states and extent pages are written into one pack, so they are read
+    /// in one visit of it and not in one visit per tree level.
+    fn held_here(&self, id: &ObjectId) -> Option<records::Row> {
+        self.here.borrow().rows.get(id).copied()
     }
 
     /// Keeps the group extents the walk read for `pack_id`.
     fn keep_layout(&self, pack_id: i64, views: Vec<layout::GroupView>) {
-        self.layouts.borrow_mut().entry(pack_id).or_insert(views);
+        let mut layouts = self.layouts.borrow_mut();
+        for (number, view) in views.into_iter().enumerate() {
+            layouts.hold(records::Layout {
+                pack: pack_id,
+                number: number as u64,
+                view,
+            });
+        }
+    }
+
+    fn note(&self, pack: i64, bytes: u64, limit: u64, whole: bool) {
+        let mut reads = self.reads.borrow_mut();
+        let sequence = reads.1;
+        reads.1 += 1;
+        reads.0.hold(records::BodyRead {
+            pack,
+            sequence,
+            bytes,
+            limit,
+            whole,
+        });
     }
 
     /// Records a whole-body read of `pack_id`. The full extent is the pack's
     /// body, so it replaces any group extents already counted for the pack.
     fn note_whole_body(&self, pack_id: i64, bytes: u64) {
-        let mut read = self.read_bytes.borrow_mut();
-        let entry = read.entry(pack_id).or_insert(0);
-        *entry = (*entry).max(bytes);
+        self.note(pack_id, bytes, 0, true);
     }
 
     /// Records one scoped acquisition's body bytes, capped at the pack's
@@ -521,14 +566,49 @@ impl ClosureSource<'_> {
     /// so the extents are disjoint; the controls each acquisition repeats can
     /// still not make a pack count for more than its body.
     fn note_scoped_body(&self, pack_id: i64, bytes: u64, length: u64) {
-        let mut read = self.read_bytes.borrow_mut();
-        let entry = read.entry(pack_id).or_insert(0);
-        *entry = entry.saturating_add(bytes).min(length);
+        self.note(pack_id, bytes, length, false);
     }
 
-    /// The distinct pack body bytes this mark read.
-    fn read_bytes(&self) -> u64 {
-        self.read_bytes.borrow().values().copied().sum()
+    /// Writes out what the reads and layouts noted since the last call hold
+    /// beyond their bound. The notes themselves never write: they are made
+    /// inside the storage readers.
+    fn relieve(&self) -> HistoryResult<()> {
+        self.reads.borrow_mut().0.relieve()?;
+        self.layouts.borrow_mut().relieve()
+    }
+
+    /// The distinct pack body bytes this mark read, and the most bytes the
+    /// list of its reads and of its layouts held in their files.
+    fn read_bytes(&self) -> HistoryResult<(u64, u64)> {
+        let mut reads = self.reads.borrow_mut();
+        let mut total = 0u64;
+        let mut pack: Option<(i64, u64)> = None;
+        let mut merged = reads.0.sorted()?;
+        while let Some(read) = merged.next()? {
+            let mut entry = match pack {
+                Some((id, entry)) if id == read.pack => entry,
+                Some((_, entry)) => {
+                    total = total.saturating_add(entry);
+                    0
+                }
+                None => 0,
+            };
+            entry = if read.whole {
+                entry.max(read.bytes)
+            } else {
+                entry.saturating_add(read.bytes).min(read.limit)
+            };
+            pack = Some((read.pack, entry));
+        }
+        drop(merged);
+        total = total.saturating_add(pack.map_or(0, |(_, entry)| entry));
+        Ok((
+            total,
+            reads
+                .0
+                .peak_file_bytes()
+                .saturating_add(self.layouts.borrow().peak_file_bytes()),
+        ))
     }
 }
 
@@ -538,11 +618,16 @@ impl Source for ClosureSource<'_> {
     }
 
     fn location(&self, id: ObjectId, ceiling: i64) -> Result<Option<ObjectLocation>, StorageError> {
+        // A chain's base is most often in the pack being read; any other is
+        // one lookup in the Store's own locator index.
+        if let Some(row) = self.held_here(&id) {
+            return Ok(Some(row.location).filter(|location| location.pack_id <= ceiling));
+        }
         Ok(self
-            .locations
-            .get(&id)
-            .filter(|location| location.pack_id <= ceiling)
-            .copied())
+            .mechanics
+            .location(&id)
+            .map_err(StorageError::from)?
+            .filter(|location| location.pack_id <= ceiling))
     }
 
     fn pack_bytes(&self, pack_id: i64) -> Result<Vec<u8>, StorageError> {
@@ -624,136 +709,6 @@ impl Source for ClosureSource<'_> {
     fn write_signatures(&self, _rows: &[SignatureRow]) -> Result<usize, StorageError> {
         Err(StorageError::Integrity("mark is read-only"))
     }
-}
-
-/// Admits every object reachable from `roots` through logical references and
-/// delta bases, exactly once, in a queue that runs to empty.
-///
-/// The walk is metadata-only: a role that names no other object
-/// ([`ObjectRole::has_references`]) costs one record header read, not a payload
-/// decode, and each wave is processed in locator order so one pack body answers
-/// every object of its group. A metadata object reached in the pack being
-/// walked is read in that same visit ([`ClosureSource::admit`]).
-/// Reference-bearing metadata pages are still authenticated and decoded, but
-/// identity is not hashed a second time.
-fn walk(
-    source: &ClosureSource<'_>,
-    capacities: &StorageCapacities,
-    construction: ConstructionPolicy,
-    roots: Vec<ObjectId>,
-    visit: Option<&crate::backend::sqlite::compact_visit::VisitSink>,
-) -> HistoryResult<Closure> {
-    let mut packs = PackCache::new();
-    let mut pool = PoolReader::with_chain_memo(CHAIN_MEMO_BYTES);
-    let mut groups = GroupCache::new();
-    let mut workspace = DecompressionWorkspace::new().map_err(storage)?;
-    let mut counters = ChainCounters::default();
-    let mut edge_decodes = 0u64;
-    let mut closure = Closure {
-        visited: IdMap::default(),
-        widths: IdMap::default(),
-        bases: IdSet::default(),
-        logical: roots.iter().copied().collect(),
-    };
-    // One hash for the whole walk, not one per metadata object.
-    let unscoped = InodeScope::from_object(ObjectId::for_bytes(b"gc.mark/object-closure"));
-    let mut queued: IdSet = roots.iter().copied().collect();
-    let mut frontier: Vec<ObjectId> = roots;
-    while !frontier.is_empty() {
-        // Pack order: one body answers every object of its group, so a wave
-        // sorted by locator reads each group once instead of once per identity.
-        // The key is one locator lookup per object, not one per comparison.
-        frontier.sort_by_cached_key(|id| {
-            source
-                .locations
-                .get(id)
-                .map_or((i64::MAX, usize::MAX, usize::MAX), locator_key)
-        });
-        source.expect_wave(&frontier);
-        // A file payload's edge is its record header: read just that, a pack
-        // at a time, and leave the payload unread.
-        let mut headers = edges::wave_edges(source, &frontier)?;
-        let mut next = Vec::new();
-        // Objects admitted while their pack is being walked: see `admit`.
-        let mut local = Vec::new();
-        for id in std::mem::take(&mut frontier) {
-            local.push(id);
-            while let Some(id) = local.pop() {
-                let location = source
-                    .location(id, i64::MAX)
-                    .map_err(storage)?
-                    .ok_or(HistoryError::Integrity("mark object locator"))?;
-                let role = location.role;
-                let references = if role.has_references() {
-                    let canonical = {
-                        let mut resolver = Resolver::new(
-                            source,
-                            i64::MAX,
-                            capacities,
-                            BodyCaches {
-                                packs: &mut packs,
-                                pool: &mut pool,
-                            },
-                            &mut groups,
-                            &mut workspace,
-                            &mut counters,
-                        );
-                        resolver.resolve_at(location).map_err(storage)?.0
-                    };
-                    let scope = if role == ObjectRole::FilesystemRoot {
-                        FilesystemRoot::decode(&canonical)
-                            .map_err(|_| HistoryError::Integrity("mark root scope"))?
-                            .scope()
-                    } else {
-                        // No other admitted role reads the scope; the leaf encoders
-                        // that derive references ignore it.
-                        unscoped
-                    };
-                    decode_references(role, &canonical, construction, scope)
-                        .map_err(|_| HistoryError::Integrity("mark object references"))?
-                } else {
-                    Vec::new()
-                };
-                for reference in references {
-                    closure.logical.insert(reference);
-                    if queued.insert(reference) {
-                        source.admit(reference, location.pack_id, &mut local, &mut next);
-                    }
-                }
-                // The base identity lives in the record header. An encoded group
-                // has no header to read on its own, so its edge borrows the group.
-                let edge = match headers.remove(&id) {
-                    Some(edge) => edge,
-                    // The walk's own decoded-group cache: a compressed group is
-                    // decompressed once, not once more for each record's edge.
-                    None => stored_edge(
-                        source,
-                        &mut packs,
-                        &mut groups,
-                        &mut workspace,
-                        &mut edge_decodes,
-                        &location,
-                    )
-                    .map_err(storage)?,
-                };
-                closure.widths.insert(id, edge.width);
-                if let Some(base) = edge.base {
-                    closure.bases.insert(base);
-                    if queued.insert(base) {
-                        source.admit(base, location.pack_id, &mut local, &mut next);
-                    }
-                }
-                if let Some(visit) = visit {
-                    // The sink keeps the row; it writes the scratch only once
-                    // the run is known to rebuild.
-                    visit.visit(id, location.pack_id)?;
-                }
-                closure.visited.insert(id, location);
-            }
-        }
-        frontier = next;
-    }
-    Ok(closure)
 }
 
 /// The §6.4 live-heads digest: BLAKE3 over `layerfs/live-heads/v1\0`, then the

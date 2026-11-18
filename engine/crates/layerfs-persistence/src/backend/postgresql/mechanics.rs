@@ -9,7 +9,7 @@ use crate::backend::{
 };
 use layerfs_content::ObjectId;
 use layerfs_storage::{
-    location::{InodeValueRow, LocatedObject, SignatureRow},
+    location::{InodeValueRow, LocatedObject, ObjectLocation, SignatureRow},
     port::{PersistedPack, PersistenceError},
     StoragePolicy,
 };
@@ -75,6 +75,17 @@ impl Mechanics for Transaction<'_> {
         out: &mut Vec<LocatedObject>,
     ) -> Result<(), PersistenceError> {
         metadata::reads::locate(self, ids, out)
+    }
+    fn locations_after(
+        &self,
+        after: Option<&ObjectId>,
+        limit: usize,
+        out: &mut Vec<ObjectLocation>,
+    ) -> Result<(), PersistenceError> {
+        metadata::reads::locations_after(self, after, limit, out)
+    }
+    fn locators_by_signed_prefix(&self) -> bool {
+        true
     }
     fn inode_values(
         &self,

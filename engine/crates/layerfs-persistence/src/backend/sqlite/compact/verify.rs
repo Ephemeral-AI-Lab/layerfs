@@ -294,8 +294,9 @@ pub(crate) fn verify(
     // identity order, so the lookups land on the pack table's leaf pages at
     // random. Through the default 2 MiB cache nearly every lookup reads its
     // page from the file again (measured on a 4.9 GB Store of 38,666 packs:
-    // 1.71 million page reads, against 47 thousand with this cache). The
-    // build's cache size keeps the pages this pass has read.
+    // 1.71 million page reads, against 47 thousand with a cache that holds
+    // every such page, 256 MiB there). The build's cache size keeps as many
+    // of the pages this pass has read as a compaction may hold.
     connection
         .execute_batch(&format!("PRAGMA cache_size=-{CACHE_KIB}"))
         .map_err(db_error)?;

@@ -99,6 +99,30 @@ impl<'a> Prepared<'a> {
         values: &[&dyn rusqlite::ToSql],
         bytes: u64,
         capacity: usize,
+        decode: impl FnMut(&rusqlite::Row<'_>) -> Result<Option<T>, E>,
+    ) -> Result<Vec<T>, E> {
+        self.mapped_rows(values, bytes, capacity, false, decode)
+    }
+
+    /// [`Self::mapped`] for a statement that returns many small rows: the
+    /// cursor's steps and decodes are observed as one span for the whole
+    /// result, not as two clock readings a row.
+    pub(crate) fn mapped_bulk<T>(
+        &mut self,
+        values: &[&dyn rusqlite::ToSql],
+        bytes: u64,
+        capacity: usize,
+        mut decode: impl FnMut(&rusqlite::Row<'_>) -> Result<T, BackendError>,
+    ) -> Result<Vec<T>, BackendError> {
+        self.mapped_rows(values, bytes, capacity, true, |row| decode(row).map(Some))
+    }
+
+    fn mapped_rows<T, E: From<BackendError> + OutcomeError>(
+        &mut self,
+        values: &[&dyn rusqlite::ToSql],
+        bytes: u64,
+        capacity: usize,
+        bulk: bool,
         mut decode: impl FnMut(&rusqlite::Row<'_>) -> Result<Option<T>, E>,
     ) -> Result<Vec<T>, E> {
         let start = Instant::now();
@@ -116,15 +140,16 @@ impl<'a> Prepared<'a> {
             };
             let result = (|| {
                 let mut result = Vec::with_capacity(capacity);
+                let _rows = bulk.then(|| statement_work::phase(work, 2, commit));
                 loop {
                     let next = {
-                        let _phase = statement_work::phase(work, 2, commit);
+                        let _phase = (!bulk).then(|| statement_work::phase(work, 2, commit));
                         cursor.next().map_err(rows::error)
                     };
                     let Some(row) = next.map_err(E::from)? else {
                         break;
                     };
-                    let _phase = statement_work::phase(work, 3, commit);
+                    let _phase = (!bulk).then(|| statement_work::phase(work, 3, commit));
                     if let Some(value) = decode(row)? {
                         result.push(value);
                     }

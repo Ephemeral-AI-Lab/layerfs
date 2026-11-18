@@ -38,10 +38,12 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-/// The bulk load's page cache: 256 MiB, so the retained packs stream through
+/// The bulk load's page cache: 64 MiB, so the retained packs stream through
 /// memory instead of the default 2 MiB cache. The verification reader takes
-/// the same size once the build has closed and released its own.
-pub(crate) const CACHE_KIB: i64 = 262_144;
+/// the same size once the build has closed and released its own. The size is
+/// part of what a compaction may hold whatever the Store's size: a mark holds
+/// more than this, and the cache is taken after the mark has let go.
+pub(crate) const CACHE_KIB: i64 = 65_536;
 
 /// §7 step 2's large window for the attached sealed source. The session default
 /// is no mmap (`session/profile.rs:86-87`), so the bulk copy would page the old

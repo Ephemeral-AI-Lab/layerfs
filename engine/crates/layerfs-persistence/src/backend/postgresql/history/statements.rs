@@ -16,9 +16,6 @@ pub(crate) fn statement(key: &str) -> Result<&'static str, BackendError> {
         "statistics_totals" => Ok(include_str!(
             "../../../../sql/postgresql/queries/history/statistics_totals.sql"
         )),
-        "gc_object_locations" => Ok(
-            "SELECT object_id,pack_id,group_number::bigint,record_number::bigint,role::bigint,canonical_length::bigint FROM object_location",
-        ),
         // The shared closure joins each round's new nodes to every history
         // edge, so a chain of n unpublished Commits costs n scans of the edge
         // set. This text follows each new node's own row by primary key.

@@ -1,32 +1,28 @@
 //! §6.3 visited scratch: a SQLite compaction's visited set is a temp-file
 //! table the build attaches.
 //!
-//! The mark hands every reached object and its locating pack to the sink as
-//! it discovers them. The sink only keeps them: the path is chosen after the
-//! walk, and a `none` decision drops the sink without creating a file. A
-//! `rebuild` calls [`VisitSink::finish`], which writes
-//! `<store>.compact-visited` (journal off, no sidecars) in one transaction:
-//! the `visited` rows in identity order and the retained packs (`live_pack`)
-//! in pack order, so both tables are filled by appending and neither needs a
-//! sort or a second pass in SQL. The §7 build attaches the file as `scratch`
-//! and joins `object_location` against it, and the abort paths delete it
-//! with the rest of the artifact set.
+//! The path is chosen after the walk, and a `none` decision drops the sink
+//! without creating a file. A `rebuild` calls [`VisitSink::finish`], which
+//! writes `<store>.compact-visited` (journal off, no sidecars) in one
+//! transaction: the `visited` rows as the mark lists them, in identity
+//! order, and the retained packs (`live_pack`) in pack order, so both tables
+//! are filled by appending and neither needs a sort or a second pass in SQL.
+//! The rows are written as they are listed; the sink holds one statement's
+//! worth of them. The §7 build attaches the file as `scratch` and joins
+//! `object_location` against it, and the abort paths delete it with the rest
+//! of the artifact set.
 use layerfs_content::ObjectId;
 use layerfs_history::error::{HistoryError, HistoryResult};
 use rusqlite::types::{ToSqlOutput, ValueRef};
 use rusqlite::{Connection, OpenFlags};
-use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
 /// Rows one `INSERT` writes; two bound values each.
 const ROWS_PER_INSERT: usize = 128;
 
-/// The reached objects a mark hands over, and the scratch they are written to
-/// when the run rebuilds.
+/// The scratch a rebuilding mark writes its reached objects to.
 pub(crate) struct VisitSink {
     path: PathBuf,
-    /// Every reached object and its locating pack, in discovery order.
-    reached: RefCell<Vec<(ObjectId, i64)>>,
     /// Whether [`Self::finish`] started the scratch file.
     created: bool,
     finished: bool,
@@ -62,31 +58,20 @@ impl VisitSink {
         }
         Ok(Self {
             path: path.to_path_buf(),
-            reached: RefCell::default(),
             created: false,
             finished: false,
         })
     }
 
-    /// Keeps one reached object and its locating pack as it is discovered.
-    pub(crate) fn visit(&self, id: ObjectId, pack_id: i64) -> HistoryResult<()> {
-        self.reached.borrow_mut().push((id, pack_id));
-        Ok(())
-    }
-
-    /// Writes the scratch: the visited rows and the retained packs derived
-    /// from them, in one transaction. Closes the connection, refuses a
+    /// Writes the scratch in one transaction: every row `list` hands over,
+    /// which must come in ascending identity order with no identity twice,
+    /// and the retained `packs`, ascending. Closes the connection, refuses a
     /// sidecar and returns the file's size.
-    pub(crate) fn finish(mut self) -> HistoryResult<u64> {
-        let mut reached = self.reached.take();
-        // Key order makes every insert an append to the table's last page.
-        // The walk reaches an object once and an object has one locator, so
-        // a repeated identity could only repeat its row.
-        reached.sort_unstable_by(|left, right| left.0.cmp(&right.0));
-        reached.dedup_by(|next, kept| next.0 == kept.0);
-        let mut packs: Vec<i64> = reached.iter().map(|(_, pack_id)| *pack_id).collect();
-        packs.sort_unstable();
-        packs.dedup();
+    pub(crate) fn finish(
+        mut self,
+        packs: &[i64],
+        list: impl FnOnce(&mut dyn FnMut(ObjectId, i64) -> HistoryResult<()>) -> HistoryResult<()>,
+    ) -> HistoryResult<u64> {
         if std::fs::symlink_metadata(&self.path).is_ok() {
             return Err(HistoryError::Exists("staged compaction artifact"));
         }
@@ -114,19 +99,34 @@ CREATE TABLE live_pack (pack_id INTEGER PRIMARY KEY) STRICT, WITHOUT ROWID;\
 BEGIN IMMEDIATE;",
             )
             .map_err(db_error)?;
-        insert(
-            &connection,
-            "INSERT INTO visited(object_id,pack_id) VALUES",
-            "(?,?)",
-            &reached,
-            |(id, pack_id)| [blob(id.as_bytes()), integer(*pack_id)],
-        )?;
-        drop(reached);
+        // Key order makes every insert an append to the table's last page.
+        // The mark lists an object once and an object has one locator, so
+        // the key refuses nothing; a row out of order would still be stored.
+        let mut rows: Vec<(ObjectId, i64)> = Vec::with_capacity(ROWS_PER_INSERT);
+        let write = |rows: &[(ObjectId, i64)]| {
+            insert(
+                &connection,
+                "INSERT INTO visited(object_id,pack_id) VALUES",
+                "(?,?)",
+                rows,
+                |(id, pack_id)| [blob(id.as_bytes()), integer(*pack_id)],
+            )
+        };
+        list(&mut |id, pack_id| {
+            rows.push((id, pack_id));
+            if rows.len() == ROWS_PER_INSERT {
+                write(&rows)?;
+                rows.clear();
+            }
+            Ok(())
+        })?;
+        write(&rows)?;
+        drop(rows);
         insert(
             &connection,
             "INSERT INTO live_pack(pack_id) VALUES",
             "(?)",
-            &packs,
+            packs,
             |pack_id| [integer(*pack_id)],
         )?;
         connection.execute_batch("COMMIT").map_err(db_error)?;

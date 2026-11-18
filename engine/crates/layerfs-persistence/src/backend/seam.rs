@@ -4,7 +4,7 @@ use super::records::{BackendError, Param, Record};
 use layerfs_content::ObjectId;
 use layerfs_storage::{
     location::PackInfo,
-    location::{InodeValueRow, LocatedObject, SignatureRow},
+    location::{InodeValueRow, LocatedObject, ObjectLocation, SignatureRow},
     port::{
         AcquiredPackRead, PackRange, PackReadChoice, PackReadPlan, PersistedPack, PersistenceError,
     },
@@ -74,6 +74,38 @@ pub(crate) trait Mechanics {
         ids: &[ObjectId],
         out: &mut Vec<LocatedObject>,
     ) -> Result<(), PersistenceError>;
+    /// Up to `limit` stored locators that follow `after` in this engine's
+    /// locator order, or the first `limit` when `after` is `None`, in that
+    /// order. The order is fixed for one transaction: identities by their
+    /// bytes, or as [`Self::locators_by_signed_prefix`] says. A mark reads
+    /// the locators through this in bounded pieces and never holds them all.
+    fn locations_after(
+        &self,
+        after: Option<&ObjectId>,
+        limit: usize,
+        out: &mut Vec<ObjectLocation>,
+    ) -> Result<(), PersistenceError>;
+    /// The stored locator of one object, or `None`, without the descriptor
+    /// of its pack.
+    fn location(&self, id: &ObjectId) -> Result<Option<ObjectLocation>, PersistenceError> {
+        let mut found = Vec::with_capacity(1);
+        self.locate(std::slice::from_ref(id), &mut found)?;
+        Ok(found
+            .first()
+            .map(|located| located.location)
+            .filter(|location| location.object_id == *id))
+    }
+    /// Whether [`Self::locations_after`] orders identities by their first
+    /// eight bytes read as a signed big-endian number, then by their bytes,
+    /// instead of by their bytes alone.
+    fn locators_by_signed_prefix(&self) -> bool {
+        false
+    }
+    /// A local directory for the sort files of one mark: files created,
+    /// unlinked at once and gone with their handle, never Store state.
+    fn scratch_directory(&self) -> std::path::PathBuf {
+        std::env::temp_dir()
+    }
     fn inode_values(
         &self,
         ordinals: &[u32],
