@@ -329,18 +329,24 @@ fn a_stopped_machine_blocks_what_is_on_it_without_trying_it() {
     assert_eq!(store.get_text("coverage"), Some("none"));
     assert!(list(store, "checks").is_empty());
     assert_eq!(long_form.get_text("status"), Some("not_checked"));
-    // the Store: its records checks, and its projects wait on the machine
+    // the Store: its records checks, its connection and its projects wait
+    // on the machine
     let store = short(&home, "store.doctor", &[("store", t("cache"))]);
     assert_eq!(
         json::print(&store),
-        format!(r#"{{"not_checked":[{{"project":"cache/site","blocked_by":{stopped}}}]}}"#)
+        format!(
+            r#"{{"not_checked":[{{"store":"cache","check":"store.connection","blocked_by":{stopped}}},{{"project":"cache/site","blocked_by":{stopped}}}]}}"#
+        )
     );
     let long_store = long(&home, "store.doctor", &[("store", t("cache"))]);
     check_pair(&store, &long_store);
     let checks: Vec<&str> = (list(long_store.get("tree").unwrap(), "checks").iter())
         .filter_map(|row| row.get_text("check"))
         .collect();
-    assert_eq!(checks, ["store.record"]);
+    assert_eq!(
+        checks,
+        ["store.record", "store.operation", "store.connection"]
+    );
     // the project and the Sandbox: nothing tried
     for (name, word, thing) in [
         ("project.doctor", "project", "cache/site"),

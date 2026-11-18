@@ -16,7 +16,6 @@ use layerfs_home::home::paths;
 use layerfs_home::op::Standing;
 use layerfs_home::outcome::{refused, Outcome as CallOutcome};
 use layerfs_home::state::{Reason, State};
-use layerfs_machine::record::MachineRecord;
 use layerfs_store::diagnostic::{self, Observation, Options, Outcome};
 use layerfs_store::identity::{self, Identity};
 use layerfs_store::place::{self, Executor};
@@ -44,14 +43,21 @@ pub(super) const CHECKS: &[CheckId] = &[
 /// The worker's shallow cut, the one `cut` its `store.diagnose` takes.
 const CUT: &str = "schema";
 
-/// Checks Store `probe.thing` into `node`: what blocks the Store blocks its
-/// projects too.
+/// Checks Store `probe.thing` into `node`: its state from the home's
+/// records (`layerfs_store::state`, with the machine family's derivation
+/// handed in) says whether it waits on its machine, and what blocks the
+/// Store blocks its projects too.
 pub(super) fn run(probe: &Probe<'_>, node: &mut Node) {
     let name = probe.thing.name.as_str();
     let mut checks = Checks::new("store", name);
+    let mut state = probe.state.clone();
     if let Some((record, identity)) = resolve(probe.home, name, &mut checks) {
+        let machines = crate::store::machine_state;
+        if let Ok(recorded) = layerfs_store::state::recorded(probe.home, &record, &machines) {
+            state = recorded;
+        }
         operation(probe.home, &record, &mut checks);
-        match probe.state {
+        match &state {
             State::Blocked(by) => {
                 let message = format!("its {} {} is not ready", by.thing, by.handle);
                 checks.waits(CONNECTION, message, by.clone());
@@ -65,7 +71,7 @@ pub(super) fn run(probe: &Probe<'_>, node: &mut Node) {
     }
     checks.fill(node, probe.checks, probe.budget.expired());
     if node.gate.is_none() {
-        node.gate = match probe.state.blocks("store", name) {
+        node.gate = match state.blocks("store", name) {
             Some(State::Blocked(by)) => Some(by),
             _ => None,
         };
@@ -461,13 +467,13 @@ fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
         .map(|sandbox| sandbox.machine().to_owned())
         .collect();
     machines.extend(probe.options.machine.clone());
-    machines.retain(|machine| machine != "native");
+    // this computer dialled the Store's own address above; `native` is
+    // probed again only for an address of its own
+    machines.retain(|machine| machine != "native" || record.own_connection(machine).is_some());
     machines.sort();
     machines.dedup();
     for machine in &machines {
-        let found = MachineRecord::read(probe.home, machine);
-        let state = found
-            .and_then(|found| crate::inventory::machine_state(probe.home, machine, found.as_ref()))
+        let state = crate::store::machine_state(probe.home, machine)
             .unwrap_or_else(|_| State::broken(Reason::Missing, None));
         match state.blocks("machine", machine) {
             Some(State::Blocked(by)) => {
