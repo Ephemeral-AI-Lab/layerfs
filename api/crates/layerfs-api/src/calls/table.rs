@@ -154,8 +154,8 @@ pub struct Call {
     pub quiet: bool,
     /// Whether the dispatcher opens (creates or converts) the home before
     /// it runs: every call but `home.init`, which opens it itself to say
-    /// what it did, and `home.get` and `machine.platforms`, which read a
-    /// home without changing it (and answer without one).
+    /// what it did, and `home.get`, `home.leftovers` and the six doctors,
+    /// which read a home without changing it (and answer without one).
     pub opens: bool,
     /// The keys of its answer (call surface 2.0). None while the call is
     /// not migrated: its result then passes through as its run function
@@ -309,26 +309,8 @@ pub const fn opt(name: &'static str, kind: Kind) -> Arg {
     }
 }
 
-use Kind::{Function, Int, Text};
+use Kind::{Function, Text};
 
-/// The paging options of a list call.
-pub const PAGE: [Arg; 2] = [opt("page_size", Int), opt("page_pos", Int)];
-/// The window options of a log read by cursor (`machine.log`,
-/// `sandbox.log`).
-pub const WINDOW: [Arg; 3] = [opt("cursor", Text), opt("before", Text), opt("limit", Int)];
-/// The options of a files read (`sandbox.files`, `machine.files`): a
-/// folder page's `depth`, `cursor` and `limit`, a file window's `offset`
-/// and `length`.
-pub const FILES: [Arg; 5] = [
-    opt("depth", Int),
-    opt("cursor", Text),
-    opt("limit", Int),
-    opt("offset", Int),
-    opt("length", Int),
-];
-/// The paging options of a cursor-paged call (call surface 2.0): the most
-/// rows in one page, and the `next_cursor` of the page before.
-pub const CURSOR: [Arg; 2] = [opt("limit", Int), opt("cursor", Text)];
 /// A Commit message.
 pub const MESSAGE: Arg = opt("message", Text).redact();
 /// The progress function of a long call.

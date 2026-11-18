@@ -2,7 +2,7 @@
 //! machine, in this process) and by themselves: a Sandbox's daemon process
 //! (`inspect::process`: live or gone by id, start time and boot; when it
 //! started; its cgroup's usage from a cgroup v2 folder given as an
-//! argument), the inspect kinds `sandboxes_live` and `machine_stats`
+//! argument), the inspect kind `machine_stats`
 //! (processors, memory, the data disk, Store sizes by `stat`, live
 //! Sandboxes), the processor counters and boot time of `/proc/stat`, each
 //! Sandbox's row (layerfs-project#182 L2), what a request past its soft
@@ -19,7 +19,7 @@ use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::names::MachineName;
 use layerfs_sandbox::inspect::process::KernelStat;
 use layerfs_sandbox::inspect::{self, process, Side, HARD, SOFT};
-use layerfs_sandbox::record::{DaemonRecord, Local, SandboxRecord};
+use layerfs_sandbox::record::{DaemonRecord, Local};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -337,7 +337,7 @@ fn usage_is_a_namespaces_sandbox_s_cgroup_v2_files() {
 }
 
 #[test]
-fn sandboxes_live_checks_each_daemon_record_on_the_side_that_runs_it() {
+fn machine_stats_checks_each_daemon_record_on_the_side_that_runs_it() {
     let _turn = serial();
     let home = new_home("live");
     let run = paths::run_root(&home);
@@ -356,35 +356,28 @@ fn sandboxes_live_checks_each_daemon_record_on_the_side_that_runs_it() {
 
     let asked = ["up", "dead", "new", "nobody", "old", "bad"];
     let request = SdkValue::map([("sandboxes", names(&asked))]);
-    let answer = inspect::ask(&home, "native", "sandboxes_live", request).unwrap();
-    assert_eq!(
-        layerfs_home::json::print(&answer),
-        concat!(
-            r#"{"sandboxes":[{"name":"up","live":true},{"name":"dead","live":false},"#,
-            r#"{"name":"new","live":false},{"name":"nobody","live":false},"#,
-            r#"{"name":"old","live":null,"reason":"no_pid"},"#,
-            r#"{"name":"bad","live":null,"reason":"record_unreadable"}],"complete":true}"#
-        )
-    );
-
-    // the home side: one request per machine among the records, in order
-    let records: Vec<SandboxRecord> = ["dead", "up", "old"]
-        .iter()
-        .map(|name| SandboxRecord::read(&home, name).unwrap().unwrap())
-        .collect();
-    let live = inspect::sandboxes_live(&home, &records);
-    let shown: Vec<_> = (live.iter())
-        .map(|live| (live.live, live.reason.as_deref()))
+    let answer = inspect::ask(&home, "native", "machine_stats", request).unwrap();
+    let items = listed(answer.get("sandboxes").unwrap(), "items");
+    let shown: Vec<_> = (items.iter())
+        .map(|item| {
+            (
+                item.get_text("name").unwrap(),
+                item.get("live").cloned().unwrap_or_default(),
+                item.get_text("live_reason"),
+            )
+        })
         .collect();
     assert_eq!(
         shown,
         [
-            (Some(false), None),
-            (Some(true), None),
-            (None, Some("no_pid"))
+            ("up", SdkValue::Bool(true), None),
+            ("dead", SdkValue::Bool(false), None),
+            ("new", SdkValue::Bool(false), None),
+            ("nobody", SdkValue::Bool(false), None),
+            ("old", SdkValue::Null, Some("no_pid")),
+            ("bad", SdkValue::Null, Some("record_unreadable")),
         ]
     );
-    assert!(inspect::sandboxes_live(&home, &[]).is_empty());
 
     // what is no list of Sandbox names is refused before anything is read
     for sandboxes in [
@@ -394,9 +387,13 @@ fn sandboxes_live_checks_each_daemon_record_on_the_side_that_runs_it() {
         SdkValue::List(vec![t("up"); 4097]),
     ] {
         let request = SdkValue::map([("sandboxes", sandboxes)]);
-        let asked = inspect::ask(&home, "native", "sandboxes_live", request);
+        let asked = inspect::ask(&home, "native", "machine_stats", request);
         assert_eq!(refused(asked), "InvalidInput");
     }
+    // the kind `sandbox.list`'s live option asked is gone with it
+    let request = SdkValue::map([("sandboxes", names(&["up"]))]);
+    let asked = inspect::ask(&home, "native", "sandboxes_live", request);
+    assert_eq!(refused(asked), "InvalidInput");
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -652,14 +649,6 @@ fn a_request_past_its_soft_budget_answers_what_it_has_and_says_so() {
                 .join(",")
         )
     );
-    assert_eq!(
-        layerfs_home::json::print(&late("sandboxes_live")),
-        concat!(
-            r#"{"sandboxes":[{"name":"up","live":null,"reason":"deadline"},"#,
-            r#"{"name":"s2","live":null,"reason":"deadline"},"#,
-            r#"{"name":"s3","live":null,"reason":"deadline"}],"complete":false,"reason":"deadline"}"#
-        )
-    );
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -703,14 +692,6 @@ fn fifty_sandboxes_and_forty_stores_answer_inside_the_soft_budget() {
         40
     );
     assert!(items.iter().all(|item| item.get("live_reason").is_none()));
-    let records = layerfs_sandbox::record::sandboxes(&home).unwrap();
-    let started = Instant::now();
-    let live = inspect::sandboxes_live(&home, &records);
-    let took = started.elapsed();
-    assert!(took < SOFT, "{took:?}");
-    assert_eq!(live.len(), 50);
-    assert_eq!(live.iter().filter(|l| l.live == Some(true)).count(), 40);
-    assert_eq!(live.iter().filter(|l| l.live == Some(false)).count(), 10);
     std::fs::remove_dir_all(home).unwrap();
 }
 
