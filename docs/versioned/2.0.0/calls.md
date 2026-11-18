@@ -832,7 +832,8 @@ handle is gone: `<sandbox>:/path` is refused `InvalidInput`.
   ordered by Sandbox then name, paged by `limit` (1 to 1000, default 100)
   and `cursor`, which carries `--sandbox`.
 - `mount` answers `{workspace, path}` (long: `outcome: mounted`, `branch`,
-  `commit` the Commit it stands on, `base_layer`, `root`, `id` the 64-hex
+  `commit` the Commit it stands on (on a fresh fork, the Layer it was
+  forked at, as `branch get` names it), `base_layer`, `root`, `id` the 64-hex
   Workspace id, `namespace`). Without `name` the name is the Branch's made
   valid: lowercased, each character outside `a-z 0-9 _ . -` replaced by
   `-`, cut to 63 and `_ . -` trimmed from the ends (`Feature/Login` mounts
@@ -868,7 +869,9 @@ handle is gone: `<sandbox>:/path` is refused `InvalidInput`.
 - `commit` answers `{commit}` (the Branch's new head) with `unchanged`,
   `merged`, `overwritten` (paths a newer-write-wins rule decided, the
   first 20) and `overwritten_count` past those; long: `outcome`, `branch`,
-  `parent`, `root`, `message`, `created_at`, `merged_from`, `displaced`.
+  `parent` (the Commit before it, or for a Branch's first Commit the
+  Layer it was forked at; null when unchanged), `root`, `message`,
+  `created_at`, `merged_from`, `displaced`.
   `--expected C` refuses `Conflict` unless the Branch's head is `C`, a
   Commit id or a prefix of 8 or more of its characters resolved as
   `commit get` resolves it (a prefix several Commits start with is

@@ -39,12 +39,25 @@ pub fn mounted(mounted: &Mounted) -> SdkValue {
         ("path", take(answer, "path")),
         ("outcome", SdkValue::text("mounted")),
         ("branch", take(answer, "branch")),
-        ("commit", take(answer, "base")),
+        // the Branch's head as `branch get` names it: its head Commit, else
+        // the Layer it was forked at (a fresh fork has no Commit yet)
+        (
+            "commit",
+            or_else(take(answer, "base"), || take(answer, "baseLayer")),
+        ),
         ("base_layer", take(answer, "baseLayer")),
         ("root", take(answer, "root")),
         ("id", take(answer, "workspace")),
         ("namespace", take(answer, "namespace")),
     ])
+}
+
+/// `value`, or what `other` answers when it is null.
+fn or_else(value: SdkValue, other: impl FnOnce() -> SdkValue) -> SdkValue {
+    match value {
+        SdkValue::Null => other(),
+        value => value,
+    }
 }
 
 /// `workspace.commit`: `{ commit, unchanged, merged, overwritten,
@@ -74,7 +87,13 @@ pub fn committed(answer: &SdkValue) -> SdkValue {
             SdkValue::text(if unchanged { "unchanged" } else { "committed" }),
         ),
         ("branch", take(answer, "branch")),
-        ("parent", take(&made, "parent")),
+        // the node this Commit follows: the Commit before it, else the
+        // Layer the Branch was forked at (its first Commit has no parent
+        // Commit); null when no Commit was made
+        (
+            "parent",
+            or_else(take(&made, "parent"), || take(&made, "base")),
+        ),
         ("root", root),
         ("message", take(&made, "message")),
         ("created_at", created),
