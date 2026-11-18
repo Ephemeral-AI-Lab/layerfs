@@ -11,7 +11,7 @@ type Check = fn(home: &Path, name: &str) -> Result<(), SdkRefusal>;
 /// The checks over a Store's users.
 #[derive(Clone, Copy)]
 pub struct Related {
-    /// `store.push`, `store.pull`, `store.remove`, `store.disconnect` and
+    /// `store.move`, `store.remove`, `store.disconnect` and
     /// `backup.restore`: refused while another live process holds the Store
     /// or a Sandbox of one of its projects is recorded.
     pub store_idle: Check,

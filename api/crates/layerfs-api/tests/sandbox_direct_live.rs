@@ -153,7 +153,7 @@ fn a_forwarded_sandbox_s_workspace_calls_dial_its_daemon_from_here() {
         &[
             ("project", t("shop/api")),
             ("name", t("dev")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();

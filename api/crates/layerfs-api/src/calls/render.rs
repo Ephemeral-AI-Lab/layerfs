@@ -21,7 +21,7 @@ const CUT: usize = 200;
 
 /// Which saved version a call's log line names, from its result; its
 /// table entry says which. For a call that is not migrated yet: a migrated
-/// call's line names its `outcome` word and its `commit`.
+/// call's line names its `outcome` word and, when it saves, its `commit`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Saves {
     /// None.
@@ -151,16 +151,20 @@ fn id(value: Option<&SdkValue>) -> Option<String> {
 
 /// The result's word and the saved version it names (§4.2), as the line's
 /// `kind` and `commit` or `layer`. A migrated call's full result names its
-/// word as `outcome` and its Commit as `commit`; any other's names its word
-/// as `kind`, and `saves` says where its saved version is.
+/// word as `outcome` and its Commit as `commit` (a read's `commit` is no
+/// saved version); any other's names its word as `kind`, and `saves` says
+/// where its saved version is.
 pub fn saved(spec: &Call, value: &SdkValue) -> Vec<(String, SdkValue)> {
     if spec.form.is_some() {
         let mut fields = Vec::new();
         if let Some(word) = value.get_text("outcome") {
             fields.push(("kind".to_owned(), SdkValue::Text(cut(word))));
         }
-        if let Some(commit) = id(value.get("commit")) {
-            fields.push(("commit".to_owned(), SdkValue::Text(commit)));
+        match id(value.get("commit")) {
+            Some(commit) if spec.saves != Saves::Nothing => {
+                fields.push(("commit".to_owned(), SdkValue::Text(commit)));
+            }
+            _ => {}
         }
         return fields;
     }

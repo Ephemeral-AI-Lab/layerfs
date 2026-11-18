@@ -280,7 +280,7 @@ pub const fn opt(name: &'static str, kind: Kind) -> Arg {
     }
 }
 
-use Kind::{Bool, Function, Int, Text};
+use Kind::{Function, Int, Text};
 
 /// The paging options of a list call.
 pub const PAGE: [Arg; 2] = [opt("page_size", Int), opt("page_pos", Int)];
@@ -304,13 +304,6 @@ pub const CURSOR: [Arg; 2] = [opt("limit", Int), opt("cursor", Text)];
 pub const MESSAGE: Arg = opt("message", Text).redact();
 /// The progress function of a long call.
 pub const PROGRESS: Arg = opt("on_progress", Function);
-/// The options of a diff call.
-pub const DIFF: [Arg; 4] = [
-    opt("paths_only", Bool),
-    opt("page_size", Int),
-    opt("page_pos", Int),
-    opt("cursor", Text),
-];
 
 /// One table entry.
 pub const fn call(

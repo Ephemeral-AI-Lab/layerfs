@@ -45,11 +45,9 @@ fn projects(home: &Path, store: &str) -> Result<SdkValue> {
 /// One Store: `{ store, engine, state.., projects, connections }`. `under`
 /// is its machine's name and state, for a sqlite Store; `connections` are
 /// the machines a PostgreSQL Store has an address of its own for, null for
-/// a sqlite Store.
+/// a sqlite Store. Its state is the Store's one records-only derivation.
 fn store(home: &Path, record: &StoreRecord, under: Option<(&str, &State)>) -> Result<SdkValue> {
-    let state = held(record.op())
-        .or_else(|| under.and_then(|(machine, state)| state.blocks("machine", machine)))
-        .unwrap_or(State::Ready);
+    let state = layerfs_store::state::recorded_under(record, under.map(|(_, state)| state))?;
     let connections = match under {
         Some(_) => SdkValue::Null,
         None => {

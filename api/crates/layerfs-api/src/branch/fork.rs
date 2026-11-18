@@ -1,31 +1,33 @@
-//! `branch.fork`: a new Branch from another Branch's head or Commit.
+//! `branch.fork`: a new Branch from another Branch's head, or from a Commit.
 use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Name, Project};
 use crate::calls::table::{a, call, opt, Call};
-use crate::calls::Context;
-use crate::calls::Policy;
-use crate::calls::Saves;
+use crate::calls::{Context, Form, Policy, Saves};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::branch::{fork, BranchFork};
+
+/// `commit` is the Commit the new Branch starts at.
+const FORM: Form = Form::of(
+    &["commit"],
+    &[],
+    &["commit", "outcome", "branch", "base", "root"],
+);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
     "branch",
     "fork",
-    &[
-        a("project", Project),
-        a("name", Name),
-        a("from_branch", Name),
-        opt("from_commit", Name),
-    ],
-    &[],
-    "a new Branch from another Branch's head or Commit",
+    &[a("project", Project), a("name", Name), opt("from", Name)],
+    &[opt("at", Name)],
+    "a new Branch from another Branch's head, or from a Commit",
     run,
 )
 .scoped(Rule::BranchFork)
 .policy(Policy::Project("project"))
-.saves(Saves::Fork);
+.saves(Saves::Fork)
+.form(&FORM)
+.agent();
 
 /// Runs `branch.fork`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
@@ -33,8 +35,8 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let request = BranchFork {
         project: text("project").unwrap_or_default(),
         name: text("name").unwrap_or_default(),
-        from_branch: text("from_branch").unwrap_or_default(),
-        from_commit: text("from_commit"),
+        from: text("from"),
+        at: text("at"),
     };
     let (home, events) = context.parts();
     fork(home, events, &request)

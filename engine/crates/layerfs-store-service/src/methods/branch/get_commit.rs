@@ -1,25 +1,12 @@
-//! One saved record admitted through a branch's saved history.
-use crate::{
-    history::saved,
-    methods::args::{project, text, Answer},
-    StoreService,
-};
+//! `branch.get_commit`: one Commit of the project, by its id or a prefix.
+use crate::methods::args::{project, text, Answer};
+use crate::{history::listing, StoreService};
 use layerfs_bridge::control::SdkValue;
 
-/// Full immutable IDs only; publication source remains a separate relationship.
+/// `get_commit({ commit, branch? })`: the Commit, resolved in one read of
+/// the identity index; with `branch`, only one that Branch's history holds.
 pub fn get_commit(service: &StoreService, args: &SdkValue) -> Answer {
     let stack = project(service, args)?;
-    let node = saved::resolve_context(
-        &service.store,
-        &stack,
-        text(args, "branch")?,
-        Some(text(args, "commit")?),
-    )?;
-    let record = saved::record(&service.store, node)?;
-    if saved::reply_cost(&record) > crate::read::window::BYTES - 512 {
-        return Err(crate::read::query::capacity(
-            "saved record details exceed reply budget; use branch.commits for its compact summary",
-        ));
-    }
-    Ok(record)
+    let commit = text(args, "commit")?;
+    listing::commit(&service.store, &stack, commit, args.get_text("branch"))
 }

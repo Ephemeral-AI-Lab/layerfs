@@ -205,7 +205,7 @@ pub fn can_remove_project(home: &Path, project: &str) -> Result<()> {
     Err(refusal)
 }
 
-/// `store.push`, `store.pull`, `store.remove`, `store.disconnect` and
+/// `store.move`, `store.remove`, `store.disconnect` and
 /// `backup.restore`: refused `InUse` while
 /// another live process holds Store `store` (its lease) or a Sandbox of one
 /// of its projects is recorded; `detail.related` lists them as `{kind:

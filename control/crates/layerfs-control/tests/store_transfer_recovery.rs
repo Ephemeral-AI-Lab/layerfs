@@ -1,9 +1,9 @@
 //! What a transfer recovers from (#13 P6, #9): `store remove` deletes the
-//! partial copy a certain `store push` left on its target, whether the dead
-//! push's intent or, after a certain failure dropped it, the record's
-//! `incoming_on` names that machine; and `store pull` asks a machine's worker
-//! again for a read-only piece whose answer was lost, never for a step that
-//! writes.
+//! partial copy a certain `store move` to a machine left on its target,
+//! whether the dead move's intent or, after a certain failure dropped it,
+//! the record's `incoming_on` names that machine; and a `store move` to
+//! `native` asks a machine's worker once for each piece: a lost answer is
+//! the call's outcome, never asked again.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{paths, private_dir, write_entity, write_record};
@@ -119,7 +119,8 @@ fn store_remove_deletes_a_dead_pushes_partial_copy() {
     let name = StoreName::parse("shop").unwrap();
     let removed = family::remove(&home, &name, related()).unwrap();
 
-    assert_eq!(removed.get_text("removed"), Some("shop"), "{removed:?}");
+    assert_eq!(removed.get_text("outcome"), Some("removed"), "{removed:?}");
+    assert_eq!(removed.get_text("store"), Some("shop"), "{removed:?}");
     assert!(
         !paths::store_dir(&home, "shop").exists(),
         "the Store is left"
@@ -140,7 +141,8 @@ fn store_remove_deletes_a_certain_failures_partial_copy() {
     let name = StoreName::parse("shop").unwrap();
     let removed = family::remove(&home, &name, related()).unwrap();
 
-    assert_eq!(removed.get_text("removed"), Some("shop"), "{removed:?}");
+    assert_eq!(removed.get_text("outcome"), Some("removed"), "{removed:?}");
+    assert_eq!(removed.get_text("store"), Some("shop"), "{removed:?}");
     assert!(
         !paths::store_dir(&home, "shop").exists(),
         "the Store is left"
@@ -216,20 +218,16 @@ fn a_certain_install_failure_keeps_the_target_in_the_record() {
     let address = steals_the_target(&root);
     box_machine(&home, &address);
     let name = StoreName::parse("shop").unwrap();
-    family::create(&home, &name).unwrap();
+    family::create(&home, &name, None).unwrap();
     let remote = paths::store_dir(&root, "shop");
 
     let mut sink = |_: SdkValue| {};
     let mut events = Events::new(&mut sink);
-    let request = family::StorePush {
-        name: "shop".to_owned(),
-        machine: "box".to_owned(),
-    };
-    let refused = family::push(&home, &mut events, &request, related()).unwrap_err();
+    let refused = family::move_to(&home, &mut events, "shop", "box", related()).unwrap_err();
 
     assert_eq!(refused.code, "Exists", "{}", refused.message);
     assert!(
-        refused.message.contains("store push, install:"),
+        refused.message.contains("store move, install:"),
         "{}",
         refused.message
     );
@@ -248,7 +246,8 @@ fn a_certain_install_failure_keeps_the_target_in_the_record() {
     );
 
     let removed = family::remove(&home, &name, related()).unwrap();
-    assert_eq!(removed.get_text("removed"), Some("shop"), "{removed:?}");
+    assert_eq!(removed.get_text("outcome"), Some("removed"), "{removed:?}");
+    assert_eq!(removed.get_text("store"), Some("shop"), "{removed:?}");
     assert!(!remote.exists(), "the target keeps a partial copy");
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
@@ -259,7 +258,7 @@ fn a_certain_install_failure_keeps_the_target_in_the_record() {
 /// the file had.
 fn store_on_box(home: &Path, root: &Path) -> Vec<u8> {
     let name = StoreName::parse("shop").unwrap();
-    family::create(home, &name).unwrap();
+    family::create(home, &name, None).unwrap();
     let local = paths::store_file(home, "shop");
     let bytes = std::fs::read(&local).unwrap();
     let remote = paths::store_dir(root, "shop");
@@ -329,7 +328,7 @@ fn flaky(root: &Path, drops: u32) -> (String, Arc<AtomicU32>) {
     (address, reads)
 }
 
-/// A worker that loses a read answer fails the pull at `send` after one
+/// A worker that loses a read answer fails the move to `native` at `send` after one
 /// attempt, and the intent stays unresolved: nothing is asked again.
 #[test]
 fn a_pull_reads_each_piece_once() {
@@ -343,11 +342,11 @@ fn a_pull_reads_each_piece_once() {
 
     let mut sink = |_: SdkValue| {};
     let mut events = Events::new(&mut sink);
-    let refused = family::pull(&home, &mut events, "shop", related()).unwrap_err();
+    let refused = family::move_to(&home, &mut events, "shop", "native", related()).unwrap_err();
 
     assert_eq!(refused.code, "Unknown", "{}", refused.message);
     assert!(
-        refused.message.contains("store pull, send:"),
+        refused.message.contains("store move, send:"),
         "{}",
         refused.message
     );
@@ -361,7 +360,7 @@ fn a_pull_reads_each_piece_once() {
     let record = StoreRecord::read(&home, "shop").unwrap().unwrap();
     assert_eq!(record.machine().unwrap(), "box", "the record moved on");
     let op = record.op().expect("the intent is kept");
-    assert_eq!(op.name(), "store.pull");
+    assert_eq!(op.name(), "store.move");
     assert_eq!(op.phase(), "send");
     assert!(op.uncertain(), "the piece may have been read");
     assert!(

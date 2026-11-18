@@ -102,6 +102,7 @@ class WorktreeTests(unittest.TestCase):
         self.assertIn(
             "type=volume,src=" + self.record["linux_target_volume"] + ",dst=/work/target,volume-nocopy", command
         )
+        self.assertIn("type=volume,dst=/tmp", command)
         self.assertIn("sha256:build", command)
 
     def test_explicit_flags_cannot_drop_repository_profile(self):

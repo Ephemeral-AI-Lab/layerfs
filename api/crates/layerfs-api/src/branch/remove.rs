@@ -1,10 +1,14 @@
-//! `branch.remove`: soft-remove one Branch through its Store marker.
+//! `branch.remove`: remove one Branch; its name stays taken until
+//! compaction.
 use crate::calls::table::Kind::{Name, Project};
 use crate::calls::table::{a, call, Call};
-use crate::calls::Context;
+use crate::calls::{Context, Form};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::branch::{remove, BranchRemove};
+
+/// A soft removal, through the Branch's Store marker.
+const FORM: Form = Form::of(&["ok"], &[], &["ok", "outcome", "branch", "removed_at"]);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -12,9 +16,10 @@ pub(crate) const CALL: Call = call(
     "remove",
     &[a("project", Project), a("branch", Name)],
     &[],
-    "soft-remove one Branch; its name stays taken until compaction",
+    "remove one Branch; its name stays taken until compaction",
     run,
-);
+)
+.form(&FORM);
 
 /// Runs `branch.remove`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
