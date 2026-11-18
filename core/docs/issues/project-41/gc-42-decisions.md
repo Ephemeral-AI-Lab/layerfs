@@ -324,8 +324,8 @@ frozen whole-lane exclusion; its measurements live under
 ## D. SQLite implementation notes: four deviations and the D2 build decision
 
 This section keeps seven records. D1, D3, D4 and D5 are deviations from the
-frozen text that the shipped code still carries; D6 and D7 are prototypes that
-await an owner decision. D2 is the build decision that
+frozen text that the shipped code still carries; D6 and D7 were prototypes and
+the owner accepted both on 2026-11-18. D2 is the build decision that
 replaced the whole-Store copy: the fresh-copy rebuild follows S5's "fresh
 Store" sentence but deviates from §7 step 4's payload sweep and rollback
 journal and from §11's peak-temp line, and the earlier `VACUUM INTO` + delete +
@@ -560,8 +560,12 @@ measured implementation of this branch.
   that copies the pack whole deletes those locators, so a later mark no
   longer sees that pack as partly dead (817 packs before, 536 after, on the
   half-removed Store) and its dead records stay for good.
-- **Decision requested:** accept repacking and the widened numerator for
-  SQLite in 2.0, or keep the frozen pack-as-unit rebuild.
+- **Decision:** accepted by the owner on 2026-11-18 ("Keep both", for D6 and
+  D7, relayed by the session that merged PR 735): the SQLite rebuild repacks
+  partly dead packs and the 10% test counts their dead records. It is SQLite
+  only and keeps the existing Store format. The question put was: accept
+  repacking and the widened numerator for SQLite in 2.0, or keep the frozen
+  pack-as-unit rebuild.
 
 ### D7. §6.4 (#42 item 37): the SQLite rebuild copies only the inode value blocks a kept leaf reads
 
@@ -603,8 +607,10 @@ measured implementation of this branch.
   read: all Branches but `main` removed 24,380,718 → 21,250,030; half the
   Branches removed → 22,227,858. In every case a mark of the rebuilt Store keeps the same
   objects and history nodes, and every kept object reads back.
-- **Decision requested:** accept dropping unread blocks for SQLite in 2.0, or
-  keep item 37.
+- **Decision:** accepted by the owner on 2026-11-18 ("Keep both", for D6 and
+  D7): the SQLite rebuild copies only the inode value blocks a kept leaf
+  reads. It is SQLite only and keeps the existing Store format. The question
+  put was: accept dropping unread blocks for SQLite in 2.0, or keep item 37.
 
 ## G. Deferred design decision (1)
 
