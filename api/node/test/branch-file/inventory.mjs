@@ -11,10 +11,10 @@ const root = fileURLToPath(new URL("../../../../", import.meta.url));
 const command = process.env.LAYERFS_CLI ?? join(root, "target/debug/layerfs");
 const docs = join(root, "docs/architecture/api/sdk");
 
-test("the SDK pages name all 84 current calls, one `### family.call` heading each", () => {
-  assert.equal(table.length, 84);
+test("the SDK pages name all 85 current calls, one `### family.call` heading each", () => {
+  assert.equal(table.length, 85);
   const families = [...new Set(table.map((spec) => spec.family))];
-  assert.equal(families.length, 12);
+  assert.equal(families.length, 10);
   const index = readFileSync(join(docs, "README.md"), "utf8");
   assert.ok(index.includes(`**${table.length} calls in ${families.length} families**`), "the SDK index states the count once");
   for (const family of families) {
@@ -41,7 +41,9 @@ test("branch/file CLI help exposes the same additions and options as the SDK", (
     assert.equal(r.status, 0, r.stderr);
     assert.ok(r.stdout.startsWith(`layerfs ${spec.family} ${spec.call.replaceAll("_", "-")}`), r.stdout);
     for (const opt of spec.options.filter(o => o.kind !== "function")) {
-      assert.ok(r.stdout.includes(`--${opt.name.replaceAll("_", "-")}`), `${spec.family}.${spec.call}: ${opt.name}`);
+      // a commit message is shown as its short switch, `-m msg` (2.0 usage lines)
+      const flag = opt.name === "message" ? "-m msg" : `--${opt.name.replaceAll("_", "-")}`;
+      assert.ok(r.stdout.includes(flag), `${spec.family}.${spec.call}: ${opt.name}`);
     }
   }
 });

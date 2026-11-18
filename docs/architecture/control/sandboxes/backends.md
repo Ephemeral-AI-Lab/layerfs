@@ -150,7 +150,7 @@ root, and `<name>` the Sandbox's run folder name
 A `native` Sandbox's entries are this user's; a `namespaces` Sandbox's are
 root's, and its commands run as another, nonroot identity. Everything in
 the folder goes with it: `delete` removes it whole after a known stop, at
-`sandbox.close` or when a start fails
+`sandbox.remove` or when a start fails
 ([Stop and delete](#stop-and-delete)).
 
 | Entry | Written by | Read by | Source |
@@ -165,7 +165,7 @@ the folder goes with it: `delete` removes it whole after a known stop, at
 | `tmp/` | commands: it is their `HOME` and scratch directory | anyone who can reach it (1777) | [`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs), [`runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs) `scratch_directory` |
 | `groups/` | each `native` command's start: one empty file per process group, removed once the group has no member | the caller's side only | [`local/groups.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/groups.rs) |
 | `bin/`, `runtime/` | the launcher: copies of the daemon, the helper and the runtime layer | anyone may read and run them; only root may change them | [`namespaces/paths.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/paths.rs) |
-| `owner` | the caller's side, once, after the daemon started | a reopen with no `deploy.localDir`, and `doctor`'s leftover walk and fix | [`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `mark_owner`, `owned` |
+| `owner` | the caller's side, once, after the daemon started | a reopen with no `deploy.localDir`, and the leftover walk of `home.leftovers` and its removal by `home.prune` | [`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `mark_owner`, `owned` |
 | `<root>/<name>.root/` | the launcher makes it empty; the init stage mounts the Sandbox's root on it inside the Sandbox's own mount namespace, so from outside it stays empty | nothing outside the Sandbox | [`namespaces/paths.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/paths.rs); `delete` removes it with `rmdir` |
 | `<root>/images/` | the first Sandbox that needs a digest unpacks it once, under that digest's `<64 hex>.2.lock`, beside its sidecar `<64 hex>.2.json` | every Sandbox built on it, read-only; it is not removed with a Sandbox, and the lock files stay | [`rootfs/cache.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/cache.rs), [`image_artifact.rs`](../../../../control/crates/layerfs-sandbox/src/image_artifact.rs) |
 
@@ -268,12 +268,12 @@ machine refuses a forward and every call goes through the worker
 
 A Sandbox record written by the retired docker backend (`backend` or
 `runtime` `docker`, or a started docker-machine record with no `runtime`) is
-never reopened: every call but `sandbox.close` is `Unsupported`, asking to
-recreate it; `sandbox.close` forgets it and names the container for
+never reopened: every call but `sandbox.remove` is `Unsupported`, asking to
+recreate it; `sandbox.remove` forgets it and names the container for
 `docker rm -f`; `sandbox.create` of that name forgets it first
 ([`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs),
 [`reopen.rs`](../../../../control/crates/layerfs-sandbox/src/reopen.rs),
-[`close.rs`](../../../../control/crates/layerfs-sandbox/src/close.rs)).
+[`remove.rs`](../../../../control/crates/layerfs-sandbox/src/remove.rs) `forget`).
 
 ## `stop.rs`: stop handles
 

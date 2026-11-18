@@ -30,7 +30,7 @@ is in [Migration](migration.md).
    machine/native/run/        0755: Sandbox run folders, <name>.root,
                               images/ cache
    store/<s>/    record.json  lock  store.sqlite (sqlite on native)
-                 store.sqlite.incoming        a pull's partial copy
+                 store.sqlite.incoming        a move's partial copy
                  backup.lock  backup.staging  store.sqlite.backup
                  open/<pid>   one lease per process using the Store
                  project/<p>/record.json
@@ -118,15 +118,16 @@ is the home or a worker's root.
 | `store/<s>/backup.lock` | `backup.create`, which holds its `flock` to its end | never; the file stays | [`backup/create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) `Creating` |
 | `<root>/store/<s>/store.sqlite.backup`; `store/<s>/backup.staging` | `backup.create`: the snapshot staged beside the Store's file, and in the home the copy fetched from a worker | when the create ends | same, [`transfer/steps.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) `Stage`, `Unstage` |
 | `<root>/sandbox/<n>/workspace/<id>.json` | a mount, once it succeeded: `{ v, id, name?, branch, path, namespace, created }`. `id` is the Workspace's 64 hex digits; `namespace` is the daemon's number for it, which names its overlay database `overlay/<namespace>.sqlite` in the run folder | its unmount | [`record/workspace.rs`](../../../../control/crates/layerfs-sandbox/src/record/workspace.rs), [`files.rs`](../../../../control/crates/layerfs-sandbox/src/files.rs) `token_of`, [`workspaces.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/workspaces.rs) |
-| `<id>.unmount`, `<id>.unmount-lock` | an unmount: who owns it, and its lock | the Sandbox's close | [`unmount_guard.rs`](../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs) |
-| `workspace/<id>/exec/<x>.json` | a command's start | its end; a stale one at the next exec of its id, cancel, unmount or close, with a line in that side's `log/exec.jsonl` | [`exec/record.rs`](../../../../control/crates/layerfs-sandbox/src/exec/record.rs), [`exec/cancel.rs`](../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) |
+| `<id>.unmount`, `<id>.unmount-lock` | an unmount: who owns it, and its lock | the Sandbox's removal | [`unmount_guard.rs`](../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs) |
+| `workspace/<id>/exec/<x>.json` | a command's start | its end; a stale one at the next exec of its id, cancel, unmount or Sandbox removal, with a line in that side's `log/exec.jsonl` | [`exec/record.rs`](../../../../control/crates/layerfs-sandbox/src/exec/record.rs), [`exec/cancel.rs`](../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) |
 | `log/init-failures.jsonl`, `log/migration*.json`, `log/1.1.0/` | a conversion; no 2.0 call appends to `init-failures.jsonl` | never | [Migration](migration.md) |
 | `/layerfs/data/incoming/init-<16 hex>/` | the parts of a `project.init` folder copy; no lock or lease is taken | every outcome the worker knows | [`project/staged.rs`](../../../../control/crates/layerfs-store/src/project/staged.rs) |
 | `/layerfs/data/.layout-3`; `/layerfs/state/secret`, `worker.pid` | the worker's first start from a layout 3 bundle; each worker launch | the marker never. `/layerfs/state` is a tmpfs on `docker` and goes with each container; on a VM its files are replaced by the next launch | [`home/guest.rs`](../../../../control/crates/layerfs-home/src/home/guest.rs), [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs), [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
 
 The run root's entries are in [Backends](../sandboxes/backends.md#the-run-folder).
-What an interrupted operation leaves of these, `layerfs doctor` reports and
-`doctor.fix` removes: [Doctor: leftovers](../doctor/checks.md#leftovers).
+What an interrupted operation leaves of these, `layerfs home leftovers`
+(`home.leftovers`) lists and `layerfs home prune <leftover>` (`home.prune`)
+removes: [Doctor: leftovers](../doctor/checks.md#leftovers).
 
 ### Where each record lives
 
@@ -147,7 +148,7 @@ is in the home; a worker's root that holds a sqlite Store's file keeps
 | Names | Whose | Source |
 | --- | --- | --- |
 | `layerfs.json`, `layerfs.lock`, `generation`, `machine/`, `store/`, `sandbox/`, `backup/`, `log/`, `trace/` | LayerFS's: every path it builds in a home starts with one of them | [`home/paths.rs`](../../../../control/crates/layerfs-home/src/home/paths.rs) |
-| `secret/`, `runtime/`, `job/`, `stat/`, `preset/` | an integration's. LayerFS creates none of them, and neither `doctor`'s scan (four fixed folders) nor its leftover walk (which never lists the home itself) lists, reads or reports them | [`doctor/scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `scan`, [`doctor/leftovers.rs`](../../../../control/crates/layerfs-control/src/doctor/leftovers.rs) |
+| `secret/`, `runtime/`, `job/`, `stat/`, `preset/` | an integration's. LayerFS creates none of them, and neither the home doctor's records scan (four fixed folders) nor the leftover walk of `home.leftovers` (which never lists the home itself) lists, reads or reports them | [`doctor/scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `scan`, [`doctor/leftovers.rs`](../../../../control/crates/layerfs-control/src/doctor/leftovers.rs) |
 
 ### The `op` intent
 
@@ -175,7 +176,7 @@ is in the home; a worker's root that holds a sqlite Store's file keeps
 | `machine/<m>/start.lock` | a machine start, stop, create or remove | 600 s, `Unavailable` | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
 | `store/<s>/lock` | leases, `op` and phase writes, the Store record | 120 s, `Unavailable` | [`home/entity_lock.rs`](../../../../control/crates/layerfs-home/src/home/entity_lock.rs) |
 | `sandbox/<n>/lock` | the Sandbox and Workspace records | 120 s, `Unavailable` | [`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) |
-| `sandbox/<n>/serve.lock` | a Sandbox start, Workspace mount or close (the discovery turn) | 60 s, `Busy` | [`project/discovery.rs`](../../../../control/crates/layerfs-store/src/project/discovery.rs) |
+| `sandbox/<n>/serve.lock` | a Sandbox start, Workspace mount or Sandbox removal (the discovery turn) | 60 s, `Busy` | [`project/discovery.rs`](../../../../control/crates/layerfs-store/src/project/discovery.rs) |
 | `store/<s>/open/<pid>` | a lease: this process uses the Store | taken under the Store lock | [`lease.rs`](../../../../control/crates/layerfs-store/src/lease.rs) |
 
 `generation` is a seventh lock file, a leaf: its `flock` is taken last, for
@@ -211,7 +212,7 @@ so two homes on one host never share one
 | A machine's VM or worker container | `layerfs-<id8>-<machine>`; each character of the machine name that is not an ASCII letter or digit becomes `-` | recorded as `vm_name` by every `machine.create` and in a new home's `docker` record; `native` has none | [`record.rs`](../../../../control/crates/layerfs-machine/src/record.rs) `vm_name`, `built_in`; [`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs) |
 | Its data volume (`docker`, `apple-container`) | `<vm_name>-data` | follows the VM name | [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs), [`apple_container/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/observe.rs) |
 | A machine record without `vm_name` | `lfs-<id8>-<machine>` | the earlier formula, computed at each read: the machine keeps its container, volume and Stores. No new name is made with `lfs-` | [`record.rs`](../../../../control/crates/layerfs-machine/src/record.rs) `provider_name`, `legacy_vm_name` |
-| A Sandbox's run folder | `layerfs-<id8>-<sandbox>` under the run root, with its private root `<that name>.root` beside it | a recorded Sandbox is used only under the name its record holds, which must be exactly `layerfs-<id8>-<sandbox>` or `lfs-<id8>-<sandbox>` (no prefix is stripped), in the run root this home computes; a forced close looks for both | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `sandbox_name`, `recorded_names`; [`reopen.rs`](../../../../control/crates/layerfs-sandbox/src/reopen.rs); [`force.rs`](../../../../control/crates/layerfs-sandbox/src/force.rs) |
+| A Sandbox's run folder | `layerfs-<id8>-<sandbox>` under the run root, with its private root `<that name>.root` beside it | a recorded Sandbox is used only under the name its record holds, which must be exactly `layerfs-<id8>-<sandbox>` or `lfs-<id8>-<sandbox>` (no prefix is stripped), in the run root this home computes; a forced `sandbox.remove` looks for both | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `sandbox_name`, `recorded_names`; [`reopen.rs`](../../../../control/crates/layerfs-sandbox/src/reopen.rs); [`force.rs`](../../../../control/crates/layerfs-sandbox/src/force.rs) |
 | An unpacked image | `images/<64 hex>.2`; `.2` is the cache layout (file times restored), and a plain `<64 hex>` an older unpack a Sandbox built on it keeps | shared by the run root's Sandboxes | [`rootfs/cache.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/cache.rs) |
 | Not prefixed | a Lima data disk `lfs<8 hex>` (a hash of the VM name: its ext4 label `lima-<disk>` holds 16 bytes); a Sandbox's cgroup `/sys/fs/cgroup/layerfs/<container id>`; the image build's temporary names (`lfs-image-*`); a retired docker backend's container `lfs-<id8>-<sandbox>` | each keeps its own form | [`lima/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/observe.rs) `disk_name`, [`namespaces/cgroup.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/cgroup.rs), [`machine_image.py`](../../../../tools/machine_image.py), [`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) `retired_container` |
 
@@ -304,9 +305,10 @@ grep `pattern` counts its own bytes. A refusal contributes only its code: its me
 
 No line is written for a running or killed call, worker requests, a
 call's internal parts, commands outside the call table (`help`,
-`--version`, `worker`, `import-env`, `doctor`), usage errors or a call
-whose entry is `quiet` (`home.get`, `home.log`, `home.clear_log`, the `logs`
-calls and the monitoring reads). `LAYERFS_LOGS=0` turns the log off for the process; it is
+`--version`, `worker`, `import-env`), usage errors or a call whose entry
+is `quiet` (`home.get`, `home.log`, `home.clear_log`, `sandbox.log`,
+`machine.log`, and the monitoring reads `sandbox.files`, `machine.files`
+and `machine.stats`). The six doctors are table calls and log a line. `LAYERFS_LOGS=0` turns the log off for the process; it is
 independent of `LAYERFS_TRACE`.
 
 ## Invariants
@@ -314,11 +316,11 @@ independent of `LAYERFS_TRACE`.
 | Rule | Enforced by |
 | --- | --- |
 | A reader sees the old record or the new one, never a part: write to a private temp file, then rename | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) `write_record` |
-| Records are private: files 0600, folders 0700. The run root `machine/native/run/` is 0755, as the backends require. Under the namespaces backend (`native` on Linux, and every worker's root) `traversable` adds only o+x to each folder from the run root up to the home or worker's root that lacks it, so a Linux home and its `machine/` and `machine/native/` are 0701: commands run as another identity and must pass, never list. A worker's root and its `store/` and `sandbox/` are made 0755 by its launcher. `doctor`, which scans the home only, accepts both modes: a home folder is an error only with a group bit or with read or write for others (mask `076`); a Store's own folder must be 0700 and a record file 0600 (mask `077`) | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) `private_dir`, `traversable`; [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `host_args`; [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs); [`doctor/scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `folder`, `store_folder`, `file_mode` |
+| Records are private: files 0600, folders 0700. The run root `machine/native/run/` is 0755, as the backends require. Under the namespaces backend (`native` on Linux, and every worker's root) `traversable` adds only o+x to each folder from the run root up to the home or worker's root that lacks it, so a Linux home and its `machine/` and `machine/native/` are 0701: commands run as another identity and must pass, never list. A worker's root and its `store/` and `sandbox/` are made 0755 by its launcher. `home.doctor`'s records check (`home.records`), which scans the home only, accepts both modes: a home folder is an error only with a group bit or with read or write for others (mask `076`); a Store's own folder must be 0700 and a record file 0600 (mask `077`) | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) `private_dir`, `traversable`; [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `host_args`; [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs); [`doctor/scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `folder`, `store_folder`, `file_mode` |
 | A record holds facts and at most one `op`; states such as `running` are derived when read; reading never clears an intent | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) |
 | Liveness compares pid, kernel start time and boot id, so a reused pid is not the owner; a compaction's recorded owner also compares its PID namespace, so a probe in another namespace never reads it as live | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs), [`process.rs`](../../../../control/crates/layerfs-home/src/process.rs) |
 | Lock order is home, start, Store, Sandbox; none is held across a worker call, a VM boot or a byte transfer, except `start.lock` across its start | [`home/lock.rs`](../../../../control/crates/layerfs-home/src/home/lock.rs), [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
-| A stale lease (its process gone) is removed under the Store lock by the next lease taker, or by push, pull, remove and disconnect, and logged to `log/leases.jsonl`; reads leave it | [`lease.rs`](../../../../control/crates/layerfs-store/src/lease.rs) |
+| A stale lease (its process gone) is removed under the Store lock by the next lease taker, or by `store.move`, `store.remove` and `store.disconnect`, and logged to `log/leases.jsonl`; reads leave it | [`lease.rs`](../../../../control/crates/layerfs-store/src/lease.rs) |
 | Only host processes take `layerfs.lock`; a worker's root is never treated as a home | [`home/lock.rs`](../../../../control/crates/layerfs-home/src/home/lock.rs), [`home/guest.rs`](../../../../control/crates/layerfs-home/src/home/guest.rs) |
 | A password never reaches a record: `store.connect` refuses a URL that carries one; the record keeps only the reference | [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs) `refuse_password`, [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) |
 | A trace or call-log line that cannot be written changes no outcome and is not retried | [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs), [`logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs) |

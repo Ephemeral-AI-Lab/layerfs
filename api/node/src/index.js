@@ -1,5 +1,5 @@
 // The `layerfs` package (#533 step 14): one client per home (and optional
-// folder scope, O32), twelve families built from the library's call table.
+// folder scope, O32), ten families built from the library's call table.
 // Each function takes its positionals in the table's order, then an options
 // object; every call is one call into the library, made once. Any call's
 // options may also carry `log_tag`, the tag of its call log line (#659),
@@ -16,7 +16,7 @@ import { LayerFSError } from "./errors.js";
 
 /** The table: `[{ family, call, args, options, help }]`. */
 export const table = decode(native.table());
-/** The twelve families, in help order. */
+/** The ten families, in help order. */
 export const families = [...new Set(table.map((c) => c.family))];
 
 const FUNCTION = "function";

@@ -1,36 +1,36 @@
 ---
 name: layerfs-js-sdk
-description: Use when building, editing, testing or inspecting a project through LayerFS 2.0 with the `@layerfs/node` package (`import layerfs from "@layerfs/node"`), its Python twin or the `layerfs` command. Activates on LayerFS projects (`<store>/<project>`), Branches, Commits, Workspaces or Sandboxes; `layerfs.file.*`, `layerfs.branch.*`, `layerfs.commit.*`, `layerfs.sandbox.*`, `layerfs.workspace.*` or `layerfs.project.*` calls; `layerfs file read …`-style commands; running npm install, build or tests inside a mounted Workspace; or resolving LayerFS Conflict, HeadMoved, Dirty or ReadOnly refusals.
+description: Use when building, editing, testing or inspecting a project through LayerFS 2.0 with the `@layerfs/node` package (`import layerfs from "@layerfs/node"`), its Python twin or the `layerfs` command. Activates on LayerFS projects (`<store>/<project>`), Branches, Commits, Workspaces or Sandboxes; `layerfs.file.*`, `layerfs.branch.*`, `layerfs.commit.*`, `layerfs.sandbox.*`, `layerfs.workspace.*` or `layerfs.project.*` calls such as `layerfs.file.edit`, `layerfs.commit.diff`, `layerfs.sandbox.create`, `layerfs.workspace.mount`, `layerfs.workspace.exec`, `layerfs.workspace.status`, `layerfs.workspace.commit` or `layerfs.branch.publish`; `layerfs file read …`-style commands; running npm install, build or tests inside a mounted Workspace; or resolving LayerFS `Conflict`, `Dirty`, `InUse`, `Busy` or `InvalidInput` refusals (`LayerFSError`).
 ---
 
 # LayerFS: working on a project
 
-> **Status:** Current general guide for LayerFS 2.0 (#533, branch `issue533-v2`).
-> It replaces the 1.1.0 guide for `@layerfs/agent`, `@layerfs/cli`,
-> `@layerfs/runtime` and `@layerfs/backend`, which are deleted. Sources: the
-> call table (one file per call, `api/crates/layerfs-api/src/<family>/<call>.rs`), the package
-> (`api/node/src/index.js`, [api/README.md](../../../api/README.md)), the
-> command (`api/crates/layerfs-cli/src`) and
-> [the decisions log](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/DECISIONS.md). File,
-> Branch, Commit, project and Store results below were captured on macOS from
-> the built `layerfs` command and the Node package in a private home on
-> 2026-11-02. Sandbox and Workspace calls were **not run** in this pass; their
-> shapes come from source.
+> **Status:** Current general guide for the LayerFS 2.0 call surface: 85
+> calls in 10 families. Sources: the built call table (`layerfs help --json`;
+> one file per call, `api/crates/layerfs-api/src/<family>/<call>.rs`), the
+> frozen spec rows
+> ([calls.json](../../../core/docs/issues/call-surface-2-0/calls.json),
+> [decisions](../../../core/docs/issues/call-surface-2-0/DECISIONS.md)), the
+> package (`api/node/src/index.js`) and the manual's
+> [calls page](../../../docs/versioned/2.0.0/calls.md). Outputs below were
+> printed by the built `layerfs` command (2.0.0) on a throwaway home on
+> macOS (`native` machine) on 2026-11-18; ids are shortened. The Node
+> package makes the same call into the same library and answers the same
+> objects; the Node snippets themselves were not run in that pass.
 
 Your project lives in LayerFS, not on your local disk. You read and change it
 through LayerFS calls: from a Node script, from Python, or one call at a time with
 the `layerfs` command. All three make the same call into the same library, so
-arguments, results and refusals are the same.
+arguments, answers and refusals are the same.
 
 ## Inside an integration: start here
 
 An integration is a host that runs you with a LayerFS project already set up. Its
 instructions name the project (`<store>/<project>`, such as `shop/api`), your
-Branch, and how to reach the package or the command.
+Branch, your Sandbox and how to reach the package or the command.
 
 - **One setting:** `LAYERFS_HOME`, the home folder that holds every record
-  (default `~/.layerfs`). Nothing else is needed. 1.1.0's other `LAYERFS_*`
-  settings are gone.
+  (default `~/.layerfs`). Nothing else is needed.
 - **The integration may give you a folder scope** (`--scope <folder>
   --scope-project <store>/<project>`, or `client({ scope })`). Then you work
   in that one project, your paths must stay inside that folder, your Branch
@@ -40,11 +40,13 @@ Branch, and how to reach the package or the command.
   source. The calls are the only way in.
 - Your current folder is for scratch files only: your scripts and notes. Files
   you find there may be an old copy, not the project.
-- **`main` is read-only.** Read it and fork from it. Writes to it are refused
-  `ReadOnly`; `commit.list` on it is refused `NoSuchBranch` (it is a chain of
-  Layers, not a Branch). Fork a Branch, work there, then `branch.publish` it.
+- **`main` is read-only.** Read it and fork from it. A write to it, a merge
+  into it (without `into`) and a mount of it are refused `InvalidInput`; the
+  mount's refusal was seen with
+  `"fix":"layerfs branch fork shop/api <name> main"`. Work on a Branch, then
+  `branch.publish` it.
 - **Always unmount.** Put every `workspace.unmount` in a `finally` block. A
-  forgotten Workspace stays mounted and its Sandbox never closes.
+  forgotten Workspace stays mounted and its Sandbox cannot be removed.
 
 ## How an agent works in LayerFS
 
@@ -54,22 +56,26 @@ what the agent did.
 
 | Agent tool | LayerFS calls | Recorded as |
 | --- | --- | --- |
-| File read: read, list, search, diff | `file.read`, `file.list`, `file.grep`, `file.glob`, `file.diff` | Nothing: reads don't change history |
+| File read: read, list, search, history | `file.read`, `file.list`, `file.stat`, `file.grep`, `file.glob`, `file.history`, `file.blame`, `commit.diff` | Nothing: reads don't change history |
 | File change: write, edit, many-file change | `file.write`, `file.edit`, `file.apply`, `file.mkdir`, `file.mv`, `file.cp`, `file.rm` | One Commit per call. All or nothing |
-| Bash | A Workspace per call: `workspace.mount` → `workspace.exec` → `workspace.commit` → `workspace.unmount` | One Commit with everything the command changed |
+| Bash | A Workspace: `workspace.mount` → `workspace.exec` → `workspace.commit` → `workspace.unmount` | One Commit with everything the command changed |
 
 **`file.*` for cheap, targeted file work; a Workspace for Bash commands.**
 
 ### Cheap file work: `file.*`
 
 - A `file` call runs on the project's Store, in your process or in the worker
-  of the machine that holds the Store. No Workspace, no mount.
+  of the machine that holds the Store. No Workspace of yours, no mount.
 - A write is atomic and is exactly one Commit with your message. Without a
   message the Commit says `Apply filesystem changes`.
-- A read sees the Branch's latest Commit: what every Workspace and writer has
-  committed, never a mounted Workspace's uncommitted changes.
-- **No merge:** if another writer committed on the Branch during the call, it is
-  refused `HeadMoved` and nothing is written. Read again, then redo the change.
+- A read sees the Branch's latest Commit (or `at`, one Commit of its
+  history): what every Workspace and writer has committed, never a mounted
+  Workspace's uncommitted changes.
+- **A moved Branch merges:** if another writer committed on the Branch during
+  the write, the change is merged with the new head and the answer says
+  `merged: true`; a path both changed is a `Conflict` and nothing is written.
+  Pass `expected: <commit>` to refuse `Conflict` instead unless the head is
+  still the one you read.
 
 ### Bash commands: a Workspace
 
@@ -78,34 +84,39 @@ Use a Workspace for commands, which usually change files too: `npm install`
 that write snapshots. Also use one for large changes across many files, and to
 reach a Workspace's uncommitted state, such as conflict markers.
 
-- **A Workspace per Bash call is the default.** Mounting does not copy or scan
-  the tree. Each mount is a new Workspace, named `<sandbox>:<path>`, such as
-  `tests:/workspaces/1`. Pass that `ws` string to `exec`, `commit`, `unmount`
-  and `status`.
 - **You name the Sandbox.** A Sandbox is created once with
-  `sandbox.create(project, name, machine?)`, holds up to 16 Workspaces, and runs
-  on the machine that holds the project's Store. `workspace.mount(sandbox,
-  branch)` never starts one. See [sandbox](references/methods/sandbox.md).
+  `sandbox.create(project, name, { machine })`, holds up to 16 Workspaces,
+  and runs on the machine that holds the project's sqlite Store (else
+  `native`). `workspace.mount(sandbox, branch)` never starts one. See
+  [sandbox](references/methods/sandbox.md).
+- **A Workspace per Bash call is the default.** Mounting does not copy or
+  scan the tree. A Workspace is named `<sandbox>:<name>`, such as
+  `tests:agent`: `mount` answers it as `workspace` (the name defaults to the
+  Branch's, made valid; `{ name }` picks another). Pass that handle to
+  `exec`, `commit`, `unmount`, `status` and `cancel`.
 - **Inside a command, use relative paths.** `exec` starts in the Workspace
-  root. The mount path changes with every mount.
+  root (or `cwd`, a folder of the Workspace). The mount path changes with
+  every mount.
 - **Commit after every Bash call, even a failing one,** with a message naming
   the step and its result, such as `"step 12: npm test (exit 1)"`.
-- **A step that changes nothing makes no Commit.** `workspace.commit` returns
-  `kind: "UpToDate"`.
+- **A step that changes nothing makes no Commit.** `workspace.commit`
+  answers `{ commit, unchanged: true }`, `commit` being the head.
 
 ## Merge rules: `/.lww`
 
-Workspaces and Branches meet in a merge: in `workspace.commit` when the Branch
-moved, and in `branch.merge`. Source files merge line by line; overlaps become a
-`Conflict` you resolve by reading. Generated state (`node_modules`, lockfiles,
-build output) can't merge that way, so list it in `/.lww` at the project root:
+Changes meet in a merge: in `workspace.commit` and the `file.*` writes when
+the Branch moved, and in `branch.merge`. Source files merge line by line;
+overlaps become a `Conflict` you resolve by reading. Generated state
+(`node_modules`, lockfiles, build output) can't merge that way, so list it in
+`/.lww` at the project root:
 
 ```
 %include .gitignore
 ```
 
-Both merges then keep the newer version of those paths whole and report each
-decision in the result's `lww` list. Never list source files. Details:
+Merges then keep the newer version of those paths whole and name each such
+path in the answer's `overwritten` list (the first 20; `overwritten_count`
+only when it was cut). Never list source files. Details:
 [merge rules](references/rules/lww.md) and
 [resolving conflicts](references/rules/conflicts.md).
 
@@ -113,65 +124,117 @@ decision in the result's `lww` list. Never list source files. Details:
 
 | Piece | What it is | Family |
 | --- | --- | --- |
-| Home | `LAYERFS_HOME`: the records of every machine, Store, project and Sandbox | — |
+| Home | `LAYERFS_HOME`: the records of every machine, Store, project, Sandbox and bucket, and the call log | `home` |
 | Store | One database holding projects and all their history: a sqlite file on one machine, or a PostgreSQL database | `store` |
 | Project | `<store>/<project>`, imported once from a host folder | `project` |
 | Branch | A named line of Commits. `main` changes only through `branch.publish` | `branch` |
-| Commit | One saved change on a Branch, named by a 66-hex id | `commit` |
+| Commit | One saved change on a Branch, named by a 66-hex id (a prefix of 8 or more is accepted where a call takes a Commit) | `commit` |
 | Files | Read and change files on a Branch directly | `file` |
 | Sandbox | Named, bound to one project, running on one machine; holds up to 16 Workspaces | `sandbox` |
-| Workspace | A Branch mounted in a Sandbox, `<sandbox>:<path>`; commands run there | `workspace` |
+| Workspace | A Branch mounted in a Sandbox, `<sandbox>:<name>`; commands run there | `workspace` |
 | Machine | Where Sandboxes run: `native`, `docker`, VMs (`apple-container`, `lima`) | `machine` |
-| Backup | A copy of a sqlite Store in an r2 or MinIO bucket | `backup` |
+| Bucket | An r2 or S3 bucket holding backups of sqlite Stores | `backup` |
 
 ## The three front ends
 
 ```js
 // Node 22+, ES module
 import layerfs, { LayerFSError } from "@layerfs/node";
-const text = (await layerfs.file.read("shop/api", "work", "/README.md")).text;
+const { text } = await layerfs.file.read("shop/api", "agent", "/README.md");
 ```
 
 ```python
 import layerfs
-text = layerfs.file.read("shop/api", "work", "/README.md")["text"]
+text = layerfs.file.read("shop/api", "agent", "/README.md")["text"]
 ```
 
 ```bash
-layerfs file read shop/api work /README.md --text
+layerfs file read shop/api agent /README.md --text
 ```
 
 | Shell | Node | Python |
 | --- | --- | --- |
 | `layerfs <family> <call> <a> <b> [<c>] --opt <v> --flag` | `family.call(a, b, c?, { opt: v, flag: true })` | `family.call(a, b, c=None, opt=v, flag=True)` |
 | `-m <text>` | `{ message }` | `message=` |
-| `--start-line 10` | `{ start_line: 10 }` | `start_line=10` |
+| `--old-string S` | `{ old_string: "S" }` | `old_string="S"` |
+| `--detail` (long form) | `{ detail: true }` | `detail=True` |
+| `--with live,stats` | `{ with: ["live", "stats"] }` | `with_=["live", "stats"]` |
+| `--progress` | `{ on_progress: (e) => … }` | `on_progress=fn` |
 | one line of JSON on stdout (`--text`: readable) | a plain object | a dict |
-| a refusal: JSON on stderr, exit 125 | throws `LayerFSError { code, message, detail }` | raises `layerfs.LayerFSError` (`.code`, `.message`, `.detail`) |
+| a refusal: JSON on stderr, exit 125 | throws `LayerFSError` | raises `layerfs.LayerFSError` |
 
-- **Positionals go from the outside in:** project, Branch, path, other inputs,
-  and an optional Commit last. Options say how.
-- **Every call takes its project.** There is no client to open or close and no
-  default project. `layerfs.client({ home, scope })` returns the same nine
-  families bound to another home or a folder scope.
-- **Results use snake_case keys** in every front end: `exit_code`,
-  `has_more`, `next_page_pos`. Bytes are `Buffer` in Node, `bytes` in Python.
-  (Exception seen live: a refusal's `detail` keeps the library's camelCase
-  keys, such as `mergeBase` and `hunksOmitted` in a `Conflict`.)
-- **Node calls return promises.** Python calls are synchronous; `layerfs.aio`
-  has the same calls as coroutines.
-- **Shell exit codes:** 0 done; 2 the command line is wrong and nothing was
-  called; 125 LayerFS refused or failed. `workspace exec --stream` exits with
-  the command's own code.
-- An unknown option or a missing argument is refused `InvalidInput` before any
-  effect (Node: ``file.read: `branch` is required``).
-- `layerfs help`, `layerfs help <family>` and `layerfs help <family> <call>`
-  print the table. `layerfs.table` holds it in code.
+- **Positionals go from the outside in:** project, Branch, path, other
+  inputs. Everything optional is an option, except a few optional trailing
+  positionals (`branch.fork`'s `from`, `file.glob`/`file.grep`'s `path`,
+  `sandbox.files`/`machine.files`'s `path`, `machine.prune`'s `image`).
+- **Every call takes its project** (or its Sandbox, Workspace, machine,
+  Store). There is no client to open and no default project.
+  `layerfs.client({ home, scope })` returns the same ten families bound to
+  another home or a folder scope. `layerfs.close()` releases the Stores this
+  process holds open; call it before a script exits.
+- **Node calls return promises.** Python calls are synchronous.
+- **Answers are snake_case** in every front end. Bytes are `Buffer` in Node,
+  `bytes` in Python.
+- An unknown option or a wrong argument count is a usage error: exit 2 in the
+  shell (seen: `layerfs: file.read takes 3 positional arguments, not 1`),
+  `InvalidInput` in Node and Python, before any effect.
+- `layerfs help`, `layerfs help <family>`, `layerfs help <family> <call>` and
+  `layerfs help --json` print the table. `layerfs.table` holds it in code.
 
 In this worktree the package is `api/node` (import `api/node/src/index.js` by
-path until it is installed as `layerfs`; it needs the addon built with
+path until it is installed; it needs the addon built with
 `npm --prefix api run build:native`). The command is `target/debug/layerfs`
 after `cargo +1.85.1 build -p layerfs-cli`.
+
+### The form of an answer
+
+- **Short form by default:** the few keys an agent needs; a key is left out
+  when it is null, false or empty. A call that changed something and has
+  nothing to say answers `{"ok":true}`. **Long form** with `{ detail: true }`:
+  every key the call declares, in a fixed order, null where there is no value.
+  Seen: `file stat` → `{"type":"file","size":8,"mode":"0644"}`; with
+  `--detail` it adds `commit`, `root`, `path`, `inode`, `modified_at`.
+- **Sections:** `with: [...]` adds a named part that costs a read of its own.
+  A call takes only the sections its row lists (`live`, `stats`, `space`,
+  `docker`, `platforms`, `tree`, `patch`); another is refused (seen:
+  `home.get: --with names \`live\`; this call takes platforms, tree`).
+- **Lists:** every list takes `{ limit, cursor }` and answers
+  `{ items, next_cursor }`. `next_cursor` is left out on the last page; pass
+  it back as `cursor`, with the same filters. Defaults: 100 rows for lists,
+  200 lines for logs, 2000 lines for text windows; at most 1000; a page also
+  ends early past 64 KiB, with a cursor.
+- **Counts:** a list inside an answer (`overwritten`, `conflicts`,
+  `changes`, `projects`) holds its first 20 entries; `<list>_count` is set
+  only when it was cut.
+- **States:** a thing's `state` is `ready`, `busy` (with
+  `op { name, phase, started_at }`), `stopped`, `blocked` (with
+  `blocked_by { <machine|store|sandbox>, reason }`), `broken` (with `reason`
+  and `fix`, one shell line) or `unknown` (with `observed_at`). `ready` is
+  left out of most short forms.
+- **Refusals:** `{ error, message }`, `fix` when there is one, and the fields
+  the next call needs, flat beside them (a `Conflict` names the head as
+  `commit`; a `Dirty` lists `changes`). `error` is one of thirteen codes:
+  `NotFound`, `Exists`, `InUse`, `Busy`, `Unresolved`, `Conflict`, `Dirty`,
+  `Capacity`, `InvalidInput`, `Unsupported`, `Unavailable`, `Failed`,
+  `Unknown`. With `detail: true` a refusal also has `fix` (null when none)
+  and `detail`, which holds the raised code as `detail.code` (seen:
+  `{"error":"NotFound","message":"no Store named nope","fix":null,"detail":{"code":"NoSuchStore"}}`).
+- **Exit codes:** 0 done; 2 the command line is wrong and nothing was
+  called; 125 refused or failed. `workspace exec` exits with the command's
+  own code and prints its answer on stdout (seen: `exit 3` →
+  `{"exit_code":3}`, exit 3). A doctor exits 0 once its report is made.
+
+```js
+import layerfs, { LayerFSError } from "@layerfs/node";
+try {
+  await layerfs.file.edit("shop/api", "agent", "/docs/a.txt", { old_string: "nope", new_string: "three" });
+} catch (e) {
+  if (!(e instanceof LayerFSError)) throw e;
+  // e.error ("NotFound"; also e.code), e.message, e.fix, e.detail (null unless
+  // the call passed detail: true) and each flat field as a property
+  console.log(e.error, e.message);   // seen in the shell: NotFound "the old text is not in /docs/a.txt"
+}
+```
 
 ## One script: fork, edit, test, publish
 
@@ -180,49 +243,54 @@ after `cargo +1.85.1 build -p layerfs-cli`.
 import layerfs from "@layerfs/node";
 
 const P = "shop/api";
-await layerfs.branch.fork(P, "work", "main");           // { kind: "Forked", branch, base, head: null }
-await layerfs.file.write(P, "work", "/hello.js", "console.log('hello');\n", { message: "add hello.js" });
-await layerfs.file.edit(P, "work", "/hello.js", { old: "'hello'", new: "'hello, shop'", message: "greet the shop" });
-console.log((await layerfs.file.read(P, "work", "/hello.js")).text);
+await layerfs.branch.fork(P, "agent", "main");                       // { commit }
+await layerfs.file.write(P, "agent", "/hello.js", "console.log('hello');\n", { message: "add hello.js" });
+await layerfs.file.edit(P, "agent", "/hello.js", { old_string: "'hello'", new_string: "'hello, shop'", message: "greet the shop" });
+console.log((await layerfs.file.read(P, "agent", "/hello.js")).text);
 
-// a Bash step; the Sandbox "tests" was made once with sandbox.create(P, "tests", <machine>)
-const mounted = await layerfs.workspace.mount("tests", "work");
+// a Bash step; the Sandbox "tests" was made once with sandbox.create(P, "tests")
+const { workspace } = await layerfs.workspace.mount("tests", "agent");   // "tests:agent"
 try {
-  const run = await layerfs.workspace.exec(mounted.ws, "timeout 110 node hello.js | tee hello.txt", { message: "run hello" });
-  await layerfs.workspace.commit(mounted.ws, { message: `step 3: node hello.js (exit ${run.exit_code})` });
+  const run = await layerfs.workspace.exec(workspace, "timeout 110 node hello.js | tee hello.txt");
+  await layerfs.workspace.commit(workspace, { message: `step 3: node hello.js (exit ${run.exit_code})` });
 } finally {
-  await layerfs.workspace.unmount(mounted.ws);
+  await layerfs.workspace.unmount(workspace);
 }
-await layerfs.branch.publish(P, "work");                 // { kind: "Added", published_layer, … }
+await layerfs.branch.publish(P, "agent");                             // { commit }: main's new head
+layerfs.close();
 ```
 
 The same file steps in the shell (content comes from stdin or `--from <file>`):
 
 ```bash
-layerfs branch fork shop/api work main
-printf "console.log('hello');\n" | layerfs file write shop/api work /hello.js -m "add hello.js"
-layerfs file edit shop/api work /hello.js --old "'hello'" --new "'hello, shop'" -m "greet the shop"
-layerfs file read shop/api work /hello.js --text
+layerfs branch fork shop/api agent main
+printf "console.log('hello');\n" | layerfs file write shop/api agent /hello.js -m "add hello.js"
+layerfs file edit shop/api agent /hello.js --old-string "'hello'" --new-string "'hello, shop'" -m "greet the shop"
+layerfs file read shop/api agent /hello.js --text
 ```
 
 ## Rules
 
 1. **Read before you retry.** Every call is one attempt; nothing is retried for
-   you. On a refusal, look at the project, then decide. On `Unknown` or
-   `Failed` the outcome may be uncertain: check with `commit.list` and
-   `file.read`, and report.
-2. **A non-zero exit is not a refusal.** `workspace.exec` returns normally;
+   you. On a refusal, read its `fix` and look at the project, then decide. On
+   `Unknown` the outcome is not known: check with `commit.list`, `file.read`
+   or `workspace.status`, and report.
+2. **A non-zero exit is not a refusal.** `workspace.exec` answers normally;
    check `exit_code`.
 3. **Keep each command under 2 minutes.** `workspace.exec` has no timeout: wrap
-   long commands, `timeout 110 npm test`.
-4. **A Workspace shows its Branch as it was at mount.** After `file.*` changes,
-   mount again before you build or test.
+   long commands, `timeout 110 npm test`. `workspace.cancel(workspace)` ends
+   what still runs.
+4. **A Workspace shows its Branch as it was at mount.** After `file.*` changes
+   `workspace.status` answers `branch_moved: true` and the next
+   `workspace.commit` merges them in; mount again to see them before you
+   build or test.
 5. **Commit every step that changes files**, failures included; publish to
    `main` at milestones.
-6. **Workspaces outlive your process.** The `ws` string works from any later
-   process with the same `LAYERFS_HOME`. Keep each Workspace's calls sequential.
+6. **Workspaces outlive your process.** The handle works from any later
+   process with the same `LAYERFS_HOME`. Keep each Workspace's calls
+   sequential.
 7. **Clean up:** commit or discard, then unmount every Workspace;
-   `sandbox.close` a Sandbox you created when you are done with it.
+   `sandbox.remove` a Sandbox you created when you are done with it.
 
 ## Folder scope
 
@@ -239,101 +307,98 @@ await lfs.file.read("shop/api", "main", "/web/index.html");   // reads Branch ag
 layerfs file read shop/api main /web/index.html --scope /web --scope-project shop/api --scope-branch agent
 ```
 
-`--scope` without `--scope-project` is a usage error (exit 2).
+From the manual (the scope was checked live before it named its project; not
+re-run on this build):
 
-Checked live (before the scope named its project; the rules below still hold):
-
-- Paths must be canonical and inside `folder`; anything else is refused
-  `InvalidInput` (`out of scope: path`).
-- Branch names become `<branch>.<name>`: `main` means `agent.main`. A Commit id
-  passes through unchanged. `branch.list` shows only the namespace's Branches,
-  named without the prefix.
-- `file` calls need `scope.branch`; without it they are refused
-  (`out of scope: branch`).
-- `commit.*` and `branch.diff` are refused (`out of scope: history`).
-- The namespace's `main` must exist first. Fork it without a scope:
-  `branch.fork(project, "agent.main", "main")`.
-- From source, not run: `workspace.mount` under a scope accepts only `main`
-  (mounting `agent.main`), and `workspace.exec` starts the command in the
-  folder.
-- From source (`797ecca2c7`): every `file` and `branch` call must name the
-  scope's project (`out of scope: project`), and a `workspace` call's Sandbox
-  must be one of that project's (`out of scope: sandbox`). Only the `file`
-  calls, `branch` list/get/fork/merge/publish and the `workspace` calls are
-  allowed; every other call (Stores, machines, backups, projects, Sandboxes)
-  is refused `out of scope: <call>`, such as `out of scope: store.remove`,
-  before any effect. Create the Sandbox and fork the namespace's `main`
-  without a scope.
+- It is an allow list: the `file` calls, `branch` `list`, `get`, `fork`,
+  `merge` and `publish`, and the `workspace` calls. Every other call is
+  refused `InvalidInput` `out of scope: <call>`, such as
+  `out of scope: store.remove`; the `commit` calls are refused
+  `out of scope: history`.
+- Every `file` and `branch` call must name the scope's project
+  (`out of scope: project`); a `workspace` call's Sandbox must be one of that
+  project's (`out of scope: sandbox`).
+- Paths must be the folder or beneath it (`out of scope: path`).
+- Branch names become `<branch>.<name>`: `main` means `agent.main`. A Commit
+  id passes through unchanged. `branch.list` shows only the namespace's
+  Branches, named without the prefix. Without `scope.branch`, every call
+  that names a Branch is refused (`out of scope: branch`).
+- `workspace.mount` under a scope mounts only the namespace's `main`, and
+  `workspace.exec` starts the command in the folder.
+- The namespace's `main` must exist first, and the Sandbox too: create them
+  without a scope (`branch.fork(project, "agent.main", "main")`).
+- `--scope` without `--scope-project` is a usage error (exit 2).
 
 ## Which call for which job
 
 | Job | Use |
 | --- | --- |
-| Create or change one file | `file.write`, or `file.edit` with `{ old, new }` (exactly one match) |
+| Create or change one file | `file.write`, or `file.edit` with `{ old_string, new_string }` (exactly one match, or `replace_all`) |
 | Several related changes as one Commit | `file.apply(project, branch, changes)` |
-| Folders, copy, move, delete | `file.mkdir`, `file.cp`, `file.mv`, `file.rm` (recursive) |
+| Folders, copy, move, delete | `file.mkdir`, `file.cp`, `file.mv`, `file.rm` (`recursive` for a folder) |
 | Install, build, test, run anything | `workspace.mount`, `exec`, `commit`, `unmount` |
-| Look at files | `file.read` (line ranges), `file.list`, `file.stat`, `file.grep` (plain text), `file.glob` |
-| Compare | `file.diff`, `commit.diff`, `branch.diff` |
-| History | `commit.list`, `commit.get`, `file.blame` |
-| Check a Workspace before Commit | `workspace.status` (base, whether the head moved, uncommitted counts) |
-| Sandboxes | `sandbox.create`, `sandbox.list`, `sandbox.get`, `sandbox.close` |
-| Combine Branches | `branch.merge(project, name, a, b)`, then `branch.publish(project, name)` |
+| Look at files | `file.read` (line windows), `file.list`, `file.stat`, `file.grep` (literal text), `file.glob` |
+| Compare | `commit.diff(project, ref, { from, path, with: ["patch"] })` |
+| History | `commit.list`, `commit.get`, `file.history`, `file.blame` |
+| Check a Workspace before Commit | `workspace.status` (changed paths, whether the Branch moved) |
+| Sandboxes | `sandbox.create`, `sandbox.list`, `sandbox.get`, `sandbox.remove`, `workspace.list` |
+| Combine Branches | `branch.merge(project, branch, from)`, then `branch.publish(project, branch)` |
 | Resolve a `Conflict` | [resolving conflicts](references/rules/conflicts.md) |
+| Is something wrong in the home? | the six doctors ([doctors](references/methods/doctor.md)) |
 
 For Rust projects, follow the [Cargo workflow](references/rules/cargo.md).
 
 ## Calls
 
-84 calls in twelve families. Each family's page has arguments, results, refusals
-and examples.
+85 calls in ten families. Each family's page has arguments, answers,
+refusals and examples. Every option object may also carry `detail`, `with`
+(only where listed) and `log_tag`.
 
 | Family | Calls |
 | --- | --- |
-| home (admin) | `init()`, `get({ with, detail })`, `log({ call, project, client, tag, outcome, since, limit, cursor, detail })`, `clear_log()`: create or convert this home, read its state (with `with: ["tree"]`, everything in it), and read or clear its call log ([logs](references/methods/logs.md)); no skill page of its own, see `docs/architecture/api/sdk/home.md` in the repository |
-| [project](references/methods/project.md) | `init(project, folder, { timeout, on_progress })`, `list(store?, { page_size, page_pos })`, `get(project)`, `stats(project, branch?, commit?)`, `export(project, destination, { branch, on_progress })`, `delete(project)`, `remove_file(project, path)` |
-| [branch](references/methods/branch.md) | `list(project, { page_size, page_pos, page })`, `get(project, branch)`, `commits(project, branch, { page, page_size, at_commit, include_storage })`, `get_commit(project, branch, commit)`, `fork(project, name, from_branch, from_commit?)`, `merge(project, name, a, b, { message, units })`, `publish(project, branch, commit?)`, `diff(project, from_branch, to_branch, { paths_only, page_size, page_pos, cursor, page, from_commit, to_commit, path_prefix, include_attribution, continuation })`, `remove(project, branch)` |
-| [commit](references/methods/commit.md) | `list(project, branch, { page_size, page_pos })`, `get(project, branch, commit)`, `diff(project, from_commit, to_commit, { paths_only, page_size, page_pos, cursor })` |
-| [file](references/methods/file.md) | reads `read(project, branch, path, commit?, { start_line, end_line })`, `stat(project, branch, path, commit?)`, `list(project, branch, path, commit?, { page_size, page, page_pos })`, `glob(project, branch, path, pattern, commit?, { page_size, page, page_pos })`, `grep(project, branch, path, pattern, commit?, { page_size, page, page_pos })`, `revision(project, branch, path, { at_commit, traversal, page, page_size, continuation })`, `blame(project, branch, path, commit?, { from_line, line_count })`, `diff(project, left_branch, left_path, right_branch, right_path, { left_commit, right_commit, include_attribution, allow_missing, page, page_size })`; writes `write(project, branch, path, content, { message, mode })`, `edit(project, branch, path, { old, new, message })`, `rm(project, branch, path, { message })`, `mkdir(project, branch, path, { message, mode })`, `mv(project, branch, from_path, to_path, { message })`, `cp(project, branch, from_path, to_path, { message })`, `apply(project, branch, changes, { message })` |
-| [sandbox](references/methods/sandbox.md) | `create(project, name, machine?, { image, on_progress })`, `list(project?, { page_size, page_pos })`, `get(name, { page_size, page_pos })`, `close(name, { force })`, `files(sandbox, path?, { depth, cursor, limit, offset, length })` |
-| [workspace](references/methods/workspace.md) | `mount(sandbox, branch, { name })`, `exec(ws, command, { message, stream, stdout, stderr, exec_id, on_progress })`, `exec_cancel(ws, exec_id, { grace_ms })`, `commit(ws, { message, force })`, `unmount(ws, { discard, force })`, `status(ws)` |
-| [machine](references/methods/machine.md) | `list()`, `platforms()`, `get(name)`, `images(name)`, `load(name, image, { on_progress })`, `prune(name, image?, { unused })`, `status(name)`, `stats(machine)`, `space(machine)`, `files(machine, path?, { depth, cursor, limit, offset, length })`, `start(name, { on_progress })`, `stop(name, { force })`, `create(name, platform, { cpus, memory, disk, image, os_image, on_progress })`, `remove(name)`, `update(name, { cpus, memory, image, docker, wsl, daemon })` |
-| [store](references/methods/store.md) | `list()`, `get(name)`, `status(name)`, `stats(name)`, `create(name)`, `connect(name, url, { password, synchronous_commit })`, `attach(name, machine, { url, password })`, `detach(name, machine)`, `push(name, machine, { on_progress })`, `pull(name, { on_progress })`, `remove(name)`, `compact(name)`, `disconnect(name)` |
-| [backup](references/methods/backup.md) | `connect(name, url, { key, region, part_size })`, `disconnect(name)`, `list(bucket?)`, `create(store, bucket, file?, { on_progress })`, `restore(store, bucket, file?, { on_progress })` |
-| [logs](references/methods/logs.md) | `machine(machine, { cursor, before, limit })`, `sandbox(sandbox, { cursor, before, limit })` |
-| [doctor](references/methods/doctor.md) | `fix(id)` |
+| [home](references/methods/home.md) | `init()`, `get({ with: ["platforms", "tree"] })`, `log({ call, project, client, tag, outcome, since, limit, cursor })`, `clear_log()`, `doctor({ on_progress })`, `leftovers({ machine })`, `prune(leftover)` |
+| [project](references/methods/project.md) | `init(project, folder, { timeout, on_progress })`, `list({ store, limit, cursor, with: ["stats"] })`, `get(project)`, `stats(project, { branch, at })`, `export(project, destination, { branch, at, on_progress })`, `delete(project)`, `hide_path(project, path)`, `doctor(project, { full, on_progress })` |
+| [branch](references/methods/branch.md) | `list(project, { prefix, exclude_prefix, limit, cursor })`, `get(project, branch)`, `fork(project, name, from?, { at })`, `merge(project, branch, from, { into, units, expected, message })`, `publish(project, branch, { at, expected, force })`, `remove(project, branch)` |
+| [commit](references/methods/commit.md) | `list(project, branch, { at, limit, cursor })`, `get(project, commit, { branch })`, `diff(project, ref, { from, path, limit, cursor, with: ["patch"] })` |
+| [file](references/methods/file.md) | reads `read(project, branch, path, { at, line, limit })`, `stat(project, branch, path, { at })`, `list(project, branch, path, { at, limit, cursor })`, `glob(project, branch, pattern, path?, { exclude, at, limit, cursor })`, `grep(project, branch, pattern, path?, { include, exclude, ignore_case, at, limit, cursor })`, `history(project, branch, path, { at, traversal, limit, cursor })`, `blame(project, branch, path, { at, line, limit })`; writes `write(project, branch, path, content, { mode, expected, message })`, `edit(project, branch, path, { old_string, new_string, replace_all, expected, message })`, `rm(project, branch, path, { recursive, expected, message })`, `mkdir(project, branch, path, { mode, expected, message })`, `mv(project, branch, from, to, { expected, message })`, `cp(project, branch, from, to, { expected, message })`, `apply(project, branch, changes, { expected, message })` |
+| [sandbox](references/methods/sandbox.md) | `create(project, name, { machine, image, mount, on_progress })`, `list({ project, machine, limit, cursor })`, `get(sandbox, { with: ["stats"] })`, `remove(sandbox, { force, on_progress })`, `files(sandbox, path?, { depth, limit, cursor, byte_offset, byte_length })`, `log(sandbox, { limit, cursor })`, `doctor(sandbox, { on_progress })` |
+| [workspace](references/methods/workspace.md) | `list({ sandbox, limit, cursor })`, `mount(sandbox, branch, { name })`, `exec(workspace, command, { cwd, env, stdin, stream, stdout, stderr, on_progress })`, `cancel(workspace, { exec })`, `commit(workspace, { message, expected, force })`, `unmount(workspace, { discard, force })`, `status(workspace, { path })` |
+| [machine](references/methods/machine.md) | `list({ with: ["live"] })`, `get(machine, { with: ["live"] })`, `images(machine, { with: ["docker"] })`, `load_image(machine, image, { on_progress })`, `prune(machine, image?, { unused })`, `stats(machine, { with: ["space"] })`, `files(machine, path?, { depth, limit, cursor, byte_offset, byte_length })`, `log(machine, { limit, cursor })`, `start(machine, { on_progress })`, `stop(machine, { force, on_progress })`, `create(name, platform, { cpus, memory, disk, image, os_image, on_progress })`, `remove(machine, { on_progress })`, `update(machine, { cpus, memory, image, docker, wsl, daemon })`, `doctor(machine, { on_progress })` |
+| [store](references/methods/store.md) | `list({ machine, with: ["stats"] })`, `get(store, { with: ["live", "stats"] })`, `create(name, { machine })`, `connect(store, url, { auth, machine, synchronous_commit })`, `disconnect(store, { machine })`, `save_auth(auth, { user, password })`, `auths()`, `remove_auth(auth)`, `update(store, { auth, synchronous_commit })`, `move(store, machine, { on_progress })`, `remove(store)`, `compact(store, { on_progress })`, `doctor(store, { machine, on_progress })` |
+| [backup](references/methods/backup.md) | `connect(name, url, { access_key, secret_key })`, `disconnect(bucket)`, `list({ bucket })`, `create(store, bucket, { file, on_progress })`, `restore(bucket, file, store, { on_progress })`, `doctor(bucket, { full })` |
 
-One top-level function is outside the families: `doctor({ home })` (shell
-`layerfs doctor [--text]`) reports what is wrong in the home as `{ ok,
-findings: [{ severity, entity: { kind, name }, message, fix }] }`, each
-finding naming the call that fixes it. It changes nothing and starts no
-machine.
+`home`, `machine`, `store` and `backup` set up where things live; an agent
+working on a project rarely needs them. Reading state, the call log and
+tracing are the [`layerfs-sdk-observe`](../layerfs-sdk-observe/SKILL.md) skill.
 
-`machine`, `store` and `backup` set up where things live; an agent working on a
-project rarely needs them. Reading state and tracing are the
-[`layerfs-sdk-observe`](../layerfs-sdk-observe/SKILL.md) skill.
+Paths are absolute in the project (`/src/index.js`).
 
-Paths are absolute in the project (`/src/index.js`). Pages are
-`{ items, has_more, next_page_pos }`; pass `page_pos: next_page_pos` for the
-next one.
+## From 1.x
 
-## From 1.1.0
+Removed names have no alias: they are not in the table (Node has no such
+function; the shell has no such command).
 
-| 1.1.0 | 2.0 |
+| 1.x | 2.0 |
 | --- | --- |
-| `LayerFS.open("shop")`, then calls on the client, `close()` | no client: every call takes `<store>/<project>` |
-| `LayerFS.init(name, folder)` | `store.create(store)` once, then `project.init("<store>/<project>", folder)` |
-| `fs.*(ref, path, …)` | `file.*(project, branch, path, commit?, …)` |
-| `fs.edit(branch, path, oldText, newText, message)` | `file.edit(project, branch, path, { old, new, message })` |
-| `fs.diff_files(lRef, lPath, rRef, rPath)` | `file.diff(project, left_branch, left_path, right_branch, right_path, { left_commit, right_commit })` |
-| `project.list_branches()` | `branch.list(project)` |
-| `branch.fork(name, fromRef?)` | `branch.fork(project, name, from_branch, from_commit?)` |
-| `branch.merge(a, b, name)` | `branch.merge(project, name, a, b)` |
-| `branch.list_commits`, `diff_commits`, `diff_branches` | `commit.list`, `commit.diff`, `branch.diff` |
-| `sandbox.create()` → a number | `sandbox.create(project, name, machine?)` |
-| `project.list_sandboxes()`, `sandbox.list_workspaces(n)` | `sandbox.list(project?)`, `sandbox.get(name)` |
-| `{ sandbox, path }` Workspace object | `ws` string `<sandbox>:<path>` |
-| positional `message`, `force`, `discard` | options `{ message }`, `{ force }`, `{ discard }` |
-| `exitCode`, `hasMore`, `startLine` | `exit_code`, `has_more`, `start_line` |
-| `backend.daemon.workspace.status(ws)` | `workspace.status(ws)` |
-| `LAYERFS_DOCKER`, `LAYERFS_IMAGE`, `LAYERFS_STORE_PATH`, … | records in the home; run `layerfs import-env` once to convert |
+| `branch.commits`, `branch.get_commit` | `commit.list`, `commit.get(project, commit, { branch })` |
+| `branch.diff`, `file.diff` | `commit.diff(project, ref, { from, path, with: ["patch"] })` |
+| `branch.fork(project, name, from_branch, from_commit?)` | `branch.fork(project, name, from?, { at })` |
+| `branch.merge(project, name, a, b)` | `branch.merge(project, a, b, { into: name })` |
+| `branch.publish(project, branch, commit?, { expected_base, expected_head })` | `branch.publish(project, branch, { at, expected })` |
+| `file.revision` | `file.history` |
+| `file.read(…, commit?, { start_line, end_line })`, `file.blame(…, { from_line, line_count })` | `file.read(…, { at, line, limit })`, `file.blame(…, { at, line, limit })` |
+| `file.glob(project, branch, path, pattern)`, `file.grep(…path, pattern)` | `file.glob(project, branch, pattern, path?)`, `file.grep(project, branch, pattern, path?)` |
+| `file.edit(…, { old, new })` | `file.edit(…, { old_string, new_string })` |
+| `project.remove_file` | `project.hide_path` |
+| `project.list(store?)`, `project.stats(project, branch?, commit?)` | `project.list({ store })`, `project.stats(project, { branch, at })` |
+| `sandbox.close(name)` | `sandbox.remove(sandbox)` |
+| `sandbox.create(project, name, machine?)` | `sandbox.create(project, name, { machine })` |
+| `workspace.exec_cancel(ws, exec_id)` | `workspace.cancel(workspace, { exec })` |
+| `ws` (`<sandbox>:<path>`), `kind: "UpToDate"`, `lww` | `workspace` (`<sandbox>:<name>`), `unchanged: true`, `overwritten` |
+| `logs.list`, `logs.reset` | `home.log`, `home.clear_log` |
+| `logs.sandbox`, `logs.machine` | `sandbox.log`, `machine.log` |
+| `layerfs doctor` / `doctor()`, `doctor.fix(id)` | `home.doctor()` and the other five doctors; `home.leftovers()`, `home.prune(leftover)` |
+| `machine.status`, `machine.space`, `machine.load`, `machine.platforms` | `machine.get(m, { with: ["live"] })`, `machine.stats(m, { with: ["space"] })`, `machine.load_image`, `home.get({ with: ["platforms"] })` |
+| `store.status`, `store.stats`, `store.push`, `store.pull` | `store.get(s, { with: ["live"] })`, `store.get(s, { with: ["stats"] })`, `store.move(s, machine)` |
+| `page`, `page_size`, `page_pos`, `has_more`, `next_page_pos`, `continuation` | `{ limit, cursor }` in, `{ items, next_cursor }` out |
+| `LayerFSError { code, message, detail }` with raised codes (`HeadMoved`, `NoSuchPath`, `ReadOnly`, …) | `LayerFSError { error, message, fix, … }` with 13 public codes; the raised code is `detail.code` under `detail: true` |

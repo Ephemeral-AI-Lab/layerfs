@@ -17,16 +17,10 @@ test("every call is in exactly one bucket, and admin adds the work bucket", () =
   const buckets = table.map(bucketOf);
   assert.equal(buckets.filter((bucket) => bucket === "work").length, 17);
   assert.equal(buckets.filter((bucket) => bucket === "admin").length, 68);
-  assert.ok(buckets.every((bucket) => bucket === "work" || bucket === "admin" || bucket === "ui" || bucket === "none"));
-  // no call is in the `none` bucket since the doctor family left (`home.prune` is admin)
-  assert.deepEqual(table.filter((spec) => bucketOf(spec) === "none").map(nameOf), []);
-  // a migrated entry names its own profile (call surface 2.0): the monitoring
-  // calls a UI polls (machine.stats, files, log) are `full` rows, so the
-  // `ui` bucket (layerfs-project#178 D2) holds no call any more
-  const ui = table.filter((spec) => bucketOf(spec) === "ui").map(nameOf);
-  assert.deepEqual(ui, []);
+  assert.ok(buckets.every((bucket) => bucket === "work" || bucket === "admin"));
+  // every entry names its own profile (call surface 2.0); the monitoring calls
+  // a UI polls (machine.stats, files, log) are `full` rows
   for (const name of ["machine.stats", "machine.files", "machine.log"]) assert.equal(bucketOf(table.find((spec) => nameOf(spec) === name)), "admin", name);
-
   const work = tools(table, "work").map(nameOf);
   const admin = tools(table, "admin").map(nameOf);
   assert.equal(work.length, 17);
@@ -36,12 +30,15 @@ test("every call is in exactly one bucket, and admin adds the work bucket", () =
   assert.throws(() => tools(table, "root"), /unknown profile/);
 });
 
-test("the admin exception list is checked before the work families", () => {
-  // `branch` is a work family, but retiring one is administration (§10)
-  const retire = { family: "branch", call: "remove" };
+test("an entry's own profile decides its bucket, whatever its family", () => {
+  // `branch` has work calls, but an entry marked `full` is administration
+  const retire = { family: "branch", call: "x", args: [], options: [], form: { profile: "full" } };
   assert.equal(bucketOf(retire), "admin");
   assert.ok(!tools([...table, retire], "work").includes(retire));
   assert.ok(tools([...table, retire], "admin").includes(retire));
+  const agent = { family: "store", call: "x", args: [], options: [], form: { profile: "agent" } };
+  assert.equal(bucketOf(agent), "work");
+  assert.ok(tools([...table, agent], "work").includes(agent));
 });
 
 test("every generated tool is a valid MCP tool with the table's arguments and options", () => {

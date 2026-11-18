@@ -2,8 +2,11 @@
 
 > **Status:** Proposal; target LayerFS 2.0.0; not a released contract.
 
-This manual describes what is implemented on branch `issue533-v2`
-([#533](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/README.md)). It is not a release
+This manual describes what is implemented on `layerfs_v2_0_0` with the 2.0
+call surface (branch `call-surface-2-0`; the frozen specification is
+[`core/docs/issues/call-surface-2-0/`](../../../core/docs/issues/call-surface-2-0/README.md),
+version 19), which grew out of
+[#533](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/README.md). It is not a release
 receipt: nothing here is tagged, published to npm, PyPI or crates.io, or
 covered by a terminal pass. Each page says what was run, what was not run
 and what is not built.
@@ -25,16 +28,18 @@ Commit, merge, and publish to `main`.
   Stores: a sqlite Store is one file on one machine, a postgresql Store is a
   database. Backups of sqlite Stores go to r2 or MinIO buckets. See
   [machines, Stores and backups](machines-and-stores.md).
-- **One call table.** 84 calls in twelve families: `home`, `project`, `branch`,
-  `commit`, `file`, `sandbox`, `workspace`, `machine`, `store`, `backup`,
-  `logs` and `doctor`.
-  The `layerfs` command, the Node package and the Python package are thin
-  front ends over one Rust library and take the same arguments. See
-  [the calls](calls.md).
+- **One call table.** 85 calls in ten families: `home`, `project`, `branch`,
+  `commit`, `file`, `sandbox`, `workspace`, `machine`, `store` and `backup`.
+  The `layerfs` command, the Node package, the Python package and the MCP
+  server are thin front ends over one Rust library and take the same
+  arguments. Every call answers a short form, or its long form with
+  `--detail`; things carry one `state`; a refusal is one of thirteen codes
+  with a `fix` line when there is one; six doctors check without changing
+  anything. See [the calls](calls.md).
 - **Projects are `<store>/<project>`.** Init imports a host folder into an
   existing Store. There is no default project.
 - **Sandboxes are named.** A Sandbox is bound to one project and runs on a
-  named machine. A Workspace is written `<sandbox>:<path>`.
+  named machine. A Workspace is written `<sandbox>:<name>`.
 
 ## Contents
 
@@ -43,12 +48,13 @@ Commit, merge, and publish to `main`.
    Python.
 2. [The home](home.md): the layout of `LAYERFS_HOME`, the one-time
    conversion of a 1.1.0 home, and `layerfs import-env`.
-3. [The calls](calls.md): all 84 calls with their positionals and options,
-   results, errors and exit codes, and the shell switches.
+3. [The calls](calls.md): all 85 calls with their positionals and options,
+   the form of their answers, the doctors, errors and exit codes, the shell
+   switches and the folder scope.
 4. [Machines, Stores and backups](machines-and-stores.md): machine kinds,
-   manual start and stop, sqlite and postgresql Stores, push and
-   pull, and backups.
-5. [Node and Python](sdk.md): the `layerfs` packages, clients, options,
+   manual start and stop, sqlite and postgresql Stores, moving a Store, and
+   backups.
+5. [Node and Python](sdk.md): the `@layerfs/node` and `layerfs` packages, clients, options,
    errors, progress and folder scope.
 6. [Limitations](limitations.md): what is not built, not verified or refused
    as `Unsupported`.
@@ -56,16 +62,19 @@ Commit, merge, and publish to `main`.
    constructor, method and behaviour mapped to its 2.0 replacement, or to
    why it is gone.
 8. [Examples](examples/README.md): runnable Node, Python (sync and async) and
-   shell flows, each run from an installed artifact, with their output; the
-   Workspace route is written out and marked not run.
+   shell flows, with their output, and the Workspace route, all run for this
+   version of the manual.
 
 ## Sources
 
 The code wins over every document below where they differ.
 
 - [The call table](../../../api/crates/layerfs-api/src/), one file per call
-  under its family (`<family>/<call>.rs`): the 84 calls, their arguments and
-  options.
+  under its family (`<family>/<call>.rs`): the 85 calls, their arguments,
+  options and the form of their answers (`layerfs help --json` prints it).
+- [The frozen call surface specification](../../../core/docs/issues/call-surface-2-0/README.md):
+  each call's row (`calls.json`) and the rulings (`DECISIONS.md`); a
+  contract test compares the built table with the rows.
 - [The #533 work order](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/README.md) and
   [its decisions log](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/DECISIONS.md): owner
   decisions and the implementation choices taken on this branch.
@@ -84,8 +93,9 @@ each old name):
 
 - **Packages.** The four 1.1.0 packages (`@layerfs/agent`, `@layerfs/cli`,
   `@layerfs/backend`, `@layerfs/runtime`) are removed. Their last source is
-  the 1.1.0 tag. There is one package, `layerfs`, for Node and for Python,
-  and one native command, `layerfs`.
+  the 1.1.0 tag. There is one package for Node (`@layerfs/node`), one for
+  Python (`layerfs`), one MCP server (`@layerfs/mcp`) and one native command,
+  `layerfs`.
 - **Entry points.** `LayerFS.init` and `LayerFS.open` are removed with no
   alias (D5). Every call names its project as `<store>/<project>`.
 - **Calls.** 1.1.0's `fs` family is now `file`. The old Store calls, the
@@ -100,7 +110,9 @@ each old name):
 - **Homes.** A 1.1.0 home is converted once, on its first 2.0 call. See
   [the home](home.md#a-110-home).
 
-The Store profile is unchanged: every sqlite Store is Disposable (WAL,
+The Store profile changed: every sqlite Store is opened with WAL and `synchronous=NORMAL` (owner,
+2026-11-17, ahead of its safety gate, so no power-loss guarantee is
+claimed); its record's profile label stays `disposable` (1.1.0 used
 `synchronous=OFF`). Durable execution is `NOT_RUN — disabled by owner until
 explicit reauthorization`. Every call is one attempt: there is no retry,
 busy handler or replay.
