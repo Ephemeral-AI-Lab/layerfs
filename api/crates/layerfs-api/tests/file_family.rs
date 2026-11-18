@@ -408,6 +408,12 @@ fn cursors_carry_their_filters_and_the_commit_their_first_page_read() {
         paths
     };
     assert_eq!(grep(&[]), ["/node_modules/x/c.ts", "/src/b.js"]);
+    // a hit's text is its line without the line end (R2 N3)
+    let found = ok(&home, "file.grep", &[p(), dev(), ("pattern", t("login"))]);
+    for row in items(&found) {
+        let text = row.get_text("text").unwrap_or_default();
+        assert!(text.contains("login") && !text.ends_with('\n'), "{row:?}");
+    }
     let folded = grep(&[
         ("ignore_case", SdkValue::Bool(true)),
         ("exclude", t("node_modules")),
@@ -523,12 +529,6 @@ fn a_merge_answers_counts_only_beside_cut_lists() {
     std::fs::remove_dir_all(folder).unwrap();
 }
 
-/// `commit.diff --with patch` (conformance R1 F7): every hunk row keeps
-/// `op` and `text` in the short form, a blank line's empty `text` too, and
-/// an added text file answers its lines as `+` hunks.
-#[test]
-fn a_patch_keeps_blank_lines_and_covers_added_files() {
-    let (home, folder) = project();
 /// A taken Branch name (conformance R1 N5) is refused `Exists` in a plain
 /// sentence, with the call again under another name as its `fix`.
 #[test]
@@ -552,6 +552,12 @@ fn a_taken_branch_name_says_so_and_offers_another() {
     std::fs::remove_dir_all(folder).unwrap();
 }
 
+/// `commit.diff --with patch` (conformance R1 F7): every hunk row keeps
+/// `op` and `text` in the short form, a blank line's empty `text` too, and
+/// an added text file answers its lines as `+` hunks.
+#[test]
+fn a_patch_keeps_blank_lines_and_covers_added_files() {
+    let (home, folder) = project();
     write(&home, "/README.md", t("hello\n\nworld\n"));
     write(&home, "/n.txt", t("x\ny\n"));
     let diff = ok(

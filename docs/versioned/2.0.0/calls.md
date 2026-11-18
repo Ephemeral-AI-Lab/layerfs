@@ -354,8 +354,10 @@ records no `op`.
   (a full id or a prefix of 8 or more; a prefix more than one Commit starts
   with is `InvalidInput` with `matches`). Short: `{ file_count, dir_count,
   symlink_count, size }`, with `partial: true` when the walk stopped at its
-  work bound (`size` is the length the counted node records, whole even
-  then); long adds `partial, commit, root`.
+  work bound (`size` is the length the counted node records, less the
+  files `project hide-path` hides, as the counts leave them out; whole even
+  when the walk stops, less only the hidden files it reached); long adds
+  `partial, commit, root`.
 - **`delete`** is refused `Busy` while a Sandbox of the project is recorded
   (`detail.related` lists each as `{kind: "sandbox", name}`) or while
   another call's `op` holds the project. Short: `{"ok":true}`, or
@@ -565,7 +567,7 @@ Store calls: Linux only (elsewhere `Unsupported`).
   Branch moves on. A cursor given with other filters, or to another call,
   is `InvalidInput`; one whose Commit is gone, `NotFound`. A `list` row is
   `{path, type}` (long: `inode`), a `glob` row a path, a `grep` row `{path,
-  line, text}` with `line_truncated`; the long forms add `skipped_hidden`
+  line, text}` (the line without its end) with `line_truncated`; the long forms add `skipped_hidden`
   (entries `project hide-path` hides) or, for `grep`, `skipped_binary` (the
   files that are not text). `grep` searches literal text; `--ignore-case`
   folds ASCII letters. `--include` and `--exclude` take a glob in the

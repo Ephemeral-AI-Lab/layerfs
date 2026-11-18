@@ -274,11 +274,8 @@ fn hidden_paths_are_not_counted() {
     let after = call(&home, "project.stats", &[("project", t("trees/p"))]);
     assert_eq!(after.get_int("file_count"), Some(2), "{after:?}");
     assert_eq!(after.get_int("dir_count"), Some(1), "{after:?}");
-    assert_eq!(
-        after.get_int("size"),
-        Some(logical),
-        "the pinned publication's logical size is unchanged"
-    );
+    // the size leaves the hidden file out too (R2 N8)
+    assert_eq!(after.get_int("size"), Some(logical - 3), "{after:?}");
     // A removed directory hides its whole subtree.
     call(
         &home,
@@ -288,6 +285,7 @@ fn hidden_paths_are_not_counted() {
     let nested = call(&home, "project.stats", &[("project", t("trees/p"))]);
     assert_eq!(nested.get_int("file_count"), Some(1), "{nested:?}");
     assert_eq!(nested.get_int("dir_count"), Some(0), "{nested:?}");
+    assert_eq!(nested.get_int("size"), Some(2), "{nested:?}");
     layerfs_api::close_idle(std::time::Duration::ZERO);
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(source).unwrap();
