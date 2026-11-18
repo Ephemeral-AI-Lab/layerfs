@@ -27,7 +27,7 @@ use layerfs_home::outcome::{failed, with_next, Outcome};
 /// step in its message, which agents read.
 fn no_sandbox(mut refusal: SdkRefusal) -> SdkRefusal {
     refusal.message.push_str(
-        ". Create a Sandbox with `sandbox.create()` and mount there: `workspace.mount(sandbox, branch)` with the `sandbox` it returns",
+        ". Create a Sandbox with `layerfs sandbox create` and mount there: `layerfs workspace mount <sandbox> <branch>` with the `sandbox` it returns",
     );
     refusal
 }
@@ -50,7 +50,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
         _ => {
             return Err(layerfs_home::outcome::refused(
                 "InvalidInput",
-                "workspace.mount names its Sandbox: workspace.mount(sandbox, branch), with a Sandbox from `sandbox.create()` or `project.list_sandboxes()`",
+                "workspace.mount names its Sandbox: `layerfs workspace mount <sandbox> <branch>`, with a Sandbox from `layerfs sandbox create` or `layerfs sandbox list`",
             ))
         }
     };
@@ -58,7 +58,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
         // main is the project's line of Layers, not a Branch (#535 terminal pass)
         return Err(layerfs_home::outcome::refused(
             "InvalidInput",
-            "main is the project's published line, not a Branch, and is not mounted: fork a Branch from it with `branch.fork(project, name, \"main\")` and mount that",
+            "main is the project's published line, not a Branch, and is not mounted: fork a Branch from it with `layerfs branch fork <project> <name>` and mount that",
         ));
     }
     let directory = crate::files::sandbox_dir(host)?;
@@ -91,12 +91,14 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
     // checked again under the guard, where it holds
     free(sandbox, &workspaces, name.as_ref())?;
     if workspaces.len() >= WORKSPACES as usize {
-        return Err(layerfs_home::outcome::refused(
+        let refusal = layerfs_home::outcome::refused(
             "Capacity",
             format!(
-                "Sandbox {sandbox} already holds {WORKSPACES} Workspaces. Create a new Sandbox with `sandbox.create()` and mount there, or list this one's Workspaces with `sandbox.list_workspaces(\"{sandbox}\")` and unmount the ones you are done with (`workspace.unmount(ws)`)"
+                "Sandbox {sandbox} already holds {WORKSPACES} Workspaces. Create a new Sandbox with `layerfs sandbox create` and mount there, or list this one's Workspaces with `layerfs workspace list --sandbox {sandbox}` and unmount the ones you are done with (`layerfs workspace unmount <workspace>`)"
             ),
-        ));
+        );
+        let fix = format!("layerfs workspace list --sandbox {sandbox}");
+        return Err(layerfs_home::outcome::with_fix(refusal, fix));
     }
     let project = host.project.as_str();
     let id = WorkspaceId::from_authority(random()?).map_err(failed)?;

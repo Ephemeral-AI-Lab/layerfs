@@ -197,7 +197,7 @@ impl WorkspaceRef {
         let wrong = || {
             refused(
                 "InvalidInput",
-                format!("a Workspace is <sandbox>:<path> or <sandbox>:<name>, not {text:?}"),
+                format!("a Workspace is <sandbox>:<name>, not {text:?}"),
             )
         };
         let (sandbox, rest) = text
