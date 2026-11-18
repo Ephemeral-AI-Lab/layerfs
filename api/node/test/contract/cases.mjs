@@ -7,10 +7,10 @@
 //   args      positionals, or `(ctx) => positionals` (`ctx.folder` is the front end's own folder);
 //             `null` skips an optional one
 //   opts      the call's options
-//   expect    "ok", or the refusal's `code`
+//   expect    "ok", or the refusal's `error`: one of the thirteen public codes
 //   cli       "usage": the command refuses it as a wrong command line (exit 2, no JSON) where the
 //             packages refuse it with `InvalidInput`; "skip": the command cannot say it
-//   loose     compare only the refusal's `code`: the wording is the front end's own
+//   loose     compare only the refusal's `error`: the wording is the front end's own
 //   differs   `{ node, python, cli }`: each front end's own expectation, no cross comparison
 //   sameAs    this answer equals the answer of the step with this id, in the same front end
 //   check     asserts on the normalized value (or refusal) of every front end
@@ -64,8 +64,8 @@ export const steps = [
   bad("store.create unknown option", "unknown", "store.create", ["other"], "InvalidInput", { bogus: "x" }, { cli: "usage", loose: true }),
   bad("stat extra positional", "unknown", "file.stat", [P, B, "/README.md", "c1", "extra"], "InvalidInput", {}, { cli: "usage", loose: true }),
   bad("init function option", "unknown", "project.init", (ctx) => ["shop/other", ctx.folder], "InvalidInput", { on_progress: 5 }, { cli: "skip", check: (v) => assert.match(v.message, /function/) }),
-  bad("never written", "unknown", "file.stat", [P, B, "/refused.txt"], "NoSuchPath"),
-  bad("never forked", "unknown", "branch.get", [P, "other"], "NoSuchBranch"),
+  bad("never written", "unknown", "file.stat", [P, B, "/refused.txt"], "NotFound"),
+  bad("never forked", "unknown", "branch.get", [P, "other"], "NotFound"),
   bad("never stored", "unknown", "store.get", ["other"], "NotFound"),
   ok("state commits after", "unknown", "commit.list", [P, B], {}, { sameAs: "state commits" }),
   ok("state branches after", "unknown", "branch.list", [P], {}, { sameAs: "state branches" }),
@@ -73,32 +73,32 @@ export const steps = [
   ok("state projects after", "unknown", "project.list", [], {}, { sameAs: "state projects" }),
 
   // --- validation errors are structured, and name what is wrong
-  bad("no such project", "validation", "file.stat", ["nosuch/x", B, "/README.md"], "NoSuchStore"),
+  bad("no such project", "validation", "file.stat", ["nosuch/x", B, "/README.md"], "NotFound"),
   bad("project without store", "validation", "file.stat", ["shop", B, "/README.md"], "InvalidInput", {}, { check: (v) => assert.match(v.message, /<store>\/<project>/) }),
   bad("empty project", "validation", "file.stat", ["", B, "/README.md"], "InvalidInput"),
   bad("null project", "validation", "file.stat", [null, B, "/README.md"], "InvalidInput", {}, { cli: "skip", check: (v) => assert.match(v.message, /`project` is required/) }),
-  bad("no such branch", "validation", "file.stat", [P, "nosuch", "/README.md"], "NoSuchBranch"),
+  bad("no such branch", "validation", "file.stat", [P, "nosuch", "/README.md"], "NotFound"),
   bad("bad branch name", "validation", "branch.fork", [P, "Bad!", "main"], "InvalidInput"),
   bad("relative path", "validation", "file.stat", [P, B, "README.md"], "InvalidInput"),
   bad("dotdot path", "validation", "file.stat", [P, B, "/a/../README.md"], "InvalidInput"),
   bad("empty path", "validation", "file.stat", [P, B, ""], "InvalidInput"),
-  bad("no such path", "validation", "file.stat", [P, B, "/nope"], "NoSuchPath", {}, { check: (v) => assert.deepEqual(v.detail, { path: "/nope" }) }),
-  bad("write to main", "validation", "file.write", [P, "main", "/x.txt", "x"], "ReadOnly"),
-  bad("fork exists", "validation", "branch.fork", [P, B, "main"], "NameTaken"),
+  bad("no such path", "validation", "file.stat", [P, B, "/nope"], "NotFound", { detail: true }, { check: (v) => assert.deepEqual([v.fix, v.detail], [null, { path: "/nope", code: "NoSuchPath" }]) }),
+  bad("write to main", "validation", "file.write", [P, "main", "/x.txt", "x"], "InvalidInput"),
+  bad("fork exists", "validation", "branch.fork", [P, B, "main"], "Exists"),
   bad("wrong kind text for int", "validation", "branch.list", [P], "InvalidInput", { page_size: "10" }, { cli: "skip", check: (v) => assert.match(v.message, /whole number/) }),
   bad("wrong kind number for text", "validation", "file.stat", [P, B, 7], "InvalidInput", {}, { cli: "skip", check: (v) => assert.match(v.message, /text/) }),
   bad("wrong kind text for bool", "validation", "workspace.unmount", ["x"], "InvalidInput", { force: "yes" }, { cli: "usage", loose: true }),
   bad("bad page_pos", "validation", "branch.list", [P], "InvalidInput", { page_pos: "zzz" }, { cli: "skip" }),
   bad("apply not a list", "validation", "file.apply", [P, B, { op: "mkdir", path: "/z" }], "InvalidInput", {}, { check: (v) => assert.match(v.message, /list/) }),
-  bad("apply unknown op", "validation", "file.apply", [P, B, [{ op: "frobnicate", path: "/z" }]], "InvalidInput", {}, { check: (v) => assert.deepEqual(v.detail, { index: 0 }) }),
-  bad("apply second change refused", "validation", "file.apply", [P, B, [{ op: "mkdir", path: "/zz" }, { op: "rm", path: "/nope" }]], "NoSuchPath", {}, { check: (v) => assert.deepEqual(v.detail?.index, 1) }),
-  bad("apply refused nothing committed", "validation", "file.stat", [P, B, "/zz"], "NoSuchPath"),
+  bad("apply unknown op", "validation", "file.apply", [P, B, [{ op: "frobnicate", path: "/z" }]], "InvalidInput", { detail: true }, { check: (v) => assert.deepEqual(v.detail, { index: 0 }) }),
+  bad("apply second change refused", "validation", "file.apply", [P, B, [{ op: "mkdir", path: "/zz" }, { op: "rm", path: "/nope" }]], "NotFound", { detail: true }, { check: (v) => assert.deepEqual(v.detail?.index, 1) }),
+  bad("apply refused nothing committed", "validation", "file.stat", [P, B, "/zz"], "NotFound"),
   bad("deep JSON", "validation", "file.apply", [P, B, deep(200)], "InvalidInput", {}, { cli: "usage", loose: true, check: (v) => assert.match(v.message ?? v.usage, /deeply/) }),
 
   // --- binary data, Unicode, empty values and nested JSON, stored and read back
   ok("write bytes", "values", "file.write", [P, B, "/all.bin", BYTES]),
   ok("stat bytes", "values", "file.stat", [P, B, "/all.bin"], {}, { check: (v) => assert.equal(v.size, 256) }),
-  bad("read bytes", "values", "file.read", [P, B, "/all.bin"], "Binary"),
+  bad("read bytes", "values", "file.read", [P, B, "/all.bin"], "InvalidInput"),
   ok("write utf8 bytes", "values", "file.write", [P, B, "/utf8.txt", Buffer.from(UNICODE, "utf8")]),
   ok("read utf8 bytes", "values", "file.read", [P, B, "/utf8.txt"], {}, { check: (v) => assert.equal(v.text, UNICODE) }),
   ok("write unicode", "values", "file.write", [P, B, "/é☃𝄞.txt", UNICODE]),
@@ -126,8 +126,8 @@ export const steps = [
   ok("read base64 wrapper", "values", "file.read", [P, B, "/d/abc.txt"], {}, { check: (v) => assert.equal(v.text, "ABC") }),
   ok("read moved", "values", "file.read", [P, B, "/d/moved.txt"], {}, { check: (v) => assert.equal(v.text, "ABC") }),
   ok("stat moved", "values", "file.stat", [P, B, "/d/moved.txt"], {}, { check: (v) => assert.equal(v.mode, 0o755) }),
-  bad("read raw", "values", "file.read", [P, B, "/d/raw.bin"], "Binary"),
-  bad("apply base64 not base64", "values", "file.apply", [P, B, [{ op: "write", path: "/q.txt", content: { base64: "not base64!" } }]], "InvalidInput", {}, { check: (v) => assert.deepEqual(v.detail, { index: 0 }) }),
+  bad("read raw", "values", "file.read", [P, B, "/d/raw.bin"], "InvalidInput"),
+  bad("apply base64 not base64", "values", "file.apply", [P, B, [{ op: "write", path: "/q.txt", content: { base64: "not base64!" } }]], "InvalidInput", { detail: true }, { check: (v) => assert.deepEqual(v.detail, { index: 0 }) }),
   ok("apply empty list", "values", "file.apply", [P, B, []], {}, { check: (v) => assert.equal(v.kind, "UpToDate") }),
   bad("lone surrogate text", "values", "file.write", [P, B, "/s.txt", "a\ud800b"], "InvalidInput", {}, { cli: "skip", loose: true }),
   bad("lone surrogate path", "values", "file.stat", [P, B, "/a\ud800"], "InvalidInput", {}, { cli: "skip", loose: true }),
@@ -156,8 +156,8 @@ export const steps = [
   bad("mode 2^62", "ints", "file.write", [P, B, "/big.txt", "x"], "InvalidInput", { mode: 2n ** 62n }, { check: (v) => assert.match(v.message, /mode/) }),
   bad("mode i64 max + 1", "ints", "file.write", [P, B, "/big.txt", "x"], "InvalidInput", { mode: 2n ** 63n }, { cli: "usage", loose: true }),
   bad("apply mode 2^63", "ints", "file.apply", [P, B, [{ op: "chmod", path: "/lines.txt", mode: 2n ** 63n }]], "InvalidInput", {}, { cli: "usage", loose: true }),
-  bad("apply mode 2^62", "ints", "file.apply", [P, B, [{ op: "chmod", path: "/lines.txt", mode: 2n ** 62n }]], "InvalidInput", {}, { check: (v) => assert.deepEqual(v.detail, { index: 0 }) }),
-  bad("big written nothing", "ints", "file.stat", [P, B, "/big.txt"], "NoSuchPath"),
+  bad("apply mode 2^62", "ints", "file.apply", [P, B, [{ op: "chmod", path: "/lines.txt", mode: 2n ** 62n }]], "InvalidInput", { detail: true }, { check: (v) => assert.deepEqual(v.detail, { index: 0 }) }),
+  bad("big written nothing", "ints", "file.stat", [P, B, "/big.txt"], "NotFound"),
 
   // --- a real flow across Branches, then the same answers from every front end
   ok("fork b2", "flow", "branch.fork", [P, "b2", "main"]),
@@ -179,7 +179,7 @@ export const steps = [
   ok("export merged", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-merged`], { branch: "merged" }, {
     check: (v) => assert.equal(v.branch, "merged"),
   }),
-  bad("export nonempty", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-main`], "NotEmpty"),
+  bad("export nonempty", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-main`], "InvalidInput"),
   bad("export commit option", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-commit`], "InvalidInput", { commit: "main" }, { cli: "usage" }),
-  bad("export absent branch", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-absent`], "NoSuchBranch", { branch: "absent" }),
+  bad("export absent branch", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-absent`], "NotFound", { branch: "absent" }),
 ];

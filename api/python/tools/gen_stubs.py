@@ -6,11 +6,14 @@
 The table comes from the built native module (`layerfs._native.table()`),
 so build the module first (see api/python/README.md). Written:
 `src/layerfs/_client.pyi`, `aio.pyi` and `__init__.pyi`. `_values.pyi` and
-`_errors.pyi` are written by hand. The table has argument kinds and no
-result schema, so every result is the loose `Result`.
+`_errors.pyi` are written by hand. The table has argument kinds and, for a
+migrated call, the keys of its answer; every result is still the loose
+`Result`. An option whose name is a Python keyword is spelled with a
+trailing underscore (`with_`, `from_`), as the package reads it.
 """
 
 import json
+import keyword
 import sys
 from pathlib import Path
 
@@ -53,6 +56,11 @@ def annotation(arg):
     return ANNOTATION[arg["kind"]]
 
 
+def spelled(name):
+    """An option's name as a Python keyword argument."""
+    return f"{name}_" if keyword.iskeyword(name) else name
+
+
 def method(spec, asynchronous):
     """One call as a stub method: positionals as they are, options keyword-only."""
     params, seen_optional = ["self"], False
@@ -63,8 +71,15 @@ def method(spec, asynchronous):
     params.append("*")
     for opt in spec["options"]:
         default = " = ..." if opt["kind"] == "function" else " | None = None"
-        params.append(f"{opt['name']}: {annotation(opt)}{default}")
-    # every call takes the tag of its call log line (#659)
+        params.append(f"{spelled(opt['name'])}: {annotation(opt)}{default}")
+    # every call takes the global options: the long form, the sections its
+    # entry lists (call surface 2.0) and the tag of its call log line (#659)
+    params.append("detail: bool | None = None")
+    sections = list((spec.get("form") or {}).get("with") or {})
+    if sections:
+        params.append(f"with_: Sequence[Literal[{', '.join(repr(name) for name in sections)}]] | None = None")
+    else:
+        params.append("with_: Sequence[str] | None = None")
     params.append("log_tag: str | None = None")
     keyword = "async def" if asynchronous else "def"
     head = f"    {keyword} {spec['call']}({', '.join(params)}) -> Result:"
@@ -114,8 +129,9 @@ def render(entries):
     """Every generated stub as `{file name: text}`."""
     names = family_names(entries)
     imports = (
-        "from collections.abc import Callable, Mapping\n"
+        "from collections.abc import Callable, Mapping, Sequence\n"
         "from os import PathLike\n"
+        "from typing import Literal\n"
         "\n"
         "from ._values import JSON, Content, Output, Progress, Result, Scope, Size\n"
     )

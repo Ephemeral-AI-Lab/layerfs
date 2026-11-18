@@ -3,7 +3,10 @@
 // small exception lists below. `tools()` is the one generated tool list the
 // server, the documentation table and the coverage column use.
 //
-// Assignment rule (each call lands in exactly one bucket):
+// A migrated call (call surface 2.0) says its own profile in its table entry
+// (`form.profile`): `agent` is the `work` bucket and `full` the `admin`
+// bucket, and no list here names it. Every other call follows the
+// assignment rule (each call lands in exactly one bucket):
 //   work   the families an agent works in (branch, commit, file, workspace)
 //          plus the read-only project and Sandbox calls named below
 //   admin  every other call an agent may make: project create/delete/
@@ -39,7 +42,7 @@ const NO_TOOL_FAMILIES = new Set(["doctor"]);
 
 /** Why a family's calls sit where they do; one line per family, in the doc. */
 const WHY = {
-  home: "set the home up and read what this build would use with it; administration",
+  home: "set the home up, read its state and what this build would use with it, and read or clear its call log; administration",
   project: "read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration",
   branch: "work on Branches: list, read, fork, merge, publish and diff",
   commit: "read a Branch's Commit history",
@@ -49,7 +52,7 @@ const WHY = {
   machine: "machines hold Stores and workers; creating, changing and removing them is administration",
   store: "create, connect, transfer and remove Stores; administration",
   backup: "upload and restore a Store on a bucket; administration",
-  logs: "read and clear the home's call log; administration",
+  logs: "read a machine's worker log or a Sandbox's daemon log; a UI's monitoring reads",
   doctor: "remove a leftover the doctor's report listed; like `layerfs doctor` itself, a person's repair and no MCP tool",
 };
 
@@ -62,6 +65,9 @@ const nameOf = (spec) => `${spec.family}.${spec.call}`;
  */
 export function bucketOf(spec) {
   const name = nameOf(spec);
+  // a migrated entry classifies itself
+  if (spec.form?.profile === "agent") return "work";
+  if (spec.form?.profile === "full") return "admin";
   // The admin exception list is checked before the work families: a retired
   // entity in a work family (`branch.remove`) is still administration (§10),
   // and a monitoring call a UI polls is offered to no agent.

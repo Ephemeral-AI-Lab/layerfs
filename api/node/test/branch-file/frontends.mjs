@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { client, table, LayerFSError } from "../../src/index.js";
 import { decode, encode } from "../../src/values.js";
+import { refusalOf } from "../contract/refusal.mjs";
 
 const root = fileURLToPath(new URL("../../../../", import.meta.url));
 const driver = fileURLToPath(new URL("../contract/driver.py", import.meta.url));
@@ -53,7 +54,7 @@ export async function parity(home, cases, scope) {
       node.push({ ok: await lfs[family][call](...step.args, ...(Object.keys(step.opts ?? {}).length ? [step.opts] : [])) });
     } catch (e) {
       assert.ok(e instanceof LayerFSError, `${step.name}: ${e.stack}`);
-      node.push({ refused: { code: e.code, message: e.message, detail: e.detail } });
+      node.push({ refused: refusalOf(e, step.opts?.detail === true) });
     }
   }
   const fronts = { node };
@@ -85,7 +86,7 @@ export async function parity(home, cases, scope) {
     }
     for (const [front, answers] of Object.entries(fronts)) {
       assert.deepEqual(semantics(answers[i]), semantics(node[i]), `${step.name}: ${front} differs from Node on the same pinned Store`);
-      if (step.error) assert.equal(answers[i].refused?.code, step.error, `${step.name}: ${front}`);
+      if (step.error) assert.equal(answers[i].refused?.error, step.error, `${step.name}: ${front}`);
       else {
         assert.ok(answers[i].ok, `${step.name}: ${front}: ${encode(answers[i])}`);
         if (["branch.commits", "branch.diff", "file.diff", "file.blame", "file.revision"].includes(step.call)) {

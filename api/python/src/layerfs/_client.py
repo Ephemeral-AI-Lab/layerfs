@@ -1,9 +1,13 @@
 """One client per home (and optional folder scope, O32): twelve families
 built from the library's call table. Each function takes its positionals
 in the table's order; optional positionals and options may be keywords.
-Any call also takes ``log_tag=``, the tag of its call log line (#659).
+Any call also takes ``log_tag=``, the tag of its call log line (#659),
+``detail=True`` for the long form of its answer and ``with_=["section"]``
+for the sections its table entry lists (call surface 2.0). A name that is a
+Python keyword takes a trailing underscore: ``with_``, ``from_``.
 Every call is one call into the library, made once."""
 
+import keyword
 import sys
 
 from . import _native
@@ -16,8 +20,17 @@ TABLE = decode(_native.table())
 FAMILIES = list(dict.fromkeys(spec["family"] for spec in TABLE))
 
 _FUNCTION = "function"
-#: Passed with any call's arguments; the library takes it out before checking.
-_LOG_TAG = "log_tag"
+#: Passed with any call's arguments; the library takes them out before
+#: checking: the log tag, and the global options ``detail`` and ``with``.
+_GLOBAL = ("log_tag", "detail", "with")
+
+
+def _plain(key):
+    """``with_`` as ``with``: a keyword argument's name without the trailing
+    underscore a Python keyword needs."""
+    if key.endswith("_") and keyword.iskeyword(key[:-1]):
+        return key[:-1]
+    return key
 
 
 def _invalid(message):
@@ -75,6 +88,7 @@ def _bind(client, spec):
                 args[arg] = value
         handlers = {}
         for key, value in keywords.items():
+            key = _plain(key)
             if key in positional:
                 if key in args:
                     raise _invalid(f"{name}: `{key}` given twice")
@@ -87,9 +101,9 @@ def _bind(client, spec):
                     handlers[key] = value
                 elif value is not None:
                     args[key] = value
-            elif key == _LOG_TAG:
+            elif key in _GLOBAL:
                 if value is not None:
-                    args[key] = value
+                    args[key] = list(value) if key == "with" and not isinstance(value, str) else value
             else:
                 raise _invalid(f'{name}: unknown option "{key}"')
         if args.get("stream") is True:
@@ -98,7 +112,7 @@ def _bind(client, spec):
         answer = decode(_native.call(name, encode(args), client._home, scope, _event_handler(handlers)))
         refused = answer.get("refused")
         if refused is not None:
-            raise LayerFSError(refused["code"], refused["message"], refused.get("detail"))
+            raise LayerFSError.from_refusal(refused)
         return answer["value"]
 
     call.__name__ = spec["call"]

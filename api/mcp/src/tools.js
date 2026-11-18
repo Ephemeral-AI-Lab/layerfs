@@ -55,6 +55,29 @@ const COMMON = {
   json: { description: "any JSON value; nested { \"base64\": \"...\" } content is read as bytes by the library" },
 };
 
+/**
+ * The global options of a migrated call (call surface 2.0), as schema
+ * properties: `detail` for the long form, and `with` when the entry lists
+ * sections. A call that is not migrated has one form and no section, so it
+ * is offered neither.
+ */
+export function globalOptions(spec) {
+  if (!spec.form) return {};
+  const out = {
+    detail: { type: "boolean", description: "the long form: every key, nulls included" },
+  };
+  const sections = Object.keys(spec.form.with ?? {});
+  if (sections.length > 0) {
+    out.with = {
+      type: "array",
+      items: { type: "string", enum: sections },
+      uniqueItems: true,
+      description: `sections to add to the answer: ${sections.join(", ")}`,
+    };
+  }
+  return out;
+}
+
 /** The options a client may send: every option that is not a function. */
 export function visibleOptions(spec) {
   return spec.options.filter((option) => option.kind !== "function" && !HIDDEN_OPTIONS.has(option.name));
@@ -87,6 +110,7 @@ export function toolFor(spec) {
     if (!arg.optional) required.push(arg.name);
   }
   for (const option of visibleOptions(spec)) properties[option.name] = propertyOf(spec, option);
+  Object.assign(properties, globalOptions(spec));
   return {
     name: `${spec.family}_${spec.call}`,
     description: descriptionOf(spec),

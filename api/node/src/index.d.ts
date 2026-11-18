@@ -19,13 +19,29 @@ export type ProgressHandler = (progress: Value) => void;
 /** Receives command output as it is passed on: a string when the bytes are UTF-8, else a Buffer. */
 export type OutputHandler = (bytes: string | Buffer) => void;
 
-/** A refused call: `code` is stable (InvalidInput, NotFound, InUse, Exists,
- * Conflict, Unsupported, Unavailable, Unknown, Failed, …). */
+/** The thirteen public refusal codes. */
+export type ErrorCode = "NotFound" | "Exists" | "InUse" | "Busy" | "Unresolved" | "Conflict" | "Dirty" | "Capacity" | "InvalidInput" | "Unsupported" | "Unavailable" | "Failed" | "Unknown";
+/** A refusal as the library answers it. */
+export interface Refusal {
+  error: ErrorCode;
+  message: string;
+  fix?: string | null;
+  detail?: Value | null;
+  [field: string]: Value | undefined;
+}
+/** A refused call: `code` (also `error`) is one of the thirteen public
+ * codes, `fix` one runnable shell line or null; the fields the next call
+ * needs (a Conflict's `commit`, a Busy's `op`) are properties of the error.
+ * `detail` is present when the call asked for the long form, else null. */
 export class LayerFSError extends Error {
   constructor(code: string, message: string, detail?: Value | null);
+  static from(refused: Refusal): LayerFSError;
   readonly name: "LayerFSError";
-  readonly code: string;
+  readonly code: ErrorCode | string;
+  readonly error: ErrorCode | string;
+  readonly fix: string | null;
   readonly detail: Value | null;
+  readonly [field: string]: unknown;
 }
 
 /** A folder scope binding a client to one project. */
@@ -35,9 +51,13 @@ export interface Scope {
   branch?: string;
 }
 
-/** What every call's options may carry: `log_tag`, an opaque tag (at most
- * 128 bytes) for the call's line in the home's call log. */
+/** What every call's options may carry: `detail` for the long form of its
+ * answer (every key, nulls included), `with` for the sections its table
+ * entry lists, and `log_tag`, an opaque tag (at most 128 bytes) for the
+ * call's line in the home's call log. */
 export interface CallOptions {
+  detail?: boolean;
+  with?: readonly string[];
   log_tag?: string;
 }
 
@@ -47,12 +67,33 @@ export interface ClientOptions {
   scope?: Scope;
 }
 
+/** The keys of one answer map; `parts` are the keys with a form of their own. */
+export interface CallForm {
+  short: { always: readonly string[]; sometimes: readonly string[] };
+  long: readonly string[];
+  parts?: { readonly [key: string]: CallForm | { scalar: string } };
+}
+/** One positional or option; `shell` is the flag of a secret option the shell reads from stdin. */
+export interface CallArg {
+  name: string;
+  kind: string;
+  optional: boolean;
+  shell?: string;
+}
 export interface CallSpec {
   family: string;
   call: string;
-  args: readonly { name: string; kind: string; optional: boolean }[];
-  options: readonly { name: string; kind: string; optional: boolean }[];
+  args: readonly CallArg[];
+  options: readonly CallArg[];
   help: string;
+  /** What a migrated call declares of its answer (call surface 2.0); absent until then. */
+  form?: CallForm & {
+    with: { readonly [section: string]: { where: "own" | "item" | "top"; keys: readonly string[]; form?: CallForm } };
+    paging: "cursor" | "line" | "byte" | null;
+    progress: boolean;
+    quiet: boolean;
+    profile: "agent" | "full";
+  };
 }
 
 export interface DoctorCheck {
@@ -108,6 +149,23 @@ export interface DoctorLeftover {
   not_before?: number;
 }
 
+
+/** Options of `home.get`; an unknown option is refused. */
+export interface HomeGetOptions extends CallOptions {
+  with?: readonly ("platforms" | "tree")[];
+}
+
+/** Options of `home.log`; an unknown option is refused. */
+export interface HomeLogOptions extends CallOptions {
+  call?: string;
+  project?: string;
+  client?: string;
+  tag?: string;
+  outcome?: string;
+  since?: WholeNumber;
+  limit?: WholeNumber;
+  cursor?: string;
+}
 
 /** Options of `project.init`; an unknown option is refused. */
 export interface ProjectInitOptions extends CallOptions {
@@ -440,18 +498,6 @@ export interface BackupRestoreOptions extends CallOptions {
   on_progress?: ProgressHandler;
 }
 
-/** Options of `logs.list`; an unknown option is refused. */
-export interface LogsListOptions extends CallOptions {
-  op?: string;
-  project?: string;
-  client?: string;
-  tag?: string;
-  outcome?: string;
-  since?: WholeNumber;
-  cursor?: string;
-  limit?: WholeNumber;
-}
-
 /** Options of `logs.machine`; an unknown option is refused. */
 export interface LogsMachineOptions extends CallOptions {
   cursor?: string;
@@ -469,8 +515,12 @@ export interface LogsSandboxOptions extends CallOptions {
 export interface HomeFamily {
   /** create this home, or convert an older one; a current home is left as it is */
   init(options?: CallOptions): Promise<Result>;
-  /** the home's state, and the Linux bundle and daemon this build would use; changes nothing */
-  get(options?: CallOptions): Promise<Result>;
+  /** the home's state and build; with --with, the platforms this computer supports or the tree of everything in the home */
+  get(options?: HomeGetOptions): Promise<Result>;
+  /** the calls made against this home, newest first */
+  log(options?: HomeLogOptions): Promise<Result>;
+  /** clear this home's call log */
+  clear_log(options?: CallOptions): Promise<Result>;
 }
 
 export interface ProjectFamily {
@@ -674,10 +724,6 @@ export interface BackupFamily {
 }
 
 export interface LogsFamily {
-  /** the calls made against this home, newest first */
-  list(options?: LogsListOptions): Promise<Result>;
-  /** clear this home's call log */
-  reset(options?: CallOptions): Promise<Result>;
   /** a machine's worker log: its last lines, or the lines after or before a cursor */
   machine(machine: string, options?: LogsMachineOptions): Promise<Result>;
   /** a Sandbox's daemon log: its last lines, or the lines after or before a cursor */

@@ -163,12 +163,13 @@ test("a throwing progress handler warns, drains every event and keeps the result
 
 test("a refusal after finalize stays a refusal with its detail and is never replayed", async () => {
   calls = [];
-  answer = { refused: { code: "NotEmpty", message: "destination changed", detail: { phase: "finalize" } } };
+  // the library's answer to a call that asked the long form
+  answer = { refused: { error: "InvalidInput", message: "destination changed", fix: null, detail: { phase: "finalize", code: "NotEmpty" } } };
   const events = [];
   try {
-    await assert.rejects(sdk.project.export("shop/api", "/exports/api", { on_progress: (e) => events.push(e) }), (e) => {
-      assert.equal(e.code, "NotEmpty");
-      assert.deepEqual(e.detail, { phase: "finalize" });
+    await assert.rejects(sdk.project.export("shop/api", "/exports/api", { detail: true, on_progress: (e) => events.push(e) }), (e) => {
+      assert.deepEqual([e.error, e.code, e.fix], ["InvalidInput", "InvalidInput", null]);
+      assert.deepEqual(e.detail, { phase: "finalize", code: "NotEmpty" });
       return true;
     });
     assert.equal(events.at(-1).phase, "finalize");
@@ -235,13 +236,13 @@ test("native Node export: default main, selected Branch, callbacks, refusals and
     });
     assert.ok(seen >= 3);
     assert.equal(readFileSync(join(branchDest, "branch.txt"), "utf8"), "agent\n");
-    await assert.rejects(lfs.project.export("shop/api", dest), (e) => e.code === "NotEmpty");
+    await assert.rejects(lfs.project.export("shop/api", dest), (e) => e.error === "InvalidInput");
     checkTree(dest);
     const plainFile = join(f.parent, "plain-file");
     writeFileSync(plainFile, "not a folder");
-    await assert.rejects(lfs.project.export("shop/api", plainFile), (e) => ["Exists", "NotDirectory"].includes(e.code));
+    await assert.rejects(lfs.project.export("shop/api", plainFile), (e) => ["Exists", "InvalidInput"].includes(e.error));
     assert.equal(readFileSync(plainFile, "utf8"), "not a folder");
-    await assert.rejects(lfs.project.export("shop/api", join(f.parent, "missing"), { branch: "absent" }), (e) => e.code === "NoSuchBranch");
+    await assert.rejects(lfs.project.export("shop/api", join(f.parent, "missing"), { branch: "absent" }), (e) => e.error === "NotFound");
     const scoped = real.client({ home: f.home, scope: { project: "shop/api", folder: "/", branch: "agent" } });
     await assert.rejects(scoped.project.export("shop/api", join(f.parent, "scoped")), /out of scope: project.export/);
     assert.ok(!readdirSync(f.parent).some((n) => n.startsWith(".layerfs-export-")));
@@ -298,9 +299,10 @@ test("CLI export: stdout JSON/text, stderr progress JSONL, default/selected Bran
     assert.equal(out.destination, dest);
     for (const field of Object.keys(result)) assert.ok(Object.hasOwn(out, field), field);
     const events = run.stderr.trim().split("\n").map((line) => {
+      // one event per line, the event itself (call surface 2.0)
       const event = JSON.parse(line);
-      assert.deepEqual(Object.keys(event), ["progress"]);
-      return event.progress;
+      assert.equal(typeof event.phase, "string", line);
+      return event;
     });
     checkProgress(events, out);
     checkTree(dest);
@@ -312,7 +314,7 @@ test("CLI export: stdout JSON/text, stderr progress JSONL, default/selected Bran
     const refused = shell(f.home, ["project", "export", "shop/api", dest]);
     assert.equal(refused.status, 125);
     assert.equal(refused.stdout, "");
-    assert.equal(JSON.parse(refused.stderr).code, "NotEmpty");
+    assert.equal(JSON.parse(refused.stderr).error, "InvalidInput");
     checkTree(dest);
     assert.ok(!readdirSync(f.parent).some((n) => n.startsWith(".layerfs-export-")));
   } finally { rmSync(f.parent, { recursive: true, force: true }); }

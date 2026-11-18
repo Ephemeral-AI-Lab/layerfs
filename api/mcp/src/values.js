@@ -8,7 +8,7 @@
 // Argument shapes come from the table entry, not from this file: `readArguments`
 // walks the entry's own args and visible options.
 
-import { visibleOptions } from "./tools.js";
+import { globalOptions, visibleOptions } from "./tools.js";
 
 const WHOLE = /^-?[0-9]+$/;
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
@@ -97,8 +97,9 @@ export function readArguments(spec, given) {
   if (!isPlain(given)) throw new InvalidArguments(`${where}: arguments must be an object`);
 
   const entries = known(spec);
+  const globals = globalOptions(spec);
   for (const name of Object.keys(given)) {
-    if (!entries.has(name)) throw new InvalidArguments(`${where}: unknown argument "${name}"`);
+    if (!entries.has(name) && !(name in globals)) throw new InvalidArguments(`${where}: unknown argument "${name}"`);
   }
 
   const positionals = [];
@@ -117,6 +118,17 @@ export function readArguments(spec, given) {
     if (value !== undefined && value !== null) {
       options[option.name] = convert(spec, option, `${where}: option "${option.name}"`, value);
     }
+  }
+  // the global options of a migrated call; the library checks the sections
+  if (globals.detail && given.detail !== undefined && given.detail !== null) {
+    if (typeof given.detail !== "boolean") refuse(`${where}: option "detail"`, "must be true or false");
+    options.detail = given.detail;
+  }
+  if (globals.with && given.with !== undefined && given.with !== null) {
+    if (!Array.isArray(given.with) || given.with.some((name) => typeof name !== "string")) {
+      refuse(`${where}: option "with"`, "must be a list of section names");
+    }
+    options.with = given.with;
   }
   return { positionals, options };
 }

@@ -22,8 +22,8 @@ lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/api", "folder": "
 
 Positionals follow the table's order; optional positionals and options may
 be keywords. Results are JSON values (dicts with snake_case keys for most
-calls); file content is `str` or `bytes`. A refusal raises `layerfs.LayerFSError` with `.code`, `.message`
-and `.detail`. Function options (`on_progress`, `stdout`, `stderr`) receive
+calls); file content is `str` or `bytes`. A refusal raises `layerfs.LayerFSError` with `.code` (one of thirteen public codes), `.message`,
+`.fix` and `.fields` (what the next call needs); `.detail` is set only when the call passed `detail=True`. Function options (`on_progress`, `stdout`, `stderr`) receive
 the call's events.
 
 A value JSON cannot hold (NaN, Infinity, a lone surrogate, a map with a

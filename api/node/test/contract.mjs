@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import { client, doctor, close, table, LayerFSError } from "../src/index.js";
 import { encode, decode } from "../src/values.js";
 import { steps, P } from "./contract/cases.mjs";
+import { refusalOf } from "./contract/refusal.mjs";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const driver = fileURLToPath(new URL("./contract/driver.py", import.meta.url));
@@ -77,7 +78,7 @@ async function runNode(ctx) {
       out.push({ ok: await lfs[family][call](...given, ...(hasOptions(step) ? [step.opts] : [])) });
     } catch (error) {
       out.push(error instanceof LayerFSError
-        ? { refused: { code: error.code, message: error.message, detail: error.detail } }
+        ? { refused: refusalOf(error, step.opts?.detail === true) }
         : { crash: String(error?.stack ?? error) });
     }
   }
@@ -193,9 +194,10 @@ function expectation(step, front, result) {
   if (want === "ok") return result.ok !== undefined ? null : `want a value, got ${shown(result)}`;
   if (want === "usage") return result.usage !== undefined ? null : `want exit 2 (a wrong command line), got ${shown(result)}`;
   if (result.refused === undefined) return `want ${want}, got ${shown(result)}`;
-  const keys = Object.keys(result.refused).sort().join();
-  if (keys !== "code,detail,message") return `refusal keys are ${keys}`;
-  return result.refused.code === want ? null : `want ${want}, got ${shown(result)}`;
+  // `error` and `message` first, in every front end; the old `code` key is gone
+  const keys = Object.keys(result.refused);
+  if (keys[0] !== "error" || keys[1] !== "message" || keys.includes("code")) return `refusal keys are ${keys.join()}`;
+  return result.refused.error === want ? null : `want ${want}, got ${shown(result)}`;
 }
 
 function failures(group) {
@@ -230,7 +232,7 @@ function failures(group) {
       const node = seen.node;
       if (mine.usage !== undefined) continue; // the command's wrong command line: checked by `expectation`
       const same = node.refused && step.loose
-        ? mine.refused?.code === node.refused.code
+        ? mine.refused?.error === node.refused.error
         : isDeepEqual(mine, node);
       if (!same) bad.push(`${step.id}: ${front} differs from node: ${shown(mine)} vs ${shown(node)}`);
     }

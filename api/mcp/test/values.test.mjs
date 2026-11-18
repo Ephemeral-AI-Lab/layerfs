@@ -38,7 +38,7 @@ test("a binary file round-trips byte for byte through file_write and export", as
     // file.read is text only (D2): binary is a refusal, not silent mojibake
     const refused = (await call(server.client, "file_read", { project: "shop/api", branch: "feat", path: "/bin.dat" })).result;
     assert.equal(refused.isError, true);
-    assert.equal(JSON.parse(refused.content[0].text).code, "Binary");
+    assert.equal(JSON.parse(refused.content[0].text).error, "InvalidInput");
 
     // the bytes themselves come back out through export, byte for byte
     const exported = await call(server.client, "project_export", {

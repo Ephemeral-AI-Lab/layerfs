@@ -64,7 +64,7 @@ class Flow(unittest.TestCase):
         self.assertTrue(progress, "on_progress ran on the loop before init returned")
         self.assertEqual(sync.file.read(P, "agent", "/docs/a.txt")["text"], "alpha\ngamma\n")
         self.assertEqual(sync.file.read(P, "agent", "/docs/d.txt")["text"], "alpha\ngamma\n")
-        self.assertEqual(refusal(sync.file.stat, P, "agent", "/docs/b.bin")["refused"][0], "NoSuchPath")
+        self.assertEqual(refusal(sync.file.stat, P, "agent", "/docs/b.bin")["refused"][0], "NotFound")
         reads = [
             ("project", "get", [P], {}),
             ("branch", "list", [P], {}),
@@ -112,7 +112,7 @@ class Flow(unittest.TestCase):
         oldest = sync.commit.list(P, "agent")["items"][-1]["id"]
         # a Commit id as the optional last positional reads that history
         self.assertEqual(sync.file.stat(P, "agent", "/README.md", oldest)["path"], "/README.md")
-        self.assertEqual(refusal(sync.file.stat, P, "agent", "/two", oldest)["refused"][0], "NoSuchPath")
+        self.assertEqual(refusal(sync.file.stat, P, "agent", "/two", oldest)["refused"][0], "NotFound")
 
     def test_a_scope_refuses_the_same_way_through_both(self):
         sync = layerfs.client(home=self.home)

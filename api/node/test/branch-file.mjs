@@ -149,7 +149,7 @@ test("branch/file saved history, comparison and provenance agree across real fro
           assert.equal(v.after, null);
         }),
       bad("legacy missing-side refusal remains", "file.diff", [p, "main", "/new.txt", "left", "/new.txt"],
-        { left_commit: f.init, right_commit: f.head }, "NoSuchPath"),
+        { left_commit: f.init, right_commit: f.head }, "NotFound"),
       step("binary attribution is unavailable, not equal ownership", "file.diff", [p, "left", "/blob.bin", "left", "/blob.bin"],
         { left_commit: f.binary, right_commit: f.head, include_attribution: true, page: 1, page_size: 50 }, v => {
           assert.equal(v.changes.attribution, null);

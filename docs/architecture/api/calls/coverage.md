@@ -52,6 +52,8 @@ Front-end problems: none.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `home.init` | - | - | yes | yes | yes | yes | admin |
 | `home.get` | - | - | yes | yes | yes | yes | admin |
+| `home.log` | - | call, project, client, tag, outcome, since, limit, cursor | yes | yes | yes | yes | admin |
+| `home.clear_log` | - | - | yes | yes | yes | yes | admin |
 | `project.init` | project, folder | timeout, on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `project.list` | ?store | page_size, page_pos | yes | yes | yes | yes | yes |
 | `project.get` | project | - | yes | yes | yes | yes | yes |
@@ -129,8 +131,6 @@ Front-end problems: none.
 | `backup.list` | ?bucket | - | yes | yes | yes | yes | admin |
 | `backup.create` | store, bucket, ?file | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `backup.restore` | store, bucket, ?file | on_progress() | yes | yes | yes | yes (--progress) | admin |
-| `logs.list` | - | op, project, client, tag, outcome, since, cursor, limit | yes | yes | yes | yes | admin |
-| `logs.reset` | - | - | yes | yes | yes | yes | admin |
 | `logs.machine` | machine | cursor, before, limit | yes | yes | yes | yes | no (UI only) |
 | `logs.sandbox` | sandbox | cursor, before, limit | yes | yes | yes | yes | no (UI only) |
 | `doctor.fix` | id | - | yes | yes | yes | yes | no (no tool) |

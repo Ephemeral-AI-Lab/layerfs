@@ -73,8 +73,11 @@ a directory if `/tmp` is not one.
 
 ## Errors and uncertain outcomes
 
-- A refused call throws `LayerFSError` with a stable `code`, a `message` and
-  the library's structured `detail`; check `code`, not the text.
+- A refused call throws `LayerFSError` with a stable `code` (one of thirteen
+  public codes), a `message`, a `fix` (one shell line, or null) and the fields
+  the next call needs as properties; check `code`, not the text. The
+  library's structured `detail` is there only when the call passed
+  `{ detail: true }`.
 - Every call is one attempt. There is no automatic retry, busy handler or
   replay, and a lost reply does not undo a mutation that was already
   published: read the state again.

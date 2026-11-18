@@ -36,6 +36,11 @@ function option(spec, opt) {
   return `  ${opt.name}?: ${type};`;
 }
 
+/** The sections a migrated call's `with` takes. */
+const sectionsOf = (spec) => Object.keys(spec.form?.with ?? {});
+/** Whether the call has an options interface of its own. */
+const hasOptions = (spec) => spec.options.length > 0 || sectionsOf(spec).length > 0;
+
 /** The text of index.d.ts for `table`: `[{ family, call, args, options, help }]`. */
 export function render(table) {
   const families = [...new Set(table.map((spec) => spec.family))];
@@ -60,13 +65,29 @@ export type ProgressHandler = (progress: Value) => void;
 /** Receives command output as it is passed on: a string when the bytes are UTF-8, else a Buffer. */
 export type OutputHandler = (bytes: string | Buffer) => void;
 
-/** A refused call: \`code\` is stable (InvalidInput, NotFound, InUse, Exists,
- * Conflict, Unsupported, Unavailable, Unknown, Failed, …). */
+/** The thirteen public refusal codes. */
+export type ErrorCode = "NotFound" | "Exists" | "InUse" | "Busy" | "Unresolved" | "Conflict" | "Dirty" | "Capacity" | "InvalidInput" | "Unsupported" | "Unavailable" | "Failed" | "Unknown";
+/** A refusal as the library answers it. */
+export interface Refusal {
+  error: ErrorCode;
+  message: string;
+  fix?: string | null;
+  detail?: Value | null;
+  [field: string]: Value | undefined;
+}
+/** A refused call: \`code\` (also \`error\`) is one of the thirteen public
+ * codes, \`fix\` one runnable shell line or null; the fields the next call
+ * needs (a Conflict's \`commit\`, a Busy's \`op\`) are properties of the error.
+ * \`detail\` is present when the call asked for the long form, else null. */
 export class LayerFSError extends Error {
   constructor(code: string, message: string, detail?: Value | null);
+  static from(refused: Refusal): LayerFSError;
   readonly name: "LayerFSError";
-  readonly code: string;
+  readonly code: ErrorCode | string;
+  readonly error: ErrorCode | string;
+  readonly fix: string | null;
   readonly detail: Value | null;
+  readonly [field: string]: unknown;
 }
 
 /** A folder scope binding a client to one project. */
@@ -76,9 +97,13 @@ export interface Scope {
   branch?: string;
 }
 
-/** What every call's options may carry: \`log_tag\`, an opaque tag (at most
- * 128 bytes) for the call's line in the home's call log. */
+/** What every call's options may carry: \`detail\` for the long form of its
+ * answer (every key, nulls included), \`with\` for the sections its table
+ * entry lists, and \`log_tag\`, an opaque tag (at most 128 bytes) for the
+ * call's line in the home's call log. */
 export interface CallOptions {
+  detail?: boolean;
+  with?: readonly string[];
   log_tag?: string;
 }
 
@@ -88,12 +113,33 @@ export interface ClientOptions {
   scope?: Scope;
 }
 
+/** The keys of one answer map; \`parts\` are the keys with a form of their own. */
+export interface CallForm {
+  short: { always: readonly string[]; sometimes: readonly string[] };
+  long: readonly string[];
+  parts?: { readonly [key: string]: CallForm | { scalar: string } };
+}
+/** One positional or option; \`shell\` is the flag of a secret option the shell reads from stdin. */
+export interface CallArg {
+  name: string;
+  kind: string;
+  optional: boolean;
+  shell?: string;
+}
 export interface CallSpec {
   family: string;
   call: string;
-  args: readonly { name: string; kind: string; optional: boolean }[];
-  options: readonly { name: string; kind: string; optional: boolean }[];
+  args: readonly CallArg[];
+  options: readonly CallArg[];
   help: string;
+  /** What a migrated call declares of its answer (call surface 2.0); absent until then. */
+  form?: CallForm & {
+    with: { readonly [section: string]: { where: "own" | "item" | "top"; keys: readonly string[]; form?: CallForm } };
+    paging: "cursor" | "line" | "byte" | null;
+    progress: boolean;
+    quiet: boolean;
+    profile: "agent" | "full";
+  };
 }
 
 export interface DoctorCheck {
@@ -151,10 +197,13 @@ export interface DoctorLeftover {
 
 `];
   for (const spec of table) {
-    if (spec.options.length === 0) continue;
+    if (!hasOptions(spec)) continue;
+    const lines = spec.options.map((opt) => option(spec, opt));
+    const sections = sectionsOf(spec);
+    if (sections.length > 0) lines.push(`  with?: readonly (${sections.map((name) => JSON.stringify(name)).join(" | ")})[];`);
     out.push(`/** Options of \`${spec.family}.${spec.call}\`; an unknown option is refused. */
 export interface ${pascal(spec.family)}${pascal(spec.call)}Options extends CallOptions {
-${spec.options.map((opt) => option(spec, opt)).join("\n")}
+${lines.join("\n")}
 }
 `);
   }
@@ -164,7 +213,7 @@ ${spec.options.map((opt) => option(spec, opt)).join("\n")}
       const signature = (list) => `  ${spec.call}(${list.join(", ")}): Promise<Result>;`;
       const signatures = [];
       {
-        const type = spec.options.length > 0 ? `${pascal(spec.family)}${pascal(spec.call)}Options` : "CallOptions";
+        const type = hasOptions(spec) ? `${pascal(spec.family)}${pascal(spec.call)}Options` : "CallOptions";
         params.push(`options?: ${type}`);
         // the binding takes a plain object in a text, name or number slot as the
         // options (index.js, `bind`): so the options may follow the required

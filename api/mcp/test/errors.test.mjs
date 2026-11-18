@@ -9,11 +9,18 @@ import { progressReporter } from "../src/progress.js";
 
 const body = (result) => JSON.parse(result.content[0].text);
 
-test("a refusal is an isError result with { code, message, detail }", () => {
-  const result = errorResult(new LayerFSError("NoSuchBranch", "no Branch nope", { path: "/x" }));
-  assert.equal(result.isError, true);
-  assert.equal(result.content.length, 1);
-  assert.deepEqual(body(result), { code: "NoSuchBranch", message: "no Branch nope", detail: { path: "/x" } });
+test("a refusal is an isError result with { error, message }, its fix, its fields and its detail", () => {
+  // the short form: the library answered no detail and no fix
+  const short = errorResult(LayerFSError.from({ error: "NotFound", message: "no Branch nope" }));
+  assert.equal(short.isError, true);
+  assert.equal(short.content.length, 1);
+  assert.deepEqual(body(short), { error: "NotFound", message: "no Branch nope" });
+  // a fix, and the fields the next call needs, flat beside it
+  const conflict = errorResult(LayerFSError.from({ error: "Conflict", message: "the head moved", fix: "layerfs branch get shop/api main", commit: "12d1" }));
+  assert.deepEqual(body(conflict), { error: "Conflict", message: "the head moved", fix: "layerfs branch get shop/api main", commit: "12d1" });
+  // the long form's detail, when the call asked for it
+  const long = errorResult(LayerFSError.from({ error: "NotFound", message: "no Branch nope", fix: null, detail: { code: "NoSuchBranch", path: "/x" } }));
+  assert.deepEqual(body(long), { error: "NotFound", message: "no Branch nope", detail: { code: "NoSuchBranch", path: "/x" } });
 });
 
 test("an uncertain outcome says so; a known Failed does not", () => {

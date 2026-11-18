@@ -17,7 +17,7 @@ test("every call is in exactly one bucket, and admin adds the work bucket", () =
   assert.equal(table.length, 84);
   const buckets = table.map(bucketOf);
   assert.equal(buckets.filter((bucket) => bucket === "work").length, 38);
-  assert.equal(buckets.filter((bucket) => bucket === "admin").length, 40);
+  assert.equal(buckets.filter((bucket) => bucket === "admin").length, 39);
   assert.ok(buckets.every((bucket) => bucket === "work" || bucket === "admin" || bucket === "ui" || bucket === "none"));
   // `doctor.fix`, like `layerfs doctor` itself, is no tool in either profile
   assert.deepEqual(table.filter((spec) => bucketOf(spec) === "none").map(nameOf), ["doctor.fix"]);
@@ -58,7 +58,11 @@ test("every generated tool is a valid MCP tool with the table's arguments and op
     assert.equal(tool.inputSchema.additionalProperties, false);
     const properties = Object.keys(tool.inputSchema.properties);
     const visible = spec.options.filter((option) => option.kind !== "function" && option.name !== "stream");
-    assert.deepEqual(properties, [...spec.args.map((arg) => arg.name), ...visible.map((option) => option.name)]);
+    // a migrated call (call surface 2.0) also takes `detail`, and `with` when its entry lists sections
+    const sections = Object.keys(spec.form?.with ?? {});
+    const globals = spec.form ? ["detail", ...(sections.length > 0 ? ["with"] : [])] : [];
+    assert.deepEqual(properties, [...spec.args.map((arg) => arg.name), ...visible.map((option) => option.name), ...globals]);
+    if (sections.length > 0) assert.deepEqual(tool.inputSchema.properties.with.items.enum, sections);
     assert.deepEqual(
       tool.inputSchema.required,
       spec.args.filter((arg) => !arg.optional).map((arg) => arg.name),

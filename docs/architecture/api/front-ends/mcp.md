@@ -22,7 +22,7 @@ server's one check of its own is the [export allowlist](#export-allowlist).
                                    v
                           layerfs (Node package), one call, once
                                    |
-             result text | isError {code,message,detail} | progress notes
+             result text | isError {error,message,fix,...} | progress notes
 ```
 
 ## Launch
@@ -94,13 +94,14 @@ Workspace, confined by its Sandbox backend, not by this list.
 Each call belongs to exactly one bucket: `work` (listed by both profiles),
 `admin` (listed only by `admin`), `ui` (listed by neither: `UI_CALLS`, the
 monitoring reads a UI polls, which no agent is offered) or `none` (no tool in
-either)
+either). A migrated entry names its own bucket (`form.profile`: `agent` is
+`work`, `full` is `admin`); the lists below place the others
 ([`profiles.js`](../../../../api/mcp/src/profiles.js)):
 
 | Bucket | Calls |
 | --- | --- |
 | `work` | the `branch`, `commit`, `file` and `workspace` families; `project.list`, `project.get`, `project.export`, `sandbox.list`, `sandbox.get` |
-| `admin` | `project.init`, `project.delete`, `project.remove_file`, `branch.remove`, `store.compact`, `sandbox.create`, `sandbox.close`; the `machine` (but `machine.stats`, `machine.space` and `machine.files`), `store` and `backup` families; `logs.list`, `logs.reset` |
+| `admin` | `project.init`, `project.delete`, `project.remove_file`, `branch.remove`, `store.compact`, `sandbox.create`, `sandbox.close`; the `home` family (`home.get`, `home.log` and `home.clear_log` by their entries' `full` profile), the `machine` (but `machine.stats`, `machine.space` and `machine.files`), `store` and `backup` families |
 | `ui` (no profile) | `sandbox.files`, `machine.stats`, `machine.space`, `machine.files`, `logs.machine`, `logs.sandbox` |
 | `none` | the `doctor` family (`doctor.fix`): like `layerfs doctor` itself, which is outside the table and no tool, removing a leftover is a person's repair |
 
@@ -119,8 +120,10 @@ built addon).
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
-| `home.init` | admin | admin | set the home up and read what this build would use with it; administration |
-| `home.get` | admin | admin | set the home up and read what this build would use with it; administration |
+| `home.init` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
+| `home.get` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
+| `home.log` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
+| `home.clear_log` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
 | `project.init` | admin | admin | import a host folder into a Store; administration |
 | `project.list` | work | work, admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
 | `project.get` | work | work, admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
@@ -198,8 +201,6 @@ built addon).
 | `backup.list` | admin | admin | upload and restore a Store on a bucket; administration |
 | `backup.create` | admin | admin | upload and restore a Store on a bucket; administration |
 | `backup.restore` | admin | admin | upload and restore a Store on a bucket; administration |
-| `logs.list` | admin | admin | read and clear the home's call log; administration |
-| `logs.reset` | admin | admin | read and clear the home's call log; administration |
 | `logs.machine` | ui | none | a monitoring read a UI polls (a machine's stats, disk space, files or worker log, a Sandbox's daemon log or files); offered to no agent |
 | `logs.sandbox` | ui | none | a monitoring read a UI polls (a machine's stats, disk space, files or worker log, a Sandbox's daemon log or files); offered to no agent |
 | `doctor.fix` | none | none | remove a leftover the doctor's report listed; like `layerfs doctor` itself, a person's repair and no MCP tool |
@@ -212,7 +213,9 @@ One tool per call, named `<family>_<call>` (`store_create`,
 `workspace_exec_cancel`, …), generated from `layerfs.table`
 ([`tools.js`](../../../../api/mcp/src/tools.js)). Each tool's JSON Schema is
 the entry's arguments, in order, then its options, minus the functions
-(`on_progress`, `stdout`, `stderr`); `additionalProperties` is false. The
+(`on_progress`, `stdout`, `stderr`); `additionalProperties` is false. A
+migrated entry (one with a `form`) also takes `detail` (the long form) and,
+when it lists sections, `with` (an array of their names). The
 `stream` option of `workspace.exec` is not exposed: it would write the
 command's output to this process's stdout, which carries the protocol.
 

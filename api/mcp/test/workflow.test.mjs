@@ -88,7 +88,8 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
     const refused = (await call(server.client, "branch_get", { project: "shop/api", branch: "nope" })).result;
     assert.equal(refused.isError, true);
     const body = JSON.parse(refused.content[0].text);
-    assert.equal(body.code, "NoSuchBranch");
+    assert.equal(body.error, "NotFound");
+    assert.equal(body.code, undefined);
     assert.equal(refused.content.length, 1, "a known refusal has no uncertainty note");
 
     await assert.rejects(
@@ -116,6 +117,27 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
     await assert.rejects(
       server.client.callTool({ name: "project_list", arguments: [] }),
       (error) => error.code === -32603,
+    );
+
+    // a migrated call (call surface 2.0) takes `detail` and its sections
+    const homeGet = listed.tools.find((tool) => tool.name === "home_get");
+    assert.deepEqual(homeGet.inputSchema.properties.with.items.enum, ["platforms", "tree"]);
+    assert.deepEqual(Object.keys(await run("home_get", {})), ["home", "state", "version", "generation"]);
+    const long = await run("home_get", { detail: true, with: ["tree"] });
+    assert.deepEqual(Object.keys(long).slice(-4), ["bundle", "daemon", "cache", "tree"]);
+    assert.ok(long.tree.machines.some((machine) => machine.machine === "native" && machine.stores.some((held) => held.store === "shop")));
+    // a section the entry does not list is the library's refusal, in its shape
+    const unlisted = (await call(server.client, "home_get", { with: ["live"] })).result;
+    assert.equal(unlisted.isError, true);
+    assert.deepEqual(Object.keys(JSON.parse(unlisted.content[0].text)), ["error", "message"]);
+    await assert.rejects(
+      server.client.callTool({ name: "home_get", arguments: { detail: "yes" } }),
+      (error) => error.code === -32602 && /detail.*must be true or false/.test(error.message),
+    );
+    // a call that is not migrated has one form: it is offered neither option
+    await assert.rejects(
+      server.client.callTool({ name: "store_list", arguments: { detail: true } }),
+      (error) => error.code === -32602 && /unknown argument "detail"/.test(error.message),
     );
     await server.close();
     server = null;

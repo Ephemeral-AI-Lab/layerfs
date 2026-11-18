@@ -151,11 +151,17 @@ class Binding(unittest.TestCase):
         self.assertEqual(self.calls, [])
 
     def test_refusal_detail_is_preserved_without_replay(self):
-        refusal = {"code": "NotEmpty", "message": "destination changed", "detail": {"phase": "finalize"}}
+        # the library's answer to a call that asked the long form
+        refusal = {
+            "error": "InvalidInput",
+            "message": "destination changed",
+            "fix": None,
+            "detail": {"phase": "finalize", "code": "NotEmpty"},
+        }
         with patch.object(native, "call", return_value=json.dumps({"refused": refusal})) as dispatch:
             with self.assertRaises(sdk.LayerFSError) as caught:
-                sdk.project.export("shop/api", "/exports/api")
-            self.assertEqual(caught.exception.code, refusal["code"])
+                sdk.project.export("shop/api", "/exports/api", detail=True)
+            self.assertEqual((caught.exception.error, caught.exception.code), ("InvalidInput", "InvalidInput"))
             self.assertEqual(caught.exception.detail, refusal["detail"])
             dispatch.assert_called_once()
 
@@ -321,13 +327,13 @@ class NativeExport(unittest.TestCase):
                 self.assertEqual((dest / ".git" / "config").read_bytes(), b"[core]\n")
                 with self.assertRaises(self.real.LayerFSError) as caught:
                     lfs.project.export("shop/api", str(dest))
-                self.assertEqual(caught.exception.code, "NotEmpty")
+                self.assertEqual(caught.exception.error, "InvalidInput")
                 self.assertEqual((dest / "ignored.bin").read_bytes(), bytes([0, 255, 128, 1]))
                 plain = parent / "plain-file"
                 plain.write_text("not a folder")
                 with self.assertRaises(self.real.LayerFSError) as caught:
                     lfs.project.export("shop/api", str(plain))
-                self.assertIn(caught.exception.code, ("Exists", "NotDirectory"))
+                self.assertIn(caught.exception.error, ("Exists", "InvalidInput"))
                 self.assertEqual(plain.read_text(), "not a folder")
 
                 async def export_branch():

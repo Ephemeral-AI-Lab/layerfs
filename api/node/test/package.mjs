@@ -59,7 +59,9 @@ test("every call, argument and option of the table is in the typings", () => {
     assert.ok(lines.length > 0 && lines.every((text) => text.endsWith("): Promise<Result>;")), `${spec.family}.${spec.call}`);
     assert.ok(block.includes(`  /** ${spec.help} */\n${lines[0]}`), `${spec.family}.${spec.call} help`);
     for (const arg of spec.args) assert.ok(line.includes(`${arg.name}${arg.optional ? "?" : ""}: `), `${spec.family}.${spec.call}(${arg.name})`);
-    if (spec.options.length === 0) {
+    // a migrated call's sections are the words its own `with` takes
+    const sections = Object.keys(spec.form?.with ?? {});
+    if (spec.options.length === 0 && sections.length === 0) {
       assert.ok(line.endsWith("options?: CallOptions): Promise<Result>;"), `${spec.family}.${spec.call}: CallOptions`);
       continue;
     }
@@ -74,6 +76,7 @@ test("every call, argument and option of the table is in the typings", () => {
       assert.ok(type, `${spec.family}.${spec.call}: no typings for ${opt.kind} option ${opt.name}`);
       return `  ${opt.name}?: ${type};`;
     });
+    if (sections.length > 0) wanted.push(`  with?: readonly (${sections.map((name) => JSON.stringify(name)).join(" | ")})[];`);
     assert.equal(declared, wanted.join("\n"), `${spec.family}.${spec.call}: ${name} options`);
     for (const opt of spec.options) assert.ok(types.includes(`  ${opt.name}?: `), `${spec.family}.${spec.call} ${opt.name}`);
   }

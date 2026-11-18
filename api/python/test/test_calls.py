@@ -87,7 +87,13 @@ def python(lfs, family, call, positionals):
     try:
         return {"value": getattr(getattr(lfs, family), call)(*positionals)}
     except layerfs.LayerFSError as error:
-        return {"refused": {"code": error.code, "message": error.message, "detail": error.detail}}
+        # the refusal as the library answers it, which the command prints as
+        # one JSON line: `error` and `message`, `fix` when there is one, then
+        # the fields the next call needs
+        refused = {"error": error.error, "message": error.message}
+        if error.fix is not None:
+            refused["fix"] = error.fix
+        return {"refused": {**refused, **error.fields}}
 
 
 class AsyncCallbacks(unittest.IsolatedAsyncioTestCase):
@@ -323,26 +329,72 @@ class Calls(unittest.TestCase):
         lfs.store.list(log_tag="dsh:s1:r1")
         with self.assertRaises(layerfs.LayerFSError):
             lfs.store.get("nope", log_tag="dsh:s1:r2")
-        page = lfs.logs.list(tag="dsh:s1:")
-        self.assertFalse(page["has_more"])
+        # the call log is `home.log` (`logs.list` until 2.0): a row's short
+        # form is its call, its outcome, when, and what went wrong
+        self.assertFalse(hasattr(lfs.logs, "list"))
+        short = lfs.home.log(tag="dsh:s1:")
+        self.assertEqual(list(short), ["items"])
         self.assertEqual(
-            [(line["client"], line["argv"], line["outcome"], line["tag"]) for line in page["lines"]],
+            [list(row) for row in short["items"]],
+            [["call", "outcome", "logged_at", "error"], ["call", "outcome", "logged_at"]],
+        )
+        page = lfs.home.log(tag="dsh:s1:", detail=True)
+        self.assertIsNone(page["next_cursor"])
+        self.assertEqual(
+            [(row["call"], row["client"], row["argv"], row["outcome"], row["error"], row["tag"]) for row in page["items"]],
             [
-                ("python", ["store", "get", "nope"], "NotFound", "dsh:s1:r2"),
-                ("python", ["store", "list"], "ok", "dsh:s1:r1"),
+                ("store.get", "python", ["store", "get", "nope"], "refused", "NotFound", "dsh:s1:r2"),
+                ("store.list", "python", ["store", "list"], "ok", None, "dsh:s1:r1"),
             ],
         )
-        self.assertEqual(lfs.logs.reset(), {"kind": "Reset", "removed": 3})
+        # pages: a cursor carries its filters, and answers no other call's
+        first = lfs.home.log(limit=1)
+        rest = lfs.home.log(cursor=first["next_cursor"])
+        self.assertEqual((len(first["items"]), len(rest["items"]), "next_cursor" in rest), (1, 2, False))
+        with self.assertRaises(layerfs.LayerFSError) as caught:
+            lfs.home.log(cursor=first["next_cursor"], call="store.get")
+        self.assertEqual(caught.exception.error, "InvalidInput")
+        self.assertEqual(lfs.home.clear_log(), {"ok": True})
+        self.assertEqual(lfs.home.clear_log(detail=True), {"ok": True, "outcome": "cleared", "line_count": 0})
         shutil.rmtree(home)
 
     def test_client_home_is_the_home_family_and_the_client_calls_its_home(self):
         parent = temp("home")
         home = os.path.join(parent, "made")
         lfs = layerfs.client(home=home)
-        self.assertEqual(lfs.home.get()["home"]["state"], "missing")
+        # the short form: what is wrong and its fix; nothing else
+        missing = lfs.home.get()
+        self.assertEqual(list(missing), ["home", "state", "version", "reason", "fix"])
+        self.assertEqual((missing["state"], missing["reason"], missing["fix"]), ("broken", "missing", "layerfs home init"))
         made = lfs.home.init()
         self.assertEqual((made["home"], made["created"]), (home, True))
-        self.assertEqual(lfs.home.get()["home"]["state"], "current")
+        ready = lfs.home.get()
+        self.assertEqual(list(ready), ["home", "state", "version", "generation"])
+        self.assertEqual(ready["state"], "ready")
+        # `detail=True` is the long form: every key, None when it has no value
+        long = lfs.home.get(detail=True)
+        self.assertEqual(
+            list(long),
+            ["home", "state", "version", "generation", "reason", "fix", "message", "layout", "mode", "bundle", "daemon", "cache"],
+        )
+        self.assertEqual((long["reason"], long["fix"], long["layout"], long["mode"]), (None, None, 3, "0700"))
+        # `with_` (a keyword in Python, so the trailing underscore) adds the
+        # sections asked for, in either form
+        tree = lfs.home.get(with_=["tree"])
+        self.assertEqual(list(tree["tree"]), ["machines", "stores", "buckets"])
+        both = lfs.home.get(detail=True, with_=["platforms", "tree"])
+        self.assertIsInstance(both["platforms"]["host"], str)
+        self.assertTrue(all("candidates" in row and isinstance(row["ready"], bool) for row in both["platforms"]["items"]))
+        with self.assertRaises(layerfs.LayerFSError) as caught:
+            lfs.home.get(with_=["live"])
+        self.assertEqual(caught.exception.error, "InvalidInput")
+        self.assertIn("takes platforms, tree", caught.exception.message)
+        with self.assertRaises(layerfs.LayerFSError) as caught:
+            lfs.home.init(with_=["tree"])
+        self.assertIn("takes no section", caught.exception.message)
+        with self.assertRaises(layerfs.LayerFSError) as caught:
+            lfs.home.get(detail="yes")
+        self.assertIn("`detail` must be true or false", caught.exception.message)
         shutil.rmtree(parent)
 
     def test_the_table(self):
@@ -380,9 +432,6 @@ class Calls(unittest.TestCase):
         # home.init would say `created` only to the first front end
         lfs.home.init()
         for spec in layerfs.TABLE:
-            # the shell's reset already cleared what the Python one would count
-            if f"{spec['family']}.{spec['call']}" == "logs.reset":
-                continue
             args = [a for a in spec["args"] if not a["optional"]]
             positionals = [REFUSING[a["kind"]] for a in args]
             words, data = [spec["family"], spec["call"]], b""
@@ -549,6 +598,29 @@ class Calls(unittest.TestCase):
             lfs.sandbox.close("s1")
             shutil.rmtree(home)
             shutil.rmtree(folder)
+
+
+
+class Refusals(unittest.TestCase):
+    def test_a_refusal_has_its_public_code_its_fix_and_in_the_long_form_its_detail(self):
+        home = temp("refusal")
+        lfs = layerfs.client(home=home)
+        lfs.store.create("shop")
+        with self.assertRaises(layerfs.LayerFSError) as caught:
+            lfs.file.read("shop/nope", "main", "/a")
+        short = caught.exception
+        # `code` stays, and is the public code; `error` is the same word
+        self.assertEqual((short.code, short.error, short.fix, short.detail), ("NotFound", "NotFound", None, None))
+        with self.assertRaises(layerfs.LayerFSError) as caught:
+            lfs.file.read("shop/nope", "main", "/a", detail=True)
+        self.assertEqual(caught.exception.error, "NotFound")
+        self.assertEqual(caught.exception.detail, {"code": "NoSuchProject"})
+        # the fields the next call needs are attributes of the error
+        made = layerfs.LayerFSError.from_refusal(
+            {"error": "Conflict", "message": "the head moved", "fix": "layerfs branch get shop/api main", "commit": "12d1"}
+        )
+        self.assertEqual((made.error, made.fix, made.commit, made.fields), ("Conflict", "layerfs branch get shop/api main", "12d1", {"commit": "12d1"}))
+        shutil.rmtree(home)
 
 
 if __name__ == "__main__":
