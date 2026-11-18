@@ -139,3 +139,35 @@ fn binary_stdin_is_content_and_never_a_usage_error() {
     }
     std::fs::remove_dir_all(home).unwrap();
 }
+
+/// `--with` may be given more than once and its sections add up; any other
+/// option given twice is a usage error (exit 2) naming it, never the
+/// library's `unknown argument` (RF re-check N-F).
+#[test]
+fn a_repeated_option_is_a_usage_error_except_with() {
+    let home = tempdir("repeat");
+    assert_eq!(code(&home, &["home", "init"]).0, Some(0));
+    let (c, out, err) = code(
+        &home,
+        &["home", "get", "--with", "tree", "--with", "platforms"],
+    );
+    assert_eq!(c, Some(0), "{err}");
+    assert!(
+        out.contains("\"tree\":") && out.contains("\"platforms\":"),
+        "{out}"
+    );
+    for (words, flag) in [
+        (&["store", "list", "--detail", "--detail"][..], "--detail"),
+        (&["home", "log", "--limit", "1", "--limit", "2"], "--limit"),
+        (&["store", "list", "--text", "--text"], "--text"),
+    ] {
+        let (c, out, err) = code(&home, words);
+        assert_eq!(c, Some(2), "{words:?}: {err}");
+        assert!(out.is_empty(), "{out}");
+        assert!(
+            err.contains(&format!("{flag} is given more than once")),
+            "{words:?}: {err}"
+        );
+    }
+    std::fs::remove_dir_all(home).unwrap();
+}

@@ -122,3 +122,45 @@ fn explicit_force_options_are_discoverable_alongside_existing_integration_calls(
             && call.get_text("call") == Some("export")));
     assert!(!home.exists());
 }
+
+/// `help --json` never says an option is both optional and required: one
+/// that must be given is `optional: false`, `required: true` (RF re-check
+/// N-G); `file edit --old-string` is one.
+#[test]
+fn help_json_never_calls_a_required_option_optional() {
+    let home = tempdir("required-capabilities").join("missing");
+    let out = run(&mut layerfs(&home, &["help", "--json"]));
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    let value = json::parse(&text(&out.stdout)).unwrap();
+    let Some(SdkValue::List(calls)) = value.get("calls") else {
+        panic!("calls list");
+    };
+    let mut required = 0;
+    for call in calls {
+        for part in ["args", "options"] {
+            let Some(SdkValue::List(args)) = call.get(part) else {
+                continue;
+            };
+            for arg in args {
+                if arg.get("required") == Some(&SdkValue::Bool(true)) {
+                    required += 1;
+                    assert_eq!(arg.get("optional"), Some(&SdkValue::Bool(false)), "{arg:?}");
+                }
+            }
+        }
+    }
+    let edit = (calls.iter())
+        .find(|call| {
+            call.get_text("family") == Some("file") && call.get_text("call") == Some("edit")
+        })
+        .unwrap();
+    let Some(SdkValue::List(options)) = edit.get("options") else {
+        panic!("{edit:?}");
+    };
+    let old = (options.iter())
+        .find(|option| option.get_text("name") == Some("old_string"))
+        .unwrap();
+    assert_eq!(old.get("required"), Some(&SdkValue::Bool(true)));
+    assert!(required > 0);
+    assert!(!home.exists());
+}

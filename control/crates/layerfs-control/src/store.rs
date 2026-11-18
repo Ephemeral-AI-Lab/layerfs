@@ -71,8 +71,11 @@ pub const RELATED: Related = Related {
 /// derivation, [`inventory::machine_state`], so a Store's `blocked_by` says
 /// what `machine get` says of its machine.
 pub fn machine_state(home: &Path, name: &str) -> Result<layerfs_home::state::State, SdkRefusal> {
-    let record = layerfs_machine::record::MachineRecord::read(home, name)?;
-    inventory::machine_state(home, name, record.as_ref())
+    match layerfs_machine::record::MachineRecord::read(home, name) {
+        Ok(record) => inventory::machine_state(home, name, record.as_ref()),
+        // a record that cannot be read blocks the Stores on it, nothing else
+        Err(_) => Ok(layerfs_machine::state::unreadable(name)),
+    }
 }
 
 /// `store.remove`: a sqlite Store no Sandbox uses, with its file.

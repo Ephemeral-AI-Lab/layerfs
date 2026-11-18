@@ -104,7 +104,11 @@ fn row(
 
 /// A bucket that could not be listed: `{bucket, blocked_by, reason,
 /// message}`, `reason` `refused` when it answered and refused, `timeout`
-/// when it ran out of time, else `lost`.
+/// when it ran out of time, `lost` when no answer came back. A bucket this
+/// home did not ask (no saved secret, settings it cannot use: `error` is
+/// `Err`) is `refused` too, the asking refused before a request: the list
+/// shape's reasons (`timeout`, `busy`, `lost`, `refused`) have no other
+/// word for it, and `lost` is only for a request that got no answer.
 fn not_listed(record: &BucketRecord, bucket: &str, error: Result<RemoteError, String>) -> SdkValue {
     let url = record.url();
     let (reason, message) = match error {
@@ -121,7 +125,7 @@ fn not_listed(record: &BucketRecord, bucket: &str, error: Result<RemoteError, St
             };
             (reason, format!("{bucket} did not answer at {url}: {text}"))
         }
-        Err(why) => ("lost", format!("{bucket} was not asked: {why}")),
+        Err(why) => ("refused", format!("{bucket} was not asked: {why}")),
     };
     SdkValue::map([
         ("bucket", SdkValue::text(bucket)),
@@ -143,7 +147,8 @@ pub fn list(home: &Path, only: Option<&str>) -> Outcome {
     let mut buckets = Vec::new();
     match only {
         Some(name) => buckets.push(BucketRecord::of(home, name)?),
-        // a bucket whose record cannot be read is not listed; the others are
+        // a bucket whose record cannot be read is not asked (`refused`, as
+        // in [`not_listed`]); the others are listed
         None => {
             for name in paths::names(&home.join("backup")).map_err(failed)? {
                 match BucketRecord::of(home, &name) {
@@ -151,7 +156,7 @@ pub fn list(home: &Path, only: Option<&str>) -> Outcome {
                     Err(refusal) => skipped.push(SdkValue::map([
                         ("bucket", SdkValue::text(&name)),
                         ("blocked_by", SdkValue::Null),
-                        ("reason", SdkValue::text("lost")),
+                        ("reason", SdkValue::text("refused")),
                         (
                             "message",
                             SdkValue::text(format!(

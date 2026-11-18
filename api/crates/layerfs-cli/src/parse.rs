@@ -92,6 +92,8 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
     let mut secret: Option<&Arg> = None;
     let mut i = 0;
     let mut only_positionals = false;
+    // the options given so far, to refuse one given twice
+    let mut given: Vec<String> = Vec::new();
     while i < words.len() {
         let word = &words[i];
         i += 1;
@@ -107,6 +109,7 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
             Some((flag, inline)) if flag.starts_with("--") => (flag, Some(inline.to_owned())),
             _ => (word.as_str(), None),
         };
+        once(call, flag, &mut given)?;
         let take = |i: &mut usize| -> Result<String, Usage> {
             if let Some(inline) = inline.clone() {
                 return Ok(inline);
@@ -125,10 +128,20 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                 switches.detail = true;
                 fields.push((layerfs_api::DETAIL.to_owned(), SdkValue::Bool(true)));
             }
+            // `--with` may be given more than once: its sections add up
             "--with" => {
                 let sections = take(&mut i)?;
                 sections_known(call, &sections)?;
-                fields.push((layerfs_api::WITH.to_owned(), SdkValue::Text(sections)));
+                match fields
+                    .iter_mut()
+                    .find(|(name, _)| name == layerfs_api::WITH)
+                {
+                    Some((_, SdkValue::Text(held))) => {
+                        held.push(',');
+                        held.push_str(&sections);
+                    }
+                    _ => fields.push((layerfs_api::WITH.to_owned(), SdkValue::Text(sections))),
+                }
             }
             "--progress" if call.arg("on_progress").is_some() => switches.progress = true,
             "--stream" if call.arg("stream").is_some() => {
@@ -370,6 +383,31 @@ fn sections_known(call: &Call, sections: &str) -> Result<(), Usage> {
             ),
         }));
     }
+    Ok(())
+}
+
+/// Refuses option `flag` given a second time, naming it: only `--with`
+/// (its sections add up) and an option the row marks `repeat` (`--env`)
+/// may be given more than once (RF re-check N-F). `-m` is `--message`.
+fn once(call: &Call, flag: &str, given: &mut Vec<String>) -> Result<(), Usage> {
+    let flag = match flag {
+        "-m" => "--message",
+        flag => flag,
+    };
+    let repeat = flag.strip_prefix("--").is_some_and(|name| {
+        let name = name.replace('-', "_");
+        (call.options.iter()).any(|arg| arg.name == name && arg.repeat)
+    });
+    if flag == "--with" || repeat {
+        return Ok(());
+    }
+    if given.iter().any(|seen| seen == flag) {
+        return Err(usage(format!(
+            "{}: {flag} is given more than once; give it once",
+            call.name()
+        )));
+    }
+    given.push(flag.to_owned());
     Ok(())
 }
 
