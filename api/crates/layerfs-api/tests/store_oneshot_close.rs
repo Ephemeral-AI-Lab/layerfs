@@ -55,11 +55,7 @@ fn a_one_shot_process_close_folds_the_log_after_a_fork() {
     ok(
         &home,
         "branch.fork",
-        &[
-            ("project", "lane/p"),
-            ("name", "lane"),
-            ("from_branch", "main"),
-        ],
+        &[("project", "lane/p"), ("name", "lane"), ("from", "main")],
     );
     // the CLI's close right after the call: no wait, nothing else in between
     assert_eq!(layerfs_control::store::close_idle(Duration::ZERO), 1);

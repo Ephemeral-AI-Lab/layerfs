@@ -146,7 +146,7 @@ fn connect_read_and_disconnect() {
         &[
             ("project", t("pg/api")),
             ("name", t("fix")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     ok(

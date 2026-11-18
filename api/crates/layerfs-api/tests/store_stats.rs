@@ -60,7 +60,7 @@ fn check(home: &Path, kind: &str, test: &str) {
         &[
             ("project", t(&name)),
             ("name", t("dev")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     call(

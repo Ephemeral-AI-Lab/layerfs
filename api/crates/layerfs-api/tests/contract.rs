@@ -1131,5 +1131,10 @@ fn the_table_s_json_carries_each_migrated_entry_s_forms() {
             at(said, "paging") == &SdkValue::Null
         );
     }
-    assert_eq!(migrated, 3);
+    // every migrated entry carries its form (no count is pinned during the
+    // rollout)
+    let entries = layerfs_api::calls()
+        .into_iter()
+        .filter(|entry| entry.form.is_some());
+    assert_eq!(migrated, entries.count());
 }

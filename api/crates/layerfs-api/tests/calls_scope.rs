@@ -1,7 +1,7 @@
 //! The call fixes of the #533 review (group calls): a folder scope bound to
 //! its project allows only the calls it covers; `commit.get` pages to the
 //! end; `branch.get` and `commit.get` keep 1.1.0's `NoSuch*` codes; a
-//! scoped `branch.list` filters every page, not the first.
+//! scoped `branch.list` lists its namespace's Branches past every other.
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_api::Scope;
 use layerfs_bridge::control::SdkValue;
@@ -65,7 +65,7 @@ fn items(value: &SdkValue) -> Vec<SdkValue> {
 fn names(value: &SdkValue) -> Vec<String> {
     items(value)
         .iter()
-        .map(|i| i.get_text("name").unwrap().to_owned())
+        .map(|i| i.get_text("branch").unwrap().to_owned())
         .collect()
 }
 
@@ -256,8 +256,14 @@ fn a_scoped_workspace_call_needs_a_sandbox_of_its_project() {
     std::fs::remove_dir_all(home).unwrap();
 }
 
+/// The `next_cursor` of a page: absent from the short form when there is
+/// no next page.
+fn next_cursor(value: &SdkValue) -> Option<String> {
+    value.get_text("next_cursor").map(str::to_owned)
+}
+
 #[test]
-fn a_scoped_branch_list_reads_every_page() {
+fn a_scoped_branch_list_pages_its_namespace_past_every_other() {
     let (home, folder) = project();
     let p = || ("project", t("shop/api"));
     // Branches that sort before the namespace fill the first page
@@ -265,25 +271,17 @@ fn a_scoped_branch_list_reads_every_page() {
         ok(
             &home,
             "branch.fork",
-            &[
-                p(),
-                ("name", t(&format!("a.{n:03}"))),
-                ("from_branch", t("main")),
-            ],
+            &[p(), ("name", t(&format!("a.{n:03}"))), ("from", t("main"))],
         );
     }
     for name in ["agent.x", "agent.y"] {
         ok(
             &home,
             "branch.fork",
-            &[p(), ("name", t(name)), ("from_branch", t("main"))],
+            &[p(), ("name", t(name)), ("from", t("main"))],
         );
     }
-    let first = ok(
-        &home,
-        "branch.list",
-        &[p(), ("page_size", SdkValue::Int(1000))],
-    );
+    let first = ok(&home, "branch.list", &[p()]);
     assert!(
         !names(&first).iter().any(|n| n.starts_with("agent.")),
         "the namespace is past the first page"
@@ -291,30 +289,25 @@ fn a_scoped_branch_list_reads_every_page() {
     let scoped = scope("shop/api", Some("agent"));
     let all = call(&home, Some(&scoped), "branch.list", &[p()]).unwrap();
     assert_eq!(names(&all), ["x", "y"]);
-    assert_eq!(all.get("has_more"), Some(&SdkValue::Bool(false)));
+    assert_eq!(next_cursor(&all), None);
     let one = call(
         &home,
         Some(&scoped),
         "branch.list",
-        &[p(), ("page_size", SdkValue::Int(1))],
+        &[p(), ("limit", SdkValue::Int(1))],
     )
     .unwrap();
     assert_eq!(names(&one), ["x"]);
-    assert_eq!(one.get("has_more"), Some(&SdkValue::Bool(true)));
-    assert_eq!(one.get_int("next_page_pos"), Some(1));
+    let cursor = next_cursor(&one).expect("a next page");
     let next = call(
         &home,
         Some(&scoped),
         "branch.list",
-        &[
-            p(),
-            ("page_size", SdkValue::Int(1)),
-            ("page_pos", SdkValue::Int(1)),
-        ],
+        &[p(), ("limit", SdkValue::Int(1)), ("cursor", t(&cursor))],
     )
     .unwrap();
     assert_eq!(names(&next), ["y"]);
-    assert_eq!(next.get("has_more"), Some(&SdkValue::Bool(false)));
+    assert_eq!(next_cursor(&next), None);
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(folder).unwrap();
 }

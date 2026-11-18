@@ -81,7 +81,7 @@ fn home_with_project() -> (PathBuf, PathBuf, PathBuf) {
         &[
             ("project", t("shop/api")),
             ("name", t("fix")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     (home, root, folder)

@@ -246,7 +246,7 @@ fn native_force_stops_live_daemon_and_command_and_detaches_mount_without_opening
         &[
             ("project", t("shop/app")),
             ("name", t("work")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();

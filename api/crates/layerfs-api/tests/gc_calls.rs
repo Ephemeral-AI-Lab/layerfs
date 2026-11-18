@@ -170,18 +170,30 @@ fn branch_remove_refuses_reserved_and_absent_branches() {
     ok(&home, "branch.get", &[p(), ("branch", t("main"))]);
     let (code, message) = refused(&home, "branch.remove", &[p(), ("branch", t("ghost"))]);
     assert_eq!(code, "NotFound", "{message}");
-    // a live Branch is hidden by the marker and reported as `Removed`
-    ok(
-        &home,
-        "branch.fork",
-        &[p(), ("name", t("work")), ("from_branch", t("main"))],
-    );
+    // a live Branch is hidden by the marker and reported as `removed`
+    for name in ["work", "work2"] {
+        ok(
+            &home,
+            "branch.fork",
+            &[p(), ("name", t(name)), ("from", t("main"))],
+        );
+    }
     let removed = ok(&home, "branch.remove", &[p(), ("branch", t("work"))]);
-    assert_eq!(removed.get_text("kind"), Some("Removed"));
-    // the project is the caller's <store>/<project>, not the Store's inner name
-    assert_eq!(removed.get_text("project"), Some("shop/api"));
-    assert_eq!(removed.get_text("branch"), Some("work"));
-    assert!(removed.get_int("removed_ms").is_some_and(|ms| ms >= 0));
+    assert_eq!(removed, SdkValue::map([("ok", SdkValue::Bool(true))]));
+    let removed = ok(
+        &home,
+        "branch.remove",
+        &[
+            p(),
+            ("branch", t("work2")),
+            ("detail", SdkValue::Bool(true)),
+        ],
+    );
+    assert_eq!(removed.get_text("outcome"), Some("removed"));
+    assert_eq!(removed.get_text("branch"), Some("work2"));
+    assert!(removed
+        .get_text("removed_at")
+        .is_some_and(|at| at.ends_with('Z')));
     let (code, message) = refused(&home, "branch.get", &[p(), ("branch", t("work"))]);
     assert_eq!(code, "NotFound", "{message}");
     std::fs::remove_dir_all(home).unwrap();

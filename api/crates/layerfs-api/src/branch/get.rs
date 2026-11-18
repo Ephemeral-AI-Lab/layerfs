@@ -2,10 +2,18 @@
 use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Name, Project};
 use crate::calls::table::{a, call, Call};
-use crate::calls::Context;
+use crate::calls::{Context, Form};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::branch::{get, BranchGet};
+
+/// The head to pass as `--expected`; `forked_from` is the Commit the
+/// Branch was forked at.
+const FORM: Form = Form::of(
+    &["commit"],
+    &[],
+    &["commit", "forked_from", "branch", "id", "base", "root"],
+);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -16,7 +24,8 @@ pub(crate) const CALL: Call = call(
     "one Branch and its head Commit",
     run,
 )
-.scoped(Rule::BranchGet);
+.scoped(Rule::BranchGet)
+.form(&FORM);
 
 /// Runs `branch.get`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
