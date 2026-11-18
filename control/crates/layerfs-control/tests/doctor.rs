@@ -536,6 +536,78 @@ fn each_problem_gives_one_finding_naming_its_fix() {
     std::fs::remove_dir_all(home).unwrap();
 }
 
+/// A copy a move left on the machine its record does not name is one
+/// warning, read from the record with no machine asked: a target's whole or
+/// partial copy (a certain failure's `incoming_on`, or a gone process's move
+/// from `native` past `send`, named `store.push` by a build before 2.0) and
+/// a source's copy a move did not retire.
+#[test]
+fn a_moves_copy_off_its_records_machine_is_one_warning_from_the_record() {
+    let home = new_home("moved");
+    layerfs_control::migrate::open(&home).unwrap();
+    let boxed = SdkValue::map([("name", t("box")), ("platform", t("lima"))]);
+    write_entity(&paths::machine_record(&home, "box"), &boxed).unwrap();
+    // a move to box failed certain at `send`: box holds a partial copy
+    let mut failed = sqlite("failed", "native");
+    failed.push(("incoming_on", t("box")));
+    store(&home, "failed", failed);
+    // an old build's push whose process ended at `send`
+    let mut pushed = sqlite("pushed", "native");
+    let push = SdkValue::map([
+        ("id", t("op-00000000000000bb")),
+        ("name", t("store.push")),
+        ("phase", t("send")),
+        (
+            "args",
+            SdkValue::map([("from", t("native")), ("to", t("box"))]),
+        ),
+        ("owner", SdkValue::map([("pid", SdkValue::Int(0))])),
+        ("started", SdkValue::Int(1)),
+        ("updated", SdkValue::Int(1)),
+        ("uncertain", SdkValue::Bool(false)),
+    ]);
+    pushed.push(("op", push));
+    store(&home, "pushed", pushed);
+    // a move to box whose retire did not finish: native keeps its copy
+    let mut kept = sqlite("kept", "box");
+    let last = SdkValue::map([
+        ("from", t("native")),
+        ("to", t("box")),
+        ("retired", SdkValue::Bool(false)),
+    ]);
+    kept.push(("last_transfer", last));
+    store(&home, "kept", kept);
+
+    let before = tree(&home);
+    let found = findings(&doctor(&home).unwrap());
+    assert_eq!(before, tree(&home), "the doctor wrote in the home");
+    for (name, says) in [
+        (
+            "failed",
+            "store.move from native to box may have left a whole or partial copy on box",
+        ),
+        (
+            "pushed",
+            "store.move from native to box may have left a whole or partial copy on box",
+        ),
+        (
+            "kept",
+            "store.move from native to box did not retire the copy on native",
+        ),
+    ] {
+        let matching: Vec<_> = (found.iter())
+            .filter(|f| f.1 == "store" && f.2 == name)
+            .collect();
+        assert_eq!(matching.len(), 1, "{name}: {found:#?}");
+        assert_eq!(matching[0].0, "warning", "{name}");
+        assert!(matching[0].3.contains(says), "{name}: {}", matching[0].3);
+        assert!(matching[0]
+            .3
+            .contains(&format!("layerfs store move {name}")));
+    }
+    std::fs::remove_dir_all(home).unwrap();
+}
+
 #[test]
 fn a_layout_2_home_reports_what_refuses_its_conversion_and_converts_nothing() {
     let home = new_home("layout2");

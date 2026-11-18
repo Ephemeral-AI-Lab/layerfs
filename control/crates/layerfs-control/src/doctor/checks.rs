@@ -2,9 +2,9 @@
 //! Store, project or machine is gone, a Store on a machine with no record,
 //! a built-in machine's recorded daemon that is not there), dead and uncertain `op`
 //! intents, stale Store leases (read, never removed), a partial Store
-//! copy (`store.sqlite.incoming`) an interrupted or certain-failed transfer
-//! left on `native` or on a push's target machine, and a copy a push or pull
-//! did not retire (from the record).
+//! copy (`store.sqlite.incoming`) an interrupted transfer left on `native`,
+//! and a copy a move left on the machine its record does not name (from
+//! the record: no machine is asked).
 //!
 //! A finding's `fix` is one runnable line in 2.0's call names, or empty
 //! when none repairs it (its message then says what to do). An intent a
@@ -17,8 +17,6 @@ use layerfs_home::home::paths;
 use layerfs_home::op::{Op, Standing};
 use layerfs_store::lease;
 use layerfs_store::record::{Placement, StoreRecord, StoreRef};
-use layerfs_store::sqlite::family::step_on;
-use layerfs_store::sqlite::transfer::step::StoreStep;
 use std::path::Path;
 
 /// `native` and `docker` exist with or without a record.
@@ -26,20 +24,12 @@ fn built_in(machine: &str) -> bool {
     matches!(machine, "native" | "docker")
 }
 
-/// The same record checks without connecting to machines for transfer files.
+/// The record checks of the home's records (`home.records`): they read
+/// files of this computer only and connect to no machine.
 pub(super) fn check_local(
     home: &Path,
     scanned: &Scanned,
     findings: &mut Findings,
-) -> Result<(), SdkRefusal> {
-    check_scope(home, scanned, findings, false)
-}
-
-fn check_scope(
-    home: &Path,
-    scanned: &Scanned,
-    findings: &mut Findings,
-    remote: bool,
 ) -> Result<(), SdkRefusal> {
     machines(scanned, findings);
     for store in &scanned.stores {
@@ -74,7 +64,7 @@ fn check_scope(
                 // a transfer running now owns its partial copy
                 let standing = op.as_ref().map(Op::standing);
                 if standing != Some(Standing::Running) {
-                    incoming(home, store, machine == "native", remote, findings);
+                    incoming(home, store, findings);
                 }
                 // an unresolved intent's own finding names its clearing call
                 if standing != Some(Standing::Unresolved) {
@@ -188,42 +178,35 @@ fn intent(entity: (&str, &str), op: &Op, clear: &str, findings: &mut Findings) {
     }
 }
 
-/// A copy a push or pull did not retire (its retire failed, or its
-/// process ended there): the record names the Store's new machine, and the
-/// next push or pull deletes the old copy first. Read from the record:
-/// another machine's files are not.
+/// A copy an ended move left on the machine its record does not name: the
+/// source's whole copy a move did not retire, or what an interrupted or
+/// certain-failed move from `native` put on its target (whole or partial).
+/// The next `store move` deletes it first. Read from the record: the
+/// machine that holds the copy is not asked, so this is the one finding of
+/// a target's partial copy.
 fn leftover(store: &StoreRecord, machine: &str, findings: &mut Findings) {
     let Some(left) = layerfs_store::sqlite::transfer::resolve::leftover(store) else {
         return;
     };
-    // the target side of a push holds a partial copy, not a whole one: it is
-    // reported with its bytes by `incoming`, below
-    if left.call == "store.push" && left.to == left.on {
-        return;
-    }
     let name = store.name();
+    let what = match left.on == left.to {
+        true => "may have left a whole or partial copy on",
+        false => "did not retire the copy on",
+    };
     findings.warning(
         ("store", name),
         format!(
-            "Store {name}'s {} from {} to {} did not retire the copy on {}; the record names {machine}, nothing reads that copy, and the next `layerfs store move {name}` deletes it first",
+            "Store {name}'s {} from {} to {} {what} {}; the record names {machine}, nothing reads that copy, and the next `layerfs store move {name}` deletes it first",
             left.call, left.from, left.to, left.on
         ),
         String::new(),
     );
 }
 
-/// A partial copy an interrupted transfer left (`store.sqlite.incoming`), on
-/// `native` or on the target machine of a `store.push`: while the push's
-/// intent is still there, or, after a certain failure dropped it, the machine
-/// its record kept. A machine's is read through its worker's `stat`, which
-/// changes nothing.
-fn incoming(
-    home: &Path,
-    store: &StoreRecord,
-    on_native: bool,
-    remote: bool,
-    findings: &mut Findings,
-) {
+/// A partial copy an interrupted transfer left (`store.sqlite.incoming`) on
+/// `native`, beside the Store's file. One on another machine is
+/// [`leftover`]'s, from the record.
+fn incoming(home: &Path, store: &StoreRecord, findings: &mut Findings) {
     let name = store.name();
     let file = paths::store_file(home, name);
     let local_incoming = file.with_file_name("store.sqlite.incoming");
@@ -237,33 +220,4 @@ fn incoming(
             format!("rm {}", shell(&local_incoming)),
         );
     }
-    if !remote {
-        return;
-    }
-    let remote =
-        layerfs_store::sqlite::transfer::resolve::partial_on(store).filter(|to| to != "native");
-    let Some(to) = remote else {
-        return;
-    };
-    let Ok(mut executor) = layerfs_store::place::on_machine(home, &to) else {
-        return;
-    };
-    let Ok(stat) = step_on(home, &mut executor, name, StoreStep::Stat) else {
-        return;
-    };
-    let Some(bytes) = stat.get_int("incoming_bytes").filter(|&bytes| bytes > 0) else {
-        return;
-    };
-    let fix = match on_native {
-        true => format!("layerfs store move {name} {to}"),
-        false => format!("layerfs store move {name} native"),
-    };
-    findings.warning(
-        ("store", name),
-        format!(
-            "machine {to} holds a {bytes}-byte partial copy (store.sqlite.incoming) of Store {name} \
-             left by an interrupted transfer; nothing reads it"
-        ),
-        fix,
-    );
 }
