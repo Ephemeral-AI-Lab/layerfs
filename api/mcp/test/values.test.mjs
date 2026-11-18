@@ -46,7 +46,7 @@ test("a binary file round-trips byte for byte through file_write and export", as
       destination: box.out,
       branch: "feat",
     });
-    assert.equal(value(exported.result).files, 2);
+    assert.equal(value(exported.result).file_count, 2);
     assert.deepEqual(readFileSync(join(box.out, "bin.dat")), BINARY);
 
     // and a UTF-8 Buffer is still read back as text
@@ -119,7 +119,7 @@ test("a decimal string reaches a real call and a non-safe JSON number is refused
     assert.equal(read.text, "two\n");
 
     await assert.rejects(
-      call(server.client, "project_list", { page_size: 9223372036854775807 }),
+      call(server.client, "project_list", { limit: 9223372036854775807 }),
       (error) => error.code === -32602 && /safe integer/.test(error.message),
     );
   } finally {

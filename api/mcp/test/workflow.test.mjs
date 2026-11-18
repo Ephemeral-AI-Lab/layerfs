@@ -35,7 +35,7 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
     assert.equal(store.store, "shop");
     assert.equal(store.engine, "sqlite");
 
-    const project = await run("project_init", { project: "shop/api", folder: box.source });
+    const project = await run("project_init", { project: "shop/api", folder: box.source, detail: true });
     assert.equal(project.project, "shop/api");
 
     const fork = await run("branch_fork", { project: "shop/api", name: "feat", from: "main", detail: true });
@@ -77,8 +77,9 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
       { project: "shop/api", destination: box.out, branch: "merged" },
       { progress: true },
     );
+    // project.export answers its counts; the merged Branch's new.txt below shows which Branch it wrote
     const answer = value(exported.result);
-    assert.equal(answer.branch, "merged");
+    assert.equal(answer.file_count, 3);
     assert.ok(existsSync(join(box.out, "new.txt")));
     assert.equal(readFileSync(join(box.out, "new.txt"), "utf8"), "from mcp\n");
     assert.ok(exported.progress.length >= 1, "the client received no progress before the result");
@@ -134,11 +135,9 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
       server.client.callTool({ name: "home_get", arguments: { detail: "yes" } }),
       (error) => error.code === -32602 && /detail.*must be true or false/.test(error.message),
     );
-    // a call that is not migrated has one form: it is offered neither option
-    await assert.rejects(
-      server.client.callTool({ name: "project_list", arguments: { detail: true } }),
-      (error) => error.code === -32602 && /unknown argument "detail"/.test(error.message),
-    );
+    // every call is migrated now (batch 3: project and file): project_list takes `detail` too
+    const projects = await run("project_list", { detail: true });
+    assert.deepEqual(projects.items.map((item) => item.project), ["shop/api"]);
     await server.close();
     server = null;
 
@@ -146,7 +145,7 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
     const work = await connect({ home: box.home, profile: "work" });
     const workList = await work.client.listTools();
     assert.equal(workList.tools.length, calls("work"));
-    assert.equal(workList.tools.length, 28);
+    assert.equal(workList.tools.length, 17);
     const workNames = new Set(workList.tools.map((tool) => tool.name));
     for (const name of names("work")) assert.ok(workNames.has(name), `${name} is missing from work`);
     for (const name of names("admin").filter((name) => !names("work").includes(name))) {

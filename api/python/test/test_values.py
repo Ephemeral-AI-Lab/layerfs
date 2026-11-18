@@ -136,7 +136,8 @@ class Bytes(Fixture):
         for name, data in cases.items():
             self.lfs.file.write(P, B, f"/{name}", data)
             self.assertEqual(self.size(f"/{name}"), len(data), name)
-        self.assertEqual(self.lfs.file.read(P, B, "/empty")["text"], "")
+        # an empty file's `text` is "", which the short form leaves out
+        self.assertEqual(self.lfs.file.read(P, B, "/empty", detail=True)["text"], "")
         self.assertEqual(self.lfs.file.read(P, B, "/unicode")["text"], "héllo 你好 \U0001f600\n")
         self.assertEqual(self.lfs.file.read(P, B, "/memoryview")["text"], "cd")
 

@@ -32,7 +32,7 @@ const bad = (id, group, call, args, expect, opts = {}, more = {}) => ({ id, grou
 export const steps = [
   // --- setup: a Store, a project from a folder, a Branch
   ok("store", "setup", "store.create", ["shop"], { detail: true }, { check: (v) => assert.equal(v.profile, "disposable") }),
-  ok("init", "setup", "project.init", (ctx) => [P, ctx.folder], {}, { check: (v) => assert.equal(v.project, P) }),
+  ok("init", "setup", "project.init", (ctx) => [P, ctx.folder], { detail: true }, { check: (v) => assert.equal(v.project, P) }),
   ok("fork", "setup", "branch.fork", [P, B, "main"], { detail: true }, { check: (v) => assert.equal(v.outcome, "forked") }),
 
   // --- required and optional arguments, defaults, omitted and null
@@ -153,8 +153,9 @@ export const steps = [
   bad("line i64 max + 1", "ints", "file.read", [P, B, "/lines.txt"], "InvalidInput", { line: 2n ** 63n }, { cli: "usage", loose: true, check: (v) => assert.match(v.message ?? v.usage, /out of range|whole number/) }),
   bad("line unsafe number", "ints", "file.read", [P, B, "/lines.txt"], "InvalidInput", { line: Number.MAX_SAFE_INTEGER + 2 }, { cli: "skip", loose: true, check: (v) => assert.match(v.message, /safe integer/) }),
   bad("limit 2^62", "ints", "branch.list", [P], "InvalidInput", { limit: 2n ** 62n }, { check: (v) => assert.match(v.message, /`limit` is 1 to 1000/) }),
-  bad("mode 2^62", "ints", "file.write", [P, B, "/big.txt", "x"], "InvalidInput", { mode: 2n ** 62n }, { check: (v) => assert.match(v.message, /mode/) }),
-  bad("mode i64 max + 1", "ints", "file.write", [P, B, "/big.txt", "x"], "InvalidInput", { mode: 2n ** 63n }, { cli: "usage", loose: true }),
+  // `mode` is octal text: a binding refuses a number for it, the command line reads the digits as text
+  bad("mode 2^62", "ints", "file.write", [P, B, "/big.txt", "x"], "InvalidInput", { mode: 2n ** 62n }, { loose: true, check: (v) => assert.match(v.message, /mode/) }),
+  bad("mode i64 max + 1", "ints", "file.write", [P, B, "/big.txt", "x"], "InvalidInput", { mode: 2n ** 63n }, { loose: true }),
   bad("apply mode 2^63", "ints", "file.apply", [P, B, [{ op: "chmod", path: "/lines.txt", mode: 2n ** 63n }]], "InvalidInput", {}, { cli: "usage", loose: true }),
   bad("apply mode 2^62", "ints", "file.apply", [P, B, [{ op: "chmod", path: "/lines.txt", mode: 2n ** 62n }]], "InvalidInput", {}, { check: (v) => assert.match(v.message, /octal/) }),
   bad("big written nothing", "ints", "file.stat", [P, B, "/big.txt"], "NotFound"),
@@ -175,11 +176,11 @@ export const steps = [
   }),
 
   // --- project.export: a fresh directory, the default and an explicit Branch, and refusals
-  ok("export main", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-main`], {}, {
-    check: (v) => assert.deepEqual([v.branch, v.files, v.directories, v.symlinks], ["main", 1, 0, 0]),
+  ok("export main", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-main`], { detail: true }, {
+    check: (v) => assert.deepEqual([typeof v.commit, v.file_count, v.dir_count, v.symlink_count], ["string", 1, 0, 0]),
   }),
-  ok("export merged", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-merged`], { branch: "merged" }, {
-    check: (v) => assert.equal(v.branch, "merged"),
+  ok("export merged", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-merged`], { branch: "merged", detail: true }, {
+    check: (v) => assert.equal(typeof v.commit, "string"),
   }),
   bad("export nonempty", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-main`], "InvalidInput"),
   bad("export commit option", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-commit`], "InvalidInput", { commit: "main" }, { cli: "usage" }),

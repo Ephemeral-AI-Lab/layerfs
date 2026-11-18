@@ -111,7 +111,7 @@ class Flow(unittest.TestCase):
         self.assertEqual(messages[:2], ["two", "one"])
         oldest = sync.commit.list(P, "agent")["items"][-1]["commit"]
         # a Commit id as `at` reads that history
-        self.assertEqual(sync.file.stat(P, "agent", "/README.md", at=oldest)["path"], "/README.md")
+        self.assertEqual(sync.file.stat(P, "agent", "/README.md", at=oldest, detail=True)["path"], "/README.md")
         self.assertEqual(refusal(sync.file.stat, P, "agent", "/two", at=oldest)["refused"][0], "NotFound")
 
     def test_a_scope_refuses_the_same_way_through_both(self):
