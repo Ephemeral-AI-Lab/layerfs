@@ -38,7 +38,7 @@ fn wal_bytes(file: &Path) -> u64 {
 /// `close_idle(ZERO)`: the Store its call wrote must close then, with its
 /// write-ahead log folded in, even while that call's idle checkpoint is
 /// still running. Init, fork, then the process-level close, as before a
-/// `store push`, which refuses a Store with a log left.
+/// `store move`, which refuses a Store with a log left.
 #[test]
 fn a_one_shot_process_close_folds_the_log_after_a_fork() {
     let home = tempdir("oneshot");

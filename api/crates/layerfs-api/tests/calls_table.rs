@@ -88,9 +88,9 @@ fn unknown_calls_and_arguments_are_refused_before_any_effect() {
     .starts_with("InvalidInput: project.get: unknown argument `bogus`"));
     // a function option never crosses into the library
     assert!(code(
-        "store.push",
+        "store.move",
         map(&[
-            ("name", t("s")),
+            ("store", t("s")),
             ("machine", t("m")),
             ("on_progress", t("f"))
         ])
@@ -370,7 +370,11 @@ fn machine_family() {
 
 #[test]
 fn store_family() {
-    assert!(code("store.push", map(&[("name", t("shop"))])).contains("`machine` is required"));
+    assert!(code("store.move", map(&[("store", t("shop"))])).contains("`machine` is required"));
+    // the old names are gone, with no alias
+    for gone in ["store.status", "store.stats", "store.push", "store.pull"] {
+        assert!(layerfs_api::find(gone).is_none(), "{gone}");
+    }
     let reached = code("store.list", SdkValue::Null);
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
 }
@@ -580,7 +584,7 @@ fn the_four_gc_calls_take_only_ids() {
             "project.remove_file",
             &[("project", Kind::Project), ("path", Kind::Text)],
         ),
-        ("store.compact", &[("name", Kind::Name)]),
+        ("store.compact", &[("store", Kind::Name)]),
     ];
     for &(name, args) in expected {
         let spec = layerfs_api::find(name).unwrap_or_else(|| panic!("{name} is missing"));
@@ -624,7 +628,20 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         .filter(|call| call.form.is_some())
         .map(|call| call.name())
         .collect();
-    assert_eq!(migrated, ["home.get", "home.log", "home.clear_log"]);
+    assert_eq!(
+        migrated,
+        [
+            "home.get",
+            "home.log",
+            "home.clear_log",
+            "store.list",
+            "store.get",
+            "store.create",
+            "store.move",
+            "store.remove",
+            "store.compact"
+        ]
+    );
     for call in layerfs_api::calls() {
         if let Some(form) = call.form {
             // every short key is a long key, and no key is listed twice
@@ -657,10 +674,10 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
 #[test]
 fn the_global_options_are_taken_out_before_the_check_on_every_call() {
     // `detail` is accepted by a call that is not migrated and changes nothing
-    let reached = code("store.list", map(&[("detail", SdkValue::Bool(true))]));
+    let reached = code("backup.list", map(&[("detail", SdkValue::Bool(true))]));
     assert!(reached.starts_with("ok "), "{reached}");
-    assert!(code("store.list", map(&[("detail", t("yes"))]))
-        .starts_with("InvalidInput: store.list: `detail` must be true or false"));
+    assert!(code("backup.list", map(&[("detail", t("yes"))]))
+        .starts_with("InvalidInput: backup.list: `detail` must be true or false"));
     // a section the entry does not declare is refused, naming what it takes
     let refused = code(
         "home.get",
@@ -670,10 +687,15 @@ fn the_global_options_are_taken_out_before_the_check_on_every_call() {
         refused,
         "InvalidInput: home.get: `with` names `live`; this call takes platforms, tree"
     );
+    let refused = code("backup.list", map(&[("with", t("live"))]));
+    assert_eq!(
+        refused,
+        "InvalidInput: backup.list: `with` names `live`, and this call takes no section"
+    );
     let refused = code("store.list", map(&[("with", t("live"))]));
     assert_eq!(
         refused,
-        "InvalidInput: store.list: `with` names `live`, and this call takes no section"
+        "InvalidInput: store.list: `with` names `live`; this call takes stats"
     );
     // an empty list asks for nothing
     let reached = code("store.list", map(&[("with", SdkValue::List(vec![]))]));

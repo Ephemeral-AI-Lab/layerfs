@@ -34,7 +34,7 @@ fn a_mkdir_failure_removes_nothing() {
     let absent_target = home.join("link-target");
     std::fs::create_dir(home.join("store")).unwrap();
     std::os::unix::fs::symlink(&absent_target, &directory).unwrap();
-    let refusal = layerfs_store::sqlite::create::create(&home, &name).unwrap_err();
+    let refusal = layerfs_store::sqlite::create::create(&home, &name, None).unwrap_err();
     assert_eq!(refusal.code, "Failed", "{}", refusal.message);
     assert!(
         refusal.message.contains("File exists"),
@@ -60,7 +60,7 @@ fn a_refused_create_removes_only_the_directory_this_call_made() {
     let home = scratch(Path::new("/dev/shm"), "tmpfs-home");
     layerfs_home::home::layout::create(&home).unwrap();
     let name = StoreName::parse("tmp").unwrap();
-    let refusal = layerfs_store::sqlite::create::create(&home, &name).unwrap_err();
+    let refusal = layerfs_store::sqlite::create::create(&home, &name, None).unwrap_err();
     assert_eq!(refusal.code, "Unsupported", "{}", refusal.message);
     assert!(
         refusal.message.contains("ext4, xfs or btrfs"),
@@ -84,7 +84,7 @@ fn a_refused_create_removes_only_the_directory_this_call_made() {
         .unwrap();
     let marker = directory.join("another callers file");
     std::fs::write(&marker, b"another caller's file").unwrap();
-    let refusal = layerfs_store::sqlite::create::create(&home, &name).unwrap_err();
+    let refusal = layerfs_store::sqlite::create::create(&home, &name, None).unwrap_err();
     assert_eq!(refusal.code, "Unsupported", "{}", refusal.message);
     assert!(directory.is_dir(), "the other caller's directory stays");
     assert_eq!(std::fs::read(&marker).unwrap(), b"another caller's file");

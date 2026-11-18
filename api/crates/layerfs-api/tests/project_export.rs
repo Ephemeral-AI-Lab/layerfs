@@ -1326,12 +1326,12 @@ fn shared_store_lease_and_concurrent_remove_admission() {
 
                 // Exclusive Store operations (`store.remove`, `store.push`) are refused `InUse`
                 let (rm_code, rm_msg) =
-                    call(&home, "store.remove", &[("name", t("shop"))]).unwrap_err();
+                    call(&home, "store.remove", &[("store", t("shop"))]).unwrap_err();
                 assert_eq!(rm_code, "InUse", "{rm_msg}");
                 let (push_code, push_msg) = call(
                     &home,
-                    "store.push",
-                    &[("name", t("shop")), ("machine", t("box"))],
+                    "store.move",
+                    &[("store", t("shop")), ("machine", t("box"))],
                 )
                 .unwrap_err();
                 assert_eq!(push_code, "InUse", "{push_msg}");

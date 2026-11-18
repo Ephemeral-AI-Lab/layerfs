@@ -137,7 +137,7 @@ fn the_worker_path_writes_the_sidecar_then_admits_and_releases_after_the_marker(
     // cases in the `layerfs-store` tests cover the same home path, and this
     // case runs where the Store's filesystem carries SQLite locks.
     let home = tempdir("home");
-    match create(&home, &StoreName::parse("shop").unwrap()) {
+    match create(&home, &StoreName::parse("shop").unwrap(), None) {
         Ok(_) => {}
         Err(refusal)
             if refusal.code == "Unsupported"

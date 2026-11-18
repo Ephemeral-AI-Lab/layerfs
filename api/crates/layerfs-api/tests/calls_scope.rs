@@ -112,7 +112,7 @@ fn a_scope_refuses_every_call_it_does_not_cover() {
     ok(&home, "store.create", &[("name", t("shop"))]);
     let scoped = scope("shop/api", Some("agent"));
     let uncovered: &[(&str, &[(&str, SdkValue)])] = &[
-        ("store.remove", &[("name", t("shop"))]),
+        ("store.remove", &[("store", t("shop"))]),
         ("store.list", &[]),
         (
             "branch.remove",
@@ -123,7 +123,7 @@ fn a_scope_refuses_every_call_it_does_not_cover() {
             "project.remove_file",
             &[("project", t("shop/api")), ("path", t("/web/a"))],
         ),
-        ("store.compact", &[("name", t("shop"))]),
+        ("store.compact", &[("store", t("shop"))]),
         (
             "project.init",
             &[("project", t("shop/x")), ("folder", t("/tmp"))],
@@ -169,7 +169,7 @@ fn a_scope_refuses_every_call_it_does_not_cover() {
         assert!(refused.unwrap_err().1.contains("out of scope"));
     }
     // the Store is still there: nothing ran
-    ok(&home, "store.get", &[("name", t("shop"))]);
+    ok(&home, "store.get", &[("store", t("shop"))]);
     // history stays refused, and another project is out of scope
     let history = call(
         &home,

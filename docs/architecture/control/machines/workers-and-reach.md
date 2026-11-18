@@ -161,7 +161,7 @@ waits at most 10 s; other operations wait as long as they run
 | `store.call` | one Store method on `store/<name>/store.sqlite` under the root, holding the Store's lease there |
 | `store.compact` | none: there is no compaction operation. A remote sqlite Store's `store.compact` is refused `Unsupported` before the worker is dialled (spec S6 deviation D5) |
 | `store.file` | one step of a Store push, pull, remove, stat or backup, with `progress` events for hashing steps |
-| `store.reach` | the check of this machine's connection to a PostgreSQL Store, for `store.update --machine` and `store.status --machine` |
+| `store.reach` | the check of this machine's connection to a PostgreSQL Store, for `store.update --machine` |
 | `store.diagnose`, `doctor.sandbox` | doctor's read-only observations; `doctor.sandbox` with `leftovers: true` is the bounded walk for what interrupted operations left under the root |
 | `doctor.fix` | removes one such leftover, named by kind and name (never a path), under its guard ([Checks](../doctor/checks.md#leftovers)) |
 | `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`, decoded into its typed request first |

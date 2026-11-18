@@ -515,7 +515,7 @@ fn each_problem_gives_one_finding_naming_its_fix() {
             "store",
             "s6",
             "store.sqlite.incoming",
-            "`layerfs store pull s6`",
+            "`layerfs store move s6 native`",
         ),
         (
             "warning",
@@ -654,7 +654,7 @@ fn a_remote_partial_copy_is_reported_without_modifying_home_or_worker() {
                 && kind == "store"
                 && name == "shop"
                 && msg.contains("machine box holds a 13-byte partial copy (store.sqlite.incoming)")
-                && fix.contains("`layerfs store push shop box`")
+                && fix.contains("`layerfs store move shop box`")
         }),
         "{found:#?}"
     );
@@ -722,7 +722,7 @@ fn a_partial_copy_a_certain_failure_left_is_reported_from_the_record() {
         "{message}"
     );
     assert!(
-        fix.contains("`layerfs store push shop box` replaces it, or `layerfs store remove shop`"),
+        fix.contains("`layerfs store move shop box` replaces it, or `layerfs store remove shop`"),
         "{fix}"
     );
     std::fs::remove_dir_all(home).unwrap();

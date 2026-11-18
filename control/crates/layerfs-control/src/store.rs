@@ -1,9 +1,9 @@
 //! The Store calls whose checks read who uses a Store (layerfs-project#105):
 //! each runs `layerfs-store`'s call with the checks from
 //! [`crate::inventory`]. The Store calls proper (`branch`, `commit`, `file`)
-//! and the rest are `layerfs-store`'s own. `store.update --machine` and
-//! `store.status --machine` also read the machine and reach it as a Sandbox
-//! call would.
+//! and the rest (`store.list`, `store.get`, `store.create`) are
+//! `layerfs-store`'s own. `store.update --machine` also reads the machine
+//! and reaches it as a Sandbox call would.
 use crate::inventory;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
@@ -13,14 +13,13 @@ use layerfs_machine::worker::Unreached;
 use layerfs_store::place::{self, Executor};
 use layerfs_store::postgresql::{check, connect, update as store_update};
 use layerfs_store::record::{OwnConnection, StoreKind, StoreRecord};
-use layerfs_store::sqlite::family::StorePush;
 use layerfs_store::Related;
 use std::path::Path;
 
 pub use layerfs_store::close_idle;
 
 /// `store.compact`: reclaim one Store's dead bytes, answering the
-/// §11 report.
+/// flattened report (`layerfs_store::report::compact_report`).
 pub fn compact(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcome {
     layerfs_store::compact::compact(home, events, name.as_str())
 }
@@ -36,14 +35,10 @@ pub fn remove(home: &Path, name: &StoreName) -> Outcome {
     layerfs_store::sqlite::family::remove(home, name, RELATED)
 }
 
-/// `store.push`: a sqlite Store from native to a machine.
-pub fn push(home: &Path, events: &mut Events<'_>, request: &StorePush) -> Outcome {
-    layerfs_store::sqlite::family::push(home, events, request, RELATED)
-}
-
-/// `store.pull`: a sqlite Store from its machine to native.
-pub fn pull(home: &Path, events: &mut Events<'_>, name: &str) -> Outcome {
-    layerfs_store::sqlite::family::pull(home, events, name, RELATED)
+/// `store.move`: a sqlite Store from the machine that holds it to
+/// `machine`, one of the two being this computer (C13).
+pub fn move_to(home: &Path, events: &mut Events<'_>, store: &str, machine: &str) -> Outcome {
+    layerfs_store::sqlite::family::move_to(home, events, store, machine, RELATED)
 }
 
 /// `store.disconnect`: forget a PostgreSQL Store; its data stays.
@@ -260,55 +255,9 @@ pub fn update(home: &Path, events: &mut Events<'_>, request: &StoreUpdate) -> Ou
     layerfs_store::sqlite::family::get(home, name)
 }
 
-/// `store.status`: a Store's live state; with `machine`, also the check of
-/// that machine's connection to a PostgreSQL Store, run from the machine
-/// now and recorded nowhere: `check: { machine, host, ok: true, at,
-/// server_version, latency_ms }`, or `ok: false` with the refusal as
-/// `error: { code, message }`. A sqlite Store, an unknown machine or a
-/// platform that runs no PostgreSQL Sandboxes refuses the call.
-pub fn status(
-    home: &Path,
-    events: &mut Events<'_>,
-    name: &StoreName,
-    machine: Option<&MachineName>,
-) -> Outcome {
-    let Some(machine) = machine.map(|m| m.as_str()) else {
-        return layerfs_store::sqlite::family::status(home, name);
-    };
-    let record = check::postgresql_record(home, name)?;
-    runs_postgresql_sandboxes(home, name, machine)?;
-    let status = layerfs_store::sqlite::family::status(home, name)?;
-    let (host, checked) = check_from(home, events, &record, machine);
-    let mut fields = vec![
-        ("machine".to_owned(), SdkValue::text(machine)),
-        (
-            "host".to_owned(),
-            host.map(SdkValue::Text).unwrap_or_default(),
-        ),
-        ("ok".to_owned(), SdkValue::Bool(checked.is_ok())),
-    ];
-    match checked {
-        Ok(SdkValue::Map(checked)) => fields.extend(checked),
-        Ok(_) => {}
-        Err(refusal) => fields.push((
-            "error".to_owned(),
-            SdkValue::map([
-                ("code", SdkValue::Text(refusal.code)),
-                ("message", SdkValue::Text(refusal.message)),
-            ]),
-        )),
-    }
-    let SdkValue::Map(mut out) = status else {
-        return Ok(status);
-    };
-    out.push(("check".to_owned(), SdkValue::Map(fields)));
-    Ok(SdkValue::Map(out))
-}
-
 /// `store.reach` in a machine's worker: `{ store, store_record, postgresql }`
 /// from the caller, which resolved the password and the URL this machine
-/// dials. Answers the check `store.update --machine` and `store.status
-/// --machine` ask for.
+/// dials. Answers the check `store.update --machine` asks for.
 pub fn reach_in_worker(args: &SdkValue) -> Outcome {
     let store = args.get_text("store").unwrap_or("");
     StoreName::parse(store)?;

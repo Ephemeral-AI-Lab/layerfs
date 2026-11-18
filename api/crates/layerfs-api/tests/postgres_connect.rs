@@ -159,10 +159,21 @@ fn connect_read_and_disconnect() {
             ("content", t("written\n")),
         ],
     );
-    let status = ok(&home, "store.status", &[("name", t("pg"))]);
-    assert_eq!(
-        status.get("server").and_then(|s| s.get("reachable")),
-        Some(&SdkValue::Bool(true)),
+    let status = ok(
+        &home,
+        "store.get",
+        &[
+            ("store", t("pg")),
+            ("with", t("live")),
+            ("detail", SdkValue::Bool(true)),
+        ],
+    );
+    assert_eq!(status.get_text("state"), Some("ready"), "{status:?}");
+    assert!(
+        status
+            .get("live")
+            .and_then(|live| live.get_text("server_version"))
+            .is_some(),
         "{status:?}"
     );
 
@@ -191,7 +202,7 @@ fn connect_read_and_disconnect() {
     let _ = std::fs::remove_dir_all(export_dir.parent().unwrap());
 
     assert_eq!(
-        call(&home, "store.remove", &[("name", t("pg"))])
+        call(&home, "store.remove", &[("store", t("pg"))])
             .unwrap_err()
             .0,
         "InvalidInput"

@@ -6,7 +6,7 @@ use layerfs_home::json::{parse, print};
 use layerfs_home::outcome::View;
 use layerfs_store::backup::record::BucketRecord;
 use layerfs_store::project::record::ProjectRecord;
-use layerfs_store::record::{StoreDerived, StoreRecord, StoreState};
+use layerfs_store::record::{StoreDerived, StoreRecord};
 
 fn value(text: &str) -> SdkValue {
     parse(text).unwrap()
@@ -15,7 +15,6 @@ fn value(text: &str) -> SdkValue {
 fn projects(names: &[&str]) -> StoreDerived {
     StoreDerived {
         projects: names.iter().map(|n| n.to_string()).collect(),
-        state: None,
     }
 }
 
@@ -32,18 +31,8 @@ fn a_store_shows_its_record_without_secrets_then_its_projects() {
         ),
     );
     let want = r#"{"name":"shop","kind":"sqlite","machine":"box","profile":"disposable","created":5,"sqlite":"3.50","backups":{"r2":{"file":"shop"}},"op":{"id":"op-1","name":"store.push","phase":"send","started":3,"uncertain":true},"last_transfer":{"from":"native","to":"box"},"projects":["api","web"]}"#;
-    for view in [View::Full, View::List] {
-        let shown = record.to_sdk(view, &projects(&["api", "web"])).unwrap();
-        assert_eq!(print(&shown), want);
-    }
-    // a list item ends with its state; a get shows none
-    let mut derived = projects(&["api", "web"]);
-    derived.state = Some(StoreState::InUse);
-    let listed = record.to_sdk(View::List, &derived).unwrap();
-    let mut want_listed = want.trim_end_matches('}').to_owned();
-    want_listed.push_str(r#","state":"in_use"}"#);
-    assert_eq!(print(&listed), want_listed);
-    assert_eq!(print(&record.to_sdk(View::Full, &derived).unwrap()), want);
+    let shown = record.to_sdk(&projects(&["api", "web"])).unwrap();
+    assert_eq!(print(&shown), want);
     // the record itself is written back as read, `v` and all
     assert_eq!(record.to_record().get("v"), Some(&SdkValue::Int(1)));
 }
@@ -51,13 +40,13 @@ fn a_store_shows_its_record_without_secrets_then_its_projects() {
 #[test]
 fn a_store_record_of_an_unknown_kind_still_shows() {
     let record = StoreRecord::from_record("odd", value(r#"{"kind":"oracle"}"#));
-    let shown = record.to_sdk(View::List, &projects(&[])).unwrap();
+    let shown = record.to_sdk(&projects(&[])).unwrap();
     assert_eq!(
         print(&shown),
         r#"{"name":"odd","kind":"oracle","projects":[]}"#
     );
     let broken = StoreRecord::from_record("odd", SdkValue::Text("x".into()));
-    let refusal = broken.to_sdk(View::Full, &projects(&[])).unwrap_err();
+    let refusal = broken.to_sdk(&projects(&[])).unwrap_err();
     assert_eq!(refusal.code, "Failed");
     assert_eq!(refusal.message, "Store odd's record is not a record");
 }
@@ -272,36 +261,48 @@ mod machines {
 }
 
 #[test]
-fn a_store_state_is_busy_unresolved_down_idle_or_in_use() {
+fn a_store_state_from_its_records_is_busy_unresolved_blocked_broken_or_ready() {
     use layerfs_home::op::Op;
-    let idle = StoreRecord::from_record("s", value(r#"{"kind":"sqlite"}"#));
-    assert_eq!(idle.state(false, &[]), StoreState::Idle);
-    assert_eq!(idle.state(false, &[42]), StoreState::InUse);
-    assert_eq!(idle.state(true, &[42]), StoreState::Down);
-    // a live operation (this process) wins over everything; a gone one's
-    // uncertain outcome is unresolved, its certain one is ignored
+    use layerfs_home::state::{Reason, State};
+    use layerfs_store::state::{held, recorded};
+    let home = std::env::temp_dir().join(format!("layerfs-store-state-{}", std::process::id()));
+    std::fs::create_dir_all(&home).unwrap();
+    let on = |machine: &str, more: &str| {
+        let text = format!(r#"{{"kind":"sqlite","machine":"{machine}"{more}}}"#);
+        StoreRecord::from_record("s", value(&text))
+    };
+    assert_eq!(recorded(&home, &on("native", "")).unwrap(), State::Ready);
+    // a machine the home does not record blocks the Store, naming it
+    assert_eq!(
+        recorded(&home, &on("box", "")).unwrap(),
+        State::blocked_by("machine", "box", "missing")
+    );
+    // what a live read found and wrote is answered from the record
+    assert_eq!(
+        recorded(&home, &on("native", r#","broken":"missing""#)).unwrap(),
+        State::broken(Reason::Missing, Some("layerfs store remove s"))
+    );
+    // a live operation (this process) wins over everything, named by its
+    // call word; a gone one's uncertain outcome is unresolved with the call
+    // that clears it, its certain one is ignored
     let live = Op::begin("store.push", "send", SdkValue::Null).unwrap();
     let with = |op: SdkValue| StoreRecord::from_record("s", SdkValue::map([("op", op)]));
-    let busy = with(live.to_record().clone());
-    assert_eq!(busy.state(true, &[42]), StoreState::Busy);
+    let busy = held(&with(live.to_record().clone())).unwrap();
+    assert!(matches!(&busy, State::Busy { name, phase, .. } if name == "move" && phase == "send"));
     let gone = |uncertain: bool| {
         value(&format!(
             r#"{{"id":"op-2","name":"store.remove","phase":"remove","owner":{{"pid":0}},"uncertain":{uncertain}}}"#
         ))
     };
-    assert_eq!(with(gone(true)).state(false, &[]), StoreState::Unresolved);
-    assert_eq!(with(gone(false)).state(false, &[]), StoreState::Idle);
-    let names: Vec<_> = [
-        StoreState::Idle,
-        StoreState::InUse,
-        StoreState::Busy,
-        StoreState::Down,
-        StoreState::Unresolved,
-    ]
-    .iter()
-    .map(|s| s.as_str())
-    .collect();
-    assert_eq!(names, ["idle", "in_use", "busy", "down", "unresolved"]);
+    assert_eq!(
+        held(&with(gone(true))),
+        Some(State::broken(
+            Reason::Unresolved,
+            Some("layerfs store remove s")
+        ))
+    );
+    assert_eq!(held(&with(gone(false))), None);
+    std::fs::remove_dir_all(&home).unwrap();
 }
 
 /// A record with an id or none and a `name` intent owned by `pid`.

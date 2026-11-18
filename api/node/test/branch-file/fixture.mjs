@@ -52,7 +52,7 @@ export async function fixture() {
     const store = await lfs.store.connect("sdk", url, { synchronous_commit: "off" });
     assert.equal(store.synchronous_commit, "off");
   } else {
-    assert.equal((await lfs.store.create("sdk")).profile, "disposable");
+    assert.equal((await lfs.store.create("sdk", { detail: true })).profile, "disposable");
   }
   const init = await lfs.project.init(project, folder);
   const otherProject = await lfs.project.init("sdk/other", folder);
@@ -72,7 +72,7 @@ export async function fixture() {
     assert.ok(process.env.LAYERFS_BUNDLE, "Set LAYERFS_BUNDLE to the matching sealed Linux worker bundle");
     await lfs.machine.update("docker", { image: process.env.LAYERFS_BRANCH_FILE_IMAGE ?? "layerfs-352-runtime:node24-https-apt-20261024" });
     await lfs.machine.start("docker");
-    await lfs.store.push("sdk", "docker");
+    await lfs.store.move("sdk", "docker");
     assert.equal((await lfs.store.get("sdk")).machine, "docker");
   }
   return {

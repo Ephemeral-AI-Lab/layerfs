@@ -59,7 +59,7 @@ fn no_direct_store(refusal: &layerfs_bridge::control::SdkRefusal) -> bool {
 /// filesystem cannot hold a directly opened Store.
 fn shop(tag: &str) -> Option<(PathBuf, OpenArgs, LayerStackId)> {
     let home = tempdir(tag);
-    match create(&home, &StoreName::parse("shop").unwrap()) {
+    match create(&home, &StoreName::parse("shop").unwrap(), None) {
         Ok(_) => {}
         Err(refusal) if no_direct_store(&refusal) => {
             eprintln!("NOT RUN: this filesystem cannot hold a directly opened Store: {refusal:?}");

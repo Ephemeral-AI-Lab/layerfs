@@ -2,8 +2,7 @@
 //! Sandboxes run on every machine whose platform runs them, with no step
 //! before the create; `store.update` changes the Store's own connection, or
 //! with `--machine` gives one machine its own, checked from that machine
-//! before it is saved; `store.status --machine` runs that check and
-//! records nothing.
+//! before it is saved.
 //!
 //! The first test needs no server: its URLs name 127.0.0.1 port 1, where
 //! nothing listens. The second needs LAYERFS_TEST_PG_URL (a server URL
@@ -99,9 +98,18 @@ fn update_and_check_refusals_need_no_server() {
     )
     .unwrap();
     // only a machine with its own connection shows, without the old check
-    let shown = ok(&home, "store.get", &[("name", t("pg"))]);
-    assert_eq!(own(&shown), ["docker"]);
-    let docker = shown.get("machines").and_then(|m| m.get("docker")).unwrap();
+    // (`store.get` answers them as `connections` rows: the Store's own,
+    // with no machine, then each machine's own)
+    let detail = ("detail", SdkValue::Bool(true));
+    let shown = ok(&home, "store.get", &[("store", t("pg")), detail]);
+    let Some(SdkValue::List(connections)) = shown.get("connections") else {
+        panic!("{shown:?}")
+    };
+    let machines: Vec<_> = (connections.iter())
+        .filter_map(|row| row.get_text("machine"))
+        .collect();
+    assert_eq!(machines, ["docker"], "{shown:?}");
+    let docker = &connections[1];
     assert_eq!(
         docker.get_text("url"),
         Some("postgresql://bob@127.0.0.1:1/app")
@@ -192,30 +200,6 @@ fn update_and_check_refusals_need_no_server() {
         "a refused update writes nothing"
     );
 
-    // the check on request: a successful answer that says it failed, and
-    // records nothing
-    let status = ok(&home, "store.status", &on("native"));
-    let check = status.get("check").expect("check");
-    assert_eq!(check.get_text("machine"), Some("native"));
-    assert_eq!(check.get_text("host"), Some("127.0.0.1"));
-    assert_eq!(check.get("ok"), Some(&SdkValue::Bool(false)));
-    let error = check.get("error").expect("error");
-    assert_eq!(error.get_text("code"), Some("Unavailable"));
-    assert!(
-        error
-            .get_text("message")
-            .is_some_and(|m| m.starts_with("machine native cannot reach PostgreSQL Store pg")),
-        "{error:?}"
-    );
-    let plain = ok(&home, "store.status", &[("name", t("pg"))]);
-    assert!(plain.get("check").is_none(), "{plain:?}");
-    let refusal = |args: &[(&str, SdkValue)]| call(&home, "store.status", args).unwrap_err();
-    let (code, message) = refusal(&[("name", t("shop")), ("machine", t("native"))]);
-    assert_eq!(code, "InvalidInput", "{message}");
-    let (code, message) = refusal(&on("nowhere"));
-    assert_eq!(code, "NotFound", "{message}");
-    assert_eq!(record_text(&home, "pg"), before, "a check writes nothing");
-
     // synchronous_commit alone dials nothing
     let shown = ok(
         &home,
@@ -269,13 +253,6 @@ fn a_machine_s_own_connection_is_checked_before_it_is_saved() {
     assert!(connected.get("machines").is_none(), "{connected:?}");
     assert!(!record_text(&home, "pg").contains("machines"));
     let native = [("name", t("pg")), ("machine", t("native"))];
-    // the check on request passes and records nothing
-    let before = record_text(&home, "pg");
-    let status = ok(&home, "store.status", &native);
-    let check = status.get("check").expect("check");
-    assert_eq!(check.get("ok"), Some(&SdkValue::Bool(true)), "{check:?}");
-    assert!(check.get_text("server_version").is_some(), "{check:?}");
-    assert_eq!(record_text(&home, "pg"), before);
     // native with a connection of its own: the same server, the password
     // by reference; the record holds no password
     let mut args = native.to_vec();
@@ -347,7 +324,11 @@ fn a_machine_s_own_connection_is_checked_before_it_is_saved() {
         ],
     );
     assert_eq!(shown.get_text("synchronous_commit"), Some("off"));
-    ok(&home, "store.stats", &[("name", t("pg"))]);
+    ok(
+        &home,
+        "store.get",
+        &[("store", t("pg")), ("with", t("stats"))],
+    );
     let mut args = native.to_vec();
     args.push(("clear", SdkValue::Bool(true)));
     let shown = ok(&home, "store.update", &args);

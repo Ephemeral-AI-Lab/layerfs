@@ -61,7 +61,7 @@ full per-call table is "Where each call runs" in [Control](../README.md).
 | Open-Store cache | one open Store per path per process, shared by the caller's route and a worker; closed by a reaper after 60 s unused, never while a call runs | [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs) |
 | WAL checkpoint | when the last call on a SQLite Store returns, or a Sandbox on it closes, its WAL is checkpointed and truncated once while the Store stays open; one that cannot complete waits for the idle close | same |
 | Store service | one engine `StoreService` per Store path per process, opened by the first client and closed by the last; its private overlays live under a random name in the temp directory | [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs) |
-| State | `store.list`, `status`: `idle`, `in_use` (another live lease), `busy` (live `op`), `down` (machine did not answer), `unresolved`; reads take no lock and leave stale leases | [`record.rs`](../../../../control/crates/layerfs-store/src/record.rs) `state`, [`status.rs`](../../../../control/crates/layerfs-store/src/status.rs), [`list.rs`](../../../../control/crates/layerfs-store/src/list.rs) |
+| State | `store.list`, `store.get`, `home.get --with tree`: from the records only, `busy` (live `op`), `broken` `unresolved` (gone owner), `blocked` (machine not ready, `blocked_by`), `broken` with the reason the last live read recorded, else `ready`; `store.get --with live` reads the Store where it lives and writes the record only when that reason changes; reads leave stale leases | [`state.rs`](../../../../control/crates/layerfs-store/src/state.rs) `recorded`, [`live.rs`](../../../../control/crates/layerfs-store/src/live.rs), [`list.rs`](../../../../control/crates/layerfs-store/src/list.rs) |
 | Stats, diagnostics | Store-wide counters on the ordinary route; read-only engine entry points without leases or writable opens | [`stats.rs`](../../../../control/crates/layerfs-store/src/stats.rs), [`diagnostic.rs`](../../../../control/crates/layerfs-store/src/diagnostic.rs) |
 | Who uses a Store | `store_idle`, `can_remove_project` read Sandbox records in `layerfs-control` and are passed in as `Related` | [`related.rs`](../../../../control/crates/layerfs-store/src/related.rs), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) |
 
@@ -86,10 +86,15 @@ full per-call table is "Where each call runs" in [Control](../README.md).
 
 A live `op` refuses every lease, Store call and new operation (`Busy`),
 this process included. A dead owner's uncertain `op` is `Unresolved`; its
-refusal names the clearing call: a new `store push <s> <m>` or `store pull
-<s>` for a transfer, else `store remove <s>`
+refusal names the clearing call: the same `store move <s> <to>` for a
+move, `store compact <s>` for a compaction, `store get <s> --with live`
+for a backup or restore, else `store remove <s>`
 ([`record.rs`](../../../../control/crates/layerfs-store/src/record.rs)
-`unblocked`, `clearing_call`).
+`unblocked`, [`intent.rs`](../../../../control/crates/layerfs-store/src/intent.rs) `clearing`).
+Without an `op`, a Store's state comes from its records only
+([`state.rs`](../../../../control/crates/layerfs-store/src/state.rs) `recorded`):
+`blocked` while its machine is not ready, `broken` with the reason the last
+live read found, else `ready`.
 
 ## Invariants
 
@@ -123,7 +128,7 @@ refusal names the clearing call: a new `store push <s> <m>` or `store pull
 | --- | --- | --- | --- |
 | `layerfs-api/tests/store_routes.rs` | `cargo +1.85.1 test --locked -p layerfs-api --test store_routes` | Linux (ext4, xfs, btrfs), macOS (apfs) | a call goes where its records say, a worker gets the records, leases are held, read and cleaned |
 | `layerfs-api/tests/store_family.rs` | `cargo +1.85.1 test --locked -p layerfs-api --test store_family` | same | create on native, push to a worker machine and pull back with equal heads; push, pull and remove refusals |
-| `layerfs-control/tests/store_reads.rs` | `cargo +1.85.1 test --locked -p layerfs-control --test store_reads` | macOS, Linux | `store.status`, `list`, `get` take no lock and leave a stale lease as it was |
+| `layerfs-control/tests/store_reads.rs` | `cargo +1.85.1 test --locked -p layerfs-control --test store_reads` | macOS, Linux | `store.list`, `get` take no lock and leave a stale lease as it was |
 | `layerfs-store/tests/kind_isolation.rs` | `cargo +1.85.1 test --locked -p layerfs-store --test kind_isolation` | any | `sqlite/` and `postgresql/` never import each other |
 
 ## Pages

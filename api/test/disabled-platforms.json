@@ -121,36 +121,38 @@
       }
     },
     {
-      "call": "store.push",
+      "call": "store.move",
       "args": {
-        "name": "local",
+        "store": "local",
         "machine": "legacy"
       }
     },
     {
-      "call": "store.push",
+      "call": "store.move",
       "args": {
-        "name": "shop",
+        "store": "shop",
         "machine": "docker"
       }
     },
     {
-      "call": "store.pull",
+      "call": "store.move",
       "args": {
-        "name": "shop"
+        "store": "shop",
+        "machine": "native"
       }
     },
     {
-      "call": "store.push",
+      "call": "store.move",
       "args": {
-        "name": "leftover",
+        "store": "leftover",
         "machine": "docker"
       }
     },
     {
-      "call": "store.pull",
+      "call": "store.move",
       "args": {
-        "name": "leftover"
+        "store": "leftover",
+        "machine": "native"
       }
     },
     {

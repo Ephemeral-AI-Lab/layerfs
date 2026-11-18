@@ -1,17 +1,16 @@
-//! The `store` family: 12 calls, one file each (H1: push and pull replace
-//! move; a PostgreSQL Store runs on every machine, #536 C4, and `update`
-//! gives one its own connection, H9).
+//! The `store` family: one file each (call surface 2.0). A sqlite Store
+//! is created, moved between this computer and a machine, and removed; a
+//! PostgreSQL database is connected and disconnected. `store.get` answers
+//! from the home's records (it absorbs `store.status` and `store.stats`),
+//! and `store.move` replaces `store.push` and `store.pull`.
 mod compact;
 mod connect;
 mod create;
 mod disconnect;
 mod get;
 mod list;
-mod pull;
-mod push;
+mod r#move;
 mod remove;
-mod stats;
-mod status;
 mod update;
 
 use crate::calls::Calls;
@@ -21,13 +20,10 @@ pub(crate) fn calls() -> Calls {
     &[
         list::CALL,
         get::CALL,
-        status::CALL,
-        stats::CALL,
         create::CALL,
         connect::CALL,
         update::CALL,
-        push::CALL,
-        pull::CALL,
+        r#move::CALL,
         remove::CALL,
         compact::CALL,
         disconnect::CALL,

@@ -87,11 +87,11 @@ record. Built-in `native` and `docker` count as present without a record.
 | store | SQLite Store on a non-built-in machine with no record | error | restore the machine's record, or delete the Store folder by hand |
 | store | 1.1.0 Store whose machine is unknown | warning | `layerfs import-env` |
 | store | stale lease of an ended process (read, never removed) | warning | the next call on the Store removes it, or delete `store/<s>/open/<pid>` |
-| store | local `store.sqlite.incoming` | warning | on `native`: delete it by hand; else `layerfs store pull <s>`, or delete it |
-| store | a push target's `store.sqlite.incoming` with bytes, read by the worker's `stat` | warning | Store on `native`: `layerfs store push <s> <machine>` or `layerfs store remove <s>`; else `store pull` or `store remove` |
-| store | a copy a push or pull did not retire (from the record) | warning | the next `layerfs store push <s> <machine>` (on `native`) or `store pull <s>` deletes it first |
+| store | local `store.sqlite.incoming` | warning | on `native`: delete it by hand; else `layerfs store move <s> native`, or delete it |
+| store | a move target's `store.sqlite.incoming` with bytes, read by the worker's `stat` | warning | Store on `native`: `layerfs store move <s> <machine>` or `layerfs store remove <s>`; else `store move <s> native` or `store remove` |
+| store | a copy a move did not retire (from the record) | warning | the next `layerfs store move <s> <machine>` (on `native`) or `store move <s> native` deletes it first |
 | sandbox | record names no project, or its Store, project or machine is gone | error | `layerfs sandbox close <x>` |
-| machine, store, sandbox | ended owner's uncertain `op` | error | show: `machine status`, `store status`, `sandbox get`; clear: `machine remove`, the Store's clearing call, `sandbox close` |
+| machine, store, sandbox | ended owner's uncertain `op` | error | show: `machine status`, `store get`, `sandbox get`; clear: `machine remove`, the Store's clearing call, `sandbox close` |
 | machine, store, sandbox | ended owner's certain `op` | warning | nothing: the next operation replaces it |
 
 A live owner's `op` is not a finding. A running Store transfer owns its

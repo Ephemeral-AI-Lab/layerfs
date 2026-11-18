@@ -329,8 +329,8 @@ fn init_files_branches_move_and_remove() {
     std::thread::sleep(std::time::Duration::from_millis(10));
     ok(
         &home,
-        "store.push",
-        &[("name", t("shop")), ("machine", t("box"))],
+        "store.move",
+        &[("store", t("shop")), ("machine", t("box"))],
     );
     let read = ok(
         &home,

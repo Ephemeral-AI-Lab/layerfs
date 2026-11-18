@@ -310,8 +310,8 @@ fn the_trace_key_is_salted_by_the_store_policy_salt() {
 fn store_compact_artifact_names_never_reach_the_log() {
     let _env = serial();
     let (home, folder) = project();
-    let report = ok(&home, "store.compact", &[("name", t("shop"))]);
-    assert_eq!(report.get_text("kind"), Some("Compacted"));
+    let report = ok(&home, "store.compact", &[("store", t("shop"))]);
+    assert!(report.get_int("freed_bytes").is_some(), "{report:?}");
     assert_eq!(
         argv(&last(&home)),
         ["store".to_owned(), "compact".into(), "shop".into()]

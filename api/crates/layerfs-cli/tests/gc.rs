@@ -31,7 +31,7 @@ const CALLS: &[(&[&str], &str, &str)] = &[
     ),
     (
         &["store", "compact"],
-        "layerfs store compact <name>",
+        "layerfs store compact <store>",
         "reclaim dead bytes",
     ),
 ];

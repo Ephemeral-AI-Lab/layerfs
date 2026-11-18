@@ -231,7 +231,7 @@ fn numbered_record(home: &Path, id: &str, record: SdkValue) {
 fn answers(home: &Path, sandboxes: &[&str]) -> Vec<Result<SdkValue, SdkValue>> {
     let mut all = vec![
         call(home, "store.list", &[]),
-        call(home, "store.get", &[("name", t("shop"))]),
+        call(home, "store.get", &[("store", t("shop"))]),
         call(home, "project.list", &[]),
         call(home, "project.get", &[("project", t("shop/app"))]),
         call(home, "sandbox.list", &[]),

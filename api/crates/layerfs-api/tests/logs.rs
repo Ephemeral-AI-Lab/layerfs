@@ -145,7 +145,7 @@ fn one_line_per_call_for_a_success_and_each_refusal() {
     assert!(call(&home, "store.get", &[("bogus", t("x"))]).is_err());
     assert_eq!(argv(&last(&home)), ["store", "get"]);
     // refused after the check: the whole argv
-    let code = call(&home, "store.get", &[("name", t("nope"))]).unwrap_err();
+    let code = call(&home, "store.get", &[("store", t("nope"))]).unwrap_err();
     let line = last(&home);
     assert_eq!(argv(&line), ["store", "get", "nope"]);
     assert_eq!(line.get_text("outcome"), Some(code.as_str()));
@@ -293,7 +293,7 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
     assert_eq!(argv(&last(&home))[4], bytes(long.len() - 1));
     // text that is not redacted is cut at 200 characters
     let long = "n".repeat(300);
-    let _ = call(&home, "store.get", &[("name", t(&long))]);
+    let _ = call(&home, "store.get", &[("store", t(&long))]);
     let name = &argv(&last(&home))[2];
     assert_eq!(name.chars().count(), 201);
     assert!(name.ends_with('…'));
@@ -621,7 +621,7 @@ fn home_log_filters_pages_and_refuses_a_stale_cursor() {
         ok(&home, "store.list", &[]);
     }
     std::env::remove_var("LAYERFS_LOGS_TAG");
-    let _ = call(&home, "store.get", &[("name", t("nope"))]);
+    let _ = call(&home, "store.get", &[("store", t("nope"))]);
     ok(
         &home,
         "file.read",

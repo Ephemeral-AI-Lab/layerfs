@@ -258,6 +258,11 @@ fn check_args(
     let want: Vec<String> = (list(at(row, what)).iter())
         .map(|arg| renamed(pending, call, arg.get_text("name").unwrap()))
         .collect();
+    // `on_progress` is a global option (calls.json `global_options`): a
+    // row says it with `progress`, which is checked on its own
+    let args: Vec<&layerfs_api::Arg> = (args.iter())
+        .filter(|arg| what != "options" || arg.name != "on_progress")
+        .collect();
     let have: Vec<&str> = args.iter().map(|arg| arg.name).collect();
     assert_eq!(have, want, "{call}: {what}");
     for (arg, said) in args.iter().zip(list(at(row, what))) {
@@ -1020,7 +1025,7 @@ fn home_log_and_clear_log_answer_in_their_rows_shapes() {
     for store in ["a", "b", "c"] {
         call(&home, "store.create", &[("name", SdkValue::text(store))]).unwrap();
     }
-    call(&home, "store.get", &[("name", SdkValue::text("nope"))]).unwrap_err();
+    call(&home, "store.get", &[("store", SdkValue::text("nope"))]).unwrap_err();
     let said = row(&spec, "home.log");
     let short = call(&home, "home.log", &[]).unwrap();
     let long = call(&home, "home.log", &[DETAIL]).unwrap();
@@ -1040,11 +1045,11 @@ fn home_log_and_clear_log_answer_in_their_rows_shapes() {
     assert_eq!(newest.get_text("call"), Some("store.get"));
     assert_eq!(newest.get_text("outcome"), Some("refused"));
     assert_eq!(newest.get_text("error"), Some("NotFound"));
-    // a call with no word of its own is `ok`: a record's own `kind` (the
-    // new Store's `sqlite`) is not what happened
+    // a migrated call's row carries the word its answer names as
+    // `outcome` (`store.create` answers `created`), never a record's `kind`
     let created = &list(at(&short, "items"))[1];
     assert_eq!(created.get_text("call"), Some("store.create"));
-    assert_eq!(created.get_text("outcome"), Some("ok"));
+    assert_eq!(created.get_text("outcome"), Some("created"));
     // pages: `limit` and the cursor of the page before
     let limit = ("limit", SdkValue::Int(2));
     let created = ("call", SdkValue::text("store.create"));
@@ -1131,5 +1136,5 @@ fn the_table_s_json_carries_each_migrated_entry_s_forms() {
             at(said, "paging") == &SdkValue::Null
         );
     }
-    assert_eq!(migrated, 3);
+    assert_eq!(migrated, 9);
 }
