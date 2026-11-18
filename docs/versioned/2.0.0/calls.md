@@ -902,24 +902,61 @@ See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals, and
 [removed platforms](machines-and-stores.md#removed-platforms-firecracker-microsandbox-and-ssh).
 
-### `store` (9)
+### `store` (12)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `list` | — | `machine`, `--with stats` | every Store, from the home's records |
 | `get` | `store` | `--with live,stats` | a Store's record and state; with `--with`, read where it lives or opened for its counters |
 | `create` | `name` | `machine` | an empty sqlite Store, on this computer or made on `machine` directly |
-| `connect` | `name`, `url` | `password`, `synchronous_commit` | connects a PostgreSQL database as a Store; its Sandboxes run on every machine that supports them |
-| `update` | `name` | `machine`, `url`, `password`, `synchronous_commit`, `clear` | changes a PostgreSQL Store's connection; with `machine`, gives that machine a connection of its own (checked from it first), or removes it with `clear` |
+| `connect` | `store`, `url` | `auth`, `machine`, `synchronous_commit` | connects a PostgreSQL database as a Store with a saved login; on a connected Store, sets its address, or with `machine` that machine's own (checked from it first) |
+| `disconnect` | `store` | `machine` | forgets a PostgreSQL Store, its data staying; with `machine`, removes only that machine's own address |
+| `save_auth` | `auth` | `user`, `password` (`--password-stdin`) | saves or replaces a PostgreSQL login in the home's secret folder |
+| `auths` | — | — | the saved logins and the Stores that use each; never a password |
+| `remove_auth` | `auth` | — | deletes a saved login no Store uses |
+| `update` | `store` | `auth`, `synchronous_commit` | a PostgreSQL Store's login or write setting |
 | `move` | `store`, `machine` | `on_progress` | moves a sqlite Store between this computer and a machine |
 | `remove` | `store` | — | deletes a sqlite Store with every project in it |
 | `compact` | `store` | `on_progress` | reclaims the dead bytes of one Store |
-| `disconnect` | `name` | — | forgets a PostgreSQL Store; its data stays |
 
-`list`, `get`, `create`, `move`, `remove` and `compact` are migrated;
-`connect`, `update` and `disconnect` are not yet. `store.status` and
-`store.stats` are gone into `store get` (`--with live`, `--with stats`),
-and `store.push` and `store.pull` into `store move`, with no alias.
+All twelve are migrated. `store.status` and `store.stats` are gone into
+`store get` (`--with live`, `--with stats`), `store.push` and `store.pull`
+into `store move`, a password in a Store's record or URL into saved
+logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
+`connect` and `disconnect` with `machine`, with no alias.
+
+- **Saved logins.** `store save-auth <auth> --user <role>
+  --password-stdin` writes `secret/auth/<auth>.json` (mode 0600, in a
+  0700 folder) and moves the home's `generation`; the password is read from
+  stdin only and never answered, logged or traced. Short `{"ok":true}`;
+  long `ok, outcome (saved or rotated), auth, user, stores, stores_count`.
+  A Store records only the login's name (`auth`); its URL holds host,
+  port, database and TLS settings, and one naming a user or holding a
+  password is refused `InvalidInput`. The login goes into the URL only
+  when the Store is dialled. `auths` answers `{ items }`, short `{ auth,
+  user }` with `stores` (at most 20) and `stores_count` when used, else
+  `stores_count: 0`; long
+  adds `created_at, updated_at`. `remove_auth` is refused `InUse` (with
+  `stores`) while a Store uses the login, `NotFound` when there is none;
+  long `ok, outcome: "removed", auth`.
+- **`connect`**, first time: `--auth` is required and must be saved;
+  `synchronous_commit` defaults to `local`. It creates the LayerFS schema
+  in an empty database or reads the Store's id from it (refused `Exists`
+  when another Store of this home has that id or name). Short
+  `{ projects, projects_count }` (`projects_count` alone for an empty
+  database; `{"ok":true}` when only an address changed); long `ok,
+  projects, projects_count, outcome (connected or updated), store, engine,
+  auth, connections, synchronous_commit`. On a connected Store `connect`
+  checks the new address against the same Store's id and takes no `--auth`
+  or `--synchronous-commit` (`InvalidInput`, naming `store update`); with
+  `--machine M` the address is `M`'s own, checked from `M` with the
+  Store's login. `projects` is null when only an address changed.
+- **`update`** changes the login (checked against the same Store) or
+  `synchronous_commit`; at least one. Long `ok, outcome: "updated", store,
+  auth, synchronous_commit`.
+- **`disconnect`** long `ok, outcome: "disconnected", store, machine`;
+  refused `InUse` while a Sandbox or Workspace uses the Store, and
+  `NotFound` for a machine with no address of its own.
 
 - **A Store's state** comes from its records only, with no probe: `busy`
   while an operation it records (`op: { name, phase, started_at }`: a
@@ -947,8 +984,8 @@ and `store.push` and `store.pull` into `store move`, with no alias.
   `projects_count` counts them all. A `backups` row's long form is
   `bucket, file, sha256, heads_sha256, last, attempt`: `last` the last
   transfer that worked (`{ call, ended_at, size }`), `attempt` the last one
-  that did not (`{ call, ended_at, error }`). `auth` is null until saved
-  logins land.
+  that did not (`{ call, ended_at, error }`). `auth` is a PostgreSQL
+  Store's saved login, by name.
 - **`get --with live`** reads the Store where it lives, starting nothing: a
   sqlite Store's file through its machine (in this process on `native`,
   else its recorded worker), a PostgreSQL Store's server from this
@@ -1021,6 +1058,28 @@ $ layerfs store move shop native
 {"error":"InvalidInput","message":"store move, check: Store shop is already on native"}
 ```
 
+PostgreSQL, against a local `postgres:17` (macOS, native; this build's
+outputs):
+
+```console
+$ printf '%s' "$PG_PASSWORD" | layerfs store save-auth pg-app --user postgres --password-stdin --detail
+{"ok":true,"outcome":"saved","auth":"pg-app","user":"postgres","stores":[],"stores_count":0}
+$ layerfs store connect shop-pg 'postgresql://127.0.0.1:55231/shop?sslmode=disable' --auth pg-app --detail
+{"ok":true,"projects":[],"projects_count":0,"outcome":"connected","store":"shop-pg","engine":"postgresql","auth":"pg-app","connections":[{"machine":null,"url":"postgresql://127.0.0.1:55231/shop?sslmode=disable"}],"synchronous_commit":"local"}
+$ layerfs store auths
+{"items":[{"auth":"pg-app","user":"postgres","stores":["shop-pg"],"stores_count":1}]}
+$ layerfs store get shop-pg
+{"engine":"postgresql","state":"ready","auth":"pg-app","connections":[{"url":"postgresql://127.0.0.1:55231/shop?sslmode=disable"}],"projects_count":0}
+$ layerfs store connect shop-pg 'postgresql://postgres:pw@127.0.0.1:55231/shop'
+{"error":"InvalidInput","message":"the URL names a user or holds a password; give the address alone and the login with --auth (`layerfs store save-auth` saves one)"}
+$ layerfs store update shop-pg --synchronous-commit off --detail
+{"ok":true,"outcome":"updated","store":"shop-pg","auth":"pg-app","synchronous_commit":"off"}
+$ layerfs store remove-auth pg-app
+{"error":"InUse","message":"the login pg-app is used by shop-pg: `layerfs store update <store> --auth <other>` or `layerfs store disconnect <store>` first","stores":["shop-pg"]}
+$ layerfs store disconnect shop-pg --detail
+{"ok":true,"outcome":"disconnected","store":"shop-pg","machine":null}
+```
+
 See [Stores](machines-and-stores.md#stores).
 
 ### `backup` (5)
@@ -1091,6 +1150,23 @@ every check was made and nothing was found; otherwise `findings` and
   worker), and none is tried.
 - `project doctor --full` is refused `Unsupported` (not built yet). `store
   doctor --machine` is for a PostgreSQL Store; a sqlite Store refuses it.
+- A Store's checks, in this order: `store.record` (its record reads and
+  names it), `store.operation` (an operation whose owner is gone with its
+  outcome unknown is an error whose `fix` is the call that clears it),
+  `store.connection` (a sqlite Store's file is where its record says,
+  read through its machine; a PostgreSQL Store's server answers this
+  computer with the saved login), `store.identity` (the Store's id is the
+  recorded one), `store.schema` (its schema is this build's) and, for a
+  sqlite Store, `store.backups` (a notice per bucket whose backup heads
+  differ from the Store's, `fix` `layerfs backup create <store>
+  <bucket>`). That is the whole cut: no Store data is scanned. A sqlite
+  Store's id and schema are read together, so a mismatch shows as
+  `store.schema`. A PostgreSQL Store is then probed from each machine
+  that has a Sandbox of it and from `--machine` (its own address where it
+  has one, else the Store's), each as one more `store.connection` row
+  with `from`. A Store whose machine is not ready shows its
+  `store.connection` as `not_checked` with `blocked_by`, and nothing after
+  it is tried.
 - `--text` prints a count line (`N error(s), N warning(s), N notice(s), N
   not checked`, or `ok` alone), then each finding, its `from` and its `fix`,
   then each `not_checked` entry.

@@ -47,31 +47,27 @@ pub struct PgServer {
     pub synchronous_commit: Option<String>,
 }
 
-/// A machine's own connection to a PostgreSQL Store, its record's
-/// `machines.<machine>`: the URL (no password) and the password's reference
-/// that machine dials where they are not the Store's (`store.update
-/// --machine`). A machine without one dials the Store's. No `Debug`, as
-/// with every value that names a password reference.
-#[derive(Clone, Default, PartialEq)]
+/// A machine's own address of a PostgreSQL Store, its record's
+/// `machines.<machine>`: the URL (no user, no password) that machine dials
+/// in place of the Store's (`store.connect --machine`), with the Store's
+/// saved login. A machine without one dials the Store's address.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct OwnConnection {
     /// The URL the machine dials, when not the Store's.
     pub url: Option<String>,
-    /// The password's reference, when not the Store's.
-    pub password: Option<String>,
 }
 
 impl OwnConnection {
     fn from_record(value: &SdkValue) -> Self {
         Self {
             url: value.get_text("url").map(str::to_owned),
-            password: value.get_text("password").map(str::to_owned),
         }
     }
 
-    /// Whether it names neither a URL nor a password: the Store's
-    /// connection, which no record entry is kept for.
+    /// Whether it names no URL: the Store's address, which no record entry
+    /// is kept for.
     pub fn is_empty(&self) -> bool {
-        self.url.is_none() && self.password.is_none()
+        self.url.is_none()
     }
 
     /// The connection as its record holds it: only the fields it has.
@@ -79,9 +75,6 @@ impl OwnConnection {
         let mut fields = Vec::new();
         if let Some(url) = &self.url {
             fields.push(("url".to_owned(), SdkValue::text(url)));
-        }
-        if let Some(password) = &self.password {
-            fields.push(("password".to_owned(), SdkValue::text(password)));
         }
         SdkValue::Map(fields)
     }
@@ -165,6 +158,9 @@ pub struct StoreRecord {
     name: String,
     parsed: Result<StoreRef>,
     fields: SdkValue,
+    /// The home it was read from, where a PostgreSQL Store's saved login
+    /// is; none for a record a worker was sent.
+    home: Option<std::path::PathBuf>,
 }
 
 /// What a Store's record view shows beside its record.
@@ -194,12 +190,27 @@ impl StoreRecord {
             name: name.to_owned(),
             parsed: StoreRef::from_record(name, &value),
             fields: value,
+            home: None,
         }
     }
 
     /// Store `name`'s record in `home` (or a worker's root), if it has one.
     pub fn read(home: &Path, name: &str) -> Result<Option<Self>> {
-        Ok(read_record(&paths::store_record(home, name))?.map(|v| Self::from_record(name, v)))
+        let read = read_record(&paths::store_record(home, name))?;
+        Ok(read.map(|v| Self::from_record(name, v).in_home(home)))
+    }
+
+    /// This record, as one of `home`'s: its saved login is read there.
+    pub fn in_home(self, home: &Path) -> Self {
+        Self {
+            home: Some(home.to_path_buf()),
+            ..self
+        }
+    }
+
+    /// The home it was read from, if it was.
+    pub fn home(&self) -> Option<&Path> {
+        self.home.as_deref()
     }
 
     /// Store `name`'s record; a bad name is `InvalidInput`, no record
@@ -236,7 +247,10 @@ impl StoreRecord {
 
     /// The record with field `field` set to `value` (added when absent).
     pub fn with(self, field: &str, value: SdkValue) -> Self {
-        Self::from_record(&self.name, with_field(self.fields, field, value))
+        Self {
+            home: self.home,
+            ..Self::from_record(&self.name, with_field(self.fields, field, value))
+        }
     }
 
     /// Writes the record to `store/<name>/record.json` under `home`.
@@ -249,7 +263,7 @@ impl StoreRecord {
         self.fields.get(field)
     }
 
-    /// The text field `field` (a PostgreSQL Store's `url`, `password`,
+    /// The text field `field` (a PostgreSQL Store's `url`, `auth`,
     /// `synchronous_commit`).
     pub fn text(&self, field: &str) -> Option<&str> {
         self.fields.get_text(field)
@@ -279,7 +293,10 @@ impl StoreRecord {
             SdkValue::Map(fields) => fields.into_iter().filter(|(n, _)| n != field).collect(),
             _ => Vec::new(),
         };
-        Self::from_record(&self.name, SdkValue::Map(fields))
+        Self {
+            home: self.home,
+            ..Self::from_record(&self.name, SdkValue::Map(fields))
+        }
     }
 
     /// The operation the record holds (its `op`), if any.
@@ -328,9 +345,10 @@ impl StoreRecord {
             })
     }
 
-    /// The machines with their own connection to a PostgreSQL Store, in
-    /// record order. An entry that names neither a URL nor a password (a
-    /// record written while machines were attached one by one) is none.
+    /// The machines with their own address of a PostgreSQL Store, in
+    /// record order. An entry that names no URL (a record written while
+    /// machines were attached one by one, or one that named only a
+    /// password reference before saved logins) is none.
     pub fn own_connections(&self) -> Vec<(String, OwnConnection)> {
         match self.fields.get("machines") {
             Some(SdkValue::Map(machines)) => machines
@@ -479,15 +497,16 @@ impl StoreRecord {
         Self::from_record(name, fields)
     }
 
-    /// A PostgreSQL Store `store.connect` records: its URL without a
-    /// password, the schema, `synchronous_commit` and the password's
-    /// reference, if any (its binding and cursor key are added once read).
+    /// A PostgreSQL Store `store.connect` records: its URL without a user
+    /// or password, the schema, `synchronous_commit` and the name of its
+    /// saved login (`auth`), if any (its binding and cursor key are added
+    /// once read).
     pub fn connected(
         name: &str,
         url: &str,
         schema: &str,
         synchronous_commit: &str,
-        password: Option<&str>,
+        auth: Option<&str>,
     ) -> Self {
         let fields = SdkValue::map([
             ("name", SdkValue::text(name)),
@@ -498,8 +517,8 @@ impl StoreRecord {
             ("created", SdkValue::Int(home::now_ms())),
         ]);
         let record = Self::from_record(name, fields);
-        match password {
-            Some(password) => record.with("password", SdkValue::text(password)),
+        match auth {
+            Some(auth) => record.with("auth", SdkValue::text(auth)),
             None => record,
         }
     }
@@ -511,7 +530,8 @@ pub fn clearing_call(op: &Op, name: &str) -> String {
     intent::clearing(op, name)
 }
 
-/// The full URL of a PostgreSQL Store's record, its password resolved now.
+/// The full URL of a PostgreSQL Store's record, with its saved login put
+/// in now.
 pub fn url(record: &StoreRecord) -> Result<String> {
     let url = record.text("url").ok_or_else(|| {
         refused(
@@ -519,12 +539,12 @@ pub fn url(record: &StoreRecord) -> Result<String> {
             format!("PostgreSQL Store {}'s record has no url", record.name()),
         )
     })?;
-    layerfs_home::secrets::with_password(url, record.text("password"))
+    crate::postgresql::login::dial(record, url)
 }
 
-/// The full URL machine `machine` dials for PostgreSQL Store `record`, its
-/// password resolved now: its own connection's URL and password reference
-/// where it has one, else the Store's.
+/// The full URL machine `machine` dials for PostgreSQL Store `record`, with
+/// the Store's saved login put in now: its own address where it has one,
+/// else the Store's.
 pub fn url_on(record: &StoreRecord, machine: &str) -> Result<String> {
     let own = record.own_connection(machine).unwrap_or_default();
     let url = match own.url.as_deref().or(record.text("url")) {
@@ -536,8 +556,7 @@ pub fn url_on(record: &StoreRecord, machine: &str) -> Result<String> {
             ))
         }
     };
-    let password = own.password.as_deref().or(record.text("password"));
-    layerfs_home::secrets::with_password(url, password)
+    crate::postgresql::login::dial(record, url)
 }
 
 /// Every Store record, by name.

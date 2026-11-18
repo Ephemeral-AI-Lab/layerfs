@@ -169,12 +169,26 @@ fn postgresql_counts_the_same_saved_tree_definition() {
         return;
     };
     let home = folder("pg-home");
+    // the URL's user becomes a saved login (a trust-auth server takes any
+    // password); the address is connected without it
+    let (scheme, rest) = url.split_once("://").unwrap();
+    let (user, address) = rest.split_once('@').unwrap();
+    call(
+        &home,
+        "store.save_auth",
+        &[
+            ("auth", t("pg")),
+            ("user", t(user)),
+            ("password", t("unused")),
+        ],
+    );
     call(
         &home,
         "store.connect",
         &[
-            ("name", t("trees")),
-            ("url", t(&url)),
+            ("store", t("trees")),
+            ("url", t(&format!("{scheme}://{address}"))),
+            ("auth", t("pg")),
             ("synchronous_commit", t("off")),
         ],
     );

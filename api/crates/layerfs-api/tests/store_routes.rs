@@ -78,20 +78,23 @@ fn a_converted_store_with_no_machine_says_how_to_place_it() {
 }
 
 #[test]
-fn a_postgresql_store_resolves_its_password_reference_per_call() {
+fn a_postgresql_store_reads_its_saved_login_per_call() {
     let home = home_with(SdkValue::map([
         ("name", t("shop")),
         ("kind", t("postgresql")),
-        ("url", t("postgresql://lfs@127.0.0.1:1/db")),
-        ("password", t("env:LAYERFS_TEST_ROUTE_PG_UNSET")),
+        ("url", t("postgresql://127.0.0.1:1/db")),
+        ("auth", t("route-login")),
         ("schema", t("shop")),
         ("synchronous_commit", t("off")),
         ("binding", SdkValue::Bytes(vec![7; 16])),
         ("cursor", SdkValue::Bytes(vec![8; 32])),
     ]));
     let (code, message) = read(&home, "shop/api").unwrap_err();
-    assert_eq!(code, "Unavailable");
-    assert!(message.contains("LAYERFS_TEST_ROUTE_PG_UNSET"), "{message}");
+    assert_eq!(code, "NotFound");
+    assert!(
+        message.contains("no saved login named route-login"),
+        "{message}"
+    );
     std::fs::remove_dir_all(home).unwrap();
 }
 

@@ -32,7 +32,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             return Err(refused(
                 "InvalidInput",
                 format!(
-                    "--machine probes a PostgreSQL Store's connection; {store} is a sqlite Store, which only its own machine reaches (not {machine})"
+                    "--machine {machine} probes a PostgreSQL Store's connection; {store} is a sqlite Store, which only its own machine reaches"
                 ),
             ));
         }

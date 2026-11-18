@@ -315,13 +315,25 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
     let folder = source("pg-src");
     let id = home::open(&home).unwrap().id;
     home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    let (scheme, rest) = url.split_once("://").unwrap();
+    let (user, address) = rest.split_once('@').unwrap();
+    let password = std::env::var("LAYERFS_TEST_PG_PASSWORD").unwrap();
+    ok(
+        &home,
+        "store.save_auth",
+        &[
+            ("auth", t("pg")),
+            ("user", t(user)),
+            ("password", t(&password)),
+        ],
+    );
     ok(
         &home,
         "store.connect",
         &[
-            ("name", t("pg")),
-            ("url", t(&url)),
-            ("password", t("env:LAYERFS_TEST_PG_PASSWORD")),
+            ("store", t("pg")),
+            ("url", t(&format!("{scheme}://{address}"))),
+            ("auth", t("pg")),
         ],
     );
     ok(
@@ -373,9 +385,12 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
     } else {
         eprintln!("NOT_RUN (docker half): LAYERFS_TEST_IMAGE / LAYERFS_BUNDLE unset");
     }
-    // the password is resolved per call and never written
+    // the password is in the home's secret folder only
     let password = std::env::var("LAYERFS_TEST_PG_PASSWORD").unwrap();
-    for entry in walk(&home) {
+    for entry in walk(&home)
+        .into_iter()
+        .filter(|e| !e.starts_with(home.join("secret")))
+    {
         let bytes = std::fs::read(&entry).unwrap_or_default();
         assert!(
             !bytes

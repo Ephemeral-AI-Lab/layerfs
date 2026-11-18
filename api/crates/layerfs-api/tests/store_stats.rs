@@ -183,12 +183,26 @@ fn postgresql_statistics_have_null_free_and_count_publications() {
         return;
     };
     let home = folder("pg-home");
+    // the URL's user becomes a saved login (a trust-auth server takes any
+    // password); the address is connected without it
+    let (scheme, rest) = url.split_once("://").unwrap();
+    let (user, address) = rest.split_once('@').unwrap();
+    call(
+        &home,
+        "store.save_auth",
+        &[
+            ("auth", t("pg")),
+            ("user", t(user)),
+            ("password", t("unused")),
+        ],
+    );
     call(
         &home,
         "store.connect",
         &[
-            ("name", t("stats")),
-            ("url", t(&url)),
+            ("store", t("stats")),
+            ("url", t(&format!("{scheme}://{address}"))),
+            ("auth", t("pg")),
             ("synchronous_commit", t("off")),
         ],
     );
