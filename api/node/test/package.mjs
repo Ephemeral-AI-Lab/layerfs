@@ -6,7 +6,8 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { table } from "../src/index.js";
+import * as layerfs from "../src/index.js";
+import { families, table } from "../src/index.js";
 import { render } from "../../scripts/gen-node-types.mjs";
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
@@ -37,6 +38,15 @@ test("index.d.ts is exactly what the call table generates", () => {
   assert.equal(readFileSync(here("../src/index.d.ts"), "utf8"), render(table), "run node api/scripts/gen-node-types.mjs");
   assert.equal(manifest.types, "./src/index.d.ts");
   assert.equal(manifest.exports["."].types, "./src/index.d.ts");
+});
+
+test("every family is a named export, as the typings declare it", () => {
+  const types = readFileSync(here("../src/index.d.ts"), "utf8");
+  for (const family of families) {
+    assert.equal(layerfs[family], layerfs.default[family], `${family} is a named export`);
+    assert.equal(typeof layerfs[family]?.[table.find((c) => c.family === family).call], "function", family);
+    assert.ok(types.includes(`\nexport const ${family}: `), `index.d.ts declares ${family}`);
+  }
 });
 
 test("every call, argument and option of the table is in the typings", () => {

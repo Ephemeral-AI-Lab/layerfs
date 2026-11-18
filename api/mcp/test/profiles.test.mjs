@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { table } from "layerfs";
+import { table } from "@layerfs/node";
 import { ToolSchema } from "@modelcontextprotocol/sdk/types.js";
 import { bucketOf, check, tools } from "../src/profiles.js";
 import { toolsOf } from "../src/tools.js";

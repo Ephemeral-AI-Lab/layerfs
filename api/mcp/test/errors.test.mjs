@@ -2,7 +2,7 @@
 // uncertainty or volume could mislead a client.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { LayerFSError } from "layerfs";
+import { LayerFSError } from "@layerfs/node";
 import { UNCERTAIN, errorResult } from "../src/errors.js";
 import { isUncertain } from "../src/values.js";
 import { progressReporter } from "../src/progress.js";
