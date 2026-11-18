@@ -45,9 +45,11 @@ pub fn read(
     let requested_end = end;
     let end = end.min(start.saturating_add(window::LINES as u64 - 1));
     let (mut content, mut next, mut clipped) = (String::new(), None, false);
-    let mut last = None;
+    // a line past the asked end is the next line, but the read is whole
+    let (mut last, mut asked) = (None, false);
     let scanned = window::lines(&cached, &entry, REPLY_BUDGET, start, |n, line| {
         if n > requested_end {
+            (next, asked) = (Some(n), true);
             return Ok(false);
         }
         if n > end || (!content.is_empty() && content.len() + line.text.len() > REPLY_BUDGET) {
@@ -80,7 +82,10 @@ pub fn read(
             last.map_or(SdkValue::Null, |n| SdkValue::Int(n as i64)),
         ),
         ("lineTruncated", SdkValue::Bool(clipped)),
-        ("truncated", SdkValue::Bool(clipped || next.is_some())),
+        (
+            "truncated",
+            SdkValue::Bool(clipped || (next.is_some() && !asked)),
+        ),
         (
             "nextLine",
             next.map_or(SdkValue::Null, |n| SdkValue::Int(n as i64)),

@@ -66,7 +66,7 @@ export async function fixture() {
   await lfs.file.rm(project, "left", "/remove.txt", { message: "remove a path" });
   const binary = await lfs.file.write(project, "left", "/blob.bin", Buffer.from([0, 255, 1]), { message: "binary" });
   const long = await lfs.file.write(project, "left", "/long.txt", `${"x".repeat(70 * 1024)}\n`, { message: "single line exceeds a reply page" });
-  await lfs.file.write(project, "left", "/base.txt", "alpha\nkept\n", { mode: 0o600, message: "same bytes different mode" });
+  await lfs.file.write(project, "left", "/base.txt", "alpha\nkept\n", { mode: "0600", message: "same bytes different mode" });
   const head = (await lfs.branch.get(project, "left")).head;
   if (route === "worker") {
     assert.ok(process.env.LAYERFS_BUNDLE, "Set LAYERFS_BUNDLE to the matching sealed Linux worker bundle");
@@ -77,8 +77,8 @@ export async function fixture() {
   }
   return {
     route, home, folder, lfs, project, init: init.layer, head,
-    source: left.head, other: right.head, publication: published.published_layer.id,
-    foreign: otherProject.layer, binary: binary.head, long: long.head,
+    source: left.commit, other: right.commit, publication: published.published_layer.id,
+    foreign: otherProject.layer, binary: binary.commit, long: long.commit,
     async cleanup() {
       // Never conceal a failed assertion by destroying its Store. The caller
       // invokes cleanup only after all assertions pass.

@@ -241,8 +241,8 @@
       "args": {
         "project": "shop/api",
         "branch": "work",
-        "from_path": "/a",
-        "to_path": "/b"
+        "from": "/a",
+        "to": "/b"
       }
     },
     {
@@ -250,8 +250,8 @@
       "args": {
         "project": "shop/api",
         "branch": "work",
-        "from_path": "/a",
-        "to_path": "/b"
+        "from": "/a",
+        "to": "/b"
       }
     }
   ]

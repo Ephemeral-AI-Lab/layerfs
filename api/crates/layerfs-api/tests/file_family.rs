@@ -326,6 +326,13 @@ fn writes_guard_the_head_and_edit_rm_mkdir_and_apply_take_their_new_options() {
 #[test]
 fn cursors_carry_their_filters_and_the_commit_their_first_page_read() {
     let (home, folder) = project();
+    // a write makes no missing parent folders: `file.mkdir` does
+    ok(&home, "file.mkdir", &[p(), dev(), ("path", t("/src"))]);
+    ok(
+        &home,
+        "file.mkdir",
+        &[p(), dev(), ("path", t("/node_modules/x"))],
+    );
     for (path, body) in [
         ("/src/a.ts", "Login here\n"),
         ("/src/b.js", "login there\n"),

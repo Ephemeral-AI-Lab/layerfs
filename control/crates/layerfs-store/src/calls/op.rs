@@ -223,6 +223,7 @@ pub(super) fn next_fields(refusal: SdkRefusal) -> SdkRefusal {
     let carried = [
         ("HeadMoved", "head", "commit"),
         ("InvalidInput", "matches", "matches"),
+        ("AmbiguousMatch", "matches", "matches"),
         ("Conflict", "conflicts", "conflicts"),
     ];
     for (code, held, next) in carried {

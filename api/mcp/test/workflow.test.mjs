@@ -50,15 +50,16 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
       path: "/new.txt",
       content: "from mcp\n",
       message: "one file",
+      detail: true,
     });
-    assert.equal(write.kind, "Committed");
-    assert.equal(write.commit.message, "one file");
+    assert.equal(write.outcome, "committed");
+    assert.equal(write.message, "one file");
 
     const read = await run("file_read", { project: "shop/api", branch: "feat", path: "/new.txt" });
     assert.equal(read.text, "from mcp\n");
 
     const list = await run("file_list", { project: "shop/api", branch: "feat", path: "/" });
-    assert.deepEqual(list.items.map((item) => item.name).sort(), ["a.txt", "new.txt", "sub"]);
+    assert.deepEqual(list.items.map((item) => item.path).sort(), ["/a.txt", "/new.txt", "/sub"]);
 
     const commits = await run("commit_list", { project: "shop/api", branch: "feat" });
     assert.equal(commits.items.length, 1);

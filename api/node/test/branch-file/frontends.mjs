@@ -89,7 +89,7 @@ export async function parity(home, cases, scope) {
       if (step.error) assert.equal(answers[i].refused?.error, step.error, `${step.name}: ${front}`);
       else {
         assert.ok(answers[i].ok, `${step.name}: ${front}: ${encode(answers[i])}`);
-        if (["branch.commits", "branch.diff", "file.diff", "file.blame", "file.revision"].includes(step.call)) {
+        if (["branch.commits", "branch.diff", "file.blame", "file.history"].includes(step.call)) {
           assert.ok(Buffer.byteLength(encode(answers[i].ok)) <= 48 * 1024, `${step.name}: ${front} exceeds the saved-query reply budget`);
         }
         step.check?.(answers[i].ok);

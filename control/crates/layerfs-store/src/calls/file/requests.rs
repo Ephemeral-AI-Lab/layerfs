@@ -1,6 +1,7 @@
 //! The requests of the `file` family's calls, one per call: its
-//! positionals and options, snake_case, as the call table names them.
-use super::{Change, Content};
+//! positionals and options, snake_case, as the call table names them;
+//! and the values they carry.
+use layerfs_bridge::control::SdkValue;
 
 /// `file.read(project, branch, path, { at, line, limit })`.
 #[derive(Clone, Debug, Default)]
@@ -223,4 +224,31 @@ pub struct FileApply {
     pub changes: Vec<Change>,
     /// The head guard and message.
     pub guard: Guard,
+}
+
+/// One `fs.*` Store method with its engine arguments (camelCase; an absent
+/// value is not sent), as a file call built them.
+#[derive(Clone, Debug)]
+pub struct FileOp {
+    /// The engine method.
+    pub method: &'static str,
+    /// Its arguments, without the project.
+    pub args: Vec<(String, SdkValue)>,
+}
+
+/// File content: text or bytes.
+#[derive(Clone, Debug)]
+pub enum Content {
+    /// Text.
+    Text(String),
+    /// Bytes.
+    Bytes(Vec<u8>),
+}
+
+/// One change of `file.apply`: its fields as sent, in order (snake_case;
+/// any value).
+#[derive(Clone, Debug, Default)]
+pub struct Change {
+    /// Its fields.
+    pub fields: Vec<(String, SdkValue)>,
 }

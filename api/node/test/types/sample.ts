@@ -17,14 +17,12 @@ async function main(): Promise<void> {
   await lfs.branch.commits("shop/api", "agent", { page: 1, page_size: 50, at_commit: "saved-id" });
   await lfs.branch.get_commit("shop/api", "main", "layer-id");
   await lfs.branch.diff("shop/api", "main", "agent", { from_commit: "layer-id", to_commit: "saved-id", include_attribution: true, page: 1 });
-  await lfs.file.revision("shop/api", "agent", "/README.md", { at_commit: "saved-id", page: 1, page_size: 10 });
-  await lfs.file.diff("shop/api", "main", "/README.md", "agent", "/README.md", { include_attribution: true, allow_missing: true, page: 1 });
-  const options: FileReadOptions = { start_line: 2n, end_line: 5 };
-  await lfs.file.read("shop/api", "main", "/README.md", null, options);
-  await lfs.file.read("shop/api", "main", "/README.md", "commit-id", { start_line: 1 });
+  await lfs.file.history("shop/api", "agent", "/README.md", { at: "saved-id", limit: 10 });
+  const options: FileReadOptions = { line: 2n, limit: 5 };
+  await lfs.file.read("shop/api", "main", "/README.md", { at: "commit-id", line: 1 });
   // the options may follow the required positionals directly
   await lfs.file.read("shop/api", "main", "/README.md", options);
-  await lfs.file.write("shop/api", "agent", "/a.bin", Buffer.from([0, 1, 255]), { message: "bytes", mode: 0o644 });
+  await lfs.file.write("shop/api", "agent", "/a.bin", Buffer.from([0, 1, 255]), { message: "bytes", mode: "0644" });
   await lfs.file.write("shop/api", "agent", "/a.txt", "text");
   await lfs.file.apply("shop/api", "agent", [{ op: "write", path: "/a", content: new Uint8Array([0, 255]) }], { message: "m" });
   await lfs.workspace.exec("shop:dev", "ls", { stream: true, stdout: (bytes) => process.stdout.write(bytes), stderr: (bytes) => void bytes });

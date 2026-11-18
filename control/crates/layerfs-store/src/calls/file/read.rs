@@ -14,6 +14,8 @@ use std::path::Path;
 
 /// The most lines one window of `file.read` or `file.blame` may ask for.
 pub const MAX_LINES: i64 = 2000;
+/// The largest line number the Store takes: 2^53 - 1.
+const MAX_SAFE: i64 = 9_007_199_254_740_991;
 
 /// Runs the Store method `method` with `args` on `project`.
 pub(super) fn run(
@@ -67,7 +69,9 @@ fn window(call: &str, line: Option<i64>, limit: Option<i64>) -> Result<(i64, i64
             format!("{call}: `limit` is 1 to {MAX_LINES}"),
         ));
     }
-    Ok((line, line.saturating_add(limit - 1)))
+    // the last line stays a safe integer: a window that reaches past it
+    // ends where the file does anyway
+    Ok((line, line.saturating_add(limit - 1).min(MAX_SAFE).max(line)))
 }
 
 /// The items of an answer, each made by `each`.

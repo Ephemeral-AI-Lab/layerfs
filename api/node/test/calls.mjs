@@ -89,7 +89,7 @@ test("a Store, an Init with progress, files, Branches and a folder scope", async
   const progress = [];
   const made = await lfs.project.init("shop/api", folder, { on_progress: (p) => progress.push(p) });
   assert.equal(made.project, "shop/api");
-  const read = await lfs.file.read("shop/api", "main", "/README.md");
+  const read = await lfs.file.read("shop/api", "main", "/README.md", { detail: true });
   assert.equal(read.text, "hello node\n");
   assert.equal(read.start_line, 1, "results are snake_case");
   await lfs.branch.fork("shop/api", "agent.main", "main");
