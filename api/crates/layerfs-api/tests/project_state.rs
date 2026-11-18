@@ -389,6 +389,11 @@ mod with_a_store {
         assert_eq!(names, ["shop/api"]);
         let ghost = call(&home, "project.get", &[("project", t("shop/ghost"))]).unwrap_err();
         assert_eq!(ghost.code, "NotFound", "{ghost:?}");
+        // and `project delete`, the fix `project doctor` names for it,
+        // removes its entry
+        let deleted = ok(&home, "project.delete", &[("project", t("shop/ghost"))]);
+        assert_eq!(deleted, SdkValue::map([("ok", SdkValue::Bool(true))]));
+        assert!(!paths::project_dir(&home, "shop", "ghost").exists());
 
         // a delete's intent left behind on a project the Store still lists
         let intent = paths::store_dir(&home, "shop")
