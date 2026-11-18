@@ -69,8 +69,9 @@ class Doctor(unittest.TestCase):
             report = lfs.home.doctor()
             self.assertNotIn("ok", report)
             [finding] = [found for found in report["findings"] if found.get("store") == "bad"]
-            self.assertEqual((finding["check"], finding["severity"]), ("host.records", "error"))
-            self.assertIn("by hand", finding["fix"])
+            self.assertEqual((finding["check"], finding["severity"]), ("home.records", "error"))
+            self.assertIn("by hand", finding["message"])
+            self.assertNotIn("fix", finding)
         finally:
             shutil.rmtree(home)
 

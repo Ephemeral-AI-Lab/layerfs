@@ -2,34 +2,12 @@
   "about": "The check ids each doctor kind can give today (layerfs_control::doctor::kinds()) against calls.json `doctor.checks` (tests/doctor_frame.rs). `today`: ids a kind gives that the frozen list does not name, to be renamed or dropped; `missing`: frozen ids no check gives yet; `order`: true while the ids both name run in a different order. Each kind's package shrinks its entry to empty lists and false; the test fails while an entry is stale.",
   "kinds": {
     "home": {
-      "today": [
-        "host.build",
-        "host.prerequisites",
-        "host.bundle",
-        "host.native_daemon",
-        "host.capacity",
-        "host.layout",
-        "host.records",
-        "host.artifacts"
-      ],
-      "missing": [
-        "home.build",
-        "home.prerequisites",
-        "home.layout",
-        "home.records",
-        "home.bundle",
-        "home.native_daemon",
-        "home.artifacts",
-        "home.capacity"
-      ],
+      "today": [],
+      "missing": [],
       "order": false
     },
     "machine": {
-      "today": [
-        "machine.platform",
-        "machine.home",
-        "machine.provider.tool_version"
-      ],
+      "today": [],
       "missing": [],
       "order": false
     },

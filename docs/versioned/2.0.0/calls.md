@@ -1079,7 +1079,7 @@ every check was made and nothing was found; otherwise `findings` and
 `not_checked`, each present only with entries:
 
 ```json
-{"findings":[{"store":"bad","check":"host.records","severity":"error","message":"…","fix":"…"}],
+{"findings":[{"store":"bad","check":"home.records","severity":"error","message":"…"}],
  "not_checked":[{"sandbox":"sb","blocked_by":{"machine":"docker","reason":"stopped"}}]}
 ```
 
@@ -1100,7 +1100,7 @@ every check was made and nothing was found; otherwise `findings` and
   or could not be checked.
 - The doctor checks its own thing, then each thing on it. A thing whose
   parent is stopped or failed is `not_checked` with `blocked_by`, and none
-  of its checks is tried; a stopped machine is checked by its records only.
+  of its checks is tried; a stopped machine gets no worker checks.
   Each thing has its own time budget; a check still running when it ends is
   `not_checked` with `timeout`.
 - `--progress` (`on_progress`) sends one event per finished thing:

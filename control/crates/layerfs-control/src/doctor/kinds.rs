@@ -1,18 +1,19 @@
 //! The real kinds of the doctor frame: each kind's list of the check ids
-//! its checks give today, in the order they run, and the function that runs
-//! today's checks of one thing into its node. Ids not renamed to the frozen
-//! lists yet keep today's names (`host.*`, `backup.*`, …); the per-kind
-//! packages rename them, and a test compares every list with the frozen
-//! one through a pending list.
+//! its checks give, in the order they run, and the function that runs the
+//! checks of one thing into its node. The home's and a machine's lists are
+//! the frozen ones (`calls.json` `doctor.checks`); ids of kinds not renamed
+//! yet keep today's names (`backup.*`, …); the per-kind packages rename
+//! them, and a test compares every list with the frozen one through a
+//! pending list.
 //!
 //! Where things are comes from the home's records (`home_tree`): what is on
-//! a thing and its recorded state. A machine whose records say it is
-//! stopped gets only its records checks, and blocks what is on it; a
-//! machine whose provider or worker fails its check blocks what is on it
-//! with that reason.
+//! a thing and its recorded state. A machine blocks what is on it with what
+//! its own checks found (stopped, `engine_down`, `missing`, `failed`,
+//! `not_answering`, `outdated`, `busy`, `unresolved`, `unsupported`), else
+//! with what its records say when its checks gave no verdict.
 use super::frame::{CheckId, KindDoctor, Located, Probe, Registry};
 use super::report::{Kind, Node, Thing};
-use super::target::{Budget, Checks};
+use super::target::Checks;
 use crate::home_tree;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
@@ -34,47 +35,30 @@ const fn full(id: &'static str) -> CheckId {
     CheckId::full(id)
 }
 
-/// The home's checks, today's `host` target.
+/// The home's checks.
 const HOME: &[CheckId] = &[
-    own("host.build"),
-    own("host.prerequisites"),
-    own("host.bundle"),
-    own("host.native_daemon"),
-    own("host.capacity"),
-    own("host.layout"),
-    own("host.records"),
-    own("host.artifacts"),
+    own("home.build"),
+    own("home.prerequisites"),
+    own("home.layout"),
+    own("home.records"),
+    own("home.bundle"),
+    own("home.native_daemon"),
+    own("home.artifacts"),
+    own("home.capacity"),
 ];
 
 /// A machine's checks.
 const MACHINE: &[CheckId] = &[
     own("machine.record"),
-    own("machine.platform"),
     own("machine.operation"),
-    own("machine.home"),
     own("machine.configuration"),
     own("machine.provider"),
-    own("machine.provider.tool_version"),
     own("machine.state"),
     own("machine.worker.endpoint"),
     own("machine.worker.auth"),
     own("machine.worker.compatibility"),
     own("machine.worker.ping"),
     own("machine.capacity"),
-];
-
-/// The checks that need a machine running: none is made on a machine its
-/// records say is stopped.
-const MACHINE_LIVE: &[&str] = &[
-    "machine.provider",
-    "machine.provider.tool_version",
-    "machine.state",
-    "machine.worker",
-    "machine.worker.endpoint",
-    "machine.worker.auth",
-    "machine.worker.compatibility",
-    "machine.worker.ping",
-    "machine.capacity",
 ];
 
 /// A Store's checks, without today's whole-Store data scan: its record
@@ -216,57 +200,22 @@ fn home(probe: &Probe<'_>, node: &mut Node) {
 fn machine(probe: &Probe<'_>, node: &mut Node) {
     let name = probe.thing.name.as_str();
     let mut checks = Checks::new("machine", name);
-    if *probe.state == State::Stopped {
-        // its records checks alone: the target stops before its first live
-        // probe once its budget is spent, and what needs it running does
-        // not apply
-        let spent = Budget::new(Some(Duration::ZERO));
-        super::machine_target::diagnose(probe.home, name, &spent, &mut checks);
-        checks.forget(MACHINE_LIVE);
-    } else {
-        super::machine_target::diagnose(probe.home, name, probe.budget, &mut checks);
-    }
+    let found = super::machine_target::diagnose(probe.home, name, probe.budget, &mut checks);
     checks.fill(node, probe.checks, probe.budget.expired());
-    if node.gate.is_none() {
-        node.gate = blocker(probe.state, "machine", name).or_else(|| failed(&checks, name));
-    }
-}
-
-/// What a machine's failed live check blocks on it: a provider that does
-/// not run it, a worker from another build, or one that does not answer.
-fn failed(checks: &Checks, name: &str) -> Option<BlockedBy> {
-    let reason = match checks.outcome("machine.provider") {
-        Some(("fail", Some("warning"))) => Some("stopped"),
-        Some(("fail", _)) => Some(match checks.evidence_of("machine.provider") {
-            Some(evidence) if evidence.get_text("state") == Some("missing") => "missing",
-            Some(evidence) if evidence.get_text("state") == Some("failed") => "failed",
-            _ => "not_answering",
+    // what its own checks found blocks what is on it (a machine they found
+    // ready blocks nothing); when they gave no verdict, its records say
+    let gate = match found {
+        Ok(()) => None,
+        Err(Some(reason)) => Some(BlockedBy {
+            thing: "machine",
+            handle: name.to_owned(),
+            reason,
         }),
-        Some(("unknown", _)) => Some("not_answering"),
-        _ => None,
+        Err(None) => blocker(probe.state, "machine", name),
     };
-    let worker = |id: &str| matches!(checks.outcome(id), Some(("fail" | "unknown", _)));
-    let reason = reason.or_else(|| {
-        if worker("machine.worker.compatibility") {
-            Some("outdated")
-        } else if [
-            "machine.worker.endpoint",
-            "machine.worker.auth",
-            "machine.worker.ping",
-        ]
-        .iter()
-        .any(|id| worker(id))
-        {
-            Some("not_answering")
-        } else {
-            None
-        }
-    })?;
-    Some(BlockedBy {
-        thing: "machine",
-        handle: name.to_owned(),
-        reason,
-    })
+    if node.gate.is_none() {
+        node.gate = gate;
+    }
 }
 
 fn store(probe: &Probe<'_>, node: &mut Node) {
