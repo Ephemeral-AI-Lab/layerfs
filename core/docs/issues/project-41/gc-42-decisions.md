@@ -461,8 +461,9 @@ measured implementation of this branch.
 
 ### D6. S5/§2/§3/§6.4: the SQLite rebuild writes partly dead packs again, and the 10% counts their dead records
 
-- **Status:** prototype on branch `claude/gc-opt-repack` (2026-11-18), not a
-  frozen-text change. It needs an owner decision before it is contract.
+- **Status:** built on branch `claude/gc-opt-repack` (2026-11-18), now on the combined
+  branch `claude/gc-real-lead`; accepted by the owner the same day (see
+  Decision below). The frozen text is not amended; this entry is the record.
 - **Frozen:** S5 "The unit that frees bytes is the pack"; §2 lists
   "repacking partly dead packs (reported, not performed)" as out of the
   release; §3 takes the numerator of the 10% test over wholly dead packs only;
@@ -569,8 +570,9 @@ measured implementation of this branch.
 
 ### D7. §6.4 (#42 item 37): the SQLite rebuild copies only the inode value blocks a kept leaf reads
 
-- **Status:** prototype on branch `claude/gc-real-storage` (2026-11-18), not a
-  frozen-text change. It needs an owner decision before it is contract.
+- **Status:** built on branch `claude/gc-real-storage` (2026-11-18), now on the combined
+  branch `claude/gc-real-lead`; accepted by the owner the same day (see
+  Decision below). The frozen text is not amended; this entry is the record.
 - **Frozen:** §6.4 "Kept in 2.0: every `inode_value_block` row; the ordinals
   of pooled leaves are private to core, and the blocks are small"; §7 step 4
   copies all `inode_value_block` rows.
