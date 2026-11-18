@@ -291,42 +291,116 @@ The final JSON result contains `project`, `store`, `name`, `kind`, `machine`,
 writing and `total: null`; `finalize` is the last event and comes only once the
 folder is in place. Events arrive at most every 200 ms.
 
-### `branch` (9)
+### `branch` (6)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `list` | `project` | `page_size`, `page_pos` | a project's Branches |
+| `list` | `project` | `prefix`, `exclude_prefix`, `limit`, `cursor` | a project's Branches, `main` included, in name order |
 | `get` | `project`, `branch` | — | one Branch and its head Commit |
-| `commits` | `project`, `branch` | `page`, `page_size`, `at_commit`, `include_storage` | a Branch's Commits, newest first |
-| `get_commit` | `project`, `branch`, `commit` | — | one saved Commit or `main` publication |
-| `fork` | `project`, `name`, `from_branch`, `[from_commit]` | — | a new Branch from another Branch's head or Commit |
-| `merge` | `project`, `name`, `a`, `b` | `message`, `units` (JSON) | merges two Branches into a new one |
-| `publish` | `project`, `branch`, `[commit]` | `expected_base`, `expected_head`, `force` | a Branch's head or Commit as `main`'s next Layer, refusing a stale base |
-| `diff` | `project`, `from_branch`, `to_branch` | `paths_only`, `page_size`, `page_pos`, `cursor` | files that differ between two Branches' heads |
-| `remove` | `project`, `branch` | — | soft-removes one Branch; its name stays taken until compaction |
+| `fork` | `project`, `name`, `[from]` | `at` | a new Branch from another Branch's head, or from a Commit |
+| `merge` | `project`, `branch`, `from` | `into`, `units` (JSON), `expected`, `message` (`-m`) | merges one Branch into another, or into a new Branch |
+| `publish` | `project`, `branch` | `at`, `expected`, `force` | a Branch's head or Commit as `main`'s next head, refusing a stale base |
+| `remove` | `project`, `branch` | — | removes one Branch; its name stays taken until compaction |
 
-Run: `fork` answers `{kind: "Forked", branch, base, head}`; `publish`
-answers `{kind: "Added", source, published_layer, based_on, overwrote_count,
-overwrote, overwrote_has_more}`; `merge` answers `{kind: "Merged",
-fast_forward, branch, head, root, sources, merge_base, conflicts, lww,
-units, …}`. `publish` is refused `HeadMoved` when `main` gained a Layer since
-the Branch forked (merge with `main` into a new Branch and publish that), or
-when `main` or the Branch head is not the `expected_base` or `expected_head`
-given; `force` overwrites instead. A Commit already published answers
-`UpToDate`, and a tree `main` already holds answers `NoChanges`.
+Where a call takes a Commit (`--at`, `--expected`, `commit get`, a
+`commit diff` side), it is a full id (66 hex characters) or a prefix of 8 or
+more, resolved by the Store in one call. A prefix more than one Commit
+starts with is refused `InvalidInput`, its detail's `matches` saying how
+many; one no Commit starts with is `NotFound`. Where a call takes a ref or
+`from`, a Branch of that name comes first, then a Commit. On `main` a
+publication answers as a Commit. Every id in an answer is the full id.
+
+- **`list`** pages by name. A row's short form is `{ branch, commit }`
+  (`commit`: the head Commit, or the publication a Branch with no Commit of
+  its own stands on); its long form adds `forked_from`, `id`, `base` and
+  `root`. `--prefix` keeps only the names that start with it,
+  `--exclude-prefix` leaves those out (such as `dsh.`), and the page does
+  not walk the names it leaves out. `limit` is 1 to 1000, 100 by default.
+  The `next_cursor` carries the filters only; a page always lists the
+  Branches there are now. `get` answers one row, by its name.
+- **`fork`** forks from the head of `from` (`main` when it is left off),
+  or with `--at` from one Commit of `from`'s history (`NotFound` when it is
+  not in it). Short: `{ commit }`, the Commit the new Branch stands on;
+  long: `commit, outcome ("forked"), branch, base, root`.
+- **`merge`** merges `from` into `branch`: a fast-forward when `branch`
+  holds nothing `from` lacks, else one merge Commit on `branch`, its first
+  parent `branch`'s head. When `branch` already holds `from` nothing changes
+  and the answer says `unchanged`. `--into NEW` writes the result to a new
+  Branch and leaves `branch` as it is (1.1.0's form). `--expected C`
+  refuses `Conflict` unless `branch`'s head is `C`, its detail's `commit`
+  being the head it is at. `main` takes changes only by `publish`; merging
+  into it without `--into` is `InvalidInput`. A conflict changes nothing and
+  is `Conflict` with the conflicts in its detail. Short: `{ commit }`, with
+  `unchanged`, `fast_forward`, `overwritten` (the paths one side's later
+  write took) and `overwritten_count` when they are set; long:
+  `commit, unchanged, fast_forward, overwritten, overwritten_count, outcome
+  ("merged", "fast_forward" or "unchanged"), branch, parent, second_parent,
+  merge_base, root, units, units_count`.
+- **`publish`** publishes the Branch's head, or with `--at` one Commit of
+  its history (a Commit `main` already holds answers `unchanged`).
+  `--expected C` refuses `Conflict` unless `main`'s head is `C`; without it
+  the call is refused `Conflict` when `main` gained a publication since the
+  Branch forked (merge `main` in and publish again), and `--force` publishes
+  over it. Either refusal's detail names `main`'s head as `commit`. Short:
+  `{ commit }` (the new publication), with `unchanged` and `previous`
+  (`main`'s head before, when it was not the Branch's base); long:
+  `commit, unchanged, previous, outcome ("published" or "unchanged"), branch,
+  source_commit, base, root, size`.
+- **`remove`** short: `{"ok":true}`; long: `{ ok, outcome: "removed",
+  branch, removed_at }`.
+- `branch.commits`, `branch.get_commit` and `branch.diff` are gone, with no
+  alias: they are `commit.list`, `commit.get` and `commit.diff`. `fork`'s
+  `from_branch` and `from_commit` became `from` and `--at`; `merge`'s
+  `name`, `a` and `b` became `branch`, `from` and `--into`; `publish`'s
+  `commit`, `expected_base` and `expected_head` became `--at` and
+  `--expected` (the Branch's head is no longer checked); `list`'s
+  `page_size` and `page_pos` became `limit` and `cursor`.
 
 ### `commit` (3)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `list` | `project`, `branch` | `page_size`, `page_pos` | a Branch's Commits, newest first |
-| `get` | `project`, `branch`, `commit` | — | one Commit of a Branch |
-| `diff` | `project`, `from_commit`, `to_commit` | `paths_only`, `page_size`, `page_pos`, `cursor` | files that differ between two Commits |
+| `list` | `project`, `branch` | `at`, `limit`, `cursor` | a Branch's Commits, newest first; on `main`, its publications |
+| `get` | `project`, `commit` | `branch` | one Commit, by its id or a prefix of 8 or more characters |
+| `diff` | `project`, `ref` | `from`, `path`, `--with patch`, `limit`, `cursor` | the paths that differ between two Commits or Branches |
 
-A Commit record has `id`, `branch`, `parent`, `second_parent`, `base`,
-`root`, `via`, `message`, `merged_from`, `time`, `logical`,
-`new_canonical`, `new_stored`, `new_metadata`, `displaced`, `lww` and
-`lww_truncated`. `commit.get` accepts an id prefix of 8 or more characters.
+- **`list`** starts at the Branch's head, or at `--at` (`NotFound` when it
+  is not in the Branch's history). A row's short form is `{ commit }`, with
+  `message`, `message_truncated` (the message is cut at 128 characters in a
+  list; `get` answers it whole) and `source_branch` (a publication's Branch)
+  when they are set. The long form adds `branch, parent, second_parent,
+  base, root, via, created_at, merged_from, source_commit, size,
+  new_canonical_bytes, new_stored_bytes, new_metadata_bytes`. `via` is how
+  the Commit was made: `workspace`, `file` or `merge`, and on `main`
+  `publish` or `init`. `limit` is 1 to 1000, 100 by default; a page also
+  ends early at 64 KiB of rows. The `next_cursor` carries the Commit the
+  first page started at, so a later page lists the same history while the
+  Branch moves on, and is `NotFound` once that Commit is gone.
+- **`get`** reads one Commit of the project, in one Store call, without
+  naming its Branch; `--branch B` refuses `NotFound` unless the Commit is in
+  `B`'s history. Short: `{ branch, parent, message }`, each when it is set.
+  The long form has the list row's keys (no `message_truncated`) and
+  `displaced`, `overwritten` (the paths a merge took from the side with the
+  later write, cut at 4 KiB), `overwritten_count` and `units`.
+- **`diff`** compares `from` to `ref`. Without `--from` the side compared
+  from is a Branch's fork point, a Commit's parent, the base of a Branch's
+  first Commit, and for `main`'s first publication the empty tree (every
+  path `added`). `--path P` keeps only `P` and what is under it. A row's
+  short form is `{ path, change }` (`added`, `removed`, `modified`, …);
+  its long form adds `type`, `content`, `metadata` and `identity` (which of
+  them differ). `--with patch` adds each changed text file's lines as
+  `hunks` and `hunks_omitted`. The answer's long form adds `from`, `to`,
+  `from_root` and `to_root` (`from` and `from_root` null for the empty
+  tree). The `next_cursor` carries both Commits the first page compared and
+  the filters, so a later page compares the same two Commits; a cursor given
+  with other filters, or to another call, is `InvalidInput`.
+- `commit.list` absorbs `branch.commits` (`page`, `page_size`,
+  `at_commit` and `include_storage` became `--at`, `limit` and `cursor`; the
+  storage figures are always in the long form), `commit.get` absorbs
+  `branch.get_commit` and no longer takes a Branch positional, and
+  `commit.diff` absorbs `branch.diff` (`from_branch`, `to_branch`,
+  `paths_only`, `page_size` and `page_pos` became `ref`, `--from`, `--with
+  patch`, `limit` and `cursor`).
 
 ### `file` (15)
 
@@ -610,8 +684,9 @@ handle is gone: `<sandbox>:/path` is refused `InvalidInput`.
   first 20) and `overwritten_count` past those; long: `outcome`, `branch`,
   `parent`, `root`, `message`, `created_at`, `merged_from`, `displaced`.
   `--expected C` refuses `Conflict` unless the Branch's head is `C`, a
-  full 66-hex Commit id in this build (a prefix is `InvalidInput`); the
-  check is one read before the Commit. A conflict is `Conflict` with
+  Commit id or a prefix of 8 or more of its characters resolved as
+  `commit get` resolves it (a prefix several Commits start with is
+  `InvalidInput` with `matches`); the check is one read before the Commit. A conflict is `Conflict` with
   `commit` (the head), `conflicts` (first 20 paths) and `conflicts_count`.
 - `unmount` answers `{"ok":true}`; long: `outcome` (`unmounted` or
   `force_unmounted`) and a forced unmount's `abort`, `detach`, `cleanup`.
@@ -636,7 +711,7 @@ handle is gone: `<sandbox>:/path` is refused `InvalidInput`.
 
 The family is migrated: each call answers its short form, `--detail` its
 long form (see [the form of an answer](#the-form-of-an-answer)).
-`machine.doctor` is the doctor's (not yet migrated). Removed with no alias:
+`machine.doctor` is one of [the doctors](#the-doctors). Removed with no alias:
 `machine.status` (now `get`, with `--with live` for the probe),
 `machine.space` (now `stats --with space`), `machine.load` (now
 `load_image`), `logs.machine` (now `log`) and `machine.platforms` (its rows
@@ -776,54 +851,126 @@ See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals, and
 [removed platforms](machines-and-stores.md#removed-platforms-firecracker-microsandbox-and-ssh).
 
-### `store` (12)
+### `store` (9)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `list` | — | — | every Store, from the home's records, each with its `state` |
-| `get` | `name` | — | a Store's record |
-| `status` | `name` | `machine` | a Store's live state; with `machine`, whether that machine reaches a PostgreSQL Store (`check`) |
-| `stats` | `name` | — | Store-wide publication and allocation counters |
-| `create` | `name` | — | an empty sqlite Store on `native` |
+| `list` | — | `machine`, `--with stats` | every Store, from the home's records |
+| `get` | `store` | `--with live,stats` | a Store's record and state; with `--with`, read where it lives or opened for its counters |
+| `create` | `name` | `machine` | an empty sqlite Store, on this computer or made on `machine` directly |
 | `connect` | `name`, `url` | `password`, `synchronous_commit` | connects a PostgreSQL database as a Store; its Sandboxes run on every machine that supports them |
 | `update` | `name` | `machine`, `url`, `password`, `synchronous_commit`, `clear` | changes a PostgreSQL Store's connection; with `machine`, gives that machine a connection of its own (checked from it first), or removes it with `clear` |
-| `push` | `name`, `machine` | `on_progress` | sends a sqlite Store from `native` to a machine |
-| `pull` | `name` | `on_progress` | brings a sqlite Store from its machine to `native` |
-| `remove` | `name` | — | deletes a sqlite Store with every project in it |
-| `compact` | `name` | — | reclaims the dead bytes of one Store: the `none` path marks only, the `rebuild` path installs a new generation |
+| `move` | `store`, `machine` | `on_progress` | moves a sqlite Store between this computer and a machine |
+| `remove` | `store` | — | deletes a sqlite Store with every project in it |
+| `compact` | `store` | `on_progress` | reclaims the dead bytes of one Store |
 | `disconnect` | `name` | — | forgets a PostgreSQL Store; its data stays |
 
-Run:
+`list`, `get`, `create`, `move`, `remove` and `compact` are migrated;
+`connect`, `update` and `disconnect` are not yet. `store.status` and
+`store.stats` are gone into `store get` (`--with live`, `--with stats`),
+and `store.push` and `store.pull` into `store move`, with no alias.
+
+- **A Store's state** comes from its records only, with no probe: `busy`
+  while an operation it records (`op: { name, phase, started_at }`: a
+  move, a remove, a create on a machine, a compaction, a backup or a
+  restore) has a live owner; `broken` `unresolved` once a gone owner left
+  that operation's outcome unknown, with `fix` naming the call that clears
+  it (`store move` again for a move, `store remove` for a remove,
+  `store compact` for a compaction, `store get <store> --with live` for a
+  backup or a restore); `blocked` when its machine is not ready, with
+  `blocked_by: { machine, reason }`; `broken` with the reason the last live
+  read found (`missing`, `unreachable`, `unresolved`) or `unsupported` for
+  a record kind this build does not read; else `ready`. A move or remove
+  holds the Store exclusively; a compaction, backup or restore does not
+  refuse reads.
+- **`get`**, short: `{ engine, state }`, with `machine`, `projects`,
+  `projects_count`, `backups` (each `{ bucket }`), `connections` and the
+  state's companion when they say something. Long: `engine, state,
+  machine, auth, connections, projects, projects_count, backups, op,
+  blocked_by, reason, fix, observed_at, store, profile, synchronous_commit,
+  sqlite_version, created_at, last_transfer`. A sqlite Store answers
+  `machine`, `profile` and `sqlite_version`; a PostgreSQL Store
+  `connections` (the Store's own address, with no `machine`, then each
+  machine's own; never a password) and `synchronous_commit`; the other
+  engine's keys are null. `projects` shows at most 20 names;
+  `projects_count` counts them all. A `backups` row's long form is
+  `bucket, file, sha256, heads_sha256, last, attempt`: `last` the last
+  transfer that worked (`{ call, ended_at, size }`), `attempt` the last one
+  that did not (`{ call, ended_at, error }`). `auth` is null until saved
+  logins land.
+- **`get --with live`** reads the Store where it lives, starting nothing: a
+  sqlite Store's file through its machine (in this process on `native`,
+  else its recorded worker), a PostgreSQL Store's server from this
+  computer. The read gives `state` and `observed_at`: `broken` `missing`
+  when no file is where the record says, `broken` `unreachable` when the
+  server does not answer, `busy` or `broken` `unresolved` from a
+  compaction's own record, `unknown` (with when LayerFS last knew) when the
+  machine or worker does not answer. The record is written only when what
+  the read found wrong changed (which moves the home's `generation`);
+  `observed_at` goes to `store/<store>/observed.json`, which does not. A
+  backup or restore whose owner is gone with its outcome unknown is settled
+  here: the read drops the `op` and writes what was tried to the bucket
+  row's `attempt`. The `live` section: `holders` (pids of other live
+  processes holding the Store), `phases` (a running compaction's phases,
+  else null), `behind` (the buckets whose backup heads differ from the
+  Store's; null for PostgreSQL or when the heads could not be read),
+  `server_version` and `latency_ms` (PostgreSQL only).
+- **`get --with stats`** opens the Store, as a Store call does (refused
+  while a move or remove holds it): `size` (the file with its write-ahead
+  log, or the PostgreSQL schema), `logical_bytes`, `canonical_bytes`,
+  `stored_bytes`, `metadata_bytes`, `file_bytes`, `reusable_bytes` (null
+  for PostgreSQL), `dedupe` and `compression` (ratios as text, six
+  decimals) and `init` (the first project init's
+  `{ entries, files, size, canonical_bytes, stored_bytes, metadata_bytes,
+  duration_ms }`, or null).
+- **`list`** answers `{ items }`, each item as `get` answers it with
+  `store` first: short `{ store, engine }` plus what says something.
+  `--machine M` keeps the sqlite Stores on `M`. `--with stats` adds each
+  item's `size` from one stat on its machine, starting nothing; null for a
+  PostgreSQL Store and for a machine that does not answer.
+- **`create`**, short `{"ok":true}`; long `ok, outcome: "created", store,
+  engine, machine, profile, sqlite_version, created_at`. `--machine M`
+  makes the Store on `M` directly through its worker (a running machine),
+  recording a `create` operation while it runs.
+- **`move`** goes to or from this computer only: a Store on a machine moves
+  to another machine by `store move <store> native` first (refused
+  `InvalidInput` naming that call). Its progress phases are `check,
+  snapshot, send, verify, install, record, retire`. Short
+  `{ moved_bytes }`; long `moved_bytes, outcome: "moved", store, from, to,
+  heads_sha256`. A move whose owner is gone is cleared by the same move or
+  by `store remove`.
+- **`remove`** deletes a sqlite Store (refused for a PostgreSQL Store:
+  `store disconnect` forgets one). Short `{"ok":true}`; long
+  `ok, outcome: "removed", store`.
+- **`compact`**, short `{ freed_bytes }`; long `freed_bytes, outcome
+  (compacted or unchanged), store, generation_before, generation_after,
+  dead_bytes, discarded_bytes, reusable_bytes, kept_waste,
+  delta_base_references (at most 20), delta_base_references_count,
+  peak_temp_bytes, residue_bytes, residue_artifacts, residue_reason,
+  estimate, zero_reasons`. It records a `compact` operation in the Store's
+  record while it runs; one left unresolved is cleared by the next
+  `store compact`.
+
+Run (macOS, native; the outputs are this build's):
 
 ```console
-$ layerfs store get shop --text
-name  shop
-kind  sqlite
-machine  native
-profile  disposable
-created  1793574130507
-sqlite  3.53.2
-
-PROJECTS  (none)
-
-$ layerfs store status shop
-{"name":"shop","kind":"sqlite","state":"idle","holders":[],"op":null,"machine":"native","file":{"exists":true,"bytes":212992,"wal_bytes":271952}}
+$ layerfs store create shop
+{"ok":true}
+$ layerfs store list
+{"items":[{"store":"shop","engine":"sqlite","machine":"native","projects_count":0}]}
+$ layerfs store get shop
+{"engine":"sqlite","state":"ready","machine":"native","projects_count":0}
+$ layerfs store get shop --with live --detail
+{"engine":"sqlite","state":"ready","machine":"native","auth":null,"connections":null,"projects":[],"projects_count":0,"backups":[],"op":null,"blocked_by":null,"reason":null,"fix":null,"observed_at":"2026-11-18T15:35:10Z","store":"shop","profile":"disposable","synchronous_commit":null,"sqlite_version":"3.53.2","created_at":"2026-11-18T15:35:10Z","last_transfer":null,"live":{"holders":[],"phases":null,"behind":[],"server_version":null,"latency_ms":null}}
+$ layerfs store list --with stats
+{"items":[{"store":"shop","engine":"sqlite","machine":"native","projects_count":0,"observed_at":"2026-11-18T15:35:10Z","size":270336}]}
+$ layerfs store compact shop
+{"freed_bytes":0}
+$ layerfs store move shop native
+{"error":"InvalidInput","message":"store move, check: Store shop is already on native"}
 ```
 
-`state` is `idle`, `in_use`, `busy`, `down` or `unresolved`; `op` is the
-move or remove running on the Store, `{id, name, phase, started,
-uncertain}`, or `null`. `store status` starts no
-machine: a Store whose machine is stopped, or whose recorded worker does
-not answer, is `down`, with `down_reason` and `file.unavailable` (O34).
-`store status`, `store list` and `store get` change nothing: they take no
-lock, and `holders` leaves out a stale lease without removing it. See
-[Stores](machines-and-stores.md#stores).
-
-Each `store list` item is the Store's record (as `store get` shows it) with
-the same `state` last, derived as `store status` derives it (#536 §10b):
-it starts no machine, dials a machine's recorded worker once for all its
-Stores, and is `down` for a Store whose kind or machine its record does
-not tell. Not run for this manual (from source and tests).
+See [Stores](machines-and-stores.md#stores).
 
 ### `backup` (5)
 
@@ -922,64 +1069,67 @@ layerfs sandbox files s1 "$HOME_PATH/notes.txt" --offset 0 --length 4096
   `Unavailable`. The MCP server does not list it. Run for this manual on a
   scratch home: the three commands above.
 
-## `layerfs doctor`
+## The doctors
 
-A top-level command beside `import-env`, outside the call table (#536 H7);
-Node and Python have it as `layerfs.doctor()` ([SDK](sdk.md)). It reports
-what is wrong in the home and changes nothing: it takes no lock, writes no
-record, removes no stale lease and starts no machine.
+Six table calls check one thing each and change nothing: they take no
+lock, write no record, remove no stale lease and start no machine.
 
 ```bash
-layerfs doctor            # {"ok":false,"findings":[{"severity":"error","entity":{"kind":"store","name":"app"},"message":"…","fix":"…"}]}
-layerfs doctor --text     # a count line, then each finding and its fix
+layerfs home doctor                 # the home, then each machine, PostgreSQL Store and bucket, shallowly
+layerfs machine doctor <machine>    # the machine, then each Store and Sandbox on it
+layerfs store doctor <store> [--machine <machine>]   # the Store, then each of its projects
+layerfs project doctor <project>    # the project's record against its Store's own list
+layerfs sandbox doctor <sandbox>    # the Sandbox: record, runtime, daemon
+layerfs backup doctor <bucket> [--full]               # the bucket's record and reach; --full writes and reads one object
 ```
 
-- `ok` is false when any finding is an `error`; a `warning` is left over or
-  out of date and refuses nothing. Each finding's `fix` names the call (or
-  the by-hand step, where no call can) that fixes it.
-- It checks: records that do not parse, or whose `"v"` is not 1; folder
-  modes other than 0700 (0701 where a namespaces Sandbox passes through, but
-  never a Store's own folder, which stays 0700) and
-  record modes other than 0600; broken references (a Sandbox whose Store,
-  project or machine is gone, a Store on a machine with no record, a project
-  in a Store folder with no record, a built-in machine whose recorded daemon is not there, an error
-  naming `machine update <name> --daemon <path>`); an `op` a gone process left uncertain (an error naming the call
-  that clears it) or certain (a warning); stale Store leases (a warning: the
-  Store's next call removes them); what refuses
-  a layout 2 home's conversion; a partial `store.sqlite.incoming` on
-  `native`; a copy a push or pull did not retire (its record's
-  `last_transfer` says `retired: false`; a warning naming the next `store
-  pull` or `store push`, which deletes it first); command records in this
-  home (a stale one, whose owner is gone, is a warning naming `workspace
-  exec-cancel`, the unmount or the close that ends it; one that does not
-  read is an error; a Workspace folder with no Workspace record beside it is
-  a warning); and each running machine's worker build (its hello alone, no
-  request; another build is a warning naming `machine stop` then `machine
-  start`, a worker that does not answer one naming `machine start`).
-- Not checked: partial copies and leftover layout 2 folders on other
-  machines (no worker operation reports them).
-- It also lists what interrupted operations left on disk, on `native` and
-  on each running machine (one bounded walk each: 20,000 entries or 2 s; a
-  stopped machine is not asked). Each is a warning on its machine whose
-  finding also holds `leftover: { machine, kind, path, bytes, age, id,
-  fixable }` (`age` in seconds since it last changed; `bytes` null when the
-  walk's bound ended first), and the report's `leftovers` has one row per
-  machine walked: `{ machine, complete, image_locks, unmount_markers }`. The
-  kinds: `run-folder` (a Sandbox run folder no Sandbox record names),
-  `empty-root` (an empty `<name>.root` whose run folder is gone),
-  `init-copy` (a `project init` folder copy, `incoming/init-*`),
-  `backup-staging` (`backup.staging`, `store.sqlite.backup`), `image-tmp`
-  and `image-part` (an interrupted image unpack or load). Image lock files
-  and unmount markers are only counted: LayerFS keeps them.
-- Exit 0 once the report is made, whatever it finds; 2 for any argument
-  but `--text`; 125 when the home cannot be named (`LAYERFS_HOME` not
-  absolute).
+Each answers the same report. The short form is `{"ok":true}` alone when
+every check was made and nothing was found; otherwise `findings` and
+`not_checked`, each present only with entries:
+
+```json
+{"findings":[{"store":"bad","check":"host.records","severity":"error","message":"…","fix":"…"}],
+ "not_checked":[{"sandbox":"sb","blocked_by":{"machine":"docker","reason":"stopped"}}]}
+```
+
+- A finding names its thing by its own word (`home`, `machine`, `store`,
+  `project`, `sandbox`, `workspace`, `bucket`), then `check`, `severity`
+  (`error`, `warning` or `notice`) and `message`; `fix` (one command) and
+  `from` (the machine a check was made from) when there is one.
+- A `not_checked` entry names a thing, or one of its checks, that gave no
+  verdict: `blocked_by` (the thing at the root of the block and its state,
+  as in the lists) or `reason` (`timeout`, `busy`, `lost`), never both.
+- The long form (`--detail`) adds `status` (the worst of `error`, `warning`,
+  `not_checked`, `notice`, `ok`), `counts` (things per status),
+  `observed_at` and `tree`: the doctor's own thing with `status`,
+  `coverage` (`none`, `shallow` or `full`), its `checks` (`{ check,
+  outcome, from }`, outcome `pass`, `notice`, `warning`, `error` or
+  `not_checked`), `blocked_by`, `reason` and one list per kind of thing on
+  it, each checked shallowly. Its `ok` is false whenever anything was found
+  or could not be checked.
+- The doctor checks its own thing, then each thing on it. A thing whose
+  parent is stopped or failed is `not_checked` with `blocked_by`, and none
+  of its checks is tried; a stopped machine is checked by its records only.
+  Each thing has its own time budget; a check still running when it ends is
+  `not_checked` with `timeout`.
+- `--progress` (`on_progress`) sends one event per finished thing:
+  `{ phase, done, total, node }`, `phase` `self` then the kind of thing
+  (`machines`, `stores`, `projects`, `sandboxes`, `buckets`). `backup doctor`
+  sends none.
+- `project doctor --full` is refused `Unsupported` (not built yet). `store
+  doctor --machine` is for a PostgreSQL Store; a sqlite Store refuses it.
+- `--text` prints a count line (`N error(s), N warning(s), N notice(s), N
+  not checked`, or `ok` alone), then each finding, its `from` and its `fix`,
+  then each `not_checked` entry.
+- Exit 0 once the report is made, whatever it finds; 125 with `NotFound`
+  when the thing is not in the home; 2 for a wrong command line. Leftovers
+  of interrupted operations are in no doctor's report.
 
 ### `layerfs doctor fix <id>`
 
 The one `doctor` command that changes something, and a call of the table
 (`doctor.fix`; `layerfs.doctor.fix(id)` in Node and Python). It removes the
-one leftover whose `id` the report gave (`<machine>:<kind>:<name>`, never a
+one leftover whose `id` it is given (`<machine>:<kind>:<name>`, never a
 path), once, on that machine, under that kind's guard:
 
 ```bash
@@ -998,8 +1148,7 @@ layerfs doctor fix native:image-part:<64 hex>
 
 Other refusals: `NotFound` (no leftover has that id now), `InvalidInput`
 (an image lock or an unmount marker, which are never removed), `Unavailable`
-(the machine is stopped) and `Unknown` (the worker's answer was lost: run
-`layerfs doctor` again to see). The MCP server has no tool for it. Run on
+(the machine is stopped) and `Unknown` (the worker's answer was lost). The MCP server has no tool for it. Run on
 macOS `native` against leftovers made by hand; not run on a VM machine for
 this manual.
 

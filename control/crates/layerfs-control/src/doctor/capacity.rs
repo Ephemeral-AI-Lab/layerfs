@@ -8,7 +8,7 @@
 //! failures, and a pool with no vacant control slot. The one bounded query
 //! itself is `layerfs_sandbox::daemon::capacity`, shared with the
 //! `daemon_capacity` field `sandbox.get` shows.
-use super::report::Findings;
+use super::records::Findings;
 use super::scan::Scanned;
 use layerfs_bridge::control::{CapacityModel, SdkRefusal};
 use layerfs_sandbox::daemon::capacity::{endpoint, read, OPERATION, WAIT};

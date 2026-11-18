@@ -294,7 +294,7 @@ pub const fn opt(name: &'static str, kind: Kind) -> Arg {
     }
 }
 
-use Kind::{Bool, Function, Int, Text};
+use Kind::{Function, Int, Text};
 
 /// The paging options of a list call.
 pub const PAGE: [Arg; 2] = [opt("page_size", Int), opt("page_pos", Int)];
@@ -318,13 +318,6 @@ pub const CURSOR: [Arg; 2] = [opt("limit", Int), opt("cursor", Text)];
 pub const MESSAGE: Arg = opt("message", Text).redact();
 /// The progress function of a long call.
 pub const PROGRESS: Arg = opt("on_progress", Function);
-/// The options of a diff call.
-pub const DIFF: [Arg; 4] = [
-    opt("paths_only", Bool),
-    opt("page_size", Int),
-    opt("page_pos", Int),
-    opt("cursor", Text),
-];
 
 /// One table entry.
 pub const fn call(
@@ -370,8 +363,9 @@ fn words(names: &[&str]) -> SdkValue {
     SdkValue::List(names.iter().map(|name| SdkValue::text(*name)).collect())
 }
 
-/// A form's keys: `{ short: { always, sometimes }, long }`, with `parts`
-/// when a key has its own form (a plain-string list is `{ scalar }`).
+/// A form's keys: `{ short: { always, sometimes }, long }`, with `things`
+/// when a `<thing>` key is one of those words, and `parts` when a key has
+/// its own form (a plain-string list is `{ scalar }`).
 fn form_value(form: &Form) -> SdkValue {
     let mut fields = vec![
         (
@@ -383,6 +377,9 @@ fn form_value(form: &Form) -> SdkValue {
         ),
         ("long".to_owned(), words(form.long)),
     ];
+    if !form.things.is_empty() {
+        fields.push(("things".to_owned(), words(form.things)));
+    }
     if !form.parts.is_empty() {
         let part = |(key, part): &(&str, Part)| {
             let value = match part {

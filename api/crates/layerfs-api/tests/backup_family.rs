@@ -117,7 +117,7 @@ fn backups_against_minio() {
         &[
             ("project", t("shop/api")),
             ("name", t("dev")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     ok(
@@ -193,8 +193,8 @@ fn backups_against_minio() {
     .unwrap();
     ok(
         &home,
-        "store.push",
-        &[("name", t("shop")), ("machine", t("box"))],
+        "store.move",
+        &[("store", t("shop")), ("machine", t("box"))],
     );
     ok(
         &home,
@@ -505,7 +505,7 @@ fn list_states_compare_the_store_and_the_copy() {
         &[
             ("project", t("shop/api")),
             ("name", t("dev")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     ok(

@@ -3,7 +3,7 @@
 //! (0700, or 0701 where a namespaces Sandbox passes through; a Store's own
 //! folder is 0700 like the daemon's rule) and record files (0600). A Store
 //! folder with projects and no Store record is reported here too.
-use super::report::Findings;
+use super::records::Findings;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{paths, read_record, RECORD_VERSION};
 use layerfs_home::outcome::failed;

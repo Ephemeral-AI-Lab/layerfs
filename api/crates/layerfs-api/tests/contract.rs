@@ -221,9 +221,20 @@ fn every_call_is_migrated_or_pending_and_the_table_names_no_other() {
             "{gone}: {replacement}"
         );
     }
+    // what a migrated call does not do yet, with the reason
+    for (call, lines) in fields(at(&pending, "not_built")) {
+        let migrated = layerfs_api::find(call).is_some_and(|entry| entry.form.is_some());
+        assert!(
+            named.contains(&call.as_str()) && migrated,
+            "not_built names `{call}`, which is not a migrated call"
+        );
+        assert!(!list(lines).is_empty(), "{call}: not_built lists nothing");
+    }
     if PENDING_MUST_BE_EMPTY {
         assert!(waiting.is_empty(), "still pending: {waiting:?}");
         assert!(fields(old).is_empty(), "old names remain: {:?}", keys(old));
+        let left = at(&pending, "not_built");
+        assert!(fields(left).is_empty(), "not built: {:?}", keys(left));
         for (what, ahead) in fields(at(&pending, "spec_sync")) {
             assert!(fields(ahead).is_empty(), "spec_sync.{what} is not empty");
         }
@@ -1028,7 +1039,7 @@ fn home_log_and_clear_log_answer_in_their_rows_shapes() {
     for store in ["a", "b", "c"] {
         call(&home, "store.create", &[("name", SdkValue::text(store))]).unwrap();
     }
-    call(&home, "store.get", &[("name", SdkValue::text("nope"))]).unwrap_err();
+    call(&home, "store.get", &[("store", SdkValue::text("nope"))]).unwrap_err();
     let said = row(&spec, "home.log");
     let short = call(&home, "home.log", &[]).unwrap();
     let long = call(&home, "home.log", &[DETAIL]).unwrap();
@@ -1048,11 +1059,11 @@ fn home_log_and_clear_log_answer_in_their_rows_shapes() {
     assert_eq!(newest.get_text("call"), Some("store.get"));
     assert_eq!(newest.get_text("outcome"), Some("refused"));
     assert_eq!(newest.get_text("error"), Some("NotFound"));
-    // a call with no word of its own is `ok`: a record's own `kind` (the
-    // new Store's `sqlite`) is not what happened
+    // a migrated call's row carries the word its answer names as
+    // `outcome` (`store.create` answers `created`), never a record's `kind`
     let created = &list(at(&short, "items"))[1];
     assert_eq!(created.get_text("call"), Some("store.create"));
-    assert_eq!(created.get_text("outcome"), Some("ok"));
+    assert_eq!(created.get_text("outcome"), Some("created"));
     // pages: `limit` and the cursor of the page before
     let limit = ("limit", SdkValue::Int(2));
     let created = ("call", SdkValue::text("store.create"));

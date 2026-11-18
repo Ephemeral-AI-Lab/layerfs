@@ -60,8 +60,6 @@ class Encoding(Fixture):
         with self.assertRaisesRegex(layerfs.LayerFSError, pattern) as caught:
             layerfs.client(home=lone)
         self.assertEqual(caught.exception.code, "InvalidInput")
-        with self.assertRaisesRegex(layerfs.LayerFSError, pattern):
-            layerfs.doctor(lone)
 
     def test_a_paired_surrogate_written_as_one_character_is_fine(self):
         text = "\U0001f600 pair\n"

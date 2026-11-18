@@ -1,7 +1,7 @@
 // Events reach their handlers on their own handle (#533 review, group
 // calls): a handler that throws does not stop the call or the process, and
 // every event the call sent reaches its handler before the call settles.
-// A `store.push` to a worker (`layerfs worker`, the repository's debug
+// A `store.move` to a worker (`layerfs worker`, the repository's debug
 // build) sends a progress event at each phase.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -69,7 +69,7 @@ test("a throwing on_progress does not stop a push; every event comes before it s
     const onWarning = (warning) => warnings.push(String(warning.message));
     process.on("warning", onWarning);
     const thrown = [];
-    const pushed = await lfs.store.push("shop", "box", {
+    const pushed = await lfs.store.move("shop", "box", {
       on_progress: (p) => {
         thrown.push(p.phase);
         throw new Error(`a handler that throws at ${p.phase}`);
@@ -86,7 +86,7 @@ test("a throwing on_progress does not stop a push; every event comes before it s
 
     // and back, counting: no event after the call settles
     const phases = [];
-    await lfs.store.pull("shop", { on_progress: (p) => phases.push(p.phase) });
+    await lfs.store.move("shop", "native", { on_progress: (p) => phases.push(p.phase) });
     const settled = phases.slice();
     assert.equal(settled[0], "check");
     assert.equal(settled[settled.length - 1], "retire", settled.join(","));

@@ -248,62 +248,48 @@ impl Filter {
         }
     }
 
-    /// The `next_cursor` of a page that ended at `last`: the place and
-    /// these filters, as one opaque word.
-    fn cursor(&self, last: &Cursor) -> String {
-        let mut fields = vec![
-            ("for".to_owned(), SdkValue::text(CURSOR_FOR)),
-            ("at".to_owned(), SdkValue::Text(last.text())),
-        ];
+    /// The filters as a cursor carries them, in one order.
+    fn fields(&self) -> Vec<(&'static str, SdkValue)> {
         let mut this = self.clone();
-        for name in TEXT_FILTERS {
-            if let Some(text) = this.text(name).take() {
-                fields.push((name.to_owned(), SdkValue::Text(text)));
-            }
-        }
-        if let Some(since) = self.since {
-            fields.push(("since".to_owned(), SdkValue::Int(since)));
-        }
-        json::base64(json::print(&SdkValue::Map(fields)).as_bytes())
-            .trim_end_matches('=')
-            .to_owned()
+        let mut fields: Vec<(&'static str, SdkValue)> = (TEXT_FILTERS.iter())
+            .map(|name| {
+                (
+                    *name,
+                    this.text(name)
+                        .take()
+                        .map_or(SdkValue::Null, SdkValue::Text),
+                )
+            })
+            .collect();
+        fields.push(("since", self.since.map_or(SdkValue::Null, SdkValue::Int)));
+        fields
+    }
+
+    /// The `next_cursor` of a page that ended at `last`: the place and
+    /// these filters, as one opaque word ([`crate::cursor`]).
+    fn cursor(&self, last: &Cursor) -> String {
+        crate::cursor::make(CURSOR_FOR, SdkValue::Text(last.text()), &self.fields())
     }
 
     /// The place `cursor` names and the filters of the call that made it,
     /// which this call continues: a filter given again must be the same.
     fn resume(&self, cursor: &str) -> Result<(Cursor, Filter), SdkRefusal> {
-        let padded = format!("{cursor}{}", "=".repeat((4 - cursor.len() % 4) % 4));
-        let made = json::unbase64(&padded)
-            .and_then(|bytes| String::from_utf8(bytes).ok())
-            .and_then(|text| json::parse(&text).ok())
-            .filter(|value| value.get_text("for") == Some(CURSOR_FOR))
-            .ok_or_else(|| {
-                refused(
-                    "InvalidInput",
-                    "home.log: `cursor` is not the `next_cursor` of a home.log page",
-                )
-            })?;
-        let place = made
-            .get_text("at")
-            .and_then(Cursor::parse)
-            .ok_or_else(stale)?;
+        let made = crate::cursor::resume(CURSOR_FOR, cursor, &self.fields())?;
+        let place = match made.place() {
+            SdkValue::Text(text) => Cursor::parse(text),
+            _ => None,
+        }
+        .ok_or_else(stale)?;
+        let since = match made.get("since") {
+            SdkValue::Int(since) => Some(since),
+            _ => None,
+        };
         let mut carried = Filter {
-            since: made.get_int("since"),
+            since,
             ..Filter::default()
         };
         for name in TEXT_FILTERS {
-            *carried.text(name) = made.get_text(name).map(str::to_owned);
-        }
-        let mut given = self.clone();
-        let differs = TEXT_FILTERS
-            .iter()
-            .any(|name| given.text(name).is_some() && given.text(name) != carried.text(name))
-            || (self.since.is_some() && self.since != carried.since);
-        if differs {
-            return Err(refused(
-                "InvalidInput",
-                "home.log: the cursor carries the filters of the call that made it; give the same filters or none",
-            ));
+            *carried.text(name) = made.text(name).map(str::to_owned);
         }
         Ok((place, carried))
     }

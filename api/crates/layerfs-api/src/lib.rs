@@ -8,9 +8,9 @@
 //! re-exported here. The `branch`, `commit` and `file`
 //! calls reach the Store engine's SDK facade (layerfs-store-service
 //! `methods/`) in the caller's process, the only route for Store calls
-//! (#352 F-020). The doctor's report and its explicit options live outside
-//! the call table and bypass normal home initialization/migration; its one
-//! table call is `doctor.fix`.
+//! (#352 F-020). The six doctors (`home`, `machine`, `store`, `project`,
+//! `sandbox`, `backup doctor`) are table calls of their families that never
+//! open the home; the `doctor` family keeps `doctor.fix`.
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
@@ -50,13 +50,6 @@ pub mod home {
     pub use layerfs_home::process;
     pub use layerfs_store::lease;
 }
-pub use doctor::{
-    doctor_options_json, doctor_request, doctor_with_options, duration as doctor_duration,
-};
-/// `layerfs doctor` (#536 H7): report-only, outside the call table.
-pub use layerfs_control::doctor::{
-    doctor, doctor_json, doctor_target, DoctorRequest, DoctorTarget,
-};
 #[cfg(feature = "machine")]
 #[doc(hidden)]
 pub use layerfs_control::machine::running;

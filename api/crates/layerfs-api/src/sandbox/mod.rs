@@ -15,5 +15,6 @@ pub(crate) fn calls() -> Calls {
         get::CALL,
         close::CALL,
         files::CALL,
+        crate::doctor::sandbox::CALL,
     ]
 }

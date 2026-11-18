@@ -110,7 +110,7 @@ pub fn create(
         if store_machine != machine {
             return Err(refused(
                 "Unsupported",
-                format!("Store {} is on machine {store_machine}; a Sandbox of {project} runs there (`store pull` and `store push` move the Store)", target.store),
+                format!("Store {} is on machine {store_machine}; a Sandbox of {project} runs there (`store move` moves the Store)", target.store),
             ));
         }
     }

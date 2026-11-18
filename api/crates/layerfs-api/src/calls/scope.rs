@@ -228,30 +228,28 @@ impl Scope {
             }
             Rule::BranchFork => {
                 bound(&args)?;
-                for field in ["name", "from_branch"] {
-                    let given = args.get_text(field).unwrap_or("").to_owned();
-                    set(&mut args, field, self.compose(&given)?);
-                }
-                // `from_commit` takes precedence in the Store: it passes the
-                // same check as every other reference
-                if let Some(given) = args.get_text("from_commit").map(str::to_owned) {
-                    set(&mut args, "from_commit", self.reference(&given)?);
-                }
+                // `from` is the namespace's `main` when left off; `at` names
+                // a Commit and is never composed
+                let from = args.get_text("from").unwrap_or("main").to_owned();
+                set(&mut args, "from", self.reference(&from)?);
+                let given = args.get_text("name").unwrap_or("").to_owned();
+                set(&mut args, "name", self.compose(&given)?);
             }
             Rule::BranchMerge => {
                 bound(&args)?;
-                for field in ["name", "a", "b"] {
+                for field in ["branch", "from"] {
                     let given = args.get_text(field).unwrap_or("").to_owned();
                     set(&mut args, field, self.compose(&given)?);
                 }
+                if let Some(given) = args.get_text("into").map(str::to_owned) {
+                    set(&mut args, "into", self.compose(&given)?);
+                }
             }
             Rule::BranchGet | Rule::BranchPublish => {
+                // `at` and `expected` name Commits and are never composed
                 bound(&args)?;
                 let given = args.get_text("branch").unwrap_or("").to_owned();
                 set(&mut args, "branch", self.compose(&given)?);
-                if let Some(given) = args.get_text("commit").map(str::to_owned) {
-                    set(&mut args, "commit", self.reference(&given)?);
-                }
             }
             Rule::WorkspaceMount => {
                 if args.get_text("branch").is_some_and(|b| b != "main") {
@@ -278,11 +276,11 @@ impl Scope {
         }
         let prefix = format!("{}.", self.branch.as_deref().unwrap_or(""));
         match value
-            .get_text("name")
+            .get_text("branch")
             .and_then(|n| n.strip_prefix(&prefix))
             .map(str::to_owned)
         {
-            Some(name) => with_field(value, "name", SdkValue::Text(name)),
+            Some(name) => with_field(value, "branch", SdkValue::Text(name)),
             None => value,
         }
     }

@@ -5,7 +5,7 @@ use napi::threadsafe_function::{
 };
 use napi::{Env, JsFunction, Status, Task};
 use napi_derive::napi;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// The call table as JSON text.
 #[napi]
@@ -55,38 +55,6 @@ pub fn close() -> u32 {
     let closed = layerfs_api::close_idle(std::time::Duration::ZERO);
     layerfs_api::end_idle_sessions(layerfs_api::SESSION_END);
     u32::try_from(closed).unwrap_or(u32::MAX)
-}
-
-/// `layerfs doctor` (report-only, outside the call table) on `home` (else
-/// the library's default). Resolves to JSON text `{ value }` or
-/// `{ refused }`; it may dial running workers, so it runs off the
-/// JavaScript thread.
-#[napi]
-pub fn doctor(home: Option<String>, options: Option<String>) -> AsyncTask<Doctor> {
-    AsyncTask::new(Doctor { home, options })
-}
-
-/// One doctor report, run off the JavaScript thread.
-pub struct Doctor {
-    home: Option<String>,
-    options: Option<String>,
-}
-
-impl Task for Doctor {
-    type Output = String;
-    type JsValue = String;
-
-    fn compute(&mut self) -> napi::Result<String> {
-        let home = layerfs_api::home(self.home.as_deref().map(Path::new));
-        Ok(layerfs_api::doctor_options_json(
-            home,
-            self.options.as_deref().unwrap_or("{}"),
-        ))
-    }
-
-    fn resolve(&mut self, _env: Env, answer: String) -> napi::Result<String> {
-        Ok(answer)
-    }
 }
 
 /// One call, run off the JavaScript thread.

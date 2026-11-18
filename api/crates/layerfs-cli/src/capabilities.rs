@@ -107,25 +107,6 @@ pub fn help() -> ExitCode {
         ])
     };
     let commands = vec![
-        command("doctor", &[], &["--text"]),
-        command("doctor host", &[], &["--timeout", "--text"]),
-        command("doctor machine", &["machine"], &["--timeout", "--text"]),
-        command("doctor sandbox", &["sandbox"], &["--timeout", "--text"]),
-        command(
-            "doctor store integrity",
-            &["store"],
-            &["--quick", "--timeout", "--text"],
-        ),
-        command(
-            "doctor store connection",
-            &["store"],
-            &["--timeout", "--text"],
-        ),
-        command(
-            "doctor backup connection",
-            &["bucket"],
-            &["--write-test", "--timeout", "--text"],
-        ),
         command("import-env", &[], &[]),
         command("worker", &[], &[]),
         command("help", &["[family]", "[call]"], &["--json"]),

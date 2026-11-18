@@ -23,7 +23,7 @@ mod text;
 pub use check::size;
 pub use context::Context;
 pub use dispatch::{asks_detail, call, call_scoped, home, Client, DETAIL, WITH};
-pub use form::{Asked, Form, Paging, Part, Place, Profile, Section};
+pub use form::{Asked, Form, Paging, Part, Place, Profile, Section, THING};
 pub use layerfs_home::json;
 pub use platform_policy::Policy;
 pub use render::Saves;

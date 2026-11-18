@@ -402,7 +402,7 @@ class Calls(unittest.TestCase):
             layerfs.FAMILIES,
             ["home", "project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs", "doctor"],
         )
-        self.assertEqual(len(layerfs.TABLE), 81)
+        self.assertEqual(len(layerfs.TABLE), 87)
         for spec in layerfs.TABLE:
             self.assertTrue(callable(getattr(getattr(layerfs, spec["family"]), spec["call"])))
         # the options the Publish change added are in the table the Python
@@ -508,9 +508,9 @@ class Calls(unittest.TestCase):
 
         async def run():
             await lfs.store.create("shop")
-            # a push sends its first progress event, then finds no machine
+            # a move sends its first progress event, then finds no machine
             try:
-                await lfs.store.push("shop", "nosuch", on_progress=lambda p: seen.append((threading.get_ident(), p)))
+                await lfs.store.move("shop", "nosuch", on_progress=lambda p: seen.append((threading.get_ident(), p)))
             except layerfs.LayerFSError as error:
                 return threading.get_ident(), error.code, list(seen)
             return None

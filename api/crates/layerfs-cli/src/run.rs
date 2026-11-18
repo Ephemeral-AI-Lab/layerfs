@@ -25,18 +25,6 @@ pub fn main(words: Vec<String>) -> ExitCode {
         },
         Some("worker") if words.len() == 1 => worker::main(),
         Some("import-env") if words.len() == 1 => import_env(),
-        // `doctor fix <id>` is the table's call; every other `doctor` is
-        // the report, outside the table
-        Some("doctor") if words.get(1).map(String::as_str) == Some("fix") => {
-            if words[2..].iter().any(|w| w == "-h" || w == "--help") {
-                return help::print(&["doctor", "fix"]);
-            }
-            match layerfs_api::find("doctor.fix") {
-                Some(call) => one(call, &words[2..]),
-                None => wrong("no call `doctor fix`".to_owned()),
-            }
-        }
-        Some("doctor") => crate::doctor::main(&words[1..]),
         Some(family) => {
             let Some(name) = words.get(1) else {
                 return help::print(&[family]);
@@ -235,6 +223,8 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
                 Some(code) => ExitCode::from(u8::try_from(code).unwrap_or(1)),
             }
         }
+        // a doctor's report reads as its findings and what it could not check
+        Ok(value) if switches.text && call.call == "doctor" => output::doctor(&value),
         Ok(value) => output::result(&value, switches.text),
     }
 }

@@ -1,9 +1,13 @@
-//! Reads change nothing (#536 §12 item 3): `store.status`, `store.list` and
-//! `store.get` leave a stale lease and `log/leases.jsonl` as they were and
-//! take no lock, while their answers still ignore the dead holder.
+//! Reads change nothing (#536 §12 item 3): `store.list` and `store.get`
+//! leave the home as it was, and a live read (`store get --with live`)
+//! writes only its observation file: each leaves a stale lease and
+//! `log/leases.jsonl` as they were and takes no lock, while its answer
+//! still ignores the dead holder.
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::events::Events;
 use layerfs_home::home::{paths, private_dir, write_entity};
-use layerfs_store::sqlite::family::{get, list, status};
+use layerfs_store::get::{get, With};
+use layerfs_store::list::list;
 use std::collections::BTreeMap;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
@@ -41,25 +45,58 @@ fn a_stale_lease_survives_every_store_read_and_is_ignored() {
     private_dir(&paths::lease_dir(&home, "s")).unwrap();
     let stale = paths::lease_dir(&home, "s").join("99999999");
     std::fs::write(&stale, "1\n").unwrap();
-    let named = layerfs_home::names::StoreName::parse("s").unwrap();
+    std::fs::write(paths::store_file(&home, "s"), b"").unwrap();
+    let mut sink = |_| {};
+    let mut events = Events::new(&mut sink);
 
     let before = tree(&home);
-    let status = status(&home, &named).unwrap();
-    let list = list(&home).unwrap();
-    let get = get(&home, &named).unwrap();
-    assert_eq!(before, tree(&home), "a read changed the home");
+    let list = list(&home, None, false, &layerfs_control::store::machine_state).unwrap();
+    let get_records = get(
+        &home,
+        &mut events,
+        "s",
+        With::default(),
+        &layerfs_control::store::machine_state,
+    )
+    .unwrap();
+    assert_eq!(before, tree(&home), "a records-only read changed the home");
+    let live = With {
+        live: true,
+        stats: false,
+    };
+    let seen = get(
+        &home,
+        &mut events,
+        "s",
+        live,
+        &layerfs_control::store::machine_state,
+    )
+    .unwrap();
+    let mut after = tree(&home);
+    let observed = paths::store_dir(&home, "s").join("observed.json");
+    assert!(after.remove(&observed).is_some(), "a live read observes");
+    // the observation file's folder changed with it, and nothing else
+    let folder = paths::store_dir(&home, "s");
+    let mut before = before;
+    before.remove(&folder);
+    after.remove(&folder);
+    assert_eq!(
+        before, after,
+        "a live read changed more than its observation"
+    );
     assert!(stale.exists());
     assert!(!home.join("log/leases.jsonl").exists());
     assert!(!paths::store_dir(&home, "s").join("lock").exists());
 
     // the dead holder holds nothing
-    assert_eq!(status.get("holders"), Some(&SdkValue::List(vec![])));
-    assert_ne!(status.get_text("state"), Some("in_use"), "{status:?}");
+    let holders = seen.get("live").unwrap().get("holders");
+    assert_eq!(holders, Some(&SdkValue::List(vec![])));
+    assert_eq!(seen.get_text("state"), Some("ready"), "{seen:?}");
     let Some(SdkValue::List(items)) = list.get("items") else {
         panic!("no items: {list:?}");
     };
     assert_eq!(items.len(), 1);
-    assert_eq!(items[0].get_text("state"), status.get_text("state"));
-    assert_eq!(get.get_text("name"), Some("s"));
+    assert_eq!(items[0].get_text("state"), Some("ready"));
+    assert_eq!(get_records.get_text("store"), Some("s"));
     let _ = std::fs::remove_dir_all(&home);
 }

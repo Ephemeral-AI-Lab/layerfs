@@ -70,8 +70,8 @@ runtime owns command launch, streams, exit status and cancel
 ## Store leases
 
 A lease is `store/<store>/open/<pid>` in the home, taken under the Store's
-lock ([Stores and projects](../stores-and-projects/README.md)); `store push`,
-`pull`, `remove` and `disconnect` refuse `InUse` while another process holds
+lock ([Stores and projects](../stores-and-projects/README.md)); `store move`,
+`remove` and `disconnect` refuse `InUse` while another process holds
 one. Which Sandbox and Workspace calls take one depends on where the call
 runs:
 
@@ -88,7 +88,7 @@ nothing: `Op::asks_daemon_only` names its two host operations, and
 `route::host_op`, `route::in_worker` and `direct::served` return for them
 before the lease, the Store open, the worker's record writes and the run
 root's creation (layerfs-project#181). A recorded Sandbox still holds its
-Store by its record: `store push`, `pull`, `remove` and `disconnect` refuse
+Store by its record: `store move`, `remove` and `disconnect` refuse
 `InUse` while one of the Store's projects has a Sandbox, whether or not
 anything reads it. Every public call, a get included, appends one line to the
 home's call log (`trace/calls.jsonl`).

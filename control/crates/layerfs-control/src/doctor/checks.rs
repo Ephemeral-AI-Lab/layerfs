@@ -5,7 +5,7 @@
 //! copy (`store.sqlite.incoming`) an interrupted or certain-failed transfer
 //! left on `native` or on a push's target machine, and a copy a push or pull
 //! did not retire (from the record).
-use super::report::Findings;
+use super::records::Findings;
 use super::scan::Scanned;
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::home::paths;
@@ -19,15 +19,6 @@ use std::path::Path;
 /// `native` and `docker` exist with or without a record.
 fn built_in(machine: &str) -> bool {
     matches!(machine, "native" | "docker")
-}
-
-/// Runs every check on `scanned`.
-pub(super) fn check(
-    home: &Path,
-    scanned: &Scanned,
-    findings: &mut Findings,
-) -> Result<(), SdkRefusal> {
-    check_scope(home, scanned, findings, true)
 }
 
 /// The same record checks without connecting to machines for transfer files.
@@ -52,7 +43,7 @@ fn check_scope(
         let op = store.op();
         if let Some(op) = &op {
             let (show, clear) = (
-                format!("store status {name}"),
+                format!("store get {name}"),
                 layerfs_store::record::clearing_call(op, name),
             );
             intent(entity, op, &show, &clear, findings);
@@ -216,15 +207,15 @@ fn leftover(store: &StoreRecord, machine: &str, findings: &mut Findings) {
     let Some(left) = layerfs_store::sqlite::transfer::resolve::leftover(store) else {
         return;
     };
-    // the target side of a push holds a partial copy, not a whole one: it is
+    // the target side of a move from native holds a partial copy, not a whole one: it is
     // reported with its bytes by `incoming`, below
-    if left.call == "store.push" && left.to == left.on {
+    if left.call == "store.move" && left.from == "native" && left.to == left.on {
         return;
     }
     let name = store.name();
     let next = match machine {
-        "native" => format!("store push {name} <machine>"),
-        _ => format!("store pull {name}"),
+        "native" => format!("store move {name} <machine>"),
+        _ => format!("store move {name} native"),
     };
     findings.warning(
         ("store", name),
@@ -256,7 +247,7 @@ fn incoming(
             format!("delete {} by hand", local_incoming.display())
         } else {
             format!(
-                "`layerfs store pull {name}` replaces it, or delete {} by hand",
+                "`layerfs store move {name} native` replaces it, or delete {} by hand",
                 local_incoming.display()
             )
         };
@@ -288,10 +279,10 @@ fn incoming(
     };
     let fix = if on_native {
         format!(
-            "`layerfs store push {name} {to}` replaces it, or `layerfs store remove {name}` deletes it"
+            "`layerfs store move {name} {to}` replaces it, or `layerfs store remove {name}` deletes it"
         )
     } else {
-        format!("`layerfs store pull {name}` or `layerfs store remove {name}` removes it")
+        format!("`layerfs store move {name} native` or `layerfs store remove {name}` removes it")
     };
     findings.warning(
         ("store", name),

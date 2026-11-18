@@ -46,7 +46,7 @@ fn native_exec_keeps_large_binary_output_cancellation_and_effects_on_closed_stdo
         &[
             ("project", t("live/p")),
             ("name", t("dev")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     call(
@@ -178,7 +178,7 @@ fn cli_json_keeps_i64_above_double_precision() {
 fn table_reads_initialize_missing_and_default_homes_but_doctor_does_not() {
     let scratch = tempdir("phase1-home");
     let missing = scratch.join("missing");
-    let doctor = run(&mut layerfs(&missing, &["doctor"]));
+    let doctor = run(&mut layerfs(&missing, &["home", "doctor"]));
     assert!(doctor.status.success());
     assert!(!missing.exists());
     let read = run(&mut layerfs(&missing, &["store", "list"]));

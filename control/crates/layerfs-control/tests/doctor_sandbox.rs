@@ -1,9 +1,12 @@
 //! Saved-route diagnostics use real authenticated channels without leases or replay.
+#[path = "support/doctor_own.rs"]
+mod doctor_own;
+use doctor_own::complete;
 use layerfs_bridge::{
     control::{Answer, Call, DaemonPhase, DaemonStatus, Reply, Request, SdkRefusal, SdkValue},
     duplex,
 };
-use layerfs_control::doctor::{doctor_target, DoctorRequest, DoctorTarget};
+use layerfs_control::doctor::{Kind, Options};
 use layerfs_home::home::{paths, private_dir, write_entity, write_record};
 use layerfs_home::process;
 use std::collections::BTreeMap;
@@ -57,25 +60,15 @@ fn tree(home: &Path) -> BTreeMap<PathBuf, (u64, i64, i64, u32)> {
     }
     found
 }
-fn request(timeout: Duration) -> DoctorRequest {
-    DoctorRequest {
-        target: DoctorTarget::Sandbox("sb".into()),
-        timeout: Some(timeout),
-        quick: false,
-        write_test: false,
-        build: Default::default(),
-    }
+/// Sandbox `sb`'s own checks under `budget`.
+fn within(home: &Path, budget: Duration) -> SdkValue {
+    doctor_own::own_within(home, Kind::Sandbox, "sb", &Options::default(), Some(budget))
 }
 fn run(home: &Path) -> SdkValue {
-    doctor_target(home, &request(Duration::from_secs(2))).unwrap()
+    within(home, Duration::from_secs(2))
 }
-fn check<'a>(report: &'a SdkValue, id: &str) -> &'a SdkValue {
-    let Some(SdkValue::List(rows)) = report.get("checks") else {
-        panic!("checks")
-    };
-    rows.iter()
-        .find(|r| r.get_text("id") == Some(id))
-        .unwrap_or_else(|| panic!("missing {id}: {report:?}"))
+fn check(report: &SdkValue, id: &str) -> SdkValue {
+    doctor_own::row(report, id).unwrap_or_else(|| panic!("missing {id}: {report:?}"))
 }
 fn sandbox(home: &Path, machine: &str, daemon: SdkValue) {
     write_entity(
@@ -307,13 +300,13 @@ fn busy_changed_lost_reply_and_deadline_remain_incomplete_without_replay() {
         let home = home();
         sandbox(&home, "native", local_record());
         let (_, server) = daemon(&home, mode);
-        let request = request(if matches!(mode, Mode::Stalled) {
+        let budget = if matches!(mode, Mode::Stalled) {
             Duration::from_millis(70)
         } else {
             Duration::from_secs(2)
-        });
-        let report = doctor_target(&home, &request).unwrap();
-        assert!(!report.get_bool("complete"));
+        };
+        let report = within(&home, budget);
+        assert!(!complete(&report));
         assert_eq!(
             check(&report, "sandbox.workspaces").get_text("outcome"),
             Some("unknown")
@@ -408,7 +401,9 @@ fn missing_worker_record_and_reused_forward_pid_block_without_connecting() {
             )]),
         );
         let report = run(&home);
-        assert!(!report.get_bool("complete"));
+        // the route's own finding; the daemon behind it does not apply
+        assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)), "{report:?}");
+        assert_eq!(doctor_own::outcome(&report, "sandbox.daemon"), None);
         assert_eq!(
             listener.accept().unwrap_err().kind(),
             std::io::ErrorKind::WouldBlock
@@ -531,7 +526,7 @@ fn incorrect_peer_close_keeps_authentication_unknown_without_echoing_keys() {
         check(&report, "sandbox.daemon_auth").get_text("outcome"),
         Some("unknown")
     );
-    assert!(!report.get_bool("complete"));
+    assert!(!complete(&report));
     assert_eq!(server.join().unwrap(), 0);
     std::fs::remove_dir_all(home).unwrap();
 }

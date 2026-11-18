@@ -1,5 +1,5 @@
 //! A sqlite Store's file on the machine that holds it (H §7.3): the steps a
-//! `store push`, a `store pull` and a `store remove` take on each side. They run in the
+//! `store move`, a `store remove` and a `store create --machine` take on each side. They run in the
 //! caller's process for `native` (under the home) and in a machine's worker
 //! for every other machine (under the worker's root). Paths come from the
 //! root and the Store's name only, never from the caller. The steps that
@@ -134,7 +134,44 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
             ),
             ("incoming_bytes", SdkValue::Int(length(&incoming)? as i64)),
         ])),
-        // the compaction record beside the Store only: `store.status` shows
+        // an empty Store at the file's place, by the identity the caller's
+        // record holds; nothing is left when it cannot be made, and a
+        // folder another caller made is never this step's to remove
+        StoreStep::Create => {
+            let record = frame
+                .store_record
+                .as_ref()
+                .ok_or_else(|| refused("InvalidInput", "a Store create carries its record"))?;
+            let identity = crate::identity::identity_of(record)?;
+            let directory = paths::store_dir(root, store);
+            if let Some(parent) = directory.parent() {
+                layerfs_home::home::private_dir(parent)?;
+            }
+            let policy = layerfs_storage::StoragePolicy::frozen_default();
+            let (created, made) = crate::identity::make_empty(&directory, &file, &identity, policy);
+            match created {
+                Ok(sealed) => Ok(SdkValue::map([(
+                    "sqlite",
+                    SdkValue::text(sealed.sqlite_version),
+                )])),
+                Err(refusal) => {
+                    if made == crate::identity::MadeDirectory::ThisCall {
+                        let _ = std::fs::remove_dir_all(&directory);
+                    }
+                    Err(refusal)
+                }
+            }
+        }
+        // the heads of the file as it is: a read of its pages, no Store
+        // opened and nothing written; null when there is no file
+        StoreStep::Heads => Ok(SdkValue::map([(
+            "heads",
+            match file.is_file() {
+                true => hex(&heads(&file).map_err(|why| refused("Failed", why))?),
+                false => SdkValue::Null,
+            },
+        )])),
+        // the compaction record beside the Store only: a live read shows
         // its op and phase without opening the Store database or an artifact
         StoreStep::CompactOp => match layerfs_persistence::compact_op_status(&file) {
             None => Ok(SdkValue::Null),

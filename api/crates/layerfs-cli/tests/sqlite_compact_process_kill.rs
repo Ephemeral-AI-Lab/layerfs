@@ -13,10 +13,10 @@
 //!
 //! Every arm reopens the Store through the CLI and asserts the §9 crash state:
 //! wholly old at `G` or wholly new at `G + 1`, the exact artifact set, the
-//! sidecars a killed session leaves, the `store.status` projection (phase,
-//! `uncertain`, `unresolved`), the next `store.compact` settling the leftover
+//! sidecars a killed session leaves, `store get --with live` (`broken`
+//! `unresolved`, its fix the next compaction), the next `store.compact` settling the leftover
 //! (an installed `G + 1` answers the recorded `Rebuild` report, F41-1), the
-//! retained layer still readable, and a clean `doctor`. The `G` baseline
+//! retained layer still readable, and a clean `store doctor`. The `G` baseline
 //! is the §3 `none` run before the dead pack exists, so the crash arms start
 //! from a Store with exactly one wholly dead pack.
 //!
@@ -53,7 +53,7 @@ fn gate_socket() -> PathBuf {
     ))
 }
 
-/// One crash point: the failpoint, the phase `store.status` must project,
+/// One crash point: the failpoint, the phase the run stood in,
 /// whether the rebuild is already installed at `G + 1`, and which staged
 /// artifacts the kill leaves beside the Store.
 #[derive(Clone, Copy, Debug)]
@@ -82,15 +82,18 @@ fn call(home: &Path, words: &[&str]) -> SdkValue {
     })
 }
 
-/// `store.compact s`, the call whose process the crash arms kill.
+/// `store.compact s`, the call whose process the crash arms kill, long form.
 fn compact(home: &Path) -> SdkValue {
-    call(home, &["store", "compact", "s"])
+    call(home, &["store", "compact", "s", "--detail"])
 }
 
 fn generations(report: &SdkValue) -> (u64, u64) {
-    let generation = report.get("generation").expect("the report's generation");
-    let before = generation.get_int("before").expect("generation.before");
-    let after = generation.get_int("after").expect("generation.after");
+    let before = report
+        .get_int("generation_before")
+        .expect("generation_before");
+    let after = report
+        .get_int("generation_after")
+        .expect("generation_after");
     (before as u64, after as u64)
 }
 
@@ -186,7 +189,11 @@ fn fixture(tag: &str) -> (PathBuf, PathBuf, u64) {
     // Nothing is dead yet: §3 `none`, so the generation does not move. This
     // names `G`, the generation every crash arm starts from.
     let baseline = compact(&home);
-    assert_eq!(baseline.get_text("path"), Some("none"), "{baseline:?}");
+    assert_eq!(
+        baseline.get_text("outcome"),
+        Some("unchanged"),
+        "{baseline:?}"
+    );
     let (before, after) = generations(&baseline);
     assert_eq!(before, after, "a `none` run moves no generation");
 
@@ -250,20 +257,21 @@ fn exercise(arm: Arm) {
         );
     }
 
-    // `store.status` (§11) projects the recorded run: the phase it stood in,
-    // an uncertain outcome, and an unresolved state because its owner died.
-    let observed = call(&home, &["store", "status", "s"]);
-    let op = observed.get("op").expect("the op projection");
-    assert!(op.get("id").is_some(), "{observed:?}");
-    assert_eq!(op.get_text("phase"), Some(arm.phase), "{observed:?}");
+    // `store get --with live` (§11) reads the recorded run: its owner died
+    // with the outcome unknown, so the Store is `broken` `unresolved` and
+    // its fix is the next compaction. (The phase it stood in is no longer
+    // part of the answer: `op` shows only while its owner lives.)
+    let _ = arm.phase;
+    let observed = call(&home, &["store", "get", "s", "--with", "live", "--detail"]);
+    assert_eq!(observed.get_text("state"), Some("broken"), "{observed:?}");
     assert_eq!(
-        op.get("uncertain"),
-        Some(&SdkValue::Bool(true)),
+        observed.get_text("reason"),
+        Some("unresolved"),
         "{observed:?}"
     );
     assert_eq!(
-        observed.get_text("state"),
-        Some("unresolved"),
+        observed.get_text("fix"),
+        Some("layerfs store compact s"),
         "{observed:?}"
     );
 
@@ -272,7 +280,11 @@ fn exercise(arm: Arm) {
     // `G + 1` answers that report instead of re-deciding to `none` on the
     // already rebuilt Store), and no residue either way.
     let recovered = compact(&home);
-    assert_eq!(recovered.get_text("path"), Some("rebuild"), "{recovered:?}");
+    assert_eq!(
+        recovered.get_text("outcome"),
+        Some("compacted"),
+        "{recovered:?}"
+    );
     assert_eq!(
         generations(&recovered),
         (generation, generation + 1),
@@ -280,15 +292,14 @@ fn exercise(arm: Arm) {
     );
     if arm.installed {
         assert!(
-            recovered.get_int("dead_bytes_bound").unwrap_or(0) > 0,
+            recovered.get_int("dead_bytes").unwrap_or(0) > 0,
             "the adopted report keeps the collected bytes at {}: {recovered:?}",
             arm.failpoint
         );
     }
-    let residue = recovered.get("residue").expect("the residue");
-    assert_eq!(residue.get_int("bytes"), Some(0), "{recovered:?}");
+    assert_eq!(recovered.get_int("residue_bytes"), Some(0), "{recovered:?}");
     assert!(
-        matches!(residue.get("artifacts"), Some(SdkValue::List(items)) if items.is_empty()),
+        matches!(recovered.get("residue_artifacts"), Some(SdkValue::List(items)) if items.is_empty()),
         "{recovered:?}"
     );
 
@@ -312,20 +323,20 @@ fn exercise(arm: Arm) {
             arm.failpoint
         );
     }
-    let settled = call(&home, &["store", "status", "s"]);
-    assert!(
-        settled.get("op").and_then(|op| op.get("id")).is_none(),
-        "{settled:?}"
-    );
-    assert_ne!(settled.get_text("state"), Some("unresolved"), "{settled:?}");
+    let settled = call(&home, &["store", "get", "s", "--with", "live", "--detail"]);
+    assert_eq!(settled.get("op"), Some(&SdkValue::Null), "{settled:?}");
+    assert_eq!(settled.get_text("state"), Some("ready"), "{settled:?}");
 
     // The retained layer still reads, and the home passes the doctor: the
     // dead pack is collected while the live one is intact.
     let stats = call(&home, &["project", "stats", "s/p"]);
     assert!(stats.get_int("files").unwrap_or(0) >= 1, "{stats:?}");
     call(&home, &["file", "stat", "s/p", "main", "/a.txt"]);
-    let doctor = call(&home, &["doctor"]);
-    assert_eq!(doctor.get("ok"), Some(&SdkValue::Bool(true)), "{doctor:?}");
+    let doctor = call(&home, &["store", "doctor", "s", "--detail"]);
+    let Some(SdkValue::List(findings)) = doctor.get("findings") else {
+        panic!("{doctor:?}");
+    };
+    assert!(findings.is_empty(), "{doctor:?}");
 
     std::fs::remove_dir_all(&home).unwrap();
     std::fs::remove_dir_all(&source).unwrap();

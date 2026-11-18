@@ -2,7 +2,7 @@
 //! nothing in it is live. The doctor reads what would refuse that
 //! conversion now (the conversion's own survey, read only: stale leases
 //! stay) and converts nothing.
-use super::report::Findings;
+use super::records::Findings;
 use crate::migrate::layout_2_blockers;
 use std::path::Path;
 

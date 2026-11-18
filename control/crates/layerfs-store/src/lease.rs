@@ -3,15 +3,15 @@
 //! Store's too), or, for a Store behind a worker, the host process that
 //! sends it calls. A lease is taken under the Store's lock (#536 §8) after
 //! the Store's record shows no operation holding it (`op`), so a lease and
-//! a push, pull or remove never overlap. `store push`, `store pull`, `store
-//! remove` and `store disconnect` read leases under the Store's lock and refuse `InUse` while
+//! a move or remove never overlap. `store move`, `store remove` and
+//! `store disconnect` read leases under the Store's lock and refuse `InUse` while
 //! one is held. A lease names its process by id, kernel start time and
 //! boot, so a reused id does not keep it alive; a lease whose process is
-//! not alive on this host is stale: a push, pull, remove or disconnect, and
+//! not alive on this host is stale: a move, remove or disconnect, and
 //! a process taking its own lease on the Store ([`claim`]), removes it under
 //! the Store's lock and logs the removal (O35), so a process that ended
 //! without closing its Stores leaves nothing once the Store is used again;
-//! reads (`store.status`, `store.list`, `layerfs doctor`) ignore it and
+//! reads (`store.get`, `store.list`, `layerfs doctor`) ignore it and
 //! change nothing.
 use crate::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -177,7 +177,7 @@ pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
     Ok(live)
 }
 
-/// Read only (`layerfs doctor`, `store.status`, `store.list`, a layout 2
+/// Read only (`layerfs doctor`, `store.get`, `store.list`, a layout 2
 /// home's survey): the live and the stale holders of Store `store` other than this process; nothing is
 /// removed and no lock is taken.
 pub fn read_holders(home: &Path, store: &str) -> Result<(Vec<u32>, Vec<u32>), SdkRefusal> {

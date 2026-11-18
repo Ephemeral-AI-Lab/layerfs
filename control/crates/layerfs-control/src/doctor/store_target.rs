@@ -16,6 +16,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+// today's whole-Store data scan: no doctor runs it since the scan left the
+// doctors (`store doctor` stops after its schema check); the Store package
+// keeps its worker route for the cut
+#[allow(dead_code)]
 pub(super) fn diagnose_integrity(
     home: &Path,
     name: &str,
@@ -86,7 +90,7 @@ pub(super) fn diagnose_connection(home: &Path, name: &str, budget: &Budget, chec
     }
 }
 
-fn resolve(
+pub(super) fn resolve(
     home: &Path,
     name: &str,
     checks: &mut Checks,

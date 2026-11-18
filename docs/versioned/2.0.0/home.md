@@ -95,7 +95,7 @@ worker's root:
   Files are 0600 and folders 0700. The run root `machine/native/run/` is
   0755. On Linux, where a Sandbox's commands run as another user, the
   folders above the run root (`machine/native/`, `machine/` and the home)
-  also let others pass through, never list: 0701. `layerfs doctor` accepts
+  also let others pass through, never list: 0701. `layerfs home doctor` accepts
   0700 and 0701 for the home's folders, reports any group bit or any read
   or write bit for others, and wants exactly 0700 for a Store's own folder
   and 0600 for a record. Bytes are stored as `{"hex": "…"}`.
@@ -128,7 +128,7 @@ worker's root:
   process is no longer alive on this host, or whose id now names another
   process, is stale; a push, pull, remove or disconnect of the Store removes
   it under the Store's lock and logs the removal (O35). Reads (`store
-  status`, `store list`, `store get`, `doctor`) ignore it and change nothing.
+  status`, `store list`, `store get`, the doctors) ignore it and change nothing.
 - **`sandbox/<name>/`** is all a Sandbox has in the home, whatever its
   machine: listing Sandboxes reads `sandbox/*` and nothing else, and one
   Sandbox is one folder read. Its `record.json` holds facts: its name,
@@ -210,10 +210,10 @@ worker's root:
   `machine/`, `store/`, `sandbox/`, `backup/`, `log/` and `trace/`. An
   integration that shares the folder keeps its own files under `secret/`,
   `runtime/`, `job/`, `stat/` or `preset/`: LayerFS creates none of them
-  and `layerfs doctor` neither lists nor reports them.
+  and no doctor lists or reports them.
 - **Leftovers.** What an interrupted call left in these folders (a run
   folder with no record, a staged snapshot, a folder copy, an image
-  temporary) is listed by [`layerfs doctor`](calls.md#layerfs-doctor) and
+  temporary) is in no [doctor](calls.md#the-doctors)'s report, and is
   removed only by [`layerfs doctor fix <id>`](calls.md#layerfs-doctor-fix-id).
 
 ### Where each record lives
