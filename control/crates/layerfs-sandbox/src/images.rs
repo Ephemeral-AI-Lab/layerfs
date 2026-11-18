@@ -95,7 +95,7 @@ pub fn list(home: &Path, name: &MachineName, docker: bool) -> Outcome {
                 let mut enriched = home::with_field(row.clone(), "sandboxes", users(id));
                 if enriched.get_bool("staged") {
                     if let Some(hex) = id.strip_prefix("sha256:").filter(|h| cache::is_hex(h)) {
-                        if is_flock_held(&ImageLock::path(home, machine, hex))? {
+                        if ImageLock::holder(home, machine, hex).is_some() {
                             enriched =
                                 home::with_field(enriched, "resumable", SdkValue::Bool(false));
                         }
@@ -283,8 +283,9 @@ fn append_cache_leftovers(
                 .ok()
                 .and_then(|mtime| now.duration_since(mtime).ok())
                 .map_or(0, |d| d.as_secs() as i64);
-            let lock_held = is_flock_held(&dir.join(format!("{hex}.2.lock")))?
-                || is_flock_held(&ImageLock::path(root, machine, hex))?;
+            // a listing reads who holds the copy's lock from its record and
+            // never takes a lock itself (a prune's guard would refuse)
+            let lock_held = ImageLock::holder(root, machine, hex).is_some();
             let resumable = meta.file_type().is_file()
                 && meta.len() > 0
                 && !published.contains(&id)

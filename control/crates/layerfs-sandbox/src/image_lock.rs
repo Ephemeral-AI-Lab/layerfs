@@ -73,6 +73,16 @@ impl ImageLock {
         Self::dir(home, machine).join(format!("{hex}.json"))
     }
 
+    /// The owner record of the copy of image `hex` on `machine`, while the
+    /// process it names lives: who holds the lock, for a listing. It reads
+    /// the record only and never takes or tests the kernel lock, so a
+    /// listing cannot make a copy wait or a prune's guard refuse. (A
+    /// prune's own guard writes no record and is not seen here.)
+    pub fn holder(home: &Path, machine: &str, hex: &str) -> Option<SdkValue> {
+        let record = read_record(&Self::record_path(home, machine, hex)).ok()??;
+        process::recorded_alive(&record).then_some(record)
+    }
+
     /// Opens (creating if absent) the lock file `name` of `machine`.
     fn open_file(home: &Path, machine: &str, name: &str) -> Result<File> {
         private_dir(&Self::dir(home, machine))?;

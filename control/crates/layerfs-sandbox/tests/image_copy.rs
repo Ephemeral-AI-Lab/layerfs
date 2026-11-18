@@ -305,6 +305,76 @@ fn a_staged_prefix_is_resumed_and_a_mismatched_one_restarted() {
     }
 }
 
+/// Plan Part 3 fix 4: a probe hashes the staged bytes only when the copy
+/// asks (`hash`), which a load does once, on the probe it resumes from.
+#[test]
+fn a_probe_hashes_the_staged_bytes_only_when_asked() {
+    let scratch = Scratch::new("copy-probe-hash");
+    let home = scratch.base.join("home");
+    cache::write(&cache::cache(&home), HEX, 0, b"abc").unwrap();
+    let probe = |hash: bool| {
+        cache::step(
+            &Side::Home(&home),
+            &SdkValue::map([
+                ("step", SdkValue::text("probe")),
+                ("id", SdkValue::text(ID)),
+                ("hash", SdkValue::Bool(hash)),
+            ]),
+        )
+        .unwrap()
+    };
+    let plain = probe(false);
+    assert_eq!(plain.get_int("offset"), Some(3));
+    assert_eq!(plain.get("prefix_sha256"), None, "not hashed unasked");
+    let hashed = probe(true);
+    assert_eq!(hashed.get_int("offset"), Some(3));
+    assert_eq!(
+        hashed.get_text("prefix_sha256"),
+        Some("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    );
+}
+
+/// Plan Part 3 fix 4: a listing says who holds a copy's lock from the
+/// lock's owner record and never takes or tests the kernel lock, so it
+/// cannot make a named prune's guard refuse. A guard that writes no record
+/// (a prune's) is not seen; a live copy's record is.
+#[test]
+fn a_listing_reads_the_copy_lock_record_and_takes_no_lock() {
+    use layerfs_sandbox::image_load::ImageLock;
+    let scratch = Scratch::new("copy-list-lock");
+    let home = scratch.base.join("home");
+    cache::write(&cache::cache(&home), HEX, 0, b"abc").unwrap();
+    let part = |home: &Path| {
+        let listed =
+            images::in_worker(home, SdkValue::map([("machine", SdkValue::text("docker"))]));
+        let listed = listed.unwrap();
+        let Some(SdkValue::List(rows)) = listed.get("images") else {
+            panic!("no images in {listed:?}");
+        };
+        rows.iter()
+            .find(|row| row.get_text("id") == Some(ID) && row.get_bool("staged"))
+            .cloned()
+            .expect("the staged part is listed")
+    };
+    let guard = ImageLock::try_hold(&home, "docker", ID).unwrap().unwrap();
+    assert!(
+        part(&home).get_bool("resumable"),
+        "a guard with no record is not seen"
+    );
+    drop(guard);
+    let copy = ImageLock::try_take(&home, "docker", ID).unwrap().unwrap();
+    assert!(
+        !part(&home).get_bool("resumable"),
+        "a live copy's record is seen"
+    );
+    assert!(
+        ImageLock::try_hold(&home, "docker", ID).unwrap().is_none(),
+        "the copy still holds its lock"
+    );
+    drop(copy);
+    assert!(part(&home).get_bool("resumable"));
+}
+
 #[test]
 fn frames_out_of_order_are_refused_and_publish_checks_the_bytes() {
     let scratch = Scratch::new("copy-frames");

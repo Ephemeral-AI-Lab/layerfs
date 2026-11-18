@@ -268,6 +268,15 @@ pub fn in_worker(
             format!("Store {store} is not a sqlite Store"),
         ));
     }
+    // a Store whose file is not here is `NotFound`, before its lease
+    // folder is made
+    let file = paths::store_file(root, store);
+    if !file.is_file() {
+        return Err(refused(
+            "NotFound",
+            format!("no file of Store {store} is on this machine"),
+        ));
+    }
     let _lease = lease::hold_locked(root, store)?;
     let mut sink = |event| {
         let _ = events(event);

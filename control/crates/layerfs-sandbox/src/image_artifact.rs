@@ -374,7 +374,7 @@ pub fn step(side: &Side<'_>, args: &SdkValue) -> Outcome {
 /// Whether this machine holds image `id` (unpacked, or in the archive its
 /// Sandboxes read), or which image a sidecar names `ref` by; its
 /// architecture, the image cache measured for free bytes and where it is,
-/// and how much of `id` is staged.
+/// and how much of `id` is staged (with its sha256 when `hash` asks).
 fn probe(side: &Side<'_>, cache: &Path, id: Option<&str>, args: &SdkValue) -> Outcome {
     let mut out = vec![
         ("architecture".to_owned(), SdkValue::text(architecture())),
@@ -425,14 +425,18 @@ fn probe(side: &Side<'_>, cache: &Path, id: Option<&str>, args: &SdkValue) -> Ou
             out.push(("config".to_owned(), info.sidecar.config));
         }
     }
+    // the staged bytes are hashed only when the copy asks (`hash`): once per
+    // load, on the probe it resumes from
     let staged = part(cache, hex);
     if let Ok(meta) = fs::symlink_metadata(&staged) {
         if meta.file_type().is_file() {
             out.push(("offset".to_owned(), SdkValue::Int(meta.len() as i64)));
-            out.push((
-                "prefix_sha256".to_owned(),
-                SdkValue::text(sha256_file(&staged)?),
-            ));
+            if args.get_bool("hash") {
+                out.push((
+                    "prefix_sha256".to_owned(),
+                    SdkValue::text(sha256_file(&staged)?),
+                ));
+            }
         }
     }
     Ok(SdkValue::Map(out))

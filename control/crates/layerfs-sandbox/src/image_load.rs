@@ -94,12 +94,15 @@ impl<'a> Target<'a> {
         }
     }
 
-    /// `probe` of image `id` (or of the image a sidecar names `reference`).
+    /// `probe` of image `id` (or of the image a sidecar names `reference`);
+    /// `hash` asks for the staged bytes' sha256, which only the probe a
+    /// copy resumes from needs.
     fn probe(
         &mut self,
         id: Option<&str>,
         reference: Option<&str>,
         archive: Option<&str>,
+        hash: bool,
     ) -> Outcome {
         let text = |v: Option<&str>| v.map_or(SdkValue::Null, SdkValue::text);
         self.step(SdkValue::map([
@@ -107,6 +110,7 @@ impl<'a> Target<'a> {
             ("id", text(id)),
             ("ref", text(reference)),
             ("archive", text(archive)),
+            ("hash", SdkValue::Bool(hash)),
         ]))
     }
 }
@@ -183,7 +187,7 @@ pub fn load(
     let kept = |probe: &SdkValue| probe.get_int("size").map(|n| n.max(0) as u64);
     // 1. the machine holds that Id already: Docker is not needed
     if cache::digest(image) {
-        let probe = target.probe(Some(image), None, archive)?;
+        let probe = target.probe(Some(image), None, archive, false)?;
         if held(&probe) {
             return Ok(reused(image, Vec::new(), kept(&probe)));
         }
@@ -195,7 +199,7 @@ pub fn load(
         Err(Failure::Missing(m)) => return Err(Failure::Missing(m).refusal(image)),
         Err(failure) => {
             if !cache::digest(image) {
-                let probe = target.probe(None, Some(image), archive)?;
+                let probe = target.probe(None, Some(image), archive, false)?;
                 if let (true, Some(id)) = (held(&probe), probe.get_text("id")) {
                     return Ok(reused(id, vec![image.to_owned()], kept(&probe)));
                 }
@@ -205,7 +209,7 @@ pub fn load(
     };
     docker.measure(std::slice::from_mut(&mut inspected));
     let Inspected { id, refs, .. } = &inspected;
-    let mut probe = target.probe(Some(id), None, archive)?;
+    let mut probe = target.probe(Some(id), None, archive, false)?;
     let machine_arch = probe.get_text("architecture").unwrap_or("").to_owned();
     if inspected.os != "linux" {
         return Err(refused_with(
@@ -250,7 +254,7 @@ pub fn load(
         // on another copy's lock.
         let _ = cleanup_owned(docker, target.home(), None, None);
     }
-    probe = target.probe(Some(id), None, archive)?;
+    probe = target.probe(Some(id), None, archive, true)?;
     if held(&probe) {
         let size = kept(&probe).or(Some(inspected.size));
         return Ok(reused(id, refs.clone(), size));
