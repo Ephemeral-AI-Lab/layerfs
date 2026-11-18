@@ -15,10 +15,10 @@ use super::report::{Kind, Node, Thing};
 use super::target::Checks;
 use crate::home_tree;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::home::{detect, Layout};
+use layerfs_home::home::{detect, paths, Layout};
 use layerfs_home::outcome::refused;
 use layerfs_home::state::{BlockedBy, Reason, State};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 const fn own(id: &'static str) -> CheckId {
@@ -261,8 +261,9 @@ fn locate(home: &Path, thing: &Thing) -> Result<Located, SdkRefusal> {
         Err(refusal) if thing.kind != Kind::Home => return Err(refusal),
         Err(_) => false,
     };
-    // a record the tree cannot read leaves the home with no children: its
-    // own records check names that record; any other doctor is refused
+    // the tree lists every record that reads (R4 F5); a home folder it
+    // cannot list leaves the home with no children (its records check names
+    // it), and any other doctor is refused
     let tree = match current.then(|| home_tree::tree(home)) {
         None => SdkValue::Null,
         Some(Ok(tree)) => tree,
@@ -279,6 +280,23 @@ fn locate(home: &Path, thing: &Thing) -> Result<Located, SdkRefusal> {
         let word = thing.kind.word();
         refused("NotFound", format!("no {word} named {}", thing.name))
     };
+    // a machine only a Store or Sandbox names has no record of its own:
+    // it is not there, and the record that names it reports the reference
+    let recorded = |node: &&SdkValue| {
+        let name = node.get_text("machine").unwrap_or("");
+        matches!(name, "native" | "docker") || paths::machine_record(home, name).exists()
+    };
+    // a record the tree could not place (unreadable) is still there:
+    // its own `.record` check names it
+    let plain = !thing.name.contains('/') && !thing.name.starts_with('.');
+    let unplaced = |record: PathBuf| match plain && record.exists() {
+        true => Ok(Located {
+            state: State::broken(Reason::Failed, None),
+            blocked: None,
+            children: Vec::new(),
+        }),
+        false => Err(missing()),
+    };
     let at = |state: State, children| {
         let blocked = match &state {
             State::Blocked(by) => Some(by.clone()),
@@ -292,22 +310,32 @@ fn locate(home: &Path, thing: &Thing) -> Result<Located, SdkRefusal> {
     };
     match thing.kind {
         Kind::Home => {
-            let mut children = things(&tree, "machines", Kind::Machine);
+            let mut children: Vec<_> = (machines.iter().filter(recorded))
+                .filter_map(|node| {
+                    let name = node.get_text("machine")?;
+                    Some((Thing::new(Kind::Machine, name), state_of(node)))
+                })
+                .collect();
             children.extend(things(&tree, "stores", Kind::Store));
             children.extend(things(&tree, "buckets", Kind::Bucket));
             at(State::Ready, children)
         }
         Kind::Machine => {
-            let node = machines
+            let Some(node) = machines
                 .iter()
+                .filter(recorded)
                 .find(|m| named(m, "machine"))
-                .ok_or_else(missing)?;
+            else {
+                return unplaced(paths::machine_record(home, &thing.name));
+            };
             let mut children = things(node, "stores", Kind::Store);
             children.extend(things(node, "sandboxes", Kind::Sandbox));
             at(state_of(node), children)
         }
         Kind::Store => {
-            let node = stores().find(|s| named(s, "store")).ok_or_else(missing)?;
+            let Some(node) = stores().find(|s| named(s, "store")) else {
+                return unplaced(paths::store_record(home, &thing.name));
+            };
             let projects = list(node.get("projects")).iter().filter_map(|p| match p {
                 SdkValue::Text(project) => Some((
                     Thing::new(Kind::Project, format!("{}/{project}", thing.name)),
@@ -335,7 +363,9 @@ fn locate(home: &Path, thing: &Thing) -> Result<Located, SdkRefusal> {
             let mut placed = machines
                 .iter()
                 .flat_map(|m| list(m.get("sandboxes")).iter());
-            let node = placed.find(|s| named(s, "sandbox")).ok_or_else(missing)?;
+            let Some(node) = placed.find(|s| named(s, "sandbox")) else {
+                return unplaced(paths::sandbox_record(home, &thing.name));
+            };
             // the Workspaces the home records; its doctor adds those its
             // daemon lists
             at(state_of(node), things(node, "workspaces", Kind::Workspace))

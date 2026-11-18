@@ -466,7 +466,7 @@ fn each_problem_gives_one_finding_naming_its_fix() {
         ("error", "machine", "old", "build that wrote it", None),
         ("error", "bucket", "b1", "0644", Some("chmod 600 ")),
         (
-            "warning",
+            "error",
             "sandbox",
             "sx",
             "its record names Store gone, which has no record",

@@ -220,7 +220,12 @@ $ layerfs home get --with live
   broken is `blocked`, and `blocked_by` names that machine. A machine that
   only a Store or Sandbox names, with no record of its own, is listed too
   (`broken`, `missing`, unless it is `native` or `docker`), so nothing in the
-  home is left out.
+  home is left out. A record that cannot be read does not fail the tree:
+  an unreadable machine record is a `broken` `failed` machine, a Store
+  record whose machine is not known (unreadable, or of a kind this build
+  does not read) is among the `stores` on no machine with its state, and
+  an unreadable Sandbox or Workspace record is left out; each kind's
+  doctor names the record.
 - **`log`** reads the home's call log (`trace/calls.jsonl`, then the one
   file it rotates to), newest first. A row's short form is
   `{ call, outcome, logged_at }`, with `project` when the call named one and
@@ -1353,16 +1358,16 @@ every check was made and nothing was found; otherwise `findings` and
 - A `not_checked` entry names a thing, or one of its checks, that gave no
   verdict: `blocked_by` (the thing at the root of the block and its state,
   as in the lists) or `reason` (`timeout`, `busy`, `lost`), never both.
+  `lost` is only a reply that did not arrive; a check that waits on one
+  that failed is `blocked_by` that thing with `failed` (a Store whose id is
+  not its record's leaves its projects' checks `blocked_by {store,
+  reason: failed}`).
 - The long form (`--detail`) adds `status` (the worst of `error`, `warning`,
   `not_checked`, `notice`, `ok`), `counts` (things per status),
   `observed_at` and `tree`: the doctor's own thing with `status`,
   `coverage` (`none`, `shallow` or `full`; `full` only when a check of
   the Full list was made), its `checks` (`{ check,
   outcome, from }`, outcome `pass`, `notice`, `warning`, `error` or
-  `lost` is only a reply that did not arrive; a check that waits on one
-  that failed is `blocked_by` that thing with `failed` (a Store whose id is
-  not its record's leaves its projects' checks `blocked_by {store,
-  reason: failed}`).
   `not_checked`), `blocked_by`, `reason` and one list per kind of thing on
   it, each checked shallowly. Its `ok` is false whenever anything was found
   or could not be checked.
@@ -1427,7 +1432,10 @@ every check was made and nothing was found; otherwise `findings` and
   not checked`, or `ok` alone), then each finding, its `from` and its `fix`,
   then each `not_checked` entry.
 - Exit 0 once the report is made, whatever it finds; 125 with `NotFound`
-  when the thing is not in the home; 2 for a wrong command line. Leftovers
+  when the thing is not in the home (a machine that only a Store or Sandbox
+  record names, with no record of its own, is not: that record's own
+  check reports the reference, an error in `home.records` as in `sandbox
+  doctor`); 2 for a wrong command line. Leftovers
   of interrupted operations are in no doctor's report: `home leftovers`
   lists them and `home prune` removes one (see [`home`](#home-7)).
 

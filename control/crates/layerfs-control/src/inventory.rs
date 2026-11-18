@@ -42,12 +42,22 @@ pub use layerfs_sandbox::record::{sandbox, sandboxes};
 /// What the home's tree, a Store's or Sandbox's `blocked_by` and the
 /// doctor say of a machine, as `machine list` and `machine get` do.
 pub fn machine_state(home: &Path, name: &str, record: Option<&MachineRecord>) -> Result<State> {
+    let on = match record {
+        Some(_) => sandboxes_on(home, name)?.len(),
+        None => 0,
+    };
+    Ok(machine_state_with(name, record, on))
+}
+
+/// [`machine_state`] with the number of Sandboxes recorded on it already
+/// counted.
+pub fn machine_state_with(name: &str, record: Option<&MachineRecord>, on: usize) -> State {
     let Some(record) = record else {
-        return Ok(layerfs_machine::state::unrecorded(name));
+        return layerfs_machine::state::unrecorded(name);
     };
     let platform = record.platform_name().unwrap_or("");
     let removed = layerfs_sandbox_backend::platform_policy::disabled_reason(platform).is_some();
-    Ok(record.status(removed, sandboxes_on(home, name)?.len()))
+    record.status(removed, on)
 }
 
 /// The sqlite Stores whose record names machine `machine`. A Store record
