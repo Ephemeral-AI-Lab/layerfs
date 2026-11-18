@@ -69,6 +69,7 @@ impl State<'_> {
                 packer: &self.packer,
                 signatures: &self.signatures,
                 values: &self.values,
+                prefer_packer: false,
             };
             for (ordinal, value) in ordinals.iter().zip(source.inode_values(&ordinals)?) {
                 known.entry(value).or_insert(*ordinal);
@@ -183,6 +184,7 @@ impl State<'_> {
             packer: &self.packer,
             signatures: &self.signatures,
             values: &self.values,
+            prefer_packer: false,
         };
         let mut bases = Vec::new();
         for id in advisory {

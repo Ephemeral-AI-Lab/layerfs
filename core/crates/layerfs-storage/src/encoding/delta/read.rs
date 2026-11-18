@@ -243,7 +243,12 @@ impl<'a> Resolver<'a> {
         let mut chain: Vec<ObjectLocation> = Vec::with_capacity(usize::from(role_depth) + 1);
         let mut current = root;
         loop {
-            if chain.iter().any(|row| row.object_id == current.object_id) {
+            if chain.iter().any(|row| {
+                row.object_id == current.object_id
+                    && row.pack_id == current.pack_id
+                    && row.group_number == current.group_number
+                    && row.record_number == current.record_number
+            }) {
                 return Err(StorageError::Integrity("dependency cycle"));
             }
             chain.push(current);
