@@ -56,13 +56,15 @@ fn home_doctor_text_names_each_finding_and_its_fix() {
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let text = String::from_utf8(out.stdout).unwrap();
     assert!(text.starts_with("1 error(s), "), "{text}");
-    assert!(text.contains("error    store bad host.records: "), "{text}");
-    assert!(text.contains("fix: no call reads it"), "{text}");
+    assert!(text.contains("error    store bad home.records: "), "{text}");
+    // no shell line repairs a record that does not parse: no fix line
+    assert!(text.contains("no call reads it"), "{text}");
+    assert!(!text.contains("fix: "), "{text}");
     let json = layerfs(&home, &["home", "doctor"]);
     let json = String::from_utf8_lossy(&json.stdout).into_owned();
     assert!(json.starts_with(r#"{"findings":["#), "{json}");
     assert!(
-        json.contains(r#"{"store":"bad","check":"host.records","severity":"error","#),
+        json.contains(r#"{"store":"bad","check":"home.records","severity":"error","#),
         "{json}"
     );
     assert_eq!(
