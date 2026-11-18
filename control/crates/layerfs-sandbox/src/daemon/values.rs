@@ -229,25 +229,20 @@ pub fn commit(reply: &CommitReply) -> Result<SdkValue, SdkRefusal> {
                 ),
                 ("truncated", SdkValue::Bool(report.truncated)),
                 // what the call answers flat beside the code (call surface
-                // 2.0): the head, the first 20 conflicting paths and their count
-                (
-                    "next",
-                    SdkValue::map([
-                        ("commit", head(report.head)),
-                        (
-                            "conflicts",
-                            SdkValue::List(
-                                (report.conflicts.iter().take(20))
-                                    .map(|conflict| SdkValue::text(&conflict.path))
-                                    .collect(),
-                            ),
-                        ),
-                        (
-                            "conflicts_count",
-                            SdkValue::Int(report.conflicts.len() as i64),
-                        ),
-                    ]),
-                ),
+                // 2.0): the head, the first 20 conflicting paths, and their
+                // count only when the list was cut
+                ("next", {
+                    let paths = (report.conflicts.iter())
+                        .map(|conflict| SdkValue::text(&conflict.path))
+                        .collect();
+                    let total = report.conflicts.len();
+                    let (conflicts, count) = layerfs_home::helpers::shown(paths, total, false);
+                    let mut next = vec![("commit", head(report.head)), ("conflicts", conflicts)];
+                    if count != SdkValue::Null {
+                        next.push(("conflicts_count", count));
+                    }
+                    SdkValue::Map(next.into_iter().map(|(k, v)| (k.to_owned(), v)).collect())
+                }),
             ]),
         }),
     }

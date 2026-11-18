@@ -708,8 +708,9 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   `--mount B` the Workspace's `workspace` (its name is the Branch's,
   lowercased, each other character `-`) and `path`. A refused mount keeps
   the Sandbox and answers the mount's refusal with `next.sandbox` and
-  `fix: layerfs workspace mount <sandbox> <B>`. Progress: `claim`, `start`
-  and, with `--mount`, `mount`. A create whose outcome is not known is
+  `fix: layerfs workspace mount <sandbox> <B>`. Progress: with `--image`, the
+  copy's `inspect, lock, export, send, unpack`; then `start` and, with
+  `--mount`, `mount`. A create whose outcome is not known is
   `Unknown`; its record keeps the `op`, uncertain.
 - On `docker` a Sandbox runs `namespaces` in the docker machine's worker
   container (D-8). Its root is the sealed bundle's `sandbox-image.tar`

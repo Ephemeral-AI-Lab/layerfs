@@ -1,8 +1,8 @@
 //! `sandbox.create`: the name claimed under the home lock with the create's
 //! `op` intent (#536 §7.1), the Sandbox started on its machine, and its
 //! result recorded with the intent dropped in one write. Its progress is
-//! its op's phases, `claim` and `start`, and `mount` when the caller mounts
-//! a Branch next (`sandbox create --mount`, which the call surface runs
+//! the image copy's phases when it names an image, then `start`, and
+//! `mount` when the caller mounts a Branch next (`sandbox create --mount`, which the call surface runs
 //! after this, with the Workspace calls).
 use super::direct;
 use super::record::{self, SandboxRecord};
@@ -34,10 +34,15 @@ pub struct CreateRequest {
     pub mount: bool,
 }
 
-/// Sends progress event `phase` of a create: `done` of `total` phases.
-fn phase(events: &mut Events<'_>, phase: &str, done: i64, mount: bool) {
-    let total = if mount { 3 } else { 2 };
-    events.phase(phase, Some(done), Some(total), Vec::new());
+/// A create's own phases, `start` and with `mount` `mount`, after the
+/// image copy's (V19-8: `inspect, lock, export, send, unpack, start,
+/// mount`).
+fn total(mount: bool) -> i64 {
+    if mount {
+        2
+    } else {
+        1
+    }
 }
 
 /// A Sandbox just started, as recorded.
@@ -134,7 +139,6 @@ pub fn create(
         return Err(refused("Exists", format!("a Sandbox named {name} exists")));
     }
     let op = Op::begin("sandbox.create", "claim", SdkValue::Null)?;
-    phase(events, "claim", 0, request.mount);
     home::private_dir(&dir)?;
     let record = SandboxRecord::creating(name, project, machine, &op);
     let claimed = record::lock(&home, name).and_then(|_sandbox| record.write(&home));
@@ -145,7 +149,6 @@ pub fn create(
     }
     drop(_lock);
     let op = op.at("start");
-    phase(events, "start", 1, request.mount);
     {
         let _sandbox = record::lock(&home, name)?;
         record.clone().with_op(&op).write(&home)?;
@@ -154,6 +157,7 @@ pub fn create(
         call: Call::Create { platform: None },
         message: Message::Absent,
         image: request.image.clone(),
+        start: Some((0, total(request.mount))),
     };
     let started = on_machine(&home, events, &record, asked, crate::dispatch::call)
         .map(|value| Started::read(&value));
@@ -172,7 +176,7 @@ pub fn create(
             }
             record.write(&home)?;
             if !request.mount {
-                phase(events, "start", 2, false);
+                events.phase("start", Some(1), Some(1), Vec::new());
             }
             Ok(Created {
                 record,

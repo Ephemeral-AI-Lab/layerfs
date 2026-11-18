@@ -55,7 +55,7 @@ pub(crate) const CALL: Call = call(
 /// name (the Workspace package's `default_name`); a
 /// mount that is refused keeps the Sandbox and answers the mount's refusal
 /// with `sandbox` and a `fix` that mounts it again. Progress events are
-/// its phases: `claim`, `start` and, with `mount`, `mount`.
+/// the image copy's phases, then `start` and, with `mount`, `mount`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let text = |name: &str| args.get_text(name).map(str::to_owned);
     let branch = text("mount");
@@ -80,7 +80,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     ];
     fields.extend(facts(&created.record));
     if let Some(branch) = branch {
-        events.phase("mount", Some(2), Some(3), Vec::new());
+        events.phase("mount", Some(1), Some(2), Vec::new());
         let asked = MountRequest {
             sandbox: request.name.clone(),
             branch: Some(branch.clone()),
@@ -91,7 +91,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             let refusal = with_next(refusal, "sandbox", SdkValue::text(&request.name));
             with_fix(refusal, fix)
         })?;
-        events.phase("mount", Some(3), Some(3), Vec::new());
+        events.phase("mount", Some(2), Some(2), Vec::new());
         fields[0].1 = SdkValue::Text(mounted.ws);
         fields[1].1 = SdkValue::opt_text(mounted.answer.get_text("path"));
     }

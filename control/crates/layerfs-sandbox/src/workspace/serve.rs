@@ -348,8 +348,7 @@ pub fn commit_with(
                 ),
             );
             let refusal = with_next(refusal, "commit", SdkValue::opt_text(shown));
-            let refusal = with_next(refusal, "conflicts", SdkValue::List(Vec::new()));
-            return Err(with_next(refusal, "conflicts_count", SdkValue::Int(0)));
+            return Err(with_next(refusal, "conflicts", SdkValue::List(Vec::new())));
         }
     }
     let reply = workspace(&mut control)
