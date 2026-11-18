@@ -31,7 +31,7 @@ fn a_stdout_that_cannot_be_written_exits_125_without_panicking() {
     for (what, words) in [
         ("store list", &["store", "list"][..]),
         ("store list --text", &["store", "list", "--text"]),
-        ("doctor", &["doctor"]),
+        ("home doctor", &["home", "doctor"]),
         ("help", &["help"]),
         ("help family", &["help", "store"]),
         ("help call", &["help", "store", "get"]),

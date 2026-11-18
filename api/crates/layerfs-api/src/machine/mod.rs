@@ -36,5 +36,6 @@ pub(crate) fn calls() -> Calls {
         create::CALL,
         remove::CALL,
         update::CALL,
+        crate::doctor::machine::CALL,
     ]
 }

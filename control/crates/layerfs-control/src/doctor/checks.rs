@@ -5,7 +5,7 @@
 //! copy (`store.sqlite.incoming`) an interrupted or certain-failed transfer
 //! left on `native` or on a push's target machine, and a copy a push or pull
 //! did not retire (from the record).
-use super::report::Findings;
+use super::records::Findings;
 use super::scan::Scanned;
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::home::paths;
@@ -19,15 +19,6 @@ use std::path::Path;
 /// `native` and `docker` exist with or without a record.
 fn built_in(machine: &str) -> bool {
     matches!(machine, "native" | "docker")
-}
-
-/// Runs every check on `scanned`.
-pub(super) fn check(
-    home: &Path,
-    scanned: &Scanned,
-    findings: &mut Findings,
-) -> Result<(), SdkRefusal> {
-    check_scope(home, scanned, findings, true)
 }
 
 /// The same record checks without connecting to machines for transfer files.

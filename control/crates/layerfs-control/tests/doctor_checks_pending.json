@@ -1,0 +1,108 @@
+{
+  "about": "The check ids each doctor kind can give today (layerfs_control::doctor::kinds()) against calls.json `doctor.checks` (tests/doctor_frame.rs). `today`: ids a kind gives that the frozen list does not name, to be renamed or dropped; `missing`: frozen ids no check gives yet; `order`: true while the ids both name run in a different order. Each kind's package shrinks its entry to empty lists and false; the test fails while an entry is stale.",
+  "kinds": {
+    "home": {
+      "today": [
+        "host.build",
+        "host.prerequisites",
+        "host.bundle",
+        "host.native_daemon",
+        "host.capacity",
+        "host.layout",
+        "host.records",
+        "host.artifacts"
+      ],
+      "missing": [
+        "home.build",
+        "home.prerequisites",
+        "home.layout",
+        "home.records",
+        "home.bundle",
+        "home.native_daemon",
+        "home.artifacts",
+        "home.capacity"
+      ],
+      "order": false
+    },
+    "machine": {
+      "today": [
+        "machine.platform",
+        "machine.home",
+        "machine.provider.tool_version"
+      ],
+      "missing": [],
+      "order": false
+    },
+    "store": {
+      "today": [
+        "store.connection.configuration",
+        "store.connection.cancelled",
+        "store.connection.authentication",
+        "store.connection.database",
+        "store.connection.transport",
+        "store.connection.cancellation.release",
+        "store.connection.close",
+        "store.connection.schema",
+        "store.connection.identity",
+        "store.connection.read",
+        "store.connection.tls"
+      ],
+      "missing": [
+        "store.operation",
+        "store.schema",
+        "store.backups"
+      ],
+      "order": true
+    },
+    "project": {
+      "today": [],
+      "missing": [
+        "project.data"
+      ],
+      "order": false
+    },
+    "sandbox": {
+      "today": [
+        "sandbox.worker_report",
+        "sandbox.daemon",
+        "sandbox.workspaces",
+        "sandbox.workspace_retained"
+      ],
+      "missing": [],
+      "order": false
+    },
+    "workspace": {
+      "today": [],
+      "missing": [
+        "workspace.mounted",
+        "workspace.activity"
+      ],
+      "order": false
+    },
+    "bucket": {
+      "today": [
+        "backup.configuration",
+        "backup.credentials",
+        "backup.transport",
+        "backup.list",
+        "backup.write_capability",
+        "backup.put",
+        "backup.get",
+        "backup.delete",
+        "backup.reconcile"
+      ],
+      "missing": [
+        "bucket.configuration",
+        "bucket.credentials",
+        "bucket.transport",
+        "bucket.list",
+        "bucket.write_capability",
+        "bucket.put",
+        "bucket.get",
+        "bucket.delete",
+        "bucket.reconcile"
+      ],
+      "order": false
+    }
+  }
+}

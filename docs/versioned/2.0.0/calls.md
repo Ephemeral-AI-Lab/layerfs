@@ -604,7 +604,7 @@ form.
   calls `setsid` itself escapes the group.
 - A command record whose owning process is gone is stale. The next exec of
   its id, cancel, unmount or close ends its command (no grace), removes it
-  and logs it to `log/exec.jsonl`; `layerfs doctor` reports it. On a
+  and logs it to `log/exec.jsonl`; `layerfs home doctor` reports it. On a
   Sandbox the caller reaches directly, a stale record whose worker cannot
   be reached is kept as it was.
 - `commit` merges first when the Branch moved since the mount; `force`
@@ -917,64 +917,67 @@ layerfs sandbox files s1 "$HOME_PATH/notes.txt" --offset 0 --length 4096
   `Unavailable`. The MCP server does not list it. Run for this manual on a
   scratch home: the three commands above.
 
-## `layerfs doctor`
+## The doctors
 
-A top-level command beside `import-env`, outside the call table (#536 H7);
-Node and Python have it as `layerfs.doctor()` ([SDK](sdk.md)). It reports
-what is wrong in the home and changes nothing: it takes no lock, writes no
-record, removes no stale lease and starts no machine.
+Six table calls check one thing each and change nothing: they take no
+lock, write no record, remove no stale lease and start no machine.
 
 ```bash
-layerfs doctor            # {"ok":false,"findings":[{"severity":"error","entity":{"kind":"store","name":"app"},"message":"…","fix":"…"}]}
-layerfs doctor --text     # a count line, then each finding and its fix
+layerfs home doctor                 # the home, then each machine, PostgreSQL Store and bucket, shallowly
+layerfs machine doctor <machine>    # the machine, then each Store and Sandbox on it
+layerfs store doctor <store> [--machine <machine>]   # the Store, then each of its projects
+layerfs project doctor <project>    # the project's record against its Store's own list
+layerfs sandbox doctor <sandbox>    # the Sandbox: record, runtime, daemon
+layerfs backup doctor <bucket> [--full]               # the bucket's record and reach; --full writes and reads one object
 ```
 
-- `ok` is false when any finding is an `error`; a `warning` is left over or
-  out of date and refuses nothing. Each finding's `fix` names the call (or
-  the by-hand step, where no call can) that fixes it.
-- It checks: records that do not parse, or whose `"v"` is not 1; folder
-  modes other than 0700 (0701 where a namespaces Sandbox passes through, but
-  never a Store's own folder, which stays 0700) and
-  record modes other than 0600; broken references (a Sandbox whose Store,
-  project or machine is gone, a Store on a machine with no record, a project
-  in a Store folder with no record, a built-in machine whose recorded daemon is not there, an error
-  naming `machine update <name> --daemon <path>`); an `op` a gone process left uncertain (an error naming the call
-  that clears it) or certain (a warning); stale Store leases (a warning: the
-  Store's next call removes them); what refuses
-  a layout 2 home's conversion; a partial `store.sqlite.incoming` on
-  `native`; a copy a push or pull did not retire (its record's
-  `last_transfer` says `retired: false`; a warning naming the next `store
-  pull` or `store push`, which deletes it first); command records in this
-  home (a stale one, whose owner is gone, is a warning naming `workspace
-  exec-cancel`, the unmount or the close that ends it; one that does not
-  read is an error; a Workspace folder with no Workspace record beside it is
-  a warning); and each running machine's worker build (its hello alone, no
-  request; another build is a warning naming `machine stop` then `machine
-  start`, a worker that does not answer one naming `machine start`).
-- Not checked: partial copies and leftover layout 2 folders on other
-  machines (no worker operation reports them).
-- It also lists what interrupted operations left on disk, on `native` and
-  on each running machine (one bounded walk each: 20,000 entries or 2 s; a
-  stopped machine is not asked). Each is a warning on its machine whose
-  finding also holds `leftover: { machine, kind, path, bytes, age, id,
-  fixable }` (`age` in seconds since it last changed; `bytes` null when the
-  walk's bound ended first), and the report's `leftovers` has one row per
-  machine walked: `{ machine, complete, image_locks, unmount_markers }`. The
-  kinds: `run-folder` (a Sandbox run folder no Sandbox record names),
-  `empty-root` (an empty `<name>.root` whose run folder is gone),
-  `init-copy` (a `project init` folder copy, `incoming/init-*`),
-  `backup-staging` (`backup.staging`, `store.sqlite.backup`), `image-tmp`
-  and `image-part` (an interrupted image unpack or load). Image lock files
-  and unmount markers are only counted: LayerFS keeps them.
-- Exit 0 once the report is made, whatever it finds; 2 for any argument
-  but `--text`; 125 when the home cannot be named (`LAYERFS_HOME` not
-  absolute).
+Each answers the same report. The short form is `{"ok":true}` alone when
+every check was made and nothing was found; otherwise `findings` and
+`not_checked`, each present only with entries:
+
+```json
+{"findings":[{"store":"bad","check":"host.records","severity":"error","message":"…","fix":"…"}],
+ "not_checked":[{"sandbox":"sb","blocked_by":{"machine":"docker","reason":"stopped"}}]}
+```
+
+- A finding names its thing by its own word (`home`, `machine`, `store`,
+  `project`, `sandbox`, `workspace`, `bucket`), then `check`, `severity`
+  (`error`, `warning` or `notice`) and `message`; `fix` (one command) and
+  `from` (the machine a check was made from) when there is one.
+- A `not_checked` entry names a thing, or one of its checks, that gave no
+  verdict: `blocked_by` (the thing at the root of the block and its state,
+  as in the lists) or `reason` (`timeout`, `busy`, `lost`), never both.
+- The long form (`--detail`) adds `status` (the worst of `error`, `warning`,
+  `not_checked`, `notice`, `ok`), `counts` (things per status),
+  `observed_at` and `tree`: the doctor's own thing with `status`,
+  `coverage` (`none`, `shallow` or `full`), its `checks` (`{ check,
+  outcome, from }`, outcome `pass`, `notice`, `warning`, `error` or
+  `not_checked`), `blocked_by`, `reason` and one list per kind of thing on
+  it, each checked shallowly. Its `ok` is false whenever anything was found
+  or could not be checked.
+- The doctor checks its own thing, then each thing on it. A thing whose
+  parent is stopped or failed is `not_checked` with `blocked_by`, and none
+  of its checks is tried; a stopped machine is checked by its records only.
+  Each thing has its own time budget; a check still running when it ends is
+  `not_checked` with `timeout`.
+- `--progress` (`on_progress`) sends one event per finished thing:
+  `{ phase, done, total, node }`, `phase` `self` then the kind of thing
+  (`machines`, `stores`, `projects`, `sandboxes`, `buckets`). `backup doctor`
+  sends none.
+- `project doctor --full` is refused `Unsupported` (not built yet). `store
+  doctor --machine` is for a PostgreSQL Store; a sqlite Store refuses it.
+- `--text` prints a count line (`N error(s), N warning(s), N notice(s), N
+  not checked`, or `ok` alone), then each finding, its `from` and its `fix`,
+  then each `not_checked` entry.
+- Exit 0 once the report is made, whatever it finds; 125 with `NotFound`
+  when the thing is not in the home; 2 for a wrong command line. Leftovers
+  of interrupted operations are in no doctor's report.
 
 ### `layerfs doctor fix <id>`
 
 The one `doctor` command that changes something, and a call of the table
 (`doctor.fix`; `layerfs.doctor.fix(id)` in Node and Python). It removes the
-one leftover whose `id` the report gave (`<machine>:<kind>:<name>`, never a
+one leftover whose `id` it is given (`<machine>:<kind>:<name>`, never a
 path), once, on that machine, under that kind's guard:
 
 ```bash
@@ -993,8 +996,7 @@ layerfs doctor fix native:image-part:<64 hex>
 
 Other refusals: `NotFound` (no leftover has that id now), `InvalidInput`
 (an image lock or an unmount marker, which are never removed), `Unavailable`
-(the machine is stopped) and `Unknown` (the worker's answer was lost: run
-`layerfs doctor` again to see). The MCP server has no tool for it. Run on
+(the machine is stopped) and `Unknown` (the worker's answer was lost). The MCP server has no tool for it. Run on
 macOS `native` against leftovers made by hand; not run on a VM machine for
 this manual.
 

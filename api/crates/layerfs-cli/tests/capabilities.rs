@@ -51,20 +51,10 @@ fn capabilities_include_the_table_and_cli_only_commands() {
     let Some(SdkValue::List(commands)) = value.get("commands") else {
         panic!("commands list");
     };
-    for (name, option) in [
-        ("doctor store integrity", "--quick"),
-        ("doctor backup connection", "--write-test"),
-        ("doctor host", "--timeout"),
-    ] {
-        let command = commands
-            .iter()
-            .find(|c| c.get_text("name") == Some(name))
-            .unwrap();
-        let Some(SdkValue::List(options)) = command.get("options") else {
-            panic!("options list");
-        };
-        assert!(options.contains(&SdkValue::text(option)));
-    }
+    // the doctors are table calls now: no command of their own
+    assert!(commands
+        .iter()
+        .all(|c| !c.get_text("name").unwrap_or("").starts_with("doctor")));
     for name in ["worker", "import-env"] {
         assert!(commands.iter().any(|c| c.get_text("name") == Some(name)));
     }

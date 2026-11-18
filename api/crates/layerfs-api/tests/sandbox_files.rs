@@ -439,7 +439,10 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
         .filter(|c| c.get_text("family") == Some("sandbox"))
         .map(|c| c.get_text("call").unwrap())
         .collect();
-    assert_eq!(sandbox, ["create", "list", "get", "close", "files"]);
+    assert_eq!(
+        sandbox,
+        ["create", "list", "get", "close", "files", "doctor"]
+    );
 }
 
 #[test]

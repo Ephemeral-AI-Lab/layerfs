@@ -1,58 +1,7 @@
-//! Shared target options and deadline for observational diagnostics.
+//! The time budget a doctor gives one thing, and the per-check collector
+//! today's target checks write into (`Checks`), which the frame turns into
+//! that thing's node (`check_report`).
 use std::time::{Duration, Instant};
-
-/// One explicitly selected diagnostic scope.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum DoctorTarget {
-    /// Local installation and home only.
-    Host,
-    /// One machine and its worker.
-    Machine(String),
-    /// One sandbox, including its daemon.
-    Sandbox(String),
-    /// Database and LayerFS integrity for one Store.
-    StoreIntegrity(String),
-    /// A registered PostgreSQL connection.
-    StoreConnection(String),
-    /// A registered backup destination.
-    BackupConnection(String),
-}
-impl DoctorTarget {
-    /// Stable kind and name for the report.
-    pub fn entity(&self) -> (&str, &str) {
-        match self {
-            Self::Host => ("host", "local"),
-            Self::Machine(name) => ("machine", name),
-            Self::Sandbox(name) => ("sandbox", name),
-            Self::StoreIntegrity(name) | Self::StoreConnection(name) => ("store", name),
-            Self::BackupConnection(name) => ("backup", name),
-        }
-    }
-    /// Stable selected operation, separate from entity identity.
-    pub fn operation(&self) -> &str {
-        match self {
-            Self::StoreIntegrity(_) => "integrity",
-            Self::StoreConnection(_) | Self::BackupConnection(_) => "connection",
-            _ => "diagnose",
-        }
-    }
-}
-
-/// Options shared by all public front ends, outside normal call dispatch.
-#[derive(Clone, Debug)]
-pub struct DoctorRequest {
-    /// Explicit target; absent options use the legacy entry instead.
-    pub target: DoctorTarget,
-    /// Overall deadline, including admission and external work.
-    pub timeout: Option<Duration>,
-    /// Reduced Store integrity coverage.
-    pub quick: bool,
-    /// Explicit temporary backup object round trip.
-    pub write_test: bool,
-    /// The build making the call, which `host.native_daemon` compares the
-    /// native daemon's stamp with (`Build::default()`: unknown).
-    pub build: crate::home::Build<'static>,
-}
 
 /// A monotonic overall work budget. Probes must bound their real work by it.
 pub struct Budget {

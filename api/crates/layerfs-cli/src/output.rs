@@ -24,38 +24,79 @@ pub fn result(value: &SdkValue, text: bool) -> ExitCode {
     print(&printed)
 }
 
-/// `layerfs doctor --text`: a count line, then each finding as
-/// `<severity> <kind> <name>: <message>` and its fix on the next line.
-pub fn findings(report: &SdkValue) -> ExitCode {
-    if matches!(report.get("checks"), Some(SdkValue::List(_))) {
-        return checks(report);
-    }
+/// A doctor's report with `--text`: a count line, then each finding as
+/// `<severity> <thing> <name> <check>: <message>` with its fix on the next
+/// line, then each check that could not be made and why.
+pub fn doctor(report: &SdkValue) -> ExitCode {
     let empty = Vec::new();
-    let found = match report.get("findings") {
-        Some(SdkValue::List(found)) => found,
+    let rows = |key: &str| match report.get(key) {
+        Some(SdkValue::List(rows)) => rows,
         _ => &empty,
     };
+    let (found, open) = (rows("findings"), rows("not_checked"));
     let text = |value: &SdkValue, key: &str| value.get_text(key).unwrap_or("").to_owned();
-    let errors = found
-        .iter()
-        .filter(|f| text(f, "severity") == "error")
-        .count();
-    let mut printed = match found.len() {
-        0 => "ok: nothing to report\n".to_owned(),
-        n => format!("{errors} error(s), {} warning(s)\n", n - errors),
+    // a finding or entry names its thing by its own word, its first key
+    let named = |value: &SdkValue| match value {
+        SdkValue::Map(fields) => fields.first().map_or(String::new(), |(word, name)| {
+            format!("{word} {}", name_of(name))
+        }),
+        _ => String::new(),
+    };
+    let count = |severity: &str| {
+        (found.iter())
+            .filter(|f| text(f, "severity") == severity)
+            .count()
+    };
+    let mut printed = match (found.len(), open.len()) {
+        (0, 0) => "ok: every check was made and nothing was found\n".to_owned(),
+        _ => format!(
+            "{} error(s), {} warning(s), {} notice(s), {} not checked\n",
+            count("error"),
+            count("warning"),
+            count("notice"),
+            open.len()
+        ),
     };
     for finding in found {
-        let entity = finding.get("entity").cloned().unwrap_or_default();
         printed.push_str(&format!(
-            "{:<8} {} {}: {}\n         fix: {}\n",
+            "{:<8} {} {}: {}\n",
             text(finding, "severity"),
-            text(&entity, "kind"),
-            text(&entity, "name"),
+            named(finding),
+            text(finding, "check"),
             text(finding, "message"),
-            text(finding, "fix"),
+        ));
+        if let Some(from) = finding.get_text("from") {
+            printed.push_str(&format!("         from: {from}\n"));
+        }
+        if let Some(fix) = finding.get_text("fix") {
+            printed.push_str(&format!("         fix: {fix}\n"));
+        }
+    }
+    for entry in open {
+        let why = match (entry.get("blocked_by"), entry.get_text("reason")) {
+            (Some(by @ SdkValue::Map(_)), _) => {
+                format!("blocked by {} ({})", named(by), text(by, "reason"))
+            }
+            (_, Some(reason)) => reason.to_owned(),
+            _ => String::new(),
+        };
+        let check = entry
+            .get_text("check")
+            .map_or(String::new(), |check| format!(" {check}"));
+        printed.push_str(&format!(
+            "{:<8} {}{check}: {why}\n",
+            "not checked",
+            named(entry)
         ));
     }
     print(&printed)
+}
+
+fn name_of(value: &SdkValue) -> String {
+    match value {
+        SdkValue::Text(text) => text.clone(),
+        other => json::print(other),
+    }
 }
 
 /// Writes one line to stderr. A stderr that is gone loses it and the exit
@@ -260,50 +301,4 @@ fn table(name: &str, rows: &[SdkValue]) -> String {
         out.push_str(&line(row));
     }
     out
-}
-
-/// Shows every completed, failed or unverified explicit diagnostic check.
-fn checks(report: &SdkValue) -> ExitCode {
-    let mut shown = String::new();
-    let complete = report.get("complete") == Some(&SdkValue::Bool(true));
-    shown.push_str(if complete {
-        "Diagnostic coverage: complete\n"
-    } else {
-        "Diagnostic coverage: incomplete\n"
-    });
-    if let Some(SdkValue::List(checks)) = report.get("checks") {
-        for check in checks {
-            let outcome = check.get_text("outcome").unwrap_or("unknown");
-            let status = match check.get_text("severity") {
-                Some(severity) => format!("{outcome}/{severity}"),
-                None => outcome.to_owned(),
-            };
-            shown.push_str(&format!(
-                "{status:<12} {}: {}\n",
-                check.get_text("id").unwrap_or(""),
-                check.get_text("message").unwrap_or("")
-            ));
-            if let Some(fix) = check.get_text("fix").filter(|f| !f.is_empty()) {
-                shown.push_str(&format!("         suggested: {fix}\n"));
-            }
-            if outcome != "pass" && outcome != "skipped" {
-                if let Some(evidence) = check.get("evidence").filter(|v| **v != SdkValue::Null) {
-                    let evidence = json::print(evidence);
-                    let compact: String = evidence.chars().take(1024).collect();
-                    shown.push_str(&format!("         evidence: {compact}"));
-                    if evidence.chars().count() > 1024 {
-                        shown.push_str("... (use JSON for full evidence)");
-                    }
-                    shown.push('\n');
-                }
-            }
-        }
-    }
-    if report.get("truncated") == Some(&SdkValue::Bool(true)) {
-        shown.push_str("Report entries truncated.\n");
-    }
-    if let Some(counts) = report.get("counts") {
-        shown.push_str(&format!("Check totals: {}\n", json::print(counts)));
-    }
-    print(&shown)
 }

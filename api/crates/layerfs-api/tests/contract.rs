@@ -221,9 +221,20 @@ fn every_call_is_migrated_or_pending_and_the_table_names_no_other() {
             "{gone}: {replacement}"
         );
     }
+    // what a migrated call does not do yet, with the reason
+    for (call, lines) in fields(at(&pending, "not_built")) {
+        let migrated = layerfs_api::find(call).is_some_and(|entry| entry.form.is_some());
+        assert!(
+            named.contains(&call.as_str()) && migrated,
+            "not_built names `{call}`, which is not a migrated call"
+        );
+        assert!(!list(lines).is_empty(), "{call}: not_built lists nothing");
+    }
     if PENDING_MUST_BE_EMPTY {
         assert!(waiting.is_empty(), "still pending: {waiting:?}");
         assert!(fields(old).is_empty(), "old names remain: {:?}", keys(old));
+        let left = at(&pending, "not_built");
+        assert!(fields(left).is_empty(), "not built: {:?}", keys(left));
         for (what, ahead) in fields(at(&pending, "spec_sync")) {
             assert!(fields(ahead).is_empty(), "spec_sync.{what} is not empty");
         }
@@ -257,6 +268,11 @@ fn check_args(
 ) {
     let want: Vec<String> = (list(at(row, what)).iter())
         .map(|arg| renamed(pending, call, arg.get_text("name").unwrap()))
+        .collect();
+    // `on_progress` is a global option in calls.json; an entry declares it
+    // as its last option when its row says `progress`
+    let args: Vec<&layerfs_api::Arg> = (args.iter())
+        .filter(|arg| arg.name != "on_progress")
         .collect();
     let have: Vec<&str> = args.iter().map(|arg| arg.name).collect();
     assert_eq!(have, want, "{call}: {what}");
@@ -1131,5 +1147,8 @@ fn the_table_s_json_carries_each_migrated_entry_s_forms() {
             at(said, "paging") == &SdkValue::Null
         );
     }
-    assert_eq!(migrated, 3);
+    // every call of calls.json that pending does not list
+    let spec = read(SPEC);
+    let waiting = texts(at(&read(PENDING), "calls"));
+    assert_eq!(migrated, rows(&spec).len() - waiting.len());
 }

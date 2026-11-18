@@ -3,7 +3,6 @@
 
 pub mod banner;
 mod capabilities;
-mod doctor;
 mod framed;
 pub mod help;
 pub mod output;

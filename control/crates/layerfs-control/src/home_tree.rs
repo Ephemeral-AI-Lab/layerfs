@@ -37,7 +37,7 @@ fn held(op: Option<Op>) -> Option<State> {
 /// A machine's state as its record says it: its intent, a removed
 /// platform, then the state a create, start or stop recorded; with none,
 /// `native` is ready and any other machine stopped.
-fn machine_state(record: &MachineRecord) -> State {
+pub(crate) fn machine_state(record: &MachineRecord) -> State {
     if let Some(state) = held(record.op()) {
         return state;
     }
