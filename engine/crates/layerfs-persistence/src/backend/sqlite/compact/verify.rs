@@ -1,7 +1,7 @@
 //! §7 step 5: immutable verification of the staged file against the live tuple.
 
 use super::build::Built;
-use super::build::CACHE_KIB;
+use super::build::{cache_kib, CACHE_KIB};
 use super::lengths::PackLengths;
 use super::op::stop_at;
 use super::op::visited_path;
@@ -321,7 +321,10 @@ pub(crate) fn verify(
     // connection has given back, keeps as many of those pages as a
     // compaction may hold.
     connection
-        .execute_batch(&format!("PRAGMA cache_size=-{CACHE_KIB}"))
+        .execute_batch(&format!(
+            "PRAGMA cache_size=-{}",
+            cache_kib(mark.sort_space(), CACHE_KIB)
+        ))
         .map_err(db_error)?;
     schema::check(
         &connection,
@@ -365,7 +368,7 @@ pub(crate) fn verify(
     if counted(packs.packs)? != mark.objects().retained_packs().len() {
         return Err(HistoryError::Integrity("staged Store pack count"));
     }
-    super::values::verify(&connection, mark.objects().inode_ordinal_set())?;
+    super::values::verify(&connection, mark.objects().inode_ordinal_runs())?;
     if counted(scanned.history)? != mark.history().len() as u64 {
         return Err(HistoryError::Integrity("staged Store history count"));
     }

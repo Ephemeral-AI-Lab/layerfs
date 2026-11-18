@@ -6,17 +6,20 @@
 //! the records the walk reached, the count of records the Store locates in
 //! each pack, and the group extents of the packs whose directory the walk
 //! read. It holds a bounded run of packs at a time.
-use super::records::{Count, Kept};
+use super::records::{Based, Count, Kept};
 use super::table::{Locators, Marks};
 use super::*;
 
-/// Reached records of the packs one round holds, at most; a pack is never
-/// split.
+/// Reached records of the packs one round holds, at most, under the default
+/// budget; a pack is never split.
 const ROUND_RECORDS: usize = 262_144;
-/// Packs one round holds, at most. Each costs its own small lists whatever
-/// it holds, so a Store of one-record packs is bounded by this and not by
-/// the records.
+/// Packs one round holds, at most, under the default budget. Each costs its
+/// own small lists whatever it holds, so a Store of one-record packs is
+/// bounded by this and not by the records.
 const ROUND_PACKS: usize = 4_096;
+/// The least of both, whatever the budget.
+const LEAST_ROUND_RECORDS: usize = 1_024;
+const LEAST_ROUND_PACKS: usize = 16;
 
 /// What the pass found: the kept waste, and the retained packs it met.
 pub(super) struct Found {
@@ -25,7 +28,7 @@ pub(super) struct Found {
     /// each with its dead bytes.
     pub(super) partly_dead: PartlyDead,
     /// The retained packs: those holding at least one reached object.
-    pub(super) retained: IdSet,
+    pub(super) retained: Sequence,
     /// How many objects the walk reached.
     pub(super) objects: u64,
 }
@@ -61,14 +64,15 @@ pub(super) fn waste(
     tx: &Transaction<'_>,
     source: &ClosureSource<'_>,
     table: &mut Locators,
-    marks: &Marks,
+    marks: &mut Marks,
     located: &mut Sorter<Count>,
-    kept: &mut Sorter<Kept>,
+    kept: (&mut Sorter<Kept>, &mut Sorter<Based>),
 ) -> HistoryResult<Found> {
+    let (kept, based) = kept;
     let mut dead_in_retained_packs_bytes = 0u64;
     let mut delta_bases_bytes = 0u64;
     let mut objects = 0u64;
-    let mut retained = IdSet::default();
+    let mut retained = Sequence::new(&source.space);
     // Written in pack order, a pack once: the order only merges its runs.
     let mut partly_dead = Sorter::new(&source.space, PARTLY_DEAD_BYTES, records::counts_by_pack);
     let mut partly_dead_count = 0u64;
@@ -78,6 +82,8 @@ pub(super) fn waste(
         &mut *source.layouts.borrow_mut(),
         Sorter::new(&source.space, PACK_SORT_BYTES, records::layouts_by_group),
     );
+    let round_records = source.space.scaled(ROUND_RECORDS).max(LEAST_ROUND_RECORDS);
+    let round_packs = source.space.scaled(ROUND_PACKS).max(LEAST_ROUND_PACKS);
     let mut layouts = layouts.sorted()?;
     let mut located = located.sorted()?;
     let mut kept = kept.sorted()?;
@@ -87,7 +93,7 @@ pub(super) fn waste(
         let mut round: Vec<Retained> = Vec::new();
         let mut unread = Vec::new();
         let mut held = 0;
-        while unread.len() < edges::HEAD_PACKS && held < ROUND_RECORDS && round.len() < ROUND_PACKS
+        while unread.len() < edges::HEAD_PACKS && held < round_records && round.len() < round_packs
         {
             let Some(first) = kept.next()? else {
                 break;
@@ -144,15 +150,11 @@ pub(super) fn waste(
                 })?;
                 partly_dead_count += 1;
             }
-            if pack_id < 0 || !retained.insert(pack_id as u64) {
+            // The reached records come in pack order: a pack once.
+            if pack_id < 0 || retained.push(pack_id as u64).is_err() {
                 return Err(HistoryError::Integrity("mark pack"));
             }
             objects += records.len() as u64;
-            for kept in records {
-                if marks.bases.get(kept.rank) && !marks.logical.get(kept.rank) {
-                    delta_bases_bytes = delta_bases_bytes.saturating_add(kept.width);
-                }
-            }
             // A pack that locates more records than the walk reached in it
             // holds a dead one. That is the only sign a compressed group
             // gives; its bytes are not attributed.
@@ -229,22 +231,34 @@ pub(super) fn waste(
         partly_dead_count += 1;
     }
     drop((layouts, located, kept));
+    // The objects first reached as a delta base, in rank order: those no
+    // logical reference reached later are kept only as a base. The bits are
+    // read forward, a page once.
+    {
+        let mut based = based.sorted()?;
+        while let Some(object) = based.next()? {
+            if marks.kinds(object.rank)? == records::BASE {
+                delta_bases_bytes = delta_bases_bytes.saturating_add(object.width);
+            }
+        }
+    }
     // The report names at most this many kept delta bases, the first in
     // identity order. The byte total stays exact; only the list is bounded,
     // and [`KeptWaste::from_parts`] records that it was cut so the §11
     // projection can render `{value, cap}`. One more than the cap is read so
     // the cut is known.
+    let mut ranks = Vec::new();
+    for (from, to) in table.byte_order() {
+        marks.each(from, to, |rank, kinds| {
+            if kinds == records::BASE {
+                ranks.push(rank);
+            }
+            Ok(ranks.len() <= MAX_KEPT_WASTE_REFERENCES)
+        })?;
+    }
     let mut delta_base_references = Vec::new();
-    'listed: for (from, to) in table.byte_order() {
-        for rank in marks.bases.ones(from, to) {
-            if marks.logical.get(rank) {
-                continue;
-            }
-            if delta_base_references.len() > MAX_KEPT_WASTE_REFERENCES {
-                break 'listed;
-            }
-            delta_base_references.push(table.at(source.mechanics, rank)?.object_id);
-        }
+    for rank in ranks.into_iter().take(MAX_KEPT_WASTE_REFERENCES + 1) {
+        delta_base_references.push(table.at(source.mechanics, rank)?.object_id);
     }
     let inode = tx.query(INODE_BLOCKS, Vec::<Param>::new())?;
     let mut inode_blocks_bytes = 0u64;

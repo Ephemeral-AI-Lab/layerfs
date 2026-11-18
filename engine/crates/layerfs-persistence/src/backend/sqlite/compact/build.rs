@@ -27,6 +27,7 @@ use super::window::ReadAhead;
 use crate::backend::records::BackendError;
 use crate::backend::sqlite::lifecycle::seal::SealedFacts;
 use crate::backend::sqlite::session::connection::Session;
+use crate::history::spill::Space;
 use crate::KeptObjects;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
@@ -49,6 +50,17 @@ pub(crate) const CACHE_KIB: i64 = 65_536;
 /// temporary file, so this is also the most one index sort holds; the load
 /// is committed by then and the index pages are written in key order.
 pub(crate) const INDEX_CACHE_KIB: i64 = 8_192;
+
+/// The least page cache a connection of the compaction is given.
+const LEAST_CACHE_KIB: usize = 512;
+
+/// A page cache that is `kib` under the default budget, under the budget
+/// of `space`: the run's one budget sizes the caches as it sizes the
+/// sorters ([`Space::scaled`]).
+pub(crate) fn cache_kib(space: &Space, kib: i64) -> i64 {
+    let kib = space.scaled(usize::try_from(kib).unwrap_or(0).saturating_mul(1024)) / 1024;
+    i64::try_from(kib.max(LEAST_CACHE_KIB)).unwrap_or(i64::MAX)
+}
 
 /// §7 step 2's large window for the attached sealed source. The session default
 /// is no mmap (`session/profile.rs:86-87`), so the bulk copy would page the old
@@ -145,6 +157,8 @@ pub(crate) struct BuildInput<'a> {
     /// dead records (for [`super::repack`]) and the inode value ordinals it
     /// read (for [`super::values`]). Each is read as a stream.
     pub(crate) kept: &'a KeptObjects,
+    /// The run's sort space, for its budget.
+    pub(crate) space: &'a Space,
 }
 
 /// What the mark found besides the retained packs, for the steps of the copy
@@ -448,7 +462,7 @@ fn copy_rows(
         // written again, without those records, once the tables are copied.
         let repack = super::repack::plan(connection, marked.kept)?;
         // The ordinals the block copy below looks its blocks up in.
-        super::values::plan(connection, marked.kept.inode_ordinal_set())?;
+        super::values::plan(connection, marked.kept.inode_ordinal_runs())?;
         // §7 step 4: the totals trigger invariant holds before the copy. The
         // rewrite of `store_totals` below trusts it.
         let before: (i64, i64) = connection
@@ -610,7 +624,10 @@ pub(crate) fn build(
         payload_bytes,
         lengths,
         kept,
+        space: sorts,
     } = input;
+    let cache = cache_kib(sorts, CACHE_KIB);
+    let index_cache = cache_kib(sorts, INDEX_CACHE_KIB);
     let store = &facts.path;
     let target = compact_path(store);
     let visited = visited_path(store);
@@ -671,7 +688,7 @@ pub(crate) fn build(
         .execute_batch(&format!(
             "PRAGMA page_size={page_size};PRAGMA auto_vacuum={auto_vacuum};\
 PRAGMA journal_mode=OFF;PRAGMA synchronous=OFF;PRAGMA foreign_keys=OFF;\
-PRAGMA temp_store=FILE;PRAGMA cache_size=-{CACHE_KIB};\
+PRAGMA temp_store=FILE;PRAGMA cache_size=-{cache};\
 PRAGMA user_version={user_version};PRAGMA application_id={application_id};"
         ))
         .map_err(db_error)?;
@@ -731,7 +748,7 @@ PRAGMA user_version={user_version};PRAGMA application_id={application_id};"
     // SQLite answers from a temporary table spills the same way. In memory
     // (the earlier `temp_store=MEMORY`) each held every key at once.
     connection
-        .execute_batch(&format!("PRAGMA cache_size=-{INDEX_CACHE_KIB}"))
+        .execute_batch(&format!("PRAGMA cache_size=-{index_cache}"))
         .map_err(db_error)?;
     for sql in &schema.secondary {
         connection.execute_batch(sql).map_err(db_error)?;

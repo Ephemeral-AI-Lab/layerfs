@@ -401,6 +401,7 @@ impl SqliteHandles {
                     payload_bytes: live_stored,
                     lengths: &mut lengths,
                     kept: mark.objects(),
+                    space: mark.sort_space(),
                 },
                 capacity,
                 request,
@@ -439,7 +440,10 @@ impl SqliteHandles {
             let peak_temp = built
                 .peak_temp_bytes()
                 .saturating_add(space.held_bytes())
-                .saturating_add(StagedLocators::sort_file_bytes(mark.objects().len() as u64))
+                .saturating_add(StagedLocators::sort_file_bytes(
+                    space,
+                    mark.objects().len() as u64,
+                ))
                 .max(space.peak_bytes());
             // §9/§11: record the installed outcome's totals now that the build
             // produced them, so a crash after the rename still lets the next

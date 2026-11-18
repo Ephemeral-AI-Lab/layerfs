@@ -13,7 +13,7 @@ use crate::history::spill::Item;
 use crate::history::spill::Merge;
 use crate::history::spill::Sorter;
 use crate::history::spill::Space;
-use crate::IdSet;
+use crate::Sequence;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
 use std::cmp::Ordering;
@@ -81,20 +81,20 @@ impl PackLengths {
 
     /// The stored bytes of the `retained` packs. A retained pack the Store
     /// does not hold is a mark that disagrees with it.
-    pub fn stored(&mut self, retained: &IdSet) -> HistoryResult<u64> {
-        let mut wanted = retained.iter().map(|pack| pack as i64).peekable();
+    pub fn stored(&mut self, retained: &Sequence) -> HistoryResult<u64> {
+        let mut packs = self.packs()?;
         let mut stored = 0u64;
-        for pack in self.packs()? {
-            let (pack, length) = pack?;
-            if wanted.peek() == Some(&pack) {
-                wanted.next();
-                stored = stored.saturating_add(length);
+        retained.each(&mut |wanted| loop {
+            match packs.next().transpose()? {
+                Some((pack, _)) if u64::try_from(pack).is_ok_and(|pack| pack < wanted) => {}
+                Some((pack, length)) if u64::try_from(pack) == Ok(wanted) => {
+                    stored = stored.saturating_add(length);
+                    return Ok(());
+                }
+                _ => return Err(HistoryError::Integrity("mark pack")),
             }
-        }
-        match wanted.next() {
-            Some(_) => Err(HistoryError::Integrity("mark pack")),
-            None => Ok(stored),
-        }
+        })?;
+        Ok(stored)
     }
 }
 

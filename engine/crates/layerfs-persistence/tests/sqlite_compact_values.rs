@@ -481,12 +481,11 @@ fn verification_requires_a_staged_block_for_every_ordinal_the_mark_read() {
         connection
             .execute_batch(&format!("PRAGMA journal_mode=DELETE;{change}"))
             .unwrap();
-        // The mark hands its read ordinals over as a set.
-        let mut read = layerfs_persistence::IdSet::default();
+        // The mark hands its read ordinals over as a list of runs.
+        let space = layerfs_persistence::internals::Space::new(temp.path().to_path_buf());
+        let mut read = layerfs_persistence::Spans::new(&space);
         for (first, last) in runs {
-            for ordinal in *first..=*last {
-                read.insert(u64::from(ordinal));
-            }
+            read.push(*first, *last).unwrap();
         }
         verify_inode_blocks(&connection, &read)
     };
@@ -591,4 +590,44 @@ fn the_read_ordinals_are_exact_across_word_and_page_boundaries() {
         "the rebuilt Store's leaves read the same ordinals"
     );
     drop(temp);
+}
+
+/// The ordinals a mark read are a list it sorts in bounded memory, and the
+/// budget that sizes that memory changes nothing it finds: a Store of
+/// leaves that read ordinals in long runs and in runs of one, with a
+/// deleted project beside them, is marked and rebuilt to the same rows
+/// under the least budget and under a wide one.
+#[test]
+fn inode_leaves_are_rebuilt_the_same_under_the_least_and_a_wide_budget() {
+    let f = Fixture::new();
+    let path = f.temp.join("store.sqlite");
+    let content = whole_file(&f, b"shared");
+    let first = reserve_ordinals(&f, 100);
+    let consecutive: Vec<u32> = (first..first + 100).collect();
+    let (dense_root, _, _) = wide_leaf(&f, content, 1, &consecutive);
+    let first = reserve_ordinals(&f, 200);
+    let alternate: Vec<u32> = (0..100).map(|step| first + 2 * step).collect();
+    let (sparse_root, _, _) = wide_leaf(&f, content, 2, &alternate);
+    let (dead_root, _, _) = tree(&f, whole_file(&f, &noise(60_000, 12)), 3);
+    initialize(&f.handles, 1, dense_root);
+    initialize(&f.handles, 2, sparse_root);
+    initialize(&f.handles, 3, dead_root);
+    f.handles
+        .history
+        .mark_stack_deleted(support::stack(3), REMOVED_AT)
+        .unwrap();
+    let Fixture { temp, handles, .. } = f;
+    drop(handles);
+
+    let least = support::marks::same_under_both_budgets(&path, temp.path());
+    assert_eq!(least.receipt.path, CompactPath::Rebuild);
+    let runs = least.mark.objects().inode_ordinals();
+    assert_eq!(runs.len(), 100, "one long run joined by the first of 100");
+    assert_eq!(
+        runs.iter()
+            .map(|(first, last)| u64::from(last - first) + 1)
+            .sum::<u64>(),
+        200
+    );
+    assert_eq!(least.after.objects().inode_ordinals(), runs);
 }

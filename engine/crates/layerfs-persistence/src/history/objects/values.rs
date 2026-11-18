@@ -17,9 +17,12 @@ use std::collections::BTreeMap;
 
 /// Ordinals past a leaf's own that one inode value read may bring along.
 pub(super) const AHEAD_VALUES: u32 = 4096;
-/// Inode values kept between reads, in two generations: when the young one
-/// reaches half of this, the old one is dropped.
+/// Inode values kept between reads under the default budget, in two
+/// generations: when the young one reaches half of this, the old one is
+/// dropped.
 pub(super) const HELD_VALUES: usize = 262_144;
+/// The least number of values kept, whatever the budget.
+const LEAST_VALUES: usize = 512;
 
 /// One inode value.
 type Value = [u8; INODE_VALUE_BYTES];
@@ -32,11 +35,12 @@ type Runs = BTreeMap<u32, Vec<Value>>;
 ///
 /// A value is written once under its ordinal and never changes, so two runs
 /// that overlap agree wherever they do, and either may answer.
-#[derive(Default)]
 pub(super) struct HeldValues {
     young: Runs,
     old: Runs,
     young_values: usize,
+    /// Values kept at most, in both generations.
+    most: usize,
 }
 
 /// The value of `ordinal` in `runs`: the last run starting at or before it is
@@ -47,6 +51,16 @@ fn held(runs: &Runs, ordinal: u32) -> Option<&Value> {
 }
 
 impl HeldValues {
+    /// Nothing held yet, and at most `most` values later.
+    pub(super) fn holding(most: usize) -> Self {
+        Self {
+            young: Runs::new(),
+            old: Runs::new(),
+            young_values: 0,
+            most: most.max(LEAST_VALUES),
+        }
+    }
+
     fn get(&self, ordinal: u32) -> Option<&Value> {
         held(&self.young, ordinal).or_else(|| held(&self.old, ordinal))
     }
@@ -62,7 +76,7 @@ impl HeldValues {
                 .count();
             let (run, tail) = rest.split_at(length);
             rest = tail;
-            if self.young_values + length > HELD_VALUES / 2 {
+            if self.young_values + length > self.most / 2 {
                 self.old = std::mem::take(&mut self.young);
                 self.young_values = 0;
             }

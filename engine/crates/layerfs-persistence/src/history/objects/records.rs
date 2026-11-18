@@ -69,6 +69,9 @@ pub(in crate::history) fn edges_by_signed_prefix(left: &Edge, right: &Edge) -> O
 pub(in crate::history) struct Row {
     pub(in crate::history) location: ObjectLocation,
     pub(in crate::history) rank: u64,
+    /// Why the walk first reached it ([`LOGICAL`], [`BASE`] or both); zero
+    /// in a list of what a pack holds.
+    pub(in crate::history) kind: u8,
 }
 
 // A file holds a locator in the widths the Store's own limits allow: 255
@@ -83,19 +86,21 @@ impl Item for Row {
         put(out, 41, 2, self.location.record_number as u64);
         put(out, 43, 4, self.location.canonical_length as u64);
         put(out, 47, 6, self.rank);
-        out[53] = self.location.role.code();
+        // A role's code leaves the two high bits free.
+        out[53] = self.location.role.code() | (self.kind << 6);
     }
     fn decode(bytes: &[u8]) -> Option<Self> {
         Some(Self {
             location: ObjectLocation {
                 object_id: ObjectId::from_bytes(&bytes[..32]).ok()?,
-                role: ObjectRole::from_code(bytes[53]).ok()?,
+                role: ObjectRole::from_code(bytes[53] & 0x3f).ok()?,
                 canonical_length: number(bytes, 43, 4) as usize,
                 pack_id: number(bytes, 32, 8) as i64,
                 group_number: number(bytes, 40, 1) as usize,
                 record_number: number(bytes, 41, 2) as usize,
             },
             rank: number(bytes, 47, 6),
+            kind: bytes[53] >> 6,
         })
     }
     fn fits(&self) -> bool {
@@ -103,6 +108,8 @@ impl Item for Row {
             && within(self.location.record_number as u64, 2)
             && within(self.location.canonical_length as u64, 4)
             && within(self.rank, 6)
+            && self.location.role.code() < 0x40
+            && self.kind < 4
     }
 }
 
@@ -123,25 +130,23 @@ pub(in crate::history) fn rows_by_locator(left: &Row, right: &Row) -> Ordering {
     key(left).cmp(&key(right))
 }
 
-/// One record the walk reached: where it is, the stored width a read
-/// charges it, and its object's rank.
+/// One record the walk reached: where it is and the stored width a read
+/// charges it.
 #[derive(Clone, Copy)]
 pub(in crate::history) struct Kept {
     pub(in crate::history) pack: i64,
     pub(in crate::history) group: u64,
     pub(in crate::history) record: u64,
     pub(in crate::history) width: u64,
-    pub(in crate::history) rank: u64,
 }
 
 impl Item for Kept {
-    const BYTES: usize = 22;
+    const BYTES: usize = 16;
     fn encode(&self, out: &mut [u8]) {
         put(out, 0, 8, self.pack as u64);
         put(out, 8, 1, self.group);
         put(out, 9, 2, self.record);
         put(out, 11, 5, self.width);
-        put(out, 16, 6, self.rank);
     }
     fn decode(bytes: &[u8]) -> Option<Self> {
         Some(Self {
@@ -149,15 +154,92 @@ impl Item for Kept {
             group: number(bytes, 8, 1),
             record: number(bytes, 9, 2),
             width: number(bytes, 11, 5),
-            rank: number(bytes, 16, 6),
         })
     }
     fn fits(&self) -> bool {
-        within(self.group, 1)
-            && within(self.record, 2)
-            && within(self.width, 5)
-            && within(self.rank, 6)
+        within(self.group, 1) && within(self.record, 2) && within(self.width, 5)
     }
+}
+
+/// One object the walk first reached as a delta base and not through a
+/// logical reference: its rank and the stored width a read charges it. If
+/// no logical reference reaches it later either, it is kept only as a base.
+#[derive(Clone, Copy)]
+pub(in crate::history) struct Based {
+    pub(in crate::history) rank: u64,
+    pub(in crate::history) width: u64,
+}
+
+impl Item for Based {
+    const BYTES: usize = 11;
+    fn encode(&self, out: &mut [u8]) {
+        put(out, 0, 6, self.rank);
+        put(out, 6, 5, self.width);
+    }
+    fn decode(bytes: &[u8]) -> Option<Self> {
+        Some(Self {
+            rank: number(bytes, 0, 6),
+            width: number(bytes, 6, 5),
+        })
+    }
+    fn fits(&self) -> bool {
+        within(self.rank, 6) && within(self.width, 5)
+    }
+}
+
+pub(in crate::history) fn based_by_rank(left: &Based, right: &Based) -> Ordering {
+    left.rank.cmp(&right.rank)
+}
+
+/// One number of a list a mark made: a pack it retains.
+#[derive(Clone, Copy)]
+pub(in crate::history) struct Number(pub(in crate::history) u64);
+
+impl Item for Number {
+    const BYTES: usize = 8;
+    fn encode(&self, out: &mut [u8]) {
+        put(out, 0, 8, self.0);
+    }
+    fn decode(bytes: &[u8]) -> Option<Self> {
+        Some(Self(number(bytes, 0, 8)))
+    }
+    fn absorb(&mut self, _other: &Self) -> bool {
+        true
+    }
+}
+
+pub(in crate::history) fn numbers_ascending(left: &Number, right: &Number) -> Ordering {
+    left.0.cmp(&right.0)
+}
+
+/// An inclusive run of numbers a mark noted: inode value ordinals it read.
+#[derive(Clone, Copy)]
+pub(in crate::history) struct Span {
+    pub(in crate::history) first: u32,
+    pub(in crate::history) last: u32,
+}
+
+impl Item for Span {
+    const BYTES: usize = 8;
+    fn encode(&self, out: &mut [u8]) {
+        put(out, 0, 4, u64::from(self.first));
+        put(out, 4, 4, u64::from(self.last));
+    }
+    fn decode(bytes: &[u8]) -> Option<Self> {
+        Some(Self {
+            first: number(bytes, 0, 4) as u32,
+            last: number(bytes, 4, 4) as u32,
+        })
+    }
+    /// Two runs that start together are the longer one.
+    fn absorb(&mut self, other: &Self) -> bool {
+        self.last = self.last.max(other.last);
+        true
+    }
+}
+
+pub(in crate::history) fn spans_by_first(left: &Span, right: &Span) -> Ordering {
+    left.first.cmp(&right.first)
 }
 
 pub(in crate::history) fn kept_by_locator(left: &Kept, right: &Kept) -> Ordering {

@@ -6,7 +6,7 @@
 //! locators block by block ([`super::table`]). Those the walk had not
 //! reached are the next wave, sorted by locator. The wave is then walked a
 //! bounded run of rows at a time.
-use super::records::{self, Edge, Kept, Row};
+use super::records::{self, Based, Edge, Kept, Row};
 use super::spill::{Sealed, Sorter};
 use super::table::{Locators, Marks};
 use super::{edges, storage, ClosureSource};
@@ -24,8 +24,12 @@ use layerfs_storage::{
     StorageCapacities,
 };
 
-/// Rows of a wave walked between two reads of record headers, at most.
+/// Rows of a wave walked between two reads of record headers, at most,
+/// under the default budget; and the least, whatever the budget.
 const RUN_ROWS: usize = 16_384;
+const LEAST_RUN_ROWS: usize = 64;
+/// The least the chain memo holds, whatever the budget.
+const LEAST_MEMO_BYTES: usize = 64 * 1024;
 /// A wave that reached fewer identities than one in this many locators asks
 /// for each one alone instead of reading the locators block by block: most
 /// blocks then hold none of them.
@@ -41,22 +45,10 @@ struct Readers {
     edge_decodes: u64,
 }
 
-impl Marks {
-    /// Notes why the object at `rank` was reached, and says whether this is
-    /// the first time it is.
-    fn note(&mut self, rank: u64, kind: u8) -> bool {
-        if kind & records::LOGICAL != 0 {
-            self.logical.set(rank);
-        }
-        if kind & records::BASE != 0 {
-            self.bases.set(rank);
-        }
-        self.reached.set(rank)
-    }
-}
-
 /// Admits every object reachable from `roots` through logical references and
-/// delta bases, exactly once, and records each in `kept`.
+/// delta bases, exactly once, and records each in `kept`: the record it is
+/// stored in, and apart from that its rank when a delta base was the first
+/// to reach it.
 ///
 /// The walk is metadata-only: a role that names no other object
 /// ([`ObjectRole::has_references`]) costs one record header read, not a payload
@@ -73,7 +65,7 @@ pub(super) fn walk(
     table: &mut Locators,
     marks: &mut Marks,
     inventory: &mut Sealed<Row>,
-    kept: &mut Sorter<Kept>,
+    kept: (&mut Sorter<Kept>, &mut Sorter<Based>),
     capacities: &StorageCapacities,
     construction: ConstructionPolicy,
     mut reached: Sorter<Edge>,
@@ -81,7 +73,12 @@ pub(super) fn walk(
     let mechanics = source.mechanics;
     let mut readers = Readers {
         packs: PackCache::new(),
-        pool: PoolReader::with_chain_memo(super::CHAIN_MEMO_BYTES),
+        pool: PoolReader::with_chain_memo(
+            source
+                .space
+                .scaled(super::CHAIN_MEMO_BYTES)
+                .max(LEAST_MEMO_BYTES),
+        ),
         groups: GroupCache::new(),
         workspace: DecompressionWorkspace::new().map_err(storage)?,
         counters: ChainCounters::default(),
@@ -89,6 +86,7 @@ pub(super) fn walk(
     };
     // One hash for the whole walk, not one per metadata object.
     let unscoped = InodeScope::from_object(ObjectId::for_bytes(b"gc.mark/object-closure"));
+    let run_rows = source.space.scaled(RUN_ROWS).max(LEAST_RUN_ROWS);
     let mut frontier: Sorter<Row> = Sorter::new(
         &source.space,
         super::FRONTIER_SORT_BYTES,
@@ -105,8 +103,12 @@ pub(super) fn walk(
                 let (rank, location) = table
                     .find(mechanics, &edge.id, sparse)?
                     .ok_or(HistoryError::Integrity("mark object locator"))?;
-                if marks.note(rank, edge.kind) {
-                    frontier.push(Row { location, rank })?;
+                if marks.note(rank, edge.kind)? {
+                    frontier.push(Row {
+                        location,
+                        rank,
+                        kind: edge.kind,
+                    })?;
                 }
             }
         }
@@ -124,7 +126,7 @@ pub(super) fn walk(
                 // the payload packs one call reads the heads of.
                 rows.clear();
                 let (mut payload_packs, mut last) = (0, None);
-                while rows.len() < RUN_ROWS {
+                while rows.len() < run_rows {
                     let Some(next) = wave.peek() else {
                         break;
                     };
@@ -147,7 +149,7 @@ pub(super) fn walk(
                     &rows,
                     inventory,
                     &mut reached,
-                    kept,
+                    (&mut *kept.0, &mut *kept.1),
                     &mut readers,
                     capacities,
                     construction,
@@ -169,12 +171,13 @@ fn walk_rows(
     rows: &[Row],
     inventory: &mut Sealed<Row>,
     reached: &mut Sorter<Edge>,
-    kept: &mut Sorter<Kept>,
+    kept: (&mut Sorter<Kept>, &mut Sorter<Based>),
     readers: &mut Readers,
     capacities: &StorageCapacities,
     construction: ConstructionPolicy,
     unscoped: InodeScope,
 ) -> HistoryResult<()> {
+    let (kept, based) = kept;
     source.expect_rows(rows);
     // A file payload's edge is its record header: read just that, a pack
     // at a time, and leave the payload unread.
@@ -252,8 +255,14 @@ fn walk_rows(
                 group: location.group_number as u64,
                 record: location.record_number as u64,
                 width: edge.width,
-                rank: row.rank,
             })?;
+            // An object kept only as a delta base was first reached as one.
+            if row.kind & records::LOGICAL == 0 {
+                based.push(Based {
+                    rank: row.rank,
+                    width: edge.width,
+                })?;
+            }
             if let Some(base) = edge.base {
                 reach(source, marks, base, records::BASE, &mut local, reached)?;
             }
@@ -358,8 +367,8 @@ fn reach(
 ) -> HistoryResult<()> {
     match source.held_here(&id) {
         Some(row) => {
-            if marks.note(row.rank, kind) {
-                local.push(row);
+            if marks.note(row.rank, kind)? {
+                local.push(Row { kind, ..row });
             }
             Ok(())
         }

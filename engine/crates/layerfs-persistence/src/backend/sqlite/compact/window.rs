@@ -21,7 +21,7 @@
 //! is cut.
 
 use super::types::io_error;
-use crate::IdSet;
+use crate::Sequence;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
 use std::fs::File;
@@ -60,7 +60,7 @@ pub struct Window {
 /// is that bound over its packs.
 pub fn windows(
     packs: impl Iterator<Item = HistoryResult<(i64, u64)>>,
-    retained: &IdSet,
+    retained: &Sequence,
     slack: u64,
     each: &mut dyn FnMut(Window) -> HistoryResult<()>,
 ) -> HistoryResult<()> {
@@ -72,7 +72,7 @@ pub fn windows(
 /// over the retained packs alone: `slack` is what that file holds beyond them.
 pub fn staged_windows(
     packs: impl Iterator<Item = HistoryResult<(i64, u64)>>,
-    retained: &IdSet,
+    retained: &Sequence,
     slack: u64,
     each: &mut dyn FnMut(Window) -> HistoryResult<()>,
 ) -> HistoryResult<()> {
@@ -80,8 +80,8 @@ pub fn staged_windows(
 }
 
 fn cut(
-    packs: impl Iterator<Item = HistoryResult<(i64, u64)>>,
-    retained: &IdSet,
+    mut packs: impl Iterator<Item = HistoryResult<(i64, u64)>>,
+    retained: &Sequence,
     slack: u64,
     staged: bool,
     each: &mut dyn FnMut(Window) -> HistoryResult<()>,
@@ -89,17 +89,22 @@ fn cut(
     // The open run: its window so far, the payload offset it ends at and the
     // retained bytes it holds.
     let mut open: Option<(Window, u64, u64)> = None;
-    let mut wanted = retained.iter().map(|pack| pack as i64).peekable();
     let mut before = 0u64;
-    for pack in packs {
-        let (pack, length) = pack?;
-        if wanted.peek() != Some(&pack) {
-            if !staged {
-                before = before.saturating_add(length);
+    retained.each(&mut |wanted| {
+        // The packs before the wanted one are dead: they move the offsets
+        // of the sealed file and are not in the file a rebuild writes.
+        let (pack, length) = loop {
+            match packs.next().transpose()? {
+                Some((pack, length)) if u64::try_from(pack).is_ok_and(|pack| pack < wanted) => {
+                    if !staged {
+                        before = before.saturating_add(length);
+                    }
+                }
+                Some((pack, length)) if u64::try_from(pack) == Ok(wanted) => break (pack, length),
+                // A retained pack the Store does not hold.
+                _ => return Err(HistoryError::Integrity("mark pack")),
             }
-            continue;
-        }
-        wanted.next();
+        };
         if let Some((window, end, held)) = open {
             if held >= WINDOW_BYTES || before.saturating_sub(end) > GAP_BYTES {
                 each(closed(window, end, slack))?;
@@ -130,11 +135,8 @@ fn cut(
             ),
         });
         before = end;
-    }
-    if wanted.next().is_some() {
-        // A retained pack the Store does not hold.
-        return Err(HistoryError::Integrity("mark pack"));
-    }
+        Ok(())
+    })?;
     if let Some((window, end, _)) = open {
         each(closed(window, end, slack))?;
     }

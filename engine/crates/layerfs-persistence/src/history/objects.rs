@@ -8,15 +8,17 @@
 //! decode, and reference-bearing pages are decoded without a second identity
 //! hash. Nothing is deleted, rewritten or compacted here.
 //!
-//! Memory does not follow the Store's size. The locators stay in the Store:
-//! they are read in bounded pieces ([`table`]), and the walk keeps one bit
-//! per object for what it reached, not the objects. The history closure
-//! stays in `kept_node` and is read a page at a time. What a wave reached,
-//! the order the next wave is walked in and the records the kept-waste pass
-//! attributes are sorted in bounded memory and written to unnamed files
-//! beyond it ([`spill`]). The retained packs and the inode value ordinals
-//! are one bit each ([`idset`]). The reached objects, the history nodes and
-//! the packs are listed, when a caller wants them, by reading them once more.
+//! Memory does not follow the Store's size: nothing a mark holds grows with
+//! the objects, the packs or the Commits. The locators stay in the Store:
+//! they are read in bounded pieces ([`table`]), and the walk keeps two bits
+//! per object for what it reached, not the objects, in an array it holds a
+//! fixed number of pages of ([`paged`]). The history closure stays in
+//! `kept_node` and is read a page at a time. What a wave reached, the order
+//! the next wave is walked in and the records the kept-waste pass attributes
+//! are sorted in bounded memory and written to unnamed files beyond it
+//! ([`spill`]), and so are the retained packs and the inode value ordinals
+//! ([`lists`]). The reached objects, the history nodes, the packs and the
+//! ordinals are listed, when a caller wants them, by reading them once more.
 use super::kept::{self, KeptHistory};
 use super::provider::HistoryProvider;
 use super::rows::cell;
@@ -36,12 +38,13 @@ use layerfs_storage::{
     StorageCapacities, StorageError,
 };
 use std::path::Path;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 mod edges;
 mod ids;
-mod idset;
 mod impls;
+mod lists;
+mod paged;
 mod plan;
 mod records;
 pub(crate) mod spill;
@@ -51,7 +54,7 @@ mod walk;
 mod waste;
 
 use ids::IdMap;
-pub use idset::IdSet;
+pub use lists::{Sequence, Spans};
 use plan::MarkGroups;
 use spill::{Sealed, Sorter, Space};
 use table::Locators;
@@ -83,11 +86,11 @@ pub struct KeptWaste {
 /// The object half of a mark: every object and pack the retained history
 /// reaches (§6.2), in ascending order.
 ///
-/// What it always holds is bounded: a count of the reached objects, one bit
-/// for each retained pack and each inode value ordinal read, and the partly
-/// dead packs in a list that leaves memory for a sort file when it is long.
-/// The lists a caller may ask for are made when it asks.
-#[derive(Clone, Debug, Default)]
+/// What it always holds is bounded: a count of the reached objects, and the
+/// retained packs, the inode value ordinals read and the partly dead packs
+/// each in a list that leaves memory for a sort file when it is long
+/// ([`lists`]). A mark that lists what it kept also holds them as slices.
+#[derive(Clone, Debug)]
 pub struct KeptObjects {
     /// The reached objects, when the mark listed them: [`HistoryProvider::mark`]
     /// does, a SQLite compaction mark writes them to its scratch instead.
@@ -95,9 +98,9 @@ pub struct KeptObjects {
     /// How many objects the mark reached, listed or not.
     count: u64,
     /// The retained packs: those holding at least one reached object.
-    retained: IdSet,
-    /// [`Self::retained`] as a list, made the first time one is asked for.
-    packs: OnceLock<Vec<i64>>,
+    retained: Sequence,
+    /// [`Self::retained`] as a slice, when the mark listed them.
+    packs: Vec<i64>,
     waste: KeptWaste,
     /// Retained packs that hold a record no reached object owns, in ascending
     /// pack order, each with its share of
@@ -106,10 +109,9 @@ pub struct KeptObjects {
     /// [`Self::partly_dead`] as a list, when the mark listed them.
     partly_dead_listed: Vec<(i64, u64)>,
     /// The inode value ordinals the reached leaves read.
-    ordinals: IdSet,
-    /// [`Self::ordinals`] as inclusive runs, made the first time they are
-    /// asked for.
-    inode_ordinals: OnceLock<Vec<(u32, u32)>>,
+    ordinals: Spans,
+    /// [`Self::ordinals`] as inclusive runs, when the mark listed them.
+    inode_ordinals: Vec<(u32, u32)>,
 }
 
 /// The partly dead packs of one mark with their dead bytes, ascending.
@@ -177,7 +179,8 @@ impl HistoryProvider {
     /// lands before the tuple is read is part of the mark, and one that lands
     /// after it moves at least one tuple field, so Phase B abandons.
     pub fn mark_gc(&self) -> HistoryResult<(MarkResult, GcTuple)> {
-        self.write_snapshot(mark_gc)
+        let budget = self.mark_budget();
+        self.write_snapshot(|tx| mark_gc(tx, budget))
     }
 
     /// The §6.4 live-heads digest of the Store as it is now, without a mark.
@@ -186,9 +189,9 @@ impl HistoryProvider {
     }
 }
 
-fn mark_gc(tx: &Transaction<'_>) -> HistoryResult<(MarkResult, GcTuple)> {
+fn mark_gc(tx: &Transaction<'_>, budget: u64) -> HistoryResult<(MarkResult, GcTuple)> {
     let tuple = gc_tuple(tx)?;
-    let mark = mark(tx)?;
+    let mark = mark(tx, budget)?;
     Ok((mark, tuple))
 }
 
@@ -202,7 +205,9 @@ pub(crate) fn mark_gc_reached(
 ) -> HistoryResult<(MarkResult, GcTuple, Reach)> {
     let tx = Transaction::new(backend);
     let tuple = gc_tuple(&tx)?;
-    let (mark, reach) = mark_recorded(&tx, false)?;
+    let (mut mark, reach) = mark_recorded(&tx, false, spill::BUDGET_BYTES)?;
+    // A PostgreSQL compaction reads the retained packs as a slice.
+    mark.objects.list_packs()?;
     Ok((mark, tuple, reach))
 }
 
@@ -235,7 +240,8 @@ impl HistoryProvider {
     /// the mark and leaves no `kept_node` row behind. Nothing is compacted; the
     /// returned [`MarkResult`] is the rebuild path's input.
     pub fn mark(&self) -> HistoryResult<MarkResult> {
-        self.write_snapshot(mark)
+        let budget = self.mark_budget();
+        self.write_snapshot(|tx| mark(tx, budget))
     }
 
     /// The §6.3 compaction mark: the same closure and digest, with every
@@ -248,18 +254,19 @@ impl HistoryProvider {
     /// A failed mark drops the sink, which removes the scratch; the caller's
     /// artifact set never keeps a half-written table.
     pub fn mark_with_scratch(&self, scratch: &Path) -> HistoryResult<MarkResult> {
+        let budget = self.mark_budget();
         match &self.engine {
             crate::backend::Engine::Sqlite(session) => session.run(true, |backend| {
                 let tx = Transaction::new(backend);
                 let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
-                let (mut mark, mut reach) = mark_recorded(&tx, false)?;
-                mark.objects.list_partly_dead()?;
+                let (mut mark, mut reach) = mark_recorded(&tx, false, budget)?;
+                mark.objects.list()?;
                 sink.finish(&mark.objects.retained, |row| {
                     reach.each(tx.mechanics(), row)
                 })?;
                 Ok(mark)
             }),
-            crate::backend::Engine::Postgres(_) => self.write_snapshot(mark),
+            crate::backend::Engine::Postgres(_) => self.write_snapshot(|tx| mark(tx, budget)),
         }
     }
 
@@ -288,12 +295,13 @@ impl HistoryProvider {
         intent: &GcIntent,
         decide: impl FnOnce(&Transaction<'_>, &MarkResult) -> HistoryResult<bool>,
     ) -> HistoryResult<(MarkResult, bool)> {
+        let budget = self.mark_budget();
         match &self.engine {
             crate::backend::Engine::Sqlite(session) => session.run_decided(true, |backend| {
                 let tx = Transaction::new(backend);
                 super::admission::register_in(&tx, intent, false)?;
                 let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
-                let (mark, mut reach) = mark_recorded(&tx, false)?;
+                let (mark, mut reach) = mark_recorded(&tx, false, budget)?;
                 let keep = decide(&tx, &mark)?;
                 let completion = if keep {
                     // Only a rebuild reads the scratch, so only a rebuild
@@ -308,7 +316,7 @@ impl HistoryProvider {
                 Ok(((mark, keep), completion))
             }),
             crate::backend::Engine::Postgres(_) => self.write_snapshot(|tx| {
-                let mark = mark(tx)?;
+                let mark = mark(tx, budget)?;
                 let keep = decide(tx, &mark)?;
                 Ok((mark, keep))
             }),
@@ -319,15 +327,15 @@ impl HistoryProvider {
 /// One mark that also lists what it kept: every reached object
 /// ([`KeptObjects::objects`], 32 bytes an object, read from the Store's
 /// locators after the walk), every history node and the partly dead packs.
-fn mark(tx: &Transaction<'_>) -> HistoryResult<MarkResult> {
-    let (mut mark, mut reach) = mark_recorded(tx, true)?;
+fn mark(tx: &Transaction<'_>, budget: u64) -> HistoryResult<MarkResult> {
+    let (mut mark, mut reach) = mark_recorded(tx, true, budget)?;
     let mut objects = Vec::with_capacity(usize::try_from(reach.count).unwrap_or(0));
     reach.each(tx.mechanics(), &mut |row, _| {
         objects.push(row.object_id);
         Ok(())
     })?;
     mark.objects.objects = objects;
-    mark.objects.list_partly_dead()?;
+    mark.objects.list()?;
     Ok(mark)
 }
 
@@ -341,12 +349,13 @@ const KEPT_SORT_BYTES: usize = 4 * 1024 * 1024;
 const INVENTORY_SORT_BYTES: usize = 4 * 1024 * 1024;
 const PACK_SORT_BYTES: usize = 4 * 1024 * 1024;
 const READ_SORT_BYTES: usize = 1024 * 1024;
+const BASED_SORT_BYTES: usize = 1024 * 1024;
 const PARTLY_DEAD_BYTES: usize = 256 * 1024;
 /// Rows one read of the live heads returns.
 const HEADS_PAGE_ROWS: usize = 1024;
 
 /// The reached set of a finished walk, for listing it: the block boundaries
-/// of the Store's locators and the walk's three bits per object.
+/// of the Store's locators and the walk's two bits per object.
 pub(crate) struct Reach {
     table: Locators,
     marks: table::Marks,
@@ -364,11 +373,10 @@ impl Reach {
         each: &mut dyn FnMut(&ObjectLocation, bool) -> HistoryResult<()>,
     ) -> HistoryResult<()> {
         let mut listed = 0u64;
-        let marks = &self.marks;
         self.table
-            .each_set(mechanics, &marks.reached, |rank, row| {
+            .each_set(mechanics, &mut self.marks, |_, row, kinds| {
                 listed += 1;
-                each(row, marks.bases.get(rank) && !marks.logical.get(rank))
+                each(row, kinds == records::BASE)
             })?;
         if listed != self.count {
             return Err(HistoryError::Integrity("mark object locations"));
@@ -379,10 +387,15 @@ impl Reach {
 
 /// One mark. `listed` also returns the history nodes
 /// ([`KeptHistory::nodes`]); the reached set is returned for a caller that
-/// lists the objects.
-fn mark_recorded(tx: &Transaction<'_>, listed: bool) -> HistoryResult<(MarkResult, Reach)> {
+/// lists the objects. `budget` sizes every buffer and cache of the mark and
+/// of the compaction that shares its sort space.
+fn mark_recorded(
+    tx: &Transaction<'_>,
+    listed: bool,
+    budget: u64,
+) -> HistoryResult<(MarkResult, Reach)> {
     let mechanics = tx.mechanics();
-    let space = Space::new(mechanics.scratch_directory());
+    let space = Space::sized(mechanics.scratch_directory(), budget);
     kept::close(tx, &space)?;
     let policy = mechanics.policy().map_err(storage)?;
     let capacities = StorageCapacities::from_policy(policy).map_err(storage)?;
@@ -392,7 +405,7 @@ fn mark_recorded(tx: &Transaction<'_>, listed: bool) -> HistoryResult<(MarkResul
     // together (everything but file payloads) in locator order.
     let mut located = Sorter::new(&space, PACK_SORT_BYTES, records::counts_by_pack);
     let mut inventory = Sorter::new(&space, INVENTORY_SORT_BYTES, records::rows_by_locator);
-    let mut table = Locators::load(mechanics, |rank, location| {
+    let mut table = Locators::load(mechanics, &space, |rank, location| {
         located.push(records::Count {
             pack: location.pack_id,
             records: 1,
@@ -401,6 +414,7 @@ fn mark_recorded(tx: &Transaction<'_>, listed: bool) -> HistoryResult<(MarkResul
             inventory.push(records::Row {
                 location: *location,
                 rank,
+                kind: 0,
             })?;
         }
         Ok(())
@@ -408,11 +422,7 @@ fn mark_recorded(tx: &Transaction<'_>, listed: bool) -> HistoryResult<(MarkResul
     // A pack's objects are asked for each time a wave visits it: one merge
     // now, so that a visit reads that pack's part and not the whole list.
     let mut inventory = inventory.seal(records::row_pack)?;
-    let mut marks = table::Marks {
-        reached: table::Bits::new(table.count()),
-        logical: table::Bits::new(table.count()),
-        bases: table::Bits::new(table.count()),
-    };
+    let mut marks = table::Marks::new(&space);
     let source = ClosureSource {
         mechanics,
         space: space.clone(),
@@ -431,8 +441,10 @@ fn mark_recorded(tx: &Transaction<'_>, listed: bool) -> HistoryResult<(MarkResul
         )),
         upcoming: std::cell::RefCell::default(),
         based: std::cell::Cell::new((i64::MIN, 0)),
-        values: std::cell::RefCell::default(),
-        ordinals: std::cell::RefCell::default(),
+        values: std::cell::RefCell::new(values::HeldValues::holding(
+            space.scaled(values::HELD_VALUES),
+        )),
+        ordinals: std::cell::RefCell::new(Spans::sorter(&space)),
     };
     // The roots of every retained Commit and Layer, straight from
     // `kept_node` into the first wave: the sorter folds a root named twice.
@@ -457,31 +469,39 @@ fn mark_recorded(tx: &Transaction<'_>, listed: bool) -> HistoryResult<(MarkResul
         }
     })?;
     let mut kept = Sorter::new(&space, KEPT_SORT_BYTES, records::kept_by_locator);
+    let mut based = Sorter::new(&space, BASED_SORT_BYTES, records::based_by_rank);
     walk::walk(
         &source,
         &mut table,
         &mut marks,
         &mut inventory,
-        &mut kept,
+        (&mut kept, &mut based),
         &capacities,
         policy.construction(),
         reached,
     )?;
     drop(inventory);
-    let found = waste::waste(tx, &source, &mut table, &marks, &mut located, &mut kept)?;
-    drop((located, kept));
+    let found = waste::waste(
+        tx,
+        &source,
+        &mut table,
+        &mut marks,
+        &mut located,
+        (&mut kept, &mut based),
+    )?;
+    drop((located, kept, based));
     let mark_bytes = source.read_bytes()?;
     let digest = live_heads_digest(tx)?;
     let objects = KeptObjects {
         objects: Vec::new(),
         count: found.objects,
         retained: found.retained,
-        packs: OnceLock::new(),
+        packs: Vec::new(),
         waste: found.waste,
         partly_dead: found.partly_dead,
         partly_dead_listed: Vec::new(),
-        ordinals: source.ordinals.take(),
-        inode_ordinals: OnceLock::new(),
+        ordinals: Spans::of(source.ordinals.replace(Spans::sorter(&space))),
+        inode_ordinals: Vec::new(),
     };
     let reach = Reach {
         table,
@@ -533,7 +553,7 @@ struct ClosureSource<'a> {
     /// Every ordinal the walk asked for ([`ordinals`]), whether the engine or
     /// the held values answered it: the rebuild copies only the blocks these
     /// name.
-    ordinals: std::cell::RefCell<IdSet>,
+    ordinals: std::cell::RefCell<Sorter<records::Span>>,
 }
 
 /// Packs announced to the engine at a time ([`ClosureSource::announce`]).
@@ -661,6 +681,7 @@ impl ClosureSource<'_> {
     /// inside the storage readers.
     fn relieve(&self) -> HistoryResult<()> {
         self.reads.borrow_mut().0.relieve()?;
+        self.ordinals.borrow_mut().relieve()?;
         self.layouts.borrow_mut().relieve()
     }
 
@@ -773,12 +794,7 @@ impl Source for ClosureSource<'_> {
     }
 
     fn inode_values(&self, ordinals: &[u32]) -> Result<Vec<[u8; INODE_VALUE_BYTES]>, StorageError> {
-        {
-            let mut read = self.ordinals.borrow_mut();
-            for ordinal in ordinals {
-                read.insert(u64::from(*ordinal));
-            }
-        }
+        lists::hold_runs(&mut self.ordinals.borrow_mut(), ordinals);
         self.values.borrow_mut().values(self.mechanics, ordinals)
     }
 

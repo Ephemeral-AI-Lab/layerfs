@@ -229,6 +229,9 @@ impl PostgresHandles {
                     cursor_key,
                     digest_floor,
                     trace_salt,
+                    mark_budget: std::sync::atomic::AtomicU64::new(
+                        crate::history::spill::BUDGET_BYTES,
+                    ),
                 },
             },
         ))

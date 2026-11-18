@@ -216,8 +216,9 @@ impl HistoryProvider {
     /// the same rows. Nothing else is written; the object closure (§6.2) starts
     /// from the returned [`KeptHistory::commits`] and [`KeptHistory::layers`].
     pub fn mark_history_closure(&self) -> HistoryResult<KeptHistory> {
+        let budget = self.mark_budget();
         self.write_snapshot(|tx| {
-            let space = Space::new(tx.mechanics().scratch_directory());
+            let space = Space::sized(tx.mechanics().scratch_directory(), budget);
             close(tx, &space)?;
             let mut history = KeptHistory::default();
             each(tx, |node, _| {

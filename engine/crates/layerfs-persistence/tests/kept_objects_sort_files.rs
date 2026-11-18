@@ -151,14 +151,18 @@ fn many_commits_and_packs_are_marked_through_bounded_lists() {
     let objects = mark.objects();
     assert_eq!(objects.retained_packs().len(), PACKS as u64);
     assert_eq!(objects.packs(), packs, "every pack holds a root");
-    assert!(objects
-        .retained_packs()
-        .iter()
-        .map(|pack| pack as i64)
-        .eq(packs.iter().copied()));
-    assert!(packs
-        .iter()
-        .all(|pack| objects.retained_packs().contains(*pack as u64)));
+    // The list is read from its file, and may be read again.
+    for _ in 0..2 {
+        let mut read = Vec::new();
+        objects
+            .retained_packs()
+            .each(&mut |pack| {
+                read.push(pack as i64);
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(read, packs);
+    }
     assert_eq!(objects.partly_dead_count(), PACKS as u64);
     let mut streamed = Vec::new();
     objects

@@ -218,11 +218,16 @@ to sixteen blocks (8,192 identities) a statement, each after the last one of
 the statement before. The table has no unique key on
 the identity, so a block takes one row per identity (`DISTINCT ON`, the
 least locator); a rank is a position in that order. The mark's sort files
-are unnamed files in the client's temporary directory. What still grows
-with the Store on the client is what the shared mark result carries: the
-retained pack ids (8 bytes a live pack), the retained history nodes and
-their roots, and the block boundaries and bits of the locator order (32
-bytes for every 512 objects and three bits an object).
+are unnamed files in the client's temporary directory, and so are the
+block boundaries and the bits of the locator order beyond the pages the
+mark holds of them (32 bytes for every 512 objects and two bits an object,
+on disk). What still grows with the Store on the client is the one list
+this compaction asks the mark for: the retained pack ids as a slice, 8
+bytes a live pack
+([`compact/op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/op.rs)).
+The mark itself keeps them in a bounded list like every other
+([SQLite: the mark's memory](sqlite.md#the-marks-memory)); a compaction
+that read that list as a stream would hold nothing per pack.
 
 One method decides where the sort files go
 ([`seam.rs`](../../../../engine/crates/layerfs-persistence/src/backend/seam.rs),

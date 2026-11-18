@@ -75,7 +75,7 @@ impl VisitSink {
     /// file's size.
     pub(crate) fn finish(
         mut self,
-        packs: &crate::IdSet,
+        packs: &crate::Sequence,
         list: impl FnOnce(
             &mut dyn FnMut(&ObjectLocation, bool) -> HistoryResult<()>,
         ) -> HistoryResult<()>,
@@ -146,7 +146,7 @@ group_number,record_number,base_only) VALUES",
         })?;
         write(&rows)?;
         drop(rows);
-        // The retained packs come from the mark's set a statement's worth
+        // The retained packs come from the mark's list a statement's worth
         // at a time; the whole list is never held.
         let mut batch: Vec<i64> = Vec::with_capacity(ROWS_PER_INSERT);
         let write = |batch: &[i64]| {
@@ -158,13 +158,14 @@ group_number,record_number,base_only) VALUES",
                 |pack_id| [integer(*pack_id)],
             )
         };
-        for pack in packs.iter() {
-            batch.push(pack as i64);
+        packs.each(&mut |pack| {
+            batch.push(i64::try_from(pack).map_err(|_| HistoryError::Integrity("mark pack"))?);
             if batch.len() == ROWS_PER_INSERT {
                 write(&batch)?;
                 batch.clear();
             }
-        }
+            Ok(())
+        })?;
         write(&batch)?;
         drop(batch);
         connection.execute_batch("COMMIT").map_err(db_error)?;

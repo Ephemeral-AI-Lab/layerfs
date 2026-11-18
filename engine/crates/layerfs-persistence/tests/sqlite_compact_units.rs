@@ -262,13 +262,14 @@ fn a_sized_fresh_file_loads_and_is_cut_back_to_its_page_count() {
     assert_eq!(u64::try_from(reread).unwrap(), pages);
 }
 
-/// The set of `packs`, as a mark hands its retained packs over.
-fn ids(packs: &[i64]) -> layerfs_persistence::IdSet {
-    let mut set = layerfs_persistence::IdSet::default();
+/// The list of `packs`, as a mark hands its retained packs over.
+fn ids(packs: &[i64]) -> layerfs_persistence::Sequence {
+    let space = layerfs_persistence::internals::Space::new(std::env::temp_dir());
+    let mut list = layerfs_persistence::Sequence::new(&space);
     for pack in packs {
-        set.insert(*pack as u64);
+        list.push(*pack as u64).unwrap();
     }
-    set
+    list
 }
 
 /// The windows the product cuts for a file of `file` bytes whose packs are
@@ -393,8 +394,8 @@ fn the_pack_copy_is_cut_into_windows_in_pack_order() {
     );
 
     // A retained pack the Store does not hold is an integrity failure, never
-    // a silently shorter copy. The mark's packs are a set, read ascending, so
-    // an order of their own they cannot have.
+    // a silently shorter copy. The mark's packs are a list that refuses a
+    // pack out of order when it is added, so no cut meets one.
     for broken in [&[6][..], &[5, 8][..]] {
         let error = cut_windows(false, &lengths, broken, 15 * MIB).unwrap_err();
         assert!(
@@ -529,8 +530,12 @@ INSERT INTO object_location SELECT i,((i*7919)%{PACKS}+1)*2,i%3,i,5 FROM o;",
         ))
         .unwrap();
     let objects = (PACKS * RECORDS) as u64;
-    assert_eq!(StagedLocators::sort_file_bytes(objects), 8 * 1024 * 1024);
-    assert_eq!(StagedLocators::sort_file_bytes(524_287), 0);
+    let estimate = |objects| {
+        let space = layerfs_persistence::internals::Space::new(directory.clone());
+        StagedLocators::sort_file_bytes(&space, objects)
+    };
+    assert_eq!(estimate(objects), 8 * 1024 * 1024);
+    assert_eq!(estimate(524_287), 0);
     let run = |connection: &rusqlite::Connection| {
         let space = layerfs_persistence::internals::Space::new(directory.clone());
         let mut locators = StagedLocators::read(connection, &space)?;
@@ -538,7 +543,10 @@ INSERT INTO object_location SELECT i,((i*7919)%{PACKS}+1)*2,i%3,i,5 FROM o;",
             (locators.objects, locators.canonical),
             (objects, 5 * objects as i64)
         );
-        assert_eq!(space.peak_bytes(), StagedLocators::sort_file_bytes(objects));
+        assert_eq!(
+            space.peak_bytes(),
+            StagedLocators::sort_file_bytes(&space, objects)
+        );
         let mut none = std::iter::empty();
         let mut pass = locators.pass(connection, &mut none)?;
         pass.through(PACKS)?;

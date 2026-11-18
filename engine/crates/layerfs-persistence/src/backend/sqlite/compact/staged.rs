@@ -125,13 +125,11 @@ impl StagedLocators {
         Ok(read)
     }
 
-    /// What that file holds for a staged file of `objects` objects: the
-    /// sorter writes its locators out each time it holds [`HELD_BYTES`] of
-    /// them, and keeps the rest. The report counts this before the
+    /// What that file holds at most for a staged file of `objects` objects
+    /// ([`Sorter::file_bytes`]). The report counts this before the
     /// verification runs.
-    pub fn sort_file_bytes(objects: u64) -> u64 {
-        let held = (HELD_BYTES / Locator::BYTES) as u64;
-        (objects / held).saturating_mul(HELD_BYTES as u64)
+    pub fn sort_file_bytes(space: &Arc<Space>, objects: u64) -> u64 {
+        Sorter::<Locator>::file_bytes(space, HELD_BYTES, objects)
     }
 
     /// Starts the pass over the staged packs. `rewritten` is the packs the

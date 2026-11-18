@@ -17,4 +17,4 @@ pub use crate::backend::sqlite::compact::{
     trim, verify_inode_blocks, windows, PackLengths, PackScan, Rewritten, StagedLocators, Window,
     DELTA_BASE_REFERENCES_CAP, GAP_BYTES, SRC_MMAP_BYTES, WINDOW_BYTES,
 };
-pub use crate::history::spill::Space;
+pub use crate::history::spill::{Space, BUDGET_BYTES, LEAST_BUDGET_BYTES};

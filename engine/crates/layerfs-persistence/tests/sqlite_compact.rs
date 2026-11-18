@@ -507,13 +507,14 @@ fn a_wholly_dead_pack_is_rebuilt_away() {
     clean(&reopened);
 }
 
-/// The set of `packs`, as a mark hands its retained packs over.
-fn ids(packs: &[i64]) -> layerfs_persistence::IdSet {
-    let mut set = layerfs_persistence::IdSet::default();
+/// The list of `packs`, as a mark hands its retained packs over.
+fn ids(packs: &[i64]) -> layerfs_persistence::Sequence {
+    let space = layerfs_persistence::internals::Space::new(std::env::temp_dir());
+    let mut list = layerfs_persistence::Sequence::new(&space);
     for pack in packs {
-        set.insert(*pack as u64);
+        list.push(*pack as u64).unwrap();
     }
-    set
+    list
 }
 
 /// The windows the product cuts for a file of `file` bytes whose packs are

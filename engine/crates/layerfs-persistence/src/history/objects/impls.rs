@@ -4,12 +4,12 @@
 //! boundary; the types stay next to their construction.
 
 use super::records::Count;
-use super::IdSet;
 use super::KeptObjects;
 use super::KeptWaste;
 use super::MarkResult;
 use super::PartlyDead;
 use super::MAX_KEPT_WASTE_REFERENCES;
+use super::{Sequence, Spans};
 use crate::history::kept::KeptHistory;
 use layerfs_content::ObjectId;
 use layerfs_history::error::{HistoryError, HistoryResult};
@@ -75,18 +75,19 @@ impl KeptWaste {
             && self.inode_blocks_bytes == 0
     }
 }
-/// Two marks kept the same when their sets and counts agree. The partly dead
-/// packs are compared as lists when both marks listed them, and by their
-/// count always.
+/// Two marks kept the same when their counts and what they listed agree:
+/// the retained packs, the partly dead packs and the inode value ordinals
+/// are compared as slices, which only a mark that lists what it kept fills.
 impl PartialEq for KeptObjects {
     fn eq(&self, other: &Self) -> bool {
         self.objects == other.objects
             && self.count == other.count
-            && self.retained == other.retained
+            && self.retained.len() == other.retained.len()
+            && self.packs == other.packs
             && self.waste == other.waste
             && self.partly_dead.count == other.partly_dead.count
             && self.partly_dead_listed == other.partly_dead_listed
-            && self.ordinals == other.ordinals
+            && self.inode_ordinals == other.inode_ordinals
     }
 }
 impl Eq for KeptObjects {}
@@ -99,21 +100,18 @@ impl KeptObjects {
         &self.objects
     }
 
-    /// Every pack holding a reached object, in ascending pack order. The
-    /// list is made the first time it is asked for and then held, eight
-    /// bytes a pack: a caller that must not hold a list reads
-    /// [`Self::retained_packs`].
+    /// Every pack holding a reached object, in ascending pack order, when
+    /// the mark listed them ([`crate::HistoryProvider::mark`],
+    /// `mark_with_scratch`, and a PostgreSQL compaction's mark, which lists
+    /// these and nothing else); eight bytes a pack. A SQLite compaction's
+    /// own mark leaves it empty and reads [`Self::retained_packs`].
     pub fn packs(&self) -> &[i64] {
-        self.packs.get_or_init(|| {
-            let mut packs = Vec::with_capacity(usize::try_from(self.retained.len()).unwrap_or(0));
-            packs.extend(self.retained.iter().map(|pack| pack as i64));
-            packs
-        })
+        &self.packs
     }
 
-    /// The packs holding a reached object, as a set of pack ids: one bit a
-    /// pack, with membership, a count and an ascending iterator.
-    pub fn retained_packs(&self) -> &IdSet {
+    /// The packs holding a reached object, ascending, in bounded memory:
+    /// a count and a read that may be repeated.
+    pub fn retained_packs(&self) -> &Sequence {
         &self.retained
     }
 
@@ -161,36 +159,47 @@ impl KeptObjects {
         Ok(())
     }
 
-    /// Fills [`Self::partly_dead_packs`].
-    pub(in crate::history) fn list_partly_dead(&mut self) -> HistoryResult<()> {
+    /// Fills [`Self::packs`].
+    pub(in crate::history) fn list_packs(&mut self) -> HistoryResult<()> {
+        let mut packs = Vec::with_capacity(usize::try_from(self.retained.len()).unwrap_or(0));
+        self.retained.each(&mut |pack| {
+            packs.push(pack as i64);
+            Ok(())
+        })?;
+        self.packs = packs;
+        Ok(())
+    }
+
+    /// Fills the slices: [`Self::packs`], [`Self::partly_dead_packs`] and
+    /// [`Self::inode_ordinals`].
+    pub(in crate::history) fn list(&mut self) -> HistoryResult<()> {
+        self.list_packs()?;
         let mut listed = Vec::with_capacity(usize::try_from(self.partly_dead.count).unwrap_or(0));
         self.each_partly_dead(&mut |pack, bytes| {
             listed.push((pack, bytes));
             Ok(())
         })?;
         self.partly_dead_listed = listed;
+        let mut runs = Vec::new();
+        self.ordinals.each(&mut |first, last| {
+            runs.push((first, last));
+            Ok(())
+        })?;
+        self.inode_ordinals = runs;
         Ok(())
     }
 
     /// The inode value ordinals the reached leaves read, as inclusive runs in
-    /// ascending order. A read of a kept leaf asks for no other ordinal, so a
-    /// rebuild keeps only the `inode_value_block` rows that hold one of them.
-    ///
-    /// The list is made the first time it is asked for and then held, eight
-    /// bytes a run: a caller that must not hold a list reads the runs of
-    /// [`Self::inode_ordinal_set`].
+    /// ascending order, when the mark listed them (as [`Self::packs`]). A
+    /// read of a kept leaf asks for no other ordinal, so a rebuild keeps
+    /// only the `inode_value_block` rows that hold one of them.
     pub fn inode_ordinals(&self) -> &[(u32, u32)] {
-        self.inode_ordinals.get_or_init(|| {
-            self.ordinals
-                .runs()
-                .map(|(first, last)| (first as u32, last as u32))
-                .collect()
-        })
+        &self.inode_ordinals
     }
 
-    /// The inode value ordinals the reached leaves read, as a set: one bit
-    /// an ordinal, with membership and its runs in ascending order.
-    pub fn inode_ordinal_set(&self) -> &IdSet {
+    /// The inode value ordinals the reached leaves read, in bounded memory:
+    /// their runs in ascending order, read as often as asked.
+    pub fn inode_ordinal_runs(&self) -> &Spans {
         &self.ordinals
     }
 
@@ -247,6 +256,15 @@ impl MarkResult {
     /// files are in the same space and count here from then on.
     pub fn scratch_bytes(&self) -> u64 {
         self.space.peak_bytes()
+    }
+
+    /// What the mark's paged arrays did ([`super::Space::paging`]): the
+    /// pages asked for that were not in memory, the pages read back from a
+    /// file, the pages written to one and how often a page was asked for. A
+    /// measurement, not part of what the mark found.
+    #[doc(hidden)]
+    pub fn paging(&self) -> [u64; 4] {
+        self.space.paging()
     }
 
     /// Where the sort files of this mark went: the one space every sort
