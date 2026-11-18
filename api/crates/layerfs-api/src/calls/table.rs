@@ -443,7 +443,8 @@ fn declared(call: &Call, form: &Form) -> SdkValue {
 /// from it: `[{ family, call, args: [{ name, kind, optional, shell?,
 /// repeat?, required? }], options, help, form? }]` (`shell` is the flag of
 /// a secret option the shell reads from stdin; `required` is true on an
-/// option that must be given). A migrated call has `form`: `{ short, long, parts?,
+/// option that must be given, whose `optional` is then false: the two never
+/// disagree). A migrated call has `form`: `{ short, long, parts?,
 /// with, paging, progress, quiet, profile }`.
 pub fn table_json(families: &'static [Family]) -> String {
     let arg = |a: &Arg| {
@@ -453,7 +454,11 @@ pub fn table_json(families: &'static [Family]) -> String {
                 "kind".to_owned(),
                 SdkValue::text(format!("{:?}", a.kind).to_lowercase()),
             ),
-            ("optional".to_owned(), SdkValue::Bool(a.optional)),
+            // an option that must be given is not optional
+            (
+                "optional".to_owned(),
+                SdkValue::Bool(a.optional && !a.required),
+            ),
         ];
         if let Some(flag) = a.shell {
             fields.push(("shell".to_owned(), SdkValue::text(flag)));
