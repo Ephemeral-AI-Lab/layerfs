@@ -166,9 +166,11 @@ fn one_statement_closure(path: &std::path::Path) -> Vec<(Vec<u8>, String, Vec<u8
 /// A SQLite mark computes the closure a bounded piece at a time: a statement
 /// follows the edges of at most 256 kept nodes and stops after 8,192 rows.
 /// This history is deeper than one statement reaches (one Branch of 9,000
-/// Commits), has Branches forked along it, a published Layer, a retired
-/// Branch that a kept Commit still names and a deleted project: the rows are
-/// the ones the single recursive statement writes.
+/// Commits), has Branches forked along it, a published Layer, a removed
+/// Branch nothing retains, removed Branches that a kept Commit or Layer
+/// still names and a deleted project with a fork and a removed Branch of its
+/// own: the rows are the ones the single recursive statement writes, and no
+/// row is of a removed Branch nothing retains or of the deleted project.
 #[test]
 fn a_closure_in_batches_keeps_what_one_statement_keeps() {
     let temp = Temp::new("kept-batches");
@@ -179,6 +181,7 @@ fn a_closure_in_batches_keeps_what_one_statement_keeps() {
     fork(&handles, one.id, main, 1);
     let chain = commits(&handles, main, 1, 9_000);
     // Branches forked from Commits along the chain, each with its own tail.
+    let mut tails = Vec::new();
     for index in 0..40u8 {
         let branch = branch_id(10 + index);
         handles
@@ -193,8 +196,35 @@ fn a_closure_in_batches_keeps_what_one_statement_keeps() {
                 },
             })
             .unwrap();
-        commits(&handles, branch, 100 + u64::from(index), 30);
+        tails.push(commits(&handles, branch, 100 + u64::from(index), 30));
     }
+    // A removed Branch nothing retains goes with its own Commits; the
+    // Commit of the chain it forked from stays, kept by the chain.
+    let unretained = branch_id(10);
+    handles
+        .history
+        .mark_branch_removed(unretained, 900)
+        .unwrap();
+    // A removed Branch another Branch forked from stays as a unit: the fork
+    // keeps the Commit it forked from, and that Commit names the Branch.
+    let forked_from = branch_id(11);
+    let child = branch_id(250);
+    handles
+        .history
+        .fork(&ForkRequest {
+            stack: one.id,
+            branch: child,
+            name: name("child-of-removed"),
+            source: ForkSource::Commit {
+                branch: forked_from,
+                commit: tails[1][10].id,
+            },
+        })
+        .unwrap();
+    handles
+        .history
+        .mark_branch_removed(forked_from, 901)
+        .unwrap();
     // A published Layer, then more Commits over it and a Branch that is
     // retired while a kept Commit still names it.
     publish(&handles, one.id, main);
@@ -203,20 +233,66 @@ fn a_closure_in_batches_keeps_what_one_statement_keeps() {
     commits(&handles, retired, 900, 5);
     publish(&handles, one.id, retired);
     handles.history.mark_branch_removed(retired, 1_000).unwrap();
-    // A deleted project keeps nothing.
+    // A deleted project keeps nothing, forks and removed Branches included.
     let two = initialize(&handles, 2);
     let gone = branch_id(201);
     fork(&handles, two.id, gone, 201);
-    commits(&handles, gone, 901, 50);
+    let gone_chain = commits(&handles, gone, 901, 50);
+    let gone_fork = branch_id(202);
+    handles
+        .history
+        .fork(&ForkRequest {
+            stack: two.id,
+            branch: gone_fork,
+            name: name("gone-fork"),
+            source: ForkSource::Commit {
+                branch: gone,
+                commit: gone_chain[20].id,
+            },
+        })
+        .unwrap();
+    let gone_tail = commits(&handles, gone_fork, 902, 5);
+    handles
+        .history
+        .mark_branch_removed(gone_fork, 1_500)
+        .unwrap();
     handles.history.mark_stack_deleted(two.id, 2_000).unwrap();
 
     let kept = handles.history.mark_history_closure().unwrap();
     let rows = kept_rows(&path);
     assert_eq!(kept.len(), rows.len());
     assert_eq!(kept.nodes().len(), rows.len(), "a listing mark lists them");
-    assert!(kept.commits().count() >= 9_000 + 40 * 30);
+    // Every tail but the one of the removed Branch nothing retains.
+    assert!(kept.commits().count() >= 9_000 + 39 * 30);
     assert!(kept.contains(KeptNodeId::Branch(retired)));
+    // The removed Branch nothing retains: its row and its own Commits are
+    // gone, the Commit it forked from is not.
+    assert!(!kept.contains(KeptNodeId::Branch(unretained)));
+    assert!(tails[0]
+        .iter()
+        .all(|commit| !kept.contains(KeptNodeId::Commit(commit.id))));
+    assert!(kept.contains(KeptNodeId::Commit(chain[0].id)));
+    // The removed Branch a fork still reaches: its row, its head chain and
+    // the fork.
+    assert!(kept.contains(KeptNodeId::Branch(forked_from)));
+    assert!(kept.contains(KeptNodeId::Branch(child)));
+    assert!(tails[1]
+        .iter()
+        .all(|commit| kept.contains(KeptNodeId::Commit(commit.id))));
+    // The deleted project: no node of it, whatever the node's kind.
     assert!(!kept.contains(KeptNodeId::Stack(two.id)));
+    for branch in [gone, gone_fork] {
+        assert!(!kept.contains(KeptNodeId::Branch(branch)));
+    }
+    assert!(gone_chain
+        .iter()
+        .chain(&gone_tail)
+        .all(|commit| !kept.contains(KeptNodeId::Commit(commit.id))));
+    assert!(
+        rows.iter()
+            .all(|row| row.0.as_slice() != two.id.to_bytes().as_slice()),
+        "no kept row carries the deleted project's id"
+    );
     drop(handles);
     let reference = one_statement_closure(&path);
     assert_eq!(rows.len(), reference.len());
