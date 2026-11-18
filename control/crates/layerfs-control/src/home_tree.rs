@@ -63,9 +63,11 @@ fn store(home: &Path, record: &StoreRecord, under: Option<(&str, &State)>) -> Sd
         Some(_) => SdkValue::Null,
         None => {
             let home_own = connection(None, record.text("url"));
-            let own = (record.own_connections().into_iter()).map(|(machine, own)| {
-                connection(Some(machine), own.url.as_deref().or(record.text("url")))
-            });
+            let own = (record.own_connections().into_iter())
+                .filter(|(_, own)| own.url.is_some())
+                .map(|(machine, own)| {
+                    connection(Some(machine), own.url.as_deref().or(record.text("url")))
+                });
             SdkValue::List(std::iter::once(home_own).chain(own).collect())
         }
     };
