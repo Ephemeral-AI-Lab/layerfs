@@ -82,12 +82,13 @@ conversion continues on the next call and a second run changes nothing.
 | --- | --- | --- |
 | A Sandbox whose runtime ended | written with no `state` or `pid`; its stopped runtime is reclaimed once | [`migrate/v2.rs`](../../../../control/crates/layerfs-control/src/migrate/v2.rs) |
 | A create whose outcome was unknown | written with an uncertain `op` | same |
-| A Sandbox of the retired docker backend | forgotten, as `sandbox close` forgets it; `migration-2.json` notes its container and the `docker rm -f` that removes it | same, `forgotten` |
+| A Sandbox of the retired docker backend | forgotten, as `sandbox remove` forgets it; `migration-2.json` notes its container and the `docker rm -f` that removes it | same, `forgotten` |
 | A crash before the flip | the home is still layout 2 and converts again; every write is idempotent | same |
 | A crash after the flip | the next `open` sees the marker and finishes step 3 | same, `finish` |
 
-`layerfs doctor` lists the same blockers read-only, without a lock
-(`blockers`, [Doctor](../doctor/README.md)).
+`layerfs home doctor` lists the same blockers read-only, without a lock, as
+`home.records` findings (`blockers`, [Doctor](../doctor/README.md),
+[Checks: conversion](../doctor/checks.md#conversion)).
 
 ## 1.1.0 environment (`import_env.rs`)
 

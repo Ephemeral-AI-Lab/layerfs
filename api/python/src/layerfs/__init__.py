@@ -1,4 +1,4 @@
-"""LayerFS for Python (#533 step 16): the twelve families of the one call
+"""LayerFS for Python (#533 step 16): the ten families of the one call
 table, synchronous; ``layerfs.aio`` has the same calls as coroutines (O19).
 
     import layerfs

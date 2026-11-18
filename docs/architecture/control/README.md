@@ -77,11 +77,11 @@ machine's worker, or in a Sandbox's daemon.
 | `store.update` | records; a Store's own connection and a `native` check are dialled here | `store.reach`: the machine's own check | — | [`layerfs-control/src/store.rs`](../../../control/crates/layerfs-control/src/store.rs) |
 | `backup.create` | uploads to the bucket | `store.file` `stage`, `read`, `unstage` | — | [`backup/create.rs`](../../../control/crates/layerfs-store/src/backup/create.rs) |
 | `machine.*`, `store.create`, `store.connect`, `store.disconnect`, `backup.connect`, `backup.disconnect`, `backup.list`, `backup.restore` | all of it | — | — | [Machines](machines/README.md), [Backups](backups/README.md) |
-| `sandbox.create`, `sandbox.close` | records, intent | `sandbox.host` (the worker runs the same host code on its `native`) | started, stopped | [`route.rs`](../../../control/crates/layerfs-sandbox/src/route.rs) |
+| `sandbox.create`, `sandbox.remove` | records, intent | `sandbox.host` with the internal host ops `sandbox.create` and `sandbox.close` (the worker runs the same host code on its `native`) | started, stopped | [`route.rs`](../../../control/crates/layerfs-sandbox/src/route.rs), [`remove.rs`](../../../control/crates/layerfs-sandbox/src/remove.rs), [`host/call.rs`](../../../control/crates/layerfs-sandbox/src/host/call.rs) |
 | `workspace.mount`, `commit`, `unmount`, `status` on a forwarded Sandbox | dials the daemon directly | — | serves it | [`direct.rs`](../../../control/crates/layerfs-sandbox/src/direct.rs) |
 | the same, not forwarded | — (local machine: dials the daemon) | `sandbox.host`; the worker dials the daemon | serves it | `route.rs` |
 | `workspace.exec` | checks the directory; keeps the command's record when forwarded (route `machine:<name>`) | runs `bash -c` through the Sandbox runtime (always the machine) | — | [`workspace/exec.rs`](../../../control/crates/layerfs-sandbox/src/workspace/exec.rs) |
-| `workspace.exec_cancel` | where the record is: here when forwarded (then rides `sandbox.host`) | else here; an unreached worker answers `{outcome: "unknown"}`, nothing changed | — | `workspace/exec.rs`, [`exec/cancel.rs`](../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) |
+| `workspace.cancel` (`--exec E` for one command) | where the record is: here when forwarded (then rides `sandbox.host`) | else here; an unreached worker answers `{outcome: "unknown"}`, nothing changed | — | `workspace/exec.rs`, [`exec/cancel.rs`](../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) |
 
 | Platform | sqlite Store calls on macOS / Linux / Windows | Workspace calls skip the worker? | Source |
 | --- | --- | --- | --- |

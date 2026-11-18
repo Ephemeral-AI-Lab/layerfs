@@ -10,22 +10,20 @@ CLI package `@layerfs/cli` (in [`cli/`](cli)), the Python package (in
 the private stdio MCP server [`mcp/`](mcp) (`@layerfs/mcp`: one generated tool
 per call, `work` and `admin` profiles). The design is in
 [docs/architecture/api](../docs/architecture/api/README.md). The package is the
-library's call table as twelve families of functions, 84 calls in all:
+library's call table as ten families of functions, 85 calls in all:
 
 | Family | Calls |
 | --- | --- |
-| [`home`](../docs/architecture/api/sdk/home.md) | `init`, `get` |
-| [`project`](../docs/architecture/api/sdk/project.md) | `init`, `list`, `get`, `stats`, `export`, `delete`, `remove_file` |
-| [`branch`](../docs/architecture/api/sdk/branch.md) | `list`, `get`, `commits`, `get_commit`, `fork`, `merge`, `publish`, `diff`, `remove` |
+| [`home`](../docs/architecture/api/sdk/home.md) | `init`, `get`, `log`, `clear_log`, `doctor`, `leftovers`, `prune` |
+| [`project`](../docs/architecture/api/sdk/project.md) | `init`, `list`, `get`, `stats`, `export`, `delete`, `hide_path`, `doctor` |
+| [`branch`](../docs/architecture/api/sdk/branch.md) | `list`, `get`, `fork`, `merge`, `publish`, `remove` |
 | [`commit`](../docs/architecture/api/sdk/commit.md) | `list`, `get`, `diff` |
-| [`file`](../docs/architecture/api/sdk/file.md) | `read`, `stat`, `list`, `glob`, `grep`, `revision`, `blame`, `diff`, `write`, `edit`, `rm`, `mkdir`, `mv`, `cp`, `apply` |
-| [`sandbox`](../docs/architecture/api/sdk/sandbox.md) | `create`, `list`, `get`, `close`, `files` |
-| [`workspace`](../docs/architecture/api/sdk/workspace.md) | `mount`, `exec`, `exec_cancel`, `commit`, `unmount`, `status` |
-| [`machine`](../docs/architecture/api/sdk/machine.md) | `list`, `platforms`, `get`, `images`, `load`, `prune`, `status`, `stats`, `space`, `files`, `start`, `stop`, `create`, `remove`, `update` |
-| [`store`](../docs/architecture/api/sdk/store.md) | `list`, `get`, `status`, `stats`, `create`, `connect`, `update`, `push`, `pull`, `remove`, `compact`, `disconnect` |
-| [`backup`](../docs/architecture/api/sdk/backup.md) | `connect`, `disconnect`, `list`, `create`, `restore` |
-| [`logs`](../docs/architecture/api/sdk/logs.md) | `list`, `reset`, `machine`, `sandbox` |
-| [`doctor`](../docs/architecture/api/sdk/doctor.md) | `fix` |
+| [`file`](../docs/architecture/api/sdk/file.md) | `read`, `stat`, `list`, `glob`, `grep`, `history`, `blame`, `write`, `edit`, `rm`, `mkdir`, `mv`, `cp`, `apply` |
+| [`sandbox`](../docs/architecture/api/sdk/sandbox.md) | `create`, `list`, `get`, `remove`, `files`, `log`, `doctor` |
+| [`workspace`](../docs/architecture/api/sdk/workspace.md) | `list`, `mount`, `exec`, `cancel`, `commit`, `unmount`, `status` |
+| [`machine`](../docs/architecture/api/sdk/machine.md) | `list`, `get`, `images`, `load_image`, `prune`, `stats`, `files`, `log`, `start`, `stop`, `create`, `remove`, `update`, `doctor` |
+| [`store`](../docs/architecture/api/sdk/store.md) | `list`, `get`, `create`, `connect`, `disconnect`, `save_auth`, `auths`, `remove_auth`, `update`, `move`, `remove`, `compact`, `doctor` |
+| [`backup`](../docs/architecture/api/sdk/backup.md) | `connect`, `disconnect`, `list`, `create`, `restore`, `doctor` |
 
 `layerfs.table` lists every call with its arguments and options; it is the
 source for the list above, for the `layerfs` command (`layerfs help`) and for
@@ -47,8 +45,8 @@ const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/api", fo
 
 Each function takes its positional arguments in the table's order and then an
 options object. Function options (`on_progress`, `stdout`, `stderr`) receive
-the call's events. A refusal throws `LayerFSError` with `code`, `message` and
-`detail`; results are plain objects with snake_case keys, and bytes are
+the call's events. A refusal throws `LayerFSError` with `error` (also read as
+`code`), `message`, `fix` and the refusal's other keys; results are plain objects with snake_case keys, and bytes are
 `Buffer`s. Whole numbers are exact: a `bigint` is sent as its digits, and a
 result is a `number` when it is a safe integer and a `bigint` when it is not;
 an unsafe `number`, `NaN`, a `Map`, a `Set` or text with a lone surrogate is
@@ -106,8 +104,9 @@ cargo +1.85.1 build --release --locked -p layerfs-cli --features tls
 ```
 
 
-Disposable/WAL/synchronous=OFF only. Durable execution is NOT_RUN — disabled by
-owner until explicit reauthorization. One attempted operation; no retry or replay.
+A sqlite Store opens with WAL and synchronous=NORMAL (owner, 2026-11-17; its
+safety gate has not run). Durable execution is NOT_RUN — disabled by owner until
+explicit reauthorization. One attempted operation; no retry or replay.
 
 ## Tests
 

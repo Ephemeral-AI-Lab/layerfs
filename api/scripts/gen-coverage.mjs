@@ -4,7 +4,6 @@
 //   Python  `layerfs.TABLE`, the sync functions and the `layerfs.aio` coroutines
 //   CLI     `layerfs help <family>`, one usage line per call
 //   MCP     the generated tool list of api/mcp, and the profile that lists it
-//           (a call of the `none` bucket, the doctor family, is no tool: "no")
 //   node api/scripts/gen-coverage.mjs          rewrite the generated block
 //   node api/scripts/gen-coverage.mjs --check  exit 1 when the block is not what the front ends give,
 //                                              or when a front end disagrees with the Node table
@@ -80,11 +79,8 @@ export async function collect({ python, cli }) {
     for (const line of help.stdout.split("\n")) {
       const found = line.match(/^layerfs (\S+) (\S+)(.*)$/);
       if (!found) continue;
-      // a call's shell name has `-` for its `_` (`workspace exec-cancel`)
+      // a call's shell name has `-` for its `_` (`machine load-image`)
       const name = `${found[1]}.${found[2].replaceAll("-", "_")}`;
-      // `layerfs help doctor` also lists the report's own forms (`doctor
-      // host`, `doctor machine <machine>`, ...), which are no calls
-      if (family === "doctor" && !node.table.some((spec) => nameOf(spec) === name)) continue;
       view.cli[name] = usage(found[3]);
     }
   }
@@ -118,7 +114,7 @@ function usage(words) {
 
 /** What the command line of `spec` must be, by the table: a content or JSON positional is read from
  * stdin or `--from`, `on_progress` is `--progress`, the output functions are no flag of their own
- * (the `stream` option is `--stream`; the 2.0 exec row removed `--events`). */
+ * (the `stream` option is `--stream`). */
 function expectedCli(spec) {
   // a secret option is its own flag, read from stdin (`--password-stdin`)
   const flagOf = (o) => (o.name === "on_progress" ? "progress" : o.shell ? o.shell.replace(/^--/, "").replaceAll("-", "_") : o.name);
@@ -174,17 +170,14 @@ export function render(view) {
         ? "the MCP tool's schema or description differs from the table"
         : bucket === null
           ? "no MCP profile bucket"
-          : bucket === "ui" || bucket === "none"
-            ? (listed.work || listed.admin ? (bucket === "ui" ? "an MCP profile lists a UI-only call" : "an MCP profile lists a call that is no tool") : null)
-            : bucket === "work" && !(listed.work && listed.admin)
+          : bucket === "work" && !(listed.work && listed.admin)
               ? "the MCP work profile does not list it"
               : bucket === "admin" && (listed.work || !listed.admin)
                 ? (listed.work ? "the MCP work profile lists an admin call" : "the MCP admin profile does not list it")
                 : null;
     if (mcpProblem !== null) problems.push(`${name}: ${mcpProblem}`);
-    else if (bucket !== "ui" && bucket !== "none") counts.mcp += 1;
-    // a UI-only call (layerfs-project#178 D2) and the doctor's repair call are in no profile by design
-    const mcp = mcpProblem !== null ? "NO" : bucket === "work" ? "yes" : bucket === "ui" ? "no (UI only)" : bucket === "none" ? "no (no tool)" : "admin";
+    else counts.mcp += 1;
+    const mcp = mcpProblem !== null ? "NO" : bucket === "work" ? "yes" : "admin";
     const notes = [
       spec.args.some(piped) ? "stdin/--from" : "",
       spec.options.some((o) => o.name === "on_progress") ? "--progress" : "",
@@ -194,11 +187,10 @@ export function render(view) {
     return `| \`${name}\` | ${shape(spec.args) || "-"} | ${options || "-"} | ${node} | ${py} | ${coroutine} | ${cli}${cli === "yes" && notes.length ? ` (${notes.join(", ")})` : ""} | ${mcp} |`;
   });
   const families = [...new Set(table.map((s) => s.family))];
-  const ui = table.filter((s) => bucketOf(s) === "ui").length;
   const lines = [
     BEGIN,
     "",
-    `${table.length} calls in ${families.length} families, counted from the Node table. Calls present: Node ${counts.node}, Python ${counts.python}, Python \`aio\` ${counts.aio}, CLI ${counts.cli}, MCP ${counts.mcp} (${work.size} in \`work\`, ${admin.size - work.size} admin only; ${ui} UI only, in no profile).`,
+    `${table.length} calls in ${families.length} families, counted from the Node table. Calls present: Node ${counts.node}, Python ${counts.python}, Python \`aio\` ${counts.aio}, CLI ${counts.cli}, MCP ${counts.mcp} (${work.size} in \`work\`, ${admin.size - work.size} admin only).`,
     "",
     `Argument names that are Python keywords: ${view.python.keywords.length === 0 ? "none" : view.python.keywords.join(", ")}.`,
     "",

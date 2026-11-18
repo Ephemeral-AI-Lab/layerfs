@@ -9,8 +9,13 @@ one file per call under its family in
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 84 calls in twelve families. `layerfs help` lists them, and
-`layerfs help <family> [<call>]` prints one family or one call.
+There are 85 calls in ten families: `home` 7, `project` 8, `branch` 6,
+`commit` 3, `file` 14, `sandbox` 7, `workspace` 7, `machine` 14, `store` 13
+and `backup` 6. `layerfs help` lists them, `layerfs help <family> [<call>]`
+prints one family or one call, and `layerfs help --json` prints the whole
+table (each call's arguments and the form of its answer). Outside the table
+the command has `import-env`, `worker` (a machine's worker process),
+`help` and `--version`.
 
 ## How a call is written
 
@@ -28,19 +33,35 @@ layerfs.<family>.<call>(<positionals>, <option>=...)
 
 - **Positionals go from the outside in:** the owner (project, Store,
   Sandbox or Workspace), then the Branch, then the path or new name, then
-  other inputs. An optional Commit is last (D7).
+  other inputs. A Commit is the option `--at` (or `--expected` for a head
+  guard), never a positional, except `commit get`'s `<commit>`.
 - **Options say how.** A shell option is the option's name with `-` for
-  `_`: `--start-line` is `start_line`.
+  `_`: `--old-string` is `old_string`. Every list takes `--limit N --cursor C`.
 - An optional positional is simply left off. In Python, optional
   positionals and options may be keywords.
 - A function option (`on_progress`, and `stdout`/`stderr` of
   `workspace.exec`) exists only in Node and Python. The shell has
   `--progress` and `--stream` instead.
 - A call name with `_` is written with `-` in the shell:
-  `layerfs workspace exec-cancel`, `layerfs home clear-log`.
-- Three options are every call's: `detail` and `with` say which
-  [form of the answer](#the-form-of-an-answer) is wanted, and `log_tag`
-  tags the call's line in the home's call log.
+  `layerfs machine load-image`, `layerfs home clear-log`.
+- `detail` is every call's option and `with` the option of the calls whose
+  row lists sections; they say which [form of the answer](#the-form-of-an-answer)
+  is wanted. `log_tag` tags the call's line in the home's call log: an
+  argument in Node and Python; without it (and always in the shell) the
+  caller's `LAYERFS_LOGS_TAG` setting tags it.
+
+### Profile and call log
+
+Each call's row says its profile. The 17 `agent` calls are what an agent
+works with, and the MCP server's default `work` profile lists only them:
+`branch.fork`, `commit.list`, `commit.diff`, `file.read`, `file.list`,
+`file.glob`, `file.grep`, `file.write`, `file.edit`, `file.rm`, `file.mv`,
+`sandbox.create`, `workspace.list`, `workspace.exec`, `workspace.cancel`,
+`workspace.commit` and `workspace.status`. The other 68 are `full`: the MCP
+`admin` profile lists them with the 17. Every call is in the shell, Node
+and Python; an MCP tool is named `<family>_<call>` (`workspace_exec`). Eight `quiet` calls write no line to the home's call log:
+`home.get`, `home.log`, `home.clear_log`, `sandbox.files`, `sandbox.log`,
+`machine.stats`, `machine.files` and `machine.log`.
 
 ### Names
 
@@ -51,9 +72,9 @@ layerfs.<family>.<call>(<positionals>, <option>=...)
 | bucket | `r2-main` | the home (apart from Stores) |
 | project | `shop/api` | always written `<store>/<project>`; a bare `api` is `InvalidInput` |
 | Branch | `main`, `agent` | its project |
-| Commit | an id, or a prefix of 8 or more characters for `commit.get` | its project |
+| Commit | the full id (66 hex characters), or a prefix of 8 or more, wherever a call takes one | its project |
 | Sandbox | `tests` | the home |
-| Workspace | `tests:/…`, answered by `workspace.mount` | — |
+| Workspace | `tests:agent`, `<sandbox>:<name>`, answered by `workspace.mount` | its Sandbox |
 
 Machine, Store, bucket, project and Sandbox names are 1 to 63 lowercase
 letters, digits, `_`, `.` and `-`, starting and ending with a letter or
@@ -68,6 +89,7 @@ Sandbox names (H §7.6).
 | --- | --- | --- |
 | name | a machine, Store, bucket, Branch or Sandbox name, or a Commit id | a word |
 | project | `<store>/<project>` | a word |
+| image | a `sha256:` digest, a Docker image Id or a Docker reference (`postgres:17-bookworm`) | a word |
 | text | a path, URL or other text | a word |
 | whole number | an integer | a word; not a number is exit 2 |
 | bool | true or false | `--flag` alone is true; `--flag=false` |
@@ -78,15 +100,12 @@ Sandbox names (H §7.6).
 
 ## The form of an answer
 
-The call surface is being moved, family by family, to one form of answer
-(the [call surface specification](../../../core/docs/issues/call-surface-2-0/README.md);
-its rows are `calls.json`, which a contract test reads). A call that has
-moved is **migrated**: today `home.get`, `home.log` and `home.clear_log`.
-Every other call still answers as its own section below says, and takes
-`detail` without changing its answer. The refusal shape below is already
-every call's.
+Every call answers in one form, described in the
+[call surface specification](../../../core/docs/issues/call-surface-2-0/README.md)
+(its rows are `calls.json`, which a contract test compares with the built
+table) and printed by `layerfs help --json` as each call's `form`.
 
-**Short and long form.** A migrated call answers its short form: the few
+**Short and long form.** A call answers its short form: the few
 keys an agent needs, with a key left out when it is null, false or empty.
 `detail` asks for the long form: every key the call declares, in a fixed
 order, null where there is no value. Neither form reads anything the other
@@ -129,23 +148,27 @@ does not.
   fields the next call needs flat beside them; `detail` adds `fix` (null
   when there is none) and `detail`. See [errors](#errors-and-exit-codes).
 
-Run for this manual on a scratch home (macOS, a debug build; the home's
-path is shortened):
+Run for this manual on a scratch home (macOS, a debug build of
+`61960e3f5f`; the home's path is shortened to `/tmp/demo/home`):
 
 ```console
 $ layerfs home get
-{"home":"/tmp/home1","state":"broken","version":"2.0.0","reason":"missing","fix":"layerfs home init"}
+{"home":"/tmp/demo/home","state":"broken","version":"2.0.0","reason":"missing","fix":"layerfs home init"}
 $ layerfs home init
-{"home":"/tmp/home1"}
+{"home":"/tmp/demo/home"}
 $ layerfs home get
-{"home":"/tmp/home1","state":"ready","version":"2.0.0","generation":2}
+{"home":"/tmp/demo/home","state":"ready","version":"2.0.0","generation":2}
 $ layerfs store create shop
-{"name":"shop","kind":"sqlite","machine":"native","profile":"disposable","created":1795008741370,"sqlite":"3.53.2","projects":[]}
+{"ok":true}
 $ layerfs home get --with tree
-{"home":"/tmp/home1","state":"ready","version":"2.0.0","generation":4,"tree":{"machines":[{"machine":"docker","platform":"docker","state":"stopped"},{"machine":"native","platform":"native","stores":[{"store":"shop","engine":"sqlite"}]}],"stores":[],"buckets":[]}}
+{"home":"/tmp/demo/home","state":"ready","version":"2.0.0","generation":43,"tree":{"machines":[{"machine":"docker","platform":"docker","state":"stopped"},{"machine":"native","platform":"native","stores":[{"store":"shop","engine":"sqlite","projects":["api"]}]}],"stores":[],"buckets":[]}}
 $ layerfs home get --with live
-{"error":"InvalidInput","message":"home.get: `with` names `live`; this call takes platforms, tree"}
+layerfs: home.get: --with names `live`; this call takes platforms, tree
+$ echo $?
+2
 ```
+
+(`generation` 43: the tree was read after the rest of this page's run.)
 
 ## The calls
 
@@ -157,9 +180,9 @@ $ layerfs home get --with live
 | --- | --- | --- | --- |
 | `init` | — | — | creates this home, converts an older layout to the current one, and leaves a current home as it is |
 | `get` | — | `--with platforms,tree` | the home's state and build; with `--with`, the platforms this computer supports or the tree of everything in the home |
-| `log` | — | `call`, `project`, `client`, `tag`, `outcome`, `since`, `limit`, `cursor` | the calls made against this home, newest first |
+| `log` | — | `call`, `project`, `client`, `tag`, `outcome`, `since`, `limit` (200), `cursor` | the calls made against this home, newest first |
 | `clear_log` | — | — | clears this home's call log |
-| `doctor` | — | — | checks the home, then each machine, PostgreSQL Store and bucket, shallowly ([the doctors](#the-doctors)) |
+| `doctor` | — | `on_progress` | checks the home, then each machine, PostgreSQL Store and bucket, shallowly ([the doctors](#the-doctors)) |
 | `leftovers` | — | `machine` | what earlier runs left behind on this computer and on each running machine |
 | `prune` | `leftover` | — | removes one leftover that `leftovers` listed |
 
@@ -197,8 +220,8 @@ $ layerfs home get --with live
   A row's short form is `{ platform, ready }`, with `missing` when something
   is; its long form has `platform, how, backend, route, sqlite, postgresql,
   ready, missing, version, options, description, socket, candidates`. It
-  needs no home. (`machine.platforms` answers the same rows until the
-  `machine` family is migrated.)
+  needs no home. (1.x's `machine.platforms` is gone, with no alias; these
+  are its rows.)
 - **`get --with tree`** adds `tree: { machines, stores, buckets }`, read
   from the home's records only: each machine with its sqlite `stores` and
   its `sandboxes`, the PostgreSQL Stores (which live on no machine) and the
@@ -305,17 +328,18 @@ $ layerfs home clear-log --detail
 (Four lines: the three above and the refused `file read` shown under
 [errors](#errors-and-exit-codes), all from the same run.)
 
-### `project` (7)
+### `project` (8)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `init` | `project`, `folder` | `timeout` (ms, default 1 hour), `on_progress` | imports a folder on this computer as a new project into an existing Store |
-| `list` | — | `store`, `limit`, `cursor`, `--with stats` | every project in the home, or one Store's |
+| `init` | `project`, `folder` | `timeout` (ms, 3600000: one hour), `on_progress` | imports a folder on this computer as a new project into an existing Store |
+| `list` | — | `store`, `limit` (100), `cursor`, `--with stats` | every project in the home, or one Store's |
 | `get` | `project` | — | one project: its Store, state and main's head |
 | `stats` | `project` | `branch` (default `main`), `at` | entry counts and size of the tree at a Branch's head or a Commit |
 | `export` | `project`, `destination` | `branch` (default `main`), `at`, `on_progress` | exports a Branch's committed tree to a folder on this computer |
 | `delete` | `project` | — | retires one project in its Store and removes its home entry |
 | `hide_path` | `project`, `path` | — | hides one absolute path from the project's whole history; frees no bytes |
+| `doctor` | `project` | `full`, `on_progress` | checks one project's record against its Store's own list; `--full` reads its data ([the doctors](#the-doctors)) |
 
 A project's `state` is `ready`, `busy` (an Init or a delete of it runs:
 `op {name, phase, started_at}`, `name` being `init` or `delete`),
@@ -414,11 +438,48 @@ Short: `{ file_count, size }` (`size` the bytes written); long adds
 `total` null; `finalize` is the last event and comes only once the folder
 is in place. Events arrive at most every 200 ms.
 
+Run for this manual (macOS `native`, a debug build of `61960e3f5f`, a scratch
+home; ids shortened to 8 characters and `…`):
+
+```console
+$ layerfs project init shop/api /tmp/demo/src --progress
+{"phase":"check","done":null,"total":null}
+{"phase":"install","done":null,"total":null}
+{"phase":"record","done":null,"total":null}
+{"commit":"32919f55…"}
+$ layerfs project list
+{"items":[{"project":"shop/api"}]}
+$ layerfs project list --with stats --detail
+{"items":[{"project":"shop/api","state":"ready","op":null,"blocked_by":null,"reason":null,"fix":null,"store":"shop","engine":"sqlite","machine":"native","commit":"32919f55…","created_at":"2026-11-18T22:04:02Z","size":19}],"next_cursor":null}
+$ layerfs project get shop/api
+{"store":"shop","state":"ready","commit":"32919f55…"}
+$ layerfs project stats shop/api
+{"file_count":2,"dir_count":1,"symlink_count":0,"size":19}
+$ layerfs project hide-path shop/api /x.txt
+{"ok":true}
+$ layerfs project export shop/api /tmp/demo/export --branch agent --progress
+{"phase":"prepare","done":null,"total":null}
+{"phase":"export","done":0,"total":null}
+{"phase":"export","done":14,"total":null}
+{"phase":"finalize","done":14,"total":null}
+{"file_count":2,"size":14}
+$ layerfs project doctor shop/api --full --progress
+{"phase":"data","done":0,"total":3}
+{"phase":"data","done":1,"total":3}
+{"phase":"data","done":2,"total":3}
+{"phase":"data","done":3,"total":3}
+{"phase":"self","done":1,"total":1,"node":{"project":"shop/api","status":"ok","coverage":"full","checks":[{"check":"project.record","outcome":"pass","from":null},{"check":"project.listed","outcome":"pass","from":null},{"check":"project.data","outcome":"pass","from":null}],"blocked_by":null,"reason":null}}
+{"ok":true}
+```
+
+`symlink_count: 0` stays in the short form: an integer 0 is a value; only
+a `<list>_count` beside a list that was not cut is left out.
+
 ### `branch` (6)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `list` | `project` | `prefix`, `exclude_prefix`, `limit`, `cursor` | a project's Branches, `main` included, in name order |
+| `list` | `project` | `prefix`, `exclude_prefix`, `limit` (100), `cursor` | a project's Branches, `main` included, in name order |
 | `get` | `project`, `branch` | — | one Branch and its head Commit |
 | `fork` | `project`, `name`, `[from]` | `at` | a new Branch from another Branch's head, or from a Commit |
 | `merge` | `project`, `branch`, `from` | `into`, `units` (JSON), `expected`, `message` (`-m`) | merges one Branch into another, or into a new Branch |
@@ -480,13 +541,31 @@ publication answers as a Commit. Every id in an answer is the full id.
   `--expected` (the Branch's head is no longer checked); `list`'s
   `page_size` and `page_pos` became `limit` and `cursor`.
 
+Run for this manual (macOS `native`, a debug build of `61960e3f5f`, a scratch
+home; ids shortened to 8 characters and `…`):
+
+```console
+$ layerfs branch fork shop/api agent main
+{"commit":"32919f55…"}
+$ layerfs branch list shop/api
+{"items":[{"branch":"agent","commit":"32919f55…"},{"branch":"main","commit":"32919f55…"}]}
+$ layerfs branch merge shop/api agent main --into merged
+{"commit":"12d12fbd…","fast_forward":true}
+$ layerfs branch publish shop/api agent
+{"commit":"32220c54…"}
+$ layerfs branch publish shop/api agent --detail
+{"commit":"32220c54…","unchanged":true,"previous":null,"outcome":"unchanged","branch":"agent","source_commit":null,"base":null,"root":null,"size":null}
+$ layerfs branch remove shop/api merged
+{"ok":true}
+```
+
 ### `commit` (3)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `list` | `project`, `branch` | `at`, `limit`, `cursor` | a Branch's Commits, newest first; on `main`, its publications |
+| `list` | `project`, `branch` | `at`, `limit` (100), `cursor` | a Branch's Commits, newest first; on `main`, its publications |
 | `get` | `project`, `commit` | `branch` | one Commit, by its id or a prefix of 8 or more characters |
-| `diff` | `project`, `ref` | `from`, `path`, `--with patch`, `limit`, `cursor` | the paths that differ between two Commits or Branches |
+| `diff` | `project`, `ref` | `from`, `path`, `--with patch`, `limit` (100), `cursor` | the paths that differ between two Commits or Branches |
 
 - **`list`** starts at the Branch's head, or at `--at` (`NotFound` when it
   is not in the Branch's history). A row's short form is `{ commit }`, with
@@ -530,10 +609,27 @@ publication answers as a Commit. Every id in an answer is the full id.
   `paths_only`, `page_size` and `page_pos` became `ref`, `--from`, `--with
   patch`, `limit` and `cursor`).
 
+Run for this manual (macOS `native`, a debug build of `61960e3f5f`, a scratch
+home; ids shortened to 8 characters and `…`):
+
+```console
+$ layerfs commit list shop/api agent --limit 2
+{"items":[{"commit":"12d12fbd…","message":"Apply filesystem changes"},{"commit":"1244862d…","message":"Apply filesystem changes"}],"next_cursor":"eyJmb3Ii…"}
+$ layerfs commit list shop/api main
+{"items":[{"commit":"32220c54…","source_branch":"agent"},{"commit":"32919f55…"}]}
+$ layerfs commit diff shop/api agent
+{"items":[{"path":"/README.md","change":"modified"},{"path":"/docs/a.txt","change":"modified"},{"path":"/x.txt","change":"added"},{"path":"/y","change":"added"}]}
+$ layerfs commit diff shop/api agent --with patch --path /docs/a.txt
+{"items":[{"path":"/docs/a.txt","change":"modified","hunks":[{"op":" ","text":"one"},{"op":"-","text":"two"},{"op":"+","text":"three"},{"op":" ","text":""}]}]}
+```
+
 ### `file` (14)
 
 1.1.0's `fs` family, renamed (O13). Paths are absolute, starting with `/`.
-Store calls: Linux only (elsewhere `Unsupported`).
+A sqlite Store on `native` and a PostgreSQL Store are read and written in
+the caller's process (the runs on this page were on macOS); a sqlite Store
+on another machine through that machine's worker (see
+[routes](machines-and-stores.md#routes)).
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -622,17 +718,48 @@ Store calls: Linux only (elsewhere `Unsupported`).
 
 Run:
 
+Also run for this manual (macOS `native`, a debug build of `61960e3f5f`, a scratch
+home; ids shortened to 8 characters and `…`):
+
 ```console
-$ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","path":"/src"},{"op":"mv","from":"/docs/a.txt","to":"/src/a.txt"}]' \
-    | layerfs file apply shop/api agent -m batch
-{"commit":"1271…"}
+$ echo "# Shop API, agent" | layerfs file write shop/api agent /README.md -m "Update the title"
+{"commit":"12c19c06…"}
+$ echo "# x" | layerfs file write shop/api agent /README.md --detail
+{"commit":"123bef1a…","unchanged":false,"merged":false,"overwritten":[],"overwritten_count":null,"outcome":"committed","branch":"agent","parent":"12c19c06…","root":"74647323…","message":"Apply filesystem changes","created_at":"2026-11-18T22:04:15Z"}
+$ layerfs file read shop/api agent /README.md
+{"text":"# x\n"}
+$ layerfs file read shop/api agent /docs/a.txt --line 2 --limit 1 --detail
+{"text":"two\n","next_line":null,"line_truncated":false,"binary":false,"size":8,"commit":"123bef1a…","root":"74647323…","path":"/docs/a.txt","start_line":2,"end_line":2}
+$ layerfs file stat shop/api agent /docs/a.txt
+{"type":"file","size":8,"mode":"0644"}
+$ layerfs file list shop/api agent / --text
+PATH        TYPE
+/README.md  file
+/docs       dir
+$ layerfs file glob shop/api agent '**/*.txt'
+{"items":["/docs/a.txt"]}
+$ layerfs file grep shop/api agent two
+{"items":[{"path":"/docs/a.txt","line":2,"text":"two"}]}
+$ layerfs file edit shop/api agent /docs/a.txt --old-string two --new-string three -m "edit a"
+{"commit":"125470c8…"}
+$ layerfs file edit shop/api agent /docs/a.txt --old-string nope --new-string three
+{"error":"NotFound","message":"the old text is not in /docs/a.txt"}
+$ layerfs file mkdir shop/api agent /src/lib
+{"commit":"128ee09b…"}
+$ layerfs file rm shop/api agent /src --recursive
+{"commit":"1244862d…"}
+$ echo '[{"op":"write","path":"/x.txt","content":"x\n"},{"op":"mkdir","path":"/y"}]' | layerfs file apply shop/api agent
+{"commit":"12d12fbd…"}
+$ layerfs file history shop/api agent /docs/a.txt
+{"items":[{"commit":"125470c8…","change":"modified","message":"edit a"},{"commit":"32919f55…","change":"added"}]}
+$ layerfs file blame shop/api agent /docs/a.txt
+{"ranges":[{"start":1,"end":1,"commit":"32919f55…"},{"start":2,"end":2,"commit":"125470c8…"}],"commits":[{"commit":"32919f55…"},{"commit":"125470c8…","message":"edit a"}]}
 ```
 
 ### `sandbox` (7)
 
-The family is migrated: each call answers its short form, `--detail` its
-long form (see [the form of an answer](#the-form-of-an-answer)).
-`sandbox.doctor` is one of [the doctors](#the-doctors). Removed with no
+Each call answers its short form, `--detail` its long form (see
+[the form of an answer](#the-form-of-an-answer)). `sandbox.doctor` is one of [the doctors](#the-doctors). Removed with no
 alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
 `logs` family is gone (`logs.machine` is `machine log`). Every call but
 `create` names the Sandbox by the positional `sandbox`.
@@ -645,7 +772,7 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
 | `remove` | `sandbox` | `force`, `on_progress` | stops a Sandbox and removes it |
 | `files` | `sandbox`, `[path]` | `depth` (1), `limit` (100), `cursor`, `byte_offset` (0), `byte_length` (262144) | a Sandbox's roots, one page of a folder, or one byte window of a file |
 | `log` | `sandbox` | `limit` (200), `cursor` | a Sandbox's daemon log: its last lines, then the lines before a cursor |
-| `doctor` | `sandbox` | — | checks one Sandbox (see [the doctors](#the-doctors)) |
+| `doctor` | `sandbox` | `on_progress` | checks one Sandbox and its Workspaces (see [the doctors](#the-doctors)) |
 
 - **State from records.** A Sandbox's `state` is derived from its record
   and its machine's record, with no probe, in this order: `busy` with `op
@@ -676,7 +803,7 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   exec ids `running` in it now (whichever client started them; one whose
   client is gone is not listed) and, when not ready, its `state` (`busy`
   with `op.name` `mount`, `commit` or `unmount`; `broken` with `fix:
-  layerfs workspace unmount <ws> --discard --force`). The long form adds
+  layerfs workspace unmount <workspace> --discard --force`). The long form adds
   `path`, `commit`, `base_layer`, `mounted_at`, `branch_moved`,
   `pending_merge`, `commands` (`[{exec, started_at, program, tag}]`: no
   argument and no environment value is shown) and `id`. The Sandbox's long
@@ -703,8 +830,8 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   machine, platform, image, created_at`. A page ends after `limit` rows
   (1 to 1000) or early at 64 KiB, with `next_cursor`, which carries the
   filters; a cursor of other filters is `InvalidInput`.
-- **`create`** checks the Store's machine, a running `store push` or
-  `store pull` and the name under one home lock, where it claims the name
+- **`create`** checks the Store's machine, a running `store move` and the
+  name under one home lock, where it claims the name
   with its `op` (`create`, #536 §7.1); its success records the result and
   drops the `op` in one write, a refused start removes the record. A name
   taken anywhere in the home is `Exists`. With no `machine` it runs on its
@@ -806,10 +933,41 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
 - `files` and `log` take no lock or lease, ask no daemon, start nothing
   and write nothing, the call log included; at most two inspection reads
   run on a machine at a time (`Busy`), and a machine that is stopped or
-  does not answer within 8 s is `Unavailable`. The MCP server lists them
-  in its admin profile.
-- Run for this manual on a scratch home: `sandbox list`, `get`, `files`
-  and `log` of a recorded native Sandbox.
+  does not answer within 8 s is `Unavailable`. They are `full` profile
+  calls: the MCP server lists them in its `admin` profile.
+
+
+Run for this manual (macOS `native`, a debug build of `61960e3f5f`, a scratch
+home; ids shortened to 8 characters and `…`):
+
+```console
+$ layerfs sandbox create shop/api tests --progress
+{"phase":"start","done":0,"total":1}
+{"phase":"start","done":1,"total":1}
+{"ok":true}
+$ layerfs sandbox list
+{"items":[{"sandbox":"tests","project":"shop/api"}]}
+$ layerfs sandbox get tests
+{"state":"ready"}
+$ layerfs sandbox get tests --with stats
+{"state":"ready","workspaces":[{"workspace":"tests:agent","branch":"agent"}],"stats":{"daemon":{"pid":75696,"started_at":"2026-11-18T22:05:16Z"},"usage_reason":"host_process","daemon_capacity":{"admission":{"pool_vacant":7,"pool_running":1,"reserved_vacant":1,"reserved_running":0},"retained":{"limit":64,"ttl_ms":3600000,"count":0,"dropped":0,"recorded":0}},"workspaces":[{"workspace":"tests:agent","overlay_bytes":77824,"usage_reason":"host_process"}]}}
+$ layerfs sandbox log tests --limit 2
+{"items":[{"text":"LAYERFS_DAEMON_LISTEN 127.0.0.1:62804"}]}
+$ layerfs sandbox doctor tests
+{"ok":true}
+$ layerfs sandbox remove tests
+{"error":"InUse","message":"Sandbox tests still holds 1 Workspace(s); commit or unmount them first","workspaces":["tests:agent"]}
+$ layerfs workspace unmount tests:agent
+{"ok":true}
+$ layerfs sandbox remove tests --progress
+{"phase":"stop","done":1,"total":3}
+{"phase":"delete","done":2,"total":3}
+{"phase":"delete","done":3,"total":3}
+{"ok":true}
+```
+
+The native daemon was this build's (`layerfs machine update native --daemon
+target/debug/layerfs-daemon` on the scratch home).
 
 ### `workspace` (7)
 
@@ -819,7 +977,7 @@ handle is gone: `<sandbox>:/path` is refused `InvalidInput`.
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `list` | — | `sandbox`, `limit`, `cursor` | every mounted Workspace, or one Sandbox's (agent profile) |
+| `list` | — | `sandbox`, `limit` (100), `cursor` | every mounted Workspace, or one Sandbox's (agent profile) |
 | `mount` | `sandbox`, `branch` | `name` | mounts a Branch in a Sandbox |
 | `exec` | `workspace`, `command` | `cwd`, `env` (repeat), `stdin`, `stream`, `stdout`, `stderr`, `on_progress` | runs one bash command in a Workspace |
 | `cancel` | `workspace` | `exec` | ends the commands running in a Workspace, or one of them |
@@ -907,11 +1065,35 @@ handle is gone: `<sandbox>:/path` is refused `InvalidInput`.
   through the machine's worker. On `docker` every call goes through its
   worker (D-8).
 
-### `machine` (13)
+Run for this manual (macOS `native`, a debug build of `61960e3f5f`, a scratch
+home; ids shortened to 8 characters and `…`):
 
-The family is migrated: each call answers its short form, `--detail` its
-long form (see [the form of an answer](#the-form-of-an-answer)).
-`machine.doctor` is one of [the doctors](#the-doctors). Removed with no alias:
+```console
+$ layerfs workspace mount tests agent
+{"workspace":"tests:agent","path":"/tmp/demo/home/machine/native/run/layerfs-8a7387b2-tests/workspaces/1"}
+$ layerfs workspace list
+{"items":[{"workspace":"tests:agent","branch":"agent"}]}
+$ layerfs workspace exec tests:agent 'echo hello > out.txt && uname -s'
+{"exit_code":0,"stdout":"Darwin\n"}
+$ layerfs workspace exec tests:agent 'exit 3'
+{"exit_code":3}
+$ echo $?
+3
+$ layerfs workspace status tests:agent
+{"changes":[{"path":"/out.txt","change":"added"},{"path":"/x.txt","change":"removed"}]}
+$ layerfs workspace commit tests:agent -m "test output"
+{"commit":"12bb5eae…"}
+$ layerfs workspace cancel tests:agent
+{"already_ended":true}
+```
+
+(`/x.txt` is listed `removed` because `project hide-path` hid it after the
+Branch's head was written; see [limitations](limitations.md#observed-in-the-runs-for-this-manual).)
+
+### `machine` (14)
+
+Each call answers its short form, `--detail` its long form (see
+[the form of an answer](#the-form-of-an-answer)). `machine.doctor` is one of [the doctors](#the-doctors). Removed with no alias:
 `machine.status` (now `get`, with `--with live` for the probe),
 `machine.space` (now `stats --with space`), `machine.load` (now
 `load_image`), `logs.machine` (now `log`) and `machine.platforms` (its rows
@@ -933,6 +1115,7 @@ positional `machine`, except `create`, which takes `name` and `platform`.
 | `create` | `name`, `platform` | `cpus` (2), `memory` (4G), `disk` (20G), `image`, `os_image`, `on_progress` | creates a VM machine (`lima`, `apple-container`) and starts it |
 | `remove` | `machine` | `on_progress` | deletes a VM machine and its disk; one of a removed platform is only forgotten |
 | `update` | `machine` | `cpus`, `memory`, `image`, `docker`, `wsl`, `daemon` | sets a machine's image, or a built-in machine's Docker socket, WSL distribution and daemon; no `disk` |
+| `doctor` | `machine` | `on_progress` | checks a machine, then each Store and Sandbox on it ([the doctors](#the-doctors)) |
 
 - **State from records.** `list` and `get` read the home's records and
   probe nothing. A machine's `state` is `ready`, `busy` (with `op { name,
@@ -1047,8 +1230,9 @@ positional `machine`, except `create`, which takes `name` and `platform`.
   `next_cursor` for the lines before it (left out at the start of the log).
   A cursor from before the worker's log rotated is stale (`InvalidInput`).
   `native` has no worker: `Unsupported`.
-- `stats`, `files` and `log` write no call-log line (`quiet`) and are no
-  MCP tool. None of the reads starts a machine.
+- `stats`, `files` and `log` write no call-log line (`quiet`); like every
+  `machine` call they are `full` profile calls, in the MCP `admin` profile.
+  None of the reads starts a machine.
 
 Run on a scratch home (macOS, a debug build; paths shortened):
 
@@ -1075,14 +1259,14 @@ See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals, and
 [removed platforms](machines-and-stores.md#removed-platforms-firecracker-microsandbox-and-ssh).
 
-### `store` (12)
+### `store` (13)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `list` | — | `machine`, `--with stats` | every Store, from the home's records |
 | `get` | `store` | `--with live,stats` | a Store's record and state; with `--with`, read where it lives or opened for its counters |
 | `create` | `name` | `machine` | an empty sqlite Store, on this computer or made on `machine` directly |
-| `connect` | `store`, `url` | `auth`, `machine`, `synchronous_commit` | connects a PostgreSQL database as a Store with a saved login; on a connected Store, sets its address, or with `machine` that machine's own (checked from it first) |
+| `connect` | `store`, `url` | `auth`, `machine`, `synchronous_commit` (`local`) | connects a PostgreSQL database as a Store with a saved login; on a connected Store, sets its address, or with `machine` that machine's own (checked from it first) |
 | `disconnect` | `store` | `machine` | forgets a PostgreSQL Store, its data staying; with `machine`, removes only that machine's own address |
 | `save_auth` | `auth` | `user`, `password` (both required; `--password-stdin`) | saves or replaces a PostgreSQL login in the home's secret folder |
 | `auths` | — | — | the saved logins and the Stores that use each; never a password |
@@ -1091,8 +1275,9 @@ refusals, and
 | `move` | `store`, `machine` | `on_progress` | moves a sqlite Store between this computer and a machine |
 | `remove` | `store` | — | deletes a sqlite Store with every project in it |
 | `compact` | `store` | `on_progress` | reclaims the dead bytes of one Store; a sqlite Store on another machine is compacted by that machine's worker |
+| `doctor` | `store` | `machine`, `on_progress` | checks a Store, then each of its projects ([the doctors](#the-doctors)) |
 
-All twelve are migrated. `store.status` and `store.stats` are gone into
+`store.doctor` is one of [the doctors](#the-doctors). `store.status` and `store.stats` are gone into
 `store get` (`--with live`, `--with stats`), `store.push` and `store.pull`
 into `store move`, a password in a Store's record or URL into saved
 logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
@@ -1175,8 +1360,10 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   backup or restore whose owner is gone with its outcome unknown is settled
   here: the read drops the `op` and writes what was tried to the bucket
   row's `attempt`. The `live` section: `holders` (pids of other live
-  processes holding the Store), `phases` (a running compaction's phases,
-  else null), `behind` (the buckets whose backup heads differ from the
+  processes holding the Store), `phases` (the steps a running compaction's
+  record can show, in order: on SQLite `mark, build, verify, install,
+  cleanup`, the record writing `cleanup` in its final step, while `store
+  compact`'s progress events are `mark, build, verify, install`; else null), `behind` (the buckets whose backup heads differ from the
   Store's; null for PostgreSQL or when the heads could not be read),
   `server_version` and `latency_ms` (PostgreSQL only).
 - **`get --with stats`** opens the Store, as a Store call does (refused
@@ -1231,7 +1418,8 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   Workspaces are mounted. While a compaction runs on a machine, a move's or
   remove's steps there are `Busy` naming it.
 
-Run (macOS, native; the outputs are this build's):
+Run (macOS, native; rerun at `61960e3f5f` on a fresh scratch home, all but
+the `--detail` line, which is from an earlier run of the same calls):
 
 ```console
 $ layerfs store create shop
@@ -1243,7 +1431,7 @@ $ layerfs store get shop
 $ layerfs store get shop --with live --detail
 {"engine":"sqlite","state":"ready","machine":"native","auth":null,"connections":null,"projects":[],"projects_count":null,"backups":[],"op":null,"blocked_by":null,"reason":null,"fix":null,"observed_at":"2026-11-18T15:35:10Z","store":"shop","profile":"disposable","synchronous_commit":null,"sqlite_version":"3.53.2","created_at":"2026-11-18T15:35:10Z","last_transfer":null,"live":{"holders":[],"phases":null,"behind":[],"server_version":null,"latency_ms":null}}
 $ layerfs store list --with stats
-{"items":[{"store":"shop","engine":"sqlite","machine":"native","observed_at":"2026-11-18T15:35:10Z","size":270336}]}
+{"items":[{"store":"shop","engine":"sqlite","machine":"native","size":270336}]}
 $ layerfs store compact shop
 {"freed_bytes":0}
 $ layerfs store move shop native
@@ -1285,7 +1473,7 @@ See [Stores](machines-and-stores.md#stores).
 | `restore` | `bucket`, `file`, `store` | `on_progress` | restores a Store file from a bucket as a sqlite Store on this computer |
 | `doctor` | `bucket` | `full` | checks a bucket; `--full` also tests a write |
 
-All six are migrated. Today's `--key` reference (`env:` or `file:`),
+`backup.doctor` is one of [the doctors](#the-doctors). 1.x's `--key` reference (`env:` or `file:`),
 `--region` and `--part-size` are gone with no alias; `list`'s bucket and
 `create`'s file are options, and `restore` names the bucket, its file, then
 the Store.
@@ -1447,13 +1635,11 @@ every check was made and nothing was found; otherwise `findings` and
 - **`--text`** prints a readable form instead: a file's text as it is; a
   result's list of records as a table with upper-case headers; other fields
   as `key  value` lines. It is one generic form, not a layout per call.
-- A migrated call answers its short form, or its long form with `--detail`
+- Every call answers its short form, or its long form with `--detail`
   ([the form of an answer](#the-form-of-an-answer)); its lists carry `items`
-  and `next_cursor`.
-- The paged results of a call that is not migrated carry `items`,
-  `has_more` (most families) and `next_page_pos`; pass `next_page_pos` back
-  as `page_pos`. The diff calls also carry `next_cursor`, passed back as
-  `cursor`.
+  and `next_cursor`, passed back as `cursor`. 1.x's `page`, `page_size`,
+  `page_pos`, `continuation`, `has_more` and `next_page_pos` are gone, with
+  no alias.
 - Result keys are snake_case in every front end. Only identifier-like keys
   change; a key that holds a path or a name never does.
 - Bytes are `Buffer`s in Node and `bytes` in Python.
@@ -1462,13 +1648,15 @@ every check was made and nothing was found; otherwise `findings` and
 
 | Exit | Meaning |
 | --- | --- |
-| 0 | the call succeeded |
-| 2 | the command line is wrong (wrong number of positionals, unknown option, a value that is not a whole number or not `true`/`false`, bad JSON, an unreadable `--from` file); nothing was called |
+| 0 | the call succeeded; a doctor exits 0 once its report is made, whatever it found |
+| 2 | the command line is wrong (wrong number of positionals, unknown option, a required option missing, a `--with` section the call does not take, a value that is not a whole number or not `true`/`false`, bad JSON, an unreadable `--from` file); nothing was called |
 | 125 | LayerFS refused or failed the call; the refusal is JSON on stderr |
 
-`workspace exec --stream` exits with the command's own code instead (0 for
-a result with no exit code, 1 for a code outside 0 to 255); 125 still means
-LayerFS refused or failed. `layerfs help` and `layerfs --version` need no
+`workspace exec` exits with the command's own code in every form (0 for a
+result with no exit code, 1 for a code outside 0 to 255) and prints its
+result JSON on stdout (`--stream` prints the output instead); 125 still
+means LayerFS refused or failed, with the refusal on stderr and nothing on
+stdout. `layerfs help` and `layerfs --version` need no
 home.
 
 A refusal is one line of JSON: `{"error", "message"}`, then `fix` when
@@ -1483,17 +1671,23 @@ also keeps them in `fields`). Run:
 
 ```console
 $ layerfs file read shop/api
-layerfs: file.read takes 3 to 4 positional arguments, not 1
+layerfs: file.read takes 3 positional arguments, not 1
 $ echo $?
 2
 
-$ layerfs store get nope
+$ layerfs store remove nope
 {"error":"NotFound","message":"no Store named nope"}
 $ echo $?
 125
 
 $ layerfs file read nope/p main /a --detail
 {"error":"NotFound","message":"no Store named nope","fix":null,"detail":{"code":"NoSuchStore"}}
+
+$ layerfs workspace mount tests main
+{"error":"InvalidInput","message":"main is the project's published line, not a Branch, and is not mounted: fork a Branch from it and mount that","fix":"layerfs branch fork shop/api <name> main"}
+
+$ layerfs sandbox remove tests
+{"error":"InUse","message":"Sandbox tests still holds 1 Workspace(s); commit or unmount them first","workspaces":["tests:agent"]}
 ```
 
 `error` is one of thirteen codes:
@@ -1503,12 +1697,12 @@ $ layerfs file read nope/p main /a --detail
 | `NotFound` | no machine, bucket, Store, project, Branch, Commit, path, Sandbox or Workspace of that name; a path a project hid |
 | `Exists` | the name is taken, the same database or bucket is already connected (under any name), or a bucket object was exported from another home |
 | `InUse` | held: running Sandboxes, mounted Workspaces, processes with the Store open, Stores on a machine; a layout 2 home with any of these, or with a move, removal or create still running, which is not converted yet ([the home](home.md#a-layout-2-home)) |
-| `Busy` | an operation runs on the entity: a Store being pushed, pulled or removed, a machine being made or removed, a Sandbox being created or closed; the message names it (`op` id and phase) and its process (#536 §7.1); the long form's `detail` is `{entity: {kind, name}, phase, op}`. Also: another project is being added to the same Store; a Store's writable open met SQLite's busy lock before any effect (the open wrote nothing, so the caller may repeat the call) |
-| `Unresolved` | an earlier operation on the entity ended with its outcome not known; its process is gone and its `op` stays. The message names the call that shows it (`store status`, `machine status`, `sandbox get`) and the one that clears it (`store remove`, `machine remove`, `sandbox close`); `detail` as for `Busy` |
+| `Busy` | an operation runs on the entity: a Store being moved, compacted, backed up, restored or removed, a machine being made, started, stopped or removed, a Sandbox being created or removed, a command running where a call needs none; the message names it (`op` id and phase) and its process (#536 §7.1), and the refusal carries `op` (`{name, phase, started_at}`) where the row says so; the long form's `detail` is `{entity: {kind, name}, phase, op}`. Also: another project is being added to the same Store; a Store's writable open met SQLite's busy lock before any effect (the open wrote nothing) |
+| `Unresolved` | an earlier operation on the entity ended with its outcome not known; its process is gone and its `op` stays. The message names the call that shows it (`store get`, `machine get`, `sandbox get`) and the one that clears it (`store remove`, `machine remove`, `sandbox remove`; a compaction's is `store compact`, with that `fix`); `detail` as for `Busy` |
 | `Conflict` | a merge or Commit conflict, or a head that moved; for `backup.restore`, the Store changed since its last backup or restore |
 | `Dirty` | uncommitted changes stand in the way |
-| `Capacity` | a Sandbox's Workspace limit; a `store push` or `store pull` target without room for the Store (the long form's `detail.needed`, `detail.free`); copying an image to a machine without room for it (`detail.needed`, `detail.free`, `detail.where`); no space left |
-| `InvalidInput` | the request is wrong for this name or kind (a file where a folder is needed, a binary file read as text, a reserved name, a write to `main`, an unknown `with` section, a cursor of another call); nothing happened |
+| `Capacity` | a Sandbox's Workspace limit (a seventeenth Workspace); a `store move` target without room for the Store (the long form's `detail.needed`, `detail.free`); copying an image to a machine without room for it (`needed_bytes`, `free_bytes`, `path`, with `fix: layerfs machine prune <m> --unused`); no space left |
+| `InvalidInput` | the request is wrong for this name or kind (a file where a folder is needed, a reserved name, a write to `main`, a Commit prefix several Commits start with (`matches`), an edit text found more than once (`matches`), a cursor of another call or of other filters); nothing happened |
 | `Unsupported` | not possible here, or not built (see [limitations](limitations.md)); a missing tool is listed in the long form's `detail.missing` |
 | `Unavailable` | a server, bucket, worker or host cannot be reached, refused the login or secret, or did not answer in time |
 | `Failed` | it was tried and did not happen; whatever exists is kept |
@@ -1538,33 +1732,32 @@ Every call is one attempt. After `Unknown`, read the state with `list`,
 | Switch | Calls | Does |
 | --- | --- | --- |
 | `--text` | all | a readable result instead of JSON |
-| `--detail` | all | the long form of a migrated call's answer, and of any call's refusal ([the form of an answer](#the-form-of-an-answer)) |
-| `--with <a,b>` | the calls whose row lists sections (`home get`) | adds the named sections to the answer |
-| `--progress` | `project init`, `project export`, `workspace exec`, `store push`, `store pull`, `backup create`, `backup restore` | progress as one JSON line per event on stderr, the event itself: `{"phase", "done", "total", …}`; for `workspace exec`, the exec id first. On a terminal it is one status line instead: `phase: <phase>  done/total`, in byte units (with a rate) for the byte phases `send`, `snapshot`, `hash`, `upload` and `download`, plain counts for every other phase |
-| `--stream` | `workspace exec` | passes the command's stdout and stderr through (output over 1 MiB too) and exits with its code |
+| `--detail` | all | the long form of the answer, and of a refusal ([the form of an answer](#the-form-of-an-answer)) |
+| `--with <a,b>` | `home get` (`platforms`, `tree`), `project list` (`stats`), `commit diff` (`patch`), `sandbox get` (`stats`), `machine list` and `machine get` (`live`), `machine images` (`docker`), `machine stats` (`space`), `store list` (`stats`), `store get` (`live`, `stats`) | adds the named sections to the answer; a name the call does not take is exit 2 |
+| `--progress` | `home doctor`, `project init`, `project export`, `project doctor`, `sandbox create`, `sandbox remove`, `sandbox doctor`, `workspace exec`, `machine load-image`, `machine start`, `machine stop`, `machine create`, `machine remove`, `machine doctor`, `store move`, `store compact`, `store doctor`, `backup create`, `backup restore` | progress as one JSON line per event on stderr, the event itself: `{"phase", "done", "total", …}` (a doctor adds `node`; `workspace exec` adds `exec` to its one `start` event). On a terminal it is one status line instead: `phase: <phase>  done/total`, in byte units (with a rate) for the byte phases `send`, `snapshot`, `hash`, `upload` and `download`, plain counts for every other phase; `LAYERFS_PROGRESS_JSON` set keeps the JSON lines on a terminal. `backup doctor` sends no progress |
+| `--stream` | `workspace exec` | passes the command's stdout and stderr through (output over 1 MiB too), prints no result and exits with the command's code |
 | `--from <file>` | `file write`, `file apply` | reads the content or JSON from a file instead of stdin |
-| `--<option>-from <file>` | any optional text option (`--old-from`, `--new-from`, `--message-from`) | reads the option's value from a file |
-| `-m <text>` | calls with `message` | the same as `--message`; help shows it as `[-m msg]` |
+| `--<option>-from <file>` | a text option (`--message-from`, `--old-string-from`, `--new-string-from`, `--cursor-from`, `--path-from` and the others `layerfs help --json` lists under `switches`) | reads the option's value from a file |
+| `-m <text>` | `branch merge`, the seven `file` writes, `workspace commit` | the commit message, the same as `--message`; help shows it as `[-m msg]` |
 | `--scope <folder>` | all | a folder scope (see below); needs `--scope-project` |
 | `--scope-project <store>/<project>` | all, with `--scope` | the one project the scope is bound to |
 | `--scope-branch <name>` | all, with `--scope` | the scope's Branch namespace |
 | `--` | all | every later word is a positional |
 
 `--option=value` works for every option. A bool option alone
-(`sandbox close … --force`) is true; `--force=false` is false. An option
+(`sandbox remove … --force`) is true; `--force=false` is false. An option
 the table marks required (`backup connect`'s `--access-key` and
 `--key-stdin`, `store save-auth`'s `--user` and `--password-stdin`, `file
 edit`'s `--old-string` and `--new-string`) is shown without brackets in
 help, and a line without it is exit 2; the table's JSON says `required:
 true`, and the Node typings, Python stubs and MCP schemas mark it.
 
-`store push` and `store pull` report their phases (`check`, `snapshot`,
-`send`, `verify`, `install`, `record`, `retire`) as `{"phase", "done",
-"total"}`: `done` and `total` are bytes during `send` and null in
-the other phases. `project init` reports the same shape on every route:
-`check`, `send` (only into a sqlite Store on another machine, while the
-folder is copied), `install` (Init adds the folder) and `record` (from
-source and tests; the run for this manual predates it).
+Each call's phases are in its family's section: `store move` reports
+`check`, `snapshot`, `send`, `verify`, `install`, `record`, `retire`
+(`done` and `total` bytes during `send`, null in the other phases);
+`project init` reports `check`, `send` (only into a sqlite Store on
+another machine, while the folder is copied), `install` and `record` on
+every route.
 
 ## Folder scope
 
@@ -1575,10 +1768,11 @@ optionally, one Branch namespace: `{ project, folder, branch? }`. Node:
 Shell: `--scope <folder> --scope-project <store>/<project> [--scope-branch
 <name>]`; `--scope` without `--scope-project` is exit 2.
 
-- It is an allow list: the `file` calls, `branch` `list`, `get`, `fork`,
-  `merge` and `publish`, and the `workspace` calls. Every other call
-  (Stores, machines, backups, projects, Sandboxes) is refused `out of
-  scope: <call>`, such as `out of scope: store.remove`.
+- It is an allow list: the `file` calls but `history`, `branch` `list`,
+  `get`, `fork`, `merge` and `publish`, and the `workspace` calls but
+  `list`. Every other call (home, Stores, machines, backups, projects,
+  Sandboxes, `branch remove`, `workspace list`) is refused `out of scope:
+  <call>`, such as `out of scope: store.remove`.
 - Every `file` and `branch` call must name the scope's project (`out of
   scope: project`); a `workspace` call's Sandbox must be recorded for that
   project (`out of scope: sandbox`).
@@ -1589,8 +1783,8 @@ Shell: `--scope <folder> --scope-project <store>/<project> [--scope-branch
   `<branch>.<name>`; `branch.list` answers only that namespace's Branches,
   named relative to it. Without `branch`, every call that names a Branch is
   refused. A 66-character Commit id is left as it is.
-- `commit` calls and `branch.diff` are refused as history. A scoped
-  `branch.list` reads every page of the project's Branches and pages the
+- The `commit` calls and `file history` are refused as history. A scoped
+  `branch list` reads every page of the project's Branches and pages the
   namespace's own.
 - `workspace.mount` mounts only the namespace's `main`; `workspace.exec`
   starts the command in the scope's folder.
@@ -1599,12 +1793,19 @@ Shell: `--scope <folder> --scope-project <store>/<project> [--scope-branch
 - A scope guards calls. It is not filesystem isolation: a command can still
   `cd` anywhere in the mounted tree.
 
-Run before the scope named its project (`797ecca2c7`), shown here in the
-current form; the answers follow from the code but were not rerun:
+Run for this manual (the scratch home of the runs above):
 
 ```console
-$ layerfs commit list shop/api agent --scope /src --scope-project shop/api
+$ layerfs commit list shop/api agent --scope /docs --scope-project shop/api
 {"error":"InvalidInput","message":"out of scope: history"}
-$ layerfs file list shop/api agent /src --scope /src --scope-project shop/api
+$ layerfs file list shop/api agent /docs --scope /docs --scope-project shop/api
 {"error":"InvalidInput","message":"out of scope: branch"}
+$ layerfs file list shop/api w1 / --scope /docs --scope-project shop/api --scope-branch agent2
+{"error":"InvalidInput","message":"out of scope: path"}
+$ layerfs file list shop/api w1 /docs --scope /docs --scope-project shop/api --scope-branch agent2
+{"error":"NotFound","message":"Branch agent2.w1 does not exist"}
+$ layerfs branch list shop/api --scope /docs --scope-project shop/api --scope-branch agent2
+{"items":[]}
+$ layerfs workspace list --scope /docs --scope-project shop/api
+{"error":"InvalidInput","message":"out of scope: workspace.list"}
 ```

@@ -12,11 +12,16 @@ async function main(): Promise<void> {
   await layerfs.project.init("shop/api", "/src/api", { timeout: 5, on_progress: (p) => progress.push(p) });
   const page: Result = await lfs.project.list();
   await lfs.project.list({ store: "shop", limit: 10, cursor: "b3A6MQ" });
-  await lfs.branch.fork("shop/api", "agent", "main", "abc");
-  await lfs.branch.fork("shop/api", "agent", "main", null);
-  await lfs.branch.commits("shop/api", "agent", { page: 1, page_size: 50, at_commit: "saved-id" });
-  await lfs.branch.get_commit("shop/api", "main", "layer-id");
-  await lfs.branch.diff("shop/api", "main", "agent", { from_commit: "layer-id", to_commit: "saved-id", include_attribution: true, page: 1 });
+  await lfs.branch.fork("shop/api", "agent", "main", { at: "32ab9e01" });
+  await lfs.branch.fork("shop/api", "agent", null);
+  // an optional positional may be left off before the options
+  await lfs.branch.fork("shop/api", "agent", { at: "32ab9e01" });
+  await lfs.branch.merge("shop/api", "main", "agent", { into: "merged", message: "merge" });
+  await lfs.commit.list("shop/api", "agent", { at: "32ab9e01", limit: 50, cursor: "b3A6MQ" });
+  await lfs.commit.get("shop/api", "32ab9e01", { branch: "main", detail: true });
+  await lfs.commit.diff("shop/api", "agent", { from: "main", path: "/README.md", with: ["patch"] });
+  await layerfs.home.get({ with: ["platforms", "tree"] });
+  await lfs.store.get("shop", { with: ["live", "stats"], log_tag: "run-1" });
   await lfs.file.history("shop/api", "agent", "/README.md", { at: "saved-id", limit: 10 });
   const options: FileReadOptions = { line: 2n, limit: 5 };
   await lfs.file.read("shop/api", "main", "/README.md", { at: "commit-id", line: 1 });
@@ -33,7 +38,7 @@ async function main(): Promise<void> {
     image: "postgres:17-bookworm",
     on_progress: (p) => progress.push(p),
   });
-  await lfs.machine.load("lima1", `sha256:${"a".repeat(64)}`, { on_progress: (p) => progress.push(p) });
+  await lfs.machine.load_image("lima1", `sha256:${"a".repeat(64)}`, { on_progress: (p) => progress.push(p) });
   await lfs.machine.prune("lima1", null, { unused: true });
   await lfs.backup.create("shop", "bucket", { file: "file", on_progress: () => {} });
   const exported: Result = await lfs.project.export("shop/api", "/exports/api", {
@@ -47,7 +52,7 @@ async function main(): Promise<void> {
   try {
     await lfs.store.list();
   } catch (error) {
-    if (error instanceof LayerFSError) void [error.code, error.message, error.detail];
+    if (error instanceof LayerFSError) void [error.error, error.code, error.message, error.fix, error.detail];
   }
 }
 void main;
@@ -75,3 +80,7 @@ void client({ scope: { folder: "/web" } });
 void lfs.project.export("shop/api", "/exports/api", { commit: "main" });
 // @ts-expect-error a cancel's exec id is text
 void lfs.workspace.cancel("shop:dev", { exec: 1 });
+// @ts-expect-error a section this call does not have
+void lfs.store.get("shop", { with: ["patch"] });
+// @ts-expect-error the 1.x call is gone (commit.list)
+void lfs.branch.commits("shop/api", "agent");

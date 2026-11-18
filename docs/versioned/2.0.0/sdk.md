@@ -8,15 +8,12 @@ Part of the [2.0.0 manual](README.md). Sources:
 [api/README.md](../../../api/README.md) and
 [api/python/README.md](../../../api/python/README.md).
 
-Both packages are named `layerfs` (O15). Each is a thin front end over the
-same Rust library. Each builds its twelve families from the library's call
-table, so neither names a call in its own code, and both take the same
-arguments as the `layerfs` command. Every call is one call into the
-library, made once.
-
-Neither package is published. `@layerfs/layerfs` is the npm fallback name
-if `layerfs` is not available (O15); this was not checked against the
-registries.
+The Node package is `@layerfs/node` (`api/node`) and the Python package
+`layerfs` (`api/python`). Each is a thin front end over the same Rust
+library. Each builds its ten families from the library's call table, so
+neither names a call in its own code, and both take the same arguments as
+the `layerfs` command. Every call is one call into the library, made once.
+Neither package is published.
 
 ## Node
 
@@ -27,22 +24,24 @@ await layerfs.store.create("shop");
 await layerfs.project.init("shop/api", "/src/api", { on_progress: console.log });
 await layerfs.branch.fork("shop/api", "agent", "main");
 await layerfs.file.write("shop/api", "agent", "/README.md", "hello\n");
-// a named Workspace: ws is "tests:build" (#536 C3)
-const { ws } = await layerfs.workspace.mount("tests", "agent", { name: "build" });
+// a named Workspace: workspace is "tests:build"
+const { workspace } = await layerfs.workspace.mount("tests", "agent", { name: "build" });
 
 const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", folder: "/web", branch: "agent" } });
 ```
 
 - Node 22 or later. The package is an ES module.
-- The default export and the named exports `project`, `branch`, `commit`,
-  `file`, `sandbox`, `workspace`, `machine`, `store` and `backup` use the
-  default home (`LAYERFS_HOME`, else `~/.layerfs`).
+- The default export's ten families and the named exports `project`,
+  `branch`, `commit`, `file`, `sandbox`, `workspace`, `machine`, `store` and
+  `backup` use the default home (`LAYERFS_HOME`, else `~/.layerfs`). The
+  `home` family is on the default export and on a client
+  (`layerfs.home.get()`), not a named export.
 - `layerfs.client({ home, scope })` makes a client of another home, with an
   optional [folder scope](calls.md#folder-scope) `{ project, folder, branch? }`.
 - Every call is `async`. Positionals come in the table's order, then an
   options object. A trailing plain object is read as the options unless its
   slot takes JSON, so an optional positional can be left off:
-  `file.read(p, b, path, { start_line: 2 })`.
+  `file.glob(p, b, "**/*.md", { limit: 10 })`.
 - An unknown option, or too many positionals, throws `InvalidInput` before
   any call.
 - Results are plain objects with snake_case keys. Bytes are `Buffer`s;
@@ -51,8 +50,9 @@ const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", fo
   `message`, `fix` and the fields the next call needs; `detail` is set when
   the call asked the long form (`{ detail: true }`). See
   [the form of an answer](calls.md#the-form-of-an-answer).
-- `table` is the call table, `[{ family, call, args, options, help }]`;
-  `families` lists the twelve families.
+- `table` is the call table, `[{ family, call, args, options, help, form }]`
+  (`form` as `layerfs help --json` prints it); `families` lists the ten
+  families.
 - The doctors are table calls of their families (`layerfs.home.doctor()`,
   `layerfs.machine.doctor(machine)` and so on; [the doctors](calls.md#the-doctors)),
   and there is no `layerfs.doctor`. The leftovers are
@@ -99,7 +99,7 @@ lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/web", "folder": "
   cannot be cancelled: it runs to its end and its outcome is dropped, so
   read the state again after a cancel.
 - Positionals come in the table's order. Optional positionals and options
-  may be keywords: `file.read(p, b, path, start_line=2)`. A positional
+  may be keywords: `file.read(p, b, path, line=2)`. A positional
   given twice, an unknown keyword or too many positionals raises
   `InvalidInput`.
 - Results are dicts with snake_case keys. File content is `str` or
@@ -107,9 +107,11 @@ lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/web", "folder": "
 - A refusal raises `layerfs.LayerFSError` with `.error` (also `.code`),
   `.message`, `.fix` and the fields the next call needs (attributes, and
   the `.fields` dict); `.detail` is set when the call asked the long form
-  (`detail=True`). `with` is a Python keyword, so the option is `with_`.
-- `layerfs.TABLE` is the call table and `layerfs.FAMILIES` the nine
-  families.
+  (`detail=True`). `with` and `from` are Python keywords, so the option is
+  `with_` and the argument `from_` (`branch.fork(p, "agent", from_="main")`,
+  `commit.diff(p, "agent", from_="main")`).
+- `layerfs.TABLE` is the call table and `layerfs.FAMILIES` the ten
+  families; each family, `home` included, is a module attribute.
 - As in Node, the doctors are their families' `doctor` calls and there is
   no `layerfs.doctor`; `layerfs.home.leftovers()` and
   `layerfs.home.prune(leftover)` (and their `layerfs.aio` forms) list and
@@ -130,7 +132,7 @@ from layerfs import aio
 async def main():
     lfs = aio.client(home="/data/lfs")
     page = await lfs.branch.list("shop/api")
-    print([b["name"] for b in page["items"]])
+    print([b["branch"] for b in page["items"]])
 
 asyncio.run(main())
 ```
@@ -139,14 +141,15 @@ asyncio.run(main())
 
 See [`project.export`](../../architecture/api/sdk/project.md#projectexport)
 for destination validation, fidelity, routing, refusal codes and result fields.
-The table has 84 calls, seven in the `project` family.
+The table has 85 calls, eight in the `project` family.
 
 ```js
 // /exports exists; the destination is absent or empty on this host.
 const exported = await layerfs.project.export("shop/api", "/exports/api", {
-  branch: "main",
-  on_progress: ({ phase, bytes }) => console.error(phase, bytes),
+  branch: "agent",
+  on_progress: ({ phase, done }) => console.error(phase, done),
 });
+// exported is {"file_count":3,"size":17} in the run below
 ```
 
 ```python
@@ -155,46 +158,60 @@ result = layerfs.project.export("shop/api", "/exports/api", branch="main", on_pr
 # result = await layerfs.aio.project.export("shop/api", "/exports/api-agent", branch="agent", on_progress=print)
 ```
 
-Omitting `branch` selects `main`. There is no `commit` option. The immutable
-node/root is pinned once; later publications and uncommitted Workspace changes
-do not enter the output. SQLite worker routes stream to the caller’s local
-writer; local/remote PostgreSQL connections read through the caller’s process.
-A required stopped machine is `Unavailable`.
+Omitting `branch` selects `main`; `at` pins one Commit of its history. The
+immutable node/root is pinned once; later publications and uncommitted
+Workspace changes do not enter the output. SQLite worker routes stream to
+the caller's local writer; local/remote PostgreSQL connections read through
+the caller's process. A required stopped machine is `Unavailable`.
 
-Callbacks receive `prepare`, `export`, `finalize` with monotonic local-output
-`files`, `directories`, `symlinks`, `bytes` and `done = bytes` during export; `total` is
-`None`/`null`. `finalize` comes only once the folder is in place, and `export`
-updates at most every 200 ms; only a successful return means success.
-Omit `on_progress` when unused: the current Python shell rejects explicit
-`on_progress=None`. Handler exceptions do not cancel export. Cancelling `aio`
-stops callbacks while the native operation continues, so inspect the destination
-before deciding on another attempt.
+The function receives `{ phase, done, total }`: `prepare`, `export` (`done`
+the bytes written so far, at most every 200 ms) and `finalize`, which comes
+only once the folder is in place; `total` is `null`/`None`. Only a
+successful return means success. Run in Node on macOS (a three-file
+project):
+
+```text
+{"phase":"prepare","done":null,"total":null}
+{"phase":"export","done":0,"total":null}
+{"phase":"export","done":17,"total":null}
+{"phase":"finalize","done":17,"total":null}
+{"file_count":3,"size":17}
+```
+
+Omit `on_progress` when unused: the Python shell rejects an explicit
+`on_progress=None`. Handler exceptions do not cancel export. Cancelling
+`aio` stops callbacks while the native operation continues, so inspect the
+destination before deciding on another attempt.
 
 ## Functions as options
 
 | Option | Calls | Called with |
 | --- | --- | --- |
-| `on_progress` | `project.init`, `project.export`, `workspace.exec`, `store.push`, `store.pull`, `backup.create`, `backup.restore` | each progress update (an object or dict); for `workspace.exec`, once, `{exec: {id}}` before the command starts |
+| `on_progress` | the 19 calls whose row says progress: `project.init`, `project.export`, `sandbox.create`, `sandbox.remove`, `workspace.exec`, `machine.load_image`, `machine.start`, `machine.stop`, `machine.create`, `machine.remove`, `store.move`, `store.compact`, `backup.create`, `backup.restore`, and the doctors `home.doctor`, `project.doctor`, `sandbox.doctor`, `machine.doctor`, `store.doctor` | each event, `{ phase, done, total }` (an object or dict); a doctor adds `node` (the finished thing's tree node); `workspace.exec` sends one `{ phase: "start", done: 0, total: 1, exec }` before the command starts |
 | `stdout`, `stderr` | `workspace.exec` | the command's output, piece by piece: a string when the piece is UTF-8, else a `Buffer` (Node) or `bytes` (Python) |
 
 There is one progress stream and no job registry (O22). Another process
-cannot watch a call it did not start; `store status` shows a push or
-pull in progress. `workspace.exec` sends its output after the command ends; there
-is no live output stream yet. A stream over 1 MiB comes only through these
-functions (one 1 MiB piece at a time) or `stream: true`; the result then
-has that stream `null`, its byte count and `streamed: true`.
+cannot watch a call it did not start; a running operation shows as the
+`busy` state with its `op` (`store get`, `machine get`, `sandbox get`).
+`workspace.exec` sends its output after the command ends; there is no live
+output stream. A stream of at most 1 MiB is answered whole; a longer one
+answers its last 1 MiB and names the file that holds all of it
+(`stdout_file`, `stderr_file`), which `sandbox.files` reads.
 
 - `on_progress` on `workspace.exec` gives the command's exec id while it
   runs, so another call (in this process or another) can end it:
 
   ```js
   const id = new Promise((resolve) => {
-    lfs.workspace.exec(ws, "npm run dev", { on_progress: (p) => resolve(p.exec.id) });
+    lfs.workspace.exec(workspace, "npm run dev", { on_progress: (p) => resolve(p.exec) });
   });
-  await lfs.workspace.exec_cancel(ws, await id, { grace_ms: 2000 });
+  await lfs.workspace.cancel(workspace, { exec: await id });
   ```
 
-  Not run as written; the shell form was (`layerfs-cli/tests/exec_cancel.rs`).
+  Not run as written. The `start` event with `exec` was seen in Node
+  ([the examples](examples/README.md#the-workspace-route)); `workspace
+  cancel` ends every running command by default, SIGTERM then SIGKILL after
+  5 s, and answers `{"already_ended": true}` when none ran.
 - `stream: true` on `workspace.exec` passes the output to the `stdout` and
   `stderr` functions, or, without them, to this process's own stdout and
   stderr (Python writes text to the text stream and bytes to its buffer).
@@ -219,22 +236,12 @@ refusal's `detail.related` names each (`{kind, name, why}`). See
 
 ## Checks on this branch
 
-From the step commits, not repeated for this manual:
+For this version of the manual (branch `cs20-pkg-z` from `call-surface-2-0`
+at `61960e3f5f`, macOS arm64, debug builds): the Node and Python
+[examples](examples/README.md), the [quickstart](quickstart.md) blocks and
+the export run above were run against scratch homes. The Node, Python and
+MCP test suites (`api/node/test`, `api/python/test`, `api/mcp/test`) run the
+table, refusals and a live Store read through each front end.
 
-- `node --test api/node/test/shell.mjs api/node/test/calls.mjs`: 5/5. All
-  57 calls are refused identically by the command and the package when
-  their arguments are missing; a live Store read both ways gives identical
-  JSON.
-- `python3 api/python/test/test_calls.py`: 4/4. All 57 calls are refused
-  as the command refuses them; a live Store read gives the same result,
-  with bytes, a keyword Commit and a folder scope; `aio`.
-- Later, with the review fixes: `api/node/test/events.mjs` (a throwing
-  `on_progress` during a Store move; live exec output with `stream`) 2/2,
-  and `test_calls.py` 7/7 with the native daemon (`94671c974c`).
-
-Run each under a wall limit of at most 120 s, for example
+Run each test under a wall limit of at most 120 s, for example
 `perl -e 'alarm 100; exec @ARGV' node --test api/node/test/calls.mjs`.
-
-For this manual, short Node and Python flows were run on macOS against a
-private home (Store, Init, Branch, file write and read, a refusal, paging,
-`aio`); see the [quickstart](quickstart.md).

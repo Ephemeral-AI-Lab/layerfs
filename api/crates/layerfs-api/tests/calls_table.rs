@@ -1,5 +1,5 @@
-//! The call table and its dispatcher (#533 step 2): 84 calls in twelve
-//! families (three of them migrated to the call surface 2.0's forms), arguments checked before any effect, one test per family that
+//! The call table and its dispatcher (#533 step 2): 85 calls in ten
+//! families (the call surface 2.0), arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::{families, json, keys, size, Call, Kind};
 use layerfs_bridge::control::SdkValue;

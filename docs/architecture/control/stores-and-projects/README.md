@@ -69,11 +69,11 @@ full per-call table is "Where each call runs" in [Control](../README.md).
 
 | Call | Kind | Does | Source |
 | --- | --- | --- | --- |
-| `list`, `get`, `status`, `stats` | both | records, leases, size where it lives | [`sqlite/family.rs`](../../../../control/crates/layerfs-store/src/sqlite/family.rs) |
+| `list`, `get` (`--with live`, `--with stats`) | both | records and state; with `live` read where the Store lives, with `stats` opened for its counters | [`list.rs`](../../../../control/crates/layerfs-store/src/list.rs), [`get.rs`](../../../../control/crates/layerfs-store/src/get.rs), [`live.rs`](../../../../control/crates/layerfs-store/src/live.rs), [`stats.rs`](../../../../control/crates/layerfs-store/src/stats.rs) |
 | `create` | sqlite | empty Store on `native`; `Exists` if named | [`sqlite/create.rs`](../../../../control/crates/layerfs-store/src/sqlite/create.rs) |
-| `push`, `pull` | sqlite | move the file between `native` and a machine | [SQLite and PostgreSQL](sqlite-and-postgresql.md#transfer-sqlitetransfer) |
+| `move` | sqlite | moves the file between `native` and a machine (1.x and the 2.0 previews: `push`, `pull`) | [SQLite and PostgreSQL](sqlite-and-postgresql.md#transfer-sqlitetransfer) |
 | `remove` | sqlite | delete the file wherever it is, with its projects; PostgreSQL `InvalidInput` | [`sqlite/remove.rs`](../../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
-| `connect`, `disconnect`, `attach`, `detach` | PostgreSQL | record or forget a database; record or forget a machine that may run its Sandboxes | [SQLite and PostgreSQL](sqlite-and-postgresql.md#postgresql-postgresql) |
+| `connect`, `disconnect`, `update`, `save_auth`, `auths`, `remove_auth` | PostgreSQL | record or forget a database (with `machine`, one machine's own address); change its login or `synchronous_commit`; keep named logins in the home's secret folder | [SQLite and PostgreSQL](sqlite-and-postgresql.md#postgresql-postgresql) |
 
 ### Multi-step operations
 
@@ -101,8 +101,8 @@ live read found, else `ready`.
 | Rule | Enforced by |
 | --- | --- |
 | Every decision on a Store's kind matches on `StoreRef` or `StoreKind`; `sqlite/` and `postgresql/` never import each other | [`record.rs`](../../../../control/crates/layerfs-store/src/record.rs); test `kind_isolation` |
-| A lease is taken under the Store's lock after the record shows no `op`, so a lease and a push, pull or remove never overlap | [`lease.rs`](../../../../control/crates/layerfs-store/src/lease.rs) `claim` |
-| A lease names its process by pid, kernel start time and boot id; a stale one is removed under the Store lock by the next claim or by push, pull, remove, disconnect, and logged to `log/leases.jsonl`; reads ignore it | same |
+| A lease is taken under the Store's lock after the record shows no `op`, so a lease and a move or remove never overlap | [`lease.rs`](../../../../control/crates/layerfs-store/src/lease.rs) `claim` |
+| A lease names its process by pid, kernel start time and boot id; a stale one is removed under the Store lock by the next claim or by a move, remove or disconnect, and logged to `log/leases.jsonl`; reads ignore it | same |
 | The Store lock is taken after the home lock, never before, and never held across a worker call or byte transfer | [`record.rs`](../../../../control/crates/layerfs-store/src/record.rs) `lock` |
 | No call starts a machine: a worker not recorded or not answering is `Unavailable`, naming `layerfs machine start` | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
 | A guest never reads the home: the caller sends the Store's record with each call; the worker finds the file under its own root by name | [`call.rs`](../../../../control/crates/layerfs-store/src/call.rs), [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
@@ -117,7 +117,7 @@ live read found, else `ready`.
 | No Store / no project | `NoSuchStore` / `NoSuchProject` from `resolve`; `NotFound` from the Store family | [`resolve.rs`](../../../../control/crates/layerfs-store/src/resolve.rs), [`record.rs`](../../../../control/crates/layerfs-store/src/record.rs) |
 | Live / dead uncertain `op` | `Busy` / `Unresolved` | `record.rs` `unblocked` |
 | Store lock held | `Unavailable` after 120 s | [Home](../home/README.md#locks-and-leases) |
-| Leased or used by a Sandbox (push, pull, remove, disconnect, restore) | `InUse`, `detail.related` lists `{kind: "lease", name: <pid>}` and `{kind: "sandbox", name}` | [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle` |
+| Leased or used by a Sandbox (move, remove, disconnect, restore) | `InUse`, `detail.related` lists `{kind: "lease", name: <pid>}` and `{kind: "sandbox", name}` | [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle` |
 | Open-Store idle close | 60 s (`IDLE`); a Store with a call running is never closed (`close` refuses `InUse`) | [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs) |
 | Store kernel guard | `Unsupported`, naming the directory requirement (`0700` owned by this user, not missing/symlink) or filesystem | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | Store file missing | `NoStore` | [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs) |
@@ -127,7 +127,7 @@ live read found, else `ready`.
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
 | `layerfs-api/tests/store_routes.rs` | `cargo +1.85.1 test --locked -p layerfs-api --test store_routes` | Linux (ext4, xfs, btrfs), macOS (apfs) | a call goes where its records say, a worker gets the records, leases are held, read and cleaned |
-| `layerfs-api/tests/store_family.rs` | `cargo +1.85.1 test --locked -p layerfs-api --test store_family` | same | create on native, push to a worker machine and pull back with equal heads; push, pull and remove refusals |
+| `layerfs-api/tests/store_family.rs` | `cargo +1.85.1 test --locked -p layerfs-api --test store_family` | same | create on native, move to a worker machine and back with equal heads; move and remove refusals |
 | `layerfs-control/tests/store_reads.rs` | `cargo +1.85.1 test --locked -p layerfs-control --test store_reads` | macOS, Linux | `store.list`, `get` take no lock and leave a stale lease as it was |
 | `layerfs-store/tests/kind_isolation.rs` | `cargo +1.85.1 test --locked -p layerfs-store --test kind_isolation` | any | `sqlite/` and `postgresql/` never import each other |
 
@@ -135,5 +135,5 @@ live read found, else `ready`.
 
 | Page | What it covers |
 | --- | --- |
-| [SQLite and PostgreSQL](sqlite-and-postgresql.md) | sqlite create, remove, push and pull; PostgreSQL connect, attach, open, the host read session and credentials |
+| [SQLite and PostgreSQL](sqlite-and-postgresql.md) | sqlite create, remove and move; PostgreSQL connect, open, the host read session and credentials |
 | [Projects](projects.md) | `project.init` (in process and through a worker), `export`, `remove`, project records and discovery |
