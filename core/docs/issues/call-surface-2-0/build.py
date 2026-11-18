@@ -1,4 +1,4 @@
-"""Build the frozen LayerFS 2.0 call-surface spec (version 18).
+"""Build the frozen LayerFS 2.0 call-surface spec (version 19).
 
   python3 -I build.py <spec-src>                  check families/*.json against SCHEMA.md and
                                                   DECISIONS.md; write calls.json, pairs.html and
@@ -26,8 +26,8 @@ import re
 import subprocess
 import sys
 
-VERSION = 18
-FROZEN = "2026-11-18"
+VERSION = 19
+FROZEN = "2026-11-19"
 BASE = "caff58a43b"
 ORDER = ["project", "file", "sandbox", "workspace", "branch", "commit", "home", "machine", "store", "backup"]
 KINDS = ["Name", "Project", "Text", "Int", "Bool", "Json", "Image", "Content", "Size", "Function"]
@@ -59,7 +59,7 @@ STATE_NAMES = [s[0] for s in STATES]
 COMPANIONS = {s[0]: s[1] for s in STATES}
 # every reason code; the first two are a blocker's own state, the rest are why a thing is broken
 REASONS = ["stopped", "busy", "engine_down", "not_answering", "outdated", "unreachable", "missing", "failed",
-           "unresolved", "lost", "unsupported"]
+           "unresolved", "lost", "unsupported", "partial"]
 BROKEN_REASONS = REASONS[2:]
 COMPANION_SHAPES = {
     "op": {"keys": ["name", "phase", "started_at"], "is": "the recorded operation: its call word, its phase, when it began"},
@@ -1720,7 +1720,7 @@ def render(S, fams, today, state, pairs_mod, draft):
         <div class="count"><div class="v">{len(REFUSAL_CODES)}</div><div class="l">refusal codes</div></div>
         <div class="count"><div class="v">{percent}</div><div class="l">of the long forms' bytes are in the short forms, over {npairs} examples</div></div>
       </div>
-      <p class="small">Frozen from version 17 with rulings R1 to R9, corrections C1 to C14 and the simplicity changes applied; they are listed under <a href="#decided">Decided at the freeze</a>. Today's column is extracted from the code's own call table at <code>{BASE}</code> ({total_old} calls in {len(old_families)} families). Owner, 2026-11-18: no environment variables for context; project, Branch and Workspace stay explicit on every call.</p>
+      <p class="small">Frozen from version 17 with rulings R1 to R9, corrections C1 to C14 and the simplicity changes applied; they are listed under <a href="#decided">Decided at the freeze</a>. Version 19 brings the rows up to <code>layerfs_v2_0_0</code> #738–#741 (Store compaction in the machine's worker, image states, image import hardening); its changes are the last section there. Today's column is extracted from the code's own call table at <code>{BASE}</code> ({total_old} calls in {len(old_families)} families). Owner, 2026-11-18: no environment variables for context; project, Branch and Workspace stay explicit on every call.</p>
     </header>'''
 
     def pre(lines):

@@ -1,4 +1,4 @@
-<!-- totals short=5490 long=28289 pairs=85 -->
+<!-- totals short=5490 long=29024 pairs=85 -->
       <h3>project</h3>
       <div class="pair">
         <div class="pair-head"><span class="call">project.init</span><code>layerfs project init &lt;project&gt; &lt;folder&gt; [--timeout 3600000]</code></div>
@@ -115,7 +115,7 @@
       <div class="pair">
         <div class="pair-head"><span class="call">sandbox.create</span><code>layerfs sandbox create &lt;project&gt; &lt;name&gt; [--machine M] [--image I] [--mount B]</code></div>
         <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
-        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">283 B</span></div><pre>{"ok":true,"workspace":"tests:agent","path":"/workspaces/1","outcome":"created","sandbox":"tests","project":"shop/api","machine":"dev","platform":"lima","image":"node:22","backend":"namespaces","route":"fuse","state":"ready","created_at":"2026-11-18T09:16:59Z","forward_failed":null}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">347 B</span></div><pre>{"ok":true,"workspace":"tests:agent","path":"/workspaces/1","outcome":"created","sandbox":"tests","project":"shop/api","machine":"dev","platform":"lima","image":"sha256:44444444…","backend":"namespaces","route":"fuse","state":"ready","created_at":"2026-11-18T09:16:59Z","forward_failed":null}</pre></div>
       </div>
       <div class="pair">
         <div class="pair-head"><span class="call">sandbox.list</span><code>layerfs sandbox list [--project P] [--machine M] [--limit 100] [--cursor C]</code></div>
@@ -280,17 +280,17 @@
       <div class="pair">
         <div class="pair-head"><span class="call">machine.images</span><code>layerfs machine images &lt;machine&gt; [--with docker]</code></div>
         <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">279 B</span></div><pre>{"items":[{"image":"sha256:44444444…","refs":["node:22"],"size":412000000,"default":true},{"image":"sha256:77777777…","refs":["postgres:17-bookworm"],"size":455000000}]}</pre></div>
-        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">354 B</span></div><pre>{"items":[{"image":"sha256:44444444…","refs":["node:22"],"size":412000000,"default":true,"architecture":"arm64","source":"imported","sandboxes":["tests"],"sandboxes_count":1,"last_used_at":"2026-11-18T09:15:59Z"}],"machine":"dev","mode":"images","architecture":"arm64","disk_free_bytes":52613349376}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">925 B</span></div><pre>{"items":[{"image":"sha256:44444444…","refs":["node:22"],"size":412000000,"default":true,"state":"ready","op":null,"reason":null,"fix":null,"message":null,"staged_bytes":null,"architecture":"arm64","source":"imported","sandboxes":["tests"],"sandboxes_count":1,"last_used_at":"2026-11-18T09:15:59Z"},{"image":"sha256:88888888…","refs":[],"size":null,"default":false,"state":"broken","op":null,"reason":"partial","fix":"layerfs machine load-image dev sha256:88888888…","message":"a copy of this image stopped after 104857600 bytes; load-image resumes it","staged_bytes":104857600,"architecture":null,"source":"imported","sandboxes":[],"sandboxes_count":0,"last_used_at":null}],"machine":"dev","mode":"images","architecture":"arm64","disk_free_bytes":52613349376}</pre></div>
       </div>
       <div class="pair">
         <div class="pair-head"><span class="call">machine.load_image</span><code>layerfs machine load-image &lt;machine&gt; &lt;image&gt;</code></div>
         <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">83 B</span></div><pre>{"image":"sha256:44444444…"}</pre></div>
-        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">169 B</span></div><pre>{"image":"sha256:44444444…","reused":false,"outcome":"loaded","machine":"dev","refs":["node:22"],"size":412000000}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">235 B</span></div><pre>{"image":"sha256:44444444…","reused":false,"dropped":["run/initctl"],"outcome":"loaded","machine":"dev","refs":["node:22"],"size":412000000,"dropped_count":null,"expanded_bytes":0}</pre></div>
       </div>
       <div class="pair">
         <div class="pair-head"><span class="call">machine.prune</span><code>layerfs machine prune &lt;machine&gt; [image] [--unused]</code></div>
         <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">26 B</span></div><pre>{"freed_bytes":2147483648}</pre></div>
-        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">165 B</span></div><pre>{"freed_bytes":2147483648,"outcome":"pruned","machine":"dev","removed":["sha256:77777777…"],"removed_count":1}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">199 B</span></div><pre>{"freed_bytes":2147483648,"skipped":[],"outcome":"pruned","machine":"dev","removed":["sha256:77777777…"],"removed_count":1,"skipped_count":null}</pre></div>
       </div>
       <div class="pair">
         <div class="pair-head"><span class="call">machine.stats</span><code>layerfs machine stats &lt;machine&gt; [--with space]</code></div>
