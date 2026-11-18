@@ -407,8 +407,11 @@ struct ClosureSource<'a> {
 const AHEAD_PACKS: usize = 128;
 /// Bytes of rebuilt chain elements the walk's reader keeps, so a page stored
 /// as a delta is rebuilt from the base an earlier version already rebuilt
-/// instead of from its whole chain.
-const CHAIN_MEMO_BYTES: usize = 16 * 1024 * 1024;
+/// instead of from its whole chain. The base of a page is the version an
+/// earlier Commit wrote, any number of packs back, and a pack's visit keeps
+/// every page of its Commit: a base that has left the memo is read from its
+/// own pack again, chain and all.
+const CHAIN_MEMO_BYTES: usize = 64 * 1024 * 1024;
 
 impl ClosureSource<'_> {
     /// Notes the packs `wave`, which is in locator order, decodes metadata

@@ -198,7 +198,7 @@ leans on an earlier one:
 
 | Kept | Rule | Bound | Source |
 | --- | --- | --- | --- |
-| Rebuilt chain elements | A page or pooled leaf stored as a delta is rebuilt from its direct base when the walk's reader has already rebuilt and authenticated that base, instead of from its whole chain (up to eight records, programs and identity hashes deep). The kept element carries its chain's depth and charged bytes, so the depth cap and chain budgets refuse what they refused before | `CHAIN_MEMO_BYTES` (16 MiB) | [`objects.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects.rs), [`pool/memo.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/memo.rs) |
+| Rebuilt chain elements | A page or pooled leaf stored as a delta is rebuilt from its direct base when the walk's reader has already rebuilt and authenticated that base, instead of from its whole chain (up to eight records, programs and identity hashes deep). The kept element carries its chain's depth and charged bytes, so the depth cap and chain budgets refuse what they refused before. A base that has left the memo is read from its own pack again | `CHAIN_MEMO_BYTES` (64 MiB) | [`objects.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects.rs), [`pool/memo.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/memo.rs) |
 | Inode values | A read of `inode_value_block` decodes each block whole to answer one ordinal, so the mark keeps every value of the blocks it read, by runs of consecutive ordinals. A leaf of a later Commit names the ordinals of the values it did not change, and those are answered without a statement | `HELD_VALUES` (262,144 values, about 19 MiB), in two generations | [`values.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/values.rs), [`metadata/values.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/metadata/values.rs) |
 
 None of this changes what the mark keeps or verifies: the closure is the
@@ -209,10 +209,13 @@ the kept values and chain elements took the walk's pooled record reads from
 674,209 to 175,199, its group decompressions from 3.09 GB to 0.43 GB, the
 pack bodies it read to decode metadata from 1.29 GB to 0.40 GB and its
 `inode_value_block` statements from 28,969 to 10,025 for 9,999 blocks.
-Reading a pack's metadata in one visit took the walk from eight waves to
-four and its pack acquisitions from 27,682 to 13,899. A whole mark went from
-84,286 statements, 57,001 BLOB handles and 1.46 GB of BLOB reads to 23,503,
-15,586 and 0.46 GB.
+Those figures are with a 16 MiB memo and one wave per tree level. Reading
+a pack's metadata in one visit took the walk from eight waves to four and,
+with the memo at 64 MiB, its pack acquisitions from 27,682 to 9,792 and its
+group decompressions to 0.21 GB; in that order a page's base is met less
+soon after it was rebuilt, so the pooled record reads are 209,480. A whole
+mark went from 84,286 statements, 57,001 BLOB handles and 1.46 GB of BLOB
+reads to 19,387, 11,479 and 0.33 GB.
 
 ## Heads
 
