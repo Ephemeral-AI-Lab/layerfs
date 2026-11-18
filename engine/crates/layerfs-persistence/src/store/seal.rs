@@ -27,6 +27,9 @@ impl SqliteHandles {
     /// new openers throughout sealing and handoff. This is not live Store
     /// reclamation. Uncertain transfer/temporary-close outcomes retain the owned
     /// `.layerfs-allocation-*` sibling; no automatic retry or deletion follows.
+    /// A file that was ever one side of an APFS clone is sealed with that
+    /// allocation kept: the filesystem refuses the release before moving
+    /// anything.
     pub fn seal(self) -> Result<SealedStore, PersistenceError> {
         let Self {
             storage,
