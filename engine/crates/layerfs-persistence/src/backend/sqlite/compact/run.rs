@@ -412,11 +412,19 @@ impl SqliteHandles {
                     return Err(error);
                 }
             };
-            // §11 `keptWaste`: the dead records of the packs this build wrote
-            // again are gone from the new Store, so they are no longer kept.
+            // §11 `keptWaste` states what the Store keeps when the call
+            // returns: after a rebuild, what a mark of the new Store finds.
+            // The dead records of the packs this build wrote again are gone
+            // from it, so they are no longer kept.
             kept_waste.dead_in_retained_packs_bytes = kept_waste
                 .dead_in_retained_packs_bytes
                 .saturating_sub(built.repacked.marked_dead);
+            // A record kept only as a delta base is charged the width a read
+            // of it pays, which changed where its group was written again.
+            kept_waste.delta_bases_bytes = kept_waste
+                .delta_bases_bytes
+                .saturating_sub(built.repacked.bases_before)
+                .saturating_add(built.repacked.bases_after);
             // The rebuilt Store holds only the blocks a kept leaf reads.
             kept_waste.inode_blocks_bytes = built.inode_blocks_bytes;
             // §9/§11: record the installed outcome's totals now that the build

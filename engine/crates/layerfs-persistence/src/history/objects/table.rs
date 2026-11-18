@@ -231,13 +231,13 @@ impl Locators {
             .ok_or(HistoryError::Integrity("mark object locations"))
     }
 
-    /// Every locator whose rank is set in `bits`, in ascending byte order of
-    /// identity.
+    /// Every locator whose rank is set in `bits`, with its rank, in
+    /// ascending byte order of identity.
     pub(super) fn each_set(
         &mut self,
         mechanics: &dyn Mechanics,
         bits: &Bits,
-        mut each: impl FnMut(&ObjectLocation) -> HistoryResult<()>,
+        mut each: impl FnMut(u64, &ObjectLocation) -> HistoryResult<()>,
     ) -> HistoryResult<()> {
         for (from, to) in self.byte_order() {
             let mut block = from / BLOCK as u64;
@@ -251,7 +251,7 @@ impl Locators {
                             .held
                             .get((rank - self.first) as usize)
                             .ok_or(HistoryError::Integrity("mark object locations"))?;
-                        each(row)?;
+                        each(rank, row)?;
                     }
                 }
                 block += 1;

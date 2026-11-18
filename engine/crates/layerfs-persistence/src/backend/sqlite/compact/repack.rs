@@ -40,10 +40,23 @@
 //! on disk, and read back one pack at a time, so the rewrite holds one pack's
 //! locators and bytes in memory, never the whole kept set. No statement here
 //! sorts or groups in a temporary b-tree.
+//!
+//! A rewrite also changes what the mark's `keptWaste.deltaBases.bytes` says
+//! of the pack. That figure charges a record kept only as a delta base the
+//! stored width a read of it pays, and a record in a compressed group pays
+//! the group's whole decoded length, which shrinks when the group is written
+//! again without its dead records. Each kept row carries the mark's
+//! delta-base-only flag, and the rewrite sums the width of those records in
+//! the old pack and in the new one ([`Repacked::bases_before`],
+//! [`Repacked::bases_after`]) with the function the mark charges them by, so
+//! the receipt states the figure a mark of the rebuilt Store would.
 
 use super::types::db_error;
+use layerfs_content::{ObjectId, ObjectRole};
 use layerfs_history::error::{HistoryError, HistoryResult};
+use layerfs_storage::encoding::delta::read::record_width;
 use layerfs_storage::encoding::{CompressionWorkspace, DecompressionWorkspace};
+use layerfs_storage::location::ObjectLocation;
 use layerfs_storage::pack::layout;
 use layerfs_storage::pack::repack::{record_counts, retain_records};
 use layerfs_storage::port::ObjectKey;
@@ -52,29 +65,41 @@ use rusqlite::{params, Connection};
 /// The working tables in the visited scratch: the packs to write again, and
 /// the locator of every kept object in them, keyed in the order [`apply`]
 /// reads it. The object is part of the key, so a damaged Store in which two
-/// objects name one record keeps both rows.
+/// objects name one record keeps both rows. `base_only` is the mark's flag
+/// for an object reached only as a delta base.
 const TABLES: &str = "CREATE TABLE scratch.repack (pack_id INTEGER PRIMARY KEY) \
 STRICT, WITHOUT ROWID;\
 CREATE TABLE scratch.repack_kept (\
  pack_id INTEGER NOT NULL, group_number INTEGER NOT NULL, record_number INTEGER NOT NULL,\
- object_id BLOB NOT NULL,\
+ object_id BLOB NOT NULL, role INTEGER NOT NULL, canonical_length INTEGER NOT NULL,\
+ base_only INTEGER NOT NULL,\
  PRIMARY KEY(pack_id,group_number,record_number,object_id)\
 ) STRICT, WITHOUT ROWID;";
 
 /// Fills `repack_kept`: one pass over the visited set (`CROSS JOIN` fixes
 /// that order), a key lookup per row in the planned packs and in the sealed
-/// locators, and an insert into the keyed scratch table. `visited` holds the mark's whole §6.2 closure, so a record
-/// reached only as a delta base is in this set.
-const FILL: &str = "INSERT INTO scratch.repack_kept(pack_id,group_number,record_number,object_id) \
-SELECT v.pack_id,l.group_number,l.record_number,v.object_id \
+/// locators, and an insert into the keyed scratch table. `visited` holds the
+/// mark's whole §6.2 closure, so a record reached only as a delta base is in
+/// this set.
+const FILL: &str = "INSERT INTO scratch.repack_kept\
+(pack_id,group_number,record_number,object_id,role,canonical_length,base_only) \
+SELECT v.pack_id,l.group_number,l.record_number,v.object_id,l.role,l.canonical_length,\
+v.base_only \
 FROM scratch.visited v CROSS JOIN src.object_location l \
 ON l.object_id=v.object_id AND l.pack_id=v.pack_id \
 WHERE v.pack_id IN (SELECT pack_id FROM scratch.repack)";
 
 /// The kept locators, one pack after another, in group and record order: a
 /// scan of `repack_kept` in its key order.
-const KEPT: &str = "SELECT pack_id,group_number,record_number,object_id \
-FROM scratch.repack_kept ORDER BY pack_id,group_number,record_number,object_id";
+const KEPT: &str = "SELECT pack_id,group_number,record_number,object_id,role,canonical_length,\
+base_only FROM scratch.repack_kept ORDER BY pack_id,group_number,record_number,object_id";
+
+/// One kept object of a pack being written again: its locator in the sealed
+/// Store, and whether the mark reached it only as a delta base.
+struct Kept {
+    location: ObjectLocation,
+    base_only: bool,
+}
 
 /// One pack this rebuild wrote again, as the build computed it.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -104,6 +129,11 @@ pub(crate) struct Repacked {
     /// Planned packs copied whole instead, because their stored bytes or
     /// their locators did not allow a rewrite.
     pub(crate) copied_whole: u64,
+    /// What the mark's `keptWaste.deltaBases.bytes` charged the records of
+    /// the packs written again that are kept only as a delta base.
+    pub(crate) bases_before: u64,
+    /// What a mark charges the same records in the packs as written again.
+    pub(crate) bases_after: u64,
 }
 
 /// The packs one rebuild writes again, with the mark's dead bytes for each.
@@ -299,13 +329,14 @@ struct Codecs {
     decompression: DecompressionWorkspace,
 }
 
-/// Writes one pack again from its kept `(group, record, object)` locators and
-/// moves those locators to the new ordinals. A pack that cannot be rewritten
-/// is copied whole and counted in [`Repacked::copied_whole`].
+/// Writes one pack again from its kept locators, which are in group and
+/// record order, and moves those locators to the new ordinals. A pack that
+/// cannot be rewritten is copied whole and counted in
+/// [`Repacked::copied_whole`].
 fn rewrite(
     connection: &Connection,
     pack_id: i64,
-    kept: &[(usize, usize, Vec<u8>)],
+    kept: &[Kept],
     units: bool,
     codecs: &mut Codecs,
     done: &mut Repacked,
@@ -317,8 +348,9 @@ fn rewrite(
     let rebuilt = read(connection, "src", pack_id, units)?.and_then(|source| {
         let header = layout::parse_header(&source.body).ok()?;
         let mut keep = vec![Vec::new(); header.group_count];
-        for (group, record, _) in kept {
-            keep.get_mut(*group)?.push(*record);
+        for kept in kept {
+            keep.get_mut(kept.location.group_number)?
+                .push(kept.location.record_number);
         }
         let rebuilt = retain_records(
             &source.body,
@@ -349,24 +381,46 @@ WHERE object_id=?3 AND pack_id=?4",
         .map_err(db_error)?;
     let mut position = 0usize;
     let mut previous = None;
-    for (group, record, object) in kept {
-        if previous != Some(*group) {
+    for kept in kept {
+        let (group, record) = (kept.location.group_number, kept.location.record_number);
+        if previous != Some(group) {
             position = 0;
-            previous = Some(*group);
+            previous = Some(group);
         }
         let moved = rebuilt
             .groups
-            .get(*group)
+            .get(group)
             .copied()
             .flatten()
             .ok_or(HistoryError::Integrity("repack group mapping"))?;
-        if (moved, position) != (*group, *record) {
+        if (moved, position) != (group, record) {
             let changed = relocate
-                .execute(params![moved as i64, position as i64, object, pack_id])
+                .execute(params![
+                    moved as i64,
+                    position as i64,
+                    kept.location.object_id.as_bytes().as_slice(),
+                    pack_id
+                ])
                 .map_err(db_error)?;
             if changed != 1 {
                 return Err(HistoryError::Integrity("repack locator"));
             }
+        }
+        if kept.base_only {
+            // The width the mark charged this record, and the one it charges
+            // the same record where the new pack holds it.
+            let before = record_width(&source.body, &kept.location).map_err(storage)?;
+            let after = record_width(
+                &rebuilt.body,
+                &ObjectLocation {
+                    group_number: moved,
+                    record_number: position,
+                    ..kept.location
+                },
+            )
+            .map_err(storage)?;
+            done.bases_before = done.bases_before.saturating_add(before);
+            done.bases_after = done.bases_after.saturating_add(after);
         }
         position += 1;
     }
@@ -396,41 +450,53 @@ pub(crate) fn apply(connection: &Connection, plan: &Plan, units: bool) -> Histor
     let mut rows = statement.query(params![]).map_err(db_error)?;
     let mut planned = plan.packs.iter();
     let mut current: Option<i64> = None;
-    let mut kept: Vec<(usize, usize, Vec<u8>)> = Vec::new();
-    let mut finish = |pack_id: i64,
-                      kept: &mut Vec<(usize, usize, Vec<u8>)>,
-                      done: &mut Repacked|
-     -> HistoryResult<()> {
-        // Both lists ascend by pack, and every planned pack holds a kept
-        // object: a pack out of step means the mark and its scratch disagree.
-        let (planned_id, marked) = planned
-            .next()
-            .ok_or(HistoryError::Integrity("repack plan"))?;
-        if *planned_id != pack_id {
-            return Err(HistoryError::Integrity("repack plan order"));
-        }
-        let before = done.packs.len();
-        rewrite(connection, pack_id, kept, units, &mut codecs, done)?;
-        if done.packs.len() > before {
-            done.marked_dead = done.marked_dead.saturating_add(*marked);
-        }
-        kept.clear();
-        Ok(())
-    };
+    let mut kept: Vec<Kept> = Vec::new();
+    let mut finish =
+        |pack_id: i64, kept: &mut Vec<Kept>, done: &mut Repacked| -> HistoryResult<()> {
+            // Both lists ascend by pack, and every planned pack holds a kept
+            // object: a pack out of step means the mark and its scratch disagree.
+            let (planned_id, marked) = planned
+                .next()
+                .ok_or(HistoryError::Integrity("repack plan"))?;
+            if *planned_id != pack_id {
+                return Err(HistoryError::Integrity("repack plan order"));
+            }
+            let before = done.packs.len();
+            rewrite(connection, pack_id, kept, units, &mut codecs, done)?;
+            if done.packs.len() > before {
+                done.marked_dead = done.marked_dead.saturating_add(*marked);
+            }
+            kept.clear();
+            Ok(())
+        };
     while let Some(row) = rows.next().map_err(db_error)? {
+        const LOCATOR: HistoryError = HistoryError::Integrity("repack locator");
         let pack_id: i64 = row.get(0).map_err(db_error)?;
-        let group: i64 = row.get(1).map_err(db_error)?;
-        let record: i64 = row.get(2).map_err(db_error)?;
-        let object: Vec<u8> = row.get(3).map_err(db_error)?;
+        let number = |column: usize| -> HistoryResult<usize> {
+            usize::try_from(row.get::<_, i64>(column).map_err(db_error)?).map_err(|_| LOCATOR)
+        };
+        let object = row.get_ref(3).map_err(db_error)?;
+        let location = ObjectLocation {
+            object_id: ObjectId::from_bytes(object.as_blob().map_err(|_| LOCATOR)?)
+                .map_err(|_| LOCATOR)?,
+            role: u8::try_from(number(4)?)
+                .ok()
+                .and_then(|code| ObjectRole::from_code(code).ok())
+                .ok_or(LOCATOR)?,
+            canonical_length: number(5)?,
+            pack_id,
+            group_number: number(1)?,
+            record_number: number(2)?,
+        };
+        let base_only = row.get::<_, i64>(6).map_err(db_error)? != 0;
         if current.is_some_and(|open| open != pack_id) {
             finish(current.unwrap_or(pack_id), &mut kept, &mut done)?;
         }
         current = Some(pack_id);
-        kept.push((
-            usize::try_from(group).map_err(|_| HistoryError::Integrity("repack locator"))?,
-            usize::try_from(record).map_err(|_| HistoryError::Integrity("repack locator"))?,
-            object,
-        ));
+        kept.push(Kept {
+            location,
+            base_only,
+        });
     }
     if let Some(pack_id) = current {
         finish(pack_id, &mut kept, &mut done)?;
