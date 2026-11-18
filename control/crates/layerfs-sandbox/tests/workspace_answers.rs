@@ -73,6 +73,24 @@ fn a_commit_names_its_parent_commit_else_the_fork_layer() {
         ("lwwTruncated", SdkValue::Bool(false)),
     ]));
     assert_eq!(unchanged.get("parent"), Some(&SdkValue::Null));
+    assert_eq!(unchanged.get_text("commit"), Some(COMMIT));
+}
+
+/// An unchanged fresh fork has no head Commit: its Commit answers the
+/// Layer the Branch was forked at as `commit` (RF follow-up N-H).
+#[test]
+fn an_unchanged_fresh_fork_names_its_fork_layer() {
+    let unchanged = answers::committed(&SdkValue::map([
+        ("kind", SdkValue::text("UpToDate")),
+        ("head", SdkValue::Null),
+        ("root", SdkValue::text("cc")),
+        ("merged", SdkValue::Null),
+        ("lww", SdkValue::List(Vec::new())),
+        ("lwwTruncated", SdkValue::Bool(false)),
+        ("baseLayer", SdkValue::text(LAYER)),
+    ]));
+    assert_eq!(unchanged.get_text("commit"), Some(LAYER));
+    assert_eq!(unchanged.get("unchanged"), Some(&SdkValue::Bool(true)));
 }
 
 fn status(base: SdkValue, head: SdkValue, moved: SdkValue) -> SdkValue {

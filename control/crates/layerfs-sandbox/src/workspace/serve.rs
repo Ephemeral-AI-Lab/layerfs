@@ -391,6 +391,13 @@ pub fn commit_with(
         })
         .map_err(operation)?;
     let value = values::commit(&reply)?;
+    // the Layer the Branch was forked at, from the mount this process
+    // holds (no read): an unchanged fresh fork's head (call surface 2.0)
+    let layer = lock(&state.mounts)?.get(path).map(|mount| {
+        let branch = &mount.workspace.bound.binding.branch;
+        layerfs_bridge::sdk_values::hex(branch.base_layer.as_slice())
+    });
+    let value = layerfs_home::home::with_field(value, "baseLayer", SdkValue::opt_text(layer));
     Ok(layerfs_home::home::with_field(
         value,
         "branch",

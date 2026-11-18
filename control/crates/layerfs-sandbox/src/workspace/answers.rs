@@ -77,7 +77,12 @@ pub fn committed(answer: &SdkValue) -> SdkValue {
         false => take(&made, "root"),
     };
     SdkValue::map([
-        ("commit", take(answer, "head")),
+        // the Branch's head as `branch get` names it: an unchanged fresh
+        // fork has no Commit, so it is the Layer the Branch was forked at
+        (
+            "commit",
+            or_else(take(answer, "head"), || take(answer, "baseLayer")),
+        ),
         ("unchanged", SdkValue::Bool(unchanged)),
         ("merged", SdkValue::Bool(merged != SdkValue::Null)),
         ("overwritten", overwritten),
