@@ -723,6 +723,7 @@ dependencies = [
  "layerfs-telemetry",
  "layerfs-workspace",
  "nix",
+ "rusqlite",
 ]
 
 [[package]]

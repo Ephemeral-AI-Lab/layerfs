@@ -1252,7 +1252,7 @@ lock, write no record, remove no stale lease and start no machine.
 layerfs home doctor                 # the home, then each machine, PostgreSQL Store and bucket, shallowly
 layerfs machine doctor <machine>    # the machine, then each Store and Sandbox on it
 layerfs store doctor <store> [--machine <machine>]   # the Store, then each of its projects
-layerfs project doctor <project>    # the project's record against its Store's own list
+layerfs project doctor <project> [--full]   # the project's record against its Store's own list; --full reads its data
 layerfs sandbox doctor <sandbox>    # the Sandbox: record, runtime, daemon; then each of its Workspaces
 layerfs backup doctor <bucket> [--full]               # the bucket's record and reach; --full writes and reads one object
 ```
@@ -1297,8 +1297,24 @@ every check was made and nothing was found; otherwise `findings` and
   <workspace> --discard --force`. A daemon that is not ready leaves its
   Workspaces `not_checked`, blocked by the Sandbox (or its machine's
   worker), and none is tried.
-- `project doctor --full` is refused `Unsupported` (not built yet). `store
-  doctor --machine` is for a PostgreSQL Store; a sqlite Store refuses it.
+- A project's checks, in this order: `project.record` (its record and its
+  Store's record read), `project.listed` (the Store's own list holds it, by
+  its stack id, or by its name for a record without one; a record the Store
+  does not list is a `notice` whose `fix` `layerfs project delete
+  <project>` removes the entry) and, with `--full` only, `project.data`:
+  everything main's head and each live Branch's head reach (what a mount
+  can reach) is read and checked where the Store's calls run, in this
+  process or in the machine's worker. It writes nothing to the Store; its
+  visited set is a temporary database outside the Store, removed when the
+  walk ends, so memory does not grow with the project. An object two
+  Branches share is read once; two projects each read it. Each problem is
+  one `project.data` finding naming the object and the head whose tree
+  reached it (the first 64, then a count); an object that could not be read
+  is `not_checked` with `lost`. While it reads it sends `{ phase: "data",
+  done, total }` events counting trees. `store doctor` never runs
+  `project.data`.
+- `store doctor --machine` is for a PostgreSQL Store; a sqlite Store
+  refuses it.
 - A Store's checks, in this order: `store.record` (its record reads and
   names it), `store.operation` (an operation whose owner is gone with its
   outcome unknown is an error whose `fix` is the call that clears it),
