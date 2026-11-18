@@ -56,11 +56,13 @@ fn map(fields: &[(&str, SdkValue)]) -> SdkValue {
     )
 }
 
-/// One call on a thread of its own: an answer that does not come within
-/// 20 s fails the test (a call that waited for the Store's lock would wait
-/// 120 s).
+/// One call, in its long form, on a thread of its own: an answer that does
+/// not come within 20 s fails the test (a call that waited for the Store's
+/// lock would wait 120 s).
 fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, (String, String)> {
-    let (home, name, args) = (home.to_owned(), name.to_owned(), map(args));
+    let mut args = args.to_vec();
+    args.push(("detail", SdkValue::Bool(true)));
+    let (home, name, args) = (home.to_owned(), name.to_owned(), map(&args));
     let (sender, answer) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let got = layerfs_api::call(Some(&home), &name, args, &mut |_| {});
@@ -277,13 +279,13 @@ fn no_lease(root: &Path) {
 }
 
 /// Workspace `n` of Sandbox `s1`, recorded in `root`'s Sandbox folder as
-/// mounted at `path`.
+/// mounted at `path` with no name: its handle, `s1:<path>`.
 fn workspace(root: &Path, n: u8, path: &Path) -> String {
     let id = format!("{n:064x}");
     let record = WorkspaceRecord::mounted(id.clone(), None, "main", path.to_str().unwrap(), 0);
     let file = paths::workspace_dir(root, "s1").join(format!("{id}.json"));
     record.write(&file).unwrap();
-    id
+    format!("s1:{}", path.display())
 }
 
 fn p(path: &Path) -> SdkValue {
@@ -291,14 +293,15 @@ fn p(path: &Path) -> SdkValue {
 }
 
 fn entries(answer: &SdkValue) -> &[SdkValue] {
-    assert_eq!(answer.get_text("kind"), Some("folder"), "{answer:?}");
-    match answer.get("entries") {
+    assert_eq!(answer.get_text("type"), Some("dir"), "{answer:?}");
+    match answer.get("items") {
         Some(SdkValue::List(entries)) => entries,
         _ => panic!("{answer:?}"),
     }
 }
 
-/// Each entry as `(path below base, kind, role, workspace)`.
+/// Each entry as `(path below base, kind, role, workspace)`, its kind why
+/// it was not read, else its `type`.
 fn shown(answer: &SdkValue, base: &Path) -> Vec<(String, String, String, String)> {
     let text = |entry: &SdkValue, name: &str| entry.get_text(name).unwrap_or("-").to_owned();
     entries(answer)
@@ -312,7 +315,11 @@ fn shown(answer: &SdkValue, base: &Path) -> Vec<(String, String, String, String)
                 .to_string();
             (
                 below,
-                text(entry, "kind"),
+                entry
+                    .get_text("not_read")
+                    .or(entry.get_text("type"))
+                    .unwrap_or("-")
+                    .to_owned(),
                 text(entry, "role"),
                 text(entry, "workspace"),
             )
@@ -362,32 +369,33 @@ fn reads_its_home_only(home: &Path, folder: &Path) {
         shown(&listed, &tmp),
         [
             row("notes.txt", "file", "-", "-"),
-            row("project", "folder", "-", "-"),
+            row("project", "dir", "-", "-"),
             row("project/main.rs", "file", "-", "-"),
         ]
     );
-    assert_eq!(listed.get("has_more"), Some(&SdkValue::Bool(false)));
+    assert_eq!(listed.get("next_cursor"), Some(&SdkValue::Null));
     let paged = [
         ("sandbox", t("s1")),
         ("path", p(&tmp)),
         ("limit", SdkValue::Int(1)),
     ];
     let first = call(home, "sandbox.files", &paged).unwrap();
-    assert_eq!(first.get_text("reason"), Some("limit"));
+    let cursor = first.get("next_cursor").unwrap().clone();
+    assert!(matches!(cursor, SdkValue::Text(_)), "{first:?}");
     let mut next = paged.to_vec();
-    next.push(("cursor", first.get("next").unwrap().clone()));
+    next.push(("cursor", cursor));
     let second = call(home, "sandbox.files", &next).unwrap();
-    assert_eq!(shown(&second, &tmp), [row("project", "folder", "-", "-")]);
-    assert_eq!(second.get("has_more"), Some(&SdkValue::Bool(false)));
+    assert_eq!(shown(&second, &tmp), [row("project", "dir", "-", "-")]);
+    assert_eq!(second.get("next_cursor"), Some(&SdkValue::Null));
     let file = [
         ("sandbox", t("s1")),
         ("path", p(&tmp.join("notes.txt"))),
-        ("offset", SdkValue::Int(5)),
-        ("length", SdkValue::Int(4)),
+        ("byte_offset", SdkValue::Int(5)),
+        ("byte_length", SdkValue::Int(4)),
     ];
     assert_eq!(
         layerfs_api::json::print(&call(home, "sandbox.files", &file).unwrap()),
-        r#"{"kind":"file","size":18,"offset":5,"content":"by a","binary":false,"next":9}"#
+        r#"{"items":null,"next_cursor":null,"text":"by a","binary":false,"size":null,"next_byte_offset":9,"type":"file"}"#
     );
     let asked = [("sandbox", t("s1")), ("path", p(&tmp.join("nothing")))];
     let (refused, message) = call(home, "sandbox.files", &asked).unwrap_err();
@@ -406,10 +414,13 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
     let args: Vec<_> = call.args.iter().map(|a| (a.name, a.optional)).collect();
     assert_eq!(args, [("sandbox", false), ("path", true)]);
     let options: Vec<_> = call.options.iter().map(|a| a.name).collect();
-    assert_eq!(options, ["depth", "cursor", "limit", "offset", "length"]);
+    assert_eq!(
+        options,
+        ["depth", "limit", "cursor", "byte_offset", "byte_length"]
+    );
     // it, `home.get` (a setup poll), the home's call log calls,
-    // `machine.stats` (layerfs-project#164, with `--with space`),
-    // `machine.files`, `machine.log` and `logs.sandbox` carry the flag: no family is
+    // `sandbox.log`, `machine.stats` (layerfs-project#164, with `--with
+    // space`), `machine.files` and `machine.log` carry the flag: no family is
     // skipped by its name
     let quiet: Vec<_> = layerfs_api::calls()
         .into_iter()
@@ -423,10 +434,10 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
             "home.log",
             "home.clear_log",
             "sandbox.files",
+            "sandbox.log",
             "machine.stats",
             "machine.files",
-            "machine.log",
-            "logs.sandbox"
+            "machine.log"
         ]
     );
     let table = layerfs_api::json::parse(&layerfs_api::table_json()).unwrap();
@@ -440,7 +451,7 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
         .collect();
     assert_eq!(
         sandbox,
-        ["create", "list", "get", "close", "files", "doctor"]
+        ["create", "list", "get", "remove", "files", "log", "doctor"]
     );
 }
 
@@ -468,7 +479,7 @@ fn a_native_sandbox_s_files_are_read_here_with_no_lock_line_or_write() {
         [
             row("workspaces/1", "mount", "workspace", &first),
             row("workspaces/2", "mount", "workspace", &second),
-            row("tmp", "folder", "home", "-"),
+            row("tmp", "dir", "home", "-"),
             row("daemon.log", "file", "log", "-"),
         ]
     );
@@ -510,7 +521,7 @@ fn a_worker_reads_its_sandbox_s_files_and_neither_side_changes() {
         shown(&roots, &folder),
         [
             row("workspaces/3", "mount", "workspace", &id),
-            row("tmp", "folder", "home", "-"),
+            row("tmp", "dir", "home", "-"),
             row("daemon.log", "file", "log", "-"),
         ]
     );
@@ -611,7 +622,7 @@ fn a_forwarded_sandbox_s_roots_list_the_workspaces_the_home_records() {
         [
             row("workspaces/2", "mount", "workspace", &two),
             row("workspaces/10", "mount", "workspace", &ten),
-            row("tmp", "folder", "home", "-"),
+            row("tmp", "dir", "home", "-"),
             row("daemon.log", "file", "log", "-"),
         ]
     );
@@ -636,9 +647,9 @@ fn a_namespaces_sandbox_s_roots_offer_its_root_which_its_machine_reads() {
     assert_eq!(
         shown(&roots, &folder),
         [
-            row("tmp", "folder", "home", "-"),
+            row("tmp", "dir", "home", "-"),
             row("daemon.log", "file", "log", "-"),
-            row("/", "folder", "root", "-"),
+            row("/", "dir", "root", "-"),
         ]
     );
     let top = call(
@@ -654,10 +665,10 @@ fn a_namespaces_sandbox_s_roots_offer_its_root_which_its_machine_reads() {
         let top = top.unwrap();
         let kind = |path: &str| {
             let found = (entries(&top).iter()).find(|entry| entry.get_text("path") == Some(path));
-            found.and_then(|entry| entry.get_text("kind"))
+            found.and_then(|entry| entry.get_text("not_read").or(entry.get_text("type")))
         };
         assert_eq!(kind("/proc"), Some("system"));
-        assert_eq!(kind("/etc"), Some("folder"));
+        assert_eq!(kind("/etc"), Some("dir"));
         let asked = [("sandbox", t("s1")), ("path", t("/proc/self/environ"))];
         let (code, message) = call(&home, "sandbox.files", &asked).unwrap_err();
         assert_eq!(code, "InvalidInput", "{message}");

@@ -270,13 +270,14 @@ fn no_lease(root: &Path) {
 }
 
 /// Workspace `n` of Sandbox `s1`, recorded in `root`'s Sandbox folder as
-/// mounted at `path`.
+/// mounted at `path`, with no name: its handle, `s1:<path>`, as a mount
+/// entry names it (call surface 2.0).
 fn workspace(root: &Path, n: u8, path: &Path) -> String {
     let id = format!("{n:064x}");
     let record = WorkspaceRecord::mounted(id.clone(), None, "main", path.to_str().unwrap(), 0);
     let file = paths::workspace_dir(root, "s1").join(format!("{id}.json"));
     record.write(&file).unwrap();
-    id
+    format!("s1:{}", path.display())
 }
 
 fn p(path: &Path) -> SdkValue {

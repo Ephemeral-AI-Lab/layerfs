@@ -137,18 +137,18 @@ impl WorkspaceRecord {
         })
     }
 
-    /// Its daemon namespace.
-    pub fn namespace(&self) -> Option<i64> {
+    /// When it was mounted, in milliseconds since 1970.
+    pub fn created(&self) -> Option<i64> {
         self.fields.get(|f| match f {
-            Field::Namespace(n) => Some(*n),
+            Field::Created(ms) => Some(*ms),
             _ => None,
         })
     }
 
-    /// When its mount recorded it, in milliseconds since 1970.
-    pub fn created(&self) -> Option<i64> {
+    /// Its daemon namespace.
+    pub fn namespace(&self) -> Option<i64> {
         self.fields.get(|f| match f {
-            Field::Created(n) => Some(*n),
+            Field::Namespace(n) => Some(*n),
             _ => None,
         })
     }

@@ -139,14 +139,21 @@ pub(super) fn command_uid(side: &Side<'_>, name: &str) -> u32 {
 
 /// The Workspace records of the Sandbox folder `directory`, as a request
 /// carries them from the side that keeps them to the side that has the run
-/// folder: `[{ id, path }]`.
+/// folder: `[{ id, path, workspace }]`, `workspace` its handle
+/// (`<sandbox>:<name>`, or `<sandbox>:<path>` with no name), the folder's
+/// name being the Sandbox's.
 pub(super) fn recorded(directory: &Path) -> Outcome {
+    let sandbox = (directory.file_name())
+        .and_then(|name| name.to_str())
+        .unwrap_or("");
     let mut sent = Vec::new();
     for (_, record) in crate::files::workspaces(directory)? {
-        if let (Some(id), Some(path)) = (record.id(), record.path()) {
+        let handle = crate::list::handle(sandbox, &record);
+        if let (Some(id), Some(path), Some(handle)) = (record.id(), record.path(), handle) {
             sent.push(SdkValue::map([
                 ("id", SdkValue::text(id)),
                 ("path", SdkValue::text(path)),
+                ("workspace", SdkValue::Text(handle)),
             ]));
         }
     }
@@ -275,16 +282,21 @@ pub(super) fn sandbox(
             }
         }
     };
+    // each Workspace by its handle; a record sent by a caller of a build
+    // before handles names it by its id
     let mut mounts: Vec<(&str, &str)> = (recorded.iter())
-        .filter_map(|item| Some((item.get_text("path")?, item.get_text("id")?)))
+        .filter_map(|item| {
+            let handle = item.get_text("workspace").or(item.get_text("id"))?;
+            Some((item.get_text("path")?, handle))
+        })
         .collect();
     // `workspaces/2` before `workspaces/10`
     mounts.sort_by_key(|(path, _)| (path.len(), *path));
     let mut entries: Vec<SdkValue> = (mounts.into_iter())
-        .map(|(path, id)| {
+        .map(|(path, handle)| {
             let mut mount = entry(path, 1, "mount", None);
             mount.push(("role".to_owned(), SdkValue::text("workspace")));
-            mount.push(("workspace".to_owned(), SdkValue::text(id)));
+            mount.push(("workspace".to_owned(), SdkValue::text(handle)));
             SdkValue::Map(mount)
         })
         .collect();

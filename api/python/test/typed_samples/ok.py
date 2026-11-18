@@ -40,7 +40,7 @@ def sync_flow() -> None:
     lfs.project.export("shop/api", "/exports/api-default")
     lfs.workspace.cancel("shop:dev", exec="exec-0123456789abcdef")
     try:
-        lfs.sandbox.close("s1", force=True)
+        lfs.sandbox.remove("s1", force=True)
     except layerfs.LayerFSError as error:
         code: str = error.code
         message: str = error.message

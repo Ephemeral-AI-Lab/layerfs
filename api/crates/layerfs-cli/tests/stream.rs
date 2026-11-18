@@ -86,7 +86,7 @@ fn exec_stream_passes_output_and_the_commands_exit_code() {
         "workspace.mount",
         &[("sandbox", t("s1")), ("branch", t("dev"))],
     );
-    let ws = mounted.get_text("ws").unwrap().to_owned();
+    let ws = mounted.get_text("workspace").unwrap().to_owned();
 
     let failing = layerfs(
         &home,
@@ -101,8 +101,8 @@ fn exec_stream_passes_output_and_the_commands_exit_code() {
     let passing = layerfs(&home, &["workspace", "exec", &ws, "true", "--stream"]);
     let plain = layerfs(&home, &["workspace", "exec", &ws, "exit 4"]);
 
-    ok(&home, "workspace.unmount", &[("ws", t(&ws))]);
-    ok(&home, "sandbox.close", &[("name", t("s1"))]);
+    ok(&home, "workspace.unmount", &[("workspace", t(&ws))]);
+    ok(&home, "sandbox.remove", &[("sandbox", t("s1"))]);
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&folder);
 

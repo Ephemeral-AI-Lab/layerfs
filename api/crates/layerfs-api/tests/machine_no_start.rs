@@ -122,11 +122,12 @@ fn every_read(home: &Path) {
     let machine = call(home, "machine.get", &[("machine", "dev")]).unwrap();
     assert_eq!(machine.get_text("state"), Some("stopped"), "{machine:?}");
 
-    let got = call(home, "sandbox.get", &[("name", "s1")]).unwrap();
-    assert_eq!(got.get_text("name"), Some("s1"));
-    assert_eq!(got.get("workspaces"), Some(&SdkValue::List(Vec::new())));
-    let why = got.get_text("down_reason").unwrap_or("");
-    assert!(!why.is_empty(), "{got:?}");
+    // blocked by its stopped machine, from records: no daemon is asked
+    let got = call(home, "sandbox.get", &[("sandbox", "s1")]).unwrap();
+    assert_eq!(got.get_text("state"), Some("blocked"), "{got:?}");
+    let by = got.get("blocked_by").unwrap_or_else(|| panic!("{got:?}"));
+    assert_eq!(by.get_text("machine"), Some("dev"), "{got:?}");
+    assert_eq!(by.get_text("reason"), Some("stopped"), "{got:?}");
 
     let (code, message) = call(home, "workspace.status", &[("workspace", "s1:w")]).unwrap_err();
     assert_eq!(code, "Unavailable", "{message}");

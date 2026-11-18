@@ -28,13 +28,14 @@ async function main(): Promise<void> {
   await lfs.workspace.exec("shop:dev", "ls", { stream: true, stdout: (bytes) => process.stdout.write(bytes), stderr: (bytes) => void bytes });
   await lfs.machine.create("vm", "lima", { cpus: 2, memory: "8G", disk: 8589934592n });
   await lfs.machine.images("lima1");
-  await lfs.sandbox.create("shop/api", "dev", "lima1", {
+  await lfs.sandbox.create("shop/api", "dev", {
+    machine: "lima1",
     image: "postgres:17-bookworm",
     on_progress: (p) => progress.push(p),
   });
   await lfs.machine.load("lima1", `sha256:${"a".repeat(64)}`, { on_progress: (p) => progress.push(p) });
   await lfs.machine.prune("lima1", null, { unused: true });
-  await lfs.backup.create("shop", "bucket", "file", { on_progress: () => {} });
+  await lfs.backup.create("shop", "bucket", { file: "file", on_progress: () => {} });
   const exported: Result = await lfs.project.export("shop/api", "/exports/api", {
     branch: "main", on_progress: (p) => progress.push(p),
   });

@@ -264,7 +264,7 @@ fn a_bucket_s_record_is_its_first_check() {
     check_pair(&short_form, &long_form);
     let found = &list(&short_form, "findings")[0];
     assert_eq!(found.get_text("bucket"), Some("b1"));
-    assert_eq!(found.get_text("check"), Some("backup.configuration"));
+    assert_eq!(found.get_text("check"), Some("bucket.configuration"));
     assert_eq!(found.get_text("severity"), Some("error"));
     assert!(events.is_empty(), "backup doctor sends no progress");
     assert_eq!(long_form.get("ok"), Some(&SdkValue::Bool(false)));

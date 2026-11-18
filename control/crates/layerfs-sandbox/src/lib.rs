@@ -18,7 +18,6 @@ pub use daemon::failure::{OperationCause, OperationFailure};
 pub use daemon::workspace::{
     BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
 };
-mod close;
 mod create;
 #[doc(hidden)]
 pub mod deploy;
@@ -60,6 +59,7 @@ pub mod output;
 pub mod record;
 #[doc(hidden)]
 pub mod registry;
+mod remove;
 #[doc(hidden)]
 pub mod reopen;
 #[doc(hidden)]
@@ -68,6 +68,8 @@ pub mod route;
 pub mod run_folder;
 #[doc(hidden)]
 pub mod runtime;
+/// A Sandbox's state and a Workspace's, from records and daemon words.
+pub mod state;
 #[doc(hidden)]
 pub mod unmount_guard;
 #[cfg(unix)]

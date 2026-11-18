@@ -1,9 +1,10 @@
 //! Sandbox records without a running Sandbox (#533 review P1-22, P1-25;
 //! #536 §7.1): the built-in machine names are refused as Sandbox names, a
 //! live create's intent refuses other operations `Busy`, a gone owner's
-//! uncertain intent refuses them `Unresolved` until `sandbox.close` clears
-//! it, a gone owner's certain intent is ignored, `sandbox.get` shows the
-//! intent, `sandbox.list` pages, and a worker replaces a project record
+//! uncertain intent refuses them `Unresolved` until `sandbox.remove` clears
+//! it, a gone owner's certain intent is ignored, `sandbox.get` answers the
+//! state with its companion, `sandbox.list` pages by cursor, and a worker
+//! replaces a project record
 //! left by a removed project of the same name.
 use layerfs_api::home::{self, paths, read_record, versioned, write_record};
 use layerfs_api::worker;
@@ -61,7 +62,7 @@ fn names(listed: &SdkValue) -> Vec<String> {
     match listed.get("items") {
         Some(SdkValue::List(items)) => items
             .iter()
-            .map(|i| i.get_text("name").unwrap_or("").to_owned())
+            .map(|i| i.get_text("sandbox").unwrap_or("").to_owned())
             .collect(),
         other => panic!("{other:?}"),
     }
@@ -95,7 +96,7 @@ fn sandbox_records_without_a_sandbox() {
 
     // a create in flight (its process lives) keeps its name: `Busy`
     unstarted(&home, "busy", Some((i64::from(std::process::id()), false)));
-    let (code, message) = call(&home, "sandbox.close", &[("name", t("busy"))]).unwrap_err();
+    let (code, message) = call(&home, "sandbox.remove", &[("sandbox", t("busy"))]).unwrap_err();
     assert_eq!(code, "Busy", "{message}");
     assert!(message.contains("sandbox.create"), "{message}");
     let (code, _) = call(
@@ -105,75 +106,149 @@ fn sandbox_records_without_a_sandbox() {
     )
     .unwrap_err();
     assert_eq!(code, "Busy");
-    let got = call(&home, "sandbox.get", &[("name", t("busy"))]).unwrap();
-    assert_eq!(got.get_text("state"), Some("creating"), "{got:?}");
+    // a live op is `busy`, its companion the op's call word, phase and start
+    let got = call(&home, "sandbox.get", &[("sandbox", t("busy"))]).unwrap();
+    assert_eq!(got.get_text("state"), Some("busy"), "{got:?}");
+    let op = got.get("op").expect("a busy Sandbox names its op");
+    assert_eq!(op.get_text("name"), Some("create"));
+    assert_eq!(op.get_text("phase"), Some("start"));
+    assert_eq!(op.get_text("started_at"), Some("1970-01-01T00:00:00Z"));
+    assert!(
+        op.get("owner").is_none() && op.get("id").is_none(),
+        "{op:?}"
+    );
 
-    // a gone owner's certain intent holds nothing: the Sandbox reads
-    // `gone` and closes
+    // a gone owner's certain intent holds nothing: the Sandbox, with no
+    // runtime, is `broken` `missing`, and its remove says it was gone
     let mut ended = std::process::Command::new("true").spawn().unwrap();
     let dead = i64::from(ended.id());
     ended.wait().unwrap();
     unstarted(&home, "crashed", Some((dead, false)));
-    let got = call(&home, "sandbox.get", &[("name", t("crashed"))]).unwrap();
-    assert_eq!(got.get_text("state"), Some("gone"), "{got:?}");
-    let closed = call(&home, "sandbox.close", &[("name", t("crashed"))]).unwrap();
-    assert_eq!(closed.get_text("was"), Some("gone"), "{closed:?}");
+    let got = call(&home, "sandbox.get", &[("sandbox", t("crashed"))]).unwrap();
+    assert_eq!(got.get_text("state"), Some("broken"), "{got:?}");
+    assert_eq!(got.get_text("reason"), Some("missing"), "{got:?}");
+    assert_eq!(got.get_text("fix"), Some("layerfs sandbox remove crashed"));
+    let removed = call(
+        &home,
+        "sandbox.remove",
+        &[("sandbox", t("crashed")), ("detail", SdkValue::Bool(true))],
+    )
+    .unwrap();
+    assert_eq!(
+        removed.get_text("outcome"),
+        Some("already_gone"),
+        "{removed:?}"
+    );
+    assert_eq!(removed.get("left"), Some(&SdkValue::List(vec![])));
 
     // a gone owner's uncertain intent refuses every other operation
-    // `Unresolved`, naming the get that shows it and the close that clears it
+    // `Unresolved`, naming the get that shows it and the remove that clears it
     unstarted(&home, "lost", Some((dead, true)));
-    let (code, message) = call(
-        &home,
+    let refusal = layerfs_api::call(
+        Some(&home),
         "workspace.exec",
-        &[("workspace", t("lost:w")), ("command", t("true"))],
+        SdkValue::map([("workspace", t("lost:w")), ("command", t("true"))]),
+        &mut |_| {},
     )
     .unwrap_err();
-    assert_eq!(code, "Unresolved", "{message}");
-    assert!(message.contains("`layerfs sandbox get lost`"), "{message}");
+    assert_eq!(refusal.code, "Unresolved", "{refusal:?}");
     assert!(
-        message.contains("`layerfs sandbox close lost`"),
-        "{message}"
+        refusal.message.contains("`layerfs sandbox get lost`"),
+        "{refusal:?}"
     );
-    let got = call(&home, "sandbox.get", &[("name", t("lost"))]).unwrap();
-    assert_eq!(got.get_text("state"), Some("unresolved"), "{got:?}");
-    let op = got.get("op").expect("sandbox.get shows the intent");
-    assert_eq!(op.get_text("id"), Some("op-00000000000000bb"));
-    assert_eq!(op.get_text("name"), Some("sandbox.create"));
-    assert_eq!(op.get_text("phase"), Some("start"));
-    assert_eq!(op.get("uncertain"), Some(&SdkValue::Bool(true)));
-    assert!(op.get("owner").is_none(), "{op:?}");
-    let closed = call(&home, "sandbox.close", &[("name", t("lost"))]).unwrap();
-    assert_eq!(closed.get_text("was"), Some("unresolved"), "{closed:?}");
-    assert!(closed.get_text("left").is_some(), "{closed:?}");
+    assert!(
+        refusal.message.contains("`layerfs sandbox remove lost`"),
+        "{refusal:?}"
+    );
+    let detail = &refusal.detail;
+    assert_eq!(detail.get_text("fix"), Some("layerfs sandbox remove lost"));
+    let next_op = detail.get("next").and_then(|next| next.get("op"));
+    assert_eq!(
+        next_op.and_then(|op| op.get_text("name")),
+        Some("create"),
+        "{detail:?}"
+    );
+    let got = call(
+        &home,
+        "sandbox.get",
+        &[("sandbox", t("lost")), ("detail", SdkValue::Bool(true))],
+    )
+    .unwrap();
+    assert_eq!(got.get_text("state"), Some("broken"), "{got:?}");
+    assert_eq!(got.get_text("reason"), Some("unresolved"), "{got:?}");
+    assert_eq!(got.get("op"), Some(&SdkValue::Null), "{got:?}");
+    let message = got.get_text("message").unwrap_or("");
+    assert!(message.contains("create (phase start)"), "{message}");
+    let removed = call(
+        &home,
+        "sandbox.remove",
+        &[("sandbox", t("lost")), ("detail", SdkValue::Bool(true))],
+    )
+    .unwrap();
+    assert_eq!(
+        removed.get_text("outcome"),
+        Some("already_gone"),
+        "{removed:?}"
+    );
+    let left = removed.get("left").cloned().unwrap_or_default();
+    assert!(
+        matches!(&left, SdkValue::List(items) if items.len() == 1),
+        "{removed:?}"
+    );
     assert!(!paths::sandbox_dir(&home, "lost").exists());
     assert_eq!(
-        call(&home, "sandbox.close", &[("name", t("lost"))])
+        call(&home, "sandbox.remove", &[("sandbox", t("lost"))])
             .unwrap_err()
             .0,
         "NotFound"
     );
 
-    // sandbox.list pages
+    // sandbox.list pages by cursor, which carries its filters
     for name in ["a1", "a2", "a3"] {
         unstarted(&home, name, None);
     }
-    let first = call(&home, "sandbox.list", &[("page_size", SdkValue::Int(2))]).unwrap();
-    assert_eq!(names(&first).len(), 2, "{first:?}");
-    let next = first.get_int("next_page_pos").expect("a second page");
+    let first = call(&home, "sandbox.list", &[("limit", SdkValue::Int(2))]).unwrap();
+    assert_eq!(names(&first), ["a1", "a2"], "{first:?}");
+    let cursor = first
+        .get_text("next_cursor")
+        .expect("a second page")
+        .to_owned();
     let second = call(
         &home,
         "sandbox.list",
-        &[
-            ("page_size", SdkValue::Int(2)),
-            ("page_pos", SdkValue::Int(next)),
-        ],
+        &[("limit", SdkValue::Int(2)), ("cursor", t(&cursor))],
     )
     .unwrap();
-    assert_eq!(second.get("next_page_pos"), Some(&SdkValue::Null));
-    let mut all = names(&first);
-    all.extend(names(&second));
-    all.sort();
-    assert_eq!(all, ["a1", "a2", "a3", "busy"]);
+    assert_eq!(names(&second), ["a3", "busy"], "{second:?}");
+    assert_eq!(
+        second.get("next_cursor"),
+        None,
+        "the last page has no cursor"
+    );
+    // a row says its state when not ready
+    let rows = match second.get("items") {
+        Some(SdkValue::List(rows)) => rows.clone(),
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(rows[0].get_text("reason"), Some("missing"), "{rows:?}");
+    assert_eq!(rows[1].get_text("state"), Some("busy"), "{rows:?}");
+    // the cursor carries the filters: another filter is refused
+    let (code, message) = call(
+        &home,
+        "sandbox.list",
+        &[("cursor", t(&cursor)), ("machine", t("docker"))],
+    )
+    .unwrap_err();
+    assert_eq!(code, "InvalidInput", "{message}");
+    let (code, _) = call(&home, "sandbox.list", &[("cursor", t("bm90IGEgY3Vyc29y"))]).unwrap_err();
+    assert_eq!(code, "InvalidInput");
+    let (code, _) = call(&home, "sandbox.list", &[("limit", SdkValue::Int(0))]).unwrap_err();
+    assert_eq!(code, "InvalidInput");
+    // filters: one machine's, one project's
+    let none = call(&home, "sandbox.list", &[("machine", t("docker"))]).unwrap();
+    assert!(names(&none).is_empty(), "{none:?}");
+    let all = call(&home, "sandbox.list", &[("project", t("shop/app"))]).unwrap();
+    assert_eq!(names(&all), ["a1", "a2", "a3", "busy"]);
     std::fs::remove_dir_all(&home).unwrap();
 }
 

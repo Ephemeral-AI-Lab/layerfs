@@ -8,7 +8,7 @@
 //! (`create.intent`); a live Store lease; a live Store move or remove
 //! (`in_progress`); a live machine removal (`removing`). A Sandbox of the
 //! retired docker backend (D-8) is neither: it is forgotten, as
-//! `sandbox close` forgets it, with a note naming its container to remove.
+//! `sandbox remove` forgets it, with a note naming its container to remove.
 //! Otherwise, in one pass:
 //!
 //! 1. write: each Sandbox record from `machine/<m>/sandbox/<name>/` to
@@ -296,7 +296,7 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
 /// and its container `container` is left for the user to remove.
 fn forgotten(name: &str, container: &str) -> String {
     format!(
-        "Sandbox {name}: forgotten, as `sandbox close` forgets it: it ran on the docker Sandbox \
+        "Sandbox {name}: forgotten, as `sandbox remove` forgets it: it ran on the docker Sandbox \
          backend, which this build no longer runs (D-8); `docker rm -f {container}` removes its \
          container and `layerfs sandbox create` makes it again"
     )
@@ -315,7 +315,7 @@ fn creator(value: &SdkValue) -> Option<i64> {
 /// Layout 2 Sandbox record `value` in layout 3's form: no stored `state`
 /// and no creator `pid`. One whose create's outcome was unknown (2.0's
 /// `state: "unknown"`) holds an uncertain `sandbox.create` intent owned by
-/// no process (pid 0), which `sandbox.close` clears; one whose creator is
+/// no process (pid 0), which `sandbox.remove` clears; one whose creator is
 /// gone holds none, and layout 3 derives `gone` from its missing id.
 fn layout_3(value: SdkValue) -> Result<SdkValue> {
     let unknown = value.get_text("state") == Some("unknown");

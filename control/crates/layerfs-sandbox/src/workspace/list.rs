@@ -16,7 +16,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
 use layerfs_home::json;
 use layerfs_home::outcome::{refused, Outcome};
-use layerfs_home::state::{Reason, State};
+use layerfs_home::state::State;
 use layerfs_store::place::{self, Executor};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -43,38 +43,6 @@ pub struct ListRequest {
     pub limit: Option<i64>,
     /// The `next_cursor` of the page before.
     pub cursor: Option<String>,
-}
-
-/// SWITCH POINT (F-sbx): a Sandbox's state as its record says it, by the
-/// record's own word today (`SandboxRecord::state`): `running` is ready,
-/// `creating` and `closing` busy with that operation, `unresolved` broken
-/// `unresolved`, `lost` broken `lost`, `gone` stopped. Package F-sbx builds
-/// the Sandbox state function of call surface 2.0; replace this body with
-/// it when it lands.
-pub fn sandbox_state(record: &SandboxRecord) -> State {
-    let busy = |name: &str| State::Busy {
-        name: name.to_owned(),
-        phase: "run".to_owned(),
-        started_ms: None,
-    };
-    match record.state(false) {
-        "creating" => busy("create"),
-        "closing" => busy("remove"),
-        "unresolved" => State::broken(Reason::Unresolved, None),
-        "lost" => State::broken(Reason::Lost, None),
-        "gone" => State::Stopped,
-        _ => State::Ready,
-    }
-}
-
-/// A machine's state as its record says it, with no probe.
-fn machine_state(home: &Path, machine: &str) -> Result<State> {
-    Ok(
-        match layerfs_machine::record::MachineRecord::read(home, machine)? {
-            Some(record) => record.status(false, 0),
-            None => layerfs_machine::state::unrecorded(machine),
-        },
-    )
 }
 
 /// One Workspace row: its Sandbox, name and record.
@@ -262,9 +230,9 @@ pub fn list(home: &Path, request: &ListRequest) -> Outcome {
     let mut asked: BTreeMap<String, Vec<&SandboxRecord>> = BTreeMap::new();
     for record in &records {
         let (name, machine) = (record.name(), record.machine());
-        let blocked = machine_state(home, machine)?
+        let blocked = crate::state::machine_state(home, machine)?
             .blocks("machine", machine)
-            .or_else(|| sandbox_state(record).blocks("sandbox", name));
+            .or_else(|| record.status(&State::Ready).blocks("sandbox", name));
         if let Some(State::Blocked(by)) = blocked {
             let message = format!("{} {} is {}", by.thing, by.handle, by.reason);
             skipped.push((

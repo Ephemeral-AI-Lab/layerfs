@@ -2,12 +2,12 @@
 //! client `cli`, `LAYERFS_LOGS_TAG` lands in `tag`, `layerfs home log` and
 //! `layerfs home clear-log` (the call surface 2.0's names for `logs list`
 //! and `logs reset`) answer as JSON like every call, and a usage error
-//! (exit 2, nothing called) writes no line. And `layerfs logs machine` and
-//! `layerfs logs sandbox` (layerfs-project#178): their usage, a Sandbox's
-//! daemon log read by cursor on a native home, their refusals, and no
-//! call-log line. And `layerfs sandbox files` (#178 step 3), a quiet call:
-//! its usage, a Sandbox's roots, a folder page, a file window, its
-//! refusals, and no call-log line either. And `layerfs machine files`
+//! (exit 2, nothing called) writes no line. And `layerfs sandbox log`
+//! (`logs sandbox` before the call surface 2.0, layerfs-project#178): its
+//! usage, a Sandbox's daemon log read newest page first by cursor on a
+//! native home, its refusals, and no call-log line. And `layerfs sandbox
+//! files` (#178 step 3), a quiet call: its usage, a Sandbox's roots, a
+//! folder page, a file window, its refusals, and no call-log line either. And `layerfs machine files`
 //! (#178 step 4), quiet too: the roots of `native`, a page, a window, and
 //! a path outside its LayerFS folders refused.
 mod common;
@@ -165,44 +165,39 @@ fn run_cli(home: &Path, words: &[&str]) -> (Option<i32>, String, String) {
 #[test]
 fn the_cli_reads_a_sandbox_s_daemon_log_by_cursor_and_logs_no_line() {
     let home = tempdir("logs-inspect");
-    // the home's first call: it is logged, as no `logs` call is
+    // the home's first call: it is logged, as `sandbox log` is not
     assert_eq!(cli(&home, &["sandbox", "list"], None).0, Some(0));
-    // help: both calls, with the cursor window
-    for (call, usage) in [
-        (
-            "machine",
-            "layerfs logs machine <machine> [--cursor <cursor>] [--before <before>] [--limit <limit>]\n",
-        ),
-        (
-            "sandbox",
-            "layerfs logs sandbox <sandbox> [--cursor <cursor>] [--before <before>] [--limit <limit>]\n",
-        ),
-    ] {
-        let (code, out, _) = run_cli(&home, &["help", "logs", call]);
-        assert_eq!(code, Some(0));
-        assert!(out.starts_with(usage), "{out}");
-        let (_, family, _) = run_cli(&home, &["help", "logs"]);
-        assert!(family.contains(usage), "{family}");
-    }
-    // a wrong command line is exit 2 and calls nothing
+    // help: the call, with its cursor
+    let usage = "layerfs sandbox log <sandbox> [--limit <limit>] [--cursor <cursor>]\n";
+    let (code, out, _) = run_cli(&home, &["help", "sandbox", "log"]);
+    assert_eq!(code, Some(0));
+    assert!(out.starts_with(usage), "{out}");
+    let (_, family, _) = run_cli(&home, &["help", "sandbox"]);
+    assert!(family.contains(usage), "{family}");
+    // a wrong command line is exit 2 and calls nothing; the old name is
+    // gone, with no alias
     for usage in [
-        &["logs", "machine"][..],
-        &["logs", "sandbox"],
-        &["logs", "sandbox", "s1", "--limit", "many"],
-        &["logs", "machine", "native", "--bogus"],
+        &["sandbox", "log"][..],
+        &["sandbox", "log", "s1", "--limit", "many"],
+        &["sandbox", "log", "s1", "--bogus"],
+        &["logs", "sandbox", "s1"],
     ] {
         assert_eq!(run_cli(&home, usage).0, Some(2), "{usage:?}");
     }
 
-    let folder = native_sandbox(
+    native_sandbox(
         &home,
         "daemon up\nlistening on 127.0.0.1:4100\n\x1b[31mwarn\x1b[0m\ttab\n",
     );
-    let (code, out, err) = run_cli(&home, &["logs", "sandbox", "s1"]);
-    assert_eq!(code, Some(0), "{err}");
-    let tail = json::parse(out.trim()).unwrap();
+    let read = |words: &[&str]| {
+        let mut line = vec!["sandbox", "log", "s1"];
+        line.extend(words);
+        let (code, out, err) = run_cli(&home, &line);
+        assert_eq!(code, Some(0), "{words:?}: {err}");
+        json::parse(out.trim()).unwrap()
+    };
     let texts = |answer: &SdkValue| -> Vec<String> {
-        let Some(SdkValue::List(lines)) = answer.get("lines") else {
+        let Some(SdkValue::List(lines)) = answer.get("items") else {
             panic!("{answer:?}")
         };
         lines
@@ -210,6 +205,8 @@ fn the_cli_reads_a_sandbox_s_daemon_log_by_cursor_and_logs_no_line() {
             .map(|line| line.get_text("text").unwrap().to_owned())
             .collect()
     };
+    // the last lines, oldest first; the whole log, so no cursor
+    let tail = read(&[]);
     assert_eq!(
         texts(&tail),
         [
@@ -218,47 +215,24 @@ fn the_cli_reads_a_sandbox_s_daemon_log_by_cursor_and_logs_no_line() {
             "\\u{1b}[31mwarn\\u{1b}[0m\\ttab"
         ]
     );
-    assert_eq!(tail.get("has_more"), Some(&SdkValue::Bool(false)));
-    assert!(tail.get("before").is_none(), "{out}");
-    let cursor = tail.get_text("cursor").unwrap().to_owned();
-    // the daemon writes on; the cursor follows, one line at a time
-    let mut log = std::fs::OpenOptions::new()
-        .append(true)
-        .open(folder.join("daemon.log"))
-        .unwrap();
-    std::io::Write::write_all(&mut log, b"mounted /w\nunmounted /w\n").unwrap();
-    let (code, out, err) = run_cli(
-        &home,
-        &["logs", "sandbox", "s1", "--cursor", &cursor, "--limit", "1"],
-    );
-    assert_eq!(code, Some(0), "{err}");
-    let next = json::parse(out.trim()).unwrap();
-    assert_eq!(texts(&next), ["mounted /w"]);
-    assert_eq!(next.get("has_more"), Some(&SdkValue::Bool(true)));
-    // and back from the first answer's cursor
-    let (code, out, err) = run_cli(
-        &home,
-        &["logs", "sandbox", "s1", "--before", &cursor, "--limit", "2"],
-    );
-    assert_eq!(code, Some(0), "{err}");
-    let earlier = json::parse(out.trim()).unwrap();
-    assert_eq!(texts(&earlier).len(), 2);
-    assert_eq!(earlier.get("has_more"), Some(&SdkValue::Bool(true)));
+    assert!(tail.get("next_cursor").is_none(), "{tail:?}");
+    // one line a page: `next_cursor` goes back to the lines before it
+    let last = read(&["--limit", "1"]);
+    assert_eq!(texts(&last), ["\\u{1b}[31mwarn\\u{1b}[0m\\ttab"]);
+    let cursor = last.get_text("next_cursor").unwrap().to_owned();
+    let earlier = read(&["--cursor", &cursor, "--limit", "1"]);
+    assert_eq!(texts(&earlier), ["listening on 127.0.0.1:4100"]);
+    let cursor = earlier.get_text("next_cursor").unwrap().to_owned();
+    let first = read(&["--cursor", &cursor, "--limit", "1"]);
+    assert_eq!(texts(&first), ["daemon up"]);
+    assert!(first.get("next_cursor").is_none(), "{first:?}");
 
     // refusals are JSON on stderr, exit 125
     for (words, code) in [
-        (&["logs", "machine", "native"][..], "Unsupported"),
-        (&["logs", "machine", "nobody"], "NotFound"),
-        (&["logs", "sandbox", "nobody"], "NotFound"),
-        (&["logs", "sandbox", "s1", "--limit", "0"], "InvalidInput"),
+        (&["sandbox", "log", "nobody"][..], "NotFound"),
+        (&["sandbox", "log", "s1", "--limit", "0"], "InvalidInput"),
         (
-            &["logs", "sandbox", "s1", "--cursor", "c1.0.1.2.3"],
-            "InvalidInput",
-        ),
-        (
-            &[
-                "logs", "sandbox", "s1", "--cursor", &cursor, "--before", &cursor,
-            ],
+            &["sandbox", "log", "s1", "--cursor", "c1.0.1.2.3"],
             "InvalidInput",
         ),
     ] {
@@ -276,7 +250,7 @@ fn the_cli_reads_a_sandbox_s_files_and_logs_no_line() {
     let home = tempdir("files-inspect");
     // the home's first call: it is logged, as `sandbox files` is not
     assert_eq!(cli(&home, &["sandbox", "list"], None).0, Some(0));
-    let usage = "layerfs sandbox files <sandbox> [<path>] [--depth <depth>] [--cursor <cursor>] [--limit <limit>] [--offset <offset>] [--length <length>]\n";
+    let usage = "layerfs sandbox files <sandbox> [<path>] [--depth <depth>] [--limit <limit>] [--cursor <cursor>] [--byte-offset <byte-offset>] [--byte-length <byte-length>]\n";
     let (code, out, _) = run_cli(&home, &["help", "sandbox", "files"]);
     assert_eq!(code, Some(0));
     assert!(out.starts_with(usage), "{out}");
@@ -288,6 +262,7 @@ fn the_cli_reads_a_sandbox_s_files_and_logs_no_line() {
         &["sandbox", "files", "s1", "--depth", "deep"],
         &["sandbox", "files", "s1", "/a", "/b"],
         &["sandbox", "files", "s1", "--bogus"],
+        &["sandbox", "files", "s1", "--offset", "1"],
     ] {
         assert_eq!(run_cli(&home, usage).0, Some(2), "{usage:?}");
     }
@@ -305,35 +280,33 @@ fn the_cli_reads_a_sandbox_s_files_and_logs_no_line() {
         json::parse(out.trim()).unwrap()
     };
     let each = |answer: &SdkValue, field: &str| -> Vec<String> {
-        let Some(SdkValue::List(entries)) = answer.get("entries") else {
+        let Some(SdkValue::List(entries)) = answer.get("items") else {
             panic!("{answer:?}")
         };
         entries
             .iter()
-            .map(|entry| entry.get_text(field).unwrap().to_owned())
+            .map(|entry| entry.get_text(field).unwrap_or("-").to_owned())
             .collect()
     };
-    // no path: the roots, by role
-    let roots = read(&[]);
+    // no path: the roots, by role (a long-form key)
+    let roots = read(&["--detail"]);
     assert_eq!(each(&roots, "role"), ["home", "log"]);
     let home_path = each(&roots, "path")[0].clone();
     assert_eq!(home_path, tmp.to_str().unwrap());
-    // a folder page, continued from its `next`
+    // a folder page, continued from its `next_cursor`
     let page = read(&[&home_path, "--depth", "2", "--limit", "2"]);
     let name = |path: &str| format!("{home_path}/{path}");
     assert_eq!(each(&page, "path"), [name("a.txt"), name("src")]);
-    assert_eq!(each(&page, "kind"), ["file", "folder"]);
-    assert_eq!(page.get("has_more"), Some(&SdkValue::Bool(true)));
-    assert_eq!(page.get_text("reason"), Some("limit"));
-    let next = page.get_text("next").unwrap().to_owned();
+    assert_eq!(each(&page, "type"), ["file", "dir"]);
+    let next = page.get_text("next_cursor").unwrap().to_owned();
     let rest = read(&[&home_path, "--depth", "2", "--cursor", &next]);
     assert_eq!(each(&rest, "path"), [name("src/b.rs")]);
-    assert_eq!(rest.get("has_more"), Some(&SdkValue::Bool(false)));
+    assert_eq!(rest.get("next_cursor"), None);
     // a file window
-    let window = read(&[&name("a.txt"), "--offset", "1", "--length", "3"]);
+    let window = read(&[&name("a.txt"), "--byte-offset", "1", "--byte-length", "3"]);
     assert_eq!(
         json::print(&window),
-        r#"{"kind":"file","size":6,"offset":1,"content":"lph","binary":false,"next":4}"#
+        r#"{"text":"lph","next_byte_offset":4}"#
     );
 
     // refusals are JSON on stderr, exit 125

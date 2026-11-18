@@ -12,25 +12,9 @@
       "order": false
     },
     "store": {
-      "today": [
-        "store.connection.configuration",
-        "store.connection.cancelled",
-        "store.connection.authentication",
-        "store.connection.database",
-        "store.connection.transport",
-        "store.connection.cancellation.release",
-        "store.connection.close",
-        "store.connection.schema",
-        "store.connection.identity",
-        "store.connection.read",
-        "store.connection.tls"
-      ],
-      "missing": [
-        "store.operation",
-        "store.schema",
-        "store.backups"
-      ],
-      "order": true
+      "today": [],
+      "missing": [],
+      "order": false
     },
     "project": {
       "today": [],
@@ -50,28 +34,8 @@
       "order": false
     },
     "bucket": {
-      "today": [
-        "backup.configuration",
-        "backup.credentials",
-        "backup.transport",
-        "backup.list",
-        "backup.write_capability",
-        "backup.put",
-        "backup.get",
-        "backup.delete",
-        "backup.reconcile"
-      ],
-      "missing": [
-        "bucket.configuration",
-        "bucket.credentials",
-        "bucket.transport",
-        "bucket.list",
-        "bucket.write_capability",
-        "bucket.put",
-        "bucket.get",
-        "bucket.delete",
-        "bucket.reconcile"
-      ],
+      "today": [],
+      "missing": [],
       "order": false
     }
   }
