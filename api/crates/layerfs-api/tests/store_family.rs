@@ -498,7 +498,7 @@ fn snapshot_checkpoints_an_unheld_leftover_wal_before_pushing_and_pulling() {
 }
 
 #[test]
-fn compact_of_a_remote_sqlite_store_is_a_documented_local_only_refusal() {
+fn compact_of_a_remote_sqlite_store_takes_its_machines_worker_route() {
     let home = tempdir("compact-home");
     home::open(&home).unwrap();
     write_record(
@@ -518,18 +518,12 @@ fn compact_of_a_remote_sqlite_store_is_a_documented_local_only_refusal() {
         &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
     )
     .unwrap();
-    // No worker is recorded for `box`: a call that dialled the machine would
-    // be `Unavailable`. `Unsupported` proves `store.compact` never takes the
-    // worker route: it is the local-only S6 deviation D5 recorded in
-    // `core/docs/issues/project-41/gc-42-decisions.md`.
+    // No worker is recorded for `box`: the call takes the machine's worker
+    // route (spec S6, #42 D5), starts nothing and is `Unavailable` naming the
+    // fix. It never compacts a file here instead.
     let (code, message) = call(&home, "store.compact", &[("name", t("shop"))]).unwrap_err();
-    assert_eq!(code, "Unsupported", "{message}");
-    assert!(message.contains("local-only"), "{message}");
-    assert!(message.contains("#42 D5"), "{message}");
-    assert!(
-        message.contains("run it on that Store's machine"),
-        "{message}"
-    );
+    assert_eq!(code, "Unavailable", "{message}");
+    assert!(message.contains("layerfs machine start box"), "{message}");
     assert!(
         !paths::store_file(&home, "shop").exists(),
         "the refusal opened no Store"

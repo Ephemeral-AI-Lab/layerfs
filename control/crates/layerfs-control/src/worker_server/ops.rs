@@ -151,6 +151,9 @@ pub(super) fn run(
                 },
             )
         }
+        // compacts a sqlite Store on this machine (spec S6, #42 D5):
+        // `{ store, store_record }`; its phases go out as events
+        layerfs_store::compact::WORKER_OP => layerfs_store::compact::in_worker(root, &args, events),
         // a Sandbox image copied to this machine (`sandbox.create --image`,
         // `machine.load`), one step at a time
         "image.artifact" => layerfs_sandbox::image_artifact::in_worker(root, &args),

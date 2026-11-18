@@ -130,8 +130,8 @@ installed → it records the outcome. A dead owner's op is adopted; only a live 
   visited, §8 — it follows S5's fresh-Store sentence but deviates from §7 step
   4's payload sweep and rollback journal, D2); `none` writes only a transient
   visited scratch and rolls its mark transaction back; the settle records a
-  `cleanup` phase; `store.compact` is local-only, and a Store pushed to another
-  machine is compacted there or pushed back.
+  `cleanup` phase; `store.compact` of a Store pushed to another machine runs
+  in that machine's worker.
 
 ## 6. First 10 minutes
 
@@ -272,7 +272,7 @@ op record or the next-call adoption.
 | D2 (S5/§3/§7/§11) | "copies only retained rows into a fresh Store"; §7 step 4's payload sweep and rollback-journal transaction; peak old + new + journal/WAL + visited | fresh-copy build (pack-as-unit, no payload sweep, no rollback journal; indexes and triggers after the load); peak old + new + visited (§8) — a recorded deviation from §7/§11, not an edit to the frozen text |
 | D3 (§3/§7 step 1.5) | `none` writes nothing; delete the scratch and stop | `none` spills the closure to `<store>.compact-visited`, counts it in `peakTempBytes` and deletes it before replying; the mark and its intent are one transaction that is rolled back, so no `kept_node`/`gc_intent` row and no WAL frame survives; no residue survives |
 | D4 (§11) | SQLite phases `mark`, `build`, `verify`, `install` | the settle also writes `cleanup` (§1) |
-| D5 (S6/§7) | "A SQLite Store compacts on the machine where it lives"; §7 "Runs as one operation on the Store's machine (S6)" | `store.compact` is local-only: its `Worker` branch is refused `Unsupported` before the Store is opened; a pushed sqlite Store is compacted after `store.push` back to `native` |
+| D5 (S6/§7) | "A SQLite Store compacts on the machine where it lives"; §7 "Runs as one operation on the Store's machine (S6)" | resolved 2026-11-18: a pushed sqlite Store is compacted by its machine's worker (`store.compact` worker operation), as S6 says |
 
 A10 is an amendment rather than a deviation: it records that
 `deadBytesRefined` equals `deadBytesBound` on every path, because the mark

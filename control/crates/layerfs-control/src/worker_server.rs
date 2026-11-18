@@ -12,14 +12,12 @@
 //! [`REQUEST_WAIT`] between bytes. `worker.ping` answers who it is;
 //! `inspect` reads this machine or one of its Sandboxes (`layerfs-sandbox`
 //! `inspect`: at most two at once, each on a helper thread with deadlines);
-//! `store.call`, `store.file`, `store.reach`, `sandbox.host`, `project.stage`,
-//! `project.init`, `project.export`, `project.delete`, `project.list` and
-//! `doctor.fix` run one operation on this machine (`ops`),
+//! `store.call`, `store.file`, `store.compact`, `store.reach`, `sandbox.host`,
+//! `project.stage`, `project.init`, `project.export`, `project.delete`,
+//! `project.list` and `doctor.fix` run one operation on this machine (`ops`),
 //! with `home` set to the worker's own root (the machine's data disk),
-//! never a path the caller sends. There is no `store.compact` operation:
-//! compaction is local-only (spec S6 deviation D5,
-//! `core/docs/issues/project-41/gc-42-decisions.md`), and the caller refuses a
-//! remote sqlite Store before it dials this worker. Answers are
+//! never a path the caller sends. `store.compact` runs a sqlite Store's
+//! compaction where its file is (spec S6, #42 D5). Answers are
 //! `{ value }` or `{ refused }`, after any `{ event }` frames.
 //!
 //! A request may carry `home_id`, the caller's home id: the root is not a

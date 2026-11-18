@@ -1,7 +1,7 @@
 //! `store.compact`: reclaim dead bytes from one Store.
 //!
-//! A sqlite Store on another machine is refused by the control function as
-//! local-only (spec S6 deviation D5, `core/docs/issues/project-41/gc-42-decisions.md`);
+//! A sqlite Store on another machine is compacted there, by that machine's
+//! worker (spec S6, `core/docs/issues/project-41/gc-42-decisions.md` D5);
 //! this entry parses the name and hands the call over.
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call, PROGRESS};
