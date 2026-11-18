@@ -121,19 +121,21 @@ fn snake(word: &str) -> String {
 
 /// A Workspace's state from its daemon's `activity` (as `sandbox.get`
 /// reads it): `idle` is ready; attaching, committing and closing are busy
-/// with that operation; `uncertain` is broken `unresolved` and
-/// `local_failure` broken `failed`, each fixed by a forced unmount of
-/// handle `ws`.
-pub fn state(activity: &str, ws: &str) -> State {
-    let busy = |name: &str, phase: &str| State::Busy {
+/// with that operation, in the `phase` the daemon names and since
+/// `since_ms` when it says (a daemon of another build may not: its
+/// activity's own phase word then, and no time); `uncertain` is broken
+/// `unresolved` and `local_failure` broken `failed`, each fixed by a
+/// forced unmount of handle `ws`.
+pub fn state(activity: &str, phase: Option<&str>, since_ms: Option<i64>, ws: &str) -> State {
+    let busy = |name: &str, first: &str| State::Busy {
         name: name.to_owned(),
-        phase: phase.to_owned(),
-        started_ms: None,
+        phase: phase.unwrap_or(first).to_owned(),
+        started_ms: since_ms,
     };
     let fix = format!("layerfs workspace unmount {ws} --force");
     match activity {
         "attaching" => busy("mount", "attach"),
-        "committing" => busy("commit", "commit"),
+        "committing" => busy("commit", "publish"),
         "closing" => busy("unmount", "close"),
         "uncertain" => State::broken(Reason::Unresolved, Some(&fix)),
         "local_failure" => State::broken(Reason::Failed, Some(&fix)),
@@ -169,7 +171,8 @@ pub fn status(answer: &SdkValue, ws: &str) -> SdkValue {
             SdkValue::Bool(answer.get_bool("headMovedSinceMount")),
         ),
     ];
-    let state = state(&activity, ws);
+    let since = answer.get_int("activitySinceMs");
+    let state = state(&activity, answer.get_text("activityPhase"), since, ws);
     let companions = state.fields();
     for key in ["state", "op", "reason", "fix"] {
         let value = (companions.iter())

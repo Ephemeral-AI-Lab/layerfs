@@ -123,6 +123,18 @@ pub fn status(status: &WorkspaceStatus, current_head: Option<Option<CommitId>>) 
         ),
         ("activity", SdkValue::text(format!("{:?}", status.activity))),
         (
+            "activityPhase",
+            SdkValue::opt_text(
+                Some(status.activity_phase.as_str()).filter(|phase| !phase.is_empty()),
+            ),
+        ),
+        (
+            "activitySinceMs",
+            status
+                .activity_since_ms
+                .map_or(SdkValue::Null, SdkValue::Int),
+        ),
+        (
             "overlay",
             status.local.as_ref().map_or(SdkValue::Null, |local| {
                 SdkValue::map([

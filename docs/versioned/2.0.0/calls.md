@@ -864,9 +864,15 @@ handle is gone: `<sandbox>:/path` is refused `InvalidInput`.
   `removed`) with `type: "dir"` for a folder; `changes_count` past the 20
   shown, `partial: true` at the bound, `branch_moved: true` when the
   Branch gained Commits since the mount, and `state` with its companion
-  when not ready (from the daemon's `activity`). `--path` filters within
-  the same read. A machine that is not ready refuses it `Unavailable`; it
-  starts no machine.
+  when not ready (from the daemon's `activity`); a busy Workspace's `op`
+  is `{name, phase, started_at}`: `mount` in `attach`, `commit` in `flush`,
+  `publish` (capture, construction, Save, publication and install) or
+  `invalidate`, `unmount` in `close`, and when the daemon admitted it. `--path` filters within
+  the same read. A machine that is not ready refuses it `Unavailable` with
+  `fix: layerfs machine start <machine>` (any call routed to a machine whose
+  worker is not running carries that fix; a worker of another build carries
+  `layerfs machine stop <m> && layerfs machine start <m>`); it starts no
+  machine.
 - On `lima`, `mount`, `commit`, `unmount` and `status` go from the caller
   straight to the Sandbox's daemon (#535 G4); `exec` and `cancel` go
   through the machine's worker. On `docker` every call goes through its

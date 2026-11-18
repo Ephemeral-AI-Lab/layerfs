@@ -85,7 +85,7 @@ impl Service {
             ));
         }
         value.kernel = Kernel::Attaching;
-        value.activity = Activity::Attaching;
+        value.enter(Activity::Attaching);
         value.epoch = value.epoch.saturating_add(1);
         Ok(value.workspace.clone())
     }
