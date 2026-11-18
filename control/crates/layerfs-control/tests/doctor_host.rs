@@ -60,6 +60,31 @@ fn tree(home: &Path) -> BTreeMap<PathBuf, (u64, i64, i64, u32)> {
     }
     result
 }
+/// The home's checks, in the order `calls.json` lists them and they run.
+const ORDER: [&str; 8] = [
+    "home.build",
+    "home.prerequisites",
+    "home.layout",
+    "home.records",
+    "home.bundle",
+    "home.native_daemon",
+    "home.artifacts",
+    "home.capacity",
+];
+/// The report's rows name only the home's checks, each once, in order.
+fn in_order(report: &SdkValue) {
+    let at: Vec<usize> = doctor_own::rows(report)
+        .iter()
+        .map(|row| {
+            let id = row.get_text("id").unwrap_or("");
+            ORDER
+                .iter()
+                .position(|o| *o == id)
+                .unwrap_or_else(|| panic!("{id}"))
+        })
+        .collect();
+    assert!(at.windows(2).all(|w| w[0] < w[1]), "{report:?}");
+}
 fn contains(report: &SdkValue, needle: &str) -> bool {
     layerfs_home::json::print(report).contains(needle)
 }
@@ -69,9 +94,11 @@ fn absent_home_stays_absent_and_reports_uninitialized() {
     let report = run(&home);
     assert!(!home.exists());
     // a home not made yet has no layout or records to check
-    assert_eq!(outcome(&report, "host.layout"), None, "{report:?}");
-    assert_eq!(outcome(&report, "host.records"), None, "{report:?}");
-    assert!(outcome(&report, "host.native_daemon").is_some());
+    assert_eq!(outcome(&report, "home.layout"), None, "{report:?}");
+    assert_eq!(outcome(&report, "home.records"), None, "{report:?}");
+    assert!(outcome(&report, "home.native_daemon").is_some());
+    assert!(outcome(&report, "home.capacity").is_some());
+    in_order(&report);
 }
 #[test]
 fn current_and_previous_layouts_are_observed_without_conversion_or_files() {
@@ -81,10 +108,14 @@ fn current_and_previous_layouts_are_observed_without_conversion_or_files() {
         let report = run(&home);
         assert_eq!(before, tree(&home));
         if layout == 2 {
-            assert!(contains(&report, "requires conversion"));
+            assert!(contains(&report, "a layout 2 home"));
+            let check = row(&report, "home.layout");
+            assert_eq!(check.get_text("severity"), Some("warning"), "{check:?}");
+            assert_eq!(check.get_text("fix"), Some("layerfs home init"));
         } else {
-            assert_eq!(outcome(&report, "host.layout").as_deref(), Some("pass"));
+            assert_eq!(outcome(&report, "home.layout").as_deref(), Some("pass"));
         }
+        in_order(&report);
         std::fs::remove_dir_all(home).unwrap();
     }
 }
@@ -98,9 +129,9 @@ fn malformed_layout_has_a_blocked_record_check_and_changes_nothing() {
     .unwrap();
     let before = tree(&home);
     let report = run(&home);
-    assert_eq!(outcome(&report, "host.layout").as_deref(), Some("fail"));
+    assert_eq!(outcome(&report, "home.layout").as_deref(), Some("fail"));
     // the records check waits on the layout: it does not apply
-    assert_eq!(outcome(&report, "host.records"), None, "{report:?}");
+    assert_eq!(outcome(&report, "home.records"), None, "{report:?}");
     assert_eq!(before, tree(&home));
     std::fs::remove_dir_all(home).unwrap();
 }
@@ -216,7 +247,7 @@ fn runtime_mount_and_log_subtrees_are_outside_record_fingerprinting() {
     private_dir(&trap).unwrap();
     std::fs::set_permissions(&trap, std::fs::Permissions::from_mode(0o0)).unwrap();
     let report = run(&home);
-    assert_eq!(outcome(&report, "host.records").as_deref(), Some("pass"));
+    assert_eq!(outcome(&report, "home.records").as_deref(), Some("pass"));
     assert_eq!(std::fs::metadata(&trap).unwrap().mode() & 0o777, 0);
     std::fs::set_permissions(&trap, std::fs::Permissions::from_mode(0o700)).unwrap();
     std::fs::remove_dir_all(home).unwrap();
@@ -255,7 +286,7 @@ fn concurrent_management_record_rewrites_leave_consistency_incomplete() {
     let report = run(&home);
     done.store(true, Ordering::Relaxed);
     assert!(writer.join().unwrap() > 0);
-    assert_eq!(outcome(&report, "host.records").as_deref(), Some("unknown"));
+    assert_eq!(outcome(&report, "home.records").as_deref(), Some("unknown"));
     assert!(!complete(&report));
     std::fs::remove_dir_all(home).unwrap();
 }
@@ -301,7 +332,7 @@ fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
     };
     // another commit: home.get's DaemonMismatch words, as a warning
     let other = with(ours);
-    let check = row(&other, "host.native_daemon");
+    let check = row(&other, "home.native_daemon");
     assert_eq!(check.get_text("severity"), Some("warning"), "{check:?}");
     assert_eq!(
         check.get_text("message"),
@@ -318,24 +349,24 @@ fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
     assert_eq!(evidence.get("matches"), Some(&SdkValue::Bool(false)));
     // the same commit, both clean
     let same = with(theirs);
-    let check = row(&same, "host.native_daemon");
+    let check = row(&same, "home.native_daemon");
     assert_eq!(check.get_text("outcome"), Some("pass"), "{check:?}");
     // a build that names no commit cannot compare: it passes
     let unknown = run(&home);
-    let check = row(&unknown, "host.native_daemon");
+    let check = row(&unknown, "home.native_daemon");
     assert_eq!(check.get_text("outcome"), Some("pass"), "{check:?}");
-    // the native machine's daemon is reported here alone, not by host.artifacts
+    // the native machine's daemon is reported here alone, not by home.artifacts
     assert!(
         !doctor_own::rows(&unknown)
             .iter()
-            .any(|r| r.get_text("id") == Some("host.artifacts")
+            .any(|r| r.get_text("id") == Some("home.artifacts")
                 && r.get_text("message").is_some_and(|m| m.contains("native"))),
         "{unknown:?}"
     );
     // a recorded daemon that is there and not executable says so
     std::fs::set_permissions(&daemon, std::fs::Permissions::from_mode(0o644)).unwrap();
     let plain = run(&home);
-    let check = row(&plain, "host.native_daemon");
+    let check = row(&plain, "home.native_daemon");
     assert_eq!(check.get_text("severity"), Some("error"), "{check:?}");
     assert_eq!(
         check.get_text("message"),
@@ -349,7 +380,7 @@ fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
     // a recorded daemon that is not there is an error, in the Sandbox's words
     std::fs::remove_file(&daemon).unwrap();
     let gone = run(&home);
-    let check = row(&gone, "host.native_daemon");
+    let check = row(&gone, "home.native_daemon");
     assert_eq!(check.get_text("severity"), Some("error"), "{check:?}");
     assert_eq!(
         check.get_text("message"),

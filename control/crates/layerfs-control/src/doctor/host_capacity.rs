@@ -1,28 +1,26 @@
-//! Local capacity measurement with a bounded observational subprocess.
+//! `home.capacity`: free space on the disk that holds the home, measured
+//! by one bounded `df` and judged by the doctors' one room rule (a nearly
+//! full disk is a warning).
 use super::{Budget, Checks};
 use layerfs_bridge::control::SdkValue;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+const ID: &str = "home.capacity";
+
 pub(super) fn check(home: &Path, budget: &Budget, checks: &mut Checks) {
     let mut path = home;
     while !path.exists() {
         let Some(parent) = path.parent() else {
-            checks.unknown(
-                "host.capacity",
-                "No existing filesystem ancestor for the home",
-            );
+            checks.unknown(ID, "no folder above the home exists to measure");
             return;
         };
         path = parent;
     }
     let wait = budget.limit(Duration::from_secs(5));
     if wait.is_zero() {
-        checks.unknown(
-            "host.capacity",
-            "Deadline expired before measuring capacity",
-        );
+        checks.unknown(ID, "its time ran out before the disk was measured");
         return;
     }
     let started = Instant::now();
@@ -34,7 +32,7 @@ pub(super) fn check(home: &Path, budget: &Budget, checks: &mut Checks) {
         .stderr(Stdio::null())
         .spawn();
     let Ok(mut child) = child else {
-        checks.unknown("host.capacity", "Filesystem capacity probe is unavailable");
+        checks.unknown(ID, "`df` could not be run to measure the disk");
         return;
     };
     loop {
@@ -44,10 +42,7 @@ pub(super) fn check(home: &Path, budget: &Budget, checks: &mut Checks) {
             _ => {
                 let _ = child.kill();
                 let _ = child.wait();
-                checks.unknown(
-                    "host.capacity",
-                    "Filesystem capacity probe did not complete within its deadline",
-                );
+                checks.unknown(ID, "`df` did not answer in time");
                 return;
             }
         }
@@ -63,27 +58,18 @@ pub(super) fn check(home: &Path, budget: &Budget, checks: &mut Checks) {
             Some((fields.first()?.to_string(), bytes))
         });
     match capacity {
-        Some((filesystem, bytes)) => {
-            checks.pass(
-                "host.capacity",
-                "Measured local filesystem capacity; no product free-space threshold applied",
-            );
-            checks.evidence(
-                "host.capacity",
-                SdkValue::map([
-                    ("filesystem", SdkValue::text(filesystem)),
-                    ("path", SdkValue::text(path.display().to_string())),
-                    (
-                        "free_bytes",
-                        i64::try_from(bytes).map_or(SdkValue::Null, SdkValue::Int),
-                    ),
-                ]),
-            );
-        }
-        None => checks.unknown(
-            "host.capacity",
-            "Filesystem capacity probe returned no usable measurement",
+        Some((filesystem, free)) => super::super::capacity::room(
+            checks,
+            ID,
+            "the disk that holds the home",
+            free,
+            None,
+            vec![
+                ("filesystem", SdkValue::text(filesystem)),
+                ("path", SdkValue::text(path.display().to_string())),
+            ],
         ),
+        None => checks.unknown(ID, "`df` gave no measurement of the disk"),
     }
-    checks.duration("host.capacity", started.elapsed());
+    checks.duration(ID, started.elapsed());
 }
