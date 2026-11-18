@@ -1,4 +1,5 @@
-//! Sorting in bounded memory for one mark.
+//! Sorting in bounded memory for one mark, and for the compaction around it
+//! (the pack lengths and the verification's checks by pack).
 //!
 //! A mark has to put several sets in order that grow with the Store: the
 //! identities a wave reached, the objects of the next wave by locator, the
@@ -23,7 +24,7 @@ use std::sync::atomic::{AtomicU64, Ordering as Atomic};
 const WINDOW_BYTES: usize = 64 * 1024;
 
 /// A fixed-width value a [`Sorter`] can write to its file.
-pub(super) trait Item: Copy {
+pub(crate) trait Item: Copy {
     /// The encoded width.
     const BYTES: usize;
     fn encode(&self, out: &mut [u8]);
@@ -69,7 +70,7 @@ fn unnamed(directory: &Path) -> std::io::Result<File> {
 }
 
 /// Items in one order, held in bounded memory. See the module comment.
-pub(super) struct Sorter<T: Item> {
+pub(crate) struct Sorter<T: Item> {
     directory: PathBuf,
     order: fn(&T, &T) -> Ordering,
     /// Items held before they are settled.
@@ -86,7 +87,7 @@ pub(super) struct Sorter<T: Item> {
 
 impl<T: Item> Sorter<T> {
     /// A sorter that holds at most about `bytes` of items in memory.
-    pub(super) fn new(directory: &Path, bytes: usize, order: fn(&T, &T) -> Ordering) -> Self {
+    pub(crate) fn new(directory: &Path, bytes: usize, order: fn(&T, &T) -> Ordering) -> Self {
         Self {
             directory: directory.to_path_buf(),
             order,
@@ -101,20 +102,20 @@ impl<T: Item> Sorter<T> {
     }
 
     /// Adds one item.
-    pub(super) fn push(&mut self, item: T) -> HistoryResult<()> {
+    pub(crate) fn push(&mut self, item: T) -> HistoryResult<()> {
         self.hold(item);
         self.relieve()
     }
 
     /// Adds one item without ever writing: for a caller that cannot fail
     /// here and calls [`Self::relieve`] soon after.
-    pub(super) fn hold(&mut self, item: T) {
+    pub(crate) fn hold(&mut self, item: T) {
         self.held.push(item);
         self.settled = false;
     }
 
     /// Brings the held items back under the bound.
-    pub(super) fn relieve(&mut self) -> HistoryResult<()> {
+    pub(crate) fn relieve(&mut self) -> HistoryResult<()> {
         if self.held.len() < self.limit {
             return Ok(());
         }
@@ -128,12 +129,12 @@ impl<T: Item> Sorter<T> {
     }
 
     /// Whether nothing was added since the last [`Self::clear`].
-    pub(super) fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.held.is_empty() && self.runs.is_empty()
     }
 
     /// The most bytes this sorter's file has held.
-    pub(super) fn peak_file_bytes(&self) -> u64 {
+    pub(crate) fn peak_file_bytes(&self) -> u64 {
         self.peak
     }
 
@@ -186,7 +187,7 @@ impl<T: Item> Sorter<T> {
     }
 
     /// Forgets every item and gives the file's space back.
-    pub(super) fn clear(&mut self) -> HistoryResult<()> {
+    pub(crate) fn clear(&mut self) -> HistoryResult<()> {
         self.held.clear();
         self.settled = true;
         self.runs.clear();
@@ -198,7 +199,7 @@ impl<T: Item> Sorter<T> {
     }
 
     /// Every item in order, equal items folded. May be read again.
-    pub(super) fn sorted(&mut self) -> HistoryResult<Merge<'_, T>> {
+    pub(crate) fn sorted(&mut self) -> HistoryResult<Merge<'_, T>> {
         self.settle();
         // A window per run, sized so that all of them stay within what the
         // sorter may hold.
@@ -265,7 +266,7 @@ impl<T> Ord for Head<T> {
 }
 
 /// The merged, ordered items of a [`Sorter`].
-pub(super) struct Merge<'a, T: Item> {
+pub(crate) struct Merge<'a, T: Item> {
     order: fn(&T, &T) -> Ordering,
     file: Option<&'a File>,
     runs: Vec<Reader<T>>,
@@ -319,7 +320,7 @@ impl<T: Item> Merge<'_, T> {
     }
 
     /// The next item in order, or `None` at the end.
-    pub(super) fn next(&mut self) -> HistoryResult<Option<T>> {
+    pub(crate) fn next(&mut self) -> HistoryResult<Option<T>> {
         let Some(head) = self.heads.pop() else {
             return Ok(None);
         };
@@ -337,7 +338,7 @@ impl<T: Item> Merge<'_, T> {
     }
 
     /// The next item without taking it.
-    pub(super) fn peek(&self) -> Option<&T> {
+    pub(crate) fn peek(&self) -> Option<&T> {
         self.heads.peek().map(|head| &head.item)
     }
 }

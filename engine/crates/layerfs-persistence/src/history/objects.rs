@@ -42,7 +42,7 @@ mod impls;
 mod ordinals;
 mod plan;
 mod records;
-mod spill;
+pub(crate) mod spill;
 mod table;
 mod values;
 mod walk;
@@ -284,8 +284,8 @@ impl HistoryProvider {
 fn mark(tx: &Transaction<'_>) -> HistoryResult<MarkResult> {
     let (mut mark, mut reach) = mark_recorded(tx)?;
     let mut objects = Vec::with_capacity(usize::try_from(reach.count).unwrap_or(0));
-    reach.each(tx.mechanics(), &mut |id, _| {
-        objects.push(id);
+    reach.each(tx.mechanics(), &mut |row, _| {
+        objects.push(row.object_id);
         Ok(())
     })?;
     mark.objects.objects = objects;
@@ -304,26 +304,30 @@ const PACK_SORT_BYTES: usize = 4 * 1024 * 1024;
 const READ_SORT_BYTES: usize = 1024 * 1024;
 
 /// The reached set of a finished walk, for listing it: the block boundaries
-/// of the Store's locators and one bit per object.
+/// of the Store's locators and the walk's three bits per object.
 pub(crate) struct Reach {
     table: Locators,
-    reached: table::Bits,
+    marks: table::Marks,
     count: u64,
 }
 
 impl Reach {
-    /// Every reached object and its pack, in ascending identity order, read
-    /// from the Store's locators a block at a time.
+    /// Every reached object's locator, in ascending identity order, read
+    /// from the Store's locators a block at a time. The flag says whether
+    /// the object was reached only as a delta base: the objects
+    /// [`KeptWaste::delta_bases_bytes`] counts.
     pub(crate) fn each(
         &mut self,
         mechanics: &dyn crate::backend::Mechanics,
-        each: &mut dyn FnMut(ObjectId, i64) -> HistoryResult<()>,
+        each: &mut dyn FnMut(&ObjectLocation, bool) -> HistoryResult<()>,
     ) -> HistoryResult<()> {
         let mut listed = 0u64;
-        self.table.each_set(mechanics, &self.reached, |row| {
-            listed += 1;
-            each(row.object_id, row.pack_id)
-        })?;
+        let marks = &self.marks;
+        self.table
+            .each_set(mechanics, &marks.reached, |rank, row| {
+                listed += 1;
+                each(row, marks.bases.get(rank) && !marks.logical.get(rank))
+            })?;
         if listed != self.count {
             return Err(HistoryError::Integrity("mark object locations"));
         }
@@ -411,7 +415,7 @@ fn mark_recorded(tx: &Transaction<'_>) -> HistoryResult<(MarkResult, Reach)> {
     };
     let reach = Reach {
         table,
-        reached: marks.reached,
+        marks,
         count: found.objects,
     };
     Ok((

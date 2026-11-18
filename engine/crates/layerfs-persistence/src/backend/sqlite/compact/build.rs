@@ -8,6 +8,7 @@
 //! in-place rewrite: `VACUUM INTO` + delete + `VACUUM` would write the retained
 //! bytes about four times over (measured), while this path writes them once.
 
+use super::lengths::PackLengths;
 use super::op::compact_path;
 use super::op::hex;
 use super::op::stop_at;
@@ -21,10 +22,8 @@ use super::types::CompactFailpoint;
 use super::types::CompactRequest;
 use super::types::MarkTuple;
 use super::verify::immutable_uri;
-use super::window::staged_windows;
 use super::window::windows;
 use super::window::ReadAhead;
-use super::window::Window;
 use crate::backend::records::BackendError;
 use crate::backend::sqlite::lifecycle::seal::SealedFacts;
 use crate::backend::sqlite::session::connection::Session;
@@ -33,7 +32,6 @@ use layerfs_history::error::HistoryResult;
 use rusqlite::params;
 use rusqlite::Connection;
 use rusqlite::OpenFlags;
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -44,6 +42,12 @@ use std::sync::Arc;
 /// part of what a compaction may hold whatever the Store's size: a mark holds
 /// more than this, and the cache is taken after the mark has let go.
 pub(crate) const CACHE_KIB: i64 = 65_536;
+
+/// The cache while the secondary indexes are built, 8 MiB. SQLite sorts an
+/// index's keys in memory up to its cache size before it writes a run to a
+/// temporary file, so this is also the most one index sort holds; the load
+/// is committed by then and the index pages are written in key order.
+pub(crate) const INDEX_CACHE_KIB: i64 = 8_192;
 
 /// §7 step 2's large window for the attached sealed source. The session default
 /// is no mmap (`session/profile.rs:86-87`), so the bulk copy would page the old
@@ -89,9 +93,10 @@ pub(crate) fn live_page_metrics(session: &Arc<Session>) -> HistoryResult<(u64, u
 pub(crate) struct Built {
     pub(crate) target: PathBuf,
     pub(crate) target_bytes: u64,
-    /// Where the retained packs lie in the fresh file, when `pack` holds their
-    /// payload: the verification's read-ahead plan.
-    pub(crate) windows: Vec<Window>,
+    /// Whether `pack` holds the payload of the fresh file's packs, so that
+    /// its rows lie spread over the whole file: the verification then reads
+    /// them window by window.
+    pub(crate) payload_in_pack: bool,
     pub(crate) visited_bytes: u64,
     pub(crate) logical: u64,
     pub(crate) canonical: u64,
@@ -134,7 +139,7 @@ pub(crate) struct BuildInput<'a> {
     /// about to write, known before the fresh file holds a row.
     pub(crate) payload_bytes: u64,
     /// Every pack of the sealed Store and its stored length.
-    pub(crate) lengths: &'a BTreeMap<i64, u64>,
+    pub(crate) lengths: &'a mut PackLengths,
     /// The packs the mark retains, ascending.
     pub(crate) retained: &'a [i64],
     /// The mark's retained packs that hold dead records, for [`super::repack`].
@@ -146,6 +151,12 @@ pub(crate) struct BuildInput<'a> {
 /// What the mark found besides the retained packs, for the steps of the copy
 /// that leave part of a retained row set behind.
 struct Marked<'a> {
+    /// See [`BuildInput::lengths`].
+    lengths: &'a mut PackLengths,
+    /// See [`BuildInput::retained`].
+    retained: &'a [i64],
+    /// The bytes of the sealed file that are not pack payload.
+    slack: u64,
     /// See [`BuildInput::partly_dead`].
     partly_dead: &'a [(i64, u64)],
     /// See [`BuildInput::inode_ordinals`].
@@ -177,9 +188,9 @@ fn copy_rule(table: &str) -> Copy {
         // took it out of `live_pack` to write it again without its dead
         // records.
         "pack" | "pack_unit" => Copy::Where(RETAINED_PACK),
-        "object_location" | "content_signature" => {
-            Copy::Where("object_id IN (SELECT object_id FROM scratch.visited)")
-        }
+        // `object_location` is not filtered: `copy_rows` writes the kept
+        // locators from the visited set itself ([`KEPT_LOCATORS`]).
+        "content_signature" => Copy::Where("object_id IN (SELECT object_id FROM scratch.visited)"),
         "file_digest" => Copy::Where("root IN (SELECT object_id FROM scratch.visited)"),
         "layer_stack" => {
             Copy::Where("layer_stack_id IN (SELECT node_id FROM src.kept_node WHERE kind='stack')")
@@ -227,6 +238,36 @@ UNION SELECT run FROM src.commit_lineage WHERE commit_id IN \
     }
 }
 
+/// The columns of `object_location`, in the order its definition gives them.
+const LOCATOR_COLUMNS: &str = "object_id,role,canonical_length,pack_id,group_number,record_number";
+
+/// The kept locators. A `visited` row is the object's whole locator as the
+/// mark read it from this Store with the writer lane held, so they are
+/// written from the scratch in one forward scan, in key order: appended to
+/// the fresh table, with no lookup in the sealed Store's (the join against
+/// it made 5.1 million page-cache lookups for 1.5 million objects and took
+/// 1.7 to 1.9 s; this scan makes 0.7 million and takes about 1 s).
+const KEPT_LOCATORS: &str = "INSERT INTO main.object_location\
+(object_id,role,canonical_length,pack_id,group_number,record_number) \
+SELECT object_id,role,canonical_length,pack_id,group_number,record_number FROM scratch.visited";
+
+/// Requires the fresh `object_location` to have exactly [`LOCATOR_COLUMNS`]:
+/// a definition with another column would lose it in [`KEPT_LOCATORS`].
+fn locator_columns(connection: &Connection) -> HistoryResult<()> {
+    let columns: String = connection
+        .query_row(
+            "SELECT COALESCE(group_concat(name,','),'') FROM \
+(SELECT name FROM pragma_table_info('object_location','main') ORDER BY cid)",
+            params![],
+            |row| row.get(0),
+        )
+        .map_err(db_error)?;
+    if columns != LOCATOR_COLUMNS {
+        return Err(HistoryError::Integrity("staged Store locator columns"));
+    }
+    Ok(())
+}
+
 /// The filter that keeps a retained pack's rows.
 const RETAINED_PACK: &str = "pack_id IN (SELECT pack_id FROM scratch.live_pack)";
 
@@ -270,7 +311,7 @@ fn add_pack_sums(
 fn copy_packs(
     connection: &Connection,
     table: &str,
-    plan: &[Window],
+    marked: &mut Marked<'_>,
     sealed: &mut ReadAhead,
     totals: &mut (i64, i64),
 ) -> HistoryResult<()> {
@@ -288,16 +329,23 @@ fn copy_packs(
 (SELECT pack_id FROM scratch.live_pack WHERE pack_id BETWEEN ?1 AND ?2)"
         ))
         .map_err(db_error)?;
-    for window in plan {
-        sealed.ask(window);
-        statement
-            .execute(params![window.first, window.last])
-            .map_err(db_error)?;
-        if let Some(sums) = sums.as_mut() {
-            add_pack_sums(sums, (window.first, window.last), totals)?;
-        }
-    }
-    Ok(())
+    // The windows are cut from the stream of pack lengths and each is copied
+    // as soon as it is cut, so no plan is held.
+    windows(
+        marked.lengths.packs()?,
+        marked.retained,
+        marked.slack,
+        &mut |window| {
+            sealed.ask(&window);
+            statement
+                .execute(params![window.first, window.last])
+                .map_err(db_error)?;
+            if let Some(sums) = sums.as_mut() {
+                add_pack_sums(sums, (window.first, window.last), totals)?;
+            }
+            Ok(())
+        },
+    )
 }
 
 /// The `store_policy` columns the rebuild copies, named explicitly: the fresh
@@ -385,9 +433,8 @@ fn copy_rows(
     op: &RunOp,
     generation: i64,
     target_tables: &BTreeSet<String>,
-    plan: &[Window],
     sealed: &mut ReadAhead,
-    marked: &Marked<'_>,
+    marked: &mut Marked<'_>,
 ) -> HistoryResult<Repacked> {
     // The pack payload is `pack.body` in a Monolithic Store and the
     // `pack_unit` rows otherwise; that table is copied window by window.
@@ -428,11 +475,14 @@ fn copy_rows(
                 continue;
             }
             if table == payload {
-                copy_packs(connection, table, plan, sealed, &mut pack_totals)?;
+                copy_packs(connection, table, marked, sealed, &mut pack_totals)?;
                 continue;
             }
             let name = identifier(table);
-            let statement = if table == "gc_intent" {
+            let statement = if table == "object_location" {
+                locator_columns(connection)?;
+                KEPT_LOCATORS.to_owned()
+            } else if table == "gc_intent" {
                 format!(
                     "INSERT INTO main.{name} SELECT * FROM src.{name} WHERE op_id=x'{}'",
                     hex(&op.op_id)
@@ -628,7 +678,7 @@ pub(crate) fn build(
         .execute_batch(&format!(
             "PRAGMA page_size={page_size};PRAGMA auto_vacuum={auto_vacuum};\
 PRAGMA journal_mode=OFF;PRAGMA synchronous=OFF;PRAGMA foreign_keys=OFF;\
-PRAGMA temp_store=MEMORY;PRAGMA cache_size=-{CACHE_KIB};\
+PRAGMA temp_store=FILE;PRAGMA cache_size=-{CACHE_KIB};\
 PRAGMA user_version={user_version};PRAGMA application_id={application_id};"
         ))
         .map_err(db_error)?;
@@ -660,16 +710,17 @@ PRAGMA user_version={user_version};PRAGMA application_id={application_id};"
     let page_bytes = u64::try_from(page_size).unwrap_or(0);
     space::reserve(&target, payload_bytes, page_bytes)?;
     let target_tables = main_tables(&connection)?;
-    let plan = windows(lengths, retained, facts.bytes)?;
     let mut sealed = ReadAhead::open(store)?;
     let repacked = copy_rows(
         &connection,
         op,
         tuple.generation + 1,
         &target_tables,
-        &plan,
         &mut sealed,
-        &Marked {
+        &mut Marked {
+            slack: facts.bytes.saturating_sub(lengths.total()),
+            lengths,
+            retained,
             partly_dead,
             inode_ordinals,
         },
@@ -682,7 +733,15 @@ PRAGMA user_version={user_version};PRAGMA application_id={application_id};"
 
     // §7 step 4: the secondary indexes and the immutability/logical triggers
     // are built after the bulk load, so the load writes no index page and fires
-    // no trigger.
+    // no trigger. The connection's temporary storage is files
+    // (`temp_store=FILE`): an index over the Commits, the Layers or the pack
+    // units is sorted through runs in SQLite's temporary directory once its
+    // keys pass the cache size set here, and a statement of the copy that
+    // SQLite answers from a temporary table spills the same way. In memory
+    // (the earlier `temp_store=MEMORY`) each held every key at once.
+    connection
+        .execute_batch(&format!("PRAGMA cache_size=-{INDEX_CACHE_KIB}"))
+        .map_err(db_error)?;
     for sql in &schema.secondary {
         connection.execute_batch(sql).map_err(db_error)?;
     }
@@ -774,16 +833,11 @@ WHERE sql IS NOT NULL AND substr(name,1,7)!='sqlite_' ORDER BY type,name",
         }
     }
     let target_bytes = space::trim(&target, u64::try_from(pages).unwrap_or(0), page_bytes)?;
-    // `pack` holds the payload unless the layout has `pack_unit` rows.
-    let staged = if target_tables.contains("pack_unit") {
-        Vec::new()
-    } else {
-        staged_windows(lengths, retained, target_bytes)?
-    };
     Ok(Built {
         target,
         target_bytes,
-        windows: staged,
+        // `pack` holds the payload unless the layout has `pack_unit` rows.
+        payload_in_pack: !target_tables.contains("pack_unit"),
         visited_bytes,
         logical: u64::try_from(totals.0).unwrap_or(0),
         canonical: u64::try_from(totals.1).unwrap_or(0),

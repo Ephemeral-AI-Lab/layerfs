@@ -284,8 +284,8 @@ fn load_visited(tx: &Transaction<'_>, reach: &mut Reach) -> HistoryResult<()> {
         Ok(())
     };
     let mut ids: Vec<ObjectId> = Vec::with_capacity(VISITED_IDS);
-    reach.each(tx, &mut |id, _| {
-        ids.push(id);
+    reach.each(tx, &mut |row, _| {
+        ids.push(row.object_id);
         if ids.len() == VISITED_IDS {
             send(&ids)?;
             ids.clear();

@@ -15,18 +15,21 @@ use layerfs_content::{
         root::profile_id,
         scope_for_seed, FilesystemRoot, PathName,
     },
-    inode_leaf::{InodeKind, InodeMetadata, InodeValue},
+    inode_leaf::{
+        encode_inode_value, pooled_body, InodeKind, InodeLeaf, InodeLeafRow, InodeMetadata,
+        InodeValue, LEAF_ROW_BYTES,
+    },
     FinalizedObject, ObjectId, ObjectRole,
 };
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, HistoryError, StackInitialization};
-use layerfs_persistence::internals::{verify_repacked, Rewritten};
+use layerfs_persistence::internals::{Rewritten, StagedLocators};
 use layerfs_persistence::{
     CompactFailpoint, CompactPath, CompactRequest, PersistenceConfig, SqliteAcquisitionSchema,
     SqliteHandles, SqlitePackLayout, SqlitePersistenceProfile,
 };
 use layerfs_storage::{
     encoding::{encode_full, encode_prefix, raw_payload, CompressionWorkspace},
-    location::{ObjectLocation, PackDomain},
+    location::{InodeValueRow, ObjectLocation, PackDomain},
     pack::{assemble, build_group, layout, layout::GroupCodec, PackLane},
     port::{ObjectKey, PackPersistence, Publication, PublishedPack, Reserve},
     save::SaveProfile,
@@ -206,6 +209,16 @@ fn publish_pack(
     lane: PackLane,
     groups: &[Vec<Stored>],
 ) -> (i64, Vec<GroupCodec>) {
+    publish_pack_with_values(handles, lane, groups, Vec::new())
+}
+
+/// [`publish_pack`], with the inode values its leaves read.
+fn publish_pack_with_values(
+    handles: &SqliteHandles,
+    lane: PackLane,
+    groups: &[Vec<Stored>],
+    inode_values: Vec<InodeValueRow>,
+) -> (i64, Vec<GroupCodec>) {
     let mut workspace = CompressionWorkspace::new().unwrap();
     let built: Vec<_> = groups
         .iter()
@@ -247,6 +260,7 @@ fn publish_pack(
                 Arc::new(body),
             )],
             objects,
+            inode_values,
             ..Publication::default()
         })
         .unwrap();
@@ -499,6 +513,29 @@ fn mixed_store(handles: &SqliteHandles) -> Mixed {
     }
 }
 
+/// §11: a rebuild's `keptWaste` is what a mark of the Store it installed
+/// finds, in all three parts.
+fn assert_kept_waste_is_the_rebuilt_stores(
+    receipt: &layerfs_persistence::CompactReceipt,
+    rebuilt: &SqliteHandles,
+) {
+    let mark = rebuilt.history.mark().unwrap();
+    let waste = mark.objects().waste();
+    assert_eq!(
+        (
+            receipt.kept_waste.dead_in_retained_packs_bytes,
+            receipt.kept_waste.delta_bases_bytes,
+            receipt.kept_waste.inode_blocks_bytes,
+        ),
+        (
+            waste.dead_in_retained_packs_bytes(),
+            waste.delta_bases_bytes(),
+            waste.inode_blocks_bytes(),
+        ),
+        "the receipt's kept waste against a mark of the rebuilt Store"
+    );
+}
+
 fn repack_round_trip(layout: SqlitePackLayout) {
     let (_temp, handles, path) = create(layout);
     let fixture = mixed_store(&handles);
@@ -536,6 +573,7 @@ fn repack_round_trip(layout: SqlitePackLayout) {
 
     let reopened = reopen(&path, layout);
     assert_eq!(reopened.history.incarnation(), generation + 1);
+    assert_kept_waste_is_the_rebuilt_stores(&receipt, &reopened);
     for (object, bytes) in fixture.live.iter().zip(&expected) {
         assert!(located(&reopened, object.id()));
         assert_eq!(
@@ -642,6 +680,7 @@ fn a_record_kept_only_as_a_delta_base_survives_a_repack() {
     assert!(receipt.kept_waste.delta_bases_bytes > 0);
 
     let reopened = reopen(&path, SqlitePackLayout::Monolithic);
+    assert_kept_waste_is_the_rebuilt_stores(&receipt, &reopened);
     assert!(located(&reopened, base.id()), "the delta base survives");
     assert!(!located(&reopened, dead.id()));
     assert_eq!(
@@ -654,6 +693,196 @@ fn a_record_kept_only_as_a_delta_base_survives_a_repack() {
     let old = before.iter().find(|row| row.0 == pack).unwrap();
     let new = after.iter().find(|row| row.0 == pack).unwrap();
     assert!(new.1 < old.1, "the dead record's bytes left the pack");
+    clean(&reopened);
+    assert_eq!(
+        reopened.compact(&request(2)).unwrap().path,
+        CompactPath::None
+    );
+}
+
+/// An inode leaf of one directory and `files` regular files holding
+/// `content`, with its values under `ordinals`. `stamp` is the last file's
+/// modification time: two leaves that differ only in it share every other
+/// value, and so every other ordinal.
+fn inode_leaf(
+    directory: ObjectId,
+    content: ObjectId,
+    ordinals: &[u32],
+    stamp: i64,
+) -> (FinalizedObject, Vec<InodeValueRow>) {
+    let mut values = Vec::new();
+    let mut rows = Vec::new();
+    for serial in 1..=ordinals.len() as u64 {
+        let (kind, count, root, mode) = if serial == 1 {
+            (InodeKind::Directory, 0, directory, 0o755)
+        } else {
+            (InodeKind::RegularFile, 1, content, 0o644)
+        };
+        let last = serial == ordinals.len() as u64;
+        let value = encode_inode_value(InodeValue {
+            kind,
+            namespace_ref_count: count,
+            content_root: root,
+            metadata_root: InodeMetadata::Inline(PortableMetadata {
+                mode,
+                mtime_seconds: if last { stamp } else { serial as i64 },
+                mtime_nanoseconds: 0,
+            }),
+        });
+        values.push(InodeValueRow {
+            ordinal: ordinals[serial as usize - 1],
+            value,
+        });
+        rows.push(InodeLeafRow { serial, value });
+    }
+    let canonical = InodeLeaf {
+        subtree_bytes: LEAF_ROW_BYTES as u64 * rows.len() as u64,
+        rows,
+    }
+    .encode()
+    .unwrap();
+    (
+        FinalizedObject::new(ObjectRole::InodeLeaf, canonical).unwrap(),
+        values,
+    )
+}
+
+/// A record in a compressed group is charged the group's whole decoded
+/// length when it is kept only as a delta base. A rebuild that writes the
+/// group again without its dead records changes that figure, so the receipt
+/// has to state the new one, like the two parts beside it.
+#[test]
+fn a_rebuild_reports_the_kept_waste_of_the_store_it_installed() {
+    const FILES: usize = 40;
+    let (_temp, handles, path) = create(SqlitePackLayout::Monolithic);
+    let mut encoder = Encoder::new();
+    let content = whole(&noise(31, 3000));
+    let directory = FinalizedObject::new(
+        ObjectRole::DirectoryLeaf,
+        encode_directory_page(&DirectoryPage::Leaf {
+            entries: (0..FILES)
+                .map(|offset| {
+                    (
+                        PathName::new(&format!("file-{offset:03}")).unwrap(),
+                        offset as u64 + 2,
+                    )
+                })
+                .collect(),
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    publish_pack(
+        &handles,
+        PackLane::WholeFile,
+        &[vec![encoder.full(&content)]],
+    );
+    publish_pack(
+        &handles,
+        PackLane::Ordinary,
+        &[vec![encoder.full(&directory)]],
+    );
+
+    // Two versions of one inode leaf. The second differs in its last value
+    // and is stored as a delta against the first, which nothing else names.
+    let reserved = handles
+        .storage
+        .reserve(Reserve {
+            packs: 0,
+            ordinals: FILES + 2,
+        })
+        .unwrap();
+    let old: Vec<u32> = (0..=FILES as u32)
+        .map(|offset| reserved.first_ordinal + offset)
+        .collect();
+    let mut new = old.clone();
+    *new.last_mut().unwrap() = reserved.first_ordinal + FILES as u32 + 1;
+    let (base, mut values) = inode_leaf(directory.id(), content.id(), &old, 7);
+    let (target, changed) = inode_leaf(directory.id(), content.id(), &new, 8);
+    values.extend(changed.last().copied());
+    let base_body = pooled_body(base.canonical(), &old).unwrap();
+    let target_body = pooled_body(target.canonical(), &new).unwrap();
+    let delta = layerfs_storage::encoding::pool::delta::build(
+        base.id(),
+        &base_body,
+        &target_body,
+        &mut usize::MAX.clone(),
+    )
+    .unwrap()
+    .expect("the second leaf is a delta of the first");
+
+    // One compressed group: dead metadata, the base and the delta.
+    let mut group = Vec::new();
+    for index in 0..6u64 {
+        let [leaf, state] = mapped_file(&chunk(&noise(300 + index, 2048)), 2048, 24);
+        group.push(encoder.full(&leaf));
+        group.push(encoder.full(&state));
+    }
+    group.push(Stored {
+        object: base.clone(),
+        record: layerfs_storage::encoding::pool::leaf::encode_full(&base_body).unwrap(),
+        located: true,
+    });
+    group.push(Stored {
+        object: target.clone(),
+        record: delta,
+        located: true,
+    });
+    let (pack, codecs) = publish_pack_with_values(&handles, PackLane::Ordinary, &[group], values);
+    assert_eq!(codecs, vec![GroupCodec::Zstandard]);
+    // The dead records of a compressed group count for nothing in the
+    // decision, so a wholly dead pack takes the Store over the threshold.
+    publish_pack(
+        &handles,
+        PackLane::WholeFile,
+        &[vec![encoder.full(&whole(&noise(32, 20_000)))]],
+    );
+
+    let root = FinalizedObject::new(
+        ObjectRole::FilesystemRoot,
+        FilesystemRoot::new(profile_id(), scope_for_seed([1; 32]), 1, target.id())
+            .unwrap()
+            .encode()
+            .unwrap(),
+    )
+    .unwrap()
+    .with_references(vec![target.id()]);
+    publish_pack(&handles, PackLane::Ordinary, &[vec![encoder.full(&root)]]);
+    initialize(&handles, root.id());
+    let expected = object_bytes(&handles, target.id());
+    assert_eq!(expected.as_slice(), target.canonical());
+
+    let before = handles.history.mark().unwrap();
+    let marked = before.objects().waste().clone();
+    assert_eq!(marked.delta_base_references(), &[base.id()]);
+    assert_eq!(
+        before
+            .objects()
+            .partly_dead_packs()
+            .iter()
+            .map(|(pack, _)| *pack)
+            .collect::<Vec<_>>(),
+        vec![pack],
+        "the pack of the compressed group holds dead records"
+    );
+
+    let receipt = handles.compact(&request(1)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(
+        receipt.kept_waste.delta_base_references,
+        vec![*base.id().as_bytes()]
+    );
+    let reopened = reopen(&path, SqlitePackLayout::Monolithic);
+    assert_kept_waste_is_the_rebuilt_stores(&receipt, &reopened);
+    assert!(
+        receipt.kept_waste.delta_bases_bytes > 0
+            && receipt.kept_waste.delta_bases_bytes < marked.delta_bases_bytes(),
+        "the base's group lost its dead records: {} is charged less than {}",
+        receipt.kept_waste.delta_bases_bytes,
+        marked.delta_bases_bytes()
+    );
+    assert_eq!(object_bytes(&reopened, target.id()), expected);
+    assert_eq!(object_bytes(&reopened, base.id()), base.canonical());
     clean(&reopened);
     assert_eq!(
         reopened.compact(&request(2)).unwrap().path,
@@ -807,6 +1036,19 @@ fn the_working_tables_live_in_the_visited_scratch_and_count_as_temp_bytes() {
     );
 }
 
+/// The product's pass over a staged file's packs, for `packs` as the build
+/// reported them: one scan of the locators, then the pack rows in one range.
+fn verify_repacked(
+    connection: &rusqlite::Connection,
+    packs: &[Rewritten],
+) -> Result<(), HistoryError> {
+    let directory = std::env::temp_dir();
+    let mut locators = StagedLocators::read(connection, &directory)?;
+    let mut rewritten = packs.iter().cloned().map(Ok);
+    let pass = locators.pass(connection, &mut rewritten)?;
+    pass.finish().map(|_| ())
+}
+
 /// What a build reports for the packs it wrote again, read here from a staged
 /// file that is known to be good.
 fn rewritten(staged: &rusqlite::Connection, packs: &[i64]) -> Vec<Rewritten> {
@@ -936,6 +1178,129 @@ WHERE pack_id={pack}"
     wrong[0].length -= 1;
     assert!(verify_repacked(&connection, &wrong).is_err());
     assert!(verify_repacked(&connection, &packs).is_ok());
+}
+
+/// Every locator names a pack the staged file holds. The verification checks
+/// that by reading the locators in pack order beside the `pack` rows, so a
+/// locator whose pack is gone is found wherever its pack would have been:
+/// before another row, or after the last one. A pack the build says it wrote
+/// must be there as well, and the pass counts what one scan of each table
+/// counts.
+#[test]
+fn the_pass_by_pack_finds_a_locator_whose_pack_the_file_does_not_hold() {
+    let (temp, handles, path) = create(SqlitePackLayout::Monolithic);
+    let fixture = mixed_store(&handles);
+    let halted = handles.compact(&CompactRequest {
+        op_id: [0x62; 16],
+        failpoint: Some(CompactFailpoint::AfterBuild),
+        ..CompactRequest::default()
+    });
+    assert!(halted.is_err());
+    let staged = artifact(&path, ".compact");
+    let good = rusqlite::Connection::open(&staged).unwrap();
+    let packs = rewritten(&good, &fixture.packs);
+    let (first, last): (i64, i64) = good
+        .query_row("SELECT min(pack_id),max(pack_id) FROM pack", [], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
+        .unwrap();
+    assert!(first < last);
+    let counted: (i64, i64, i64, i64, i64) = good
+        .query_row(
+            "SELECT (SELECT count(*) FROM pack),(SELECT sum(length) FROM pack),\
+(SELECT COALESCE(sum(length),0) FROM pack WHERE domain=0),\
+(SELECT count(*) FROM object_location),(SELECT sum(canonical_length) FROM object_location)",
+            [],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
+        )
+        .unwrap();
+    // The staged file as built, read in three ranges: one scan of each table.
+    {
+        let mut locators = StagedLocators::read(&good, temp.path()).unwrap();
+        assert_eq!(
+            (locators.objects as i64, locators.canonical),
+            (counted.3, counted.4)
+        );
+        let mut rewritten = packs.iter().cloned().map(Ok);
+        let mut pass = locators.pass(&good, &mut rewritten).unwrap();
+        pass.through(first).unwrap();
+        pass.through(first).unwrap();
+        pass.through(last - 1).unwrap();
+        let scan = pass.finish().unwrap();
+        assert_eq!(
+            (scan.packs, scan.stored, scan.metadata),
+            (counted.0, counted.1, counted.2)
+        );
+    }
+    drop(good);
+
+    let mut case = 0u8;
+    let mut tampered = |change: &str, packs: &[Rewritten]| -> Result<(), HistoryError> {
+        case += 1;
+        let copy = temp.path().join(format!("gone-{case}.sqlite"));
+        std::fs::copy(&staged, &copy).unwrap();
+        let connection = rusqlite::Connection::open(&copy).unwrap();
+        connection
+            .execute_batch(&format!(
+                "PRAGMA foreign_keys=OFF;PRAGMA journal_mode=DELETE;\
+DROP TRIGGER pack_immutable_delete;{change}"
+            ))
+            .unwrap();
+        verify_repacked(&connection, packs)
+    };
+    const FOREIGN_KEY: HistoryError = HistoryError::Integrity("staged Store foreign key");
+    const PACK: HistoryError = HistoryError::Integrity("staged Store repacked pack");
+    assert_eq!(tampered("SELECT 1", &packs), Ok(()));
+    assert_eq!(tampered("SELECT 1", &[]), Ok(()), "no pack written again");
+    // The first pack's row is gone: its locators come before every row.
+    assert_eq!(
+        tampered(&format!("DELETE FROM pack WHERE pack_id={first}"), &[]),
+        Err(FOREIGN_KEY)
+    );
+    // The last pack's row is gone: its locators are left after every row.
+    assert_eq!(
+        tampered(&format!("DELETE FROM pack WHERE pack_id={last}"), &[]),
+        Err(FOREIGN_KEY)
+    );
+    // One locator names a pack past every row.
+    assert_eq!(
+        tampered(
+            &format!(
+                "UPDATE object_location SET pack_id={} WHERE object_id=\
+(SELECT object_id FROM object_location LIMIT 1)",
+                last + 7
+            ),
+            &[]
+        ),
+        Err(FOREIGN_KEY)
+    );
+    // A pack the build wrote again, gone with its locators.
+    let written = packs[0].pack_id;
+    assert_eq!(
+        tampered(
+            &format!(
+                "DELETE FROM object_location WHERE pack_id={written};\
+DELETE FROM pack WHERE pack_id={written}"
+            ),
+            &packs
+        ),
+        Err(PACK)
+    );
+    // A pack the build names that was never in the file.
+    let mut more = packs.clone();
+    more.push(Rewritten {
+        pack_id: last + 9,
+        ..packs[0].clone()
+    });
+    assert_eq!(tampered("SELECT 1", &more), Err(PACK));
 }
 
 /// Runs one statement batch against the Store file while no session is open.

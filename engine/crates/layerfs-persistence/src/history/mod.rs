@@ -23,6 +23,7 @@ mod rows;
 mod transaction;
 pub use kept::{KeptHistory, KeptNode, KeptNodeId};
 pub(crate) use lineage_backfill::backfill_lineage;
+pub(crate) use objects::spill;
 pub use objects::GcTuple;
 pub(crate) use objects::{mark_gc_reached, Reach};
 pub use objects::{KeptObjects, KeptWaste, MarkResult};
