@@ -563,3 +563,105 @@ fn a_patch_keeps_blank_lines_and_covers_added_files() {
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(folder).unwrap();
 }
+
+/// `file.read`'s short form (conformance R2 F3, F4, F6): `size` only for a
+/// file that is not text; `next_line` only while a line is left, so a cut
+/// last line has none; `file.edit`'s `replaced` always in the long form,
+/// in the short form only past 1.
+#[test]
+fn reads_answer_size_and_next_line_only_when_they_are_news() {
+    let (home, folder) = project();
+    let read = |path: &str, extra: &[(&str, SdkValue)]| {
+        let mut args = vec![p(), dev(), ("path", t(path))];
+        args.extend(extra.iter().cloned());
+        ok(&home, "file.read", &args)
+    };
+    write(&home, "/a.txt", t("one\ntwo\n"));
+    let text = read("/a.txt", &[]);
+    assert_eq!(text.get("size"), None, "{text:?}");
+    assert_eq!(read("/a.txt", &[detail()]).get_int("size"), Some(8));
+    write(&home, "/bin", SdkValue::Bytes(vec![0, 255, 1]));
+    let binary = read("/bin", &[]);
+    assert_eq!(binary.get_int("size"), Some(3), "{binary:?}");
+    // one line longer than a reply: cut, and no line after it
+    let long = "x".repeat(70_000);
+    write(&home, "/long.txt", t(&long));
+    let cut = read("/long.txt", &[]);
+    assert_eq!(
+        cut.get("line_truncated"),
+        Some(&SdkValue::Bool(true)),
+        "{:?}",
+        cut.get("next_line")
+    );
+    assert_eq!(cut.get("next_line"), None);
+    // a cut first line with a second after it: the second is next
+    write(&home, "/two.txt", t(&format!("{long}\nsecond\n")));
+    let first = read("/two.txt", &[]);
+    assert_eq!(
+        first.get_int("next_line"),
+        Some(2),
+        "{:?}",
+        first.get("next_line")
+    );
+    // file.edit: a plain edit replaced one, said only in the long form
+    let edit = |path: &str, extra: &[(&str, SdkValue)]| {
+        let mut args = vec![
+            p(),
+            dev(),
+            ("path", t(path)),
+            ("old_string", t("o")),
+            ("new_string", t("0")),
+        ];
+        args.extend(extra.iter().cloned());
+        ok(&home, "file.edit", &args)
+    };
+    write(&home, "/e.txt", t("one\n"));
+    let plain = edit("/e.txt", &[detail()]);
+    assert_eq!(plain.get_int("replaced"), Some(1), "{plain:?}");
+    write(&home, "/f.txt", t("one\n"));
+    let single = edit("/f.txt", &[("replace_all", SdkValue::Bool(true))]);
+    assert_eq!(single.get("replaced"), None, "{single:?}");
+    write(&home, "/g.txt", t("oo\n"));
+    let both = edit("/g.txt", &[("replace_all", SdkValue::Bool(true))]);
+    assert_eq!(both.get_int("replaced"), Some(2), "{both:?}");
+    std::fs::remove_dir_all(home).unwrap();
+    std::fs::remove_dir_all(folder).unwrap();
+}
+
+/// `--at` names a Commit only (conformance R2 F5): a Branch name or a
+/// prefix shorter than 8 is refused `InvalidInput`, on every read.
+#[test]
+fn at_names_a_commit_never_a_branch() {
+    let (home, folder) = project();
+    let made = write(&home, "/a.txt", t("a\n"));
+    let at = head(&made);
+    for name in ["file.read", "file.stat", "file.list", "file.blame"] {
+        let path = if name == "file.list" { "/" } else { "/a.txt" };
+        let args = |value: &str| vec![p(), dev(), ("path", t(path)), ("at", t(value))];
+        for bad in ["main", "dev", &at[..7]] {
+            let refusal = refused(&home, name, &args(bad));
+            assert_eq!(
+                layerfs_home::outcome::public_code(&refusal.code),
+                "InvalidInput",
+                "{name} --at {bad}: {refusal:?}"
+            );
+        }
+        ok(&home, name, &args(&at[..8]));
+        ok(&home, name, &args(&at));
+    }
+    for name in ["file.glob", "file.grep"] {
+        let pattern = if name == "file.glob" { "*.txt" } else { "a" };
+        let refusal = refused(
+            &home,
+            name,
+            &[p(), dev(), ("pattern", t(pattern)), ("at", t("main"))],
+        );
+        assert_eq!(
+            layerfs_home::outcome::public_code(&refusal.code),
+            "InvalidInput",
+            "{name}: {refusal:?}"
+        );
+    }
+    std::fs::remove_dir_all(home).unwrap();
+    std::fs::remove_dir_all(folder).unwrap();
+}

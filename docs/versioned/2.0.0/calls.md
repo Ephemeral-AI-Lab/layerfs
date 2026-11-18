@@ -544,12 +544,14 @@ Store calls: Linux only (elsewhere `Unsupported`).
 
 - **Reads** read the Branch's head, or `--at C`: a full Commit id or a
   prefix of 8 or more of its characters (a prefix more than one Commit
-  starts with is `InvalidInput` with `matches`, a count). Every long form
+  starts with is `InvalidInput` with `matches`, a count; a Branch name or
+  a shorter prefix is `InvalidInput`, never read as a Branch). Every long form
   names the Commit read as `commit` (its full 66-character id), its `root`
   and the `path`. `read` answers `text` (an empty file `""`), `next_line`
-  while lines are left and `line_truncated` when a long line was cut; a file
-  that is not text answers `binary: true` and its `size` instead of
-  `text`. `stat` answers `type` (`file`, `dir` or `symlink`), `size` and
+  while lines are left (none after a cut last line) and `line_truncated`
+  when a long line was cut; a file that is not text answers `binary: true`
+  and its `size` instead of `text` (the short form shows `size` only then;
+  the long form always). `stat` answers `type` (`file`, `dir` or `symlink`), `size` and
   `mode` as octal text (`"0644"`); the long form adds `inode` and
   `modified_at`. `blame` answers `ranges` (`{start, end, commit}`, runs of
   lines with one owner; a range without `commit` has none found) and
@@ -589,8 +591,9 @@ Store calls: Linux only (elsewhere `Unsupported`).
   folder `mkdir` makes gets its `mode`, missing parents `0755`.
 - `edit` without `--replace-all` needs exactly one occurrence: none is
   `NotFound`, more than one `InvalidInput` with `matches` and a `fix` that
-  adds `--replace-all`. With it, every occurrence is replaced and the answer
-  says how many as `replaced`. `rm` of a folder that is not empty needs
+  adds `--replace-all`. With it, every occurrence is replaced. The long
+  form says how many as `replaced` (1 for a plain edit); the short form
+  only when more than one. `rm` of a folder that is not empty needs
   `--recursive` (`InvalidInput` with a `fix` that adds it).
 - In the shell, `write` reads its content and `apply` its JSON from stdin,
   or from `--from <file>`.

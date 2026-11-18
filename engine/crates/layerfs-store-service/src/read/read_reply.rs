@@ -58,7 +58,18 @@ pub fn finish(mut fields: Vec<(String, SdkValue)>) -> args::Answer {
             SdkValue::Int(start + count - 1)
         },
     );
-    set(&mut fields, "nextLine", SdkValue::Int(start + count));
+    // a next line exists past what is shown in the window's text, or past
+    // the window itself; a cut last line has none after it
+    let rest = &text[end..];
+    let more = match partial {
+        true => rest.find('\n').is_some_and(|at| at + 1 < rest.len()),
+        false => !rest.is_empty(),
+    };
+    let next = match more || answer.get_int("nextLine").is_some() {
+        true => SdkValue::Int(start + count),
+        false => SdkValue::Null,
+    };
+    set(&mut fields, "nextLine", next);
     set(
         &mut fields,
         "lineTruncated",

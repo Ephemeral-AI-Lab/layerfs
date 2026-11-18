@@ -9,7 +9,8 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::file::{edit, FileEdit};
 
-/// A write's answer and, with `--replace-all`, how many were `replaced`.
+/// A write's answer and how many occurrences were `replaced`: always in the
+/// long form (1 for a plain edit), in the short form only past 1.
 const FORM: Form = Form::of(
     &["commit"],
     &[
@@ -33,7 +34,14 @@ const FORM: Form = Form::of(
         "message",
         "created_at",
     ],
-);
+)
+.short_when(&[("replaced", more_than_one)]);
+
+/// Whether more than one occurrence was replaced.
+fn more_than_one(fields: &[(String, SdkValue)]) -> bool {
+    (fields.iter())
+        .any(|(key, value)| key == "replaced" && matches!(value, SdkValue::Int(n) if *n > 1))
+}
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(

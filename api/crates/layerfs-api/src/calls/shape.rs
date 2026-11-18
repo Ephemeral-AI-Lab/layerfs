@@ -116,6 +116,15 @@ impl Shaping<'_> {
     /// One map by its form.
     fn map(&self, form: &Form, mut fields: Fields, level: Level) -> SdkValue {
         let top = level == Level::Top;
+        // the short keys a test of the whole map holds back, judged before
+        // any key is taken
+        let held: Vec<&str> = match self.detail {
+            true => Vec::new(),
+            false => (form.when.iter())
+                .filter(|(_, shows)| !shows(&fields))
+                .map(|(key, _)| *key)
+                .collect(),
+        };
         let mut out: Fields = Vec::new();
         for key in form.long {
             if *key == THING {
@@ -147,7 +156,7 @@ impl Shaping<'_> {
             let kept = self.detail
                 || match form.always.contains(key) {
                     true => value != SdkValue::Null,
-                    false => !empty(&value) && !usual(form, key, &value),
+                    false => !empty(&value) && !usual(form, key, &value) && !held.contains(key),
                 };
             if kept {
                 out.push(((*key).to_owned(), value));

@@ -176,10 +176,10 @@ pub fn edit(home: &Path, events: &mut Events<'_>, request: &FileEdit) -> Outcome
             false => on_main(refusal, &request.project),
         }
     })?;
-    // without --replace-all exactly one occurrence was replaced: no news
-    let replaced = match request.replace_all {
-        true => take(&value, "replaced"),
-        false => SdkValue::Null,
+    // without --replace-all exactly one occurrence was replaced
+    let replaced = match take(&value, "replaced") {
+        SdkValue::Null => SdkValue::Int(1),
+        counted => counted,
     };
     Ok(answer(&value, Some(replaced)))
 }

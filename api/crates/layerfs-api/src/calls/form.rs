@@ -4,6 +4,7 @@
 //! data; [`super::shape`] makes every answer from them, so a run function
 //! builds one full map and never two forms. An entry without a [`Form`] is
 //! not migrated yet: its result passes through as it is.
+use layerfs_bridge::control::SdkValue;
 
 /// The keys of one answer map: a call's top level, an item of its list, a
 /// section, or a node of a tree.
@@ -27,7 +28,15 @@ pub struct Form {
     /// it under its own word (a doctor's finding names a machine, a Store
     /// or a Workspace alike).
     pub things: &'static [&'static str],
+    /// The `sometimes` keys the short form shows only when a test of the
+    /// whole map says so: `file.read`'s `size` only beside `binary`. The
+    /// long form is not changed.
+    pub when: &'static [(&'static str, ShortWhen)],
 }
+
+/// Whether the short form shows a key, from the whole map the run function
+/// answered (its fields as given).
+pub type ShortWhen = fn(&[(String, SdkValue)]) -> bool;
 
 /// What a key with its own form holds.
 #[derive(Clone, Copy, Debug)]
@@ -52,7 +61,14 @@ impl Form {
             parts: &[],
             usual: &[],
             things: &[],
+            when: &[],
         }
+    }
+
+    /// This form, each of these `sometimes` keys shown in the short form
+    /// only when its test of the whole map holds ([`Form::when`]).
+    pub const fn short_when(self, when: &'static [(&'static str, ShortWhen)]) -> Form {
+        Form { when, ..self }
     }
 
     /// This form, its [`THING`] key held by one of `things`.
