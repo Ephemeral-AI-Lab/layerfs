@@ -14,20 +14,18 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// A list as answers show it.
-fn names(items: &[String]) -> SdkValue {
-    SdkValue::List(items.iter().map(SdkValue::text).collect())
-}
-
-fn count(items: &[String]) -> SdkValue {
-    SdkValue::Int(i64::try_from(items.len()).unwrap_or(i64::MAX))
+/// A list as answers show it: the first 20 names, and the count only when
+/// there were more.
+fn names(items: &[String]) -> (SdkValue, SdkValue) {
+    let names = items.iter().map(SdkValue::text).collect();
+    layerfs_home::helpers::shown(names, 0, false)
 }
 
 /// The machine as `machine.get` and each `machine.list` item show it:
 /// `platform`, `state` with its companion, `observed_at`, then what its
 /// record holds (`machine`, `backend`, `supports`, its size, images and
 /// settings, `message`, `created_at`) and what is on it (`stores`,
-/// `sandboxes`, each with its count).
+/// `sandboxes`, each with its count when cut).
 ///
 /// Without `seen`, the state is the record's ([`MachineRecord::recorded`])
 /// and `observed_at` its last live read's time, null before the first.
@@ -86,12 +84,13 @@ pub(super) fn summary(
     for key in SETTINGS {
         fields.push((key, of(key).unwrap_or_default()));
     }
+    let (stores, sandboxes) = (names(&stores), names(&sandboxes));
     fields.extend([
         ("message", SdkValue::opt_text(message)),
-        ("stores", names(&stores)),
-        ("stores_count", count(&stores)),
-        ("sandboxes", names(&sandboxes)),
-        ("sandboxes_count", count(&sandboxes)),
+        ("stores", stores.0),
+        ("stores_count", stores.1),
+        ("sandboxes", sandboxes.0),
+        ("sandboxes_count", sandboxes.1),
         ("created_at", of("created_at").unwrap_or_default()),
     ]);
     Ok(SdkValue::Map(

@@ -106,7 +106,7 @@ fn a_login_is_saved_privately_listed_without_its_password_and_removed_when_unuse
     let listed = ok(&home, "store.auths", &[]);
     assert_eq!(
         layerfs_api::json::print(&listed),
-        r#"{"items":[{"auth":"pg-app","user":"app","stores":["shop"],"stores_count":1}]}"#
+        r#"{"items":[{"auth":"pg-app","user":"app","stores":["shop"]}]}"#
     );
     let long = ok(&home, "store.auths", &[("detail", SdkValue::Bool(true))]);
     let item = &match long.get("items") {

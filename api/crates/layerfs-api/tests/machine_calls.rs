@@ -199,7 +199,8 @@ fn machines_over_records() {
     assert_eq!(code, "InUse", "{message}");
     let got = call(&home, "machine.get", &[("machine", t("box"))]).unwrap();
     assert_eq!(got.get("stores"), Some(&SdkValue::List(vec![t("shop")])));
-    assert_eq!(got.get("stores_count"), Some(&SdkValue::Int(1)));
+    // a list's count only beside a cut list (more than 20)
+    assert_eq!(got.get("stores_count"), Some(&SdkValue::Null));
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(empty);
 }

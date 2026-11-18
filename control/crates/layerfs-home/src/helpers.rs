@@ -1,6 +1,7 @@
 //! General helpers every entity uses (moved from `sandbox/registry.rs`,
 //! layerfs-project#103): the lock of a process table, a required text
-//! argument and fresh random bytes.
+//! argument, fresh random bytes, and an answer's list with its
+//! `<list>_count` companion.
 use crate::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::sync::{Mutex, MutexGuard};
@@ -33,4 +34,24 @@ pub fn random() -> Result<[u8; 32], SdkRefusal> {
     layerfs_bridge::duplex::generate_keypair()
         .map(|pair| pair.public)
         .map_err(failed)
+}
+
+/// The entries an answer's list holds (call surface 2.0 SCHEMA): a list
+/// keeps its first `SHOWN`.
+pub const SHOWN: usize = 20;
+
+/// `items` as an answer's list and its `<list>_count` companion: the first
+/// [`SHOWN`] entries, and the count only when the list was cut (SCHEMA:
+/// "`<list>_count` only beside a cut list"), else null. `total` is how many
+/// there are when the source knows more than `items` holds (at least
+/// `items.len()` is used); `cut` says the source itself left some out
+/// without knowing how many, so the count is then what is known.
+pub fn shown(mut items: Vec<SdkValue>, total: usize, cut: bool) -> (SdkValue, SdkValue) {
+    let total = total.max(items.len());
+    items.truncate(SHOWN);
+    let count = match total > items.len() || cut {
+        true => SdkValue::Int(i64::try_from(total).unwrap_or(i64::MAX)),
+        false => SdkValue::Null,
+    };
+    (SdkValue::List(items), count)
 }

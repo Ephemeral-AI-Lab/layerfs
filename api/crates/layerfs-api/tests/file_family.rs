@@ -198,6 +198,22 @@ fn writes_guard_the_head_and_edit_rm_mkdir_and_apply_take_their_new_options() {
     let (home, folder) = project();
     let made = write(&home, "/a.txt", t("x x x\n"));
     let at = head(&made);
+    // nothing was overwritten: the short form is the Commit alone, and the
+    // long form's count is null, set only beside a cut list (R2 F1)
+    assert_eq!(made, SdkValue::map([("commit", t(&at))]), "{made:?}");
+    let long = ok(
+        &home,
+        "file.write",
+        &[
+            p(),
+            dev(),
+            ("path", t("/d.txt")),
+            ("content", t("d")),
+            detail(),
+        ],
+    );
+    assert_eq!(long.get("overwritten"), Some(&SdkValue::List(Vec::new())));
+    assert_eq!(long.get("overwritten_count"), Some(&SdkValue::Null));
     // a stale `--expected` is refused `Conflict` naming the head
     write(&home, "/b.txt", t("b\n"));
     let stale = refused(
@@ -451,6 +467,58 @@ fn cursors_carry_their_filters_and_the_commit_their_first_page_read() {
         ],
     );
     assert_eq!(items(&rest)[0].get_text("change"), Some("added"));
+    std::fs::remove_dir_all(home).unwrap();
+    std::fs::remove_dir_all(folder).unwrap();
+}
+
+/// A list's `_count` companion is set only when the list was cut at 20
+/// (conformance R1 F2): a merge that overwrote nothing answers its Commit
+/// alone, and its long form and `commit.get`'s carry null counts.
+#[test]
+fn a_merge_answers_counts_only_beside_cut_lists() {
+    let (home, folder) = project();
+    ok(
+        &home,
+        "branch.fork",
+        &[p(), ("name", t("agent")), ("from", t("dev"))],
+    );
+    write(&home, "/x.txt", t("x\n"));
+    ok(
+        &home,
+        "file.write",
+        &[
+            p(),
+            ("branch", t("agent")),
+            ("path", t("/y.txt")),
+            ("content", t("y\n")),
+        ],
+    );
+    let merged = ok(&home, "branch.merge", &[p(), dev(), ("from", t("agent"))]);
+    let commit = head(&merged);
+    assert_eq!(
+        merged,
+        SdkValue::map([("commit", t(&commit))]),
+        "{merged:?}"
+    );
+    let again = ok(
+        &home,
+        "branch.merge",
+        &[p(), dev(), ("from", t("agent")), detail()],
+    );
+    assert_eq!(again.get_text("outcome"), Some("unchanged"), "{again:?}");
+    for key in ["overwritten_count", "units_count"] {
+        assert_eq!(again.get(key), Some(&SdkValue::Null), "{key}: {again:?}");
+    }
+    let got = ok(
+        &home,
+        "commit.get",
+        &[p(), ("commit", t(&commit)), detail()],
+    );
+    assert_eq!(
+        got.get("overwritten_count"),
+        Some(&SdkValue::Null),
+        "{got:?}"
+    );
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(folder).unwrap();
 }

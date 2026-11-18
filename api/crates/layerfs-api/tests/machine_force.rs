@@ -105,9 +105,10 @@ esac
     )
     .unwrap();
     assert_eq!(stopped.get_text("outcome"), Some("stopped"));
+    // a list's count only beside a cut list (more than 20)
     assert_eq!(
         stopped.get("stopped_sandboxes_count"),
-        Some(&SdkValue::Int(2))
+        Some(&SdkValue::Null)
     );
     assert!(stopped.get_bool("forced"));
     assert_eq!(

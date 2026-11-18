@@ -23,9 +23,6 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// The one schema a 2.0 PostgreSQL Store lives in.
 pub const SCHEMA: &str = "layerfs";
 
-/// How many project names an answer shows.
-const SHOWN: usize = 20;
-
 /// What a call on Store `record` dials: its URL with its saved login.
 pub fn selection(record: &StoreRecord) -> Result<PgSelection> {
     Ok(selection_at(record, url(record)?))
@@ -208,14 +205,13 @@ pub fn connections(record: &StoreRecord) -> SdkValue {
 }
 
 /// `store.connect`'s answer for `record`: `outcome` (`connected` or
-/// `updated`), the projects found on a first connect (the first 20 names
-/// and the count), the login, the addresses and the setting.
+/// `updated`), the projects found on a first connect (the first 20 names,
+/// and the count only when there were more), the login, the addresses and the setting.
 pub fn answer(record: &StoreRecord, outcome: &str, projects: Option<&[String]>) -> SdkValue {
     let (names, count) = match projects {
-        Some(found) => (
-            SdkValue::List(found.iter().take(SHOWN).map(SdkValue::text).collect()),
-            SdkValue::Int(found.len() as i64),
-        ),
+        Some(found) => {
+            layerfs_home::helpers::shown(found.iter().map(SdkValue::text).collect(), 0, false)
+        }
         None => (SdkValue::Null, SdkValue::Null),
     };
     let text = |key: &str| record.text(key).map_or(SdkValue::Null, SdkValue::text);

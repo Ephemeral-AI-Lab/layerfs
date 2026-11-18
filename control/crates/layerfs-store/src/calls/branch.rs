@@ -5,6 +5,7 @@ use super::op::{next_fields, on_project, Names, StoreOp};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::cursor;
 use layerfs_home::events::Events;
+use layerfs_home::helpers::shown;
 use layerfs_home::outcome::{refused, Outcome};
 use std::path::Path;
 
@@ -217,20 +218,11 @@ pub fn fork(home: &Path, events: &mut Events<'_>, request: &BranchFork) -> Outco
     ]))
 }
 
-/// The paths of a list of `{ path, … }` rows.
-fn paths(value: Option<&SdkValue>) -> SdkValue {
-    let rows = match value {
-        Some(SdkValue::List(rows)) => rows.as_slice(),
-        _ => &[],
-    };
-    let path = |row: &SdkValue| row.get("path").cloned().unwrap_or_default();
-    SdkValue::List(rows.iter().map(path).collect())
-}
-
-fn count(value: &SdkValue) -> SdkValue {
+/// The rows of a list, or none.
+fn rows(value: Option<&SdkValue>) -> Vec<SdkValue> {
     match value {
-        SdkValue::List(items) => SdkValue::Int(items.len() as i64),
-        _ => SdkValue::Int(0),
+        Some(SdkValue::List(rows)) => rows.clone(),
+        _ => Vec::new(),
     }
 }
 
@@ -252,13 +244,20 @@ pub fn merge(home: &Path, events: &mut Events<'_>, request: &BranchMerge) -> Out
         (false, true) => "fast_forward",
         (false, false) => "merged",
     };
-    let overwritten = paths(value.get("lww"));
-    let units = take("units");
+    let path = |row: SdkValue| row.get("path").cloned().unwrap_or_default();
+    let paths = rows(value.get("lww")).into_iter().map(path).collect();
+    // each list keeps its first 20; its count only when it was cut
+    let (overwritten, overwritten_count) = shown(paths, 0, value.get_bool("lwwTruncated"));
+    let (units, units_count) = shown(
+        rows(value.get("units")),
+        0,
+        value.get_bool("unitsTruncated"),
+    );
     Ok(SdkValue::map([
         ("commit", take("commit")),
         ("unchanged", SdkValue::Bool(unchanged)),
         ("fast_forward", SdkValue::Bool(fast_forward)),
-        ("overwritten_count", count(&overwritten)),
+        ("overwritten_count", overwritten_count),
         ("overwritten", overwritten),
         ("outcome", SdkValue::text(outcome)),
         ("branch", take("branch")),
@@ -266,7 +265,7 @@ pub fn merge(home: &Path, events: &mut Events<'_>, request: &BranchMerge) -> Out
         ("second_parent", source(1)),
         ("merge_base", take("mergeBase")),
         ("root", take("root")),
-        ("units_count", count(&units)),
+        ("units_count", units_count),
         ("units", units),
     ]))
 }

@@ -106,6 +106,10 @@ does not.
   sections its row lists; another name is refused `InvalidInput`, naming the
   ones it takes (in the shell it is a wrong command line, exit 2). A section is in both forms, and only when asked for.
   Python spells the option `with_`, because `with` is a keyword.
+- **Counts.** A list inside an answer (`overwritten`, `projects`,
+  `stores`) holds its first 20 entries; its `<list>_count` is set only when
+  the list was cut, else it is left out of the short form and null in the
+  long form.
 - **Lists.** A list call answers `{ items, next_cursor }`: `next_cursor` is
   left out of the short form on the last page and null in the long form.
   Pass it back as `cursor`. It carries the filters of the call that made it:
@@ -432,7 +436,8 @@ publication answers as a Commit. Every id in an answer is the full id.
   into it without `--into` is `InvalidInput`. A conflict changes nothing and
   is `Conflict` with the conflicts in its detail. Short: `{ commit }`, with
   `unchanged`, `fast_forward`, `overwritten` (the paths one side's later
-  write took) and `overwritten_count` when they are set; long:
+  write took, the first 20) when they are set and `overwritten_count` only
+  past those; long:
   `commit, unchanged, fast_forward, overwritten, overwritten_count, outcome
   ("merged", "fast_forward" or "unchanged"), branch, parent, second_parent,
   merge_base, root, units, units_count`.
@@ -481,7 +486,8 @@ publication answers as a Commit. Every id in an answer is the full id.
   `B`'s history. Short: `{ branch, parent, message }`, each when it is set.
   The long form has the list row's keys (no `message_truncated`) and
   `displaced`, `overwritten` (the paths a merge took from the side with the
-  later write, cut at 4 KiB), `overwritten_count` and `units`.
+  later write, the first 20), `overwritten_count` (only when that list was
+  cut) and `units`.
 - **`diff`** compares `from` to `ref`. Without `--from` the side compared
   from is a Branch's fork point, a Commit's parent, the base of a Branch's
   first Commit, and for `main`'s first publication the empty tree (every
@@ -916,7 +922,8 @@ positional `machine`, except `create`, which takes `name` and `platform`.
 - **Item and long keys.** A `list` row and the `get` answer have `machine,
   platform, state, op, reason, fix, observed_at, backend, supports, cpus,
   memory_bytes, disk_bytes, image, os_image, docker, wsl, daemon, message,
-  stores, stores_count, sandboxes, sandboxes_count, created_at` (`get` puts
+  stores, stores_count, sandboxes, sandboxes_count, created_at` (each list
+  the first 20 names, its count only past those; `get` puts
   `platform` and `state` first). `supports` is a list of words: `sqlite`,
   `postgresql_sandbox`, and `log` when the machine has a worker whose log
   can be read.
@@ -993,7 +1000,7 @@ $ layerfs machine list
 $ layerfs machine get docker --with live
 {"platform":"docker","state":"stopped","observed_at":"2026-11-18T15:34:11Z","live":{"tool_version":"29.5.2"}}
 $ layerfs machine get native --detail --with live
-{"platform":"native","state":"ready","op":null,"reason":null,"fix":null,"observed_at":null,"machine":"native","backend":"native","supports":["sqlite","postgresql_sandbox"],"cpus":null,"memory_bytes":null,"disk_bytes":null,"image":null,"os_image":null,"docker":null,"wsl":null,"daemon":null,"message":null,"stores":["shop"],"stores_count":1,"sandboxes":[],"sandboxes_count":0,"created_at":"2026-11-18T15:34:11Z","live":{"disk_free_bytes":null,"tool_version":null,"worker":null}}
+{"platform":"native","state":"ready","op":null,"reason":null,"fix":null,"observed_at":null,"machine":"native","backend":"native","supports":["sqlite","postgresql_sandbox"],"cpus":null,"memory_bytes":null,"disk_bytes":null,"image":null,"os_image":null,"docker":null,"wsl":null,"daemon":null,"message":null,"stores":["shop"],"stores_count":null,"sandboxes":[],"sandboxes_count":null,"created_at":"2026-11-18T15:34:11Z","live":{"disk_free_bytes":null,"tool_version":null,"worker":null}}
 $ layerfs machine start native
 {"unchanged":true}
 $ layerfs machine stats native
@@ -1042,8 +1049,8 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   port, database and TLS settings, and one naming a user or holding a
   password is refused `InvalidInput`. The login goes into the URL only
   when the Store is dialled. `auths` answers `{ items }`, short `{ auth,
-  user }` with `stores` (at most 20) and `stores_count` when used, else
-  `stores_count: 0`; long
+  user }` with `stores` (at most 20) when used, and `stores_count` only
+  past 20; long
   adds `created_at, updated_at`. `remove_auth` is refused `InUse` (with
   `stores`) while a Store uses the login, `NotFound` when there is none;
   long `ok, outcome: "removed", auth`.
@@ -1051,8 +1058,9 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   `synchronous_commit` defaults to `local`. It creates the LayerFS schema
   in an empty database or reads the Store's id from it (refused `Exists`
   when another Store of this home has that id or name). Short
-  `{ projects, projects_count }` (`projects_count` alone for an empty
-  database; `{"ok":true}` when only an address changed); long `ok,
+  `{ projects }` (the first 20 names, with `projects_count` only past
+  those; `{"ok":true}` for an empty database or when only an address
+  changed); long `ok,
   projects, projects_count, outcome (connected or updated), store, engine,
   auth, connections, synchronous_commit`. On a connected Store `connect`
   checks the new address against the same Store's id and takes no `--auth`
@@ -1089,7 +1097,7 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   `connections` (the Store's own address, with no `machine`, then each
   machine's own; never a password) and `synchronous_commit`; the other
   engine's keys are null. `projects` shows at most 20 names;
-  `projects_count` counts them all. A `backups` row's long form is
+  `projects_count` counts them all, only when there are more. A `backups` row's long form is
   `bucket, file, sha256, heads_sha256, last, attempt`: `last` the last
   transfer that worked (`{ call, ended_at, size }`), `attempt` the last one
   that did not (`{ call, ended_at, error }`). `auth` is a PostgreSQL
@@ -1155,13 +1163,13 @@ Run (macOS, native; the outputs are this build's):
 $ layerfs store create shop
 {"ok":true}
 $ layerfs store list
-{"items":[{"store":"shop","engine":"sqlite","machine":"native","projects_count":0}]}
+{"items":[{"store":"shop","engine":"sqlite","machine":"native"}]}
 $ layerfs store get shop
-{"engine":"sqlite","state":"ready","machine":"native","projects_count":0}
+{"engine":"sqlite","state":"ready","machine":"native"}
 $ layerfs store get shop --with live --detail
-{"engine":"sqlite","state":"ready","machine":"native","auth":null,"connections":null,"projects":[],"projects_count":0,"backups":[],"op":null,"blocked_by":null,"reason":null,"fix":null,"observed_at":"2026-11-18T15:35:10Z","store":"shop","profile":"disposable","synchronous_commit":null,"sqlite_version":"3.53.2","created_at":"2026-11-18T15:35:10Z","last_transfer":null,"live":{"holders":[],"phases":null,"behind":[],"server_version":null,"latency_ms":null}}
+{"engine":"sqlite","state":"ready","machine":"native","auth":null,"connections":null,"projects":[],"projects_count":null,"backups":[],"op":null,"blocked_by":null,"reason":null,"fix":null,"observed_at":"2026-11-18T15:35:10Z","store":"shop","profile":"disposable","synchronous_commit":null,"sqlite_version":"3.53.2","created_at":"2026-11-18T15:35:10Z","last_transfer":null,"live":{"holders":[],"phases":null,"behind":[],"server_version":null,"latency_ms":null}}
 $ layerfs store list --with stats
-{"items":[{"store":"shop","engine":"sqlite","machine":"native","projects_count":0,"observed_at":"2026-11-18T15:35:10Z","size":270336}]}
+{"items":[{"store":"shop","engine":"sqlite","machine":"native","observed_at":"2026-11-18T15:35:10Z","size":270336}]}
 $ layerfs store compact shop
 {"freed_bytes":0}
 $ layerfs store move shop native
@@ -1173,13 +1181,13 @@ outputs):
 
 ```console
 $ printf '%s' "$PG_PASSWORD" | layerfs store save-auth pg-app --user postgres --password-stdin --detail
-{"ok":true,"outcome":"saved","auth":"pg-app","user":"postgres","stores":[],"stores_count":0}
+{"ok":true,"outcome":"saved","auth":"pg-app","user":"postgres","stores":[],"stores_count":null}
 $ layerfs store connect shop-pg 'postgresql://127.0.0.1:55231/shop?sslmode=disable' --auth pg-app --detail
-{"ok":true,"projects":[],"projects_count":0,"outcome":"connected","store":"shop-pg","engine":"postgresql","auth":"pg-app","connections":[{"machine":null,"url":"postgresql://127.0.0.1:55231/shop?sslmode=disable"}],"synchronous_commit":"local"}
+{"ok":true,"projects":[],"projects_count":null,"outcome":"connected","store":"shop-pg","engine":"postgresql","auth":"pg-app","connections":[{"machine":null,"url":"postgresql://127.0.0.1:55231/shop?sslmode=disable"}],"synchronous_commit":"local"}
 $ layerfs store auths
-{"items":[{"auth":"pg-app","user":"postgres","stores":["shop-pg"],"stores_count":1}]}
+{"items":[{"auth":"pg-app","user":"postgres","stores":["shop-pg"]}]}
 $ layerfs store get shop-pg
-{"engine":"postgresql","state":"ready","auth":"pg-app","connections":[{"url":"postgresql://127.0.0.1:55231/shop?sslmode=disable"}],"projects_count":0}
+{"engine":"postgresql","state":"ready","auth":"pg-app","connections":[{"url":"postgresql://127.0.0.1:55231/shop?sslmode=disable"}]}
 $ layerfs store connect shop-pg 'postgresql://postgres:pw@127.0.0.1:55231/shop'
 {"error":"InvalidInput","message":"the URL names a user or holds a password; give the address alone and the login with --auth (`layerfs store save-auth` saves one)"}
 $ layerfs store update shop-pg --synchronous-commit off --detail

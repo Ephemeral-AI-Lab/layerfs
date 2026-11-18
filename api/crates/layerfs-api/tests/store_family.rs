@@ -138,7 +138,7 @@ fn create_list_and_get() {
     let short = call(&home, "store.list", &[]).unwrap();
     assert_eq!(
         layerfs_api::json::print(&short),
-        r#"{"items":[{"store":"shop","engine":"sqlite","machine":"native","projects_count":0}]}"#
+        r#"{"items":[{"store":"shop","engine":"sqlite","machine":"native"}]}"#
     );
     let list = detail(&home, "store.list", &[]).unwrap();
     let SdkValue::List(items) = list.get("items").unwrap() else {
@@ -157,7 +157,7 @@ fn create_list_and_get() {
     let got = call(&home, "store.get", &[("store", t("shop"))]).unwrap();
     assert_eq!(
         layerfs_api::json::print(&got),
-        r#"{"engine":"sqlite","state":"ready","machine":"native","projects_count":0}"#
+        r#"{"engine":"sqlite","state":"ready","machine":"native"}"#
     );
     // a live read finds the file and nobody holding it, and notes when
     let live = detail(
