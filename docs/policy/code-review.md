@@ -210,6 +210,37 @@ PRs are squash-merged. The author writes the squash commit's message,
 including its `Production LOC:` line computed against the base branch's head
 at merge time.
 
+Whoever merges a PR deletes its head branch on GitHub in the same step,
+unless another open PR uses that branch as its base: retarget those PRs
+first, then delete it. Push follow-up work to a new branch, not to a merged
+one. Deleting a GitHub branch does not touch anyone's local branch or
+worktree; each owner removes their own.
+
+### Removing branches
+
+The release branches `main` and `layerfs_v2_0_0` are never deleted. Any
+other branch on GitHub counts as **merged** when one of these holds:
+
+- its tip is an ancestor of a release branch;
+- it is the head of a merged PR and its tip is the commit that PR merged
+  (squash merges leave no ancestry);
+- every one of its commits is patch-equivalent to a commit already in a
+  release branch (`git cherry <release> <branch>` prints no `+` line).
+
+Anyone may delete a merged branch without asking. Delete with the tip you
+checked as a lease, so a branch pushed to since then is refused rather than
+lost:
+
+```bash
+git push origin --force-with-lease=refs/heads/<branch>:<sha> :refs/heads/<branch>
+```
+
+A branch with any commit outside the release branches is not merged, even
+if its PR was closed or it was pushed to after its PR merged. Keep it, and
+keep any branch that is the base of an open PR; only its owner deletes it.
+Record the name and tip of each branch deleted in a sweep (in the PR or
+issue that did it), so one can be restored from its tip if needed.
+
 ## Issue priority
 
 An issue's priority comes from **impact first** (severity), then exposure
