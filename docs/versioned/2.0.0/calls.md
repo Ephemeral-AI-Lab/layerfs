@@ -129,13 +129,13 @@ path is shortened):
 $ layerfs home get
 {"home":"/tmp/home1","state":"broken","version":"2.0.0","reason":"missing","fix":"layerfs home init"}
 $ layerfs home init
-{"home":"/tmp/home1","created":true,"converted":false,"layout":3}
+{"home":"/tmp/home1"}
 $ layerfs home get
 {"home":"/tmp/home1","state":"ready","version":"2.0.0","generation":2}
 $ layerfs store create shop
 {"name":"shop","kind":"sqlite","machine":"native","profile":"disposable","created":1795008741370,"sqlite":"3.53.2","projects":[]}
 $ layerfs home get --with tree
-{"home":"/tmp/home1","state":"ready","version":"2.0.0","generation":4,"tree":{"machines":[{"machine":"docker","state":"stopped"},{"machine":"native","stores":[{"store":"shop"}]}],"stores":[],"buckets":[]}}
+{"home":"/tmp/home1","state":"ready","version":"2.0.0","generation":4,"tree":{"machines":[{"machine":"docker","platform":"docker","state":"stopped"},{"machine":"native","platform":"native","stores":[{"store":"shop","engine":"sqlite"}]}],"stores":[],"buckets":[]}}
 $ layerfs home get --with live
 {"error":"InvalidInput","message":"home.get: `with` names `live`; this call takes platforms, tree"}
 ```
@@ -144,7 +144,7 @@ $ layerfs home get --with live
 
 `[x]` is an optional positional. Every family's results are snake_case.
 
-### `home` (4)
+### `home` (7)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -152,12 +152,18 @@ $ layerfs home get --with live
 | `get` | — | `--with platforms,tree` | the home's state and build; with `--with`, the platforms this computer supports or the tree of everything in the home |
 | `log` | — | `call`, `project`, `client`, `tag`, `outcome`, `since`, `limit`, `cursor` | the calls made against this home, newest first |
 | `clear_log` | — | — | clears this home's call log |
+| `doctor` | — | — | checks the home, then each machine, PostgreSQL Store and bucket, shallowly ([the doctors](#the-doctors)) |
+| `leftovers` | — | `machine` | what earlier runs left behind on this computer and on each running machine |
+| `prune` | `leftover` | — | removes one leftover that `leftovers` listed |
 
-- `init` and `get` are not opened by the dispatcher: `init` opens or
-  creates the home itself, and `get` never opens it. `get`, `log` and
-  `clear_log` write no line to the call log, and all four are `admin` in the
-  MCP server. `init` is not migrated: it returns
-  `{ home, created, converted, layout }`.
+- `init`, `get`, `doctor` and `leftovers` are not opened by the
+  dispatcher: `init` opens or creates the home itself, and the others never
+  open it. `get`, `log` and `clear_log` write no line to the call log, and
+  all seven are `admin` in the MCP server.
+- **`init`**, short: `{ home }`, with `unchanged: true` when the home was
+  already current or `converted: true` when it was an older layout. Long:
+  `home, unchanged, converted, outcome, layout, version`: `outcome` is
+  `created`, `converted` or `unchanged`, and `version` is this build's.
 - **`get`**, short: `{ home, state, version }`, with `generation` when the
   home is ready, and `reason` and `fix` when it is broken (`missing`: no
   home there; `outdated`: an older layout; both fixed by
@@ -175,8 +181,10 @@ $ layerfs home get --with live
   doctor's to say.
 - `generation` is a counter that moves each time a record of the home is
   written or removed (a machine, Store, project, bucket, Sandbox or
-  Workspace record) and never for a read: a caller that kept a tree reads it
-  again only when the number differs.
+  Workspace record, a saved login) and never for a read, an observation
+  file (`observed_at`) or a command's own records: a caller that kept a
+  tree reads it again only when the number differs. Every entity record
+  write moves it once, in the one function that writes records.
 - **`get --with platforms`** adds `platforms: { host, items }`: `host` is
   this computer's system and `items` one row per platform this build knows.
   A row's short form is `{ platform, ready }`, with `missing` when something
@@ -187,15 +195,21 @@ $ layerfs home get --with live
 - **`get --with tree`** adds `tree: { machines, stores, buckets }`, read
   from the home's records only: each machine with its sqlite `stores` and
   its `sandboxes`, the PostgreSQL Stores (which live on no machine) and the
-  buckets. A node's short form is its name, and its state only when it is
-  not `ready`; a Store adds `projects` and, when it is not sqlite,
-  `engine`; a Sandbox adds `workspaces`, each `{ workspace, branch }`. The
-  long forms are: machine `machine, platform, cpus, memory_bytes, state, op,
-  reason, fix, stores, sandboxes`; Store `store, engine, state, op,
-  blocked_by, reason, fix, projects, connections` (`connections`: the
-  machines a PostgreSQL Store is connected from); Sandbox `sandbox,
-  project, image, state, op, blocked_by, reason, fix, workspaces`; bucket
-  `bucket, provider`. A Store or Sandbox whose machine is stopped, busy or
+  buckets. A node's short form is what names it (machine `machine,
+  platform`; Store `store, engine`; Sandbox `sandbox, project`; bucket
+  `bucket, provider`), then what is news: its state only when it is not
+  `ready`, a machine's `cpus` and `memory_bytes`, a Store's `projects` and
+  `connections`, a Sandbox's `image`, `workspaces` (each `{ workspace,
+  branch }`) and `workspaces_not_listed`. The long forms are: machine
+  `machine, platform, cpus, memory_bytes, state, op, reason, fix, stores,
+  sandboxes`; Store `store, engine, projects, connections, state, op,
+  blocked_by, reason, fix`; Sandbox `sandbox, project, image, workspaces,
+  workspaces_not_listed, state, op, blocked_by, reason, fix`; bucket
+  `bucket, provider`. A PostgreSQL Store's `connections` are `{ machine,
+  url }`: the home's own address first (`machine` null), then each machine
+  that has its own; a sqlite Store's are null. A Workspace is in the home's
+  records only on `native` and for a Sandbox reached directly: any other
+  Sandbox answers `workspaces` null and `workspaces_not_listed: true`. A Store or Sandbox whose machine is stopped, busy or
   broken is `blocked`, and `blocked_by` names that machine. A machine that
   only a Store or Sandbox names, with no record of its own, is listed too
   (`broken`, `missing`, unless it is `native` or `docker`), so nothing in the
@@ -217,8 +231,44 @@ $ layerfs home get --with live
   its byte count, never its value.
 - **`clear_log`** truncates the call log in place and removes the rotated
   file. Short: `{"ok":true}`; long: `{ ok, outcome: "cleared", line_count }`.
-- `home.log` and `home.clear_log` were `logs.list` and `logs.reset`; the old
-  names are gone, with no alias. A row's `at`, `ms`, `lines`, `has_more`
+- **`leftovers`** lists what interrupted operations left: one bounded walk
+  of the home's own folders on `native` (20,000 entries or 2 s), and one
+  through the worker of each running machine; `--machine M` walks one.
+  Nothing is started: a machine that is stopped, held by an operation or
+  does not answer is named in `not_listed` (`{ machine, message }` with
+  `blocked_by`, the thing at the root and its state, or `reason`:
+  `timeout`, `busy` or `refused`), and so is one whose walk stopped at its
+  bound (`timeout`; what it found is listed). An item's short form is
+  `{ leftover, modified_at }`, with `size` (null when the bound ended the
+  walk before it was measured) and `report_only`; its long form adds
+  `removable_at`, `kind`, `machine` and `path`. `leftover` is its id,
+  `<machine>:<kind>:<name>` (never a path), the kind in snake_case:
+  `run_folder`, `empty_root`, `init_copy`, `backup_staging`, `image_tmp`,
+  `image_part`. An image's lock file and a Workspace's unmount marker are
+  LayerFS's own and never listed. A home that is not current has none; a
+  machine the home does not know is `NotFound`.
+- **`prune <leftover>`** removes the one leftover whose id it is given,
+  once, on that machine, under that kind's guard. Short: `{ freed_bytes }`,
+  or `{"ok":true}` when the size was not measured; long: `ok, freed_bytes,
+  outcome ("removed"), leftover, kind, machine, path`.
+
+  | Kind | Removed when (else `InUse`, nothing removed) |
+  | --- | --- |
+  | `run_folder` | no Sandbox record names it, its `owner` marker is there and older than a minute, no daemon of it runs and nothing is mounted at or under it or its `.root` |
+  | `empty_root` | its run folder is gone and it is not a mount point; `rmdir` only |
+  | `init_copy` | a line of `log/uncertain.jsonl` names the machine and the copy, and its deadline (when the lost request went out, plus the Init's `timeoutMs`) passed more than an hour ago (`removable_at`); a copy no line names is `report_only` and refused `InvalidInput` |
+  | `backup_staging` | no `backup create` of that Store is running (its `backup.lock` is taken for the removal) |
+  | `image_tmp` | no unpack of that image is running (its lock is taken; the lock file stays) |
+  | `image_part` | it has not been written for an hour |
+
+  Other refusals: `NotFound` (no leftover has that id now), `Unavailable`
+  (the machine is stopped) and `Unknown` (the worker's answer was lost;
+  nothing is sent again).
+- `home.log` and `home.clear_log` were `logs.list` and `logs.reset`, and
+  `home.prune` was `doctor.fix` (the `doctor` family is gone); the old
+  names are gone, with no alias. A leftover's `id`, `bytes`, `age`,
+  `fixable` and `not_before` became `leftover`, `size`, `modified_at`,
+  `report_only` and `removable_at`, and its kinds lost their hyphens. A row's `at`, `ms`, `lines`, `has_more`
   and `next` became `logged_at`, `duration_ms`, `items` and `next_cursor`.
   The home's layout and settings are in [the home](home.md).
 
@@ -666,83 +716,92 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 - Not run for this manual. See
   [limitations](limitations.md#not-built-refused-as-unsupported).
 
-### `workspace` (6)
+### `workspace` (7)
 
-A Workspace is `<sandbox>:<path>`, or `<sandbox>:<name>` when its mount
-named it, answered as `ws` by `mount`. Every `workspace` call takes either
-form.
+A Workspace is `<sandbox>:<name>`, the handle `mount` answers as
+`workspace`; every other `workspace` call takes it. The path form of the
+handle is gone: `<sandbox>:/path` is refused `InvalidInput`.
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `mount` | `sandbox`, `branch` | `name` | mounts a side Branch in a Sandbox; `main` is refused `InvalidInput` (fork a Branch from it) |
-| `exec` | `ws`, `command` | `message`, `stream`, `stdout`, `stderr`, `exec_id`, `on_progress` | runs one bash command in a Workspace |
-| `exec_cancel` | `ws`, `exec_id` | `grace_ms` | ends a running command: SIGTERM, then SIGKILL after `grace_ms` |
-| `commit` | `ws` | `message`, `force` | commits a Workspace's changes to its Branch |
-| `unmount` | `ws` | `discard`, `force` | ends a Workspace |
-| `status` | `ws` | — | a Workspace's changes since its base (O14) |
+| `list` | — | `sandbox`, `limit`, `cursor` | every mounted Workspace, or one Sandbox's (agent profile) |
+| `mount` | `sandbox`, `branch` | `name` | mounts a Branch in a Sandbox |
+| `exec` | `workspace`, `command` | `cwd`, `env` (repeat), `stdin`, `stream`, `stdout`, `stderr`, `on_progress` | runs one bash command in a Workspace |
+| `cancel` | `workspace` | `exec` | ends the commands running in a Workspace, or one of them |
+| `commit` | `workspace` | `message` (`-m`), `expected`, `force` | commits a Workspace's changes to its Branch |
+| `unmount` | `workspace` | `discard`, `force` | ends a Workspace |
+| `status` | `workspace` | `path` | a Workspace's uncommitted changes, and whether its Branch moved |
 
-- `mount` with `name` names the Workspace (a name, as for Sandboxes);
-  `ws` is then `<sandbox>:<name>`. A name is unique within its Sandbox: one
-  in use is `Exists`. It is free again once that Workspace is unmounted.
-  `mount` answers `name` (or `null`) beside `path`. A name no mounted
-  Workspace carries is `NotMounted`.
-- `exec` answers `kind` (`exit:<code>`), `exit_code`, `stdout`, `stderr`,
-  `message`, `truncated`, `exec_id` and `stop` (`cgroup` on Linux kernels,
-  the docker machine included; `group`, the command's own process group,
-  on macOS `native`). A command that exits non-zero is still exit 0
-  for the shell unless `--stream` is given. Inline output that is not UTF-8
-  comes back as bytes.
-- A stream over 1 MiB is not inline: it is sent as output events, one
-  1 MiB page at a time, and the reply has that stream `null` with
-  `stdout_bytes` or `stderr_bytes` and `streamed: true`. Only the
-  `stdout`/`stderr` functions, `stream: true` (Node, Python) and `--stream`
-  (shell) receive those bytes; without one of them they are not kept.
-- `stdout` and `stderr` (Node, Python) are functions given the command's
-  output. `stream: true` without them writes it to the calling process's
-  own stdout and stderr. The library sends the output after the command
-  ends; there is no live output stream yet.
-- Every command has an exec id: `exec_id` names it (1 to 64 letters,
-  digits, `.`, `_` or `-`, not starting with `.` or `-`), else LayerFS
-  makes one (`exec-` and 16 hex digits). Either way it is the call's first
-  progress event, `{exec: {id}}`, given to `on_progress` (Node, Python)
-  and printed by `--progress` (shell) before the command starts. An id a
-  running command of the same Workspace carries is `Exists`.
-- While a command runs, its record lets any process end it:
-  `workspace exec-cancel <ws> <exec-id> [--grace-ms N]` sends SIGTERM to
-  everything it started, waits `grace_ms` (default 5000), then SIGKILL. It
-  answers `{outcome: "cancelled", signal}` (`signal` is the last one sent),
-  `{outcome: "ended"}` when the command had already finished (or has no
-  record), or `{outcome: "unknown"}` when the machine's worker was not
-  reached or did not answer: nothing is known to have changed. The
-  cancelled command's `exec` answers `kind: "cancelled"` with exit code
-  128 + the signal. A cancel that comes before the command starts answers
-  `cancelled` with `SIGKILL`, and the command is ended as it starts (exit
-  code 137). After `unknown` the record keeps the cancel's mark: cancel
-  again once the worker answers; if the command then ends by a signal,
-  its `exec` answers `kind: "cancelled"`. On Linux each command runs in its own cgroup, so
-  children that left its process group end too; on macOS a child that
-  calls `setsid` itself escapes the group.
-- A command record whose owning process is gone is stale. The next exec of
-  its id, cancel, unmount or close ends its command (no grace), removes it
-  and logs it to `log/exec.jsonl`; `layerfs home doctor` reports it. On a
-  Sandbox the caller reaches directly, a stale record whose worker cannot
-  be reached is kept as it was.
-- `commit` merges first when the Branch moved since the mount; `force`
-  publishes over a moved head instead.
-- `unmount` with `discard` drops uncommitted changes; `force` aborts its
-  connection. `unmount` is `Busy` while a command runs in the Workspace
-  (`detail.execs`); with `force` each one is cancelled first, and one whose
-  cancel is not confirmed refuses it `Unknown`.
-- `status` starts no machine (#535 P4): on a Sandbox whose machine is down
-  it is `Unavailable`, naming `machine start`. `mount`, `exec`, `commit`
-  and `unmount` on a stopped machine are refused the same way, as Store
-  calls are; nothing starts a machine but `machine start` (#535 D11).
-- On `lima`, `mount`, `commit`, `unmount` and
-  `status` go from the caller straight to the Sandbox's daemon (#535 G4);
-  `exec` goes through the machine's worker. On `docker` every call goes
-  through its worker (D-8). See machines-and-stores.md,
-  Routes.
-- Not run for this manual.
+- `list` reads Workspace records and asks no daemon: the home's own for a
+  Sandbox on `native` or one reached directly, and one `workspace.list`
+  request to each other ready machine's worker. A Sandbox whose machine,
+  or which itself, is not ready is named in `not_listed` with
+  `blocked_by`; one whose worker did not answer with `reason` (`timeout`,
+  `busy`, `lost`, or `refused` with its refusal in `message`). Rows are
+  `{workspace, branch}` (long: `sandbox`, `project`, `path`, `mounted_at`),
+  ordered by Sandbox then name, paged by `limit` (1 to 1000, default 100)
+  and `cursor`, which carries `--sandbox`.
+- `mount` answers `{workspace, path}` (long: `outcome: mounted`, `branch`,
+  `commit` the Commit it stands on, `base_layer`, `root`, `id` the 64-hex
+  Workspace id, `namespace`). Without `name` the name is the Branch's made
+  valid: lowercased, each character outside `a-z 0-9 _ . -` replaced by
+  `-`, cut to 63 and `_ . -` trimmed from the ends (`Feature/Login` mounts
+  as `feature-login`). A name in use is `Exists`; a Branch whose default is
+  empty or reserved, and `main`, are `InvalidInput`; each with a `fix`. A
+  seventeenth Workspace is `Capacity`.
+- `exec` answers `{exit_code}` and `stdout`, `stderr` when not empty; long:
+  `stdout_file`, `stderr_file`, `cancelled`, `exec`, `stop` (`cgroup` on
+  Linux kernels, `group` on macOS `native`), `stdout_bytes`,
+  `stderr_bytes`, `duration_ms`. A stream of at most 1 MiB is answered
+  whole; a longer one answers its last 1 MiB and names the file that holds
+  all of it, `<run folder>/exec/<workspace id>/<exec id>.stdout`, which
+  `sandbox files` reads and `unmount` deletes. The shell exits with the
+  command's own code in every form and prints the result JSON on stdout; a
+  refusal exits 125. `--cwd` is a folder of the Workspace as a path from
+  its root; `--env K=V` repeats (Node and Python: one object); `--stdin`
+  gives the command this process's stdin, read whole (Node and Python:
+  text or bytes); without it the command reads `/dev/null`. `--stream`
+  writes the output to this process's stdout and stderr and prints no
+  result. There is no timeout.
+- LayerFS makes every exec id (`exec-` and 16 hex digits); `--progress`
+  sends `{"phase":"start","done":0,"total":1,"exec":"exec-…"}` before the
+  command starts. A lost reply is the refusal `Unknown` with `exec` and a
+  `fix` naming `workspace cancel --exec`; the command is never run again.
+- `cancel` ends every command running in the Workspace, or the one
+  `--exec` names: SIGTERM, then SIGKILL after 5 s. Short answers:
+  `{"signal":"SIGTERM"}`, `{"already_ended":true}`, `{"unknown":true}`
+  (the worker was not reached or did not answer: cancel again once it
+  answers). Long: `outcome` (the worst of `commands[].outcome`: unknown,
+  cancelled, already_ended) and `commands: [{exec, outcome, signal}]`. A
+  cancelled command's `exec` answers `cancelled: true` and exit code 128
+  plus the signal.
+- `commit` answers `{commit}` (the Branch's new head) with `unchanged`,
+  `merged`, `overwritten` (paths a newer-write-wins rule decided, the
+  first 20) and `overwritten_count` past those; long: `outcome`, `branch`,
+  `parent`, `root`, `message`, `created_at`, `merged_from`, `displaced`.
+  `--expected C` refuses `Conflict` unless the Branch's head is `C`, a
+  Commit id or a prefix of 8 or more of its characters resolved as
+  `commit get` resolves it (a prefix several Commits start with is
+  `InvalidInput` with `matches`); the check is one read before the Commit. A conflict is `Conflict` with
+  `commit` (the head), `conflicts` (first 20 paths) and `conflicts_count`.
+- `unmount` answers `{"ok":true}`; long: `outcome` (`unmounted` or
+  `force_unmounted`) and a forced unmount's `abort`, `detach`, `cleanup`.
+  `Dirty` carries `changes` (the first 20 entries, as `status` lists
+  them), `changes_count` and `pending_merge`, with a `fix` naming
+  `workspace commit`; `Busy` and an unconfirmed forced cancel (`Unknown`)
+  carry `running` (the exec ids).
+- `status` answers `changes`: the first 20 entries of one bounded read of
+  256 overlay rows, each `{path, change}` (`added`, `modified`,
+  `removed`) with `type: "dir"` for a folder; `changes_count` past the 20
+  shown, `partial: true` at the bound, `branch_moved: true` when the
+  Branch gained Commits since the mount, and `state` with its companion
+  when not ready (from the daemon's `activity`). `--path` filters within
+  the same read. A machine that is not ready refuses it `Unavailable`; it
+  starts no machine.
+- On `lima`, `mount`, `commit`, `unmount` and `status` go from the caller
+  straight to the Sandbox's daemon (#535 G4); `exec` and `cancel` go
+  through the machine's worker. On `docker` every call goes through its
+  worker (D-8).
 
 ### `machine` (13)
 
@@ -1116,7 +1175,7 @@ layerfs home doctor                 # the home, then each machine, PostgreSQL St
 layerfs machine doctor <machine>    # the machine, then each Store and Sandbox on it
 layerfs store doctor <store> [--machine <machine>]   # the Store, then each of its projects
 layerfs project doctor <project>    # the project's record against its Store's own list
-layerfs sandbox doctor <sandbox>    # the Sandbox: record, runtime, daemon
+layerfs sandbox doctor <sandbox>    # the Sandbox: record, runtime, daemon; then each of its Workspaces
 layerfs backup doctor <bucket> [--full]               # the bucket's record and reach; --full writes and reads one object
 ```
 
@@ -1125,7 +1184,7 @@ every check was made and nothing was found; otherwise `findings` and
 `not_checked`, each present only with entries:
 
 ```json
-{"findings":[{"store":"bad","check":"host.records","severity":"error","message":"…","fix":"…"}],
+{"findings":[{"store":"bad","check":"home.records","severity":"error","message":"…"}],
  "not_checked":[{"sandbox":"sb","blocked_by":{"machine":"docker","reason":"stopped"}}]}
 ```
 
@@ -1146,13 +1205,20 @@ every check was made and nothing was found; otherwise `findings` and
   or could not be checked.
 - The doctor checks its own thing, then each thing on it. A thing whose
   parent is stopped or failed is `not_checked` with `blocked_by`, and none
-  of its checks is tried; a stopped machine is checked by its records only.
+  of its checks is tried; a stopped machine gets no worker checks.
   Each thing has its own time budget; a check still running when it ends is
   `not_checked` with `timeout`.
 - `--progress` (`on_progress`) sends one event per finished thing:
   `{ phase, done, total, node }`, `phase` `self` then the kind of thing
-  (`machines`, `stores`, `projects`, `sandboxes`, `buckets`). `backup doctor`
-  sends none.
+  (`machines`, `stores`, `projects`, `sandboxes`, `workspaces`, `buckets`).
+  `backup doctor` sends none.
+- A Workspace has no doctor of its own: `sandbox doctor` reads its daemon's
+  list once and gives each Workspace it lists or the home records one node,
+  `<sandbox>:<name>`, with `workspace.mounted` and `workspace.activity`; a
+  failed or uncertain one is an error fixed by `layerfs workspace unmount
+  <workspace> --discard --force`. A daemon that is not ready leaves its
+  Workspaces `not_checked`, blocked by the Sandbox (or its machine's
+  worker), and none is tried.
 - `project doctor --full` is refused `Unsupported` (not built yet). `store
   doctor --machine` is for a PostgreSQL Store; a sqlite Store refuses it.
 - `--text` prints a count line (`N error(s), N warning(s), N notice(s), N
@@ -1160,34 +1226,8 @@ every check was made and nothing was found; otherwise `findings` and
   then each `not_checked` entry.
 - Exit 0 once the report is made, whatever it finds; 125 with `NotFound`
   when the thing is not in the home; 2 for a wrong command line. Leftovers
-  of interrupted operations are in no doctor's report.
-
-### `layerfs doctor fix <id>`
-
-The one `doctor` command that changes something, and a call of the table
-(`doctor.fix`; `layerfs.doctor.fix(id)` in Node and Python). It removes the
-one leftover whose `id` it is given (`<machine>:<kind>:<name>`, never a
-path), once, on that machine, under that kind's guard:
-
-```bash
-layerfs doctor fix native:image-part:<64 hex>
-# {"kind":"image-part","path":"…/machine/native/run/images/.recv-<64 hex>.part","removed":true,"bytes":50,"machine":"native","id":"native:image-part:<64 hex>"}
-```
-
-| Kind | Removed when (else `InUse`, nothing removed) |
-| --- | --- |
-| `run-folder` | no Sandbox record names it, its `owner` marker is there and older than a minute, no daemon of it runs and nothing is mounted at or under it or its `.root` |
-| `empty-root` | its run folder is gone and it is not a mount point; `rmdir` only |
-| `init-copy` | a line of `log/uncertain.jsonl` names the machine and the copy, and its deadline (when the lost request went out, plus the Init's `timeoutMs`) passed more than an hour ago; a copy no line names is only reported (`InvalidInput`) |
-| `backup-staging` | no `backup create` of that Store is running (its `backup.lock` is taken for the removal) |
-| `image-tmp` | no unpack of that image is running (its lock is taken; the lock file stays) |
-| `image-part` | it has not been written for an hour |
-
-Other refusals: `NotFound` (no leftover has that id now), `InvalidInput`
-(an image lock or an unmount marker, which are never removed), `Unavailable`
-(the machine is stopped) and `Unknown` (the worker's answer was lost). The MCP server has no tool for it. Run on
-macOS `native` against leftovers made by hand; not run on a VM machine for
-this manual.
+  of interrupted operations are in no doctor's report: `home leftovers`
+  lists them and `home prune` removes one (see [`home`](#home-7)).
 
 ## Results
 

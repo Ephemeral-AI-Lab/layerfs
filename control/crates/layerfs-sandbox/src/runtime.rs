@@ -9,7 +9,7 @@
 //! platform (#529), recorded beside the runtime; every later call follows
 //! the record, not the caller's deployment.
 use crate::host::Deploy;
-use crate::output::Spool;
+use crate::output::{Place, Spool};
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::outcome::{failed, refused};
 #[cfg(target_os = "linux")]
@@ -224,24 +224,24 @@ pub fn scratch(runtime: &Sandbox) -> String {
     runtime.scratch_directory()
 }
 
-/// One command to its end: exit code, stdout, stderr. `spool` sends every
-/// non-empty stream to its file instead of keeping it inline. `slot` names
-/// the command for its stop handle and is told it at spawn.
+/// One command to its end: exit code, stdout, stderr. A stream past the
+/// inline window spills to its file at `place` (`crate::output`); `stdin`
+/// is given to the command whole. `slot` names the command for its stop
+/// handle and is told it at spawn.
 pub fn run(
     runtime: &Sandbox,
     identity: CommandIdentity,
-    arguments: Vec<String>,
-    environment: Vec<String>,
-    (directory, spool): (&str, bool),
+    (arguments, environment, stdin): (Vec<String>, Vec<String>, Option<Vec<u8>>),
+    (directory, place): (&str, Option<&Place>),
     slot: ExecSlot<'_>,
 ) -> Result<(i32, Spool, Spool), SdkRefusal> {
-    let (mut stdout, mut stderr) = (Spool::new(spool), Spool::new(spool));
+    let (mut stdout, mut stderr) = (Spool::at(place, "stdout"), Spool::at(place, "stderr"));
     let request = layerfs_sandbox_backend::ExecRequest {
         identity,
         arguments,
         environment,
         directory: directory.to_owned(),
-        stdin: false,
+        stdin,
     };
     let exit = runtime
         .run_in(&request, slot, &mut stdout, &mut stderr)

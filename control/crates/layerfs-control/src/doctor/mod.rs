@@ -5,26 +5,18 @@
 //! home that changes meanwhile may be reported as it was part way.
 //!
 //! It also lists what interrupted operations left on `native` and on each
-//! running machine ([`leftovers()`], one bounded walk per side), and
-//! `doctor.fix` removes one of them under its guard (`leftover_fix`): the
-//! one call here that changes anything (layerfs-project#180). No doctor's
-//! report holds them.
-// the whole-home sweep's live parts (a Sandbox daemon's capacity, each
-// worker's build) left with it; the Sandbox and machine packages fold them
-// into their own checks
-#[allow(dead_code)]
+//! running machine (`home leftovers`, [`leftover_list`], one bounded walk
+//! per side), and `home prune` removes one of them under its guard
+//! ([`leftover_prune`]): the one call here that changes anything
+//! (layerfs-project#180). No doctor's report holds them.
 mod capacity;
 mod checks;
 mod convert;
-pub mod leftover_fix;
-pub mod leftover_report;
+pub mod leftover_list;
+pub mod leftover_prune;
 pub mod leftovers;
 mod records;
 mod scan;
-#[allow(dead_code)]
-mod workers;
-
-pub use records::leftovers;
 
 mod check_report;
 pub mod frame;
@@ -39,6 +31,7 @@ pub use report::{Kind, Node, Report, Thing};
 mod host_target;
 mod machine_target;
 mod sandbox_target;
+mod workspace_target;
 pub(crate) use sandbox_target::worker_diagnose as diagnose_worker_sandbox;
 mod backup_target;
 mod store_target;

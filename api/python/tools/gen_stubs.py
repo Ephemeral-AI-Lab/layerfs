@@ -167,19 +167,12 @@ def render(entries):
         "    Scope as Scope,\n"
         ")\n"
         "\n"
-        "class _Doctor(DoctorFamily):\n"
-        '    """The report as a function, with the ``doctor`` family\'s calls: ``doctor()`` and ``doctor.fix(id)``."""\n'
-        "\n"
-        f"    def __call__(self, home: {HOME} = None, *, target: str | None = None, name: str | None = None, timeout: str | None = None, quick: bool | None = None, write_test: bool | None = None) -> DoctorReport:\n"
-        '        """Diagnoses without LayerFS state changes; backup write_test uses its own temporary S3 version."""\n'
-        "\n"
-        "doctor: _Doctor\n"
         "\n"
         "def close() -> int:\n"
         '    """Closes every Store this process holds open with no call running."""\n'
         "\n"
-        f"{attributes([spec for spec in entries if spec['family'] != 'doctor'], '')}\n"
-        f"__all__ = {['FAMILIES', 'TABLE', 'Client', 'LayerFSError'] + sorted(set(names) | {'client', 'close', 'doctor'})!r}\n"
+        f"{attributes(entries, '')}\n"
+        f"__all__ = {['FAMILIES', 'TABLE', 'Client', 'LayerFSError'] + sorted(set(names) | {'client', 'close'})!r}\n"
     )
     return {"_client.pyi": sync, "aio.pyi": asynchronous, "__init__.pyi": package}
 

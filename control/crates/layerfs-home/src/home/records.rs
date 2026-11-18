@@ -129,9 +129,13 @@ fn unhex(text: &str) -> Option<Vec<u8>> {
 pub const RECORD_VERSION: i64 = 1;
 
 /// Writes entity record `value` at `path` ([`write_record`]) with its
-/// version first, `"v": 1`.
+/// version first, `"v": 1`. When `path` is one of a home's records, the
+/// home's generation moves ([`super::generation::recorded`]): the one place
+/// a record write moves it, so a record writer adds no call of its own.
 pub fn write_entity(path: &Path, value: &SdkValue) -> Result<(), SdkRefusal> {
-    write_record(path, &versioned(value))
+    write_record(path, &versioned(value))?;
+    super::generation::recorded(path);
+    Ok(())
 }
 
 /// `value` (a record) with `"v": 1` as its first field.

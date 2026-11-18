@@ -98,9 +98,7 @@ impl WorkspaceRecord {
 
     /// Writes the record at `path`, with its version.
     pub fn write(&self, path: &Path) -> Result<()> {
-        write_entity(path, &self.fields.encode())?;
-        layerfs_home::home::generation::moved_above(path);
-        Ok(())
+        write_entity(path, &self.fields.encode())
     }
 
     fn text(&self, pick: fn(&Field) -> Option<&String>) -> Option<&str> {
@@ -143,6 +141,14 @@ impl WorkspaceRecord {
     pub fn namespace(&self) -> Option<i64> {
         self.fields.get(|f| match f {
             Field::Namespace(n) => Some(*n),
+            _ => None,
+        })
+    }
+
+    /// When its mount recorded it, in milliseconds since 1970.
+    pub fn created(&self) -> Option<i64> {
+        self.fields.get(|f| match f {
+            Field::Created(n) => Some(*n),
             _ => None,
         })
     }

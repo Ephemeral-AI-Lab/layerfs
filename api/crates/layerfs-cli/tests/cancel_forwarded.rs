@@ -1,21 +1,23 @@
 //! Command records of a Sandbox this host reaches directly (#535 G4,
-//! layerfs-project#113 gaps 3 and 4), against a stand-in worker: no VM,
-//! container or daemon runs. The home keeps those records with route
-//! `machine:<name>`; the command runs in the machine's worker.
+//! layerfs-project#113 gaps 3 and 4, call surface 2.0), against a stand-in
+//! worker: no VM, container or daemon runs. The home keeps those records
+//! with route `machine:<name>`; the command runs in the machine's worker.
 //!
 //! - A stale one (its owner gone) is ended in the worker, through the same
-//!   `workspace.exec_cancel` in `sandbox.host` with zero grace, before it is
-//!   removed and logged: by `workspace.exec_cancel`, `workspace.unmount`,
-//!   `sandbox.close` and a `workspace.exec` of the same id. A worker that
-//!   answers the Sandbox does not run there confirms it ended.
+//!   `workspace.cancel` op in `sandbox.host` with zero grace, before it is
+//!   removed and logged: by `workspace.cancel`, `workspace.unmount` and
+//!   `sandbox.close`. A worker that answers the Sandbox does not run there
+//!   confirms it ended.
 //! - A worker that cannot be reached keeps it as it was: the cancel answers
-//!   `unknown`, unmount and close are refused `Unknown`, its id stays taken.
+//!   `unknown`, unmount and close are refused `Unknown`.
 //! - A worker that takes a cancel and never answers leaves the call waiting
 //!   until the connection closes (no operation timeout, by design); then it
 //!   answers `unknown`, and the record is kept.
 //! - A cancel before the command runs (its record has no stop handle yet)
 //!   is answered `cancelled` (SIGKILL) and only marked; when the worker
 //!   tells that it started, the owner ends it there with zero grace.
+//! - A cancel of an id with no record yet leaves a marker and answers
+//!   `already_ended`.
 #![cfg(all(unix, feature = "machine"))]
 mod common;
 use common::{layerfs, run, tempdir, text};
@@ -34,7 +36,7 @@ fn t(s: &str) -> SdkValue {
     SdkValue::text(s)
 }
 
-/// What the stand-in does with a `workspace.exec_cancel`.
+/// What the stand-in does with a `workspace.cancel`.
 #[derive(Clone)]
 enum Cancel {
     /// Answers `{ outcome: "cancelled", signal: "SIGKILL" }`.
@@ -78,21 +80,14 @@ fn worker(seen: Seen, cancel: Cancel) -> SocketAddr {
             let answer = match (op.as_str(), &cancel) {
                 ("workspace.exec", _) => SdkValue::map([(
                     "value",
-                    SdkValue::map([
-                        ("kind", t("exit:0")),
-                        ("exitCode", SdkValue::Int(0)),
-                        ("stdout", t("")),
-                        ("stderr", t("")),
-                        ("execId", more.get("execId").cloned().unwrap_or_default()),
-                        ("stop", t("cgroup")),
-                    ]),
+                    exec_result(0, more.get_text("execId").unwrap_or("")),
                 )]),
-                ("workspace.exec_cancel", Cancel::Cancelled) => SdkValue::map([(
+                ("workspace.cancel", Cancel::Cancelled) => SdkValue::map([(
                     "value",
                     SdkValue::map([("outcome", t("cancelled")), ("signal", t("SIGKILL"))]),
                 )]),
-                ("workspace.exec_cancel", Cancel::NoSandbox) => refusal("NoSuchSandbox"),
-                ("workspace.exec_cancel", Cancel::Silent(hold)) => {
+                ("workspace.cancel", Cancel::NoSandbox) => refusal("NoSuchSandbox"),
+                ("workspace.cancel", Cancel::Silent(hold)) => {
                     // the request is in; nothing is answered
                     std::thread::sleep(*hold);
                     continue;
@@ -103,6 +98,20 @@ fn worker(seen: Seen, cancel: Cancel) -> SocketAddr {
         }
     });
     address
+}
+
+/// The side's result of a command that wrote nothing and exited `code`.
+fn exec_result(code: i64, id: &str) -> SdkValue {
+    SdkValue::map([
+        ("exit_code", SdkValue::Int(code)),
+        ("cancelled", SdkValue::Bool(false)),
+        ("stdout", t("")),
+        ("stderr", t("")),
+        ("stdoutBytes", SdkValue::Int(0)),
+        ("stderrBytes", SdkValue::Int(0)),
+        ("exec", t(id)),
+        ("stop", t("cgroup")),
+    ])
 }
 
 fn refusal(code: &str) -> SdkValue {
@@ -168,19 +177,9 @@ fn holding(seen: Seen, arrived: Sender<()>, go: Receiver<()>) -> SocketAddr {
                             std::thread::sleep(Duration::from_millis(10));
                         };
                         let code = if killed { 137 } else { 0 };
-                        SdkValue::map([(
-                            "value",
-                            SdkValue::map([
-                                ("kind", t(&format!("exit:{code}"))),
-                                ("exitCode", SdkValue::Int(code)),
-                                ("stdout", t("")),
-                                ("stderr", t("")),
-                                ("execId", t(&id)),
-                                ("stop", t("cgroup")),
-                            ]),
-                        )])
+                        SdkValue::map([("value", exec_result(code, &id))])
                     }
-                    "workspace.exec_cancel" => SdkValue::map([(
+                    "workspace.cancel" => SdkValue::map([(
                         "value",
                         SdkValue::map([("outcome", t("cancelled")), ("signal", t("SIGKILL"))]),
                     )]),
@@ -311,7 +310,7 @@ fn cancels(seen: &Seen) -> Vec<(String, Option<i64>, String)> {
     let frames = seen.lock().unwrap().clone();
     frames
         .iter()
-        .filter(|f| f.get_text("op") == Some("workspace.exec_cancel"))
+        .filter(|f| f.get_text("op") == Some("workspace.cancel"))
         .map(|f| {
             let more = f.get("more").unwrap();
             (
@@ -333,17 +332,43 @@ fn log(home: &Path) -> String {
     std::fs::read_to_string(home.join("log/exec.jsonl")).unwrap_or_default()
 }
 
+/// `layerfs workspace cancel b1:one --exec <id>`: exit code, stdout, stderr.
+fn cancel(home: &Path, id: &str) -> (Option<i32>, String, String) {
+    cli(home, &["workspace", "cancel", "b1:one", "--exec", id])
+}
+
+/// The one command record of Workspace `one`, waited for (bounded).
+fn only_exec(home: &Path) -> String {
+    let folder = exec_file(home, "x").parent().unwrap().to_owned();
+    let until = Instant::now() + Duration::from_secs(30);
+    loop {
+        let names: Vec<String> = std::fs::read_dir(&folder)
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| {
+                let name = entry.ok()?.file_name().to_string_lossy().into_owned();
+                name.strip_suffix(".json").map(str::to_owned)
+            })
+            .collect();
+        if let [one] = names.as_slice() {
+            return one.clone();
+        }
+        assert!(Instant::now() < until, "no one command record: {names:?}");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
 #[test]
 fn a_stale_forwarded_record_is_ended_in_its_worker_then_removed() {
     let seen = Seen::default();
     let home = home_with("ended", worker(seen.clone(), Cancel::Cancelled));
     let zero = |id: &str| (id.to_owned(), Some(0), WS.to_owned());
 
-    // workspace.exec_cancel
+    // workspace.cancel
     exec_record(&home, "e1", owner(false));
-    let (code, out, err) = cli(&home, &["workspace", "exec-cancel", "b1:one", "e1"]);
+    let (code, out, err) = cancel(&home, "e1");
     assert_eq!(code, Some(0), "{err}");
-    assert_eq!(out.trim(), r#"{"outcome":"cancelled","signal":"SIGKILL"}"#);
+    assert_eq!(out.trim(), r#"{"signal":"SIGKILL"}"#);
     assert_eq!(cancels(&seen), [zero("e1")]);
     assert!(!exec_file(&home, "e1").exists());
     let logged = log(&home);
@@ -352,14 +377,11 @@ fn a_stale_forwarded_record_is_ended_in_its_worker_then_removed() {
         "{logged}"
     );
 
-    // a workspace.exec of the same id ends it first, then runs
+    // with no --exec, every command of the Workspace: here the stale one
     exec_record(&home, "e4", owner(false));
-    let (code, out, err) = cli(
-        &home,
-        &["workspace", "exec", "b1:one", "true", "--exec-id", "e4"],
-    );
+    let (code, out, err) = cli(&home, &["workspace", "cancel", "b1:one", "--detail"]);
     assert_eq!(code, Some(0), "{err}");
-    assert!(out.contains("\"exec_id\":\"e4\""), "{out}");
+    assert!(out.contains(r#""exec":"e4""#), "{out}");
     assert_eq!(cancels(&seen), [zero("e1"), zero("e4")]);
     assert!(!exec_file(&home, "e4").exists());
 
@@ -383,9 +405,9 @@ fn a_worker_without_the_sandbox_confirms_its_stale_command_ended() {
     let seen = Seen::default();
     let home = home_with("nosandbox", worker(seen.clone(), Cancel::NoSandbox));
     exec_record(&home, "e7", owner(false));
-    let (code, out, err) = cli(&home, &["workspace", "exec-cancel", "b1:one", "e7"]);
+    let (code, out, err) = cancel(&home, "e7");
     assert_eq!(code, Some(0), "{err}");
-    assert_eq!(out.trim(), r#"{"outcome":"ended"}"#);
+    assert_eq!(out.trim(), r#"{"already_ended":true}"#);
     assert_eq!(cancels(&seen).len(), 1);
     assert!(!exec_file(&home, "e7").exists());
     std::fs::remove_dir_all(home).unwrap();
@@ -396,9 +418,9 @@ fn a_worker_not_reached_keeps_the_stale_record_as_it_was() {
     let home = home_with("unreached", gone());
     let bytes = exec_record(&home, "e1", owner(false));
     let kept = || std::fs::read_to_string(exec_file(&home, "e1")).unwrap();
-    let (code, out, err) = cli(&home, &["workspace", "exec-cancel", "b1:one", "e1"]);
+    let (code, out, err) = cancel(&home, "e1");
     assert_eq!(code, Some(0), "{err}");
-    assert_eq!(out.trim(), r#"{"outcome":"unknown"}"#);
+    assert_eq!(out.trim(), r#"{"unknown":true}"#);
     assert_eq!(kept(), bytes);
     assert!(log(&home).contains("\"kept\":true"), "{}", log(&home));
     // unmount and close are refused Unknown, naming it; nothing changed
@@ -422,14 +444,6 @@ fn a_worker_not_reached_keeps_the_stale_record_as_it_was() {
         .unwrap()
         .unwrap();
     assert!(sandbox.get("op").is_none(), "{sandbox:?}");
-    // its id stays taken
-    let (code, _, err) = cli(
-        &home,
-        &["workspace", "exec", "b1:one", "true", "--exec-id", "e1"],
-    );
-    assert_eq!(code, Some(125), "{err}");
-    assert!(err.contains("\"error\":\"Exists\""), "{err}");
-    assert_eq!(kept(), bytes);
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -443,7 +457,7 @@ fn a_worker_that_never_answers_leaves_the_cancel_waiting_until_it_closes() {
     let stale = exec_record(&home, "stale", owner(false));
     for id in ["live", "stale"] {
         let started = Instant::now();
-        let mut child = layerfs(&home, &["workspace", "exec-cancel", "b1:one", id])
+        let mut child = layerfs(&home, &["workspace", "cancel", "b1:one", "--exec", id])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -455,7 +469,7 @@ fn a_worker_that_never_answers_leaves_the_cancel_waiting_until_it_closes() {
         let out = common::finish(child);
         assert!(started.elapsed() >= hold, "{id}");
         assert_eq!(out.status.code(), Some(0), "{id}: {}", text(&out.stderr));
-        assert_eq!(text(&out.stdout).trim(), r#"{"outcome":"unknown"}"#, "{id}");
+        assert_eq!(text(&out.stdout).trim(), r#"{"unknown":true}"#, "{id}");
     }
     assert_eq!(cancels(&seen).len(), 2);
     // the live record is kept, marked by the cancel it was sent
@@ -475,94 +489,54 @@ fn a_cancel_before_the_command_starts_is_answered_cancelled_and_its_owner_ends_i
     let (arrived, came) = channel();
     let (go, held) = channel();
     let home = home_with("early", holding(seen.clone(), arrived, held));
-    let child = layerfs(
-        &home,
-        &[
-            "workspace",
-            "exec",
-            "b1:one",
-            "sleep 600",
-            "--exec-id",
-            "e9",
-        ],
-    )
-    .env("LAYERFS_LOGS_TAG", "dsh:s9:t1")
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .spawn()
-    .unwrap();
+    let child = layerfs(&home, &["workspace", "exec", "b1:one", "sleep 600"])
+        .env("LAYERFS_LOGS_TAG", "dsh:s9:t1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
     // the exec is in the worker and has not started: no stop handle yet
     came.recv_timeout(Duration::from_secs(30)).unwrap();
-    let recorded = read_record(&exec_file(&home, "e9")).unwrap().unwrap();
+    let id = only_exec(&home);
+    assert!(id.starts_with("exec-") && id.len() == 21, "{id}");
+    let recorded = read_record(&exec_file(&home, &id)).unwrap().unwrap();
     assert_eq!(recorded.get("stop"), Some(&SdkValue::Null), "{recorded:?}");
     // the home's record names the call's log tag and the command's
     // program, nothing more of the command (layerfs-project#178)
     assert_eq!(recorded.get_text("tag"), Some("dsh:s9:t1"), "{recorded:?}");
     assert_eq!(recorded.get_text("program"), Some("sleep"), "{recorded:?}");
-    // the cancel is answered at once, and only marks the record
-    let (code, out, err) = cli(&home, &["workspace", "exec-cancel", "b1:one", "e9"]);
+    // the cancel, of every command, is answered at once, and only marks it
+    let (code, out, err) = cli(&home, &["workspace", "cancel", "b1:one"]);
     assert_eq!(code, Some(0), "{err}");
-    assert_eq!(out.trim(), r#"{"outcome":"cancelled","signal":"SIGKILL"}"#);
+    assert_eq!(out.trim(), r#"{"signal":"SIGKILL"}"#);
     assert!(cancels(&seen).is_empty(), "nothing was sent to the worker");
-    let marked = read_record(&exec_file(&home, "e9")).unwrap().unwrap();
+    let marked = read_record(&exec_file(&home, &id)).unwrap().unwrap();
     assert!(marked.get_int("cancel").is_some(), "{marked:?}");
     // the command starts: its owner ends it there, with zero grace
     go.send(()).unwrap();
     let ran = common::finish(child);
     let (out, err) = (text(&ran.stdout), text(&ran.stderr));
-    assert_eq!(cancels(&seen), [("e9".to_owned(), Some(0), WS.to_owned())]);
+    assert_eq!(cancels(&seen), [(id.clone(), Some(0), WS.to_owned())]);
     assert!(
-        out.contains("\"kind\":\"cancelled\"") && out.contains("\"exit_code\":137"),
+        out.contains("\"cancelled\":true") && out.contains("\"exit_code\":137"),
         "{:?}: {out} {err}",
         ran.status.code()
     );
-    assert!(!exec_file(&home, "e9").exists());
+    // the shell exits with the command's code
+    assert_eq!(ran.status.code(), Some(137));
+    assert!(!exec_file(&home, &id).exists());
     std::fs::remove_dir_all(home).unwrap();
 }
 
 #[test]
-fn a_cancel_before_cli_registration_is_forwarded_at_spawn() {
+fn a_cancel_of_an_id_with_no_record_leaves_a_marker() {
     let seen = Seen::default();
-    let (arrived, came) = channel();
-    let (go, held) = channel();
-    let home = home_with("unregistered", holding(seen.clone(), arrived, held));
-    let (code, out, err) = cli(&home, &["workspace", "exec-cancel", "b1:one", "e9"]);
+    let home = home_with("unregistered", worker(seen.clone(), Cancel::Cancelled));
+    let id = "exec-00000000000000e9";
+    let (code, out, err) = cancel(&home, id);
     assert_eq!(code, Some(0), "{err}");
-    assert_eq!(out.trim(), r#"{"outcome":"ended"}"#);
-    assert!(exec_file(&home, "e9").with_extension("cancel").exists());
-    let child = layerfs(
-        &home,
-        &[
-            "workspace",
-            "exec",
-            "b1:one",
-            "sleep 600",
-            "--exec-id",
-            "e9",
-        ],
-    )
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .spawn()
-    .unwrap();
-    // the exec is in the worker and has not started: no stop handle yet
-    came.recv_timeout(Duration::from_secs(30)).unwrap();
-    let recorded = read_record(&exec_file(&home, "e9")).unwrap().unwrap();
-    assert_eq!(recorded.get("stop"), Some(&SdkValue::Null), "{recorded:?}");
+    assert_eq!(out.trim(), r#"{"already_ended":true}"#);
+    assert!(exec_file(&home, id).with_extension("cancel").exists());
     assert!(cancels(&seen).is_empty());
-    assert!(!exec_file(&home, "e9").with_extension("cancel").exists());
-    let marked = read_record(&exec_file(&home, "e9")).unwrap().unwrap();
-    assert!(marked.get_int("cancel").is_some(), "{marked:?}");
-    // the command starts: its owner ends it there, with zero grace
-    go.send(()).unwrap();
-    let ran = common::finish(child);
-    let (out, err) = (text(&ran.stdout), text(&ran.stderr));
-    assert_eq!(cancels(&seen), [("e9".to_owned(), Some(0), WS.to_owned())]);
-    assert!(
-        out.contains("\"kind\":\"cancelled\"") && out.contains("\"exit_code\":137"),
-        "{:?}: {out} {err}",
-        ran.status.code()
-    );
-    assert!(!exec_file(&home, "e9").exists());
     std::fs::remove_dir_all(home).unwrap();
 }

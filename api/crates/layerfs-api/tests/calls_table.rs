@@ -360,30 +360,30 @@ fn sandbox_family() {
 #[test]
 fn workspace_family() {
     assert!(
-        code("workspace.exec", map(&[("ws", t("tests:/workspaces/1"))]))
+        code("workspace.exec", map(&[("workspace", t("tests:dev"))]))
             .contains("`command` is required")
     );
-    let reached = code("workspace.status", map(&[("ws", t("tests:/workspaces/1"))]));
+    // a Workspace by its name (#536 C3); the path form is gone (2.0)
+    let reached = code("workspace.status", map(&[("workspace", t("tests:dev"))]));
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
-    // a Workspace by its name (#536 C3)
-    let reached = code("workspace.status", map(&[("ws", t("tests:dev"))]));
-    assert!(!reached.starts_with("InvalidInput"), "{reached}");
+    let refused = code(
+        "workspace.status",
+        map(&[("workspace", t("tests:/workspaces/1"))]),
+    );
+    assert!(refused.starts_with("InvalidInput"), "{refused}");
     let mount = layerfs_api::find("workspace.mount").unwrap();
     let options: Vec<_> = mount.options.iter().map(|o| (o.name, o.kind)).collect();
     assert_eq!(options, [("name", Kind::Name)]);
-    // exec_cancel (layerfs-project#113): the Workspace, the exec id and a grace
-    let cancel = layerfs_api::find("workspace.exec_cancel").unwrap();
+    // cancel (was exec_cancel): the Workspace, and an exec id to end one
+    let cancel = layerfs_api::find("workspace.cancel").unwrap();
     let args: Vec<_> = cancel.args.iter().map(|a| (a.name, a.kind)).collect();
-    assert_eq!(args, [("ws", Kind::Text), ("exec_id", Kind::Text)]);
+    assert_eq!(args, [("workspace", Kind::Text)]);
     let options: Vec<_> = cancel.options.iter().map(|o| (o.name, o.kind)).collect();
-    assert_eq!(options, [("grace_ms", Kind::Int)]);
+    assert_eq!(options, [("exec", Kind::Text)]);
+    assert!(layerfs_api::find("workspace.exec_cancel").is_none());
     let exec = layerfs_api::find("workspace.exec").unwrap();
-    assert!(exec.options.iter().any(|o| o.name == "exec_id"));
-    assert!(code(
-        "workspace.exec_cancel",
-        map(&[("ws", t("tests:/workspaces/1"))])
-    )
-    .contains("`exec_id` is required"));
+    assert!(!exec.options.iter().any(|o| o.name == "exec_id"));
+    assert!(exec.options.iter().any(|o| o.name == "env" && o.repeat));
 }
 
 #[test]
@@ -491,21 +491,38 @@ fn sizes_and_keys() {
 }
 
 #[test]
-fn doctor_family() {
-    assert!(code("doctor.fix", SdkValue::Null).contains("`id` is required"));
+fn home_leftovers_and_prune() {
+    assert!(code("home.prune", SdkValue::Null).contains("`leftover` is required"));
     assert!(code(
-        "doctor.fix",
-        map(&[("id", t("native:image-part:00")), ("path", t("/etc"))])
+        "home.prune",
+        map(&[("leftover", t("native:image_part:00")), ("path", t("/etc"))])
     )
-    .starts_with("InvalidInput: doctor.fix: unknown argument `path`"));
-    // reached: an id that names nothing is not found, and one of a kind
-    // that is only counted is refused
-    let reached = code("doctor.fix", map(&[("id", t("native:run-folder:../x"))]));
-    assert!(reached.starts_with("NotFound: "), "{reached}");
-    let lock = format!("native:image-lock:{}.2", "ab".repeat(32));
-    let reached = code("doctor.fix", map(&[("id", t(&lock))]));
-    assert!(reached.starts_with("InvalidInput: "), "{reached}");
-    assert!(reached.contains("only reported"), "{reached}");
+    .starts_with("InvalidInput: home.prune: unknown argument `path`"));
+    // reached: an id that names nothing is not found, and so is one in
+    // today's hyphenated spelling or of a kind that is no longer listed
+    let lock = format!("native:image_lock:{}.2", "ab".repeat(32));
+    for id in [
+        "native:run_folder:../x",
+        "native:run-folder:x",
+        lock.as_str(),
+    ] {
+        let reached = code("home.prune", map(&[("leftover", t(id))]));
+        assert!(reached.starts_with("NotFound: "), "{reached}");
+        assert!(reached.contains("layerfs home leftovers"), "{reached}");
+    }
+    // a home with nothing left over lists nothing; a machine it does not
+    // know is not found
+    assert_eq!(code("home.leftovers", SdkValue::Null), r#"ok {"items":[]}"#);
+    let unknown = code("home.leftovers", map(&[("machine", t("lab"))]));
+    assert!(
+        unknown.starts_with("NotFound: no machine named lab"),
+        "{unknown}"
+    );
+    // ruling R1: the old name is gone, with its family
+    assert_eq!(
+        code("doctor.fix", SdkValue::Null),
+        "InvalidInput: no call named `doctor.fix`"
+    );
 }
 
 #[test]
@@ -547,11 +564,6 @@ fn the_source_is_one_file_per_call_under_its_family() {
             .map(|c| format!("{}.rs", c.call))
             .collect();
         files.push("mod.rs".to_owned());
-        if family.name == "doctor" {
-            // the six doctors' one answer, beside the family's one call;
-            // each doctor's entry is in its own family's folder
-            files.push("answer.rs".to_owned());
-        }
         files.sort();
         assert_eq!(names(&src.join(family.name)), files, "{}", family.name);
     }
@@ -649,7 +661,18 @@ fn the_call_log_calls_moved_to_home_with_no_alias() {
         .iter()
         .map(|call| call.call)
         .collect();
-    assert_eq!(home, ["init", "get", "log", "clear_log", "doctor"]);
+    assert_eq!(
+        home,
+        [
+            "init",
+            "get",
+            "log",
+            "clear_log",
+            "doctor",
+            "leftovers",
+            "prune"
+        ]
+    );
 }
 
 #[test]
@@ -676,7 +699,15 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "machine.update",
         "machine.doctor",
     ];
-    let home = ["home.get", "home.log", "home.clear_log", "home.doctor"];
+    let home = [
+        "home.init",
+        "home.get",
+        "home.log",
+        "home.clear_log",
+        "home.doctor",
+        "home.leftovers",
+        "home.prune",
+    ];
     let branch = [
         "branch.list",
         "branch.get",
@@ -702,6 +733,15 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "file.cp",
         "file.apply",
     ];
+    let workspace = [
+        "workspace.list",
+        "workspace.mount",
+        "workspace.exec",
+        "workspace.cancel",
+        "workspace.commit",
+        "workspace.unmount",
+        "workspace.status",
+    ];
     let store = [
         "store.list",
         "store.get",
@@ -722,6 +762,7 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
             &commit[..],
             &file[..],
             &["sandbox.doctor"][..],
+            &workspace[..],
             &machine[..],
             &store[..],
             &after[..],

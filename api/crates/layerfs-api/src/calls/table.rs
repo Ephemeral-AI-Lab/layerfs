@@ -73,6 +73,10 @@ pub struct Arg {
     /// for a secret: the shell then takes the value no other way, and Node
     /// and Python pass it as the option.
     pub shell: Option<&'static str>,
+    /// Whether the shell takes the option more than once: a JSON option
+    /// given as `--env K=V` repeatedly is one object of names to text
+    /// (call surface 2.0 `repeat`).
+    pub repeat: bool,
 }
 
 impl Arg {
@@ -98,6 +102,14 @@ impl Arg {
         Arg {
             shell: Some(flag),
             redact: Redact::Bytes,
+            ..self
+        }
+    }
+
+    /// This option, given more than once in the shell ([`Arg::repeat`]).
+    pub const fn repeat(self) -> Arg {
+        Arg {
+            repeat: true,
             ..self
         }
     }
@@ -266,6 +278,7 @@ pub const fn a(name: &'static str, kind: Kind) -> Arg {
         optional: false,
         redact: Redact::No,
         shell: None,
+        repeat: false,
     }
 }
 
@@ -277,6 +290,7 @@ pub const fn opt(name: &'static str, kind: Kind) -> Arg {
         optional: true,
         redact: Redact::No,
         shell: None,
+        repeat: false,
     }
 }
 
@@ -427,6 +441,9 @@ pub fn table_json(families: &'static [Family]) -> String {
         ];
         if let Some(flag) = a.shell {
             fields.push(("shell".to_owned(), SdkValue::text(flag)));
+        }
+        if a.repeat {
+            fields.push(("repeat".to_owned(), SdkValue::Bool(true)));
         }
         SdkValue::Map(fields)
     };

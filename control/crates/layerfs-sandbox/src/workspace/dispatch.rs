@@ -27,8 +27,13 @@ pub fn call(host: Host, call: Call) -> Outcome {
     layerfs_home::trace::step("by_name");
     match call {
         Call::Mount { branch, name } => workspace::mount(&host, branch.as_deref(), name.as_deref()),
-        Call::Commit { force, .. } => {
-            workspace::commit(&host, path.as_deref(), force.unwrap_or(false))
+        Call::Commit {
+            force,
+            ref expected,
+            ..
+        } => {
+            let force = force.unwrap_or(false);
+            workspace::commit(&host, path.as_deref(), force, expected.as_deref())
         }
         Call::Unmount { discard, force, .. } => workspace::unmount(
             &host,
@@ -36,11 +41,15 @@ pub fn call(host: Host, call: Call) -> Outcome {
             discard.unwrap_or(false),
             force.unwrap_or(false),
         ),
-        Call::Status { .. } => workspace::status(&host, path.as_deref()),
+        Call::Status { ref under, .. } => {
+            workspace::status(&host, path.as_deref(), under.as_deref())
+        }
         Call::Exec {
             directory,
             command,
-            spool,
+            cwd,
+            env,
+            stdin,
             exec_id,
             workspace,
             tag,
@@ -51,7 +60,9 @@ pub fn call(host: Host, call: Call) -> Outcome {
                 path: path.as_deref(),
                 directory: directory.as_deref(),
                 command: command.as_deref(),
-                spool,
+                cwd: cwd.as_deref(),
+                env: &env,
+                stdin: stdin.as_deref(),
                 exec_id: exec_id.as_deref(),
                 workspace: workspace.as_deref(),
                 tag: tag.as_deref(),

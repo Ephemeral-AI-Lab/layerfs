@@ -10,6 +10,7 @@
 mod check;
 mod context;
 mod dispatch;
+pub(crate) mod doctor;
 pub mod form;
 pub mod keys;
 mod platform_policy;

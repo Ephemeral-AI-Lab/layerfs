@@ -1,9 +1,10 @@
-//! What interrupted operations leave, in `layerfs doctor`'s report and
-//! under `doctor.fix` (layerfs-project#180): each kind is reported with its
-//! path, bytes and age on `native` and through a machine's worker; each is
-//! removed only by `doctor.fix`, under its guard; lock files and unmount
-//! markers are counted and kept; a walk past its bound says so; and no id,
-//! however it is written, removes anything outside the entry it names.
+//! What interrupted operations leave, in `home leftovers` and under `home
+//! prune` (layerfs-project#180, call surface 2.0): each kind is listed with
+//! its path, size and modification time on `native` and through a
+//! machine's worker; each is removed only by `home prune`, under its guard;
+//! lock files and unmount markers are never listed and are kept; a machine
+//! that was not walked, or not to the end, is named in `not_listed`; and no
+//! id, however it is written, removes anything outside the entry it names.
 //!
 //! Nothing runs a daemon or a machine: the leftovers are made by hand in a
 //! temporary home, the machine `box` is this build's worker server on a
@@ -14,9 +15,11 @@
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::process::LocalProcess;
-use layerfs_control::doctor::leftover_fix::{fix, fix_on};
+use layerfs_control::doctor::leftover_list::list;
+use layerfs_control::doctor::leftover_prune::{prune, prune_on};
 use layerfs_control::doctor::leftovers::{self, Bounds, Kind, BOUNDS};
 use layerfs_home::home::{self, paths, write_record};
+use layerfs_home::time::iso;
 use layerfs_machine::worker::{self, Hello, MAX_HELLO};
 use layerfs_sandbox::record::{DaemonRecord, Local};
 use layerfs_store::backup::create::Creating;
@@ -117,36 +120,30 @@ fn leftovers_under(root: &Path, id8: &str) -> PathBuf {
     outside
 }
 
-/// The report's leftover findings: each `leftover` map.
-fn found(report: &SdkValue) -> Vec<SdkValue> {
-    let Some(SdkValue::List(findings)) = report.get("findings") else {
-        panic!("no findings: {report:?}");
+/// The list's items, each checked against its own fields.
+fn found(listed: &SdkValue) -> Vec<SdkValue> {
+    let Some(SdkValue::List(items)) = listed.get("items") else {
+        panic!("no items: {listed:?}");
     };
-    (findings.iter())
-        .filter_map(|finding| {
-            let left = finding.get("leftover")?.clone();
-            let fix = finding.get_text("fix").unwrap();
-            let id = left.get_text("id").unwrap();
-            let fixable = left.get_bool("fixable");
-            assert_eq!(
-                fix.contains(&format!("`layerfs doctor fix {id}`")),
-                fixable,
-                "{finding:?}"
-            );
-            assert_eq!(finding.get_text("severity"), Some("warning"));
-            let message = finding.get_text("message").unwrap();
-            assert!(
-                message.contains(left.get_text("path").unwrap()),
-                "{message}"
-            );
-            Some(left)
-        })
-        .collect()
+    for item in items {
+        let id = item.get_text("leftover").unwrap();
+        let (machine, kind) = (
+            item.get_text("machine").unwrap(),
+            item.get_text("kind").unwrap(),
+        );
+        assert!(id.starts_with(&format!("{machine}:{kind}:")), "{item:?}");
+        assert!(Kind::named(kind).is_some(), "{item:?}");
+        assert!(item
+            .get_text("modified_at")
+            .is_some_and(|at| at.ends_with('Z')));
+        assert!(item.get_text("path").is_some(), "{item:?}");
+    }
+    items.clone()
 }
 
-/// The leftover of `kind` on `machine` in `report`.
-fn one(report: &SdkValue, machine: &str, kind: Kind) -> SdkValue {
-    let all = found(report);
+/// The leftover of `kind` on `machine` in `listed`.
+fn one(listed: &SdkValue, machine: &str, kind: Kind) -> SdkValue {
+    let all = found(listed);
     let mut of_kind = (all.iter()).filter(|left| {
         left.get_text("machine") == Some(machine) && left.get_text("kind") == Some(kind.as_str())
     });
@@ -157,26 +154,26 @@ fn one(report: &SdkValue, machine: &str, kind: Kind) -> SdkValue {
     left.clone()
 }
 
-fn ids(report: &SdkValue) -> Vec<String> {
-    (found(report).iter())
-        .map(|left| left.get_text("id").unwrap().to_owned())
+fn ids(listed: &SdkValue) -> Vec<String> {
+    (found(listed).iter())
+        .map(|left| left.get_text("leftover").unwrap().to_owned())
         .collect()
 }
 
-fn row(report: &SdkValue, machine: &str) -> SdkValue {
-    let Some(SdkValue::List(rows)) = report.get("leftovers") else {
-        panic!("no leftovers rows: {report:?}");
+/// The machines `listed` names in `not_listed`, each with its entry.
+fn not_listed(listed: &SdkValue) -> Vec<(String, SdkValue)> {
+    let Some(SdkValue::List(rows)) = listed.get("not_listed") else {
+        panic!("no not_listed: {listed:?}");
     };
     (rows.iter())
-        .find(|row| row.get_text("machine") == Some(machine))
-        .unwrap_or_else(|| panic!("machine {machine} was not walked: {rows:?}"))
-        .clone()
+        .map(|row| (row.get_text("machine").unwrap().to_owned(), row.clone()))
+        .collect()
 }
 
-/// What interrupted operations left in `home`, the list `doctor.fix`
-/// takes its ids from.
+/// What interrupted operations left in `home`, the list `home prune` takes
+/// its ids from.
 fn doctor(home: &Path) -> SdkValue {
-    layerfs_control::doctor::leftovers(home).unwrap()
+    list(home, None).unwrap()
 }
 
 fn refusal(outcome: Result<SdkValue, SdkRefusal>, code: &str) -> String {
@@ -191,10 +188,9 @@ fn reported(report: &SdkValue, machine: &str, root: &Path, id8: &str) {
     let expect = |kind: Kind, path: PathBuf, bytes: i64, name: &str| {
         let left = one(report, machine, kind);
         assert_eq!(left.get_text("path"), Some(path.to_str().unwrap()));
-        assert_eq!(left.get_int("bytes"), Some(bytes), "{left:?}");
-        assert!(left.get_int("age").is_some_and(|age| age >= 0), "{left:?}");
+        assert_eq!(left.get_int("size"), Some(bytes), "{left:?}");
         let id = format!("{machine}:{}:{name}", kind.as_str());
-        assert_eq!(left.get_text("id"), Some(id.as_str()));
+        assert_eq!(left.get_text("leftover"), Some(id.as_str()));
         left
     };
     // the files of the run folder but not its Workspace mount folder: the
@@ -223,8 +219,12 @@ fn reported(report: &SdkValue, machine: &str, root: &Path, id8: &str) {
         HEX,
     );
     // the modification time of the part itself, set two hours back
-    let age = part.get_int("age").unwrap();
-    assert!((7195..7400).contains(&age), "{age}");
+    let at = part.get_text("modified_at").unwrap().to_owned();
+    let now = home::now_ms();
+    assert!(
+        iso(now - 7_400_000) <= at && at <= iso(now - 7_195_000),
+        "{at}"
+    );
     expect(
         Kind::BackupStaging,
         paths::store_dir(root, "shop").join("store.sqlite.backup"),
@@ -238,15 +238,15 @@ fn reported(report: &SdkValue, machine: &str, root: &Path, id8: &str) {
         COPY,
     );
     // no uncertain line names it: reported only
-    assert!(!copy.get_bool("fixable"), "{copy:?}");
+    assert!(copy.get_bool("report_only"), "{copy:?}");
+    assert_eq!(copy.get("removable_at"), Some(&SdkValue::Null), "{copy:?}");
+    // the lock files and the unmount marker are never listed
     assert_eq!(found(report).len(), 6, "{:?}", found(report));
-    let row = row(report, machine);
-    assert!(row.get_bool("complete"), "{row:?}");
-    assert_eq!(row.get_int("image_locks"), Some(2), "{row:?}");
-    assert_eq!(row.get_int("unmount_markers"), Some(1), "{row:?}");
+    // the walk ended: the machine is not named as passed over
+    assert!(!not_listed(report).iter().any(|(name, _)| name == machine));
 }
 
-/// Removes every fixable leftover of [`leftovers_under`] on `machine` and
+/// Removes every removable leftover of [`leftovers_under`] on `machine` and
 /// checks each is gone, from the disk and from the next report.
 fn fixed(home: &Path, machine: &str, root: &Path, outside: &Path) {
     let cache = paths::run_root(root).join("images");
@@ -258,19 +258,31 @@ fn fixed(home: &Path, machine: &str, root: &Path, outside: &Path) {
         Kind::BackupStaging,
     ] {
         let left = one(&doctor(home), machine, kind);
-        let (id, path) = (left.get_text("id").unwrap(), left.get_text("path").unwrap());
+        let (id, path) = (
+            left.get_text("leftover").unwrap(),
+            left.get_text("path").unwrap(),
+        );
         assert!(std::fs::symlink_metadata(path).is_ok(), "{path}");
-        let removed = fix(home, id).unwrap_or_else(|r| panic!("{id}: {r:?}"));
-        assert_eq!(removed.get("removed"), Some(&SdkValue::Bool(true)));
-        assert_eq!(removed.get_text("id"), Some(id));
+        let removed = prune(home, id).unwrap_or_else(|r| panic!("{id}: {r:?}"));
+        assert_eq!(removed.get_text("outcome"), Some("removed"));
+        assert_eq!(removed.get_text("leftover"), Some(id));
         assert_eq!(removed.get_text("machine"), Some(machine));
         assert_eq!(removed.get_text("kind"), Some(kind.as_str()));
         assert_eq!(removed.get_text("path"), Some(path));
+        // what it freed is the size it was listed with; a run folder's
+        // Workspace mount folder is removed with it but was never measured,
+        // and an unpack's temporary is removed without a count
+        let freed = removed.get_int("freed_bytes");
+        match kind {
+            Kind::RunFolder => assert!(freed > left.get_int("size"), "{removed:?}"),
+            Kind::ImageTmp => assert_eq!(freed, None, "{removed:?}"),
+            _ => assert_eq!(freed, left.get_int("size"), "{removed:?}"),
+        }
         assert!(std::fs::symlink_metadata(path).is_err(), "{path} is there");
         assert!(!ids(&doctor(home)).iter().any(|other| other == id), "{id}");
         // gone: the same id is not found again
-        refusal(fix(home, id), "NotFound");
-        // every fix leaves the image lock files, and what a link named
+        refusal(prune(home, id), "NotFound");
+        // every removal leaves the image lock files, and what a link named
         assert!(cache.join(format!("{HEX}.2.lock")).is_file());
         assert!(cache
             .join(format!("{}.2.lock", HEX.replace('0', "f")))
@@ -280,13 +292,10 @@ fn fixed(home: &Path, machine: &str, root: &Path, outside: &Path) {
     }
     // the folder copy is still there: nothing names it
     assert_eq!(found(&doctor(home)).len(), 1);
-    let row = row(&doctor(home), machine);
-    assert_eq!(row.get_int("image_locks"), Some(2), "{row:?}");
-    assert_eq!(row.get_int("unmount_markers"), Some(1), "{row:?}");
 }
 
 #[test]
-fn native_reports_each_kind_and_fix_removes_it() {
+fn native_lists_each_kind_and_prune_removes_it() {
     let (home, id8) = new_home("native");
     assert!(found(&doctor(&home)).is_empty());
     let outside = leftovers_under(&home, &id8);
@@ -294,17 +303,17 @@ fn native_reports_each_kind_and_fix_removes_it() {
     file(&paths::store_dir(&home, "web").join("backup.staging"), 11);
     let report = doctor(&home);
     let staged = (found(&report).into_iter())
-        .find(|left| left.get_text("id") == Some("native:backup-staging:web/backup.staging"))
+        .find(|left| left.get_text("leftover") == Some("native:backup_staging:web/backup.staging"))
         .expect("backup.staging");
-    assert_eq!(staged.get_int("bytes"), Some(11));
-    fix(&home, "native:backup-staging:web/backup.staging").unwrap();
+    assert_eq!(staged.get_int("size"), Some(11));
+    prune(&home, "native:backup_staging:web/backup.staging").unwrap();
     assert!(!paths::store_dir(&home, "web")
         .join("backup.staging")
         .exists());
     reported(&doctor(&home), "native", &home, &id8);
     // on native no Init is staged, so no line can name the copy: reported only
-    let copy = format!("native:init-copy:{COPY}");
-    let why = refusal(fix(&home, &copy), "InvalidInput");
+    let copy = format!("native:init_copy:{COPY}");
+    let why = refusal(prune(&home, &copy), "InvalidInput");
     assert!(why.contains("only reported"), "{why}");
     fixed(&home, "native", &home, &outside);
     assert!(home
@@ -343,7 +352,7 @@ fn name_copy(home: &Path, deadline_in: i64) {
 }
 
 #[test]
-fn a_worker_reports_each_kind_and_fix_removes_it() {
+fn a_worker_lists_each_kind_and_prune_removes_it() {
     let placed = worker_store::placed("worker", serve);
     let (home, root) = (placed.home.clone(), placed.root.clone());
     let id8 = home::opened(&home).unwrap().id[..8].to_owned();
@@ -364,36 +373,40 @@ fn a_worker_reports_each_kind_and_fix_removes_it() {
     .unwrap();
     let report = doctor(&home);
     reported(&report, "box", &root, &id8);
-    // the home itself holds none of them
-    assert!(row(&report, "native").get_bool("complete"));
+    // the home itself holds none of them, and every side was walked
+    assert!(not_listed(&report).is_empty(), "{report:?}");
     assert!(found(&report)
         .iter()
         .all(|left| left.get_text("machine") == Some("box")));
-    let why = refusal(fix(&home, &format!("box:run-folder:{kept}")), "InUse");
+    // `--machine` lists one side
+    let only = list(&home, Some("box")).unwrap();
+    assert_eq!(ids(&only), ids(&report));
+    assert!(found(&list(&home, Some("native")).unwrap()).is_empty());
+    let why = refusal(prune(&home, &format!("box:run_folder:{kept}")), "InUse");
     assert!(why.contains("a Sandbox record names"), "{why}");
     assert!(paths::run_root(&root).join(&kept).is_dir());
 
     // a staged snapshot on the machine is removed under the home's lock
-    let staged = "box:backup-staging:shop/store.sqlite.backup";
+    let staged = "box:backup_staging:shop/store.sqlite.backup";
     let held = Creating::take(&home, "shop").unwrap();
-    let why = refusal(fix(&home, staged), "InUse");
+    let why = refusal(prune(&home, staged), "InUse");
     assert!(why.contains("backup create"), "{why}");
     drop(held);
 
     // the folder copy: unnamed it is only reported; named, it is removable
     // an hour after its Init's deadline, by the worker's own discard
-    let copy = format!("box:init-copy:{COPY}");
-    refusal(fix(&home, &copy), "InvalidInput");
+    let copy = format!("box:init_copy:{COPY}");
+    refusal(prune(&home, &copy), "InvalidInput");
     name_copy(&home, 60_000);
     let left = one(&doctor(&home), "box", Kind::InitCopy);
-    assert!(left.get_bool("fixable"), "{left:?}");
-    let not_before = left.get_int("not_before").unwrap();
-    assert!(not_before > home::now_ms() + 3_500_000, "{left:?}");
-    let why = refusal(fix(&home, &copy), "InUse");
+    assert!(!left.get_bool("report_only"), "{left:?}");
+    let removable_at = left.get_text("removable_at").unwrap().to_owned();
+    assert!(removable_at > iso(home::now_ms() + 3_500_000), "{left:?}");
+    let why = refusal(prune(&home, &copy), "InUse");
     assert!(why.contains("deadline"), "{why}");
     // a deadline that passed, but less than an hour ago
     name_copy(&home, -600_000);
-    refusal(fix(&home, &copy), "InUse");
+    refusal(prune(&home, &copy), "InUse");
     assert!(root
         .join(format!("incoming/init-{COPY}/src/main.rs"))
         .is_file());
@@ -401,16 +414,17 @@ fn a_worker_reports_each_kind_and_fix_removes_it() {
     fixed(&home, "box", &root, &outside);
 
     name_copy(&home, -2 * 3_600_000);
-    let removed = fix(&home, &copy).unwrap();
-    assert_eq!(removed.get_text("kind"), Some("init-copy"));
+    let removed = prune(&home, &copy).unwrap();
+    assert_eq!(removed.get_text("kind"), Some("init_copy"));
+    assert_eq!(removed.get("freed_bytes"), Some(&SdkValue::Null));
     assert!(!root.join(format!("incoming/init-{COPY}")).exists());
     assert!(found(&doctor(&home)).is_empty());
-    refusal(fix(&home, &copy), "NotFound");
+    refusal(prune(&home, &copy), "NotFound");
     placed.remove();
 }
 
 #[test]
-fn a_stopped_machine_is_unavailable_and_a_lost_answer_unknown() {
+fn a_stopped_or_silent_machine_is_not_listed_and_a_lost_answer_unknown() {
     let (home, _) = new_home("routes");
     let machine = |name: &str| {
         write_record(
@@ -421,15 +435,48 @@ fn a_stopped_machine_is_unavailable_and_a_lost_answer_unknown() {
     };
     // recorded, with no worker: stopped
     machine("off");
-    let id = format!("off:image-part:{HEX}");
-    let why = refusal(fix(&home, &id), "Unavailable");
+    let id = format!("off:image_part:{HEX}");
+    let why = refusal(prune(&home, &id), "Unavailable");
     assert!(why.contains("machine start off"), "{why}");
     refusal(
-        fix(&home, "off:run-folder:layerfs-00000000-x"),
+        prune(&home, "off:run_folder:layerfs-00000000-x"),
         "Unavailable",
     );
-    // and its leftovers are not in the report: nothing is started to ask
-    assert!(row_names(&doctor(&home)) == ["native"]);
+    // nothing is started to list its leftovers: it is named instead, by
+    // the state of the thing at the root
+    let passed = not_listed(&doctor(&home));
+    assert_eq!(passed.len(), 1, "{passed:?}");
+    let (name, entry) = &passed[0];
+    assert_eq!(name, "off");
+    let by = entry.get("blocked_by").unwrap();
+    assert_eq!(by.get_text("machine"), Some("off"));
+    assert_eq!(by.get_text("reason"), Some("stopped"));
+    assert_eq!(entry.get_text("message"), Some("machine off is stopped"));
+    assert!(entry.get("reason").is_none(), "{entry:?}");
+    // `--machine` names one machine, which must be the home's
+    assert_eq!(not_listed(&list(&home, Some("off")).unwrap()).len(), 1);
+    assert!(not_listed(&list(&home, Some("native")).unwrap()).is_empty());
+    let why = refusal(list(&home, Some("nowhere")), "NotFound");
+    assert!(why.contains("no machine named nowhere"), "{why}");
+
+    // a machine whose recorded worker does not answer is named with why
+    machine("silent");
+    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = closed.local_addr().unwrap().to_string();
+    drop(closed);
+    write_record(
+        &paths::worker_record(&home, "silent"),
+        &SdkValue::map([("address", t(&address)), ("secret", t("k"))]),
+    )
+    .unwrap();
+    let passed = not_listed(&list(&home, Some("silent")).unwrap());
+    assert_eq!(passed.len(), 1, "{passed:?}");
+    assert_eq!(
+        passed[0].1.get_text("reason"),
+        Some("timeout"),
+        "{passed:?}"
+    );
+    assert!(passed[0].1.get("blocked_by").is_none(), "{passed:?}");
 
     // a worker of this build that takes the request and then goes away
     machine("lost");
@@ -447,28 +494,19 @@ fn a_stopped_machine_is_unavailable_and_a_lost_answer_unknown() {
         worker::write_frame(&mut stream, &Hello::own().to_frame()).unwrap();
         worker::read_frame(&mut stream).ok().flatten()
     });
-    let why = refusal(fix(&home, &format!("lost:image-part:{HEX}")), "Unknown");
+    let why = refusal(prune(&home, &format!("lost:image_part:{HEX}")), "Unknown");
     assert!(
         why.contains("not resent") || why.contains("may have run"),
         "{why}"
     );
     let request = served.join().unwrap().expect("the request was sent once");
-    assert_eq!(request.get_text("op"), Some("doctor.fix"));
+    assert_eq!(request.get_text("op"), Some("home.prune"));
     let args = request.get("args").unwrap();
     // a kind and a name travel, never a path
-    assert_eq!(args.get_text("kind"), Some("image-part"));
+    assert_eq!(args.get_text("kind"), Some("image_part"));
     assert_eq!(args.get_text("name"), Some(HEX));
     assert!(args.get("path").is_none(), "{args:?}");
     std::fs::remove_dir_all(home.parent().unwrap()).unwrap();
-}
-
-fn row_names(report: &SdkValue) -> Vec<String> {
-    let Some(SdkValue::List(rows)) = report.get("leftovers") else {
-        panic!("no leftovers rows: {report:?}");
-    };
-    (rows.iter())
-        .map(|row| row.get_text("machine").unwrap().to_owned())
-        .collect()
 }
 
 /// Sandbox `id`'s record in `home`: started, its daemon the process `pid`,
@@ -513,7 +551,7 @@ fn a_run_folder_in_use_is_refused() {
     let outside = dir(&home.parent().unwrap().join("outside"));
     let run = paths::run_root(&home);
     let name = |sandbox: &str| format!("layerfs-{id8}-{sandbox}");
-    let id = |sandbox: &str| format!("native:run-folder:{}", name(sandbox));
+    let id = |sandbox: &str| format!("native:run_folder:{}", name(sandbox));
 
     // a Sandbox whose record names its run folder is not a leftover
     let mut daemon = std::process::Command::new("sleep")
@@ -527,31 +565,31 @@ fn a_run_folder_in_use_is_refused() {
     let earlier = run_folder(&home, &format!("lfs-{id8}-live"), "live", &outside);
     let report = doctor(&home);
     let listed = ids(&report);
-    let earlier_id = format!("native:run-folder:lfs-{id8}-live");
+    let earlier_id = format!("native:run_folder:lfs-{id8}-live");
     assert_eq!(listed, [earlier_id.clone()], "{report:?}");
-    let why = refusal(fix(&home, &id("live")), "InUse");
+    let why = refusal(prune(&home, &id("live")), "InUse");
     assert!(why.contains("a Sandbox record names"), "{why}");
-    let why = refusal(fix(&home, &earlier_id), "InUse");
+    let why = refusal(prune(&home, &earlier_id), "InUse");
     assert!(why.contains("live daemon"), "{why}");
     assert!(earlier.join("daemon.log").is_file() && recorded.join("daemon.log").is_file());
     // once that daemon ended, the earlier folder is removable; the recorded
     // one never is
     daemon.kill().unwrap();
     daemon.wait().unwrap();
-    fix(&home, &earlier_id).unwrap();
+    prune(&home, &earlier_id).unwrap();
     assert!(!earlier.exists());
-    refusal(fix(&home, &id("live")), "InUse");
+    refusal(prune(&home, &id("live")), "InUse");
 
     // no `owner` marker: not known to be a finished start's folder
     let bare = dir(&run.join(name("bare")));
     file(&bare.join("daemon.log"), 3);
     assert!(ids(&doctor(&home)).contains(&id("bare")));
-    let why = refusal(fix(&home, &id("bare")), "InUse");
+    let why = refusal(prune(&home, &id("bare")), "InUse");
     assert!(why.contains("no `owner` marker"), "{why}");
     // a marker just written: its Sandbox may be starting
     let fresh = run_folder(&home, &name("fresh"), "fresh", &outside);
     aged(&fresh.join("owner"), Duration::ZERO);
-    let why = refusal(fix(&home, &id("fresh")), "InUse");
+    let why = refusal(prune(&home, &id("fresh")), "InUse");
     assert!(why.contains("may be starting"), "{why}");
     // a Sandbox being created: its record is there, with no daemon yet
     let creating = run_folder(&home, &name("soon"), "soon", &outside);
@@ -566,7 +604,7 @@ fn a_run_folder_in_use_is_refused() {
     )
     .unwrap();
     assert!(!ids(&doctor(&home)).contains(&id("soon")));
-    refusal(fix(&home, &id("soon")), "InUse");
+    refusal(prune(&home, &id("soon")), "InUse");
     for kept in [&bare, &fresh, &creating] {
         assert!(kept.join("daemon.log").is_file(), "{}", kept.display());
     }
@@ -575,9 +613,9 @@ fn a_run_folder_in_use_is_refused() {
     dir(&run.join(format!("{}.root", name("bare"))));
     assert!(!ids(&doctor(&home))
         .iter()
-        .any(|id| id.contains("empty-root")));
+        .any(|id| id.contains("empty_root")));
     let why = refusal(
-        fix(&home, &format!("native:empty-root:{}", name("bare"))),
+        prune(&home, &format!("native:empty_root:{}", name("bare"))),
         "InUse",
     );
     assert!(why.contains("run folder is there"), "{why}");
@@ -602,9 +640,9 @@ fn guards_held_by_another_are_in_use() {
     let cache = paths::run_root(&home).join("images");
 
     // a `backup.create` of the Store holds `backup.lock`
-    let staged = "native:backup-staging:shop/store.sqlite.backup";
+    let staged = "native:backup_staging:shop/store.sqlite.backup";
     let held = Creating::take(&home, "shop").unwrap();
-    let why = refusal(fix(&home, staged), "InUse");
+    let why = refusal(prune(&home, staged), "InUse");
     assert!(why.contains("backup create"), "{why}");
     drop(held);
 
@@ -615,15 +653,15 @@ fn guards_held_by_another_are_in_use() {
     let lock = nix::fcntl::Flock::lock(lock, nix::fcntl::FlockArg::LockExclusiveNonblock)
         .map_err(|(_, error)| error)
         .unwrap();
-    let tmp = format!("native:image-tmp:{HEX}.2-ab12");
-    let why = refusal(fix(&home, &tmp), "InUse");
+    let tmp = format!("native:image_tmp:{HEX}.2-ab12");
+    let why = refusal(prune(&home, &tmp), "InUse");
     assert!(why.contains("lock"), "{why}");
     drop(lock);
 
     // an image part written within the hour may still be received
     let part = cache.join(format!(".recv-{HEX}.part"));
     aged(&part, Duration::from_secs(600));
-    let why = refusal(fix(&home, &format!("native:image-part:{HEX}")), "InUse");
+    let why = refusal(prune(&home, &format!("native:image_part:{HEX}")), "InUse");
     assert!(why.contains("unchanged"), "{why}");
 
     // nothing was removed, and with each guard free again all of it goes
@@ -637,11 +675,13 @@ fn guards_held_by_another_are_in_use() {
     aged(&part, Duration::from_secs(7200));
     fixed(&home, "native", &home, &outside);
 
-    // the kinds that are only counted are never removed
-    let lock = format!("native:image-lock:{HEX}.2");
-    let why = refusal(fix(&home, &lock), "InvalidInput");
-    assert!(why.contains("only reported"), "{why}");
-    refusal(fix(&home, "native:unmount-marker:s1/7"), "InvalidInput");
+    // an image's lock file and a Workspace's unmount marker are no
+    // leftover: no id names them, and nothing removes them
+    refusal(
+        prune(&home, &format!("native:image_lock:{HEX}.2")),
+        "NotFound",
+    );
+    refusal(prune(&home, "native:unmount_marker:s1/7"), "NotFound");
     assert!(cache.join(format!("{HEX}.2.lock")).is_file());
     assert!(home.join("sandbox/s1/workspace/7.unmount").is_file());
     std::fs::remove_dir_all(home.parent().unwrap()).unwrap();
@@ -667,46 +707,49 @@ fn a_crafted_id_removes_nothing_outside_its_entry() {
     let before = ids(&doctor(&home));
     assert_eq!(before.len(), 6, "a link is never a leftover: {before:?}");
 
-    let absolute = format!("native:run-folder:{}", outside.display());
+    let absolute = format!("native:run_folder:{}", outside.display());
+    let gone = format!("native:run-folder:layerfs-{id8}-gone");
     let crafted = [
         "",
         "native",
-        "native:run-folder",
-        "native:run-folder:",
-        "native:run-folder:..",
-        "native:run-folder:.",
-        "native:run-folder:../../../outside",
-        "native:run-folder:a/b",
-        "native:run-folder:images",
-        "native:run-folder:.hidden",
+        "native:run_folder",
+        "native:run_folder:",
+        "native:run_folder:..",
+        "native:run_folder:.",
+        "native:run_folder:../../../outside",
+        "native:run_folder:a/b",
+        "native:run_folder:images",
+        "native:run_folder:.hidden",
         absolute.as_str(),
-        "native:empty-root:..",
-        "native:empty-root:../x",
-        "native:backup-staging:../outside/backup.staging",
-        "native:backup-staging:shop/../../layerfs.json",
-        "native:backup-staging:shop/store.sqlite",
-        "native:backup-staging:shop/record.json",
-        "native:image-tmp:../../x",
-        "native:image-part:../x",
-        "native:init-copy:../../outside",
+        // today's hyphenated kind is no kind
+        gone.as_str(),
+        "native:empty_root:..",
+        "native:empty_root:../x",
+        "native:backup_staging:../outside/backup.staging",
+        "native:backup_staging:shop/../../layerfs.json",
+        "native:backup_staging:shop/store.sqlite",
+        "native:backup_staging:shop/record.json",
+        "native:image_tmp:../../x",
+        "native:image_part:../x",
+        "native:init_copy:../../outside",
         "native:nothing:x",
-        "../x:run-folder:y",
-        "NATIVE:run-folder:y",
+        "../x:run_folder:y",
+        "NATIVE:run_folder:y",
     ];
     for id in crafted {
         assert!(leftovers::parse(id).is_none(), "{id}");
-        refusal(fix(&home, id), "NotFound");
+        refusal(prune(&home, id), "NotFound");
     }
     // well-formed ids that name a link, or an entry behind one
     for id in [
-        format!("native:run-folder:layerfs-{id8}-link"),
-        format!("native:empty-root:layerfs-{id8}-away"),
-        "native:backup-staging:evil/backup.staging".to_owned(),
-        "native:backup-staging:evil/store.sqlite.backup".to_owned(),
-        "native:backup-staging:shop/backup.staging".to_owned(),
+        format!("native:run_folder:layerfs-{id8}-link"),
+        format!("native:empty_root:layerfs-{id8}-away"),
+        "native:backup_staging:evil/backup.staging".to_owned(),
+        "native:backup_staging:evil/store.sqlite.backup".to_owned(),
+        "native:backup_staging:shop/backup.staging".to_owned(),
     ] {
         assert!(leftovers::parse(&id).is_some(), "{id}");
-        refusal(fix(&home, &id), "NotFound");
+        refusal(prune(&home, &id), "NotFound");
     }
     // the removing side refuses the same names when asked directly, as a
     // worker is
@@ -718,7 +761,7 @@ fn a_crafted_id_removes_nothing_outside_its_entry() {
         (Kind::ImageTmp, "../../x"),
         (Kind::ImagePart, "../x"),
     ] {
-        refusal(fix_on(&home, kind, name, &[]), "NotFound");
+        refusal(prune_on(&home, kind, name, &[]), "NotFound");
     }
     // a run root that is itself a link out of the home is not entered
     let (other, other8) = new_home("crafted-linked");
@@ -732,7 +775,7 @@ fn a_crafted_id_removes_nothing_outside_its_entry() {
     std::os::unix::fs::symlink(&elsewhere, paths::run_root(&other)).unwrap();
     assert!(found(&doctor(&other)).is_empty());
     refusal(
-        fix(&other, &format!("native:run-folder:layerfs-{other8}-x")),
+        prune(&other, &format!("native:run_folder:layerfs-{other8}-x")),
         "NotFound",
     );
     assert!(elsewhere
@@ -746,7 +789,7 @@ fn a_crafted_id_removes_nothing_outside_its_entry() {
     assert!(home.join("layerfs.json").is_file());
     assert_eq!(ids(&doctor(&home)), before);
     // the run folder's own link out is unlinked with it, never followed
-    fix(&home, &format!("native:run-folder:layerfs-{id8}-gone")).unwrap();
+    prune(&home, &format!("native:run_folder:layerfs-{id8}-gone")).unwrap();
     assert!(outside.join("precious").is_file());
     std::fs::remove_dir_all(other.parent().unwrap()).unwrap();
     std::fs::remove_dir_all(home.parent().unwrap()).unwrap();

@@ -278,9 +278,7 @@ impl SandboxRecord {
 
     /// Writes the record into Sandbox folder `dir`, with its version.
     pub fn write_in(&self, dir: &Path) -> Result<()> {
-        write_entity(&dir.join("record.json"), &self.to_record())?;
-        home::generation::moved_above(dir);
-        Ok(())
+        write_entity(&dir.join("record.json"), &self.to_record())
     }
 
     /// The Sandbox's name (its folder's).

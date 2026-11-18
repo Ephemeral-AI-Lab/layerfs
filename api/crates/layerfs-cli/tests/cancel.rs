@@ -1,20 +1,20 @@
-//! Exec ids, exec records and `workspace.exec_cancel` on `native`
-//! (layerfs-project#113, compute-plane 2.0 §5, §8): a caller-named exec id
-//! is used and an omitted one is the first progress event; a duplicate is
-//! refused; a `sleep 600` started by one process (a `layerfs` command) is
-//! cancelled by another (this test) and its exec answers `cancelled` with
-//! its background children gone; cancelling an ended command answers
-//! `ended`; unmount and close are refused `Busy` while a command runs and
-//! `force` cancels it first; a stale record (its owner gone) is ended,
-//! removed and logged. While that command runs, `sandbox.get` from this
-//! other process lists it under its Workspace's `running` with the log tag
-//! of the call that started it and its program, beside the Workspace's
-//! `overlay_bytes` and the Sandbox's `workspace_capacity`
-//! (layerfs-project#178); once it ended, it is listed no more. Two commands
-//! run at once in one Workspace: a third runs and ends beside them, both
-//! are listed, and cancelling one leaves the other running. The live
-//! halves need the native daemon at LAYERFS_DAEMON; without it, they say
-//! NOT_RUN.
+//! Exec ids, exec records and `workspace.cancel` on `native`
+//! (layerfs-project#113, compute-plane 2.0 §5, §8, call surface 2.0):
+//! control makes each exec id, the first progress event (`--progress`
+//! prints it first on stderr); a `sleep 600` started by one process (a
+//! `layerfs` command) is cancelled by another (this test) and its exec
+//! answers `cancelled` with its background children gone; cancelling an
+//! ended command answers `already_ended`; unmount and close are refused
+//! `Busy` while a command runs and `force` cancels it first; a stale record
+//! (its owner gone) is ended, removed and logged. While that command runs,
+//! `sandbox.get` from this other process lists it under its Workspace's
+//! `running` with the log tag of the call that started it and its program,
+//! beside the Workspace's `overlay_bytes` and the Sandbox's
+//! `workspace_capacity` (layerfs-project#178); once it ended, it is listed
+//! no more. Two commands run at once in one Workspace: a third runs and
+//! ends beside them, both are listed, and cancelling one leaves the other
+//! running. The live halves need the native daemon at LAYERFS_DAEMON;
+//! without it, they say NOT_RUN.
 use layerfs_api::home;
 use layerfs_bridge::control::SdkValue;
 use std::io::{BufRead, BufReader};
@@ -63,18 +63,38 @@ fn refused(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> String {
 /// The log tag of every command [`started`] starts.
 const TAG: &str = "dsh:s9:t1";
 
-/// `layerfs workspace exec <ws> <script> --exec-id <id>`, started, its call
-/// tagged [`TAG`].
-fn started(home: &Path, ws: &str, script: &str, id: &str) -> Child {
-    Command::new(LAYERFS)
-        .args(["workspace", "exec", ws, script, "--exec-id", id])
+/// `layerfs workspace exec <ws> <script> --progress`, started, its call
+/// tagged [`TAG`], with the exec id control made: the first line on its
+/// stderr, the `{ phase: "start", exec }` progress event.
+fn started(home: &Path, ws: &str, script: &str) -> (Child, String) {
+    let mut child = Command::new(LAYERFS)
+        .args(["workspace", "exec", ws, script, "--progress"])
         .env("LAYERFS_HOME", home)
         .env("LAYERFS_LOGS_TAG", TAG)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .process_group(0)
         .spawn()
-        .unwrap()
+        .unwrap();
+    let mut first = String::new();
+    BufReader::new(child.stderr.take().unwrap())
+        .read_line(&mut first)
+        .unwrap();
+    let event = layerfs_api::json::parse(first.trim()).unwrap_or_else(|e| panic!("{first}: {e:?}"));
+    let progress = event.get("progress").unwrap_or_else(|| panic!("{first}"));
+    assert_eq!(progress.get_text("phase"), Some("start"), "{first}");
+    let id = progress
+        .get_text("exec")
+        .unwrap_or_else(|| panic!("{first}"));
+    assert!(id.starts_with("exec-") && id.len() == 21, "{id}");
+    (child, id.to_owned())
+}
+
+/// The long answer of `name` (`detail: true`).
+fn long(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
+    let mut args = args.to_vec();
+    args.push(("detail", SdkValue::Bool(true)));
+    ok(home, name, &args)
 }
 
 /// Waits (at most 30 s) for `file` to exist with a stop handle.
@@ -122,8 +142,8 @@ fn exec_ids_records_and_cancel_on_native() {
     assert_eq!(
         refused(
             &home,
-            "workspace.exec_cancel",
-            &[("ws", t("s1:w")), ("exec_id", t("../x"))]
+            "workspace.cancel",
+            &[("workspace", t("s1:w")), ("exec", t("../x"))]
         ),
         "InvalidInput"
     );
@@ -159,71 +179,29 @@ fn exec_ids_records_and_cancel_on_native() {
     ];
     ok(&home, "sandbox.create", &sandbox);
     let mount = [("sandbox", t("s1")), ("branch", t("dev")), ("name", t("w"))];
-    let mounted = ok(&home, "workspace.mount", &mount);
-    let wsid = mounted.get_text("workspace").unwrap().to_owned();
+    let mounted = long(&home, "workspace.mount", &mount);
+    let wsid = mounted.get_text("id").unwrap().to_owned();
     let execs = home.join("sandbox/s1/workspace").join(&wsid).join("exec");
-    let ws = || ("ws", t("s1:w"));
+    let ws = || ("workspace", t("s1:w"));
 
-    // Cancel before even starting the CLI: the pending mark must survive
-    // process startup and be consumed at registration, without a resend.
-    let early = ok(
-        &home,
-        "workspace.exec_cancel",
-        &[ws(), ("exec_id", t("before-cli"))],
-    );
-    assert_eq!(early.get_text("outcome"), Some("ended"));
-    let early = started(&home, "s1:w", "sleep 600", "before-cli");
-    let answer = answered(early);
-    assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
-    assert!(answer.contains("\"exit_code\":137"), "{answer}");
-
-    // a caller-named exec id is used, and is the first progress event
+    // control makes the exec id and sends it first, as progress
     let mut events = Vec::new();
-    let named = call(
-        &home,
-        "workspace.exec",
-        &[ws(), ("command", t("echo hi")), ("exec_id", t("named-1"))],
-        &mut |event| events.push(event),
-    )
-    .unwrap();
-    assert_eq!(named.get_text("exec_id"), Some("named-1"));
-    assert_eq!(named.get_text("stop"), Some("group"));
-    assert_eq!(named.get_text("kind"), Some("exit:0"));
-    let first = events[0]
-        .get("progress")
-        .and_then(|p| p.get("exec"))
-        .cloned();
-    assert_eq!(
-        first
-            .and_then(|e| e.get_text("id").map(str::to_owned))
-            .as_deref(),
-        Some("named-1")
-    );
-    // an omitted one is made by control and sent first too
-    let mut events = Vec::new();
-    let made = call(
-        &home,
-        "workspace.exec",
-        &[ws(), ("command", t("true"))],
-        &mut |e| events.push(e),
-    )
-    .unwrap();
-    let id = made.get_text("exec_id").unwrap().to_owned();
+    let mut args = vec![ws(), ("command", t("echo hi"))];
+    args.push(("detail", SdkValue::Bool(true)));
+    let made = call(&home, "workspace.exec", &args, &mut |e| events.push(e)).unwrap();
+    let id = made.get_text("exec").unwrap().to_owned();
     assert!(id.starts_with("exec-"), "{id}");
-    let first = events[0]
-        .get("progress")
-        .and_then(|p| p.get("exec"))
-        .cloned();
-    assert_eq!(
-        first.and_then(|e| e.get_text("id").map(str::to_owned)),
-        Some(id)
-    );
+    assert_eq!(made.get_text("stop"), Some("group"));
+    assert_eq!(made.get_int("exit_code"), Some(0));
+    assert_eq!(made.get_text("stdout"), Some("hi\n"));
+    let first = events[0].get("progress").and_then(|p| p.get_text("exec"));
+    assert_eq!(first, Some(id.as_str()));
     // an ended command leaves no record
-    assert!(!execs.join("named-1.json").exists());
+    assert!(!execs.join(format!("{id}.json")).exists());
 
     // one process starts a command with a background child...
-    let child = started(&home, "s1:w", "sleep 600 & sleep 600", "long-1");
-    let record = recorded(&execs.join("long-1.json"));
+    let (child, long_1) = started(&home, "s1:w", "sleep 600 & sleep 600");
+    let record = recorded(&execs.join(format!("{long_1}.json")));
     let pgid = record
         .get("stop")
         .unwrap()
@@ -245,7 +223,7 @@ fn exec_ids_records_and_cancel_on_native() {
     assert_eq!(got.get_int("workspace_capacity"), Some(16), "{got:?}");
     let workspace = listed(&got);
     let running = SdkValue::List(vec![SdkValue::map([
-        ("exec_id", t("long-1")),
+        ("exec_id", t(&long_1)),
         ("started", record.get("started").cloned().unwrap()),
         ("tag", t(TAG)),
         ("program", t("sleep")),
@@ -261,9 +239,6 @@ fn exec_ids_records_and_cancel_on_native() {
     let bytes = i64::try_from(std::fs::metadata(&overlay).unwrap().len()).unwrap();
     assert!(bytes > 0, "{}", overlay.display());
     assert_eq!(workspace.get_int("overlay_bytes"), Some(bytes), "{got:?}");
-    // ...the same id is refused while it runs
-    let duplicate = [ws(), ("command", t("true")), ("exec_id", t("long-1"))];
-    assert_eq!(refused(&home, "workspace.exec", &duplicate), "Exists");
     // ...unmount and close are refused while it runs
     assert_eq!(refused(&home, "workspace.unmount", &[ws()]), "Busy");
     assert_eq!(
@@ -271,12 +246,8 @@ fn exec_ids_records_and_cancel_on_native() {
         "Busy"
     );
     // ...and another process cancels it
-    let cancel = [
-        ws(),
-        ("exec_id", t("long-1")),
-        ("grace_ms", SdkValue::Int(5000)),
-    ];
-    let cancelled = ok(&home, "workspace.exec_cancel", &cancel);
+    let cancel = [ws(), ("exec", t(&long_1))];
+    let cancelled = long(&home, "workspace.cancel", &cancel);
     assert_eq!(
         cancelled.get_text("outcome"),
         Some("cancelled"),
@@ -284,49 +255,24 @@ fn exec_ids_records_and_cancel_on_native() {
     );
     assert_eq!(cancelled.get_text("signal"), Some("SIGTERM"));
     let answer = answered(child);
-    assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
+    assert!(answer.contains("\"cancelled\":true"), "{answer}");
     assert!(answer.contains("\"exit_code\":143"), "{answer}");
     assert!(!group_runs(pgid), "the command's group still runs");
     // cancelling it again: it ended
-    let again = ok(&home, "workspace.exec_cancel", &cancel);
-    assert_eq!(again.get_text("outcome"), Some("ended"));
+    let again = ok(&home, "workspace.cancel", &cancel);
+    assert_eq!(again.get("already_ended"), Some(&SdkValue::Bool(true)));
     // ...and a get lists it no more
     let got = ok(&home, "sandbox.get", &[("name", t("s1"))]);
     let none = SdkValue::List(Vec::new());
     assert_eq!(listed(&got).get("running"), Some(&none), "{got:?}");
 
-    // a command started with no exec id: `--progress` prints the id control
-    // made as its first line on stderr, and another process cancels by it
-    let mut child = Command::new(LAYERFS)
-        .args(["workspace", "exec", "s1:w", "sleep 600", "--progress"])
-        .env("LAYERFS_HOME", &home)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .process_group(0)
-        .spawn()
-        .unwrap();
-    let mut first = String::new();
-    BufReader::new(child.stderr.take().unwrap())
-        .read_line(&mut first)
-        .unwrap();
-    let event = layerfs_api::json::parse(first.trim()).unwrap_or_else(|e| panic!("{first}: {e:?}"));
-    let made = event
-        .get("progress")
-        .and_then(|p| p.get("exec"))
-        .and_then(|e| e.get_text("id"))
-        .unwrap_or_else(|| panic!("{first}"))
-        .to_owned();
-    assert!(made.starts_with("exec-"), "{made}");
+    // with no exec id, the cancel ends every command running in it
+    let (child, made) = started(&home, "s1:w", "sleep 600");
     recorded(&execs.join(format!("{made}.json")));
-    let cancel_made = [ws(), ("exec_id", t(&made))];
-    let cancelled = ok(&home, "workspace.exec_cancel", &cancel_made);
+    let cancelled = long(&home, "workspace.cancel", &[ws()]);
     assert_eq!(cancelled.get_text("outcome"), Some("cancelled"));
     let answer = answered(child);
-    assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
-    assert!(
-        answer.contains(&format!("\"exec_id\":\"{made}\"")),
-        "{answer}"
-    );
+    assert!(answer.contains("\"cancelled\":true"), "{answer}");
 
     // a stale record (its owner gone) whose command still runs: ended,
     // removed and logged by the unmount that finds it
@@ -375,15 +321,15 @@ fn exec_ids_records_and_cancel_on_native() {
     )
     .unwrap();
     // force: a second command is cancelled first; the stale one is ended
-    let second = started(&home, "s1:w", "sleep 600", "long-2");
-    recorded(&execs.join("long-2.json"));
+    let (second, long_2) = started(&home, "s1:w", "sleep 600");
+    recorded(&execs.join(format!("{long_2}.json")));
     ok(
         &home,
         "workspace.unmount",
         &[ws(), ("force", SdkValue::Bool(true))],
     );
     let answer = answered(second);
-    assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
+    assert!(answer.contains("\"cancelled\":true"), "{answer}");
     let status = orphan.wait().unwrap();
     assert!(
         status.code().is_none(),
@@ -398,14 +344,14 @@ fn exec_ids_records_and_cancel_on_native() {
     assert!(!home.join("sandbox/s1/workspace").join(&wsid).exists());
 
     // close with force cancels the command first
-    let mounted = ok(&home, "workspace.mount", &mount);
-    let wsid = mounted.get_text("workspace").unwrap().to_owned();
-    let third = started(&home, "s1:w", "sleep 600", "long-3");
+    let mounted = long(&home, "workspace.mount", &mount);
+    let wsid = mounted.get_text("id").unwrap().to_owned();
+    let (third, long_3) = started(&home, "s1:w", "sleep 600");
     recorded(
         &home
             .join("sandbox/s1/workspace")
             .join(&wsid)
-            .join("exec/long-3.json"),
+            .join(format!("exec/{long_3}.json")),
     );
     ok(
         &home,
@@ -413,7 +359,7 @@ fn exec_ids_records_and_cancel_on_native() {
         &[("name", t("s1")), ("force", SdkValue::Bool(true))],
     );
     let answer = answered(third);
-    assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
+    assert!(answer.contains("\"cancelled\":true"), "{answer}");
     assert!(!home.join("sandbox/s1").exists());
 
     let _ = std::fs::remove_dir_all(&home);
@@ -471,16 +417,16 @@ fn two_commands_run_at_once_in_one_workspace_on_native() {
     ];
     ok(&home, "sandbox.create", &sandbox);
     let mount = [("sandbox", t("s1")), ("branch", t("dev")), ("name", t("w"))];
-    let mounted = ok(&home, "workspace.mount", &mount);
-    let wsid = mounted.get_text("workspace").unwrap().to_owned();
+    let mounted = long(&home, "workspace.mount", &mount);
+    let wsid = mounted.get_text("id").unwrap().to_owned();
     let execs = home.join("sandbox/s1/workspace").join(&wsid).join("exec");
-    let ws = || ("ws", t("s1:w"));
+    let ws = || ("workspace", t("s1:w"));
 
     // two long commands, started one after the other, both run
-    let first = started(&home, "s1:w", "sleep 600", "both-a");
-    let a = recorded(&execs.join("both-a.json"));
-    let second = started(&home, "s1:w", "sleep 600", "both-b");
-    let b = recorded(&execs.join("both-b.json"));
+    let (first, both_a) = started(&home, "s1:w", "sleep 600");
+    let a = recorded(&execs.join(format!("{both_a}.json")));
+    let (second, both_b) = started(&home, "s1:w", "sleep 600");
+    let b = recorded(&execs.join(format!("{both_b}.json")));
     let group = |record: &SdkValue| {
         let stop = record.get("stop").unwrap().get("group").unwrap();
         stop.get_int("pgid").unwrap()
@@ -489,49 +435,43 @@ fn two_commands_run_at_once_in_one_workspace_on_native() {
     assert_ne!(a_group, b_group, "each command has its own stop handle");
     assert!(group_runs(a_group) && group_runs(b_group));
     // a third runs and ends while both run
-    let third = ok(
+    let third = long(
         &home,
         "workspace.exec",
-        &[
-            ws(),
-            ("command", t("echo beside")),
-            ("exec_id", t("both-c")),
-        ],
+        &[ws(), ("command", t("echo beside"))],
     );
-    assert_eq!(third.get_text("kind"), Some("exit:0"), "{third:?}");
-    assert!(!execs.join("both-c.json").exists());
+    assert_eq!(third.get_int("exit_code"), Some(0), "{third:?}");
+    let both_c = third.get_text("exec").unwrap();
+    assert!(!execs.join(format!("{both_c}.json")).exists());
     // a get lists both, oldest first
-    assert_eq!(running_ids(&home), ["both-a", "both-b"]);
+    assert_eq!(running_ids(&home), [both_a.clone(), both_b.clone()]);
 
     // cancelling one leaves the other running
-    let cancel = |id: &str| {
-        let args = [ws(), ("exec_id", t(id)), ("grace_ms", SdkValue::Int(5000))];
-        ok(&home, "workspace.exec_cancel", &args)
-    };
-    let cancelled = cancel("both-a");
+    let cancel = |id: &str| long(&home, "workspace.cancel", &[ws(), ("exec", t(id))]);
+    let cancelled = cancel(&both_a);
     assert_eq!(
         cancelled.get_text("outcome"),
         Some("cancelled"),
         "{cancelled:?}"
     );
     let answer = answered(first);
-    assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
+    assert!(answer.contains("\"cancelled\":true"), "{answer}");
     assert!(
         !group_runs(a_group),
         "the cancelled command's group still runs"
     );
     assert!(group_runs(b_group), "the other command was ended too");
-    assert!(execs.join("both-b.json").exists());
-    assert_eq!(running_ids(&home), ["both-b"]);
+    assert!(execs.join(format!("{both_b}.json")).exists());
+    assert_eq!(running_ids(&home), [both_b.clone()]);
 
-    let cancelled = cancel("both-b");
+    let cancelled = cancel(&both_b);
     assert_eq!(
         cancelled.get_text("outcome"),
         Some("cancelled"),
         "{cancelled:?}"
     );
     let answer = answered(second);
-    assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
+    assert!(answer.contains("\"cancelled\":true"), "{answer}");
     assert!(running_ids(&home).is_empty());
 
     ok(&home, "workspace.unmount", &[ws()]);
@@ -542,7 +482,7 @@ fn two_commands_run_at_once_in_one_workspace_on_native() {
 
 /// A forced `machine.stop` of `native` cancels each Sandbox's running
 /// command before its runtime stops, as a forced close does: the exec
-/// answers `cancelled`, not the `exit:137` of the runtime's kill. Live only.
+/// answers `cancelled`, not a bare exit 137 of the runtime's kill. Live only.
 #[test]
 fn forced_native_machine_stop_cancels_running_commands() {
     let Ok(daemon) = std::env::var("LAYERFS_DAEMON") else {
@@ -579,16 +519,16 @@ fn forced_native_machine_stop_cancels_running_commands() {
     ];
     ok(&home, "sandbox.create", &sandbox);
     let mount = [("sandbox", t("s1")), ("branch", t("dev")), ("name", t("w"))];
-    let wsid = ok(&home, "workspace.mount", &mount)
-        .get_text("workspace")
+    let wsid = long(&home, "workspace.mount", &mount)
+        .get_text("id")
         .unwrap()
         .to_owned();
-    let child = started(&home, "s1:w", "sleep 600", "stop-1");
+    let (child, stop_1) = started(&home, "s1:w", "sleep 600");
     let record = recorded(
         &home
             .join("sandbox/s1/workspace")
             .join(&wsid)
-            .join("exec/stop-1.json"),
+            .join(format!("exec/{stop_1}.json")),
     );
     let pgid = record
         .get("stop")
@@ -605,11 +545,11 @@ fn forced_native_machine_stop_cancels_running_commands() {
         "{stopped:?}"
     );
     let answer = answered(child);
-    assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
+    assert!(answer.contains("\"cancelled\":true"), "{answer}");
     assert!(!group_runs(pgid), "the command's group still runs");
     // its record was settled, not left for a later close
     let execs = home.join("sandbox/s1/workspace").join(&wsid).join("exec");
-    assert!(!execs.join("stop-1.json").exists());
+    assert!(!execs.join(format!("{stop_1}.json")).exists());
     let _ = call(
         &home,
         "sandbox.close",

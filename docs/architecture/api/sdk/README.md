@@ -50,7 +50,7 @@ built table.
 
 | Family | Calls, in help order | Runs by default | Source |
 | --- | --- | --- | --- |
-| [`home`](home.md) | [`init`](home.md#homeinit), [`get`](home.md#homeget) | the caller's process; `get` reads files only and never opens the home | [`home/`](../../../../api/crates/layerfs-api/src/home) |
+| [`home`](home.md) | [`init`](home.md#homeinit), [`get`](home.md#homeget), [`log`](home.md#homelog), [`clear_log`](home.md#homeclear_log), `doctor`, [`leftovers`](home.md#homeleftovers), [`prune`](home.md#homeprune) | the caller's process; `get` reads files only and never opens the home; `leftovers` asks running machines' workers, `prune` runs on its leftover's machine | [`home/`](../../../../api/crates/layerfs-api/src/home) |
 | [`project`](project.md) | [`init`](project.md#projectinit), [`list`](project.md#projectlist), [`get`](project.md#projectget), [`stats`](project.md#projectstats), [`export`](project.md#projectexport), [`delete`](project.md#projectdelete), [`remove_file`](project.md#projectremove_file) | `list`, `get`: home records; the rest where the Store's calls run | [`project/`](../../../../api/crates/layerfs-api/src/project) |
 | [`branch`](branch.md) | [`list`](branch.md#branchlist), [`get`](branch.md#branchget), [`commits`](branch.md#branchcommits), [`get_commit`](branch.md#branchget_commit), [`fork`](branch.md#branchfork), [`merge`](branch.md#branchmerge), [`publish`](branch.md#branchpublish), [`diff`](branch.md#branchdiff), [`remove`](branch.md#branchremove) | where the Store's calls run | [`branch/`](../../../../api/crates/layerfs-api/src/branch) |
 | [`commit`](commit.md) | [`list`](commit.md#commitlist), [`get`](commit.md#commitget), [`diff`](commit.md#commitdiff) | where the Store's calls run | [`commit/`](../../../../api/crates/layerfs-api/src/commit) |
@@ -61,7 +61,6 @@ built table.
 | [`store`](store.md) | [`list`](store.md#storelist), [`get`](store.md#storeget), [`status`](store.md#storestatus), [`stats`](store.md#storestats), [`create`](store.md#storecreate), [`connect`](store.md#storeconnect), [`update`](store.md#storeupdate), [`push`](store.md#storepush), [`pull`](store.md#storepull), [`remove`](store.md#storeremove), [`compact`](store.md#storecompact), [`disconnect`](store.md#storedisconnect) | the caller's process; sqlite file steps in the Store machine's worker | [`store/`](../../../../api/crates/layerfs-api/src/store) |
 | [`backup`](backup.md) | [`connect`](backup.md#backupconnect), [`disconnect`](backup.md#backupdisconnect), [`list`](backup.md#backuplist), [`create`](backup.md#backupcreate), [`restore`](backup.md#backuprestore) | the caller's process; `create` stages on the Store's machine | [`backup/`](../../../../api/crates/layerfs-api/src/backup) |
 | [`logs`](logs.md) | [`list`](logs.md#logslist), [`reset`](logs.md#logsreset), [`machine`](logs.md#logsmachine), [`sandbox`](logs.md#logssandbox) | `list`, `reset`: the caller's process, home files only; `machine`, `sandbox`: where the log file is | [`logs/`](../../../../api/crates/layerfs-api/src/logs) |
-| [`doctor`](doctor.md) | [`fix`](doctor.md#doctorfix) | the machine its id names: the caller's process on `native`, else that machine's worker | [`doctor/`](../../../../api/crates/layerfs-api/src/doctor) |
 
 "Where the Store's calls run" is the caller's process for a PostgreSQL Store
 and for a sqlite Store on a locally executing machine (`native`, except on
@@ -86,7 +85,7 @@ in the [API layer page](../README.md#calling-conventions).
 
 | Rule | Enforced by |
 | --- | --- |
-| One file per call under its family, and the family's `mod.rs` lists them in help order (`doctor/` also holds the report's `options.rs` and `run.rs`, which are outside the table) | `the_source_is_one_file_per_call_under_its_family` in [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) |
+| One file per call under its family, and the family's `mod.rs` lists them in help order (the doctors' shared code is under `calls/doctor/`) | `the_source_is_one_file_per_call_under_its_family` in [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) |
 | Every front end exposes exactly the table's calls with the table's arguments | the generated [coverage matrix](../calls/coverage.md), checked by [`coverage.mjs`](../../../../api/node/test/coverage.mjs) |
 | These pages name every call once, under `### family.call`, and state the count above | [`inventory.mjs`](../../../../api/node/test/branch-file/inventory.mjs) |
 | A call runs once; nothing retries or replays it | [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) |
@@ -123,4 +122,3 @@ in the [API layer page](../README.md#calling-conventions).
 | [store](store.md) | sqlite and PostgreSQL Stores; compaction |
 | [backup](backup.md) | buckets and Store backups |
 | [logs](logs.md) | the home's call log; a machine's worker log and a Sandbox's daemon log |
-| [doctor](doctor.md) | `doctor.fix`: remove one leftover the report listed |

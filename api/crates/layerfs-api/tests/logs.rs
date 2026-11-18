@@ -226,7 +226,7 @@ fn argv_has_positionals_options_flags_and_the_scope_before_it_rewrites() {
         &home,
         &scope,
         "workspace.exec",
-        &[("ws", t("none")), ("command", t("make test"))],
+        &[("workspace", t("none")), ("command", t("make test"))],
     );
     let mut want = vec!["workspace".to_owned(), "exec".into(), "none".into()];
     want.push(bytes("make test".len()));
@@ -338,7 +338,7 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
     let _ = call(
         &home,
         "workspace.exec",
-        &[("ws", t("none")), ("command", t("echo secret"))],
+        &[("workspace", t("none")), ("command", t("echo secret"))],
     );
     assert_eq!(argv(&last(&home))[3], bytes(11));
     // json, encoded length
