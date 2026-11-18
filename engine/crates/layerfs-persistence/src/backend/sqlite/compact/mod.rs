@@ -24,28 +24,40 @@
 //!
 //! The module is split by phase: [`types`] (the §7/§11 shapes), [`op`] (the
 //! `.compact-op` sidecar), [`build`] with [`space`] (the fresh file's size
-//! during the load) and [`window`] (the pack copy's windows and the sealed
-//! file's read-ahead), [`verify`], [`install`], [`receipt`] and [`run`] (the
+//! during the load), [`lengths`] (every pack's stored length, in bounded
+//! memory), [`window`] (the pack copy's windows and the sealed file's
+//! read-ahead), [`repack`] (retained packs written again without
+//! their dead records) and [`values`] (only the inode value blocks a kept leaf
+//! reads are copied), [`verify`] with [`staged`] (the pass over the staged
+//! packs and their locators), [`install`], [`receipt`] and [`run`] (the
 //! orchestration on `SqliteHandles`).
 
 mod build;
 mod install;
+mod lengths;
 mod op;
 mod receipt;
+mod repack;
 mod run;
 mod space;
+mod staged;
 mod types;
+mod values;
 mod verify;
 mod window;
 
 pub use build::{peak_temp_bytes, source_mmap, SRC_MMAP_BYTES};
+pub use lengths::PackLengths;
 pub use op::{compact_op_status, CompactOpStatus};
 pub use receipt::receipt;
+pub use repack::Rewritten;
 pub use space::{reserve, trim};
+pub use staged::{PackScan, StagedLocators};
 pub use types::io_error;
 pub use types::{cap_delta_references, DELTA_BASE_REFERENCES_CAP};
 pub use types::{
     CompactFailpoint, CompactKeptWaste, CompactPath, CompactReceipt, CompactRequest,
     CompactResidue, CompactZeroReason, OwnerLiveness,
 };
-pub use window::{windows, Window, GAP_BYTES, WINDOW_BYTES};
+pub use values::verify as verify_inode_blocks;
+pub use window::{staged_windows, windows, Window, GAP_BYTES, WINDOW_BYTES};

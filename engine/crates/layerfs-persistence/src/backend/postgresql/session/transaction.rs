@@ -58,9 +58,15 @@ pub(crate) struct Transaction<'a> {
     fence: Option<u64>,
     /// The Store's checked schema, for statements that name it.
     pub(crate) schema: &'a str,
-    /// Pack rows read ahead of the scoped reads a caller announced
-    /// (`objects::read::expect`), by pack. Each is used once.
-    pub(crate) ahead: RefCell<std::collections::HashMap<i64, Row>>,
+    /// Pack rows held for the scoped reads a caller announced
+    /// (`objects::read::expect`).
+    pub(crate) packs: RefCell<super::super::objects::read::HeldPacks>,
+    /// Inode value blocks this transaction has read
+    /// (`metadata::reads::inode_values_ahead`).
+    pub(crate) values: RefCell<super::super::metadata::reads::HeldBlocks>,
+    /// Locators this transaction was told to expect lookups of
+    /// (`metadata::reads::expect_locations`).
+    pub(crate) located: RefCell<super::super::metadata::reads::HeldLocations>,
 }
 
 impl Transaction<'_> {
@@ -68,6 +74,11 @@ impl Transaction<'_> {
     /// around them: true inside a transaction.
     pub(crate) fn unfenced(&self) -> bool {
         self.fence.is_none()
+    }
+
+    /// Statements this session has sent so far, this transaction's included.
+    pub(crate) fn statements(&self) -> u64 {
+        self.state.borrow().work.statements
     }
 
     /// Online engine check preserving the server's concrete corruption verdict.
@@ -407,7 +418,9 @@ impl Session {
                     lane: Cell::new(mode == Mode::Publish && !turn.nested),
                     fence: None,
                     schema,
-                    ahead: RefCell::default(),
+                    packs: RefCell::default(),
+                    values: RefCell::default(),
+                    located: RefCell::default(),
                 };
                 let result = body(&tx);
                 let uncertain = tx.uncertain.get()
@@ -541,7 +554,9 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
             lane: Cell::new(false),
             fence,
             schema,
-            ahead: RefCell::default(),
+            packs: RefCell::default(),
+            values: RefCell::default(),
+            located: RefCell::default(),
         };
         let result = body(&tx);
         let uncertain = tx.uncertain.get();

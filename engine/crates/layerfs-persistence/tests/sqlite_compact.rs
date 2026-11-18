@@ -160,6 +160,80 @@ fn filesystem_root(handles: &SqliteHandles, seed: u8) -> ObjectId {
     save_objects(handles, &[directory, inode, object])
 }
 
+/// A filesystem root whose one directory entry is a regular file of `bytes`.
+/// Returns the root and the file's object.
+fn file_root(handles: &SqliteHandles, bytes: &[u8]) -> (ObjectId, ObjectId) {
+    use layerfs_content::{
+        filesystem::{
+            attributes::PortableMetadata,
+            directory::{encode_directory_page, DirectoryPage},
+            inode::{encode_inode_page, InodePage},
+            root::profile_id,
+            scope_for_seed, FilesystemRoot, PathName,
+        },
+        inode_leaf::{InodeKind, InodeMetadata, InodeValue},
+    };
+    let file = FinalizedObject::new(
+        ObjectRole::WholeFile,
+        encode_whole_file_payload(bytes).unwrap(),
+    )
+    .unwrap();
+    let file_id = file.id();
+    let directory = FinalizedObject::new(
+        ObjectRole::DirectoryLeaf,
+        encode_directory_page(&DirectoryPage::Leaf {
+            entries: vec![(PathName::new("file").unwrap(), 2)],
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    let directory_id = directory.id();
+    let metadata = |mode| {
+        InodeMetadata::Inline(PortableMetadata {
+            mode,
+            mtime_seconds: 1,
+            mtime_nanoseconds: 0,
+        })
+    };
+    let inode = FinalizedObject::new(
+        ObjectRole::InodeLeaf,
+        encode_inode_page(&InodePage::Leaf {
+            entries: vec![
+                (
+                    1,
+                    InodeValue {
+                        kind: InodeKind::Directory,
+                        namespace_ref_count: 0,
+                        content_root: directory_id,
+                        metadata_root: metadata(0o755),
+                    },
+                ),
+                (
+                    2,
+                    InodeValue {
+                        kind: InodeKind::RegularFile,
+                        namespace_ref_count: 1,
+                        content_root: file_id,
+                        metadata_root: metadata(0o644),
+                    },
+                ),
+            ],
+        })
+        .unwrap(),
+    )
+    .unwrap()
+    .with_references(vec![directory_id, file_id]);
+    let inode_id = inode.id();
+    let root = FilesystemRoot::new(profile_id(), scope_for_seed([1; 32]), 1, inode_id).unwrap();
+    let object = FinalizedObject::new(ObjectRole::FilesystemRoot, root.encode().unwrap())
+        .unwrap()
+        .with_references(vec![inode_id]);
+    (
+        save_objects(handles, &[file, directory, inode, object]),
+        file_id,
+    )
+}
+
 fn initialize(handles: &SqliteHandles, tag: u8, genesis: ObjectId) -> LayerStackRecord {
     handles
         .history
@@ -433,12 +507,47 @@ fn a_wholly_dead_pack_is_rebuilt_away() {
     clean(&reopened);
 }
 
+/// The list of `packs`, as a mark hands its retained packs over.
+fn ids(packs: &[i64]) -> layerfs_persistence::Sequence {
+    let space = layerfs_persistence::internals::Space::new(std::env::temp_dir());
+    let mut list = layerfs_persistence::Sequence::new(&space);
+    for pack in packs {
+        list.push(*pack as u64).unwrap();
+    }
+    list
+}
+
+/// The windows the product cuts for a file of `file` bytes whose packs are
+/// `lengths`: of the sealed file, or (`staged`) of the file a rebuild writes.
+fn cut_windows(
+    staged: bool,
+    lengths: &std::collections::BTreeMap<i64, u64>,
+    retained: &[i64],
+    file: u64,
+) -> layerfs_history::error::HistoryResult<Vec<layerfs_persistence::internals::Window>> {
+    use layerfs_persistence::internals::{staged_windows, windows};
+    let packs = lengths.iter().map(|(pack, length)| Ok((*pack, *length)));
+    let mut cut = Vec::new();
+    let mut each = |window| {
+        cut.push(window);
+        Ok(())
+    };
+    if staged {
+        let kept: u64 = retained.iter().filter_map(|pack| lengths.get(pack)).sum();
+        staged_windows(packs, &ids(retained), file.saturating_sub(kept), &mut each)?;
+    } else {
+        let total: u64 = lengths.values().sum();
+        windows(packs, &ids(retained), file.saturating_sub(total), &mut each)?;
+    }
+    Ok(cut)
+}
+
 /// The pack copy runs one window of retained packs per statement, and a long
 /// run of dead packs ends a window. Retained packs on both sides of such a run
 /// are two windows, and both arrive in the rebuilt Store.
 #[test]
 fn retained_packs_on_both_sides_of_a_long_dead_run_are_all_copied() {
-    use layerfs_persistence::internals::{windows, GAP_BYTES};
+    use layerfs_persistence::internals::GAP_BYTES;
     use std::collections::{BTreeMap, BTreeSet};
 
     let (_temp, handles, path) = create_store();
@@ -502,7 +611,7 @@ fn retained_packs_on_both_sides_of_a_long_dead_run_are_all_copied() {
     };
     assert!(dead_bytes > GAP_BYTES, "the dead run is {dead_bytes} bytes");
     let file = std::fs::metadata(&path).unwrap().len();
-    let plan = windows(&lengths, &retained, file).unwrap();
+    let plan = cut_windows(false, &lengths, &retained, file).unwrap();
     assert_eq!(plan.len(), 2, "{plan:?}");
     assert!(plan[0].last < plan[1].first);
 
@@ -529,6 +638,104 @@ fn retained_packs_on_both_sides_of_a_long_dead_run_are_all_copied() {
         .collect();
     assert_eq!(packs, retained, "every retained pack, and only those");
     drop(rebuilt);
+    // Two windows: each one's packs are in the totals once.
+    let (totals, sums) = pack_totals_and_sums(&path);
+    assert_eq!(totals, sums);
+    let kept: u64 = retained.iter().map(|pack| lengths[pack]).sum();
+    assert_eq!(u64::try_from(totals.0).unwrap(), kept);
+    clean(&reopened);
+}
+
+/// The verification reads the fresh file's `pack` rows one window at a time.
+/// A rebuild that keeps more than one window of payload is verified over
+/// several ranges, and every retained pack is counted in exactly one of them:
+/// the run installs, and the installed totals are the sums over its packs.
+#[test]
+fn a_rebuild_keeping_more_than_one_window_is_verified_window_by_window() {
+    use layerfs_persistence::internals::WINDOW_BYTES;
+    use std::collections::BTreeMap;
+
+    // A whole-file object holds at most 131,071 raw bytes.
+    const FILE_BYTES: usize = 100_000;
+    let (_temp, handles, path) = create_store();
+    // Bytes that do not compress: a pack is as long as its file.
+    let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+    let mut file = || -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(FILE_BYTES);
+        while bytes.len() < FILE_BYTES {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            bytes.extend_from_slice(&state.to_le_bytes());
+        }
+        bytes
+    };
+    // One Branch whose 720 Commits each keep one file (72 MB), and 100 files
+    // no Commit reaches (10 MB) between them.
+    let genesis = filesystem_root(&handles, 1);
+    let stack = initialize(&handles, 1, genesis);
+    let work = support::branch_id(1);
+    fork(&handles, stack.id, work, 1);
+    let mut live = vec![genesis];
+    let mut dead = Vec::new();
+    for index in 0..720 {
+        let (root, kept) = file_root(&handles, &file());
+        commit(&handles, work, root);
+        live.extend([root, kept]);
+        if index == 100 {
+            for _ in 0..100 {
+                dead.push(whole_file(&handles, &file()));
+            }
+        }
+    }
+    let before = generation(&handles);
+
+    let receipt = handles.compact(&request(49)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    let reopened = reopen(&path);
+    assert_eq!(generation(&reopened), before + 1);
+    for id in &live {
+        assert!(located(&reopened, *id), "retained file {id} survives");
+    }
+    for id in &dead {
+        assert!(!located(&reopened, *id), "dead file {id} is collected");
+    }
+
+    // The plan the verification read by: the fresh file's packs are all
+    // retained, and they are more than one window.
+    let lengths: BTreeMap<i64, u64> = {
+        let rebuilt = rusqlite::Connection::open_with_flags(
+            &path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .unwrap();
+        let mut statement = rebuilt
+            .prepare("SELECT pack_id,length FROM pack ORDER BY pack_id")
+            .unwrap();
+        let lengths = statement
+            .query_map([], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)? as u64))
+            })
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        lengths
+    };
+    let retained: Vec<i64> = lengths.keys().copied().collect();
+    let kept: u64 = lengths.values().sum();
+    assert!(kept > WINDOW_BYTES, "{kept} bytes kept");
+    let bytes = std::fs::metadata(&path).unwrap().len();
+    let plan = cut_windows(true, &lengths, &retained, bytes).unwrap();
+    assert!(plan.len() > 1, "{plan:?}");
+    assert_eq!(
+        plan,
+        cut_windows(false, &lengths, &retained, bytes).unwrap()
+    );
+    assert_eq!(plan.first().unwrap().first, retained[0]);
+    assert_eq!(plan.last().unwrap().last, *retained.last().unwrap());
+    let (totals, sums) = pack_totals_and_sums(&path);
+    assert_eq!(totals, sums);
+    assert_eq!(u64::try_from(totals.0).unwrap(), kept);
     clean(&reopened);
 }
 
@@ -1296,6 +1503,23 @@ fn store_file_tuple(path: &Path) -> (u64, std::time::SystemTime, u32) {
     (metadata.len(), modified, u32::from_be_bytes(header))
 }
 
+/// The rebuilt Store's `(stored, metadata)` totals beside the same two sums
+/// taken over its `pack` rows: the build sums them window by window.
+fn pack_totals_and_sums(path: &Path) -> ((i64, i64), (i64, i64)) {
+    let connection =
+        rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .unwrap();
+    connection
+        .query_row(
+            "SELECT t.stored,t.metadata,(SELECT COALESCE(SUM(length),0) FROM pack),\
+(SELECT COALESCE(SUM(CASE WHEN domain=0 THEN length ELSE 0 END),0) FROM pack) \
+FROM store_totals t WHERE t.id=1",
+            [],
+            |row| Ok(((row.get(0)?, row.get(1)?), (row.get(2)?, row.get(3)?))),
+        )
+        .unwrap()
+}
+
 /// The raw table counts a compaction must leave behind; the Store is closed
 /// after `compact` consumes its handles, so a plain read is safe.
 fn table_count(path: &Path, table: &str) -> i64 {
@@ -1694,7 +1918,8 @@ fn a_returned_residue_is_judged_by_the_next_run() {
 /// write transaction, and the `none` decision rolls it back: no `kept_node`
 /// row, no `gc_intent` row and no WAL frame is committed, so the Store file's
 /// `(size, mtime, change counter)` is unchanged. The §6.3 visited scratch is
-/// created, counted in `peakTempBytes` and deleted before the reply.
+/// written only for a rebuild, so this path creates no temporary file and
+/// reports `peakTempBytes` 0 with the `none-path` reason.
 #[test]
 fn a_none_path_leaves_no_mark_state() {
     let (_temp, handles, path) = create_store();
@@ -1708,13 +1933,21 @@ fn a_none_path_leaves_no_mark_state() {
     assert_eq!(table_count(&path, "kept_node"), 0);
     let receipt = handles.compact(&request(0x75)).unwrap();
     assert_eq!(receipt.path, CompactPath::None);
+    assert_eq!(
+        receipt.peak_temp_bytes, 0,
+        "the none path writes no visited scratch"
+    );
     assert!(
-        receipt.peak_temp_bytes > 0,
-        "the none path's visited scratch counts in peakTempBytes"
+        receipt
+            .zero_reasons
+            .iter()
+            .any(|zero| zero.field == "peakTempBytes" && zero.reason == "none-path"),
+        "a zero peakTempBytes names its reason: {:?}",
+        receipt.zero_reasons
     );
     assert!(
         !visited_path(&path).exists(),
-        "the none path deletes its visited scratch"
+        "the none path leaves no visited scratch"
     );
     assert!(!op_path(&path).exists());
     assert_eq!(
@@ -1856,6 +2089,10 @@ fn layout_round_trip(layout: SqlitePackLayout) {
     assert_eq!(final_handles.profile().pack_layout, layout);
     assert!(located(&final_handles, live));
     assert!(!located(&final_handles, dead));
+    // `pack` holds no payload in the group-row layouts and is summed whole.
+    let (totals, sums) = pack_totals_and_sums(&path);
+    assert_eq!(totals, sums);
+    assert!(totals.0 > 0);
     clean(&final_handles);
 }
 
@@ -1929,10 +2166,11 @@ fn acquisition_layout_opens_compacts_and_clears_working_rows() {
     clean(&final_handles);
 }
 
-/// §6.3: the mark itself streams the visited set into `<store>.compact-visited`
-/// as it discovers objects, so the build has no second in-memory map to write.
+/// §6.3: the mark writes the visited set into `<store>.compact-visited`, one
+/// row per reached object, and the retained packs are exactly those rows'
+/// packs.
 #[test]
-fn the_mark_streams_its_visited_set_into_the_scratch_table() {
+fn the_mark_writes_its_visited_set_into_the_scratch_table() {
     let (_temp, handles, path) = create_store();
     let live = filesystem_root(&handles, 1);
     initialize(&handles, 1, live);
@@ -1959,6 +2197,40 @@ fn the_mark_streams_its_visited_set_into_the_scratch_table() {
         mark.objects().packs().len() as u64,
         "one row per retained pack"
     );
+    let (visited_packs, unlisted): (i64, i64) = connection
+        .query_row(
+            "SELECT count(DISTINCT pack_id),\
+                    count(*) FILTER (WHERE pack_id NOT IN (SELECT pack_id FROM live_pack)) \
+               FROM visited",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(
+        visited_packs, packs,
+        "every retained pack holds a visited row"
+    );
+    assert_eq!(unlisted, 0, "every visited row's pack is retained");
+    // A row is the object's whole locator, as the Store holds it: the build
+    // writes the kept locators from this table.
+    connection
+        .execute(
+            "ATTACH DATABASE ?1 AS store",
+            rusqlite::params![path.to_str().unwrap()],
+        )
+        .unwrap();
+    let same: i64 = connection
+        .query_row(
+            "SELECT count(*) FROM visited v JOIN store.object_location l \
+ON l.object_id=v.object_id AND l.role=v.role AND l.canonical_length=v.canonical_length \
+AND l.pack_id=v.pack_id AND l.group_number=v.group_number \
+AND l.record_number=v.record_number",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(same, rows, "every visited row is the Store's locator");
+    connection.execute_batch("DETACH DATABASE store").unwrap();
     let present: i64 = connection
         .query_row(
             "SELECT count(*) FROM visited WHERE object_id=?1",

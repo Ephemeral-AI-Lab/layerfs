@@ -26,10 +26,12 @@ use support::{branch_id, name};
 const CURSOR: [u8; 32] = [78; 32];
 
 /// Every test opens its own catalog identity, as a real Store does: the
-/// PostgreSQL advisory keys are server-global, so two tests that shared a
-/// binding could see each other's intents while running in parallel.
+/// PostgreSQL advisory keys are database-wide, so two tests that shared a
+/// binding could see each other's intents while running in parallel. The
+/// process id keeps a second run of this file on the same database from
+/// sharing them too.
 fn binding(tag: &str) -> Vec<u8> {
-    format!("postgresql-gc-fence-{tag}").into_bytes()
+    format!("postgresql-gc-fence-{tag}-{}", std::process::id()).into_bytes()
 }
 
 fn op(tag: u8) -> [u8; 16] {

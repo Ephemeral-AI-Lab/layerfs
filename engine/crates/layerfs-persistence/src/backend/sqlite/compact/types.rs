@@ -52,7 +52,9 @@ pub(crate) struct MarkTuple {
 /// Which §3 path a compaction took.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CompactPath {
-    /// Below the 10% wholly-dead threshold: mark only, nothing written.
+    /// Below the 10% dead-bytes threshold (wholly dead packs plus the dead
+    /// records the mark found inside retained packs): mark only, nothing
+    /// written.
     None,
     /// A rebuild installed at `G → G+1`.
     Rebuild,

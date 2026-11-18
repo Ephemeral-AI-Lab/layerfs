@@ -6,7 +6,7 @@ use crate::backend::{
 };
 use layerfs_content::ObjectId;
 use layerfs_storage::{
-    location::{InodeValueRow, LocatedObject, SignatureRow},
+    location::{InodeValueRow, LocatedObject, ObjectLocation, SignatureRow},
     port::{PersistedPack, PersistenceError},
     StoragePolicy,
 };
@@ -37,12 +37,50 @@ impl Mechanics for Transaction<'_> {
     ) -> Result<(), PersistenceError> {
         super::metadata::locations::read(self, ids, out)
     }
+    fn locations_after(
+        &self,
+        after: Option<&ObjectId>,
+        limit: usize,
+        out: &mut Vec<ObjectLocation>,
+    ) -> Result<(), PersistenceError> {
+        super::metadata::locations::after(self, after, limit, out)
+    }
+    fn location(&self, id: &ObjectId) -> Result<Option<ObjectLocation>, PersistenceError> {
+        super::metadata::locations::one(self, id)
+    }
+    fn location_after(
+        &self,
+        after: Option<&ObjectId>,
+        id: &ObjectId,
+    ) -> Result<Option<crate::backend::Ranked>, PersistenceError> {
+        super::metadata::locations::ranked(self, after, id).map(Some)
+    }
+    fn closure_in_batches(&self) -> bool {
+        // Temporary storage is memory on this connection (`temp_store`), so
+        // one recursive statement over the history would hold all of it.
+        true
+    }
+    fn scratch_directory(&self) -> std::path::PathBuf {
+        // Beside the Store: the file system that holds the Store and its
+        // rebuild has the room, and a temporary directory may be memory.
+        self.store_directory()
+    }
     fn inode_values(
         &self,
         ordinals: &[u32],
         out: &mut Vec<InodeValueRow>,
     ) -> Result<(), PersistenceError> {
         super::metadata::values::read(self, ordinals, out)
+    }
+    fn inode_values_ahead(
+        &self,
+        ordinals: &[u32],
+        _ahead: u32,
+        out: &mut Vec<InodeValueRow>,
+    ) -> Result<(), PersistenceError> {
+        // Nothing is read past the asked blocks: only their other values,
+        // which the read decoded anyway, come along.
+        super::metadata::values::read_blocks(self, ordinals, out)
     }
     fn signatures(&self, out: &mut Vec<SignatureRow>) -> Result<(), PersistenceError> {
         super::metadata::signatures::read(self, out)
@@ -80,6 +118,15 @@ impl Mechanics for Transaction<'_> {
             return crate::backend::seam::ranges_by_acquisition(self, requests, out);
         }
         super::objects::read::ranges(self, requests, out)
+    }
+    fn pack_range_fill(&self) -> usize {
+        // Group rows are separate BLOBs: a range is mapped to the rows it
+        // covers, and nothing between two ranges is free.
+        if self.layout().uses_units() {
+            0
+        } else {
+            super::objects::read::RANGE_FILL_BYTES
+        }
     }
     fn read_scoped_pack(
         &self,

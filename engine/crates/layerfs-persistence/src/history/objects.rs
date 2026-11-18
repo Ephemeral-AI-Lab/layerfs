@@ -2,54 +2,62 @@
 //! digest.
 //!
 //! A mark starts at the roots of every Commit and Layer the §6.1 history
-//! closure retained. Every locator is loaded once, unsorted, and the walk
-//! follows each object's direct logical references and its record-header delta
-//! base to the fixpoint. The walk is metadata-only: a role that names no other
-//! object costs one header read, not a payload decode, and reference-bearing
-//! pages are decoded without a second identity hash. The retained pack of every
-//! reached object is recorded, and the bytes of records in those packs that no
-//! reached object owns are reported as `keptWaste` from a bounded directory
-//! prefix read. Nothing is deleted, rewritten or compacted here; the closure is
-//! kept in memory for the rebuild path to use.
+//! closure retained and follows each object's direct logical references and
+//! its record-header delta base to the fixpoint. The walk is metadata-only: a
+//! role that names no other object costs one header read, not a payload
+//! decode, and reference-bearing pages are decoded without a second identity
+//! hash. Nothing is deleted, rewritten or compacted here.
+//!
+//! Memory does not follow the Store's size: nothing a mark holds grows with
+//! the objects, the packs or the Commits. The locators stay in the Store:
+//! they are read in bounded pieces ([`table`]), and the walk keeps two bits
+//! per object for what it reached, not the objects, in an array it holds a
+//! fixed number of pages of ([`paged`]). The history closure stays in
+//! `kept_node` and is read a page at a time. What a wave reached, the order
+//! the next wave is walked in and the records the kept-waste pass attributes
+//! are sorted in bounded memory and written to unnamed files beyond it
+//! ([`spill`]), and so are the retained packs and the inode value ordinals
+//! ([`lists`]). The reached objects, the history nodes, the packs and the
+//! ordinals are listed, when a caller wants them, by reading them once more.
 use super::kept::{self, KeptHistory};
 use super::provider::HistoryProvider;
-use super::rows::{cell, object};
+use super::rows::cell;
 use super::transaction::Transaction;
 use crate::backend::records::Param;
 use crate::backend::sqlite::session::transaction::Completion;
-use layerfs_content::filesystem::{FilesystemRoot, InodeScope};
 use layerfs_content::inode_leaf::INODE_VALUE_BYTES;
-use layerfs_content::object::decode_references;
-use layerfs_content::{ConstructionPolicy, ObjectId, ObjectRole};
+use layerfs_content::{ObjectId, ObjectRole};
 use layerfs_history::error::{HistoryError, HistoryResult};
 use layerfs_history::records::GcIntent;
 use layerfs_storage::{
-    encoding::pool::PoolReader,
-    encoding::{
-        delta::{
-            edge::RecordDirectory,
-            read::{locator_key, stored_edge, BodyCaches, ChainCounters, Resolver},
-        },
-        DecompressionWorkspace, GroupCache, PackAcquisition, PackCache, PackUnit,
-    },
+    encoding::{delta::edge::RecordDirectory, PackAcquisition, PackUnit},
     location::{ObjectLocation, SignatureRow},
     pack::layout::{self, GroupCodec},
     port::AcquiredPackRead,
     source::Source,
     StorageCapacities, StorageError,
 };
-use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 mod edges;
 mod ids;
 mod impls;
+mod lists;
+mod paged;
 mod plan;
+mod records;
+pub(crate) mod spill;
+mod table;
+mod values;
+mod walk;
+mod waste;
 
-use ids::{IdMap, IdSet};
+use ids::IdMap;
+pub use lists::{Sequence, Spans};
 use plan::MarkGroups;
-const ROOTS: &str = "gc_kept_roots";
-const LOCATIONS: &str = "gc_object_locations";
+use spill::{Sealed, Sorter, Space};
+use table::Locators;
 const LIVE_STACKS: &str = "gc_live_stacks";
 const LIVE_BRANCHES: &str = "gc_live_branches";
 const INODE_BLOCKS: &str = "gc_inode_blocks";
@@ -77,11 +85,46 @@ pub struct KeptWaste {
 
 /// The object half of a mark: every object and pack the retained history
 /// reaches (§6.2), in ascending order.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+///
+/// What it always holds is bounded: a count of the reached objects, and the
+/// retained packs, the inode value ordinals read and the partly dead packs
+/// each in a list that leaves memory for a sort file when it is long
+/// ([`lists`]). A mark that lists what it kept also holds them as slices.
+#[derive(Clone, Debug)]
 pub struct KeptObjects {
+    /// The reached objects, when the mark listed them: [`HistoryProvider::mark`]
+    /// does, a SQLite compaction mark writes them to its scratch instead.
     objects: Vec<ObjectId>,
+    /// How many objects the mark reached, listed or not.
+    count: u64,
+    /// The retained packs: those holding at least one reached object.
+    retained: Sequence,
+    /// [`Self::retained`] as a slice, when the mark listed them.
     packs: Vec<i64>,
     waste: KeptWaste,
+    /// Retained packs that hold a record no reached object owns, in ascending
+    /// pack order, each with its share of
+    /// [`KeptWaste::dead_in_retained_packs_bytes`].
+    partly_dead: PartlyDead,
+    /// [`Self::partly_dead`] as a list, when the mark listed them.
+    partly_dead_listed: Vec<(i64, u64)>,
+    /// The inode value ordinals the reached leaves read.
+    ordinals: Spans,
+    /// [`Self::ordinals`] as inclusive runs, when the mark listed them.
+    inode_ordinals: Vec<(u32, u32)>,
+}
+
+/// The partly dead packs of one mark with their dead bytes, ascending.
+#[derive(Clone, Default)]
+pub(in crate::history) struct PartlyDead {
+    packs: Option<Arc<Mutex<Sorter<records::Count>>>>,
+    count: u64,
+}
+
+impl std::fmt::Debug for PartlyDead {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(out, "PartlyDead({})", self.count)
+    }
 }
 
 /// One complete mark: the §6.1 history closure, the §6.2 object closure and the
@@ -90,12 +133,15 @@ pub struct KeptObjects {
 /// A rebuild path chooses its plan from [`Self::objects`] and reports
 /// [`Self::live_heads_digest`] to prove the generation it installed; nothing in
 /// this value has been compacted or deleted.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct MarkResult {
     history: KeptHistory,
     objects: KeptObjects,
     live_heads_digest: [u8; 32],
     mark_bytes: u64,
+    /// Where the mark's sort files went, and how much they held together.
+    /// A compaction puts its own sort files in the same space.
+    space: Arc<Space>,
 }
 
 /// The Store tuple a compaction records as its mark's first statement and
@@ -133,7 +179,8 @@ impl HistoryProvider {
     /// lands before the tuple is read is part of the mark, and one that lands
     /// after it moves at least one tuple field, so Phase B abandons.
     pub fn mark_gc(&self) -> HistoryResult<(MarkResult, GcTuple)> {
-        self.write_snapshot(mark_gc)
+        let budget = self.mark_budget();
+        self.write_snapshot(|tx| mark_gc(tx, budget))
     }
 
     /// The §6.4 live-heads digest of the Store as it is now, without a mark.
@@ -142,10 +189,35 @@ impl HistoryProvider {
     }
 }
 
-fn mark_gc(tx: &Transaction<'_>) -> HistoryResult<(MarkResult, GcTuple)> {
+fn mark_gc(tx: &Transaction<'_>, budget: u64) -> HistoryResult<(MarkResult, GcTuple)> {
     let tuple = gc_tuple(tx)?;
-    let mark = mark(tx)?;
+    let mark = mark(tx, budget)?;
     Ok((mark, tuple))
+}
+
+/// [`HistoryProvider::mark_gc`] inside a caller's engine transaction, with the
+/// reached set instead of a list of it ([`KeptObjects::objects`] is empty),
+/// and no list of the retained packs either: the caller reads
+/// [`KeptObjects::retained_packs`] as a stream.
+/// A PostgreSQL compaction decides and fills its visited table from
+/// [`Reach::each`] in the transaction that walked, so the reached identities
+/// are never held: the ranks a `Reach` names are those of this snapshot only.
+pub(crate) fn mark_gc_reached(
+    backend: &dyn crate::backend::HistoryStatements,
+) -> HistoryResult<(MarkResult, GcTuple, Reach)> {
+    let tx = Transaction::new(backend);
+    let tuple = gc_tuple(&tx)?;
+    let (mark, reach) = mark_recorded(&tx, false, spill::BUDGET_BYTES)?;
+    Ok((mark, tuple, reach))
+}
+
+/// The §6.4 live-heads digest inside a caller's engine transaction, read a
+/// bounded page at a time: what a PostgreSQL swap compares with its mark's
+/// under the Store-wide lock.
+pub(crate) fn live_heads_digest_in(
+    backend: &dyn crate::backend::HistoryStatements,
+) -> HistoryResult<[u8; 32]> {
+    live_heads_digest(&Transaction::new(backend))
 }
 
 fn gc_tuple(tx: &Transaction<'_>) -> HistoryResult<GcTuple> {
@@ -177,12 +249,13 @@ impl HistoryProvider {
     /// the mark and leaves no `kept_node` row behind. Nothing is compacted; the
     /// returned [`MarkResult`] is the rebuild path's input.
     pub fn mark(&self) -> HistoryResult<MarkResult> {
-        self.write_snapshot(mark)
+        let budget = self.mark_budget();
+        self.write_snapshot(|tx| mark(tx, budget))
     }
 
     /// The §6.3 compaction mark: the same closure and digest, with every
-    /// reached object streamed into the compaction's temp-file visited table
-    /// (`<store>.compact-visited`) as it is discovered. The §7 build attaches
+    /// reached object written to the compaction's temp-file visited table
+    /// (`<store>.compact-visited`) when the walk is done. The §7 build attaches
     /// that same file, so it never rebuilds an in-memory `object_id -> pack`
     /// map from a second `object_location` scan. On PostgreSQL the visited set
     /// is the `pg_temp` table the Phase M mark fills, so the path is unused.
@@ -190,240 +263,333 @@ impl HistoryProvider {
     /// A failed mark drops the sink, which removes the scratch; the caller's
     /// artifact set never keeps a half-written table.
     pub fn mark_with_scratch(&self, scratch: &Path) -> HistoryResult<MarkResult> {
+        let budget = self.mark_budget();
         match &self.engine {
             crate::backend::Engine::Sqlite(session) => session.run(true, |backend| {
                 let tx = Transaction::new(backend);
                 let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
-                let mark = mark_recorded(&tx, Some(&sink))?;
-                sink.finish()?;
+                let (mut mark, mut reach) = mark_recorded(&tx, false, budget)?;
+                mark.objects.list()?;
+                sink.finish(&mark.objects.retained, |row| {
+                    reach.each(tx.mechanics(), row)
+                })?;
                 Ok(mark)
             }),
-            crate::backend::Engine::Postgres(_) => self.write_snapshot(mark),
+            crate::backend::Engine::Postgres(_) => self.write_snapshot(|tx| mark(tx, budget)),
         }
     }
 
     /// The §6.3 compaction mark under one admission intent, as one write
     /// transaction whose caller decides whether it survives.
     ///
-    /// `decide` sees the completed [`MarkResult`] and returns `true` to keep
+    /// `decide` sees the completed [`MarkResult`] and the transaction that
+    /// made it, for what it still has to read, and returns `true` to keep
     /// the transaction (a `rebuild`) or `false` to roll it back (a `none`). §5.1
     /// registers the exclusive operation intent inside the same transaction, so
     /// a rollback takes it with the closure: the live Store then keeps no
     /// `kept_node` row, no `gc_intent` row and no committed WAL frame, and the
-    /// §3 `none` path writes nothing that survives the call. The §6.3 visited
-    /// scratch is a separate temp database on both paths; the caller deletes it
-    /// after a rollback and keeps it for the rebuild's build phase.
+    /// §3 `none` path writes nothing at all. The §6.3 visited scratch is a
+    /// separate temp database that only a kept transaction writes, after the
+    /// decision and before the commit, for the rebuild's build phase.
+    ///
+    /// On SQLite the result does not list the reached objects or the history
+    /// nodes ([`KeptObjects::objects`] and [`KeptHistory::nodes`] are
+    /// empty): the objects go to the scratch straight from the Store's
+    /// locators, the nodes stay in `kept_node`, and no copy of either is
+    /// held. Nor are the partly dead packs listed: a rebuild reads them as
+    /// a stream ([`KeptObjects::each_partly_dead`]).
     pub(crate) fn mark_for_compaction(
         &self,
         scratch: &Path,
         intent: &GcIntent,
-        decide: impl FnOnce(&MarkResult) -> HistoryResult<bool>,
+        decide: impl FnOnce(&Transaction<'_>, &MarkResult) -> HistoryResult<bool>,
     ) -> HistoryResult<(MarkResult, bool)> {
+        let budget = self.mark_budget();
         match &self.engine {
             crate::backend::Engine::Sqlite(session) => session.run_decided(true, |backend| {
                 let tx = Transaction::new(backend);
                 super::admission::register_in(&tx, intent, false)?;
                 let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
-                let mark = mark_recorded(&tx, Some(&sink))?;
-                sink.finish()?;
-                let keep = decide(&mark)?;
+                let (mark, mut reach) = mark_recorded(&tx, false, budget)?;
+                let keep = decide(&tx, &mark)?;
                 let completion = if keep {
+                    // Only a rebuild reads the scratch, so only a rebuild
+                    // writes it; a `none` drops the sink and no file exists.
+                    sink.finish(&mark.objects.retained, |row| {
+                        reach.each(tx.mechanics(), row)
+                    })?;
                     Completion::Commit
                 } else {
                     Completion::Rollback
                 };
                 Ok(((mark, keep), completion))
             }),
-            crate::backend::Engine::Postgres(_) => {
-                let mark = self.write_snapshot(mark)?;
-                let keep = decide(&mark)?;
+            crate::backend::Engine::Postgres(_) => self.write_snapshot(|tx| {
+                let mark = mark(tx, budget)?;
+                let keep = decide(tx, &mark)?;
                 Ok((mark, keep))
-            }
+            }),
         }
     }
 }
 
-fn mark(tx: &Transaction<'_>) -> HistoryResult<MarkResult> {
-    mark_recorded(tx, None)
+/// One mark that also lists what it kept: every reached object
+/// ([`KeptObjects::objects`], 32 bytes an object, read from the Store's
+/// locators after the walk), every history node and the partly dead packs.
+fn mark(tx: &Transaction<'_>, budget: u64) -> HistoryResult<MarkResult> {
+    let (mut mark, mut reach) = mark_recorded(tx, true, budget)?;
+    let mut objects = Vec::with_capacity(usize::try_from(reach.count).unwrap_or(0));
+    reach.each(tx.mechanics(), &mut |row, _| {
+        objects.push(row.object_id);
+        Ok(())
+    })?;
+    mark.objects.objects = objects;
+    mark.objects.list()?;
+    Ok(mark)
 }
 
+/// Bytes of items each sorter of a mark holds before it writes a run
+/// ([`spill`]): the identities a wave reached, the next wave by locator, the
+/// reached records by locator, the Store's objects other than file payloads
+/// by locator, and the small per-pack lists.
+const EDGE_SORT_BYTES: usize = 8 * 1024 * 1024;
+const FRONTIER_SORT_BYTES: usize = 8 * 1024 * 1024;
+const KEPT_SORT_BYTES: usize = 4 * 1024 * 1024;
+const INVENTORY_SORT_BYTES: usize = 4 * 1024 * 1024;
+const PACK_SORT_BYTES: usize = 4 * 1024 * 1024;
+const READ_SORT_BYTES: usize = 1024 * 1024;
+const BASED_SORT_BYTES: usize = 1024 * 1024;
+const PARTLY_DEAD_BYTES: usize = 256 * 1024;
+/// Rows one read of the live heads returns.
+const HEADS_PAGE_ROWS: usize = 1024;
+
+/// The reached set of a finished walk, for listing it: the block boundaries
+/// of the Store's locators and the walk's two bits per object.
+pub(crate) struct Reach {
+    table: Locators,
+    marks: table::Marks,
+    count: u64,
+}
+
+impl Reach {
+    /// Every reached object's locator, in ascending identity order, read
+    /// from the Store's locators a block at a time. The flag says whether
+    /// the object was reached only as a delta base: the objects
+    /// [`KeptWaste::delta_bases_bytes`] counts.
+    pub(crate) fn each(
+        &mut self,
+        mechanics: &dyn crate::backend::Mechanics,
+        each: &mut dyn FnMut(&ObjectLocation, bool) -> HistoryResult<()>,
+    ) -> HistoryResult<()> {
+        let mut listed = 0u64;
+        self.table
+            .each_set(mechanics, &mut self.marks, |_, row, kinds| {
+                listed += 1;
+                each(row, kinds == records::BASE)
+            })?;
+        if listed != self.count {
+            return Err(HistoryError::Integrity("mark object locations"));
+        }
+        Ok(())
+    }
+}
+
+/// One mark. `listed` also returns the history nodes
+/// ([`KeptHistory::nodes`]); the reached set is returned for a caller that
+/// lists the objects. `budget` sizes every buffer and cache of the mark and
+/// of the compaction that shares its sort space.
 fn mark_recorded(
     tx: &Transaction<'_>,
-    visit: Option<&crate::backend::sqlite::compact_visit::VisitSink>,
-) -> HistoryResult<MarkResult> {
-    let history = kept::mark(tx)?;
-    let policy = tx.mechanics().policy().map_err(storage)?;
+    listed: bool,
+    budget: u64,
+) -> HistoryResult<(MarkResult, Reach)> {
+    let mechanics = tx.mechanics();
+    let space = Space::sized(mechanics.scratch_directory(), budget);
+    kept::close(tx, &space)?;
+    let policy = mechanics.policy().map_err(storage)?;
     let capacities = StorageCapacities::from_policy(policy).map_err(storage)?;
-    // Every locator is loaded once. The walk's queue and the kept-waste
-    // attribution share that one read, so a mark never asks the engine for a
-    // single object location again.
-    let located = locate_all(tx)?;
+    // Every locator is read once here, a bounded piece at a time. The pass
+    // keeps the block boundaries the walk finds an identity by, counts each
+    // pack's located records and puts the objects a pack visit reads
+    // together (everything but file payloads) in locator order.
+    let mut located = Sorter::new(&space, PACK_SORT_BYTES, records::counts_by_pack);
+    let mut inventory = Sorter::new(&space, INVENTORY_SORT_BYTES, records::rows_by_locator);
+    let mut table = Locators::load(mechanics, &space, |rank, location| {
+        located.push(records::Count {
+            pack: location.pack_id,
+            records: 1,
+        })?;
+        if !matches!(location.role, ObjectRole::WholeFile | ObjectRole::Chunk) {
+            inventory.push(records::Row {
+                location: *location,
+                rank,
+                kind: 0,
+            })?;
+        }
+        Ok(())
+    })?;
+    // A pack's objects are asked for each time a wave visits it: one merge
+    // now, so that a visit reads that pack's part and not the whole list.
+    let mut inventory = inventory.seal(records::row_pack)?;
+    let mut marks = table::Marks::new(&space);
     let source = ClosureSource {
-        mechanics: tx.mechanics(),
-        locations: &located.locations,
-        read_bytes: std::cell::RefCell::new(HashMap::new()),
-        layouts: std::cell::RefCell::new(HashMap::new()),
+        mechanics,
+        space: space.clone(),
+        here: std::cell::RefCell::new(Here {
+            pack: i64::MIN,
+            rows: IdMap::default(),
+        }),
+        reads: std::cell::RefCell::new((
+            Sorter::new(&space, READ_SORT_BYTES, records::reads_in_order),
+            0,
+        )),
+        layouts: std::cell::RefCell::new(Sorter::new(
+            &space,
+            PACK_SORT_BYTES,
+            records::layouts_by_group,
+        )),
         upcoming: std::cell::RefCell::default(),
-        values: std::cell::RefCell::default(),
+        based: std::cell::Cell::new((i64::MIN, 0)),
+        values: std::cell::RefCell::new(values::HeldValues::holding(
+            space.scaled(values::HELD_VALUES),
+        )),
+        ordinals: std::cell::RefCell::new(Spans::sorter(&space)),
     };
-    let roots = roots(tx)?;
-    let closure = walk(&source, &capacities, policy.construction(), roots, visit)?;
-    let waste = waste(tx, &source, &located, &closure)?;
-    let mark_bytes = source.read_bytes();
+    // The roots of every retained Commit and Layer, straight from
+    // `kept_node` into the first wave: the sorter folds a root named twice.
+    let mut reached: Sorter<records::Edge> = Sorter::new(
+        &space,
+        EDGE_SORT_BYTES,
+        if mechanics.locators_by_signed_prefix() {
+            records::edges_by_signed_prefix
+        } else {
+            records::edges_by_bytes
+        },
+    );
+    let mut history = KeptHistory::default();
+    kept::each(tx, |node, root| {
+        history.note(node, listed);
+        match root {
+            Some(id) => reached.push(records::Edge {
+                id,
+                kind: records::LOGICAL,
+            }),
+            None => Ok(()),
+        }
+    })?;
+    let mut kept = Sorter::new(&space, KEPT_SORT_BYTES, records::kept_by_locator);
+    let mut based = Sorter::new(&space, BASED_SORT_BYTES, records::based_by_rank);
+    walk::walk(
+        &source,
+        &mut table,
+        &mut marks,
+        &mut inventory,
+        (&mut kept, &mut based),
+        &capacities,
+        policy.construction(),
+        reached,
+    )?;
+    drop(inventory);
+    let found = waste::waste(
+        tx,
+        &source,
+        &mut table,
+        &mut marks,
+        &mut located,
+        (&mut kept, &mut based),
+    )?;
+    drop((located, kept, based));
+    let mark_bytes = source.read_bytes()?;
     let digest = live_heads_digest(tx)?;
     let objects = KeptObjects {
-        objects: closure.objects(),
-        packs: closure.packs(),
-        waste,
+        objects: Vec::new(),
+        count: found.objects,
+        retained: found.retained,
+        packs: Vec::new(),
+        waste: found.waste,
+        partly_dead: found.partly_dead,
+        partly_dead_listed: Vec::new(),
+        ordinals: Spans::of(source.ordinals.replace(Spans::sorter(&space))),
+        inode_ordinals: Vec::new(),
     };
-    Ok(MarkResult {
-        history,
-        objects,
-        live_heads_digest: digest,
-        mark_bytes,
-    })
-}
-
-/// The roots of every retained Commit and Layer, deduplicated and ordered.
-fn roots(tx: &Transaction<'_>) -> HistoryResult<Vec<ObjectId>> {
-    let rows = tx.query(ROOTS, Vec::<Param>::new())?;
-    let mut roots = BTreeSet::new();
-    for row in &rows {
-        roots.insert(object(row, 0)?);
-    }
-    Ok(roots.into_iter().collect())
-}
-
-/// Every stored locator, read once in the table's own key order.
-///
-/// An object has one locator row (its identity is the table's key), so no
-/// order is needed to pick a winner, and asking for pack order made the
-/// engine sort every row of the table for each mark. Both maps below are
-/// keyed, so they do not need sorted input either.
-///
-/// `locations` answers the walk; `inventory` answers kept-waste attribution.
-/// They are two views of the same single `gc_object_locations` read, so the
-/// mark no longer loads `object_location` twice (once per object and once for
-/// the waste inventory).
-struct Located {
-    /// The locator of every object, keyed by identity.
-    locations: IdMap<ObjectLocation>,
-    /// pack -> group -> (record, object): the pack/object inventory.
-    inventory: BTreeMap<i64, BTreeMap<usize, BTreeMap<usize, ObjectId>>>,
-}
-
-fn locate_all(tx: &Transaction<'_>) -> HistoryResult<Located> {
-    let rows = tx.query(LOCATIONS, Vec::<Param>::new())?;
-    let mut located = Located {
-        locations: IdMap::with_capacity_and_hasher(rows.len(), ids::IdState::default()),
-        inventory: BTreeMap::new(),
+    let reach = Reach {
+        table,
+        marks,
+        count: found.objects,
     };
-    for row in &rows {
-        let id = object(row, 0)?;
-        let pack: i64 = cell(row, 1)?;
-        let group = usize::try_from(cell::<i64>(row, 2)?)
-            .map_err(|_| HistoryError::Integrity("mark pack inventory"))?;
-        let record = usize::try_from(cell::<i64>(row, 3)?)
-            .map_err(|_| HistoryError::Integrity("mark pack inventory"))?;
-        let role = ObjectRole::from_code(
-            u8::try_from(cell::<i64>(row, 4)?)
-                .map_err(|_| HistoryError::Integrity("mark object role"))?,
-        )
-        .map_err(|_| HistoryError::Integrity("mark object role"))?;
-        let canonical_length = usize::try_from(cell::<i64>(row, 5)?)
-            .map_err(|_| HistoryError::Integrity("mark object length"))?;
-        located
-            .inventory
-            .entry(pack)
-            .or_default()
-            .entry(group)
-            .or_default()
-            .insert(record, id);
-        located.locations.entry(id).or_insert(ObjectLocation {
-            object_id: id,
-            role,
-            canonical_length,
-            pack_id: pack,
-            group_number: group,
-            record_number: record,
-        });
-    }
-    Ok(located)
+    Ok((
+        MarkResult {
+            history,
+            objects,
+            live_heads_digest: digest,
+            mark_bytes,
+            space,
+        },
+        reach,
+    ))
 }
 
-/// The in-memory closure of one mark, before `keptWaste` is attributed.
-struct Closure {
-    /// Every reached object and its locator.
-    visited: IdMap<ObjectLocation>,
-    /// The stored width a read charges each reached object's record.
-    widths: IdMap<u64>,
-    /// Objects reached as a direct delta base.
-    bases: IdSet,
-    /// Objects reached as a root or through a logical reference.
-    logical: IdSet,
-}
-
-impl Closure {
-    /// Every reached object, in ascending identity order.
-    fn objects(&self) -> Vec<ObjectId> {
-        let mut objects: Vec<ObjectId> = self.visited.keys().copied().collect();
-        objects.sort_unstable();
-        objects
-    }
-
-    /// The retained packs: those holding at least one reached object.
-    fn packs(&self) -> Vec<i64> {
-        self.visited
-            .values()
-            .map(|location| location.pack_id)
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect()
-    }
+/// The objects other than file payloads that one pack holds, by identity.
+struct Here {
+    pack: i64,
+    rows: IdMap<records::Row>,
 }
 
 /// Physical input for the shared encoding readers over one mark transaction.
 struct ClosureSource<'a> {
     mechanics: &'a dyn crate::backend::Mechanics,
-    /// Every locator, exactly as the one `gc_object_locations` read returned it.
-    locations: &'a IdMap<ObjectLocation>,
-    /// pack -> the body bytes this mark read from it: a whole body, or the
-    /// disjoint group extents it acquired. The sum is
-    /// [`MarkResult::mark_bytes`]: a pack read in several groups counts each
-    /// extent once, and a later whole-body read replaces the partial sum.
-    read_bytes: std::cell::RefCell<HashMap<i64, u64>>,
-    /// pack -> its group extents, kept from the walk's own read of the pack's
-    /// directory so the kept-waste pass does not read it a second time.
-    layouts: std::cell::RefCell<HashMap<i64, Vec<layout::GroupView>>>,
-    /// The packs the wave being walked decodes metadata from, ascending, and
+    /// Where this mark's sort files go.
+    space: Arc<Space>,
+    /// The pack being walked and what it holds besides file payloads: what a
+    /// reference found there is looked up in before the Store is asked.
+    here: std::cell::RefCell<Here>,
+    /// Every read of pack body bytes this mark made, and how many. Folded per
+    /// pack in the order made, they give [`MarkResult::mark_bytes`]: a pack
+    /// read in several groups counts each extent once, and a later whole-body
+    /// read replaces the partial sum.
+    reads: std::cell::RefCell<(Sorter<records::BodyRead>, u64)>,
+    /// The group extents of every pack whose directory the walk read, kept so
+    /// the kept-waste pass does not read it a second time.
+    layouts: std::cell::RefCell<Sorter<records::Layout>>,
+    /// The packs the rows being walked decode metadata from, ascending, and
     /// how many of them the engine has been told to expect.
     upcoming: std::cell::RefCell<(Vec<i64>, usize)>,
-    /// Inode values the engine returned ahead of need, by ordinal.
-    values: std::cell::RefCell<HashMap<u32, [u8; INODE_VALUE_BYTES]>>,
+    /// The pack and group whose delta bases the engine was last told to
+    /// expect lookups of ([`walk`]'s `expect_bases`).
+    based: std::cell::Cell<(i64, usize)>,
+    /// Inode values the engine has returned, asked for or not.
+    values: std::cell::RefCell<values::HeldValues>,
+    /// Every ordinal the walk asked for ([`ordinals`]), whether the engine or
+    /// the held values answered it: the rebuild copies only the blocks these
+    /// name.
+    ordinals: std::cell::RefCell<Sorter<records::Span>>,
 }
 
 /// Packs announced to the engine at a time ([`ClosureSource::announce`]).
 const AHEAD_PACKS: usize = 128;
-/// Ordinals past a leaf's own that one inode value read may bring along.
-const AHEAD_VALUES: u32 = 4096;
-/// Inode values kept between reads; the map is emptied when it would pass this.
-const HELD_VALUES: usize = 65_536;
+/// Bytes of rebuilt chain elements the walk's reader keeps, so a page stored
+/// as a delta is rebuilt from the base an earlier version already rebuilt
+/// instead of from its whole chain. The base of a page is the version an
+/// earlier Commit wrote, any number of packs back, and a pack's visit keeps
+/// every page of its Commit: a base that has left the memo is read from its
+/// own pack again, chain and all. The size is the largest single part of
+/// what a mark holds.
+const CHAIN_MEMO_BYTES: usize = 32 * 1024 * 1024;
 
 impl ClosureSource<'_> {
-    /// Notes the packs `wave`, which is in locator order, decodes metadata
+    /// Notes the packs `rows`, which are in locator order, decode metadata
     /// from: the packs the walk reads one scoped acquisition at a time.
-    fn expect_wave(&self, wave: &[ObjectId]) {
-        let mut packs: Vec<i64> = wave
+    fn expect_rows(&self, rows: &[records::Row]) {
+        let mut packs: Vec<i64> = rows
             .iter()
-            .filter_map(|id| self.locations.get(id))
-            .filter(|location| location.role.has_references())
-            .map(|location| location.pack_id)
+            .filter(|row| row.location.role.has_references())
+            .map(|row| row.location.pack_id)
             .collect();
         packs.dedup();
         *self.upcoming.borrow_mut() = (packs, 0);
     }
 
-    /// Before `pack_id` is acquired: tells the engine which of the wave's
+    /// Before `pack_id` is acquired: tells the engine which of the expected
     /// packs follow it, a window at a time, so an engine that pays a round
     /// trip per pack can read the window in one.
     fn announce(&self, pack_id: i64) -> Result<(), StorageError> {
@@ -441,17 +607,74 @@ impl ClosureSource<'_> {
             .map_err(StorageError::from)
     }
 
+    /// Makes `pack_id` the pack being walked: takes its objects other than
+    /// file payloads from `inventory`, which finds a pack's rows by its id
+    /// and reads on from where it stands when a wave's packs follow each
+    /// other.
+    fn enter(&self, pack_id: i64, inventory: &mut Sealed<records::Row>) -> HistoryResult<()> {
+        let mut here = self.here.borrow_mut();
+        if here.pack == pack_id {
+            return Ok(());
+        }
+        here.pack = pack_id;
+        here.rows.clear();
+        let rows = &mut here.rows;
+        inventory.each_of(pack_id, |row| {
+            rows.insert(row.location.object_id, row);
+        })
+    }
+
+    /// The object `id` when the pack being walked holds it and it is not a
+    /// file payload: a Commit's root, inode pages, directory pages, file
+    /// states and extent pages are written into one pack, so they are read
+    /// in one visit of it and not in one visit per tree level.
+    fn held_here(&self, id: &ObjectId) -> Option<records::Row> {
+        self.here.borrow().rows.get(id).copied()
+    }
+
+    /// The objects of group `group` of the pack being walked that name other
+    /// objects: those whose rebuild may look a delta base up.
+    fn held_in_group(&self, group: usize) -> Vec<ObjectLocation> {
+        let here = self.here.borrow();
+        let mut rows: Vec<ObjectLocation> = here
+            .rows
+            .values()
+            .map(|row| row.location)
+            .filter(|row| row.group_number == group && row.role.has_references())
+            .collect();
+        rows.sort_unstable_by_key(|row| row.record_number);
+        rows
+    }
+
     /// Keeps the group extents the walk read for `pack_id`.
     fn keep_layout(&self, pack_id: i64, views: Vec<layout::GroupView>) {
-        self.layouts.borrow_mut().entry(pack_id).or_insert(views);
+        let mut layouts = self.layouts.borrow_mut();
+        for (number, view) in views.into_iter().enumerate() {
+            layouts.hold(records::Layout {
+                pack: pack_id,
+                number: number as u64,
+                view,
+            });
+        }
+    }
+
+    fn note(&self, pack: i64, bytes: u64, limit: u64, whole: bool) {
+        let mut reads = self.reads.borrow_mut();
+        let sequence = reads.1;
+        reads.1 += 1;
+        reads.0.hold(records::BodyRead {
+            pack,
+            sequence,
+            bytes,
+            limit,
+            whole,
+        });
     }
 
     /// Records a whole-body read of `pack_id`. The full extent is the pack's
     /// body, so it replaces any group extents already counted for the pack.
     fn note_whole_body(&self, pack_id: i64, bytes: u64) {
-        let mut read = self.read_bytes.borrow_mut();
-        let entry = read.entry(pack_id).or_insert(0);
-        *entry = (*entry).max(bytes);
+        self.note(pack_id, bytes, 0, true);
     }
 
     /// Records one scoped acquisition's body bytes, capped at the pack's
@@ -459,14 +682,42 @@ impl ClosureSource<'_> {
     /// so the extents are disjoint; the controls each acquisition repeats can
     /// still not make a pack count for more than its body.
     fn note_scoped_body(&self, pack_id: i64, bytes: u64, length: u64) {
-        let mut read = self.read_bytes.borrow_mut();
-        let entry = read.entry(pack_id).or_insert(0);
-        *entry = entry.saturating_add(bytes).min(length);
+        self.note(pack_id, bytes, length, false);
+    }
+
+    /// Writes out what the reads and layouts noted since the last call hold
+    /// beyond their bound. The notes themselves never write: they are made
+    /// inside the storage readers.
+    fn relieve(&self) -> HistoryResult<()> {
+        self.reads.borrow_mut().0.relieve()?;
+        self.ordinals.borrow_mut().relieve()?;
+        self.layouts.borrow_mut().relieve()
     }
 
     /// The distinct pack body bytes this mark read.
-    fn read_bytes(&self) -> u64 {
-        self.read_bytes.borrow().values().copied().sum()
+    fn read_bytes(&self) -> HistoryResult<u64> {
+        let mut reads = self.reads.borrow_mut();
+        let mut total = 0u64;
+        let mut pack: Option<(i64, u64)> = None;
+        let mut merged = reads.0.sorted()?;
+        while let Some(read) = merged.next()? {
+            let mut entry = match pack {
+                Some((id, entry)) if id == read.pack => entry,
+                Some((_, entry)) => {
+                    total = total.saturating_add(entry);
+                    0
+                }
+                None => 0,
+            };
+            entry = if read.whole {
+                entry.max(read.bytes)
+            } else {
+                entry.saturating_add(read.bytes).min(read.limit)
+            };
+            pack = Some((read.pack, entry));
+        }
+        drop(merged);
+        Ok(total.saturating_add(pack.map_or(0, |(_, entry)| entry)))
     }
 }
 
@@ -476,11 +727,16 @@ impl Source for ClosureSource<'_> {
     }
 
     fn location(&self, id: ObjectId, ceiling: i64) -> Result<Option<ObjectLocation>, StorageError> {
+        // A chain's base is most often in the pack being read; any other is
+        // one lookup in the Store's own locator index.
+        if let Some(row) = self.held_here(&id) {
+            return Ok(Some(row.location).filter(|location| location.pack_id <= ceiling));
+        }
         Ok(self
-            .locations
-            .get(&id)
-            .filter(|location| location.pack_id <= ceiling)
-            .copied())
+            .mechanics
+            .location(&id)
+            .map_err(StorageError::from)?
+            .filter(|location| location.pack_id <= ceiling))
     }
 
     fn pack_bytes(&self, pack_id: i64) -> Result<Vec<u8>, StorageError> {
@@ -547,28 +803,8 @@ impl Source for ClosureSource<'_> {
     }
 
     fn inode_values(&self, ordinals: &[u32]) -> Result<Vec<[u8; INODE_VALUE_BYTES]>, StorageError> {
-        // One keyed map, so a page of many ordinals is not scanned per
-        // ordinal. It also keeps what the engine read ahead: a walk meets
-        // leaves in about the order their values were stored.
-        let mut held = self.values.borrow_mut();
-        if !ordinals.iter().all(|ordinal| held.contains_key(ordinal)) {
-            let mut rows = Vec::new();
-            self.mechanics
-                .inode_values_ahead(ordinals, AHEAD_VALUES, &mut rows)
-                .map_err(StorageError::from)?;
-            if held.len() + rows.len() > HELD_VALUES {
-                held.clear();
-            }
-            held.extend(rows.iter().map(|row| (row.ordinal, row.value)));
-        }
-        ordinals
-            .iter()
-            .map(|ordinal| {
-                held.get(ordinal)
-                    .copied()
-                    .ok_or(StorageError::Integrity("mark inode value"))
-            })
-            .collect()
+        lists::hold_runs(&mut self.ordinals.borrow_mut(), ordinals);
+        self.values.borrow_mut().values(self.mechanics, ordinals)
     }
 
     fn signatures(&self) -> Result<Vec<SignatureRow>, StorageError> {
@@ -584,334 +820,18 @@ impl Source for ClosureSource<'_> {
     }
 }
 
-/// Admits every object reachable from `roots` through logical references and
-/// delta bases, exactly once, in a queue that runs to empty.
-///
-/// The walk is metadata-only: a role that names no other object
-/// ([`ObjectRole::has_references`]) costs one record header read, not a payload
-/// decode, and each wave is processed in locator order so one pack body answers
-/// every object of its group. Reference-bearing metadata pages are still
-/// authenticated and decoded, but identity is not hashed a second time.
-fn walk(
-    source: &ClosureSource<'_>,
-    capacities: &StorageCapacities,
-    construction: ConstructionPolicy,
-    roots: Vec<ObjectId>,
-    visit: Option<&crate::backend::sqlite::compact_visit::VisitSink>,
-) -> HistoryResult<Closure> {
-    let mut packs = PackCache::new();
-    let mut pool = PoolReader::new();
-    let mut groups = GroupCache::new();
-    let mut workspace = DecompressionWorkspace::new().map_err(storage)?;
-    let mut counters = ChainCounters::default();
-    let mut edge_decodes = 0u64;
-    let mut closure = Closure {
-        visited: IdMap::default(),
-        widths: IdMap::default(),
-        bases: IdSet::default(),
-        logical: roots.iter().copied().collect(),
-    };
-    // One hash for the whole walk, not one per metadata object.
-    let unscoped = InodeScope::from_object(ObjectId::for_bytes(b"gc.mark/object-closure"));
-    let mut queued: IdSet = roots.iter().copied().collect();
-    let mut frontier: Vec<ObjectId> = roots;
-    while !frontier.is_empty() {
-        // Pack order: one body answers every object of its group, so a wave
-        // sorted by locator reads each group once instead of once per identity.
-        // The key is one locator lookup per object, not one per comparison.
-        frontier.sort_by_cached_key(|id| {
-            source
-                .locations
-                .get(id)
-                .map_or((i64::MAX, usize::MAX, usize::MAX), locator_key)
-        });
-        source.expect_wave(&frontier);
-        // A file payload's edge is its record header: read just that, a pack
-        // at a time, and leave the payload unread.
-        let mut headers = edges::wave_edges(source, &frontier)?;
-        let mut next = Vec::new();
-        for id in std::mem::take(&mut frontier) {
-            let location = source
-                .location(id, i64::MAX)
-                .map_err(storage)?
-                .ok_or(HistoryError::Integrity("mark object locator"))?;
-            let role = location.role;
-            let references = if role.has_references() {
-                let canonical = {
-                    let mut resolver = Resolver::new(
-                        source,
-                        i64::MAX,
-                        capacities,
-                        BodyCaches {
-                            packs: &mut packs,
-                            pool: &mut pool,
-                        },
-                        &mut groups,
-                        &mut workspace,
-                        &mut counters,
-                    );
-                    resolver.resolve_at(location).map_err(storage)?.0
-                };
-                let scope = if role == ObjectRole::FilesystemRoot {
-                    FilesystemRoot::decode(&canonical)
-                        .map_err(|_| HistoryError::Integrity("mark root scope"))?
-                        .scope()
-                } else {
-                    // No other admitted role reads the scope; the leaf encoders
-                    // that derive references ignore it.
-                    unscoped
-                };
-                decode_references(role, &canonical, construction, scope)
-                    .map_err(|_| HistoryError::Integrity("mark object references"))?
-            } else {
-                Vec::new()
-            };
-            for reference in references {
-                closure.logical.insert(reference);
-                if queued.insert(reference) {
-                    next.push(reference);
-                }
-            }
-            // The base identity lives in the record header. An encoded group
-            // has no header to read on its own, so its edge borrows the group.
-            let edge = match headers.remove(&id) {
-                Some(edge) => edge,
-                // The walk's own decoded-group cache: a compressed group is
-                // decompressed once, not once more for each record's edge.
-                None => stored_edge(
-                    source,
-                    &mut packs,
-                    &mut groups,
-                    &mut workspace,
-                    &mut edge_decodes,
-                    &location,
-                )
-                .map_err(storage)?,
-            };
-            closure.widths.insert(id, edge.width);
-            if let Some(base) = edge.base {
-                closure.bases.insert(base);
-                if queued.insert(base) {
-                    next.push(base);
-                }
-            }
-            if let Some(visit) = visit {
-                // Streaming rows as objects are discovered keeps the scratch a
-                // complete §6.2 closure at every step, not a post-pass copy.
-                visit.visit(id, location.pack_id)?;
-            }
-            closure.visited.insert(id, location);
-        }
-        frontier = next;
-    }
-    Ok(closure)
-}
-
-/// Attributes the bytes a retained pack keeps for records no reached object
-/// owns, the delta-base-only bytes and the inode-value block bytes.
-///
-/// The pack directory sits at the head of every body, so the common cases are
-/// answered from a bounded prefix read: a wholly dead group's extent and a
-/// retained compressed group (which contributes nothing) need no body. Only a
-/// retained uncompressed group that still holds a dead record needs the body,
-/// because its exact per-record split lives inside the group.
-fn waste(
-    tx: &Transaction<'_>,
-    source: &ClosureSource<'_>,
-    located: &Located,
-    closure: &Closure,
-) -> HistoryResult<KeptWaste> {
-    let mut dead_in_retained_packs_bytes = 0u64;
-    let packs = closure.packs();
-    // Packs the walk did not lay out have their directory prefix read here:
-    // a bounded batch of packs per call, not one call per pack.
-    let mut prefixes = {
-        let layouts = source.layouts.borrow();
-        let unread = packs.iter().filter(|pack| !layouts.contains_key(pack));
-        edges::Prefixes::new(source, unread.copied().collect())
-    };
-    for pack_id in packs {
-        let groups = located.inventory.get(&pack_id);
-        // The walk already read this pack's directory when it read its
-        // record headers; only a pack it reached another way is read here.
-        let kept = source.layouts.borrow().get(&pack_id).cloned();
-        let views = if let Some(views) = kept {
-            views
-        } else {
-            // The pack row may reserve more capacity than it uses; the header names
-            // the used length. Everything below parses against `used`, never the
-            // reserved capacity. A prefix that already covers `used` is the body.
-            let (capacity, prefix) = prefixes.take(pack_id)?;
-            if prefix.len() < layout::USED_OFFSET + 4 {
-                return Err(HistoryError::Integrity("mark pack length"));
-            }
-            let used = {
-                let field = &prefix[layout::USED_OFFSET..layout::USED_OFFSET + 4];
-                u32::from_le_bytes(
-                    field
-                        .try_into()
-                        .map_err(|_| HistoryError::Integrity("mark pack length"))?,
-                ) as usize
-            };
-            if used < layout::HEADER_LEN || used > capacity {
-                return Err(HistoryError::Integrity("mark pack length"));
-            }
-            if prefix.len() >= used {
-                dead_in_retained_packs_bytes = dead_in_retained_packs_bytes
-                    .saturating_add(pack_waste(&prefix[..used], groups, closure)?);
-                continue;
-            }
-            let header = layout::parse_directory_header(&prefix, used).map_err(storage)?;
-            layout::directory_group_views(&prefix, header).map_err(storage)?
-        };
-        // A wholly dead group's stored extent is known from the directory. A
-        // retained Raw group whose inventory no longer accounts for every
-        // record has its own record directory read, so its exact per-record
-        // split costs neither the pack body nor the group's.
-        let mut mixed_raw = Vec::new();
-        for (number, view) in views.iter().enumerate() {
-            let records = groups.and_then(|groups| groups.get(&number));
-            let live = records
-                .is_some_and(|records| records.values().any(|id| closure.visited.contains_key(id)));
-            if !live {
-                dead_in_retained_packs_bytes = dead_in_retained_packs_bytes
-                    .saturating_add(u64::try_from(view.end - view.start).unwrap_or(u64::MAX));
-            } else if view.codec == GroupCodec::Raw
-                && group_may_hide_dead_records(*view, records, closure)
-            {
-                mixed_raw.push((number, *view));
-            }
-        }
-        if mixed_raw.is_empty() {
-            continue;
-        }
-        // Each record's extent is in the group's directory, so the records
-        // themselves stay unread.
-        let views: Vec<layout::GroupView> = mixed_raw.iter().map(|(_, view)| *view).collect();
-        let directories = edges::group_directories(source, pack_id, &views)?;
-        for ((number, _), directory) in mixed_raw.iter().zip(&directories) {
-            let records = groups.and_then(|groups| groups.get(number));
-            dead_in_retained_packs_bytes = dead_in_retained_packs_bytes
-                .saturating_add(dead_raw_record_bytes(directory, records, closure)?);
-        }
-    }
-    let mut deltas: Vec<ObjectId> = closure
-        .bases
-        .difference(&closure.logical)
-        .copied()
-        .collect();
-    deltas.sort_unstable();
-    let delta_bases_bytes = deltas.iter().fold(0u64, |total, id| {
-        total.saturating_add(closure.widths.get(id).copied().unwrap_or(0))
-    });
-    // The report names at most this many kept delta bases. The byte total stays
-    // exact; only the list is bounded, and [`KeptWaste::from_parts`] records
-    // that it was cut so the §11 projection can render `{value, cap}`.
-    let delta_base_references = deltas;
-    let inode = tx.query(INODE_BLOCKS, Vec::<Param>::new())?;
-    let mut inode_blocks_bytes = 0u64;
-    for row in &inode {
-        let length: i64 = cell(row, 0)?;
-        inode_blocks_bytes =
-            inode_blocks_bytes.saturating_add(u64::try_from(length).unwrap_or(u64::MAX));
-    }
-    Ok(KeptWaste::from_parts(
-        dead_in_retained_packs_bytes,
-        delta_bases_bytes,
-        delta_base_references,
-        inode_blocks_bytes,
-    ))
-}
-
-/// Whether a retained Raw group's `object_location` inventory still explains
-/// its whole stored extent. A rebuild copies a retained pack whole but keeps
-/// only the reached records' rows, so a later mark sees a dead record that no
-/// row names; comparing the directory extent with the live records' framing and
-/// widths detects that case without reading the body.
-fn group_may_hide_dead_records(
-    view: layout::GroupView,
-    records: Option<&BTreeMap<usize, ObjectId>>,
-    closure: &Closure,
-) -> bool {
-    let (live_records, live_width) = records.map_or((0u64, 0u64), |records| {
-        records.values().fold((0u64, 0u64), |(count, width), id| {
-            if closure.visited.contains_key(id) {
-                (
-                    count + 1,
-                    width.saturating_add(closure.widths.get(id).copied().unwrap_or(0)),
-                )
-            } else {
-                (count, width)
-            }
-        })
-    });
-    let extent = u64::try_from(view.end - view.start).unwrap_or(u64::MAX);
-    extent != 4 + 4 * live_records + live_width
-}
-
-/// The framed bytes of every record in a Raw group that no reached object owns,
-/// including a record whose `object_location` row a rebuild did not retain. The
-/// group's directory names every record's extent, so this is one pass over it.
-fn dead_raw_record_bytes(
-    directory: &RecordDirectory,
-    records: Option<&BTreeMap<usize, ObjectId>>,
-    closure: &Closure,
-) -> HistoryResult<u64> {
-    let mut dead = 0u64;
-    for record in 0..directory.count() {
-        let live = records
-            .and_then(|records| records.get(&record))
-            .is_some_and(|id| closure.visited.contains_key(id));
-        if live {
-            continue;
-        }
-        let (start, end) = directory.range(record).map_err(storage)?;
-        dead = dead.saturating_add(u64::try_from(end - start).unwrap_or(u64::MAX));
-    }
-    Ok(dead)
-}
-
-/// One retained pack's dead bytes, exact over a complete body.
-fn pack_waste(
-    body: &[u8],
-    groups: Option<&BTreeMap<usize, BTreeMap<usize, ObjectId>>>,
-    closure: &Closure,
-) -> HistoryResult<u64> {
-    let header = layout::parse_header(body).map_err(storage)?;
-    let mut dead = 0u64;
-    for group_number in 0..header.group_count {
-        let view = layout::group_view(body, header, group_number).map_err(storage)?;
-        let records = groups.and_then(|groups| groups.get(&group_number));
-        let live = records
-            .is_some_and(|records| records.values().any(|id| closure.visited.contains_key(id)));
-        if !live {
-            // No reached object owns any record of this group, so its stored
-            // extent stays only because the pack is retained.
-            dead = dead.saturating_add(u64::try_from(view.end - view.start).unwrap_or(u64::MAX));
-        } else if view.codec == GroupCodec::Raw
-            && group_may_hide_dead_records(view, records, closure)
-        {
-            // An exact per-record split is possible only when the body is
-            // stored uncompressed. A compressed group's bytes cannot be
-            // attributed to one record, so a retained group contributes
-            // nothing and the error stays conservative.
-            let directory = RecordDirectory::of(&body[view.start..view.end]).map_err(storage)?;
-            dead = dead.saturating_add(dead_raw_record_bytes(&directory, records, closure)?);
-        }
-    }
-    Ok(dead)
-}
-
 /// The §6.4 live-heads digest: BLAKE3 over `layerfs/live-heads/v1\0`, then the
 /// non-retired stacks in identity order as `(stack_id, head_layer_id)`, then the
 /// marker-free Branches in identity order as `(branch_id, head_commit_id or 33
 /// zero bytes, base_layer_id)`. Every field is fixed width, so a retired row is
 /// absent rather than hashed as zeros and timestamps never enter the vector.
+///
+/// The rows are read a bounded page at a time, in identity order, and hashed
+/// as they come.
 fn live_heads_digest(tx: &Transaction<'_>) -> HistoryResult<[u8; 32]> {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"layerfs/live-heads/v1\0");
-    let stacks = tx.query(LIVE_STACKS, Vec::<Param>::new())?;
-    for row in &stacks {
+    live_rows(tx, LIVE_STACKS, &mut |row| {
         let id: Vec<u8> = cell(row, 0)?;
         let head: Vec<u8> = cell(row, 1)?;
         if id.len() != 17 || head.len() != 33 {
@@ -919,9 +839,9 @@ fn live_heads_digest(tx: &Transaction<'_>) -> HistoryResult<[u8; 32]> {
         }
         hasher.update(&id);
         hasher.update(&head);
-    }
-    let branches = tx.query(LIVE_BRANCHES, Vec::<Param>::new())?;
-    for row in &branches {
+        Ok(())
+    })?;
+    live_rows(tx, LIVE_BRANCHES, &mut |row| {
         let id: Vec<u8> = cell(row, 0)?;
         let head: Option<Vec<u8>> = cell(row, 1)?;
         let base: Vec<u8> = cell(row, 2)?;
@@ -935,8 +855,35 @@ fn live_heads_digest(tx: &Transaction<'_>) -> HistoryResult<[u8; 32]> {
             None => hasher.update(&[0u8; 33]),
         };
         hasher.update(&base);
-    }
+        Ok(())
+    })?;
     Ok(*hasher.finalize().as_bytes())
+}
+
+/// Hands the rows of one live-heads statement to `each`, a page at a time.
+/// The first column is the identity the pages follow.
+fn live_rows(
+    tx: &Transaction<'_>,
+    key: &str,
+    each: &mut dyn FnMut(&crate::backend::records::Record) -> HistoryResult<()>,
+) -> HistoryResult<()> {
+    let mut after: Vec<u8> = Vec::new();
+    loop {
+        let rows = tx.query(
+            key,
+            vec![
+                Param::Bytes(after.clone()),
+                Param::I64(HEADS_PAGE_ROWS as i64),
+            ],
+        )?;
+        for row in &rows {
+            each(row)?;
+        }
+        match rows.last() {
+            Some(last) if rows.len() == HEADS_PAGE_ROWS => after = cell(last, 0)?,
+            _ => return Ok(()),
+        }
+    }
 }
 
 /// One physical read failure as a mark failure; an unproven outcome is never

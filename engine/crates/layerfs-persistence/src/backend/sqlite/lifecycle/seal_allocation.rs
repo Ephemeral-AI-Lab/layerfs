@@ -1,4 +1,16 @@
 //! One-shot release of unused macOS extents after the sole SQLite owner closes.
+//!
+//! `F_TRANSFEREXTENTS` moves the blocks past the file's logical end to an
+//! empty same-directory scratch file, which is then removed. APFS refuses the
+//! call with `ENOENT` for a file that was ever one side of a clone (`cp -c`,
+//! `clonefile`, a Finder duplicate, `std::fs::copy`; the origin as well as the
+//! copy, and still after the other side is deleted or every byte is
+//! rewritten) once that file has blocks past its end. Measured on macOS
+//! 26.4.1, that refusal moves nothing: the file keeps its length, blocks,
+//! modification time and bytes, and the scratch stays empty. The release
+//! checks the length, the block count and the empty scratch, and only then
+//! reports nothing released; the sealed file is intact and only larger on
+//! disk than it could be.
 use layerfs_storage::port::PersistenceError;
 use nix::fcntl::{fcntl, FcntlArg};
 use std::{
@@ -55,7 +67,11 @@ fn refused(action: &str, error: impl std::fmt::Display) -> PersistenceError {
     }
 }
 
-pub(super) fn release(path: &Path, identity: Identity) -> Result<u64, PersistenceError> {
+/// Gives back the blocks `path` holds past its logical end, when it has any
+/// and the filesystem can move them. `Ok` means the file is the same file
+/// with the same length and no more blocks than before; it does not promise
+/// that any block was given back.
+pub(super) fn release(path: &Path, identity: Identity) -> Result<(), PersistenceError> {
     let source = OpenOptions::new()
         .read(true)
         .write(true)
@@ -69,7 +85,7 @@ pub(super) fn release(path: &Path, identity: Identity) -> Result<u64, Persistenc
             .checked_mul(512)
             .ok_or_else(|| refused("size", "overflow"))?;
         if allocated > before.len() {
-            transfer(path, &source, &identity, before.len())?;
+            transfer(path, &source, &identity, &before)?;
         }
         let after = identity
             .check(path, &source)
@@ -77,7 +93,7 @@ pub(super) fn release(path: &Path, identity: Identity) -> Result<u64, Persistenc
         if after.len() != before.len() || after.blocks() > before.blocks() {
             return Err(PersistenceError::Uncertain);
         }
-        Ok(after.len())
+        Ok(())
     })();
     if nix::unistd::close(source).is_err() {
         return Err(PersistenceError::Uncertain);
@@ -89,7 +105,7 @@ fn transfer(
     path: &Path,
     source: &File,
     identity: &Identity,
-    length: u64,
+    before: &Metadata,
 ) -> Result<(), PersistenceError> {
     let parent = path
         .parent()
@@ -117,14 +133,17 @@ fn transfer(
     if nix::unistd::close(target).is_err() {
         return Err(PersistenceError::Uncertain);
     }
-    let known = match transferred {
-        Ok(_) => Ok(()),
+    let (known, cloned) = match transferred {
+        Ok(_) => (Ok(()), false),
         Err(
             error @ (nix::errno::Errno::ENOTSUP
             | nix::errno::Errno::EXDEV
             | nix::errno::Errno::EPERM
             | nix::errno::Errno::EINVAL),
-        ) => Err(refused("extent transfer", error)),
+        ) => (Err(refused("extent transfer", error)), false),
+        // The clone refusal (module documentation). It is "nothing released"
+        // only once the checks below show that nothing moved.
+        Err(nix::errno::Errno::ENOENT) => (Ok(()), true),
         Err(_) => return Err(PersistenceError::Uncertain),
     };
     // Unknown outcomes retain the exclusively created sibling. No cleanup is
@@ -133,7 +152,14 @@ fn transfer(
         .check(path, source)
         .map_err(|_| PersistenceError::Uncertain)?;
     let sibling = fs::symlink_metadata(&temporary).map_err(|_| PersistenceError::Uncertain)?;
-    if original.len() != length || !target_identity.matches(&sibling) {
+    if original.len() != before.len() || !target_identity.matches(&sibling) {
+        return Err(PersistenceError::Uncertain);
+    }
+    // A refused clone that lost a block, or a scratch that gained one, is
+    // not the measured refusal: some extent may have moved.
+    if cloned
+        && (original.blocks() != before.blocks() || sibling.len() != 0 || sibling.blocks() != 0)
+    {
         return Err(PersistenceError::Uncertain);
     }
     fs::remove_file(&temporary).map_err(|_| PersistenceError::Uncertain)?;

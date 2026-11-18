@@ -8,13 +8,16 @@
 //! origin/displaced node) to its fixpoint. A retired Branch a retained node
 //! reaches is kept through that node with its own edges, and a deleted project
 //! is excluded because every history edge is stack-local.
+use super::objects::spill::{Item, Sorter, Space};
 use super::params;
 use super::provider::HistoryProvider;
 use super::rows::cell;
 use super::transaction::Transaction;
 use crate::backend::records::{Param, Record};
+use layerfs_content::ObjectId;
 use layerfs_history::error::{HistoryError, HistoryResult};
 use layerfs_history::identity::{BranchId, CommitId, LayerId, LayerStackId, NodeId};
+use std::sync::Arc;
 
 const CLEAR: &str = "kept_node_clear";
 const ROOTS: &str = "kept_node_roots";
@@ -37,7 +40,18 @@ const UNREACHABLE_DELETES: [&str; 8] = [
     "history_remove_unreachable_reach",
 ];
 const MARK: &str = "kept_node_mark";
-const READ: &str = "kept_node_read";
+const SEED: &str = "kept_node_seed";
+const EXPAND: &str = "kept_node_expand";
+const PAGE: &str = "kept_node_page";
+/// Rows one read of `kept_node` returns.
+const PAGE_ROWS: usize = 1024;
+/// Nodes one closure statement starts from, and the most rows it may reach
+/// before it stops: what one statement holds is bounded by the second.
+const BATCH_NODES: usize = 256;
+const BATCH_ROWS: usize = 8192;
+/// Bytes of nodes still to follow that the closure holds before it writes
+/// them to a sort file.
+const FRONTIER_SORT_BYTES: usize = 1024 * 1024;
 
 /// The identity of one node in a Store's retained history.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -116,29 +130,33 @@ impl KeptNode {
 /// The retained history closure a mark wrote to `kept_node` (§6.1), in
 /// `(layer_stack_id, kind, node_id)` order.
 ///
-/// The object closure (§6.2) starts from [`Self::commits`] and [`Self::layers`].
+/// The closure itself stays in `kept_node`. A mark that lists what it kept
+/// ([`HistoryProvider::mark`], [`HistoryProvider::mark_history_closure`])
+/// also returns the nodes here; a compaction's mark returns their count
+/// only, so what it holds does not grow with the history.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct KeptHistory {
     nodes: Vec<KeptNode>,
+    count: u64,
 }
 
 impl KeptHistory {
-    /// Every retained node, in `kept_node` order.
+    /// Every retained node, in `kept_node` order, when the mark listed them.
     pub fn nodes(&self) -> &[KeptNode] {
         &self.nodes
     }
 
-    /// How many nodes the closure holds.
+    /// How many nodes the closure holds, listed or not.
     pub fn len(&self) -> usize {
-        self.nodes.len()
+        usize::try_from(self.count).unwrap_or(usize::MAX)
     }
 
     /// Whether the closure holds no node.
     pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
+        self.count == 0
     }
 
-    /// Whether `id` is retained.
+    /// Whether `id` is among the listed nodes.
     pub fn contains(&self, id: KeptNodeId) -> bool {
         self.nodes.iter().any(|node| node.id == id)
     }
@@ -198,19 +216,191 @@ impl HistoryProvider {
     /// the same rows. Nothing else is written; the object closure (§6.2) starts
     /// from the returned [`KeptHistory::commits`] and [`KeptHistory::layers`].
     pub fn mark_history_closure(&self) -> HistoryResult<KeptHistory> {
-        self.write_snapshot(mark)
+        let budget = self.mark_budget();
+        self.write_snapshot(|tx| {
+            let space = Space::sized(tx.mechanics().scratch_directory(), budget);
+            close(tx, &space)?;
+            let mut history = KeptHistory::default();
+            each(tx, |node, _| {
+                history.note(node, true);
+                Ok(())
+            })?;
+            Ok(history)
+        })
     }
 }
 
-pub(super) fn mark(tx: &Transaction<'_>) -> HistoryResult<KeptHistory> {
-    tx.execute(CLEAR, Vec::<Param>::new())?;
-    tx.execute(MARK, Vec::<Param>::new())?;
-    let rows = tx.query(READ, Vec::<Param>::new())?;
-    let mut nodes = Vec::with_capacity(rows.len());
-    for row in &rows {
-        nodes.push(kept_node(row)?);
+impl KeptHistory {
+    /// Counts one node of the closure, and keeps it when the mark lists.
+    pub(super) fn note(&mut self, node: KeptNode, listed: bool) {
+        self.count += 1;
+        if listed {
+            self.nodes.push(node);
+        }
     }
-    Ok(KeptHistory { nodes })
+}
+
+/// One node the closure has still to follow: its LayerStack and its tagged
+/// identity, which names its kind.
+#[derive(Clone, Copy)]
+struct Pending {
+    stack: [u8; 17],
+    id: [u8; 33],
+}
+
+impl Pending {
+    fn new(stack: &[u8], id: &[u8]) -> HistoryResult<Self> {
+        let tagged = matches!(
+            (id.first(), id.len()),
+            (Some(0x12 | 0x32), 33) | (Some(0x11 | 0x31), 17)
+        );
+        if stack.len() != 17 || !tagged {
+            return Err(HistoryError::Integrity("kept node identity"));
+        }
+        let mut pending = Self {
+            stack: [0; 17],
+            id: [0; 33],
+        };
+        pending.stack.copy_from_slice(stack);
+        pending.id[..id.len()].copy_from_slice(id);
+        Ok(pending)
+    }
+}
+
+impl Item for Pending {
+    const BYTES: usize = 50;
+    fn encode(&self, out: &mut [u8]) {
+        out[..17].copy_from_slice(&self.stack);
+        out[17..].copy_from_slice(&self.id);
+    }
+    fn decode(bytes: &[u8]) -> Option<Self> {
+        let mut pending = Self {
+            stack: [0; 17],
+            id: [0; 33],
+        };
+        pending.stack.copy_from_slice(&bytes[..17]);
+        pending.id.copy_from_slice(&bytes[17..50]);
+        Some(pending)
+    }
+    fn absorb(&mut self, _other: &Self) -> bool {
+        true
+    }
+}
+
+fn pending_order(left: &Pending, right: &Pending) -> std::cmp::Ordering {
+    (left.stack, left.id).cmp(&(right.stack, right.id))
+}
+
+/// Recomputes the §6.1 history closure into `kept_node`. The rows stay in
+/// the table; [`each`] reads them.
+///
+/// An engine that computes temporary results in its own process
+/// ([`crate::backend::Mechanics::closure_in_batches`]) is given the closure
+/// a bounded piece at a time: the roots are written by one statement, then
+/// each statement follows the edges of at most [`BATCH_NODES`] kept nodes
+/// until it has reached [`BATCH_ROWS`] rows, writes the nodes it found that
+/// were not kept and returns them. A statement that stopped at its bound
+/// has not followed everything it found, so what it returned and what it
+/// started from are followed again; the nodes waiting for that are sorted in
+/// bounded memory ([`Sorter`]) and written to a sort file beyond it. Every
+/// statement that stops at its bound keeps at least
+/// `BATCH_ROWS - BATCH_NODES` new nodes, so the closure ends.
+///
+/// Elsewhere it is the one recursive statement, and what that holds is the
+/// server's to bound.
+pub(super) fn close(tx: &Transaction<'_>, space: &Arc<Space>) -> HistoryResult<()> {
+    tx.execute(CLEAR, Vec::<Param>::new())?;
+    if !tx.mechanics().closure_in_batches() {
+        tx.execute(MARK, Vec::<Param>::new())?;
+        return Ok(());
+    }
+    tx.execute(SEED, Vec::<Param>::new())?;
+    let mut pending = Sorter::new(space, FRONTIER_SORT_BYTES, pending_order);
+    each(tx, |node, _| {
+        pending.push(Pending::new(node.stack.as_slice(), node.id.as_slice())?)
+    })?;
+    while !pending.is_empty() {
+        let mut found = Sorter::new(space, FRONTIER_SORT_BYTES, pending_order);
+        let mut nodes = pending.sorted()?;
+        let mut batch: Vec<Pending> = Vec::with_capacity(BATCH_NODES);
+        loop {
+            batch.clear();
+            while batch.len() < BATCH_NODES {
+                match nodes.next()? {
+                    Some(node) => batch.push(node),
+                    None => break,
+                }
+            }
+            if batch.is_empty() {
+                break;
+            }
+            let mut from = vec![0u8; batch.len() * Pending::BYTES];
+            for (node, out) in batch.iter().zip(from.chunks_exact_mut(Pending::BYTES)) {
+                node.encode(out);
+            }
+            let rows = tx.query(EXPAND, params![from, batch.len() as i64, BATCH_ROWS as i64])?;
+            if rows.len() + batch.len() < BATCH_ROWS {
+                // The statement ran to its end: everything it found is
+                // kept and followed.
+                continue;
+            }
+            for row in &rows {
+                let stack: Vec<u8> = cell(row, 0)?;
+                let id: Vec<u8> = cell(row, 1)?;
+                found.push(Pending::new(&stack, &id)?)?;
+            }
+            for node in &batch {
+                found.push(*node)?;
+            }
+        }
+        drop(nodes);
+        pending = found;
+    }
+    Ok(())
+}
+
+/// Hands every node of `kept_node` to `each`, in table order, with the root
+/// object of a Commit or a Layer. The rows are read a bounded page at a
+/// time and never held together.
+pub(super) fn each(
+    tx: &Transaction<'_>,
+    mut each: impl FnMut(KeptNode, Option<ObjectId>) -> HistoryResult<()>,
+) -> HistoryResult<()> {
+    let mut after: (Vec<u8>, String, Vec<u8>) = (Vec::new(), String::new(), Vec::new());
+    loop {
+        let rows = tx.query(
+            PAGE,
+            params![
+                after.0.clone(),
+                after.1.clone(),
+                after.2.clone(),
+                PAGE_ROWS as i64
+            ],
+        )?;
+        for row in &rows {
+            let node = kept_node(row)?;
+            let root: Option<Vec<u8>> = cell(row, 4)?;
+            let root = match (node.id, root) {
+                (KeptNodeId::Commit(_) | KeptNodeId::Layer(_), Some(root)) => Some(
+                    ObjectId::from_bytes(&root)
+                        .map_err(|_| HistoryError::Integrity("kept node root"))?,
+                ),
+                (KeptNodeId::Commit(_) | KeptNodeId::Layer(_), None) => {
+                    return Err(HistoryError::Integrity("kept node root"))
+                }
+                (_, _) => None,
+            };
+            each(node, root)?;
+        }
+        let Some(last) = rows.last() else {
+            break;
+        };
+        after = (cell(last, 0)?, cell(last, 1)?, cell(last, 2)?);
+        if rows.len() < PAGE_ROWS {
+            break;
+        }
+    }
+    Ok(())
 }
 
 /// The retained history roots of one Stack: every Layer of a live Stack,
@@ -278,7 +468,7 @@ pub(super) fn remove_unreachable(
     stack: LayerStackId,
     dry_run: bool,
 ) -> HistoryResult<u64> {
-    mark(tx)?;
+    close(tx, &Space::new(tx.mechanics().scratch_directory()))?;
     let count = unreachable_count(tx, stack)?;
     if dry_run || count == 0 {
         return Ok(count);
