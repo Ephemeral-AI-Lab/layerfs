@@ -51,9 +51,11 @@ fn code(name: &str, args: SdkValue) -> String {
 }
 
 #[test]
-fn the_table_has_twelve_families_and_84_calls() {
+fn each_family_holds_its_own_calls_and_names_are_unique() {
+    // which calls exist is the contract test's to say (`tests/contract.rs`
+    // compares the table with the frozen spec); no count is pinned here
+    // while the families move to the 2.0 call surface one package at a time
     let all: Vec<&Call> = layerfs_api::calls();
-    assert_eq!(all.len(), 84);
     // each family holds only its own calls, and has at least one
     for family in families() {
         assert!(!family.calls().is_empty(), "{}", family.name);
@@ -66,7 +68,7 @@ fn the_table_has_twelve_families_and_84_calls() {
     let mut names: Vec<_> = all.iter().map(|c| c.name()).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 84, "call names are unique");
+    assert_eq!(names.len(), all.len(), "call names are unique");
     // an optional positional is only ever followed by optional ones (D7)
     for c in &all {
         let first_optional = c.args.iter().position(|a| a.optional);
@@ -74,10 +76,6 @@ fn the_table_has_twelve_families_and_84_calls() {
             assert!(c.args[i..].iter().all(|a| a.optional), "{}", c.name());
         }
     }
-    let counts: Vec<usize> = families().iter().map(|f| f.calls().len()).collect();
-    // `home` holds the call log's two calls since the call surface 2.0;
-    // `logs` keeps a machine's and a Sandbox's
-    assert_eq!(counts, [4, 7, 9, 3, 15, 5, 6, 15, 12, 5, 2, 1]);
 }
 
 #[test]
