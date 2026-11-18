@@ -56,6 +56,39 @@ pub fn moved(home: &Path) {
     flock::unlock(&file);
 }
 
+/// Entity record `path` was written ([`super::write_entity`] calls this
+/// after every write, so a record writer moves the generation without a
+/// line of its own): it moves when `path` is one of a home's records, and
+/// for nothing else. A home's records are `<folder>/<name>/record.json`
+/// directly under the home (a machine, a Store, a Sandbox, a bucket, and
+/// any record kind kept the same way, such as a saved login), a project's
+/// `store/<store>/project/<name>/record.json` and a Workspace's
+/// `sandbox/<sandbox>/workspace/<id>.json`. A command's records under a
+/// Workspace (`exec/`), a cancel mark, an observation file and every record
+/// under a machine's worker root move nothing.
+pub fn recorded(path: &Path) {
+    if let Some(home) = home_of(path) {
+        moved(home);
+    }
+}
+
+/// The home whose record `path` is, when it is one ([`recorded`]).
+fn home_of(path: &Path) -> Option<&Path> {
+    let up = |levels: usize| path.ancestors().nth(levels);
+    let named = |levels: usize, word: &str| {
+        up(levels)
+            .and_then(Path::file_name)
+            .is_some_and(|name| name == word)
+    };
+    let home = match path.file_name()?.to_str()? {
+        "record.json" if named(2, "project") && named(4, "store") => up(5)?,
+        "record.json" => up(3)?,
+        name if name.ends_with(".json") && named(1, "workspace") && named(3, "sandbox") => up(4)?,
+        _ => return None,
+    };
+    home.join("layerfs.json").is_file().then_some(home)
+}
+
 /// [`moved`] for a caller that holds only a record's path or its folder
 /// (a Sandbox's folder, a Workspace's record, a project's entry): the home
 /// is the nearest folder above `path`, at most five levels up, that holds

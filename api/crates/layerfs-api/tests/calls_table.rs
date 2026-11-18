@@ -452,21 +452,38 @@ fn sizes_and_keys() {
 }
 
 #[test]
-fn doctor_family() {
-    assert!(code("doctor.fix", SdkValue::Null).contains("`id` is required"));
+fn home_leftovers_and_prune() {
+    assert!(code("home.prune", SdkValue::Null).contains("`leftover` is required"));
     assert!(code(
-        "doctor.fix",
-        map(&[("id", t("native:image-part:00")), ("path", t("/etc"))])
+        "home.prune",
+        map(&[("leftover", t("native:image_part:00")), ("path", t("/etc"))])
     )
-    .starts_with("InvalidInput: doctor.fix: unknown argument `path`"));
-    // reached: an id that names nothing is not found, and one of a kind
-    // that is only counted is refused
-    let reached = code("doctor.fix", map(&[("id", t("native:run-folder:../x"))]));
-    assert!(reached.starts_with("NotFound: "), "{reached}");
-    let lock = format!("native:image-lock:{}.2", "ab".repeat(32));
-    let reached = code("doctor.fix", map(&[("id", t(&lock))]));
-    assert!(reached.starts_with("InvalidInput: "), "{reached}");
-    assert!(reached.contains("only reported"), "{reached}");
+    .starts_with("InvalidInput: home.prune: unknown argument `path`"));
+    // reached: an id that names nothing is not found, and so is one in
+    // today's hyphenated spelling or of a kind that is no longer listed
+    let lock = format!("native:image_lock:{}.2", "ab".repeat(32));
+    for id in [
+        "native:run_folder:../x",
+        "native:run-folder:x",
+        lock.as_str(),
+    ] {
+        let reached = code("home.prune", map(&[("leftover", t(id))]));
+        assert!(reached.starts_with("NotFound: "), "{reached}");
+        assert!(reached.contains("layerfs home leftovers"), "{reached}");
+    }
+    // a home with nothing left over lists nothing; a machine it does not
+    // know is not found
+    assert_eq!(code("home.leftovers", SdkValue::Null), r#"ok {"items":[]}"#);
+    let unknown = code("home.leftovers", map(&[("machine", t("lab"))]));
+    assert!(
+        unknown.starts_with("NotFound: no machine named lab"),
+        "{unknown}"
+    );
+    // ruling R1: the old name is gone, with its family
+    assert_eq!(
+        code("doctor.fix", SdkValue::Null),
+        "InvalidInput: no call named `doctor.fix`"
+    );
 }
 
 #[test]
@@ -508,11 +525,6 @@ fn the_source_is_one_file_per_call_under_its_family() {
             .map(|c| format!("{}.rs", c.call))
             .collect();
         files.push("mod.rs".to_owned());
-        if family.name == "doctor" {
-            // the six doctors' one answer, beside the family's one call;
-            // each doctor's entry is in its own family's folder
-            files.push("answer.rs".to_owned());
-        }
         files.sort();
         assert_eq!(names(&src.join(family.name)), files, "{}", family.name);
     }
@@ -610,7 +622,18 @@ fn the_call_log_calls_moved_to_home_with_no_alias() {
         .iter()
         .map(|call| call.call)
         .collect();
-    assert_eq!(home, ["init", "get", "log", "clear_log", "doctor"]);
+    assert_eq!(
+        home,
+        [
+            "init",
+            "get",
+            "log",
+            "clear_log",
+            "doctor",
+            "leftovers",
+            "prune"
+        ]
+    );
 }
 
 #[test]
@@ -637,7 +660,15 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "machine.update",
         "machine.doctor",
     ];
-    let home = ["home.get", "home.log", "home.clear_log", "home.doctor"];
+    let home = [
+        "home.init",
+        "home.get",
+        "home.log",
+        "home.clear_log",
+        "home.doctor",
+        "home.leftovers",
+        "home.prune",
+    ];
     let branch = [
         "branch.list",
         "branch.get",

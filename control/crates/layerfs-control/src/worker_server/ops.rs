@@ -114,7 +114,7 @@ pub(super) fn run(
         "machine.prune" => layerfs_sandbox::images::prune_in_worker(root, args),
         "doctor.sandbox" => crate::doctor::diagnose_worker_sandbox(root, args),
         // removes one leftover under this root, under its guard (#180)
-        "doctor.fix" => crate::doctor::leftover_fix::fix_in_worker(root, &args),
+        "home.prune" => crate::doctor::leftover_prune::prune_in_worker(root, &args),
         "store.diagnose" => crate::doctor::diagnose_store_in_worker(root, args, events),
         // the check of this machine's connection to a PostgreSQL Store
         // (`store.update`): the caller sends the record and

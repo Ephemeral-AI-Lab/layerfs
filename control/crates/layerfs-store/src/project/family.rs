@@ -385,7 +385,7 @@ fn init_on_worker(
                 refusal.message
             );
             // the worker's Init ends by its own deadline, counted from when
-            // it read this request, moments after this: the hour `doctor.fix`
+            // it read this request, moments after this: the hour `home.prune`
             // waits past the recorded deadline covers the difference
             let left = send::Left {
                 store,

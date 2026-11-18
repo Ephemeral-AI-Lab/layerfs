@@ -1,10 +1,10 @@
-//! `doctor.fix(id)` (layerfs-project#180): removes one leftover `layerfs
-//! doctor` reported, one attempt, under that kind's guard. It is a
-//! mutation: it goes where a machine's mutations go (`place::on_machine`,
-//! which refuses while an operation holds the machine), to this process on
-//! `native` and to the worker's `doctor.fix` operation otherwise, sent
-//! once. A stopped machine is `Unavailable`; a lost answer is `Unknown`
-//! and nothing is sent again.
+//! `home.prune(leftover)` (call surface 2.0, layerfs-project#180): removes
+//! one leftover `home leftovers` listed, one attempt, under that kind's
+//! guard. It is a mutation: it goes where a machine's mutations go
+//! (`place::on_machine`, which refuses while an operation holds the
+//! machine), to this process on `native` and to the worker's `home.prune`
+//! operation otherwise, sent once. A stopped machine is `Unavailable`; a
+//! lost answer is `Unknown` and nothing is sent again.
 //!
 //! The caller sends a kind and a name, never a path. The removing side
 //! derives the path ([`Kind::path`]), checks every folder on the way is a
@@ -13,20 +13,19 @@
 //!
 //! | kind | guard (`InUse` when it does not hold) |
 //! | --- | --- |
-//! | `run-folder` | no Sandbox record names it; its `owner` marker is there and older than a minute; the record that marker names has no live daemon (pid, start time and boot); the mount table lists nothing at or under it or its `<name>.root`. Removed entry by entry, through no link, and only directories on the folder's own device |
-//! | `empty-root` | its run folder is gone; not a mount point (mount table, and its device is its parent's); `rmdir` only |
-//! | `backup-staging` | the Store's `backup.lock` in the home, taken without waiting and held for the removal |
-//! | `image-tmp` | the image's `<hex>.2.lock`, taken without waiting; the lock file stays |
-//! | `image-part` | not written for an hour |
-//! | `init-copy` | a line of the home's `log/uncertain.jsonl` names this machine and copy, and its deadline passed more than an hour ago; then the worker's `project.stage` discard removes it. A copy no line names, or one with no deadline, is report-only (`InvalidInput`) |
+//! | `run_folder` | no Sandbox record names it; its `owner` marker is there and older than a minute; the record that marker names has no live daemon (pid, start time and boot); the mount table lists nothing at or under it or its `<name>.root`. Removed entry by entry, through no link, and only directories on the folder's own device |
+//! | `empty_root` | its run folder is gone; not a mount point (mount table, and its device is its parent's); `rmdir` only |
+//! | `backup_staging` | the Store's `backup.lock` in the home, taken without waiting and held for the removal |
+//! | `image_tmp` | the image's `<hex>.2.lock`, taken without waiting; the lock file stays |
+//! | `image_part` | not written for an hour |
+//! | `init_copy` | a line of the home's `log/uncertain.jsonl` names this machine and copy, and its deadline passed more than an hour ago; then the worker's `project.stage` discard removes it. A copy no line names, or one with no deadline, is report-only (`InvalidInput`) |
 //!
 //! `NotFound`: an id no walk gives, or an entry that is gone. `InvalidInput`:
-//! a kind that is only reported (`image-lock`, `unmount-marker`, an unnamed
-//! folder copy).
-use super::leftover_report::{named, named_copies, INIT_GRACE_MS};
+//! a folder copy that is only reported (`report_only`).
+use super::leftover_list::{named, named_copies, INIT_GRACE_MS};
 use super::leftovers::{self, Kind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::home::{now_ms, paths, with_field};
+use layerfs_home::home::{now_ms, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_sandbox::record::SandboxRecord;
 use layerfs_sandbox_backend::rootfs::{self, Temporary};
@@ -51,25 +50,17 @@ fn in_use(why: impl Into<String>) -> SdkRefusal {
 fn gone(id: &str) -> SdkRefusal {
     refused(
         "NotFound",
-        format!("no leftover has the id {id} now; `layerfs doctor` lists them"),
+        format!("no leftover has the id {id} now; `layerfs home leftovers` lists them"),
     )
 }
 
-/// `doctor.fix(id)` on `home`: `{ id, machine, kind, path, removed: true,
-/// bytes }`.
-pub fn fix(home: &Path, id: &str) -> Outcome {
+/// `home.prune(leftover)` on `home`: `{ freed_bytes, outcome: removed,
+/// leftover, kind, machine, path }`; `freed_bytes` is null when the size
+/// was not measured.
+pub fn prune(home: &Path, id: &str) -> Outcome {
     let Some((machine, kind, name)) = leftovers::parse(id) else {
         return Err(gone(id));
     };
-    if kind.report_only() {
-        return Err(refused(
-            "InvalidInput",
-            format!(
-                "`{}` entries are only reported: LayerFS keeps them, and nothing removes them",
-                kind.as_str()
-            ),
-        ));
-    }
     let built_in = matches!(machine, "native" | "docker");
     if !built_in && layerfs_machine::record::MachineRecord::read(home, machine)?.is_none() {
         return Err(gone(id));
@@ -84,7 +75,7 @@ pub fn fix(home: &Path, id: &str) -> Outcome {
                 _ => None,
             };
             match place::on_machine(home, machine)? {
-                Executor::Local => fix_on(home, kind, name, &[]).map_err(|r| renamed(r, id))?,
+                Executor::Local => prune_on(home, kind, name, &[]).map_err(|r| renamed(r, id))?,
                 Executor::Worker(mut worker) => {
                     let known = (layerfs_sandbox::record::sandboxes(home)?.iter())
                         .filter(|sandbox| sandbox.machine() == machine)
@@ -96,15 +87,22 @@ pub fn fix(home: &Path, id: &str) -> Outcome {
                         ("known", SdkValue::List(known)),
                     ]);
                     worker
-                        .attempt("doctor.fix", args, &mut |_| {})
+                        .attempt("home.prune", args, &mut |_| {})
                         .map_err(|unreached| unreached.0)?
                         .map_err(|r| renamed(r, id))?
                 }
             }
         }
     };
-    let removed = with_field(removed, "machine", SdkValue::text(machine));
-    Ok(with_field(removed, "id", SdkValue::text(id)))
+    let field = |key: &str| removed.get(key).cloned().unwrap_or_default();
+    Ok(SdkValue::map([
+        ("freed_bytes", field("freed_bytes")),
+        ("outcome", SdkValue::text("removed")),
+        ("leftover", SdkValue::text(id)),
+        ("kind", SdkValue::text(kind.as_str())),
+        ("machine", SdkValue::text(machine)),
+        ("path", field("path")),
+    ]))
 }
 
 /// A removing side's `NotFound` names the id the caller gave.
@@ -185,19 +183,17 @@ fn init_copy(home: &Path, machine: &str, copy: &str, id: &str) -> Outcome {
         return Err(gone(id));
     }
     Ok(SdkValue::map([
-        ("kind", SdkValue::text(Kind::InitCopy.as_str())),
         ("path", SdkValue::text(path)),
-        ("removed", SdkValue::Bool(true)),
-        ("bytes", SdkValue::Null),
+        ("freed_bytes", SdkValue::Null),
     ]))
 }
 
-/// The worker's `doctor.fix` operation: `{ kind, name, known }` under its
+/// The worker's `home.prune` operation: `{ kind, name, known }` under its
 /// own root.
-pub(crate) fn fix_in_worker(root: &Path, args: &SdkValue) -> Outcome {
+pub(crate) fn prune_in_worker(root: &Path, args: &SdkValue) -> Outcome {
     let kind = args.get_text("kind").and_then(Kind::named);
     let (Some(kind), Some(name)) = (kind, args.get_text("name")) else {
-        return Err(refused("InvalidInput", "doctor.fix: `kind` and `name`"));
+        return Err(refused("InvalidInput", "home.prune: `kind` and `name`"));
     };
     let known: Vec<String> = match args.get("known") {
         Some(SdkValue::List(names)) => (names.iter())
@@ -208,13 +204,13 @@ pub(crate) fn fix_in_worker(root: &Path, args: &SdkValue) -> Outcome {
             .collect(),
         _ => Vec::new(),
     };
-    fix_on(root, kind, name, &known)
+    prune_on(root, kind, name, &known)
 }
 
 /// Removes entry `name` of `kind` under side root `root`, found again and
 /// checked under its guard now. `known` names the Sandboxes the caller's
-/// home records on this machine.
-pub fn fix_on(root: &Path, kind: Kind, name: &str, known: &[String]) -> Outcome {
+/// home records on this machine: `{ path, freed_bytes }`.
+pub fn prune_on(root: &Path, kind: Kind, name: &str, known: &[String]) -> Outcome {
     let absent = || refused("NotFound", "no such leftover");
     let path = kind.path(root, name).ok_or_else(absent)?;
     // every folder from the root down to the entry's own is a real
@@ -259,7 +255,7 @@ pub fn fix_on(root: &Path, kind: Kind, name: &str, known: &[String]) -> Outcome 
             std::fs::remove_file(&path).map_err(failed)?;
             Some(found.len())
         }
-        Kind::InitCopy | Kind::ImageLock | Kind::UnmountMarker => {
+        Kind::InitCopy => {
             return Err(refused(
                 "InvalidInput",
                 format!("`{}` entries are not removed here", kind.as_str()),
@@ -269,11 +265,9 @@ pub fn fix_on(root: &Path, kind: Kind, name: &str, known: &[String]) -> Outcome 
         _ => return Err(absent()),
     };
     Ok(SdkValue::map([
-        ("kind", SdkValue::text(kind.as_str())),
         ("path", SdkValue::text(path.display().to_string())),
-        ("removed", SdkValue::Bool(true)),
         (
-            "bytes",
+            "freed_bytes",
             (bytes.and_then(|bytes| i64::try_from(bytes).ok()))
                 .map_or(SdkValue::Null, SdkValue::Int),
         ),
@@ -314,7 +308,7 @@ fn run_folder(root: &Path, path: &Path, known: &[String]) -> Result<Option<u64>>
     let shown = path.display();
     if leftovers::recorded(path, &leftovers::records(root), known) {
         return Err(in_use(format!(
-            "a Sandbox record names {shown}; `layerfs sandbox close` closes that Sandbox"
+            "a Sandbox record names {shown}; `layerfs sandbox remove` removes that Sandbox"
         )));
     }
     let marker = path.join(leftovers::OWNER);

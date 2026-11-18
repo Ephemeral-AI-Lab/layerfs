@@ -14,7 +14,7 @@
 //! `inspect`: at most two at once, each on a helper thread with deadlines);
 //! `store.call`, `store.file`, `store.reach`, `sandbox.host`, `project.stage`,
 //! `project.init`, `project.export`, `project.delete`, `project.list` and
-//! `doctor.fix` run one operation on this machine (`ops`),
+//! `home.prune` run one operation on this machine (`ops`),
 //! with `home` set to the worker's own root (the machine's data disk),
 //! never a path the caller sends. There is no `store.compact` operation:
 //! compaction is local-only (spec S6 deviation D5,

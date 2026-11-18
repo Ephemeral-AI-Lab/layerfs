@@ -8,7 +8,7 @@
 //! `buckets` the buckets. Each node holds what its record holds, with its
 //! `state` and that state's companion. A Workspace is in the home's records
 //! only on `native` and for a Sandbox reached directly (C10): any other
-//! Sandbox answers `workspaces` null.
+//! Sandbox answers `workspaces` null and `workspaces_not_listed` true.
 use crate::inventory;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
@@ -42,17 +42,29 @@ fn projects(home: &Path, store: &str) -> Result<SdkValue> {
     ))
 }
 
-/// One Store: `{ store, engine, state.., projects, connections }`. `under`
-/// is its machine's name and state, for a sqlite Store; `connections` are
-/// the machines a PostgreSQL Store has an address of its own for, null for
-/// a sqlite Store. Its state is the Store's one records-only derivation.
+/// One Store: `{ store, engine, projects, connections, state.. }`. `under`
+/// is its machine's name and state, for a sqlite Store; a PostgreSQL
+/// Store's `connections` are `{ machine, url }`, the home's own address
+/// first (`machine` null), then each machine that has one of its own; a
+/// sqlite Store has none (null). A URL is as the record holds it: a
+/// password is a reference, never written there. Its state is the Store's
+/// one records-only derivation.
 fn store(home: &Path, record: &StoreRecord, under: Option<(&str, &State)>) -> Result<SdkValue> {
     let state = layerfs_store::state::recorded_under(record, under.map(|(_, state)| state))?;
+    let connection = |machine: Option<String>, url: Option<&str>| {
+        SdkValue::map([
+            ("machine", SdkValue::opt_text(machine)),
+            ("url", SdkValue::opt_text(url.map(str::to_owned))),
+        ])
+    };
     let connections = match under {
         Some(_) => SdkValue::Null,
         None => {
-            let own = record.own_connections().into_iter();
-            SdkValue::List(own.map(|(machine, _)| SdkValue::Text(machine)).collect())
+            let home_own = connection(None, record.text("url"));
+            let own = (record.own_connections().into_iter()).map(|(machine, own)| {
+                connection(Some(machine), own.url.as_deref().or(record.text("url")))
+            });
+            SdkValue::List(std::iter::once(home_own).chain(own).collect())
         }
     };
     Ok(state.write(SdkValue::map([
@@ -95,10 +107,11 @@ fn workspaces(home: &Path, sandbox: &str) -> Result<Vec<SdkValue>> {
     Ok(found.into_iter().map(node).collect())
 }
 
-/// One Sandbox: `{ sandbox, project, image, state.., workspaces }`, under
-/// its machine's state. `workspaces` is null when the home does not record
-/// them: the Sandbox is blocked, or it is on a machine reached through its
-/// worker.
+/// One Sandbox: `{ sandbox, project, image, workspaces,
+/// workspaces_not_listed, state.. }`, under its machine's state.
+/// `workspaces` is null when the home does not record them: the Sandbox is
+/// blocked, or it is on a machine reached through its worker, which
+/// `workspaces_not_listed` says.
 fn sandbox(home: &Path, record: &SandboxRecord, machine: &State) -> Result<SdkValue> {
     let name = record.name();
     let state = match record.state(false) {
@@ -114,22 +127,19 @@ fn sandbox(home: &Path, record: &SandboxRecord, machine: &State) -> Result<SdkVa
             .blocks("machine", record.machine())
             .unwrap_or(State::Ready),
     };
-    let listed = match state {
-        State::Blocked(_) => SdkValue::Null,
-        _ => {
-            let found = workspaces(home, name)?;
-            // only `native` and a Sandbox reached directly record them here
-            match found.is_empty() && record.machine() != "native" {
-                true => SdkValue::Null,
-                false => SdkValue::List(found),
-            }
-        }
+    // only `native` and a Sandbox reached directly record them here
+    let recorded = record.machine() == "native" || layerfs_sandbox::direct::forwarded(record);
+    let (listed, not_listed) = match state {
+        State::Blocked(_) => (SdkValue::Null, false),
+        _ if !recorded => (SdkValue::Null, true),
+        _ => (SdkValue::List(workspaces(home, name)?), false),
     };
     Ok(state.write(SdkValue::map([
         ("sandbox", SdkValue::text(name)),
         ("project", SdkValue::opt_text(record.project())),
         ("image", SdkValue::opt_text(record.image())),
         ("workspaces", listed),
+        ("workspaces_not_listed", SdkValue::Bool(not_listed)),
     ])))
 }
 

@@ -50,11 +50,12 @@ const PLATFORM: Form = Form::of(
 const PLATFORMS: Form = Form::of(&["host", "items"], &[], &["host", "items"])
     .parts(&[("items", Part::Rows(&PLATFORM))]);
 
-/// The nodes of `--with tree`.
+/// The nodes of `--with tree`: a PostgreSQL Store's address, the home's
+/// own (`machine` null) or one machine's.
+const CONNECTION: Form = Form::of(&["url"], &["machine"], &["machine", "url"]);
 const STORE: Form = Form::of(
-    &["store"],
+    &["store", "engine"],
     &[
-        "engine",
         "projects",
         "connections",
         "state",
@@ -66,40 +67,58 @@ const STORE: Form = Form::of(
     &[
         "store",
         "engine",
+        "projects",
+        "connections",
         "state",
         "op",
         "blocked_by",
         "reason",
         "fix",
-        "projects",
-        "connections",
     ],
 )
 .parts(&[
     ("projects", Part::Scalars("project")),
-    ("connections", Part::Scalars("machine")),
-])
-.usual(&[("engine", "sqlite")]);
+    ("connections", Part::Rows(&CONNECTION)),
+]);
 const WORKSPACE: Form = Form::of(&["workspace", "branch"], &[], &["workspace", "branch"]);
 const SANDBOX: Form = Form::of(
-    &["sandbox"],
-    &["workspaces", "state", "op", "blocked_by", "reason", "fix"],
+    &["sandbox", "project"],
     &[
-        "sandbox",
-        "project",
         "image",
+        "workspaces",
+        "workspaces_not_listed",
         "state",
         "op",
         "blocked_by",
         "reason",
         "fix",
+    ],
+    &[
+        "sandbox",
+        "project",
+        "image",
         "workspaces",
+        "workspaces_not_listed",
+        "state",
+        "op",
+        "blocked_by",
+        "reason",
+        "fix",
     ],
 )
 .parts(&[("workspaces", Part::Rows(&WORKSPACE))]);
 const MACHINE: Form = Form::of(
-    &["machine"],
-    &["state", "op", "reason", "fix", "stores", "sandboxes"],
+    &["machine", "platform"],
+    &[
+        "cpus",
+        "memory_bytes",
+        "state",
+        "op",
+        "reason",
+        "fix",
+        "stores",
+        "sandboxes",
+    ],
     &[
         "machine",
         "platform",
@@ -117,7 +136,7 @@ const MACHINE: Form = Form::of(
     ("stores", Part::Rows(&STORE)),
     ("sandboxes", Part::Rows(&SANDBOX)),
 ]);
-const BUCKET: Form = Form::of(&["bucket"], &[], &["bucket", "provider"]);
+const BUCKET: Form = Form::of(&["bucket", "provider"], &[], &["bucket", "provider"]);
 const TREE: Form = Form::of(
     &["machines", "stores", "buckets"],
     &[],

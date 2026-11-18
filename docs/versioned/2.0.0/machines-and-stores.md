@@ -406,9 +406,9 @@ $ layerfs store pull shop --progress       # run (2026-11-08: docker, lima, appl
   records the project when the worker answers. A failure while copying
   deletes the copy; a lost answer is `Unknown`, names the copy that may
   remain (in its message and in a line of `log/uncertain.jsonl`, with the
-  Init's deadline), and records nothing in the home. `layerfs doctor` lists
-  such a copy and [`layerfs doctor fix`](calls.md#layerfs-doctor-fix-id)
-  removes it an hour after that deadline. Not run on a real VM.
+  Init's deadline), and records nothing in the home. `layerfs home
+  leftovers` lists such a copy and `layerfs home prune`
+  ([`home`](calls.md#home-7)) removes it an hour after that deadline. Not run on a real VM.
 - A Sandbox of a sqlite project runs only on the Store's machine.
 
 ### PostgreSQL Stores

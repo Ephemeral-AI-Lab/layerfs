@@ -1,7 +1,8 @@
 //! `home.init` and `home.get`: setting a home up on purpose, and reading what
 //! this build would use with it without changing anything. `init` opens the
 //! home as every call does (created when empty, converted from layout 2 or
-//! 1.1.0, an interrupted conversion finished) and says which of those it did.
+//! 1.1.0, an interrupted conversion finished) and says which of those it did
+//! (`outcome`: `created`, `converted` or `unchanged`).
 //! `get` reads files only: no process, Docker, network, lock or log line, so a
 //! client can poll it, and it answers for a home that does not exist yet.
 //! What it answers is the call surface's (2.0): the home's `state` with
@@ -66,8 +67,9 @@ fn state(home: &Path) -> Result<(Found, Option<i64>), layerfs_bridge::control::S
 }
 
 /// `home.init`: the home ready for calls, as the first call of any other
-/// kind makes it. Refused inside a machine's worker root, which is not a
-/// home, and `InUse` while a layout 2 home has live Sandboxes.
+/// kind makes it: `{ home, unchanged, converted, outcome, layout, version }`.
+/// Refused inside a machine's worker root, which is not a home, and `InUse`
+/// while a layout 2 home has live Sandboxes.
 pub fn init(home: &Path) -> Outcome {
     if layerfs_home::home::guest::is_root(home) {
         return Err(refused(
@@ -80,14 +82,21 @@ pub fn init(home: &Path) -> Outcome {
         .inspect_err(|refusal| crate::migrate::note_failure(home, refusal))?;
     #[cfg(feature = "machine")]
     layerfs_machine::ensure_built_ins(home, &file.id)?;
+    let outcome = match before {
+        Found::Missing => "created",
+        Found::NeedsConversion => "converted",
+        Found::Current => "unchanged",
+    };
     Ok(SdkValue::map([
         ("home", SdkValue::text(home.display().to_string())),
-        ("created", SdkValue::Bool(before == Found::Missing)),
+        ("unchanged", SdkValue::Bool(before == Found::Current)),
         (
             "converted",
             SdkValue::Bool(before == Found::NeedsConversion),
         ),
+        ("outcome", SdkValue::text(outcome)),
         ("layout", SdkValue::Int(file.layout)),
+        ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
     ]))
 }
 

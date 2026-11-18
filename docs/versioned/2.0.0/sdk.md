@@ -53,13 +53,11 @@ const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", fo
   [the form of an answer](calls.md#the-form-of-an-answer).
 - `table` is the call table, `[{ family, call, args, options, help }]`;
   `families` lists the twelve families.
-- `layerfs.doctor({ home })` (also a named export) is
-  [`layerfs doctor`](calls.md#layerfs-doctor), outside the table: it
-  resolves to `{ ok, findings: [{ severity, entity: { kind, name }, message,
-  fix }] }` and changes nothing; `home` defaults as above.
-  `layerfs.doctor.fix(id)` is the table call
-  [`doctor fix`](calls.md#layerfs-doctor-fix-id): it removes one leftover the
-  report listed (`findings[].leftover.id`).
+- The doctors are table calls of their families (`layerfs.home.doctor()`,
+  `layerfs.machine.doctor(machine)` and so on; [the doctors](calls.md#the-doctors)),
+  and there is no `layerfs.doctor`. The leftovers are
+  `layerfs.home.leftovers()`, and `layerfs.home.prune(leftover)` removes one
+  ([`home`](calls.md#home-7)).
 - `layerfs.close()` (also a named export), outside the table, closes every
   Store this process holds open with no call running, which drops its
   leases; it answers how many it closed. A process calls it before it
@@ -112,10 +110,10 @@ lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/web", "folder": "
   (`detail=True`). `with` is a Python keyword, so the option is `with_`.
 - `layerfs.TABLE` is the call table and `layerfs.FAMILIES` the nine
   families.
-- `layerfs.doctor(home=None)` is [`layerfs doctor`](calls.md#layerfs-doctor),
-  outside the table: a dict `{"ok", "findings"}` as in Node, changing
-  nothing. `layerfs.doctor.fix(id)` (and `layerfs.aio.doctor.fix`) is the
-  table call that removes one leftover the report listed.
+- As in Node, the doctors are their families' `doctor` calls and there is
+  no `layerfs.doctor`; `layerfs.home.leftovers()` and
+  `layerfs.home.prune(leftover)` (and their `layerfs.aio` forms) list and
+  remove leftovers.
 - `layerfs.close()` is Node's `close()`: it closes this process's open
   Stores, dropping their leases, and returns how many.
 - Build: `cd api/python && maturin build --locked` (maturin 1.9.6 or a
