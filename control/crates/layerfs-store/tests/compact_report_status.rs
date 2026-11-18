@@ -228,7 +228,11 @@ fn the_report_is_flat_with_byte_totals_named_bytes() {
         texts(wire.get("delta_base_references").unwrap()),
         vec!["0707070707070707070707070707070707070707070707070707070707070707"]
     );
-    assert_eq!(wire.get_int("delta_base_references_count"), Some(1));
+    // one reference, not cut: no count (a count only beside a cut list)
+    assert_eq!(
+        wire.get("delta_base_references_count"),
+        Some(&SdkValue::Null)
+    );
     assert_eq!(wire.get_int("residue_bytes"), Some(0));
     assert!(texts(wire.get("residue_artifacts").unwrap()).is_empty());
     assert_eq!(wire.get("residue_reason"), Some(&SdkValue::Null));

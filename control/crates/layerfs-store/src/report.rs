@@ -9,8 +9,8 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_persistence::{CompactPath, CompactReceipt, CompactStatus};
 
 /// How many `delta_base_references` the answer shows; the count beside
-/// them says how many the run found.
-pub const REFERENCES_SHOWN: usize = 20;
+/// them, only when there were more, says how many the run found.
+pub const REFERENCES_SHOWN: usize = layerfs_home::helpers::SHOWN;
 
 /// The key of this answer a §11 report field (`wire`, as the engine names
 /// it) is answered under: what a `zero_reasons` entry names.
@@ -38,11 +38,12 @@ fn key_of(wire: &str) -> &str {
 pub fn compact_report(store: &str, report: &CompactReceipt) -> SdkValue {
     let int = |value: u64| SdkValue::Int(i64::try_from(value).unwrap_or(i64::MAX));
     let found = &report.kept_waste.delta_base_references;
-    let references: Vec<SdkValue> = found
+    let references = found
         .iter()
-        .take(REFERENCES_SHOWN)
         .map(|id| SdkValue::text(layerfs_bridge::sdk_values::hex(id)))
         .collect();
+    let capped = report.kept_waste.delta_base_references_capped;
+    let (references, references_count) = layerfs_home::helpers::shown(references, 0, capped);
     let artifacts = report.residue.artifacts.iter().map(SdkValue::text);
     let mut zero_reasons: Vec<SdkValue> = Vec::new();
     for zero in &report.zero_reasons {
@@ -85,8 +86,8 @@ pub fn compact_report(store: &str, report: &CompactReceipt) -> SdkValue {
                 ),
             ]),
         ),
-        ("delta_base_references", SdkValue::List(references)),
-        ("delta_base_references_count", int(found.len() as u64)),
+        ("delta_base_references", references),
+        ("delta_base_references_count", references_count),
         ("peak_temp_bytes", int(report.peak_temp_bytes)),
         ("residue_bytes", int(report.residue.bytes)),
         ("residue_artifacts", SdkValue::List(artifacts.collect())),

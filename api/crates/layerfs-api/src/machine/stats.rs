@@ -197,14 +197,15 @@ pub(super) fn field(value: &SdkValue, name: &str) -> SdkValue {
     value.get(name).cloned().unwrap_or_default()
 }
 
-/// How many items the list `value` holds.
+/// The list `value` as an answer shows it: its first 20 items, and their
+/// count only when it was cut.
 #[cfg(feature = "machine")]
-pub(super) fn count(value: &SdkValue) -> SdkValue {
+pub(super) fn cut(value: SdkValue) -> (SdkValue, SdkValue) {
     let items = match value {
-        SdkValue::List(items) => items.len(),
-        _ => 0,
+        SdkValue::List(items) => items,
+        _ => Vec::new(),
     };
-    SdkValue::Int(i64::try_from(items).unwrap_or(i64::MAX))
+    layerfs_home::helpers::shown(items, 0, false)
 }
 
 /// Each row of the list `value`, as `row` answers it; an empty list when
