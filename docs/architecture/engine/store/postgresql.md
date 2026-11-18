@@ -144,8 +144,20 @@ also reads ahead, because each statement costs a round trip:
 | Read | One statement covers | Bound | Source |
 | --- | --- | --- | --- |
 | Pack heads and record ranges of payload packs | 256 packs; 1,024 ranges or 512 KiB | `HEAD_PACKS`, `BATCH_RANGES`, `BATCH_BYTES` | [`edges.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/edges.rs) |
-| Metadata packs the walk decodes | the next 128 packs of the wave, each up to 32 KiB (a longer pack is read alone) | `AHEAD_PACKS`, `AHEAD_BYTES` | [`objects.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects.rs), [`read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/read.rs) |
-| Inode values of a leaf | the blocks holding the ordinals the walk does not hold yet and up to 4,096 ordinals past the last of them; at most 262,144 values kept, in two generations | `AHEAD_VALUES`, `HELD_VALUES` | [`values.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/values.rs), [`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
+| Metadata packs the walk decodes | the announced packs of the wave not held yet, up to 256 packs or 8 MiB of pack heads (a head is at most `PACK_LIMIT`, 256 KiB); a pack row is fetched once and kept, at most 96 MiB in two generations | `AHEAD_PACKS`, `AHEAD_BYTES`, `HELD_PACK_BYTES` | [`objects.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects.rs), [`read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/read.rs) |
+| Inode values of a leaf | the blocks holding the ordinals the walk does not hold yet and up to 4,096 ordinals past the last of them, less the blocks this transaction already fetched; a block is fetched once and kept, at most 64 MiB in two generations | `AHEAD_VALUES`, `HELD_VALUES`, `HELD_BLOCK_BYTES` | [`values.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/values.rs), [`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
+
+The ranged read takes a pack's ranges sorted and disjoint and joins those at
+most 8 KiB apart (`SPAN_FILL`) into spans. The server fetches each span from the pack body
+once and cuts the ranges out of it in memory, so the TOAST chunks under a run
+of record headers are read once per span and not once per range. The rows
+that come back are exactly the ranges asked for: the bytes between two
+ranges of a span never leave the server.
+
+The kept pack rows and value blocks belong to the transaction and go with
+it. They are filled only inside a transaction (one snapshot), and pack rows
+only after the walk has announced packs, so an autocommit read keeps
+nothing.
 
 A SQLite Store ignores the pack hint and reads no block ahead; it returns
 every value of the blocks it does read

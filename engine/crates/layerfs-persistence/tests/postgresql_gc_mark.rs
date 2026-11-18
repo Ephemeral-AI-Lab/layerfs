@@ -12,7 +12,9 @@ mod support;
 
 use layerfs_content::{construct_bytes, read_range, ObjectId};
 use layerfs_history::HistoryCatalog;
+use layerfs_persistence::internals::{postgresql_reads, PostgresRead};
 use layerfs_persistence::{KeptNodeId, PostgresHandles};
+use layerfs_storage::port::{PackRange, PersistenceError};
 use layerfs_storage::{port::PackPersistence, Storage};
 use layerfs_telemetry::timer::Timing;
 use std::sync::Arc;
@@ -454,6 +456,17 @@ fn a_mark_keeps_the_saved_objects_and_reports_the_live_heads_digest() {
 /// leaf, its directory and its filesystem root. Returns the root and every
 /// object id of the Save.
 fn save_tree(handles: &PostgresHandles, seed: u32, files: u32) -> (ObjectId, Vec<ObjectId>) {
+    save_tree_with(handles, seed, files, 0)
+}
+
+/// [`save_tree`] with `pages` more directories, each one full page of long
+/// names, so the Save's metadata pack is as long as the test needs.
+fn save_tree_with(
+    handles: &PostgresHandles,
+    seed: u32,
+    files: u32,
+    pages: u32,
+) -> (ObjectId, Vec<ObjectId>) {
     use layerfs_content::filesystem::attributes::PortableMetadata;
     use layerfs_content::filesystem::directory::{encode_directory_page, DirectoryPage};
     use layerfs_content::filesystem::inode::{encode_inode_page, InodePage};
@@ -474,6 +487,28 @@ fn save_tree(handles: &PostgresHandles, seed: u32, files: u32) -> (ObjectId, Vec
             FinalizedObject::new(
                 ObjectRole::WholeFile,
                 encode_whole_file_payload(&bytes(seed.wrapping_mul(1000) + index, 1024)).unwrap(),
+            )
+            .unwrap()
+        })
+        .collect();
+    let wide: Vec<FinalizedObject> = (0..pages)
+        .map(|page| {
+            let mut rows: Vec<(layerfs_content::filesystem::path::PathName, u64)> = (0..30u32)
+                .map(|index| {
+                    let mut name = String::new();
+                    for byte in bytes(seed.wrapping_mul(7919) + page * 31 + index, 100) {
+                        name.push_str(&format!("{byte:02x}"));
+                    }
+                    (
+                        layerfs_content::filesystem::path::PathName::new(&name).unwrap(),
+                        u64::from(index) + 2,
+                    )
+                })
+                .collect();
+            rows.sort();
+            FinalizedObject::new(
+                ObjectRole::DirectoryLeaf,
+                encode_directory_page(&DirectoryPage::Leaf { entries: rows }).unwrap(),
             )
             .unwrap()
         })
@@ -508,6 +543,19 @@ fn save_tree(handles: &PostgresHandles, seed: u32, files: u32) -> (ObjectId, Vec
         ));
         references.push(file.id());
     }
+    // The directories' serials follow the files', so the rows stay in key order.
+    for (offset, page) in wide.iter().enumerate() {
+        entries.push((
+            offset as u64 + 100_000,
+            InodeValue {
+                kind: InodeKind::Directory,
+                namespace_ref_count: 1,
+                content_root: page.id(),
+                metadata_root: metadata(0o755),
+            },
+        ));
+        references.push(page.id());
+    }
     let leaf = FinalizedObject::new(
         ObjectRole::InodeLeaf,
         encode_inode_page(&InodePage::Leaf { entries }).unwrap(),
@@ -520,6 +568,7 @@ fn save_tree(handles: &PostgresHandles, seed: u32, files: u32) -> (ObjectId, Vec
         .unwrap()
         .with_references(vec![leaf.id()]);
     let root_id = root.id();
+    objects.extend(wide);
     objects.extend([directory, leaf, root]);
     let ids: Vec<ObjectId> = objects.iter().map(FinalizedObject::id).collect();
     let storage = Storage::new(handles.storage.clone() as Arc<dyn PackPersistence>).unwrap();
@@ -613,6 +662,233 @@ fn a_mark_sends_the_same_statements_for_twice_the_layers() {
         statements[0], statements[1],
         "a mark's statements do not grow with its Layers: {statements:?}"
     );
+}
+
+/// Ranged reads return exactly the bytes asked for, whatever the server
+/// fetches to produce them: ranges that touch, ranges a few kilobytes apart
+/// (cut from one fetched span) and ranges far apart (their own spans), over
+/// two packs in one statement. A range past its body, ranges out of order and
+/// an absent pack are refused as before.
+#[test]
+fn ranged_reads_return_exactly_the_ranges_near_or_far_apart() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "mark_spans");
+    let handles: PostgresHandles = schema.create(BINDING, CURSOR);
+    save_tree(&handles, 1, 99);
+    save_tree(&handles, 2, 99);
+    let packs: Vec<(i64, Vec<u8>)> = schema
+        .admin()
+        .query(
+            "SELECT pack_id,body FROM pack WHERE domain<>0 AND length>60000 ORDER BY pack_id LIMIT 2",
+            &[],
+        )
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+    assert_eq!(packs.len(), 2, "two payload packs past 60 KB");
+    let range = |offset, length| PackRange { offset, length };
+    let end = packs[0].1.len();
+    let asked = vec![
+        (
+            packs[0].0,
+            vec![
+                range(0, 16),
+                range(16, 1),
+                range(100, 41),
+                range(5_000, 10),
+                range(13_009, 7),
+                range(40_000, 100),
+                range(end - 1, 1),
+            ],
+        ),
+        (packs[1].0, vec![range(432, 50), range(50_000, 3)]),
+    ];
+    let outcome = postgresql_reads(&handles, &[PostgresRead::Ranges(asked.clone())]).unwrap();
+    assert_eq!(outcome[0].statements, 1, "one statement for every range");
+    let expected: Vec<Vec<u8>> = asked
+        .iter()
+        .zip(&packs)
+        .flat_map(|((_, ranges), (_, body))| {
+            ranges
+                .iter()
+                .map(|r| body[r.offset..r.offset + r.length].to_vec())
+        })
+        .collect();
+    assert_eq!(outcome[0].bytes, expected);
+
+    let refused = |ranges: Vec<(i64, Vec<PackRange>)>| {
+        postgresql_reads(&handles, &[PostgresRead::Ranges(ranges)]).unwrap_err()
+    };
+    assert_eq!(
+        refused(vec![(packs[0].0, vec![range(10, 4), range(end - 4, 8)])]),
+        PersistenceError::Malformed,
+        "a range past the body"
+    );
+    assert_eq!(
+        refused(vec![(packs[0].0, vec![range(100, 4), range(50, 4)])]),
+        PersistenceError::Malformed,
+        "ranges out of order"
+    );
+    assert_eq!(
+        refused(vec![(i64::MAX - 7, vec![range(0, 4)])]),
+        PersistenceError::Missing,
+        "an absent pack"
+    );
+}
+
+/// A mark announces a wave's metadata packs and the server sends them in one
+/// statement whatever their length, up to a bound in bytes. With metadata
+/// packs past 32 KiB each, twice the Layers still cost the same statements;
+/// reading every such pack by its own statement adds one per Layer.
+#[test]
+fn a_mark_reads_metadata_packs_longer_than_32_kib_ahead() {
+    let Some(url) = url() else { return };
+    let mut statements = Vec::new();
+    for (tag, layers) in [("mark_wide_3", 3u32), ("mark_wide_6", 6)] {
+        let schema = Schema::new(url.clone(), tag);
+        let handles: PostgresHandles = schema.create(BINDING, CURSOR);
+        let (genesis_root, mut saved) = save_tree_with(&handles, 1, 20, 16);
+        let (shop, work, _genesis) = project_with_genesis(&handles.history, 1, genesis_root);
+        for seed in 2..=layers {
+            let (root, ids) = save_tree_with(&handles, seed, 20, 16);
+            commit_with(&handles.history, work, root);
+            publish(&handles.history, shop, work);
+            saved.extend(ids);
+        }
+        let shortest: i64 = schema
+            .admin()
+            .query_one("SELECT min(length) FROM pack WHERE domain=0", &[])
+            .unwrap()
+            .get(0);
+        assert!(
+            shortest > 32 * 1024,
+            "every metadata pack is long: {shortest}"
+        );
+        let before = handles.diagnostics().unwrap();
+        let mark = handles.history.mark().expect("the mark");
+        let sent = handles.diagnostics().unwrap().since(&before);
+        for id in &saved {
+            assert!(mark.objects().contains(*id), "a saved object is reached");
+        }
+        statements.push(sent.statements);
+    }
+    assert_eq!(
+        statements[0], statements[1],
+        "long metadata packs are read ahead too: {statements:?}"
+    );
+}
+
+/// Once a walk has announced its reads, a pack row fetched for it answers
+/// every later scoped read of that pack in the transaction: a walk that comes
+/// back to a pack for a delta base pays no second round trip. Before any
+/// announcement nothing is kept.
+#[test]
+fn an_announced_walk_fetches_each_pack_row_once() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "mark_held_packs");
+    let handles: PostgresHandles = schema.create(BINDING, CURSOR);
+    for seed in 1..=3 {
+        save_tree(&handles, seed, 20);
+    }
+    let packs: Vec<(i64, Vec<u8>)> = schema
+        .admin()
+        .query(
+            "SELECT pack_id,body FROM pack WHERE domain=0 ORDER BY pack_id",
+            &[],
+        )
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+    assert!(packs.len() >= 3, "three metadata packs: {}", packs.len());
+    let (a, b, c) = (packs[0].0, packs[1].0, packs[2].0);
+    let steps = [
+        PostgresRead::Pack(a),
+        PostgresRead::Pack(a),
+        PostgresRead::Expect(vec![a, b]),
+        PostgresRead::Pack(a),
+        PostgresRead::Pack(b),
+        PostgresRead::Pack(a),
+        PostgresRead::Pack(c),
+        PostgresRead::Pack(c),
+        PostgresRead::Expect(vec![a, b, c]),
+    ];
+    let outcome = postgresql_reads(&handles, &steps).unwrap();
+    let sent: Vec<u64> = outcome.iter().map(|step| step.statements).collect();
+    assert_eq!(
+        sent,
+        [1, 1, 1, 0, 0, 0, 1, 0, 0],
+        "unannounced reads fetch every time; an announced walk fetches a pack once"
+    );
+    for (step, body) in [(0, 0), (1, 0), (3, 0), (4, 1), (5, 0), (6, 2), (7, 2)] {
+        assert_eq!(outcome[step].bytes, [packs[body].1.clone()], "step {step}");
+    }
+}
+
+/// A transaction reads each inode value block once. A block asked for again
+/// costs no statement; a call fetches only the blocks it lacks; blocks read
+/// ahead answer later calls and are not handed back before they are asked
+/// for. The values are those a plain read returns.
+#[test]
+fn a_transaction_reads_each_value_block_once() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "mark_held_values");
+    let handles: PostgresHandles = schema.create(BINDING, CURSOR);
+    for seed in 1..=4 {
+        save_tree(&handles, seed, 20);
+    }
+    let blocks: Vec<(u32, u32)> = schema
+        .admin()
+        .query(
+            "SELECT first_ordinal,last_ordinal FROM inode_value_block ORDER BY first_ordinal",
+            &[],
+        )
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.get::<_, i64>(0) as u32, row.get::<_, i64>(1) as u32))
+        .collect();
+    assert!(blocks.len() >= 4, "four value blocks: {blocks:?}");
+    let last = blocks[blocks.len() - 1];
+    let steps = [
+        PostgresRead::Values(vec![blocks[0].0], 0),
+        PostgresRead::Values(vec![blocks[0].1], 0),
+        PostgresRead::Values(vec![blocks[0].1, blocks[2].0], 0),
+        PostgresRead::Values(vec![blocks[1].0], u32::MAX),
+        PostgresRead::Values(vec![last.1], 0),
+        PostgresRead::Values(vec![blocks[1].0, blocks[2].0, last.0], u32::MAX),
+    ];
+    let outcome = postgresql_reads(&handles, &steps).unwrap();
+    let sent: Vec<u64> = outcome.iter().map(|step| step.statements).collect();
+    assert_eq!(sent, [1, 0, 1, 1, 0, 0], "each block is fetched once");
+    let handed =
+        |step: usize| -> Vec<u32> { outcome[step].values.iter().map(|row| row.ordinal).collect() };
+    let block = |index: usize| -> Vec<u32> { (blocks[index].0..=blocks[index].1).collect() };
+    assert_eq!(handed(0), block(0));
+    assert_eq!(handed(1), block(0));
+    assert_eq!(handed(2), [block(0), block(2)].concat());
+    assert_eq!(
+        handed(3),
+        block(1),
+        "blocks read ahead are kept, not handed back"
+    );
+    assert_eq!(handed(4), (last.0..=last.1).collect::<Vec<u32>>());
+    // Every value equals the one a plain read of its ordinal returns.
+    let all: Vec<u32> = blocks
+        .iter()
+        .flat_map(|(first, end)| *first..=*end)
+        .collect();
+    let mut plain = Vec::new();
+    PackPersistence::inode_values(handles.storage.as_ref(), &all, &mut plain).unwrap();
+    assert_eq!(plain.len(), all.len());
+    for step in &outcome {
+        for row in &step.values {
+            let at = plain
+                .binary_search_by_key(&row.ordinal, |known| known.ordinal)
+                .expect("a stored ordinal");
+            assert_eq!(row.value, plain[at].value, "ordinal {}", row.ordinal);
+        }
+    }
 }
 
 const POSTGRESQL_MARK: &str = include_str!("../sql/postgresql/queries/history/kept_node_mark.sql");

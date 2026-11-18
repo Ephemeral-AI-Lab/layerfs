@@ -7,6 +7,9 @@ pub use crate::backend::postgresql::compact::{decode_kept_waste, encode_kept_was
 pub use crate::backend::postgresql::compact::{
     effective_rank, standby_satisfied, sync_name, sync_rank, takes_rebuild_path, Replica,
 };
+pub use crate::backend::postgresql::probe::{
+    reads as postgresql_reads, Outcome as PostgresReadOutcome, Read as PostgresRead,
+};
 pub use crate::backend::postgresql::session::rows::sqlstate;
 pub use crate::backend::records::BackendError;
 pub use crate::backend::sqlite::compact::{
