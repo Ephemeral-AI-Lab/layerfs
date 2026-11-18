@@ -1,7 +1,7 @@
 //! The real kinds of the doctor frame: each kind's list of the check ids
 //! its checks give today, in the order they run, and the function that runs
 //! today's checks of one thing into its node. Ids not renamed to the frozen
-//! lists yet keep today's names (`host.*`, `backup.*`, …); the per-kind
+//! lists yet keep today's names (`host.*`, …); the per-kind
 //! packages rename them, and a test compares every list with the frozen
 //! one through a pending list.
 //!
@@ -126,18 +126,17 @@ const SANDBOX: &[CheckId] = &[
     own("sandbox.observation"),
 ];
 
-/// A bucket's checks, today's `backup connection` target; the write test is
-/// its Full check.
+/// A bucket's checks; the write test is its Full check.
 const BUCKET: &[CheckId] = &[
-    own("backup.configuration"),
-    own("backup.credentials"),
-    own("backup.transport"),
-    own("backup.list"),
-    full("backup.write_capability"),
-    full("backup.put"),
-    full("backup.get"),
-    full("backup.delete"),
-    full("backup.reconcile"),
+    own("bucket.configuration"),
+    own("bucket.credentials"),
+    own("bucket.transport"),
+    own("bucket.list"),
+    full("bucket.write_capability"),
+    full("bucket.put"),
+    full("bucket.get"),
+    full("bucket.delete"),
+    full("bucket.reconcile"),
 ];
 
 /// The real kinds. A Workspace has no checks of its own yet: its Sandbox's
@@ -425,7 +424,7 @@ fn sandbox(probe: &Probe<'_>, node: &mut Node) {
 
 fn bucket(probe: &Probe<'_>, node: &mut Node) {
     let name = probe.thing.name.as_str();
-    let mut checks = Checks::new("backup", name);
+    let mut checks = Checks::new("bucket", name);
     super::backup_target::diagnose(probe.home, name, probe.full, probe.budget, &mut checks);
     checks.fill(node, probe.checks, probe.budget.expired());
 }

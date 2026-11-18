@@ -376,6 +376,14 @@ fn store_family() {
 #[test]
 fn backup_family() {
     assert!(code("backup.create", map(&[("store", t("shop"))])).contains("`bucket` is required"));
+    assert!(code(
+        "backup.restore",
+        map(&[("bucket", t("b")), ("store", t("shop"))])
+    )
+    .contains("`file` is required"));
+    // the key's secret is an option; both key options are required
+    let connect = map(&[("name", t("b")), ("url", t("http://127.0.0.1:9/b"))]);
+    assert!(code("backup.connect", connect).contains("`access_key` is required"));
     let reached = code("backup.list", SdkValue::Null);
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
 }
@@ -656,7 +664,14 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "store.compact",
         "store.doctor",
     ];
-    let after = ["backup.doctor"];
+    let after = [
+        "backup.connect",
+        "backup.disconnect",
+        "backup.list",
+        "backup.create",
+        "backup.restore",
+        "backup.doctor",
+    ];
     // in family order: home, project, branch, commit, file, sandbox, …
     assert_eq!(
         migrated,

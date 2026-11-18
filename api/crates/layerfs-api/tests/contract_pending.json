@@ -43,12 +43,7 @@
     "store.save_auth",
     "store.auths",
     "store.remove_auth",
-    "store.update",
-    "backup.connect",
-    "backup.disconnect",
-    "backup.list",
-    "backup.create",
-    "backup.restore"
+    "store.update"
   ],
   "old_names": {
     "doctor.fix": "home.prune",
@@ -79,9 +74,6 @@
     "sandbox.doctor": [
       "a Workspace node per Workspace (`workspace.mounted`, `workspace.activity`) is not built: today's `sandbox.workspaces` covers the daemon's whole list and `workspaces` in the tree is empty",
       "`sandbox.daemon`, `sandbox.workspaces`, `sandbox.workspace_retained` and `sandbox.worker_report` keep today's ids"
-    ],
-    "backup.doctor": [
-      "its checks keep today's `backup.*` ids; `bucket.*` is the backup package's rename"
     ]
   },
   "spec_sync": {

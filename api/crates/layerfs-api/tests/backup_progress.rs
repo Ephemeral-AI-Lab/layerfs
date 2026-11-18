@@ -1,7 +1,9 @@
 //! Live progress of a real backup and restore against MinIO (layerfs-project
-//! #5): a Store above the part size goes up in several multipart parts, and
-//! `backup.create` and `backup.restore` send their phases in order with byte
-//! counts that end on the bytes they moved. Needs the LAYERFS_REMOTE_*
+//! #5, call surface 2.0): `backup.create` and `backup.restore` send their
+//! phases in order as `{ phase, done, total }`, with byte counts that end on
+//! the bytes they moved. (The piece size is no longer an option, so a
+//! multipart upload needs a Store above the 64 MiB default; the bucket
+//! library's own tests cover parts.) Needs the LAYERFS_REMOTE_*
 //! variables tests/minio_service.sh of layerfs-bucket prints; without
 //! them the test says NOT_RUN and passes.
 use layerfs_api::home;
@@ -78,9 +80,11 @@ fn noise(len: usize) -> Vec<u8> {
 
 #[test]
 fn create_and_restore_send_their_bytes_against_minio() {
-    let (Ok(endpoint), Ok(bucket)) = (
+    let (Ok(endpoint), Ok(bucket), Ok(access), Ok(secret)) = (
         std::env::var("LAYERFS_REMOTE_ENDPOINT"),
         std::env::var("LAYERFS_REMOTE_BUCKET"),
+        std::env::var("LAYERFS_REMOTE_ACCESS_KEY"),
+        std::env::var("LAYERFS_REMOTE_SECRET_KEY"),
     ) else {
         eprintln!("NOT_RUN: LAYERFS_REMOTE_ENDPOINT / LAYERFS_REMOTE_BUCKET unset");
         return;
@@ -110,24 +114,26 @@ fn create_and_restore_send_their_bytes_against_minio() {
         &[
             ("name", t("b1")),
             ("url", t(&url)),
-            ("key", t("env:LAYERFS_REMOTE")),
-            ("part_size", SdkValue::Int(5 << 20)),
+            ("access_key", t(&access)),
+            ("secret_key", t(&secret)),
         ],
     );
 
     let (made, seen) = traced(
         &home,
         "backup.create",
-        &[("store", t("shop")), ("bucket", t("b1"))],
+        &[
+            ("store", t("shop")),
+            ("bucket", t("b1")),
+            ("detail", SdkValue::Bool(true)),
+        ],
     );
-    let bytes = made.get_int("bytes").unwrap();
-    assert!(
-        bytes > 2 * (5 << 20),
-        "the Store spans several parts: {bytes}"
-    );
+    assert_eq!(made.get_text("outcome"), Some("created"));
+    let bytes = made.get_int("size").unwrap();
+    assert!(bytes > 12 << 20, "the Store holds the file: {bytes}");
     assert_eq!(
         phases(&seen),
-        ["check", "snapshot", "check", "hash", "upload"],
+        ["check", "snapshot", "hash", "upload"],
         "{seen:?}"
     );
     for phase in ["hash", "upload"] {
@@ -139,12 +145,14 @@ fn create_and_restore_send_their_bytes_against_minio() {
         &home,
         "backup.restore",
         &[
-            ("store", t("copy")),
             ("bucket", t("b1")),
             ("file", t("shop")),
+            ("store", t("copy")),
+            // the long form: its size and sha256
+            ("detail", SdkValue::Bool(true)),
         ],
     );
-    assert_eq!(restored.get_int("bytes"), Some(bytes));
+    assert_eq!(restored.get_int("size"), Some(bytes));
     assert_eq!(restored.get_text("sha256"), made.get_text("sha256"));
     assert_eq!(
         phases(&seen),

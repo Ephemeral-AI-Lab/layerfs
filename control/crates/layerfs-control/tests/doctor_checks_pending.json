@@ -80,28 +80,8 @@
       "order": false
     },
     "bucket": {
-      "today": [
-        "backup.configuration",
-        "backup.credentials",
-        "backup.transport",
-        "backup.list",
-        "backup.write_capability",
-        "backup.put",
-        "backup.get",
-        "backup.delete",
-        "backup.reconcile"
-      ],
-      "missing": [
-        "bucket.configuration",
-        "bucket.credentials",
-        "bucket.transport",
-        "bucket.list",
-        "bucket.write_capability",
-        "bucket.put",
-        "bucket.get",
-        "bucket.delete",
-        "bucket.reconcile"
-      ],
+      "today": [],
+      "missing": [],
       "order": false
     }
   }

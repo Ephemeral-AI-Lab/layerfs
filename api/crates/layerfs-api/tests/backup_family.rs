@@ -1,6 +1,8 @@
-//! Backups (#533 step 11) against a real MinIO: connect, create, the list
-//! states, the restore Conflict, a restore as a new Store, a backup of
-//! a Store behind a worker, and disconnect keeping the objects. Needs the
+//! Backups (#533 step 11, call surface 2.0) against a real MinIO: connect
+//! with the key's secret kept in the home, create, the list facts
+//! (`behind`, `changed`, `missing`), the restore Conflict, a restore as a
+//! new Store, a backup of a Store behind a worker (whose heads `list`
+//! reads through the worker), and disconnect keeping the objects. Needs the
 //! LAYERFS_REMOTE_* variables tests/minio_service.sh of layerfs-bucket
 //! prints; without them the test says NOT_RUN and passes.
 use layerfs_api::home::{self, paths, read_record, write_record};
@@ -15,6 +17,15 @@ fn tempdir(tag: &str) -> PathBuf {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
     dir
+}
+
+/// A prefix of this run's own in the bucket: a container's process ids
+/// repeat from one run to the next, and the objects stay.
+fn run_id() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
 }
 
 fn t(s: &str) -> SdkValue {
@@ -34,20 +45,66 @@ fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
     call(home, name, args).unwrap_or_else(|e| panic!("{name}: {e:?}"))
 }
 
+/// The key's two options, from the variables minio_service.sh prints.
+fn key() -> [(&'static str, SdkValue); 2] {
+    let read = |name: &str| std::env::var(name).unwrap_or_else(|_| panic!("{name} unset"));
+    [
+        ("access_key", t(&read("LAYERFS_REMOTE_ACCESS_KEY"))),
+        ("secret_key", t(&read("LAYERFS_REMOTE_SECRET_KEY"))),
+    ]
+}
+
+/// `backup.connect(name, url)` with the key.
+fn connect(home: &Path, name: &str, url: &str) -> SdkValue {
+    let [access, secret] = key();
+    ok(
+        home,
+        "backup.connect",
+        &[("name", t(name)), ("url", t(url)), access, secret],
+    )
+}
+
+/// One listed row's facts as one word, as this test compares them:
+/// `missing`, `unlinked` (no Store), `unknown` (a fact that could not be
+/// read), else from `behind` and `changed`.
+fn word(item: &SdkValue) -> String {
+    let fact = |key: &str| match item.get(key) {
+        Some(SdkValue::Bool(yes)) => Some(*yes),
+        _ => None,
+    };
+    let word = if fact("missing") == Some(true) {
+        "missing"
+    } else if item.get_text("store").is_none() {
+        "unlinked"
+    } else {
+        match (fact("behind"), fact("changed")) {
+            (Some(false), Some(false)) => "current",
+            (Some(true), Some(false)) => "store_changed",
+            (Some(false), Some(true)) => "bucket_changed",
+            (Some(true), Some(true)) => "both_changed",
+            _ => "unknown",
+        }
+    };
+    word.to_owned()
+}
+
+/// The long form of `backup.list`.
+fn listed(home: &Path) -> Vec<SdkValue> {
+    let args = SdkValue::map([("detail", SdkValue::Bool(true))]);
+    let listed = layerfs_api::call(Some(home), "backup.list", args, &mut |_| {})
+        .unwrap_or_else(|r| panic!("backup.list: {r:?}"));
+    assert_eq!(listed.get("not_listed"), Some(&SdkValue::List(vec![])));
+    let Some(SdkValue::List(items)) = listed.get("items") else {
+        panic!("{listed:?}")
+    };
+    items.clone()
+}
+
 /// `(file, state)` of every listed copy, sorted.
 fn states(home: &Path) -> Vec<(String, String)> {
-    let listed = ok(home, "backup.list", &[]);
-    let SdkValue::List(items) = listed.get("items").unwrap() else {
-        panic!()
-    };
-    let mut out: Vec<_> = items
+    let mut out: Vec<_> = listed(home)
         .iter()
-        .map(|i| {
-            (
-                i.get_text("file").unwrap().to_owned(),
-                i.get_text("state").unwrap().to_owned(),
-            )
-        })
+        .map(|i| (i.get_text("file").unwrap().to_owned(), word(i)))
         .collect();
     out.sort();
     out
@@ -80,26 +137,40 @@ fn backups_against_minio() {
         ],
     );
 
-    let prefix = format!("lfs533-{}", std::process::id());
+    let prefix = format!("lfs533-{}", run_id());
     let url = format!("{endpoint}/{bucket}/{prefix}");
-    let key = ("key", t("env:LAYERFS_REMOTE"));
-    // a key that does not resolve is refused before anything is recorded
+    // a key the bucket refuses is Unavailable before anything is recorded
+    let [access, _] = key();
     let bad = call(
         &home,
         "backup.connect",
         &[
             ("name", t("b1")),
             ("url", t(&url)),
-            ("key", t("env:LAYERFS_NOPE")),
+            access,
+            ("secret_key", t("not-the-secret")),
         ],
     );
-    assert!(bad.is_err());
+    assert_eq!(bad.unwrap_err().0, "Unavailable");
     assert!(!paths::bucket_record(&home, "b1").exists());
-    ok(
+    assert!(!home.join("secret/bucket/b1").exists());
+    let connected = connect(&home, "b1", &url);
+    assert_eq!(connected, SdkValue::map([("ok", SdkValue::Bool(true))]));
+    // the secret is in the home's secret folder, never in the record
+    let secret = home.join("secret/bucket/b1");
+    let mode = std::fs::metadata(&secret).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600);
+    let record = std::fs::read_to_string(paths::bucket_record(&home, "b1")).unwrap();
+    let secret_key = std::env::var("LAYERFS_REMOTE_SECRET_KEY").unwrap();
+    assert!(!record.contains(&secret_key), "{record}");
+    // a name that is taken is Exists
+    let [access, secret_key] = key();
+    let taken = call(
         &home,
         "backup.connect",
-        &[("name", t("b1")), ("url", t(&url)), key.clone()],
+        &[("name", t("b1")), ("url", t(&url)), access, secret_key],
     );
+    assert_eq!(taken.unwrap_err().0, "Exists");
     assert_eq!(states(&home), vec![]);
 
     let made = ok(
@@ -134,7 +205,11 @@ fn backups_against_minio() {
     let refused = call(
         &home,
         "backup.restore",
-        &[("store", t("shop")), ("bucket", t("b1"))],
+        &[
+            ("bucket", t("b1")),
+            ("file", t("shop")),
+            ("store", t("shop")),
+        ],
     );
     assert_eq!(refused.unwrap_err().0, "Conflict");
     ok(
@@ -169,11 +244,24 @@ fn backups_against_minio() {
     );
     assert_eq!(read.get_text("text"), Some("x"));
     // the unchanged Store restores over itself
-    ok(
-        &home,
+    let replaced = layerfs_api::call(
+        Some(&home),
         "backup.restore",
-        &[("store", t("copy")), ("bucket", t("b1"))],
-    );
+        SdkValue::map([
+            ("bucket", t("b1")),
+            ("file", t("shop")),
+            ("store", t("copy")),
+            ("detail", SdkValue::Bool(true)),
+        ]),
+        &mut |_| {},
+    )
+    .unwrap();
+    assert_eq!(replaced.get_text("outcome"), Some("replaced"));
+    // its `op` was dropped as it ended
+    let copy = read_record(&paths::store_record(&home, "copy"))
+        .unwrap()
+        .unwrap();
+    assert!(copy.get("op").is_none(), "{copy:?}");
 
     // a Store behind a worker backs up: the bytes come through this process
     write_record(
@@ -221,44 +309,50 @@ fn backups_against_minio() {
     let path = paths::store_record(&home, "copy");
     let record = read_record(&path).unwrap().unwrap();
     let mut links = record.get("backups").cloned().unwrap();
-    links = home::with_field(links, "b1", SdkValue::map([("file", t("gone"))]));
+    // a link whose last transfer moved a file the bucket no longer holds (a
+    // link that never moved one, a failed first attempt, names nothing)
+    let moved = links.get("b1").cloned().unwrap();
+    let gone = home::with_field(moved, "file", t("gone"));
+    links = home::with_field(links, "b1", gone);
     write_record(&path, &home::with_field(record.clone(), "backups", links)).unwrap();
-    // shop is on box now: its heads are not read here, so its state is
-    // unknown, with the reason, never current
+    // shop is on box now: its heads are read through box's worker, so it
+    // is not behind its backup
     assert_eq!(
         states(&home),
         vec![
-            pair("from-box", "unknown"),
+            pair("from-box", "current"),
             pair("gone", "missing"),
             pair("shop", "unlinked")
         ]
     );
-    let listed = ok(&home, "backup.list", &[]);
-    let SdkValue::List(items) = listed.get("items").unwrap() else {
-        panic!()
-    };
+    let items = listed(&home);
     let boxed = items
         .iter()
         .find(|i| i.get_text("file") == Some("from-box"))
         .unwrap();
-    assert!(
-        boxed.get_text("reason").unwrap().contains("on box"),
+    assert_eq!(
+        boxed.get("behind"),
+        Some(&SdkValue::Bool(false)),
         "{boxed:?}"
     );
+    assert_eq!(boxed.get("message"), Some(&SdkValue::Null), "{boxed:?}");
     write_record(&path, &record).unwrap();
     assert!(states(&home).contains(&pair("shop", "store_changed")));
 
     // disconnect forgets the bucket and the links; the objects stay
-    ok(&home, "backup.disconnect", &[("name", t("b1"))]);
+    let gone = ok(&home, "backup.disconnect", &[("bucket", t("b1"))]);
+    let mut unlinked = match gone.get("unlinked") {
+        Some(SdkValue::List(names)) => names.clone(),
+        other => panic!("{other:?}"),
+    };
+    unlinked.sort_by_key(|name| format!("{name:?}"));
+    assert_eq!(unlinked, vec![t("copy"), t("shop")]);
+    assert!(!home.join("secret/bucket/b1").exists(), "its key went too");
     let shop = read_record(&paths::store_record(&home, "shop"))
         .unwrap()
         .unwrap();
     assert_eq!(shop.get("backups"), Some(&SdkValue::Map(vec![])));
-    ok(
-        &home,
-        "backup.connect",
-        &[("name", t("b1")), ("url", t(&url)), key],
-    );
+    connect(&home, "b1", &url);
     assert_eq!(states(&home).len(), 2, "objects stayed");
 
     // a Store folder already there at the daemon's own mode is restored into
@@ -321,16 +415,8 @@ fn backed_up(tag: &str) -> Option<(PathBuf, PathBuf, String)> {
             ("folder", t(&folder.display().to_string())),
         ],
     );
-    let url = format!("{endpoint}/{bucket}/lfs533-{tag}-{}", std::process::id());
-    ok(
-        &home,
-        "backup.connect",
-        &[
-            ("name", t("b1")),
-            ("url", t(&url)),
-            ("key", t("env:LAYERFS_REMOTE")),
-        ],
-    );
+    let url = format!("{endpoint}/{bucket}/lfs533-{tag}-{}", run_id());
+    connect(&home, "b1", &url);
     ok(
         &home,
         "backup.create",
@@ -405,15 +491,7 @@ fn foreign_copies_and_unrecorded_links() {
     let other = tempdir("foreign-other");
     home::open(&other).unwrap();
     ok(&other, "store.create", &[("name", t("shop"))]);
-    ok(
-        &other,
-        "backup.connect",
-        &[
-            ("name", t("b1")),
-            ("url", t(&url)),
-            ("key", t("env:LAYERFS_REMOTE")),
-        ],
-    );
+    connect(&other, "b1", &url);
     let refused = call(
         &other,
         "backup.create",
@@ -455,17 +533,13 @@ fn foreign_copies_and_unrecorded_links() {
 
 /// `(file, store, state)` of every listed item, sorted.
 fn linked_states(home: &Path) -> Vec<(String, String, String)> {
-    let listed = ok(home, "backup.list", &[]);
-    let SdkValue::List(items) = listed.get("items").unwrap() else {
-        panic!()
-    };
-    let mut out: Vec<_> = items
+    let mut out: Vec<_> = listed(home)
         .iter()
         .map(|i| {
             (
                 i.get_text("file").unwrap().to_owned(),
                 i.get_text("store").unwrap_or("-").to_owned(),
-                i.get_text("state").unwrap().to_owned(),
+                word(i),
             )
         })
         .collect();
@@ -490,9 +564,10 @@ fn write(home: &Path, project: &str, path: &str) {
     );
 }
 
-/// The list states (#533 review P1-14): the Store's heads and the bucket
-/// copy's sha256 each against the link's last transfer, one item per
-/// linked Store; a link that cannot be compared is `unknown` with a reason.
+/// The list facts (#533 review P1-14): the Store's heads (`behind`) and the
+/// bucket copy's sha256 (`changed`) each against the link's last transfer,
+/// one item per linked Store; a fact that cannot be read is null with a
+/// `message`.
 #[test]
 fn list_states_compare_the_store_and_the_copy() {
     let Some((home, folder, _)) = backed_up("states") else {
@@ -563,17 +638,15 @@ fn list_states_compare_the_store_and_the_copy() {
     let heads = link.get("heads").unwrap().clone();
     let bare = SdkValue::map([("b1", SdkValue::map([("file", t("shop")), ("heads", heads)]))]);
     write_record(&path, &home::with_field(record, "backups", bare)).unwrap();
-    let listed = ok(&home, "backup.list", &[]);
-    let SdkValue::List(items) = listed.get("items").unwrap() else {
-        panic!()
-    };
+    let items = listed(&home);
     let twin = items
         .iter()
         .find(|i| i.get_text("store") == Some("twin"))
         .unwrap();
-    assert_eq!(twin.get_text("state"), Some("unknown"));
+    assert_eq!(word(twin), "unknown");
+    assert_eq!(twin.get("changed"), Some(&SdkValue::Null));
     assert!(
-        twin.get_text("reason").unwrap().contains("sha256"),
+        twin.get_text("message").unwrap().contains("sha256"),
         "{twin:?}"
     );
     for dir in [home, folder] {
@@ -664,19 +737,15 @@ fn restored_records_are_complete_for_a_sandbox() {
     // a new home, the backup as a new Store
     let other = tempdir("records-home");
     home::open(&other).unwrap();
-    ok(
-        &other,
-        "backup.connect",
-        &[
-            ("name", t("b1")),
-            ("url", t(&url)),
-            ("key", t("env:LAYERFS_REMOTE")),
-        ],
-    );
+    connect(&other, "b1", &url);
     ok(
         &other,
         "backup.restore",
-        &[("store", t("shop")), ("bucket", t("b1"))],
+        &[
+            ("bucket", t("b1")),
+            ("file", t("shop")),
+            ("store", t("shop")),
+        ],
     );
     same_project(&other, "shop", &original);
     let read = ok(
@@ -695,7 +764,11 @@ fn restored_records_are_complete_for_a_sandbox() {
     ok(
         &other,
         "backup.restore",
-        &[("store", t("shop")), ("bucket", t("b1"))],
+        &[
+            ("bucket", t("b1")),
+            ("file", t("shop")),
+            ("store", t("shop")),
+        ],
     );
     assert_eq!(std::fs::read(&record).unwrap(), before, "record rewritten");
     // a record an earlier restore left without its manifests is completed
@@ -705,7 +778,11 @@ fn restored_records_are_complete_for_a_sandbox() {
     ok(
         &other,
         "backup.restore",
-        &[("store", t("shop")), ("bucket", t("b1"))],
+        &[
+            ("bucket", t("b1")),
+            ("file", t("shop")),
+            ("store", t("shop")),
+        ],
     );
     same_project(&other, "shop", &original);
     for dir in [home, folder, other] {
