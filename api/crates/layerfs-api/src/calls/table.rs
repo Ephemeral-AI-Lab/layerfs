@@ -356,8 +356,9 @@ fn words(names: &[&str]) -> SdkValue {
     SdkValue::List(names.iter().map(|name| SdkValue::text(*name)).collect())
 }
 
-/// A form's keys: `{ short: { always, sometimes }, long }`, with `parts`
-/// when a key has its own form (a plain-string list is `{ scalar }`).
+/// A form's keys: `{ short: { always, sometimes }, long }`, with `things`
+/// when a `<thing>` key is one of those words, and `parts` when a key has
+/// its own form (a plain-string list is `{ scalar }`).
 fn form_value(form: &Form) -> SdkValue {
     let mut fields = vec![
         (
@@ -369,6 +370,9 @@ fn form_value(form: &Form) -> SdkValue {
         ),
         ("long".to_owned(), words(form.long)),
     ];
+    if !form.things.is_empty() {
+        fields.push(("things".to_owned(), words(form.things)));
+    }
     if !form.parts.is_empty() {
         let part = |(key, part): &(&str, Part)| {
             let value = match part {

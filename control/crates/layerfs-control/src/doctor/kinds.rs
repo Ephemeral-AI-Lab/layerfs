@@ -1,0 +1,593 @@
+//! The real kinds of the doctor frame: each kind's list of the check ids
+//! its checks give today, in the order they run, and the function that runs
+//! today's checks of one thing into its node. Ids not renamed to the frozen
+//! lists yet keep today's names (`host.*`, `backup.*`, …); the per-kind
+//! packages rename them, and a test compares every list with the frozen
+//! one through a pending list.
+//!
+//! Where things are comes from the home's records (`home_tree`): what is on
+//! a thing and its recorded state. A machine whose records say it is
+//! stopped gets only its records checks, and blocks what is on it; a
+//! machine whose provider or worker fails its check blocks what is on it
+//! with that reason.
+use super::frame::{CheckId, KindDoctor, Located, Probe, Registry};
+use super::report::{Kind, Node, Thing};
+use super::target::{Budget, Checks};
+use crate::home_tree;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::events::Events;
+use layerfs_home::home::{detect, Layout};
+use layerfs_home::names::ProjectRef;
+use layerfs_home::outcome::refused;
+use layerfs_home::state::{BlockedBy, Reason, State};
+use layerfs_machine::record::MachineRecord;
+use layerfs_store::project::record::ProjectRecord;
+use layerfs_store::record::{StoreRecord, StoreRef};
+use std::path::Path;
+use std::time::Duration;
+
+const fn own(id: &'static str) -> CheckId {
+    CheckId::own(id)
+}
+
+const fn full(id: &'static str) -> CheckId {
+    CheckId::full(id)
+}
+
+/// The home's checks, today's `host` target.
+const HOME: &[CheckId] = &[
+    own("host.build"),
+    own("host.prerequisites"),
+    own("host.bundle"),
+    own("host.native_daemon"),
+    own("host.capacity"),
+    own("host.layout"),
+    own("host.records"),
+    own("host.artifacts"),
+];
+
+/// A machine's checks.
+const MACHINE: &[CheckId] = &[
+    own("machine.record"),
+    own("machine.platform"),
+    own("machine.operation"),
+    own("machine.home"),
+    own("machine.configuration"),
+    own("machine.provider"),
+    own("machine.provider.tool_version"),
+    own("machine.state"),
+    own("machine.worker.endpoint"),
+    own("machine.worker.auth"),
+    own("machine.worker.compatibility"),
+    own("machine.worker.ping"),
+    own("machine.capacity"),
+];
+
+/// The checks that need a machine running: none is made on a machine its
+/// records say is stopped.
+const MACHINE_LIVE: &[&str] = &[
+    "machine.provider",
+    "machine.provider.tool_version",
+    "machine.state",
+    "machine.worker",
+    "machine.worker.endpoint",
+    "machine.worker.auth",
+    "machine.worker.compatibility",
+    "machine.worker.ping",
+    "machine.capacity",
+];
+
+/// A Store's checks, without today's whole-Store data scan: its record
+/// and saved identity, and a PostgreSQL Store's connection from this
+/// computer (step by step) and from each machine with a Sandbox of it.
+const STORE: &[CheckId] = &[
+    own("store.record"),
+    own("store.identity"),
+    own("store.connection.configuration"),
+    own("store.connection.cancelled"),
+    own("store.connection.authentication"),
+    own("store.connection.database"),
+    own("store.connection.transport"),
+    own("store.connection.cancellation.release"),
+    own("store.connection.close"),
+    own("store.connection.schema"),
+    own("store.connection.identity"),
+    own("store.connection.read"),
+    own("store.connection.tls"),
+    own("store.connection"),
+];
+
+/// A project's checks: its record, and its record against the Store's own
+/// list (the comparison `project.get` makes).
+const PROJECT: &[CheckId] = &[own("project.record"), own("project.listed")];
+
+/// A Sandbox's checks.
+const SANDBOX: &[CheckId] = &[
+    own("sandbox.record"),
+    own("sandbox.machine_reference"),
+    own("sandbox.store_reference"),
+    own("sandbox.project_reference"),
+    own("sandbox.store_placement"),
+    own("sandbox.operation"),
+    own("sandbox.runtime"),
+    own("sandbox.route"),
+    own("sandbox.forward_process"),
+    own("sandbox.worker_compatibility"),
+    own("sandbox.worker_report"),
+    own("sandbox.daemon_keys"),
+    own("sandbox.daemon"),
+    own("sandbox.daemon_connect"),
+    own("sandbox.daemon_auth"),
+    own("sandbox.daemon_instance"),
+    own("sandbox.daemon_ready"),
+    own("sandbox.workspaces"),
+    own("sandbox.workspace_retained"),
+    own("sandbox.session"),
+    own("sandbox.observation"),
+];
+
+/// A bucket's checks, today's `backup connection` target; the write test is
+/// its Full check.
+const BUCKET: &[CheckId] = &[
+    own("backup.configuration"),
+    own("backup.credentials"),
+    own("backup.transport"),
+    own("backup.list"),
+    full("backup.write_capability"),
+    full("backup.put"),
+    full("backup.get"),
+    full("backup.delete"),
+    full("backup.reconcile"),
+];
+
+/// The real kinds. A Workspace has no checks of its own yet: its Sandbox's
+/// `sandbox.workspaces` covers the daemon's whole list.
+pub(super) static KINDS: [KindDoctor; 7] = [
+    KindDoctor {
+        kind: Kind::Home,
+        checks: HOME,
+        budget: Duration::from_secs(30),
+        run: home,
+    },
+    KindDoctor {
+        kind: Kind::Machine,
+        checks: MACHINE,
+        budget: Duration::from_secs(30),
+        run: machine,
+    },
+    KindDoctor {
+        kind: Kind::Store,
+        checks: STORE,
+        budget: Duration::from_secs(10),
+        run: store,
+    },
+    KindDoctor {
+        kind: Kind::Project,
+        checks: PROJECT,
+        budget: Duration::from_secs(10),
+        run: project,
+    },
+    KindDoctor {
+        kind: Kind::Sandbox,
+        checks: SANDBOX,
+        budget: Duration::from_secs(30),
+        run: sandbox,
+    },
+    KindDoctor {
+        kind: Kind::Workspace,
+        checks: &[],
+        budget: Duration::from_secs(10),
+        run: |_, _| {},
+    },
+    KindDoctor {
+        kind: Kind::Bucket,
+        checks: BUCKET,
+        budget: Duration::from_secs(10),
+        run: bucket,
+    },
+];
+
+/// The real kinds and where things are in a home.
+pub(super) static REGISTRY: Registry = Registry {
+    kinds: &KINDS,
+    locate,
+};
+
+/// The real kinds, each with its list of the check ids it can give.
+pub fn kinds() -> &'static [KindDoctor] {
+    &KINDS
+}
+
+/// What `state` of the `word` thing named `name` blocks: the root of the
+/// block, when it is not ready.
+fn blocker(state: &State, word: &'static str, name: &str) -> Option<BlockedBy> {
+    match state.blocks(word, name) {
+        Some(State::Blocked(by)) => Some(by),
+        _ => None,
+    }
+}
+
+fn home(probe: &Probe<'_>, node: &mut Node) {
+    let mut checks = Checks::new("home", &probe.thing.name);
+    super::host_target::diagnose(probe.home, probe.options.build, probe.budget, &mut checks);
+    checks.fill(node, probe.checks, probe.budget.expired());
+}
+
+fn machine(probe: &Probe<'_>, node: &mut Node) {
+    let name = probe.thing.name.as_str();
+    let mut checks = Checks::new("machine", name);
+    if *probe.state == State::Stopped {
+        // its records checks alone: the target stops before its first live
+        // probe once its budget is spent, and what needs it running does
+        // not apply
+        let spent = Budget::new(Some(Duration::ZERO));
+        super::machine_target::diagnose(probe.home, name, &spent, &mut checks);
+        checks.forget(MACHINE_LIVE);
+    } else {
+        super::machine_target::diagnose(probe.home, name, probe.budget, &mut checks);
+    }
+    checks.fill(node, probe.checks, probe.budget.expired());
+    if node.gate.is_none() {
+        node.gate = blocker(probe.state, "machine", name).or_else(|| failed(&checks, name));
+    }
+}
+
+/// What a machine's failed live check blocks on it: a provider that does
+/// not run it, a worker from another build, or one that does not answer.
+fn failed(checks: &Checks, name: &str) -> Option<BlockedBy> {
+    let reason = match checks.outcome("machine.provider") {
+        Some(("fail", Some("warning"))) => Some("stopped"),
+        Some(("fail", _)) => Some(match checks.evidence_of("machine.provider") {
+            Some(evidence) if evidence.get_text("state") == Some("missing") => "missing",
+            Some(evidence) if evidence.get_text("state") == Some("failed") => "failed",
+            _ => "not_answering",
+        }),
+        Some(("unknown", _)) => Some("not_answering"),
+        _ => None,
+    };
+    let worker = |id: &str| matches!(checks.outcome(id), Some(("fail" | "unknown", _)));
+    let reason = reason.or_else(|| {
+        if worker("machine.worker.compatibility") {
+            Some("outdated")
+        } else if [
+            "machine.worker.endpoint",
+            "machine.worker.auth",
+            "machine.worker.ping",
+        ]
+        .iter()
+        .any(|id| worker(id))
+        {
+            Some("not_answering")
+        } else {
+            None
+        }
+    })?;
+    Some(BlockedBy {
+        thing: "machine",
+        handle: name.to_owned(),
+        reason,
+    })
+}
+
+fn store(probe: &Probe<'_>, node: &mut Node) {
+    let name = probe.thing.name.as_str();
+    let mut checks = Checks::new("store", name);
+    let record = StoreRecord::of(probe.home, name);
+    match record.as_ref().map(StoreRecord::store_ref) {
+        Ok(Ok(StoreRef::Postgres { .. })) => {
+            super::store_target::diagnose_connection(probe.home, name, probe.budget, &mut checks);
+            if let Ok(record) = &record {
+                reach(probe, record, &mut checks);
+            }
+        }
+        _ => {
+            let _ = super::store_target::resolve(probe.home, name, &mut checks);
+        }
+    }
+    checks.fill(node, probe.checks, probe.budget.expired());
+    if node.gate.is_none() {
+        node.gate = blocker(probe.state, "store", name);
+    }
+}
+
+/// `store.connection` of PostgreSQL Store `record` from each machine that
+/// has a Sandbox of it, and from `--machine`, as those machines dial it;
+/// this computer's own probe is the step-by-step one. A machine that is
+/// not ready is not dialled.
+fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
+    let name = record.name();
+    let mut machines: Vec<String> = crate::inventory::sandboxes(probe.home)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|sandbox| {
+            let project = sandbox.project().unwrap_or("");
+            project.split_once('/').map(|(store, _)| store) == Some(name)
+        })
+        .map(|sandbox| sandbox.machine().to_owned())
+        .collect();
+    machines.extend(probe.options.machine.clone());
+    machines.retain(|machine| machine != "native");
+    machines.sort();
+    machines.dedup();
+    const ID: &str = "store.connection";
+    for machine in &machines {
+        let record_of = MachineRecord::read(probe.home, machine);
+        let state = match record_of
+            .and_then(|found| crate::inventory::machine_state(probe.home, machine, found.as_ref()))
+        {
+            Ok(state) => state,
+            Err(_) => State::broken(Reason::Missing, None),
+        };
+        if let Some(by) = blocker(&state, "machine", machine) {
+            checks.waits(ID, format!("machine {machine} is not ready"), by);
+        } else {
+            let mut sink = |_| {};
+            let mut events = Events::new(&mut sink);
+            match crate::store::check_from(probe.home, &mut events, record, machine).1 {
+                Ok(_) => checks.pass(ID, format!("machine {machine} reaches the server")),
+                Err(refusal) => checks.fail(ID, refusal.message),
+            }
+        }
+        checks.from(ID, machine);
+    }
+}
+
+fn project(probe: &Probe<'_>, node: &mut Node) {
+    if let Some(by) = probe.blocked {
+        *node = Node::blocked(probe.thing.clone(), by.clone());
+        return;
+    }
+    let handle = probe.thing.name.as_str();
+    let mut checks = Checks::new("project", handle);
+    let (store, name) = handle.split_once('/').unwrap_or((handle, ""));
+    let recorded = StoreRecord::read(probe.home, store).and_then(|found| {
+        let found = found.ok_or_else(|| refused("NotFound", format!("no Store {store}")))?;
+        Ok((found, ProjectRecord::read(probe.home, store, name)?))
+    });
+    match recorded {
+        Ok((_, Some(_))) => {
+            checks.pass("project.record", "the project and its Store are on record")
+        }
+        Ok((_, None)) => {
+            checks.fail(
+                "project.record",
+                format!("the home has no record of {handle}"),
+            );
+        }
+        Err(refusal) => checks.fail("project.record", refusal.message),
+    }
+    if matches!(checks.outcome("project.record"), Some(("pass", _))) {
+        listed(probe, handle, store, &mut checks);
+    }
+    checks.fill(node, probe.checks, probe.budget.expired());
+}
+
+/// `project.listed`: the Store's own list holds the project its record
+/// names, as `project.get` compares them.
+fn listed(probe: &Probe<'_>, handle: &str, store: &str, checks: &mut Checks) {
+    const ID: &str = "project.listed";
+    let answer = ProjectRef::parse(handle)
+        .and_then(|project| layerfs_store::project::family::get(probe.home, &project));
+    match answer {
+        Ok(_) => checks.pass(ID, "the Store lists it"),
+        Err(refusal) if refusal.code == "NoSuchProject" => {
+            checks.notice(ID, "on record, but the Store does not list it");
+            checks.fix(ID, format!("layerfs project delete {handle}"));
+            checks.evidence(
+                ID,
+                SdkValue::map([
+                    ("recorded", SdkValue::Bool(true)),
+                    ("listed", SdkValue::Bool(false)),
+                ]),
+            );
+        }
+        // the Store this host cannot open, or whose file is gone: the
+        // listing waits on it, and the Store's own doctor says why
+        Err(refusal) if matches!(refusal.code.as_str(), "Unsupported" | "NoStore") => {
+            let by = BlockedBy {
+                thing: "store",
+                handle: store.to_owned(),
+                reason: if refusal.code == "NoStore" {
+                    "missing"
+                } else {
+                    "unsupported"
+                },
+            };
+            checks.waits(ID, refusal.message, by);
+        }
+        Err(refusal) if refusal.code == "Busy" => checks.busy(ID, refusal.message),
+        Err(refusal) => checks.unknown(ID, refusal.message),
+    }
+}
+
+fn sandbox(probe: &Probe<'_>, node: &mut Node) {
+    if let Some(by) = probe.blocked {
+        *node = Node::blocked(probe.thing.clone(), by.clone());
+        return;
+    }
+    let name = probe.thing.name.as_str();
+    let mut checks = Checks::new("sandbox", name);
+    super::sandbox_target::diagnose(probe.home, name, probe.budget, &mut checks);
+    // a worker's report may name a check this build does not know: its
+    // report is not one this build reads
+    let strange = checks.unlisted(probe.checks);
+    if !strange.is_empty() {
+        let names: Vec<&str> = strange.iter().map(String::as_str).collect();
+        checks.forget(&names);
+        let message = format!(
+            "the worker reported checks this build does not know: {}",
+            names.join(", ")
+        );
+        checks.unknown("sandbox.worker_report", message);
+    }
+    checks.fill(node, probe.checks, probe.budget.expired());
+}
+
+fn bucket(probe: &Probe<'_>, node: &mut Node) {
+    let name = probe.thing.name.as_str();
+    let mut checks = Checks::new("backup", name);
+    super::backup_target::diagnose(probe.home, name, probe.full, probe.budget, &mut checks);
+    checks.fill(node, probe.checks, probe.budget.expired());
+}
+
+/// A recorded state as `home.get --with tree` shows it.
+fn state_of(node: &SdkValue) -> State {
+    let text = |key: &str| node.get_text(key).map(str::to_owned);
+    match node.get_text("state") {
+        Some("stopped") => State::Stopped,
+        Some("busy") => {
+            let op = node.get("op").cloned().unwrap_or_default();
+            State::Busy {
+                name: op.get_text("name").unwrap_or("").to_owned(),
+                phase: op.get_text("phase").unwrap_or("").to_owned(),
+                started_ms: None,
+            }
+        }
+        Some("blocked") => node
+            .get("blocked_by")
+            .and_then(blocked_of)
+            .map_or(State::Unknown { observed_ms: None }, State::Blocked),
+        Some("broken") => State::Broken {
+            reason: (Reason::ALL.into_iter())
+                .find(|reason| node.get_text("reason") == Some(reason.word()))
+                .unwrap_or(Reason::Failed),
+            fix: text("fix"),
+        },
+        Some("unknown") => State::Unknown { observed_ms: None },
+        _ => State::Ready,
+    }
+}
+
+/// `{ <thing>, reason }` as a recorded state's `blocked_by` shows it.
+fn blocked_of(by: &SdkValue) -> Option<BlockedBy> {
+    let (thing, handle) = ["machine", "store", "sandbox"]
+        .into_iter()
+        .find_map(|word| by.get_text(word).map(|handle| (word, handle.to_owned())))?;
+    let said = by.get_text("reason")?;
+    let reason = ["stopped", "busy"]
+        .into_iter()
+        .chain(Reason::ALL.iter().map(|reason| reason.word()))
+        .find(|word| *word == said)?;
+    Some(BlockedBy {
+        thing,
+        handle,
+        reason,
+    })
+}
+
+fn list(value: Option<&SdkValue>) -> &[SdkValue] {
+    match value {
+        Some(SdkValue::List(items)) => items,
+        _ => &[],
+    }
+}
+
+/// The nodes of `kind` under `key` of `parent`, each with its state.
+fn things(parent: &SdkValue, key: &str, kind: Kind) -> Vec<(Thing, State)> {
+    let word = kind.word();
+    (list(parent.get(key)).iter())
+        .filter_map(|node| Some((Thing::new(kind, node.get_text(word)?), state_of(node))))
+        .collect()
+}
+
+/// Finds `thing` in the home's records: its state, what above it blocks
+/// it, and the things directly on it. A thing that is not there is
+/// `NotFound`; the home itself always is, with nothing on it until it is a
+/// current-layout home.
+fn locate(home: &Path, thing: &Thing) -> Result<Located, SdkRefusal> {
+    let current = match detect(home) {
+        Ok(Layout::Current(_)) => true,
+        Ok(_) => false,
+        Err(refusal) if thing.kind != Kind::Home => return Err(refusal),
+        Err(_) => false,
+    };
+    // a record the tree cannot read leaves the home with no children: its
+    // own records check names that record; any other doctor is refused
+    let tree = match current.then(|| home_tree::tree(home)) {
+        None => SdkValue::Null,
+        Some(Ok(tree)) => tree,
+        Some(Err(_)) if thing.kind == Kind::Home => SdkValue::Null,
+        Some(Err(refusal)) => return Err(refusal),
+    };
+    let machines = list(tree.get("machines"));
+    let stores = || {
+        let placed = machines.iter().flat_map(|m| list(m.get("stores")).iter());
+        placed.chain(list(tree.get("stores")))
+    };
+    let named = |node: &&SdkValue, word: &str| node.get_text(word) == Some(&thing.name);
+    let missing = || {
+        let word = thing.kind.word();
+        refused("NotFound", format!("no {word} named {}", thing.name))
+    };
+    let at = |state: State, children| {
+        let blocked = match &state {
+            State::Blocked(by) => Some(by.clone()),
+            _ => None,
+        };
+        Ok(Located {
+            state,
+            blocked,
+            children,
+        })
+    };
+    match thing.kind {
+        Kind::Home => {
+            let mut children = things(&tree, "machines", Kind::Machine);
+            children.extend(things(&tree, "stores", Kind::Store));
+            children.extend(things(&tree, "buckets", Kind::Bucket));
+            at(State::Ready, children)
+        }
+        Kind::Machine => {
+            let node = machines
+                .iter()
+                .find(|m| named(m, "machine"))
+                .ok_or_else(missing)?;
+            let mut children = things(node, "stores", Kind::Store);
+            children.extend(things(node, "sandboxes", Kind::Sandbox));
+            at(state_of(node), children)
+        }
+        Kind::Store => {
+            let node = stores().find(|s| named(s, "store")).ok_or_else(missing)?;
+            let projects = list(node.get("projects")).iter().filter_map(|p| match p {
+                SdkValue::Text(project) => Some((
+                    Thing::new(Kind::Project, format!("{}/{project}", thing.name)),
+                    State::Ready,
+                )),
+                _ => None,
+            });
+            at(state_of(node), projects.collect())
+        }
+        Kind::Project => {
+            let (store, project) = thing.name.split_once('/').ok_or_else(missing)?;
+            let node =
+                (stores().find(|s| s.get_text("store") == Some(store))).ok_or_else(missing)?;
+            let recorded = list(node.get("projects"));
+            if !recorded.contains(&SdkValue::text(project)) {
+                return Err(missing());
+            }
+            Ok(Located {
+                state: State::Ready,
+                blocked: blocker(&state_of(node), "store", store),
+                children: Vec::new(),
+            })
+        }
+        Kind::Sandbox => {
+            let mut placed = machines
+                .iter()
+                .flat_map(|m| list(m.get("sandboxes")).iter());
+            let node = placed.find(|s| named(s, "sandbox")).ok_or_else(missing)?;
+            // its Workspaces are not checked one by one yet
+            at(state_of(node), Vec::new())
+        }
+        Kind::Bucket => {
+            let found = list(tree.get("buckets"))
+                .iter()
+                .any(|b| named(&b, "bucket"));
+            match found {
+                true => at(State::Ready, Vec::new()),
+                false => Err(missing()),
+            }
+        }
+        Kind::Workspace => Err(missing()),
+    }
+}

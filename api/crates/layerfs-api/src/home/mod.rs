@@ -13,5 +13,11 @@ pub(crate) use get::build;
 
 /// Its calls, in the order help lists them.
 pub(crate) fn calls() -> Calls {
-    &[init::CALL, get::CALL, log::CALL, clear_log::CALL]
+    &[
+        init::CALL,
+        get::CALL,
+        log::CALL,
+        clear_log::CALL,
+        crate::doctor::home::CALL,
+    ]
 }

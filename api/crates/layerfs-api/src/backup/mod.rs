@@ -15,5 +15,6 @@ pub(crate) fn calls() -> Calls {
         list::CALL,
         create::CALL,
         restore::CALL,
+        crate::doctor::backup::CALL,
     ]
 }

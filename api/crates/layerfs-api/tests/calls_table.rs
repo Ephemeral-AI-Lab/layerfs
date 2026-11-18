@@ -515,10 +515,9 @@ fn the_source_is_one_file_per_call_under_its_family() {
             .collect();
         files.push("mod.rs".to_owned());
         if family.name == "doctor" {
-            // the report itself (explicit options and its run) stays
-            // outside the table and the home dispatcher, beside the family's
-            // one call
-            files.extend(["options.rs".to_owned(), "run.rs".to_owned()]);
+            // the six doctors' one answer, beside the family's one call;
+            // each doctor's entry is in its own family's folder
+            files.push("answer.rs".to_owned());
         }
         files.sort();
         assert_eq!(names(&src.join(family.name)), files, "{}", family.name);
@@ -617,7 +616,7 @@ fn the_call_log_calls_moved_to_home_with_no_alias() {
         .iter()
         .map(|call| call.call)
         .collect();
-    assert_eq!(home, ["init", "get", "log", "clear_log"]);
+    assert_eq!(home, ["init", "get", "log", "clear_log", "doctor"]);
 }
 
 #[test]
@@ -642,8 +641,10 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "machine.create",
         "machine.remove",
         "machine.update",
+        "machine.doctor",
     ];
-    let home = ["home.get", "home.log", "home.clear_log"];
+    let home = ["home.get", "home.log", "home.clear_log", "home.doctor"];
+    let doctors = ["project.doctor", "sandbox.doctor"];
     let store = [
         "store.list",
         "store.get",
@@ -651,8 +652,20 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "store.move",
         "store.remove",
         "store.compact",
+        "store.doctor",
     ];
-    assert_eq!(migrated, [&home[..], &machine[..], &store[..]].concat());
+    let after = ["backup.doctor"];
+    assert_eq!(
+        migrated,
+        [
+            &home[..],
+            &doctors[..],
+            &machine[..],
+            &store[..],
+            &after[..]
+        ]
+        .concat()
+    );
     for call in layerfs_api::calls() {
         if let Some(form) = call.form {
             // every short key is a long key, and no key is listed twice

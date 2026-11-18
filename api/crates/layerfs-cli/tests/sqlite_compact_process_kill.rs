@@ -16,7 +16,7 @@
 //! sidecars a killed session leaves, `store get --with live` (`broken`
 //! `unresolved`, its fix the next compaction), the next `store.compact` settling the leftover
 //! (an installed `G + 1` answers the recorded `Rebuild` report, F41-1), the
-//! retained layer still readable, and a clean `doctor`. The `G` baseline
+//! retained layer still readable, and a clean `store doctor`. The `G` baseline
 //! is the §3 `none` run before the dead pack exists, so the crash arms start
 //! from a Store with exactly one wholly dead pack.
 //!
@@ -332,8 +332,11 @@ fn exercise(arm: Arm) {
     let stats = call(&home, &["project", "stats", "s/p"]);
     assert!(stats.get_int("files").unwrap_or(0) >= 1, "{stats:?}");
     call(&home, &["file", "stat", "s/p", "main", "/a.txt"]);
-    let doctor = call(&home, &["doctor"]);
-    assert_eq!(doctor.get("ok"), Some(&SdkValue::Bool(true)), "{doctor:?}");
+    let doctor = call(&home, &["store", "doctor", "s", "--detail"]);
+    let Some(SdkValue::List(findings)) = doctor.get("findings") else {
+        panic!("{doctor:?}");
+    };
+    assert!(findings.is_empty(), "{doctor:?}");
 
     std::fs::remove_dir_all(&home).unwrap();
     std::fs::remove_dir_all(&source).unwrap();

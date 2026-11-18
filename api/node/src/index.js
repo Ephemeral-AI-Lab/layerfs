@@ -113,22 +113,6 @@ export function client({ home, scope } = {}) {
   return Object.freeze(made);
 }
 
-/** `layerfs doctor`: what is wrong in `home` (default `LAYERFS_HOME`, else
- * `~/.layerfs`), without changing LayerFS state or starting a machine. Resolves to
- * `{ ok, findings: [{ severity, entity: { kind, name }, message, fix }] }`;
- * `ok` is false when a finding is an error. Explicit `{ target, name?, timeout?,
- * quick?, write_test? }` selects one scope and adds checks/complete/coverage;
- * empty options retain the legacy report. Explicit backup write_test may create
- * and delete its own temporary S3 object version. Outside the call table.
- * The report also lists what interrupted operations left (`leftovers`, and
- * `leftover` on such a finding); `doctor.fix(id)`, the `doctor` family's one
- * call, removes one of them under its guard. */
-export async function doctor({ home, ...options } = {}) {
-  const answer = decode(await native.doctor(home ?? null, encode(options)));
-  if (answer.refused) throw new LayerFSError(answer.refused.code, answer.refused.message, answer.refused.detail);
-  return answer.value;
-}
-
 /** Closes every Store this process holds open with no call running,
  * releasing its leases, so it leaves none behind when it exits (a lease
  * of a process that ended is stale until the Store's next call). Call it
@@ -141,10 +125,6 @@ export function close() {
 }
 
 const fallback = client();
-export const { project, branch, commit, file, sandbox, workspace, machine, store, backup, logs } = fallback;
-// the package's `doctor` is the report, and carries the `doctor` family's
-// calls: `layerfs.doctor()` and `layerfs.doctor.fix(id)`. A client made by
-// `client()` has the family alone: `lfs.doctor.fix(id)`.
-Object.assign(doctor, fallback.doctor);
+export const { project, branch, commit, file, sandbox, workspace, machine, store, backup, logs, doctor } = fallback;
 export { LayerFSError };
 export default { ...fallback, client, close, doctor, table, families, LayerFSError };

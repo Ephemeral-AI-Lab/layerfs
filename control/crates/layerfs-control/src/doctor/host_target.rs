@@ -1,5 +1,5 @@
 //! Observational host diagnosis: installation, local records and local capacity.
-use super::report::Findings;
+use super::records::Findings;
 use super::target::{Budget, Checks};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{detect, Layout};
@@ -88,7 +88,16 @@ pub(super) fn diagnose(
 fn observed(home: &Path, budget: &Budget, checks: &mut Checks, previous: bool) {
     let before = inventory::fingerprint(home, budget);
     if before.is_err() {
-        checks.unknown("host.records", "Management record metadata could not be observed completely; no consistency scan attempted");
+        // a home folder the inventory will not walk (a symlinked `store/`)
+        // is the records scan's own finding: report it when the scan names it
+        let mut findings = Findings::default();
+        let named = !previous && super::scan::scan(home, &mut findings).is_ok();
+        let said = findings.to_sdk();
+        if named && matches!(said.get("findings"), Some(SdkValue::List(rows)) if !rows.is_empty()) {
+            publish(findings, checks);
+        } else {
+            checks.unknown("host.records", "Management record metadata could not be observed completely; no consistency scan attempted");
+        }
         install::without_inventory(checks, true);
         return;
     }
@@ -158,7 +167,8 @@ fn publish(findings: Findings, checks: &mut Checks) {
             checks.fix("host.records", fix);
         }
         if let Some(entity) = row.get("entity") {
-            checks.evidence("host.records", entity.clone());
+            let text = |key: &str| entity.get_text(key).unwrap_or("").to_owned();
+            checks.about("host.records", &text("kind"), &text("name"));
         }
     }
 }

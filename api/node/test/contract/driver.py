@@ -3,7 +3,7 @@
 stdin: JSON `{ "home": ..., "aio": bool, "steps": [{ "call": "file.read", "args": [...], "opts": {...} }] }`
 with bytes as `{"$bytes": base64}` and a float as `{"$float": text}` (a one-key `{"base64": ...}` map stays a map).
 stdout: JSON `[{ "ok": value } | { "refused": { error, message, fix?, ...fields, detail? } }]`, one per step,
-bytes as `{"$bytes": base64}`. `call` "doctor" is `layerfs.doctor(home)`.
+bytes as `{"$bytes": base64}`.
 Nothing here converts values: the package's own encoder and decoder do.
 """
 
@@ -55,9 +55,6 @@ def run_sync(request):
     out = []
     for step in request["steps"]:
         try:
-            if step["call"] == "doctor":
-                out.append({"ok": layerfs.doctor(request["home"])})
-                continue
             family, call = step["call"].split(".")
             out.append({"ok": getattr(getattr(client, family), call)(*step["args"], **step["opts"])})
         except layerfs.LayerFSError as error:
@@ -70,9 +67,6 @@ async def run_aio(request):
     out = []
     for step in request["steps"]:
         try:
-            if step["call"] == "doctor":
-                out.append({"ok": layerfs.doctor(request["home"])})
-                continue
             family, call = step["call"].split(".")
             out.append({"ok": await getattr(getattr(client, family), call)(*step["args"], **step["opts"])})
         except layerfs.LayerFSError as error:

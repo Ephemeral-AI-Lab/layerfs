@@ -57,17 +57,20 @@ fn usage_error_refusal_and_success_have_their_own_codes() {
 fn doctor_help_is_help_and_help_exits_0() {
     let home = tempdir("doctor-help");
     for words in [
-        &["doctor", "--help"][..],
-        &["doctor", "-h"],
-        &["help", "doctor"],
+        &["home", "doctor", "--help"][..],
+        &["home", "doctor", "-h"],
+        &["help", "home", "doctor"],
     ] {
         let (c, out, err) = code(&home, words);
         assert_eq!(c, Some(0), "{words:?}: {err}");
-        assert!(out.starts_with("layerfs doctor [--text]\n"), "{out}");
+        assert!(
+            out.starts_with("layerfs home doctor [--progress]\n"),
+            "{out}"
+        );
         assert!(err.is_empty(), "{err}");
     }
     // a flag it does not take is still a wrong command line
-    assert_eq!(code(&home, &["doctor", "--all"]).0, Some(2));
+    assert_eq!(code(&home, &["home", "doctor", "--all"]).0, Some(2));
     assert!(!home.join("store").exists(), "help made no home");
     let (c, out, _) = code(&home, &["--version"]);
     assert_eq!(c, Some(0));

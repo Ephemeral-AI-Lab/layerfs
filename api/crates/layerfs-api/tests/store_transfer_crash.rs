@@ -121,16 +121,18 @@ fn read(home: &Path) -> Result<SdkValue, (String, String)> {
     )
 }
 
-/// The doctor's findings for Store `shop` as `(severity, message, fix)`.
+/// The home doctor's records findings on Store `shop` as `(severity,
+/// message, fix)`.
 fn doctor_on_shop(home: &Path) -> Vec<(String, String, String)> {
-    let report = layerfs_api::doctor(home).unwrap();
+    let report = call_ok(home, "home.doctor", &[("detail", SdkValue::Bool(true))]);
     let Some(SdkValue::List(items)) = report.get("findings") else {
         panic!("{report:?}")
     };
     let text = |v: &SdkValue, k: &str| v.get_text(k).unwrap_or("").to_owned();
     items
         .iter()
-        .filter(|f| f.get("entity").and_then(|e| e.get_text("name")) == Some("shop"))
+        .filter(|f| f.get_text("store") == Some("shop"))
+        .filter(|f| f.get_text("check") == Some("host.records"))
         .map(|f| (text(f, "severity"), text(f, "message"), text(f, "fix")))
         .collect()
 }

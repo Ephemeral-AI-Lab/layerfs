@@ -3,7 +3,7 @@
 //! answered with its protocol and bundle); no request is sent, and nothing
 //! is started. A worker of another build, or one that does not answer, is
 //! a warning naming the calls that fix it.
-use super::report::Findings;
+use super::records::Findings;
 use super::scan::Scanned;
 use layerfs_home::home::{paths, read_record};
 use layerfs_machine::worker::{self, Endpoint};

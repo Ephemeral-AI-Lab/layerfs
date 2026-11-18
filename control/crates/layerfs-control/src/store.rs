@@ -133,7 +133,7 @@ fn from_machine(
 /// `store.reach`. The URL is built as the machine's Sandboxes' calls build
 /// it. Answers the check, `{ at, server_version, latency_ms }`, or its
 /// refusal; either way with the host it dialled, once known.
-fn check_from(
+pub(crate) fn check_from(
     home: &Path,
     events: &mut Events<'_>,
     record: &StoreRecord,
