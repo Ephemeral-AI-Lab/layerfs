@@ -37,7 +37,7 @@ fn hex_of(id: &str) -> Option<&str> {
 /// lock, so the next copy takes it over and resumes the staged part; a record
 /// whose pid another process now holds does not keep the lock, because the
 /// lock is not that process's. There is no deadline: a live owner is waited
-/// for as long as it lives and the wait says `waiting: "lock"` every second.
+/// for as long as it lives and the wait says `{phase: "lock"}` every second.
 /// Interrupting a waiting copy today means killing it, which leaves nothing
 /// to undo — a released kernel lock and at most its record, which the next
 /// copy replaces; a wait a shared Cancel can end is X01's, not this card's.
@@ -125,7 +125,8 @@ impl ImageLock {
 
     /// Takes the lock of image `id` on `machine`, waiting while a live copy
     /// holds it and recording this copy as the owner. `events` say
-    /// `{phase: "lock", waiting: "lock", holder}` once a second meanwhile.
+    /// `{phase: "lock"}` once a second meanwhile; the copy it waits for is
+    /// the `busy` item of `machine images` (its pid is not sent).
     pub fn take(home: &Path, machine: &str, id: &str, events: &mut Events<'_>) -> Result<Self> {
         let hex = hex_of(id).ok_or_else(|| refused("InvalidInput", "image id"))?;
         let file = Self::open_file(home, machine, &format!("{hex}.lock"))?;
@@ -135,18 +136,7 @@ impl ImageLock {
                 break;
             }
             if reported.is_none_or(|at| at.elapsed() >= WAIT_REPORT) {
-                let record = Self::record_path(home, machine, hex);
-                events.progress(SdkValue::map([
-                    ("phase", SdkValue::text("lock")),
-                    ("waiting", SdkValue::text("lock")),
-                    (
-                        "holder",
-                        read_record(&record)
-                            .ok()
-                            .flatten()
-                            .unwrap_or(SdkValue::Null),
-                    ),
-                ]));
+                events.phase("lock", None, None, Vec::new());
                 reported = Some(Instant::now());
             }
             std::thread::sleep(LOCK_POLL);
@@ -154,6 +144,22 @@ impl ImageLock {
         // a prune of this machine that is under way finishes first
         PruneGate::pass(home, machine)?;
         Self::with_record(file, home, machine, hex, id)
+    }
+
+    /// Records the phase this copy is in (`export`, `send`, `unpack`) in its
+    /// owner record, which `machine images` shows as the busy item's
+    /// `op.phase`. A copy that writes no record (a prune's guard) records
+    /// nothing; a record that cannot be written changes nothing else.
+    pub fn at(&self, phase: &str) {
+        let Some(path) = &self.record else {
+            return;
+        };
+        if let Ok(Some(record)) = read_record(path) {
+            let _ = write_record(
+                path,
+                &home::with_field(record, "phase", SdkValue::text(phase)),
+            );
+        }
     }
 
     /// Wraps `file` with its owner record path and writes the owner record.

@@ -175,12 +175,7 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
         )])),
         // the compaction record beside the Store only: a live read shows
         // its op and phase without opening the Store database or an artifact
-        StoreStep::CompactOp => match layerfs_persistence::compact_op_status(&file) {
-            None => Ok(SdkValue::Null),
-            Some(op) => Ok(crate::report::compact_status(
-                &op.status(crate::compact::owner_alive(&op)),
-            )),
-        },
+        StoreStep::CompactOp => Ok(crate::compact::recorded_run(&file).unwrap_or_default()),
         // snapshot: the idle Store's bytes, sha256 and history heads. A Store
         // nobody holds has no write-ahead log left unless a process crashed;
         // if a crashed opener left one, checkpoint and close it first.

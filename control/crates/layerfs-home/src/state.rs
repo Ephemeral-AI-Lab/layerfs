@@ -28,11 +28,14 @@ pub enum Reason {
     Lost,
     /// This build or host does not support it.
     Unsupported,
+    /// A copy left it partway (an image part or an unpack that was not
+    /// recorded); its fix resumes or rebuilds it.
+    Partial,
 }
 
 impl Reason {
     /// Every reason, in the order the specification lists them.
-    pub const ALL: [Reason; 9] = [
+    pub const ALL: [Reason; 10] = [
         Reason::EngineDown,
         Reason::NotAnswering,
         Reason::Outdated,
@@ -42,6 +45,7 @@ impl Reason {
         Reason::Unresolved,
         Reason::Lost,
         Reason::Unsupported,
+        Reason::Partial,
     ];
 
     /// The reason as results show it.
@@ -56,6 +60,7 @@ impl Reason {
             Reason::Unresolved => "unresolved",
             Reason::Lost => "lost",
             Reason::Unsupported => "unsupported",
+            Reason::Partial => "partial",
         }
     }
 }

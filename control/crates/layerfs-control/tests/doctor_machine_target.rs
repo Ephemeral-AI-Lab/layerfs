@@ -265,7 +265,19 @@ fn machine_checks_report_in_order_and_preserve_the_home() {
     let (severity, message, fix) = finding(&running, "machine.capacity");
     assert_eq!(severity, "warning");
     assert!(message.starts_with("its data disk has "), "{message}");
-    assert_eq!(fix, "layerfs machine prune docker --unused");
+    // v19: the prune is the fix only when the image listing names bytes it
+    // frees; this stand-in worker answers one request, so the listing is
+    // not known and the evidence says so
+    assert_eq!(fix, "", "no prune fix without reclaimable bytes");
+    let evidence = doctor_own::row(&running, "machine.capacity")
+        .and_then(|row| row.get("evidence").cloned())
+        .unwrap_or_default();
+    assert_eq!(
+        evidence.get("reclaimable_image_bytes"),
+        Some(&SdkValue::Null),
+        "{evidence:?}"
+    );
+    assert_eq!(evidence.get_int("disk_free_bytes"), Some(1234));
     // a worker of another build: stop and start, no request sent
     let server = worker(&f.home, "protocol");
     let old = f.report("docker", Duration::from_millis(250));

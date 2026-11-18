@@ -461,14 +461,10 @@ fn named(cache: &Path, reference: &str) -> Result<Option<String>, SdkRefusal> {
                 "image reference `{reference}` is ambiguous across cached images: {}; remove one with `machine.prune`",
                 matches.join(", ")
             ),
-            SdkValue::map([
-                ("reason", SdkValue::text("ambiguous")),
-                ("ref", SdkValue::text(reference)),
-                (
-                    "ids",
-                    SdkValue::List(matches.into_iter().map(SdkValue::Text).collect()),
-                ),
-            ]),
+            SdkValue::map([(
+                "images",
+                SdkValue::List(matches.into_iter().map(SdkValue::Text).collect()),
+            )]),
         )),
     }
 }
@@ -522,7 +518,7 @@ pub fn write(cache: &Path, hex: &str, offset: u64, bytes: &[u8]) -> Result<(), S
     let mut file = options.open(&staged).map_err(failed)?;
     if file.metadata().map_err(failed)?.len() != offset {
         return Err(refused(
-            "InvalidInput",
+            "Failed",
             "image frames are out of order: the staged length is not the frame's offset",
         ));
     }
@@ -561,7 +557,7 @@ fn publish(cache: &Path, id: &str, args: &SdkValue) -> Outcome {
     let sum = sha256_file(&staged)?;
     if length != size || Some(sum.as_str()) != args.get_text("sha256") {
         return Err(refused(
-            "InvalidInput",
+            "Failed",
             "the staged image is not what was sent; it was kept for the next copy to resume or restart",
         ));
     }

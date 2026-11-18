@@ -40,6 +40,9 @@ mod get;
 pub mod host;
 #[doc(hidden)]
 pub mod image_artifact;
+/// The export containers killed image copies left in the host's Docker
+/// (`home leftovers` kind `export_container`).
+pub mod image_exports;
 #[doc(hidden)]
 pub mod image_load;
 #[doc(hidden)]

@@ -58,7 +58,8 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &MachineCreate) -> 
 
 /// `machine.remove`. A removed machine's own connection to each
 /// PostgreSQL Store is forgotten with it, so a later machine of its name
-/// dials the Store's.
+/// dials the Store's, and so are the home's image copy locks of it
+/// (`run/image-lock/<machine>/`).
 pub fn remove(home: &Path, events: &mut Events<'_>, name: &MachineName) -> Outcome {
     let removed = layerfs_machine::remove(home, name, RELATED, events)?;
     layerfs_store::postgresql::check::forget_machine(home, name).map_err(|refusal| {
@@ -70,6 +71,20 @@ pub fn remove(home: &Path, events: &mut Events<'_>, name: &MachineName) -> Outco
             ),
         )
     })?;
+    // the home's image copy locks of the machine go with it
+    let locks = layerfs_sandbox::image_lock::ImageLock::dir(home, name.as_str());
+    match std::fs::remove_dir_all(&locks) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+            return Err(layerfs_home::outcome::refused(
+                "Failed",
+                format!(
+                    "machine {name} was removed, but its image copy locks in {} were not: {error}",
+                    locks.display()
+                ),
+            ))
+        }
+        _ => {}
+    }
     Ok(removed)
 }
 
