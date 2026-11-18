@@ -13,7 +13,7 @@
     {
       "call": "branch.list",
       "badge": "extended",
-      "note": "one <code>commit</code> replaces head/saved_head/base: the Branch's head, or the Commit it was forked at while it has none of its own; <code>main</code> is a row, and its <code>commit</code> is main's head; <code>forked_from</code> (long form) is the Commit the Branch was forked at, not a Branch name: the record keeps the Commit; no <code>created_at</code>: a Branch record has no time",
+      "note": "one <code>commit</code> replaces head/saved_head/base: the Branch's head, or the Commit it was forked at while it has none of its own; <code>main</code> is a row, and its <code>commit</code> is main's head; <code>forked_from</code> (long form) is the Commit the Branch was forked at, not a Branch name: the record keeps the Commit; no <code>created_at</code>: a Branch record has no time; a cursor carries the call's filters only, and pins no Commit: given with other filters, or to another call, it is refused <code>InvalidInput</code>",
       "today": [
         "branch.list"
       ],
@@ -45,7 +45,7 @@
         {
           "name": "cursor",
           "kind": "Text",
-          "help": "the `next_cursor` of the page before; it carries the pinned Commit and the filters"
+          "help": "the `next_cursor` of the page before; it carries the filters only"
         }
       ],
       "stdin": null,
@@ -102,7 +102,7 @@
           "why": "one paging convention"
         }
       ],
-      "new_work": "`--prefix` and `--exclude-prefix` are new: today only a folder scope filters Branches, by its namespace, on the caller's side after reading every page. `--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor must carry the Commit the first page read and the call's filters."
+      "new_work": "`--prefix` and `--exclude-prefix` are new: today only a folder scope filters Branches, by its namespace, on the caller's side after reading every page. `--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor carries the call's filters only, and no Commit; one given with other filters, or to another call, is refused `InvalidInput`."
     },
     {
       "call": "branch.get",
@@ -224,7 +224,7 @@
           "why": "one way to name a Commit"
         }
       ],
-      "new_work": "An id prefix is new: today the call takes a full 66-character id."
+      "new_work": "An id prefix is new: today the call takes a full 66-character id. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "branch.merge",
@@ -258,7 +258,8 @@
         {
           "name": "units",
           "kind": "Json",
-          "help": "merge units: a list of patterns or {name, patterns}; a unit both sides changed is taken whole from the side with the later write"
+          "help": "merge units: a list of patterns or {name, patterns}; a unit both sides changed is taken whole from the side with the later write",
+          "redact": true
         },
         {
           "name": "expected",
@@ -268,7 +269,8 @@
         {
           "name": "message",
           "kind": "Text",
-          "help": "the merge Commit's message; `-m` in the shell; `Merge <branch> and <from>` when left off"
+          "help": "the merge Commit's message; `-m` in the shell; `Merge <branch> and <from>` when left off",
+          "redact": true
         }
       ],
       "stdin": null,
@@ -330,7 +332,7 @@
           "why": "the Branch merged from"
         }
       ],
-      "new_work": "Merging into an existing Branch is new: today `branch.merge` always makes a new Branch (`--into NEW` is that form) and never changes either side. Moving `branch`'s head to the merge result, `--expected`, and `unchanged` (when `branch` already holds `from`) are part of that work."
+      "new_work": "Merging into an existing Branch is new: today `branch.merge` always makes a new Branch (`--into NEW` is that form) and never changes either side. Moving `branch`'s head to the merge result, `--expected`, and `unchanged` (when `branch` already holds `from`) are part of that work. An id prefix for `--expected` is new. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "branch.publish",
@@ -420,7 +422,7 @@
           "why": "naming the Commit to publish pins what is published; a moved Branch head cannot change it"
         }
       ],
-      "new_work": "An id prefix is new: today the call takes a full 66-character id. The refusal of a stale `--expected` is `Conflict` and names main's head as `commit` (`HeadMoved` today)."
+      "new_work": "An id prefix is new: today the call takes a full 66-character id. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count. The refusal of a stale `--expected` is `Conflict` and names main's head as `commit` (`HeadMoved` today)."
     },
     {
       "call": "branch.remove",

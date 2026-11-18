@@ -60,7 +60,7 @@
   {
    "call": "home.get",
    "badge": "merged",
-   "note": "+ <code>machine.platforms</code> (<code>--with platforms</code>). Reads the home and changes nothing; it writes no call-log line. <code>state</code> is <code>ready</code>, or <code>broken</code> with <code>reason: missing</code> (no home yet) or <code>reason: outdated</code> (an older layout), each with <code>fix: layerfs home init</code>; a folder this build cannot read as a home is refused <code>Unsupported</code>. <code>generation</code> is a number that moves when any record in the home changes: a UI polls it and re-reads only when it moves. It does not move for a Workspace the home does not record. <code>--with tree</code> is the whole home from records only, with no machine contacted: every machine with its sqlite Stores and its Sandboxes, then the PostgreSQL Stores and the buckets. A node goes by its own word and leaves <code>state</code> out when <code>ready</code>; a Store's <code>engine</code> is left out when sqlite; a project (its name within the Store, as <code>store list</code> gives it) and a Workspace (its handle) are plain strings and take their Store's or Sandbox's state. Workspaces are listed only where the home keeps their records (a Sandbox on <code>native</code>, or one reached directly); elsewhere the node says <code>workspaces_not_listed:true</code> while that machine is ready. On a stopped machine a Store and a Sandbox answer <code>blocked</code> with <code>blocked_by</code> naming the machine, and no Workspaces are listed. Leftovers are not a section here: <code>home leftovers</code> is its own call",
+   "note": "+ <code>machine.platforms</code> (<code>--with platforms</code>). Reads the home and changes nothing; it writes no call-log line. <code>state</code> is <code>ready</code>, or <code>broken</code> with <code>reason: missing</code> (no home yet) or <code>reason: outdated</code> (an older layout), each with <code>fix: layerfs home init</code>; a folder this build cannot read as a home is refused <code>Unsupported</code>. <code>generation</code> is a number that moves when any record in the home is written: a UI polls it and re-reads only when it moves. A live read (<code>--with live</code>, or <code>sandbox get</code>) writes a record only when the state word or its reason changes, and that write moves it; <code>observed_at</code> is kept beside the record in an observation file it does not cover. It does not move when the owner of a recorded <code>op</code> dies (a dead owner's op is ignored on read, with no write), nor for a Workspace the home does not record. <code>--with tree</code> is the whole home from records only, with no machine contacted: every machine with its sqlite Stores and its Sandboxes, then the PostgreSQL Stores and the buckets. A node holds what the records hold: a machine its <code>platform</code> (and <code>cpus</code>, <code>memory_bytes</code> where it has them), a Store its <code>engine</code> and <code>projects</code> (bare names, as <code>store get</code> answers them; a PostgreSQL Store also its <code>connections</code>), a Sandbox its <code>project</code>, <code>image</code> and <code>workspaces</code> (each <code>{workspace, branch}</code>), a bucket its <code>provider</code>. A node leaves <code>state</code> out when <code>ready</code>; the state is the last one its record holds, so a <code>blocked_by</code> can name <code>engine_down</code>, <code>not_answering</code>, <code>missing</code> or <code>unreachable</code> after a live read saw it. A project and a Workspace take their Store's or Sandbox's state. Workspaces are listed only where the home keeps their records (a Sandbox on <code>native</code>, or one reached directly); elsewhere the node says <code>workspaces_not_listed:true</code> while that machine is ready. On a stopped machine a Store and a Sandbox answer <code>blocked</code> with <code>blocked_by</code> naming the machine, and no Workspaces are listed. Leftovers are not a section here: <code>home leftovers</code> is its own call",
    "today": [
     "home.get",
     "machine.platforms"
@@ -163,14 +163,17 @@
       "stores",
       "buckets"
      ],
-     "help": "everything in the home, from its records only: `machines` (each with its sqlite `stores` and its `sandboxes`), `stores` (the PostgreSQL Stores, which live on no machine) and `buckets`. Each node's keys are in `nodes`; a state and its companions follow the state table",
+     "help": "everything in the home, from its records only: `machines` (each with its sqlite `stores` and its `sandboxes`), `stores` (the PostgreSQL Stores, which live on no machine) and `buckets`. A node holds what the records hold and no more: a machine {machine, platform, cpus, memory_bytes}; a Store {store, engine, projects}, and a PostgreSQL Store also `connections` (the home's own address, then each machine with its own); a Sandbox {sandbox, project, image, workspaces}; a bucket {bucket, provider}; each with `state` and its companion when it is not ready. Each node's keys are in `nodes`",
      "nodes": {
       "machine": {
        "short": {
         "always": [
-         "machine"
+         "machine",
+         "platform"
         ],
         "sometimes": [
+         "cpus",
+         "memory_bytes",
          "state",
          "op",
          "reason",
@@ -182,6 +185,8 @@
        "long": [
         "machine",
         "platform",
+        "cpus",
+        "memory_bytes",
         "state",
         "op",
         "reason",
@@ -193,11 +198,12 @@
       "store": {
        "short": {
         "always": [
-         "store"
+         "store",
+         "engine"
         ],
         "sometimes": [
-         "engine",
          "projects",
+         "connections",
          "state",
          "op",
          "blocked_by",
@@ -208,20 +214,23 @@
        "long": [
         "store",
         "engine",
+        "projects",
+        "connections",
         "state",
         "op",
         "blocked_by",
         "reason",
-        "fix",
-        "projects"
+        "fix"
        ]
       },
       "sandbox": {
        "short": {
         "always": [
-         "sandbox"
+         "sandbox",
+         "project"
         ],
         "sometimes": [
+         "image",
          "workspaces",
          "workspaces_not_listed",
          "state",
@@ -234,19 +243,21 @@
        "long": [
         "sandbox",
         "project",
+        "image",
+        "workspaces",
+        "workspaces_not_listed",
         "state",
         "op",
         "blocked_by",
         "reason",
-        "fix",
-        "workspaces",
-        "workspaces_not_listed"
+        "fix"
        ]
       },
       "bucket": {
        "short": {
         "always": [
-         "bucket"
+         "bucket",
+         "provider"
         ],
         "sometimes": []
        },
@@ -259,7 +270,31 @@
        "scalar": "project"
       },
       "workspaces": {
-       "scalar": "workspace"
+       "short": {
+        "always": [
+         "workspace",
+         "branch"
+        ],
+        "sometimes": []
+       },
+       "long": [
+        "workspace",
+        "branch"
+       ]
+      },
+      "connections": {
+       "short": {
+        "always": [
+         "url"
+        ],
+        "sometimes": [
+         "machine"
+        ]
+       },
+       "long": [
+        "machine",
+        "url"
+       ]
       }
      },
      "example": {
@@ -267,6 +302,8 @@
        {
         "machine": "native",
         "platform": "native",
+        "cpus": null,
+        "memory_bytes": null,
         "state": "ready",
         "op": null,
         "reason": null,
@@ -275,36 +312,43 @@
          {
           "store": "qv2-store",
           "engine": "sqlite",
+          "projects": [
+           "qv2-strata",
+           "qv2-probe"
+          ],
+          "connections": null,
           "state": "ready",
           "op": null,
           "blocked_by": null,
           "reason": null,
-          "fix": null,
-          "projects": [
-           "qv2-strata",
-           "qv2-probe"
-          ]
+          "fix": null
          }
         ],
         "sandboxes": [
          {
           "sandbox": "tests",
           "project": "qv2-store/qv2-strata",
+          "image": "node:22",
+          "workspaces": [
+           {
+            "workspace": "tests:agent",
+            "branch": "agent"
+           }
+          ],
+          "workspaces_not_listed": false,
           "state": "ready",
           "op": null,
           "blocked_by": null,
           "reason": null,
-          "fix": null,
-          "workspaces": [
-           "tests:agent"
-          ],
-          "workspaces_not_listed": false
+          "fix": null
          }
         ]
        },
        {
         "machine": "docker",
         "platform": "docker",
+        "cpus": null,
+        "memory_bytes": null,
         "state": "stopped",
         "op": null,
         "reason": null,
@@ -313,6 +357,10 @@
          {
           "store": "sim-website",
           "engine": "sqlite",
+          "projects": [
+           "website"
+          ],
+          "connections": null,
           "state": "blocked",
           "op": null,
           "blocked_by": {
@@ -320,16 +368,16 @@
            "reason": "stopped"
           },
           "reason": null,
-          "fix": null,
-          "projects": [
-           "website"
-          ]
+          "fix": null
          }
         ],
         "sandboxes": [
          {
           "sandbox": "sim-1",
           "project": "sim-website/website",
+          "image": "node:22",
+          "workspaces": null,
+          "workspaces_not_listed": false,
           "state": "blocked",
           "op": null,
           "blocked_by": {
@@ -337,9 +385,7 @@
            "reason": "stopped"
           },
           "reason": null,
-          "fix": null,
-          "workspaces": null,
-          "workspaces_not_listed": false
+          "fix": null
          }
         ]
        }
@@ -348,14 +394,20 @@
        {
         "store": "demo-experiments",
         "engine": "postgresql",
+        "projects": [
+         "abc"
+        ],
+        "connections": [
+         {
+          "machine": null,
+          "url": "postgres://db.internal:5432/experiments"
+         }
+        ],
         "state": "ready",
         "op": null,
         "blocked_by": null,
         "reason": null,
-        "fix": null,
-        "projects": [
-         "abc"
-        ]
+        "fix": null
        }
       ],
       "buckets": [
@@ -403,12 +455,12 @@
      "{\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182}",
      "no home yet: {\"home\":\"/Users/me/.layerfs\",\"state\":\"broken\",\"version\":\"2.0.0\",\"reason\":\"missing\",\"fix\":\"layerfs home init\"}",
      "an older layout: {\"home\":\"/Users/me/.layerfs\",\"state\":\"broken\",\"version\":\"2.0.0\",\"reason\":\"outdated\",\"fix\":\"layerfs home init\"}",
-     "--with tree: {\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182,\"tree\":{\"machines\":[{\"machine\":\"native\",\"stores\":[{\"store\":\"qv2-store\",\"projects\":[\"qv2-strata\",\"qv2-probe\"]}],\"sandboxes\":[{\"sandbox\":\"tests\",\"workspaces\":[\"tests:agent\"]}]},{\"machine\":\"demo-build\",\"sandboxes\":[{\"sandbox\":\"build-1\",\"workspaces_not_listed\":true}]},{\"machine\":\"docker\",\"state\":\"stopped\",\"stores\":[{\"store\":\"sim-website\",\"projects\":[\"website\"],\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}],\"sandboxes\":[{\"sandbox\":\"sim-1\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}],\"stores\":[{\"store\":\"demo-experiments\",\"engine\":\"postgresql\",\"projects\":[\"abc\"]}],\"buckets\":[{\"bucket\":\"r2-main\"}]}}"
+     "--with tree: {\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182,\"tree\":{\"machines\":[{\"machine\":\"native\",\"platform\":\"native\",\"stores\":[{\"store\":\"qv2-store\",\"engine\":\"sqlite\",\"projects\":[\"qv2-strata\",\"qv2-probe\"]}],\"sandboxes\":[{\"sandbox\":\"tests\",\"project\":\"qv2-store/qv2-strata\",\"image\":\"node:22\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\"}]}]},{\"machine\":\"demo-build\",\"platform\":\"lima\",\"cpus\":4,\"memory_bytes\":8589934592,\"sandboxes\":[{\"sandbox\":\"build-1\",\"project\":\"demo-experiments/abc\",\"image\":\"node:22\",\"workspaces_not_listed\":true}]},{\"machine\":\"docker\",\"platform\":\"docker\",\"state\":\"stopped\",\"stores\":[{\"store\":\"sim-website\",\"engine\":\"sqlite\",\"projects\":[\"website\"],\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}],\"sandboxes\":[{\"sandbox\":\"sim-1\",\"project\":\"sim-website/website\",\"image\":\"node:22\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}],\"stores\":[{\"store\":\"demo-experiments\",\"engine\":\"postgresql\",\"projects\":[\"abc\"],\"connections\":[{\"url\":\"postgres://db.internal:5432/experiments\"},{\"machine\":\"demo-build\",\"url\":\"postgres://10.0.2.2:5432/experiments\"}]}],\"buckets\":[{\"bucket\":\"r2-main\",\"provider\":\"r2\"}]}}"
     ],
     "long": "{\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182,\"reason\":null,\"fix\":null,\"message\":null,\"layout\":3,\"mode\":\"0700\",\"bundle\":{\"path\":\"/Users/me/Library/Caches/layerfs/2.0.0/linux\",\"source\":\"cache\",\"present\":true,\"commit\":\"caff58a43b\",\"dirty\":false,\"matches\":true},\"daemon\":{\"path\":\"/Users/me/Library/Caches/layerfs/2.0.0/darwin/layerfs-daemon\",\"source\":\"default\",\"present\":true,\"commit\":\"caff58a43b\",\"dirty\":false,\"matches\":true},\"cache\":{\"path\":\"/Users/me/Library/Caches/layerfs\"}}"
    },
    "dropped": [],
-   "new_work": "`generation` is new: a counter kept in the home and moved under the home's lock by every record write (machines, Stores, projects, Sandboxes, the Workspaces the home records, buckets, saved logins). `state` with `reason` and `fix` is new: today `home.state` is `missing`, `current`, `needs_conversion` or `unknown`, and a home it cannot read is answered as `unknown`, not refused. `version` is new in the answer (the build has it). `--with tree` is new: one read of the home's records that derives each node's state as `machine get`, `store get` and `sandbox list` derive it, with no probe. `--with platforms` is today's `machine.platforms` answer under `platforms`, with `platforms` as `items`, `kernel` as `route` and `options[].name` as `option`. Flattening: `home {path, state, layout, mode}` becomes the top-level `home` (the path), `state`, `layout` and `mode`; `bundle.dir` becomes `bundle.path`. `warnings` and `home.mode_ok` leave the answer: `bundle.present`, `bundle.matches` and `daemon.matches` carry the facts, and `home doctor` reports them as findings. `daemon` is null where this computer runs no native daemon, as today. `message` is the sentence behind a `broken` state (today's `HomeMissing` or `HomeNeedsConversion` warning text) and null when `ready`.",
+   "new_work": "`generation` is new: a counter kept in the home and moved under the home's lock by every record write (machines, Stores, projects, Sandboxes, the Workspaces the home records, buckets, saved logins). A live read writes a record only when the derived state word or its reason changes, so polling does not move it; `observed_at` goes to an observation file beside the record, outside the counter. An op whose owner died is ignored on read without a write, so the counter does not signal that. `state` with `reason` and `fix` is new: today `home.state` is `missing`, `current`, `needs_conversion` or `unknown`, and a home it cannot read is answered as `unknown`, not refused. `version` is new in the answer (the build has it). `--with tree` is new: one read of the home's records that derives each node's state as `machine get`, `store get` and `sandbox list` derive it without a probe, from the last state word and reason each record holds. A node carries only what records hold: a machine's `cpus` and `memory_bytes` (null where its record has none), a PostgreSQL Store's `connections` ({machine, url}; `machine` is null for the home's own address), a Sandbox's `image`, a bucket's `provider`. `--with platforms` is today's `machine.platforms` answer under `platforms`, with `platforms` as `items`, `kernel` as `route` and `options[].name` as `option`. Flattening: `home {path, state, layout, mode}` becomes the top-level `home` (the path), `state`, `layout` and `mode`; `bundle.dir` becomes `bundle.path`. `warnings` and `home.mode_ok` leave the answer: `bundle.present`, `bundle.matches` and `daemon.matches` carry the facts, and `home doctor` reports them as findings. `daemon` is null where this computer runs no native daemon, as today. `message` is the sentence behind a `broken` state (today's `HomeMissing` or `HomeNeedsConversion` warning text) and null when `ready`.",
    "nested": {
     "bundle": {
      "long": [
@@ -435,23 +487,30 @@
       "path"
      ]
     }
+   },
+   "states": {
+    "reasons": [
+     "missing",
+     "outdated"
+    ],
+    "ops": []
    }
   },
   {
    "call": "home.log",
    "badge": "moved",
-   "note": "was <code>logs.list</code>: the calls made against this home, newest first; <code>next_cursor</code> reads older ones. All six filters stay (the UI uses each). <code>op</code> is the call's name; <code>outcome</code> is the result's own word (<code>committed</code>, <code>mounted</code>, …), <code>ok</code> when the result names none, or <code>refused</code> with <code>error</code> holding the refusal code; <code>--outcome</code> matches either. <code>client</code> is <code>cli</code>, <code>node</code>, <code>python</code> or <code>rust</code>. The long form's <code>skipped</code> counts lines that could not be read. A cursor from before <code>home clear-log</code> is refused <code>InvalidInput</code>. Writes no call-log line",
+   "note": "was <code>logs.list</code>: the calls made against this home, newest first; <code>next_cursor</code> reads older ones. All six filters stay (the UI uses each). <code>call</code> is the call's name (<code>--call</code> takes a family alone, or <code>family.call</code>, as today's <code>--op</code>); <code>outcome</code> is the result's own word (<code>committed</code>, <code>mounted</code>, …), <code>ok</code> when the result names none, or <code>refused</code> with <code>error</code> holding the refusal code; <code>--outcome</code> matches either. <code>client</code> is <code>cli</code>, <code>node</code>, <code>python</code> or <code>rust</code>. <code>tag</code> is the value the call was made with as the global option <code>log_tag</code> (an argument in Node and Python; the shell reads the setting <code>LAYERFS_LOGS_TAG</code>), and <code>--tag</code> matches the whole tag or a prefix ending in <code>:</code>. <code>argv</code> holds the call's words with every argument marked <code>redact</code> as a byte count (<code>&lt;10 bytes&gt;</code>), never its value. The long form's <code>skipped</code> counts lines that could not be read. A cursor from before <code>home clear-log</code> is refused <code>InvalidInput</code>. Writes no call-log line",
    "today": [
     "logs.list"
    ],
    "help": "the calls made against this home, newest first",
-   "cli": "layerfs home log [--op O] [--project P] [--client C] [--tag T] [--outcome O] [--since T] [--limit 200] [--cursor C]",
+   "cli": "layerfs home log [--call C] [--project P] [--client C] [--tag T] [--outcome O] [--since T] [--limit 200] [--cursor C]",
    "positionals": [],
    "options": [
     {
-     "name": "op",
+     "name": "call",
      "kind": "Text",
-     "help": "only this call, such as `file.write`"
+     "help": "only this call: a family alone (`file`), or `family.call` (`file.write`)"
     },
     {
      "name": "project",
@@ -466,7 +525,7 @@
     {
      "name": "tag",
      "kind": "Text",
-     "help": "only calls made with this log tag"
+     "help": "only calls made with this log tag: the whole tag, or a prefix that ends in `:`"
     },
     {
      "name": "outcome",
@@ -512,7 +571,7 @@
    "item": {
     "short": {
      "always": [
-      "op",
+      "call",
       "outcome",
       "logged_at"
      ],
@@ -522,7 +581,7 @@
      ]
     },
     "long": [
-     "op",
+     "call",
      "outcome",
      "logged_at",
      "project",
@@ -536,13 +595,19 @@
    },
    "examples": {
     "short": [
-     "{\"items\":[{\"op\":\"file.write\",\"outcome\":\"committed\",\"logged_at\":\"2026-11-18T09:16:59Z\",\"project\":\"shop/api\"},{\"op\":\"workspace.commit\",\"outcome\":\"refused\",\"logged_at\":\"2026-11-18T09:02:11Z\",\"project\":\"shop/api\",\"error\":\"Conflict\"}]}",
-     "more pages: {\"items\":[{\"op\":\"sandbox.create\",\"outcome\":\"created\",\"logged_at\":\"2026-11-18T09:02:11Z\",\"project\":\"shop/api\"}],\"next_cursor\":\"MTc5NDc4MTM3NjU0MA\"}"
+     "{\"items\":[{\"call\":\"file.write\",\"outcome\":\"committed\",\"logged_at\":\"2026-11-18T09:16:59Z\",\"project\":\"shop/api\"},{\"call\":\"workspace.commit\",\"outcome\":\"refused\",\"logged_at\":\"2026-11-18T09:02:11Z\",\"project\":\"shop/api\",\"error\":\"Conflict\"}]}",
+     "more pages: {\"items\":[{\"call\":\"sandbox.create\",\"outcome\":\"created\",\"logged_at\":\"2026-11-18T09:02:11Z\",\"project\":\"shop/api\"}],\"next_cursor\":\"MTc5NDc4MTM3NjU0MA\"}"
     ],
-    "long": "{\"items\":[{\"op\":\"file.write\",\"outcome\":\"committed\",\"logged_at\":\"2026-11-18T09:16:59Z\",\"project\":\"shop/api\",\"error\":null,\"duration_ms\":41,\"client\":\"cli\",\"argv\":[\"file\",\"write\",\"shop/api\",\"agent\",\"/src/app.ts\"],\"commit\":\"12d1c0ff\",\"tag\":null}],\"next_cursor\":null,\"skipped\":0}"
+    "long": "{\"items\":[{\"call\":\"file.write\",\"outcome\":\"committed\",\"logged_at\":\"2026-11-18T09:16:59Z\",\"project\":\"shop/api\",\"error\":null,\"duration_ms\":41,\"client\":\"cli\",\"argv\":[\"file\",\"write\",\"shop/api\",\"agent\",\"<10 bytes>\",\"<24 bytes>\"],\"commit\":\"12d1c0ff\",\"tag\":null}],\"next_cursor\":null,\"skipped\":0}"
    },
-   "dropped": [],
-   "new_work": "The call moves from the `logs` family; the reader and its filters are today's. Changes to a row: `at` (milliseconds) to `logged_at`, `ms` to `duration_ms`, `lines` to `items`, `next` and `has_more` to `next_cursor`. `op` and `project` are new as keys: a line stores the call's `argv`, and the filters already derive both from it. `outcome` splits: today it is `ok` or the refusal code, with the result's word in `kind`; now the word is `outcome` and the code is `error`. `v` and `layer` leave the row. The default page is 200 lines (100 today)."
+   "dropped": [
+    {
+     "today": "--op",
+     "now": "--call",
+     "why": "`op` is only ever the state companion; a log row names its call"
+    }
+   ],
+   "new_work": "The call moves from the `logs` family; the reader and its filters are today's. Changes to a row: `at` (milliseconds) to `logged_at`, `ms` to `duration_ms`, `lines` to `items`, `next` and `has_more` to `next_cursor`. `call` and `project` are new as keys: a line stores the call's `argv`, and the filters already derive both from it; `--op` becomes `--call`. Redaction is today's (byte counts in `argv`); the list of redacted arguments moves from one name list to each argument's `redact` field. `outcome` splits: today it is `ok` or the refusal code, with the result's word in `kind`; now the word is `outcome` and the code is `error`. `v` and `layer` leave the row. The default page is 200 lines (100 today)."
   },
   {
    "call": "home.clear_log",
@@ -621,10 +686,31 @@
      "problems: {\"findings\":[{\"machine\":\"demo-build\",\"check\":\"machine.worker.compatibility\",\"severity\":\"error\",\"message\":\"worker is from another build\",\"fix\":\"layerfs machine stop demo-build && layerfs machine start demo-build\"},{\"sandbox\":\"old-run\",\"check\":\"home.records\",\"severity\":\"warning\",\"message\":\"its record names machine lab, which has no record\",\"fix\":\"layerfs sandbox remove old-run\"}]}",
      "a check gave no verdict: {\"not_checked\":[{\"store\":\"demo-experiments\",\"check\":\"store.connection\",\"reason\":\"timeout\"}]}"
     ],
-    "long": "{\"ok\":true,\"findings\":[],\"not_checked\":[],\"status\":\"ok\",\"counts\":{\"ok\":5,\"notice\":0,\"warning\":0,\"error\":0,\"not_checked\":0},\"observed_at\":\"2026-11-18T09:16:59Z\",\"tree\":{\"home\":\"/Users/me/.layerfs\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"home.build\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.prerequisites\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.bundle\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.layout\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.records\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.capacity\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null,\"machines\":[{\"machine\":\"native\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"machine.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.state\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.capacity\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null},{\"machine\":\"docker\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"machine.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.state\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}],\"stores\":[{\"store\":\"demo-experiments\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"store.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.schema\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.connection\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}],\"buckets\":[{\"bucket\":\"r2-main\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"bucket.configuration\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"bucket.credentials\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"bucket.transport\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"bucket.list\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}]}}"
+    "long": "{\"ok\":true,\"findings\":[],\"not_checked\":[],\"status\":\"ok\",\"counts\":{\"ok\":5,\"notice\":0,\"warning\":0,\"error\":0,\"not_checked\":0},\"observed_at\":\"2026-11-18T09:16:59Z\",\"tree\":{\"home\":\"/Users/me/.layerfs\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"home.build\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.prerequisites\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.layout\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.records\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.bundle\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.native_daemon\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.capacity\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null,\"machines\":[{\"machine\":\"native\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"machine.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.state\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null},{\"machine\":\"docker\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"machine.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.state\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}],\"stores\":[{\"store\":\"demo-experiments\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"store.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.schema\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.connection\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}],\"buckets\":[{\"bucket\":\"r2-main\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"bucket.configuration\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"bucket.credentials\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"bucket.transport\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"bucket.list\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}]}}"
    },
-   "dropped": [],
-   "new_work": "The table call and the one doctor shape are new: today `layerfs doctor` is a shell command outside the call table that answers two reports (the whole-home sweep `{ok, findings, leftovers}` and the per-target `{checks, findings, counts, ...}`). The home's own checks exist as the `host` target and are renamed `home.*` (`checks.home`); `host.remote`, which is always skipped today, is left out. Outcomes map: `pass` to `ok`, `fail` to its finding's severity, `unknown` and `skipped` to `not_checked` with a `reason` (or left out when the check does not apply), `blocked` to `not_checked` with `blocked_by`. New work: running the shallow check of each machine, PostgreSQL Store and bucket inside this call (today one call is one target), each with its own time budget; one event per finished thing; a records finding named by the thing's own word (today `entity {kind, name}`). The leftover list leaves the report for `home.leftovers`.",
+   "dropped": [
+    {
+     "today": "--timeout (layerfs doctor host)",
+     "now": "",
+     "why": "each thing has its own time budget (30 s for a whole call today, 10 s for a connection check)"
+    },
+    {
+     "today": "--quick (layerfs doctor store integrity)",
+     "now": "",
+     "why": "the whole-Store scan leaves the doctors; `store doctor` stops after the schema check"
+    },
+    {
+     "today": "--write-test (layerfs doctor backup connection)",
+     "now": "backup doctor --full",
+     "why": "R5"
+    },
+    {
+     "today": "--text (layerfs doctor)",
+     "now": "--text",
+     "why": "the global option, as on every call"
+    }
+   ],
+   "new_work": "The table call and the one doctor shape are new: today `layerfs doctor` is a shell command outside the call table that answers two reports (the whole-home sweep `{ok, findings, leftovers}` and the per-target `{checks, findings, counts, ...}`). The home's own checks exist as the `host` target and are renamed `home.*` (`checks.home`, in the order they run); `host.bundle_hashes` and `host.remote`, which are always skipped today, are left out. `home.capacity` measures and applies no threshold today: a finding for a nearly full disk needs one, which is new. Outcomes map: `pass` to `ok`, `fail` to its finding's severity, `unknown` and `skipped` to `not_checked` with a `reason` (or left out when the check does not apply), `blocked` to `not_checked` with `blocked_by`. New work: running the shallow check of each machine, PostgreSQL Store and bucket inside this call (today one call is one target), each with its own time budget; one event per finished thing; a records finding named by the thing's own word (today `entity {kind, name}`). The leftover list leaves the report for `home.leftovers`.",
    "off_table": [
     {
      "today": "layerfs doctor",
@@ -657,44 +743,65 @@
      "why": "one bucket doctor"
     },
     {
-     "today": "--timeout",
+     "today": "host.build · host.prerequisites · host.layout · host.records · host.bundle · host.native_daemon · host.artifacts · host.capacity",
+     "now": "home.*",
+     "why": "a check is named after the thing it checks"
+    },
+    {
+     "today": "host.bundle_hashes · host.remote",
      "now": "",
-     "why": "each thing has its own time budget (30 s for a whole call today, 10 s for a connection check)"
-    },
-    {
-     "today": "--quick",
-     "now": "",
-     "why": "the whole-Store scan leaves the doctors; `store doctor` stops after the schema check"
-    },
-    {
-     "today": "--write-test",
-     "now": "layerfs backup doctor <bucket> --full",
-     "why": "R5"
-    },
-    {
-     "today": "--text",
-     "now": "--text",
-     "why": "the global option, as on every call"
+     "why": "always skipped today: a check that is never made is left out"
     }
    ],
    "checks": {
     "home": [
-     "home.build",
-     "home.prerequisites",
-     "home.bundle",
-     "home.bundle_hashes",
-     "home.native_daemon",
-     "home.artifacts",
-     "home.layout",
-     "home.records",
-     "home.capacity"
+     {
+      "check": "home.build",
+      "what": "the calling program exists and can run",
+      "full_only": false
+     },
+     {
+      "check": "home.prerequisites",
+      "what": "what a Sandbox on this computer needs is installed",
+      "full_only": false
+     },
+     {
+      "check": "home.layout",
+      "what": "the home folder is a current-layout home this build reads",
+      "full_only": false
+     },
+     {
+      "check": "home.records",
+      "what": "every record in the home: references between records, file modes, leases and half-finished operations",
+      "full_only": false
+     },
+     {
+      "check": "home.bundle",
+      "what": "the Linux bundle is present and complete, where a recorded machine needs it",
+      "full_only": false
+     },
+     {
+      "check": "home.native_daemon",
+      "what": "the daemon for this computer is present and from this build",
+      "full_only": false
+     },
+     {
+      "check": "home.artifacts",
+      "what": "each machine's configured daemon file is present and can run",
+      "full_only": false
+     },
+     {
+      "check": "home.capacity",
+      "what": "free space on the disk that holds the home can be measured",
+      "full_only": false
+     }
     ]
    }
   },
   {
    "call": "home.leftovers",
    "badge": "new",
-   "note": "what earlier runs left behind: on this computer (<code>native</code>) and on each running machine, or on the one <code>--machine</code> names. <code>leftover</code> is the id <code>home prune</code> takes (<code>&lt;machine&gt;:&lt;kind&gt;:&lt;name&gt;</code>); <code>kind</code> is <code>run-folder</code>, <code>empty-root</code>, <code>init-copy</code>, <code>backup-staging</code>, <code>image-tmp</code> or <code>image-part</code>; <code>size</code> is left out when it was not measured; <code>report_only:true</code> marks one <code>home prune</code> would refuse now (the copy of an Init whose outcome is not settled; the long form's <code>removable_at</code> says when, if known). Not paged: each machine is one bounded walk (20,000 entries or 2 s). A machine that was not walked, or whose walk hit its bound, is in <code>not_checked</code> with <code>blocked_by</code>, or with <code>reason</code> (<code>timeout</code>, <code>busy</code>, <code>lost</code>); a stopped machine is not started. Nothing left answers <code>{\"items\":[]}</code>. No doctor reports leftovers",
+   "note": "what earlier runs left behind: on this computer (<code>native</code>) and on each running machine, or on the one <code>--machine</code> names. <code>leftover</code> is the id <code>home prune</code> takes (<code>&lt;machine&gt;:&lt;kind&gt;:&lt;name&gt;</code>); <code>kind</code> is <code>run_folder</code>, <code>empty_root</code>, <code>init_copy</code>, <code>backup_staging</code>, <code>image_tmp</code> or <code>image_part</code>; <code>size</code> is left out when it was not measured; <code>report_only:true</code> marks one <code>home prune</code> would refuse now (the copy of an Init whose outcome is not settled; the long form's <code>removable_at</code> says when, if known). Not paged: each machine is one bounded walk (20,000 entries or 2 s). A machine that was not walked, or whose walk hit its bound, is named in <code>not_listed</code> as <code>{machine, blocked_by | reason, message}</code> (<code>reason</code> is <code>timeout</code>, <code>busy</code> or <code>lost</code>); a stopped machine is not started. Nothing left answers <code>{\"items\":[]}</code>. No doctor reports leftovers",
    "today": [],
    "help": "what earlier runs left behind on this computer and on each running machine",
    "cli": "layerfs home leftovers [--machine M]",
@@ -717,12 +824,12 @@
      "items"
     ],
     "sometimes": [
-     "not_checked"
+     "not_listed"
     ]
    },
    "long": [
     "items",
-    "not_checked",
+    "not_listed",
     "observed_at"
    ],
    "item": {
@@ -749,18 +856,19 @@
    },
    "examples": {
     "short": [
-     "{\"items\":[{\"leftover\":\"native:run-folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344},{\"leftover\":\"dev:init-copy:shop-9a1f\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":524288000,\"report_only\":true}]}",
-     "a machine was not walked: {\"items\":[{\"leftover\":\"native:run-folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344}],\"not_checked\":[{\"machine\":\"docker\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}"
+     "{\"items\":[{\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344},{\"leftover\":\"dev:init_copy:shop-9a1f\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":524288000,\"report_only\":true}]}",
+     "a machine was not walked: {\"items\":[{\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344}],\"not_listed\":[{\"machine\":\"docker\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"},\"message\":\"machine docker is stopped\"}]}"
     ],
-    "long": "{\"items\":[{\"leftover\":\"native:run-folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344,\"report_only\":false,\"removable_at\":null,\"kind\":\"run-folder\",\"machine\":\"native\",\"path\":\"/Users/me/.layerfs/machine/native/run/tests-5f0c7a1e\"}],\"not_checked\":[],\"observed_at\":\"2026-11-18T09:16:59Z\"}"
+    "long": "{\"items\":[{\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344,\"report_only\":false,\"removable_at\":null,\"kind\":\"run_folder\",\"machine\":\"native\",\"path\":\"/Users/me/.layerfs/machine/native/run/tests-5f0c7a1e\"}],\"not_listed\":[],\"observed_at\":\"2026-11-18T09:16:59Z\"}"
    },
    "dropped": [],
-   "new_work": "The call is new; the walk is not. Today the list is part of the shell's `layerfs doctor` report (`findings[].leftover` and a `leftovers` row per machine): one bounded walk on `native` and one through each running machine's worker, with stopped and unanswering machines passed over in silence. New: a table call with `--machine`, and `not_checked` for a machine that was passed over or whose walk was cut (`complete: false` today). Renames per entry: `id` to `leftover`, `bytes` to `size`, `age` (seconds) to `modified_at`, `fixable: false` to `report_only: true`, `not_before` (milliseconds) to `removable_at`. The per-machine counts of image locks and unmount markers leave the answer.",
+   "new_work": "The call is new; the walk is not. Today the list is part of the shell's `layerfs doctor` report (`findings[].leftover` and a `leftovers` row per machine): one bounded walk on `native` and one through each running machine's worker, with stopped and unanswering machines passed over in silence. New: a table call with `--machine`, and `not_listed` for a machine that was passed over or whose walk was cut (`complete: false` today). The kinds are snake_case, in `kind` and inside the id (`run-folder` and the rest have hyphens today). Renames per entry: `id` to `leftover`, `bytes` to `size`, `age` (seconds) to `modified_at`, `fixable: false` to `report_only: true`, `not_before` (milliseconds) to `removable_at`. The per-machine counts of image locks and unmount markers leave the answer.",
    "nested": {
-    "not_checked": {
+    "not_listed": {
      "short": {
       "always": [
-       "machine"
+       "machine",
+       "message"
       ],
       "sometimes": [
        "blocked_by",
@@ -770,10 +878,19 @@
      "long": [
       "machine",
       "blocked_by",
-      "reason"
+      "reason",
+      "message"
      ]
     }
-   }
+   },
+   "kinds": [
+    "run_folder",
+    "empty_root",
+    "init_copy",
+    "backup_staging",
+    "image_tmp",
+    "image_part"
+   ]
   },
   {
    "call": "home.prune",
@@ -819,7 +936,7 @@
      "{\"freed_bytes\":11833344}",
      "its size was not measured: {\"ok\":true}"
     ],
-    "long": "{\"ok\":true,\"freed_bytes\":11833344,\"outcome\":\"removed\",\"leftover\":\"native:run-folder:tests-5f0c7a1e\",\"kind\":\"run-folder\",\"machine\":\"native\",\"path\":\"/Users/me/.layerfs/machine/native/run/tests-5f0c7a1e\"}"
+    "long": "{\"ok\":true,\"freed_bytes\":11833344,\"outcome\":\"removed\",\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"kind\":\"run_folder\",\"machine\":\"native\",\"path\":\"/Users/me/.layerfs/machine/native/run/tests-5f0c7a1e\"}"
    },
    "dropped": [
     {
@@ -828,7 +945,7 @@
      "why": "a thing goes by its own word"
     }
    ],
-   "new_work": "No new capability: the call moves from the `doctor` family. `bytes` becomes `freed_bytes`, `id` becomes `leftover`, `removed: true` becomes `outcome: removed`."
+   "new_work": "No new capability: the call moves from the `doctor` family. `bytes` becomes `freed_bytes`, `id` becomes `leftover`, `removed: true` becomes `outcome: removed`. The id carries the snake_case kind (`native:run_folder:...`)."
   }
  ]
 }

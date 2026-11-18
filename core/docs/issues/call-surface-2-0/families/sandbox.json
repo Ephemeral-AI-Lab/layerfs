@@ -13,7 +13,7 @@
   {
    "call": "sandbox.create",
    "badge": "extended",
-   "note": "with <code>--mount B</code> the call also mounts Branch <code>B</code> and answers the Workspace handle and its path, as <code>workspace mount</code> does; without it <code>{\"ok\":true}</code>. If the Sandbox starts and the mount is refused, the Sandbox is kept (<code>ready</code>): the call is refused with the mount's own code, and the refusal carries <code>sandbox</code> and a <code>fix</code> naming <code>layerfs workspace mount</code>. <code>--machine</code> defaults to the machine of the project's sqlite Store; a project of a PostgreSQL Store runs on this computer (<code>native</code>) without it, as today: the Store itself records no machine. The names <code>native</code>, <code>docker</code> and <code>*.root</code> stay refused. Progress phases as today: <code>inspect</code>, <code>export</code>, <code>send</code> (bytes), <code>unpack</code>, <code>start</code>, then <code>mount</code> with <code>--mount</code>",
+   "note": "with <code>--mount B</code> the call also mounts Branch <code>B</code> and answers the Workspace handle and its path, as <code>workspace mount</code> does, under the same default name (the Branch's name made valid); the call has no name option of its own, so a name already in use is the mount's <code>Exists</code> refusal, whose <code>fix</code> names <code>workspace mount … --name</code>; without it <code>{\"ok\":true}</code>. If the Sandbox starts and the mount is refused, the Sandbox is kept (<code>ready</code>): the call is refused with the mount's own code, and the refusal carries <code>sandbox</code> and a <code>fix</code> naming <code>layerfs workspace mount</code>. <code>--machine</code> defaults to the machine of the project's sqlite Store; a project of a PostgreSQL Store runs on this computer (<code>native</code>) without it, as today: the Store itself records no machine. The names <code>native</code>, <code>docker</code> and <code>*.root</code> stay refused. Progress phases as today: <code>inspect</code>, <code>export</code>, <code>send</code> (bytes), <code>unpack</code>, <code>start</code>, then <code>mount</code> with <code>--mount</code>",
    "today": [
     "sandbox.create"
    ],
@@ -43,7 +43,7 @@
     {
      "name": "mount",
      "kind": "Name",
-     "help": "also mount this Branch; the Workspace is named after the Branch, and the answer is its handle and path"
+     "help": "also mount this Branch; the Workspace gets the default name, the Branch's name made valid, and the answer is its handle and path"
     }
    ],
    "stdin": null,
@@ -91,7 +91,7 @@
      "why": "anything optional is an option"
     }
    ],
-   "new_work": "`--mount` is new: today create and mount are two calls. One call must start the Sandbox, record it, then run the mount; a refused mount must leave the Sandbox recorded and ready and answer a refusal that carries `sandbox` and a `fix` (`layerfs workspace mount <sandbox> <branch>`). The mount's default name (the Branch) is new work of `workspace.mount`. `ok` is true in every long answer; `workspace` and `path` are null there without `--mount`. The default machine is today's: the sqlite Store's machine, else `native`. The record's `runtime` (the same word as `backend`) and `id` leave the answer; `created` (milliseconds) becomes `created_at`.",
+   "new_work": "`--mount` is new: today create and mount are two calls. One call must start the Sandbox, record it, then run the mount; a refused mount must leave the Sandbox recorded and ready and answer a refusal that carries `sandbox` and a `fix` (`layerfs workspace mount <sandbox> <branch>`). The mount's default name (the Branch's name made valid) is new work of `workspace.mount`; this call takes no name option. `ok` is true in every long answer; `workspace` and `path` are null there without `--mount`. The default machine is today's: the sqlite Store's machine, else `native`. The record's `runtime` (the same word as `backend`) and `id` leave the answer; `created` (milliseconds) becomes `created_at`.",
    "refusals": [
     {
      "error": "the mount's own code (NotFound, Exists, Capacity, InvalidInput, Unavailable, ...)",
@@ -101,12 +101,16 @@
       "fix"
      ]
     }
-   ]
+   ],
+   "states": {
+    "reasons": [],
+    "ops": []
+   }
   },
   {
    "call": "sandbox.list",
    "badge": "extended",
-   "note": "records only: the call asks no machine. A row leaves <code>state</code> out when <code>ready</code>. <code>workspaces</code> are the handles of its mounted Workspaces, listed only where the home keeps the Workspace records (a Sandbox on <code>native</code>, or one reached directly) and the Sandbox is not <code>blocked</code>. Elsewhere the machine's worker keeps them: the row says <code>workspaces_not_listed:true</code> while that machine is ready, and <code>workspace list --sandbox S</code> asks it. A Sandbox on a stopped machine answers <code>blocked</code> with <code>blocked_by</code> naming the machine, and no Workspaces (long form: <code>workspaces</code> is null). <code>[project]</code> &rarr; <code>--project</code>; <code>--live</code> is gone: <code>sandbox get</code> asks one Sandbox, and <code>machine stats</code> counts a machine's running daemons",
+   "note": "records only: the call asks no machine. A row leaves <code>state</code> out when <code>ready</code>; the state is the last one a record holds, so <code>lost</code> or <code>not_answering</code> shows here only after a <code>sandbox get</code> saw it. <code>workspaces</code> are its mounted Workspaces, each <code>{workspace, branch}</code>, listed only where the home keeps the Workspace records (a Sandbox on <code>native</code>, or one reached directly) and the Sandbox is not <code>blocked</code>. Elsewhere the machine's worker keeps them: the row says <code>workspaces_not_listed:true</code> while that machine is ready, and <code>workspace list --sandbox S</code> asks it. A Sandbox on a stopped machine answers <code>blocked</code> with <code>blocked_by</code> naming the machine, and no Workspaces (long form: <code>workspaces</code> is null). <code>[project]</code> &rarr; <code>--project</code>; <code>--live</code> is gone: <code>sandbox get</code> asks one Sandbox, and <code>machine stats</code> counts a machine's running daemons",
    "today": [
     "sandbox.list"
    ],
@@ -189,10 +193,10 @@
    },
    "examples": {
     "short": [
-     "{\"items\":[{\"sandbox\":\"tests\",\"project\":\"shop/api\",\"workspaces\":[\"tests:agent\"]},{\"sandbox\":\"build-1\",\"project\":\"shop/api\",\"workspaces_not_listed\":true},{\"sandbox\":\"sim-1\",\"project\":\"sim-website/website\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}",
-     "more pages: {\"items\":[{\"sandbox\":\"tests\",\"project\":\"shop/api\",\"workspaces\":[\"tests:agent\"]}],\"next_cursor\":\"dGVzdHM\"}"
+     "{\"items\":[{\"sandbox\":\"tests\",\"project\":\"shop/api\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\"}]},{\"sandbox\":\"build-1\",\"project\":\"shop/api\",\"workspaces_not_listed\":true},{\"sandbox\":\"sim-1\",\"project\":\"sim-website/website\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}",
+     "more pages: {\"items\":[{\"sandbox\":\"tests\",\"project\":\"shop/api\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\"}]}],\"next_cursor\":\"dGVzdHM\"}"
     ],
-    "long": "{\"items\":[{\"sandbox\":\"tests\",\"project\":\"shop/api\",\"workspaces\":[\"tests:agent\"],\"workspaces_not_listed\":false,\"state\":\"ready\",\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"message\":null,\"machine\":\"dev\",\"platform\":\"lima\",\"image\":\"node:22\",\"created_at\":\"2026-11-18T09:02:11Z\"},{\"sandbox\":\"sim-1\",\"project\":\"sim-website/website\",\"workspaces\":null,\"workspaces_not_listed\":false,\"state\":\"blocked\",\"op\":null,\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"},\"reason\":null,\"fix\":null,\"message\":\"machine docker is stopped\",\"machine\":\"docker\",\"platform\":\"docker\",\"image\":\"node:22\",\"created_at\":\"2026-11-18T09:02:11Z\"}],\"next_cursor\":null}"
+    "long": "{\"items\":[{\"sandbox\":\"tests\",\"project\":\"shop/api\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\"}],\"workspaces_not_listed\":false,\"state\":\"ready\",\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"message\":null,\"machine\":\"dev\",\"platform\":\"lima\",\"image\":\"node:22\",\"created_at\":\"2026-11-18T09:02:11Z\"},{\"sandbox\":\"sim-1\",\"project\":\"sim-website/website\",\"workspaces\":null,\"workspaces_not_listed\":false,\"state\":\"blocked\",\"op\":null,\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"},\"reason\":null,\"fix\":null,\"message\":\"machine docker is stopped\",\"machine\":\"docker\",\"platform\":\"docker\",\"image\":\"node:22\",\"created_at\":\"2026-11-18T09:02:11Z\"}],\"next_cursor\":null}"
    },
    "dropped": [
     {
@@ -216,17 +220,40 @@
      "why": "a state comes from records; `sandbox get` asks one Sandbox and `machine stats` counts a machine's running daemons"
     }
    ],
-   "new_work": "`state` and its companions are new on a row: today a row carries the record's own word (`creating`, `closing`, `unresolved`, `gone`, `running`). From records: a recorded `op` is `busy` (`op.name` is `create` or `remove`), an operation whose outcome is not known is `broken` with `reason: unresolved`, a record with no runtime id is `broken` with `reason: missing`, a record of the retired docker backend is `broken` with `reason: unsupported`, and a machine that is not ready makes it `blocked`; every `fix` is `layerfs sandbox remove <sandbox>`, and the long form's `message` is the sentence behind a `blocked` or `broken` state. `workspaces` and `workspaces_not_listed` are new: the handles come from the Workspace records the home keeps, which needs every Workspace to have a name (new work of `workspace.mount`). `--machine` is new. `--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50).",
+   "new_work": "`state` and its companions are new on a row: today a row carries the record's own word (`creating`, `closing`, `unresolved`, `gone`, `running`). From records: a recorded `op` is `busy` (`op.name` is `create` or `remove`), an operation whose outcome is not known is `broken` with `reason: unresolved`, a record with no runtime id is `broken` with `reason: missing`, a record of the retired docker backend is `broken` with `reason: unsupported`, and a machine that is not ready makes it `blocked`; `broken` with `reason: lost` or `not_answering` appears once a `sandbox get` saw it and wrote it to the record; every `fix` is `layerfs sandbox remove <sandbox>`, and the long form's `message` is the sentence behind a `blocked` or `broken` state. `workspaces` and `workspaces_not_listed` are new: each handle and Branch come from the Workspace records the home keeps, which needs every Workspace to have a name (new work of `workspace.mount`). `--machine` is new. `--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50).",
    "nested": {
     "workspaces": {
-     "scalar": "workspace"
+     "short": {
+      "always": [
+       "workspace",
+       "branch"
+      ],
+      "sometimes": []
+     },
+     "long": [
+      "workspace",
+      "branch"
+     ]
     }
+   },
+   "states": {
+    "reasons": [
+     "unresolved",
+     "missing",
+     "unsupported",
+     "lost",
+     "not_answering"
+    ],
+    "ops": [
+     "create",
+     "remove"
+    ]
    }
   },
   {
    "call": "sandbox.get",
    "badge": "reshaped",
-   "note": "asks the Sandbox's own side, as today: its daemon lists the Workspaces. No paging: a Sandbox holds at most 16 Workspaces (<code>workspace_capacity</code>). Each Workspace answers its handle, its Branch and the exec ids of the commands <code>running</code> in it; a Workspace leaves <code>state</code> out when <code>ready</code> (<code>busy</code> while it mounts, commits or unmounts; <code>broken</code> after a failure). On a machine that is not ready the Sandbox answers <code>blocked</code> and no Workspaces (long form: <code>workspaces</code> is null); a machine that does not answer is <code>blocked_by</code> with <code>reason: not_answering</code>; a Sandbox whose machine says it does not run is <code>broken</code> with <code>reason: lost</code>, and one whose daemon admits no connection is <code>broken</code> with <code>reason: not_answering</code>. <code>--with stats</code> adds the daemon's process, the Sandbox's CPU and memory and each Workspace's overlay size",
+   "note": "asks the Sandbox's own side, as today: its daemon lists the Workspaces. No paging: a Sandbox holds at most 16 Workspaces (<code>workspace_capacity</code>). Each Workspace answers its handle, its Branch and the exec ids of the commands <code>running</code> in it; a Workspace leaves <code>state</code> out when <code>ready</code> (<code>busy</code> while it mounts, commits or unmounts; <code>broken</code> after a failure). On a machine that is not ready the Sandbox answers <code>blocked</code> and no Workspaces (long form: <code>workspaces</code> is null); when its machine does not answer the Sandbox is <code>unknown</code> with <code>observed_at</code> (when its state was last known) and no Workspaces, never <code>blocked</code>; a Sandbox whose machine says it does not run is <code>broken</code> with <code>reason: lost</code>, and one whose daemon admits no connection is <code>broken</code> with <code>reason: not_answering</code>. <code>--with stats</code> adds the daemon's process, the Sandbox's CPU and memory and each Workspace's overlay size",
    "today": [
     "sandbox.get"
    ],
@@ -289,7 +316,8 @@
      "op",
      "blocked_by",
      "reason",
-     "fix"
+     "fix",
+     "observed_at"
     ]
    },
    "long": [
@@ -299,6 +327,7 @@
     "blocked_by",
     "reason",
     "fix",
+    "observed_at",
     "message",
     "sandbox",
     "project",
@@ -316,12 +345,13 @@
      "{\"state\":\"ready\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\",\"running\":[\"exec-9c0f2a7b41d6e803\"]}]}",
      "no Workspace: {\"state\":\"ready\"}",
      "its machine is stopped: {\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}",
+     "its machine does not answer: {\"state\":\"unknown\",\"observed_at\":\"2026-11-18T09:02:11Z\"}",
      "being created: {\"state\":\"busy\",\"op\":{\"name\":\"create\",\"phase\":\"unpack\",\"started_at\":\"2026-11-18T09:16:59Z\"}}",
      "its daemon is gone: {\"state\":\"broken\",\"reason\":\"lost\",\"fix\":\"layerfs sandbox remove tests\"}",
      "a Workspace mid-Commit: {\"state\":\"ready\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\",\"state\":\"busy\",\"op\":{\"name\":\"commit\",\"phase\":\"publish\",\"started_at\":\"2026-11-18T09:16:59Z\"}}]}",
      "--with stats: {\"state\":\"ready\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\"}],\"stats\":{\"daemon\":{\"pid\":4121,\"started_at\":\"2026-11-18T09:02:11Z\"},\"usage\":{\"cpu_ms\":8120,\"memory_bytes\":48234496,\"memory_peak_bytes\":61865984,\"memory_file_bytes\":12582912,\"pid_count\":3,\"oom_kill_count\":0},\"workspaces\":[{\"workspace\":\"tests:agent\",\"overlay_bytes\":8675328}]}}"
     ],
-    "long": "{\"state\":\"ready\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\",\"running\":[\"exec-9c0f2a7b41d6e803\"],\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"path\":\"/workspaces/1\",\"commit\":\"5c77a1d0\",\"base_layer\":\"a1e4c7d2\",\"mounted_at\":\"2026-11-18T09:02:11Z\",\"branch_moved\":false,\"pending_merge\":false,\"commands\":[{\"exec\":\"exec-9c0f2a7b41d6e803\",\"started_at\":\"2026-11-18T09:16:59Z\",\"program\":\"npm\",\"tag\":null}],\"id\":\"5f0c7a1e9b3d4826a7c0e15d92b46f38c1a7e05b3d9f24687a0c1e5b9d3f7a26\"}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"message\":null,\"sandbox\":\"tests\",\"project\":\"shop/api\",\"machine\":\"dev\",\"platform\":\"lima\",\"image\":\"node:22\",\"backend\":\"namespaces\",\"route\":\"fuse\",\"created_at\":\"2026-11-18T09:02:11Z\",\"workspace_capacity\":16}"
+    "long": "{\"state\":\"ready\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\",\"running\":[\"exec-9c0f2a7b41d6e803\"],\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"path\":\"/workspaces/1\",\"commit\":\"5c77a1d0\",\"base_layer\":\"a1e4c7d2\",\"mounted_at\":\"2026-11-18T09:02:11Z\",\"branch_moved\":false,\"pending_merge\":false,\"commands\":[{\"exec\":\"exec-9c0f2a7b41d6e803\",\"started_at\":\"2026-11-18T09:16:59Z\",\"program\":\"npm\",\"tag\":null}],\"id\":\"5f0c7a1e9b3d4826a7c0e15d92b46f38c1a7e05b3d9f24687a0c1e5b9d3f7a26\"}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":null,\"message\":null,\"sandbox\":\"tests\",\"project\":\"shop/api\",\"machine\":\"dev\",\"platform\":\"lima\",\"image\":\"node:22\",\"backend\":\"namespaces\",\"route\":\"fuse\",\"created_at\":\"2026-11-18T09:02:11Z\",\"workspace_capacity\":16}"
    },
    "dropped": [
     {
@@ -335,7 +365,7 @@
      "why": "no paging: a Sandbox holds at most 16 Workspaces"
     }
    ],
-   "new_work": "The state table is new: today the call answers the record's word (`creating`, `closing`, `unresolved`, `gone`, `lost`, `running`) with `down_reason` and `down`. The mapping: a live `op` is `busy` (`op.name` `create` or `remove`; today's op carries `started` in milliseconds and `uncertain`); an uncertain op is `broken`/`unresolved`; no runtime id, or a confirmed stop, is `broken`/`missing`; the retired docker backend is `broken`/`unsupported`; a machine that is stopped, busy or broken makes it `blocked`; a machine that does not answer makes it `blocked` with `reason: not_answering`; a machine that says the Sandbox does not run is `broken`/`lost`; a daemon that admits no connection is `broken`/`not_answering` (today's `down {code, resource, pool_vacant, reserved_vacant, retained}` becomes the long form's `message`, the sentence behind a `blocked` or `broken` state). Every `fix` is `layerfs sandbox remove <sandbox>`. A Workspace's `state` is new, from the daemon's `activity`: `idle` is `ready`; `attaching`, `committing` and `closing` are `busy` with `op.name` `mount`, `commit` and `unmount` (the daemon records no start time for them today); `uncertain` is `broken`/`unresolved` and `local_failure` is `broken`/`failed`, each with `fix: layerfs workspace unmount <workspace> --discard --force`. `mounted_at` is the Workspace record's `created`; where the worker keeps that record the reply must carry it. `--with stats` regroups what the call always answers today (`daemon`, `usage`, `usage_reason`, `daemon_capacity`, and each Workspace's `overlay_bytes` and `usage`), with `cpu_usec` as `cpu_ms`, `memory_current` as `memory_bytes`, `pids` as `pid_count` and `oom_kills` as `oom_kill_count`. Renames per Workspace: `ws` to `workspace`, the 64-hex `workspace` to `id`, `base` to `commit`, `head_moved_since_mount` to `branch_moved`, `running[].exec_id` to `commands[].exec` with `started` as `started_at`. `namespace`, `root`, `revision`, `directory`, `mounted`, `dirty`, `activity`, `name` and `next_page_pos` leave the answer (`workspace status` answers the overlay counts).",
+   "new_work": "The state table is new: today the call answers the record's word (`creating`, `closing`, `unresolved`, `gone`, `lost`, `running`) with `down_reason` and `down`. The mapping: a live `op` is `busy` (`op.name` `create` or `remove`; today's op carries `started` in milliseconds and `uncertain`); an uncertain op is `broken`/`unresolved`; no runtime id, or a confirmed stop, is `broken`/`missing`; the retired docker backend is `broken`/`unsupported`; a machine that is stopped, busy or broken makes it `blocked`; a machine that does not answer makes it `unknown` with `observed_at` and `workspaces` null (the call is a live read; today it is refused or answers `down_reason`); a machine that says the Sandbox does not run is `broken`/`lost`; a daemon that admits no connection is `broken`/`not_answering` (today's `down {code, resource, pool_vacant, reserved_vacant, retained}` becomes the long form's `message`, the sentence behind a `blocked` or `broken` state). Every `fix` is `layerfs sandbox remove <sandbox>`. As a live read the call writes the Sandbox's record only when the state word or its reason changes (that write moves `generation`), so `sandbox list` and the tree then show `lost` or `not_answering` from records; `observed_at` is kept beside the record in an observation file that `generation` does not cover. A Workspace's `state` is new, from the daemon's `activity`: `idle` is `ready`; `attaching`, `committing` and `closing` are `busy` with `op.name` `mount`, `commit` and `unmount` (the daemon records no start time for them today); `uncertain` is `broken`/`unresolved` and `local_failure` is `broken`/`failed`, each with `fix: layerfs workspace unmount <workspace> --discard --force`. `mounted_at` is the Workspace record's `created`; where the worker keeps that record the reply must carry it. `--with stats` regroups what the call always answers today (`daemon`, `usage`, `usage_reason`, `daemon_capacity`, and each Workspace's `overlay_bytes` and `usage`), with `cpu_usec` as `cpu_ms`, `memory_current` as `memory_bytes`, `pids` as `pid_count` and `oom_kills` as `oom_kill_count`. Renames per Workspace: `ws` to `workspace`, the 64-hex `workspace` to `id`, `base` to `commit`, `head_moved_since_mount` to `branch_moved`, `running[].exec_id` to `commands[].exec` with `started` as `started_at`. `namespace`, `root`, `revision`, `directory`, `mounted`, `dirty`, `activity`, `name` and `next_page_pos` leave the answer (`workspace status` answers the overlay counts).",
    "nested": {
     "workspaces": {
      "short": {
@@ -367,7 +397,18 @@
       "pending_merge",
       "commands",
       "id"
-     ]
+     ],
+     "states": {
+      "reasons": [
+       "unresolved",
+       "failed"
+      ],
+      "ops": [
+       "mount",
+       "commit",
+       "unmount"
+      ]
+     }
     },
     "workspaces[].running": {
      "scalar": "exec"
@@ -380,6 +421,19 @@
       "tag"
      ]
     }
+   },
+   "states": {
+    "reasons": [
+     "unresolved",
+     "missing",
+     "unsupported",
+     "lost",
+     "not_answering"
+    ],
+    "ops": [
+     "create",
+     "remove"
+    ]
    }
   },
   {
@@ -487,7 +541,8 @@
     {
      "name": "path",
      "kind": "Text",
-     "optional": true
+     "optional": true,
+     "redact": true
     }
    ],
    "options": [
@@ -717,10 +772,21 @@
      "its machine is stopped: {\"not_checked\":[{\"sandbox\":\"sim-1\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}",
      "its daemon did not answer in time: {\"not_checked\":[{\"sandbox\":\"tests\",\"check\":\"sandbox.daemon_ready\",\"reason\":\"timeout\"}]}"
     ],
-    "long": "{\"ok\":true,\"findings\":[],\"not_checked\":[],\"status\":\"ok\",\"counts\":{\"ok\":2,\"notice\":0,\"warning\":0,\"error\":0,\"not_checked\":0},\"observed_at\":\"2026-11-18T09:16:59Z\",\"tree\":{\"sandbox\":\"tests\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"sandbox.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"sandbox.runtime\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"sandbox.daemon_connect\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"sandbox.daemon_ready\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"sandbox.filesystem_serving\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null,\"workspaces\":[{\"workspace\":\"tests:agent\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"workspace.mounted\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"workspace.activity\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}]}}"
+    "long": "{\"ok\":true,\"findings\":[],\"not_checked\":[],\"status\":\"ok\",\"counts\":{\"ok\":2,\"notice\":0,\"warning\":0,\"error\":0,\"not_checked\":0},\"observed_at\":\"2026-11-18T09:16:59Z\",\"tree\":{\"sandbox\":\"tests\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"sandbox.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"sandbox.runtime\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"sandbox.route\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"sandbox.daemon_connect\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"sandbox.daemon_auth\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"sandbox.daemon_ready\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null,\"workspaces\":[{\"workspace\":\"tests:agent\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"workspace.mounted\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"workspace.activity\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}]}}"
    },
-   "dropped": [],
-   "new_work": "The table call and the one doctor shape are new: today `layerfs doctor sandbox <sandbox>` is a shell command outside the call table, with its own report (`checks` with outcomes pass, fail, unknown, skipped and blocked). The Sandbox's checks exist and keep their ids (`checks.sandbox`); `unknown` and `skipped` become `not_checked` with a `reason`, `blocked` becomes `not_checked` with `blocked_by`. Per-Workspace nodes are new: today one check, `sandbox.workspaces`, covers the daemon's whole list (`sandbox.doctor_workspaces` rows carry `mounted` and `activity`); it becomes `workspace.mounted` and `workspace.activity` on one node per Workspace, which needs each row's handle. Progress events are new. A per-thing time budget replaces the call's one budget.",
+   "dropped": [
+    {
+     "today": "--timeout (layerfs doctor sandbox)",
+     "now": "",
+     "why": "each thing has its own time budget (30 s for the whole call today)"
+    },
+    {
+     "today": "--text (layerfs doctor sandbox)",
+     "now": "--text",
+     "why": "the global option, as on every call"
+    }
+   ],
+   "new_work": "The table call and the one doctor shape are new: today `layerfs doctor sandbox <sandbox>` is a shell command outside the call table, with its own report (`checks` with outcomes pass, fail, unknown, skipped and blocked). The Sandbox's checks exist and keep their ids (`checks.sandbox`, in the order they run); the ids that go are in `off_table`; `unknown` and `skipped` become `not_checked` with a `reason`, `blocked` becomes `not_checked` with `blocked_by`. Per-Workspace nodes are new: today one check, `sandbox.workspaces`, covers the daemon's whole list (`sandbox.doctor_workspaces` rows carry `mounted` and `activity`); it becomes `workspace.mounted` and `workspace.activity` on one node per Workspace, which needs each row's handle. Progress events are new. A per-thing time budget replaces the call's one budget.",
    "off_table": [
     {
      "today": "layerfs doctor sandbox <sandbox>",
@@ -728,46 +794,125 @@
      "why": "one doctor per thing, a call of its family (no alias, R1)"
     },
     {
-     "today": "--timeout",
-     "now": "",
-     "why": "each thing has its own time budget (30 s for the whole call today)"
+     "today": "sandbox.daemon",
+     "now": "sandbox.daemon_connect",
+     "why": "it only ever said the daemon was not observed; that is a not_checked entry on the connection check"
     },
     {
-     "today": "--text",
-     "now": "--text",
-     "why": "the global option, as on every call"
+     "today": "sandbox.workspaces · sandbox.workspace_retained",
+     "now": "workspace.mounted · workspace.activity",
+     "why": "one node per Workspace in place of one check over the daemon's whole list"
+    },
+    {
+     "today": "sandbox.worker_report",
+     "now": "",
+     "why": "a worker report that is malformed or cut is a not_checked entry on the Sandbox with reason lost"
+    },
+    {
+     "today": "sandbox.filesystem_serving · sandbox.overlay_state · sandbox.runtime_containment · sandbox.runtime_placement",
+     "now": "",
+     "why": "always skipped today: a check that is never made is left out"
     }
    ],
    "checks": {
     "sandbox": [
-     "sandbox.record",
-     "sandbox.machine_reference",
-     "sandbox.store_reference",
-     "sandbox.project_reference",
-     "sandbox.store_placement",
-     "sandbox.operation",
-     "sandbox.route",
-     "sandbox.runtime",
-     "sandbox.runtime_placement",
-     "sandbox.runtime_containment",
-     "sandbox.daemon",
-     "sandbox.daemon_keys",
-     "sandbox.daemon_connect",
-     "sandbox.daemon_auth",
-     "sandbox.daemon_instance",
-     "sandbox.daemon_ready",
-     "sandbox.session",
-     "sandbox.forward_process",
-     "sandbox.worker_compatibility",
-     "sandbox.worker_report",
-     "sandbox.filesystem_serving",
-     "sandbox.overlay_state",
-     "sandbox.observation",
-     "sandbox.workspace_retained"
+     {
+      "check": "sandbox.record",
+      "what": "its record exists, parses and has a supported version",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.machine_reference",
+      "what": "the machine its record names has a record",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.store_reference",
+      "what": "the Store of its project has a readable record",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.project_reference",
+      "what": "its project has a record",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.store_placement",
+      "what": "a sqlite Store and the Sandbox are on the same machine",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.operation",
+      "what": "no operation of an ended owner is left on its record",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.runtime",
+      "what": "its recorded runtime process runs, by id, start time and boot",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.route",
+      "what": "the saved route to its daemon can be used: its machine's worker, or its forward",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.forward_process",
+      "what": "the forward's process runs, where the route has one",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.worker_compatibility",
+      "what": "its machine's worker is from this build, where the worker makes the report",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.daemon_keys",
+      "what": "the saved daemon endpoint and identities are readable and match the route",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.daemon_connect",
+      "what": "the daemon accepts a connection",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.daemon_auth",
+      "what": "the daemon accepts the saved identities",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.daemon_instance",
+      "what": "the daemon is the instance the Sandbox was started with",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.daemon_ready",
+      "what": "the daemon reports that it is ready for calls",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.session",
+      "what": "the doctor's own session with the daemon ended cleanly",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.observation",
+      "what": "the daemon's record did not change while it was read",
+      "full_only": false
+     }
     ],
     "workspace": [
-     "workspace.mounted",
-     "workspace.activity"
+     {
+      "check": "workspace.mounted",
+      "what": "the daemon reports its mount as present",
+      "full_only": false
+     },
+     {
+      "check": "workspace.activity",
+      "what": "no failed or uncertain operation is kept on it",
+      "full_only": false
+     }
     ]
    }
   }

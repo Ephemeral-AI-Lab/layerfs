@@ -90,3 +90,97 @@ the project record check is not new (and its finding is a notice with a fix, not
 
 85 calls in 10 families: project 8, file 14, sandbox 7, workspace 7, branch 6, commit 3, home 7,
 machine 14, store 13, backup 6.
+
+## Fixes from the exit review
+
+A fresh reviewer checked the frozen spec against the code and found 23 defects. Each is decided
+below; the full wording is in `REVIEW-FIXES.md`, beside this file. Where a fix refines a ruling
+above (fix 5 refines R2), the fix holds.
+
+- **Fix 1** A `--with live` read writes the record only when the state word or its reason changes,
+  and only that write moves `generation`. `observed_at` is kept in an observation file that
+  `generation` does not cover. `generation` does not signal the death of an operation's owner. A
+  records-only read answers the last written state word and reason, so `engine_down`,
+  `not_answering`, `missing` and `unreachable` can appear in a records-only `blocked_by`.
+- **Fix 2** Answers carry the full 66-hex Commit id; examples are abbreviated. A prefix that matches
+  more than one Commit is refused `InvalidInput` with `matches`. A `<ref>` or `--from R` is a Branch
+  name first, then a Commit id or prefix. `commit diff <ref>` of a Commit with no parent compares
+  with its Branch's `base`, and with the empty tree when there is none.
+- **Fix 3** `project list --with stats` adds `size` only, from the head Layer's recorded length.
+  `project stats` keeps its counts from the bounded walk, with `partial`.
+- **Fix 4** `workspace.status`: `changes` is the first 20 entries of a bounded read of 256 overlay
+  rows; `changes_count` counts the entries read, with `partial:true` at the bound. A renamed or
+  removed folder is one entry.
+- **Fix 5** An outdated worker's `fix` is `layerfs machine stop <m> && layerfs machine start <m>` when
+  no Sandbox is recorded on the machine, and the same with `--force` on the stop when some are; its
+  `message` then names the count. The page's button runs only the first form and is off while
+  Sandboxes are on the machine, with the tip "N Sandboxes are on it. Copy the fix to stop it
+  anyway."; the detail panel's Fix line shows the `--force` command to copy.
+- **Fix 6** `sandbox.get` when the machine does not answer: `unknown` with `observed_at`, and
+  `workspaces` null. Not `blocked`.
+- **Fix 7** `workspaces` is a list of objects everywhere: `[{workspace, branch}]` in list rows and
+  tree nodes; `sandbox.get` adds its further keys per Workspace.
+- **Fix 8** The refusal fold map gains `NoMatch` to `NotFound`, `AmbiguousMatch` to `InvalidInput`
+  (with `matches` and a `fix` adding `--replace-all`), `NoSpace` to `Capacity`, `Timeout` to
+  `Unavailable`.
+- **Fix 9** An argument may carry `"redact": true`: the call log records its byte count, never its
+  value. It is set on every argument today's log redacts, under its new name, and on the new `cwd`,
+  `env`, `include`, `exclude` and `stdin`. A `from` that is a path is redacted; a `from` that is a
+  Branch is not.
+- **Fix 10** A secret is an option of kind `Content`, required and redacted, with `shell` naming the
+  shell's stdin flag: `password` (`--password-stdin`) on `store save-auth`, `secret_key`
+  (`--key-stdin`) on `backup connect`. The shell reads it from stdin and no other way; Node and
+  Python pass the value as the option.
+- **Fix 11** `mode` on `file write` and `file mkdir` is kind `Text`, octal (`"0644"`), as answers
+  spell it.
+- **Fix 12** A Workspace's default name is the Branch name made valid: lowercased, each character
+  outside the Workspace name alphabet replaced by `-`. A collision is refused `Exists` with a `fix`
+  naming `--name`. `sandbox create --mount B` uses the same default.
+- **Fix 13** Pages against rows: tree projects under a Store are bare names; "Backup behind" is a
+  notice from `store doctor`, check `store.backups`, on the Store, with `fix`
+  `layerfs backup create <store> <bucket>`; the per-entity state table is built from the rows'
+  `states` fields (`{reasons, ops}`); a project the Store does not list is hidden in `project list`
+  and a notice in `project doctor` and `store doctor`, never "Missing"; removing a machine removes
+  its own PostgreSQL addresses, which is new work of `machine remove` (today they stay).
+- **Fix 14** The mock uses the frozen check ids, and row facts come only from tree nodes. A tree node
+  holds what records hold: a machine `machine, platform, cpus, memory_bytes`; a Store
+  `store, engine, projects`, a PostgreSQL Store also `connections`; a Sandbox
+  `sandbox, project, image, workspaces`; a bucket `bucket, provider`; each with `state` and its
+  companion when not ready.
+- **Fix 15** Every doctor row carries `checks`: one closed, ordered list of `{check, what, full_only}`
+  per kind of thing, owned by that kind's doctor row (a Workspace's by `sandbox.doctor`). A parent's
+  shallow check of a child runs that kind's list without the `full_only` entries. `build.py` collects
+  the lists into `calls.json` as `doctor.checks` and refuses an example that names a check outside them.
+- **Fix 16** Spellings: `change` is `added`, `modified` or `removed`; a machine's free disk is
+  `disk_free_bytes`; a Store's reusable pages are `reusable_bytes`; `home.log` rows name the call as
+  `call` and filter with `--call`, and `op` is only ever the state companion; a list that could not
+  include everything names what is missing in `not_listed`, `[{<thing>, blocked_by | reason, message}]`;
+  a state's `reason` and a `not_checked` entry's `reason` are separate lists.
+- **Fix 17** `machine get --with live`: the section does not repeat `observed_at` or `message`.
+- **Fix 18** Small rule breaks: `file edit --old-string/--new-string` are required;
+  `backup connect <name> …`; `counts` in a doctor's answer is the one plural that is a map;
+  `machine stats --with space` answers `[{part, bytes}]`; times inside `last`, `attempt` and
+  `last_transfer` end in `_at`; a no-op `machine start` or `stop` answers `{"unchanged":true}`;
+  leftover kinds are snake_case.
+- **Fix 19** `log_tag` stays a global option: an argument in Node and Python; the shell reads
+  `LAYERFS_LOGS_TAG`, a setting of the caller, not call context.
+- **Fix 20** A cursor carries its call's filters and, where the call pins a Commit, the pin;
+  `project list` and `branch list` cursors carry filters only. A cursor given with different filters
+  or pin, or to another call, is refused `InvalidInput`; one whose pinned Commit is gone is refused
+  `NotFound`.
+- **Fix 21** `backup.list` drops `exported_from` and `binding_match`: reading them is extra I/O.
+- **Fix 22** `project doctor --full` writes nothing to the Store. It may keep its visited set in a
+  scratch file outside the Store, removed when the call ends, as today's integrity scan does.
+- **Fix 23** Lost replies beyond C13: the Store rows say how an uncertain `compact`, `backup` or
+  `restore` is cleared, and where nothing clears it today, `store get <store> --with live` settles it
+  (new work). `workspace.exec`'s `Unknown` refusal carries `exec`.
+
+Added by the coordinator while the fixes were applied:
+
+- **Cursors in the call log** Every `cursor` option is redacted: a cursor carries its call's filters,
+  which may hold a redacted path or pattern. `build.py` sets it in `calls.json`.
+- **`refused`** A `not_listed` entry's `reason` is `timeout`, `busy`, `lost` or `refused` (a thing
+  that answered and refused, such as a bucket that rejects its key; `message` carries the refusal).
+  A doctor's `not_checked` entry stays `timeout`, `busy` or `lost`.
+- **`repeat`** An option that may be given more than once is marked `repeat`, on the option or as a
+  list on the row (`workspace.exec`: `env`).

@@ -106,25 +106,6 @@
     "workspace.exec_cancel": "workspace.cancel"
   },
   "spec_sync": {
-    "folds": {
-      "NotFound": [
-        "NoMatch"
-      ],
-      "InvalidInput": [
-        "AmbiguousMatch"
-      ],
-      "Capacity": [
-        "NoSpace"
-      ],
-      "Unavailable": [
-        "Timeout"
-      ]
-    },
-    "renames": {
-      "home.log": {
-        "op": "call"
-      }
-    },
     "nodes": {
       "home.get": {
         "tree": {

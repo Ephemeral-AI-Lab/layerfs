@@ -6,6 +6,7 @@
   "reasons": [
     "<b>Why <code>commit diff shop/api agent</code>:</b> \"what did this Branch change?\" is the common question, so one argument answers it. <code>--from</code> names the other side when it is not the fork point or the parent.",
     "<b>Why the Store resolves prefixes:</b> today <code>commit.get</code> pages history on the caller's side, about 21 Store calls for 1000 Commits.",
+    "<b>Why answers carry whole ids:</b> every <code>commit</code> an answer names is the full 66-character id, so it can be passed back to any call; the examples here shorten them. A caller may pass a prefix of 8 or more characters; one that matches more than one Commit is refused <code>InvalidInput</code> with <code>matches</code>, a count.",
     "<b>Why paths by default:</b> a diff of 100 paths is ~25 KB today. Most callers ask what changed; <code>--with patch</code> answers how.",
     "<b>Why two different paths cannot be compared:</b> <code>file.diff</code> could. The files view compares one path between two Commits, which <code>commit diff --path</code> covers."
   ],
@@ -13,7 +14,7 @@
     {
       "call": "commit.list",
       "badge": "merged",
-      "note": "+ <code>branch.commits</code>; newest first; on <code>main</code> the rows are its publications, each with the <code>source_branch</code> it came from and no <code>message</code>; a message is cut at 128 characters (<code>message_truncated</code>); <code>--at</code> starts at an older Commit (today's <code>at_commit</code>); the long row always carries the byte counts, so <code>include_storage</code> is gone; <code>via</code> is workspace, file, merge, publish or init",
+      "note": "+ <code>branch.commits</code>; newest first; on <code>main</code> the rows are its publications, each with the <code>source_branch</code> it came from and no <code>message</code>; a message is cut at 128 characters (<code>message_truncated</code>); <code>--at</code> starts at an older Commit (today's <code>at_commit</code>); the long row always carries the byte counts, so <code>include_storage</code> is gone; <code>via</code> is workspace, file, merge, publish or init; every <code>commit</code> is the full 66-character id (the examples shorten them); a cursor carries the Commit the first page read and the call's filters: given with another pin or other filters, or to another call, it is refused <code>InvalidInput</code>; when its Commit is gone, <code>NotFound</code> (its Commit is the one the first page started at)",
       "today": [
         "commit.list",
         "branch.commits"
@@ -126,12 +127,12 @@
           "why": "the byte counts are in every Commit record; the long row always carries them"
         }
       ],
-      "new_work": "One list in place of two: today `commit.list` pages by position and answers whole Commit records, and `branch.commits` pages by number from a pinned start and answers summaries. `--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor must carry the Commit the first page read and the call's filters. An id prefix is new: today the call takes a full 66-character id."
+      "new_work": "One list in place of two: today `commit.list` pages by position and answers whole Commit records, and `branch.commits` pages by number from a pinned start and answers summaries. `--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor must carry the Commit the first page read and the call's filters; one given with another pin or other filters, or to another call, is refused `InvalidInput`, and one whose Commit is gone `NotFound`. An id prefix is new: today the call takes a full 66-character id. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "commit.get",
       "badge": "merged",
-      "note": "+ <code>branch.get_commit</code>; the Branch is optional: with <code>--branch</code> the Commit must be in that Branch's history; <code>branch</code> in the answer is the Branch the Commit was made on; on <code>main</code> a publication's id is accepted, and it answers <code>source_branch</code> and <code>source_commit</code>; the tree's size is <code>size</code>, as in <code>project stats</code>",
+      "note": "+ <code>branch.get_commit</code>; the Branch is optional: with <code>--branch</code> the Commit must be in that Branch's history; <code>branch</code> in the answer is the Branch the Commit was made on; on <code>main</code> a publication's id is accepted, and it answers <code>source_branch</code> and <code>source_commit</code>; the tree's size is <code>size</code>, as in <code>project stats</code>; an answer carries the full 66-character id, whatever was passed (the examples shorten them); a prefix that matches more than one Commit is refused <code>InvalidInput</code> with <code>matches</code>, a count",
       "today": [
         "commit.get",
         "branch.get_commit"
@@ -205,12 +206,12 @@
           "why": "a Commit id names its project's Commit without a Branch"
         }
       ],
-      "new_work": "Finding a Commit without a Branch is new: today both calls need one. `commit.get` matches an id or prefix by paging that Branch's Commits on the caller's side, about 21 Store calls for 1000 Commits; `branch.get_commit` takes full ids only. Resolving an id or prefix in the Store, in one call, is new."
+      "new_work": "Finding a Commit without a Branch is new: today both calls need one. `commit.get` matches an id or prefix by paging that Branch's Commits on the caller's side, about 21 Store calls for 1000 Commits; `branch.get_commit` takes full ids only. Resolving an id or prefix in the Store, in one call, is new. Refusing a prefix that matches more than one Commit (`InvalidInput` with `matches`, a count) is new: today the newest match wins."
     },
     {
       "call": "commit.diff",
       "badge": "merged",
-      "note": "+ <code>branch.diff</code>, <code>file.diff</code>; <code>ref</code> is a Branch or a Commit; without <code>--from</code>: the changes since the fork (a Branch) or since the parent (a Commit); paths only by default, <code>--with patch</code> adds each text file's lines; <code>--path</code> narrows to one file or one folder; <code>change</code> is added, removed or modified; comparing two different paths and line ownership across a diff are dropped",
+      "note": "+ <code>branch.diff</code>, <code>file.diff</code>; <code>ref</code> and <code>--from</code> are each read as a Branch name first and, when no Branch has that name, as a Commit id or a prefix of 8 or more characters (a prefix that matches more than one Commit is refused <code>InvalidInput</code> with <code>matches</code>, a count); without <code>--from</code>: the changes since the fork (a Branch) or since the parent (a Commit); a Commit with no parent is compared with its <code>base</code>, the Commit its Branch was forked at, and with the empty tree when it has neither (main's first Commit); <code>main</code>, which has no fork, is compared as its head Commit is; paths only by default, <code>--with patch</code> adds each text file's lines; <code>--path</code> narrows to one file or one folder; <code>change</code> is added, removed or modified; comparing two different paths and line ownership across a diff are dropped; a cursor carries both Commits compared and the call's filters: given with another side or other filters, or to another call, it is refused <code>InvalidInput</code>; when one of its Commits is gone, <code>NotFound</code>",
       "today": [
         "commit.diff",
         "branch.diff",
@@ -232,12 +233,13 @@
         {
           "name": "from",
           "kind": "Name",
-          "help": "the side compared from, a Branch or a Commit; the fork point of a Branch or the parent of a Commit when left off"
+          "help": "the side compared from: a Branch name, else a Commit id or prefix; the fork point of a Branch or the parent of a Commit when left off"
         },
         {
           "name": "path",
           "kind": "Text",
-          "help": "only this file, or this folder and what is under it"
+          "help": "only this file, or this folder and what is under it",
+          "redact": true
         },
         {
           "name": "limit",
@@ -248,7 +250,7 @@
         {
           "name": "cursor",
           "kind": "Text",
-          "help": "the `next_cursor` of the page before; it carries the pinned Commit and the filters"
+          "help": "the `next_cursor` of the page before; it carries both Commits and the filters"
         }
       ],
       "stdin": null,
@@ -363,7 +365,7 @@
           "why": "a path present on one side only is a row with change added or removed"
         }
       ],
-      "new_work": "`<ref>` alone is new: finding the fork point of a Branch or the parent of a Commit as the other side (today both sides are always given). One argument that is a Branch or a Commit is new: today `commit.diff` takes two full ids and `branch.diff` two Branch names with optional Commits. `--path` exists only on `branch.diff` today (`path_prefix`). Paths-only is today's `paths_only`; it becomes the default. `--cursor` exists today as the last path an earlier page listed (beside `page_pos`, and `continuation` on `branch.diff`); it becomes one opaque cursor that carries both pinned Commits and the filters. An id prefix is new: today the call takes a full 66-character id."
+      "new_work": "`<ref>` alone is new: finding the fork point of a Branch or the parent of a Commit as the other side (today both sides are always given). One argument that is a Branch or a Commit is new: today `commit.diff` takes two full ids and `branch.diff` two Branch names with optional Commits. `--path` exists only on `branch.diff` today (`path_prefix`). Paths-only is today's `paths_only`; it becomes the default. `--cursor` exists today as the last path an earlier page listed (beside `page_pos`, and `continuation` on `branch.diff`); it becomes one opaque cursor that carries both pinned Commits and the filters; one given with another side or other filters, or to another call, is refused `InvalidInput`, and one whose Commit is gone `NotFound`. Reading one argument as a Branch name first and as a Commit id or prefix only when no Branch has that name is new. Comparing a Commit that has no parent with its `base` is new, and so is comparing main's first Commit with the empty tree: a Commit record always holds its `base` today, and a Layer on main holds only its `parent`. An id prefix is new: today the call takes a full 66-character id. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     }
   ]
 }

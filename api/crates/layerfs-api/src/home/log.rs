@@ -43,7 +43,7 @@ pub(crate) const CALL: Call = call(
         opt("outcome", Text),
         opt("since", Int),
         opt("limit", Int),
-        opt("cursor", Text),
+        opt("cursor", Text).redact(),
     ],
     "the calls made against this home, newest first",
     run,

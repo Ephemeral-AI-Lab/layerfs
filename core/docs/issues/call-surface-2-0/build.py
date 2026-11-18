@@ -67,7 +67,8 @@ COMPANION_SHAPES = {
                    "is": "the thing at the root of the block, by its own word, with that thing's state (stopped, busy) or its broken reason"},
     "reason": {"one_of": BROKEN_REASONS, "is": "why it is broken, as a code; the sentence is the long form's message"},
     "fix": {"is": "one runnable shell line; two commands are joined with &&"},
-    "observed_at": {"is": "when LayerFS last knew its state: the last live read that answered, else when its record was last written"},
+    "observed_at": {"is": "when LayerFS last knew its state: the last live read that answered, else when its record was last "
+                          "written; kept beside the record in an observation file that generation does not cover"},
 }
 
 # the closed list a caller can meet; all thirteen are codes the code uses today
@@ -90,13 +91,14 @@ CODE_NAMES = [c for c, _ in REFUSAL_CODES]
 # today's other codes (caff58a43b has no closed list; these are the strings its crates refuse with)
 TODAY_CODES = {
     "NotFound": ["NoSuchStore", "NoSuchProject", "NoSuchBranch", "NoSuchCommit", "NoSuchPath", "NoSuchSandbox",
-                 "NoStore", "NoCommit", "NotInHistory", "NotMounted", "Removed"],
+                 "NoStore", "NoCommit", "NotInHistory", "NotMounted", "Removed", "NoMatch"],
     "Exists": ["NameTaken"],
     "InUse": ["MountsActive"],
     "Conflict": ["HeadMoved"],
     "InvalidInput": ["NotFile", "IsDirectory", "NotDirectory", "NotEmpty", "Binary", "ReservedName", "ReadOnly",
-                     "NoMergeBase", "TooLarge"],
-    "Unavailable": ["Denied", "Unauthorized", "StaleSandbox", "StaleStore"],
+                     "NoMergeBase", "TooLarge", "AmbiguousMatch"],
+    "Capacity": ["NoSpace"],
+    "Unavailable": ["Denied", "Unauthorized", "StaleSandbox", "StaleStore", "Timeout"],
     "Failed": ["UnknownMethod"],
 }
 EXIT_CODES = {
@@ -106,6 +108,11 @@ EXIT_CODES = {
     "command": "workspace exec exits with the command's own code (0 when it has none, 1 for a code outside 0 to 255) "
                "and prints its result JSON on stdout; a refusal still exits 125 with {\"error\",...} on stderr and nothing on stdout",
 }
+# the arguments today's call log records only as a byte count (calls/render.rs REDACTED at the base commit)
+TODAY_REDACTED = ["command", "message", "old", "new", "password", "url", "path", "left_path", "right_path", "from_path",
+                  "to_path", "path_prefix", "pattern"]
+NEW_REDACTED = ["cwd", "env", "include", "exclude", "stdin"]  # new arguments that are redacted too (review fix 9)
+ARG_FIELDS = ["name", "kind", "optional", "default", "help", "required", "redact", "shell", "repeat"]
 WITH_ORDER = ["live", "stats", "space", "docker", "platforms", "tree", "patch"]  # DECISIONS.md, "Simplicity changes adopted"
 WITH_GONE = {"write": "R5", "leftovers": "R6", "storage": "folded into stats", "usage": "folded into stats"}
 GLOBAL_OPTIONS = [
@@ -117,11 +124,16 @@ GLOBAL_OPTIONS = [
      "help": "progress events; only on the calls whose row says progress"},
     {"name": "text", "kind": "Bool", "cli": "--text", "node": None, "python": None,
      "help": "a readable result instead of JSON; shell only, as today"},
+    {"name": "log_tag", "kind": "Text", "cli": "LAYERFS_LOGS_TAG=tag (a setting)", "node": 'log_tag: "tag"',
+     "python": 'log_tag="tag"',
+     "help": "tags this call's line in the call log, as today; a setting of the caller, not call context"},
     {"name": "from", "kind": "Text", "cli": "--from <file>", "node": None, "python": None,
      "help": "a content or JSON positional read from a file instead of stdin; shell only, as today"},
     {"name": "scope", "kind": "Text", "cli": "--scope <folder> --scope-project <project> --scope-branch <branch>",
      "node": "scope", "python": "scope", "help": "the folder scope, as today"},
 ]
+NOT_CHECKED_REASONS = ["timeout", "busy", "lost"]  # a doctor's not_checked entry
+NOT_LISTED_REASONS = NOT_CHECKED_REASONS + ["refused"]  # a list's not_listed entry: also a thing that answered and refused
 LIST_SHAPE = {
     "in": ["limit", "cursor"],
     "long": ["items", "next_cursor"],
@@ -131,14 +143,23 @@ LIST_SHAPE = {
     "page_bytes": 65536,
     "rules": ["next_cursor is left out of the short form at the end and is null in the long form",
               "a page ends early at page_bytes with a cursor, never Capacity",
-              "the cursor carries the pins and filters of the call that made it",
+              "a cursor carries its call's filters and, where the call pins a Commit, the pin; "
+              "project.list and branch.list cursors carry filters only",
+              "a cursor given with different filters or another pin, or to another call, is refused InvalidInput",
+              "a cursor whose pinned Commit is gone is refused NotFound",
+              "a cursor is redacted in the call log: it carries the call's filters, which may hold a redacted path or pattern",
               "a log pages from the newest line back, with the same options and shape"],
+    "not_listed": {"entry": ["<thing>", "blocked_by", "reason", "message"], "one_of": ["blocked_by", "reason"],
+                   "reason": NOT_LISTED_REASONS,
+                   "is": "what a list could not include: one entry per thing it could not ask, never a refusal of the whole call; "
+                         "refused is a thing that answered and refused, with the refusal in message"},
 }
 REFUSAL_SHAPE = {
     "short": {"always": ["error", "message"], "sometimes": ["fix"]},
     "long": ["error", "message", "fix", "detail"],
     "extra": "the fields the next call needs, flat beside them: a Conflict names the head as commit, "
-             "a Busy or Unresolved names its op, a Dirty lists its paths",
+             "a Busy or Unresolved names its op, a Dirty lists its paths, an InvalidInput for a Commit prefix or an "
+             "edit string that matches more than once carries matches (a count)",
     "stream": "stderr",
     "exit": 125,
     "error": CODE_NAMES,
@@ -153,7 +174,6 @@ OUTCOMES = ["pass", "notice", "warning", "error", "not_checked"]  # one check: p
 COVERAGE = ["none", "shallow", "full"]  # what was checked on a thing in this run
 WORST_FIRST = ["error", "warning", "not_checked", "notice", "ok"]
 SEVERITIES = ["error", "warning", "notice"]
-NOT_CHECKED_REASONS = ["timeout", "busy", "lost"]
 CHILDREN = {"home": ["machines", "stores", "buckets"], "machine": ["stores", "sandboxes"], "store": ["projects"],
             "sandbox": ["workspaces"], "project": [], "bucket": [], "workspace": []}
 DOCTOR_THING = {"home.doctor": "home", "machine.doctor": "machine", "store.doctor": "store",
@@ -163,11 +183,20 @@ DOCTOR_LONG = ["ok", "findings", "not_checked", "status", "counts", "observed_at
 NODE_KEYS = ["status", "coverage", "checks", "blocked_by", "reason"]  # after the thing's own key; then its child lists
 CHECK_KEYS = ["check", "outcome", "from"]
 PHASES = ["self", "machines", "stores", "projects", "sandboxes", "workspaces", "buckets"]
+# the doctor row that owns each kind's check list (review fix 15); a Workspace has no doctor, so its Sandbox's row owns it
+CHECK_OWNER = {"home": "home.doctor", "machine": "machine.doctor", "store": "store.doctor", "project": "project.doctor",
+               "sandbox": "sandbox.doctor", "workspace": "sandbox.doctor", "bucket": "backup.doctor"}
+CHECK_ENTRY = ["check", "what", "full_only"]
+FULL_KINDS = ["project", "bucket"]  # the kinds with a Full check (R5)
+STATE_THING = {"backup": "bucket"}  # a family's rows describe the thing of the same name, but for backup
 
 
-def doctor_shape(calls):
+def doctor_shape(calls, checks):
     return {
         "calls": calls,
+        "checks": checks,
+        "check_entry": CHECK_ENTRY,
+        "check_owner": CHECK_OWNER,
         "things": THINGS,
         "short": {"always": [], "sometimes": ["ok", "findings", "not_checked"]},
         "ok": "{\"ok\":true} alone, only when every check was made and nothing was found",
@@ -183,9 +212,11 @@ def doctor_shape(calls):
         "not_checked": {"short": {"always": ["<thing>"], "one_of": ["blocked_by", "reason"], "sometimes": ["check"]},
                         "long": ["<thing>", "check", "blocked_by", "reason"]},
         "not_checked_reason": NOT_CHECKED_REASONS,
+        "not_checked_reason_is": "why a check that was tried gave no verdict; a separate list from a state's reason codes",
         "blocked_by": ["<thing>", "reason"],
         "blocked_by_reason": REASONS,
         "counts": STATUSES,
+        "counts_is": "a map from each status to a number of things: the one plural key that is not a list",
         "check": CHECK_KEYS,
         "node": ["<thing>"] + NODE_KEYS + ["<child lists>"],
         "children": {k: v for k, v in CHILDREN.items() if k != "workspace"},
@@ -560,6 +591,82 @@ def check_doctor_long(call, value, say):
             say(f"status is the worst of its things and findings: `{worst}` here, not `{value['status']}`")
 
 
+def check_lists(value, say):
+    """`not_listed` entries and the `op` companion, wherever an example carries them (review fix 16)."""
+    for where, obj in walk(value):
+        at = where or "the answer"
+        if "op" in obj and obj["op"] is not None and not isinstance(obj["op"], dict):
+            say(f"{at}: `op` is only ever the state companion object {{name, phase, started_at}}; a call's name is `call`")
+        entries = obj.get("not_listed")
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            thing = thing_key(entry) if isinstance(entry, dict) else None
+            if not thing or set(entry) - {thing, "blocked_by", "reason", "message"} or not entry.get("message"):
+                say(f"{at}: a not_listed entry is {{<thing>, blocked_by | reason, message}}: {entry}")
+                continue
+            if (entry.get("blocked_by") is None) == (entry.get("reason") is None):
+                say(f"{at}: a not_listed entry carries blocked_by or reason, one of them")
+            if entry.get("reason") is not None and entry["reason"] not in NOT_LISTED_REASONS:
+                say(f"{at}: not_listed reason `{entry['reason']}` is not one of {NOT_LISTED_REASONS}")
+            if entry.get("blocked_by") is not None and check_blocked_by(entry["blocked_by"]):
+                say(f"{at}: {check_blocked_by(entry['blocked_by'])}")
+
+
+def used_checks(value, kind):
+    """Every check id a doctor answer names: (where, the node's kind or None, id, the node's coverage or None)."""
+    found = []
+    if not isinstance(value, dict):
+        return found
+    for name in ("findings", "not_checked"):
+        for entry in value.get(name) or []:
+            if isinstance(entry, dict) and entry.get("check") is not None:
+                found.append((name, None, entry["check"], None))
+    tree = value.get("tree")
+    nodes = [(kind, tree)] if isinstance(tree, dict) else []
+    for child in CHILDREN.get(kind, []) if isinstance(tree, dict) else []:
+        child_kind = child[:-1] if child != "sandboxes" else "sandbox"
+        nodes += [(child_kind, n) for n in tree.get(child) or [] if isinstance(n, dict)]
+    for node_kind, node in nodes:
+        for check in node.get("checks") or []:
+            if isinstance(check, dict) and "check" in check:
+                found.append((f"the {node_kind} node", node_kind, check["check"], node.get("coverage")))
+    return found
+
+
+def normal_checks(value):
+    """A row's `checks` as {kind: [{check, what, full_only}]}, from either accepted form; None when it is neither."""
+    if isinstance(value, list) and all(isinstance(e, dict) and set(e) == {"kind", "checks"} for e in value):
+        value = {e["kind"]: e["checks"] for e in value}
+    if not isinstance(value, dict) or not all(isinstance(v, list) for v in value.values()):
+        return None
+    return {kind: [{"check": e, "what": None, "full_only": False} if isinstance(e, str) else e for e in entries]
+            for kind, entries in value.items()}
+
+
+def check_doctor_lists(state, partial):
+    """Review fix 15: one closed check list per kind, owned by one row; every id an example names is in it."""
+    errors, lists = state["errors"], state["checks"]
+    every = {e["check"] for entries in lists.values() for e in entries if isinstance(e, dict) and "check" in e}
+    for kind, owner in CHECK_OWNER.items():
+        if kind not in lists and owner in state["calls"] and normal_checks(state["calls"][owner].get("checks")) is not None:
+            errors.append(f"{owner}: [checks] its `checks` has no list for a {kind}; that row owns the {kind}'s list")
+    complete = all(kind in lists for kind in CHECK_OWNER)
+    for call, where, kind, check, coverage in state["used_checks"] + frame_checks():
+        if kind is None:
+            if complete and check not in every:
+                errors.append(f"{call}: [checks] {where} names `{check}`, which is in no kind's check list")
+            continue
+        if kind not in lists:
+            continue  # the owner row without its list is reported on that row, once
+        entry = next((e for e in lists[kind] if isinstance(e, dict) and e.get("check") == check), None)
+        if entry is None:
+            errors.append(f"{call}: [checks] {where} names `{check}`, which is not in the {kind}'s check list "
+                          f"({CHECK_OWNER[kind]})")
+        elif entry.get("full_only") and coverage != "full":
+            errors.append(f"{call}: [checks] {where} names `{check}`, a Full check only, on a node whose coverage is {coverage}")
+
+
 ISO = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z")
 SINGULAR_S = {"status", "cpus", "class", "address", "progress", "access", "alias", "basis", "bus", "canvas", "ms",
               "exists", "holders"}
@@ -650,6 +757,16 @@ def check_row(family, row, today, state):
             err("kind", f"`{name}` has kind `{arg.get('kind')}`; the code's kinds are {', '.join(KINDS)}")
         if not re.fullmatch(r"[a-z][a-z0-9_]*", str(name)):
             err("kind", f"`{name}` is not snake_case")
+        for extra in sorted(set(arg) - set(ARG_FIELDS)):
+            err("fields", f"`{name}` has a field `{extra}`; an argument has {', '.join(ARG_FIELDS)}")
+        for flag in ("redact", "required", "optional", "repeat"):
+            if flag in arg and not isinstance(arg[flag], bool):
+                err("fields", f"`{name}`: `{flag}` is true or false")
+        if "shell" in arg and (arg in positionals or not re.fullmatch(r"--[a-z][a-z0-9-]*", str(arg["shell"]))):
+            err("fields", f"`{name}`: `shell` is an option's own shell spelling, such as --password-stdin")
+    if "repeat" in row and not (isinstance(row["repeat"], list) and all(r in [o.get("name") for o in options] for r in row["repeat"])):
+        err("fields", "`repeat` on a row lists the options that may be given more than once")
+    shell_of = {o["shell"][2:].replace("-", "_"): o["name"] for o in options if isinstance(o.get("shell"), str)}
     names = [a.get("name") for a in positionals + options]
     for name in sorted({n for n in names if names.count(n) > 1}):
         err("kind", f"`{name}` is listed twice among the positionals and options")
@@ -689,7 +806,11 @@ def check_row(family, row, today, state):
             allowed.add("progress")
         required = {o["name"] for o in options if o.get("kind") != "Function"}
         every = required | {o["name"] for o in options}
-        cli_options = set(shown["options"])
+        cli_options = {shell_of.get(n, n) for n in shown["options"]}  # an option with `shell` shows that spelling
+        shown["bare"] = [shell_of.get(n, n) for n in shown["bare"]]
+        for name, real in shell_of.items():
+            if real in shown["options"]:
+                err("cli", f"option `{real}` is spelled --{name.replace('_', '-')} in the shell, so cli shows that")
         for name in sorted(cli_options - every - allowed):
             err("cli", f"cli has --{name.replace('_', '-')}, which is not an option of the row")
         for name in sorted(required - cli_options):
@@ -707,6 +828,32 @@ def check_row(family, row, today, state):
                     err("cli", f"cli shows --with {value}, which is not a section of the row")
         if re.search(r"--[a-z0-9-]*_", cli):
             err("cli", "a shell option is the name with `-` for `_`")
+    for o in options:
+        if "shell" not in o:
+            continue
+        if o.get("kind") != "Content" or o.get("required") is not True or o.get("redact") is not True:
+            err("secret", f"`{o['name']}` is a secret: an option of kind Content with \"required\": true and \"redact\": true")
+        if row.get("stdin") != "secret":
+            err("secret", f"the shell reads `{o['name']}` from stdin ({o['shell']}), so the row's `stdin` is \"secret\"")
+    if row.get("stdin") == "secret" and not any("shell" in o for o in options):
+        err("secret", "a secret is an option of kind Content with `shell` naming the shell's stdin flag (--password-stdin), "
+            "so that Node and Python can pass it")
+
+    # call-log redaction (review fix 9): what today's log redacts stays redacted, and so do the new free-text arguments
+    args_by_name = {a.get("name"): a for a in positionals + options}
+    for old in row.get("today") or []:
+        entry = today.get(old) if isinstance(old, str) else None
+        for arg in (entry["positionals"] + entry["options"]) if entry else []:
+            kept = args_by_name.get(arg["name"])
+            if arg["name"] in TODAY_REDACTED and kept is not None and kept.get("redact") is not True:
+                err("redact", f"today's call log redacts `{arg['name']}` of {old}; the row's `{arg['name']}` carries \"redact\": true")
+    for name in NEW_REDACTED:
+        if name in args_by_name and args_by_name[name].get("redact") is not True:
+            err("redact", f"`{name}` is free text, so it carries \"redact\": true")
+    if "from" in args_by_name:
+        is_path = call in ("file.mv", "file.cp")
+        if (args_by_name["from"].get("redact") is True) != is_path:
+            err("redact", "`from` is redacted where it is a path (file mv, file cp) and not where it is a Branch")
 
     # with sections
     for name, section in withs.items():
@@ -781,6 +928,7 @@ def check_row(family, row, today, state):
         err("examples.short", "`examples.short` is a list of one or more JSON lines")
         shorts = []
     is_doctor = call in DOCTOR_THING
+    parsed = []
     for n, line in enumerate(shorts, 1):
         label, text = unlabel(line)
         tag = f"line {n}" + (f" ({label})" if label else "")
@@ -819,7 +967,9 @@ def check_row(family, row, today, state):
                 for key in item_always:
                     if key not in entry:
                         err("examples.short", f"{tag}: items[{i}] lacks `{key}`, which is in item.short.always")
+        parsed.append(value)
         check_states(value, True, lambda what: err("state", f"short {tag}: {what}"))
+        check_lists(value, lambda what: err("lists", f"short {tag}: {what}"))
         if is_doctor:
             check_doctor_short(value, lambda what: err("doctor", f"short {tag}: {what}"))
         naming(call, value, warnings.append)
@@ -849,7 +999,9 @@ def check_row(family, row, today, state):
                         more, less = sorted(got - set(item_long)), sorted(set(item_long) - got)
                         err("examples.long", f"items[{i}] does not have exactly `item.long`:"
                             + (f" extra {', '.join(more)};" if more else "") + (f" missing {', '.join(less)}" if less else ""))
+            parsed.append(value)
             check_states(value, False, lambda what: err("state", f"long: {what}"))
+            check_lists(value, lambda what: err("lists", f"long: {what}"))
             if "ok" in value and not is_doctor and value["ok"] is not True:
                 err("examples.long", "`ok` is always true in the long form of a call that is not a doctor")
             if is_doctor:
@@ -972,6 +1124,75 @@ def check_row(family, row, today, state):
     if item is not None and "state" in item_always:
         err("state", "a list row leaves `state` out when ready: it belongs in item.short.sometimes")
 
+    # the row's own states (review fix 13): the reasons and op names its thing can answer
+    states = row.get("states")
+    has_state = "state" in long or "state" in item_long
+    seen_reasons, seen_ops = [], []
+    for form in parsed:
+        for obj in [form] + [e for e in form.get("items") or [] if isinstance(e, dict)] if isinstance(form.get("items"), list) else [form]:
+            if obj.get("state") == "broken" and obj.get("reason") is not None:
+                seen_reasons.append(obj["reason"])
+            if isinstance(obj.get("op"), dict) and "name" in obj["op"] and "state" in obj:
+                seen_ops.append(obj["op"]["name"])
+    if states is None:
+        if has_state:
+            err("states", "its answer has `state`, so the row lists its possible reasons and op names in "
+                "`states`: {\"reasons\": [...], \"ops\": [...]}")
+    elif not isinstance(states, dict) or set(states) != {"reasons", "ops"} or not all(
+            isinstance(states[k], list) and all(isinstance(v, str) for v in states[k]) for k in ("reasons", "ops")):
+        err("states", "`states` is {\"reasons\": [...], \"ops\": [...]}")
+    else:
+        for reason in states["reasons"]:
+            if reason not in REASONS:
+                err("states", f"reason `{reason}` is not one of the reason codes ({', '.join(REASONS)})")
+        for op in states["ops"]:
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", op):
+                err("states", f"op name `{op}` is not snake_case")
+        for reason in dict.fromkeys(seen_reasons):
+            if reason not in states["reasons"]:
+                err("states", f"an example is broken with reason `{reason}`, which `states.reasons` does not list")
+        for op in dict.fromkeys(seen_ops):
+            if op not in states["ops"]:
+                err("states", f"an example's op is named `{op}`, which `states.ops` does not list")
+        state["states"][call] = states
+
+    # a doctor row's closed check lists (review fix 15)
+    if "checks" in row and not is_doctor:
+        err("checks", "`checks` belongs to a doctor row")
+    if is_doctor:
+        lists = normal_checks(row.get("checks"))
+        if "checks" not in row:
+            err("checks", "a doctor row carries `checks`: for each kind of thing whose list it owns, the complete ordered "
+                "list of {check, what, full_only}")
+        elif lists is None:
+            err("checks", "`checks` is {<kind>: [{check, what, full_only}, …]}")
+        else:
+            for kind, entries in lists.items():
+                if CHECK_OWNER.get(kind) != call:
+                    err("checks", f"a {kind}'s check list is owned by {CHECK_OWNER.get(kind, 'no doctor')}, one list per kind; "
+                        "this row does not list it" if kind in CHECK_OWNER else f"`{kind}` is not a kind of thing")
+                    continue
+                ids = []
+                for entry in entries:
+                    if not isinstance(entry, dict) or set(entry) != set(CHECK_ENTRY) or not isinstance(entry["full_only"], bool) \
+                            or not (entry["what"] is None or isinstance(entry["what"], str) and entry["what"].strip()):
+                        err("checks", f"a {kind} check is {{check, what, full_only}}: {entry}")
+                        continue
+                    if entry["what"] is None:
+                        err("checks", f"`{entry['check']}` says what it checks in `what`")
+                    if not re.fullmatch(rf"{kind}\.[a-z][a-z0-9_.]*", str(entry["check"])):
+                        err("checks", f"a {kind}'s check id is `{kind}.<snake_case>`, not `{entry['check']}`")
+                    if entry["full_only"] and kind not in FULL_KINDS:
+                        err("checks", f"`{entry['check']}` is full_only; only a project and a bucket have a Full check (R5)")
+                    ids.append(entry["check"])
+                if len(set(ids)) != len(ids):
+                    err("checks", f"a check id is listed twice in the {kind}'s list")
+                if not entries:
+                    err("checks", f"the {kind}'s list is empty")
+                state["checks"][kind] = entries
+        for form in parsed:
+            state["used_checks"] += [(call, w, k, c, cov) for w, k, c, cov in used_checks(form, DOCTOR_THING[call])]
+
     if is_doctor:
         if always or set(sometimes) != {"ok", "findings", "not_checked"}:
             err("doctor", "a doctor's short is {always: [], sometimes: [ok, findings, not_checked]}")
@@ -1081,7 +1302,9 @@ def decision_totals(md):
 # --- the frame's own examples (checked like the rows') -------------------------------------
 
 T = "2026-11-18T09:16:59Z"
-OUTDATED_FIX = "layerfs machine stop demo-build && layerfs machine start demo-build"
+# an outdated worker's fix (review fix 5): the plain form when no Sandbox is recorded on the machine, --force when some are
+OUTDATED_FIX = "layerfs machine stop demo-build --force && layerfs machine start demo-build"
+OUTDATED_MESSAGE = "worker is from another build; 2 Sandboxes are on it"
 
 
 def _check(name, outcome="pass", source=None):
@@ -1096,42 +1319,70 @@ def _node(kind, handle, status="ok", checks=(), blocked_by=None, reason=None, **
 
 
 BLOCK = {"machine": "demo-build", "reason": "outdated"}
-DOCTOR_EXAMPLES = {
-    "clean": ("machine.doctor", "layerfs machine doctor dev", {"ok": True}, {
-        "ok": True, "findings": [], "not_checked": [], "status": "ok",
-        "counts": {"ok": 3, "notice": 0, "warning": 0, "error": 0, "not_checked": 0}, "observed_at": T,
-        "tree": _node("machine", "dev", checks=[_check("machine.state"), _check("machine.worker.ping"),
-                                                _check("machine.worker.compatibility"), _check("machine.capacity")],
-                      stores=[_node("store", "shop", checks=[_check("store.record"), _check("store.schema")])],
-                      sandboxes=[_node("sandbox", "tests", checks=[_check("sandbox.daemon")])])}),
-    "problem": ("machine.doctor", "layerfs machine doctor demo-build", {
-        "findings": [{"machine": "demo-build", "check": "machine.worker.compatibility", "severity": "error",
-                      "message": "worker is from another build", "fix": OUTDATED_FIX}],
-        "not_checked": [{"store": "demo-build-cache", "blocked_by": BLOCK}, {"sandbox": "build-1", "blocked_by": BLOCK}]}, {
-        "ok": False,
-        "findings": [{"machine": "demo-build", "check": "machine.worker.compatibility", "severity": "error",
-                      "message": "worker is from another build", "fix": OUTDATED_FIX, "from": None,
-                      "evidence": {"protocol": 3}}],
-        "not_checked": [{"store": "demo-build-cache", "check": None, "blocked_by": BLOCK, "reason": None},
-                        {"sandbox": "build-1", "check": None, "blocked_by": BLOCK, "reason": None}],
-        "status": "error", "counts": {"ok": 0, "notice": 0, "warning": 0, "error": 1, "not_checked": 2}, "observed_at": T,
-        "tree": _node("machine", "demo-build", "error",
-                      [_check("machine.state"), _check("machine.worker.ping"), _check("machine.worker.compatibility", "error")],
-                      stores=[_node("store", "demo-build-cache", "not_checked", blocked_by=BLOCK)],
-                      sandboxes=[_node("sandbox", "build-1", "not_checked", blocked_by=BLOCK)])}),
-    "could_not": ("store.doctor", "layerfs store doctor qv2-store", {
-        "findings": [{"project": "qv2-store/qv2-probe", "check": "project.listed", "severity": "notice",
-                      "message": "on record, but the Store does not list it",
-                      "fix": "layerfs project delete qv2-store/qv2-probe"}],
-        "not_checked": [{"project": "qv2-store/qv2-strata", "check": "project.listed", "reason": "timeout"}]}, None),
-}
-PROGRESS_EXAMPLE = [
-    {"phase": "self", "done": 1, "total": 3,
-     "node": _node("machine", "native", checks=[_check("machine.state"), _check("machine.worker.ping"), _check("machine.capacity")])},
-    {"phase": "stores", "done": 2, "total": 3,
-     "node": _node("store", "qv2-store", checks=[_check("store.record"), _check("store.schema")])},
-    {"phase": "sandboxes", "done": 3, "total": 3, "node": _node("sandbox", "tests", "not_checked", reason="timeout")},
-]
+OUTDATED_CHECK = "machine.worker.compatibility"
+# used only until the rows' own lists are read (a partial build)
+FALLBACK_CHECKS = {"machine": ["machine.state", OUTDATED_CHECK, "machine.capacity"], "store": ["store.record", "store.schema"],
+                   "sandbox": ["sandbox.record"], "project": ["project.record", "project.listed"]}
+DOCTOR_EXAMPLES, PROGRESS_EXAMPLE = {}, []
+
+
+def set_frame(lists):
+    """The frame's own doctor examples, with each node's checks taken from its kind's closed list."""
+    def ids(kind, skip=()):
+        entries = lists.get(kind) or [{"check": c, "full_only": False} for c in FALLBACK_CHECKS[kind]]
+        return [e["check"] for e in entries if not e.get("full_only") and e["check"] not in skip]
+
+    def run(kind, skip=(), stop=None, outcome="error"):
+        """The kind's shallow list, all passed; with `stop`, up to that check, which has `outcome` (the ones after it are not made)."""
+        names = ids(kind, skip)
+        if stop:
+            assert stop in names, f"the frame's examples use `{stop}`, which is not in the {kind}'s check list"
+            names = names[:names.index(stop) + 1]
+        return [_check(n, outcome if n == stop else "pass") for n in names]
+
+    no_link = ("store.backups",)  # a Store with no bucket link: the check does not apply and is left out
+    finding = {"machine": "demo-build", "check": OUTDATED_CHECK, "severity": "error", "message": OUTDATED_MESSAGE,
+               "fix": OUTDATED_FIX}
+    listed = ids("project")[-1]
+    DOCTOR_EXAMPLES.clear()
+    DOCTOR_EXAMPLES.update({
+        "clean": ("machine.doctor", "layerfs machine doctor dev", {"ok": True}, {
+            "ok": True, "findings": [], "not_checked": [], "status": "ok",
+            "counts": {"ok": 3, "notice": 0, "warning": 0, "error": 0, "not_checked": 0}, "observed_at": T,
+            "tree": _node("machine", "dev", checks=run("machine"),
+                          stores=[_node("store", "shop", checks=run("store", no_link))],
+                          sandboxes=[_node("sandbox", "tests", checks=run("sandbox"))])}),
+        "problem": ("machine.doctor", "layerfs machine doctor demo-build", {
+            "findings": [finding],
+            "not_checked": [{"store": "demo-build-cache", "blocked_by": BLOCK}, {"sandbox": "build-1", "blocked_by": BLOCK},
+                            {"sandbox": "build-2", "blocked_by": BLOCK}]}, {
+            "ok": False,
+            "findings": [dict(finding, **{"from": None, "evidence": {"protocol": 3, "sandbox_count": 2}})],
+            "not_checked": [{"store": "demo-build-cache", "check": None, "blocked_by": BLOCK, "reason": None},
+                            {"sandbox": "build-1", "check": None, "blocked_by": BLOCK, "reason": None},
+                            {"sandbox": "build-2", "check": None, "blocked_by": BLOCK, "reason": None}],
+            "status": "error", "counts": {"ok": 0, "notice": 0, "warning": 0, "error": 1, "not_checked": 3}, "observed_at": T,
+            "tree": _node("machine", "demo-build", "error", run("machine", stop=OUTDATED_CHECK),
+                          stores=[_node("store", "demo-build-cache", "not_checked", blocked_by=BLOCK)],
+                          sandboxes=[_node("sandbox", "build-1", "not_checked", blocked_by=BLOCK),
+                                     _node("sandbox", "build-2", "not_checked", blocked_by=BLOCK)])}),
+        "could_not": ("store.doctor", "layerfs store doctor qv2-store", {
+            "findings": [{"project": "qv2-store/qv2-probe", "check": listed, "severity": "notice",
+                          "message": "on record, but the Store does not list it",
+                          "fix": "layerfs project delete qv2-store/qv2-probe"}],
+            "not_checked": [{"project": "qv2-store/qv2-strata", "check": listed, "reason": "timeout"}]}, None),
+    })
+    PROGRESS_EXAMPLE[:] = [
+        {"phase": "self", "done": 1, "total": 3, "node": _node("store", "qv2-store", checks=run("store", no_link))},
+        {"phase": "projects", "done": 2, "total": 3, "node": _node("project", "qv2-store/qv2-probe", "notice",
+                                                                    run("project", stop=listed, outcome="notice"))},
+        {"phase": "projects", "done": 3, "total": 3,
+         "node": _node("project", "qv2-store/qv2-strata", "not_checked", run("project", stop=listed, outcome="not_checked"),
+                       reason="timeout")},
+    ]
+
+
+set_frame({})
 
 
 def check_frame():
@@ -1148,6 +1399,19 @@ def check_frame():
         assert list(event) == PROGRESS_EVENT + ["node"] and event["phase"] in PHASES
     assert not problems, problems
     assert all(code in CODE_NAMES for code in TODAY_CODES) and set(COMPANIONS) == set(STATE_NAMES)
+
+
+def frame_checks():
+    """The check ids the frame's own examples name, in the form check_doctor_lists reads."""
+    found = []
+    for name, (call, _, short, long) in DOCTOR_EXAMPLES.items():
+        for value in (short, long):
+            found += [(f"the frame's `{name}` example", w, k, c, cov) for w, k, c, cov in used_checks(value, DOCTOR_THING[call])]
+    for event in PROGRESS_EXAMPLE:
+        kind = thing_key(event["node"])
+        found += [("the frame's progress example", f"the {kind} node", kind, c["check"], event["node"]["coverage"])
+                  for c in event["node"]["checks"]]
+    return found
 
 
 # --- rendering ------------------------------------------------------------------------------
@@ -1186,15 +1450,16 @@ def doctor_keys_table():
            "(an object, or null). The short form leaves a null <code>fix</code> and <code>from</code> out."),
         ("not_checked", "short when any, long", "What could not be checked (R3). Each entry names its thing and carries exactly one of "
          "<code>blocked_by</code> (<code>{&lt;thing&gt;, reason}</code>, the same object the status calls answer) or <code>reason</code>: "
-         + code_list(NOT_CHECKED_REASONS) + ". <code>check</code> is the first check that was not made; it is left out (null in the long form) "
+         + code_list(NOT_CHECKED_REASONS) + ". This <code>reason</code> says why a check that was tried gave no verdict; it is a separate list "
+         "from a state's reason codes, which appear here only inside <code>blocked_by</code>. <code>check</code> is the first check that was not made; it is left out (null in the long form) "
          "when none of the thing's checks was made. An entry has no severity and is never a finding. A check that does not apply is left out of the report."),
         ("status", "long", "The worst among the things in the tree and the findings, one of " + code_list(STATUSES) + ". Worst first: " + code_list(WORST_FIRST, " &gt; ") + "."),
-        ("counts", "long", "Things by status: <code>{" + ", ".join(STATUSES) + "}</code>. Each thing in the tree is counted once, by its own status; every key is always present."),
+        ("counts", "long", "Things by status: <code>{" + ", ".join(STATUSES) + "}</code>. Each thing in the tree is counted once, by its own status; every key is always present. It is the one plural key that is a map and not a list."),
         ("observed_at", "long", "When the doctor finished."),
         ("tree", "long",
          "The thing's node and, under it, one list per kind of thing directly on it. A node: its thing by its own word, <code>status</code>, "
          "<code>coverage</code> (" + code_list(COVERAGE) + ": what this run checked on it; <code>full</code> only on a project or a bucket whose Full check ran), "
-         "<code>checks</code> (each <code>{" + ", ".join(CHECK_KEYS) + "}</code>, in the order they ran; an outcome is " + code_list(OUTCOMES)
+         "<code>checks</code> (each <code>{" + ", ".join(CHECK_KEYS) + "}</code>, in the order they ran, with ids from that kind's closed list below; an outcome is " + code_list(OUTCOMES)
          + ": passed, its finding's severity, or not made), and <code>blocked_by</code> and <code>reason</code> (one of them set when its status is "
          "<code>not_checked</code>, both null otherwise). Child lists: " + "; ".join(f"{k}: {', '.join(v)}" for k, v in CHILDREN.items() if v)
          + ". A child node has no lists of its own. A project's and a bucket's tree is their one node."),
@@ -1202,6 +1467,97 @@ def doctor_keys_table():
     body = "\n".join(f'          <tr><td class="call">{k}</td><td class="plain">{f}</td><td class="plain">{d}</td></tr>' for k, f, d in rows)
     return ('<div class="tbl"><table style="min-width:760px">\n        <thead><tr><th style="width:12%">Key</th><th style="width:16%">Form</th>'
             "<th>Holds</th></tr></thead>\n        <tbody>\n" + body + "\n        </tbody>\n      </table></div>")
+
+
+READY_TIP = {"home": "version and build", "machine": "CPU, memory, free disk", "store": "idle, or in use by N",
+             "project": "last Commit", "sandbox": "Workspaces, running commands",
+             "workspace": 'idle or 1 command running; N uncommitted; <span class="dot warn"></span> Branch moved',
+             "bucket": "provider, last backup"}
+WAITS_ON = {"home": "—", "machine": "—", "store": "its machine (sqlite); a PostgreSQL Store shows a dot per machine instead",
+            "project": "machine, or its Store while Working", "sandbox": "machine", "workspace": "Sandbox, machine", "bucket": "—"}
+OP_VERBS = {"create": "Creating", "start": "Starting", "stop": "Stopping", "remove": "Removing", "move": "Moving",
+            "compact": "Compacting", "backup": "Backing up", "restore": "Restoring", "export": "Exporting",
+            "delete": "Deleting", "mount": "Mounting", "commit": "Committing", "cancel": "Cancelling",
+            "unmount": "Unmounting", "update": "Updating", "init": "Setting up", "connect": "Connecting",
+            "prune": "Pruning", "pull": "Pulling", "push": "Pushing"}
+
+
+def entity_states(state):
+    """The per-entity table of status.html, from the rows' `states` fields (review fix 13)."""
+    by_thing = {}
+    for call, states in state["states"].items():
+        family = call.split(".")[0]
+        entry = by_thing.setdefault(STATE_THING.get(family, family), {"reasons": [], "ops": [], "calls": []})
+        entry["calls"].append(call)
+        entry["ops"] += [op for op in states["ops"] if op not in entry["ops"]]
+        entry["reasons"] += [r for r in states["reasons"] if r not in entry["reasons"]]
+    rows = []
+    for thing in [t for t in THINGS if t in by_thing] + [t for t in by_thing if t not in THINGS]:
+        entry = by_thing[thing]
+        ops = " · ".join(f"<code>{E(op)}</code> {E(OP_VERBS.get(op, op.replace('_', ' ').capitalize()))}" for op in entry["ops"]) or "—"
+        reasons = " · ".join(f"<code>{E(r)}</code> {E(r.replace('_', ' ').capitalize())}"
+                             for r in REASONS if r in entry["reasons"]) or "—"
+        rows.append(f'          <tr><td class="call">{thing}</td><td class="plain">{READY_TIP.get(thing, "—")}</td>'
+                    f'<td class="plain">{ops}</td><td class="plain">{WAITS_ON.get(thing, "—")}</td><td class="plain">{reasons}</td>'
+                    f'<td class="plain">{code_list(entry["calls"])}</td></tr>')
+    return ('<div class="tbl"><table style="min-width:900px">\n        <thead><tr><th>Entity</th><th>Ready tip</th>'
+            "<th><code>op</code> names, as Working verbs</th><th>Waits on</th><th>Reasons, as Needs-you words</th>"
+            "<th>From the rows of</th></tr></thead>\n        <tbody>\n" + "\n".join(rows) + "\n        </tbody>\n      </table></div>")
+
+
+def doctor_checks_table(state):
+    """The closed check lists by kind (review fix 15), as collected into calls.json."""
+    rows = []
+    for kind in [k for k in CHECK_OWNER if k in state["checks"]]:
+        entries = state["checks"][kind]
+        for n, entry in enumerate(entries):
+            first = (f'<td class="call" rowspan="{len(entries)}">{kind}<span class="help">{len(entries)} checks, owned by '
+                     f'{CHECK_OWNER[kind]}</span></td>') if n == 0 else ""
+            rows.append(f'          <tr>{first}<td class="cli" style="width:auto">{E(str(entry.get("check")))}</td>'
+                        f'<td class="plain">{md_inline(str(entry.get("what") or ""))}</td>'
+                        f'<td class="plain">{"Full check only" if entry.get("full_only") else ""}</td></tr>')
+    return ('<div class="tbl"><table style="min-width:760px">\n        <thead><tr><th style="width:16%">Kind</th><th style="width:26%">Check</th>'
+            "<th>What it checks</th><th style=\"width:12%\"></th></tr></thead>\n        <tbody>\n" + "\n".join(rows)
+            + "\n        </tbody>\n      </table></div>")
+
+
+def fold(value, indent=0, width=74):
+    """JSON on as few lines as fit the width: a nested value that does not fit starts its own line."""
+    flat = compact(value)
+    if indent + len(flat) <= width or not isinstance(value, (dict, list)) or not value:
+        return flat
+    pad = ",\n" + " " * (indent + 1)
+    if isinstance(value, list):
+        return "[" + pad.join(fold(v, indent + 1, width) for v in value) + "]"
+    out, line = [], ""
+    for k, v in value.items():
+        piece = json.dumps(k, ensure_ascii=False) + ":" + fold(v, indent + 1, width)
+        if "\n" in piece or (line and indent + 2 + len(line) + len(piece) > width):
+            if line:
+                out.append(line)
+            line = piece
+            if "\n" in piece:
+                out.append(piece)
+                line = ""
+        else:
+            line = f"{line},{piece}" if line else piece
+    if line:
+        out.append(line)
+    return "{" + pad.join(out) + "}"
+
+
+def home_tree_example(state):
+    """`home get --with tree`, from the home.get row's own example."""
+    row = state["calls"].get("home.get") or {}
+    for line in (row.get("examples") or {}).get("short") or []:
+        _, text = unlabel(line)
+        try:
+            value = json.loads(text)
+        except ValueError:
+            continue
+        if isinstance(value, dict) and "tree" in value:
+            return "$ layerfs home get --with tree\n" + E(fold(value, width=46), quote=False)
+    return "$ layerfs home get --with tree\n{…}"
 
 
 def doctor_example(name, long=False):
@@ -1446,7 +1802,10 @@ def render(S, fams, today, state, pairs_mod, draft):
     front = "".join(
         f'<tr><td class="cli" style="width:auto">{E(o["cli"])}</td><td class="cli" style="width:auto">{E(o["node"] or "—")}</td>'
         f'<td class="cli" style="width:auto">{E(o["python"] or "—")}</td><td class="plain">{E(o["help"])}</td></tr>' for o in GLOBAL_OPTIONS)
-    stdin_secret = calls_where(lambda r: r["stdin"] == "secret")
+    secrets = [(r["call"], o) for r in rows for o in r["options"] if o.get("shell")]
+    redacted = [a["name"] for r in rows for a in r["positionals"] + json_row(r)["options"] if a.get("redact")]
+    redacted_calls = calls_where(lambda r: any(a.get("redact") for a in r["positionals"] + json_row(r)["options"]))
+    not_listed = calls_where(lambda r: "not_listed" in r["long"])
     py_keywords = sorted({n for n in ["with"] + [a["name"] for r in rows for a in r["positionals"] + r["options"]] if keyword.iskeyword(n)})
     RULES = [
         ("Call form", "<code>layerfs &lt;family&gt; &lt;call&gt; &lt;positionals&gt; [--options]</code>. Two levels only. Positionals go from the outside in: owner, Branch, path or new name. Anything optional is an option"
@@ -1456,28 +1815,33 @@ def render(S, fams, today, state, pairs_mod, draft):
         ("Long form", "<code>--detail</code>, for the UI. Every short key with the same name and type, plus flat extra keys. Every key of the row's <code>long</code> list is always present. Where a row has <code>ok</code>, the long form keeps it and it is true; only a doctor's <code>ok</code> can be false, when it has findings or things it could not check. It adds no I/O."),
         ("Sections", f"<code>--with</code> adds one named section to an answer and nothing else. Values: {code_list(with_values)}. A section answers under its own key (<code>\"live\": {{…}}</code>)"
          + (f", except where a row adds its keys flat to each item or to the top level ({E('; '.join(top_sections))})" if top_sections else "") + "."),
-        ("Commits in", f"<code>--at C</code> pins a read: a full id or a prefix of 8 or more characters, resolved by the Store ({len(has_option('at'))} calls). <code>--expected C</code> guards a write: <code>Conflict</code> if the head moved ({len(has_option('expected'))} calls). <code>-m</code> gives the message on every call that makes a Commit ({len(has_option('message'))} calls)."),
-        ("Commits out", "A write answers the new <code>commit</code>, a plain id, the same word <code>--at</code> and <code>--expected</code> take. Reads answer none in the short form. History calls answer Commits because Commits are what they list."),
-        ("Paging", f"One convention. In: <code>--limit N --cursor C</code>; the default limit is {LIST_SHAPE['default_limit']['list']} for a list and {LIST_SHAPE['default_limit']['log']} for a log, at most {LIST_SHAPE['max_limit']}. Out: <code>{{\"items\":[…],\"next_cursor\":\"…\"}}</code>; <code>next_cursor</code> is left out at the end. A page ends early at 64 KiB with a cursor, never <code>Capacity</code>. The cursor carries the pins and filters. {len(cursor_calls)} calls page this way"
+        ("Commits in", f"<code>--at C</code> pins a read: a full id or a prefix of 8 or more characters, resolved by the Store ({len(has_option('at'))} calls). <code>--expected C</code> guards a write: <code>Conflict</code> if the head moved ({len(has_option('expected'))} calls). <code>-m</code> gives the message on every call that makes a Commit ({len(has_option('message'))} calls). A prefix that matches more than one Commit is refused <code>InvalidInput</code> with <code>matches</code>, a count. A <code>&lt;ref&gt;</code> or <code>--from R</code> is a Branch name first; when no such Branch exists it is a Commit id or prefix. <code>commit diff &lt;ref&gt;</code> of a Commit with no parent compares with its Branch's <code>base</code>, and with the empty tree when there is none."),
+        ("Commits out", "A write answers the new <code>commit</code>, a plain id, the same word <code>--at</code> and <code>--expected</code> take. Reads answer none in the short form. History calls answer Commits because Commits are what they list. An answer always carries the full id, 66 hex characters; the examples on this page cut each id to 8 characters and an ellipsis."),
+        ("Paging", f"One convention. In: <code>--limit N --cursor C</code>; the default limit is {LIST_SHAPE['default_limit']['list']} for a list and {LIST_SHAPE['default_limit']['log']} for a log, at most {LIST_SHAPE['max_limit']}. Out: <code>{{\"items\":[…],\"next_cursor\":\"…\"}}</code>; <code>next_cursor</code> is left out at the end. A page ends early at 64 KiB with a cursor, never <code>Capacity</code>. {len(cursor_calls)} calls page this way"
          + (f", the log calls among them ({code_list(log_calls)}), newest first" if log_calls else "")
          + (f". {len(unpaged)} list calls take no cursor because they are bounded, and each row says why: {code_list(unpaged)}" if unpaged else "") + "."),
+        ("Cursors", "A cursor carries its call's filters and, where the call pins a Commit, the pin; <code>project list</code> and <code>branch list</code> cursors carry filters only. A cursor given with different filters or another pin, or to another call, is refused <code>InvalidInput</code>. A cursor whose pinned Commit is gone is refused <code>NotFound</code>."),
+        ("Partial lists", "A list that could not include everything still answers, and names what is missing in <code>not_listed</code>: <code>[{&lt;thing&gt;, blocked_by | reason, message}]</code>, one entry per thing it could not ask, with <code>blocked_by</code> as in a state or <code>reason</code> one of "
+         + code_list(NOT_LISTED_REASONS) + (f" ({code_list(not_listed)})" if not_listed else "") + ". <code>refused</code> is a thing that answered and refused, such as a bucket that rejects its key; <code>message</code> carries the refusal. It is never a refusal of the whole call. A doctor's <code>not_checked</code> entry takes " + code_list(NOT_CHECKED_REASONS) + " only."),
         ("Windows", f"Text by lines: <code>--line N</code> (1-based) and <code>--limit N</code> (default {LIST_SHAPE['default_limit']['line']}), answering <code>next_line</code> when more remains"
          + (f" ({code_list(line_calls)})" if line_calls else "") + "."
          + (f" Bytes, for UI file views only: {code_list(byte_calls)}." if byte_calls else "")),
         ("Inline lists", "A list inside a result (conflicts, overwritten paths, changes) shows its first 20 entries; only then does <code>&lt;list&gt;_count</code> appear. The rest comes from the call that owns the list. A field never changes type when cut."),
         ("Names", "Each thing by its own word (<code>project</code>, <code>branch</code>, <code>workspace</code>, <code>sandbox</code>, <code>machine</code>, <code>store</code>, <code>bucket</code>, <code>commit</code>), never <code>name</code> except for what a call creates. <code>engine</code> is sqlite or postgresql; <code>type</code> is file, dir or symlink only. Enum values are lowercase."),
-        ("Fields", "Byte totals end in <code>_bytes</code>; one object's length is <code>size</code>. <code>*_at</code> is ISO-8601 UTC; <code>*_ms</code> is a duration. A plural noun is always a list, never a number. A count is <code>&lt;thing&gt;_count</code> (<code>file_count</code>); the count of a list that was cut is <code>&lt;list&gt;_count</code> and appears only beside that list."),
-        ("State", "One of six words on every machine, Store, project, Sandbox and Workspace, each with the companion below and no other. A <code>get</code> always answers <code>state</code>; a list row leaves it out when it is <code>ready</code>. The reasons and rules are under <a href=\"#status\">Status</a>.</span>"
+        ("Fields", "Byte totals end in <code>_bytes</code>; one object's length is <code>size</code>. <code>*_at</code> is ISO-8601 UTC; <code>*_ms</code> is a duration. A plural noun is always a list, never a number. A count is <code>&lt;thing&gt;_count</code> (<code>file_count</code>); the count of a list that was cut is <code>&lt;list&gt;_count</code> and appears only beside that list. <code>counts</code> in a doctor's answer is the one plural that is a map, from each status to a number of things. <code>op</code> is only ever the state companion object; a log row names its call as <code>call</code>."),
+        ("State", "One of six words on every machine, Store, project, Sandbox and Workspace, each with the companion below and no other. A <code>get</code> always answers <code>state</code>; a list row leaves it out when it is <code>ready</code>. A state's <code>reason</code> is one of the reason codes; the <code>reason</code> of a doctor's <code>not_checked</code> entry (" + code_list(NOT_CHECKED_REASONS) + ") and of a <code>not_listed</code> entry (" + code_list(NOT_LISTED_REASONS) + ") are separate lists. The reasons and rules are under <a href=\"#status\">Status</a>.</span>"
          + state_table(False) + "<span>"),
-        ("Refusals", f"<code>{{\"error\",\"message\",\"fix\"}}</code> on stderr, plus the fields the next call needs (a <code>Conflict</code> names the head as <code>commit</code>). <code>fix</code> is a runnable command and is left out when there is none. <code>detail</code> only in the long form. {len(REFUSAL_CODES)} codes: {code_list(CODE_NAMES)}. Today's refusal is <code>{{\"code\",\"message\",\"detail\"}}</code> and the code has no closed list; its other codes fold into these at the boundary: {fold}."),
+        ("Refusals", f"<code>{{\"error\",\"message\",\"fix\"}}</code> on stderr, plus the fields the next call needs (a <code>Conflict</code> names the head as <code>commit</code>). <code>fix</code> is a runnable command and is left out when there is none. <code>detail</code> only in the long form. {len(REFUSAL_CODES)} codes: {code_list(CODE_NAMES)}. Today's refusal is <code>{{\"code\",\"message\",\"detail\"}}</code> and the code has no closed list; its other codes fold into these at the boundary: {fold}. An edit string that is not found is <code>NotFound</code>; one that matches more than once is <code>InvalidInput</code> with <code>matches</code>, a count, and a <code>fix</code> that adds <code>--replace-all</code>."),
         ("Exit codes", f"<code>0</code>: {E(EXIT_CODES['0'])}. <code>2</code>: {E(EXIT_CODES['2'])}. <code>125</code>: {E(EXIT_CODES['125'])}. As today. <code>workspace exec</code> exits with the command's own code and prints its result JSON on stdout; a refusal prints <code>{{\"error\",…}}</code> on stderr, nothing on stdout, and exits 125."),
         ("Global options", "The same on every call, in each front end:</span>"
          f'<div class="tbl"><table class="mini" style="min-width:520px"><thead><tr><th>Shell</th><th>Node</th><th>Python</th><th>Does</th></tr></thead><tbody>{front}</tbody></table></div><span>'
          + "Python spells a name that is a Python keyword with a trailing underscore"
          + (f": {code_list([k + '_=' for k in py_keywords])}" if py_keywords else "") + ". "
-         + (f"Secrets come only on stdin ({code_list(stdin_secret)})." if stdin_secret else "Secrets come only on stdin.")),
+         + "<code>log_tag</code> is an argument in Node and Python; the shell reads <code>LAYERFS_LOGS_TAG</code>, a setting of the caller, not call context. "
+         + "A secret is never a shell argument: the shell reads it from stdin and takes it no other way, and Node and Python pass the value as the option"
+         + (" (" + "; ".join(f"<code>{E(o['shell'])}</code> on {cmd(c)}, <code>{o['name']}</code> in Node and Python" for c, o in secrets) + ")" if secrets else "") + "."),
         ("Progress", f"<code>--progress</code> prints one JSON line per event on stderr, <code>{{{', '.join(chr(34) + k + chr(34) for k in PROGRESS_EVENT)}}}</code>; Node and Python pass <code>on_progress</code>. {len(state['progress'])} calls report it: {code_list(state['progress'])}. A doctor's event also carries <code>node</code>, the thing that just finished."),
-        ("Call log", f"Every call writes one line to the home's call log, except the calls whose row says quiet, which a UI polls: {code_list(state['quiet']) or 'none'}."),
+        ("Call log", f"Every call writes one line to the home's call log, except the calls whose row says quiet, which a UI polls: {code_list(state['quiet']) or 'none'}. An argument whose row says <code>redact</code> is logged as its byte count, never its value: paths, commands, messages, edit strings, URLs, patterns, content and secrets, as today, and the new free-text arguments ({code_list(NEW_REDACTED)}). That is {len(redacted)} arguments on {len(redacted_calls)} calls ({code_list(sorted(set(redacted)))}). A <code>from</code> that is a path is redacted; a <code>from</code> that is a Branch is not. Every <code>cursor</code> is redacted, because a cursor carries its call's filters, which may hold a redacted path or pattern. <code>log_tag</code> tags the line, as today."),
         ("One attempt", "Every call is one attempt, with no retry and no replay of a lost reply. The in-between states are stated (C13): a <code>sandbox create --mount</code> whose mount is refused keeps the Sandbox and names it in the refusal; <code>store move</code> goes to or from this computer only; a lost reply on <code>machine start</code> or <code>machine stop</code> is settled by <code>machine get --with live</code>."),
     ]
     rules = ['    <section id="rules">', '      <h2>Rules for every call</h2>', '      <div class="rules">']
@@ -1593,11 +1957,15 @@ def render(S, fams, today, state, pairs_mod, draft):
         "REASON_CODES": code_list(REASONS),
         "BROKEN_REASONS": code_list(BROKEN_REASONS),
         "DOCTOR_KEYS": doctor_keys_table(),
+        "DOCTOR_CHECKS": doctor_checks_table(state),
+        "ENTITY_STATES": entity_states(state),
+        "HOME_TREE": home_tree_example(state),
+        "OUTDATED_FIX": E(OUTDATED_FIX),
         "DOCTOR_EX_CLEAN": doctor_example("clean"),
         "DOCTOR_EX_PROBLEM": doctor_example("problem"),
         "DOCTOR_EX_PROBLEM_LONG": doctor_example("problem", True),
         "DOCTOR_EX_COULD_NOT": doctor_example("could_not"),
-        "DOCTOR_EX_PROGRESS": "$ layerfs machine doctor native --progress\n" + "\n".join(E(compact(e), quote=False) for e in PROGRESS_EXAMPLE),
+        "DOCTOR_EX_PROGRESS": "$ layerfs store doctor qv2-store --progress\n" + "\n".join(E(compact(e), quote=False) for e in PROGRESS_EXAMPLE),
         "STATUSES": code_list(STATUSES),
         "OUTCOMES": code_list(OUTCOMES),
         "PHASES": code_list(PHASES),
@@ -1617,6 +1985,13 @@ def render(S, fams, today, state, pairs_mod, draft):
     return page, (short_total, long_total, npairs)
 
 
+def json_row(row):
+    """A row as calls.json holds it: without the page-only fields, and with every `cursor` option redacted."""
+    out = {k: v for k, v in row.items() if k not in HTML_ONLY}
+    out["options"] = [dict(o, redact=True) if o.get("name") == "cursor" else o for o in row["options"]]
+    return out
+
+
 def calls_json(fams, state):
     rows = [r["call"] for f in fams for r in f["calls"]]
     return {
@@ -1629,12 +2004,12 @@ def calls_json(fams, state):
         "exit_codes": EXIT_CODES,
         "with_values": [w for w in WITH_ORDER if w in state["with"]],
         "global_options": GLOBAL_OPTIONS,
-        "doctor": doctor_shape([c for c in rows if c in DOCTOR_THING]),
+        "doctor": doctor_shape([c for c in rows if c in DOCTOR_THING], {k: state["checks"][k] for k in CHECK_OWNER if k in state["checks"]}),
         "list_shape": LIST_SHAPE,
         "refusal_shape": REFUSAL_SHAPE,
         "progress_event": PROGRESS_EVENT,
         "families": [{"family": f["family"], "who": f.get("who"), "old_count": f.get("old_count"),
-                      "calls": [{k: v for k, v in r.items() if k not in HTML_ONLY} for r in f["calls"]]} for f in fams],
+                      "calls": [json_row(r) for r in f["calls"]]} for f in fams],
     }
 
 
@@ -1667,7 +2042,7 @@ def main(argv):
     table = json.loads((S / "today-table.json").read_text())
     assert table["base"] == BASE and len(table["calls"]) == 84, "today-table.json is not the table at " + BASE
     today = {f'{c["family"]}.{c["call"]}': c for c in table["calls"]}
-    state = {"errors": [], "warnings": [], "calls": {}, "covered": {}, "with": {}, "quiet": [], "progress": [], "agent": [],
+    state = {"errors": [], "warnings": [], "calls": {}, "covered": {}, "with": {}, "quiet": [], "progress": [], "agent": [], "checks": {}, "used_checks": [], "states": {},
              "missing": [], "off_table": table.get("off_table", [])}
     folder = pathlib.Path(values["--families"] or S / "families")
     fams = []
@@ -1697,6 +2072,13 @@ def main(argv):
         if counted + gone != len(today):
             state["errors"].append(f"totals: [today] the old_count values add up to {counted}; with {gone} calls in the gone families that is not {len(today)}")
     check_decisions(state, partial, decision_totals((S / "DECISIONS.md").read_text()))
+    try:
+        set_frame(state["checks"])
+        check_frame()
+    except (AssertionError, KeyError, TypeError, IndexError) as why:
+        state["errors"].append(f"the frame's examples: [checks] they cannot be built from the rows' check lists: {why}")
+        set_frame({})
+    check_doctor_lists(state, partial)
     state["warnings"] = list(dict.fromkeys(state["warnings"]))
     for line in state["warnings"]:
         print("warning:", line)

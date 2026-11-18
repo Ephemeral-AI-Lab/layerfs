@@ -269,8 +269,8 @@ code, .mono { font-family: var(--ds-font-family-code); font-size: 12px; }
 /* the mark group: one mark per check, one focusable signal. Its width is reserved
    from the number of checks, so nothing beside it moves when the marks land. */
 .marks {
-  display: inline-flex; flex: none; align-items: center; justify-content: flex-end; gap: 5px;
-  height: 24px; min-width: calc(var(--n) * 12px + 3px); padding: 0 4px;
+  display: inline-flex; flex: none; align-items: center; justify-content: flex-end; gap: 4px;
+  height: 24px; min-width: calc(var(--n) * 11px + 4px); padding: 0 4px;
   border: 0; border-radius: 6px; background: none; cursor: default;
 }
 span.marks { visibility: hidden; }
@@ -295,8 +295,9 @@ span.marks { visibility: hidden; }
 .cmdLine .lbl { flex: none; width: 34px; padding-top: 4px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
 .checks { display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 0 0 0 42px; list-style: none; }
 .checks li { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.checks li .mk { align-self: center; }
-.checks code { flex: none; }
+.chk { display: inline-flex; flex: none; align-items: baseline; gap: 8px; margin: 0 0 0 -4px; padding: 0 4px; border: 0; border-radius: 4px; background: none; cursor: default; }
+.chk .mk { align-self: center; }
+@media (hover: hover) { .chk:hover { background: var(--dsw-alias-interactive-bg-hover); } }
 .checks .res { min-width: 0; font-size: 12px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 
 /* ---------- tooltip (storage Signal .body / HoverCard) ---------- */
@@ -437,13 +438,13 @@ function markFor(x) {
   if (x.k === 'machine') {
     const pf = x.platform;
     const svg = pf === 'docker' ? brand('docker', size) : pf === 'lima' ? brand('lima', 13) : pf === 'native' ? brand('apple', size) : line('vm', size);
-    return { svg, words: 'Machine, ' + (pf === 'native' ? 'this computer' : pf) };
+    return { svg, words: 'Machine, ' + pf };
   }
   if (x.k === 'store') { const pg = x.engine === 'postgresql'; return { svg: brand(pg ? 'postgresql' : 'sqlite', size), words: 'Store, ' + (pg ? 'PostgreSQL' : 'SQLite') }; }
   if (x.k === 'project') return { svg: layerfsGlyph(size, true), words: 'Project' };
   if (x.k === 'sandbox') return { svg: line('sandbox', size), words: 'Sandbox' };
   if (x.k === 'workspace') return { svg: line('branch', size), words: 'Workspace' };
-  return { svg: x.provider === 'r2' ? brand('cloudflare', size) : x.provider === 'minio' ? brand('minio', size) : line('bucket', size), words: 'Bucket, ' + (x.provider === 'r2' ? 'Cloudflare R2' : x.provider === 'minio' ? 'MinIO' : 'S3') };
+  return { svg: x.provider === 'r2' ? brand('cloudflare', size) : x.provider === 'minio' ? brand('minio', size) : line('bucket', size), words: 'Bucket, ' + (PROVIDER[x.provider] || x.provider) };
 }
 const TAB_ICON = { machines: () => line('machines', 15), stores: () => line('stores', 15), projects: () => layerfsGlyph(15, true), sandboxes: () => line('sandboxes', 15), backups: () => line('bucket', 15) };
 
@@ -451,66 +452,127 @@ const TAB_ICON = { machines: () => line('machines', 15), stores: () => line('sto
    What `layerfs home get --with tree` answers: the ownership tree, from records.
    home > machines, PostgreSQL Stores, buckets; machine > Stores, Sandboxes;
    Store > projects; Sandbox > Workspaces. */
-const MACHINES = [
-  { n: 'LayerFS Home', id: 'native', platform: 'native', fact: 'this computer',
-    stores: ['2026-08-16', 'demo-studio', 'qv2-store', 'sim-website-c69'],
-    sandboxes: [
-      { n: 'tests', project: 'demo-studio/website', ws: [['agent', 'branch agent · idle'], ['main', 'branch main · 1 command running']] },
-      { n: 'metrics', project: 'analytics/events', ws: [['main', 'branch main · idle']] }] },
-  { n: 'demo-build', id: 'demo-build', platform: 'lima', fact: 'lima · 4 CPU · 8 GB',
-    stores: ['demo-build-cache'],
-    sandboxes: [
-      { n: 'build-1', project: 'demo-build-cache/compiler', ws: [['main', 'branch main']] },
-      { n: 'build-2', project: 'demo-build-cache/sdk', ws: [] }] },
-  { n: 'docker', id: 'docker', platform: 'docker', fact: 'docker · 4 CPU · 8 GB', stores: ['sim-website-0ce'], sandboxes: [] },
-  { n: 'dev', id: 'dev', platform: 'lima', fact: 'lima · 4 CPU · 8 GB',
-    stores: ['shop'],
-    sandboxes: [
-      { n: 'sdk-1', project: 'shop/api', ws: [['agent', 'branch agent · 3 uncommitted']] },
-      { n: 'exp-1', project: 'demo-experiments/abc', ws: [['agent', 'branch agent · idle']] },
-      { n: 'funnels', project: 'analytics/funnels', ws: [['main', 'branch main · idle']] }] }
-];
-const PG_STORES = ['demo-experiments', 'analytics'];
-const STORE_FACT = {
-  '2026-08-16': 'sqlite · 340 KB', 'demo-studio': 'sqlite · 410 KB', 'qv2-store': 'sqlite · 4.9 GB', 'sim-website-c69': 'sqlite · 1.5 MB',
-  'demo-build-cache': 'sqlite · 549 KB', 'sim-website-0ce': 'sqlite · 2.0 MB', 'shop': 'sqlite · 213 MB',
-  'demo-experiments': 'postgresql · db.example:5432', 'analytics': 'postgresql · db.example:5432'
+/* Each node holds what the records hold and no more (home.get, section tree):
+   machine {machine, platform, cpus, memory_bytes}; Store {store, engine, projects}, a
+   PostgreSQL Store also connections; Sandbox {sandbox, project, image, workspaces:
+   [{workspace, branch}]}; bucket {bucket, provider}. A project under a Store is a bare
+   name; its handle in commands is <store>/<project>. Row facts come from these keys only. */
+const GB = 1024 * 1024 * 1024;
+const TREE = {
+  home: '~/.layerfs', version: '2.0.0',
+  machines: [
+    { machine: 'LayerFS Home', id: 'native', platform: 'native', cpus: null, memory_bytes: null,
+      stores: [
+        { store: '2026-08-16', engine: 'sqlite', projects: ['2026-08-16'] },
+        { store: 'demo-studio', engine: 'sqlite', projects: ['website', 'design'] },
+        { store: 'qv2-store', engine: 'sqlite', projects: ['qv2-strata', 'qv2-probe'] },
+        { store: 'sim-website-c69', engine: 'sqlite', projects: ['website-c69'] }],
+      sandboxes: [
+        { sandbox: 'tests', project: 'demo-studio/website', image: 'node:22', workspaces: [{ workspace: 'tests:agent', branch: 'agent' }, { workspace: 'tests:main', branch: 'main' }] },
+        { sandbox: 'metrics', project: 'analytics/events', image: 'python:3.13', workspaces: [{ workspace: 'metrics:main', branch: 'main' }] }] },
+    { machine: 'demo-build', id: 'demo-build', platform: 'lima', cpus: 4, memory_bytes: 8 * GB,
+      stores: [{ store: 'demo-build-cache', engine: 'sqlite', projects: ['compiler', 'sdk'] }],
+      sandboxes: [
+        { sandbox: 'build-1', project: 'demo-build-cache/compiler', image: 'rust:1.85', workspaces: [{ workspace: 'build-1:main', branch: 'main' }] },
+        { sandbox: 'build-2', project: 'demo-build-cache/sdk', image: 'node:22', workspaces: [] }] },
+    { machine: 'docker', id: 'docker', platform: 'docker', cpus: 4, memory_bytes: 8 * GB,
+      stores: [{ store: 'sim-website-0ce', engine: 'sqlite', projects: ['website-0ce'] }], sandboxes: [] },
+    { machine: 'dev', id: 'dev', platform: 'lima', cpus: 4, memory_bytes: 8 * GB,
+      stores: [{ store: 'shop', engine: 'sqlite', projects: ['api', 'web'] }],
+      sandboxes: [
+        { sandbox: 'sdk-1', project: 'shop/api', image: 'node:22', workspaces: [{ workspace: 'sdk-1:agent', branch: 'agent' }] },
+        { sandbox: 'exp-1', project: 'demo-experiments/abc', image: 'python:3.13', workspaces: [{ workspace: 'exp-1:agent', branch: 'agent' }] },
+        { sandbox: 'funnels', project: 'analytics/funnels', image: 'python:3.13', workspaces: [{ workspace: 'funnels:main', branch: 'main' }] }] }
+  ],
+  stores: [
+    { store: 'demo-experiments', engine: 'postgresql', projects: ['abc'], connections: [{ machine: null, url: 'postgres://db.example:5432/experiments' }] },
+    { store: 'analytics', engine: 'postgresql', projects: ['events', 'funnels'], connections: [{ machine: null, url: 'postgres://db.example:5432/analytics' }, { machine: 'dev', url: 'postgres://10.0.2.2:5432/analytics' }] }],
+  buckets: [{ bucket: 'r2-main', provider: 'r2' }, { bucket: 'minio-local', provider: 'minio' }, { bucket: 'r2-old', provider: 'r2' }]
 };
-const PROJECTS = [
-  ['2026-08-16', '2026-08-16'], ['demo-studio', 'website'], ['demo-studio', 'design'],
-  ['qv2-store', 'qv2-strata'], ['qv2-store', 'qv2-probe'], ['sim-website-c69', 'website-c69'],
-  ['demo-build-cache', 'compiler'], ['demo-build-cache', 'sdk'], ['sim-website-0ce', 'website-0ce'],
-  ['shop', 'api'], ['shop', 'web'], ['demo-experiments', 'abc'], ['analytics', 'events'], ['analytics', 'funnels']
-];
-const BUCKETS = [
-  { n: 'r2-main', provider: 'r2', fact: 'Cloudflare R2 · 2 Store files' },
-  { n: 'minio-local', provider: 'minio', fact: 'MinIO · 1 Store file' },
-  { n: 'r2-old', provider: 'r2', fact: 'Cloudflare R2 · 1 Store file' }
-];
+/* MOCK ONLY: which sqlite Stores have a bucket link. The tree does not carry this; it only
+   decides whether store.backups is in a Store's report (it is left out with no link). */
+const LINKS = { 'demo-studio': ['r2-main'], 'qv2-store': ['r2-main'], 'sim-website-c69': ['minio-local'], 'shop': ['r2-main', 'r2-old'] };
+/* The frozen, closed check lists (calls.json, doctor.checks): kind -> ordered checks.
+   A check's `what` is its tip. full_only checks are in a report only after a Full check. */
 const CHECKS = {
-  home: ['host.build', 'host.prerequisites', 'host.bundle', 'host.layout', 'host.records', 'host.capacity'],
-  machine: ['machine.record', 'machine.state', 'machine.worker.compatibility', 'machine.capacity'],
-  store: ['store.record', 'store.identity', 'store.schema', 'store.reachable'],
-  project: ['project.record', 'project.listed', 'project.data'],        // project.data: Full check only
-  sandbox: ['sandbox.record', 'sandbox.daemon_connect', 'sandbox.daemon_ready'],
-  workspace: ['workspace.record', 'workspace.mounted', 'workspace.activity'],
-  bucket: ['backup.configuration', 'backup.transport', 'backup.list', 'backup.write']   // backup.write: Full check only
+  home: [
+    { check: "home.build", what: "the calling program exists and can run" },
+    { check: "home.prerequisites", what: "what a Sandbox on this computer needs is installed" },
+    { check: "home.layout", what: "the home folder is a current-layout home this build reads" },
+    { check: "home.records", what: "every record in the home: references between records, file modes, leases and half-finished operations" },
+    { check: "home.bundle", what: "the Linux bundle is present and complete, where a recorded machine needs it" },
+    { check: "home.native_daemon", what: "the daemon for this computer is present and from this build" },
+    { check: "home.artifacts", what: "each machine's configured daemon file is present and can run" },
+    { check: "home.capacity", what: "free space on the disk that holds the home can be measured" }],
+  machine: [
+    { check: "machine.record", what: "its record is valid and names a platform this build runs" },
+    { check: "machine.operation", what: "no operation on it is half-finished or left with its outcome not known" },
+    { check: "machine.configuration", what: "its record makes a valid request to its provider" },
+    { check: "machine.provider", what: "its provider answers and its VM or container runs" },
+    { check: "machine.state", what: "the recorded state agrees with what the provider reports" },
+    { check: "machine.worker.endpoint", what: "a worker endpoint and secret are saved for it" },
+    { check: "machine.worker.auth", what: "the worker accepts the secret and answers hello" },
+    { check: "machine.worker.compatibility", what: "the worker is from this build" },
+    { check: "machine.worker.ping", what: "the worker answers a request" },
+    { check: "machine.capacity", what: "its data disk has room" }],
+  store: [
+    { check: "store.record", what: "its record is valid: name, engine and the saved id" },
+    { check: "store.operation", what: "no operation on it is half-finished or left with its outcome not known, and no lease is stale" },
+    { check: "store.connection", what: "it is reached where it lives: a sqlite Store through its machine; a PostgreSQL Store from this computer, and once more from each machine that has a Sandbox of it, with from naming that machine" },
+    { check: "store.identity", what: "the id in its data is the id in its record" },
+    { check: "store.schema", what: "its schema is the one this build reads" },
+    { check: "store.backups", what: "no backup of it is behind: its heads against each bucket link (sqlite; a notice per bucket)" }],
+  project: [
+    { check: "project.record", what: "the home's record of the project and its folder read, and the Store the record sits under is on record" },
+    { check: "project.listed", what: "the Store's own list holds the project the record names, by its stack id, or by its name for a record without one" },
+    { check: "project.data", what: "everything reachable from main's head and from each Branch's head is read and checked", full_only: true }],
+  sandbox: [
+    { check: "sandbox.record", what: "its record exists, parses and has a supported version" },
+    { check: "sandbox.machine_reference", what: "the machine its record names has a record" },
+    { check: "sandbox.store_reference", what: "the Store of its project has a readable record" },
+    { check: "sandbox.project_reference", what: "its project has a record" },
+    { check: "sandbox.store_placement", what: "a sqlite Store and the Sandbox are on the same machine" },
+    { check: "sandbox.operation", what: "no operation of an ended owner is left on its record" },
+    { check: "sandbox.runtime", what: "its recorded runtime process runs, by id, start time and boot" },
+    { check: "sandbox.route", what: "the saved route to its daemon can be used: its machine's worker, or its forward" },
+    { check: "sandbox.forward_process", what: "the forward's process runs, where the route has one" },
+    { check: "sandbox.worker_compatibility", what: "its machine's worker is from this build, where the worker makes the report" },
+    { check: "sandbox.daemon_keys", what: "the saved daemon endpoint and identities are readable and match the route" },
+    { check: "sandbox.daemon_connect", what: "the daemon accepts a connection" },
+    { check: "sandbox.daemon_auth", what: "the daemon accepts the saved identities" },
+    { check: "sandbox.daemon_instance", what: "the daemon is the instance the Sandbox was started with" },
+    { check: "sandbox.daemon_ready", what: "the daemon reports that it is ready for calls" },
+    { check: "sandbox.session", what: "the doctor's own session with the daemon ended cleanly" },
+    { check: "sandbox.observation", what: "the daemon's record did not change while it was read" }],
+  workspace: [
+    { check: "workspace.mounted", what: "the daemon reports its mount as present" },
+    { check: "workspace.activity", what: "no failed or uncertain operation is kept on it" }],
+  bucket: [
+    { check: "bucket.configuration", what: "its record is valid: provider, address, bucket, prefix and key" },
+    { check: "bucket.credentials", what: "its key can be read from the home" },
+    { check: "bucket.transport", what: "its address answers" },
+    { check: "bucket.list", what: "one listing page under its prefix succeeds with its key" },
+    { check: "bucket.write_capability", what: "the bucket keeps object versions, so a test object can be removed again", full_only: true },
+    { check: "bucket.put", what: "one small test object is written", full_only: true },
+    { check: "bucket.get", what: "the test object is read back", full_only: true },
+    { check: "bucket.delete", what: "the test object's version is deleted", full_only: true },
+    { check: "bucket.reconcile", what: "after a put whose reply was lost: the test object is found and owned, without a second put", full_only: true }]
 };
-const HOME_KEY = 'home:LayerFS 2.0.0';
+const HOME_KEY = 'home:LayerFS ' + TREE.version;
 const TABS = [['machines', 'Machines', 'machine'], ['stores', 'Stores', 'store'], ['projects', 'Projects', 'project'], ['sandboxes', 'Sandboxes', 'sandbox'], ['backups', 'Backups', 'bucket']];
 
 /* MOCK ONLY: the scenarios of the strip at the bottom. A scenario decides what the
    doctors will find; the page itself never reads it. */
 const SCENARIOS = [
   { id: 'mixed', label: 'Mixed: one stopped, one outdated, one lost Sandbox, two notices', stopped: ['docker'], outdated: ['demo-build'], lost: ['exp-1'], notices: true,
-    hint: 'Press Check all. docker is stopped, demo-build has an outdated worker with 2 Sandboxes running, the daemon of exp-1 (on dev) does not answer, qv2-store/qv2-probe is not in its Store, r2-old is behind.' },
+    hint: 'Press Check all. docker is stopped, demo-build has an outdated worker with 2 Sandboxes on it, the daemon of exp-1 (on dev) does not answer, qv2-store/qv2-probe is not in its Store, and the backup of shop in r2-old is behind.' },
   { id: 'healthy', label: 'All healthy', hint: 'Press Check all: every row ends OK.' },
   { id: 'stopped', label: 'One machine stopped', stopped: ['docker'],
     hint: 'docker is stopped on purpose. What is on it reads Not checked with the tip "Its machine is stopped". Start is the only button there.' },
-  { id: 'outdated0', label: 'Outdated worker, 0 Sandboxes running', outdated: ['demo-build'], noSandboxes: ['demo-build'],
-    hint: 'Press Check on demo-build, then Restart worker: stop, start, then the doctors of the machine and what is on it.' },
-  { id: 'outdated2', label: 'Outdated worker, 2 Sandboxes running', outdated: ['demo-build'],
-    hint: 'Press Check on demo-build. Restart worker is off; its tip says "2 Sandboxes are running".' },
+  { id: 'outdated0', label: 'Outdated worker, no Sandbox on the machine', outdated: ['demo-build'], noSandboxes: ['demo-build'],
+    hint: 'Press Check on demo-build, then Restart worker: it runs machine stop && machine start, then the doctors of the machine and what is on it.' },
+  { id: 'outdated2', label: 'Outdated worker, 2 Sandboxes on the machine', outdated: ['demo-build'],
+    hint: 'Press Check on demo-build. Restart worker is off; its tip says "2 Sandboxes are on it. Copy the fix to stop it anyway." The Fix line in the detail is the --force command, to copy. The page never runs it.' },
   { id: 'timeout', label: 'A doctor call that times out (one busy, one lost)', fail: { 'store:qv2-store': 'timeout', 'sandbox:sdk-1': 'busy', 'bucket:minio-local': 'lost' },
     hint: 'Press Check all, or Check on qv2-store (times out), sdk-1 (busy) or minio-local (reply lost). Each fails once; Check again succeeds.' },
   { id: 'refused', label: 'A fix that is refused', stopped: ['docker'], refuse: true,
@@ -525,21 +587,21 @@ let W = null;
 function buildWorld(sc) {
   const things = []; const by = {};
   const add = (o) => { o.key = o.k + ':' + o.n; o.i = things.length; things.push(o); by[o.key] = o; return o; };
-  const home = add({ k: 'home', n: 'LayerFS 2.0.0', parent: null, machine: null, fact: '~/.layerfs · 412 GB free' });
-  const addStore = (n, parent, machine, engine) => {
-    const s = add({ k: 'store', n, parent, machine, engine, fact: STORE_FACT[n] });
-    PROJECTS.filter((p) => p[0] === n).forEach((p) => add({ k: 'project', n: p[0] + '/' + p[1], label: p[1], store: n, parent: s.key, machine }));
+  const home = add({ k: 'home', n: 'LayerFS ' + TREE.version, parent: null, machine: null, path: TREE.home });
+  const addStore = (st, parent, machine) => {
+    const s = add({ k: 'store', n: st.store, parent, machine, engine: st.engine, connections: st.connections || null });
+    st.projects.forEach((name) => add({ k: 'project', n: st.store + '/' + name, label: name, store: st.store, parent: s.key, machine }));
   };
-  MACHINES.forEach((m) => {
-    const mx = add({ k: 'machine', n: m.n, id: m.id, platform: m.platform, parent: home.key, machine: null, fact: m.fact });
-    m.stores.forEach((s) => addStore(s, mx.key, mx.key, 'sqlite'));
-    ((sc.noSandboxes || []).indexOf(m.n) >= 0 ? [] : m.sandboxes).forEach((b) => {
-      const bx = add({ k: 'sandbox', n: b.n, project: b.project, parent: mx.key, machine: mx.key, fact: 'project ' + b.project });
-      b.ws.forEach((w) => add({ k: 'workspace', n: b.n + ':' + w[0], label: w[0], sandbox: b.n, parent: bx.key, machine: mx.key, fact: w[1] }));
+  TREE.machines.forEach((m) => {
+    const mx = add({ k: 'machine', n: m.machine, id: m.id, platform: m.platform, cpus: m.cpus, memory_bytes: m.memory_bytes, parent: home.key, machine: null });
+    m.stores.forEach((st) => addStore(st, mx.key, mx.key));
+    ((sc.noSandboxes || []).indexOf(m.machine) >= 0 ? [] : m.sandboxes).forEach((b) => {
+      const bx = add({ k: 'sandbox', n: b.sandbox, project: b.project, image: b.image, parent: mx.key, machine: mx.key });
+      b.workspaces.forEach((w) => add({ k: 'workspace', n: w.workspace, branch: w.branch, sandbox: b.sandbox, parent: bx.key, machine: mx.key }));
     });
   });
-  PG_STORES.forEach((s) => addStore(s, home.key, null, 'postgresql'));
-  BUCKETS.forEach((b) => add({ k: 'bucket', n: b.n, provider: b.provider, parent: home.key, machine: null, fact: b.fact }));
+  TREE.stores.forEach((st) => addStore(st, home.key, null));
+  TREE.buckets.forEach((b) => add({ k: 'bucket', n: b.bucket, provider: b.provider, parent: home.key, machine: null }));
   return {
     things, by,
     stopped: new Set(sc.stopped || []), outdated: new Set(sc.outdated || []), lost: new Set(sc.lost || []),
@@ -550,12 +612,27 @@ const kidsOf = (x) => W.things.filter((y) => y.parent === x.key);
 const ancestors = (x) => { const a = []; let p = x.parent && W.by[x.parent]; while (p) { a.push(p); p = p.parent && W.by[p.parent]; } return a; };
 /* R9: a PostgreSQL Store is probed from each machine that has a Sandbox of that Store. */
 const reachMachines = (x) => W.things.filter((m) => m.k === 'machine' && kidsOf(m).some((b) => b.k === 'sandbox' && b.project.split('/')[0] === x.n));
-function checkIds(x) {
-  if (x.k === 'store' && x.engine === 'postgresql') {
-    const ms = reachMachines(x);
-    return CHECKS.store.slice(0, 3).map((id) => ({ id })).concat(ms.length ? ms.map((m) => ({ id: 'store.reachable', from: m.key })) : [{ id: 'store.reachable' }]);
-  }
-  return CHECKS[x.k].map((id) => ({ id }));
+/* The checks a report holds for one thing: that kind's frozen list, in order. A check that
+   does not apply is left out, not listed as skipped: native has no provider, worker or data
+   disk; a stopped machine's worker checks are not made; store.backups is left out for a
+   PostgreSQL Store and a Store with no bucket link; full_only checks are in only after a Full
+   check; bucket.reconcile runs only after a put whose reply was lost. `any` gives the longest
+   list the thing can have, which reserves the width of its mark group. */
+function checkIds(x, full, any) {
+  let list = CHECKS[x.k].filter((c) => full || !c.full_only);
+  const drop = (re) => { list = list.filter((c) => !re.test(c.check)); };
+  if (x.k === 'machine' && x.platform === 'native') drop(/^machine\.(provider|worker\.|capacity)/);
+  else if (x.k === 'machine' && !any && W.stopped.has(x.n)) drop(/^machine\.(worker\.|capacity)/);
+  if (x.k === 'sandbox' && W.by[x.machine].platform === 'native') drop(/^sandbox\.worker_compatibility$/);
+  if (x.k === 'store' && (x.engine === 'postgresql' || !LINKS[x.n])) drop(/^store\.backups$/);
+  if (x.k === 'bucket') drop(/^bucket\.reconcile$/);
+  const out = [];
+  list.forEach((c) => {
+    out.push({ id: c.check, what: c.what });
+    /* R9: one more store.connection per machine that has a Sandbox of a PostgreSQL Store, with `from` */
+    if (c.check === 'store.connection' && x.engine === 'postgresql') reachMachines(x).forEach((m) => out.push({ id: c.check, what: c.what, from: m.key }));
+  });
+  return out;
 }
 
 /* --------------------------------------------------------------- state --- */
@@ -578,43 +655,38 @@ const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : (w === 'Sandbox' ? 'es' :
 /* ------------------------------------------------------------ the truth ---
    probe(x) is what a doctor reports for one thing: its own checks, nothing beneath it. */
 function probe(x, full) {
-  const res = { s: 'ok', at: Date.now(), full: !!full, checks: checkIds(x).map((c) => Object.assign({ r: 'ok' }, c)) };
-  const after = (i) => res.checks.forEach((c, j) => { if (j > i) c.r = 'nc'; });
-  const cover = notes[x.key] && notes[x.key].fullAt;
-  if (x.k === 'machine' && W.stopped.has(x.n)) {
-    res.s = 'nc'; res.why = 'stopped-self'; after(0); res.checks[1].note = 'stopped';
+  const res = { s: 'ok', at: Date.now(), full: !!full, checks: checkIds(x, full).map((c) => Object.assign({ r: 'ok' }, c)) };
+  /* one check gets a result and the finding's message; after an error the checks that need it are not made */
+  const find = (id, r, msg) => {
+    const i = res.checks.findIndex((c) => c.id === id && !c.from);
+    res.checks[i].r = r; res.checks[i].note = msg;
+    if (r === 'bad') res.checks.forEach((c, j) => { if (j > i) c.r = 'nc'; });
+  };
+  if (x.k === 'machine' && W.stopped.has(x.n)) {            // stopped on purpose is not a finding
+    res.s = 'nc'; res.why = 'stopped-self';
     return res;
   }
   if (x.k === 'machine' && W.outdated.has(x.n)) {
-    res.s = 'problem'; res.word = 'Outdated'; res.msg = 'worker is from another build';
-    res.checks[2].r = 'bad'; res.checks[2].note = res.msg; after(2);
+    const n = kidsOf(x).filter((c) => c.k === 'sandbox').length;
+    res.s = 'problem'; res.word = 'Outdated';
+    res.msg = 'worker is from another build' + (n ? '; ' + plural(n, 'Sandbox') + (n === 1 ? ' is' : ' are') + ' on it' : '');
+    find('machine.worker.compatibility', 'bad', res.msg);
     return res;
   }
   if (x.k === 'sandbox' && W.lost.has(x.n)) {
     res.s = 'problem'; res.word = 'Lost'; res.msg = 'its daemon does not answer';
-    res.checks[1].r = 'bad'; res.checks[1].note = res.msg; after(1);
+    find('sandbox.daemon_connect', 'bad', res.msg);
     return res;
   }
-  if (x.k === 'project') {
-    const d = res.checks[2];
-    if (W.notices && x.n === 'qv2-store/qv2-probe') {
-      res.s = 'notice'; res.word = 'Not in the Store'; res.msg = 'on record, but the Store does not list it';
-      res.checks[1].r = 'warn'; res.checks[1].note = res.msg; d.r = 'nc';
-      return res;
-    }
-    if (full) d.note = 'read ' + clock(res.at);
-    else if (cover) d.note = 'read ' + clock(cover);
-    else { d.r = 'nc'; d.note = 'Full check only'; }
+  if (x.k === 'project' && W.notices && x.n === 'qv2-store/qv2-probe') {
+    res.s = 'notice'; res.word = 'Not in the Store'; res.msg = 'on record, but the Store does not list it';
+    find('project.listed', 'warn', res.msg);
+    res.checks.forEach((c) => { if (c.id === 'project.data') c.r = 'nc'; });
+    return res;
   }
-  if (x.k === 'bucket') {
-    const w = res.checks[3];
-    if (full) w.note = 'tested ' + clock(res.at);
-    else if (cover) w.note = 'tested ' + clock(cover);
-    else { w.r = 'nc'; w.note = 'Full check only'; }
-    if (W.notices && x.n === 'r2-old') {
-      res.s = 'notice'; res.word = 'Backup behind'; res.msg = '2 Commits in shop are newer than this backup';
-      res.checks[2].r = 'warn'; res.checks[2].note = res.msg;
-    }
+  if (x.k === 'store' && W.notices && x.n === 'shop') {      // a backup that is behind is the Store's notice, never a bucket's
+    res.s = 'notice'; res.word = 'Backup behind'; res.msg = 'r2-old is 2 Commits behind';
+    find('store.backups', 'warn', res.msg);
   }
   if (x.k === 'store') res.checks.forEach((c) => {
     const m = c.from && W.by[c.from];
@@ -721,7 +793,7 @@ function runDoctor(call, x, at, full) {
   const stops = pre.s === 'problem' || pre.why === 'stopped-self';   // what is on it is not attempted
   schedule(call, t, () => {
     R[x.key] = probe(x, full); release(call, x.key);
-    if (full) { notes[x.key] = { fullAt: Date.now() }; toast(x.n + ': ' + (x.k === 'project' ? 'data read' : 'write tested')); }
+    if (full && R[x.key].s !== 'notice') { notes[x.key] = { fullAt: Date.now() }; toast(x.n + ': ' + (x.k === 'project' ? 'data read' : 'write tested')); }
     if (stops) { kids.forEach((c) => { delete R[c.key]; }); freeKids(); }
   });
   if (!stops) kids.forEach((c) => {
@@ -758,14 +830,22 @@ function runFull(x) {
   runDoctor(newCall('full', x.key), x, 0, true);
   syncTicker(); render();
 }
-/* The fix of a root cause. R2: an outdated worker is machine stop, then machine start,
-   behind one button. Then that machine's doctor, then the doctor of each Store and Sandbox on it. */
+/* The fix of a root cause, as the finding's `fix` gives it. `run` is what the page's button
+   runs; `cmds` is what the detail panel's Fix line shows to copy. After a fix the page runs
+   that machine's doctor, then the doctor of each Store and Sandbox on it. */
 function fixOf(x, o) {
-  if (x.k === 'machine' && W.stopped.has(x.n)) return { button: 'Start', steps: ['Starting'], cmds: ['layerfs machine start ' + x.id] };
-  if (x.k === 'machine' && o.st === 'problem') return { button: 'Restart worker', steps: ['Stopping', 'Starting'], cmds: ['layerfs machine stop ' + x.id, 'layerfs machine start ' + x.id] };
+  if (x.k === 'machine' && W.stopped.has(x.n)) return { button: 'Start', steps: ['Starting'], run: ['layerfs machine start ' + x.id], cmds: ['layerfs machine start ' + x.id] };
+  if (x.k === 'machine' && o.st === 'problem') {
+    /* R2 and review fix 5: the button runs stop && start, and only when no Sandbox is on the machine.
+       With Sandboxes on it the finding's fix is the --force form: shown to copy, never run by the page. */
+    const n = kidsOf(x).filter((c) => c.k === 'sandbox').length;
+    const run = 'layerfs machine stop ' + x.id + ' && layerfs machine start ' + x.id;
+    return { button: 'Restart worker', steps: ['Stopping', 'Starting'], run: [run], sandboxes: n,
+      cmds: [n ? 'layerfs machine stop ' + x.id + ' --force && layerfs machine start ' + x.id : run] };
+  }
   if (x.k === 'sandbox' && o.st === 'problem') return { cmds: ['layerfs sandbox remove ' + x.n] };
   if (x.k === 'project' && o.st === 'notice') return { cmds: ['layerfs project delete ' + x.n] };
-  if (x.k === 'bucket' && o.st === 'notice') return { cmds: ['layerfs backup create shop ' + x.n] };
+  if (x.k === 'store' && o.st === 'notice') return { cmds: ['layerfs backup create ' + x.n + ' r2-old'] };
   return null;
 }
 function runFix(m) {
@@ -834,6 +914,7 @@ function setTheme(mode) {
 const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const WORD = { ok: 'OK', run: 'Checking', nc: 'Not checked', notice: 'Notice', problem: 'Problem' };   // the five status words
 const DOT = { ok: 'ok', run: 'run', nc: 'nc', notice: 'warn', problem: 'bad' };
+const PROVIDER = { r2: 'Cloudflare R2', minio: 'MinIO', s3: 'S3' };
 const RES = { ok: 'passed', bad: 'failed', warn: 'notice', nc: 'not checked' };
 const REASON = { timeout: 'Timed out.', busy: 'Busy: another call was holding it.', lost: 'The reply was lost.' };
 const REASON_SHORT = { timeout: 'timed out', busy: 'busy', lost: 'reply lost' };
@@ -871,16 +952,19 @@ const tipFor = (fid, tip) => { if (tip) TIPS[fid] = tip; return ' data-fid="' + 
 function sigTip(x, o, fix) {
   const r = o.r; const fixCmds = fix ? ['# fix'].concat(fix.cmds) : [];
   if (o.st === 'run') {
-    const c = calls.find((k) => k.wait[x.key] > 0);
+    const c = calls.find((k) => k.wait[x.key] > 0);   // the call this thing is waiting on
     const cmd = !c || c.kind === 'all' ? null : c.kind === 'full' ? fullCmd(x) : c.kind === 'check' ? callFor(W.by[c.key]) : callFor(x);
     return { title: WORD.run, lines: c && c.kind === 'all' ? ['Check all is running.'] : [], cmds: cmd ? [cmd] : [] };
   }
   if (o.st === 'ok') {
     const lines = ['Checked at ' + clock(r.at) + '.'];
-    if (x.k === 'project') lines.push(notes[x.key] && notes[x.key].fullAt ? 'Data read at ' + clock(notes[x.key].fullAt) + '.' : 'Data never read: Full check only.');
+    const nt = notes[x.key] || {};
+    if (x.k === 'project') lines.push(nt.fullAt ? 'Data read at ' + clock(nt.fullAt) + '.' : 'Data never read: Full check only.');
+    if (x.k === 'bucket') lines.push(nt.fullAt ? 'Write tested at ' + clock(nt.fullAt) + '.' : 'Write never tested: Full check only.');
+    if (nt.stopped) lines.push('Full check stopped at ' + nt.stopped + '.');
     return { title: WORD.ok, lines };
   }
-  if (o.st === 'notice' || o.st === 'problem') return { title: WORD[o.st] + ' · ' + r.word, mark: DOT[o.st], lines: [r.msg.charAt(0).toUpperCase() + r.msg.slice(1) + '.'], cmds: fixCmds };
+  if (o.st === 'notice' || o.st === 'problem') return { title: WORD[o.st] + ' · ' + r.word, mark: DOT[o.st], lines: [r.msg], cmds: fixCmds };   // the finding's message, as LayerFS sends it
   if (o.why === 'stopped-self') return { title: WORD.nc + ' · Stopped', lines: ['Stopped on purpose. Start it to check what is on it.'], cmds: fixCmds };
   if (o.why === 'stopped') return { title: WORD.nc, lines: ['Its machine is stopped.'] };
   if (o.why === 'waiting') return { title: WORD.nc, lines: ['Waiting on ' + o.by.n + '.'] };
@@ -906,7 +990,7 @@ function offWhy(x, button, base) {
     if (running('all')) return 'Check all is running.';
     if (busy[x.key] > 0) return 'It is being checked.';
     const n = kidsOf(x).filter((c) => c.k === 'sandbox').length;
-    if (base.st === 'problem' && n) return plural(n, 'Sandbox') + (n === 1 ? ' is' : ' are') + ' running. Close ' + (n === 1 ? 'it' : 'them') + ' first.';
+    if (base.st === 'problem' && n) return plural(n, 'Sandbox') + (n === 1 ? ' is' : ' are') + ' on it. Copy the fix to stop it anyway.';
   }
   return null;
 }
@@ -921,14 +1005,18 @@ function allOffWhy() {
 function factOf(x, depth, kids) {
   const m = x.machine && W.by[x.machine];
   const on = depth === 0 && m ? 'on ' + m.n : '';
+  const cover = notes[x.key] && notes[x.key].fullAt;
+  if (x.k === 'home') return x.path;
   if (x.k === 'machine') {
     const ns = kids.filter((y) => y.k === 'store').length; const nb = kids.filter((y) => y.k === 'sandbox').length;
-    return [x.fact, ns ? plural(ns, 'Store') : '', nb ? plural(nb, 'Sandbox') : ''].filter(Boolean).join(' · ');
+    return [x.platform, x.cpus ? x.cpus + ' CPU' : '', x.memory_bytes ? Math.round(x.memory_bytes / GB) + ' GB' : '', ns ? plural(ns, 'Store') : '', nb ? plural(nb, 'Sandbox') : ''].filter(Boolean).join(' · ');
   }
-  if (x.k === 'store') return [x.fact, plural(kids.length, 'project'), on].filter(Boolean).join(' · ');
-  if (x.k === 'sandbox') return [x.fact, plural(kids.length, 'Workspace'), on].filter(Boolean).join(' · ');
-  if (x.k === 'project') return [depth === 0 ? 'in Store ' + x.store : '', notes[x.key] && notes[x.key].fullAt ? 'data read ' + clock(notes[x.key].fullAt) : ''].filter(Boolean).join(' · ');
-  return x.fact || '';
+  if (x.k === 'store') return [x.engine, x.connections ? plural(x.connections.length, 'connection') : '', plural(kids.length, 'project'), on].filter(Boolean).join(' · ');
+  if (x.k === 'sandbox') return [x.project, x.image, plural(kids.length, 'Workspace'), on].filter(Boolean).join(' · ');
+  if (x.k === 'workspace') return 'branch ' + x.branch;
+  if (x.k === 'project') return cover ? 'data read ' + clock(cover) : '';
+  if (x.k === 'bucket') return [PROVIDER[x.provider] || x.provider, cover ? 'write tested ' + clock(cover) : ''].filter(Boolean).join(' · ');
+  return '';
 }
 function within(x) {
   const n = { bad: 0, warn: 0 };
@@ -949,7 +1037,7 @@ function view(x, depth) {
   return {
     x, depth, o, base, kids, fix, word, showMarks, blocked,
     open: !!S.open[x.key], folder: kids.length > 0,
-    name: depth > 0 ? (x.label || x.n) : x.n,
+    name: depth > 0 && x.k === 'project' ? x.label : x.n,   // under its Store a project is a bare name; alone it is <store>/<project>
     fact: o.st === 'run' || phase[x.key] ? '' : factOf(x, depth, kids),
     inside: insideText ? insideText + ' inside' : '', insideMark: inside.bad ? 'bad' : 'warn',
     canCheck: x.k !== 'workspace' && !blocked && base.why !== 'stopped-self',
@@ -967,11 +1055,9 @@ function btn(o) {
 function detailHtml(v) {
   const x = v.x; const o = v.o; const r = o.r;
   const list = r && r.checks ? r.checks : checkIds(x).map((c) => Object.assign({ r: 'nc' }, c));
-  const stopped = notes[x.key] && notes[x.key].stopped;
-  const checks = list.map((c) => {
-    const text = stopped && (c.id === 'project.data' || c.id === 'backup.write') && c.r === 'nc' ? 'not checked: stopped at ' + stopped : checkText(c);
-    return '<li>' + mk(c.r) + '<code>' + esc(checkName(c)) + '</code><span class="res">' + esc(text) + '</span></li>';
-  }).join('');
+  /* each check is a small signal of its own: its tip says what the check is (the frozen `what`) */
+  const checks = list.map((c, i) => '<li><button type="button" class="chk"' + tipFor('chk:' + x.key + ':' + i, { title: checkName(c), mark: c.r, lines: [c.what] }) + '>'
+    + mk(c.r) + '<code>' + esc(checkName(c)) + '</code></button><span class="res">' + esc(checkText(c)) + '</span></li>').join('');
   const cmd = r && r.full ? fullCmd(x) : callFor(x);
   const copy = (fid, text) => btn({ w: 'copy', fid: fid + ':' + x.key, act: 'copy', key: text, text: 'Copy', label: 'Copy the command', tip: { title: 'Copy the command', lines: ['Runs nothing.'] } });
   const fixLine = v.fix && (v.ownTrouble || o.st === 'run')
@@ -995,7 +1081,8 @@ function rowHtml(v) {
     const mine = running('fix', key); const why = mine ? null : offWhy(x, 'fix', v.base);
     const after = kidsOf(x).filter((c) => c.k === 'store' || c.k === 'sandbox').map(callFor);
     more.push(btn({ variant: 'primary', fid: 'fix:' + key, act: 'fix', key, text: v.fix.button, busy: !!mine, off: !!why,
-      tip: { title: v.fix.button, lines: [why || 'Then checks the machine and what is on it.'], cmds: v.fix.cmds.concat(['# then', callFor(x)], after) } }));
+      /* an off button shows no command when the only fix is the --force one: that is copied from the detail, not run */
+      tip: { title: v.fix.button, lines: [why || 'Then checks the machine and what is on it.'], cmds: v.fix.sandboxes ? [] : v.fix.run.concat(['# then', callFor(x)], after) } }));
     if (phase[key]) more.push('<span class="phase">' + esc(phase[key]) + '…</span>');   // the step the fix is at, after the button so the button never moves
   }
   /* a refused fix: the refusal as a signal beside the button, which is back and can be pressed again */
@@ -1007,11 +1094,12 @@ function rowHtml(v) {
   if (v.fact) more.push('<span class="fact">' + esc(v.fact) + '</span>');
   if (v.inside) more.push('<span class="inside">' + mk(v.insideMark) + esc(v.inside) + '</span>');
 
-  let marks = '<span class="marks" style="--n:' + checkIds(x).length + '"></span>';
+  const room = checkIds(x, true, true).length;       // the longest report this thing can have
+  let marks = '<span class="marks" style="--n:' + room + '"></span>';
   if (v.showMarks) {
     const cs = o.r.checks;
     const label = plural(cs.length, 'check') + ': ' + cs.map((c) => checkName(c) + ' ' + checkText(c)).join(', ');
-    marks = '<button type="button" class="marks" style="--n:' + cs.length + '"' + tipFor('marks:' + key, { title: plural(cs.length, 'check'), checks: cs }) + ' aria-label="' + esc(label) + '">'
+    marks = '<button type="button" class="marks" style="--n:' + room + '"' + tipFor('marks:' + key, { title: plural(cs.length, 'check'), checks: cs }) + ' aria-label="' + esc(label) + '">'
       + cs.map((c) => mk(c.r)).join('') + '</button>';
   }
   const acts = [];
@@ -1203,7 +1291,7 @@ document.addEventListener('click', (e) => {
     else if (!e.target.closest('.tip')) hideTip();
     return;
   }
-  if (el.classList.contains('sig') || el.classList.contains('marks')) return showTip(el);     // a tap opens the tip
+  if (el.classList.contains('sig') || el.classList.contains('marks') || el.classList.contains('chk')) return showTip(el);     // a tap opens the tip
   if (el.id === 'mockOpen') { resetWorld(); return render(); }
   if (el.id === 'mockSettle') return settle();
   if (el.getAttribute('aria-disabled') === 'true') return showTip(el);                          // says why, does nothing

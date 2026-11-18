@@ -31,7 +31,8 @@
         },
         {
           "name": "path",
-          "kind": "Text"
+          "kind": "Text",
+          "redact": true
         }
       ],
       "options": [
@@ -106,7 +107,7 @@
           "why": "a count of lines, as every window and page takes"
         }
       ],
-      "new_work": "A file that is not text answering `binary` and `size` is new: today the call is refused `Binary`. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`."
+      "new_work": "A file that is not text answering `binary` and `size` is new: today the call is refused `Binary`. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "file.stat",
@@ -128,7 +129,8 @@
         },
         {
           "name": "path",
-          "kind": "Text"
+          "kind": "Text",
+          "redact": true
         }
       ],
       "options": [
@@ -176,12 +178,12 @@
           "why": "one way to pin a read; an optional Commit is an option"
         }
       ],
-      "new_work": "`modified_at` is new in the answer: the call already reads the entry's modification time with its mode. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`."
+      "new_work": "`modified_at` is new in the answer: the call already reads the entry's modification time with its mode. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "file.list",
       "badge": "paging",
-      "note": "one folder's own entries; <code>skipped_hidden</code> counts entries <code>project hide-path</code> hides; rows carry no size or mode (the listing reads neither): <code>file stat</code> answers them; no <code>name</code>: it is the last part of <code>path</code>",
+      "note": "one folder's own entries; <code>skipped_hidden</code> counts entries <code>project hide-path</code> hides; rows carry no size or mode (the listing reads neither): <code>file stat</code> answers them; no <code>name</code>: it is the last part of <code>path</code>; a cursor carries the Commit the first page read and the call's filters: given with another pin or other filters, or to another call, it is refused <code>InvalidInput</code>; when its Commit is gone, <code>NotFound</code>",
       "today": [
         "file.list"
       ],
@@ -198,7 +200,8 @@
         },
         {
           "name": "path",
-          "kind": "Text"
+          "kind": "Text",
+          "redact": true
         }
       ],
       "options": [
@@ -279,12 +282,12 @@
           "why": "one paging convention"
         }
       ],
-      "new_work": "`--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor must carry the Commit the first page read and the call's filters. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`."
+      "new_work": "`--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor must carry the Commit the first page read and the call's filters; one given with another pin or other filters, or to another call, is refused `InvalidInput`, and one whose Commit is gone `NotFound`. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "file.glob",
       "badge": "reshaped",
-      "note": "pattern first; <code>path</code> defaults to <code>/</code>; gains <code>--exclude</code> and <code>--cursor</code>",
+      "note": "pattern first; <code>path</code> defaults to <code>/</code>; gains <code>--exclude</code> and <code>--cursor</code>; a cursor carries the Commit the first page read and the call's filters: given with another pin or other filters, or to another call, it is refused <code>InvalidInput</code>; when its Commit is gone, <code>NotFound</code>",
       "today": [
         "file.glob"
       ],
@@ -301,20 +304,23 @@
         },
         {
           "name": "pattern",
-          "kind": "Text"
+          "kind": "Text",
+          "redact": true
         },
         {
           "name": "path",
           "kind": "Text",
           "optional": true,
-          "default": "/"
+          "default": "/",
+          "redact": true
         }
       ],
       "options": [
         {
           "name": "exclude",
           "kind": "Text",
-          "help": "a glob of paths to leave out, such as node_modules"
+          "help": "a glob of paths to leave out, such as node_modules",
+          "redact": true
         },
         {
           "name": "at",
@@ -387,12 +393,12 @@
           "why": "one paging convention"
         }
       ],
-      "new_work": "`--exclude` is new: today the call takes one pattern and no exclusion. `--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor must carry the Commit the first page read and the call's filters. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`."
+      "new_work": "`--exclude` is new: today the call takes one pattern and no exclusion. `--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor must carry the Commit the first page read and the call's filters; one given with another pin or other filters, or to another call, is refused `InvalidInput`, and one whose Commit is gone `NotFound`. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "file.grep",
       "badge": "extended",
-      "note": "the pattern is literal text, as the code searches today (its help said regular expression); pattern first; <code>path</code> defaults to <code>/</code>; files that are not text are skipped and counted in <code>skipped_binary</code>",
+      "note": "the pattern is literal text, as the code searches today (its help said regular expression); pattern first; <code>path</code> defaults to <code>/</code>; files that are not text are skipped and counted in <code>skipped_binary</code>; a cursor carries the Commit the first page read and the call's filters: given with another pin or other filters, or to another call, it is refused <code>InvalidInput</code>; when its Commit is gone, <code>NotFound</code>",
       "today": [
         "file.grep"
       ],
@@ -409,25 +415,29 @@
         },
         {
           "name": "pattern",
-          "kind": "Text"
+          "kind": "Text",
+          "redact": true
         },
         {
           "name": "path",
           "kind": "Text",
           "optional": true,
-          "default": "/"
+          "default": "/",
+          "redact": true
         }
       ],
       "options": [
         {
           "name": "include",
           "kind": "Text",
-          "help": "search only paths that match this glob, such as *.ts"
+          "help": "search only paths that match this glob, such as *.ts",
+          "redact": true
         },
         {
           "name": "exclude",
           "kind": "Text",
-          "help": "a glob of paths to leave out, such as node_modules"
+          "help": "a glob of paths to leave out, such as node_modules",
+          "redact": true
         },
         {
           "name": "ignore_case",
@@ -520,12 +530,12 @@
           "why": "one paging convention"
         }
       ],
-      "new_work": "`--include`, `--exclude` and `--ignore-case` are new: today the search is case-sensitive over every text file under the folder. `--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor must carry the Commit the first page read and the call's filters. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`."
+      "new_work": "`--include`, `--exclude` and `--ignore-case` are new: today the search is case-sensitive over every text file under the folder. `--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor must carry the Commit the first page read and the call's filters; one given with another pin or other filters, or to another call, is refused `InvalidInput`, and one whose Commit is gone `NotFound`. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "file.history",
       "badge": "renamed",
-      "note": "was <code>revision</code>; a Commit list, newest first, so it names Commits; <code>--at</code> starts at an older Commit (today's <code>at_commit</code>); <code>--traversal</code> is kept: the files view uses both values; <code>change</code> is added, removed or modified; the long row's <code>type</code>, <code>size</code> and <code>mode</code> are the path's after that Commit; a publication on <code>main</code> has no <code>message</code> or <code>created_at</code>",
+      "note": "was <code>revision</code>; a Commit list, newest first, so it names Commits; <code>--at</code> starts at an older Commit (today's <code>at_commit</code>); <code>--traversal</code> is kept: the files view uses both values; <code>change</code> is added, removed or modified; the long row's <code>type</code>, <code>size</code> and <code>mode</code> are the path's after that Commit; a publication on <code>main</code> has no <code>message</code> or <code>created_at</code>; a cursor carries the Commit the first page read and the call's filters: given with another pin or other filters, or to another call, it is refused <code>InvalidInput</code>; when its Commit is gone, <code>NotFound</code>",
       "today": [
         "file.revision"
       ],
@@ -542,7 +552,8 @@
         },
         {
           "name": "path",
-          "kind": "Text"
+          "kind": "Text",
+          "redact": true
         }
       ],
       "options": [
@@ -638,7 +649,7 @@
           "why": "one paging convention"
         }
       ],
-      "new_work": "A reshaping of today's `file.revision`: no new reads. `--cursor` replaces its `continuation` (already a stateless position that carries the pin and the query) and its numbered `page`. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`."
+      "new_work": "A reshaping of today's `file.revision`: no new reads. `--cursor` replaces its `continuation` (already a stateless position that carries the pin and the query) and its numbered `page`. The continuation is an authenticated token: one that does not match its pin and query is already refused `InvalidInput` today, as the cursor rule asks. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "file.blame",
@@ -660,7 +671,8 @@
         },
         {
           "name": "path",
-          "kind": "Text"
+          "kind": "Text",
+          "redact": true
         }
       ],
       "options": [
@@ -732,12 +744,12 @@
           "why": "a count of lines, as every window and page takes"
         }
       ],
-      "new_work": "A reshaping: today each line carries its text, owner and message; grouping lines into ranges and listing each Commit once reads nothing more. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`."
+      "new_work": "A reshaping: today each line carries its text, owner and message; grouping lines into ranges and listing each Commit once reads nothing more. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "file.write",
       "badge": "reshaped",
-      "note": "was ~650 B; the content comes from stdin, or <code>--from &lt;file&gt;</code>; adds <code>unchanged</code> (no Commit was made; <code>commit</code> is the head), <code>merged</code> (the Branch had moved and the change was merged) and <code>overwritten</code> paths when they happen; a write to <code>main</code> is refused with a <code>fix</code> naming <code>branch fork</code>",
+      "note": "was ~650 B; the content comes from stdin, or <code>--from &lt;file&gt;</code>; <code>--mode</code> is octal text (<code>0644</code>), the spelling <code>file stat</code> answers; adds <code>unchanged</code> (no Commit was made; <code>commit</code> is the head), <code>merged</code> (the Branch had moved and the change was merged) and <code>overwritten</code> paths when they happen; a write to <code>main</code> is refused with a <code>fix</code> naming <code>branch fork</code>",
       "today": [
         "file.write"
       ],
@@ -754,18 +766,20 @@
         },
         {
           "name": "path",
-          "kind": "Text"
+          "kind": "Text",
+          "redact": true
         },
         {
           "name": "content",
-          "kind": "Content"
+          "kind": "Content",
+          "redact": true
         }
       ],
       "options": [
         {
           "name": "mode",
-          "kind": "Int",
-          "help": "permission bits as a whole number, 0 to 4095 (420 is 0644); a new file is 0644 and an existing one keeps its mode"
+          "kind": "Text",
+          "help": "permission bits in octal, such as 0644, spelled as `file stat` answers them; a new file is 0644 and an existing one keeps its mode"
         },
         {
           "name": "expected",
@@ -776,7 +790,8 @@
           "name": "message",
           "kind": "Text",
           "help": "the Commit message; `-m` in the shell",
-          "default": "Apply filesystem changes"
+          "default": "Apply filesystem changes",
+          "redact": true
         }
       ],
       "stdin": "content",
@@ -819,12 +834,12 @@
         "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
       },
       "dropped": [],
-      "new_work": "`--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well."
+      "new_work": "`--mode` as octal text (`0644`, four digits, `0000` to `7777`) is new: today it is a whole number, 0 to 4095 (420 for 0644). `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "file.edit",
       "badge": "extended",
-      "note": "<code>--old-string</code> and <code>--new-string</code> are both required; without <code>--replace-all</code> the old text must occur exactly once; adds <code>replaced</code> only when more than 1; adds <code>unchanged</code> (no Commit was made; <code>commit</code> is the head), <code>merged</code> (the Branch had moved and the change was merged) and <code>overwritten</code> paths when they happen",
+      "note": "<code>--old-string</code> and <code>--new-string</code> are both required; without <code>--replace-all</code> the old text must occur exactly once: no occurrence is refused <code>NotFound</code> (today's <code>NoMatch</code>), and more than one is refused <code>InvalidInput</code> with <code>matches</code>, the count, and a <code>fix</code> that adds <code>--replace-all</code> (today's <code>AmbiguousMatch</code>); with <code>--replace-all</code> only no occurrence is refused; adds <code>replaced</code> only when more than 1; adds <code>unchanged</code> (no Commit was made; <code>commit</code> is the head), <code>merged</code> (the Branch had moved and the change was merged) and <code>overwritten</code> paths when they happen",
       "today": [
         "file.edit"
       ],
@@ -841,19 +856,24 @@
         },
         {
           "name": "path",
-          "kind": "Text"
+          "kind": "Text",
+          "redact": true
         }
       ],
       "options": [
         {
           "name": "old_string",
           "kind": "Text",
-          "help": "the text to replace; required"
+          "help": "the text to replace",
+          "required": true,
+          "redact": true
         },
         {
           "name": "new_string",
           "kind": "Text",
-          "help": "its replacement; required"
+          "help": "its replacement",
+          "required": true,
+          "redact": true
         },
         {
           "name": "replace_all",
@@ -869,7 +889,8 @@
           "name": "message",
           "kind": "Text",
           "help": "the Commit message; `-m` in the shell",
-          "default": "Apply filesystem changes"
+          "default": "Apply filesystem changes",
+          "redact": true
         }
       ],
       "stdin": null,
@@ -925,7 +946,7 @@
           "why": "the name agents' edit tools use"
         }
       ],
-      "new_work": "`--replace-all` is new: today the old text must occur exactly once (`NoMatch` or `AmbiguousMatch` otherwise). `replaced` is new in the answer (the edit already counts the matches). `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well."
+      "new_work": "`--replace-all` is new: today the old text must occur exactly once (`NoMatch` or `AmbiguousMatch` otherwise). Those two refusals fold into `NotFound` and `InvalidInput`; the count is in the refusal's detail today (`matches`), and the `fix` line is new. `replaced` is new in the answer (the edit already counts the matches). `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "file.rm",
@@ -947,7 +968,8 @@
         },
         {
           "name": "path",
-          "kind": "Text"
+          "kind": "Text",
+          "redact": true
         }
       ],
       "options": [
@@ -965,7 +987,8 @@
           "name": "message",
           "kind": "Text",
           "help": "the Commit message; `-m` in the shell",
-          "default": "Apply filesystem changes"
+          "default": "Apply filesystem changes",
+          "redact": true
         }
       ],
       "stdin": null,
@@ -1008,12 +1031,12 @@
         "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
       },
       "dropped": [],
-      "new_work": "`--recursive` is new: today `rm` removes a folder with everything in it. Without the option a folder that is not empty is refused `InvalidInput`, with a `fix` that adds `--recursive`. `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well."
+      "new_work": "`--recursive` is new: today `rm` removes a folder with everything in it. Without the option a folder that is not empty is refused `InvalidInput`, with a `fix` that adds `--recursive`. `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "file.mkdir",
       "badge": "extended",
-      "note": "gains <code>--expected</code>, like every write; a folder that exists answers <code>unchanged</code>; adds <code>unchanged</code> (no Commit was made; <code>commit</code> is the head), <code>merged</code> (the Branch had moved and the change was merged) and <code>overwritten</code> paths when they happen",
+      "note": "gains <code>--expected</code>, like every write; <code>--mode</code> is octal text (<code>0755</code>), the spelling <code>file stat</code> answers; a folder that exists answers <code>unchanged</code>; adds <code>unchanged</code> (no Commit was made; <code>commit</code> is the head), <code>merged</code> (the Branch had moved and the change was merged) and <code>overwritten</code> paths when they happen",
       "today": [
         "file.mkdir"
       ],
@@ -1030,14 +1053,15 @@
         },
         {
           "name": "path",
-          "kind": "Text"
+          "kind": "Text",
+          "redact": true
         }
       ],
       "options": [
         {
           "name": "mode",
-          "kind": "Int",
-          "help": "permission bits of the folder when it is made, as a whole number (493 is 0755); missing parents get 0755"
+          "kind": "Text",
+          "help": "permission bits of the folder when it is made, in octal, such as 0755; missing parents get 0755"
         },
         {
           "name": "expected",
@@ -1048,7 +1072,8 @@
           "name": "message",
           "kind": "Text",
           "help": "the Commit message; `-m` in the shell",
-          "default": "Apply filesystem changes"
+          "default": "Apply filesystem changes",
+          "redact": true
         }
       ],
       "stdin": null,
@@ -1091,7 +1116,7 @@
         "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
       },
       "dropped": [],
-      "new_work": "`--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well."
+      "new_work": "`--mode` as octal text (`0644`, four digits, `0000` to `7777`) is new: today it is a whole number, 0 to 4095 (420 for 0644). `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "file.mv",
@@ -1113,11 +1138,13 @@
         },
         {
           "name": "from",
-          "kind": "Text"
+          "kind": "Text",
+          "redact": true
         },
         {
           "name": "to",
-          "kind": "Text"
+          "kind": "Text",
+          "redact": true
         }
       ],
       "options": [
@@ -1130,7 +1157,8 @@
           "name": "message",
           "kind": "Text",
           "help": "the Commit message; `-m` in the shell",
-          "default": "Apply filesystem changes"
+          "default": "Apply filesystem changes",
+          "redact": true
         }
       ],
       "stdin": null,
@@ -1184,7 +1212,7 @@
           "why": "shorter; the position says it is a path"
         }
       ],
-      "new_work": "`--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well."
+      "new_work": "`--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "file.cp",
@@ -1206,11 +1234,13 @@
         },
         {
           "name": "from",
-          "kind": "Text"
+          "kind": "Text",
+          "redact": true
         },
         {
           "name": "to",
-          "kind": "Text"
+          "kind": "Text",
+          "redact": true
         }
       ],
       "options": [
@@ -1223,7 +1253,8 @@
           "name": "message",
           "kind": "Text",
           "help": "the Commit message; `-m` in the shell",
-          "default": "Apply filesystem changes"
+          "default": "Apply filesystem changes",
+          "redact": true
         }
       ],
       "stdin": null,
@@ -1277,12 +1308,12 @@
           "why": "shorter; the position says it is a path"
         }
       ],
-      "new_work": "`--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well."
+      "new_work": "`--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "file.apply",
       "badge": "reshaped",
-      "note": "the JSON list comes from stdin, or <code>--from &lt;file&gt;</code>; each change has an <code>op</code> (write, edit, rm, mkdir, chmod, mv, cp) and that call's own fields: <code>path</code>, <code>from</code>, <code>to</code>, <code>content</code>, <code>old_string</code>, <code>new_string</code>, <code>replace_all</code>, <code>mode</code>, <code>recursive</code>; no per-path list in the answer: <code>commit diff &lt;project&gt; &lt;commit&gt;</code> lists what changed; adds <code>unchanged</code> (no Commit was made; <code>commit</code> is the head), <code>merged</code> (the Branch had moved and the change was merged) and <code>overwritten</code> paths when they happen",
+      "note": "the JSON list comes from stdin, or <code>--from &lt;file&gt;</code>; each change has an <code>op</code> (write, edit, rm, mkdir, chmod, mv, cp) and that call's own fields: <code>path</code>, <code>from</code>, <code>to</code>, <code>content</code>, <code>old_string</code>, <code>new_string</code>, <code>replace_all</code>, <code>mode</code> (octal text, as <code>--mode</code>), <code>recursive</code>; no per-path list in the answer: <code>commit diff &lt;project&gt; &lt;commit&gt;</code> lists what changed; adds <code>unchanged</code> (no Commit was made; <code>commit</code> is the head), <code>merged</code> (the Branch had moved and the change was merged) and <code>overwritten</code> paths when they happen",
       "today": [
         "file.apply"
       ],
@@ -1299,7 +1330,8 @@
         },
         {
           "name": "changes",
-          "kind": "Json"
+          "kind": "Json",
+          "redact": true
         }
       ],
       "options": [
@@ -1312,7 +1344,8 @@
           "name": "message",
           "kind": "Text",
           "help": "the Commit message; `-m` in the shell",
-          "default": "Apply filesystem changes"
+          "default": "Apply filesystem changes",
+          "redact": true
         }
       ],
       "stdin": "json",
@@ -1355,7 +1388,7 @@
         "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":0,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
       },
       "dropped": [],
-      "new_work": "A change's fields follow the single calls' new names (`from`, `to`, `old_string`, `new_string`, `replace_all`, `recursive`): today they are `from_path`, `to_path`, `old` and `new`, and `from` and `to` are refused. A folder scope checks a change's path fields by name, so its list of names moves with them. `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well."
+      "new_work": "A change's fields follow the single calls' new names (`from`, `to`, `old_string`, `new_string`, `replace_all`, `recursive`): today they are `from_path`, `to_path`, `old` and `new`, and `from` and `to` are refused. A folder scope checks a change's path fields by name, so its list of names moves with them. A change's `mode` is octal text, as `--mode` is; today it is a whole number. `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     }
   ]
 }

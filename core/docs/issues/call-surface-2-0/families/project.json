@@ -6,7 +6,7 @@
   "reasons": [
     "<b>Why <code>hide_path</code>:</b> an agent meeting <code>remove_file</code> cold will use it like <code>file.rm</code>, and hide a path from the project's whole history.",
     "<b>Why stats has no <code>commit</code>:</b> the caller named the Branch or <code>--at</code>; the Commit it counted is in the long form.",
-    "<b>Why sizes are opt-in on the list:</b> a file count and a size per project need a count kept at publish, or a tree walk that comes back partial for any repo with <code>node_modules</code>. <code>project list --with stats</code> asks for them; <code>project get</code> takes no <code>--with</code>.",
+    "<b>Why the list's stats are a size only:</b> main's head already records its length, so <code>project list --with stats</code> costs one record per project. A file count is in no record: it needs a format change, or a tree walk that comes back partial for any repo with <code>node_modules</code>. <code>project stats</code> does that walk for one project and says <code>partial</code>; <code>project get</code> takes no <code>--with</code>.",
     "<b>Why <code>file_count</code>, not <code>files</code>:</b> a plural noun is always a list, so a number is never named with one.",
     "<b>Why only a project has two doctor depths:</b> the shallow check reads records; <code>--full</code> reads the data its Branches reach, which can take minutes."
   ],
@@ -73,7 +73,7 @@
     {
       "call": "project.list",
       "badge": "extended",
-      "note": "keeps the recorded projects of a Store it cannot open, marked <code>blocked</code>; <code>[store]</code> → <code>--store</code>; a row leaves <code>state</code> out when <code>ready</code>; a project on record that its Store does not list stays hidden, as today (<code>project doctor</code> reports it)",
+      "note": "keeps the recorded projects of a Store it cannot open, marked <code>blocked</code>; <code>[store]</code> → <code>--store</code>; a row leaves <code>state</code> out when <code>ready</code>; <code>busy</code> is an Init (<code>op.name</code> <code>init</code>) or a delete (<code>delete</code>) that is running; <code>blocked_by</code> names its Store or that Store's machine; the one <code>reason</code> is <code>unresolved</code>, a delete that stopped part-way, with the fix <code>layerfs project delete &lt;project&gt;</code>; an export is a read and is not an <code>op</code>; a project is never <code>stopped</code> or <code>unknown</code>; a project on record that its Store does not list stays hidden, as today (<code>project doctor</code> and <code>store doctor</code> report it as a <code>notice</code>); a cursor carries the call's filters only, and pins no Commit: given with other filters, or to another call, it is refused <code>InvalidInput</code>",
       "today": [
         "project.list"
       ],
@@ -95,7 +95,7 @@
         {
           "name": "cursor",
           "kind": "Text",
-          "help": "the `next_cursor` of the page before; it carries the pinned Commit and the filters"
+          "help": "the `next_cursor` of the page before; it carries the filters only"
         }
       ],
       "stdin": null,
@@ -103,10 +103,9 @@
         "stats": {
           "where": "item",
           "keys": [
-            "file_count",
             "size"
           ],
-          "help": "each project's file count and size in bytes at main's head; left out for a blocked project"
+          "help": "each project's size in bytes at main's head, as the head's own record holds it; left out for a blocked project"
         }
       },
       "paging": "cursor",
@@ -176,12 +175,21 @@
           "why": "one paging convention"
         }
       ],
-      "new_work": "`state` and its companions (`op`, `blocked_by`, `reason`, `fix`) are new: a project has no state today. They come from the home's records (the Store's and its machine's state, a recorded delete or Init), with no probe. Listing the projects of a Store that cannot be opened is new: today an all-Stores listing leaves that Store out and a named one is refused. `commit` (main's head) per row is new in the answer: the listing already reads each project's stack record, which holds it, but keeps only the name and stack id, and the worker's listing reply does not carry it. `--with stats` is new: no call lists a size per project today, and a file count needs a count kept at publish (`project.stats` walks the tree and can stop at its work bound). `--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor must carry the Commit the first page read and the call's filters."
+      "new_work": "`state` and its companions (`op`, `blocked_by`, `reason`, `fix`) are new: a project has no state today, and its record holds no `op`. `blocked` comes from the records of its Store and that Store's machine, with no probe. `busy` needs an `op` in the project's record, as machines, Stores and Sandboxes keep one: `project.init` writes its record in its last phase today, so a project being imported is on no list, and `project.delete` keeps only its intent file (`store/<store>/delete/<project>.json`: pending, marked, done), which names no owner. `broken` with `unresolved` is a delete whose owner is gone while its intent is still pending and the Store still lists the project: today such a project is listed like any other, and calls that need its admission are refused `Unresolved` until `project delete` is run again. Listing the projects of a Store that cannot be opened is new: today an all-Stores listing leaves that Store out and a named one is refused. `commit` (main's head) per row is new in the answer: the listing already reads each project's stack record, which holds it, but keeps only the name and stack id, and the worker's listing reply does not carry it. `--with stats` is new: no call lists a size per project today. `size` is the length main's head Layer records (today's `logical`), one record read per project and no tree walk. It carries no file count: no record holds one, so it would need a format change; `project.stats` counts by a bounded walk. `--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor carries the call's filters only, and no Commit; one given with other filters, or to another call, is refused `InvalidInput`.",
+      "states": {
+        "reasons": [
+          "unresolved"
+        ],
+        "ops": [
+          "init",
+          "delete"
+        ]
+      }
     },
     {
       "call": "project.get",
       "badge": "reshaped",
-      "note": "<code>commit</code> is main's head; a project of a Store that cannot be opened answers <code>blocked</code>, not a refusal; no <code>--with</code>",
+      "note": "<code>commit</code> is main's head; a project of a Store that cannot be opened answers <code>blocked</code>, not a refusal; <code>busy</code> is an Init (<code>op.name</code> <code>init</code>) or a delete (<code>delete</code>) that is running; <code>blocked_by</code> names its Store or that Store's machine; the one <code>reason</code> is <code>unresolved</code>, a delete that stopped part-way, with the fix <code>layerfs project delete &lt;project&gt;</code>; an export is a read and is not an <code>op</code>; a project is never <code>stopped</code> or <code>unknown</code>; a project on record that its Store does not list is refused <code>NotFound</code>, as today; no <code>--with</code>",
       "today": [
         "project.get"
       ],
@@ -230,12 +238,23 @@
       "examples": {
         "short": [
           "{\"store\":\"shop\",\"state\":\"ready\",\"commit\":\"32ab9e01\"}",
-          "its machine is stopped: {\"store\":\"sim-website\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}"
+          "its machine is stopped: {\"store\":\"sim-website\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}",
+          "a delete is running: {\"store\":\"shop\",\"state\":\"busy\",\"commit\":\"32ab9e01\",\"op\":{\"name\":\"delete\",\"phase\":\"mark\",\"started_at\":\"2026-11-18T09:16:59Z\"}}",
+          "a delete stopped part-way: {\"store\":\"shop\",\"state\":\"broken\",\"commit\":\"32ab9e01\",\"reason\":\"unresolved\",\"fix\":\"layerfs project delete shop/old\"}"
         ],
         "long": "{\"store\":\"shop\",\"state\":\"ready\",\"commit\":\"32ab9e01\",\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"project\":\"shop/api\",\"engine\":\"sqlite\",\"machine\":\"native\",\"created_at\":\"2026-11-17T09:16:59Z\"}"
       },
       "dropped": [],
-      "new_work": "`state` and its companions (`op`, `blocked_by`, `reason`, `fix`) are new: a project has no state today. They come from the home's records (the Store's and its machine's state, a recorded delete or Init), with no probe. Answering `blocked` for a project whose Store cannot be opened is new (a refusal today). `commit` is new in the answer: the call already lists the Store's stack records, which hold main's head."
+      "new_work": "`state` and its companions (`op`, `blocked_by`, `reason`, `fix`) are new: a project has no state today, and its record holds no `op`. `blocked` comes from the records of its Store and that Store's machine, with no probe. `busy` needs an `op` in the project's record, as machines, Stores and Sandboxes keep one: `project.init` writes its record in its last phase today, so a project being imported is on no list, and `project.delete` keeps only its intent file (`store/<store>/delete/<project>.json`: pending, marked, done), which names no owner. `broken` with `unresolved` is a delete whose owner is gone while its intent is still pending and the Store still lists the project: today such a project is listed like any other, and calls that need its admission are refused `Unresolved` until `project delete` is run again. Answering `blocked` for a project whose Store cannot be opened is new (a refusal today). `commit` is new in the answer: the call already lists the Store's stack records, which hold main's head.",
+      "states": {
+        "reasons": [
+          "unresolved"
+        ],
+        "ops": [
+          "init",
+          "delete"
+        ]
+      }
     },
     {
       "call": "project.stats",
@@ -311,7 +330,7 @@
           "why": "one way to pin a read"
         }
       ],
-      "new_work": "An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`."
+      "new_work": "An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
     },
     {
       "call": "project.export",
@@ -374,7 +393,7 @@
         "long": "{\"file_count\":1834,\"size\":52428800,\"dir_count\":212,\"symlink_count\":3,\"commit\":\"5c77a1d0\",\"root\":\"9f3c0b7a\"}"
       },
       "dropped": [],
-      "new_work": "`--at` is new: today export takes a Branch and pins its head, with no Commit argument. Progress events with only `phase`, `done` and `total` are a reshaping: today's events also carry running counts."
+      "new_work": "`--at` is new: today export takes a Branch and pins its head, with no Commit argument. An id prefix is accepted; a prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count. Progress events with only `phase`, `done` and `total` are a reshaping: today's events also carry running counts."
     },
     {
       "call": "project.delete",
@@ -438,7 +457,8 @@
         },
         {
           "name": "path",
-          "kind": "Text"
+          "kind": "Text",
+          "redact": true
         }
       ],
       "options": [],
@@ -477,7 +497,7 @@
     {
       "call": "project.doctor",
       "badge": "new",
-      "note": "shallow: its record (<code>project.record</code>) and its record against the Store's own list (<code>project.listed</code>); <code>--full</code> also reads everything reachable from main's head and each Branch's head (<code>project.data</code>). A project on record that the Store does not list is a <code>notice</code> with the fix <code>layerfs project delete &lt;project&gt;</code>, not an error. A <code>not_checked</code> entry carries <code>blocked_by</code> or <code>reason</code> (<code>timeout</code>, <code>busy</code>, <code>lost</code>). The answer is the one doctor shape; the project node's <code>coverage</code> is <code>shallow</code>, <code>full</code> with <code>--full</code>, or <code>none</code> when it could not be checked",
+      "note": "shallow: its record (<code>project.record</code>) and its record against the Store's own list (<code>project.listed</code>); <code>--full</code> also reads everything reachable from main's head and each Branch's head (<code>project.data</code>). A project on record that the Store does not list is a <code>notice</code> with the fix <code>layerfs project delete &lt;project&gt;</code>, not an error. A <code>not_checked</code> entry carries <code>blocked_by</code> or <code>reason</code> (<code>timeout</code>, <code>busy</code>, <code>lost</code>). The answer is the one doctor shape; the project node's <code>coverage</code> is <code>shallow</code>, <code>full</code> with <code>--full</code>, or <code>none</code> when it could not be checked. <code>checks</code> is the project kind's whole list, in the order they run; <code>store doctor</code> runs the same list without the full-only entry on each of its projects. <code>--full</code> writes nothing to the Store: it may keep its visited set in a scratch file outside the Store, removed when the call ends, as today's integrity scan does. No check id of today's doctors names a project: the home sweep reads each project's record and folder, which <code>project.record</code> covers",
       "today": [],
       "help": "check one project's record; with --full, also read and check its data",
       "cli": "layerfs project doctor <project> [--full]",
@@ -527,7 +547,26 @@
         "long": "{\"ok\":true,\"findings\":[],\"not_checked\":[],\"status\":\"ok\",\"counts\":{\"ok\":1,\"notice\":0,\"warning\":0,\"error\":0,\"not_checked\":0},\"observed_at\":\"2026-11-18T09:16:59Z\",\"tree\":{\"project\":\"shop/api\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"project.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"project.listed\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}}"
       },
       "dropped": [],
-      "new_work": "The call and its answer shape are new. The record check is not: `project.get` and `project.list` already compare a project's record with the Store's own list (and hide a project the Store does not list); the doctor reports that case as a notice with a fix. `--full` is new work: a streamed, bounded-memory, read-only walk of everything reachable from main's head and the head of each Branch, on both engines and through a machine's worker; today's integrity check has no scope smaller than a Store. Progress events are new. The fix `layerfs project delete <project>` finishes a delete that kept the home's entry; no call today removes the entry of a project that was deleted from another home."
+      "new_work": "The call and its answer shape are new. The record check is not: `project.get` and `project.list` already compare a project's record with the Store's own list (and hide a project the Store does not list); the doctor reports that case as a notice with a fix. `--full` is new work: a streamed, bounded-memory walk of everything reachable from main's head and the head of each Branch, on both engines and through a machine's worker; today's integrity check has no scope smaller than a Store. It writes nothing to the Store; its visited set may live in a scratch file outside the Store, as today's integrity scan keeps its own in a private SQLite temporary database that is removed when the scan's connection closes. Progress events are new. The fix `layerfs project delete <project>` finishes a delete that kept the home's entry; no call today removes the entry of a project that was deleted from another home.",
+      "checks": {
+        "project": [
+          {
+            "check": "project.record",
+            "full_only": false,
+            "what": "the home's record of the project and its folder read, and the Store the record sits under is on record"
+          },
+          {
+            "check": "project.listed",
+            "full_only": false,
+            "what": "the Store's own list holds the project the record names, by its stack id, or by its name for a record without one"
+          },
+          {
+            "check": "project.data",
+            "full_only": true,
+            "what": "everything reachable from main's head and from each Branch's head is read and checked"
+          }
+        ]
+      }
     }
   ]
 }
