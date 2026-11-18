@@ -36,7 +36,8 @@ pub struct Names<'a> {
 
 /// One Store method with its arguments.
 pub enum StoreOp<'a> {
-    /// Store-wide statistics (no project required).
+    /// Store-wide statistics (no project required): `store get --with
+    /// stats` (engine method `store.stats`).
     Statistics,
     /// Entry counts at one project pin.
     ProjectStats(&'a super::project::ProjectStats),
@@ -60,7 +61,8 @@ pub enum StoreOp<'a> {
     },
     /// `branch.list_commits`: one page of a Branch's Commits.
     ListCommits(&'a CommitPage),
-    /// `branch.get_commit`: one Commit of the project.
+    /// `commit.get` (engine method `branch.get_commit`): one Commit of the
+    /// project.
     GetCommit(&'a CommitGet),
     /// `branch.fork`.
     Fork(&'a BranchFork),
@@ -125,7 +127,12 @@ impl Args {
 }
 
 impl StoreOp<'_> {
-    /// The engine method.
+    /// The engine method: the Store service's dispatch name, which keeps
+    /// its name under the call surface 2.0 (`project.remove_file` is
+    /// `project.hide_path`'s, `branch.get_commit` `commit.get`'s,
+    /// `store.stats` `store get --with stats`'s). It is sent to the Store,
+    /// in this process or in a worker's `store.call` frame, and no answer,
+    /// operation record or log line shows it.
     pub fn method(&self) -> &'static str {
         match self {
             Self::Statistics => "store.stats",

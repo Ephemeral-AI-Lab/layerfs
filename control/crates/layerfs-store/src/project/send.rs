@@ -2,7 +2,7 @@
 //! machine (#536 H11a): the folder is on the caller's host, so this process
 //! walks it and copies it to the machine's worker in `project.stage`
 //! requests of at most [`CHUNK`] bytes ([`super::tree`] records), as a
-//! `store push` sends a Store file; the worker's Init then reads the copy.
+//! `store move` sends a Store file; the worker's Init then reads the copy.
 //!
 //! The walk refuses, before anything is sent, what Init would refuse of the
 //! folder: an entry that is not a regular file, directory or symbolic link,
@@ -245,7 +245,7 @@ pub fn measure(folder: &Path, project: &str) -> Result<u64> {
 }
 
 /// Refuses `Capacity` unless the machine has the copy's `total` bytes and
-/// a store push's headroom free where its Stores are; asks its worker.
+/// a Store move's headroom free where its Stores are; asks its worker.
 pub fn room(worker: &mut Worker, copy: &Copy<'_>, total: u64) -> Result<()> {
     let stat = SdkValue::map([
         ("op", SdkValue::text("stat")),

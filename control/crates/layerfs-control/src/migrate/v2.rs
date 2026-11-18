@@ -162,7 +162,7 @@ fn remove(path: &Path) -> Result<()> {
 }
 
 /// What refuses the conversion of layout 2 home `home` now, read only
-/// (`layerfs doctor`): `(kind, name, what ends it)` for each live thing.
+/// (`layerfs home doctor`): `(kind, name, what ends it)` for each live thing.
 /// Stale leases stay (the conversion removes them); no lock is taken.
 pub(crate) fn blockers(home: &Path) -> Result<Vec<(&'static str, String, String)>> {
     let live = |home: &Path, store: &str| lease::read_holders(home, store).map(|(live, _)| live);

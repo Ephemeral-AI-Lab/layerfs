@@ -395,7 +395,7 @@ pub fn disconnected(store: &str, machine: Option<&str>) -> SdkValue {
     ])
 }
 
-/// `store.status` of a PostgreSQL Store: whether its server answers, its
+/// `store get --with live` of a PostgreSQL Store: whether its server answers, its
 /// version and the schema's size.
 pub fn status(record: &StoreRecord) -> SdkValue {
     let url = match url(record) {
@@ -406,7 +406,7 @@ pub fn status(record: &StoreRecord) -> SdkValue {
         .unwrap_or_else(|refusal| SdkValue::map([("unavailable", SdkValue::Text(refusal.message))]))
 }
 
-/// The Store's compaction operation as `store.status` (T10.5) renders it:
+/// The Store's compaction operation as `store get --with live` (T10.5) renders it:
 /// `{id, name, phase, started, uncertain, state, phases}`, or null when the
 /// Store has none. One status query reads the Store-side `gc_op` and the
 /// compaction `gc_intent`; no Store session is opened, no schema is changed

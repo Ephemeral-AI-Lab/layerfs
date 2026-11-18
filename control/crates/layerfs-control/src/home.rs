@@ -160,7 +160,8 @@ pub fn get(home: &Path, build: Build<'_>, with: With) -> Outcome {
 }
 
 /// `--with platforms`: `{ host, items }`, one row per platform this build
-/// knows with what it is missing here; what `machine.platforms` answers,
+/// knows with what it is missing here: what `layerfs_machine::platforms`
+/// answers (`machine.platforms` before 2.0),
 /// with a row's `kernel` as `route` and an option's `name` as `option`.
 #[cfg(feature = "machine")]
 fn platforms(home: &Path) -> Outcome {

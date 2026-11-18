@@ -9,7 +9,7 @@ use crate::ProviderCapabilities;
 
 /// What is fixed for one Sandbox backend.
 pub(crate) trait BackendAdapter: Sync {
-    /// The value Sandbox records, `machine.platforms` and `SUPPORT.json`
+    /// The value Sandbox records, `home get --with platforms` and `SUPPORT.json`
     /// store and show (`host_process` is `"native"`, G6).
     fn stored_name(&self) -> &'static str;
     /// One line: how a Sandbox runs on this backend.
