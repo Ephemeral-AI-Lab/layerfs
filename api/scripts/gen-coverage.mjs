@@ -94,7 +94,10 @@ export async function collect({ python, cli }) {
 /** A usage line's words as `{ positionals, options, from }`; names in snake_case. */
 function usage(words) {
   const out = { positionals: [], options: [], from: false };
-  for (const [, optionalPositional, positional, flag, value] of words.matchAll(/\[<([\w-]+)>\]|<([\w-]+)>|\[--([\w-]+)(?: <([\w-]+)>)?\]/g)) {
+  // an option is `[--name]` or `[--name <value>]`, a repeated object option `[--name K=V]...`
+  const pattern = /\[<([\w-]+)>\]|<([\w-]+)>|\[--([\w-]+)(?: <([\w-]+)>)?\]|\[--([\w-]+) K=V\]\.\.\./g;
+  for (const [, optionalPositional, positional, single, value, repeated] of words.matchAll(pattern)) {
+    const flag = single ?? repeated;
     const snake = (text) => text.replaceAll("-", "_");
     if (optionalPositional) out.positionals.push({ name: snake(optionalPositional), optional: true });
     else if (positional) out.positionals.push({ name: snake(positional), optional: false });
@@ -107,13 +110,12 @@ function usage(words) {
 }
 
 /** What the command line of `spec` must be, by the table: a content or JSON positional is read from
- * stdin or `--from`, `on_progress` is `--progress`, the output functions are `--stream`. */
+ * stdin or `--from`, `on_progress` is `--progress`, the output functions are no flag of their own
+ * (the `stream` option is `--stream`; the 2.0 exec row removed `--events`). */
 function expectedCli(spec) {
   // a secret option is its own flag, read from stdin (`--password-stdin`)
   const flagOf = (o) => (o.name === "on_progress" ? "progress" : o.shell ? o.shell.replace(/^--/, "").replaceAll("-", "_") : o.name);
   const options = spec.options.filter((o) => o.kind !== FUNCTION || o.name === "on_progress").map(flagOf);
-  // the command frames a call with a stdout sink as events: `--events`, last
-  if (spec.options.some((o) => o.name === "stdout")) options.push("events");
   return {
     positionals: spec.args.filter((a) => !piped(a)).map((a) => ({ name: a.name, optional: a.optional })),
     options,

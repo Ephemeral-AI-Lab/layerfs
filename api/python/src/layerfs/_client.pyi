@@ -50,6 +50,33 @@ class HomeFamily:
         log_tag: str | None = None,
     ) -> Result:
         """clear this home's call log"""
+    def doctor(
+        self,
+        *,
+        on_progress: Callable[[Progress], object] = ...,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """check the home, then each machine, PostgreSQL Store and bucket, shallowly"""
+    def leftovers(
+        self,
+        *,
+        machine: str | None = None,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """what earlier runs left behind on this computer and on each running machine"""
+    def prune(
+        self,
+        leftover: str,
+        *,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """remove one leftover that home leftovers listed"""
 
 class ProjectFamily:
     def init(
@@ -126,20 +153,32 @@ class ProjectFamily:
         log_tag: str | None = None,
     ) -> Result:
         """hide one absolute path from every node at or below its marker frontier"""
+    def doctor(
+        self,
+        project: str,
+        *,
+        full: bool | None = None,
+        on_progress: Callable[[Progress], object] = ...,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """check one project's record; with --full, also read and check its data"""
 
 class BranchFamily:
     def list(
         self,
         project: str,
         *,
-        page_size: int | None = None,
-        page_pos: int | None = None,
-        page: int | None = None,
+        prefix: str | None = None,
+        exclude_prefix: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """a project's Branches"""
+        """a project's Branches, main included, in name order"""
     def get(
         self,
         project: str,
@@ -150,92 +189,46 @@ class BranchFamily:
         log_tag: str | None = None,
     ) -> Result:
         """one Branch and its head Commit"""
-    def commits(
-        self,
-        project: str,
-        branch: str,
-        *,
-        page: int | None = None,
-        page_size: int | None = None,
-        at_commit: str | None = None,
-        include_storage: bool | None = None,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """saved branch commits or main publications, newest first"""
-    def get_commit(
-        self,
-        project: str,
-        branch: str,
-        commit: str,
-        *,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """one saved Commit or main publication"""
     def fork(
         self,
         project: str,
         name: str,
-        from_branch: str,
-        from_commit: str | None = None,
+        from_: str | None = None,
         *,
+        at: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """a new Branch from another Branch's head or Commit"""
+        """a new Branch from another Branch's head, or from a Commit"""
     def merge(
         self,
         project: str,
-        name: str,
-        a: str,
-        b: str,
+        branch: str,
+        from_: str,
         *,
-        message: str | None = None,
+        into: str | None = None,
         units: JSON | None = None,
+        expected: str | None = None,
+        message: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """merge two Branches into a new one"""
+        """merge one Branch into another, or into a new Branch"""
     def publish(
         self,
         project: str,
         branch: str,
-        commit: str | None = None,
         *,
-        expected_base: str | None = None,
-        expected_head: str | None = None,
+        at: str | None = None,
+        expected: str | None = None,
         force: bool | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """a Branch's head or Commit as main's next Layer, refusing a stale base"""
-    def diff(
-        self,
-        project: str,
-        from_branch: str,
-        to_branch: str,
-        *,
-        paths_only: bool | None = None,
-        page_size: int | None = None,
-        page_pos: int | None = None,
-        cursor: str | None = None,
-        page: int | None = None,
-        from_commit: str | None = None,
-        to_commit: str | None = None,
-        path_prefix: str | None = None,
-        include_attribution: bool | None = None,
-        continuation: str | None = None,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """files that differ between two Branches' heads"""
+        """a Branch's head or Commit as main's next head, refusing a stale base"""
     def remove(
         self,
         project: str,
@@ -245,7 +238,7 @@ class BranchFamily:
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """soft-remove one Branch; its name stays taken until compaction"""
+        """remove one Branch; its name stays taken until compaction"""
 
 class CommitFamily:
     def list(
@@ -253,8 +246,9 @@ class CommitFamily:
         project: str,
         branch: str,
         *,
-        page_size: int | None = None,
-        page_pos: int | None = None,
+        at: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
@@ -263,29 +257,28 @@ class CommitFamily:
     def get(
         self,
         project: str,
-        branch: str,
         commit: str,
         *,
+        branch: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """one Commit of a Branch"""
+        """one Commit, by its id or a prefix of 8 or more characters"""
     def diff(
         self,
         project: str,
-        from_commit: str,
-        to_commit: str,
+        ref: str,
         *,
-        paths_only: bool | None = None,
-        page_size: int | None = None,
-        page_pos: int | None = None,
+        from_: str | None = None,
+        path: str | None = None,
+        limit: int | None = None,
         cursor: str | None = None,
         detail: bool | None = None,
-        with_: Sequence[str] | None = None,
+        with_: Sequence[Literal['patch']] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """files that differ between two Commits"""
+        """the paths that differ between two Commits or Branches"""
 
 class FileFamily:
     def read(
@@ -507,65 +500,97 @@ class SandboxFamily:
         self,
         project: str,
         name: str,
-        machine: str | None = None,
         *,
+        machine: str | None = None,
         image: str | None = None,
+        mount: str | None = None,
         on_progress: Callable[[Progress], object] = ...,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """start a named Sandbox of a project on a machine (default: its sqlite Store's, or native)"""
+        """start a named Sandbox of a project on a machine; with --mount, also mount a Branch in it"""
     def list(
         self,
-        project: str | None = None,
         *,
-        page_size: int | None = None,
-        page_pos: int | None = None,
-        live: bool | None = None,
+        project: str | None = None,
+        machine: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """every Sandbox in the home, or one project's"""
+        """every Sandbox in the home, or one project's or one machine's"""
     def get(
         self,
-        name: str,
+        sandbox: str,
         *,
-        page_size: int | None = None,
-        page_pos: int | None = None,
         detail: bool | None = None,
-        with_: Sequence[str] | None = None,
+        with_: Sequence[Literal['stats']] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """a Sandbox and its Workspaces"""
-    def close(
+        """one Sandbox: its state and its Workspaces"""
+    def remove(
         self,
-        name: str,
+        sandbox: str,
         *,
         force: bool | None = None,
+        on_progress: Callable[[Progress], object] = ...,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """stop a Sandbox"""
+        """stop a Sandbox and remove it"""
     def files(
         self,
         sandbox: str,
         path: str | None = None,
         *,
         depth: int | None = None,
-        cursor: str | None = None,
         limit: int | None = None,
-        offset: int | None = None,
-        length: int | None = None,
+        cursor: str | None = None,
+        byte_offset: int | None = None,
+        byte_length: int | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """a Sandbox's files: its roots, or a folder or file under its home or in its root"""
+        """a Sandbox's files: its roots, one page of a folder, or one byte window of a file"""
+    def log(
+        self,
+        sandbox: str,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a Sandbox's daemon log: its last lines, or the lines before a cursor"""
+    def doctor(
+        self,
+        sandbox: str,
+        *,
+        on_progress: Callable[[Progress], object] = ...,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """check one Sandbox: its record, runtime and daemon, then each of its Workspaces"""
 
 class WorkspaceFamily:
+    def list(
+        self,
+        *,
+        sandbox: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """every mounted Workspace, or one Sandbox's"""
     def mount(
         self,
         sandbox: str,
@@ -579,36 +604,37 @@ class WorkspaceFamily:
         """mount a Branch in a Sandbox"""
     def exec(
         self,
-        ws: str,
+        workspace: str,
         command: str,
         *,
-        message: str | None = None,
+        cwd: str | None = None,
+        env: JSON | None = None,
+        stdin: Content | None = None,
         stream: bool | None = None,
         stdout: Callable[[Output], object] = ...,
         stderr: Callable[[Output], object] = ...,
-        exec_id: str | None = None,
         on_progress: Callable[[Progress], object] = ...,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
         """run one bash command in a Workspace"""
-    def exec_cancel(
+    def cancel(
         self,
-        ws: str,
-        exec_id: str,
+        workspace: str,
         *,
-        grace_ms: int | None = None,
+        exec: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """end a running command: SIGTERM, then SIGKILL after grace_ms"""
+        """end the commands running in a Workspace, or one of them"""
     def commit(
         self,
-        ws: str,
+        workspace: str,
         *,
         message: str | None = None,
+        expected: str | None = None,
         force: bool | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
@@ -617,7 +643,7 @@ class WorkspaceFamily:
         """commit a Workspace's changes to its Branch"""
     def unmount(
         self,
-        ws: str,
+        workspace: str,
         *,
         discard: bool | None = None,
         force: bool | None = None,
@@ -628,52 +654,45 @@ class WorkspaceFamily:
         """end a Workspace"""
     def status(
         self,
-        ws: str,
+        workspace: str,
         *,
+        path: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """a Workspace's changes since its base"""
+        """a Workspace's uncommitted changes, and whether its Branch moved"""
 
 class MachineFamily:
     def list(
         self,
         *,
         detail: bool | None = None,
-        with_: Sequence[str] | None = None,
+        with_: Sequence[Literal['live']] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """every machine, with what it supports"""
-    def platforms(
-        self,
-        *,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """the platforms this host and build support, and what each is missing"""
+        """every machine, from the home's records"""
     def get(
         self,
-        name: str,
+        machine: str,
         *,
         detail: bool | None = None,
-        with_: Sequence[str] | None = None,
+        with_: Sequence[Literal['live']] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """a machine's record"""
+        """a machine's record and state"""
     def images(
         self,
-        name: str,
+        machine: str,
         *,
         detail: bool | None = None,
-        with_: Sequence[str] | None = None,
+        with_: Sequence[Literal['docker']] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """the Sandbox images a machine holds, and the host's Docker images it can copy"""
-    def load(
+        """the Sandbox images a machine holds"""
+    def load_image(
         self,
-        name: str,
+        machine: str,
         image: str,
         *,
         on_progress: Callable[[Progress], object] = ...,
@@ -684,7 +703,7 @@ class MachineFamily:
         """copy an image from the host's Docker to a machine without creating a Sandbox"""
     def prune(
         self,
-        name: str,
+        machine: str,
         image: str | None = None,
         *,
         unused: bool | None = None,
@@ -693,51 +712,44 @@ class MachineFamily:
         log_tag: str | None = None,
     ) -> Result:
         """remove a Sandbox image from a machine, or every unused one"""
-    def status(
-        self,
-        name: str,
-        *,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """a machine's live state, free disk and tool version"""
     def stats(
         self,
         machine: str,
         *,
         detail: bool | None = None,
-        with_: Sequence[str] | None = None,
+        with_: Sequence[Literal['space']] | None = None,
         log_tag: str | None = None,
     ) -> Result:
         """a machine's observed processors, memory and data disk, its Stores' sizes and live Sandboxes"""
-    def space(
-        self,
-        machine: str,
-        *,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """where a machine's data disk goes: its Stores, Sandboxes, images and logs, and what is not LayerFS's"""
     def files(
         self,
         machine: str,
         path: str | None = None,
         *,
         depth: int | None = None,
-        cursor: str | None = None,
         limit: int | None = None,
-        offset: int | None = None,
-        length: int | None = None,
+        cursor: str | None = None,
+        byte_offset: int | None = None,
+        byte_length: int | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
         """a machine's files: its LayerFS folders by role, or a folder or file of the machine"""
+    def log(
+        self,
+        machine: str,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a machine's worker log: its last lines, then the lines before a cursor"""
     def start(
         self,
-        name: str,
+        machine: str,
         *,
         on_progress: Callable[[Progress], object] = ...,
         detail: bool | None = None,
@@ -747,9 +759,10 @@ class MachineFamily:
         """start a stopped machine and its worker; a running one answers at once"""
     def stop(
         self,
-        name: str,
+        machine: str,
         *,
         force: bool | None = None,
+        on_progress: Callable[[Progress], object] = ...,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
@@ -770,11 +783,12 @@ class MachineFamily:
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """create an enabled VM machine (apple-container, lima)"""
+        """create a VM machine (lima, apple-container) and start it"""
     def remove(
         self,
-        name: str,
+        machine: str,
         *,
+        on_progress: Callable[[Progress], object] = ...,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
@@ -782,7 +796,7 @@ class MachineFamily:
         """delete a VM machine and its disk; one of a removed platform is only forgotten"""
     def update(
         self,
-        name: str,
+        machine: str,
         *,
         cpus: int | None = None,
         memory: Size | None = None,
@@ -794,83 +808,9 @@ class MachineFamily:
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """resize a VM, or set a built-in machine's image, Docker socket and daemon"""
-
-class StoreFamily:
-    def list(
+        """set a machine's image, or a built-in machine's Docker socket, WSL distribution and daemon"""
+    def doctor(
         self,
-        *,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """every Store, from the home's records"""
-    def get(
-        self,
-        name: str,
-        *,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """a Store's record"""
-    def status(
-        self,
-        name: str,
-        *,
-        machine: str | None = None,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """a Store's live state; with a machine, whether it reaches a PostgreSQL Store"""
-    def stats(
-        self,
-        name: str,
-        *,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """Store-wide publication and allocation counters"""
-    def create(
-        self,
-        name: str,
-        *,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """an empty sqlite Store on native"""
-    def connect(
-        self,
-        name: str,
-        url: str,
-        *,
-        password: str | None = None,
-        synchronous_commit: str | None = None,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """connect a PostgreSQL database as a Store"""
-    def update(
-        self,
-        name: str,
-        *,
-        machine: str | None = None,
-        url: str | None = None,
-        password: str | None = None,
-        synchronous_commit: str | None = None,
-        clear: bool | None = None,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """change a PostgreSQL Store's connection, or the one a machine alone dials"""
-    def push(
-        self,
-        name: str,
         machine: str,
         *,
         on_progress: Callable[[Progress], object] = ...,
@@ -878,20 +818,113 @@ class StoreFamily:
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """send a sqlite Store from native to a machine"""
-    def pull(
+        """check a machine, then each Store and Sandbox on it"""
+
+class StoreFamily:
+    def list(
+        self,
+        *,
+        machine: str | None = None,
+        detail: bool | None = None,
+        with_: Sequence[Literal['stats']] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """every Store, from the home's records"""
+    def get(
+        self,
+        store: str,
+        *,
+        detail: bool | None = None,
+        with_: Sequence[Literal['live', 'stats']] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a Store's record and state"""
+    def create(
         self,
         name: str,
+        *,
+        machine: str | None = None,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """an empty sqlite Store"""
+    def connect(
+        self,
+        store: str,
+        url: str,
+        *,
+        auth: str | None = None,
+        machine: str | None = None,
+        synchronous_commit: str | None = None,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """connect a PostgreSQL database as a Store, or set an address of a connected one"""
+    def disconnect(
+        self,
+        store: str,
+        *,
+        machine: str | None = None,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """forget a PostgreSQL Store, or one machine's own address; its data stays"""
+    def save_auth(
+        self,
+        auth: str,
+        *,
+        user: str | None = None,
+        password: Content | None = None,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """save a PostgreSQL login in the home; saving again rotates it"""
+    def auths(
+        self,
+        *,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """the saved PostgreSQL logins and the Stores that use each"""
+    def remove_auth(
+        self,
+        auth: str,
+        *,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """remove a saved PostgreSQL login no Store uses"""
+    def update(
+        self,
+        store: str,
+        *,
+        auth: str | None = None,
+        synchronous_commit: str | None = None,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """change a PostgreSQL Store's saved login or its synchronous_commit"""
+    def move(
+        self,
+        store: str,
+        machine: str,
         *,
         on_progress: Callable[[Progress], object] = ...,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """bring a sqlite Store from its machine to native"""
+        """move a sqlite Store between this computer and a machine"""
     def remove(
         self,
-        name: str,
+        store: str,
         *,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
@@ -900,7 +933,7 @@ class StoreFamily:
         """delete a sqlite Store with every project in it"""
     def compact(
         self,
-        name: str,
+        store: str,
         *,
         on_progress: Callable[[Progress], object] = ...,
         detail: bool | None = None,
@@ -908,15 +941,17 @@ class StoreFamily:
         log_tag: str | None = None,
     ) -> Result:
         """reclaim dead bytes from one Store"""
-    def disconnect(
+    def doctor(
         self,
-        name: str,
+        store: str,
         *,
+        machine: str | None = None,
+        on_progress: Callable[[Progress], object] = ...,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """forget a PostgreSQL Store; its data stays"""
+        """check a Store, then each of its projects"""
 
 class BackupFamily:
     def connect(
@@ -924,93 +959,65 @@ class BackupFamily:
         name: str,
         url: str,
         *,
-        key: str | None = None,
-        region: str | None = None,
-        part_size: Size | None = None,
+        access_key: str | None = None,
+        secret_key: Content | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """connect an r2 or MinIO bucket"""
+        """connect a bucket (r2, or an S3 endpoint) for Store backups"""
     def disconnect(
         self,
-        name: str,
+        bucket: str,
         *,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """forget a bucket and this home's links to it"""
+        """forget a bucket; its files stay"""
     def list(
         self,
-        bucket: str | None = None,
         *,
+        bucket: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """every Store file on the connected buckets"""
+        """the Store files in the connected buckets, with the Store each is linked to"""
     def create(
         self,
         store: str,
         bucket: str,
-        file: str | None = None,
         *,
+        file: str | None = None,
         on_progress: Callable[[Progress], object] = ...,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """upload a sqlite Store to a bucket"""
+        """back up a sqlite Store to a bucket"""
     def restore(
         self,
-        store: str,
         bucket: str,
-        file: str | None = None,
+        file: str,
+        store: str,
         *,
         on_progress: Callable[[Progress], object] = ...,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """download a backup as a sqlite Store on native"""
-
-class LogsFamily:
-    def machine(
+        """restore a Store file from a bucket as a sqlite Store on this computer"""
+    def doctor(
         self,
-        machine: str,
+        bucket: str,
         *,
-        cursor: str | None = None,
-        before: str | None = None,
-        limit: int | None = None,
+        full: bool | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """a machine's worker log: its last lines, or the lines after or before a cursor"""
-    def sandbox(
-        self,
-        sandbox: str,
-        *,
-        cursor: str | None = None,
-        before: str | None = None,
-        limit: int | None = None,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """a Sandbox's daemon log: its last lines, or the lines after or before a cursor"""
-
-class DoctorFamily:
-    def fix(
-        self,
-        id: str,
-        *,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """remove one leftover `layerfs doctor` listed, under its guard"""
+        """check a bucket; --full also tests a write"""
 
 class Client:
     scope: Scope | Mapping[str, str | None] | None
@@ -1024,8 +1031,6 @@ class Client:
     machine: MachineFamily
     store: StoreFamily
     backup: BackupFamily
-    logs: LogsFamily
-    doctor: DoctorFamily
     def __init__(self, home: str | PathLike[str] | None = None, scope: Scope | Mapping[str, str | None] | None = None) -> None: ...
 
 def client(home: str | PathLike[str] | None = None, scope: Scope | Mapping[str, str | None] | None = None) -> Client: ...

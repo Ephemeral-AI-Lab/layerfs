@@ -8,8 +8,8 @@ so build the module first (see api/python/README.md). Written:
 `src/layerfs/_client.pyi`, `aio.pyi` and `__init__.pyi`. `_values.pyi` and
 `_errors.pyi` are written by hand. The table has argument kinds and, for a
 migrated call, the keys of its answer; every result is still the loose
-`Result`. An option whose name is a Python keyword is spelled with a
-trailing underscore (`with_`, `from_`), as the package reads it.
+`Result`. An argument or option whose name is a Python keyword is spelled
+with a trailing underscore (`with_`, `from_`), as the package reads it.
 """
 
 import json
@@ -57,7 +57,7 @@ def annotation(arg):
 
 
 def spelled(name):
-    """An option's name as a Python keyword argument."""
+    """An argument's or option's name as a Python parameter (`from_`)."""
     return f"{name}_" if keyword.iskeyword(name) else name
 
 
@@ -67,7 +67,7 @@ def method(spec, asynchronous):
     for arg in spec["args"]:
         assert arg["optional"] or not seen_optional, f"{spec['family']}.{spec['call']}: required after optional"
         seen_optional = seen_optional or arg["optional"]
-        params.append(f"{arg['name']}: {annotation(arg)}" + (" | None = None" if arg["optional"] else ""))
+        params.append(f"{spelled(arg['name'])}: {annotation(arg)}" + (" | None = None" if arg["optional"] else ""))
     params.append("*")
     for opt in spec["options"]:
         default = " = ..." if opt["kind"] == "function" else " | None = None"

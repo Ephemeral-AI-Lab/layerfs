@@ -116,7 +116,7 @@ built addon).
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
-84 calls: 38 in `work`, 39 in `admin` only, 6 in no profile (`ui`), 1 no tool; `--profile admin` lists 77.
+86 calls: 28 in `work`, 58 in `admin` only, 0 in no profile (`ui`), 0 no tool; `--profile admin` lists 86.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
@@ -124,6 +124,9 @@ built addon).
 | `home.get` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
 | `home.log` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
 | `home.clear_log` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
+| `home.doctor` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
+| `home.leftovers` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
+| `home.prune` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
 | `project.init` | admin | admin | import a host folder into a Store; administration |
 | `project.list` | work | work, admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
 | `project.get` | work | work, admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
@@ -131,17 +134,15 @@ built addon).
 | `project.export` | work | work, admin | export a Branch snapshot to a local folder under a launch-time --export-root; a folder scope refuses it |
 | `project.delete` | admin | admin | retire a project in its Store and remove its home entry; administration; a folder scope refuses it |
 | `project.remove_file` | admin | admin | hide one absolute path from every node at or below its marker frontier; administration; a folder scope refuses it |
-| `branch.list` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
-| `branch.get` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
-| `branch.commits` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
-| `branch.get_commit` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
+| `project.doctor` | admin | admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
+| `branch.list` | admin | admin | work on Branches: list, read, fork, merge, publish and diff |
+| `branch.get` | admin | admin | work on Branches: list, read, fork, merge, publish and diff |
 | `branch.fork` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
-| `branch.merge` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
-| `branch.publish` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
-| `branch.diff` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
+| `branch.merge` | admin | admin | work on Branches: list, read, fork, merge, publish and diff |
+| `branch.publish` | admin | admin | work on Branches: list, read, fork, merge, publish and diff |
 | `branch.remove` | admin | admin | retire one Branch in its Store; administration; a folder scope refuses it |
 | `commit.list` | work | work, admin | read a Branch's Commit history |
-| `commit.get` | work | work, admin | read a Branch's Commit history |
+| `commit.get` | admin | admin | read a Branch's Commit history |
 | `commit.diff` | work | work, admin | read a Branch's Commit history |
 | `file.read` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
 | `file.stat` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
@@ -158,52 +159,53 @@ built addon).
 | `file.mv` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
 | `file.cp` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
 | `file.apply` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
-| `sandbox.create` | admin | admin | start a Sandbox process; administration |
-| `sandbox.list` | work | work, admin | read a Sandbox and its Workspaces (work); starting and closing one is administration |
-| `sandbox.get` | work | work, admin | read a Sandbox and its Workspaces (work); starting and closing one is administration |
-| `sandbox.close` | admin | admin | stop a Sandbox; administration |
-| `sandbox.files` | ui | none | a monitoring read a UI polls (a machine's stats, disk space, files or worker log, a Sandbox's daemon log or files); offered to no agent |
-| `workspace.mount` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
+| `sandbox.create` | work | work, admin | start a Sandbox, and with --mount mount a Branch in it; work |
+| `sandbox.list` | admin | admin | start a Sandbox (work); read, remove and inspect one (administration) |
+| `sandbox.get` | admin | admin | start a Sandbox (work); read, remove and inspect one (administration) |
+| `sandbox.remove` | admin | admin | stop a Sandbox and remove it; administration |
+| `sandbox.files` | admin | admin | start a Sandbox (work); read, remove and inspect one (administration) |
+| `sandbox.log` | admin | admin | start a Sandbox (work); read, remove and inspect one (administration) |
+| `sandbox.doctor` | admin | admin | start a Sandbox (work); read, remove and inspect one (administration) |
+| `workspace.list` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
+| `workspace.mount` | admin | admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
 | `workspace.exec` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
-| `workspace.exec_cancel` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
+| `workspace.cancel` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
 | `workspace.commit` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
-| `workspace.unmount` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
+| `workspace.unmount` | admin | admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
 | `workspace.status` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
 | `machine.list` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
-| `machine.platforms` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.get` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.images` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
-| `machine.load` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
+| `machine.load_image` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.prune` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
-| `machine.status` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
-| `machine.stats` | ui | none | a monitoring read a UI polls (a machine's stats, disk space, files or worker log, a Sandbox's daemon log or files); offered to no agent |
-| `machine.space` | ui | none | a monitoring read a UI polls (a machine's stats, disk space, files or worker log, a Sandbox's daemon log or files); offered to no agent |
-| `machine.files` | ui | none | a monitoring read a UI polls (a machine's stats, disk space, files or worker log, a Sandbox's daemon log or files); offered to no agent |
+| `machine.stats` | admin | admin | a monitoring read a UI polls (a machine's stats, disk space, files or worker log); offered to no agent |
+| `machine.files` | admin | admin | a monitoring read a UI polls (a machine's stats, disk space, files or worker log); offered to no agent |
+| `machine.log` | admin | admin | a monitoring read a UI polls (a machine's stats, disk space, files or worker log); offered to no agent |
 | `machine.start` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.stop` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.create` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.remove` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.update` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
+| `machine.doctor` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `store.list` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.get` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.status` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.stats` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.create` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.connect` | admin | admin | create, connect, transfer and remove Stores; administration |
+| `store.disconnect` | admin | admin | create, connect, transfer and remove Stores; administration |
+| `store.save_auth` | admin | admin | create, connect, transfer and remove Stores; administration |
+| `store.auths` | admin | admin | create, connect, transfer and remove Stores; administration |
+| `store.remove_auth` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.update` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.push` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.pull` | admin | admin | create, connect, transfer and remove Stores; administration |
+| `store.move` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.remove` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.compact` | admin | admin | reclaim one Store's dead bytes; administration; a folder scope refuses it |
-| `store.disconnect` | admin | admin | create, connect, transfer and remove Stores; administration |
+| `store.doctor` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `backup.connect` | admin | admin | upload and restore a Store on a bucket; administration |
 | `backup.disconnect` | admin | admin | upload and restore a Store on a bucket; administration |
 | `backup.list` | admin | admin | upload and restore a Store on a bucket; administration |
 | `backup.create` | admin | admin | upload and restore a Store on a bucket; administration |
 | `backup.restore` | admin | admin | upload and restore a Store on a bucket; administration |
-| `logs.machine` | ui | none | a monitoring read a UI polls (a machine's stats, disk space, files or worker log, a Sandbox's daemon log or files); offered to no agent |
-| `logs.sandbox` | ui | none | a monitoring read a UI polls (a machine's stats, disk space, files or worker log, a Sandbox's daemon log or files); offered to no agent |
-| `doctor.fix` | none | none | remove a leftover the doctor's report listed; like `layerfs doctor` itself, a person's repair and no MCP tool |
+| `backup.doctor` | admin | admin | upload and restore a Store on a bucket; administration |
 
 <!-- END GENERATED -->
 
