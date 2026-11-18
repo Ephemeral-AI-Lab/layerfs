@@ -17,8 +17,11 @@
 //! run leaves for the next call to remove. The new packs and the moved
 //! locators go to the fresh `<store>.compact` file. The working set goes to
 //! the mark's visited scratch, `<store>.compact-visited`: [`plan`] adds the
-//! tables `repack` and `repack_kept` there and deletes the planned packs from
-//! its `live_pack`. The sealed Store is attached `immutable=1` and never
+//! tables `repack`, `repack_kept` and `rewritten` there and deletes the
+//! planned packs from its `live_pack`; [`apply`] notes each pack it wrote in
+//! `rewritten`, where the verification reads them back in pack order. No
+//! list of packs is held in memory: the plan and its outcome are these
+//! tables. The sealed Store is attached `immutable=1` and never
 //! changes, so a failure or a crash at any point leaves it as it was, exactly
 //! as for the whole-pack copy.
 //!
@@ -62,13 +65,17 @@ use layerfs_storage::pack::repack::retain_records;
 use layerfs_storage::port::ObjectKey;
 use rusqlite::{params, Connection};
 
-/// The working tables in the visited scratch: the packs to write again, and
-/// the locator of every kept object in them, keyed in the order [`apply`]
-/// reads it. The object is part of the key, so a damaged Store in which two
+/// The working tables in the visited scratch: the packs to write again with
+/// the dead bytes the mark found in each, the locator of every kept object
+/// in them, keyed in the order [`apply`] reads it, and the packs [`apply`]
+/// wrote. The object is part of the key, so a damaged Store in which two
 /// objects name one record keeps both rows. `base_only` is the mark's flag
 /// for an object reached only as a delta base.
-const TABLES: &str = "CREATE TABLE scratch.repack (pack_id INTEGER PRIMARY KEY) \
-STRICT, WITHOUT ROWID;\
+const TABLES: &str = "CREATE TABLE scratch.repack (\
+ pack_id INTEGER PRIMARY KEY, marked INTEGER NOT NULL) STRICT, WITHOUT ROWID;\
+CREATE TABLE scratch.rewritten (\
+ pack_id INTEGER PRIMARY KEY, digest BLOB NOT NULL, length INTEGER NOT NULL,\
+ records INTEGER NOT NULL) STRICT, WITHOUT ROWID;\
 CREATE TABLE scratch.repack_kept (\
  pack_id INTEGER NOT NULL, group_number INTEGER NOT NULL, record_number INTEGER NOT NULL,\
  object_id BLOB NOT NULL, role INTEGER NOT NULL, canonical_length INTEGER NOT NULL,\
@@ -76,18 +83,14 @@ CREATE TABLE scratch.repack_kept (\
  PRIMARY KEY(pack_id,group_number,record_number,object_id)\
 ) STRICT, WITHOUT ROWID;";
 
-/// Fills `repack_kept`: one pass over the visited set (`CROSS JOIN` fixes
-/// that order), a key lookup per row in the planned packs and in the sealed
-/// locators, and an insert into the keyed scratch table. `visited` holds the
-/// mark's whole §6.2 closure, so a record reached only as a delta base is in
-/// this set.
+/// Fills `repack_kept`: one pass over the visited set, whose rows are whole
+/// locators, a key lookup per row in the planned packs, and an insert into
+/// the keyed scratch table. `visited` holds the mark's whole §6.2 closure,
+/// so a record reached only as a delta base is in this set.
 const FILL: &str = "INSERT INTO scratch.repack_kept\
 (pack_id,group_number,record_number,object_id,role,canonical_length,base_only) \
-SELECT v.pack_id,l.group_number,l.record_number,v.object_id,l.role,l.canonical_length,\
-v.base_only \
-FROM scratch.visited v CROSS JOIN src.object_location l \
-ON l.object_id=v.object_id AND l.pack_id=v.pack_id \
-WHERE v.pack_id IN (SELECT pack_id FROM scratch.repack)";
+SELECT pack_id,group_number,record_number,object_id,role,canonical_length,base_only \
+FROM scratch.visited WHERE pack_id IN (SELECT pack_id FROM scratch.repack)";
 
 /// The kept locators, one pack after another, in group and record order: a
 /// scan of `repack_kept` in its key order.
@@ -117,8 +120,8 @@ pub struct Rewritten {
 /// What a rebuild's repack step did, for the report and the verification.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct Repacked {
-    /// The packs written again, in ascending pack order.
-    pub(crate) packs: Vec<Rewritten>,
+    /// How many packs were written again; `scratch.rewritten` lists them.
+    pub(crate) rewritten: u64,
     /// Their stored bytes in the sealed Store.
     pub(crate) bytes_before: u64,
     /// Their stored bytes in the fresh Store.
@@ -136,9 +139,9 @@ pub(crate) struct Repacked {
     pub(crate) bases_after: u64,
 }
 
-/// The packs one rebuild writes again, with the mark's dead bytes for each.
+/// Whether one rebuild writes any pack again; `scratch.repack` names them.
 pub(crate) struct Plan {
-    packs: Vec<(i64, u64)>,
+    planned: bool,
 }
 
 /// Names the packs to rewrite and takes them out of the whole-pack copy.
@@ -148,7 +151,7 @@ pub(crate) struct Plan {
 /// kept, and the rebuild stops instead of guessing.
 pub(crate) fn plan(connection: &Connection, partly_dead: &[(i64, u64)]) -> HistoryResult<Plan> {
     if partly_dead.is_empty() {
-        return Ok(Plan { packs: Vec::new() });
+        return Ok(Plan { planned: false });
     }
     // The working tables live in the visited scratch, beside the set this
     // edits: a temp table would open the connection's temp database, which the
@@ -157,10 +160,12 @@ pub(crate) fn plan(connection: &Connection, partly_dead: &[(i64, u64)]) -> Histo
     connection.execute_batch(TABLES).map_err(db_error)?;
     {
         let mut insert = connection
-            .prepare("INSERT INTO scratch.repack(pack_id) VALUES(?1)")
+            .prepare("INSERT INTO scratch.repack(pack_id,marked) VALUES(?1,?2)")
             .map_err(db_error)?;
-        for (pack_id, _) in partly_dead {
-            insert.execute(params![pack_id]).map_err(db_error)?;
+        for (pack_id, marked) in partly_dead {
+            let marked =
+                i64::try_from(*marked).map_err(|_| HistoryError::Integrity("repack plan"))?;
+            insert.execute(params![pack_id, marked]).map_err(db_error)?;
         }
     }
     let removed = connection
@@ -173,9 +178,7 @@ pub(crate) fn plan(connection: &Connection, partly_dead: &[(i64, u64)]) -> Histo
         return Err(HistoryError::Integrity("repack names a pack not retained"));
     }
     connection.execute(FILL, params![]).map_err(db_error)?;
-    Ok(Plan {
-        packs: partly_dead.to_vec(),
-    })
+    Ok(Plan { planned: true })
 }
 
 /// One stored pack row with its complete body.
@@ -426,12 +429,19 @@ WHERE object_id=?3 AND pack_id=?4",
     }
     done.bytes_before = done.bytes_before.saturating_add(source.body.len() as u64);
     done.bytes_after = done.bytes_after.saturating_add(rebuilt.body.len() as u64);
-    done.packs.push(Rewritten {
-        pack_id,
-        digest,
-        length: rebuilt.body.len() as u64,
-        records: rebuilt.records,
-    });
+    connection
+        .prepare_cached(
+            "INSERT INTO scratch.rewritten(pack_id,digest,length,records) VALUES(?1,?2,?3,?4)",
+        )
+        .map_err(db_error)?
+        .execute(params![
+            pack_id,
+            digest.as_slice(),
+            rebuilt.body.len() as i64,
+            rebuilt.records as i64
+        ])
+        .map_err(db_error)?;
+    done.rewritten += 1;
     Ok(())
 }
 
@@ -439,7 +449,7 @@ WHERE object_id=?3 AND pack_id=?4",
 /// the other tables, so each kept object's locator row is there to move.
 pub(crate) fn apply(connection: &Connection, plan: &Plan, units: bool) -> HistoryResult<Repacked> {
     let mut done = Repacked::default();
-    if plan.packs.is_empty() {
+    if !plan.planned {
         return Ok(done);
     }
     let mut codecs = Codecs {
@@ -448,23 +458,32 @@ pub(crate) fn apply(connection: &Connection, plan: &Plan, units: bool) -> Histor
     };
     let mut statement = connection.prepare(KEPT).map_err(db_error)?;
     let mut rows = statement.query(params![]).map_err(db_error)?;
-    let mut planned = plan.packs.iter();
+    // The planned packs, read beside the kept locators: both ascend by pack.
+    let mut planned = connection
+        .prepare("SELECT pack_id,marked FROM scratch.repack ORDER BY pack_id")
+        .map_err(db_error)?;
+    let mut planned = planned.query(params![]).map_err(db_error)?;
     let mut current: Option<i64> = None;
     let mut kept: Vec<Kept> = Vec::new();
     let mut finish =
         |pack_id: i64, kept: &mut Vec<Kept>, done: &mut Repacked| -> HistoryResult<()> {
             // Both lists ascend by pack, and every planned pack holds a kept
             // object: a pack out of step means the mark and its scratch disagree.
-            let (planned_id, marked) = planned
+            let row = planned
                 .next()
+                .map_err(db_error)?
                 .ok_or(HistoryError::Integrity("repack plan"))?;
-            if *planned_id != pack_id {
+            let planned_id: i64 = row.get(0).map_err(db_error)?;
+            let marked: i64 = row.get(1).map_err(db_error)?;
+            if planned_id != pack_id {
                 return Err(HistoryError::Integrity("repack plan order"));
             }
-            let before = done.packs.len();
+            let before = done.rewritten;
             rewrite(connection, pack_id, kept, units, &mut codecs, done)?;
-            if done.packs.len() > before {
-                done.marked_dead = done.marked_dead.saturating_add(*marked);
+            if done.rewritten > before {
+                done.marked_dead = done
+                    .marked_dead
+                    .saturating_add(u64::try_from(marked).unwrap_or(0));
             }
             kept.clear();
             Ok(())
@@ -501,7 +520,7 @@ pub(crate) fn apply(connection: &Connection, plan: &Plan, units: bool) -> Histor
     if let Some(pack_id) = current {
         finish(pack_id, &mut kept, &mut done)?;
     }
-    if planned.next().is_some() {
+    if planned.next().map_err(db_error)?.is_some() {
         return Err(HistoryError::Integrity("repack plan incomplete"));
     }
     Ok(done)
@@ -511,4 +530,20 @@ pub(crate) fn apply(connection: &Connection, plan: &Plan, units: bool) -> Histor
 /// is unchanged, so nothing is uncertain.
 fn storage(_error: layerfs_storage::StorageError) -> HistoryError {
     HistoryError::Integrity("repack pack")
+}
+
+/// The packs [`apply`] wrote, as it noted them in the scratch, ascending.
+pub(crate) const REWRITTEN: &str =
+    "SELECT pack_id,digest,length,records FROM rewritten ORDER BY pack_id";
+
+/// One row of [`REWRITTEN`].
+pub(crate) fn rewritten_row(row: &rusqlite::Row<'_>) -> HistoryResult<Rewritten> {
+    const ROW: HistoryError = HistoryError::Integrity("repack scratch");
+    let digest: Vec<u8> = row.get(1).map_err(db_error)?;
+    Ok(Rewritten {
+        pack_id: row.get(0).map_err(db_error)?,
+        digest: digest.try_into().map_err(|_| ROW)?,
+        length: u64::try_from(row.get::<_, i64>(2).map_err(db_error)?).map_err(|_| ROW)?,
+        records: u64::try_from(row.get::<_, i64>(3).map_err(db_error)?).map_err(|_| ROW)?,
+    })
 }

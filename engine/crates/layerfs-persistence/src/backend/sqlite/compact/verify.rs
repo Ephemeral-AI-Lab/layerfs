@@ -1,9 +1,13 @@
 //! §7 step 5: immutable verification of the staged file against the live tuple.
 
 use super::build::Built;
+use super::build::CACHE_KIB;
 use super::lengths::PackLengths;
 use super::op::stop_at;
+use super::op::visited_path;
 use super::op::RunOp;
+use super::repack::rewritten_row;
+use super::repack::REWRITTEN;
 use super::staged::PackScan;
 use super::staged::StagedLocators;
 use super::types::db_error;
@@ -219,6 +223,7 @@ struct Staged {
 /// table.
 fn scan_packs(
     connection: &Connection,
+    scratch: &Path,
     built: &Built,
     lengths: &mut PackLengths,
     retained: &[i64],
@@ -226,7 +231,24 @@ fn scan_packs(
     let directory = built.target.parent().unwrap_or(Path::new("."));
     let mut locators = StagedLocators::read(connection, directory)?;
     let (objects, canonical) = (locators.objects, locators.canonical);
-    let mut rewritten = built.repacked.packs.iter().cloned().map(Ok);
+    // The packs the build wrote again are listed in its scratch, which no
+    // one writes any more; without one there is no such table.
+    let scratch = match built.repacked.rewritten {
+        0 => None,
+        _ => Some(open_immutable(scratch)?),
+    };
+    let mut listed = match &scratch {
+        Some(scratch) => Some(scratch.prepare(REWRITTEN).map_err(db_error)?),
+        None => None,
+    };
+    let mut rows = match listed.as_mut() {
+        Some(listed) => Some(listed.query(params![]).map_err(db_error)?),
+        None => None,
+    };
+    let mut rewritten = std::iter::from_fn(|| {
+        let row = rows.as_mut()?.next().map_err(db_error).transpose()?;
+        Some(row.and_then(rewritten_row))
+    });
     let mut pass = locators.pass(connection, &mut rewritten)?;
     if built.payload_in_pack {
         // What a window's range holds beyond its own payload (see `windows`).
@@ -240,10 +262,14 @@ fn scan_packs(
         })?;
     }
     // Every identity after the last window, or the whole table without one.
+    let packs = pass.finish()?;
+    if packs.rewritten != built.repacked.rewritten {
+        return Err(HistoryError::Integrity("staged Store repacked pack"));
+    }
     Ok(Staged {
         objects,
         canonical,
-        packs: pass.finish()?,
+        packs,
     })
 }
 
@@ -286,10 +312,17 @@ pub(crate) fn verify(
         layout,
         acquisition,
     } = input;
-    // Every pass below reads its table forward, so the reader keeps the
-    // default 2 MiB cache: no pass looks a row up at random in a table that
-    // grows with the Store.
     let connection = open_immutable(&built.target)?;
+    // The passes over the objects and the packs read their tables forward
+    // and need no cache. The foreign keys of the history tables are still
+    // SQLite's check, one lookup per key at random over those tables: through
+    // the default 2 MiB cache a Store of 426 thousand Commits read 453
+    // thousand pages for it. The build's cache size, which the build's
+    // connection has given back, keeps as many of those pages as a
+    // compaction may hold.
+    connection
+        .execute_batch(&format!("PRAGMA cache_size=-{CACHE_KIB}"))
+        .map_err(db_error)?;
     schema::check(
         &connection,
         &RefCell::new(SqlWork::default()),
@@ -309,7 +342,13 @@ pub(crate) fn verify(
     // The objects, the packs and the packs written again: the row counts the
     // mark fixes, the sums the totals row must equal and every locator's
     // pack, in two forward scans.
-    let staged = scan_packs(&connection, built, lengths, mark.objects().packs())?;
+    let staged = scan_packs(
+        &connection,
+        &visited_path(store),
+        built,
+        lengths,
+        mark.objects().packs(),
+    )?;
     let packs = staged.packs;
     let scanned = connection
         .query_row(SCAN_SQL, params![], |row| {

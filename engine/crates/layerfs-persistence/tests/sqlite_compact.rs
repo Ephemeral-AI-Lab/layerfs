@@ -2201,6 +2201,26 @@ fn the_mark_writes_its_visited_set_into_the_scratch_table() {
         "every retained pack holds a visited row"
     );
     assert_eq!(unlisted, 0, "every visited row's pack is retained");
+    // A row is the object's whole locator, as the Store holds it: the build
+    // writes the kept locators from this table.
+    connection
+        .execute(
+            "ATTACH DATABASE ?1 AS store",
+            rusqlite::params![path.to_str().unwrap()],
+        )
+        .unwrap();
+    let same: i64 = connection
+        .query_row(
+            "SELECT count(*) FROM visited v JOIN store.object_location l \
+ON l.object_id=v.object_id AND l.role=v.role AND l.canonical_length=v.canonical_length \
+AND l.pack_id=v.pack_id AND l.group_number=v.group_number \
+AND l.record_number=v.record_number",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(same, rows, "every visited row is the Store's locator");
+    connection.execute_batch("DETACH DATABASE store").unwrap();
     let present: i64 = connection
         .query_row(
             "SELECT count(*) FROM visited WHERE object_id=?1",

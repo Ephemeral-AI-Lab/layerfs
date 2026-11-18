@@ -181,6 +181,8 @@ pub struct PackScan {
     pub stored: i64,
     /// The part of that sum in the metadata domain.
     pub metadata: i64,
+    /// The packs read back as written again.
+    pub rewritten: u64,
 }
 
 /// One pass over the staged file's `pack` rows in pack order. See the module
@@ -231,6 +233,7 @@ impl PackPass<'_> {
             match self.next.take() {
                 Some(written) if written.pack_id == pack => {
                     self.next = self.rewritten.next().transpose()?;
+                    self.scan.rewritten += 1;
                     read_back(
                         self.connection,
                         &written,
