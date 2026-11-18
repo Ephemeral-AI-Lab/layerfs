@@ -24,9 +24,10 @@ chooses by `StoreKind`. Every new Store runs the Disposable profile
 
 ## Transfer (`sqlite/transfer/`)
 
-`store.push <s> <machine>` moves a sqlite Store's file from `native` to a
-machine's worker; `store.pull <s>` brings it back. Between two machines
-the caller pulls, then pushes; each half is its own operation
+`store.move <s> <machine>` moves a sqlite Store's file from `native` to a
+machine's worker; `store.move <s> native` brings it back. One side is always `native`: between two
+machines the caller moves the Store to `native`, then on; each half is its
+own operation
 ([`phases.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs)).
 
 ```text
@@ -66,7 +67,7 @@ running on it is `InUse`
 | a phase fails certain | whatever exists; the refusal names the phase | — |
 | `Unknown`, or any failure at `record` (both copies exist) | both copies; `op` uncertain; `log/uncertain.jsonl` | a new push or pull, which first deletes the copy the record does not name |
 | a retire that did not finish | the source's copy; `last_transfer.retired: false` | the next push or pull |
-| a push that failed certain at `send`, `verify` or `install` | the target's `store.sqlite.incoming`; the record's `incoming_on` names the machine | the next `store push` or `store remove` (doctor reports its bytes) |
+| a push that failed certain at `send`, `verify` or `install` | the target's `store.sqlite.incoming`; the record's `incoming_on` names the machine | the next `store move` or `store remove` (doctor reports its bytes) |
 
 The copy the record names is never touched, and nothing is deleted while
 another operation holds the Store
@@ -94,7 +95,6 @@ another operation holds the Store
 | `store.disconnect` | forgets the Store; its data stays | `InvalidInput` for sqlite (`store remove`); `InUse` while leased or a Sandbox uses it | same |
 | `store.update <s> {url, password, synchronous_commit}` | changes the Store's own connection; a new URL or password is dialled once from here and must hold this Store's binding; this process's open sessions on it are closed | `InvalidInput`; `Exists` (another Store's database); `Unavailable` (not reached, or another Store's schema); `InUse` (a call running here); `Conflict` if the record changed meanwhile | [`update.rs`](../../../../control/crates/layerfs-store/src/postgresql/update.rs) |
 | `store.update <s> --machine <m> {url, password}` | gives one machine a connection of its own, `machines.<m>: {url?, password?}`: the machine's platform must run PostgreSQL Sandboxes (support table); the check runs on the side that dials (this process, or the worker's `store.reach`) before anything is saved. `--clear` removes it and dials nothing | `Unsupported` (row reason; a worker without `store.reach` names stop and start); `Unavailable` (server not reached, naming the host, never the URL, plus the platform's hint; or another Store's schema); `Denied` (login or privilege); `Conflict` if the record changed meanwhile | [`check.rs`](../../../../control/crates/layerfs-store/src/postgresql/check.rs), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) |
-| `store.status <s> --machine <m>` | runs that check now and answers it as `check: {machine, host, ok, ..}`; records nothing | a failed check is `ok: false`, not a refusal | same |
 | Store calls | open the schema in this process with the URL resolved now | — | [`open.rs`](../../../../control/crates/layerfs-store/src/postgresql/open.rs) |
 | Host read session | one read-only session per process for Sandbox host operations: a create's reach check and a status's head read, on every route; opened with the light check on first read, checked with one empty query before each use (a dead one is replaced, not retried), closed after 60 s unused | — | [`reader.rs`](../../../../control/crates/layerfs-store/src/postgresql/reader.rs) |
 

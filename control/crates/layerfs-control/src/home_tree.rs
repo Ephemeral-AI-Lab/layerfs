@@ -47,11 +47,10 @@ fn projects(home: &Path, store: &str) -> Result<SdkValue> {
 /// Store's `connections` are `{ machine, url }`, the home's own address
 /// first (`machine` null), then each machine that has one of its own; a
 /// sqlite Store has none (null). A URL is as the record holds it: a
-/// password is a reference, never written there.
+/// password is a reference, never written there. Its state is the Store's
+/// one records-only derivation.
 fn store(home: &Path, record: &StoreRecord, under: Option<(&str, &State)>) -> Result<SdkValue> {
-    let state = held(record.op())
-        .or_else(|| under.and_then(|(machine, state)| state.blocks("machine", machine)))
-        .unwrap_or(State::Ready);
+    let state = layerfs_store::state::recorded_under(record, under.map(|(_, state)| state))?;
     let connection = |machine: Option<String>, url: Option<&str>| {
         SdkValue::map([
             ("machine", SdkValue::opt_text(machine)),

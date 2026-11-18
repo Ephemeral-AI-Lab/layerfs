@@ -1,6 +1,7 @@
-//! `branch.publish`'s expected-base options are generated from the call
-//! table: the shell accepts them, its usage line names them, and a malformed
-//! value is a usage error naming the flag (#691).
+//! `branch.publish`'s `--at`, `--expected` and `--force` are generated from
+//! the call table: the shell accepts them, its usage line names them, and a
+//! malformed value is a usage error naming the flag (#691; 2.0 call
+//! surface).
 use layerfs_api::Call;
 use layerfs_bridge::control::SdkValue;
 
@@ -26,23 +27,23 @@ fn usage_error(words: &[&str]) -> String {
     }
 }
 
-const BASE: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-const HEAD: &str = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+const MAIN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+const AT: &str = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
 
 #[test]
-fn the_shell_reads_expected_base_expected_head_and_force() {
+fn the_shell_reads_at_expected_and_force() {
     let parsed = parse(&[
         "shop/api",
         "work",
-        "--expected-base",
-        BASE,
-        "--expected-head",
-        HEAD,
+        "--at",
+        AT,
+        "--expected",
+        MAIN,
         "--force",
     ])
     .expect("the options parse");
-    assert_eq!(parsed.args.get_text("expected_base"), Some(BASE));
-    assert_eq!(parsed.args.get_text("expected_head"), Some(HEAD));
+    assert_eq!(parsed.args.get_text("at"), Some(AT));
+    assert_eq!(parsed.args.get_text("expected"), Some(MAIN));
     assert!(
         matches!(parsed.args.get("force"), Some(SdkValue::Bool(true))),
         "{:?}",
@@ -50,7 +51,7 @@ fn the_shell_reads_expected_base_expected_head_and_force() {
     );
     assert_eq!(
         layerfs_cli::help::usage(publish()),
-        "layerfs branch publish <project> <branch> [<commit>] [--expected-base <expected-base>] [--expected-head <expected-head>] [--force]"
+        "layerfs branch publish <project> <branch> [--at <at>] [--expected <expected>] [--force]"
     );
 }
 
@@ -61,13 +62,13 @@ fn the_options_take_inline_values_and_a_boolean_force() {
     let inline = parse(&[
         "shop/api",
         "work",
-        &format!("--expected-base={BASE}"),
-        &format!("--expected-head={HEAD}"),
+        &format!("--at={AT}"),
+        &format!("--expected={MAIN}"),
         "--force=false",
     ])
     .expect("the inline options parse");
-    assert_eq!(inline.args.get_text("expected_base"), Some(BASE));
-    assert_eq!(inline.args.get_text("expected_head"), Some(HEAD));
+    assert_eq!(inline.args.get_text("at"), Some(AT));
+    assert_eq!(inline.args.get_text("expected"), Some(MAIN));
     assert!(
         matches!(inline.args.get("force"), Some(SdkValue::Bool(false))),
         "{:?}",
@@ -86,20 +87,21 @@ fn the_options_take_inline_values_and_a_boolean_force() {
 #[test]
 fn a_malformed_expectation_is_a_usage_error() {
     assert_eq!(
-        usage_error(&["shop/api", "work", "--expected-base"]),
-        "--expected-base needs a value"
+        usage_error(&["shop/api", "work", "--expected"]),
+        "--expected needs a value"
     );
     assert_eq!(
         usage_error(&["shop/api", "work", "--force=yes"]),
         "branch.publish: `force` is true or false"
     );
-    let unknown = usage_error(&["shop/api", "work", &format!("--expected-bass={BASE}")]);
+    // the old options are gone
+    let unknown = usage_error(&["shop/api", "work", &format!("--expected-base={MAIN}")]);
     assert!(
-        unknown.starts_with("branch.publish: unknown option --expected-bass\naccepted options: "),
+        unknown.starts_with("branch.publish: unknown option --expected-base\naccepted options: "),
         "{unknown}"
     );
-    // The refusal lists the flags the call accepts, including the new ones.
-    for flag in ["--expected-base", "--expected-head", "--force"] {
+    // The refusal lists the flags the call accepts.
+    for flag in ["--at", "--expected", "--force"] {
         assert!(unknown.contains(flag), "{flag}: {unknown}");
     }
 }

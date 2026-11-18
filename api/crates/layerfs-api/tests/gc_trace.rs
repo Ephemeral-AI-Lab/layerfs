@@ -243,7 +243,6 @@ fn the_redacted_set_covers_every_path_bearing_call() {
         "right_path",
         "from_path",
         "to_path",
-        "path_prefix",
         "pattern",
     ] {
         let named = (layerfs_api::calls().into_iter())
@@ -265,7 +264,7 @@ fn the_redacted_set_covers_every_path_bearing_call() {
         ("file.diff", &["left_path", "right_path"][..]),
         ("file.cp", &["from_path", "to_path"][..]),
         ("file.mv", &["from_path", "to_path"][..]),
-        ("branch.diff", &["path_prefix"][..]),
+        ("commit.diff", &["path"][..]),
     ] {
         let spec = layerfs_api::find(name).unwrap_or_else(|| panic!("{name} is missing"));
         for arg in args {
@@ -310,8 +309,8 @@ fn the_trace_key_is_salted_by_the_store_policy_salt() {
 fn store_compact_artifact_names_never_reach_the_log() {
     let _env = serial();
     let (home, folder) = project();
-    let report = ok(&home, "store.compact", &[("name", t("shop"))]);
-    assert_eq!(report.get_text("kind"), Some("Compacted"));
+    let report = ok(&home, "store.compact", &[("store", t("shop"))]);
+    assert!(report.get_int("freed_bytes").is_some(), "{report:?}");
     assert_eq!(
         argv(&last(&home)),
         ["store".to_owned(), "compact".into(), "shop".into()]

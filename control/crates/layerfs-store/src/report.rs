@@ -1,114 +1,106 @@
-//! The wire rendering of the §11 compaction report and the `store.status`
-//! compaction projection (T10).
+//! The compaction report `store.compact` answers (call surface 2.0) and the
+//! projection of a compaction's own record a live read shows (T10).
 //!
 //! One serializer renders the [`CompactReceipt`] both backends return, so the
-//! SQLite and PostgreSQL paths cannot disagree on a key: every key is snake_case (§10;
-//! §11 names are logical), a zero field is named by its wire key, and
-//! `residue.reason` appears only when something remains.
+//! SQLite and PostgreSQL paths cannot disagree on a key: the report is flat,
+//! every byte total ends in `_bytes`, a zero field is named by its key in
+//! this answer, and `residue_reason` is null unless something remains.
 use layerfs_bridge::control::SdkValue;
-use layerfs_persistence::{CompactReceipt, CompactStatus};
+use layerfs_persistence::{CompactPath, CompactReceipt, CompactStatus};
 
-/// The §11 report as `store.compact` returns it:
-/// `{kind: "Compacted", path, generation {before, after}, ...}`.
-#[must_use]
-pub fn compact_report(report: &CompactReceipt) -> SdkValue {
-    let int = |value: u64| SdkValue::Int(i64::try_from(value).unwrap_or(i64::MAX));
-    let references: Vec<SdkValue> = report
-        .kept_waste
-        .delta_base_references
-        .iter()
-        .map(|id| SdkValue::text(layerfs_bridge::sdk_values::hex(id)))
-        .collect();
-    // §11/S7: a capped field carries its cap. A list cut at the cap renders as
-    // `{value, cap}`; every other report keeps the plain identity list.
-    let references = if report.kept_waste.delta_base_references_capped {
-        SdkValue::map([
-            ("value", SdkValue::List(references)),
-            (
-                "cap",
-                int(layerfs_persistence::DELTA_BASE_REFERENCES_CAP as u64),
-            ),
-        ])
-    } else {
-        SdkValue::List(references)
-    };
-    let mut residue = vec![
-        ("bytes".to_owned(), int(report.residue.bytes)),
-        (
-            "artifacts".to_owned(),
-            SdkValue::List(
-                report
-                    .residue
-                    .artifacts
-                    .iter()
-                    .map(SdkValue::text)
-                    .collect(),
-            ),
-        ),
-    ];
-    if let Some(reason) = &report.residue.reason {
-        residue.push(("reason".to_owned(), SdkValue::text(reason)));
+/// How many `delta_base_references` the answer shows; the count beside
+/// them says how many the run found.
+pub const REFERENCES_SHOWN: usize = 20;
+
+/// The key of this answer a §11 report field (`wire`, as the engine names
+/// it) is answered under: what a `zero_reasons` entry names.
+fn key_of(wire: &str) -> &str {
+    match wire {
+        "dead_bytes_bound" | "dead_bytes_refined" => "dead_bytes",
+        "logical_discarded" => "discarded_bytes",
+        "backend_reusable" => "reusable_bytes",
+        "physical_shrink" => "freed_bytes",
+        "residue" | "residue.bytes" => "residue_bytes",
+        other => other,
     }
-    let zero_reasons = report
-        .zero_reasons
-        .iter()
-        .map(|zero| {
-            SdkValue::map([
-                ("field", SdkValue::text(zero.wire_field())),
-                ("reason", SdkValue::text(zero.reason)),
-            ])
-        })
-        .collect();
-    SdkValue::Map(
-        [
-            ("kind", SdkValue::text("Compacted")),
-            ("path", SdkValue::text(report.path.as_str())),
-            (
-                "generation",
-                SdkValue::map([
-                    ("before", int(report.generation_before)),
-                    ("after", int(report.generation_after)),
-                ]),
-            ),
-            ("dead_bytes_bound", int(report.dead_bytes_bound)),
-            ("dead_bytes_refined", int(report.dead_bytes_refined)),
-            ("logical_discarded", int(report.logical_discarded)),
-            ("backend_reusable", int(report.backend_reusable)),
-            ("physical_shrink", int(report.physical_shrink)),
-            (
-                "kept_waste",
-                SdkValue::map([
-                    (
-                        "dead_in_retained_packs_bytes",
-                        int(report.kept_waste.dead_in_retained_packs_bytes),
-                    ),
-                    (
-                        "delta_bases",
-                        SdkValue::map([
-                            ("bytes", int(report.kept_waste.delta_bases_bytes)),
-                            ("references", references),
-                        ]),
-                    ),
-                    (
-                        "inode_blocks_bytes",
-                        int(report.kept_waste.inode_blocks_bytes),
-                    ),
-                ]),
-            ),
-            ("peak_temp_bytes", int(report.peak_temp_bytes)),
-            ("residue", SdkValue::Map(residue.into_iter().collect())),
-            ("estimate", SdkValue::Bool(report.estimate)),
-            ("zero_reasons", SdkValue::List(zero_reasons)),
-        ]
-        .into_iter()
-        .map(|(name, value)| (name.to_owned(), value))
-        .collect(),
-    )
 }
 
-/// The `store.status` projection of a compaction: `{id, name, phase, started,
-/// uncertain, state, phases}`. The caller splits the op fields into its `op`
-/// and leaves `state`/`phases` beside them (§11).
+/// The report `store.compact` answers for Store `store`: `{ freed_bytes,
+/// outcome, store, generation_before, generation_after, dead_bytes,
+/// discarded_bytes, reusable_bytes, kept_waste, delta_base_references,
+/// delta_base_references_count, peak_temp_bytes, residue_bytes,
+/// residue_artifacts, residue_reason, estimate, zero_reasons }`.
+/// `freed_bytes` is how much the Store's file or database shrank; `outcome`
+/// is `compacted` for a rebuild and `unchanged` when the run stayed below
+/// its threshold and wrote nothing; `dead_bytes` is the one total the mark
+/// found (its bound and its refinement are equal on every path).
+#[must_use]
+pub fn compact_report(store: &str, report: &CompactReceipt) -> SdkValue {
+    let int = |value: u64| SdkValue::Int(i64::try_from(value).unwrap_or(i64::MAX));
+    let found = &report.kept_waste.delta_base_references;
+    let references: Vec<SdkValue> = found
+        .iter()
+        .take(REFERENCES_SHOWN)
+        .map(|id| SdkValue::text(layerfs_bridge::sdk_values::hex(id)))
+        .collect();
+    let artifacts = report.residue.artifacts.iter().map(SdkValue::text);
+    let mut zero_reasons: Vec<SdkValue> = Vec::new();
+    for zero in &report.zero_reasons {
+        let entry = SdkValue::map([
+            ("field", SdkValue::text(key_of(zero.wire_field()))),
+            ("reason", SdkValue::text(zero.reason)),
+        ]);
+        // the bound and the refinement are one key here: one entry for both
+        if !zero_reasons.contains(&entry) {
+            zero_reasons.push(entry);
+        }
+    }
+    let outcome = match report.path {
+        CompactPath::Rebuild => "compacted",
+        CompactPath::None => "unchanged",
+    };
+    SdkValue::map([
+        ("freed_bytes", int(report.physical_shrink)),
+        ("outcome", SdkValue::text(outcome)),
+        ("store", SdkValue::text(store)),
+        ("generation_before", int(report.generation_before)),
+        ("generation_after", int(report.generation_after)),
+        ("dead_bytes", int(report.dead_bytes_refined)),
+        ("discarded_bytes", int(report.logical_discarded)),
+        ("reusable_bytes", int(report.backend_reusable)),
+        (
+            "kept_waste",
+            SdkValue::map([
+                (
+                    "dead_in_retained_packs_bytes",
+                    int(report.kept_waste.dead_in_retained_packs_bytes),
+                ),
+                (
+                    "delta_bases_bytes",
+                    int(report.kept_waste.delta_bases_bytes),
+                ),
+                (
+                    "inode_blocks_bytes",
+                    int(report.kept_waste.inode_blocks_bytes),
+                ),
+            ]),
+        ),
+        ("delta_base_references", SdkValue::List(references)),
+        ("delta_base_references_count", int(found.len() as u64)),
+        ("peak_temp_bytes", int(report.peak_temp_bytes)),
+        ("residue_bytes", int(report.residue.bytes)),
+        ("residue_artifacts", SdkValue::List(artifacts.collect())),
+        (
+            "residue_reason",
+            SdkValue::opt_text(report.residue.reason.as_deref()),
+        ),
+        ("estimate", SdkValue::Bool(report.estimate)),
+        ("zero_reasons", SdkValue::List(zero_reasons)),
+    ])
+}
+
+/// The projection of a compaction's own record, as a live read takes it:
+/// `{id, name, phase, started, uncertain, state, phases}` (§11).
 #[must_use]
 pub fn compact_status(status: &CompactStatus) -> SdkValue {
     SdkValue::map([

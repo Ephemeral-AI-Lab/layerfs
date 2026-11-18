@@ -55,7 +55,7 @@ fn after_a_panic_in_a_store_call_the_next_calls_work() {
 
     // the next Store call, and a Sandbox operation, answer as before
     let after = worker_store::stats(&placed.home).unwrap();
-    assert_eq!(after.get_text("name"), before.get_text("name"));
+    assert_eq!(after.get_text("store"), before.get_text("store"));
     let again = worker_store::sandbox_call(&placed.endpoint).unwrap_err();
     assert_eq!((again.code, again.message), (sandbox.code, sandbox.message));
     let folder = worker_store::folder(&placed.scratch.join("more"), 4096);

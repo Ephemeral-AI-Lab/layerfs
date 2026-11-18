@@ -65,7 +65,7 @@ async def async_flow() -> None:
     await lfs.workspace.exec("ws", "ls", stdout=on_output)
     await lfs.project.export("shop/api", "/exports/api", branch="agent", on_progress=on_progress)
     await lfs.workspace.exec_cancel("ws", "exec-0123456789abcdef")
-    await aio.store.push("shop", "machine", on_progress=on_progress)
+    await aio.store.move("shop", "machine", on_progress=on_progress)
     try:
         await aio.file.stat("shop/api", "main", "/a")
     except aio.LayerFSError as error:

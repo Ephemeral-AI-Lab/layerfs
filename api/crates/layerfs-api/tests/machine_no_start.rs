@@ -97,8 +97,8 @@ fn every_read(home: &Path) {
         ("machine.get", vec![("machine", "dev")]),
         ("machine.get", vec![("machine", "dev"), ("with", "live")]),
         ("store.list", vec![]),
-        ("store.get", vec![("name", "shop")]),
-        ("store.status", vec![("name", "shop")]),
+        ("store.get", vec![("store", "shop")]),
+        ("store.get", vec![("store", "shop"), ("with", "live")]),
         ("project.list", vec![]),
         ("project.get", vec![("project", "shop/api")]),
         ("sandbox.list", vec![]),
@@ -106,17 +106,17 @@ fn every_read(home: &Path) {
     ] {
         call(home, name, &args).unwrap_or_else(|(code, why)| panic!("{name}: {code} {why}"));
     }
-    let status = call(home, "store.status", &[("name", "shop")]).unwrap();
-    assert_eq!(status.get_text("state"), Some("down"), "{status:?}");
+    let status = call(home, "store.get", &[("store", "shop"), ("with", "live")]).unwrap();
+    assert_eq!(status.get_text("state"), Some("blocked"), "{status:?}");
     // a list item carries the same state, starting nothing (#536 §10b)
     let listed = call(home, "store.list", &[]).unwrap();
     let Some(SdkValue::List(items)) = listed.get("items") else {
         panic!("{listed:?}")
     };
-    let shop = items.iter().find(|i| i.get_text("name") == Some("shop"));
+    let shop = items.iter().find(|i| i.get_text("store") == Some("shop"));
     assert_eq!(
         shop.and_then(|i| i.get_text("state")),
-        Some("down"),
+        Some("blocked"),
         "{listed:?}"
     );
     let machine = call(home, "machine.get", &[("machine", "dev")]).unwrap();

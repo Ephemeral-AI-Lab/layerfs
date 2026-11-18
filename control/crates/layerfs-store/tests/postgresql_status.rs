@@ -1,17 +1,18 @@
-//! T10.5: the PostgreSQL branch of `store.status`, through the control call.
+//! T10.5: the PostgreSQL branch of a live read (`store get --with live`,
+//! call surface 2.0; it was `store.status`), through the control call.
 //!
-//! `store.status` of a PostgreSQL Store reads the Store-side `gc_op` row with
-//! its compaction `gc_intent` in one status query, projects the operation
-//! `{id, name, phase, started, uncertain}`, and separates a live owner
-//! (`busy`) from a leftover (`unresolved`); `phases` is PostgreSQL's §8 order
-//! `mark`, `build`, `swap`, `cleanup`. A Store with no row — never compacted,
-//! or a run that settled and removed its row — is idle, with `op: null` and
-//! `phases: null`.
+//! A live read of a PostgreSQL Store reads the Store-side `gc_op` row with
+//! its compaction `gc_intent` in one status query and separates a live
+//! owner (`busy`, with `op {name, phase, started_at}`) from a leftover
+//! (`broken`, `unresolved`, fixed by the next `store compact`); the `live`
+//! section's `phases` is PostgreSQL's §8 order `mark`, `build`, `swap`,
+//! `cleanup`. A Store with no row — never compacted, or a run that settled
+//! and removed its row — is ready, with `phases: null`.
 //!
 //! This is the control-level end-to-end case T10.5 was missing: the
 //! persistence suite proves the reader, and this test drives the call the SDK
-//! and CLI actually reach (`layerfs_store::sqlite::family::status`, the
-//! kind-neutral `store.status` route) against a real PostgreSQL Store. The
+//! and CLI actually reach (`layerfs_store::get::get`, the kind-neutral
+//! `store.get` route) against a real PostgreSQL Store. The
 //! rows a compaction leaves are written directly, so the test proves the
 //! projection, not a failpoint: a live owner is a real non-idle backend
 //! recorded in `pg_stat_activity`.
@@ -23,10 +24,11 @@
 //! would collide with another run. Without the variable it reports NOT_RUN.
 use layerfs_bridge::control::SdkValue;
 use layerfs_history::HistoryCatalogConfig;
+use layerfs_home::events::Events;
 use layerfs_home::home;
-use layerfs_home::names::StoreName;
 use layerfs_persistence::{PostgresHandles, PostgresSelection};
 use layerfs_storage::StoragePolicy;
+use layerfs_store::get::With;
 use layerfs_store::record::StoreRecord;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -127,17 +129,6 @@ fn hex(bytes: &[u8]) -> String {
     out
 }
 
-fn op_id(byte: u8) -> String {
-    format!("op-{}", hex(&[byte; 16]))
-}
-
-fn text(value: &SdkValue) -> &str {
-    match value {
-        SdkValue::Text(text) => text,
-        other => panic!("not text: {other:?}"),
-    }
-}
-
 fn texts(value: &SdkValue) -> Vec<String> {
     match value {
         SdkValue::List(items) => items
@@ -234,10 +225,34 @@ fn wait_gone(admin: &mut postgres::Client, pid: i32, start: &str) {
     panic!("the recorded owner backend never ended");
 }
 
-/// The real control entry point: `store.status` for the Store in `home`.
+/// A machine's records-only state, as the Store reads take it: the machine
+/// family's derivation (`layerfs-control` passes the same, with the removed
+/// platform check this crate does not see).
+fn machines(
+    home: &Path,
+    name: &str,
+) -> Result<layerfs_home::state::State, layerfs_bridge::control::SdkRefusal> {
+    Ok(
+        match layerfs_machine::record::MachineRecord::read(home, name)? {
+            Some(record) => record.status(false, 0),
+            None => layerfs_machine::state::unrecorded(name),
+        },
+    )
+}
+
+/// The real control entry point: `store get pgs --with live` in `home`.
 fn status(home: &Path) -> SdkValue {
-    let name = StoreName::parse("pgs").unwrap();
-    layerfs_store::sqlite::family::status(home, &name).unwrap()
+    let mut sink = |_| {};
+    let with = With {
+        live: true,
+        stats: false,
+    };
+    layerfs_store::get::get(home, &mut Events::new(&mut sink), "pgs", with, &machines).unwrap()
+}
+
+/// The `live` section's `phases`.
+fn phases(answer: &SdkValue) -> &SdkValue {
+    answer.get("live").unwrap().get("phases").unwrap()
 }
 
 #[test]
@@ -268,22 +283,19 @@ fn postgresql_store_status_projects_busy_leftover_and_idle() {
 
     // Idle: no compaction row, so no op and no phases.
     let idle = status(&home);
-    assert_eq!(idle.get_text("name"), Some("pgs"));
-    assert_eq!(idle.get_text("kind"), Some("postgresql"));
-    assert_eq!(idle.get_text("state"), Some("idle"));
+    assert_eq!(idle.get_text("store"), Some("pgs"));
+    assert_eq!(idle.get_text("engine"), Some("postgresql"));
+    assert_eq!(idle.get_text("state"), Some("ready"));
+    assert!(idle.get("op").is_none(), "a ready Store has no op");
     assert_eq!(
-        idle.get("op"),
-        Some(&SdkValue::Null),
-        "an idle Store has no op"
-    );
-    assert_eq!(
-        idle.get("phases"),
-        Some(&SdkValue::Null),
+        phases(&idle),
+        &SdkValue::Null,
         "an idle Store has no phases"
     );
+    let live = idle.get("live").unwrap();
     assert!(
-        matches!(idle.get("server"), Some(SdkValue::Map(_))),
-        "the server status is reported beside the op"
+        live.get_text("server_version").is_some() && live.get_int("latency_ms").is_some(),
+        "the server's answer is reported in the live section"
     );
 
     // A live owner: an open, non-idle backend is what the §9 dead-owner rule
@@ -318,32 +330,25 @@ fn postgresql_store_status_projects_busy_leftover_and_idle() {
     assert_eq!(
         op,
         &SdkValue::map([
-            ("id", SdkValue::text(op_id(0xab))),
-            ("name", SdkValue::text("store.compact")),
+            ("name", SdkValue::text("compact")),
             ("phase", SdkValue::text("build")),
-            ("started", SdkValue::Int(started_ms)),
-            ("uncertain", SdkValue::Bool(true)),
+            (
+                "started_at",
+                SdkValue::text(layerfs_home::time::iso(started_ms))
+            ),
         ]),
-        "the op is exactly the five §11 fields"
+        "the op is the state's companion"
     );
-    assert_eq!(texts(busy.get("phases").unwrap()), PHASES);
-    assert!(
-        op.get("state").is_none() && op.get("phases").is_none(),
-        "state and phases sit beside the op"
-    );
+    assert_eq!(texts(phases(&busy)), PHASES);
 
     // A gone owner leaves the same row: uncertain, and now unresolved.
     owner.close().unwrap();
     wait_gone(&mut admin, pid, &start);
     let leftover = status(&home);
-    assert_eq!(leftover.get_text("state"), Some("unresolved"));
-    let op = leftover.get("op").unwrap();
-    assert_eq!(text(op.get("id").unwrap()), op_id(0xab));
-    assert_eq!(op.get_text("name"), Some("store.compact"));
-    assert_eq!(op.get_text("phase"), Some("build"));
-    assert_eq!(op.get_int("started"), Some(started_ms));
-    assert_eq!(op.get("uncertain"), Some(&SdkValue::Bool(true)));
-    assert_eq!(texts(leftover.get("phases").unwrap()), PHASES);
+    assert_eq!(leftover.get_text("state"), Some("broken"));
+    assert_eq!(leftover.get_text("reason"), Some("unresolved"));
+    assert_eq!(leftover.get_text("fix"), Some("layerfs store compact pgs"));
+    assert_eq!(texts(phases(&leftover)), PHASES);
 
     // The two observed states emit the bounded `compact.status{state}` sample
     // once each; idle emits none.
@@ -359,8 +364,7 @@ fn postgresql_store_status_projects_busy_leftover_and_idle() {
     assert_eq!(sample("unresolved"), 1);
     assert_eq!(sample("idle"), 0, "an idle status is not a compaction op");
 
-    // Every recorded phase is projected under its §8 name; a dead owner is
-    // an unresolved leftover for each.
+    // A dead owner is an unresolved leftover in every recorded phase.
     for (index, phase) in PHASES.iter().enumerate() {
         clear(&mut admin);
         let byte = u8::try_from(index).unwrap();
@@ -376,26 +380,16 @@ fn postgresql_store_status_projects_busy_leftover_and_idle() {
             },
         );
         let projected = status(&home);
-        assert_eq!(projected.get_text("state"), Some("unresolved"));
-        assert_eq!(
-            projected.get("op").unwrap().get_text("phase"),
-            Some(*phase),
-            "{phase}: the row records the phase"
-        );
-        let expected_id = op_id(byte);
-        assert_eq!(
-            projected.get("op").unwrap().get_text("id"),
-            Some(expected_id.as_str())
-        );
-        assert_eq!(texts(projected.get("phases").unwrap()), PHASES);
+        assert_eq!(projected.get_text("state"), Some("broken"), "{phase}");
+        assert_eq!(projected.get_text("reason"), Some("unresolved"), "{phase}");
+        assert_eq!(texts(phases(&projected)), PHASES);
     }
 
-    // A settled run removes the row: idle again, with no op and no phases.
+    // A settled run removes the row: ready again, with no phases.
     clear(&mut admin);
     let idle = status(&home);
-    assert_eq!(idle.get_text("state"), Some("idle"));
-    assert_eq!(idle.get("op"), Some(&SdkValue::Null));
-    assert_eq!(idle.get("phases"), Some(&SdkValue::Null));
+    assert_eq!(idle.get_text("state"), Some("ready"));
+    assert_eq!(phases(&idle), &SdkValue::Null);
 
     drop(admin);
     drop(handles);

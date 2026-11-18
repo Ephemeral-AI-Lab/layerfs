@@ -191,7 +191,8 @@ fn the_generation_moves_when_a_record_is_written_or_removed_and_not_on_a_read() 
     layerfs_api::call(Some(&home), "store.create", named.clone(), &mut |_| {}).unwrap();
     let created = generation(&home);
     assert!(created > start, "{created} after {start}");
-    layerfs_api::call(Some(&home), "store.remove", named, &mut |_| {}).unwrap();
+    let removed = SdkValue::map([("store", SdkValue::text("shop"))]);
+    layerfs_api::call(Some(&home), "store.remove", removed, &mut |_| {}).unwrap();
     assert!(generation(&home) > created);
     let _ = std::fs::remove_dir_all(&home);
 }

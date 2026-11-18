@@ -118,7 +118,7 @@ try {
     await step("machine.update", () => lfs.machine.update("docker", { image: process.env.LFS533_IMAGE }));
   }
   if (machine !== "native" && !pgUrl) {
-    await step("store.push", () => lfs.store.push(storeName, machine));
+    await step("store.move", () => lfs.store.move(storeName, machine));
     pushed = true;
   }
   out.sandbox = (await step("sandbox.create", () => lfs.sandbox.create(project, name, machine))).value;
@@ -181,7 +181,7 @@ try {
     await step("store.disconnect", () => lfs.store.disconnect(storeName)).catch((error) => { out.removeError = error.message; });
   } else if (shared) {
     // the Store comes back to native, then goes; the home and its machine stay
-    if (pushed) await step("store.pull", () => lfs.store.pull(storeName)).catch((error) => { out.pullError = error.message; });
+    if (pushed) await step("store.move", () => lfs.store.move(storeName, "native")).catch((error) => { out.pullError = error.message; });
     await step("store.remove", () => lfs.store.remove(storeName)).catch((error) => { out.removeError = error.message; });
   }
   if (machine === "docker" && !shared) {

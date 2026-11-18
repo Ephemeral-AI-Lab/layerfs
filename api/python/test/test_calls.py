@@ -509,9 +509,9 @@ class Calls(unittest.TestCase):
 
         async def run():
             await lfs.store.create("shop")
-            # a push sends its first progress event, then finds no machine
+            # a move sends its first progress event, then finds no machine
             try:
-                await lfs.store.push("shop", "nosuch", on_progress=lambda p: seen.append((threading.get_ident(), p)))
+                await lfs.store.move("shop", "nosuch", on_progress=lambda p: seen.append((threading.get_ident(), p)))
             except layerfs.LayerFSError as error:
                 return threading.get_ident(), error.code, list(seen)
             return None

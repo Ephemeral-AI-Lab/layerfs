@@ -1,4 +1,5 @@
-//! The `commit` family: 3 calls, one file each.
+//! The `commit` family: 3 calls, one file each; the only place history is
+//! read.
 mod diff;
 mod get;
 mod list;
