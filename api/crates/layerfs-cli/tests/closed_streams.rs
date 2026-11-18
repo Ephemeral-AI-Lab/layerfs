@@ -35,7 +35,7 @@ fn a_stdout_that_cannot_be_written_exits_125_without_panicking() {
         ("help", &["help"]),
         ("help family", &["help", "store"]),
         ("help call", &["help", "store", "get"]),
-        ("help doctor", &["help", "doctor"]),
+        ("help machine doctor", &["help", "machine", "doctor"]),
         ("--version", &["--version"]),
     ] {
         for (sink, stdout) in failing_sinks(what) {

@@ -23,6 +23,7 @@ fn a_digest_and_a_reference_are_both_text() {
             &[
                 "store/project",
                 "dev",
+                "--machine",
                 "docker",
                 "--image",
                 image,

@@ -94,11 +94,13 @@ export async function collect({ python, cli }) {
 /** A usage line's words as `{ positionals, options, from }`; names in snake_case. */
 function usage(words) {
   const out = { positionals: [], options: [], from: false };
-  for (const [, optionalPositional, positional, flag] of words.matchAll(/\[<([\w-]+)>\]|<([\w-]+)>|\[--([\w-]+)(?: <[\w-]+>)?\]/g)) {
+  for (const [, optionalPositional, positional, flag, value] of words.matchAll(/\[<([\w-]+)>\]|<([\w-]+)>|\[--([\w-]+)(?: <([\w-]+)>)?\]/g)) {
     const snake = (text) => text.replaceAll("-", "_");
     if (optionalPositional) out.positionals.push({ name: snake(optionalPositional), optional: true });
     else if (positional) out.positionals.push({ name: snake(positional), optional: false });
-    else if (flag === "from") out.from = true;
+    // the piped positional's flag is exactly `[--from <file>]`; a call's own
+    // `from` option (commit.diff's `--from <ref>`) is an ordinary option
+    else if (flag === "from" && value === "file") out.from = true;
     else out.options.push(snake(flag));
   }
   return out;
