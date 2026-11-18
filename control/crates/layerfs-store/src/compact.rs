@@ -6,12 +6,12 @@
 //! `Busy` in the GC vocabulary (§10 keeps `InUse` for non-GC calls), before
 //! any effect. It then opens the Store's own session, runs
 //! the §7 (SQLite) or §8 (PostgreSQL) compaction and answers the §11 report.
-//! A SQLite Store on another machine is `Unsupported` and is never sent to
-//! that machine's worker. Spec S6 says the rebuild runs on the machine that
-//! holds the file; 2.0 implements that only through `place::plan`'s `Local`
-//! route. This local-only reading is the documented contract deviation D5 in
-//! `core/docs/issues/project-41/gc-42-decisions.md` (with the API and control
-//! docs); run the call on that machine.
+//! A SQLite Store on another machine compacts there (spec S6): the call sends
+//! `{ store, store_record }` to that machine's worker ([`WORKER_OP`]), which
+//! runs the same §7 path on the file under its own root ([`in_worker`]) while
+//! this process keeps the Store's lease. Decision D5 in
+//! `core/docs/issues/project-41/gc-42-decisions.md` records the change from
+//! the earlier local-only refusal.
 use crate::identity;
 use crate::identity::Kind;
 use crate::lease;
@@ -91,16 +91,68 @@ pub fn compact(home: &Path, events: &mut Events<'_>, store: &str) -> Outcome {
         return compact_postgresql(&record, &home, events, store);
     }
     match place::plan(&home, &store_ref)? {
-        Executor::Local => {}
-        Executor::Worker(_) => {
-            return Err(refused(
-                "Unsupported",
-                format!(
-                    "store.compact of Store {store} is local-only: run it on that Store's machine (S6 deviation #42 D5; the worker has no compaction route)"
-                ),
-            ))
+        Executor::Local => compact_sqlite(&home, events, store, &record),
+        Executor::Worker(mut worker) => {
+            // S6: the rebuild runs on the machine that holds the file. This
+            // process keeps the Store's lease while the worker runs it, so a
+            // move or remove cannot start; the worker's phases come back as
+            // they are sent. A lost answer is `Unknown`, never resent: the
+            // run's own op record lets the next compaction judge it (§9).
+            let request = SdkValue::map([
+                ("store", SdkValue::text(store)),
+                ("store_record", record.to_record().clone()),
+            ]);
+            worker.call(WORKER_OP, request, &mut |event| events.event(event))
         }
     }
+}
+
+/// The worker operation that compacts a sqlite Store on its machine.
+pub const WORKER_OP: &str = "store.compact";
+
+/// The worker's side of `store.compact`: `{ store, store_record }`, the
+/// Store file under the worker's `root` (the machine's data disk), never a
+/// path the caller sends. The worker holds the Store's lease under its root
+/// for the run, as `store.call` does while it keeps a Store open. An event
+/// that cannot be written does not end the run (#177): a caller that went
+/// away gets `Unknown`, and the run still finishes or aborts on its own terms.
+pub fn in_worker(
+    root: &Path,
+    args: &SdkValue,
+    events: &mut dyn FnMut(SdkValue) -> Result<(), SdkRefusal>,
+) -> Outcome {
+    let store = args
+        .get_text("store")
+        .ok_or_else(|| refused("InvalidInput", "store.compact names its Store"))?;
+    layerfs_home::names::StoreName::parse(store)?;
+    let fields = args
+        .get("store_record")
+        .cloned()
+        .ok_or_else(|| refused("InvalidInput", "store.compact sends the Store's record"))?;
+    let record = StoreRecord::from_record(store, fields);
+    if !matches!(record.store_ref()?, StoreRef::Sqlite { .. }) {
+        return Err(refused(
+            "InvalidInput",
+            format!("Store {store} is not a sqlite Store"),
+        ));
+    }
+    let _lease = lease::hold_locked(root, store)?;
+    let mut sink = |event| {
+        let _ = events(event);
+    };
+    let mut events = Events::new(&mut sink);
+    compact_sqlite(root, &mut events, store, &record)
+}
+
+/// The §7 SQLite path on Store file `store` under `home` (a home, or a
+/// worker's root), its lease held by the caller.
+fn compact_sqlite(
+    home: &Path,
+    events: &mut Events<'_>,
+    store: &str,
+    record: &StoreRecord,
+) -> Outcome {
+    let home = home.to_path_buf();
     let path = paths::store_file(&home, store);
     // A cached open in this process must end first. A call still running on
     // it keeps the Store open and is `Busy` in the GC vocabulary (§10 keeps

@@ -127,31 +127,3 @@ fn the_retired_host_ops_are_refused() {
     }
     std::fs::remove_dir_all(root).unwrap();
 }
-
-/// `store.compact` has no worker route (spec S6 deviation D5): a caller from
-/// a home whose sqlite Store lives on another machine is refused before any
-/// operation runs, and the worker names the unknown operation.
-#[test]
-fn store_compact_is_not_a_worker_operation() {
-    let root = tempdir("no-compact");
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let endpoint = Endpoint {
-        address: listener.local_addr().unwrap(),
-        secret: "k".to_owned(),
-    };
-    let guest = root.clone();
-    std::thread::spawn(move || {
-        layerfs_control::worker_server::serve(listener, "k".to_owned(), guest)
-    });
-    for _ in 0..200 {
-        if worker::ping(&endpoint).is_ok() {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
-    let args = SdkValue::map([("name", SdkValue::text("shop"))]);
-    let refusal = worker::call(&endpoint, "store.compact", args, &mut |_| {}).unwrap_err();
-    assert_eq!(refusal.code, "InvalidInput", "{}", refusal.message);
-    assert_eq!(refusal.message, "the worker has no operation store.compact");
-    std::fs::remove_dir_all(root).unwrap();
-}

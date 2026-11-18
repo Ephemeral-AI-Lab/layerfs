@@ -461,7 +461,8 @@ SQLite, whose payload walk runs inside the mark, reports no value.
 
 | Error | When | Source |
 | --- | --- | --- |
-| `NoSuchStore`, `Unsupported` | a missing Store; a sqlite Store on another machine, because compaction is local-only by the documented S6 deviation (#42 D5) and never takes the worker route; a non-private Store directory; or an unsupported filesystem | [`compact.rs`](../../../../control/crates/layerfs-store/src/compact.rs) |
+| `NoSuchStore`, `Unsupported` | a missing Store; a non-private Store directory; or an unsupported filesystem. A sqlite Store on another machine is compacted by that machine's worker (spec S6, #42 D5) | [`compact.rs`](../../../../control/crates/layerfs-store/src/compact.rs) |
+| `Unavailable`, `Unknown` | a sqlite Store on another machine whose worker is not running (nothing is started; the message names `layerfs machine start`), or whose answer was lost after the request was sent: the run may have finished, and its op record lets the next `store.compact` judge it | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
 | `MountsActive`, `Busy`, `Unresolved` | a mount, long-lived client or operation holds the Store, or a dead owner left an uncertain one | spec §5 |
 | `Busy` | a call still running on the Store in this process, so the Store cannot be closed for the rebuild: the open cache's refusal is reported as `Busy`, naming the Store as `entity` with `phase` and `op` null | spec §10 |
 | `StaleStore`, `Conflict` | `StaleStore` for a connection that bypassed admission and touches the Store after the install; `Conflict` when the sealed state changed at install (sidecar, `(dev, ino)` identity, or the sealed size/mtime/change counter) | spec §7, §10 |

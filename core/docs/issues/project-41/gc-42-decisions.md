@@ -321,11 +321,12 @@ frozen whole-lane exclusion; its measurements live under
 
 ---
 
-## D. SQLite implementation notes: four deviations and the D2 build decision
+## D. SQLite implementation notes: three deviations, the D2 build decision, the D5 route and D6–D7
 
-This section keeps seven records. D1, D3, D4 and D5 are deviations from the
-frozen text that the shipped code still carries; D6 and D7 were prototypes and
-the owner accepted both on 2026-11-18. D2 is the build decision that
+This section keeps seven records. D1, D3 and D4 are deviations from the
+frozen text that the shipped code still carries; D5 was one until
+2026-11-18 and now records how the code follows S6; D6 and D7 were
+prototypes and the owner accepted both on 2026-11-18. D2 is the build decision that
 replaced the whole-Store copy: the fresh-copy rebuild follows S5's "fresh
 Store" sentence but deviates from §7 step 4's payload sweep and rollback
 journal and from §11's peak-temp line, and the earlier `VACUUM INTO` + delete +
@@ -431,33 +432,35 @@ measured implementation of this branch.
 - **Runbook consequence:** `store.status` shows `cleanup` on SQLite after the
   install point; the runbook's phase list includes it.
 
-### D5. S6/§7: `store.compact` is local-only; a remote sqlite Store is `Unsupported`
+### D5. S6/§7: `store.compact` of a sqlite Store on another machine runs in that machine's worker
 
 - **Frozen:** S6 "A SQLite Store compacts on the machine where it lives
   (`place::plan`, `control/crates/layerfs-store/src/place.rs:40-49`)"; §7
   "Runs as one operation on the Store's machine (S6)."
-- **Implemented:** the call consults `place::plan` but runs compaction only on
-  the `Local` branch, in the caller's process. Its `Worker` branch is refused
-  `Unsupported` before the Store is opened or the machine is dialled, and the
-  worker has no `store.compact` operation at all. A sqlite Store pushed to a
-  machine (`docker`, `lima`, `apple-container`) therefore cannot be compacted
-  from the home that owns the record; the owner pushes it back to `native`,
-  compacts there, and pushes it again. `store.compact` of a PostgreSQL Store
-  is unchanged: the call dials the Store's recorded URL itself.
-- **Reason:** the worker route needs a worker-side compaction operation, the
-  Store record and lease read under the worker's root, and a crash/resume
-  answer for a call whose run can be hours long; 2.0 ships the local engine
-  and the transfer route (`store.push`/`store.pull`) instead. The refusal is
-  named, never a silent local run on the wrong file.
-- **Decision requested:** accept local-only for 2.0 as a deviation from S6
-  (and say so in the API and control docs, which now name #42 D5), or require
-  the worker `store.compact` route before the contract closes.
-- **Consequence:** `store.compact` of a Store whose record names another
-  machine is `Unsupported` with "local-only: run it on that Store's machine
-  (S6 deviation #42 D5; the worker has no compaction route)"; the operation is
-  refused before any effect. `api/crates/layerfs-api/tests/store_family.rs`
-  `compact_of_a_remote_sqlite_store_is_a_documented_local_only_refusal` pins
-  it.
+- **History:** until 2026-11-18 the call ran compaction only on `place::plan`'s
+  `Local` branch and refused the `Worker` branch `Unsupported` ("local-only"),
+  as a requested deviation from S6. The owner asked on 2026-11-18 for
+  `store.compact` to work on a Store pushed to a machine (`docker`, `lima`,
+  `apple-container`), so the deviation is withdrawn.
+- **Implemented:** the caller takes the Store's lease under its home, as
+  before, and sends `{ store, store_record }` to the machine's worker
+  operation `store.compact` (`compact::WORKER_OP`). The worker holds the
+  Store's lease under its own root and runs the same §7 path on
+  `store/<name>/store.sqlite` there (`compact::in_worker`); each phase comes
+  back as a `progress` event. A worker that is not running is `Unavailable`
+  naming `layerfs machine start`, and nothing is started (#535 D11). A lost
+  answer after the request went out is `Unknown` and is never resent; an
+  event that cannot be written does not end the run (#177), and the run's op
+  record lets the next compaction judge it (§9). PostgreSQL is unchanged:
+  the call dials the Store's recorded URL itself.
+- **Tests:** `control/crates/layerfs-control/tests/store_compact_worker.rs`
+  compacts a Store under a worker root through a live worker (phases, rebuild,
+  nothing left beside the file, the kept project reads, a second run takes
+  `none`) and checks the operation's frame refusals;
+  `api/crates/layerfs-api/tests/store_family.rs`
+  `compact_of_a_remote_sqlite_store_takes_its_machines_worker_route` pins the
+  `Unavailable` answer for a machine with no worker.
+
 
 ### D6. S5/§2/§3/§6.4: the SQLite rebuild writes partly dead packs again, and the 10% counts their dead records
 
