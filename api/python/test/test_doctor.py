@@ -81,14 +81,23 @@ class Doctor(unittest.TestCase):
         try:
             lfs = layerfs.client(home=home)
             lfs.store.list()
-            # a partly received image, last written two hours ago, and its lock
-            # each folder 0700: makedirs leaves the folders above to the umask
+            # an unpack's temporary folder, its image's lock, and a partly
+            # received image (no leftover since spec v19: `machine prune` owns
+            # it); each folder 0700: makedirs leaves the folders above to the
+            # umask
             images = home
             for part in ("machine", "native", "run", "images"):
                 images = os.path.join(images, part)
                 os.makedirs(images, mode=0o700, exist_ok=True)
                 os.chmod(images, 0o700)
             digest = "ab" * 32
+            unpack = os.path.join(images, f".tmp-{digest}.2-ab12")
+            folder = os.path.join(unpack, "usr", "bin")
+            os.makedirs(folder, mode=0o700)
+            for made in (unpack, os.path.dirname(folder), folder):
+                os.chmod(made, 0o700)
+            with open(os.path.join(folder, "tool"), "w") as file:
+                file.write("x" * 50)
             received = os.path.join(images, f".recv-{digest}.part")
             with open(received, "w") as file:
                 file.write("x" * 50)
@@ -97,35 +106,42 @@ class Doctor(unittest.TestCase):
             lock = os.path.join(images, f"{digest}.2.lock")
             open(lock, "w").close()
 
-            # the list names the part by its id; the lock is no leftover
-            leftover = f"native:image_part:{digest}"
+            # the list names the temporary by its id; the lock and the part
+            # are no leftover
+            leftover = f"native:image_tmp:{digest}.2-ab12"
             listed = lfs.home.leftovers(machine="native")
             self.assertEqual([item["leftover"] for item in listed["items"]], [leftover])
 
             # the same call on the module's function, on a client and as a coroutine
             self.assertTrue(callable(layerfs.home.prune))
             self.assertFalse(hasattr(layerfs, "doctor"))
-            for wrong in (f"native:image_lock:{digest}.2", "native:image_part:../x"):
+            for wrong in (
+                f"native:image_lock:{digest}.2",
+                "native:image_tmp:../../x",
+                f"native:image_part:{digest}",
+            ):
                 with self.assertRaises(layerfs.LayerFSError) as refused:
                     lfs.home.prune(wrong)
                 self.assertEqual(refused.exception.code, "NotFound")
             with self.assertRaises(layerfs.LayerFSError) as refused:
-                asyncio.run(aio.client(home=home).home.prune(f"native:image-part:{digest}"))
+                asyncio.run(aio.client(home=home).home.prune(f"native:image-tmp:{digest}.2-ab12"))
             self.assertEqual(refused.exception.code, "NotFound")
             removed = lfs.home.prune(leftover, detail=True)
             self.assertEqual(
                 removed,
                 {
                     "ok": True,
-                    "freed_bytes": 50,
+                    # a temporary is removed without a count
+                    "freed_bytes": None,
                     "outcome": "removed",
                     "leftover": leftover,
-                    "kind": "image_part",
+                    "kind": "image_tmp",
                     "machine": "native",
-                    "path": received,
+                    "path": unpack,
                 },
             )
-            self.assertFalse(os.path.exists(received))
+            self.assertFalse(os.path.exists(unpack))
+            self.assertTrue(os.path.exists(received), "the part stays for `machine prune`")
             self.assertTrue(os.path.exists(lock), "the lock file stays")
             with self.assertRaises(layerfs.LayerFSError) as refused:
                 lfs.home.prune(leftover)

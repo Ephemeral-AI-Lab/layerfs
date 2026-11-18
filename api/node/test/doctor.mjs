@@ -44,8 +44,9 @@ test("home.prune removes a leftover home.leftovers listed, on the package and on
   chmodSync(home, 0o700);
   const lfs = layerfs.client({ home });
   await lfs.store.list();
-  // a partly received image, last written two hours ago, and its lock
-  // each folder 0700, whatever the umask
+  // an unpack's temporary folder, its image's lock, and a partly received
+  // image (no leftover since spec v19: `machine prune` owns it); each folder
+  // 0700, whatever the umask
   let images = home;
   for (const part of ["machine", "native", "run", "images"]) {
     images = join(images, part);
@@ -53,14 +54,19 @@ test("home.prune removes a leftover home.leftovers listed, on the package and on
     chmodSync(images, 0o700);
   }
   const digest = "ab".repeat(32);
+  const tmp = join(images, `.tmp-${digest}.2-ab12`);
+  mkdirSync(join(tmp, "usr", "bin"), { recursive: true, mode: 0o700 });
+  for (const folder of [tmp, join(tmp, "usr"), join(tmp, "usr", "bin")]) chmodSync(folder, 0o700);
+  writeFileSync(join(tmp, "usr", "bin", "tool"), "x".repeat(50));
   const part = join(images, `.recv-${digest}.part`);
   writeFileSync(part, "x".repeat(50));
   const then = Date.now() / 1000 - 7200;
   utimesSync(part, then, then);
   writeFileSync(join(images, `${digest}.2.lock`), "");
 
-  // the list names the part by its id; the lock is no leftover
-  const id = `native:image_part:${digest}`;
+  // the list names the temporary by its id; the lock and the part are no
+  // leftover
+  const id = `native:image_tmp:${digest}.2-ab12`;
   const listed = await lfs.home.leftovers({ machine: "native" });
   assert.deepEqual(listed.items.map((item) => item.leftover), [id]);
 
@@ -70,11 +76,14 @@ test("home.prune removes a leftover home.leftovers listed, on the package and on
   assert.equal(layerfs.doctor, undefined, "the doctor family is gone");
   const refused = (code) => (error) => error instanceof LayerFSError && error.code === code;
   await assert.rejects(lfs.home.prune(`native:image_lock:${digest}.2`), refused("NotFound"));
-  await assert.rejects(lfs.home.prune("native:image_part:../x"), refused("NotFound"));
+  await assert.rejects(lfs.home.prune("native:image_tmp:../../x"), refused("NotFound"));
+  await assert.rejects(lfs.home.prune(`native:image_part:${digest}`), refused("NotFound"));
   await assert.rejects(lfs.home.prune(), refused("InvalidInput"));
   const removed = await lfs.home.prune(id, { detail: true });
-  assert.deepEqual(removed, { ok: true, freed_bytes: 50, outcome: "removed", leftover: id, kind: "image_part", machine: "native", path: part });
-  assert.ok(!existsSync(part));
+  // a temporary is removed without a count
+  assert.deepEqual(removed, { ok: true, freed_bytes: null, outcome: "removed", leftover: id, kind: "image_tmp", machine: "native", path: tmp });
+  assert.ok(!existsSync(tmp));
+  assert.ok(existsSync(part), "the part stays for `machine prune`");
   assert.ok(existsSync(join(images, `${digest}.2.lock`)), "the lock file stays");
   await assert.rejects(lfs.home.prune(id), refused("NotFound"));
   rmSync(home, { recursive: true, force: true });
