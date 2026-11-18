@@ -127,8 +127,9 @@ impl KeptObjects {
     /// [`KeptWaste::dead_in_retained_packs_bytes`]. A pack named with zero
     /// bytes holds an unreached record inside a compressed group.
     ///
-    /// Listed by a mark that lists what it kept and by a compaction's mark
-    /// that is kept for a rebuild; empty otherwise, while
+    /// Listed by a mark that lists what it kept
+    /// ([`crate::HistoryProvider::mark`], `mark_with_scratch`); a
+    /// compaction's own mark leaves it empty, while
     /// [`Self::partly_dead_count`] and [`Self::each_partly_dead`] always
     /// answer.
     pub fn partly_dead_packs(&self) -> &[(i64, u64)] {
@@ -242,11 +243,30 @@ impl MarkResult {
     /// The most bytes the mark's sort files held at one time. The mark sorts
     /// what it reached in bounded memory and writes what does not fit to
     /// unnamed files beside a SQLite Store (a local temporary directory for
-    /// PostgreSQL); zero when everything fitted.
+    /// PostgreSQL); zero when everything fitted. A compaction's own sort
+    /// files are in the same space and count here from then on.
     pub fn scratch_bytes(&self) -> u64 {
-        self.scratch_bytes
+        self.space.peak_bytes()
+    }
+
+    /// Where the sort files of this mark went: the one space every sort
+    /// file of a compaction is created in and counted by.
+    pub(crate) fn sort_space(&self) -> &Arc<super::Space> {
+        &self.space
     }
 }
+
+/// Two marks are equal when they kept the same and read the same; where
+/// their sort files went is not part of what they found.
+impl PartialEq for MarkResult {
+    fn eq(&self, other: &Self) -> bool {
+        self.history == other.history
+            && self.objects == other.objects
+            && self.live_heads_digest == other.live_heads_digest
+            && self.mark_bytes == other.mark_bytes
+    }
+}
+impl Eq for MarkResult {}
 
 impl PartlyDead {
     /// The list a kept-waste pass adds to, in ascending pack order.

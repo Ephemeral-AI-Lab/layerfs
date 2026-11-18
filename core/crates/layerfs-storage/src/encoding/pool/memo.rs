@@ -78,6 +78,12 @@ impl ChainMemo {
         (known.role == role && known.highest_pack <= ceiling).then(|| known.clone())
     }
 
+    /// Whether `id` is held, in either generation. Asking does not count as
+    /// a use: the element keeps its generation.
+    pub(super) fn holds(&self, id: &ObjectId) -> bool {
+        self.young.contains_key(id) || self.old.contains_key(id)
+    }
+
     /// Keeps one element whose canonical identity the reader has checked.
     pub(super) fn insert(&mut self, id: ObjectId, known: Known) {
         if known.bytes.len() > self.limit / 2 || self.young.contains_key(&id) {

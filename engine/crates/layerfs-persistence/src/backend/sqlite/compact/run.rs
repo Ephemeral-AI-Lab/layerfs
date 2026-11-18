@@ -13,6 +13,7 @@ use super::install::settle_leftover;
 use super::install::sync_directory;
 use super::install::unfinished_work;
 use super::install::WriterGuard;
+use super::lengths::PackLengths;
 use super::op::mark_returned;
 use super::op::now_ms;
 use super::op::remove_op_record;
@@ -21,6 +22,7 @@ use super::op::visited_path;
 use super::op::InstalledReport;
 use super::op::RunOp;
 use super::receipt::receipt;
+use super::staged::StagedLocators;
 use super::types::seal_error;
 use super::types::CompactFailpoint;
 use super::types::CompactKeptWaste;
@@ -35,14 +37,12 @@ use super::verify::VerifyInput;
 use crate::backend::records::Param;
 use crate::compact_metrics::CompactPhase;
 use crate::compact_metrics::RunMetrics;
-use crate::MarkResult;
 use crate::SqliteHandles;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
 use layerfs_history::records::GcIntent;
 use layerfs_history::records::GcIntentKind;
 use layerfs_history::records::GcScopeKind;
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 /// The history statement that reads the stored lengths of the packs after
@@ -199,8 +199,13 @@ impl SqliteHandles {
             // per reached pack. It reads them inside the mark's transaction,
             // after the walk: in the layout that keeps a pack's payload in
             // its row, the scan visits one table page per pack, and the walk
-            // has just read those pages for every pack it reached.
-            let mut lengths = BTreeMap::new();
+            // has just read those pages for every pack it reached. The list
+            // is bounded: see `PackLengths`.
+            // Its file, when it needs one, goes where the mark's sort files
+            // go, so it is made when the mark is.
+            let mut lengths: Option<PackLengths> = None;
+            // The stored bytes of the packs the mark retains.
+            let mut live_stored = 0u64;
             // §5.1/§6.3/§8: the registration, the §6.1 closure and the §6.2
             // walk are ONE write transaction. `rebuild` commits it; `none`
             // rolls it back, so §3's `nothing is written` holds in the Store's
@@ -210,6 +215,7 @@ impl SqliteHandles {
             // decision and before that commit.
             let decided =
                 history.mark_for_compaction(&visited_path(&store), &intent, |tx, mark| {
+                    let lengths = lengths.insert(PackLengths::new(mark.sort_space()));
                     let mut after = i64::MIN;
                     loop {
                         let rows = tx.query(
@@ -220,19 +226,20 @@ impl SqliteHandles {
                             let length = u64::try_from(row.get::<i64>(1)?)
                                 .map_err(|_| HistoryError::Integrity("pack length"))?;
                             after = row.get::<i64>(0)?;
-                            lengths.insert(after, length);
+                            lengths.push(after, length)?;
                         }
                         if (rows.len() as i64) < PACK_LENGTH_ROWS {
                             break;
                         }
                     }
-                    let total = total_stored_bytes(&lengths);
+                    let total = lengths.total();
+                    live_stored = lengths.stored(mark.objects().retained_packs())?;
                     // A rebuild frees the wholly dead packs and, since it
                     // writes partly dead packs again, the dead records the
                     // mark found inside retained ones: both count towards
                     // the 10%.
                     let dead = total
-                        .saturating_sub(live_stored_bytes(&lengths, mark)?)
+                        .saturating_sub(live_stored)
                         .saturating_add(mark.objects().waste().dead_in_retained_packs_bytes());
                     Ok(total > 0 && dead.saturating_mul(10) >= total)
                 });
@@ -253,14 +260,11 @@ impl SqliteHandles {
                     return Err(error);
                 }
             };
-            let total = total_stored_bytes(&lengths);
-            let live_stored = match live_stored_bytes(&lengths, &mark) {
-                Ok(live_stored) => live_stored,
-                Err(error) => {
-                    abort_run(&history, &store, &op_id);
-                    return Err(error);
-                }
+            let Some(mut lengths) = lengths else {
+                abort_run(&history, &store, &op_id);
+                return Err(HistoryError::Integrity("pack lengths"));
             };
+            let total = lengths.total();
             let dead = total.saturating_sub(live_stored);
             let mut kept_waste = CompactKeptWaste::from_waste(mark.objects().waste());
             let history_rows = u64::try_from(tuple.history_rows).unwrap_or(0);
@@ -294,9 +298,10 @@ impl SqliteHandles {
                     free.saturating_mul(page),
                     0,
                     kept_waste,
-                    // No scratch is written; what the mark's sorting wrote
-                    // to its unnamed files, and zero when it wrote none.
-                    mark.scratch_bytes(),
+                    // No scratch is written; the most the mark's sorting and
+                    // the pack lengths held together in their unnamed files,
+                    // and zero when they wrote none.
+                    mark.sort_space().peak_bytes(),
                     CompactResidue::default(),
                     total,
                     history_rows,
@@ -394,10 +399,8 @@ impl SqliteHandles {
                     tuple: &tuple,
                     synchronous,
                     payload_bytes: live_stored,
-                    lengths: &lengths,
-                    retained: mark.objects().packs(),
-                    partly_dead: mark.objects().partly_dead_packs(),
-                    inode_ordinals: mark.objects().inode_ordinals(),
+                    lengths: &mut lengths,
+                    kept: mark.objects(),
                 },
                 capacity,
                 request,
@@ -412,13 +415,32 @@ impl SqliteHandles {
                     return Err(error);
                 }
             };
-            // §11 `keptWaste`: the dead records of the packs this build wrote
-            // again are gone from the new Store, so they are no longer kept.
+            // §11 `keptWaste` states what the Store keeps when the call
+            // returns: after a rebuild, what a mark of the new Store finds.
+            // The dead records of the packs this build wrote again are gone
+            // from it, so they are no longer kept.
             kept_waste.dead_in_retained_packs_bytes = kept_waste
                 .dead_in_retained_packs_bytes
                 .saturating_sub(built.repacked.marked_dead);
+            // A record kept only as a delta base is charged the width a read
+            // of it pays, which changed where its group was written again.
+            kept_waste.delta_bases_bytes = kept_waste
+                .delta_bases_bytes
+                .saturating_sub(built.repacked.bases_before)
+                .saturating_add(built.repacked.bases_after);
             // The rebuilt Store holds only the blocks a kept leaf reads.
             kept_waste.inode_blocks_bytes = built.inode_blocks_bytes;
+            // §11 `peakTempBytes`: the most the run's files hold at one
+            // time. Either that was during the mark (its sort files and the
+            // pack lengths, counted together by their one space), or it is
+            // now: the fresh file, the scratch, what the space still holds
+            // and the verification's sorted locators, which join it next.
+            let space = mark.sort_space();
+            let peak_temp = built
+                .peak_temp_bytes()
+                .saturating_add(space.held_bytes())
+                .saturating_add(StagedLocators::sort_file_bytes(mark.objects().len() as u64))
+                .max(space.peak_bytes());
             // §9/§11: record the installed outcome's totals now that the build
             // produced them, so a crash after the rename still lets the next
             // call answer the original report instead of re-deciding.
@@ -430,7 +452,7 @@ impl SqliteHandles {
                 backend_reusable: source_reusable,
                 physical_shrink: facts.bytes.saturating_sub(built.target_bytes),
                 kept_waste: kept_waste.clone(),
-                peak_temp: built.peak_temp_bytes().max(mark.scratch_bytes()),
+                peak_temp,
                 total_stored: total,
             });
             stop_at(request, CompactFailpoint::AfterBuild, &op, &store)?;
@@ -447,6 +469,7 @@ impl SqliteHandles {
                 VerifyInput {
                     store: &store,
                     built: &built,
+                    lengths: &mut lengths,
                     mark: &mark,
                     tuple: &tuple,
                     layout,
@@ -521,29 +544,11 @@ impl SqliteHandles {
                 source_reusable,
                 physical_shrink,
                 kept_waste,
-                built.peak_temp_bytes().max(mark.scratch_bytes()),
+                peak_temp,
                 residue,
                 total,
                 history_rows,
             ))
         }
     }
-}
-
-/// The stored bytes of every pack of the Store.
-fn total_stored_bytes(lengths: &BTreeMap<i64, u64>) -> u64 {
-    lengths.values().copied().fold(0u64, u64::saturating_add)
-}
-
-/// The stored bytes of every pack the mark retains, from the one read of the
-/// Store's fixed pack descriptors the run takes while it holds the lane.
-fn live_stored_bytes(lengths: &BTreeMap<i64, u64>, mark: &MarkResult) -> HistoryResult<u64> {
-    let mut live = 0u64;
-    for pack in mark.objects().packs() {
-        let length = lengths
-            .get(pack)
-            .ok_or(HistoryError::Integrity("mark pack"))?;
-        live = live.saturating_add(*length);
-    }
-    Ok(live)
 }

@@ -131,14 +131,15 @@ impl std::fmt::Debug for PartlyDead {
 /// A rebuild path chooses its plan from [`Self::objects`] and reports
 /// [`Self::live_heads_digest`] to prove the generation it installed; nothing in
 /// this value has been compacted or deleted.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct MarkResult {
     history: KeptHistory,
     objects: KeptObjects,
     live_heads_digest: [u8; 32],
     mark_bytes: u64,
-    /// The most bytes the mark's sort files held at one time.
-    scratch_bytes: u64,
+    /// Where the mark's sort files went, and how much they held together.
+    /// A compaction puts its own sort files in the same space.
+    space: Arc<Space>,
 }
 
 /// The Store tuple a compaction records as its mark's first statement and
@@ -189,6 +190,20 @@ fn mark_gc(tx: &Transaction<'_>) -> HistoryResult<(MarkResult, GcTuple)> {
     let tuple = gc_tuple(tx)?;
     let mark = mark(tx)?;
     Ok((mark, tuple))
+}
+
+/// [`HistoryProvider::mark_gc`] inside a caller's engine transaction, with the
+/// reached set instead of a list of it ([`KeptObjects::objects`] is empty).
+/// A PostgreSQL compaction decides and fills its visited table from
+/// [`Reach::each`] in the transaction that walked, so the reached identities
+/// are never held: the ranks a `Reach` names are those of this snapshot only.
+pub(crate) fn mark_gc_reached(
+    backend: &dyn crate::backend::HistoryStatements,
+) -> HistoryResult<(MarkResult, GcTuple, Reach)> {
+    let tx = Transaction::new(backend);
+    let tuple = gc_tuple(&tx)?;
+    let (mark, reach) = mark_recorded(&tx, false)?;
+    Ok((mark, tuple, reach))
 }
 
 fn gc_tuple(tx: &Transaction<'_>) -> HistoryResult<GcTuple> {
@@ -265,8 +280,8 @@ impl HistoryProvider {
     /// nodes ([`KeptObjects::objects`] and [`KeptHistory::nodes`] are
     /// empty): the objects go to the scratch straight from the Store's
     /// locators, the nodes stay in `kept_node`, and no copy of either is
-    /// held. [`KeptObjects::partly_dead_packs`] is listed for a kept mark
-    /// only, which is the one a rebuild reads it from.
+    /// held. Nor are the partly dead packs listed: a rebuild reads them as
+    /// a stream ([`KeptObjects::each_partly_dead`]).
     pub(crate) fn mark_for_compaction(
         &self,
         scratch: &Path,
@@ -278,12 +293,11 @@ impl HistoryProvider {
                 let tx = Transaction::new(backend);
                 super::admission::register_in(&tx, intent, false)?;
                 let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
-                let (mut mark, mut reach) = mark_recorded(&tx, false)?;
+                let (mark, mut reach) = mark_recorded(&tx, false)?;
                 let keep = decide(&tx, &mark)?;
                 let completion = if keep {
                     // Only a rebuild reads the scratch, so only a rebuild
                     // writes it; a `none` drops the sink and no file exists.
-                    mark.objects.list_partly_dead()?;
                     sink.finish(&mark.objects.retained, |row| {
                         reach.each(tx.mechanics(), row)
                     })?;
@@ -308,8 +322,8 @@ impl HistoryProvider {
 fn mark(tx: &Transaction<'_>) -> HistoryResult<MarkResult> {
     let (mut mark, mut reach) = mark_recorded(tx, true)?;
     let mut objects = Vec::with_capacity(usize::try_from(reach.count).unwrap_or(0));
-    reach.each(tx.mechanics(), &mut |id, _| {
-        objects.push(id);
+    reach.each(tx.mechanics(), &mut |row, _| {
+        objects.push(row.object_id);
         Ok(())
     })?;
     mark.objects.objects = objects;
@@ -332,26 +346,30 @@ const PARTLY_DEAD_BYTES: usize = 256 * 1024;
 const HEADS_PAGE_ROWS: usize = 1024;
 
 /// The reached set of a finished walk, for listing it: the block boundaries
-/// of the Store's locators and one bit per object.
+/// of the Store's locators and the walk's three bits per object.
 pub(crate) struct Reach {
     table: Locators,
-    reached: table::Bits,
+    marks: table::Marks,
     count: u64,
 }
 
 impl Reach {
-    /// Every reached object and its pack, in ascending identity order, read
-    /// from the Store's locators a block at a time.
+    /// Every reached object's locator, in ascending identity order, read
+    /// from the Store's locators a block at a time. The flag says whether
+    /// the object was reached only as a delta base: the objects
+    /// [`KeptWaste::delta_bases_bytes`] counts.
     pub(crate) fn each(
         &mut self,
         mechanics: &dyn crate::backend::Mechanics,
-        each: &mut dyn FnMut(ObjectId, i64) -> HistoryResult<()>,
+        each: &mut dyn FnMut(&ObjectLocation, bool) -> HistoryResult<()>,
     ) -> HistoryResult<()> {
         let mut listed = 0u64;
-        self.table.each_set(mechanics, &self.reached, |row| {
-            listed += 1;
-            each(row.object_id, row.pack_id)
-        })?;
+        let marks = &self.marks;
+        self.table
+            .each_set(mechanics, &marks.reached, |rank, row| {
+                listed += 1;
+                each(row, marks.bases.get(rank) && !marks.logical.get(rank))
+            })?;
         if listed != self.count {
             return Err(HistoryError::Integrity("mark object locations"));
         }
@@ -412,6 +430,7 @@ fn mark_recorded(tx: &Transaction<'_>, listed: bool) -> HistoryResult<(MarkResul
             records::layouts_by_group,
         )),
         upcoming: std::cell::RefCell::default(),
+        based: std::cell::Cell::new((i64::MIN, 0)),
         values: std::cell::RefCell::default(),
         ordinals: std::cell::RefCell::default(),
     };
@@ -466,7 +485,7 @@ fn mark_recorded(tx: &Transaction<'_>, listed: bool) -> HistoryResult<(MarkResul
     };
     let reach = Reach {
         table,
-        reached: marks.reached,
+        marks,
         count: found.objects,
     };
     Ok((
@@ -475,7 +494,7 @@ fn mark_recorded(tx: &Transaction<'_>, listed: bool) -> HistoryResult<(MarkResul
             objects,
             live_heads_digest: digest,
             mark_bytes,
-            scratch_bytes: space.peak_bytes(),
+            space,
         },
         reach,
     ))
@@ -506,6 +525,9 @@ struct ClosureSource<'a> {
     /// The packs the rows being walked decode metadata from, ascending, and
     /// how many of them the engine has been told to expect.
     upcoming: std::cell::RefCell<(Vec<i64>, usize)>,
+    /// The pack and group whose delta bases the engine was last told to
+    /// expect lookups of ([`walk`]'s `expect_bases`).
+    based: std::cell::Cell<(i64, usize)>,
     /// Inode values the engine has returned, asked for or not.
     values: std::cell::RefCell<values::HeldValues>,
     /// Every ordinal the walk asked for ([`ordinals`]), whether the engine or
@@ -579,6 +601,20 @@ impl ClosureSource<'_> {
     /// in one visit of it and not in one visit per tree level.
     fn held_here(&self, id: &ObjectId) -> Option<records::Row> {
         self.here.borrow().rows.get(id).copied()
+    }
+
+    /// The objects of group `group` of the pack being walked that name other
+    /// objects: those whose rebuild may look a delta base up.
+    fn held_in_group(&self, group: usize) -> Vec<ObjectLocation> {
+        let here = self.here.borrow();
+        let mut rows: Vec<ObjectLocation> = here
+            .rows
+            .values()
+            .map(|row| row.location)
+            .filter(|row| row.group_number == group && row.role.has_references())
+            .collect();
+        rows.sort_unstable_by_key(|row| row.record_number);
+        rows
     }
 
     /// Keeps the group extents the walk read for `pack_id`.

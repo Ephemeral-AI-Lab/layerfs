@@ -28,7 +28,7 @@ pub struct IdSet {
 
 impl IdSet {
     /// Adds `id` and says whether it was absent.
-    pub(in crate::history) fn insert(&mut self, id: u64) -> bool {
+    pub fn insert(&mut self, id: u64) -> bool {
         let page = self
             .pages
             .entry(id >> PAGE_BITS)

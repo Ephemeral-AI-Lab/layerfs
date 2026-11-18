@@ -19,6 +19,7 @@
 //! back and requires every read ordinal to be inside a staged block.
 
 use super::types::db_error;
+use crate::IdSet;
 use layerfs_history::error::{HistoryError, HistoryResult};
 use rusqlite::{params, Connection};
 
@@ -33,13 +34,17 @@ pub(crate) const LIVE_BLOCK: &str = "first_ordinal<=(SELECT run_last FROM scratc
 WHERE run_first<=last_ordinal ORDER BY run_first DESC LIMIT 1)";
 
 /// Writes the mark's read ordinals to the scratch the block copy reads.
-/// `runs` is ascending, so the rows are appended in key order.
-pub(crate) fn plan(connection: &Connection, runs: &[(u32, u32)]) -> HistoryResult<()> {
+/// The runs of `read` ascend, so the rows are appended in key order.
+pub(crate) fn plan(connection: &Connection, read: &IdSet) -> HistoryResult<()> {
     connection.execute_batch(TABLE).map_err(db_error)?;
     let mut insert = connection
         .prepare("INSERT INTO scratch.live_ordinal(run_first,run_last) VALUES(?1,?2)")
         .map_err(db_error)?;
-    for (first, last) in runs {
+    for (first, last) in read.runs() {
+        let run = (i64::try_from(first), i64::try_from(last));
+        let (Ok(first), Ok(last)) = run else {
+            return Err(HistoryError::Integrity("inode value ordinal"));
+        };
         insert.execute(params![first, last]).map_err(db_error)?;
     }
     Ok(())
@@ -61,7 +66,7 @@ pub(crate) fn kept_bytes(connection: &Connection) -> HistoryResult<u64> {
 /// §7 step 6 for the block copy: every ordinal the mark read is inside a
 /// block of the staged file. One ordered pass over the staged block keys and
 /// the runs; nothing outside the staged file is read.
-pub fn verify(connection: &Connection, runs: &[(u32, u32)]) -> HistoryResult<()> {
+pub fn verify(connection: &Connection, read: &IdSet) -> HistoryResult<()> {
     const MISSING: HistoryError = HistoryError::Integrity("staged Store inode value blocks");
     let mut statement = connection
         .prepare("SELECT first_ordinal,last_ordinal FROM inode_value_block ORDER BY first_ordinal")
@@ -77,10 +82,14 @@ pub fn verify(connection: &Connection, runs: &[(u32, u32)]) -> HistoryResult<()>
         }
     };
     let mut block = next()?;
-    for (first, last) in runs {
+    for (first, last) in read.runs() {
+        let run = (i64::try_from(first), i64::try_from(last));
+        let (Ok(first), Ok(last)) = run else {
+            return Err(MISSING);
+        };
         // The first ordinal of the run no block has covered yet.
-        let mut wanted = i64::from(*first);
-        while wanted <= i64::from(*last) {
+        let mut wanted = first;
+        while wanted <= last {
             match block {
                 Some((_, end)) if end < wanted => block = next()?,
                 Some((start, end)) if start <= wanted => wanted = end + 1,

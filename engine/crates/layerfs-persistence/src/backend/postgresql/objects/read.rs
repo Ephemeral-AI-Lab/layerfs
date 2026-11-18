@@ -11,6 +11,7 @@ use layerfs_storage::{
 };
 use postgres::Row;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 fn info(r: &Record) -> Result<PackInfo, BackendError> {
     pack_info(r.get(0)?, r.get(1)?, &r.get::<Vec<u8>>(2)?, r.get(3)?)
@@ -106,7 +107,32 @@ const AHEAD_BYTES: i64 = 8 * 1024 * 1024;
 /// Bytes of pack rows a transaction that announced its reads keeps, in two
 /// generations: when the young one reaches half of this, the old one is
 /// dropped.
-const HELD_PACK_BYTES: usize = 96 * 1024 * 1024;
+const HELD_PACK_BYTES: usize = 32 * 1024 * 1024;
+
+/// One pack row as a scoped read uses it: the descriptor and the head of the
+/// body, copied out of the driver's row. The driver cuts its rows from the
+/// buffers it received them in, so a kept row would keep the whole buffer.
+pub(crate) struct HeldPack {
+    info: PackInfo,
+    head: Vec<u8>,
+}
+
+impl HeldPack {
+    /// Checks one fetched row and copies what a scoped read needs of it.
+    fn from_row(row: &Row) -> Result<Self, PersistenceError> {
+        let info = info(&rows::record_first(row, 4)?)?;
+        let head: Vec<u8> = row.try_get(4).map_err(|e| rows::error(&e))?;
+        if head.len() != info.length.min(HEAD_BYTES as usize) {
+            return Err(PersistenceError::Malformed);
+        }
+        Ok(Self { info, head })
+    }
+
+    /// The bytes this holds, with an allowance for the entry itself.
+    fn bytes(&self) -> usize {
+        self.head.len() + 128
+    }
+}
 
 /// The pack rows a transaction holds for its scoped reads: those read ahead
 /// ([`expect`]) and, once the caller has announced a walk, every row a
@@ -118,8 +144,8 @@ const HELD_PACK_BYTES: usize = 96 * 1024 * 1024;
 /// no second round trip and no second transfer.
 #[derive(Default)]
 pub(crate) struct HeldPacks {
-    young: HashMap<i64, Row>,
-    old: HashMap<i64, Row>,
+    young: HashMap<i64, Rc<HeldPack>>,
+    old: HashMap<i64, Rc<HeldPack>>,
     young_bytes: usize,
     /// Whether the caller announced its reads: only then are rows kept.
     walk: bool,
@@ -132,24 +158,24 @@ impl HeldPacks {
 
     /// The held row of `id`; one found in the old generation joins the
     /// young one, so a pack in use outlives the next turn.
-    fn get(&mut self, id: i64) -> Option<Row> {
-        if let Some(row) = self.young.get(&id) {
-            return Some(row.clone());
+    fn get(&mut self, id: i64) -> Option<Rc<HeldPack>> {
+        if let Some(pack) = self.young.get(&id) {
+            return Some(pack.clone());
         }
-        let row = self.old.remove(&id)?;
-        self.keep(id, row.clone());
-        Some(row)
+        let pack = self.old.remove(&id)?;
+        self.keep(id, pack.clone());
+        Some(pack)
     }
 
-    fn keep(&mut self, id: i64, row: Row) {
-        let bytes = row.raw_size_bytes();
+    fn keep(&mut self, id: i64, pack: Rc<HeldPack>) {
+        let bytes = pack.bytes();
         if self.young_bytes + bytes > HELD_PACK_BYTES / 2 {
             self.old = std::mem::take(&mut self.young);
             self.young_bytes = 0;
         }
         self.young_bytes += bytes;
-        if let Some(replaced) = self.young.insert(id, row) {
-            self.young_bytes -= replaced.raw_size_bytes();
+        if let Some(replaced) = self.young.insert(id, pack) {
+            self.young_bytes -= replaced.bytes();
         }
     }
 }
@@ -192,9 +218,12 @@ pub(crate) fn expect(tx: &Transaction<'_>, ids: &[i64]) -> Result<(), Persistenc
         ids.len() as u64 * 8 + 12,
     )?;
     let mut held = tx.packs.borrow_mut();
-    for row in rows {
-        let id: i64 = row.try_get(0).map_err(|e| rows::error(&e))?;
-        held.keep(id, row);
+    for row in &rows {
+        // A row that does not check is left for the scoped read of its
+        // pack, which fetches it again and refuses it there.
+        if let Ok(pack) = HeldPack::from_row(row) {
+            held.keep(pack.info.pack_id, Rc::new(pack));
+        }
     }
     Ok(())
 }
@@ -213,8 +242,8 @@ fn read_with<T>(
     }
     // A held row of this pack is the row the statement below returns.
     let held = tx.packs.borrow_mut().get(id);
-    let row = match held {
-        Some(row) => row,
+    let pack = match held {
+        Some(pack) => pack,
         None => {
             let mut found = tx.typed(
                 &format!(
@@ -228,21 +257,19 @@ fn read_with<T>(
                 return Err(PersistenceError::Malformed);
             }
             let row = found.pop().ok_or(PersistenceError::Missing)?;
+            let pack = Rc::new(HeldPack::from_row(&row)?);
             let mut held = tx.packs.borrow_mut();
             if held.walk {
-                held.keep(id, row.clone());
+                held.keep(id, pack.clone());
             }
-            row
+            pack
         }
     };
-    let descriptor = info(&rows::record_first(&row, 4)?)?;
+    let descriptor = pack.info;
     if descriptor.pack_id != id {
         return Err(PersistenceError::Malformed);
     }
-    let head: Vec<u8> = row.try_get(4).map_err(|e| rows::error(&e))?;
-    if head.len() != descriptor.length.min(HEAD_BYTES as usize) {
-        return Err(PersistenceError::Malformed);
-    }
+    let head = &pack.head;
     let ranged = format!(
         "SELECT substring(body FROM $2 FOR $3) FROM {}.pack WHERE pack_id=$1",
         tx.schema

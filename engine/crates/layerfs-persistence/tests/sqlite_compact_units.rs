@@ -262,6 +262,40 @@ fn a_sized_fresh_file_loads_and_is_cut_back_to_its_page_count() {
     assert_eq!(u64::try_from(reread).unwrap(), pages);
 }
 
+/// The set of `packs`, as a mark hands its retained packs over.
+fn ids(packs: &[i64]) -> layerfs_persistence::IdSet {
+    let mut set = layerfs_persistence::IdSet::default();
+    for pack in packs {
+        set.insert(*pack as u64);
+    }
+    set
+}
+
+/// The windows the product cuts for a file of `file` bytes whose packs are
+/// `lengths`: of the sealed file, or (`staged`) of the file a rebuild writes.
+fn cut_windows(
+    staged: bool,
+    lengths: &std::collections::BTreeMap<i64, u64>,
+    retained: &[i64],
+    file: u64,
+) -> layerfs_history::error::HistoryResult<Vec<layerfs_persistence::internals::Window>> {
+    use layerfs_persistence::internals::{staged_windows, windows};
+    let packs = lengths.iter().map(|(pack, length)| Ok((*pack, *length)));
+    let mut cut = Vec::new();
+    let mut each = |window| {
+        cut.push(window);
+        Ok(())
+    };
+    if staged {
+        let kept: u64 = retained.iter().filter_map(|pack| lengths.get(pack)).sum();
+        staged_windows(packs, &ids(retained), file.saturating_sub(kept), &mut each)?;
+    } else {
+        let total: u64 = lengths.values().sum();
+        windows(packs, &ids(retained), file.saturating_sub(total), &mut each)?;
+    }
+    Ok(cut)
+}
+
 /// The pack copy runs one window of retained packs at a time. A window ends
 /// once it holds [`WINDOW_BYTES`] of retained payload or when a run of dead
 /// packs longer than [`GAP_BYTES`] follows it, and its file range is the
@@ -269,9 +303,7 @@ fn a_sized_fresh_file_loads_and_is_cut_back_to_its_page_count() {
 /// payload.
 #[test]
 fn the_pack_copy_is_cut_into_windows_in_pack_order() {
-    use layerfs_persistence::internals::{
-        staged_windows, windows, Window, GAP_BYTES, WINDOW_BYTES,
-    };
+    use layerfs_persistence::internals::{Window, GAP_BYTES, WINDOW_BYTES};
     use std::collections::BTreeMap;
 
     const MIB: u64 = 1024 * 1024;
@@ -285,23 +317,26 @@ fn the_pack_copy_is_cut_into_windows_in_pack_order() {
     let retained: Vec<i64> = (1..=10).collect();
     let file = 160 * MIB + MIB;
     assert_eq!(
-        windows(&lengths, &retained, file).unwrap(),
+        cut_windows(false, &lengths, &retained, file).unwrap(),
         vec![
             Window {
                 first: 1,
                 last: 4,
+                packs: 4,
                 offset: 0,
                 bytes: 65 * MIB
             },
             Window {
                 first: 5,
                 last: 8,
+                packs: 4,
                 offset: 64 * MIB,
                 bytes: 65 * MIB
             },
             Window {
                 first: 9,
                 last: 10,
+                packs: 2,
                 offset: 128 * MIB,
                 bytes: 33 * MIB
             },
@@ -321,17 +356,19 @@ fn the_pack_copy_is_cut_into_windows_in_pack_order() {
     .into_iter()
     .collect();
     assert_eq!(
-        windows(&lengths, &[1, 3, 5], 15 * MIB).unwrap(),
+        cut_windows(false, &lengths, &[1, 3, 5], 15 * MIB).unwrap(),
         vec![
             Window {
                 first: 1,
                 last: 3,
+                packs: 2,
                 offset: 0,
                 bytes: 3 * MIB
             },
             Window {
                 first: 5,
                 last: 5,
+                packs: 1,
                 offset: 12 * MIB,
                 bytes: MIB
             },
@@ -340,21 +377,26 @@ fn the_pack_copy_is_cut_into_windows_in_pack_order() {
 
     // No retained pack is no window; a file shorter than its packs has no
     // slack to add.
-    assert_eq!(windows(&lengths, &[], 15 * MIB).unwrap(), Vec::new());
     assert_eq!(
-        windows(&lengths, &[7], MIB).unwrap(),
+        cut_windows(false, &lengths, &[], 15 * MIB).unwrap(),
+        Vec::new()
+    );
+    assert_eq!(
+        cut_windows(false, &lengths, &[7], MIB).unwrap(),
         vec![Window {
             first: 7,
             last: 7,
+            packs: 1,
             offset: 13 * MIB,
             bytes: 2 * MIB
         }]
     );
 
-    // A retained pack the Store does not hold, or a mark out of order, is an
-    // integrity failure, never a silently shorter copy.
-    for broken in [&[6][..], &[3, 1][..], &[1, 1][..], &[5, 8][..]] {
-        let error = windows(&lengths, broken, 15 * MIB).unwrap_err();
+    // A retained pack the Store does not hold is an integrity failure, never
+    // a silently shorter copy. The mark's packs are a set, read ascending, so
+    // an order of their own they cannot have.
+    for broken in [&[6][..], &[5, 8][..]] {
+        let error = cut_windows(false, &lengths, broken, 15 * MIB).unwrap_err();
         assert!(
             matches!(error, HistoryError::Integrity("mark pack")),
             "{broken:?}: {error:?}"
@@ -365,20 +407,161 @@ fn the_pack_copy_is_cut_into_windows_in_pack_order() {
     // counts no dead pack: the long dead run neither ends a window nor moves
     // an offset, and the slack is that of the fresh file.
     assert_eq!(
-        staged_windows(&lengths, &[1, 3, 5], 4 * MIB).unwrap(),
+        cut_windows(true, &lengths, &[1, 3, 5], 4 * MIB).unwrap(),
         vec![Window {
             first: 1,
             last: 5,
+            packs: 3,
             offset: 0,
             bytes: 4 * MIB
         }]
     );
-    assert_eq!(staged_windows(&lengths, &[], MIB).unwrap(), Vec::new());
-    for broken in [&[6][..], &[3, 1][..]] {
-        let error = staged_windows(&lengths, broken, 4 * MIB).unwrap_err();
+    assert_eq!(cut_windows(true, &lengths, &[], MIB).unwrap(), Vec::new());
+    for broken in [&[6][..], &[5, 8][..]] {
+        let error = cut_windows(true, &lengths, broken, 4 * MIB).unwrap_err();
         assert!(
             matches!(error, HistoryError::Integrity("mark pack")),
             "{broken:?}: {error:?}"
         );
     }
+}
+
+/// The run keeps every pack's stored length in bounded memory: past 65,536
+/// packs the list is in an unnamed file beside the Store, and what it gives
+/// back (the total, the retained bytes, the packs in order and the windows
+/// cut from them) is what a list held whole gives.
+#[test]
+fn the_pack_lengths_of_a_large_store_are_read_back_from_a_file() {
+    use layerfs_persistence::internals::{windows, PackLengths, Space};
+    use std::collections::BTreeMap;
+
+    const PACKS: i64 = 200_000;
+    let directory =
+        std::env::temp_dir().join(format!("layerfs-pack-lengths-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).unwrap();
+    let length = |pack: i64| 1_000 + (pack as u64 * 7_919) % 90_000;
+    let space = Space::new(directory.clone());
+    let mut lengths = PackLengths::new(&space);
+    let mut whole = BTreeMap::new();
+    for pack in 1..=PACKS {
+        // Identities need not be dense.
+        let pack = pack * 3;
+        lengths.push(pack, length(pack)).unwrap();
+        whole.insert(pack, length(pack));
+    }
+    // 16 bytes a pack, less the 65,536 packs that may stay in memory.
+    let file = space.peak_bytes();
+    assert!(
+        (16 * (PACKS as u64 - 65_536)..=16 * PACKS as u64).contains(&file),
+        "{file} bytes in the file"
+    );
+    assert_eq!(
+        std::fs::read_dir(&directory).unwrap().count(),
+        0,
+        "the file has no name"
+    );
+    assert_eq!(lengths.total(), whole.values().sum::<u64>());
+    // Read twice: the list is not consumed.
+    for _ in 0..2 {
+        let read: Vec<(i64, u64)> = lengths.packs().unwrap().map(Result::unwrap).collect();
+        assert!(read
+            .iter()
+            .copied()
+            .eq(whole.iter().map(|(pack, length)| (*pack, *length))));
+    }
+    let retained: Vec<i64> = whole.keys().copied().filter(|pack| pack % 5 != 0).collect();
+    let kept: u64 = retained.iter().map(|pack| whole[pack]).sum();
+    assert_eq!(lengths.stored(&ids(&retained)).unwrap(), kept);
+    assert!(matches!(
+        lengths.stored(&ids(&[3, 4])).unwrap_err(),
+        HistoryError::Integrity("mark pack")
+    ));
+    let slack = 4096;
+    let mut streamed = Vec::new();
+    windows(
+        lengths.packs().unwrap(),
+        &ids(&retained),
+        slack,
+        &mut |window| {
+            streamed.push(window);
+            Ok(())
+        },
+    )
+    .unwrap();
+    let held = cut_windows(false, &whole, &retained, lengths.total() + slack).unwrap();
+    assert!(held.len() > 100, "{} windows", held.len());
+    assert_eq!(streamed, held);
+    assert_eq!(
+        streamed.iter().map(|window| window.packs).sum::<u64>(),
+        retained.len() as u64
+    );
+    std::fs::remove_dir(&directory).unwrap();
+}
+
+/// The verification's locators are sorted in bounded memory: past 524,288 of
+/// them the sorter writes 8 MiB runs to an unnamed file, exactly the bytes
+/// the report counts beforehand, and the pass by pack reads them back merged
+/// with the rest. Every pack takes its locators, and a pack that is gone
+/// leaves its locators as the foreign-key failure.
+#[test]
+fn the_staged_locators_of_a_large_store_are_sorted_through_a_file() {
+    use layerfs_persistence::internals::StagedLocators;
+
+    const PACKS: i64 = 3_000;
+    const RECORDS: i64 = 200;
+    let directory =
+        std::env::temp_dir().join(format!("layerfs-staged-locators-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).unwrap();
+    let connection = rusqlite::Connection::open(directory.join("staged.sqlite")).unwrap();
+    // The two tables the pass reads, with the columns it reads; locators are
+    // stored in an order that is not pack order, as object identities are.
+    connection
+        .execute_batch(&format!(
+            "PRAGMA journal_mode=OFF;PRAGMA synchronous=OFF;\
+CREATE TABLE pack(pack_id INTEGER PRIMARY KEY,length INTEGER,domain INTEGER);\
+CREATE TABLE object_location(n INTEGER PRIMARY KEY,pack_id INTEGER,\
+group_number INTEGER,record_number INTEGER,canonical_length INTEGER);\
+WITH RECURSIVE p(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM p WHERE i<{PACKS}) \
+INSERT INTO pack SELECT i*2,100+i,i%2 FROM p;\
+WITH RECURSIVE o(i) AS (SELECT 0 UNION ALL SELECT i+1 FROM o WHERE i<{}) \
+INSERT INTO object_location SELECT i,((i*7919)%{PACKS}+1)*2,i%3,i,5 FROM o;",
+            PACKS * RECORDS - 1
+        ))
+        .unwrap();
+    let objects = (PACKS * RECORDS) as u64;
+    assert_eq!(StagedLocators::sort_file_bytes(objects), 8 * 1024 * 1024);
+    assert_eq!(StagedLocators::sort_file_bytes(524_287), 0);
+    let run = |connection: &rusqlite::Connection| {
+        let space = layerfs_persistence::internals::Space::new(directory.clone());
+        let mut locators = StagedLocators::read(connection, &space)?;
+        assert_eq!(
+            (locators.objects, locators.canonical),
+            (objects, 5 * objects as i64)
+        );
+        assert_eq!(space.peak_bytes(), StagedLocators::sort_file_bytes(objects));
+        let mut none = std::iter::empty();
+        let mut pass = locators.pass(connection, &mut none)?;
+        pass.through(PACKS)?;
+        pass.finish()
+    };
+    let scan = run(&connection).unwrap();
+    let lengths: i64 = (1..=PACKS).map(|pack| 100 + pack).sum();
+    let metadata: i64 = (1..=PACKS)
+        .filter(|pack| pack % 2 == 0)
+        .map(|pack| 100 + pack)
+        .sum();
+    assert_eq!(
+        (scan.packs, scan.stored, scan.metadata),
+        (PACKS, lengths, metadata)
+    );
+    connection
+        .execute("DELETE FROM pack WHERE pack_id=?1", [PACKS])
+        .unwrap();
+    assert!(matches!(
+        run(&connection).unwrap_err(),
+        HistoryError::Integrity("staged Store foreign key")
+    ));
+    drop(connection);
+    std::fs::remove_file(directory.join("staged.sqlite")).unwrap();
+    std::fs::remove_dir(&directory).unwrap();
 }

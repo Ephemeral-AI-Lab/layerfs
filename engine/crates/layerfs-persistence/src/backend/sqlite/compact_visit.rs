@@ -7,17 +7,22 @@
 //! transaction: the `visited` rows as the mark lists them, in identity
 //! order, and the retained packs (`live_pack`) in pack order, so both tables
 //! are filled by appending and neither needs a sort or a second pass in SQL.
-//! The rows are written as they are listed; the sink holds one statement's
-//! worth of them. The §7 build attaches the file as `scratch` and joins
-//! `object_location` against it, and the abort paths delete it with the rest
-//! of the artifact set.
-use layerfs_content::ObjectId;
+//! A `visited` row is the object's whole locator, as the mark read it from
+//! the Store while it held the writer lane, so the §7 build copies the kept
+//! locators from this table in one forward scan and never looks one up in
+//! the sealed Store. A row also says whether its object was reached only as
+//! a delta base, so the rebuild can restate the mark's
+//! `keptWaste.deltaBases.bytes` for the packs it writes again. The rows are
+//! written as they are listed; the sink holds one statement's worth of them.
+//! The build attaches the file as `scratch`, and the abort paths delete it
+//! with the rest of the artifact set.
 use layerfs_history::error::{HistoryError, HistoryResult};
+use layerfs_storage::location::ObjectLocation;
 use rusqlite::types::{ToSqlOutput, ValueRef};
 use rusqlite::{Connection, OpenFlags};
 use std::path::{Path, PathBuf};
 
-/// Rows one `INSERT` writes; two bound values each.
+/// Rows one `INSERT` writes; seven bound values each.
 const ROWS_PER_INSERT: usize = 128;
 
 /// The scratch a rebuilding mark writes its reached objects to.
@@ -63,14 +68,17 @@ impl VisitSink {
         })
     }
 
-    /// Writes the scratch in one transaction: every row `list` hands over,
-    /// which must come in ascending identity order with no identity twice,
-    /// and the retained `packs`, ascending. Closes the connection, refuses a
-    /// sidecar and returns the file's size.
+    /// Writes the scratch in one transaction: every reached locator `list`
+    /// hands over with its delta-base-only flag, which must come in ascending
+    /// identity order with no identity twice, and the retained `packs`,
+    /// ascending. Closes the connection, refuses a sidecar and returns the
+    /// file's size.
     pub(crate) fn finish(
         mut self,
         packs: &crate::IdSet,
-        list: impl FnOnce(&mut dyn FnMut(ObjectId, i64) -> HistoryResult<()>) -> HistoryResult<()>,
+        list: impl FnOnce(
+            &mut dyn FnMut(&ObjectLocation, bool) -> HistoryResult<()>,
+        ) -> HistoryResult<()>,
     ) -> HistoryResult<u64> {
         if std::fs::symlink_metadata(&self.path).is_ok() {
             return Err(HistoryError::Exists("staged compaction artifact"));
@@ -93,7 +101,12 @@ impl VisitSink {
                 "PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF;\
 CREATE TABLE visited (\
  object_id BLOB PRIMARY KEY CHECK(length(object_id)=32),\
- pack_id INTEGER NOT NULL\
+ role INTEGER NOT NULL,\
+ canonical_length INTEGER NOT NULL,\
+ pack_id INTEGER NOT NULL,\
+ group_number INTEGER NOT NULL,\
+ record_number INTEGER NOT NULL,\
+ base_only INTEGER NOT NULL\
 ) STRICT, WITHOUT ROWID;\
 CREATE TABLE live_pack (pack_id INTEGER PRIMARY KEY) STRICT, WITHOUT ROWID;\
 BEGIN IMMEDIATE;",
@@ -102,18 +115,29 @@ BEGIN IMMEDIATE;",
         // Key order makes every insert an append to the table's last page.
         // The mark lists an object once and an object has one locator, so
         // the key refuses nothing; a row out of order would still be stored.
-        let mut rows: Vec<(ObjectId, i64)> = Vec::with_capacity(ROWS_PER_INSERT);
-        let write = |rows: &[(ObjectId, i64)]| {
+        let mut rows: Vec<(ObjectLocation, bool)> = Vec::with_capacity(ROWS_PER_INSERT);
+        let write = |rows: &[(ObjectLocation, bool)]| {
             insert(
                 &connection,
-                "INSERT INTO visited(object_id,pack_id) VALUES",
-                "(?,?)",
+                "INSERT INTO visited(object_id,role,canonical_length,pack_id,\
+group_number,record_number,base_only) VALUES",
+                "(?,?,?,?,?,?,?)",
                 rows,
-                |(id, pack_id)| [blob(id.as_bytes()), integer(*pack_id)],
+                |(row, base_only)| {
+                    [
+                        blob(row.object_id.as_bytes()),
+                        integer(i64::from(row.role.code())),
+                        integer(row.canonical_length as i64),
+                        integer(row.pack_id),
+                        integer(row.group_number as i64),
+                        integer(row.record_number as i64),
+                        integer(i64::from(*base_only)),
+                    ]
+                },
             )
         };
-        list(&mut |id, pack_id| {
-            rows.push((id, pack_id));
+        list(&mut |row, base_only| {
+            rows.push((*row, base_only));
             if rows.len() == ROWS_PER_INSERT {
                 write(&rows)?;
                 rows.clear();

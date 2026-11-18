@@ -191,6 +191,7 @@ fn walk_rows(
             source.enter(location.pack_id, inventory)?;
             let role = location.role;
             let references = if role.has_references() {
+                expect_bases(source, readers, &location)?;
                 let canonical = {
                     let mut resolver = Resolver::new(
                         source,
@@ -259,6 +260,86 @@ fn walk_rows(
         }
     }
     source.relieve()
+}
+
+/// Levels of delta bases [`expect_bases`] follows below one group: no chain
+/// is deeper than a depth cap, which is a byte.
+const BASE_LEVELS: usize = u8::MAX as usize;
+
+/// Before a record of `location`'s group is rebuilt, on an engine that pays
+/// a round trip per locator lookup: tells it the lookups the group's chains
+/// are about to make, a level of delta bases at a time, so they cost one
+/// statement a level and not one for each chain element
+/// ([`crate::backend::Mechanics::expect_locations`]).
+///
+/// A rebuild walks from a record to its base, and on from there until it
+/// meets an element the reader's memo holds or a record stored whole. This
+/// walks the same way for every record of the group at once: it reads each
+/// element's base from the record the rebuild is about to read, through the
+/// caches the rebuild reads through, and stops where the memo holds the
+/// element. It is a hint only. What the memo holds can change before a
+/// rebuild gets there; a lookup that was not announced is then made on its
+/// own, and an element read here that no rebuild reads costs one record
+/// header.
+fn expect_bases(
+    source: &ClosureSource<'_>,
+    readers: &mut Readers,
+    location: &ObjectLocation,
+) -> HistoryResult<()> {
+    let mechanics = source.mechanics;
+    if !mechanics.batches_locations() {
+        return Ok(());
+    }
+    let group = (location.pack_id, location.group_number);
+    if source.based.replace(group) == group {
+        return Ok(());
+    }
+    let engine = |error: layerfs_storage::port::PersistenceError| {
+        storage(layerfs_storage::StorageError::from(error))
+    };
+    let mut level = source.held_in_group(location.group_number);
+    for _ in 0..BASE_LEVELS {
+        // A rebuild locates the base of every element it reads, and reads
+        // on only through a base its memo does not hold.
+        let (mut next, mut outside) = (Vec::new(), Vec::new());
+        for row in &level {
+            let edge = stored_edge(
+                source,
+                &mut readers.packs,
+                &mut readers.groups,
+                &mut readers.workspace,
+                &mut readers.edge_decodes,
+                row,
+            )
+            .map_err(storage)?;
+            let Some(base) = edge.base else {
+                continue;
+            };
+            match source.held_here(&base) {
+                Some(held) if !readers.pool.remembers(&base) => next.push(held.location),
+                Some(_) => {}
+                None => outside.push(base),
+            }
+        }
+        outside.sort_unstable();
+        outside.dedup();
+        mechanics.expect_locations(&outside).map_err(engine)?;
+        for base in outside.iter().filter(|base| !readers.pool.remembers(base)) {
+            // Held by the engine now; one it does not locate is the
+            // rebuild's refusal to make, not this hint's.
+            next.extend(mechanics.location(base).map_err(engine)?);
+        }
+        if next.is_empty() {
+            break;
+        }
+        next.sort_unstable_by_key(|row| (row.pack_id, row.group_number, row.record_number));
+        next.dedup();
+        let mut packs: Vec<i64> = next.iter().map(|row| row.pack_id).collect();
+        packs.dedup();
+        mechanics.expect_scoped_packs(&packs).map_err(engine)?;
+        level = next;
+    }
+    Ok(())
 }
 
 /// Notes a newly found reference or delta base. An object of the pack being

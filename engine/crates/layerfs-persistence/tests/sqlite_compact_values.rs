@@ -481,7 +481,14 @@ fn verification_requires_a_staged_block_for_every_ordinal_the_mark_read() {
         connection
             .execute_batch(&format!("PRAGMA journal_mode=DELETE;{change}"))
             .unwrap();
-        verify_inode_blocks(&connection, runs)
+        // The mark hands its read ordinals over as a set.
+        let mut read = layerfs_persistence::IdSet::default();
+        for (first, last) in runs {
+            for ordinal in *first..=*last {
+                read.insert(u64::from(ordinal));
+            }
+        }
+        verify_inode_blocks(&connection, &read)
     };
     assert!(
         tampered("SELECT 1", &runs).is_ok(),

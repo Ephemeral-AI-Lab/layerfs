@@ -1,4 +1,5 @@
-//! Sorting in bounded memory for one mark.
+//! Sorting in bounded memory for one mark, and for the compaction around it
+//! (the pack lengths and the verification's checks by pack).
 //!
 //! A mark has to put several sets in order that grow with the Store: the
 //! identities a wave reached, the objects of the next wave by locator, the
@@ -78,7 +79,8 @@ const NAME: &str = ".layerfs-mark-";
 /// sort file in the directory removes every such name first. Removing the
 /// name of a file another process is about to unlink is harmless: the file
 /// lives by its handle, and a missing name is what the unlink wanted.
-pub(crate) struct Space {
+#[derive(Debug)]
+pub struct Space {
     directory: PathBuf,
     held: AtomicU64,
     peak: AtomicU64,
@@ -86,7 +88,8 @@ pub(crate) struct Space {
 }
 
 impl Space {
-    pub(crate) fn new(directory: PathBuf) -> Arc<Self> {
+    /// A space whose files are created in `directory`.
+    pub fn new(directory: PathBuf) -> Arc<Self> {
         Arc::new(Self {
             directory,
             held: AtomicU64::new(0),
@@ -96,8 +99,13 @@ impl Space {
     }
 
     /// The most bytes the files of this space held at one time.
-    pub(crate) fn peak_bytes(&self) -> u64 {
+    pub fn peak_bytes(&self) -> u64 {
         self.peak.load(Atomic::Relaxed)
+    }
+
+    /// The bytes the files of this space hold now.
+    pub fn held_bytes(&self) -> u64 {
+        self.held.load(Atomic::Relaxed)
     }
 
     fn grow(&self, bytes: u64) {
