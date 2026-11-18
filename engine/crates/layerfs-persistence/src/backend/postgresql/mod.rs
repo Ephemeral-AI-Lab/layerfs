@@ -9,6 +9,7 @@ mod mechanics;
 pub(crate) mod merge_records;
 pub(crate) mod metadata;
 pub(crate) mod objects;
+pub(crate) mod probe;
 pub(crate) mod schema;
 pub(crate) mod session;
 pub(crate) mod status;

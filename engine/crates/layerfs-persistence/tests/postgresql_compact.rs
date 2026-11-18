@@ -46,9 +46,9 @@ struct Schema {
     url: String,
     selection: PostgresSelection,
     /// This test's own catalog identity. The Store-scoped admission advisory
-    /// key derives from it, and PostgreSQL advisory locks are server-wide
-    /// (not schema-scoped), so tests that shared one binding would exclude
-    /// each other while running in parallel.
+    /// key and the scratch schema name derive from it, and PostgreSQL
+    /// advisory locks are database-wide (not schema-scoped), so tests that
+    /// shared one binding would exclude each other while running in parallel.
     binding: Vec<u8>,
 }
 impl Schema {
@@ -133,10 +133,14 @@ impl Drop for Schema {
 }
 
 /// Every test opens its own catalog identity, as a real Store does: the
-/// PostgreSQL advisory keys are server-global, so two tests that shared a
-/// binding could see each other's intents while running in parallel.
+/// PostgreSQL advisory keys are database-wide, so two tests that shared a
+/// binding could see each other's intents while running in parallel. The
+/// process id keeps a second run of this file on the same database (another
+/// worktree's, say) from sharing them too: with the tag alone the two runs
+/// refused each other's compactions as `BusyOp` and dropped each other's
+/// scratch schemas.
 fn binding(tag: &str) -> Vec<u8> {
-    format!("postgresql-compact-{tag}").into_bytes()
+    format!("postgresql-compact-{tag}-{}", std::process::id()).into_bytes()
 }
 
 /// The deterministic per-Store scratch schema name: `lfs_gc_` plus the
@@ -1847,14 +1851,35 @@ fn role_url(url: &str, role: &str) -> String {
 
 /// Serializes the role and database ACL writes of the AC-44 matrix: the
 /// tests run in parallel, and two `GRANT`/`REVOKE` statements on the same
-/// `pg_database` row can fail with `tuple concurrently updated`. The lock is
-/// held only while a fixture writes, never through a compaction.
+/// `pg_database` row can fail with `tuple concurrently updated`. The process
+/// mutex orders this binary's own tests; the session advisory key orders them
+/// against another process running this file on the same database. It is the
+/// two-integer form, a key space the product's bigint keys never use. Both
+/// are held only while a fixture writes, never through a compaction.
 static ROLE_SETUP: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-fn role_setup() -> std::sync::MutexGuard<'static, ()> {
-    ROLE_SETUP
+struct RoleSetup {
+    /// Closed first: the session's end releases the advisory key.
+    _session: Option<postgres::Client>,
+    _process: std::sync::MutexGuard<'static, ()>,
+}
+
+fn role_setup(url: &str) -> RoleSetup {
+    let process = ROLE_SETUP
         .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let session = postgres::Client::connect(url, postgres::NoTls)
+        .ok()
+        .and_then(|mut client| {
+            client
+                .batch_execute("SELECT pg_advisory_lock(1818653236, 54)")
+                .ok()
+                .map(|()| client)
+        });
+    RoleSetup {
+        _session: session,
+        _process: process,
+    }
 }
 
 /// A login role of the AC-44 privilege matrix. It owns the Store's tables and
@@ -1871,7 +1896,7 @@ struct Role {
 }
 impl Role {
     fn new(schema: &Schema, tag: &str) -> Self {
-        let _setup = role_setup();
+        let _setup = role_setup(&schema.url);
         let name = format!("lfs_g54_{tag}_{}", std::process::id());
         let mut admin =
             postgres::Client::connect(&schema.url, postgres::NoTls).expect("role admin");
@@ -1930,7 +1955,7 @@ impl Role {
         postgres::Client::connect(&self.admin_url, postgres::NoTls).expect("role admin")
     }
     fn grant_schema_create(&self, schema: &Schema) {
-        let _setup = role_setup();
+        let _setup = role_setup(&self.admin_url);
         self.admin()
             .batch_execute(&format!(
                 "GRANT CREATE ON SCHEMA {} TO {}",
@@ -1939,7 +1964,7 @@ impl Role {
             .expect("schema create");
     }
     fn grant_database(&self, create: bool, temp: bool) {
-        let _setup = role_setup();
+        let _setup = role_setup(&self.admin_url);
         let mut sql = String::new();
         if create {
             sql.push_str(&format!(
@@ -1958,21 +1983,28 @@ impl Role {
         }
     }
     fn grant_read_all_stats(&self) {
-        let _setup = role_setup();
+        let _setup = role_setup(&self.admin_url);
         self.admin()
             .batch_execute(&format!("GRANT pg_read_all_stats TO {}", self.name))
             .expect("stats grant");
     }
     /// Gives every Store table and sequence back to the fixture
-    /// administrator, so the role no longer owns what Phase B must drop.
+    /// administrator, so the role no longer owns what Phase B must drop. A
+    /// sequence linked to a column follows its table: PostgreSQL refuses to
+    /// change its owner alone, and `pg_class` order does not put the table
+    /// first.
     fn disown(&self, schema: &Schema) {
-        let _setup = role_setup();
+        let _setup = role_setup(&self.admin_url);
         let mut admin = self.admin();
         let owned: Vec<(String, String)> = admin
             .query(
                 "SELECT c.relname::text, c.relkind::text FROM pg_class c \
                  JOIN pg_namespace n ON n.oid = c.relnamespace \
-                 WHERE n.nspname = $1 AND c.relkind IN ('r', 'p', 'S')",
+                 WHERE n.nspname = $1 AND (c.relkind IN ('r', 'p') \
+                   OR (c.relkind = 'S' AND NOT EXISTS (SELECT 1 FROM pg_depend d \
+                        WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid \
+                          AND d.refclassid = 'pg_class'::regclass \
+                          AND d.deptype IN ('a', 'i'))))",
                 &[&schema.selection.schema],
             )
             .expect("schema relations")
@@ -1993,7 +2025,7 @@ impl Role {
     /// DML plus every ACL privilege with grant option, the strongest a
     /// non-owner can hold; Phase B still needs ownership.
     fn grant_table_privileges(&self, schema: &Schema) {
-        let _setup = role_setup();
+        let _setup = role_setup(&self.admin_url);
         self.admin()
             .batch_execute(&format!(
                 "GRANT SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER \
@@ -2010,7 +2042,7 @@ impl Role {
 }
 impl Drop for Role {
     fn drop(&mut self) {
-        let _setup = role_setup();
+        let _setup = role_setup(&self.admin_url);
         if let Ok(mut admin) = postgres::Client::connect(&self.admin_url, postgres::NoTls) {
             let _ = admin.batch_execute(&format!("DROP OWNED BY {}", self.name));
             let _ = admin.batch_execute(&format!("DROP ROLE IF EXISTS {}", self.name));
