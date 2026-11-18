@@ -50,14 +50,28 @@ fn a_stale_lease_survives_every_store_read_and_is_ignored() {
     let mut events = Events::new(&mut sink);
 
     let before = tree(&home);
-    let list = list(&home, None, false).unwrap();
-    let get_records = get(&home, &mut events, "s", With::default()).unwrap();
+    let list = list(&home, None, false, &layerfs_control::store::machine_state).unwrap();
+    let get_records = get(
+        &home,
+        &mut events,
+        "s",
+        With::default(),
+        &layerfs_control::store::machine_state,
+    )
+    .unwrap();
     assert_eq!(before, tree(&home), "a records-only read changed the home");
     let live = With {
         live: true,
         stats: false,
     };
-    let seen = get(&home, &mut events, "s", live).unwrap();
+    let seen = get(
+        &home,
+        &mut events,
+        "s",
+        live,
+        &layerfs_control::store::machine_state,
+    )
+    .unwrap();
     let mut after = tree(&home);
     let observed = paths::store_dir(&home, "s").join("observed.json");
     assert!(after.remove(&observed).is_some(), "a live read observes");

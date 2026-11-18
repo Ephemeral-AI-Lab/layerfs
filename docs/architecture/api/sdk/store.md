@@ -6,7 +6,7 @@ The `store` calls: create, connect, update, inspect, move, remove and compact th
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-api/src/store`](../../../../api/crates/layerfs-api/src/store), [`layerfs-store/src`](../../../../control/crates/layerfs-store/src) (`sqlite/`, `postgresql/`, `list.rs`, `get.rs`, `state.rs`, `live.rs`, `stats.rs`, `observed.rs`, `intent.rs`), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) |
+| Source | [`api/crates/layerfs-api/src/store`](../../../../api/crates/layerfs-api/src/store), [`layerfs-store/src`](../../../../control/crates/layerfs-store/src) (`sqlite/`, `postgresql/`, `list.rs`, `get.rs`, `state.rs`, `live.rs`, `stats.rs`, `intent.rs`), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) |
 | Runs by default | the caller's process (records, locks, leases, PostgreSQL connections); a sqlite Store's file steps run in its machine's worker (`store.file`) when it is not on a locally executing machine |
 | Design | [Stores and projects](../../control/stores-and-projects/README.md) (records, placement, leases), [SQLite and PostgreSQL](../../control/stores-and-projects/sqlite-and-postgresql.md) (transfer phases, connect, update and the check), [Engine: Store](../../engine/store/README.md) |
 
@@ -75,7 +75,7 @@ shows `cursor`, `binding` or `v`:
 | --- | --- |
 | `busy` | the record's `op` belongs to a live process (`op` companion) |
 | `broken` `unresolved` | the `op`'s process is gone and its outcome unknown; `fix` names the clearing call (`intent::clearing`) |
-| `blocked` | a sqlite Store whose machine is not ready (`blocked_by: { machine, reason }`, from `state::machine_state`, the one seam to the machine family) |
+| `blocked` | a sqlite Store whose machine is not ready (`blocked_by: { machine, reason }`, from the machine family's one derivation, `inventory::machine_state`, which the calls hand the Store code as `state::Machines`) |
 | `broken` `unsupported` / `missing` / `unreachable` | a record kind this build does not read; or the reason the last live read wrote to `broken` |
 | `ready` | otherwise |
 
@@ -114,7 +114,7 @@ CLI     layerfs store get <store> [--with live,stats]
 The answer ([`get.rs`](../../../../control/crates/layerfs-store/src/get.rs)
 `summary`) is `engine, state` and its companion (`op`, `blocked_by`,
 `reason`, `fix`), `observed_at` (when it was last read live, from
-`store/<store>/observed.json`), `machine`, `auth` (null until saved logins
+`store/<store>/observed.json`, `layerfs_home::home::observed`), `machine`, `auth` (null until saved logins
 land), `connections` (PostgreSQL: the Store's own address, then each
 machine's own, never a password), `projects` (at most 20) and
 `projects_count`, `backups` rows `{ bucket, file, sha256, heads_sha256,

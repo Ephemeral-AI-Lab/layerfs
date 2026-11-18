@@ -16,14 +16,13 @@
 //! tried to the link's `attempt` ([`crate::get::ATTEMPT`]).
 use crate::get::ATTEMPT;
 use crate::intent;
-use crate::observed;
 use crate::place;
 use crate::record::{self, Placement, StoreRecord, StoreRef};
 use crate::sqlite::family::step_on;
 use crate::sqlite::transfer::step::StoreStep;
 use crate::state;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::home::{now_ms, with_field};
+use layerfs_home::home::{now_ms, observed, paths, with_field};
 use layerfs_home::op::{self, Standing};
 use layerfs_home::state::{Reason, State};
 use layerfs_persistence::compact_metrics::{self, CompactStatusState};
@@ -202,14 +201,14 @@ fn remember(
 }
 
 /// Reads Store `record` where it lives (see the module's documentation).
-pub fn read(home: &Path, record: StoreRecord) -> Result<Seen> {
+pub fn read(home: &Path, record: StoreRecord, machines: state::Machines) -> Result<Seen> {
     let store = record.name().to_owned();
     let (holders, _) = crate::lease::read_holders(home, &store)?;
     let holders = holders.iter().map(|pid| SdkValue::Int(i64::from(*pid)));
     let holders = SdkValue::List(holders.collect());
     // what the records say first: a Store whose machine is not ready is
     // blocked, and nothing is asked of a machine that is not running
-    let recorded = state::recorded(home, &record)?;
+    let recorded = state::recorded(home, &record, machines)?;
     let found = match (&recorded, record.store_ref()) {
         (State::Blocked(_), _) | (_, Err(_)) => None,
         // a 1.1.0 Store whose machine its record does not tell: nowhere to read
@@ -244,7 +243,7 @@ pub fn read(home: &Path, record: StoreRecord) -> Result<Seen> {
         ])
     };
     let Some(found) = found else {
-        let observed = observed::read(home, &store);
+        let observed = observed::read(&paths::store_record(home, &store));
         let section = section(None, SdkValue::Null);
         return Ok(Seen {
             record,
@@ -254,7 +253,7 @@ pub fn read(home: &Path, record: StoreRecord) -> Result<Seen> {
         });
     };
     if found.unanswered {
-        let observed = observed::last_known(home, &store);
+        let observed = observed::last_known(&paths::store_record(home, &store));
         return Ok(Seen {
             record,
             state: State::Unknown {
@@ -267,7 +266,7 @@ pub fn read(home: &Path, record: StoreRecord) -> Result<Seen> {
     // the Store answered: a gone owner's backup or restore is settled,
     // and what is wrong with it is remembered when it changed
     let now = now_ms();
-    let _ = observed::write(home, &store, now);
+    let _ = observed::write(&paths::store_record(home, &store), now);
     let record = settle(home, &store, record)?;
     let compaction = compacting(&record, &found.compaction);
     // a compaction's own record is observed by its bounded state label,
@@ -283,7 +282,7 @@ pub fn read(home: &Path, record: StoreRecord) -> Result<Seen> {
     let state = match (state::held(&record), compaction) {
         (Some(held), _) => held,
         (None, Some(busy @ State::Busy { .. })) => busy,
-        (None, _) => state::recorded(home, &record)?,
+        (None, _) => state::recorded(home, &record, machines)?,
     };
     let behind = match (&record.store_ref(), &found.heads) {
         (Ok(StoreRef::Postgres { .. }), _) | (_, None) => SdkValue::Null,

@@ -254,21 +254,25 @@ fn a_store_state_from_its_records_is_busy_unresolved_blocked_broken_or_ready() {
     use layerfs_home::op::Op;
     use layerfs_home::state::{Reason, State};
     use layerfs_store::state::{held, recorded};
+    let machines = &layerfs_control::store::machine_state;
     let home = std::env::temp_dir().join(format!("layerfs-store-state-{}", std::process::id()));
     std::fs::create_dir_all(&home).unwrap();
     let on = |machine: &str, more: &str| {
         let text = format!(r#"{{"kind":"sqlite","machine":"{machine}"{more}}}"#);
         StoreRecord::from_record("s", value(&text))
     };
-    assert_eq!(recorded(&home, &on("native", "")).unwrap(), State::Ready);
+    assert_eq!(
+        recorded(&home, &on("native", ""), machines).unwrap(),
+        State::Ready
+    );
     // a machine the home does not record blocks the Store, naming it
     assert_eq!(
-        recorded(&home, &on("box", "")).unwrap(),
+        recorded(&home, &on("box", ""), machines).unwrap(),
         State::blocked_by("machine", "box", "missing")
     );
     // what a live read found and wrote is answered from the record
     assert_eq!(
-        recorded(&home, &on("native", r#","broken":"missing""#)).unwrap(),
+        recorded(&home, &on("native", r#","broken":"missing""#), machines).unwrap(),
         State::broken(Reason::Missing, Some("layerfs store remove s"))
     );
     // a live operation (this process) wins over everything, named by its

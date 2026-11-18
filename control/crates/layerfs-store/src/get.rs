@@ -9,12 +9,11 @@
 //! `synchronous_commit`; the other engine's keys are null.
 use crate::backup::record::StoreLink;
 use crate::intent;
-use crate::observed;
 use crate::record::{Placement, StoreRecord, StoreRef};
 use crate::state;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
-use layerfs_home::home::paths;
+use layerfs_home::home::{observed, paths};
 use layerfs_home::outcome::{failed, Outcome};
 use layerfs_home::state::State;
 use layerfs_home::time;
@@ -223,16 +222,27 @@ pub fn summary(
 /// `live`, the state, its companion and `observed_at` come from a read of
 /// the Store where it lives, and the `live` section holds what that read
 /// found; with `stats`, the `stats` section holds its counters.
-pub fn get(home: &Path, events: &mut Events<'_>, store: &str, with: With) -> Outcome {
+pub fn get(
+    home: &Path,
+    events: &mut Events<'_>,
+    store: &str,
+    with: With,
+    machines: state::Machines,
+) -> Outcome {
     let record = StoreRecord::of(home, store)?;
     let (record, state, observed, live) = match with.live {
         true => {
-            let seen = crate::live::read(home, record)?;
+            let seen = crate::live::read(home, record, machines)?;
             (seen.record, seen.state, seen.observed, Some(seen.section))
         }
         false => {
-            let state = state::recorded(home, &record)?;
-            (record, state, observed::read(home, store), None)
+            let state = state::recorded(home, &record, machines)?;
+            (
+                record,
+                state,
+                observed::read(&paths::store_record(home, store)),
+                None,
+            )
         }
     };
     let mut answer = summary(home, &record, &state, observed)?;

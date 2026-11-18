@@ -17,7 +17,6 @@ use crate::record::{Placement, StoreRecord, StoreRef};
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::op::Standing;
 use layerfs_home::state::{Reason, State};
-use layerfs_machine::record::MachineRecord;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -27,24 +26,16 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// Absent while the Store was found well, or never read live.
 pub const SEEN: &str = "broken";
 
-/// A machine's state from its record alone.
+/// How a machine's records-only state is derived, handed in by the caller.
 ///
-/// **The seam with the machine family.** This is the single place the
-/// Store code derives a machine's records-only state, and it is the
-/// machine family's own derivation ([`MachineRecord::status`],
-/// [`layerfs_machine::state::unrecorded`]), so a Store's `blocked_by` says
-/// what `machine get` says. Two inputs that only `layerfs-control` has are
-/// left out: whether the record's platform was removed in 2.0 (the policy
-/// is behind the `machine` feature, which this crate's guest build lacks),
-/// so a removed platform's machine blocks its Stores by what its record
-/// says rather than as `unsupported`; and the Sandbox count, which only
-/// shapes an outdated worker's `fix`.
-pub fn machine_state(home: &Path, machine: &str) -> Result<State> {
-    Ok(match MachineRecord::read(home, machine)? {
-        Some(record) => record.status(false, 0),
-        None => layerfs_machine::state::unrecorded(machine),
-    })
-}
+/// **The seam with the machine family.** A Store on a machine is `blocked`
+/// by what that machine's state says. The one derivation of it is the
+/// inventory's `machine_state` in the control crate (over
+/// `layerfs_machine::state`, adding the removed-platform check), which
+/// this crate sits below; so every function here that needs a machine's
+/// state takes this, and the calls pass the control crate's
+/// `store::machine_state`.
+pub type Machines<'a> = &'a dyn Fn(&Path, &str) -> Result<State>;
 
 /// The state the record's operation gives the Store, if it holds one that
 /// still means something: `busy` with the operation, or `broken`
@@ -100,11 +91,12 @@ pub fn seen(record: &StoreRecord) -> Option<State> {
 }
 
 /// Store `record`'s state from the home's records, `under` being its
-/// machine's state when the caller already derived it (a list reads each
-/// machine once). A record this build cannot place is `broken`: a kind it
+/// machine's state for a sqlite Store on a machine (none for a PostgreSQL
+/// Store, which is on no machine; a sqlite Store given none is not
+/// blocked). A record this build cannot place is `broken`: a kind it
 /// does not read is `unsupported`, a sqlite Store whose machine a 1.1.0
 /// home did not tell is `missing`.
-pub fn recorded_under(home: &Path, record: &StoreRecord, under: Option<&State>) -> Result<State> {
+pub fn recorded_under(record: &StoreRecord, under: Option<&State>) -> Result<State> {
     if let Some(state) = held(record) {
         return Ok(state);
     }
@@ -118,11 +110,7 @@ pub fn recorded_under(home: &Path, record: &StoreRecord, under: Option<&State>) 
             machine: Placement::Machine(machine),
             ..
         }) => {
-            let blocked = match under {
-                Some(state) => state.blocks("machine", machine),
-                None => machine_state(home, machine)?.blocks("machine", machine),
-            };
-            if let Some(blocked) = blocked {
+            if let Some(blocked) = under.and_then(|state| state.blocks("machine", machine)) {
                 return Ok(blocked);
             }
         }
@@ -131,14 +119,29 @@ pub fn recorded_under(home: &Path, record: &StoreRecord, under: Option<&State>) 
     Ok(seen(record).unwrap_or(State::Ready))
 }
 
+/// The machine a sqlite Store's record places it on, if it names one.
+pub fn placed(record: &StoreRecord) -> Option<&str> {
+    match record.store_ref() {
+        Ok(StoreRef::Sqlite {
+            machine: Placement::Machine(machine),
+            ..
+        }) => Some(machine),
+        _ => None,
+    }
+}
+
 /// Store `record`'s state from the home's records: the one derivation
-/// every package uses for a Store.
-pub fn recorded(home: &Path, record: &StoreRecord) -> Result<State> {
-    recorded_under(home, record, None)
+/// every package uses for a Store, its machine's state from `machines`.
+pub fn recorded(home: &Path, record: &StoreRecord, machines: Machines) -> Result<State> {
+    let under = match placed(record) {
+        Some(machine) => Some(machines(home, machine)?),
+        None => None,
+    };
+    recorded_under(record, under.as_ref())
 }
 
 /// Store `store`'s records-only state by name; a bad name is
 /// `InvalidInput`, no record `NotFound`.
-pub fn of(home: &Path, store: &str) -> Result<State> {
-    recorded(home, &StoreRecord::of(home, store)?)
+pub fn of(home: &Path, store: &str, machines: Machines) -> Result<State> {
+    recorded(home, &StoreRecord::of(home, store)?, machines)
 }

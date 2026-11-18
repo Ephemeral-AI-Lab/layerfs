@@ -146,7 +146,13 @@ pub fn stats(home: &Path) -> Result<SdkValue, SdkRefusal> {
         live: false,
         stats: true,
     };
-    layerfs_store::get::get(home, &mut Events::new(&mut sink), "shop", with)
+    layerfs_store::get::get(
+        home,
+        &mut Events::new(&mut sink),
+        "shop",
+        with,
+        &layerfs_control::store::machine_state,
+    )
 }
 
 /// The record a caller sends of Store `shop`.

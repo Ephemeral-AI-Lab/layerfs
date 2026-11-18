@@ -70,5 +70,6 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         .map(MachineName::parse)
         .transpose()?;
     let machine = machine.as_ref().map(MachineName::as_str);
-    layerfs_store::list::list(&context.home, machine, context.with("stats"))
+    let machines = &layerfs_control::store::machine_state;
+    layerfs_store::list::list(&context.home, machine, context.with("stats"), machines)
 }

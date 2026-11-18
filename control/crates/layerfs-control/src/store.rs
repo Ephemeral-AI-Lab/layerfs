@@ -30,6 +30,15 @@ pub const RELATED: Related = Related {
     can_remove_project: inventory::can_remove_project,
 };
 
+/// A machine's records-only state as the Store reads take it
+/// ([`layerfs_store::state::Machines`]): the machine family's one
+/// derivation, [`inventory::machine_state`], so a Store's `blocked_by` says
+/// what `machine get` says of its machine.
+pub fn machine_state(home: &Path, name: &str) -> Result<layerfs_home::state::State, SdkRefusal> {
+    let record = layerfs_machine::record::MachineRecord::read(home, name)?;
+    inventory::machine_state(home, name, record.as_ref())
+}
+
 /// `store.remove`: a sqlite Store no Sandbox uses, with its file.
 pub fn remove(home: &Path, name: &StoreName) -> Outcome {
     layerfs_store::sqlite::family::remove(home, name, RELATED)

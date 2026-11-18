@@ -120,5 +120,6 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         stats: context.with("stats"),
     };
     let (home, events) = context.parts();
-    layerfs_store::get::get(home, events, store.as_str(), with)
+    let machines = &layerfs_control::store::machine_state;
+    layerfs_store::get::get(home, events, store.as_str(), with, machines)
 }

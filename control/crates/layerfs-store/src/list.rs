@@ -3,13 +3,13 @@
 //! machine's state is derived once for all its Stores. Nothing is probed
 //! unless `--with stats` asks for sizes.
 use crate::get::summary;
-use crate::observed;
 use crate::place;
 use crate::record::{Placement, StoreRecord, StoreRef};
 use crate::sqlite::family::step_on;
 use crate::sqlite::transfer::step::StoreStep;
 use crate::state;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::home::{observed, paths};
 use layerfs_home::outcome::Outcome;
 use layerfs_home::state::State;
 use std::collections::BTreeMap;
@@ -56,8 +56,8 @@ fn size(home: &Path, record: &StoreRecord, unanswered: &mut Vec<String>) -> SdkV
 /// `store.list`: every Store, or with `machine` only the sqlite Stores on
 /// that machine, each with its records-only state; with `stats`, each
 /// item's `size`.
-pub fn list(home: &Path, machine: Option<&str>, stats: bool) -> Outcome {
-    let mut machines: BTreeMap<String, State> = BTreeMap::new();
+pub fn list(home: &Path, machine: Option<&str>, stats: bool, machines: state::Machines) -> Outcome {
+    let mut derived: BTreeMap<String, State> = BTreeMap::new();
     let mut unanswered = Vec::new();
     let mut items = Vec::new();
     for record in crate::record::stores(home)? {
@@ -67,15 +67,15 @@ pub fn list(home: &Path, machine: Option<&str>, stats: bool) -> Outcome {
         }
         let under = match on {
             Some(on) => {
-                if !machines.contains_key(on) {
-                    machines.insert(on.to_owned(), state::machine_state(home, on)?);
+                if !derived.contains_key(on) {
+                    derived.insert(on.to_owned(), machines(home, on)?);
                 }
-                machines.get(on)
+                derived.get(on)
             }
             None => None,
         };
-        let state = state::recorded_under(home, &record, under)?;
-        let observed = observed::read(home, record.name());
+        let state = state::recorded_under(&record, under)?;
+        let observed = observed::read(&paths::store_record(home, record.name()));
         let mut item = summary(home, &record, &state, observed)?;
         if let (true, SdkValue::Map(fields)) = (stats, &mut item) {
             fields.push(("size".to_owned(), size(home, &record, &mut unanswered)));

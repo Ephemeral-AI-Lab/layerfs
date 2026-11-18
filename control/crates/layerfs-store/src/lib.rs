@@ -24,7 +24,6 @@ pub mod intent;
 pub mod lease;
 pub mod list;
 mod live;
-pub mod observed;
 #[doc(hidden)]
 pub mod open;
 pub mod open_args;

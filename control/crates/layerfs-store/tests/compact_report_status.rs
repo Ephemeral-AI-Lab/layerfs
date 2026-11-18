@@ -126,6 +126,21 @@ fn receipt() -> CompactReceipt {
     }
 }
 
+/// A machine's records-only state, as the Store reads take it: the machine
+/// family's derivation (`layerfs-control` passes the same, with the removed
+/// platform check this crate does not see).
+fn machines(
+    home: &Path,
+    name: &str,
+) -> Result<layerfs_home::state::State, layerfs_bridge::control::SdkRefusal> {
+    Ok(
+        match layerfs_machine::record::MachineRecord::read(home, name)? {
+            Some(record) => record.status(false, 0),
+            None => layerfs_machine::state::unrecorded(name),
+        },
+    )
+}
+
 /// `store get <s> --with live` against `home`.
 fn live(home: &Path) -> SdkValue {
     let mut sink = |_| {};
@@ -133,14 +148,14 @@ fn live(home: &Path) -> SdkValue {
         live: true,
         stats: false,
     };
-    layerfs_store::get::get(home, &mut Events::new(&mut sink), "s", with).unwrap()
+    layerfs_store::get::get(home, &mut Events::new(&mut sink), "s", with, &machines).unwrap()
 }
 
 /// `store get <s>` from the records alone.
 fn recorded(home: &Path) -> SdkValue {
     let mut sink = |_| {};
     let with = With::default();
-    layerfs_store::get::get(home, &mut Events::new(&mut sink), "s", with).unwrap()
+    layerfs_store::get::get(home, &mut Events::new(&mut sink), "s", with, &machines).unwrap()
 }
 
 #[test]

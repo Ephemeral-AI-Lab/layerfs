@@ -225,6 +225,21 @@ fn wait_gone(admin: &mut postgres::Client, pid: i32, start: &str) {
     panic!("the recorded owner backend never ended");
 }
 
+/// A machine's records-only state, as the Store reads take it: the machine
+/// family's derivation (`layerfs-control` passes the same, with the removed
+/// platform check this crate does not see).
+fn machines(
+    home: &Path,
+    name: &str,
+) -> Result<layerfs_home::state::State, layerfs_bridge::control::SdkRefusal> {
+    Ok(
+        match layerfs_machine::record::MachineRecord::read(home, name)? {
+            Some(record) => record.status(false, 0),
+            None => layerfs_machine::state::unrecorded(name),
+        },
+    )
+}
+
 /// The real control entry point: `store get pgs --with live` in `home`.
 fn status(home: &Path) -> SdkValue {
     let mut sink = |_| {};
@@ -232,7 +247,7 @@ fn status(home: &Path) -> SdkValue {
         live: true,
         stats: false,
     };
-    layerfs_store::get::get(home, &mut Events::new(&mut sink), "pgs", with).unwrap()
+    layerfs_store::get::get(home, &mut Events::new(&mut sink), "pgs", with, &machines).unwrap()
 }
 
 /// The `live` section's `phases`.
