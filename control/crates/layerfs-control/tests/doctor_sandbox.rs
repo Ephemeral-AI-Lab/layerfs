@@ -860,3 +860,26 @@ fn a_workspace_whose_list_was_not_asked_for_waits_on_its_sandbox_not_lost() {
     assert!(!format!("{report:?}").contains("\"lost\""), "{report:?}");
     std::fs::remove_dir_all(home).unwrap();
 }
+
+#[test]
+fn a_workspace_its_sandbox_did_not_observe_waits_on_that_sandbox() {
+    let home = home();
+    sandbox(&home, "native", local_record());
+    recorded(&home, &id(1), "agent");
+    // the `workspace` kind's own run, as the frame visits a Workspace its
+    // Sandbox's doctor made no node for: no probe is tried, nothing is lost
+    let report = doctor_own::own(&home, Kind::Workspace, "sb:agent", &Options::default());
+    let entry = (list(&report, "not_checked").iter())
+        .find(|entry| entry.get_text("workspace") == Some("sb:agent"))
+        .unwrap_or_else(|| panic!("{report:?}"));
+    assert_eq!(entry.get("reason"), Some(&SdkValue::Null), "{report:?}");
+    let by = entry
+        .get("blocked_by")
+        .unwrap_or_else(|| panic!("{report:?}"));
+    assert_eq!(by.get_text("sandbox"), Some("sb"), "{report:?}");
+    assert_eq!(by.get_text("reason"), Some("not_answering"), "{report:?}");
+    let tree = report.get("tree").unwrap();
+    assert_eq!(tree.get_text("status"), Some("not_checked"), "{report:?}");
+    assert!(!format!("{report:?}").contains("\"lost\""), "{report:?}");
+    std::fs::remove_dir_all(home).unwrap();
+}

@@ -177,14 +177,7 @@ fn node(sandbox: &str, seen: &Seen, listing: Listing) -> Node {
         Listing::NoVerdict(reason) => Some(reason),
         // nothing reached its daemon's list: no probe was tried, so nothing
         // was lost; it waits on its Sandbox
-        Listing::NotAsked => {
-            let by = BlockedBy {
-                thing: "sandbox",
-                handle: sandbox.to_owned(),
-                reason: "not_answering",
-            };
-            return Node::blocked(thing, by);
-        }
+        Listing::NotAsked => return waiting(thing, sandbox),
     };
     if let Some(reason) = reason {
         return unchecked(thing, reason);
@@ -250,8 +243,23 @@ fn unchecked(thing: Thing, reason: NoVerdict) -> Node {
     node
 }
 
+/// The node of a Workspace no probe was tried on: it waits on Sandbox
+/// `sandbox`, whose daemon's list did not reach it (`not_answering`).
+fn waiting(thing: Thing, sandbox: &str) -> Node {
+    let by = BlockedBy {
+        thing: "sandbox",
+        handle: sandbox.to_owned(),
+        reason: "not_answering",
+    };
+    Node::blocked(thing, by)
+}
+
 /// The `workspace` kind's own run: only its Sandbox's doctor observes a
-/// Workspace, so one it did not observe gave no verdict.
+/// Workspace (from its daemon's list), so one it did not observe was not
+/// tried here; it waits on that Sandbox, named before the `:` of its
+/// handle.
 pub(super) fn doctor(probe: &Probe<'_>, node: &mut Node) {
-    *node = unchecked(probe.thing.clone(), NoVerdict::Lost);
+    let name = probe.thing.name.as_str();
+    let sandbox = name.split_once(':').map_or(name, |(sandbox, _)| sandbox);
+    *node = waiting(probe.thing.clone(), sandbox);
 }
