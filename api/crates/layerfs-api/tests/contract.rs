@@ -1036,7 +1036,7 @@ fn home_log_and_clear_log_answer_in_their_rows_shapes() {
     for store in ["a", "b", "c"] {
         call(&home, "store.create", &[("name", SdkValue::text(store))]).unwrap();
     }
-    call(&home, "store.get", &[("name", SdkValue::text("nope"))]).unwrap_err();
+    call(&home, "store.get", &[("store", SdkValue::text("nope"))]).unwrap_err();
     let said = row(&spec, "home.log");
     let short = call(&home, "home.log", &[]).unwrap();
     let long = call(&home, "home.log", &[DETAIL]).unwrap();
@@ -1056,11 +1056,11 @@ fn home_log_and_clear_log_answer_in_their_rows_shapes() {
     assert_eq!(newest.get_text("call"), Some("store.get"));
     assert_eq!(newest.get_text("outcome"), Some("refused"));
     assert_eq!(newest.get_text("error"), Some("NotFound"));
-    // a call with no word of its own is `ok`: a record's own `kind` (the
-    // new Store's `sqlite`) is not what happened
+    // a migrated call's row carries the word its answer names as
+    // `outcome` (`store.create` answers `created`), never a record's `kind`
     let created = &list(at(&short, "items"))[1];
     assert_eq!(created.get_text("call"), Some("store.create"));
-    assert_eq!(created.get_text("outcome"), Some("ok"));
+    assert_eq!(created.get_text("outcome"), Some("created"));
     // pages: `limit` and the cursor of the page before
     let limit = ("limit", SdkValue::Int(2));
     let created = ("call", SdkValue::text("store.create"));

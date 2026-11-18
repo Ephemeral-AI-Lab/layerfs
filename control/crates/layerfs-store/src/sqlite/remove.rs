@@ -21,7 +21,7 @@ pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
     if let StoreRef::Postgres { .. } = store_ref {
         return Err(refused(
             "InvalidInput",
-            format!("Store {name} is a PostgreSQL database; `store disconnect` forgets it and keeps its data"),
+            format!("Store {name} is a PostgreSQL database; `layerfs store disconnect {name}` forgets it and keeps its data"),
         ));
     }
     let machine = store_ref.machine()?.to_owned();
@@ -29,7 +29,7 @@ pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
     if let Executor::Worker(worker) = &mut executor {
         worker.ready()?;
     }
-    // the copy an ended push or pull left on the other machine, if the
+    // the copy an ended move left on the other machine, if the
     // record names one: it goes too, and `op.args.leftover` records it so a
     // second `store.remove` finishes an interrupted one
     let left = crate::sqlite::transfer::resolve::leftover(&record);
@@ -48,7 +48,7 @@ pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
         fields.push(("leftover", SdkValue::text(&left.on)));
     }
     let args = fields_map(fields);
-    let mut op = Op::begin("store.remove", "check", args)?;
+    let mut op = Op::begin(crate::intent::REMOVE, "check", args)?;
     let previous = begin(home, name, &op, related, |record| {
         if record.machine()? != machine {
             return Err(refused(
@@ -67,7 +67,7 @@ pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
         }
         let previous = record.op();
         if previous.as_ref().map(Op::standing) == Some(Standing::Running) {
-            record.unblocked()?;
+            record.unheld()?;
         }
         Ok(previous.filter(|held| held.standing() == Standing::Unresolved))
     })?;
@@ -108,5 +108,8 @@ pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
     let _store = record::lock(home, name)?;
     std::fs::remove_dir_all(paths::store_dir(home, name)).map_err(failed)?;
     layerfs_home::home::generation::moved(home);
-    Ok(SdkValue::map([("removed", SdkValue::text(name))]))
+    Ok(SdkValue::map([
+        ("outcome", SdkValue::text("removed")),
+        ("store", SdkValue::text(name)),
+    ]))
 }

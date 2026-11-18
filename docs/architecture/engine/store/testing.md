@@ -73,7 +73,7 @@ tools/ci/test_store_ext4.sh --list
 | --- | --- | --- |
 | `layerfs-persistence` | `heads`, `sqlite_publication` | Branch heads and a publication round trip |
 | `layerfs-store-service` | `kernel_guard`, `commit_pipeline` | the guard admits a private ext4 directory and refuses tmpfs; a Commit pipeline |
-| `layerfs-store` | `create_directory`, `compact_report_status` | `store.create`'s directory ownership and guard refusal; the §11 report wire shape and the `store.status` compaction op |
+| `layerfs-store` | `create_directory`, `compact_report_status` | `store.create`'s directory ownership and guard refusal; the §11 report wire shape and the compaction op `store get --with live` reads |
 | `layerfs-api` | `store_family`, `calls_table`, `gc_calls`, `gc_trace` | the Store family and GC call tables, the four GC result shapes and the trace redaction |
 | `layerfs-cli` | `gc`, `sqlite_compact_process_kill` | the four GC commands and help; the real `layerfs store compact` process killed at the named failpoints (T-G65) |
 

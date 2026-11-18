@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod cursor;
 pub mod events;
 pub mod helpers;
 pub mod home;

@@ -1,6 +1,6 @@
 // The progress contract of the package (#37), by running it: which calls
 // take `on_progress`; what `project.init` reports in this process and
-// through a stand-in worker, and `store.push`/`store.pull` to that worker;
+// through a stand-in worker, and `store.move` to that worker and back;
 // that events arrive while the call runs, before it settles and not after;
 // and what a throwing handler does. Local Init needs no machine, daemon or
 // bucket. The worker half needs the repository's debug build
@@ -39,8 +39,8 @@ function folderOf(files) {
 
 const calling = (name) => table.filter((c) => c.options.some((o) => o.name === name && o.kind === "function")).map((c) => `${c.family}.${c.call}`);
 
-test("the table: nineteen calls take on_progress (five doctors) and one takes the exec sinks", () => {
-  assert.deepEqual(calling("on_progress"), ["home.doctor", "project.init", "project.export", "project.doctor", "sandbox.create", "sandbox.doctor", "workspace.exec", "machine.load_image", "machine.start", "machine.stop", "machine.create", "machine.remove", "machine.doctor", "store.push", "store.pull", "store.compact", "store.doctor", "backup.create", "backup.restore"]);
+test("the table: eighteen calls take on_progress (five doctors) and one takes the exec sinks", () => {
+  assert.deepEqual(calling("on_progress"), ["home.doctor", "project.init", "project.export", "project.doctor", "sandbox.create", "sandbox.doctor", "workspace.exec", "machine.load_image", "machine.start", "machine.stop", "machine.create", "machine.remove", "machine.doctor", "store.move", "store.compact", "store.doctor", "backup.create", "backup.restore"]);
   assert.deepEqual(calling("stdout"), ["workspace.exec"]);
   assert.deepEqual(calling("stderr"), ["workspace.exec"]);
   assert.equal(table.flatMap((c) => c.options).filter((o) => o.kind === "function").length, 19 + 2);
@@ -185,7 +185,7 @@ test("through a worker: push, pull and init report bytes per phase; null outside
     writeFileSync(join(home, "machine", "box", "worker.json"), JSON.stringify({ address: box.address, secret: "s3cret" }), { mode: 0o600 });
 
     const pushed = [];
-    await lfs.store.push("shop", "box", { on_progress: (p) => pushed.push(p) });
+    await lfs.store.move("shop", "box", { on_progress: (p) => pushed.push(p) });
     assert.deepEqual(pushed.map((p) => p.phase).filter((p, i, all) => all.indexOf(p) === i),
       ["check", "snapshot", "send", "verify", "install", "record", "retire"]);
 
@@ -195,16 +195,16 @@ test("through a worker: push, pull and init report bytes per phase; null outside
       ["check", "send", "install", "record"]);
 
     const pulled = [];
-    await lfs.store.pull("shop", { on_progress: (p) => pulled.push(p) });
+    await lfs.store.move("shop", "native", { on_progress: (p) => pulled.push(p) });
     assert.equal(pulled[0].phase, "check");
     assert.equal(pulled[pulled.length - 1].phase, "retire");
 
     // `snapshot` and `verify` count their own bytes in push and pull
     // (layerfs-project#8 hardening); Init through a worker counts its tree.
     for (const [name, events, counted] of [
-      ["store.push", pushed, ["snapshot", "send", "verify"]],
+      ["store.move to box", pushed, ["snapshot", "send", "verify"]],
       ["project.init", inited, ["send"]],
-      ["store.pull", pulled, ["snapshot", "send", "verify"]],
+      ["store.move to native", pulled, ["snapshot", "send", "verify"]],
     ]) {
       // one shape: exactly phase, done and total
       for (const p of events) assert.deepEqual(Object.keys(p).sort(), ["done", "phase", "total"], `${name}: ${JSON.stringify(p)}`);

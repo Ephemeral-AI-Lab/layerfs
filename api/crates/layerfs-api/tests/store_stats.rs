@@ -1,4 +1,5 @@
-//! Store statistics through native SQLite, a real worker, and PostgreSQL.
+//! Store statistics (`store get --with stats`, call surface 2.0; it was
+//! `store.stats`) through native SQLite, a real worker, and PostgreSQL.
 use layerfs_api::home::{paths, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
@@ -27,17 +28,39 @@ fn call(home: &Path, method: &str, fields: &[(&str, SdkValue)]) -> SdkValue {
         .unwrap_or_else(|r| panic!("{method}: {r:?}"))
 }
 fn check(home: &Path, kind: &str, test: &str) {
-    let stats = || call(home, "store.stats", &[("name", t("stats"))]);
+    let answer = || {
+        call(
+            home,
+            "store.get",
+            &[
+                ("store", t("stats")),
+                ("with", t("stats")),
+                ("detail", SdkValue::Bool(true)),
+            ],
+        )
+    };
+    let stats = || answer().get("stats").cloned().expect("the stats section");
+    assert_eq!(answer().get_text("engine"), Some(kind));
     let empty = stats();
-    assert_eq!(empty.get_text("kind"), Some(kind));
     // a previous project's bytes stay after its soft delete, so later runs
     // measure from the Store's current history
-    let base = empty.get_int("history_logical").unwrap();
+    let base = empty.get_int("logical_bytes").unwrap();
     assert_eq!(
-        empty.get("free") == Some(&SdkValue::Null),
+        empty.get("reusable_bytes") == Some(&SdkValue::Null),
         kind == "postgresql"
     );
-    assert!(empty.get("dedupe").is_none());
+    // the ratios are text with six decimals, or null with nothing to divide
+    for ratio in ["dedupe", "compression"] {
+        match empty.get(ratio) {
+            Some(SdkValue::Null) => {}
+            Some(SdkValue::Text(text)) => assert_eq!(text.split('.').nth(1).map(str::len), Some(6)),
+            other => panic!("{ratio}: {other:?}"),
+        }
+    }
+    assert!(
+        matches!(empty.get("size"), Some(SdkValue::Int(_))),
+        "{empty:?}"
+    );
     let name = format!("stats/{test}");
     let source = folder(&format!("input-{kind}-{test}"));
     std::fs::write(source.join("file"), "hello").unwrap();
@@ -50,17 +73,17 @@ fn check(home: &Path, kind: &str, test: &str) {
         ],
     );
     let initial = stats();
-    assert_eq!(initial.get_int("history_logical"), Some(base + 5));
-    assert!(initial.get_int("canonical").unwrap() > 0);
-    assert!(initial.get_int("stored").unwrap() > 0);
-    assert!(initial.get_int("file").unwrap() > 0);
+    assert_eq!(initial.get_int("logical_bytes"), Some(base + 5));
+    assert!(initial.get_int("canonical_bytes").unwrap() > 0);
+    assert!(initial.get_int("stored_bytes").unwrap() > 0);
+    assert!(initial.get_int("file_bytes").unwrap() > 0);
     call(
         home,
         "branch.fork",
         &[
             ("project", t(&name)),
             ("name", t("dev")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     call(
@@ -80,7 +103,7 @@ fn check(home: &Path, kind: &str, test: &str) {
     );
     let published = stats();
     assert_eq!(
-        published.get_int("history_logical"),
+        published.get_int("logical_bytes"),
         Some(base + 17),
         "Commit and Layer count their snapshots"
     );
@@ -89,9 +112,12 @@ fn check(home: &Path, kind: &str, test: &str) {
     // `store.compact` collects them and the counters do not drop.
     call(home, "project.delete", &[("project", t(&name))]);
     let removed = stats();
-    assert_eq!(removed.get_int("history_logical"), Some(base + 17));
-    assert_eq!(removed.get("canonical"), published.get("canonical"));
-    assert_eq!(removed.get("stored"), published.get("stored"));
+    assert_eq!(removed.get_int("logical_bytes"), Some(base + 17));
+    assert_eq!(
+        removed.get("canonical_bytes"),
+        published.get("canonical_bytes")
+    );
+    assert_eq!(removed.get("stored_bytes"), published.get("stored_bytes"));
     let gone = layerfs_api::call(
         Some(home),
         "project.get",
@@ -117,7 +143,11 @@ fn native_sqlite_and_worker_statistics_use_the_same_counters() {
     std::thread::spawn(move || layerfs_api::worker::serve(listener, "phase137".to_owned(), guest));
     write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("state", t("running")),
+        ]),
     )
     .unwrap();
     write_record(
@@ -127,8 +157,8 @@ fn native_sqlite_and_worker_statistics_use_the_same_counters() {
     .unwrap();
     call(
         &home,
-        "store.push",
-        &[("name", t("stats")), ("machine", t("box"))],
+        "store.move",
+        &[("store", t("stats")), ("machine", t("box"))],
     );
     check(&home, "sqlite", "w");
     // A stopped worker refuses rather than starting anything.
@@ -136,8 +166,8 @@ fn native_sqlite_and_worker_statistics_use_the_same_counters() {
     std::fs::remove_file(paths::worker_record(&home, "box")).unwrap();
     let refused = layerfs_api::call(
         Some(&home),
-        "store.stats",
-        SdkValue::map([("name", t("stats"))]),
+        "store.get",
+        SdkValue::map([("store", t("stats")), ("with", t("stats"))]),
         &mut |_| {},
     )
     .unwrap_err();

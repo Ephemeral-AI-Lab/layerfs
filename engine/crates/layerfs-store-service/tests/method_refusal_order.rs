@@ -202,7 +202,7 @@ fn a_short_identity_is_not_a_missing_branch() {
     });
     let listed = fixture.call("branch.list_commits", vec![("branch", t("main"))]);
     let id = support::items(&listed)[0]
-        .get_text("id")
+        .get_text("commit")
         .unwrap()
         .to_owned();
     fixture.call(
@@ -248,7 +248,7 @@ fn a_short_identity_is_not_a_missing_branch() {
     let r = refused(
         &fixture,
         "branch.list_commits",
-        vec![("branch", t("ghost")), ("pageSize", SdkValue::Int(0))],
+        vec![("branch", t("ghost")), ("limit", SdkValue::Int(0))],
     );
     assert_eq!(r.code, "NoSuchBranch");
     fixture.cleanup();

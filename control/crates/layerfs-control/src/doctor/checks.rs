@@ -47,7 +47,8 @@ fn check_scope(
         let entity = ("store", name);
         let op = store.op();
         if let Some(op) = &op {
-            intent(entity, op, &clear_store(op, name), findings);
+            let clear = layerfs_store::record::clearing_call(op, name);
+            intent(entity, op, &format!("layerfs {clear}"), findings);
         }
         match store.store_ref() {
             Err(refusal) => findings.error(
@@ -184,18 +185,6 @@ fn intent(entity: (&str, &str), op: &Op, clear: &str, findings: &mut Findings) {
             format!("{kind} {name} has an unresolved {what}: its outcome is not known"),
             clear.to_owned(),
         );
-    }
-}
-
-/// The 2.0 call that clears Store `name`'s unresolved `op`: a move by the
-/// same move (`store.push` to its target, `store.pull` to `native`), a
-/// compaction by the next compaction, anything else by `store remove`.
-fn clear_store(op: &Op, name: &str) -> String {
-    match (op.name(), op.args().get_text("to")) {
-        ("store.push", Some(to)) => format!("layerfs store move {name} {to}"),
-        ("store.pull", _) => format!("layerfs store move {name} native"),
-        ("store.compact", _) => format!("layerfs store compact {name}"),
-        _ => format!("layerfs store remove {name}"),
     }
 }
 

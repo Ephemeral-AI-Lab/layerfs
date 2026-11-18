@@ -149,7 +149,7 @@ fn exec_ids_records_and_cancel_on_native() {
         &[
             ("project", t("shop/api")),
             ("name", t("dev")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     let sandbox = [
@@ -461,7 +461,7 @@ fn two_commands_run_at_once_in_one_workspace_on_native() {
         &[
             ("project", t("shop/api")),
             ("name", t("dev")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     let sandbox = [
@@ -569,7 +569,7 @@ fn forced_native_machine_stop_cancels_running_commands() {
         &[
             ("project", t("shop/api")),
             ("name", t("dev")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     let sandbox = [

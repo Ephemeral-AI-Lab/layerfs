@@ -79,7 +79,7 @@ fn work(home: &Path, project: &str, sandbox: &str, branch: &str, file: &str) {
         &[
             ("project", t(project)),
             ("name", t(branch)),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     let mounted = ok(
@@ -445,8 +445,8 @@ fn a_sqlite_store_s_sandbox_on_the_docker_machine() {
         ok(&home, "machine.start", &[("name", t("docker"))]);
         let moved = ok(
             &home,
-            "store.push",
-            &[("name", t("shop")), ("machine", t("docker"))],
+            "store.move",
+            &[("store", t("shop")), ("machine", t("docker"))],
         );
         assert_eq!(moved.get_text("to"), Some("docker"), "{moved:?}");
         let created = ok(
@@ -505,8 +505,8 @@ fn a_sqlite_store_s_sandbox_on_each_running_vm_machine() {
         ok(&home, "store.create", &[("name", t(&store))]);
         let moved = ok(
             &home,
-            "store.push",
-            &[("name", t(&store)), ("machine", t(machine))],
+            "store.move",
+            &[("store", t(&store)), ("machine", t(machine))],
         );
         assert_eq!(moved.get_text("to"), Some(machine), "{moved:?}");
         // Init through the machine's worker, where the Store now is
@@ -536,7 +536,7 @@ fn a_sqlite_store_s_sandbox_on_each_running_vm_machine() {
         assert_eq!(created.get_text("machine"), Some(machine), "{created:?}");
         work(&home, &project, &store, "on-vm", "vm.txt");
         ok(&home, "sandbox.close", &[("name", t(&store))]);
-        ok(&home, "store.remove", &[("name", t(&store))]);
+        ok(&home, "store.remove", &[("store", t(&store))]);
         std::fs::remove_dir_all(&folder).unwrap();
         eprintln!("RAN on {machine}: {created:?}");
     }

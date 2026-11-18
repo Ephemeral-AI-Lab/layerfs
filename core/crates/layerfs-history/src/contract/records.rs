@@ -397,7 +397,7 @@ pub struct AddLayerRequest {
     pub stack: LayerStackId,
     /// Branch that published the Commit.
     pub branch: BranchId,
-    /// Selected source Commit.
+    /// Selected source Commit: the Branch's head or one its head holds.
     pub commit: CommitId,
     /// Stack head the caller expects.
     pub expected_stack_head: LayerId,

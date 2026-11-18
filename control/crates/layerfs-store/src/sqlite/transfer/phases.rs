@@ -1,9 +1,11 @@
-//! `store.push` and `store.pull` (#536 §7.3, H1): a sqlite Store's file
-//! between `native` and a machine, one phase at a time (check, snapshot,
-//! send, verify, install, record, retire). A push sends it from `native`
-//! to a machine's worker, a pull from its machine's worker to `native`:
-//! the phases are the same, only the sides swap. Between two machines the
-//! caller pulls, then pushes; each half is its own operation.
+//! `store.move` (#536 §7.3, H1; call surface 2.0): a sqlite Store's file
+//! between this computer (`native`) and a machine, one phase at a time
+//! (check, snapshot, send, verify, install, record, retire). It goes to or
+//! from this computer only (C13): to a machine's worker from `native`, or
+//! from its machine's worker to `native`; the phases are the same, only
+//! the sides swap. Between two other machines it is refused, naming the
+//! move to `native` that comes first.
+use crate::intent;
 use crate::place::{self, Executor};
 use crate::record::{self, StoreRecord};
 use crate::sqlite::family::{
@@ -17,13 +19,13 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, with_field};
 use layerfs_home::op::{self, Op};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::outcome::{refused, with_fix, Outcome};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// `store.push`: the Store's file from `native` to machine `to`.
-pub fn push(
+/// `store.move`: the Store's file from the machine that holds it to `to`.
+pub fn move_to(
     home: &Path,
     events: &mut Events<'_>,
     name: &str,
@@ -31,38 +33,24 @@ pub fn push(
     related: Related,
 ) -> Outcome {
     layerfs_home::names::MachineName::parse(to)?;
-    transfer(home, events, name, Some(to), related)
+    transfer(home, events, name, to, related)
 }
 
-/// `store.pull`: the Store's file from its machine to `native`.
-pub fn pull(home: &Path, events: &mut Events<'_>, name: &str, related: Related) -> Outcome {
-    transfer(home, events, name, None, related)
-}
-
-/// Where the Store goes from and to: a push (`to` named) from `native`, a
-/// pull from the machine its record names.
-fn sides(home: &Path, record: &StoreRecord, to: Option<&str>) -> Result<(String, String)> {
-    match to {
-        Some(to) => {
-            super::resolve::can_push(home, record, to)?;
-            Ok(("native".to_owned(), to.to_owned()))
-        }
-        None => Ok((super::resolve::can_pull(record)?, "native".to_owned())),
-    }
+/// Where the Store goes from and to: from the machine its record names to
+/// `to`, one of the two being this computer.
+fn sides(home: &Path, record: &StoreRecord, to: &str) -> Result<(String, String)> {
+    Ok((super::resolve::can_move(home, record, to)?, to.to_owned()))
 }
 
 fn transfer(
     home: &Path,
     events: &mut Events<'_>,
     name: &str,
-    target: Option<&str>,
+    target: &str,
     related: Related,
 ) -> Outcome {
     let home = home.to_path_buf();
-    let call = match target {
-        Some(_) => "store.push",
-        None => "store.pull",
-    };
+    let call = intent::MOVE;
     let mut written = None;
     let result = run(&home, events, name, target, call, &mut written, related);
     if let (Err((phase, refusal)), Some(op)) = (&result, &written) {
@@ -71,18 +59,18 @@ fn transfer(
         // failure put nothing in place; past record the Store is on `to`,
         // and a retire that did not finish leaves `last_transfer` saying so
         let uncertain = *phase != "retire" && (refusal.code == "Unknown" || *phase == "record");
-        // a push that failed certain at `send`, `verify` or `install` keeps
-        // its target's partial copy and drops the intent that named that
-        // machine: the record keeps the machine instead, so the doctor reports
-        // the copy and `store.remove` deletes it there (§7.3, P6)
-        if !uncertain && call == "store.push" && matches!(*phase, "send" | "verify" | "install") {
-            if let Some(to) = op.args().get_text("to") {
+        // a move to a machine that failed certain at `send`, `verify` or
+        // `install` keeps its target's partial copy and drops the intent that
+        // named that machine: the record keeps the machine instead, so the
+        // doctor reports the copy and `store.remove` deletes it there (§7.3, P6)
+        if !uncertain && matches!(*phase, "send" | "verify" | "install") {
+            if let Some(to) = op.args().get_text("to").filter(|to| *to != "native") {
                 let _ = note_incoming(&home, name, to);
             }
         }
         ended(&home, name, op, phase, refusal, uncertain, None);
     }
-    let verb = call.replace('.', " ");
+    let verb = "store move";
     result.map_err(|(phase, mut refusal)| {
         // past record the Store is on `to`: a retire that did not finish
         // says which machine now holds it and which copy stayed
@@ -113,7 +101,7 @@ fn run(
     home: &Path,
     events: &mut Events<'_>,
     name: &str,
-    target: Option<&str>,
+    target: &str,
     call: &str,
     written: &mut Option<Op>,
     related: Related,
@@ -123,13 +111,13 @@ fn run(
     // machines, the target's file and its free disk; the side again under
     // the locks, where `op` is written
     progress(events, "check", None);
-    // first the copy an ended push or pull left, which this call clears
+    // first the copy an ended move left, which this call clears
     at(
         "check",
-        super::resolve::resolve(&home, name, call, target, related),
+        super::resolve::resolve(&home, name, target, related),
     )?;
     let record = at("check", record_of(&home, name))?;
-    at("check", record.unblocked())?;
+    at("check", record.unheld())?;
     let (from, to) = at("check", sides(&home, &record, target))?;
     // what holds the Store is refused before any machine is reached
     at("check", held_now(&home, name, related))?;
@@ -137,7 +125,7 @@ fn run(
     let args = SdkValue::map([("from", SdkValue::text(&from)), ("to", SdkValue::text(&to))]);
     let op = at("check", Op::begin(call, "check", args))?;
     let begun = begin(&home, name, &op, related, |record| {
-        record.unblocked()?;
+        record.unheld()?;
         if sides(&home, record, target)? != (from.clone(), to.clone()) {
             return Err(refused(
                 "Conflict",
@@ -174,13 +162,14 @@ pub const HEADROOM: u64 = 1 << 30;
 /// Both machines' executors, once each answers: the target holds no Store
 /// file named `name` and has the Store's bytes (with its write-ahead log)
 /// plus [`HEADROOM`] free (#536 §7.3, §11 item 7). A stopped machine is
-/// `Unavailable`, naming `layerfs machine start` (#535 D11).
+/// `Unavailable`, with `layerfs machine start` as its fix (#535 D11).
 fn reach(home: &Path, name: &str, from: &str, to: &str) -> Result<(Executor, Executor)> {
     let mut source = place::on_machine(home, from)?;
     let mut target = place::on_machine(home, to)?;
-    for executor in [&mut source, &mut target] {
+    for (machine, executor) in [(from, &mut source), (to, &mut target)] {
         if let Executor::Worker(worker) = executor {
-            worker.ready()?;
+            let start = format!("layerfs machine start {machine}");
+            worker.ready().map_err(|refusal| with_fix(refusal, start))?;
         }
     }
     let held = step_on(home, &mut source, name, StoreStep::Stat)?;
@@ -319,7 +308,7 @@ fn phases(
     // install puts the target's copy in place, which no step undoes with
     // certainty: from here until the record names the target a crash leaves
     // both copies, so the intent is written uncertain before it (H4–H6); the
-    // next push or pull deletes the copy the record does not name
+    // next move deletes the copy the record does not name
     *op = op.clone().as_uncertain();
     enter(&home, events, op, name, "install", None)?;
     at(
@@ -335,7 +324,7 @@ fn phases(
     // record: the Store is on `to` from here on. The same write records
     // that the source's copy is not yet retired and keeps `op`, certain, at
     // retire while it is: a retire that does not finish leaves a Store in
-    // use on `to` and a copy the next push or pull deletes first
+    // use on `to` and a copy the next move deletes first
     enter(&home, events, op, name, "record", None)?;
     let last = SdkValue::map([
         ("call", SdkValue::text(op.name())),
@@ -381,10 +370,14 @@ fn phases(
     )?;
     at("retire", retired(&home, name, op.id()))?;
     Ok(SdkValue::map([
+        ("moved_bytes", SdkValue::Int(total as i64)),
+        ("outcome", SdkValue::text("moved")),
         ("store", SdkValue::text(name)),
         ("from", SdkValue::text(from)),
         ("to", SdkValue::text(to)),
-        ("bytes", SdkValue::Int(total as i64)),
-        ("heads", snapshot.get("heads").cloned().unwrap_or_default()),
+        (
+            "heads_sha256",
+            snapshot.get("heads").cloned().unwrap_or_default(),
+        ),
     ]))
 }

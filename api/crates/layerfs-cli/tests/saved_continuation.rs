@@ -51,64 +51,48 @@ fn check(home: &Path, source: &Path) {
     }
     let saved = call(home, &["project", "stats", "q/p", "dev"]);
     let commit = saved.get("at").unwrap().get_text("id").unwrap();
-    let changed = call(
-        home,
-        &["commit", "diff", "q/p", layer, commit, "--paths-only"],
-    );
+    // `commit` (dev's head, the third write) from `layer`; by default from
+    // its parent, which lacks only the last write
+    let changed = call(home, &["commit", "diff", "q/p", commit, "--from", layer]);
     assert_eq!(items(&changed).len(), 3);
-    let query = [
-        "branch",
-        "diff",
-        "q/p",
-        "main",
-        "dev",
-        "--from-commit",
-        layer,
-        "--to-commit",
-        commit,
-        "--page-size",
-        "1",
-        "--paths-only",
-    ];
+    let parent = call(home, &["commit", "diff", "q/p", commit]);
+    assert_eq!(items(&parent).len(), 1);
+    assert_eq!(items(&parent)[0].get_text("path"), Some("/c"));
+    // one path a page; each next page in a new process, by the cursor
+    let query = ["commit", "diff", "q/p", "dev", "--limit", "1"];
     let first = call(home, &query);
-    let token = first.get_text("continuation").unwrap();
-    let second = call(home, &[&query[..], &["--continuation", token]].concat());
-    assert_eq!(second.get_int("page"), Some(2));
+    let token = first.get_text("next_cursor").unwrap();
+    let second = call(home, &[&query[..], &["--cursor", token]].concat());
     assert_ne!(items(&first)[0].get("path"), items(&second)[0].get("path"));
     let third = call(
         home,
         &[
             &query[..],
-            &["--continuation", second.get_text("continuation").unwrap()],
+            &["--cursor", second.get_text("next_cursor").unwrap()],
         ]
         .concat(),
     );
-    assert_eq!(third.get_int("page"), Some(3));
-    assert!(!third.get_bool("has_more"));
-    assert_eq!(third.get("continuation"), Some(&SdkValue::Null));
+    assert_eq!(items(&third).len(), 1);
+    assert_eq!(third.get("next_cursor"), None);
+    // a cursor given other filters, or altered, is refused
     invalid(
         home,
-        &[
-            &query[..],
-            &["--continuation", token, "--path-prefix", "/a"],
-        ]
-        .concat(),
+        &[&query[..], &["--cursor", token, "--path", "/a"]].concat(),
     );
     invalid(
         home,
-        &[&query[..], &["--continuation", token, "--page", "9"]].concat(),
+        &[&query[..], &["--cursor", token, "--from", "main"]].concat(),
     );
     let mut altered = token.to_owned();
-    let tail = altered.pop().unwrap();
-    altered.push(if tail == '0' { '1' } else { '0' });
-    invalid(home, &[&query[..], &["--continuation", &altered]].concat());
+    altered.insert(0, '!');
+    invalid(home, &[&query[..], &["--cursor", &altered]].concat());
     call(home, &["branch", "publish", "q/p", "dev"]);
     let published = call(home, &["project", "stats", "q/p"]);
     let new_layer = published.get("at").unwrap().get_text("id").unwrap();
     assert_eq!(
         items(&call(
             home,
-            &["commit", "diff", "q/p", layer, new_layer, "--paths-only"]
+            &["commit", "diff", "q/p", new_layer, "--from", layer]
         ))
         .len(),
         3
