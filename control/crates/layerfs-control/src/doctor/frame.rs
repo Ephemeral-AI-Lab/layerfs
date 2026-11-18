@@ -4,8 +4,9 @@
 //! Each thing runs under its own time budget and sends one progress event
 //! when it is finished: `{ phase, done, total, node }`, `phase` `self` for
 //! the named thing, else the list word of the kind being checked, `done`
-//! and `total` counting things (the total is known from records before the
-//! first check). A parent that failed or is stopped blocks what is on it:
+//! and `total` counting things (the total is known from records, and from
+//! what the named thing's own check listed, before the first thing on it is
+//! checked). A parent that failed or is stopped blocks what is on it:
 //! those things are not tried, each one `not_checked` with `blocked_by`
 //! naming the root of the block. Nothing is retried.
 //!
@@ -94,7 +95,9 @@ pub struct KindDoctor {
     /// The time budget of one thing of the kind.
     pub budget: Duration,
     /// Makes the checks of one thing into its node: its rows, findings and
-    /// `not_checked` entries, and in `gate` what blocks the things on it.
+    /// `not_checked` entries, in `gate` what blocks the things on it, and in
+    /// `children` the nodes of things on it its own check observed (kept
+    /// only when it is the named thing).
     pub run: fn(&Probe<'_>, &mut Node),
 }
 
@@ -146,7 +149,6 @@ pub fn run_with(
     events: &mut Events<'_>,
 ) -> Result<Report, SdkRefusal> {
     let located = (registry.locate)(home, &root)?;
-    let total = 1 + located.children.len();
     let mut tree = visit(
         registry,
         home,
@@ -155,12 +157,25 @@ pub fn run_with(
         (&located.state, located.blocked.as_ref()),
         options,
     );
+    // a kind whose own check observes what is on its thing (a Sandbox's
+    // daemon lists its Workspaces) makes their nodes itself: those join
+    // the recorded ones, and are not checked again
+    let mut made = std::mem::take(&mut tree.children);
+    let mut children = located.children;
+    for node in &made {
+        if !children.iter().any(|(thing, _)| *thing == node.thing) {
+            children.push((node.thing.clone(), State::Ready));
+        }
+    }
+    let total = 1 + children.len();
     finished(events, "self", 1, total, &tree);
-    for (at, (child, state)) in located.children.into_iter().enumerate() {
+    for (at, (child, state)) in children.into_iter().enumerate() {
         let phase = child.kind.list();
-        let node = match &tree.gate {
-            Some(by) => Node::blocked(child, by.clone()),
-            None => visit(registry, home, &child, false, (&state, None), options),
+        let found = made.iter().position(|node| node.thing == child);
+        let node = match (&tree.gate, found) {
+            (Some(by), _) => Node::blocked(child, by.clone()),
+            (None, Some(at)) => made.swap_remove(at),
+            (None, None) => visit(registry, home, &child, false, (&state, None), options),
         };
         finished(events, phase, at + 2, total, &node);
         tree.children.push(node);

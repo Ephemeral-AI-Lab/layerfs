@@ -1,18 +1,19 @@
 //! The real kinds of the doctor frame: each kind's list of the check ids
-//! its checks give today, in the order they run, and the function that runs
-//! today's checks of one thing into its node. Ids not renamed to the frozen
-//! lists yet keep today's names (`host.*`, `backup.*`, …); the per-kind
-//! packages rename them, and a test compares every list with the frozen
-//! one through a pending list.
+//! its checks give, in the order they run, and the function that runs the
+//! checks of one thing into its node. The home's and a machine's lists are
+//! the frozen ones (`calls.json` `doctor.checks`); ids of kinds not renamed
+//! yet keep today's names (`backup.*`, …); the per-kind packages rename
+//! them, and a test compares every list with the frozen one through a
+//! pending list.
 //!
 //! Where things are comes from the home's records (`home_tree`): what is on
-//! a thing and its recorded state. A machine whose records say it is
-//! stopped gets only its records checks, and blocks what is on it; a
-//! machine whose provider or worker fails its check blocks what is on it
-//! with that reason.
+//! a thing and its recorded state. A machine blocks what is on it with what
+//! its own checks found (stopped, `engine_down`, `missing`, `failed`,
+//! `not_answering`, `outdated`, `busy`, `unresolved`, `unsupported`), else
+//! with what its records say when its checks gave no verdict.
 use super::frame::{CheckId, KindDoctor, Located, Probe, Registry};
 use super::report::{Kind, Node, Thing};
-use super::target::{Budget, Checks};
+use super::target::Checks;
 use crate::home_tree;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{detect, Layout};
@@ -32,27 +33,24 @@ const fn full(id: &'static str) -> CheckId {
     CheckId::full(id)
 }
 
-/// The home's checks, today's `host` target.
+/// The home's checks.
 const HOME: &[CheckId] = &[
-    own("host.build"),
-    own("host.prerequisites"),
-    own("host.bundle"),
-    own("host.native_daemon"),
-    own("host.capacity"),
-    own("host.layout"),
-    own("host.records"),
-    own("host.artifacts"),
+    own("home.build"),
+    own("home.prerequisites"),
+    own("home.layout"),
+    own("home.records"),
+    own("home.bundle"),
+    own("home.native_daemon"),
+    own("home.artifacts"),
+    own("home.capacity"),
 ];
 
 /// A machine's checks.
 const MACHINE: &[CheckId] = &[
     own("machine.record"),
-    own("machine.platform"),
     own("machine.operation"),
-    own("machine.home"),
     own("machine.configuration"),
     own("machine.provider"),
-    own("machine.provider.tool_version"),
     own("machine.state"),
     own("machine.worker.endpoint"),
     own("machine.worker.auth"),
@@ -61,25 +59,11 @@ const MACHINE: &[CheckId] = &[
     own("machine.capacity"),
 ];
 
-/// The checks that need a machine running: none is made on a machine its
-/// records say is stopped.
-const MACHINE_LIVE: &[&str] = &[
-    "machine.provider",
-    "machine.provider.tool_version",
-    "machine.state",
-    "machine.worker",
-    "machine.worker.endpoint",
-    "machine.worker.auth",
-    "machine.worker.compatibility",
-    "machine.worker.ping",
-    "machine.capacity",
-];
-
 /// A project's checks: its record, and its record against the Store's own
 /// list (the comparison `project.get` makes).
 const PROJECT: &[CheckId] = &[own("project.record"), own("project.listed")];
 
-/// A Sandbox's checks.
+/// A Sandbox's checks; its Workspaces' are `workspace_target::CHECKS`.
 const SANDBOX: &[CheckId] = &[
     own("sandbox.record"),
     own("sandbox.machine_reference"),
@@ -91,15 +75,11 @@ const SANDBOX: &[CheckId] = &[
     own("sandbox.route"),
     own("sandbox.forward_process"),
     own("sandbox.worker_compatibility"),
-    own("sandbox.worker_report"),
     own("sandbox.daemon_keys"),
-    own("sandbox.daemon"),
     own("sandbox.daemon_connect"),
     own("sandbox.daemon_auth"),
     own("sandbox.daemon_instance"),
     own("sandbox.daemon_ready"),
-    own("sandbox.workspaces"),
-    own("sandbox.workspace_retained"),
     own("sandbox.session"),
     own("sandbox.observation"),
 ];
@@ -118,8 +98,8 @@ const BUCKET: &[CheckId] = &[
     full("backup.reconcile"),
 ];
 
-/// The real kinds. A Workspace has no checks of its own yet: its Sandbox's
-/// `sandbox.workspaces` covers the daemon's whole list.
+/// The real kinds. A Workspace has no doctor of its own: its Sandbox's
+/// doctor makes its node from the daemon's list.
 pub(super) static KINDS: [KindDoctor; 7] = [
     KindDoctor {
         kind: Kind::Home,
@@ -149,13 +129,13 @@ pub(super) static KINDS: [KindDoctor; 7] = [
         kind: Kind::Sandbox,
         checks: SANDBOX,
         budget: Duration::from_secs(30),
-        run: sandbox,
+        run: super::sandbox_target::doctor,
     },
     KindDoctor {
         kind: Kind::Workspace,
-        checks: &[],
+        checks: super::workspace_target::CHECKS,
         budget: Duration::from_secs(10),
-        run: |_, _| {},
+        run: super::workspace_target::doctor,
     },
     KindDoctor {
         kind: Kind::Bucket,
@@ -194,57 +174,22 @@ fn home(probe: &Probe<'_>, node: &mut Node) {
 fn machine(probe: &Probe<'_>, node: &mut Node) {
     let name = probe.thing.name.as_str();
     let mut checks = Checks::new("machine", name);
-    if *probe.state == State::Stopped {
-        // its records checks alone: the target stops before its first live
-        // probe once its budget is spent, and what needs it running does
-        // not apply
-        let spent = Budget::new(Some(Duration::ZERO));
-        super::machine_target::diagnose(probe.home, name, &spent, &mut checks);
-        checks.forget(MACHINE_LIVE);
-    } else {
-        super::machine_target::diagnose(probe.home, name, probe.budget, &mut checks);
-    }
+    let found = super::machine_target::diagnose(probe.home, name, probe.budget, &mut checks);
     checks.fill(node, probe.checks, probe.budget.expired());
-    if node.gate.is_none() {
-        node.gate = blocker(probe.state, "machine", name).or_else(|| failed(&checks, name));
-    }
-}
-
-/// What a machine's failed live check blocks on it: a provider that does
-/// not run it, a worker from another build, or one that does not answer.
-fn failed(checks: &Checks, name: &str) -> Option<BlockedBy> {
-    let reason = match checks.outcome("machine.provider") {
-        Some(("fail", Some("warning"))) => Some("stopped"),
-        Some(("fail", _)) => Some(match checks.evidence_of("machine.provider") {
-            Some(evidence) if evidence.get_text("state") == Some("missing") => "missing",
-            Some(evidence) if evidence.get_text("state") == Some("failed") => "failed",
-            _ => "not_answering",
+    // what its own checks found blocks what is on it (a machine they found
+    // ready blocks nothing); when they gave no verdict, its records say
+    let gate = match found {
+        Ok(()) => None,
+        Err(Some(reason)) => Some(BlockedBy {
+            thing: "machine",
+            handle: name.to_owned(),
+            reason,
         }),
-        Some(("unknown", _)) => Some("not_answering"),
-        _ => None,
+        Err(None) => blocker(probe.state, "machine", name),
     };
-    let worker = |id: &str| matches!(checks.outcome(id), Some(("fail" | "unknown", _)));
-    let reason = reason.or_else(|| {
-        if worker("machine.worker.compatibility") {
-            Some("outdated")
-        } else if [
-            "machine.worker.endpoint",
-            "machine.worker.auth",
-            "machine.worker.ping",
-        ]
-        .iter()
-        .any(|id| worker(id))
-        {
-            Some("not_answering")
-        } else {
-            None
-        }
-    })?;
-    Some(BlockedBy {
-        thing: "machine",
-        handle: name.to_owned(),
-        reason,
-    })
+    if node.gate.is_none() {
+        node.gate = gate;
+    }
 }
 
 fn project(probe: &Probe<'_>, node: &mut Node) {
@@ -313,29 +258,6 @@ fn listed(probe: &Probe<'_>, handle: &str, store: &str, checks: &mut Checks) {
         Err(refusal) if refusal.code == "Busy" => checks.busy(ID, refusal.message),
         Err(refusal) => checks.unknown(ID, refusal.message),
     }
-}
-
-fn sandbox(probe: &Probe<'_>, node: &mut Node) {
-    if let Some(by) = probe.blocked {
-        *node = Node::blocked(probe.thing.clone(), by.clone());
-        return;
-    }
-    let name = probe.thing.name.as_str();
-    let mut checks = Checks::new("sandbox", name);
-    super::sandbox_target::diagnose(probe.home, name, probe.budget, &mut checks);
-    // a worker's report may name a check this build does not know: its
-    // report is not one this build reads
-    let strange = checks.unlisted(probe.checks);
-    if !strange.is_empty() {
-        let names: Vec<&str> = strange.iter().map(String::as_str).collect();
-        checks.forget(&names);
-        let message = format!(
-            "the worker reported checks this build does not know: {}",
-            names.join(", ")
-        );
-        checks.unknown("sandbox.worker_report", message);
-    }
-    checks.fill(node, probe.checks, probe.budget.expired());
 }
 
 fn bucket(probe: &Probe<'_>, node: &mut Node) {
@@ -491,8 +413,9 @@ fn locate(home: &Path, thing: &Thing) -> Result<Located, SdkRefusal> {
                 .iter()
                 .flat_map(|m| list(m.get("sandboxes")).iter());
             let node = placed.find(|s| named(s, "sandbox")).ok_or_else(missing)?;
-            // its Workspaces are not checked one by one yet
-            at(state_of(node), Vec::new())
+            // the Workspaces the home records; its doctor adds those its
+            // daemon lists
+            at(state_of(node), things(node, "workspaces", Kind::Workspace))
         }
         Kind::Bucket => {
             let found = list(tree.get("buckets"))

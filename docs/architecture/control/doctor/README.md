@@ -115,22 +115,46 @@ blocks the checks after it.
 
 ### Sandbox
 
-The saved route is followed without `sandbox.get`, deployment, Store open,
-lease, record refresh, new forward or lifecycle change.
+`sandbox doctor` follows the saved route without `sandbox.get`, deployment,
+Store open, lease, record refresh, new forward or lifecycle change, in the
+17 frozen checks' order. Its records checks always run. A machine that is
+not ready keeps every live check from being made: the Sandbox is one
+`not_checked` entry with `blocked_by` its machine (and its node `coverage`
+`none`). A running owner's operation is one with `reason` `busy`. Each live
+check runs only when the one it needs did not fail; one that cannot apply
+is left out. A failed check's `fix` is `layerfs sandbox remove <sandbox>`.
+The Sandbox's records state comes from one function in `sandbox_target.rs`
+(`recorded_state`), the place to switch to the Sandbox entity's own state.
 
 | Check | What is observed | Source |
 | --- | --- | --- |
-| `sandbox.record`, `.store_reference`, `.project_reference`, `.machine_reference`, `.store_placement` | Record and the records it names; a SQLite Store must be on the Sandbox's machine | [`sandbox_target.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_target.rs) |
-| `sandbox.operation` | Live owner `pass`; ended owner's certain or uncertain `op` `warning` | [`sandbox_target.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_target.rs) |
-| `sandbox.runtime`, `.forward_process` | Native or namespaces daemon/init process, or a forward's carrier, matched by pid, start time and boot; never by pid alone | [`sandbox_runtime.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_runtime.rs) |
-| `sandbox.route`, `.worker_compatibility`, `.worker_report` | Native: direct. Forward: the machine's `worker.json` must exist; no worker call. Other machines: one `doctor.sandbox` request to an authenticated compatible worker, whose checks are merged | [`sandbox_target.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_target.rs) |
-| `sandbox.daemon_keys`, `.daemon_connect`, `.daemon_auth`, `.daemon_instance`, `.daemon_ready` | Saved loopback endpoint and 32-byte keys; authenticated channel; `Hello` without waiting for startup must name the saved instance and `ControlReady` | [`sandbox_channel.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_channel.rs) |
-| `sandbox.workspaces`, `.workspace_retained` | `sandbox.doctor_workspaces` pages of at most 32 rows under a generation; counts, mounted, activities and up to 16 failed or uncertain examples | [`sandbox_channel.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_channel.rs), [`diagnostic.rs`](../../../../engine/crates/layerfs-daemon/src/control/diagnostic.rs) |
+| `sandbox.record`, `.machine_reference`, `.store_reference`, `.project_reference`, `.store_placement` | Record and the records it names; a sqlite Store must be on the Sandbox's machine | [`sandbox_target.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_target.rs) |
+| `sandbox.operation` | Live owner `pass`; an ended owner's certain `op` a notice, its uncertain one an error | [`sandbox_target.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_target.rs) |
+| `sandbox.runtime`, `.forward_process` | Native or namespaces daemon/init process, or a forward's carrier, matched by pid, start time and boot; never by pid alone. A runtime seen gone is not dialled | [`sandbox_runtime.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_runtime.rs) |
+| `sandbox.route`, `.worker_compatibility` | Native: direct. Forward: the machine's `worker.json` must exist (else `not_checked`, blocked by the machine); no worker call. Other machines: one `doctor.sandbox` request to an authenticated worker of this build, whose report (checks, `workspaces`, `listing`) is read in; a malformed or cut report leaves the Sandbox `not_checked` with `reason` `lost` | [`sandbox_remote.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_remote.rs) |
+| `sandbox.daemon_keys`, `.daemon_connect`, `.daemon_auth`, `.daemon_instance`, `.daemon_ready` | Saved loopback endpoint and 32-byte keys; a refused connection is an error (nothing listens), any other failure `not_checked`; authenticated channel; `Hello` without waiting for startup must name the saved instance and `ControlReady` (still starting: warning; retained: error) | [`sandbox_channel.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_channel.rs) |
 | `sandbox.session` | `EndSession` for the doctor's own control session, only after a clean exchange | [`sandbox_channel.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_channel.rs) |
+| `sandbox.observation` | The saved keys file did not change while the daemon was read | [`sandbox_target.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_target.rs) |
 
-Always `skipped`: `sandbox.filesystem_serving` (FUSE/NFS reads, overlay and
-Store integrity), `sandbox.overlay_state` (dirty counts, pending merges) and
-`sandbox.runtime_containment` or `sandbox.runtime_placement`.
+**Workspaces.** A Workspace has no doctor of its own. After a ready daemon,
+`sandbox.doctor_workspaces` is read in pages of at most 32 rows under one
+generation ([`diagnostic.rs`](../../../../engine/crates/layerfs-daemon/src/control/diagnostic.rs)); each Workspace the daemon lists or the Sandbox's folder
+records (the home's on `native` and for a forward, the worker's own
+elsewhere) gets one shallow node named `<sandbox>:<name>` (its name, else
+its path, else its id), recorded ones first: `workspace.mounted` (the mount
+is present; being made or removed is a notice; held without a mount, or
+recorded but not held, an error) and `workspace.activity` (`failed` or
+`uncertain` is an error). Both fixes are `layerfs workspace unmount
+<workspace> --discard --force`. A list that gave no verdict (`Busy`, a
+changed generation, a lost reply, the deadline) leaves each Workspace
+`not_checked` with `busy`, `lost` or `timeout`, or the Sandbox when none
+is recorded. A daemon that is not seen ready blocks its Workspaces: each is
+`not_checked` with `blocked_by` the thing at the root (`sandbox` with
+`lost`, `unreachable`, `missing`, `not_answering`, `failed` or `busy`, or
+the `machine` whose worker does not answer or is `outdated`), and none is
+tried ([`workspace_target.rs`](../../../../control/crates/layerfs-control/src/doctor/workspace_target.rs)). The runner adds the Workspaces the daemon listed to those the
+home records before the first is checked, so `--progress` sends `self`,
+then one `workspaces` event each.
 
 ### Store
 
@@ -185,7 +209,7 @@ reconcile that fails leaves `possible_retained_key` and `owned_version`.
 | Retained checks, message, evidence | 1024 checks, 4096 characters, 16 KiB; beyond them `truncated` | [`check_report.rs`](../../../../control/crates/layerfs-control/src/doctor/check_report.rs) |
 | Probe caps | `df` 5 s; provider 10 s; worker hello 5 s; Store worker connect 5 s; PostgreSQL admission 10 s when no deadline | target sources above |
 | Frames | hello and ping 4 KiB (`MAX_HELLO`); diagnostic request and answer frames 64 KiB (`TooLarge`) | [`diagnostic.rs`](../../../../control/crates/layerfs-machine/src/worker/diagnostic.rs) |
-| Daemon registry held | `Busy`, `Changed` or `UnknownMethod` make `sandbox.workspaces` `unknown`; no retry | [`sandbox_channel.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_channel.rs) |
+| Daemon registry held | `Busy` makes each Workspace `not_checked` `busy`; `Changed` or `UnknownMethod` `lost`; no retry | [`sandbox_channel.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_channel.rs) |
 | Build without `machine` | `machine.platform` `unknown` | [`machine_target.rs`](../../../../control/crates/layerfs-control/src/doctor/machine_target.rs) |
 | SQLite off this kernel | `Unsupported`, shown as `store.integrity.access` `unknown` | [`diagnostic.rs`](../../../../control/crates/layerfs-store/src/diagnostic.rs) |
 | Build without `tls` for R2 or `https://` | `backup.configuration` `unknown`; nothing sent | [`backup_target.rs`](../../../../control/crates/layerfs-control/src/doctor/backup_target.rs) |
