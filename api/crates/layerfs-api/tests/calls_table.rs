@@ -640,7 +640,7 @@ fn the_four_gc_calls_take_only_ids() {
         ),
         ("project.delete", &[("project", Kind::Project)]),
         (
-            "project.remove_file",
+            "project.hide_path",
             &[("project", Kind::Project), ("path", Kind::Text)],
         ),
         ("store.compact", &[("store", Kind::Name)]),
@@ -748,6 +748,16 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "file.cp",
         "file.apply",
     ];
+    let project = [
+        "project.init",
+        "project.list",
+        "project.get",
+        "project.stats",
+        "project.export",
+        "project.delete",
+        "project.hide_path",
+        "project.doctor",
+    ];
     let sandbox = [
         "sandbox.create",
         "sandbox.list",
@@ -794,7 +804,7 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         migrated,
         [
             &home[..],
-            &["project.doctor"][..],
+            &project[..],
             &branch[..],
             &commit[..],
             &file[..],

@@ -288,58 +288,108 @@ $ layerfs home clear-log --detail
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `init` | `project`, `folder` | `timeout` (ms, default 1 hour), `on_progress` | imports a folder on the caller's host as a new project into an existing Store |
-| `list` | `[store]` | `page_size`, `page_pos` | every project in the home, or one Store's |
-| `get` | `project` | — | a project's record: its Store, kind and machine |
-| `stats` | `project`, `[branch]`, `[commit]` | — | entry counts of one pinned saved tree |
-| `export` | `project`, `destination` | `branch` (default `main`), `on_progress` | exports a pinned committed Branch snapshot to a local directory |
+| `init` | `project`, `folder` | `timeout` (ms, default 1 hour), `on_progress` | imports a folder on this computer as a new project into an existing Store |
+| `list` | — | `store`, `limit`, `cursor`, `--with stats` | every project in the home, or one Store's |
+| `get` | `project` | — | one project: its Store, state and main's head |
+| `stats` | `project` | `branch` (default `main`), `at` | entry counts and size of the tree at a Branch's head or a Commit |
+| `export` | `project`, `destination` | `branch` (default `main`), `at`, `on_progress` | exports a Branch's committed tree to a folder on this computer |
 | `delete` | `project` | — | retires one project in its Store and removes its home entry |
-| `remove_file` | `project`, `path` | — | hides one absolute path from every node at or below its marker frontier |
+| `hide_path` | `project`, `path` | — | hides one absolute path from the project's whole history; frees no bytes |
 
-- `init` never creates a Store; a missing one is `NotFound`. `folder` is
-  always on the caller's host. Into a sqlite Store on `native` or a
-  PostgreSQL Store, Init runs in the caller's process. Into a sqlite Store
-  on another machine (which must be running), the caller copies the folder
-  to that machine's worker, which runs Init on the copy and then deletes it
-  (#536 H11, H11a): the machine needs free room for the copy while Init
-  runs (`Capacity` otherwise), and progress shows phase `send` with bytes
-  sent before Init's own counts. A missing folder, or one with a socket,
-  FIFO or device file, is refused before anything is sent. Run: answers
-  `project`, `store`, `name`, `kind`, `machine`, `created`, `layer` and
-  `root`.
-- `delete` is refused `Busy` while a Sandbox of the project is recorded
-  (`detail.related` lists each as `{kind: "sandbox", name}`).
-- `remove_file` is visibility-only in 2.0: it hides the path across the
-  project's history and frees no bytes; the marker frontier governs later
-  re-creations.
+A project's `state` is `ready`, `busy` (an Init or a delete of it runs:
+`op {name, phase, started_at}`, `name` being `init` or `delete`),
+`blocked` (its Store, or that Store's machine, is not ready, or the Store
+cannot be read: `blocked_by {store | machine, reason}`) or `broken` with
+`reason: unresolved` (a delete, or an Init, that stopped part-way, with
+`fix: layerfs project delete <project>`). A project is never `stopped` or
+`unknown`. While a call runs on a project its record holds the call's `op`;
+a Store whose records say it is not ready is not asked, and any other
+Store's own list is read where its calls run. A project on record that its
+Store does not list is hidden from `list` and `NotFound` to `get`, as
+before (`project doctor` reports it as a notice). An export is a read and
+records no `op`.
+
+- **`init`** never creates a Store; a missing one is `NotFound`. `folder`
+  is an absolute path on this computer. Into a sqlite Store on `native` or
+  a PostgreSQL Store, Init runs in the caller's process. Into a sqlite
+  Store on another machine (which must be running), the caller copies the
+  folder to that machine's worker, which runs Init on the copy and then
+  deletes it (#536 H11, H11a): the machine needs free room for the copy
+  while Init runs (`Capacity` otherwise). A missing folder, or one with a
+  socket, FIFO or device file, is refused before anything is sent. The
+  project's entry is claimed first (a name the home already holds is
+  `Exists`), so the project is listed `busy` while Init runs; a refusal
+  removes the entry, and an outcome that is not known (a lost reply) keeps
+  it `broken` `unresolved`. Progress events are `{phase, done, total}`:
+  `check`, `send` (bytes, to a worker only), `install`, `record`. Short:
+  `{ commit }`, main's first Layer; long: `commit, outcome ("created"),
+  project, store, engine, machine, root, created_at`.
+- **`list`** pages by Store, then name: `limit` is 1 to 1000, 100 by
+  default, and a page also ends early past 64 KiB of rows. The
+  `next_cursor` carries the `--store` filter only; one given with another
+  filter, or to another call, is `InvalidInput`. A row's short form is
+  `{ project }` with its `state` and companion when not `ready`; its long
+  form adds `store, engine, machine, commit` (main's head, null for a
+  project whose Store was not read) and `created_at`. `--with stats` adds
+  `size` to each row: the length main's head Layer records, one record per
+  project and no tree walk; it is left out for a blocked project.
+- **`get`** short: `{ store, state }` with `commit` (main's head) and the
+  state's companion; long: `store, state, commit, op, blocked_by, reason,
+  fix, project, engine, machine, created_at`. It takes no `--with`.
+- **`stats`** counts files, folders and symlinks by a bounded walk of the
+  tree at the Branch's head or, with `--at`, at one Commit of its history
+  (a full id or a prefix of 8 or more; a prefix more than one Commit starts
+  with is `InvalidInput` with `matches`). Short: `{ file_count, dir_count,
+  symlink_count, size }`, with `partial: true` when the walk stopped at its
+  work bound (`size` is the length the counted node records, whole even
+  then); long adds `partial, commit, root`.
+- **`delete`** is refused `Busy` while a Sandbox of the project is recorded
+  (`detail.related` lists each as `{kind: "sandbox", name}`) or while
+  another call's `op` holds the project. Short: `{"ok":true}`, or
+  `{"home_entry_kept":true}` when the home's entry could not be removed
+  (the project is retired; run `delete` again to remove the entry); long:
+  `ok, home_entry_kept, outcome ("deleted"), deleted_at`. Running it again
+  clears a `broken` `unresolved` project, including the entry of an Init
+  that never reached the Store.
+- **`hide_path`** (was `remove_file`, removed with no alias) writes a
+  marker, not a Commit: it hides the path across the project's history and
+  frees no bytes; the marker frontier governs later re-creations. Short:
+  `{"ok":true}`, or `{"unchanged":true}` for a path already hidden; long:
+  `ok, unchanged, outcome ("hidden" or "unchanged"), path,
+  frontier_serial, hidden_at`.
+- `list`'s `[store]`, `page_size` and `page_pos` became `--store`,
+  `--limit` and `--cursor`; `stats`'s `[branch]` and `[commit]` became
+  `--branch` and `--at`.
 
 `project export` ([reference](../../architecture/api/sdk/project.md#projectexport)) exports a committed Branch snapshot. `destination` is an absolute path
-on the caller’s host, even for a worker Store. It must be absent or an empty
+on this computer, even for a worker Store. It must be absent or an empty
 real directory, outside the home, with an existing parent. A nonempty destination
 is `InvalidInput` (raised as `NotEmpty`); files and symlinks are refused. Same-parent staging is published
 by atomic rename only after all bytes and metadata are written; failures clean
 up this call’s staging without deleting unrelated files.
 
-Export takes a Branch name, with no `commit` option or `--commit` flag. It pins
-the node/root once, excludes uncommitted Workspace changes and is unaffected by
-later publications. SQLite reads locally or streams bounded frames from its
-worker; PostgreSQL reads in the caller’s process, for local or remote servers.
-A required stopped worker is `Unavailable` and is never started automatically.
-The fidelity contract includes binary files, empty directories, `.git`, ignored
-files, symlinks, permission bits and nanosecond `mtime` where the host supports
-them. Host name/case collisions are `Conflict`, rather than silent overwrites.
+Export takes a Branch (`main` by default) and pins its head, or with `--at`
+one Commit of its history (a full id or a prefix of 8 or more, as `stats`
+takes it). It pins the node/root once, excludes uncommitted Workspace
+changes and is unaffected by later publications. SQLite reads locally or
+streams bounded frames from its worker; PostgreSQL reads in the caller’s
+process, for local or remote servers. A required stopped worker is
+`Unavailable` and is never started automatically. The fidelity contract
+includes binary files, empty directories, `.git`, ignored files, symlinks,
+permission bits and nanosecond `mtime` where the host supports them. Host
+name/case collisions are `Conflict`, rather than silent overwrites.
 
 ```bash
 # Example, not run: /exports exists and /exports/api is absent or empty.
 layerfs project export shop/api /exports/api --branch agent --progress
 ```
 
-The final JSON result contains `project`, `store`, `name`, `kind`, `machine`,
-`branch`, `snapshot`, `node`, `root`, `destination`, `files`, `directories`,
-`symlinks` and `bytes`. Progress on stderr is JSON Lines with `prepare`, `export`,
-`finalize`, local `files`/`directories`/`symlinks`/`bytes`, `done = bytes` during
-writing and `total: null`; `finalize` is the last event and comes only once the
-folder is in place. Events arrive at most every 200 ms.
+Short: `{ file_count, size }` (`size` the bytes written); long adds
+`dir_count, symlink_count, commit` (the exported node, its full id) and
+`root`. Progress on stderr is JSON Lines of `{phase, done, total}`:
+`prepare`, `export` and `finalize`, `done` the bytes written so far and
+`total` null; `finalize` is the last event and comes only once the folder
+is in place. Events arrive at most every 200 ms.
 
 ### `branch` (6)
 

@@ -330,7 +330,7 @@ fn exercise(arm: Arm) {
     // The retained layer still reads, and the home passes the doctor: the
     // dead pack is collected while the live one is intact.
     let stats = call(&home, &["project", "stats", "s/p"]);
-    assert!(stats.get_int("files").unwrap_or(0) >= 1, "{stats:?}");
+    assert!(stats.get_int("file_count").unwrap_or(0) >= 1, "{stats:?}");
     call(&home, &["file", "stat", "s/p", "main", "/a.txt"]);
     let doctor = call(&home, &["store", "doctor", "s", "--detail"]);
     let Some(SdkValue::List(findings)) = doctor.get("findings") else {

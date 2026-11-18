@@ -11,7 +11,7 @@ async function main(): Promise<void> {
   const progress: unknown[] = [];
   await layerfs.project.init("shop/api", "/src/api", { timeout: 5, on_progress: (p) => progress.push(p) });
   const page: Result = await lfs.project.list();
-  await lfs.project.list("shop", { page_size: 10, page_pos: 2n });
+  await lfs.project.list({ store: "shop", limit: 10, cursor: "b3A6MQ" });
   await lfs.branch.fork("shop/api", "agent", "main", "abc");
   await lfs.branch.fork("shop/api", "agent", "main", null);
   await lfs.branch.commits("shop/api", "agent", { page: 1, page_size: 50, at_commit: "saved-id" });

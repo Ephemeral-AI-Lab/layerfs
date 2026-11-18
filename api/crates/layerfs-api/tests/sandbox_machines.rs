@@ -529,6 +529,7 @@ fn a_sqlite_store_s_sandbox_on_each_running_vm_machine() {
             &[
                 ("project", t(&project)),
                 ("folder", t(&folder.display().to_string())),
+                ("detail", SdkValue::Bool(true)),
             ],
         );
         assert_eq!(made.get_text("machine"), Some(machine), "{made:?}");

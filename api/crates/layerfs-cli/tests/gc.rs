@@ -11,8 +11,8 @@ fn run_code(home: &Path, words: &[&str]) -> (Option<i32>, String, String) {
     (out.status.code(), text(&out.stdout), text(&out.stderr))
 }
 
-/// The help line of each call, as the table renders it: remove-file is the
-/// shell spelling of remove_file.
+/// The help line of each call, as the table renders it: hide-path is the
+/// shell spelling of hide_path.
 const CALLS: &[(&[&str], &str, &str)] = &[
     (
         &["branch", "remove"],
@@ -25,8 +25,8 @@ const CALLS: &[(&[&str], &str, &str)] = &[
         "retire one project",
     ),
     (
-        &["project", "remove-file"],
-        "layerfs project remove-file <project> <path>",
+        &["project", "hide-path"],
+        "layerfs project hide-path <project> <path>",
         "hide one absolute path",
     ),
     (
@@ -60,7 +60,7 @@ fn help_lists_each_gc_call_with_its_usage() {
     };
     assert!(line("branch").contains("remove"), "{}", line("branch"));
     assert!(
-        line("project").contains("delete") && line("project").contains("remove-file"),
+        line("project").contains("delete") && line("project").contains("hide-path"),
         "{}",
         line("project")
     );
@@ -98,9 +98,9 @@ fn wrong_arity_and_options_are_usage_errors() {
         &["project", "delete"],
         &["project", "delete", "shop/api", "extra"],
         &["project", "delete", "shop/api", "--force"],
-        &["project", "remove-file", "shop/api"],
-        &["project", "remove-file", "shop/api", "/a", "extra"],
-        &["project", "remove-file", "shop/api", "/a", "--force"],
+        &["project", "hide-path", "shop/api"],
+        &["project", "hide-path", "shop/api", "/a", "extra"],
+        &["project", "hide-path", "shop/api", "/a", "--force"],
         &["store", "compact"],
         &["store", "compact", "shop", "extra"],
         &["store", "compact", "shop", "--force"],
@@ -122,7 +122,7 @@ fn well_formed_lines_reach_the_library() {
     let well_formed: &[&[&str]] = &[
         &["branch", "remove", "shop/api", "work"],
         &["project", "delete", "shop/api"],
-        &["project", "remove-file", "shop/api", "/a"],
+        &["project", "hide-path", "shop/api", "/a"],
         &["store", "compact", "shop"],
     ];
     for words in well_formed {
@@ -146,7 +146,7 @@ fn a_bare_project_is_refused_and_the_four_are_out_of_scope() {
     for words in [
         &["branch", "remove", "api", "main"][..],
         &["project", "delete", "api"],
-        &["project", "remove-file", "api", "/a"],
+        &["project", "hide-path", "api", "/a"],
     ] {
         let (code, out, err) = run_code(&home, words);
         assert_eq!(code, Some(125), "{words:?}: {err}");
@@ -165,8 +165,8 @@ fn a_bare_project_is_refused_and_the_four_are_out_of_scope() {
         (&["branch", "remove", "shop/api", "main"], "branch.remove"),
         (&["project", "delete", "shop/api"], "project.delete"),
         (
-            &["project", "remove-file", "shop/api", "/web/a"],
-            "project.remove_file",
+            &["project", "hide-path", "shop/api", "/web/a"],
+            "project.hide_path",
         ),
         (&["store", "compact", "shop"], "store.compact"),
     ];
