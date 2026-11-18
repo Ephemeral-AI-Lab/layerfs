@@ -1,4 +1,5 @@
-//! `logs.machine` and `logs.sandbox` (layerfs-project#178 step 1) on the
+//! `machine.log` (`logs.machine` before the call surface 2.0) and
+//! `logs.sandbox` (layerfs-project#178 step 1) on the
 //! two routes of an inspect request: this process for a `native` Sandbox,
 //! and a machine's worker (this build's own server on a scratch root) for
 //! every other, a Sandbox whose daemon the home reaches directly included.
@@ -67,8 +68,10 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
         .expect("the call did not answer within 20 s")
 }
 
+/// The lines of a log read: `machine.log`'s `items`, `logs.sandbox`'s
+/// `lines`.
 fn texts(answer: &SdkValue) -> Vec<String> {
-    let Some(SdkValue::List(lines)) = answer.get("lines") else {
+    let Some(SdkValue::List(lines)) = answer.get("items").or(answer.get("lines")) else {
         panic!("{answer:?}")
     };
     lines
@@ -287,13 +290,22 @@ fn no_lease(root: &Path) {
 
 #[test]
 fn the_table_lists_both_calls_with_a_cursor_window() {
-    for (name, positional) in [("logs.machine", "machine"), ("logs.sandbox", "sandbox")] {
+    for (name, positional, want) in [
+        ("machine.log", "machine", ["limit", "cursor"].as_slice()),
+        (
+            "logs.sandbox",
+            "sandbox",
+            ["cursor", "before", "limit"].as_slice(),
+        ),
+    ] {
         let call = layerfs_api::find(name).unwrap_or_else(|| panic!("{name}"));
         let args: Vec<_> = call.args.iter().map(|a| (a.name, a.optional)).collect();
         assert_eq!(args, [(positional, false)], "{name}");
         let options: Vec<_> = call.options.iter().map(|a| a.name).collect();
-        assert_eq!(options, ["cursor", "before", "limit"], "{name}");
+        assert_eq!(options, want, "{name}");
+        assert!(call.quiet, "{name}");
     }
+    assert!(layerfs_api::find("logs.machine").is_none(), "no alias (R1)");
     // discovery: the table front ends build their functions from lists them
     let table = layerfs_api::json::parse(&layerfs_api::table_json()).unwrap();
     let SdkValue::List(calls) = table else {
@@ -304,8 +316,9 @@ fn the_table_lists_both_calls_with_a_cursor_window() {
         .filter(|c| c.get_text("family") == Some("logs"))
         .map(|c| c.get_text("call").unwrap())
         .collect();
-    // the call log's own two calls are `home.log` and `home.clear_log`
-    assert_eq!(logs, ["machine", "sandbox"]);
+    // the call log's own two calls are `home.log` and `home.clear_log`, a
+    // machine's worker log `machine.log`
+    assert_eq!(logs, ["sandbox"]);
 }
 
 #[test]
@@ -363,11 +376,11 @@ fn a_native_sandbox_s_log_is_read_here_with_no_lock_and_nothing_written() {
     assert_eq!(texts(&next), names(300, 303));
 
     // refusals: a native machine has no worker log; unknown names
-    let (code, message) = call(&home, "logs.machine", &[("machine", t("native"))]).unwrap_err();
+    let (code, message) = call(&home, "machine.log", &[("machine", t("native"))]).unwrap_err();
     assert_eq!(code, "Unsupported", "{message}");
     // a name no machine has: `NotFound` in a host build; a build without
     // the machine adapters knows only that no worker is recorded for it
-    let (code, _) = call(&home, "logs.machine", &[("machine", t("nobody"))]).unwrap_err();
+    let (code, _) = call(&home, "machine.log", &[("machine", t("nobody"))]).unwrap_err();
     let unknown = match cfg!(feature = "machine") {
         true => "NotFound",
         false => "Unavailable",
@@ -405,21 +418,21 @@ fn a_worker_reads_its_log_and_its_sandboxes_logs_and_writes_nothing() {
     let _push = pushing(&home);
     let (before, guest) = (files(&home), files(&root));
 
-    let tail = call(&home, "logs.machine", &[("machine", t("box"))]).unwrap();
+    let tail = call(&home, "machine.log", &[("machine", t("box"))]).unwrap();
     assert_eq!(texts(&tail), names(250, 300));
-    assert_eq!(tail.get("has_more"), Some(&SdkValue::Bool(true)));
-    // back into the rotated file
-    let before_arg = ("before", tail.get("before").unwrap().clone());
-    let earlier = call(&home, "logs.machine", &[("machine", t("box")), before_arg]).unwrap();
+    // back into the rotated file, by next_cursor
+    let back = ("cursor", tail.get("next_cursor").unwrap().clone());
+    let earlier = call(&home, "machine.log", &[("machine", t("box")), back]).unwrap();
     assert_eq!(texts(&earlier), names(50, 250));
     let limited = [
         ("machine", t("box")),
-        ("before", earlier.get("before").unwrap().clone()),
+        ("cursor", earlier.get("next_cursor").unwrap().clone()),
         ("limit", SdkValue::Int(1000)),
     ];
-    let first = call(&home, "logs.machine", &limited).unwrap();
+    let first = call(&home, "machine.log", &limited).unwrap();
     assert_eq!(texts(&first), names(0, 50));
-    assert_eq!(first.get("has_more"), Some(&SdkValue::Bool(false)));
+    // the start of the log: the short form leaves next_cursor out
+    assert_eq!(first.get("next_cursor"), None, "{first:?}");
     // the Sandbox's daemon log, from the run folder the worker's record names
     let daemon = call(&home, "logs.sandbox", &[("sandbox", t("s1"))]).unwrap();
     assert_eq!(texts(&daemon), ["daemon up", "listening"]);
@@ -439,29 +452,24 @@ fn a_worker_reads_its_log_and_its_sandboxes_logs_and_writes_nothing() {
     no_lease(&root);
     assert!(!paths::store_record(&root, "shop").exists());
 
-    // the worker writes on; the cursor follows
-    let cursor = ("cursor", tail.get("cursor").unwrap().clone());
+    // the worker writes on: the newest page ends with it
+    let cursor = ("cursor", tail.get("next_cursor").unwrap().clone());
     let mut file = std::fs::OpenOptions::new().append(true).open(&log).unwrap();
     std::io::Write::write_all(&mut file, b"\x1b[1mbold\x1b[0m\n").unwrap();
-    let next = call(
-        &home,
-        "logs.machine",
-        &[("machine", t("box")), cursor.clone()],
-    )
-    .unwrap();
-    assert_eq!(texts(&next), ["\\u{1b}[1mbold\\u{1b}[0m"]);
+    let newest = call(&home, "machine.log", &[("machine", t("box"))]).unwrap();
+    let newest = texts(&newest);
+    assert_eq!(newest.last().unwrap(), "\\u{1b}[1mbold\\u{1b}[0m");
 
     // a restart rotates the log: the old cursor is refused, a new read follows
     std::fs::rename(&log, root.join("log/worker.1.log")).unwrap();
     std::fs::write(&log, "started again\n").unwrap();
-    let (code, message) =
-        call(&home, "logs.machine", &[("machine", t("box")), cursor]).unwrap_err();
+    let (code, message) = call(&home, "machine.log", &[("machine", t("box")), cursor]).unwrap_err();
     assert_eq!(code, "InvalidInput", "{message}");
     assert!(
-        message.starts_with("logs.machine: the cursor is stale"),
+        message.starts_with("machine.log: the cursor is stale"),
         "{message}"
     );
-    let fresh = call(&home, "logs.machine", &[("machine", t("box"))]).unwrap();
+    let fresh = call(&home, "machine.log", &[("machine", t("box"))]).unwrap();
     assert_eq!(texts(&fresh), ["started again"]);
 
     // a Sandbox the worker holds no run folder for
@@ -477,17 +485,15 @@ fn a_machine_started_by_an_earlier_build_answers_an_empty_log() {
     let (scratch, home, root) = boxed("old");
     // its worker answers, and wrote no `log/worker.log`
     let guest = files(&root);
-    let empty = call(&home, "logs.machine", &[("machine", t("box"))]).unwrap();
+    let empty = call(&home, "machine.log", &[("machine", t("box"))]).unwrap();
     assert!(texts(&empty).is_empty());
-    assert_eq!(empty.get("has_more"), Some(&SdkValue::Bool(false)));
-    assert!(empty.get("before").is_none());
+    assert_eq!(empty.get("next_cursor"), None, "{empty:?}");
     assert_eq!(files(&root), guest, "nothing was made under the root");
     assert!(!paths::log_dir(&root).exists());
-    // once a later start writes one, the same cursor reads it from its start
-    let cursor = ("cursor", empty.get("cursor").unwrap().clone());
+    // once a later start writes one, a read answers it
     std::fs::create_dir_all(paths::log_dir(&root)).unwrap();
     std::fs::write(paths::worker_log(&root), "first\n").unwrap();
-    let next = call(&home, "logs.machine", &[("machine", t("box")), cursor]).unwrap();
+    let next = call(&home, "machine.log", &[("machine", t("box"))]).unwrap();
     assert_eq!(texts(&next), ["first"]);
     std::fs::remove_dir_all(scratch).unwrap();
 }
@@ -503,7 +509,7 @@ fn a_stopped_machine_is_unavailable_and_nothing_starts_it() {
     settle(&home);
     let before = files(&home);
     for (name, args) in [
-        ("logs.machine", [("machine", t("box"))]),
+        ("machine.log", [("machine", t("box"))]),
         ("logs.sandbox", [("sandbox", t("s1"))]),
     ] {
         let (code, message) = call(&home, name, &args).unwrap_err();
@@ -525,7 +531,7 @@ fn a_stopped_machine_is_unavailable_and_nothing_starts_it() {
     settle(&home);
     let before = files(&home);
     let at = Instant::now();
-    let (code, message) = call(&home, "logs.machine", &[("machine", t("box"))]).unwrap_err();
+    let (code, message) = call(&home, "machine.log", &[("machine", t("box"))]).unwrap_err();
     assert_eq!(code, "Unavailable", "{message}");
     assert!(message.contains("layerfs machine start box"), "{message}");
     assert!(at.elapsed() < Duration::from_secs(3), "{:?}", at.elapsed());

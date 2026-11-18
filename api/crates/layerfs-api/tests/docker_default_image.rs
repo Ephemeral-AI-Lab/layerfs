@@ -49,7 +49,7 @@ fn start(home: &Path) -> SdkRefusal {
     layerfs_api::call(
         Some(home),
         "machine.start",
-        SdkValue::map([("name", t("docker"))]),
+        SdkValue::map([("machine", t("docker"))]),
         &mut |_| {},
     )
     .expect_err("no container runs here")

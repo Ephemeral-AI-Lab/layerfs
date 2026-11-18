@@ -408,8 +408,8 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
     let options: Vec<_> = call.options.iter().map(|a| a.name).collect();
     assert_eq!(options, ["depth", "cursor", "limit", "offset", "length"]);
     // it, `home.get` (a setup poll), the home's call log calls,
-    // `machine.stats` (layerfs-project#164), `machine.space`,
-    // `machine.files` and the two `logs` calls carry the flag: no family is
+    // `machine.stats` (layerfs-project#164, with `--with space`),
+    // `machine.files`, `machine.log` and `logs.sandbox` carry the flag: no family is
     // skipped by its name
     let quiet: Vec<_> = layerfs_api::calls()
         .into_iter()
@@ -424,9 +424,8 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
             "home.clear_log",
             "sandbox.files",
             "machine.stats",
-            "machine.space",
             "machine.files",
-            "logs.machine",
+            "machine.log",
             "logs.sandbox"
         ]
     );

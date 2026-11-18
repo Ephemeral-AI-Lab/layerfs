@@ -107,7 +107,7 @@ fn effects(tools: &Path) -> Vec<String> {
 /// stand-in refuses.
 fn docker_run(home: &Path, tools: &Path) -> String {
     let before = effects(tools).len();
-    let (code, message) = call(home, "machine.start", &[("name", t("docker"))]).unwrap_err();
+    let (code, message) = call(home, "machine.start", &[("machine", t("docker"))]).unwrap_err();
     assert_eq!(code, "Failed", "{message}");
     let after = effects(tools);
     let runs: Vec<_> = after[before..]

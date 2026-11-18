@@ -311,10 +311,12 @@ fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
     machines.dedup();
     const ID: &str = "store.connection";
     for machine in &machines {
-        let state = match MachineRecord::read(probe.home, machine) {
-            Ok(Some(found)) => home_tree::machine_state(&found),
-            Ok(None) if machine == "docker" => State::Stopped,
-            _ => State::broken(Reason::Missing, None),
+        let record_of = MachineRecord::read(probe.home, machine);
+        let state = match record_of
+            .and_then(|found| crate::inventory::machine_state(probe.home, machine, found.as_ref()))
+        {
+            Ok(state) => state,
+            Err(_) => State::broken(Reason::Missing, None),
         };
         if let Some(by) = blocker(&state, "machine", machine) {
             checks.waits(ID, format!("machine {machine} is not ready"), by);
