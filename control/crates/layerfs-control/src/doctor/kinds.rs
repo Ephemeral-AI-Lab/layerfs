@@ -101,7 +101,7 @@ const STORE: &[CheckId] = &[
 /// list (the comparison `project.get` makes).
 const PROJECT: &[CheckId] = &[own("project.record"), own("project.listed")];
 
-/// A Sandbox's checks.
+/// A Sandbox's checks; its Workspaces' are `workspace_target::CHECKS`.
 const SANDBOX: &[CheckId] = &[
     own("sandbox.record"),
     own("sandbox.machine_reference"),
@@ -113,15 +113,11 @@ const SANDBOX: &[CheckId] = &[
     own("sandbox.route"),
     own("sandbox.forward_process"),
     own("sandbox.worker_compatibility"),
-    own("sandbox.worker_report"),
     own("sandbox.daemon_keys"),
-    own("sandbox.daemon"),
     own("sandbox.daemon_connect"),
     own("sandbox.daemon_auth"),
     own("sandbox.daemon_instance"),
     own("sandbox.daemon_ready"),
-    own("sandbox.workspaces"),
-    own("sandbox.workspace_retained"),
     own("sandbox.session"),
     own("sandbox.observation"),
 ];
@@ -140,8 +136,8 @@ const BUCKET: &[CheckId] = &[
     full("backup.reconcile"),
 ];
 
-/// The real kinds. A Workspace has no checks of its own yet: its Sandbox's
-/// `sandbox.workspaces` covers the daemon's whole list.
+/// The real kinds. A Workspace has no doctor of its own: its Sandbox's
+/// doctor makes its node from the daemon's list.
 pub(super) static KINDS: [KindDoctor; 7] = [
     KindDoctor {
         kind: Kind::Home,
@@ -171,13 +167,13 @@ pub(super) static KINDS: [KindDoctor; 7] = [
         kind: Kind::Sandbox,
         checks: SANDBOX,
         budget: Duration::from_secs(30),
-        run: sandbox,
+        run: super::sandbox_target::doctor,
     },
     KindDoctor {
         kind: Kind::Workspace,
-        checks: &[],
+        checks: super::workspace_target::CHECKS,
         budget: Duration::from_secs(10),
-        run: |_, _| {},
+        run: super::workspace_target::doctor,
     },
     KindDoctor {
         kind: Kind::Bucket,
@@ -400,29 +396,6 @@ fn listed(probe: &Probe<'_>, handle: &str, store: &str, checks: &mut Checks) {
     }
 }
 
-fn sandbox(probe: &Probe<'_>, node: &mut Node) {
-    if let Some(by) = probe.blocked {
-        *node = Node::blocked(probe.thing.clone(), by.clone());
-        return;
-    }
-    let name = probe.thing.name.as_str();
-    let mut checks = Checks::new("sandbox", name);
-    super::sandbox_target::diagnose(probe.home, name, probe.budget, &mut checks);
-    // a worker's report may name a check this build does not know: its
-    // report is not one this build reads
-    let strange = checks.unlisted(probe.checks);
-    if !strange.is_empty() {
-        let names: Vec<&str> = strange.iter().map(String::as_str).collect();
-        checks.forget(&names);
-        let message = format!(
-            "the worker reported checks this build does not know: {}",
-            names.join(", ")
-        );
-        checks.unknown("sandbox.worker_report", message);
-    }
-    checks.fill(node, probe.checks, probe.budget.expired());
-}
-
 fn bucket(probe: &Probe<'_>, node: &mut Node) {
     let name = probe.thing.name.as_str();
     let mut checks = Checks::new("backup", name);
@@ -576,8 +549,9 @@ fn locate(home: &Path, thing: &Thing) -> Result<Located, SdkRefusal> {
                 .iter()
                 .flat_map(|m| list(m.get("sandboxes")).iter());
             let node = placed.find(|s| named(s, "sandbox")).ok_or_else(missing)?;
-            // its Workspaces are not checked one by one yet
-            at(state_of(node), Vec::new())
+            // the Workspaces the home records; its doctor adds those its
+            // daemon lists
+            at(state_of(node), things(node, "workspaces", Kind::Workspace))
         }
         Kind::Bucket => {
             let found = list(tree.get("buckets"))
