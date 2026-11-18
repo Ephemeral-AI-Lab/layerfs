@@ -144,8 +144,8 @@ also reads ahead, because each statement costs a round trip:
 | Read | One statement covers | Bound | Source |
 | --- | --- | --- | --- |
 | Pack heads and record ranges of payload packs | 256 packs; 1,024 ranges or 512 KiB | `HEAD_PACKS`, `BATCH_RANGES`, `BATCH_BYTES` | [`edges.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/edges.rs) |
-| Metadata packs the walk decodes | the announced packs of the wave not held yet, up to 256 packs or 8 MiB of pack heads (a head is at most `PACK_LIMIT`, 256 KiB); a pack row is fetched once and kept, at most 96 MiB in two generations | `AHEAD_PACKS`, `AHEAD_BYTES`, `HELD_PACK_BYTES` | [`objects.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects.rs), [`read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/read.rs) |
-| Inode values of a leaf | the blocks holding the ordinals the walk does not hold yet and up to 4,096 ordinals past the last of them, less the blocks this transaction already fetched; a block is fetched once and kept, at most 64 MiB in two generations | `AHEAD_VALUES`, `HELD_VALUES`, `HELD_BLOCK_BYTES` | [`values.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/values.rs), [`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
+| Metadata packs the walk decodes | the announced packs of the wave not held yet, up to 256 packs or 8 MiB of pack heads (a head is at most `PACK_LIMIT`, 256 KiB); a pack row is fetched once and kept, at most 32 MiB in two generations | `AHEAD_PACKS`, `AHEAD_BYTES`, `HELD_PACK_BYTES` | [`objects.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects.rs), [`read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/read.rs) |
+| Inode values of a leaf | the blocks holding the ordinals the walk does not hold yet and up to 4,096 ordinals past the last of them, less the blocks this transaction already fetched; a block is fetched once and kept, at most 16 MiB in two generations | `AHEAD_VALUES`, `HELD_VALUES`, `HELD_BLOCK_BYTES` | [`values.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/values.rs), [`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
 | Locators of delta bases | the bases one level of a pack group's chains names outside the pack, up to 4,096 identities; a locator is kept until 16,384 newer ones were, in two generations | `LOCATE_IDS`, `HELD_LOCATIONS` | [`walk.rs`](../../../../engine/crates/layerfs-persistence/src/history/objects/walk.rs) (`expect_bases`), [`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
 
 The ranged read takes a pack's ranges sorted and disjoint and joins those at
@@ -173,7 +173,14 @@ made on its own (`Mechanics::expect_locations`, told only to an engine whose
 The kept pack rows, value blocks and locators belong to the transaction and
 go with it. They are filled only inside a transaction (one snapshot), and
 pack rows only after the walk has announced packs, so an autocommit read
-keeps nothing.
+keeps nothing. A kept pack row is a copy of the descriptor and the body's
+head: the driver cuts its rows out of the buffers it received them in, so
+keeping the driver's row would keep a whole receive buffer for one small
+pack, and the bound would not be the memory held. The sizes are chosen so a
+whole mark stays near 200 MB on the client: on a real Store of 1.69 million
+objects, 96 MiB of pack rows and 64 MiB of value blocks peaked at 290 MB
+and sent 14,229 statements; 32 MiB and 16 MiB peaked at 206 and 215 MB in
+two samples and send 15,558.
 
 A SQLite Store ignores the pack hint and the locator hint and reads no
 block ahead; it returns every value of the blocks it does read
@@ -206,8 +213,9 @@ holds one row a batch and no list of live packs
 The mark's walk holds the same bounded memory as on SQLite
 ([SQLite: the mark's memory](sqlite.md#the-marks-memory)). Its locator
 blocks are read in the order of the `object_location_prefix` index: the
-signed eight-byte prefix, then the identity, 512 identities a statement,
-each after the last one of the block before. The table has no unique key on
+signed eight-byte prefix, then the identity, 512 identities a block and up
+to sixteen blocks (8,192 identities) a statement, each after the last one of
+the statement before. The table has no unique key on
 the identity, so a block takes one row per identity (`DISTINCT ON`, the
 least locator); a rank is a position in that order. The mark's sort files
 are unnamed files in the client's temporary directory. What still grows

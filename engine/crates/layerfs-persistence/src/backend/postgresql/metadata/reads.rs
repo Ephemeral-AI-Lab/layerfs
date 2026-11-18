@@ -223,7 +223,7 @@ pub(crate) fn inode_values(
 /// has reached half of this, the next call drops the old one. A call never
 /// drops a block it read, so what it keeps can exceed this by its own
 /// statement.
-const HELD_BLOCK_BYTES: usize = 64 * 1024 * 1024;
+const HELD_BLOCK_BYTES: usize = 16 * 1024 * 1024;
 
 /// The value blocks one transaction has read, by first ordinal, each with
 /// its last ordinal and body.
