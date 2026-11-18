@@ -28,9 +28,6 @@
     "sandbox.remove",
     "sandbox.files",
     "sandbox.log",
-    "home.init",
-    "home.leftovers",
-    "home.prune",
     "store.connect",
     "store.disconnect",
     "store.save_auth",
@@ -44,7 +41,6 @@
     "backup.restore"
   ],
   "old_names": {
-    "doctor.fix": "home.prune",
     "file.diff": "commit.diff",
     "file.revision": "file.history",
     "logs.sandbox": "sandbox.log",
@@ -65,117 +61,6 @@
     ]
   },
   "spec_sync": {
-    "nodes": {
-      "home.get": {
-        "tree": {
-          "machine": {
-            "short": {
-              "always": [
-                "machine"
-              ],
-              "sometimes": [
-                "state",
-                "op",
-                "reason",
-                "fix",
-                "stores",
-                "sandboxes"
-              ]
-            },
-            "long": [
-              "machine",
-              "platform",
-              "cpus",
-              "memory_bytes",
-              "state",
-              "op",
-              "reason",
-              "fix",
-              "stores",
-              "sandboxes"
-            ]
-          },
-          "store": {
-            "short": {
-              "always": [
-                "store"
-              ],
-              "sometimes": [
-                "engine",
-                "projects",
-                "connections",
-                "state",
-                "op",
-                "blocked_by",
-                "reason",
-                "fix"
-              ]
-            },
-            "long": [
-              "store",
-              "engine",
-              "state",
-              "op",
-              "blocked_by",
-              "reason",
-              "fix",
-              "projects",
-              "connections"
-            ]
-          },
-          "sandbox": {
-            "short": {
-              "always": [
-                "sandbox"
-              ],
-              "sometimes": [
-                "workspaces",
-                "state",
-                "op",
-                "blocked_by",
-                "reason",
-                "fix"
-              ]
-            },
-            "long": [
-              "sandbox",
-              "project",
-              "image",
-              "state",
-              "op",
-              "blocked_by",
-              "reason",
-              "fix",
-              "workspaces"
-            ]
-          },
-          "workspace": {
-            "short": {
-              "always": [
-                "workspace",
-                "branch"
-              ],
-              "sometimes": []
-            },
-            "long": [
-              "workspace",
-              "branch"
-            ]
-          },
-          "bucket": {
-            "short": {
-              "always": [
-                "bucket"
-              ],
-              "sometimes": []
-            },
-            "long": [
-              "bucket",
-              "provider"
-            ]
-          }
-        }
-      }
-    }
+    "nodes": {}
   }
 }

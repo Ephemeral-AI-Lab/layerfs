@@ -35,7 +35,7 @@ else:
     # Load the real aio module with private import stubs, without pretending a
     # native binding is available or exercising native calls against a mock.
     layerfs = None
-    families = ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs", "doctor"]
+    families = ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs"]
     package = types.ModuleType("_layerfs_aio_unit")
     package.__path__ = []
     dependencies = {
@@ -367,7 +367,8 @@ class Calls(unittest.TestCase):
         self.assertEqual(list(missing), ["home", "state", "version", "reason", "fix"])
         self.assertEqual((missing["state"], missing["reason"], missing["fix"]), ("broken", "missing", "layerfs home init"))
         made = lfs.home.init()
-        self.assertEqual((made["home"], made["created"]), (home, True))
+        self.assertEqual(made, {"home": home})
+        self.assertEqual(lfs.home.init(detail=True)["outcome"], "unchanged")
         ready = lfs.home.get()
         self.assertEqual(list(ready), ["home", "state", "version", "generation"])
         self.assertEqual(ready["state"], "ready")
@@ -400,7 +401,7 @@ class Calls(unittest.TestCase):
     def test_the_table(self):
         self.assertEqual(
             layerfs.FAMILIES,
-            ["home", "project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs", "doctor"],
+            ["home", "project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs"],
         )
         self.assertEqual(len(layerfs.TABLE), 87)
         for spec in layerfs.TABLE:

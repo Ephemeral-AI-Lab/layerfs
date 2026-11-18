@@ -3,12 +3,12 @@
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
 This page covers the whole-home survey that `layerfs doctor` runs with no
-target, the leftovers it lists with `doctor.fix`, the one call that removes
+target, the leftovers `home.leftovers` lists and `home.prune`, the one call that removes
 one, and the two report shapes, within [Doctor](README.md).
 
 | | |
 | --- | --- |
-| Source | [`layerfs-control/src/doctor`](../../../../control/crates/layerfs-control/src/doctor): `report.rs`, `scan.rs`, `checks.rs`, `convert.rs`, `workers.rs`, `capacity.rs`, `leftovers.rs`, `leftover_report.rs`, `leftover_fix.rs`, `check_report.rs` |
+| Source | [`layerfs-control/src/doctor`](../../../../control/crates/layerfs-control/src/doctor): `report.rs`, `scan.rs`, `checks.rs`, `convert.rs`, `workers.rs`, `capacity.rs`, `leftovers.rs`, `leftover_list.rs`, `leftover_prune.rs`, `check_report.rs` |
 
 ## Report
 
@@ -19,15 +19,12 @@ one, and the two report shapes, within [Doctor](README.md).
      Empty         -> ok, no findings; the home stays absent
      Old (1.1.0)   -> warning: not converted; `layerfs import-env`
      Previous (2)  -> convert::check
-     Current (3)   -> scan -> checks -> capacity -> workers -> leftovers
+     Current (3)   -> scan -> checks -> capacity -> workers
    -> { "ok": bool,
         "findings": [ { "severity": "error" | "warning",
                         "entity":   { "kind", "name" },
                         "message":  "<what is wrong>",
-                        "fix":      "<the call or step that fixes it>",
-                        "leftover": { ... }        (a leftover's finding) } ],
-        "leftovers": [ { "machine", "complete",
-                         "image_locks", "unmount_markers" } ] }
+                        "fix":      "<the call or step that fixes it>" } ] }
 ```
 
 | Field or case | Meaning | Source |
@@ -36,7 +33,7 @@ one, and the two report shapes, within [Doctor](README.md).
 | `severity` | `error`: a call on the entity is refused or does the wrong thing; `warning`: left over or out of date, nothing is refused for it | [`report.rs`](../../../../control/crates/layerfs-control/src/doctor/report.rs) |
 | `entity.kind` | `home`, `machine`, `store`, `project`, `sandbox`, `workspace`, `exec` or `bucket` | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs), [`checks.rs`](../../../../control/crates/layerfs-control/src/doctor/checks.rs) |
 | order | findings in the order the checks made them | [`report.rs`](../../../../control/crates/layerfs-control/src/doctor/report.rs) |
-| `leftover`, `leftovers` | a leftover's finding also holds its fields, and `leftovers` has one row per machine walked; a report that walked none (a home that is absent, 1.1.0 or layout 2) has no `leftovers`; see [Leftovers](#leftovers) | [`report.rs`](../../../../control/crates/layerfs-control/src/doctor/report.rs), [`leftover_report.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_report.rs) |
+| leftovers | in no report: `home.leftovers` lists them; see [Leftovers](#leftovers) | [`leftover_list.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_list.rs) |
 | refusal | a top folder that cannot be listed, or a lease folder that cannot be read, refuses the whole survey (`Failed`) | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs), [`checks.rs`](../../../../control/crates/layerfs-control/src/doctor/checks.rs) |
 
 The survey takes no lock, so a home that changes meanwhile may be reported
@@ -164,21 +161,24 @@ Sandbox whose record names no endpoint is not queried. The query is the one
 ## Leftovers
 
 What an interrupted operation left on disk, found by one bounded walk of
-each side's own folders and removed only by `doctor.fix`.
+each side's own folders, listed by `home.leftovers` and removed only by
+`home.prune`. No doctor's report holds them.
 
 ```text
- layerfs doctor                              layerfs doctor fix <id>
+ layerfs home leftovers [--machine M]        layerfs home prune <leftover>
    native: walk(home)                          parse <machine>:<kind>:<name>
-   each machine with worker.json:              place::on_machine(machine)
-     place::on_machine -> worker                 native -> fix_on(home, ..)
-       doctor.sandbox {leftovers: true,          worker -> doctor.fix
-                       known, timeout_ms}                  {kind, name, known}
-         walk(worker root)                     derive the path from kind and
-   -> one warning per entry on                 name, find the entry again,
-      ("machine", m), with leftover            check its guard, remove, once
-      { machine, kind, path, bytes,            -> { id, machine, kind, path,
-        age, id, fixable[, not_before] }            removed: true, bytes }
-   -> leftovers: one row per machine walked
+   each recorded machine (or M):               place::on_machine(machine)
+     stopped / held -> not_listed (blocked_by)   native -> prune_on(home, ..)
+     place::on_machine -> worker                 worker -> home.prune
+       doctor.sandbox {leftovers: true,                   {kind, name, known}
+                       known, timeout_ms}      derive the path from kind and
+         walk(worker root)                     name, find the entry again,
+       no answer / walk at its bound           check its guard, remove, once
+         -> not_listed (reason: timeout)       -> { freed_bytes, outcome:
+   -> { items: [{ leftover, modified_at,           "removed", leftover, kind,
+        size, report_only, removable_at,           machine, path }
+        kind, machine, path }],
+        not_listed, observed_at }
 ```
 
 The walk is a read: it takes no lock, lease or daemon connection, follows no
@@ -188,42 +188,45 @@ the worker root itself, so what an integration keeps in a home (`secret/`,
 `runtime/`, `job/`, `stat/`, `preset/`) is neither listed nor read. It never
 opens a Store's files, a lock or lease file or an overlay database, never
 enters or `stat`s a run folder's `workspaces/` (its Workspace mount points),
-and does not descend into a directory on another device. A machine that is
-stopped, held by an operation or does not answer is passed over: nothing is
-started, and it has no row in `leftovers`.
+and does not descend into a directory on another device. Nothing is started:
+a machine that is stopped or held by an operation is in `not_listed` with
+`blocked_by`, one that does not answer or whose walk stopped at its bound
+with `reason: timeout` (what that walk found is still listed), and a refused
+ask with `reason: busy` or `refused`. An unknown `--machine` is `NotFound`.
 
-| Kind (`leftover.kind`) | Entry | Reported when | `doctor.fix` removes it when (else `InUse`) |
+| Kind (`kind`) | Entry | Listed when | `home.prune` removes it when (else `InUse`) |
 | --- | --- | --- | --- |
-| `run-folder` | `machine/native/run/<name>/` | no Sandbox record names it: none of this side's records holds it as its daemon's run folder, and its Sandbox has no record that is still being created, here or (sent as `known`) in the caller's home | no record names it; its `owner` marker is there and older than 60 s; the record that marker names has no live daemon (pid, start time and boot); the mount table lists nothing at or under it or its `<name>.root`. Removed entry by entry, through no link, entering only directories on the folder's own device |
-| `empty-root` | `machine/native/run/<name>.root/` | it is empty and its run folder `<name>/` is gone | its run folder is gone and it is not a mount point (mount table, and its device is its parent's); `rmdir` only |
-| `init-copy` | `incoming/init-<16 hex>/` (a worker root) | always; `fixable` only when a line of the home's `log/uncertain.jsonl` names the machine and the copy with a deadline | more than an hour has passed since that line's `deadline`; then the worker's own `project.stage` discard removes it. A copy no line names is report-only (`InvalidInput`) |
-| `backup-staging` | `store/<s>/backup.staging` (the home), `store/<s>/store.sqlite.backup` (the Store's machine) | the file is there and no live process holds an operation on that Store | the Store's `backup.lock` in the home can be taken without waiting; it is held for the removal |
-| `image-tmp` | `machine/native/run/images/.tmp-<hex>.2-<id>/` | always | the image's `<hex>.2.lock` can be taken without waiting; the lock file stays |
-| `image-part` | `machine/native/run/images/.recv-<hex>.part` | always | it has not been written for an hour |
-| counted only | image `<hex>.2.lock` files; `sandbox/<x>/workspace/<id>.unmount` markers | as `image_locks` and `unmount_markers` of the machine's row | never: LayerFS keeps them, and `doctor.fix` refuses `image-lock` and `unmount-marker` ids `InvalidInput` |
+| `run_folder` | `machine/native/run/<name>/` | no Sandbox record names it: none of this side's records holds it as its daemon's run folder, and its Sandbox has no record that is still being created, here or (sent as `known`) in the caller's home | no record names it; its `owner` marker is there and older than 60 s; the record that marker names has no live daemon (pid, start time and boot); the mount table lists nothing at or under it or its `<name>.root`. Removed entry by entry, through no link, entering only directories on the folder's own device |
+| `empty_root` | `machine/native/run/<name>.root/` | it is empty and its run folder `<name>/` is gone | its run folder is gone and it is not a mount point (mount table, and its device is its parent's); `rmdir` only |
+| `init_copy` | `incoming/init-<16 hex>/` (a worker root) | always; `report_only` unless a line of the home's `log/uncertain.jsonl` names the machine and the copy with a deadline | more than an hour has passed since that line's `deadline` (`removable_at`); then the worker's own `project.stage` discard removes it. A copy no line names is report-only (`InvalidInput`) |
+| `backup_staging` | `store/<s>/backup.staging` (the home), `store/<s>/store.sqlite.backup` (the Store's machine) | the file is there and no live process holds an operation on that Store | the Store's `backup.lock` in the home can be taken without waiting; it is held for the removal |
+| `image_tmp` | `machine/native/run/images/.tmp-<hex>.2-<id>/` | always | the image's `<hex>.2.lock` can be taken without waiting; the lock file stays |
+| `image_part` | `machine/native/run/images/.recv-<hex>.part` | always | it has not been written for an hour |
+
+Image `<hex>.2.lock` files and Workspace `.unmount` markers are LayerFS's own
+and are neither listed nor removed.
 
 | Field or rule | Meaning | Source |
 | --- | --- | --- |
-| `bytes` | the file's size, or of every file under the folder (a run folder without its `workspaces/`); `null` when a bound ended the walk before it was measured | [`leftovers.rs`](../../../../control/crates/layerfs-control/src/doctor/leftovers.rs) `measure` |
-| `age` | seconds since the newest modification time (`mtime`) of the entry and of what was measured under it | [`leftovers.rs`](../../../../control/crates/layerfs-control/src/doctor/leftovers.rs) `measure` |
-| `id` | `<machine>:<kind>:<name>`, the same for an entry in every report; `name` is the run folder's or root's name, `<store>/<file>`, the copy's 16 hex digits, `<hex>.2-<id>` or the part's digest. It admits no separator, `..` or leading dot, and holds no path | [`leftovers.rs`](../../../../control/crates/layerfs-control/src/doctor/leftovers.rs) `id`, `parse`, `Kind::path` |
-| `fixable`, `not_before` | false for a folder copy no uncertain line names with a deadline; `not_before` is that deadline plus one hour (ms since the epoch) | [`leftover_report.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_report.rs) |
-| bound | each side's walk stops after 20,000 directory entries or 2 s (`BOUNDS`); its row then says `complete: false` and a warning says there may be more | [`leftovers.rs`](../../../../control/crates/layerfs-control/src/doctor/leftovers.rs), [`leftover_report.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_report.rs) |
+| `size` | the file's size, or of every file under the folder (a run folder without its `workspaces/`); `null` when a bound ended the walk before it was measured | [`leftovers.rs`](../../../../control/crates/layerfs-control/src/doctor/leftovers.rs) `measure` |
+| `modified_at` | the newest modification time (`mtime`) of the entry and of what was measured under it | [`leftovers.rs`](../../../../control/crates/layerfs-control/src/doctor/leftovers.rs) `measure` |
+| `leftover` | `<machine>:<kind>:<name>`, the same for an entry in every list; `name` is the run folder's or root's name, `<store>/<file>`, the copy's 16 hex digits, `<hex>.2-<id>` or the part's digest. It admits no separator, `..` or leading dot, and holds no path | [`leftovers.rs`](../../../../control/crates/layerfs-control/src/doctor/leftovers.rs) `id`, `parse`, `Kind::path` |
+| `report_only`, `removable_at` | `report_only` for a folder copy no uncertain line names with a deadline; `removable_at` is that deadline plus one hour | [`leftover_list.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_list.rs) |
+| bound | each side's walk stops after 20,000 directory entries or 2 s (`BOUNDS`); the machine is then also in `not_listed` (`reason: timeout`) | [`leftovers.rs`](../../../../control/crates/layerfs-control/src/doctor/leftovers.rs), [`leftover_list.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_list.rs) |
 | the uncertain line | a `project init` whose part or install answer is lost appends `{ at, call: "project.init", store, project, machine, copy, phase, deadline, message }`: `deadline` is when the lost request went out plus the Init's `timeoutMs` | [`send.rs`](../../../../control/crates/layerfs-store/src/project/send.rs) `log_left`, [`parts.rs`](../../../../control/crates/layerfs-store/src/project/parts.rs), [`family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs) |
-| a worker's answer | read as data: a kind or name the walk does not give is dropped, and the path shown is never used to remove | [`leftover_report.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_report.rs) `report` |
+| a worker's answer | read as data: a kind or name the walk does not give is dropped, and the path shown is never used to remove | [`leftover_list.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_list.rs) `List::item` |
 
-`doctor.fix` is the one mutation here, and a table call
-([SDK](../../api/sdk/doctor.md#doctorfix)): `layerfs doctor fix <id>`. It
+`home.prune` is the one mutation here: `layerfs home prune <leftover>`. It
 makes one attempt and sends nothing twice.
 
-| `doctor.fix` answers | When | Source |
+| `home.prune` answers | When | Source |
 | --- | --- | --- |
-| `{ id, machine, kind, path, removed: true, bytes }` | the entry was removed (`bytes` null for a folder copy and an image temporary) | [`leftover_fix.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_fix.rs) `fix` |
-| `NotFound` | an id no walk gives (a path, `..`, an unknown kind or machine), an entry that is gone, or a link under the entry's name or on the way to it | [`leftover_fix.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_fix.rs) `fix_on`, `beneath` |
-| `InUse` | the kind's guard does not hold; the message says which part | [`leftover_fix.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_fix.rs) |
-| `InvalidInput` | a kind that is only reported: `image-lock`, `unmount-marker`, a folder copy no line names | [`leftover_fix.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_fix.rs) |
+| `{ freed_bytes, outcome: "removed", leftover, kind, machine, path }` | the entry was removed (`freed_bytes` null for a folder copy and an image temporary) | [`leftover_prune.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_prune.rs) `prune` |
+| `NotFound` | a leftover no walk gives (a path, `..`, an unknown kind or machine), an entry that is gone, or a link under the entry's name or on the way to it | [`leftover_prune.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_prune.rs) `prune_on`, `beneath` |
+| `InUse` | the kind's guard does not hold; the message says which part | [`leftover_prune.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_prune.rs) |
+| `InvalidInput` | a folder copy that is only reported | [`leftover_prune.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_prune.rs) |
 | `Unavailable` | the machine is stopped; nothing starts it | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) `on_machine` |
-| `Unknown` | the worker's answer was lost; the entry may or may not be there, and `layerfs doctor` shows which | [`client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| `Unknown` | the worker's answer was lost; the entry may or may not be there, and `layerfs home leftovers` shows which | [`client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 The image temporary is removed by the unpack's own taker
 ([`rootfs/cache.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/cache.rs)
@@ -275,4 +278,4 @@ Callers redact evidence before adding it.
 - [Workers and reach](../machines/workers-and-reach.md): the hello frame
 - [Sandboxes](../sandboxes/README.md): daemon capacity and `sandbox.get`
 - [Front ends](../../api/front-ends/README.md): `layerfs doctor`, Node and Python `doctor()`
-- [SDK: doctor family](../../api/sdk/doctor.md): `doctor.fix` in each front end
+- [SDK: home family](../../api/sdk/home.md#homeleftovers): `home.leftovers` and `home.prune`

@@ -50,9 +50,7 @@ impl BucketRecord {
 
     /// Writes the record to `backup/<name>/record.json` under `home`.
     pub fn write(&self, home: &Path) -> Result<()> {
-        write_entity(&paths::bucket_record(home, &self.name), &self.fields)?;
-        home::generation::moved(home);
-        Ok(())
+        write_entity(&paths::bucket_record(home, &self.name), &self.fields)
     }
 
     /// The record as written.

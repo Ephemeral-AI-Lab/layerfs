@@ -1,7 +1,8 @@
 //! The doctors on the command line (call surface 2.0): `layerfs home
 //! doctor` prints the one report (JSON, or `--text`), exits 0 whatever it
-//! finds and changes nothing; and `layerfs doctor fix <id>`, the table call
-//! that removes one leftover (layerfs-project#180).
+//! finds and changes nothing; and `layerfs home leftovers` and `layerfs
+//! home prune <leftover>`, which list what earlier runs left and remove one
+//! of them (layerfs-project#180).
 use layerfs_api::home::{self, paths, private_dir};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -75,8 +76,8 @@ fn home_doctor_text_names_each_finding_and_its_fix() {
 }
 
 #[test]
-fn doctor_fix_removes_one_leftover_by_its_id() {
-    let home = home_path("fix");
+fn home_leftovers_lists_and_home_prune_removes_one() {
+    let home = home_path("prune");
     home::open(&home).unwrap();
     // a partly received image, last written two hours ago, and its lock
     let images = paths::run_root(&home).join("images");
@@ -97,24 +98,34 @@ fn doctor_fix_removes_one_leftover_by_its_id() {
         .unwrap();
     let lock = images.join(format!("{digest}.2.lock"));
     std::fs::write(&lock, "").unwrap();
-    let id = format!("native:image-part:{digest}");
+    let id = format!("native:image_part:{digest}");
 
-    // no doctor's report lists a leftover (layerfs-project#180): its id is
-    // the one the leftover walk gives
+    // the list names the part by its id, with its size; the lock is no
+    // leftover
+    let out = layerfs(&home, &["home", "leftovers", "--machine", "native"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let listed = layerfs_api::json::parse(String::from_utf8(out.stdout).unwrap().trim()).unwrap();
+    let Some(layerfs_bridge::control::SdkValue::List(items)) = listed.get("items") else {
+        panic!("{listed:?}");
+    };
+    assert_eq!(items.len(), 1, "{listed:?}");
+    assert_eq!(items[0].get_text("leftover"), Some(id.as_str()));
+    assert_eq!(items[0].get_int("size"), Some(50));
+
     // wrong command lines exit 2, refusals 125 with their code
-    assert_eq!(layerfs(&home, &["doctor", "fix"]).status.code(), Some(2));
+    assert_eq!(layerfs(&home, &["home", "prune"]).status.code(), Some(2));
     assert_eq!(
-        layerfs(&home, &["doctor", "fix", &id, "more"])
+        layerfs(&home, &["home", "prune", &id, "more"])
             .status
             .code(),
         Some(2)
     );
     for (wrong, code) in [
-        ("native:image-part:../x".to_owned(), "NotFound"),
-        (format!("native:image-lock:{digest}.2"), "InvalidInput"),
-        (format!("gone:image-part:{digest}"), "NotFound"),
+        ("native:image_part:../x".to_owned(), "NotFound"),
+        (format!("native:image-part:{digest}"), "NotFound"),
+        (format!("gone:image_part:{digest}"), "NotFound"),
     ] {
-        let out = layerfs(&home, &["doctor", "fix", &wrong]);
+        let out = layerfs(&home, &["home", "prune", &wrong]);
         assert_eq!(out.status.code(), Some(125), "{out:?}");
         let refusal = String::from_utf8_lossy(&out.stderr).into_owned();
         assert!(
@@ -124,29 +135,41 @@ fn doctor_fix_removes_one_leftover_by_its_id() {
     }
     assert!(part.is_file() && lock.is_file());
 
-    let out = layerfs(&home, &["doctor", "fix", &id]);
+    let out = layerfs(&home, &["home", "prune", &id, "--detail"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let removed = String::from_utf8(out.stdout).unwrap();
     assert_eq!(
         removed.trim(),
         format!(
-            r#"{{"kind":"image-part","path":"{}","removed":true,"bytes":50,"machine":"native","id":"{id}"}}"#,
+            r#"{{"ok":true,"freed_bytes":50,"outcome":"removed","leftover":"{id}","kind":"image_part","machine":"native","path":"{}"}}"#,
             part.display()
         )
     );
     assert!(!part.exists(), "the part is still there");
     assert!(lock.is_file(), "the lock file was removed");
     assert_eq!(
-        layerfs(&home, &["doctor", "fix", &id]).status.code(),
+        layerfs(&home, &["home", "prune", &id]).status.code(),
         Some(125)
     );
+    // the old name is gone (R1)
+    assert_eq!(
+        layerfs(&home, &["doctor", "fix", &id]).status.code(),
+        Some(2)
+    );
 
-    // help names it under the doctor and as its own topic
-    let help = String::from_utf8(layerfs(&home, &["help", "doctor"]).stdout).unwrap();
-    assert!(help.contains("layerfs doctor fix <id>\n"), "{help}");
-    for words in [&["help", "doctor", "fix"][..], &["doctor", "fix", "--help"]] {
+    // help names both under the home
+    let help = String::from_utf8(layerfs(&home, &["help", "home"]).stdout).unwrap();
+    assert!(help.contains("layerfs home prune <leftover>\n"), "{help}");
+    assert!(
+        help.contains("layerfs home leftovers [--machine <machine>]\n"),
+        "{help}"
+    );
+    for words in [&["help", "home", "prune"][..], &["home", "prune", "--help"]] {
         let help = String::from_utf8(layerfs(&home, words).stdout).unwrap();
-        assert!(help.starts_with("layerfs doctor fix <id>\n"), "{help}");
+        assert!(
+            help.starts_with("layerfs home prune <leftover>\n"),
+            "{help}"
+        );
     }
     std::fs::remove_dir_all(home).unwrap();
 }

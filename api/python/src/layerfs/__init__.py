@@ -46,7 +46,6 @@ machine = _default.machine
 store = _default.store
 backup = _default.backup
 logs = _default.logs
-doctor = _default.doctor
 
 __all__ = [
     "FAMILIES",
@@ -58,7 +57,6 @@ __all__ = [
     "client",
     "close",
     "commit",
-    "doctor",
     "file",
     "home",
     "logs",

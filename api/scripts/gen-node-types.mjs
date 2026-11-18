@@ -241,21 +241,14 @@ export const families: readonly string[];
 
 /** A client of \`home\` with an optional folder scope. */
 export function client(options?: ClientOptions): Client;
-/** Diagnoses without LayerFS state changes; explicit backup write_test uses its own temporary S3 version. */
-export function doctor(options?: DoctorOptions): Promise<DoctorReport>;
-/** The \`doctor\` family's calls, on the package's report function. */
-export namespace doctor {
-  const fix: DoctorFamily["fix"];
-}
 /** Closes every Store this process holds open with no call running; answers how many. Outside the call table. */
 export function close(): number;
 
-${families.filter((family) => family !== "doctor").map((family) => `export const ${family}: ${pascal(family)}Family;`).join("\n")}
+${families.map((family) => `export const ${family}: ${pascal(family)}Family;`).join("\n")}
 
 declare const layerfs: Client & {
   client: typeof client;
   close: typeof close;
-  doctor: typeof doctor;
   table: typeof table;
   families: typeof families;
   LayerFSError: typeof LayerFSError;

@@ -55,7 +55,7 @@ FAMILIES = ["home", "branch", "commit", "file", "sandbox", "workspace", "machine
 native.table = lambda: json.dumps([SPEC] + [
     {"family": family, "call": "list", "args": [], "options": [], "help": "stub"}
     for family in FAMILIES
-] + [{"family": "doctor", "call": "fix", "args": [], "options": [], "help": "stub"}])
+])
 sys.modules[native.__name__] = native
 package_spec = importlib.util.spec_from_file_location(
     PACKAGE, SOURCE / "__init__.py", submodule_search_locations=[str(SOURCE)]

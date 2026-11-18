@@ -10,7 +10,8 @@
 //! `methods/`) in the caller's process, the only route for Store calls
 //! (#352 F-020). The six doctors (`home`, `machine`, `store`, `project`,
 //! `sandbox`, `backup doctor`) are table calls of their families that never
-//! open the home; the `doctor` family keeps `doctor.fix`.
+//! open the home; they share one answer (`calls/doctor/`), which is no
+//! family.
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
@@ -18,7 +19,6 @@ mod backup;
 mod branch;
 pub mod calls;
 mod commit;
-mod doctor;
 mod file;
 // the `home` family's folder; `home` itself names the re-exported home module below
 #[path = "home/mod.rs"]
@@ -31,6 +31,9 @@ mod store;
 mod workspace;
 
 use calls as machinery;
+// the six doctors' shared answer and entries (`calls/doctor/`), by the
+// path each family's entry names
+use calls::doctor;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use std::path::Path;
@@ -74,8 +77,8 @@ pub use layerfs_sandbox::{
     BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
 };
 
-/// The twelve families, in the order help lists them: 84 calls, the same
-/// from the `layerfs` binary, Node and Python.
+/// The eleven families, in the order help lists them, the same from the
+/// `layerfs` binary, Node and Python.
 pub fn families() -> Families {
     &[
         Family {
@@ -121,10 +124,6 @@ pub fn families() -> Families {
         Family {
             name: "logs",
             list: logs::calls,
-        },
-        Family {
-            name: "doctor",
-            list: doctor::calls,
         },
     ]
 }

@@ -1,6 +1,5 @@
 // The profile table, the generated page and the tool schemas stay equal to the
 // call table: every call in exactly one bucket, every schema a valid MCP tool.
-// The doctor family's bucket is `none`: no tool in either profile.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -19,14 +18,14 @@ test("every call is in exactly one bucket, and admin adds the work bucket", () =
   assert.equal(buckets.filter((bucket) => bucket === "work").length, 38);
   assert.equal(buckets.filter((bucket) => bucket === "admin").length, 37);
   assert.ok(buckets.every((bucket) => bucket === "work" || bucket === "admin" || bucket === "ui" || bucket === "none"));
-  // `doctor.fix`, like `layerfs doctor` itself, is no tool in either profile
-  assert.deepEqual(table.filter((spec) => bucketOf(spec) === "none").map(nameOf), ["doctor.fix"]);
+  // no call is in the `none` bucket since the doctor family left (`home.prune` is admin)
+  assert.deepEqual(table.filter((spec) => bucketOf(spec) === "none").map(nameOf), []);
   // the monitoring calls a UI polls are offered to no agent (layerfs-project#178 D2, #164)
   const ui = table.filter((spec) => bucketOf(spec) === "ui").map(nameOf);
   assert.deepEqual(ui, ["sandbox.files", "machine.stats", "machine.files", "machine.log", "logs.sandbox"]);
   for (const profile of ["work", "admin"]) {
     const listed = tools(table, profile).map(nameOf);
-    for (const name of [...ui, "doctor.fix"]) assert.ok(!listed.includes(name), `${name} is in the ${profile} profile`);
+    for (const name of ui) assert.ok(!listed.includes(name), `${name} is in the ${profile} profile`);
   }
 
   const work = tools(table, "work").map(nameOf);

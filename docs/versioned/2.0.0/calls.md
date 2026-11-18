@@ -129,13 +129,13 @@ path is shortened):
 $ layerfs home get
 {"home":"/tmp/home1","state":"broken","version":"2.0.0","reason":"missing","fix":"layerfs home init"}
 $ layerfs home init
-{"home":"/tmp/home1","created":true,"converted":false,"layout":3}
+{"home":"/tmp/home1"}
 $ layerfs home get
 {"home":"/tmp/home1","state":"ready","version":"2.0.0","generation":2}
 $ layerfs store create shop
 {"name":"shop","kind":"sqlite","machine":"native","profile":"disposable","created":1795008741370,"sqlite":"3.53.2","projects":[]}
 $ layerfs home get --with tree
-{"home":"/tmp/home1","state":"ready","version":"2.0.0","generation":4,"tree":{"machines":[{"machine":"docker","state":"stopped"},{"machine":"native","stores":[{"store":"shop"}]}],"stores":[],"buckets":[]}}
+{"home":"/tmp/home1","state":"ready","version":"2.0.0","generation":4,"tree":{"machines":[{"machine":"docker","platform":"docker","state":"stopped"},{"machine":"native","platform":"native","stores":[{"store":"shop","engine":"sqlite"}]}],"stores":[],"buckets":[]}}
 $ layerfs home get --with live
 {"error":"InvalidInput","message":"home.get: `with` names `live`; this call takes platforms, tree"}
 ```
@@ -144,7 +144,7 @@ $ layerfs home get --with live
 
 `[x]` is an optional positional. Every family's results are snake_case.
 
-### `home` (4)
+### `home` (7)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -152,12 +152,18 @@ $ layerfs home get --with live
 | `get` | — | `--with platforms,tree` | the home's state and build; with `--with`, the platforms this computer supports or the tree of everything in the home |
 | `log` | — | `call`, `project`, `client`, `tag`, `outcome`, `since`, `limit`, `cursor` | the calls made against this home, newest first |
 | `clear_log` | — | — | clears this home's call log |
+| `doctor` | — | — | checks the home, then each machine, PostgreSQL Store and bucket, shallowly ([the doctors](#the-doctors)) |
+| `leftovers` | — | `machine` | what earlier runs left behind on this computer and on each running machine |
+| `prune` | `leftover` | — | removes one leftover that `leftovers` listed |
 
-- `init` and `get` are not opened by the dispatcher: `init` opens or
-  creates the home itself, and `get` never opens it. `get`, `log` and
-  `clear_log` write no line to the call log, and all four are `admin` in the
-  MCP server. `init` is not migrated: it returns
-  `{ home, created, converted, layout }`.
+- `init`, `get`, `doctor` and `leftovers` are not opened by the
+  dispatcher: `init` opens or creates the home itself, and the others never
+  open it. `get`, `log` and `clear_log` write no line to the call log, and
+  all seven are `admin` in the MCP server.
+- **`init`**, short: `{ home }`, with `unchanged: true` when the home was
+  already current or `converted: true` when it was an older layout. Long:
+  `home, unchanged, converted, outcome, layout, version`: `outcome` is
+  `created`, `converted` or `unchanged`, and `version` is this build's.
 - **`get`**, short: `{ home, state, version }`, with `generation` when the
   home is ready, and `reason` and `fix` when it is broken (`missing`: no
   home there; `outdated`: an older layout; both fixed by
@@ -175,8 +181,10 @@ $ layerfs home get --with live
   doctor's to say.
 - `generation` is a counter that moves each time a record of the home is
   written or removed (a machine, Store, project, bucket, Sandbox or
-  Workspace record) and never for a read: a caller that kept a tree reads it
-  again only when the number differs.
+  Workspace record, a saved login) and never for a read, an observation
+  file (`observed_at`) or a command's own records: a caller that kept a
+  tree reads it again only when the number differs. Every entity record
+  write moves it once, in the one function that writes records.
 - **`get --with platforms`** adds `platforms: { host, items }`: `host` is
   this computer's system and `items` one row per platform this build knows.
   A row's short form is `{ platform, ready }`, with `missing` when something
@@ -187,15 +195,21 @@ $ layerfs home get --with live
 - **`get --with tree`** adds `tree: { machines, stores, buckets }`, read
   from the home's records only: each machine with its sqlite `stores` and
   its `sandboxes`, the PostgreSQL Stores (which live on no machine) and the
-  buckets. A node's short form is its name, and its state only when it is
-  not `ready`; a Store adds `projects` and, when it is not sqlite,
-  `engine`; a Sandbox adds `workspaces`, each `{ workspace, branch }`. The
-  long forms are: machine `machine, platform, cpus, memory_bytes, state, op,
-  reason, fix, stores, sandboxes`; Store `store, engine, state, op,
-  blocked_by, reason, fix, projects, connections` (`connections`: the
-  machines a PostgreSQL Store is connected from); Sandbox `sandbox,
-  project, image, state, op, blocked_by, reason, fix, workspaces`; bucket
-  `bucket, provider`. A Store or Sandbox whose machine is stopped, busy or
+  buckets. A node's short form is what names it (machine `machine,
+  platform`; Store `store, engine`; Sandbox `sandbox, project`; bucket
+  `bucket, provider`), then what is news: its state only when it is not
+  `ready`, a machine's `cpus` and `memory_bytes`, a Store's `projects` and
+  `connections`, a Sandbox's `image`, `workspaces` (each `{ workspace,
+  branch }`) and `workspaces_not_listed`. The long forms are: machine
+  `machine, platform, cpus, memory_bytes, state, op, reason, fix, stores,
+  sandboxes`; Store `store, engine, projects, connections, state, op,
+  blocked_by, reason, fix`; Sandbox `sandbox, project, image, workspaces,
+  workspaces_not_listed, state, op, blocked_by, reason, fix`; bucket
+  `bucket, provider`. A PostgreSQL Store's `connections` are `{ machine,
+  url }`: the home's own address first (`machine` null), then each machine
+  that has its own; a sqlite Store's are null. A Workspace is in the home's
+  records only on `native` and for a Sandbox reached directly: any other
+  Sandbox answers `workspaces` null and `workspaces_not_listed: true`. A Store or Sandbox whose machine is stopped, busy or
   broken is `blocked`, and `blocked_by` names that machine. A machine that
   only a Store or Sandbox names, with no record of its own, is listed too
   (`broken`, `missing`, unless it is `native` or `docker`), so nothing in the
@@ -217,8 +231,44 @@ $ layerfs home get --with live
   its byte count, never its value.
 - **`clear_log`** truncates the call log in place and removes the rotated
   file. Short: `{"ok":true}`; long: `{ ok, outcome: "cleared", line_count }`.
-- `home.log` and `home.clear_log` were `logs.list` and `logs.reset`; the old
-  names are gone, with no alias. A row's `at`, `ms`, `lines`, `has_more`
+- **`leftovers`** lists what interrupted operations left: one bounded walk
+  of the home's own folders on `native` (20,000 entries or 2 s), and one
+  through the worker of each running machine; `--machine M` walks one.
+  Nothing is started: a machine that is stopped, held by an operation or
+  does not answer is named in `not_listed` (`{ machine, message }` with
+  `blocked_by`, the thing at the root and its state, or `reason`:
+  `timeout`, `busy` or `refused`), and so is one whose walk stopped at its
+  bound (`timeout`; what it found is listed). An item's short form is
+  `{ leftover, modified_at }`, with `size` (null when the bound ended the
+  walk before it was measured) and `report_only`; its long form adds
+  `removable_at`, `kind`, `machine` and `path`. `leftover` is its id,
+  `<machine>:<kind>:<name>` (never a path), the kind in snake_case:
+  `run_folder`, `empty_root`, `init_copy`, `backup_staging`, `image_tmp`,
+  `image_part`. An image's lock file and a Workspace's unmount marker are
+  LayerFS's own and never listed. A home that is not current has none; a
+  machine the home does not know is `NotFound`.
+- **`prune <leftover>`** removes the one leftover whose id it is given,
+  once, on that machine, under that kind's guard. Short: `{ freed_bytes }`,
+  or `{"ok":true}` when the size was not measured; long: `ok, freed_bytes,
+  outcome ("removed"), leftover, kind, machine, path`.
+
+  | Kind | Removed when (else `InUse`, nothing removed) |
+  | --- | --- |
+  | `run_folder` | no Sandbox record names it, its `owner` marker is there and older than a minute, no daemon of it runs and nothing is mounted at or under it or its `.root` |
+  | `empty_root` | its run folder is gone and it is not a mount point; `rmdir` only |
+  | `init_copy` | a line of `log/uncertain.jsonl` names the machine and the copy, and its deadline (when the lost request went out, plus the Init's `timeoutMs`) passed more than an hour ago (`removable_at`); a copy no line names is `report_only` and refused `InvalidInput` |
+  | `backup_staging` | no `backup create` of that Store is running (its `backup.lock` is taken for the removal) |
+  | `image_tmp` | no unpack of that image is running (its lock is taken; the lock file stays) |
+  | `image_part` | it has not been written for an hour |
+
+  Other refusals: `NotFound` (no leftover has that id now), `Unavailable`
+  (the machine is stopped) and `Unknown` (the worker's answer was lost;
+  nothing is sent again).
+- `home.log` and `home.clear_log` were `logs.list` and `logs.reset`, and
+  `home.prune` was `doctor.fix` (the `doctor` family is gone); the old
+  names are gone, with no alias. A leftover's `id`, `bytes`, `age`,
+  `fixable` and `not_before` became `leftover`, `size`, `modified_at`,
+  `report_only` and `removable_at`, and its kinds lost their hyphens. A row's `at`, `ms`, `lines`, `has_more`
   and `next` became `logged_at`, `duration_ms`, `items` and `next_cursor`.
   The home's layout and settings are in [the home](home.md).
 
@@ -1130,34 +1180,8 @@ every check was made and nothing was found; otherwise `findings` and
   then each `not_checked` entry.
 - Exit 0 once the report is made, whatever it finds; 125 with `NotFound`
   when the thing is not in the home; 2 for a wrong command line. Leftovers
-  of interrupted operations are in no doctor's report.
-
-### `layerfs doctor fix <id>`
-
-The one `doctor` command that changes something, and a call of the table
-(`doctor.fix`; `layerfs.doctor.fix(id)` in Node and Python). It removes the
-one leftover whose `id` it is given (`<machine>:<kind>:<name>`, never a
-path), once, on that machine, under that kind's guard:
-
-```bash
-layerfs doctor fix native:image-part:<64 hex>
-# {"kind":"image-part","path":"…/machine/native/run/images/.recv-<64 hex>.part","removed":true,"bytes":50,"machine":"native","id":"native:image-part:<64 hex>"}
-```
-
-| Kind | Removed when (else `InUse`, nothing removed) |
-| --- | --- |
-| `run-folder` | no Sandbox record names it, its `owner` marker is there and older than a minute, no daemon of it runs and nothing is mounted at or under it or its `.root` |
-| `empty-root` | its run folder is gone and it is not a mount point; `rmdir` only |
-| `init-copy` | a line of `log/uncertain.jsonl` names the machine and the copy, and its deadline (when the lost request went out, plus the Init's `timeoutMs`) passed more than an hour ago; a copy no line names is only reported (`InvalidInput`) |
-| `backup-staging` | no `backup create` of that Store is running (its `backup.lock` is taken for the removal) |
-| `image-tmp` | no unpack of that image is running (its lock is taken; the lock file stays) |
-| `image-part` | it has not been written for an hour |
-
-Other refusals: `NotFound` (no leftover has that id now), `InvalidInput`
-(an image lock or an unmount marker, which are never removed), `Unavailable`
-(the machine is stopped) and `Unknown` (the worker's answer was lost). The MCP server has no tool for it. Run on
-macOS `native` against leftovers made by hand; not run on a VM machine for
-this manual.
+  of interrupted operations are in no doctor's report: `home leftovers`
+  lists them and `home prune` removes one (see [`home`](#home-7)).
 
 ## Results
 
