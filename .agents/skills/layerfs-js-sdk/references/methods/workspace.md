@@ -1,19 +1,20 @@
 # workspace calls
 
-> **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
-> `layerfs-js-sdk` skill. **Not run in this pass** (no Sandbox was started).
-> Shapes are read from `api/crates/layerfs-api/src/family/sandboxes.rs`,
-> `host/workspace.rs`, `host/exec.rs` and `sandbox/values.rs`, with keys in
-> snake_case as the library returns them. Only `workspace status` on a missing
-> Sandbox was run (`NoSuchSandbox`).
+> **Status:** Current general guide for the LayerFS 2.0 call surface. Part of
+> the `layerfs-js-sdk` skill. Outputs marked "seen" were printed by the built
+> `layerfs` command on a throwaway home on 2026-11-18 (macOS, a `native`
+> Sandbox; ids shortened); the rest is from the table, the spec rows and the
+> manual, not run. `workspace.exec_cancel` is gone (now `workspace.cancel`),
+> with no alias.
 
 ```js
+workspace.list({ sandbox, limit, cursor })
 workspace.mount(sandbox, branch, { name })
-workspace.exec(ws, command, { message, stream, stdout, stderr, exec_id, on_progress })
-workspace.exec_cancel(ws, exec_id, { grace_ms })
-workspace.commit(ws, { message, force })
-workspace.unmount(ws, { discard, force })
-workspace.status(ws)
+workspace.exec(workspace, command, { cwd, env, stdin, stream, stdout, stderr, on_progress })
+workspace.cancel(workspace, { exec })
+workspace.commit(workspace, { message, expected, force })
+workspace.unmount(workspace, { discard, force })
+workspace.status(workspace, { path })
 ```
 
 A Workspace is a complete, writable view of a Branch where ordinary commands
@@ -22,236 +23,228 @@ at the Commit. For one small read or edit, [`file.*`](file.md) is cheaper.
 
 ## Shared rules
 
-- A Workspace is named `<sandbox>:<path>`, such as `tests:/workspaces/1`,
-  or `<sandbox>:<name>`, such as `tests:build`, when its mount gave it a
-  `name`: the `ws` field of `mount`'s result. Pass that string to every other
-  call; every call takes either form. It works from any later process with
-  the same `LAYERFS_HOME`. Never use one after its unmount.
-- **Each mount is a new Workspace**, even on the same Branch, with its own
-  uncommitted changes. Mounting doesn't copy or scan the tree.
+- A Workspace is named `<sandbox>:<name>`, such as `tests:agent`: the
+  `workspace` key of `mount`'s answer. Pass that handle to every other call.
+  The path form `<sandbox>:/path` is refused `InvalidInput`. The handle works
+  from any later process with the same `LAYERFS_HOME`; never use one after
+  its unmount.
+- **Each mount is a new Workspace**, with its own uncommitted changes.
+  Mounting doesn't copy or scan the tree.
 - **A Workspace per Bash call is the default:** mount, exec, commit, unmount.
   Longer work is fine too: keep one mounted across several `exec` calls and
   commit at any point, or mount several at once.
-- **The view is fixed at mount.** It does not follow later Commits; `commit`
-  merges in what moved. To *see* it, mount again.
+- **The view is fixed at mount.** It does not follow later Commits:
+  `status` answers `branch_moved: true` and `commit` merges in what moved.
+  To *see* it, mount again.
 - **Everything in it is committed:** sources, `.git`, `node_modules`, build
   output and caches. Scratch files belong in `/tmp`, outside the Workspace.
 - Keep each Workspace's calls sequential.
-- While its Sandbox is being created or closed, `mount`, `exec`, `commit`
-  and `unmount` are refused `Busy`; once such a call lost its answer and its
-  process ended (`state: "unresolved"` in `sandbox.get`), they are refused
-  `Unresolved` until `sandbox.close(name)` clears it. `status` only reads
-  and is not refused for that (see [sandbox](sandbox.md)).
-- On `lima` and `docker`, `mount`, `commit`, `unmount` and `status`
-  go from this process straight to the Sandbox's daemon (#535 G4); `exec`
-  goes through the machine's worker, which runs the command in the machine.
+- A call routed to a machine whose worker is not running is refused
+  `Unavailable` with `fix: layerfs machine start <machine>`; none of these
+  calls starts a machine.
 
 ```js
-const { ws } = await layerfs.workspace.mount("tests", "work");   // a NEW Workspace
+const { workspace } = await layerfs.workspace.mount("tests", "agent");   // a NEW Workspace
 try {
-  const run = await layerfs.workspace.exec(ws, "timeout 110 npm test 2>&1", { message: "step 12" });
-  await layerfs.workspace.commit(ws, { message: `step 12: npm test (exit ${run.exit_code})` });
+  const run = await layerfs.workspace.exec(workspace, "timeout 110 npm test 2>&1");
+  await layerfs.workspace.commit(workspace, { message: `step 12: npm test (exit ${run.exit_code})` });
 } finally {
-  await layerfs.workspace.unmount(ws);                            // ws is now invalid
+  await layerfs.workspace.unmount(workspace);                           // the handle is now invalid
 }
 ```
 
 ```bash
-ws=$(layerfs workspace mount tests work | jq -r .ws)
+ws=$(layerfs workspace mount tests agent | jq -r .workspace)
 layerfs workspace exec "$ws" "timeout 110 npm test 2>&1" --stream; code=$?
 layerfs workspace commit "$ws" -m "step 12: npm test (exit $code)"
 layerfs workspace unmount "$ws"
 ```
 
+## `workspace.list`
+
+Every mounted Workspace in the home, or one Sandbox's (`sandbox`), from
+records; it asks no daemon. Rows `{ workspace, branch }` (long: `sandbox`,
+`project`, `path`, `mounted_at`), by Sandbox then name, paged by `limit`
+(1 to 1000, default 100) and `cursor`. A Sandbox whose Workspaces could not
+be listed (its machine is not ready, or its worker did not answer) is named
+in `not_listed` with `blocked_by` or `reason`.
+
+```bash
+$ layerfs workspace list                                                       # seen
+{"items":[{"workspace":"tests:agent","branch":"agent"}]}
+```
+
 ## `workspace.mount`
 
-`workspace.mount(sandbox, branch, { name })`
+Mounts the Branch's head as it is now, in the Sandbox named `sandbox`. It
+never starts a Sandbox. Answers `{ workspace, path }`; long adds
+`outcome: "mounted"`, `branch`, `commit` (the Commit it stands on),
+`base_layer`, `root`, `id` (the 64-hex Workspace id) and `namespace`.
+Without `name` the name is the Branch's made valid: lowercased, each
+character outside `a-z 0-9 _ . -` replaced by `-`, cut to 63, and `_ . -`
+trimmed from the ends (`Feature/Login` mounts as `feature-login`).
 
-Mounts the Branch's head as it is now, in the Sandbox named `sandbox`. It never
-starts a Sandbox. Only side Branches are mounted: `main` (the project's
-published line, not a Branch) is refused `InvalidInput`; fork a Branch from it
-with `branch.fork(project, name, "main")` and mount that. `name` (optional, #536 C3) names the Workspace: 1–63
-lowercase letters, digits, `_ . -`, unique within the Sandbox while it is
-mounted; `ws` is then `<sandbox>:<name>`.
+```bash
+$ layerfs workspace mount tests agent                                          # seen
+{"workspace":"tests:agent","path":"/tmp/demo/home/machine/native/run/layerfs-8a7387b2-tests/workspaces/1"}
+$ layerfs workspace mount tests main                                           # seen, exit 125
+{"error":"InvalidInput","message":"main is the project's published line, not a Branch, and is not mounted: fork a Branch from it and mount that","fix":"layerfs branch fork shop/api <name> main"}
+```
 
-**Returns** (from source):
-
-| Field | Meaning |
-| --- | --- |
-| `ws` | `<sandbox>:<name>` when named, else `<sandbox>:<path>`: pass this on |
-| `name` | Its name, or `null` |
-| `kind` | `"Mounted"` |
-| `path` | The mount path inside the Sandbox |
-| `branch`, `base`, `base_layer`, `root` | The Branch, the Commit it shows, the `main` Layer under it, its root id |
-| `workspace`, `namespace` | Daemon ids |
-| `sandbox`, `container` | The Sandbox's id (its name, as its machine knows it) and its container (or daemon folder) name |
-| `image`, `platform`, `runtime` | What the Sandbox runs on |
-
-| Code | Meaning | Do |
+| `error` | When | Do |
 | --- | --- | --- |
-| `NoSuchSandbox` | No Sandbox of that name, or its daemon ended (a crash or kill) | `sandbox.create` (after `sandbox.close(name)` for one whose daemon ended; see [sandbox](sandbox.md#sandbox-lifetime)) |
-| `NoSuchBranch` | No such Branch, or `main` | Fork first |
-| `Exists` | A Workspace of that `name` is mounted in the Sandbox | Pick another name, or use (or unmount) that one |
-| `Capacity` | The Sandbox holds 16 Workspaces. (Its message still names 1.1.0's `sandbox.list_workspaces`; use `sandbox.get`) | Create another Sandbox, or unmount Workspaces you're done with |
-| `Failed` | The mount failed in the daemon | Stop and report |
+| `InvalidInput` | `main`, or a Branch whose default name is empty or reserved (`fix` names `--name`) | Fork a Branch; pass `name` |
+| `Exists` | A Workspace of that name is mounted in the Sandbox (`fix` names `--name`) | Use that one, or pick another `name` |
+| `Capacity` | The Sandbox already holds 16 Workspaces | Unmount Workspaces you're done with, or use another Sandbox |
+| `NotFound` | No such Sandbox or Branch | `sandbox.list`, `branch.list` |
 
 ## `workspace.exec`
 
-`workspace.exec(ws, command, { message, stream, stdout, stderr, exec_id, on_progress })`
+Runs one bash command in the Workspace and waits for it to end. The working
+directory is the Workspace root, or `cwd` (a folder of the Workspace, as a
+path from its root), so use relative paths (`src/cart.js`), never the mount
+path.
 
-Runs one command with `bash -c` in the Workspace and waits for it to end. The
-working directory is the Workspace root, so use relative paths
-(`src/cart.js`), never the mount path.
+Answers `{ exit_code }`, with `stdout` and `stderr` when not empty. **A
+non-zero exit is not a refusal.** The long form adds `stdout_file`,
+`stderr_file`, `cancelled`, `exec` (its id), `stop` (`cgroup` on Linux
+kernels, `group` on macOS `native`), `stdout_bytes`, `stderr_bytes` and
+`duration_ms`.
 
-**Returns:**
+```bash
+$ layerfs workspace exec tests:agent 'echo hello > out.txt && uname -s'        # seen
+{"exit_code":0,"stdout":"Darwin\n"}
+$ layerfs workspace exec tests:agent 'exit 3'                                  # seen, exit 3
+{"exit_code":3}
+```
 
-| Field | Meaning |
-| --- | --- |
-| `kind` | `"exit:<code>"` |
-| `exit_code` | The command's exit code. Non-zero is **not** a refusal |
-| `stdout`, `stderr` | Each stream, whole, up to 1 MiB (bytes when it is not UTF-8). A stream over 1 MiB is `null` here, with `stdout_bytes`/`stderr_bytes` and `streamed: true`: its bytes went to the functions or `stream` only |
-| `message` | Your message, echoed; it creates no history |
-| `truncated` | `false`: no output is cut |
-
-**Output streaming.** In this build the library sends the output as events
-**after the command ends**, not live (from source and the commits' live
-tests, `f67d5a9f6f`, `771823d728`, `94671c974c`, `37f1bbd2b9`):
-
-- Node: `{ stdout: (piece) => …, stderr: (piece) => … }` are called with each
-  piece: a string when it is UTF-8, else a `Buffer`. `{ stream: true }`
-  without them writes the output to your process's own stdout and stderr.
-- Python: `stdout=`, `stderr=` functions, the same way (`str` or `bytes`);
-  `stream=True` alone writes to `sys.stdout`/`sys.stderr`.
-- Shell: `--stream` writes the output to stdout and stderr and exits with the
-  command's own code (0 when the result has none; 125 still means LayerFS
-  failed). Without `--stream`, the JSON result goes to stdout and the exit
-  code is 0.
-- Output over 1 MiB arrives only this way, 1 MiB per piece; without a
-  function, `stream` or `--stream` those bytes are not kept.
-
-`exec_id` (1–64 of `A-Z a-z 0-9 . _ -`, not starting with `.` or `-`) names
-the running command; it defaults to `exec-<16 hex>` and must be unique among
-the Workspace's running commands (`Exists` otherwise). `on_progress` receives
-one event before the command starts: `{ exec: { id } }`.
-
-**Limits**
-
-- No timeout: put `timeout 110` inside the command.
+- **Output:** a stream of at most 1 MiB is answered whole; a longer one
+  answers its last 1 MiB and names, as `stdout_file`/`stderr_file`, the file
+  in the Sandbox's run folder that holds all of it (`sandbox.files` reads it,
+  `unmount` deletes it). Output that is not UTF-8 is bytes.
+- **Node and Python** also take `stdout` and `stderr` functions, called with
+  the output's pieces, and `stream: true`, which writes it to your process's
+  own stdout and stderr. When the pieces arrive was not checked in this pass.
+- **Shell:** the command exits with the command's own code and prints the
+  answer on stdout; `--stream` writes the output to stdout and stderr and
+  prints no answer; a refusal exits 125.
+- `env` is one object in Node and Python (shell: `--env K=V`, repeated).
+  `stdin` gives the command text or bytes (shell: `--stdin` passes this
+  process's stdin, read whole); without it the command reads `/dev/null`.
+- LayerFS makes every exec id (`exec-` and 16 hex digits); `on_progress`
+  receives `{ phase: "start", done: 0, total: 1, exec: "exec-…" }` before
+  the command starts.
+- **No timeout:** put `timeout 110` inside the command.
 - It waits until everything holding its output has ended, background jobs
   included. Start a server, probe it and stop it in **one** call, with its
   output redirected to `/tmp`.
-- Output up to 1 MiB per stream is returned whole; more comes only through
-  the functions or `stream`. For a long log, redirect to a file in `/tmp` and
-  read the end in a second call.
 
 ```js
-await layerfs.workspace.exec(ws, "timeout 110 npm run build >/tmp/build.log 2>&1; echo $? >/tmp/build.code", { message: "build" });
-const tail = await layerfs.workspace.exec(ws, "cat /tmp/build.code; tail -n 60 /tmp/build.log", { message: "build log" });
+await layerfs.workspace.exec(workspace, "timeout 110 npm run build >/tmp/build.log 2>&1; echo $? >/tmp/build.code");
+const tail = await layerfs.workspace.exec(workspace, "cat /tmp/build.code; tail -n 60 /tmp/build.log");
 ```
 
 **Write a file inside a mounted Workspace** only when this Workspace must see
-it before its next Commit; otherwise use `file.*` and mount again. Pass the
-content as base64 so the shell doesn't reinterpret it (fine up to a few tens
-of KiB):
+it before its next Commit; otherwise use `file.*` and mount again. `stdin`
+carries the content without shell quoting:
 
 ```js
-const b64 = Buffer.from("export const TAX = 0.08;\n").toString("base64");
-const run = await layerfs.workspace.exec(ws, `printf '%s' ${b64} | base64 -d > src/tax.js`, { message: "write src/tax.js" });
+await layerfs.workspace.exec(workspace, "cat > src/tax.js", { stdin: "export const TAX = 0.08;\n" });
 ```
 
-**Refusals:** `NoSuchSandbox` (the Sandbox is gone: its Workspaces are gone
-too; mount again elsewhere), `NotMounted`, `Exists` (that `exec_id` is
-running in this Workspace), `Unknown` (the exit code is not
-known: the command may or may not have run; stop).
+**Refusals:** `Unknown` when the reply was lost: the command may have started
+and may still run; it is never run again. The refusal carries `exec` and a
+`fix` naming `workspace cancel --exec`. `NotFound` for a Workspace that is
+not mounted.
 
-## `workspace.exec_cancel`
+## `workspace.cancel`
 
-`workspace.exec_cancel(ws, exec_id, { grace_ms })`
+Ends every command running in the Workspace, or the one `exec` names:
+SIGTERM, then SIGKILL after 5 s. Short answers: `{ signal: "SIGTERM" }` (or
+`"SIGKILL"`), `{ already_ended: true }`, or `{ unknown: true }` (the worker
+was not reached or did not answer: cancel again once it answers). Long:
+`outcome` (the worst of `commands[].outcome`: `unknown`, `cancelled`,
+`already_ended`) and `commands: [{ exec, outcome, signal }]`. A cancelled
+command's `exec` answers `cancelled: true` and exit code 128 plus the signal.
 
-Ends a running command from any process: SIGTERM to everything it started,
-then SIGKILL after `grace_ms` (default 5000, not negative; 0 sends SIGKILL
-right after SIGTERM). One explicit attempt; there is no operation timeout.
-
-| Answer | Meaning |
-| --- | --- |
-| `{ outcome: "cancelled", signal }` | `SIGTERM` when the command was gone within the grace, else `SIGKILL`; a command not yet running is marked and answered `SIGKILL`, and its owner ends it once it runs |
-| `{ outcome: "ended" }` | no record, or nothing left; with no record, a pending mark is kept for 30 s and cancels a command registered with that id in that time |
-| `{ outcome: "unknown" }` | the worker was not reached or did not answer; call again once it answers |
-
-A cancelled `workspace.exec` answers `kind: "cancelled"` and its code is
-128 + the signal. Error: `Failed` (a record that does not read, or the signal
-could not be sent).
+```bash
+$ layerfs workspace cancel tests:agent                                         # seen: nothing ran
+{"already_ended":true}
+```
 
 ## `workspace.commit`
 
-`workspace.commit(ws, { message, force })`
+Saves everything changed in the Workspace as one Commit on its Branch. If
+the Branch moved since the mount, it merges first. The Workspace stays
+mounted.
 
-Saves everything changed in the Workspace as one Commit on its Branch. If the
-Branch moved since the mount, it merges first. The Workspace stays mounted.
+Answers `{ commit }` (the Branch's new head) with `unchanged` (nothing
+changed; no Commit), `merged` (a merge ran), `overwritten` (paths
+[`/.lww`](../rules/lww.md) rules decided, the first 20) and
+`overwritten_count` past those; long adds `outcome`, `branch`, `parent`,
+`root`, `message`, `created_at`, `merged_from` (the head merged in) and
+`displaced`.
 
-**Returns:**
+```bash
+$ layerfs workspace commit tests:agent -m 'test output'                        # seen
+{"commit":"12bb5eae…"}
+```
 
-| `kind` | Fields | Meaning |
+- `expected: <commit>` refuses `Conflict` unless the Branch's head is that
+  Commit (an id or a prefix of 8 or more), checked once before the Commit.
+- `force: true` commits over a head that moved since the mount instead of
+  merging with it, replacing what the other writer committed (`displaced`
+  names it). Use it only when you mean to discard that.
+
+| `error` | When | Do |
 | --- | --- | --- |
-| `Committed` | `head`, `commit`, `displaced_head`, `merged`, `lww`, `lww_truncated` | New Commit. `merged` is `{ from, head }` when a merge ran, else `null`. `lww` lists files decided by the head's [`/.lww`](../rules/lww.md), each `{ path, kept, deleted, rule }` |
-| `UpToDate` | `head`, `root`, `merged`, `lww`, `lww_truncated` | Nothing changed; no Commit |
-
-`commit` is the record [`commit.list`](commit.md#commitlist) shows, with
-`via: "exec"`.
-
-**`force`** (passed to the daemon since `37f1bbd2b9`): publishes over a
-moved head instead of merging, replacing what the other writer committed.
-Use it only when you mean to discard that.
-
-| Code | Meaning | Do |
-| --- | --- | --- |
-| `Conflict` | The merge with the moved head overlaps. Markers are written into the Workspace; nothing is committed | See [resolving conflicts](../rules/conflicts.md#commit-conflicts) |
-| `NotMounted` | Not mounted | Use the Workspace from `mount` |
-
-A Commit `Conflict`'s `detail` (camelCase, from source): `head`, `base`,
-`markers`, `conflicts`, `lww`, `conflictsTruncated`, `lwwTruncated`, `written`,
-`truncated`. Full marker files stay in the Workspace even when the reply
-leaves their text out.
+| `Conflict` | The merge with the moved head overlaps: markers are written into the Workspace and nothing is committed; or the head is not `expected`. Flat: `commit` (the head), `conflicts` (the first 20 paths), `conflicts_count` | See [resolving conflicts](../rules/conflicts.md#commit-conflicts) |
+| `NotFound` | The Workspace is not mounted | Use the handle from `mount` |
 
 ## `workspace.unmount`
 
-`workspace.unmount(ws, { discard, force })`
-
-Ends a Workspace. The Sandbox keeps running with no Workspace until `sandbox.close` (#535 D11).
+Ends a Workspace. The Sandbox keeps running until `sandbox.remove`.
 
 | Option | Meaning |
 | --- | --- |
-| `discard` | Drop uncommitted changes instead of refusing |
-| `force` | Abort the Workspace's kernel connection; drops uncommitted changes. A normal unmount that stalls ends itself with one abort write; use `force` only for a live connection, never to repeat an attempted abort |
+| `discard` | Drop uncommitted changes instead of refusing `Dirty` |
+| `force` | End running commands and abort the Workspace's kernel connection; drops uncommitted changes. A normal unmount that stalls ends itself; use `force` only for a live connection |
 
-**Returns:** `{ kind: "Unmounted" }`, or with `force`
-`{ kind: "ForceUnmounted", abort, detach, cleanup }`.
+Answers `{"ok":true}`; long: `outcome` (`unmounted` or `force_unmounted`)
+and a forced unmount's `abort`, `detach` and `cleanup`.
 
-| Code | Meaning | Do |
+```bash
+$ layerfs workspace unmount tests:agent                                        # seen
+{"ok":true}
+```
+
+| `error` | When | Do |
 | --- | --- | --- |
-| `Dirty` | Uncommitted changes; `detail.changed` lists paths, with `pendingMerge` and `truncated` | Commit them so the step is recorded; discard only a Workspace you're abandoning |
-| `Busy` | A process still runs there (`detail.processes`) | Wait for it, or end it in a command |
-| `NotMounted` | Already unmounted, or the wrong `ws` | Use the Workspace from `mount` |
-| `Failed` with `TeardownCustody` in the message | The mount is gone but its drain did not finish | Preserve the message; don't repeat the abort; replace the Sandbox if its connection can't be ended |
+| `Dirty` | Uncommitted changes; flat `changes` (the first 20, as `status` lists them), `changes_count`, `pending_merge`, and a `fix` naming `workspace commit` | Commit them so the step is recorded; discard only a Workspace you're abandoning |
+| `Busy` | A command still runs there; flat `running` (exec ids) | `workspace.cancel`, or wait |
+| `Unknown` | `force`, and a command's cancel was not confirmed; flat `running` | Stop and report |
 
 ## `workspace.status`
 
-`workspace.status(ws)`
+What a Workspace holds before you commit. Short: `changes`, the first 20
+entries of one bounded read of 256 overlay rows, each `{ path, change }`
+(`added`, `modified`, `removed`; a renamed or removed folder is one entry),
+plus when set `changes_count` (past the 20 shown), `partial: true` (the read
+hit its bound), `branch_moved: true` (the Branch gained Commits since the
+mount) and `state` with its companion when not `ready`. `path` filters within
+the same read. Long adds `type` per change, `branch`, `commit`, `base_layer`,
+`branch_head`, `activity` (the daemon's own word), `overlay`
+(`{ inode_count, entry_count }`) and `pending_merge`.
 
-What a Workspace holds before you commit. New in the SDK surface for 2.0
-(1.1.0 had it only in `@layerfs/backend`). From source:
+```bash
+$ layerfs workspace status tests:agent                                         # seen
+{"changes":[{"path":"/out.txt","change":"added"},{"path":"/x.txt","change":"removed"}]}
+$ layerfs workspace status tests:agent --detail                                # seen
+{"changes":[{"path":"/out.txt","change":"added","type":"file"},{"path":"/x.txt","change":"removed","type":"file"}],"changes_count":null,"partial":false,"branch_moved":false,"state":"ready","op":null,"reason":null,"fix":null,"branch":"agent","commit":"12d12fbd…","base_layer":"32919f55…","branch_head":"12d12fbd…","activity":"idle","overlay":{"inode_count":3,"entry_count":2},"pending_merge":false}
+```
 
-| Field | Meaning |
-| --- | --- |
-| `kind` | `"ok"` |
-| `branch` | The Branch it was mounted from |
-| `base`, `base_layer` | The Commit and `main` Layer it is based on |
-| `branch_head` | The Branch's head now (`null` when that read failed) |
-| `head_moved_since_mount` | `true` when a Commit now would merge first |
-| `activity` | The daemon's activity state |
-| `overlay` | `{ inodes, entries, pending_merge }`: changed files and directory entries, or `null` |
-
-Use it before a Commit you might want to keep separate from other writers'
-changes, or to decide whether a leftover Workspace holds anything.
-It never starts a machine (#535 P4): on a Sandbox whose machine is down it is
-`Unavailable`, naming `machine start`.
+A busy Workspace's `op` is `{ name, phase, started_at }`: `mount`, `commit`
+or `unmount`. A `broken` one (`unresolved`, `failed`) carries
+`fix: layerfs workspace unmount <workspace> --discard --force`. Use `status`
+before a Commit you might want to keep separate from other writers' changes,
+or to decide whether a leftover Workspace holds anything.

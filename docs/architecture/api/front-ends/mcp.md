@@ -91,23 +91,23 @@ Workspace, confined by its Sandbox backend, not by this list.
 
 ## Profiles
 
-Each call belongs to exactly one bucket: `work` (listed by both profiles),
-`admin` (listed only by `admin`), `ui` (listed by neither: `UI_CALLS`, the
-monitoring reads a UI polls, which no agent is offered) or `none` (no tool in
-either). A migrated entry names its own bucket (`form.profile`: `agent` is
-`work`, `full` is `admin`); the lists below place the others
-([`profiles.js`](../../../../api/mcp/src/profiles.js)):
+Each call belongs to exactly one bucket: `work` (listed by both profiles) or
+`admin` (listed only by `admin`). Every 2.0 entry names its own bucket in its
+table entry (`form.profile`: `agent` is `work`, `full` is `admin`), and
+[`profiles.js`](../../../../api/mcp/src/profiles.js) reads only that; it names
+calls only to give some a longer line in the table below. 17 calls are in
+`work` and 68 in `admin` only.
 
 | Bucket | Calls |
 | --- | --- |
-| `work` | the `branch`, `commit`, `file` and `workspace` families; `project.list`, `project.get`, `project.export`, `sandbox.list`, `sandbox.get` |
-| `admin` | `project.init`, `project.delete`, `project.remove_file`, `branch.remove`, `store.compact`, `sandbox.create`, `sandbox.close`; the `home` family (`home.get`, `home.log` and `home.clear_log` by their entries' `full` profile), the `machine` (but `machine.stats`, `machine.space` and `machine.files`), `store` and `backup` families |
-| `ui` (no profile) | `sandbox.files`, `machine.stats`, `machine.space`, `machine.files`, `logs.machine`, `logs.sandbox` |
-| `none` | the `doctor` family (`doctor.fix`): like `layerfs doctor` itself, which is outside the table and no tool, removing a leftover is a person's repair |
+| `work` | `branch.fork`; `commit.list`, `commit.diff`; `file.read`, `file.list`, `file.glob`, `file.grep`, `file.write`, `file.edit`, `file.rm`, `file.mv`; `sandbox.create`; `workspace.list`, `workspace.exec`, `workspace.cancel`, `workspace.commit`, `workspace.status` |
+| `admin` | every other call, the six doctors included |
 
-`work` lets an agent read a project, work on Branches and files (each write
-is one explicit Commit), run in a mounted Workspace and export a snapshot.
-`admin` adds the calls that start workers, move whole Stores, hold
+`work` lets an agent fork a Branch, read and change its files (each write is
+one explicit Commit), read and compare its Commits, start a Sandbox and run,
+cancel and commit in a mounted Workspace. `admin` adds the project, home,
+machine, Store and backup calls, the rest of the Branch, file and Sandbox
+calls, and the doctors: the calls that start workers, move whole Stores, hold
 credentials, retire or compact records, or change the shape of the home. A new call with
 no bucket fails `tools()`, generation and the test rather than appearing
 silently. Regenerate the table below with
@@ -116,107 +116,107 @@ built addon).
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
-85 calls: 17 in `work`, 68 in `admin` only, 0 in no profile (`ui`), 0 no tool; `--profile admin` lists 85.
+85 calls: 17 in `work` (the table's `agent` profile), 68 in `admin` only (`full`); `--profile admin` lists 85.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
-| `home.init` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
-| `home.get` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
-| `home.log` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
-| `home.clear_log` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
-| `home.doctor` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
-| `home.leftovers` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
-| `home.prune` | admin | admin | set the home up, read its state and what this build would use with it, and read or clear its call log; administration |
-| `project.init` | admin | admin | import a host folder into a Store; administration |
-| `project.list` | admin | admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
-| `project.get` | admin | admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
-| `project.stats` | admin | admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
-| `project.export` | admin | admin | export a Branch snapshot to a local folder under a launch-time --export-root; a folder scope refuses it |
-| `project.delete` | admin | admin | retire a project in its Store and remove its home entry; administration; a folder scope refuses it |
-| `project.hide_path` | admin | admin | hide one absolute path from the project's whole history; administration; a folder scope refuses it |
-| `project.doctor` | admin | admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
-| `branch.list` | admin | admin | work on Branches: list, read, fork, merge, publish and diff |
-| `branch.get` | admin | admin | work on Branches: list, read, fork, merge, publish and diff |
-| `branch.fork` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
-| `branch.merge` | admin | admin | work on Branches: list, read, fork, merge, publish and diff |
-| `branch.publish` | admin | admin | work on Branches: list, read, fork, merge, publish and diff |
-| `branch.remove` | admin | admin | retire one Branch in its Store; administration; a folder scope refuses it |
-| `commit.list` | work | work, admin | read a Branch's Commit history |
-| `commit.get` | admin | admin | read a Branch's Commit history |
-| `commit.diff` | work | work, admin | read a Branch's Commit history |
-| `file.read` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.stat` | admin | admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.list` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.glob` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.grep` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.history` | admin | admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.blame` | admin | admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.write` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.edit` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.rm` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.mkdir` | admin | admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.mv` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.cp` | admin | admin | read and change files in a Branch; each write is one explicit Commit |
-| `file.apply` | admin | admin | read and change files in a Branch; each write is one explicit Commit |
-| `sandbox.create` | work | work, admin | start a Sandbox, and with --mount mount a Branch in it; work |
-| `sandbox.list` | admin | admin | start a Sandbox (work); read, remove and inspect one (administration) |
-| `sandbox.get` | admin | admin | start a Sandbox (work); read, remove and inspect one (administration) |
-| `sandbox.remove` | admin | admin | stop a Sandbox and remove it; administration |
-| `sandbox.files` | admin | admin | start a Sandbox (work); read, remove and inspect one (administration) |
-| `sandbox.log` | admin | admin | start a Sandbox (work); read, remove and inspect one (administration) |
-| `sandbox.doctor` | admin | admin | start a Sandbox (work); read, remove and inspect one (administration) |
-| `workspace.list` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
-| `workspace.mount` | admin | admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
-| `workspace.exec` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
-| `workspace.cancel` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
-| `workspace.commit` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
-| `workspace.unmount` | admin | admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
-| `workspace.status` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
-| `machine.list` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
-| `machine.get` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
-| `machine.images` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
-| `machine.load_image` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
-| `machine.prune` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
-| `machine.stats` | admin | admin | a monitoring read a UI polls (a machine's stats, disk space, files or worker log); offered to no agent |
-| `machine.files` | admin | admin | a monitoring read a UI polls (a machine's stats, disk space, files or worker log); offered to no agent |
-| `machine.log` | admin | admin | a monitoring read a UI polls (a machine's stats, disk space, files or worker log); offered to no agent |
-| `machine.start` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
-| `machine.stop` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
-| `machine.create` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
-| `machine.remove` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
-| `machine.update` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
-| `machine.doctor` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
-| `store.list` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.get` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.create` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.connect` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.disconnect` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.save_auth` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.auths` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.remove_auth` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.update` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.move` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.remove` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.compact` | admin | admin | reclaim one Store's dead bytes; administration; a folder scope refuses it |
-| `store.doctor` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `backup.connect` | admin | admin | upload and restore a Store on a bucket; administration |
-| `backup.disconnect` | admin | admin | upload and restore a Store on a bucket; administration |
-| `backup.list` | admin | admin | upload and restore a Store on a bucket; administration |
-| `backup.create` | admin | admin | upload and restore a Store on a bucket; administration |
-| `backup.restore` | admin | admin | upload and restore a Store on a bucket; administration |
-| `backup.doctor` | admin | admin | upload and restore a Store on a bucket; administration |
+| `home.init` | admin | admin | set the home up, read its state and call log, check it and prune its leftovers; the `full` profile (administration) |
+| `home.get` | admin | admin | set the home up, read its state and call log, check it and prune its leftovers; the `full` profile (administration) |
+| `home.log` | admin | admin | set the home up, read its state and call log, check it and prune its leftovers; the `full` profile (administration) |
+| `home.clear_log` | admin | admin | set the home up, read its state and call log, check it and prune its leftovers; the `full` profile (administration) |
+| `home.doctor` | admin | admin | set the home up, read its state and call log, check it and prune its leftovers; the `full` profile (administration) |
+| `home.leftovers` | admin | admin | set the home up, read its state and call log, check it and prune its leftovers; the `full` profile (administration) |
+| `home.prune` | admin | admin | set the home up, read its state and call log, check it and prune its leftovers; the `full` profile (administration) |
+| `project.init` | admin | admin | import a host folder into a Store; the `full` profile (administration) |
+| `project.list` | admin | admin | import, list, read, count, export, delete or check a project, or hide a path in it; the `full` profile (administration) |
+| `project.get` | admin | admin | import, list, read, count, export, delete or check a project, or hide a path in it; the `full` profile (administration) |
+| `project.stats` | admin | admin | import, list, read, count, export, delete or check a project, or hide a path in it; the `full` profile (administration) |
+| `project.export` | admin | admin | export a Branch snapshot to a local folder under a launch-time --export-root; a folder scope refuses it; the `full` profile (administration) |
+| `project.delete` | admin | admin | retire a project in its Store and remove its home entry; a folder scope refuses it; the `full` profile (administration) |
+| `project.hide_path` | admin | admin | hide one absolute path from the project's whole history; a folder scope refuses it; the `full` profile (administration) |
+| `project.doctor` | admin | admin | import, list, read, count, export, delete or check a project, or hide a path in it; the `full` profile (administration) |
+| `branch.list` | admin | admin | list, read, fork, merge, publish and remove Branches; the `full` profile (administration) |
+| `branch.get` | admin | admin | list, read, fork, merge, publish and remove Branches; the `full` profile (administration) |
+| `branch.fork` | work | work, admin | list, read, fork, merge, publish and remove Branches; the `agent` profile |
+| `branch.merge` | admin | admin | list, read, fork, merge, publish and remove Branches; the `full` profile (administration) |
+| `branch.publish` | admin | admin | list, read, fork, merge, publish and remove Branches; the `full` profile (administration) |
+| `branch.remove` | admin | admin | retire one Branch in its Store; a folder scope refuses it; the `full` profile (administration) |
+| `commit.list` | work | work, admin | read a Branch's Commit history and compare Commits; the `agent` profile |
+| `commit.get` | admin | admin | read a Branch's Commit history and compare Commits; the `full` profile (administration) |
+| `commit.diff` | work | work, admin | read a Branch's Commit history and compare Commits; the `agent` profile |
+| `file.read` | work | work, admin | read and change files in a Branch; each write is one explicit Commit; the `agent` profile |
+| `file.stat` | admin | admin | read and change files in a Branch; each write is one explicit Commit; the `full` profile (administration) |
+| `file.list` | work | work, admin | read and change files in a Branch; each write is one explicit Commit; the `agent` profile |
+| `file.glob` | work | work, admin | read and change files in a Branch; each write is one explicit Commit; the `agent` profile |
+| `file.grep` | work | work, admin | read and change files in a Branch; each write is one explicit Commit; the `agent` profile |
+| `file.history` | admin | admin | read and change files in a Branch; each write is one explicit Commit; the `full` profile (administration) |
+| `file.blame` | admin | admin | read and change files in a Branch; each write is one explicit Commit; the `full` profile (administration) |
+| `file.write` | work | work, admin | read and change files in a Branch; each write is one explicit Commit; the `agent` profile |
+| `file.edit` | work | work, admin | read and change files in a Branch; each write is one explicit Commit; the `agent` profile |
+| `file.rm` | work | work, admin | read and change files in a Branch; each write is one explicit Commit; the `agent` profile |
+| `file.mkdir` | admin | admin | read and change files in a Branch; each write is one explicit Commit; the `full` profile (administration) |
+| `file.mv` | work | work, admin | read and change files in a Branch; each write is one explicit Commit; the `agent` profile |
+| `file.cp` | admin | admin | read and change files in a Branch; each write is one explicit Commit; the `full` profile (administration) |
+| `file.apply` | admin | admin | read and change files in a Branch; each write is one explicit Commit; the `full` profile (administration) |
+| `sandbox.create` | work | work, admin | start a Sandbox, and with --mount mount a Branch in it; the `agent` profile |
+| `sandbox.list` | admin | admin | start, read, remove, inspect and check a Sandbox; the `full` profile (administration) |
+| `sandbox.get` | admin | admin | start, read, remove, inspect and check a Sandbox; the `full` profile (administration) |
+| `sandbox.remove` | admin | admin | stop a Sandbox and remove it; the `full` profile (administration) |
+| `sandbox.files` | admin | admin | start, read, remove, inspect and check a Sandbox; the `full` profile (administration) |
+| `sandbox.log` | admin | admin | start, read, remove, inspect and check a Sandbox; the `full` profile (administration) |
+| `sandbox.doctor` | admin | admin | start, read, remove, inspect and check a Sandbox; the `full` profile (administration) |
+| `workspace.list` | work | work, admin | mount, run in, cancel, commit and unmount a Workspace explicitly; nothing is implicit; the `agent` profile |
+| `workspace.mount` | admin | admin | mount, run in, cancel, commit and unmount a Workspace explicitly; nothing is implicit; the `full` profile (administration) |
+| `workspace.exec` | work | work, admin | mount, run in, cancel, commit and unmount a Workspace explicitly; nothing is implicit; the `agent` profile |
+| `workspace.cancel` | work | work, admin | mount, run in, cancel, commit and unmount a Workspace explicitly; nothing is implicit; the `agent` profile |
+| `workspace.commit` | work | work, admin | mount, run in, cancel, commit and unmount a Workspace explicitly; nothing is implicit; the `agent` profile |
+| `workspace.unmount` | admin | admin | mount, run in, cancel, commit and unmount a Workspace explicitly; nothing is implicit; the `full` profile (administration) |
+| `workspace.status` | work | work, admin | mount, run in, cancel, commit and unmount a Workspace explicitly; nothing is implicit; the `agent` profile |
+| `machine.list` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
+| `machine.get` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
+| `machine.images` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
+| `machine.load_image` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
+| `machine.prune` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
+| `machine.stats` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
+| `machine.files` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
+| `machine.log` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
+| `machine.start` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
+| `machine.stop` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
+| `machine.create` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
+| `machine.remove` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
+| `machine.update` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
+| `machine.doctor` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
+| `store.list` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
+| `store.get` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
+| `store.create` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
+| `store.connect` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
+| `store.disconnect` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
+| `store.save_auth` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
+| `store.auths` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
+| `store.remove_auth` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
+| `store.update` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
+| `store.move` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
+| `store.remove` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
+| `store.compact` | admin | admin | reclaim one Store's dead bytes; a folder scope refuses it; the `full` profile (administration) |
+| `store.doctor` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
+| `backup.connect` | admin | admin | connect buckets, back up and restore a Store, and check a bucket; the `full` profile (administration) |
+| `backup.disconnect` | admin | admin | connect buckets, back up and restore a Store, and check a bucket; the `full` profile (administration) |
+| `backup.list` | admin | admin | connect buckets, back up and restore a Store, and check a bucket; the `full` profile (administration) |
+| `backup.create` | admin | admin | connect buckets, back up and restore a Store, and check a bucket; the `full` profile (administration) |
+| `backup.restore` | admin | admin | connect buckets, back up and restore a Store, and check a bucket; the `full` profile (administration) |
+| `backup.doctor` | admin | admin | connect buckets, back up and restore a Store, and check a bucket; the `full` profile (administration) |
 
 <!-- END GENERATED -->
 
 ## Tools and schemas
 
 One tool per call, named `<family>_<call>` (`store_create`,
-`workspace_exec_cancel`, …), generated from `layerfs.table`
+`workspace_cancel`, …), generated from `layerfs.table`
 ([`tools.js`](../../../../api/mcp/src/tools.js)). Each tool's JSON Schema is
 the entry's arguments, in order, then its options, minus the functions
 (`on_progress`, `stdout`, `stderr`); `additionalProperties` is false. A
-migrated entry (one with a `form`) also takes `detail` (the long form) and,
-when it lists sections, `with` (an array of their names). The
+2.0 entry (every entry has a `form`) also takes `detail` (the long form)
+and, when it lists sections, `with` (an array of their names). The
 `stream` option of `workspace.exec` is not exposed: it would write the
 command's output to this process's stdout, which carries the protocol.
 
@@ -243,14 +243,14 @@ the SDK's request schema (`-32603`). The call does not run.
 | Rule | Behaviour | Source |
 | --- | --- | --- |
 | Result | the call's answer as JSON, exactly once | [`server.js`](../../../../api/mcp/src/server.js) |
-| Refusal | `isError: true` and a text block `{ "code", "message", "detail" }`, the library's own | [`errors.js`](../../../../api/mcp/src/errors.js) |
+| Refusal | `isError: true` and a text block `{ "error", "message", "fix" }` with the fields beside them that the library put there, and `detail` when it has one; the library's own | [`errors.js`](../../../../api/mcp/src/errors.js) |
 | Uncertain outcome | `Unknown`, `Unresolved`, or `Failed` with `attempted: true`, adds `outcome uncertain: read state before acting again; nothing was retried.` (`UNCERTAIN`) | [`errors.js`](../../../../api/mcp/src/errors.js) |
 | Retry, replay, Commit, unmount | none of its own: one library call per tool call; Commit and unmount only through `workspace_commit` and `workspace_unmount`, never on an error, disconnect or shutdown | [`server.js`](../../../../api/mcp/src/server.js) |
 | Progress | with a progress token, `on_progress` events become `notifications/progress`: the first at once, then at most one per 100 ms (`INTERVAL_MS`) carrying the latest, and the last before the result, which waits 10 ms so the note arrives first. `progress` counts 1, 2, …; `total` only when positive; `message` the event as JSON, cut at 512 characters. Without a token, no handler is passed | [`progress.js`](../../../../api/mcp/src/progress.js) |
-| `workspace.exec` | output is buffered: inline text up to 1 MiB per stream in the result; a larger stream is not delivered (no `stdout`/`stderr` function), and `stdout_bytes`, `stderr_bytes`, `streamed: true` report it | [Errors and events](../calls/errors-and-events.md#workspaceexec-output) |
+| `workspace.exec` | output is buffered (no `stdout`/`stderr` function): each stream's text is in the result up to its last 1 MiB; a longer stream answers its last 1 MiB and `stdout_file` or `stderr_file` names the file on the machine that holds all of it; `stdout_bytes` and `stderr_bytes` (long form) give its full size | [Errors and events](../calls/errors-and-events.md#workspaceexec-output) |
 | Cancel notification | acknowledged on stderr; the native call cannot be cancelled and runs to its end | [`server.js`](../../../../api/mcp/src/server.js) |
 | stdin close, `SIGTERM`, `SIGINT` | stop accepting calls, wait up to 2 s (`GRACE_MS`) for in-flight ones, run `layerfs.close()` (idle Stores only), exit 0. A Workspace stays mounted; a call still running is cut off and its outcome is unknown | [`server.js`](../../../../api/mcp/src/server.js) |
-| stdout, stderr | stdout carries one JSON-RPC message per line and nothing else while serving; one `layerfs-mcp: …` line per call, startup and shutdown on stderr. Argument values are never logged (a `store.connect` password, a `backup.connect` key) | [`server.js`](../../../../api/mcp/src/server.js) |
+| stdout, stderr | stdout carries one JSON-RPC message per line and nothing else while serving; one `layerfs-mcp: …` line per call, startup and shutdown on stderr. Argument values are never logged (a `store.save_auth` password, a `backup.connect` key) | [`server.js`](../../../../api/mcp/src/server.js) |
 
 ## Limits
 
@@ -259,8 +259,8 @@ the SDK's request schema (`-32603`). The call does not run.
 - One home and one fixed scope per process; no `init`/`open`/`close` tool.
 - Calls run on Node's default thread pool (`UV_THREADPOOL_SIZE` 4): many long
   concurrent calls can starve each other. The server does not raise it.
-- No batching or automatic paging: `page_size`, `page_pos` and `cursor` pass
-  through, and `next_page_pos` comes back as the call gives it.
+- No batching or automatic paging: `limit` and `cursor` pass through, and
+  `next_cursor` comes back as the call gives it.
 
 ## Tests
 

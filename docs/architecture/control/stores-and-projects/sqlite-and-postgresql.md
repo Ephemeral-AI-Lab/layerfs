@@ -20,7 +20,7 @@ chooses by `StoreKind`. Every new Store runs the Disposable profile
 | Call | Does | Refusals |
 | --- | --- | --- |
 | `store.create <s>` | an empty Store at `store/<s>/store.sqlite` on `native` | `Exists` |
-| `store.remove <s>` | deletes the file wherever it is (here or a worker `store.file remove`), its projects, and any copy an ended push or pull left on the other machine (`op.args.leftover`, so a second remove finishes an interrupted one); clears a gone process's unresolved `op` | `InvalidInput` for PostgreSQL (`store disconnect` keeps its data); `InUse`; `Conflict` if the Store moved meanwhile; a live `op` `Busy` |
+| `store.remove <s>` | deletes the file wherever it is (here or a worker `store.file remove`), its projects, and any copy an ended move left on the other machine (`op.args.leftover`, so a second remove finishes an interrupted one); clears a gone process's unresolved `op` | `InvalidInput` for PostgreSQL (`store disconnect` keeps its data); `InUse`; `Conflict` if the Store moved meanwhile; a live `op` `Busy` |
 
 ## Transfer (`sqlite/transfer/`)
 
@@ -65,9 +65,9 @@ running on it is `InUse`
 | Case | What is kept | Cleared by |
 | --- | --- | --- |
 | a phase fails certain | whatever exists; the refusal names the phase | — |
-| `Unknown`, or any failure at `record` (both copies exist) | both copies; `op` uncertain; `log/uncertain.jsonl` | a new push or pull, which first deletes the copy the record does not name |
-| a retire that did not finish | the source's copy; `last_transfer.retired: false` | the next push or pull |
-| a push that failed certain at `send`, `verify` or `install` | the target's `store.sqlite.incoming`; the record's `incoming_on` names the machine | the next `store move` or `store remove` (doctor reports its bytes) |
+| `Unknown`, or any failure at `record` (both copies exist) | both copies; `op` uncertain; `log/uncertain.jsonl` | a new `store move`, which first deletes the copy the record does not name |
+| a retire that did not finish | the source's copy; `last_transfer.retired: false` | the next `store move` |
+| a move that failed certain at `send`, `verify` or `install` | the target's `store.sqlite.incoming`; the record's `incoming_on` names the machine | the next `store move` or `store remove` (doctor reports its bytes) |
 
 The copy the record names is never touched, and nothing is deleted while
 another operation holds the Store

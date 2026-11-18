@@ -253,6 +253,11 @@ recommended option is taken, and each such choice is listed here.
   `blocked` comes first while the machine is stopped. `store.operation` reads it the same way; on a
   stopped machine it is `not_checked` with `blocked_by`.
 
+- **V19-12a `live.phases`** (coordinator ruling after batch 4, applied by package Z) `store get
+  --with live`'s `live.phases` lists the steps the compaction record can show, in order: on SQLite
+  `mark, build, verify, install, cleanup`, since the record writes `cleanup` in its final step.
+  `store compact`'s progress events stay `mark, build, verify, install` (V19-12). No code change.
+
 ## Conformance fixes (2026-11-19, review R3)
 
 Coordinator rulings on the R3 conformance review, applied to the rows by package FX.

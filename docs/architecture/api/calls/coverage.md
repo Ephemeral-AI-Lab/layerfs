@@ -42,7 +42,7 @@ check and proves a missing, renamed or extra call is reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-85 calls in 10 families, counted from the Node table. Calls present: Node 85, Python 85, Python `aio` 85, CLI 85, MCP 85 (17 in `work`, 68 admin only; 0 UI only, in no profile).
+85 calls in 10 families, counted from the Node table. Calls present: Node 85, Python 85, Python `aio` 85, CLI 85, MCP 85 (17 in `work`, 68 admin only).
 
 Argument names that are Python keywords: from.
 
@@ -147,10 +147,9 @@ These are not calls and are not in the matrix.
 | the table | `table`, `families` | `TABLE`, `FAMILIES` | `layerfs help [<family> [<call>]]`, `layerfs help --json` |
 | a client with home and folder scope | `client({ home, scope })`, frozen | `client(home=, scope=)` | `--scope`, `--scope-project`, `--scope-branch`; the home is `LAYERFS_HOME` only |
 | the module-level default client | `layerfs.<family>` | `layerfs.<family>`, `layerfs.aio.<family>` | — |
-| `doctor` (the report; `doctor.fix` is a call and is in the table) | `doctor({ home, ...options })` | `layerfs.doctor(home, ...)` | `layerfs doctor [--text]` ([Doctor](../../control/doctor/README.md)) |
 | `close` | `close()` | `layerfs.close()` | none: the command closes its idle Stores after every call |
-| the error | `LayerFSError { code, message, detail }` | `LayerFSError` with the same three | JSON `{ code, message, detail }` on stderr, exit 125 |
-| `--text`, `--from`, `--NAME-from`, `-m` | — | — | readable output; content, JSON and text options from a file; `-m` is `--message` |
+| the error | `LayerFSError { code, message, fix, detail }` and the next-call fields | `LayerFSError` (`code`, also `error`; `message`, `fix`, `fields`, `detail`) | JSON `{ error, message, fix, … }` on stderr (`detail` with `--detail`), exit 125 |
+| `--text`, `--from`, `--NAME-from`, `-m`, `--password-stdin`, `--key-stdin` | — | — | readable output; content, JSON and text options from a file; `-m` is `--message`; a secret from stdin |
 | `layerfs worker`, `layerfs import-env` | — | — | serve a machine's worker; write 1.1.0 settings as records, once |
 
 ## Where the front ends differ on purpose
@@ -158,15 +157,15 @@ These are not calls and are not in the matrix.
 | Difference | Why |
 | --- | --- |
 | The CLI reads a content or JSON positional (`file.write` content, `file.apply` changes) from stdin or `--from`, and an optional text option `--x` also from `--x-from <file>`; UTF-8 stdin is text, anything else bytes | a shell word cannot carry binary data or a document |
-| A wrong command line is exit 2 with plain text on stderr (unknown option, wrong positional count, a word not of its kind, unreadable JSON, a whole number beyond signed 64 bits); the packages refuse the same input `InvalidInput`. A library refusal is exit 125 with the packages' `{ code, message, detail }` | the command line is parsed against the table before the library is called |
+| A wrong command line is exit 2 with plain text on stderr (unknown option, wrong positional count, a word not of its kind, unreadable JSON, a whole number beyond signed 64 bits); the packages refuse the same input `InvalidInput`. A library refusal is exit 125 with the packages' `{ error, message, fix, … }` | the command line is parsed against the table before the library is called |
 | The CLI has no `null` and no typed values: an omitted argument is omitted, a word is read by its kind, and a positional cannot be left out before one that is given | words are text |
-| Whole numbers: Node takes a safe-integer `number` or a `bigint`; Python any `int`; the CLI a signed 64-bit decimal. The library reads signed 64 bits; the engine accepts line numbers, page sizes and modes only as safe integers | JavaScript numbers are doubles |
+| Whole numbers: Node takes a safe-integer `number` or a `bigint`; Python any `int`; the CLI a signed 64-bit decimal. The library reads signed 64 bits; the engine accepts line numbers, limits and modes only as safe integers | JavaScript numbers are doubles |
 | Python refuses a float, `2.0` included ("only whole numbers are accepted"); Node and the CLI accept `2.0` as `2` | the types differ |
 | Function options exist in Node and Python only, never cross into the library, and are `--progress` and `--stream` on the command line | a callback cannot cross a process |
-| Python takes positionals and options as keywords; Node takes a trailing options object. No argument name is a Python keyword (generated above) | idiom |
+| Python takes optional positionals and options as keywords, spelling `with` and `from` as `with_` and `from_`; Node takes a trailing options object | idiom; `with` and `from` are Python keywords |
 | Python `aio` runs the synchronous call on a thread; cancelling the coroutine does not stop the call | the native call cannot be cancelled |
-| `layerfs doctor` can warn of a stale lease of an ended process that Node and Python do not see | the command is one process per call; the in-process front ends keep their lease alive |
-| A refusal a front end makes itself is worded by that front end; its `code` is the same | each front end builds its own JSON text |
+| `layerfs home doctor` can warn of a stale lease of an ended process that Node and Python do not see | the command is one process per call; the in-process front ends keep their lease alive |
+| A refusal a front end makes itself is worded by that front end; its `error` code is the same | each front end builds its own JSON text |
 
 ## What is checked across the front ends
 
@@ -182,21 +181,22 @@ wording is the front end's own, `message` and `detail`.
 | Group | What it shows |
 | --- | --- |
 | `setup` | `store.create` (profile `disposable`), `project.init`, `branch.fork` |
-| `args` | a missing positional; defaults of `file.read`, `branch.list` and the Commit message; omitted equals `null`; a window, a page, `mode` |
+| `args` | a missing positional; defaults of `file.read`, `branch.list` and the Commit message; omitted equals `null`; a line window, a `limit` and `cursor` page, `mode` |
 | `unknown` | an unknown option, an extra positional and a non-function handler are refused before any effect (state listed before and after is equal) |
-| `validation` | `InvalidInput`, `NoSuchStore`, `NoSuchBranch`, `NoSuchPath`, `ReadOnly`, `NameTaken` with their detail; `file.apply` stops at the first refused change with nothing committed (`detail.index`); JSON nested deeper than 128 |
+| `validation` | `InvalidInput` (a bad name, path or kind, a write to `main`, a bad cursor), `NotFound` (no project, Branch or path; the raised `NoSuchPath` kept as `detail.code`), `Exists` (a fork onto a taken name); `file.apply` stops at the first refused change with nothing committed (`detail.index`); JSON nested deeper than 128 |
 | `values` | all 256 byte values round-trip as `Binary`; Unicode in content and paths; empty content and message; nested JSON with integers beyond 2^53 kept exactly; `{ "base64" }` as bytes; a lone surrogate refused before the call |
-| `ints` | `start_line` 2^53-1 exact; 2^53 up to 2^63-1 refused by the engine as not a safe integer; 2^63 refused before it (`number out of range`; the command exits 2) |
-| `flow` | fork, write, merge, reads of the merged Branch, `branch.diff`, `commit.list`, `branch.get`, `project.get`, `project.list`, `store.list`, `doctor`: equal answers |
+| `ints` | `file.read`'s `line` 2^53-1 exact; 2^53 up to 2^63-1 refused by the engine as not a safe integer; 2^63 refused before it (`number out of range`; the command exits 2) |
+| `flow` | fork, write, merge, reads of the merged Branch, `commit.diff`, `commit.list`, `branch.get`, `project.get`, `project.list`, `store.list`, `home.doctor`: equal answers |
+| `export` | `project.export` of the default and an explicit Branch; a non-empty destination, an unknown option and an absent Branch refused |
 
 Both tests skip with the reason when a front end is absent; a skipped front
 end is not counted as agreeing.
 
 | Behaviour all front ends share | Detail |
 | --- | --- |
-| `file.apply` with `[]` | commits nothing and answers `UpToDate` (`head` null on a Branch with no Commit) |
-| a refused removal | `NoSuchPath` with `detail.index`; the message is the engine error's text (`Content(PathNotFound)`) |
-| engine argument refusals | name the Store method's camelCase field (`startLine must be a positive safe integer`, `pageSize must be in 1..=1000`); result keys are snake_case throughout |
+| `file.apply` with `[]` | commits nothing and answers `{ unchanged: true }` |
+| a refused removal inside `file.apply` | `NotFound` with `detail.index`, the change it stopped at |
+| engine argument refusals | say the value must be a safe integer (a `line` past 2^53-1); result keys are snake_case throughout |
 | a one-key `{ "base64": <text> }` map | is bytes when the text is base64; inside `changes` a non-base64 one is refused |
 
 ## Build and run

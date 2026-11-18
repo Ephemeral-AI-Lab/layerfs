@@ -2,289 +2,458 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The `workspace` calls: mount a Branch as a writable tree in a running Sandbox, run and cancel commands in it, commit it, read its status and unmount it, within the [SDK](README.md).
+The `workspace` calls: list mounted Workspaces, mount a Branch as a writable tree in a running Sandbox, run and cancel commands in it, commit it, read its status and unmount it, within the [SDK](README.md).
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-api/src/workspace`](../../../../api/crates/layerfs-api/src/workspace), [`layerfs-sandbox/src/workspace`](../../../../control/crates/layerfs-sandbox/src/workspace), [`layerfs-sandbox/src/exec`](../../../../control/crates/layerfs-sandbox/src/exec), [`daemon/values.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
-| Runs by default | records in the caller's process; `mount`, `commit`, `unmount`, `status` reach the Sandbox's daemon (directly when its port is forwarded, else through the machine: this process or its worker, `sandbox.host`); `exec` and `exec_cancel` run in the Sandbox's runtime on its machine, never in the daemon |
+| Source | [`api/crates/layerfs-api/src/workspace`](../../../../api/crates/layerfs-api/src/workspace) (one file per call), [`layerfs-sandbox/src/workspace`](../../../../control/crates/layerfs-sandbox/src/workspace) (`calls.rs`, `answers.rs`, `exec.rs`, `list.rs`, `serve.rs`), [`layerfs-sandbox/src/exec`](../../../../control/crates/layerfs-sandbox/src/exec), [`daemon/values.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
+| Runs by default | records in the caller's process; `mount`, `commit`, `unmount`, `status` reach the Sandbox's daemon (directly when its port is forwarded, else through the machine: this process or its worker); `exec` and `cancel` run in the Sandbox's runtime on its machine, never in the daemon. `list` reads Workspace records and asks no daemon |
 | Design | [Sandboxes: daemon channel and exec](../../control/sandboxes/daemon-channel-and-exec.md), [Engine: daemon](../../engine/daemon/README.md), [Commit](../../engine/commit/README.md), [Workspace flow](../../flows/workspace.md), [Commit flow](../../flows/commit.md) |
 
 ## Calls
 
 ```text
- sandbox.create (running Sandbox)      branch.fork (a Branch, not main)
+ sandbox create (running Sandbox)      branch fork (a Branch, not main)
             \                              /
-             mount <sandbox> <branch> --> ws = <sandbox>:<path|name>
+             mount <sandbox> <branch> --> workspace = <sandbox>:<name>
                 |
-   +---> exec <ws> <command>   (bash -c in the Sandbox runtime)
-   |        |   exec_cancel <ws> <exec_id>  (from any process)
-   |     status <ws>           (base, head moved?, activity, overlay)
-   +---- commit <ws>           (one Commit; merges a moved head)
+   +---> exec <workspace> <command>   (bash -c in the Sandbox runtime)
+   |        |   cancel <workspace> [--exec E]  (from any process)
+   |     status <workspace>           (changes, Branch moved?, state)
+   +---- commit <workspace>           (one Commit; merges a moved head)
             v
-         unmount <ws>          (Dirty unless committed or discard)
+         unmount <workspace>          (Dirty unless committed or --discard)
+
+ list [--sandbox S]                   (the handles, from records)
 ```
 
-| Call | Host operation | Returns |
+| Call | Short answer | MCP |
 | --- | --- | --- |
-| [`workspace.mount`](#workspacemount) | `workspace.mount` | `{ kind: "Mounted", …, ws }` |
-| [`workspace.exec`](#workspaceexec) | `workspace.exec` | `{ kind: "exit:<code>" \| "cancelled", exit_code, stdout, stderr, … }` |
-| [`workspace.exec_cancel`](#workspaceexec_cancel) | `workspace.exec_cancel` | `{ outcome: "cancelled" \| "ended" \| "unknown", signal? }` |
-| [`workspace.commit`](#workspacecommit) | `workspace.commit` | `Committed` or `UpToDate` |
-| [`workspace.unmount`](#workspaceunmount) | `workspace.unmount` | `Unmounted` or `ForceUnmounted` |
-| [`workspace.status`](#workspacestatus) | `backend.daemon.workspace.status` | `{ kind: "ok", base, branch_head, activity, overlay, … }` |
+| [`workspace.list`](#workspacelist) | `{ items: [{ workspace, branch }] }` | `work` |
+| [`workspace.mount`](#workspacemount) | `{ workspace, path }` | `admin` |
+| [`workspace.exec`](#workspaceexec) | `{ exit_code }` + `stdout`, `stderr` when not empty | `work` |
+| [`workspace.cancel`](#workspacecancel) | `{ signal }`, `{ already_ended }` or `{ unknown }` | `work` |
+| [`workspace.commit`](#workspacecommit) | `{ commit }` | `work` |
+| [`workspace.unmount`](#workspaceunmount) | `{ ok }` | `admin` |
+| [`workspace.status`](#workspacestatus) | `{ changes }` | `work` |
 
-A Workspace is named by `ws`: `<sandbox>:<path>`, or `<sandbox>:<name>`
-when its mount named it (`WorkspaceRef`,
-[`names.rs`](../../../../control/crates/layerfs-home/src/names.rs)). A
-Sandbox holds at most 16 Workspaces (`WORKSPACES`,
-[`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs)).
+A Workspace is named by its handle `<sandbox>:<name>`, the `workspace`
+`mount` answers; every other `workspace` call takes it. The path form of the
+handle (`<sandbox>:/path`) is refused `InvalidInput`
+([`names.rs`](../../../../control/crates/layerfs-home/src/names.rs)). A
+Sandbox holds at most 16 Workspaces
+([`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs)).
 Under a folder scope, `mount` takes only `main`, mounted as the Branch
-`<namespace>.main`; `exec` runs `cd '.<folder>' && <command>` (a prefix,
-not confinement); and the Sandbox must belong to the scope's project
+`<namespace>.main`; `exec` starts the command in the scope's folder (a
+prefix, not confinement); and the Sandbox must belong to the scope's project
 ([`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs)).
+
+On `lima`, `mount`, `commit`, `unmount` and `status` go from the caller
+straight to the Sandbox's daemon; `exec` and `cancel` go through the
+machine's worker. On `docker` every call goes through its worker. A call
+routed to a machine that is not ready is refused `Unavailable` with
+`fix: layerfs machine start <machine>` (a worker of another build:
+`layerfs machine stop <machine> && layerfs machine start <machine>`); no
+call starts a machine.
+
+### workspace.list
+
+Every mounted Workspace, or one Sandbox's.
+
+```text
+CLI     layerfs workspace list [--sandbox S] [--limit 100] [--cursor C]
+Node    await layerfs.workspace.list({ sandbox, limit, cursor })
+Python  layerfs.workspace.list(*, sandbox=None, limit=None, cursor=None)
+```
+
+| Argument | Kind | Rule |
+| --- | --- | --- |
+| `sandbox` option | name | list only this Sandbox's Workspaces |
+| `limit` option | int | the most rows in one page, 1 to 1000; default `100` |
+| `cursor` option | text | the `next_cursor` of the page before; it carries the filters |
+
+| Answer | Keys |
+| --- | --- |
+| short | `items`; when set: `next_cursor`, `not_listed` |
+| long | `items, next_cursor, not_listed` |
+| `items[]` short | `workspace`, `branch` |
+| `items[]` long | `workspace, branch, sandbox, project, path, mounted_at` |
+| `not_listed[]` short | `sandbox`, `message`; when set: `blocked_by`, `reason` |
+| `not_listed[]` long | `sandbox, blocked_by, reason, message` |
+| call | pages by `limit` and `cursor`; writes one call-log line; MCP `work` |
+
+The handle of every mounted Workspace, to find one again. It reads Workspace
+records: the home's own for a Sandbox on `native` or one reached directly,
+and one request to each other ready machine's worker for the records it
+keeps ([`workspace/list.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/list.rs)).
+A Sandbox whose machine, or which itself, is not ready is named in
+`not_listed` with `blocked_by`; one whose worker did not answer with
+`reason` (`timeout`, `busy`, `lost`, or `refused` with its refusal in
+`message`). Rows carry no state: `workspace status` and `sandbox get` ask
+the daemon. Rows are ordered by Sandbox, then name; the cursor carries
+`--sandbox`.
+
+```console
+$ layerfs workspace list
+{"items":[{"workspace":"tests:agent","branch":"agent"}]}
+```
 
 ### workspace.mount
 
-Mounts a Branch as a new Workspace, a complete writable view of its head.
+Mount a Branch in a Sandbox.
 
 ```text
-JS      await layerfs.workspace.mount(sandbox, branch, { name })
+CLI     layerfs workspace mount <sandbox> <branch> [--name N]
+Node    await layerfs.workspace.mount(sandbox, branch, { name })
 Python  layerfs.workspace.mount(sandbox, branch, *, name=None)
-CLI     layerfs workspace mount <sandbox> <branch> [--name <name>]
 ```
 
 | Argument | Kind | Rule |
 | --- | --- | --- |
-| `sandbox` | Name | a running Sandbox; a mount never starts one |
-| `branch` | Name | a side Branch of the Sandbox's project; `main` is `InvalidInput` (fork from it) |
-| `name` option | Name | unique among the Sandbox's Workspaces; `ws` becomes `<sandbox>:<name>` |
+| `sandbox` | name | a Sandbox name |
+| `branch` | name | a Branch other than `main` |
+| `name` option | name | the Workspace's name within its Sandbox (1 to 63 lowercase letters, digits, `_`, `.` or `-`, starting and ending with a letter or digit); default: the Branch's name made valid: lowercased, each character outside the Workspace name alphabet (lowercase letters, digits, `_`, `.`, `-`) replaced by `-` |
 
-```text
-{ kind: "Mounted", path, workspace, namespace, branch,
-  base: <head Commit> | null, base_layer, root,
-  sandbox, container, image, platform | null, runtime, name | null, ws }
-```
+| Answer | Keys |
+| --- | --- |
+| short | `workspace`, `path` |
+| long | `workspace, path, outcome, branch, commit, base_layer, root, id, namespace` |
+| call | writes one call-log line; MCP `admin` |
+
+Mounts a Branch as a new Workspace, a complete writable view of its head,
+and answers its handle and the directory the daemon mounted it at
+(`/workspaces/<n>` in the Sandbox; a folder under its run folder on macOS
+`native`). Without `--name` the name is the Branch's made valid: lowercased,
+each character outside `a-z 0-9 _ . -` replaced by `-`, cut to 63 and
+`_ . -` trimmed from the ends (`Feature/Login` mounts as `feature-login`).
+The long form adds `outcome` (`mounted`), `branch`, `commit` (the Commit it
+stands on; on a fresh fork, the publication it was forked at), `base_layer`,
+`root`, `id` (the 64-hex Workspace id) and `namespace`.
 
 The caller reads no Store: it sends the project and Branch names and the
-daemon finds the Branch as it binds (`Request::MountNamed`). The mount binds
-the whole root without a scan or copy; its only new file is the Workspace's
-overlay database, copied from the template. It is recorded as
-`workspace/<id>.json` in the Sandbox's folder
+daemon finds the Branch as it binds. The mount binds the whole root without
+a scan or copy; its only new file is the Workspace's overlay database,
+copied from the template. It is recorded as `workspace/<id>.json` in the
+Sandbox's folder
 ([`workspace/serve.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs)).
-Errors: `NoSuchProject`, `NoSuchBranch` (the daemon's lookup,
-[`store/bind.rs`](../../../../engine/crates/layerfs-store-service/src/store/bind.rs));
-`Exists` (name in use); `Capacity` (16 Workspaces). After an uncertain mount,
-`sandbox.get` lists what is mounted; a mount that landed takes a place.
+After an uncertain mount, `workspace list` or `sandbox get` shows what is
+mounted.
+
+| Refusal | When | Next |
+| --- | --- | --- |
+| `Exists` | a Workspace of that name is mounted in the Sandbox | `fix` names `--name` |
+| `InvalidInput` | the Branch is `main`, or its default name is empty or reserved | `fix`: `layerfs branch fork <project> <name> main` for `main` |
+| `Capacity` | the Sandbox already holds 16 Workspaces | |
+| `NotFound` | no such Sandbox, project or Branch (the daemon's lookup, [`store/bind.rs`](../../../../engine/crates/layerfs-store-service/src/store/bind.rs)) | |
+
+Run on macOS native with a debug build:
+
+```console
+$ layerfs workspace mount tests main
+{"error":"InvalidInput","message":"main is the project's published line, not a Branch, and is not mounted: fork a Branch from it and mount that","fix":"layerfs branch fork shop/api <name> main"}
+$ layerfs workspace mount tests agent
+{"workspace":"tests:agent","path":"/tmp/demo/home/machine/native/run/layerfs-8a7387b2-tests/workspaces/1"}
+```
 
 ### workspace.exec
 
-Runs one `bash -c` command in the Workspace's directory and answers its
-exit code and output when it ends. It does not commit.
+Run one bash command in a Workspace.
 
 ```text
-JS      await layerfs.workspace.exec(ws, command, { message, stream, stdout, stderr, exec_id, on_progress })
-Python  layerfs.workspace.exec(ws, command, *, message=None, stream=None, stdout=None, stderr=None, exec_id=None, on_progress=None)
-CLI     layerfs workspace exec <ws> <command> [--message <message>] [--stream] [--exec-id <exec-id>] [--progress] [--events]
+CLI     layerfs workspace exec <workspace> <command> [--cwd D] [--env K=V]... [--stdin] [--stream] [--progress]
+Node    await layerfs.workspace.exec(workspace, command, { cwd, env, stdin, stream, stdout, stderr, on_progress })
+Python  layerfs.workspace.exec(workspace, command, *, cwd=None, env=None, stdin=None, stream=None, stdout=None, stderr=None, on_progress=None)
 ```
 
 | Argument | Kind | Rule |
 | --- | --- | --- |
-| `command` | Text | `bash -c <command>` as the Sandbox's command identity, `HOME` its scratch folder (on macOS `native`, `RUSTUP_HOME`, `CARGO_HOME` and `GIT_CONFIG_GLOBAL` default to the caller's when present; override in the caller's environment or the command) ([`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs)) |
-| `message` option | Text | echoed in the answer; no Commit is made |
-| `stream` option | Bool | pass output to this process's stdout and stderr when no functions are given (CLI `--stream`) |
-| `stdout`, `stderr` options | Function | receive each output event's text, or bytes when not UTF-8; never reach the library |
-| `exec_id` option | Text | 1–64 of `A-Z a-z 0-9 . _ -`, not starting with `.` or `-`, unique among the Workspace's running commands; default `exec-<16 hex>` ([`exec/id.rs`](../../../../control/crates/layerfs-sandbox/src/exec/id.rs)) |
-| `on_progress` option | Function | one event before the command starts: `{ exec: { id } }` |
+| `workspace` | text | the handle `<sandbox>:<name>` that `workspace mount` answers |
+| `command` | text | one bash command line |
+| `cwd` option | text | the folder the command starts in, as a path from the Workspace's root; default: the root |
+| `env` option | json | one environment variable for the command, `K=V`; repeat the option for more (Node and Python: one object of names to text) |
+| `stdin` option | content | the command's stdin: in the shell, this process's stdin read whole; in Node and Python, text or bytes |
+| `stream` option | bool | write the command's output to this process's stdout and stderr instead of answering it; the shell prints no result |
+| `stdout` option | function | Node and Python: a function given the command's stdout |
+| `stderr` option | function | Node and Python: a function given the command's stderr |
+| `on_progress` option | function |  |
 
-```text
-fits:  { kind: "exit:<code>" | "cancelled", exit_code, stdout, stderr,
-         message, truncated: false, exec_id, stop }
-spooled (a stream over 1 MiB):
-       { ..., stdout: null | text, stderr: null | text,
-         stdout_bytes, stderr_bytes, streamed: true }
-```
+| Answer | Keys |
+| --- | --- |
+| short | `exit_code`; when set: `stdout`, `stderr`, `stdout_file`, `stderr_file`, `cancelled` |
+| long | `exit_code, stdout, stderr, stdout_file, stderr_file, cancelled, exec, stop, stdout_bytes, stderr_bytes, duration_ms` |
+| call | sends progress; writes one call-log line; MCP `work` |
 
-A non-zero exit is not an error. `cancelled` means `exec_cancel` ended it;
-the code is then 128 + the signal. `stop` is how a cancel ends it: `cgroup`
-(`namespaces`) or `group` (`host_process`,
-[`stop.rs`](../../../../control/crates/layerfs-sandbox-backend/src/stop.rs)).
-Output reaches the caller after the command ends; how it is spooled, paged
-and ordered is in [errors and events](../calls/errors-and-events.md#workspaceexec-output).
-While the command runs, its record
-`sandbox/<name>/workspace/<id>/exec/<exec id>.json` lets any process cancel
-it, makes `unmount` and `sandbox.close` refuse `Busy` unless `force`, and
-is what `sandbox.get` lists under the Workspace's `running`, with the
-call's log tag (`Context::tag`: `log_tag`, else `LAYERFS_LOGS_TAG`) and the
-command's program; a
-record whose owner process is gone is stale, ended and removed by the next
-call that finds it, logged in `log/exec.jsonl`
+Runs one `bash -c` command in the Workspace's directory, as the Sandbox's
+command identity with `HOME` its scratch folder, and waits for it; it does
+not commit ([`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs)).
+A non-zero exit is not an error. The long form adds `stdout_file`,
+`stderr_file`, `cancelled`, `exec`, `stop` (`cgroup` on Linux kernels,
+`group` on macOS `native`), `stdout_bytes`, `stderr_bytes` and
+`duration_ms`. A stream of at most 1 MiB is answered whole; a longer one
+answers its last 1 MiB and names the file that holds all of it,
+`<run folder>/exec/<workspace id>/<exec id>.stdout`, which `sandbox files`
+reads and `unmount` deletes. No total is capped.
+
+LayerFS makes every exec id (`exec-` and 16 hex digits); `--progress` sends
+`{"phase":"start","done":0,"total":1,"exec":"exec-…"}` before the command
+starts: the id `workspace cancel --exec` takes. While the command runs, its
+record `sandbox/<name>/workspace/<id>/exec/<exec id>.json` lets any process
+cancel it, makes `unmount` and `sandbox remove` refuse `Busy` unless
+`--force`, and is what `sandbox get` lists under the Workspace's `running`,
+with the call's log tag and the command's program; a record whose owner
+process is gone is ended and removed by the next call that finds it
 ([`exec/record.rs`](../../../../control/crates/layerfs-sandbox/src/exec/record.rs)).
-There is no runtime timeout, no implicit Commit, no automatic unmount.
+There is no timeout, no implicit Commit and no automatic unmount.
 
-`--events` (CLI only) writes every output byte as NDJSON output events,
-then one `{result}` or `{refusal}` frame; it includes progress and excludes
-`--stream` and `--text`. A result exits 0 whatever the command's code
-([`framed.rs`](../../../../api/crates/layerfs-cli/src/framed.rs)).
+`--cwd` is a folder of the Workspace as a path from its root; `--env K=V`
+repeats (Node and Python pass one object of names to text); `--stdin` gives
+the command this process's stdin, read whole before it starts (Node and
+Python: text or bytes); without it the command reads `/dev/null`.
+`--stream` writes the output to this process's stdout and stderr after the
+command ends and prints no result (Node and Python: the `stdout` and
+`stderr` functions). The shell exits with the command's own code (0 when it
+has none, 1 for a code outside 0 to 255) and prints the result JSON on
+stdout; a refusal exits 125 with nothing on stdout.
 
-| Error | When |
-| --- | --- |
-| `Exists` | a running command of the Workspace has this `exec_id` |
-| `Failed` | the runtime could not run the command, or spooling or draining failed |
-| `Unknown` | the worker's answer was lost: the command may have run in full or in part; read `workspace.status` before running it again |
+| Refusal | When | Next |
+| --- | --- | --- |
+| `Unknown` | the reply was lost: the command may have started and may still run; it is never run again | `exec` names it; `fix`: `layerfs workspace cancel <workspace> --exec <exec>` |
+| `Failed` | the runtime could not run the command, or spooling or draining failed | |
 
-### workspace.exec_cancel
+Run on macOS native with a debug build:
 
-Ends a running command from any process: SIGTERM to everything it started,
-then SIGKILL after `grace_ms`. One explicit attempt.
-
-```text
-JS      await layerfs.workspace.exec_cancel(ws, exec_id, { grace_ms })
-Python  layerfs.workspace.exec_cancel(ws, exec_id, *, grace_ms=None)
-CLI     layerfs workspace exec-cancel <ws> <exec-id> [--grace-ms <grace-ms>]
+```console
+$ layerfs workspace exec tests:agent 'echo hello > out.txt && uname -s'
+{"exit_code":0,"stdout":"Darwin\n"}
+$ layerfs workspace exec tests:agent 'exit 3'
+{"exit_code":3}
 ```
 
-`grace_ms` defaults to 5000 (`GRACE_MS`), not negative; 0 sends SIGKILL right
-after SIGTERM ([`exec/cancel.rs`](../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs)).
+The second exits 3.
 
-| Answer | Meaning |
+### workspace.cancel
+
+End the commands running in a Workspace, or one of them.
+
+```text
+CLI     layerfs workspace cancel <workspace> [--exec E]
+Node    await layerfs.workspace.cancel(workspace, { exec })
+Python  layerfs.workspace.cancel(workspace, *, exec=None)
+```
+
+| Argument | Kind | Rule |
+| --- | --- | --- |
+| `workspace` | text | the handle `<sandbox>:<name>` that `workspace mount` answers |
+| `exec` option | text | end only this command: the exec id from its progress event, `sandbox get` or the long form; default: every running command |
+
+| Answer | Keys |
 | --- | --- |
-| `{ outcome: "cancelled", signal }` | `SIGTERM` when the command was gone within the grace, else `SIGKILL`; a command not yet running is marked and answered `SIGKILL`, and its owner ends it once it runs |
-| `{ outcome: "ended" }` | no record, or nothing left; with no record, a pending mark is kept for 30 s and cancels a command registered with that id in that time ([`exec/pending.rs`](../../../../control/crates/layerfs-sandbox/src/exec/pending.rs)) |
-| `{ outcome: "unknown" }` | the worker was not reached or did not answer; call again once it answers |
+| short | each when set: `signal`, `already_ended`, `unknown` |
+| long | `signal, already_ended, unknown, outcome, commands` |
+| `commands[]` short | `{}` |
+| `commands[]` long | `exec, outcome, signal` |
+| call | writes one call-log line; MCP `work` |
+
+Ends every command running in the Workspace, or the one `--exec` names:
+SIGTERM to everything it started, then SIGKILL after 5 s
+([`exec/cancel.rs`](../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs)).
+Three short forms, all exit 0: `{"signal":"SIGTERM"}` (a command was
+signalled and has ended; `signal` is the last one sent),
+`{"already_ended":true}` (nothing was running: the named command had
+finished, or has no record) and `{"unknown":true}` (the machine's worker was
+not reached or did not answer, so nothing is known to have changed; cancel
+again once it answers). With several commands `signal` and `unknown` can
+stand together; the long form's `outcome` is the worst of
+`commands[].outcome` (`unknown`, `cancelled`, `already_ended`) and
+`commands` is `[{exec, outcome, signal}]`. A cancelled command's `exec`
+answers `cancelled: true` and exit code 128 plus the signal.
 
 On `namespaces` each command runs in its own cgroup
 `<sandbox cgroup>/ws-<workspace id>/exec-<exec id>`, so children that left
-its process group end too; on `host_process` (macOS `native`) it is the
-command's process group, which a child calling `setsid` escapes. A worker
-that takes the cancel and never answers leaves the call waiting until its
-connection closes: there is no operation timeout. Error: `Failed` (a record
-that does not read, or the signal could not be sent).
+its process group end too; on macOS `native` it is the command's process
+group, which a child calling `setsid` escapes. With no record, a pending
+mark is kept for 30 s and cancels a command registered with that id in that
+time ([`exec/pending.rs`](../../../../control/crates/layerfs-sandbox/src/exec/pending.rs)).
+It was `workspace.exec_cancel`, removed with no alias; its grace is fixed at
+5 s.
+
+```console
+$ layerfs workspace cancel tests:agent
+{"already_ended":true}
+```
 
 ### workspace.commit
 
-Commits everything published in the Workspace so far, from every process
-that wrote to it, as one Commit on its Branch; a moved head is merged first.
+Commit a Workspace's changes to its Branch.
+
+```text
+CLI     layerfs workspace commit <workspace> [-m msg] [--expected C] [--force]
+Node    await layerfs.workspace.commit(workspace, { message, expected, force })
+Python  layerfs.workspace.commit(workspace, *, message=None, expected=None, force=None)
+```
+
+| Argument | Kind | Rule |
+| --- | --- | --- |
+| `workspace` | text | the handle `<sandbox>:<name>` that `workspace mount` answers |
+| `message` option | text | the Commit message; `-m` in the shell |
+| `expected` option | name | refuse `Conflict` unless the Branch's head is this Commit |
+| `force` option | bool | commit over a head that moved since the mount instead of merging with it |
+
+| Answer | Keys |
+| --- | --- |
+| short | `commit`; when set: `unchanged`, `merged`, `overwritten`, `overwritten_count` |
+| long | `commit, unchanged, merged, overwritten, overwritten_count, outcome, branch, parent, root, message, created_at, merged_from, displaced` |
+| `overwritten[]` short | each a `path` |
+| call | writes one call-log line; MCP `work` |
+
+Commits everything changed in the Workspace since its base, whichever
+process changed it, as one Commit on its Branch; `commit` is the Branch's
+new head. The daemon captures the Workspace's published frontier (not
+filtered by exec), saves, merges a moved head and publishes; only the
+publish step holds the Store's lane, and later writes stay in the Workspace
+([`daemon/values.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/values.rs)).
 The Workspace stays mounted.
 
-```text
-JS      await layerfs.workspace.commit(ws, { message, force })
-Python  layerfs.workspace.commit(ws, *, message=None, force=None)
-CLI     layerfs workspace commit <ws> [--message <message>] [--force]
-```
+When the Branch moved since the mount the changes are merged first
+(`merged: true`; `overwritten` lists the paths a newer-write-wins rule
+decided, the first 20, then `overwritten_count`); `--force` commits over the
+moved head instead, and the long form's `displaced` is the head it
+replaced. Nothing to commit answers the head with `unchanged: true`. The
+long form adds `outcome`, `branch`, `parent` (the Commit before it, or for a
+Branch's first Commit the publication it was forked at; null when
+unchanged), `root`, `message`, `created_at` and `merged_from`. `--expected
+C` refuses `Conflict` unless the Branch's head is `C`, an id or a prefix of
+8 or more characters resolved as `commit get` resolves it; the check is one
+read before the Commit.
 
-`force` publishes over a moved head instead of merging (the head is
-displaced).
-
-```text
-Committed: { kind: "Committed", head, commit, displaced_head | null,
-             merged: null | { from, head }, lww, lww_truncated }
-UpToDate:  { kind: "UpToDate", head | null, root, merged, lww, lww_truncated }
-```
-
-The daemon captures the Workspace's published frontier, whichever process
-wrote it (not filtered by exec), saves, merges a moved head and publishes;
-only the publish step holds the Store's lane, and later writes stay in the
-Workspace ([`daemon/values.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) `commit`).
-
-| Error | When |
+| Refusal | When |
 | --- | --- |
-| `Conflict` | the head moved and files conflict: markers are written into the Workspace and nothing is committed; or files still hold markers (`detail.head`, `base`, `markers`, `conflicts`, `written`, `lww`) |
-| `Busy` | another control operation runs on the Workspace ([`control/registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs) `idle`) |
-| `Unknown`, `detail.phase: "admission"` | an earlier Commit's install was uncertain or failed; the daemon keeps that custody and refuses new Commits |
+| `Conflict` | a path conflicts, or the head is not `--expected`; nothing is committed. It carries `commit` (the head), `conflicts` (the first 20 paths) and `conflicts_count` |
+| `InvalidInput` | an `--expected` prefix several Commits start with (`matches`) |
+| `Busy` | another control operation runs on the Workspace ([`control/registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs)) |
+| `Unknown` | an earlier Commit's install was uncertain or failed (`detail.phase: "admission"`): the daemon keeps that custody and refuses new Commits; or the reply was lost |
 
-After an uncertain Commit read `commit.list` (a new head?) and
-`workspace.status` (`activity`, `base`, `pending_merge`). A lost reply does
-not remove a published Commit.
+After an uncertain Commit read `commit list` (a new head?) and
+`workspace status`. A lost reply does not remove a published Commit.
+
+```console
+$ layerfs workspace commit tests:agent -m 'test output'
+{"commit":"12bb5eaecf807d89c86f1bc55f01e1a3e6ebb17d2fb2de1de6a3ccba3cf2573e67"}
+```
 
 ### workspace.unmount
 
-Ends a Workspace: the daemon drains its requests, detaches the mount,
-closes its overlay connection and deletes its overlay file.
+End a Workspace.
 
 ```text
-JS      await layerfs.workspace.unmount(ws, { discard, force })
-Python  layerfs.workspace.unmount(ws, *, discard=None, force=None)
-CLI     layerfs workspace unmount <ws> [--discard] [--force]
+CLI     layerfs workspace unmount <workspace> [--discard] [--force]
+Node    await layerfs.workspace.unmount(workspace, { discard, force })
+Python  layerfs.workspace.unmount(workspace, *, discard=None, force=None)
 ```
 
-| Option | Effect |
+| Argument | Kind | Rule |
+| --- | --- | --- |
+| `workspace` | text | the handle `<sandbox>:<name>` that `workspace mount` answers |
+| `discard` option | bool | drop its uncommitted changes |
+| `force` option | bool | cancel its running commands and abort its connection |
+
+| Answer | Keys |
 | --- | --- |
-| `discard` | drop uncommitted changes instead of refusing `Dirty` |
-| `force` | cancel each running command first (5000 ms grace), then one abort write ends the connection (also after a normal unmount stalled); on the native NFS route one forced client unmount takes its place and also finishes an entry kept at `Detach` when a normal unmount's helper failed or timed out while the client mount stayed; uncommitted changes are dropped |
+| short | `ok` |
+| long | `ok, outcome, abort, detach, cleanup` |
+| call | writes one call-log line; MCP `admin` |
 
-```text
-normal: { kind: "Unmounted" }
-force:  { kind: "ForceUnmounted", abort, detach, cleanup }
-either may add cleanup_error (daemon succeeded; a local record stayed)
-```
+Ends a Workspace: the daemon drains its requests, detaches the mount,
+closes its overlay connection and deletes its overlay file; the Branch's
+history stays. `--discard` drops uncommitted changes instead of refusing
+`Dirty`. `--force` cancels each running command first, then one abort write
+ends the connection (also after a normal unmount stalled); on the native NFS
+route one forced client unmount takes its place. The long form's `outcome`
+is `unmounted` or `force_unmounted`, with a forced unmount's `abort`,
+`detach` and `cleanup`.
 
 The machine writes `workspace/<id>.unmount` before it calls the daemon and
 records the outcome after, so a repeated unmount answers what the first one
 established without dialling again. The one exception is a record the daemon
-itself answered `Retained` at stage `Detach`: its export is still held and one
-forced client unmount is what finishes it, so `force` may replace that record
-with a forced attempt (the daemon's guard remains the real gate, and `Busy`,
-`Dirty`, or a call whose request was never sent restores the earlier record:
-a connect failure, or an exchange that failed before sending was attempted).
-A `Failed` answer without a stage — a send that was attempted, or a refusal —
-and an in-progress, `Unknown`, already-forced, other-stage or pre-`forced`
-record keeps its answer and is not forceable. The record is versioned (`v`):
-version 1 adds `forced` and the daemon's `stage` to version 0's `state`,
-`startedMs`, `path`, `code`, `message` and `detail`. A version-0 record has
-neither field and is read and answered as before; a record from a newer
-version is answered as it stands and is never forceable. A Workspace the daemon
-no longer knows answers `Unmounted`
+answered `Retained` at stage `Detach`: its export is still held and one
+forced client unmount finishes it, so `--force` may replace that record with
+a forced attempt. A Workspace the daemon no longer knows answers `ok`
 ([`unmount_guard.rs`](../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs)).
 
-| Error | When |
+| Refusal | When |
 | --- | --- |
-| `Dirty` | uncommitted changes and no `discard` (`detail.changed`, `pending_merge`, `truncated`) |
-| `Busy` | without `force`, commands run (`detail.execs`); another unmount is in progress; a process holds the mount; another control operation runs |
-| `Unknown` | the worker's answer was lost; or with `force` a command's cancel was not confirmed (`detail.execs`). Call `unmount` again: a recorded outcome is answered as it was |
+| `Dirty` | uncommitted changes and no `--discard`: `changes` (the first 20 entries, as `status` lists them), `changes_count`, `pending_merge`, and a `fix` naming `workspace commit` |
+| `Busy` | without `--force`, commands run (`running`, the exec ids); another unmount is in progress; a process holds the mount |
+| `Unknown` | the worker's answer was lost; or with `--force` a command's cancel was not confirmed (`running`). Call `unmount` again: a recorded outcome is answered as it was |
+
+```console
+$ layerfs workspace unmount tests:agent
+{"ok":true}
+```
 
 ### workspace.status
 
-A Workspace's base, whether its Branch head moved since the mount, what it is
-doing and how many changes it holds. Changes nothing.
+A Workspace's uncommitted changes, and whether its Branch moved.
 
 ```text
-JS      await layerfs.workspace.status(ws)
-Python  layerfs.workspace.status(ws)
-CLI     layerfs workspace status <ws>
+CLI     layerfs workspace status <workspace> [--path P]
+Node    await layerfs.workspace.status(workspace, { path })
+Python  layerfs.workspace.status(workspace, *, path=None)
 ```
 
-```text
-{ kind: "ok", base | null, base_layer, branch, branch_head | null,
-  head_moved_since_mount | null, activity,
-  overlay: { inodes, entries, pending_merge } | null }
-```
+| Argument | Kind | Rule |
+| --- | --- | --- |
+| `workspace` | text | the handle `<sandbox>:<name>` that `workspace mount` answers |
+| `path` option | text | list only changes under this folder of the Workspace; it filters within the same bounded read |
 
-| Field | Meaning |
+| Answer | Keys |
 | --- | --- |
-| `branch_head`, `head_moved_since_mount` | the Branch head now, read on the Store's own route by the caller; null when that read failed |
-| `activity` | `Idle`, `Committing`, `Closing`, `Attaching`, `Uncertain` (an unknown outcome keeps custody; Commit and unmount are refused) or `LocalFailure` (published, but the local install did not finish) ([`control_types.rs`](../../../../engine/crates/layerfs-bridge/src/control_types.rs)) |
-| `overlay` | uncaptured changed inodes and entries; `pending_merge` when the overlay's base root is not the binding's root |
+| short | `changes`; when set: `changes_count`, `partial`, `branch_moved`, `state`, `op`, `reason`, `fix` |
+| long | `changes, changes_count, partial, branch_moved, state, op, reason, fix, branch, commit, base_layer, branch_head, activity, overlay, pending_merge` |
+| `changes[]` short | `path`, `change`; when set: `type` |
+| `changes[]` long | `path, change, type` |
+| `overlay[]` short | `{}` |
+| `overlay[]` long | `inode_count, entry_count` |
+| call | writes one call-log line; MCP `work` |
 
-A read: answered while a `sandbox.create` or `close` holds the Sandbox, and
-it starts no machine. It is the read after an uncertain `exec` or `commit`.
+What a Commit would capture now, from one bounded read of the overlay (256
+rows). `changes` is the first 20 entries read, each `{path, change}`
+(`added`, `modified`, `removed`) with `type: "dir"` for a folder; an entry is
+not a file count: a renamed or removed folder is one entry.
+`changes_count` is given when more than the 20 shown were read, and
+`partial: true` when the bound was hit. `branch_moved: true` when the Branch
+gained Commits since the mount (a Commit will merge). `state` is left out
+when `ready`: `busy` with its `op` (`{name, phase, started_at}`: `mount` in
+`attach`, `commit` in `flush`, `publish` or `invalidate`, `unmount` in
+`close`) and `broken` with a `fix` after a failure, from the daemon's
+`activity`. The long form adds `branch`, `commit`, `base_layer`,
+`branch_head`, `activity`, `overlay` (`{inode_count, entry_count}`) and
+`pending_merge`. `--path` narrows the answer to one folder within the same
+read. It changes nothing, is answered while a `sandbox create` or `remove`
+holds the Sandbox, and is the read after an uncertain `exec` or `commit`.
+
+Run on macOS native with a debug build:
+
+```console
+$ layerfs workspace status tests:agent
+{"changes":[{"path":"/out.txt","change":"added"},{"path":"/x.txt","change":"removed"}]}
+```
 
 ## Family errors
 
 | Error | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a bad `ws`, option or `exec_id`; `main` as the Branch; out of scope | [`workspace/serve.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
-| `NoSuchSandbox`, `NotMounted` | no such Sandbox (or its daemon ended itself when idle); the path or name is not mounted | same |
-| `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox (not for `status`); no daemon connection lent in time | [`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs), [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
-| `StaleSandbox` | a saved daemon that is not `ControlReady` | `daemon/pool.rs` |
-| `TooLarge` | a request over one control record | [`daemon/call.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/call.rs) |
-| `Unavailable` | the machine's worker is not recorded or does not answer | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) |
-| daemon codes | a daemon control refusal keeps its own code (`Busy`, `HeadMoved`, `Missing`, `Capacity`, `Invalid`, `Failed`, `Unknown`) with `detail.phase` | `daemon/values.rs` `refusal` |
-| `Failed` | a daemon exchange failed; the message carries the `OperationFailure`, whose `attempted` says the request may have had effects | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs), [`daemon/failure.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/failure.rs) |
+| `InvalidInput` | a bad handle (a path handle included) or option; `main` as the Branch; out of scope | [`workspace/serve.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
+| `NotFound` | no such Sandbox (or its daemon ended itself when idle); the handle is not mounted (raised `NoSuchSandbox`, `NotMounted`) | same |
+| `Busy`, `Unresolved` | a `sandbox create` or `remove` holds the Sandbox (not for `status`); no daemon connection lent in time | [`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs), [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
+| `Unavailable` | the machine's worker is not recorded or does not answer; a saved daemon that is not ready (raised `StaleSandbox`) | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs), `daemon/pool.rs` |
+| `InvalidInput` | a request over one control record (raised `TooLarge`) | [`daemon/call.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/call.rs) |
+| daemon codes | a daemon control refusal keeps its own code with `detail.phase`, folded to its public code | `daemon/values.rs` |
+| `Failed` | a daemon exchange failed; the message carries the `OperationFailure`, whose `attempted` says the request may have had effects | [`daemon/failure.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/failure.rs) |
 | `Unknown` | the worker's answer was lost after the request was sent | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 ## Related
 
-- [sandbox family](sandbox.md), [commit family](commit.md).
+- [sandbox family](sandbox.md), [commit family](commit.md), [branch family](branch.md).
 - [Daemon channel and exec](../../control/sandboxes/daemon-channel-and-exec.md), [bridge](../../engine/bridge/README.md).
 - [Errors and events](../calls/errors-and-events.md).

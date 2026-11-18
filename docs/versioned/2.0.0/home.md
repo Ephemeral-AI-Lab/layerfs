@@ -47,13 +47,13 @@ hold a password or a bucket key. They are not settings; see
     lock                       the Sandbox lock: its record and Workspace record changes
     serve.lock                 held by the call that runs the Sandbox (native, and machines reached directly)
     workspace/<id>.json        one per mounted Workspace: v, id, name?, branch, path, namespace, created
-    workspace/<id>.unmount     who owns an unmount of it, with <id>.unmount-lock; kept until the Sandbox closes
+    workspace/<id>.unmount     who owns an unmount of it, with <id>.unmount-lock; kept until the Sandbox is removed
     workspace/<id>/exec/<x>.json  one per running command (exec id <x>): owner, route, stop handle
   store/<name>/
     record.json                kind, machine, profile, backup links
     lock                       the Store lock
     store.sqlite               a sqlite Store's file while it is on native
-    store.sqlite.incoming      the partial copy of a store pull, renamed to store.sqlite when verified
+    store.sqlite.incoming      the partial copy of a store move to native, renamed to store.sqlite when verified
     backup.lock                held by a backup create of this Store
     backup.staging             a backup create's snapshot fetched from a machine, removed when it ends
     store.sqlite.backup        a backup create's snapshot staged beside the file, removed when it ends
@@ -75,7 +75,7 @@ worker's root:
 /layerfs/data/
   .layout-3                    what an earlier bundle left here was cleared
   store/<name>/                record.json (v, name, kind), store.sqlite, store.sqlite.incoming
-                               (a store push's partial copy), store.sqlite.backup
+                               (a store move's partial copy), store.sqlite.backup
   sandbox/<name>/              record.json, control.json, lock, workspace/ as above
   machine/native/run/          the machine's Sandboxes' run folders and image cache, as above
   incoming/init-<16 hex>/      the folder copy of a project init, while it runs
@@ -120,21 +120,21 @@ worker's root:
 - **`store/<name>/open/<pid>`** is a lease. Every process that uses a sqlite
   Store holds one: the process that opens it, or, for a Store behind a
   worker, the host process that sends it calls; a PostgreSQL Store's
-  in-process calls hold one too. `store push`, `store pull` and `store remove` read the
+  in-process calls hold one too. `store move` and `store remove` read the
   leases under the Store's lock and refuse `InUse` while one is held. A
-  lease is taken under the Store's lock, and refused `Busy` while a push, pull or
+  lease is taken under the Store's lock, and refused `Busy` while a move or
   remove of the Store runs (`Unresolved` after one whose outcome is not
   known). It records its process's start time and boot: a lease whose
   process is no longer alive on this host, or whose id now names another
-  process, is stale; a push, pull, remove or disconnect of the Store removes
+  process, is stale; a move, remove or disconnect of the Store removes
   it under the Store's lock and logs the removal (O35). Reads (`store
-  status`, `store list`, `store get`, the doctors) ignore it and change nothing.
+  list`, `store get`, the doctors) ignore it and change nothing.
 - **`sandbox/<name>/`** is all a Sandbox has in the home, whatever its
   machine: listing Sandboxes reads `sandbox/*` and nothing else, and one
   Sandbox is one folder read. Its `record.json` holds facts: its name,
   project and machine and, once started, its id, `backend`, kernel `route`
   (`fuse`, or `nfs` on a macOS native Sandbox) and `runtime_id`; and,
-  while a `sandbox.create` or `sandbox.close` runs or after one lost its
+  while a `sandbox.create` or `sandbox.remove` runs or after one lost its
   answer, one `op` intent (`{id, name, phase, args, owner: {pid,
   pid_start, pid_boot}, started, updated, uncertain}`, #536 §7.1). Its
   state is derived, never stored. Its `lock` is taken after the home lock
@@ -298,7 +298,7 @@ by the first call of this build, under the home lock. It is refused
 
 | Refused while | `kind` | Ends it |
 | --- | --- | --- |
-| a Sandbox's runtime runs (its container or local daemon, observed once) | `sandbox` | `layerfs sandbox close <name>` with the build that started it |
+| a Sandbox's runtime runs (its container or local daemon, observed once) | `sandbox` | `layerfs sandbox close <name>` with the build that started it (a layout 2 build; this build's call is `sandbox remove`) |
 | a Sandbox on a machine behind a worker is recorded with an id (this build does not ask the old worker) | `sandbox` | the same |
 | a Sandbox create is in flight (its creating process lives) | `sandbox` | let it finish |
 | an earlier create's outcome is unknown (`create.intent`) | `intent` | remove what it left, then the file |
@@ -316,9 +316,9 @@ one pass:
    check above reads it). A Sandbox whose native runtime had ended, or
    whose create's process ended, is written with no id (`gone`); an ended
    runtime is deleted once and its numbered folder removed; `sandbox
-   close` then answers `was: gone`. A create whose outcome was `unknown`
-   is written with an uncertain `sandbox.create` `op` owned by no process
-   (`unresolved`; `sandbox close` clears it). It drops a Store record's
+   remove` then answers `outcome: already_gone`. A create whose outcome was
+   `unknown` is written with an uncertain `sandbox.create` `op` owned by no
+   process (`unresolved`; `sandbox remove` clears it). It drops a Store record's
    `in_progress` whose process ended (2.0 did not let it hold the Store;
    layout 3 records hold `op` instead), with a note. It writes `"v": 1`
    into every machine, Store, project and bucket record, dropping a

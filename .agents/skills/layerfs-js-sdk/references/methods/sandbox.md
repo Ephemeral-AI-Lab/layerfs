@@ -1,235 +1,229 @@
 # sandbox calls
 
-> **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
-> `layerfs-js-sdk` skill. **Not run in this pass** (no Sandbox was started):
-> everything here is read from `api/crates/layerfs-api/src/family/sandboxes.rs`,
-> `host/sandbox.rs` and the table, except `sandbox.list` on an empty home
-> (`{"items":[]}`, seen live).
+> **Status:** Current general guide for the LayerFS 2.0 call surface. Part of
+> the `layerfs-js-sdk` skill. Outputs marked "seen" were printed by the built
+> `layerfs` command on a throwaway home on 2026-11-18 (macOS, a `native`
+> Sandbox; paths shortened only where marked); the rest is from the table,
+> the spec rows and the manual, not run. `sandbox.close` (now `remove`) and
+> `logs.sandbox` (now `sandbox.log`) are gone, with no alias.
 
 ```js
-sandbox.create(project, name, machine?, { image, on_progress })
-sandbox.list(project?, { page_size, page_pos })
-sandbox.get(name, { page_size, page_pos })
-sandbox.close(name, { force })
-sandbox.files(sandbox, path?, { depth, cursor, limit, offset, length })
+sandbox.create(project, name, { machine, image, mount, on_progress })
+sandbox.list({ project, machine, limit, cursor })
+sandbox.get(sandbox, { with: ["stats"] })
+sandbox.remove(sandbox, { force, on_progress })
+sandbox.files(sandbox, path?, { depth, limit, cursor, byte_offset, byte_length })
+sandbox.log(sandbox, { limit, cursor })
+sandbox.doctor(sandbox, { on_progress })
 ```
 
-A Sandbox is named (unique in the home), bound to one project when created, and
-runs one LayerFS daemon on one machine. It holds up to 16 Workspaces of any
-Branches of its project. `sandbox.create` is the only call that starts one;
-`workspace.mount(sandbox, branch)` mounts in the one it names.
+A Sandbox is named (unique in the home), bound to one project when created,
+and runs one LayerFS daemon on one machine. It holds up to 16 Workspaces of
+any Branches of its project. `sandbox.create` is the only call that starts
+one; `workspace.mount(sandbox, branch)` mounts in the one it names. It runs
+until `sandbox.remove`.
 
 ```js
 import layerfs from "@layerfs/node";
 
 const P = "shop/api";
-await layerfs.sandbox.create(P, "build-1", "native");
+await layerfs.sandbox.create(P, "build-1");
 try {
-  const { ws } = await layerfs.workspace.mount("build-1", "work");
+  const { workspace } = await layerfs.workspace.mount("build-1", "agent");
   try {
-    const run = await layerfs.workspace.exec(ws, "timeout 110 npm run build", { message: "step 20" });
-    await layerfs.workspace.commit(ws, { message: `step 20: npm run build (exit ${run.exit_code})` });
+    const run = await layerfs.workspace.exec(workspace, "timeout 110 npm run build");
+    await layerfs.workspace.commit(workspace, { message: `step 20: npm run build (exit ${run.exit_code})` });
   } finally {
-    await layerfs.workspace.unmount(ws);
+    await layerfs.workspace.unmount(workspace);
   }
 } finally {
-  await layerfs.sandbox.close("build-1");
+  await layerfs.sandbox.remove("build-1");
 }
 ```
 
-```bash
-layerfs sandbox create shop/api build-1 native
-```
+## State
+
+A Sandbox's `state` comes from its record and its machine's record: `busy`
+with `op { name, phase, started_at }` while a `create` or `remove` runs;
+`broken` `unresolved` once one lost its answer and its process ended;
+`broken` `missing` with no runtime; `blocked` with `blocked_by { machine,
+reason }` while its machine is not ready; `broken` `unsupported` for the
+retired docker backend; `broken` `lost` or `not_answering` when a `get`
+found it so; else `ready`. Every broken Sandbox's `fix` is
+`layerfs sandbox remove <sandbox>`.
 
 ## `sandbox.create`
 
-`sandbox.create(project, name, machine?, { image })`
+Starts a named Sandbox of a project. With no `machine` it runs on its sqlite
+Store's machine, else on `native`; another machine than a sqlite Store's is
+`Unsupported`. `image` (a `sha256:` digest, a Docker image id or a Docker
+reference) picks its root on every machine but macOS `native`, which refuses
+it `Unsupported`; an image the machine does not hold is copied from the
+host's Docker first, as [`machine.load_image`](machine.md) does, with its
+refusals. With `mount: "B"` it also mounts Branch `B` and answers that
+Workspace's `{ workspace, path }`; otherwise `{"ok":true}`.
 
-With no `machine`, the Sandbox runs on its sqlite Store's machine, or on
-`native` for a PostgreSQL Store.
+```bash
+$ layerfs sandbox create shop/api tests --progress                             # seen
+{"phase":"start","done":0,"total":1}
+{"phase":"start","done":1,"total":1}
+{"ok":true}
+```
 
-Starts a Sandbox, binds it to the project and returns its record when it is
-ready.
+Progress: with `image`, the copy's `inspect`, `lock`, `export`, `send`,
+`unpack`; then `start` and, with `mount`, `mount`. The long form adds
+`outcome`, `sandbox`, `project`, `machine`, `platform`, `image`, `backend`,
+`route`, `state`, `created_at` and `forward_failed`.
 
-| Arg | Meaning |
-| --- | --- |
-| `project` | `<store>/<project>` |
-| `name` | 1–63 lowercase letters, digits, `_ . -`; unique in the home |
-| `machine` | Where it runs. For a sqlite Store it must be the machine the Store is on (`store.get` names it) |
-| `image` | An image digest, where the machine allows one; on `docker` it overrides the machine's image and the bundle's default |
-
-**What runs where in this build** (from source):
-
-| Machine | Sandbox |
-| --- | --- |
-| `native` on macOS | host processes, Workspaces over loopback NFS. Needs the daemon: the native machine record's `daemon`, else `~/.cache/layerfs/bundle/<version>/<os>-<arch>/layerfs-daemon` (`Unavailable` when missing) |
-| `native` on Linux | Linux namespaces |
-| a VM machine | sent to that machine's worker, which runs it on its own `native`. On `lima` this process then forwards the daemon's port to its loopback and keeps its keys in the home (#535 G4): the Workspace calls but `exec` go to the daemon directly. A forward that fails leaves the Sandbox on the worker route and the answer says `forward_failed` |
-| `docker`, sqlite Store on `docker` | a container on `image`, else the docker machine's image (`machine update docker --image`), else the bundle's Sandbox image, loaded into Docker once (#535 P5); on macOS and Linux the docker worker starts it beside itself, mounting only the Store's folder (G8). Its daemon's port is published on this host's loopback: the Workspace calls but `exec` go to it directly (#535 G4) |
-| PostgreSQL Store, a platform the support table allows (`native`, `docker`, `lima`, `apple-container` on macOS) | where that machine runs Sandboxes (rows above). This process resolves the password and rewrites a loopback host for the machine (`docker`: `host.docker.internal`); the create first checks, from that machine, that the server answers with the Store's schema binding. The daemon needs the `postgresql` build |
-| PostgreSQL Store, a platform the table refuses (`apple-container` off macOS) | `Unsupported` with the support table's reason (`machine.platforms`) |
-
-**Returns:** the Sandbox's record: `{ name, project, machine, created, id,
-platform, runtime, image, backend, route, state: "running" }`. `name` is what
-you pass to every other call; `id` is the same name, as its machine knows it;
-`route` is the kernel route (`fuse`, or `nfs` on macOS `native`).
-
-**State and intent** (#536 §7): a Sandbox's record stores facts and, while a
-`sandbox.create` or `sandbox.close` runs, one `op` intent; `state` is derived
-when asked:
-
-| `state` | When |
-| --- | --- |
-| `creating` | a `sandbox.create`'s process is still running it |
-| `closing` | a `sandbox.close`'s process is still running it |
-| `running` | it has an id and no live or unresolved intent |
-| `gone` | it has no id (its create's process ended before recording one), or `sandbox.get` heard from its machine that it no longer runs |
-| `unresolved` | a create or close lost its answer and its process has ended |
-
-While an intent's process lives, `sandbox.close` and every `workspace` call
-but `status` are refused `Busy` (naming the operation). An `unresolved`
-Sandbox refuses them `Unresolved`, naming `layerfs sandbox get <name>` (shows
-the `op`) and `layerfs sandbox close <name>`, the call that clears it.
-
-**Refusals**
-
-| Code | Meaning | Do |
+| `error` | When | Do |
 | --- | --- | --- |
-| `Exists` | A Sandbox with that name is recorded in the home (even one that closed itself) | Pick another name, or `sandbox.close(name)` first to drop the old record |
-| `NotFound` | No machine of that name, or no such Store | Check `machine.list`, `project.get` |
-| `Unsupported` | The machine's platform was removed in 2.0 (`firecracker`, `ssh`, `microsandbox`): ``platform `<name>` was removed in LayerFS 2.0`` | Use another machine; `machine.remove(name)` forgets the old record |
-| `Unsupported` | The machine is not the sqlite Store's (message names the Store's machine), the support table refuses the platform for the Store's kind, or the PostgreSQL URL cannot be rewritten for the machine (`sslmode=verify-full` with a rewrite) | Use the Store's machine, `store.pull` / `store.push` the Store, or give the Store a URL the machine can dial |
-| `Unavailable` | The machine cannot reach the PostgreSQL server, or reaches a server holding another Store (message names the host tried) | Make the server reachable from that machine |
-| `Unavailable` | The daemon bundle is missing | Report it; the home's owner installs the bundle |
-| `InvalidInput` | A bad name or project, or the name `native` or `docker` (they name the built-in machines) | Fix the call |
-| `Failed` | Starting it failed; its record is removed | Stop and report the message |
-| `Unknown` | The machine's answer was lost: a Sandbox may or may not have started. The record keeps its `op`, marked `uncertain` (`state: "unresolved"`) | Stop and report; don't create it again. `sandbox.close(name)` clears it (a Sandbox it left on its machine is not recorded) |
+| `Exists` | A Sandbox of that name is recorded in the home | Pick another name, or `sandbox.remove` the old one |
+| `InvalidInput` | A bad name, or `native` / `docker` (seen: `a Sandbox is not named native: that names a built-in machine`) | Fix the name |
+| `NotFound` | No such machine, Store or project | `machine.list`, `project.get` |
+| `Unsupported` | Not the sqlite Store's machine; a platform that cannot run it; an image on macOS `native` | Use the Store's machine, or `store.move` the Store |
+| `Unavailable` | The machine is stopped, or a server or Docker cannot be reached | `machine.start`; read `message` |
+| the mount's own code | With `mount`: the Sandbox started and the mount was refused; the Sandbox is kept and named as `sandbox`, with `fix: layerfs workspace mount <sandbox> <B>` | Mount again, or fix the Branch |
+| `Unknown` | The outcome is not known; the record keeps its `op`, uncertain | Stop and report; `sandbox.remove` clears it |
 
 ## `sandbox.list`
 
-`sandbox.list(project?, { page_size, page_pos })`
+Every Sandbox in the home, or one project's or one machine's, from records;
+it asks no machine or daemon. Rows: `sandbox`, `project`, the Workspaces the
+home records (`[{ workspace, branch }]`) and the state when not ready;
+`workspaces_not_listed: true` for a Sandbox whose Workspace records live in
+its machine. Long adds `message`, `machine`, `platform`, `image`,
+`created_at`. Paged by `limit` (default 100) and `cursor`.
 
-Every Sandbox record in the home, or one project's, one page at a time:
-`{ items: [record, …], next_page_pos }` (`page_size` 1–1000, default 50;
-`next_page_pos` is `null` after the last page). Each item carries its
-derived `state` and, while it has one, its `op` (`{ id, name, phase,
-started, uncertain }`). It reads the home's records only; it does not ask
-the daemons whether they still run (a Sandbox whose daemon ended reads
-`running` here).
+```bash
+$ layerfs sandbox list                                                         # seen
+{"items":[{"sandbox":"tests","project":"shop/api"}]}
+```
 
 ## `sandbox.get`
 
-`sandbox.get(name, { page_size, page_pos })`
+One Sandbox: its state, and its Workspaces from a live read of its daemon.
+Short: `{ state }` with `workspaces` (each `{ workspace, branch }`, plus the
+exec ids `running` in it and its `state` when not ready) and the state's
+companion. A machine that does not answer gives `unknown` with `observed_at`
+and `workspaces` null. Long adds, per Workspace, `path`, `commit`,
+`base_layer`, `mounted_at`, `branch_moved`, `pending_merge`, `commands`
+(`[{ exec, started_at, program, tag }]`) and `id`, and for the Sandbox
+`message`, `sandbox`, `project`, `machine`, `platform`, `image`, `backend`,
+`route`, `created_at` and `workspace_capacity` (16).
 
-The Sandbox's record with its derived `state` and its `op` while it has one
-(`{ id, name, phase, started, uncertain }`; reading never clears it), plus
-`workspaces`, one page of the daemon's list of mounted Workspaces, and
-`next_page_pos` (`page_size`, `page_pos` as for `list`). A Sandbox with no
-`id` asks no daemon; one whose machine answers that it no longer runs reads
-`state: "gone"` with `workspaces: []`. From source, each entry has `ws` (`<sandbox>:<name>` when its mount
-named it, else `<sandbox>:<path>`: pass it to the `workspace` calls), `name`
-(or `null`), `path`, and the daemon's `workspace`, `namespace`, `branch`,
-`base`, `base_layer`, `root`, `activity`, `mounted`, `directory` (the same
-path), `head_moved_since_mount`, `dirty` (`{ inodes, entries }` or `null`),
-`pending_merge` and `revision`. Not checked live.
+```bash
+$ layerfs sandbox get tests                                                    # seen, no Workspace mounted
+{"state":"ready"}
+$ layerfs sandbox get tests --with stats                                       # seen
+{"state":"ready","workspaces":[{"workspace":"tests:agent","branch":"agent"}],"stats":{"daemon":{"pid":75696,"started_at":"2026-11-18T22:05:16Z"},"usage_reason":"host_process","daemon_capacity":{"admission":{"pool_vacant":7,"pool_running":1,"reserved_vacant":1,"reserved_running":0},"retained":{"limit":64,"ttl_ms":3600000,"count":0,"dropped":0,"recorded":0}},"workspaces":[{"workspace":"tests:agent","overlay_bytes":77824,"usage_reason":"host_process"}]}}
+```
 
-`sandbox.list` and `sandbox.get` never start a machine (#535 P4). When the
-Sandbox's machine is down, `get` answers its record with `workspaces: []` and
-`down_reason` (why its worker was not reached); `machine.start(machine)`
-starts it.
+`with: ["stats"]` adds `stats` (null unless ready): `daemon`
+(`{ pid, started_at }`), `usage` (`{ cpu_ms, memory_bytes,
+memory_peak_bytes, memory_file_bytes, pid_count, oom_kill_count }` of its
+cgroup, or null with `usage_reason`: `host_process` on a macOS `native`
+Sandbox), `daemon_capacity` and per-Workspace `overlay_bytes`.
 
-`activity` is `Idle` when nothing runs in the Workspace; `Busy` while a Commit
-or mount runs; `Closing`, `Uncertain` or `Failed` need a look before you
-unmount.
+## `sandbox.remove`
 
-## `sandbox.close`
+Stops a Sandbox and removes its record. Answers `{"ok":true}`; with `force`
+also `unmounted` (the Workspaces it ended). Long `outcome`: `removed`,
+`already_gone` (`left` says what may remain) or `forgotten` (the retired
+docker backend, with its `container` and a `fix`). Progress: `cancel` (with
+`force`), `stop`, `delete`.
 
-`sandbox.close(name, { force })`
+```bash
+$ layerfs sandbox remove tests                                                 # seen, exit 125
+{"error":"InUse","message":"Sandbox tests still holds 1 Workspace(s); commit or unmount them first","workspaces":["tests:agent"]}
+$ layerfs workspace unmount tests:agent                                        # seen
+{"ok":true}
+$ layerfs sandbox remove tests --progress                                      # seen
+{"phase":"stop","done":1,"total":3}
+{"phase":"delete","done":2,"total":3}
+{"phase":"delete","done":3,"total":3}
+{"ok":true}
+```
 
-Stops the Sandbox now (stop, then delete, each attempted once), then removes
-its record. Its `op` (`sandbox.close`) is recorded before the stop: a lost
-answer (`Unknown`) keeps the record with that `op` uncertain
-(`state: "unresolved"`) until another `sandbox.close` clears it; any other
-refusal leaves the Sandbox as it was. `Busy` while another create or close
-of it runs.
+| `error` | When | Do |
+| --- | --- | --- |
+| `InUse` | A Workspace is mounted and no `force`; flat `workspaces` | Commit or unmount them first |
+| `Busy` | A command runs and no `force`; flat `running` (exec ids) | `workspace.cancel`, or wait |
+| `Unknown` | `force`, and a command's cancel was not confirmed; flat `running` | Stop and report |
 
-- **Returns:** `{ kind: "Closed", sandbox: <id>, closed: <name> }`. For a
-  Sandbox that was already gone (it closed itself), `{ closed, was_gone: true }`
-  and its record is removed.
-- `MountsActive` while any Workspace is mounted in it (`detail.workspaces`
-  lists them): commit or unmount them first.
-- `force` (O31, built in `37f1bbd2b9`, from source): stops the Sandbox
-  through its backend despite mounted Workspaces and answers
-  `{ kind: "Closed", sandbox, unknown: [path, …] }`, the Workspaces it could
-  not drain. Their uncommitted changes and processes end with the Sandbox:
-  commit first what you want to keep.
-- A record with no `id` (a create still running, one whose outcome was
-  unknown, or one whose process ended) closes too: `Busy` while the
-  creating process lives, otherwise the record goes and the name is free
-  (`{ closed, was }`, `was` being `gone` or `unresolved`; for an unresolved
-  create, `left` says a Sandbox may remain on its machine).
+`force` cancels each running command, then stops the Sandbox anyway: its
+Workspaces' uncommitted changes end with it. Commit first what you want to
+keep. A lost answer keeps the record with its `op` uncertain (`broken`
+`unresolved`) until another `remove`.
 
 ## `sandbox.files`
 
-`sandbox.files(sandbox, path?, { depth, cursor, limit, offset, length })`
+Reads what is in a Sandbox: its roots, one page of a folder, or one byte
+window of a file. It takes no lock, asks no daemon, starts nothing and writes
+nothing, the call log included.
 
-Reads what is in a Sandbox: its roots, one page of a folder, or one window of
-a file, in its home and, for a Sandbox with a root of its own, in that root.
-It is a read for a UI that shows a tree: no lock, no lease, no daemon call,
-nothing written, no call-log line, and the MCP server does not list it.
+- With no `path`: the roots (long form: each `role`): one per mounted
+  Workspace (`not_read: "mount"`), its home, its daemon log and, for a
+  Sandbox with a root of its own (every one but a macOS `native` Sandbox),
+  `/`.
+- A folder: `items` (`{ path, type, size, not_read }`, `type` `file`, `dir`,
+  `symlink` or `other`; long adds `role, depth, mode, modified_at, target,
+  fs, workspace`) to `depth` levels (default 1), `limit` a page (default
+  100), with `next_cursor`.
+- A file: a window from `byte_offset` (default 0) of `byte_length` (default
+  262144): `text` and `next_byte_offset` while more remains, or
+  `binary: true` with its `size`.
+- The daemon log is refused `InvalidInput` (read it with `sandbox.log`), as
+  are `..`, a link on the way, a FIFO, socket or device, and a private file.
 
-With no `path` it answers the roots that exist, each with a `role`:
-`workspace` (one per mounted Workspace), `home`, `log` and, for a Sandbox with
-its own root, `root` (`/`). `depth` is 1 (default) to 32; `limit` is 1 to
-1000 (default 500); `cursor` is a page's `next`; `offset` and `length` take
-a file window (default 0 and 256 KiB, at most 1 MiB).
+```bash
+$ layerfs sandbox files tests                                                  # seen
+{"items":[{"path":"/tmp/demo/home/machine/native/run/layerfs-8a7387b2-tests/workspaces/1","type":"dir","not_read":"mount"},{"path":"/tmp/demo/home/machine/native/run/layerfs-8a7387b2-tests/tmp","type":"dir"},{"path":"/tmp/demo/home/machine/native/run/layerfs-8a7387b2-tests/daemon.log","type":"file","size":38}]}
+```
 
-A folder answers `{ kind: "folder", entries, next, has_more, reason? }`; an
-entry is `{ path, depth, kind, size, mode, mtime }`, `kind` one of `file`,
-`folder`, `symlink`, `mount`, `restricted` or `other`. A file answers
-`{ kind: "file", size, offset, content, binary, next }`; `binary` is true when
-the window holds a NUL byte, and `content` is then empty.
+## `sandbox.log`
 
-Errors: `InvalidInput` (an option out of range, a `cursor` with no `path`, a
-path that is not absolute or holds `..`, a symlink or a private entry, a path
-outside the home when the Sandbox has no root of its own); `NotFound`;
-`NoSuchSandbox`; `Unavailable` (the machine is stopped, its worker does not
-answer, or the root is read while its daemon is not running); `Busy` (two
-inspection reads already run on that machine); `Unsupported` (a kernel too old
-for `openat2`, or a non-root reader of the root).
+The Sandbox's daemon log, `daemon.log` in its run folder: `items`
+(`[{ text, continued? }]`, oldest first; `continued` marks a piece of a
+longer line), the last `limit` lines (default 200, 1 to 1000), or with
+`cursor` the lines before it, at most 64 KiB a call. `next_cursor` continues
+with older lines and is absent at the start of the log. Control characters
+are escaped. Like `files`, it takes no lock and writes nothing; at most two
+inspection reads run on a machine at a time (`Busy`), and a machine that is
+stopped or does not answer within 8 s is `Unavailable`.
 
-## Sandbox lifetime
+```bash
+$ layerfs sandbox log tests --limit 2                                          # seen
+{"items":[{"text":"LAYERFS_DAEMON_LISTEN 127.0.0.1:62804"}]}
+```
 
-A Sandbox runs until `sandbox.close(name)`; `machine.stop` is refused
-`InUse` while it runs. Its daemon does not exit when its last
-Workspace is unmounted: the 120-second idle close (#373) is removed (#535
-D11). A Sandbox whose daemon ended for another reason (a crash, a kill)
-keeps its record: a mount there is refused `NoSuchSandbox`, and
-`sandbox.create` with the same name is `Exists` until `sandbox.close(name)`
-drops the record.
+## `sandbox.doctor`
+
+Checks one Sandbox (record, runtime, daemon), then each of its Workspaces.
+The report is the [doctors'](doctor.md) shared shape.
+
+```bash
+$ layerfs sandbox doctor tests                                                 # seen
+{"ok":true}
+```
 
 ## Clearing idle Workspaces
 
 Nothing unmounts a Workspace for you: a script that exits or throws before its
-`unmount` leaves it mounted, and its Sandbox never closes. To clear leftovers,
-list each Sandbox's Workspaces and unmount only those that are idle, hold
-nothing uncommitted and that no agent is keeping on purpose (a build Workspace,
-one running a dev server). Field names are from source:
+`unmount` leaves it mounted, and its Sandbox cannot be removed. To clear
+leftovers, look at each Workspace and unmount only those that are idle, hold
+nothing uncommitted and that no agent is keeping on purpose (a build
+Workspace, one running a dev server):
 
 ```js
-const keep = new Set([/* the `ws` of Workspaces agents said they keep */]);
-for (const sb of (await layerfs.sandbox.list("shop/api")).items) {
-  const got = await layerfs.sandbox.get(sb.name);
-  for (const w of got.workspaces ?? []) {
-    const ws = w.ws;
-    if (w.activity === "Idle" && w.dirty === null && !w.pending_merge && !keep.has(ws)) {
-      await layerfs.workspace.unmount(ws);   // no discard: a Dirty one stays for its owner
-    }
+const keep = new Set([/* handles agents said they keep */]);
+for (const w of (await layerfs.workspace.list({ limit: 1000 })).items) {
+  if (keep.has(w.workspace)) continue;
+  const s = await layerfs.workspace.status(w.workspace);
+  if (!s.state && (s.changes ?? []).length === 0 && !s.partial) {
+    await layerfs.workspace.unmount(w.workspace);   // no discard: a Dirty one stays for its owner
   }
 }
 ```
 
 Don't pass `discard` for a Workspace another agent mounted. Without it, a
 Workspace with uncommitted changes is refused `Dirty` and stays mounted.
-(`dirty` may be `{ inodes: 0, entries: 0 }` rather than `null` when clean; the
-unmount without `discard` is the real check.)

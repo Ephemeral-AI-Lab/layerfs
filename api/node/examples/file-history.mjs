@@ -1,11 +1,11 @@
-// A mountless file and history flow in a throwaway home (Disposable, no
-// Sandbox, no machine, nothing mounted): a Store, a project from a folder, a
+// A mountless file and history flow in a throwaway home (no Sandbox, no
+// machine, nothing mounted): a Store, a project from a folder, a
 // Branch, three writes (text, bytes, a batch), the history and a diff, then
 // the Branch published to `main`. From the repository, after building the
 // addon (`node api/scripts/build-native.mjs`):
 //   node api/node/examples/file-history.mjs
-// The temporary directory must be on ext4, xfs or btrfs (a Store needs SQLite
-// locks); set TMPDIR to such a directory if /tmp is not. Installed, import
+// The temporary directory must be on a local filesystem (ext4, xfs or btrfs
+// on Linux; apfs on macOS); set TMPDIR to such a directory if it is not. Installed, import
 // from "@layerfs/node" instead of "../src/index.js".
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -36,11 +36,12 @@ try {
   const history = await lfs.commit.list("shop/app", "agent");
   console.log("commits:", history.items.map((commit) => commit.message));
   console.log("read:", (await lfs.file.read("shop/app", "agent", "/src/index.js")).text.trim());
-  const diff = await lfs.branch.diff("shop/app", "main", "agent", { paths_only: true });
-  console.log("changed:", diff.items.map((change) => `${change.kind} ${change.path}`));
+  // the Branch against the Commit it was forked from
+  const diff = await lfs.commit.diff("shop/app", "agent");
+  console.log("changed:", diff.items.map((change) => `${change.change} ${change.path}`));
 
   const published = await lfs.branch.publish("shop/app", "agent");
-  console.log("published:", published.kind);
+  console.log("published:", published.commit.slice(0, 8));
   console.log("on main:", (await lfs.file.stat("shop/app", "main", "/notes.md")).size, "bytes in /notes.md");
 } finally {
   close();
