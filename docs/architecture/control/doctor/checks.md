@@ -201,10 +201,12 @@ ask with `reason: busy` or `refused`. An unknown `--machine` is `NotFound`.
 | `init_copy` | `incoming/init-<16 hex>/` (a worker root) | always; `report_only` unless a line of the home's `log/uncertain.jsonl` names the machine and the copy with a deadline | more than an hour has passed since that line's `deadline` (`removable_at`); then the worker's own `project.stage` discard removes it. A copy no line names is report-only (`InvalidInput`) |
 | `backup_staging` | `store/<s>/backup.staging` (the home), `store/<s>/store.sqlite.backup` (the Store's machine) | the file is there and no live process holds an operation on that Store | the Store's `backup.lock` in the home can be taken without waiting; it is held for the removal |
 | `image_tmp` | `machine/native/run/images/.tmp-<hex>.2-<id>/` | always | the image's `<hex>.2.lock` can be taken without waiting; the lock file stays |
-| `image_part` | `machine/native/run/images/.recv-<hex>.part` | always | it has not been written for an hour |
+| `export_container` | an image export container in the host's Docker: labelled `layerfs.role=image-export` with this home's id, or a legacy unlabelled `layerfs-export-<machine>-<hex>` (listed with `native`'s entries; `path` and `size` null) | an image copy has run from this home (`run/image-lock/` exists) and Docker answers; `report_only` while the copy lock's owner record of its image and machine names a live process. Docker not answering puts `native` in `not_listed` (`blocked_by {machine: docker, reason: engine_down}`); no Docker lists none | the copy lock of its image on its machine can be taken without waiting; `docker rm -v` removes it with its anonymous volumes ([`image_exports.rs`](../../../../control/crates/layerfs-sandbox/src/image_exports.rs)) |
 
 Image `<hex>.2.lock` files and Workspace `.unmount` markers are LayerFS's own
-and are neither listed nor removed.
+and are neither listed nor removed. A copy's staged `.recv-<hex>.part` is not
+a leftover (spec v19): `machine.images` shows it as a `broken`/`partial` item
+and `machine.prune --unused` removes it.
 
 | Field or rule | Meaning | Source |
 | --- | --- | --- |

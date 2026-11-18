@@ -221,7 +221,11 @@ Each item is `{ leftover, modified_at, size, report_only, removable_at, kind,
 machine, path }`; the short item is `{ leftover, modified_at }` plus `size`
 and `report_only` when set. `leftover` is `<machine>:<kind>:<name>`, the id
 `home.prune` takes; it never holds a path. The kinds are `run_folder`,
-`empty_root`, `init_copy`, `backup_staging`, `image_tmp` and `image_part`
+`empty_root`, `init_copy`, `backup_staging`, `image_tmp` and
+`export_container` (an image export container a killed copy left in the
+host's Docker, listed with `native`'s entries once an image copy has run
+from the home; a Docker that does not answer puts `native` in `not_listed`,
+blocked by `docker`'s `engine_down`)
 ([Checks: leftovers](../../control/doctor/checks.md#leftovers)). A machine
 that was not walked, or not to the end, is in `not_listed` as `{ machine,
 blocked_by, reason, message }`: `blocked_by` for a stopped machine or one an
@@ -248,7 +252,7 @@ nothing but the one entry is removed.
 | Error | When |
 | --- | --- |
 | `NotFound` | no leftover has that id now: an id no list gives (a path, `..`, an unknown kind or machine), an entry already removed, or a link in its place |
-| `InUse` | the kind's guard does not hold: a Sandbox record names the run folder, its `owner` marker is missing or newer than a minute, a daemon of it runs, something is mounted there, a `backup create` of the Store or an unpack of the image is running, the image part was written within the hour, or a folder copy's Init may run until an hour after its deadline. Nothing was removed |
+| `InUse` | the kind's guard does not hold: a Sandbox record names the run folder, its `owner` marker is missing or newer than a minute, a daemon of it runs, something is mounted there, a `backup create` of the Store or an unpack of the image is running, a copy of an export container's image holds the copy lock, or a folder copy's Init may run until an hour after its deadline. Nothing was removed |
 | `InvalidInput` | a folder copy no line of `log/uncertain.jsonl` names (report-only); a missing `leftover` |
 | `Unavailable` | the machine is stopped; `layerfs machine start <machine>` starts it |
 | `Unknown` | the worker's answer was lost; `layerfs home leftovers` shows whether the entry is still there |
