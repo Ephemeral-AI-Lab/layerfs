@@ -761,3 +761,130 @@ fn leaves_naming_values_of_one_block_cost_one_value_read() {
         .sum();
     assert_eq!(reads, 1, "{profile:?}");
 }
+
+/// Publishes one Ordinary pack whose single Raw group holds `objects`, each
+/// as its own record, and then `padding` bytes no locator names.
+fn publish_tree_pack(f: &Fixture, objects: &[FinalizedObject], padding: usize) -> i64 {
+    let capacities = StorageCapacities::from_policy(f.policy).unwrap();
+    let mut workspace = CompressionWorkspace::new().unwrap();
+    let mut profile = SaveProfile::default();
+    let mut records: Vec<_> = objects
+        .iter()
+        .map(|object| {
+            let encoded = encode_full(
+                object.canonical(),
+                object.role(),
+                &capacities,
+                &mut workspace,
+                &mut profile,
+            )
+            .unwrap();
+            assert_eq!(encoded.lane, PackLane::Ordinary);
+            encoded.record
+        })
+        .collect();
+    records.push(vec![0; padding]);
+    let group = build_group(PackLane::Ordinary, &records, None).unwrap();
+    assert_eq!(group.codec, layout::GroupCodec::Raw);
+    let body = assemble(PackLane::Ordinary, &[group]).unwrap();
+    let reserved = f
+        .handles
+        .storage
+        .reserve(Reserve {
+            packs: 1,
+            ordinals: 0,
+        })
+        .unwrap();
+    f.handles
+        .storage
+        .publish(&Publication {
+            packs: vec![PublishedPack::seal(
+                reserved.first_pack_id,
+                PackDomain::Metadata,
+                Arc::new(body),
+            )],
+            objects: objects
+                .iter()
+                .enumerate()
+                .map(|(record, object)| ObjectLocation {
+                    object_id: object.id(),
+                    role: object.role(),
+                    canonical_length: object.canonical_len(),
+                    pack_id: reserved.first_pack_id,
+                    group_number: 0,
+                    record_number: record,
+                })
+                .collect(),
+            ..Publication::default()
+        })
+        .unwrap();
+    reserved.first_pack_id
+}
+
+#[test]
+fn a_tree_written_into_one_pack_is_decoded_in_one_visit_of_it() {
+    // More metadata packs than the walk's 2 MiB of pack bodies can hold at
+    // once, each holding one Commit's file state and the extent leaf below it.
+    const PACKS: usize = 80;
+    const PADDING: usize = 32_000;
+    let f = Fixture::new();
+    let chunk = f
+        .put(
+            ObjectRole::Chunk,
+            mapping::encode_chunk_object(&[7u8; 200]).unwrap(),
+        )
+        .id();
+    let mut leaves = Vec::new();
+    let mut states = Vec::new();
+    for length in 1..=PACKS as u64 {
+        let leaf = FinalizedObject::new(
+            ObjectRole::ExtentLeaf,
+            mapping::encode_node(
+                &ExtentNode::Leaf {
+                    subtree_logical_bytes: length,
+                    extents: vec![ExtentSlice::new(chunk, 0, length as u32).unwrap()],
+                },
+                true,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let state = FinalizedObject::new(
+            ObjectRole::FileState,
+            mapping::encode_file_state(FileState {
+                logical_len: length,
+                extent_count: 1,
+                tree_level: 0,
+                profile_id: mapping::profile_id(),
+                mapping_root: leaf.id(),
+            })
+            .unwrap(),
+        )
+        .unwrap();
+        publish_tree_pack(&f, &[leaf.clone(), state.clone()], PADDING);
+        leaves.push(leaf.id());
+        states.push(state.id());
+    }
+    let stack = initialize(&f.handles, 1, states[0]);
+    let work = branch_id(1);
+    fork(&f.handles, stack.id, work, 1);
+    for state in &states[1..] {
+        commit(&f.handles, work, *state);
+    }
+
+    layerfs_persistence::profile_statements();
+    let mark = f.handles.history.mark().unwrap();
+    let profile = layerfs_persistence::take_statement_profile();
+    for id in leaves.iter().chain(&states).chain([&chunk]) {
+        assert!(mark.objects().contains(*id), "object {id} is retained");
+    }
+    // A leaf is admitted while its file state's pack is still held, so each
+    // pack is acquired once. Walking the leaves as a wave of their own, after
+    // every file state, found the first packs evicted and read each again.
+    let acquisitions: u64 = profile
+        .iter()
+        .filter(|(sql, _)| sql.starts_with("SELECT pack_id,domain,digest,length FROM pack WHERE"))
+        .map(|(_, cost)| cost.calls)
+        .sum();
+    assert_eq!(acquisitions, PACKS as u64, "{profile:?}");
+}

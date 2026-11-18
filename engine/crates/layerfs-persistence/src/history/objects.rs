@@ -442,6 +442,31 @@ impl ClosureSource<'_> {
             .map_err(StorageError::from)
     }
 
+    /// Queues a newly reached object. An object stored in the pack being
+    /// walked joins `local`, which the walk empties before it leaves the
+    /// pack: a Commit's root, inode pages, directory pages, file states and
+    /// extent pages are written into one pack, so they are read in one visit
+    /// of it and not in one visit per tree level. A file payload always waits
+    /// for the next wave, where payload headers are read a pack at a time; so
+    /// does an object of any other pack.
+    fn admit(
+        &self,
+        id: ObjectId,
+        pack_id: i64,
+        local: &mut Vec<ObjectId>,
+        next: &mut Vec<ObjectId>,
+    ) {
+        let here = self.locations.get(&id).is_some_and(|found| {
+            found.pack_id == pack_id
+                && !matches!(found.role, ObjectRole::WholeFile | ObjectRole::Chunk)
+        });
+        if here {
+            local.push(id)
+        } else {
+            next.push(id)
+        }
+    }
+
     /// Keeps the group extents the walk read for `pack_id`.
     fn keep_layout(&self, pack_id: i64, views: Vec<layout::GroupView>) {
         self.layouts.borrow_mut().entry(pack_id).or_insert(views);
@@ -570,8 +595,10 @@ impl Source for ClosureSource<'_> {
 /// The walk is metadata-only: a role that names no other object
 /// ([`ObjectRole::has_references`]) costs one record header read, not a payload
 /// decode, and each wave is processed in locator order so one pack body answers
-/// every object of its group. Reference-bearing metadata pages are still
-/// authenticated and decoded, but identity is not hashed a second time.
+/// every object of its group. A metadata object reached in the pack being
+/// walked is read in that same visit ([`ClosureSource::admit`]).
+/// Reference-bearing metadata pages are still authenticated and decoded, but
+/// identity is not hashed a second time.
 fn walk(
     source: &ClosureSource<'_>,
     capacities: &StorageCapacities,
@@ -610,77 +637,82 @@ fn walk(
         // at a time, and leave the payload unread.
         let mut headers = edges::wave_edges(source, &frontier)?;
         let mut next = Vec::new();
+        // Objects admitted while their pack is being walked: see `admit`.
+        let mut local = Vec::new();
         for id in std::mem::take(&mut frontier) {
-            let location = source
-                .location(id, i64::MAX)
-                .map_err(storage)?
-                .ok_or(HistoryError::Integrity("mark object locator"))?;
-            let role = location.role;
-            let references = if role.has_references() {
-                let canonical = {
-                    let mut resolver = Resolver::new(
+            local.push(id);
+            while let Some(id) = local.pop() {
+                let location = source
+                    .location(id, i64::MAX)
+                    .map_err(storage)?
+                    .ok_or(HistoryError::Integrity("mark object locator"))?;
+                let role = location.role;
+                let references = if role.has_references() {
+                    let canonical = {
+                        let mut resolver = Resolver::new(
+                            source,
+                            i64::MAX,
+                            capacities,
+                            BodyCaches {
+                                packs: &mut packs,
+                                pool: &mut pool,
+                            },
+                            &mut groups,
+                            &mut workspace,
+                            &mut counters,
+                        );
+                        resolver.resolve_at(location).map_err(storage)?.0
+                    };
+                    let scope = if role == ObjectRole::FilesystemRoot {
+                        FilesystemRoot::decode(&canonical)
+                            .map_err(|_| HistoryError::Integrity("mark root scope"))?
+                            .scope()
+                    } else {
+                        // No other admitted role reads the scope; the leaf encoders
+                        // that derive references ignore it.
+                        unscoped
+                    };
+                    decode_references(role, &canonical, construction, scope)
+                        .map_err(|_| HistoryError::Integrity("mark object references"))?
+                } else {
+                    Vec::new()
+                };
+                for reference in references {
+                    closure.logical.insert(reference);
+                    if queued.insert(reference) {
+                        source.admit(reference, location.pack_id, &mut local, &mut next);
+                    }
+                }
+                // The base identity lives in the record header. An encoded group
+                // has no header to read on its own, so its edge borrows the group.
+                let edge = match headers.remove(&id) {
+                    Some(edge) => edge,
+                    // The walk's own decoded-group cache: a compressed group is
+                    // decompressed once, not once more for each record's edge.
+                    None => stored_edge(
                         source,
-                        i64::MAX,
-                        capacities,
-                        BodyCaches {
-                            packs: &mut packs,
-                            pool: &mut pool,
-                        },
+                        &mut packs,
                         &mut groups,
                         &mut workspace,
-                        &mut counters,
-                    );
-                    resolver.resolve_at(location).map_err(storage)?.0
+                        &mut edge_decodes,
+                        &location,
+                    )
+                    .map_err(storage)?,
                 };
-                let scope = if role == ObjectRole::FilesystemRoot {
-                    FilesystemRoot::decode(&canonical)
-                        .map_err(|_| HistoryError::Integrity("mark root scope"))?
-                        .scope()
-                } else {
-                    // No other admitted role reads the scope; the leaf encoders
-                    // that derive references ignore it.
-                    unscoped
-                };
-                decode_references(role, &canonical, construction, scope)
-                    .map_err(|_| HistoryError::Integrity("mark object references"))?
-            } else {
-                Vec::new()
-            };
-            for reference in references {
-                closure.logical.insert(reference);
-                if queued.insert(reference) {
-                    next.push(reference);
+                closure.widths.insert(id, edge.width);
+                if let Some(base) = edge.base {
+                    closure.bases.insert(base);
+                    if queued.insert(base) {
+                        source.admit(base, location.pack_id, &mut local, &mut next);
+                    }
                 }
-            }
-            // The base identity lives in the record header. An encoded group
-            // has no header to read on its own, so its edge borrows the group.
-            let edge = match headers.remove(&id) {
-                Some(edge) => edge,
-                // The walk's own decoded-group cache: a compressed group is
-                // decompressed once, not once more for each record's edge.
-                None => stored_edge(
-                    source,
-                    &mut packs,
-                    &mut groups,
-                    &mut workspace,
-                    &mut edge_decodes,
-                    &location,
-                )
-                .map_err(storage)?,
-            };
-            closure.widths.insert(id, edge.width);
-            if let Some(base) = edge.base {
-                closure.bases.insert(base);
-                if queued.insert(base) {
-                    next.push(base);
+                if let Some(visit) = visit {
+                    // Streaming rows as objects are discovered keeps the scratch a
+                    // complete §6.2 closure at every step, not a post-pass copy.
+                    visit.visit(id, location.pack_id)?;
                 }
+                closure.visited.insert(id, location);
             }
-            if let Some(visit) = visit {
-                // Streaming rows as objects are discovered keeps the scratch a
-                // complete §6.2 closure at every step, not a post-pass copy.
-                visit.visit(id, location.pack_id)?;
-            }
-            closure.visited.insert(id, location);
         }
         frontier = next;
     }
