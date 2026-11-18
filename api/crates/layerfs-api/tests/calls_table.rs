@@ -327,7 +327,7 @@ fn file_family() {
             ("new_string", t("x"))
         ])
     )
-    .contains("needs `old_string`"));
+    .contains("file.edit: `old_string` is required"));
     let reached = code(
         "file.read",
         map(&[
@@ -411,6 +411,9 @@ fn machine_family() {
 #[test]
 fn store_family() {
     assert!(code("store.move", map(&[("store", t("shop"))])).contains("`machine` is required"));
+    // a required option is refused before the call runs
+    let auth = map(&[("auth", t("pg")), ("password", t("pw"))]);
+    assert!(code("store.save_auth", auth).contains("`user` is required"));
     // the old names are gone, with no alias
     for gone in ["store.status", "store.stats", "store.push", "store.pull"] {
         assert!(layerfs_api::find(gone).is_none(), "{gone}");
@@ -430,6 +433,39 @@ fn backup_family() {
     // the key's secret is an option; both key options are required
     let connect = map(&[("name", t("b")), ("url", t("http://127.0.0.1:9/b"))]);
     assert!(code("backup.connect", connect).contains("`access_key` is required"));
+    let connect = map(&[
+        ("name", t("b")),
+        ("url", t("http://127.0.0.1:9/b")),
+        ("access_key", t("AKID")),
+    ]);
+    assert!(code("backup.connect", connect).contains("`secret_key` is required"));
+    // the table says so, and its JSON tells the front ends
+    let table = json::parse(&layerfs_api::table_json()).unwrap();
+    let entry = |name: &str| {
+        let SdkValue::List(calls) = &table else {
+            panic!("the table is a list")
+        };
+        let (family, call) = name.split_once('.').unwrap();
+        calls
+            .iter()
+            .find(|c| c.get_text("family") == Some(family) && c.get_text("call") == Some(call))
+            .cloned()
+            .unwrap()
+    };
+    for (name, required) in [
+        ("backup.connect", ["access_key", "secret_key"]),
+        ("store.save_auth", ["user", "password"]),
+        ("file.edit", ["old_string", "new_string"]),
+    ] {
+        let Some(SdkValue::List(options)) = entry(name).get("options").cloned() else {
+            panic!("{name}: options")
+        };
+        for option in options {
+            let want = required.contains(&option.get_text("name").unwrap());
+            let said = option.get("required") == Some(&SdkValue::Bool(true));
+            assert_eq!(said, want, "{name} {:?}", option.get_text("name"));
+        }
+    }
     let reached = code("backup.list", SdkValue::Null);
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
 }

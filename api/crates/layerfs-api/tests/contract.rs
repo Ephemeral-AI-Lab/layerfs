@@ -257,8 +257,8 @@ fn kind_word(kind: Kind) -> &'static str {
 }
 
 /// Checks a table entry's arguments against the row's `positionals` or
-/// `options`: names, kinds and order; `optional`, `redact` and `shell`
-/// where the row says them.
+/// `options`: names, kinds and order; a positional's `optional`, an
+/// option's `required`; `redact` and `shell` where the row says them.
 fn check_args(
     pending: &SdkValue,
     call: &str,
@@ -282,6 +282,9 @@ fn check_args(
         if what == "positionals" {
             let optional = at(said, "optional") == &SdkValue::Bool(true);
             assert_eq!(arg.optional, optional, "{spot}: optional");
+        } else {
+            let required = at(said, "required") == &SdkValue::Bool(true);
+            assert_eq!(arg.required, required, "{spot}: required");
         }
         if let Some(SdkValue::Bool(redact)) = said.get("redact") {
             assert_eq!(arg.redacted(), *redact, "{spot}: redact");

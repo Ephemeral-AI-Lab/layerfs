@@ -77,6 +77,11 @@ pub struct Arg {
     /// given as `--env K=V` repeatedly is one object of names to text
     /// (call surface 2.0 `repeat`).
     pub repeat: bool,
+    /// Whether an option must be given (call surface 2.0 `required`): the
+    /// shell refuses a line without it (exit 2), the library refuses the
+    /// call before any effect, and Node, Python and MCP mark it required.
+    /// Positionals say this with `optional` instead.
+    pub required: bool,
 }
 
 impl Arg {
@@ -110,6 +115,14 @@ impl Arg {
     pub const fn repeat(self) -> Arg {
         Arg {
             repeat: true,
+            ..self
+        }
+    }
+
+    /// This option, which must be given ([`Arg::required`]).
+    pub const fn required(self) -> Arg {
+        Arg {
+            required: true,
             ..self
         }
     }
@@ -279,6 +292,7 @@ pub const fn a(name: &'static str, kind: Kind) -> Arg {
         redact: Redact::No,
         shell: None,
         repeat: false,
+        required: false,
     }
 }
 
@@ -291,6 +305,7 @@ pub const fn opt(name: &'static str, kind: Kind) -> Arg {
         redact: Redact::No,
         shell: None,
         repeat: false,
+        required: false,
     }
 }
 
@@ -425,9 +440,10 @@ fn declared(call: &Call, form: &Form) -> SdkValue {
 }
 
 /// The whole table as JSON text, for front ends that build their functions
-/// from it: `[{ family, call, args: [{ name, kind, optional, shell? }],
-/// options, help, form? }]` (`shell` is the flag of a secret option the
-/// shell reads from stdin). A migrated call has `form`: `{ short, long, parts?,
+/// from it: `[{ family, call, args: [{ name, kind, optional, shell?,
+/// repeat?, required? }], options, help, form? }]` (`shell` is the flag of
+/// a secret option the shell reads from stdin; `required` is true on an
+/// option that must be given). A migrated call has `form`: `{ short, long, parts?,
 /// with, paging, progress, quiet, profile }`.
 pub fn table_json(families: &'static [Family]) -> String {
     let arg = |a: &Arg| {
@@ -444,6 +460,9 @@ pub fn table_json(families: &'static [Family]) -> String {
         }
         if a.repeat {
             fields.push(("repeat".to_owned(), SdkValue::Bool(true)));
+        }
+        if a.required {
+            fields.push(("required".to_owned(), SdkValue::Bool(true)));
         }
         SdkValue::Map(fields)
     };

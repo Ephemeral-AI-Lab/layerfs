@@ -348,6 +348,10 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
     let printed = layerfs_api::json::print(&line);
     assert!(!printed.contains("hunter2"), "{printed}");
     assert!(argv(&line).contains(&bytes(7)), "{printed}");
+    assert!(
+        argv(&line).contains(&"--password-stdin".to_owned()),
+        "{printed}"
+    );
     let _ = call(
         &home,
         "workspace.exec",
@@ -384,6 +388,13 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
     assert!(words.contains(&"AKID".to_owned()), "{words:?}");
     assert!(words.contains(&bytes(10)), "{words:?}");
     assert!(!words.iter().any(|w| w.contains("s3cr3t")), "{words:?}");
+    // the secret goes by the shell flag that reads it, not its option name
+    let at = words
+        .iter()
+        .position(|w| w == "--key-stdin")
+        .expect("--key-stdin");
+    assert_eq!(words[at + 1], bytes(10), "{words:?}");
+    assert!(!words.contains(&"--secret-key".to_owned()), "{words:?}");
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(folder).unwrap();
 }

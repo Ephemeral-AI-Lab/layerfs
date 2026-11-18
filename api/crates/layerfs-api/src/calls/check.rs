@@ -1,5 +1,5 @@
 //! A call's arguments checked against its table entry before any effect:
-//! every name known, every required positional present, every value of its
+//! every name known, every required positional and option present, every value of its
 //! kind. Sizes become whole bytes. Front ends strip their functions
 //! (`on_progress`, exec sinks) before the call reaches the library.
 use super::table::{Call, Kind};
@@ -27,7 +27,7 @@ pub fn check(call: &Call, args: SdkValue) -> Result<Vec<(String, SdkValue)>, Sdk
             .map(|(_, value)| value.clone())
             .unwrap_or(SdkValue::Null);
         if matches!(value, SdkValue::Null) {
-            if !arg.optional {
+            if !arg.optional || arg.required {
                 return Err(invalid(call, &format!("`{}` is required", arg.name)));
             }
             continue;

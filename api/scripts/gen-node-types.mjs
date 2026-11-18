@@ -33,13 +33,15 @@ function argument(spec, arg) {
 function option(spec, opt) {
   const type = opt.kind === "function" ? FUNCTION[opt.name] : ARGUMENT[opt.kind];
   if (!type) throw new Error(`${spec.family}.${spec.call}: no type for option "${opt.name}" of kind "${opt.kind}"`);
-  return `  ${opt.name}?: ${type};`;
+  return `  ${opt.name}${opt.required ? "" : "?"}: ${type};`;
 }
 
 /** The sections a migrated call's `with` takes. */
 const sectionsOf = (spec) => Object.keys(spec.form?.with ?? {});
 /** Whether the call has an options interface of its own. */
 const hasOptions = (spec) => spec.options.length > 0 || sectionsOf(spec).length > 0;
+/** Whether the call has an option that must be given, so its options may not be left off. */
+const needsOptions = (spec) => spec.options.some((opt) => opt.required);
 
 /** The text of index.d.ts for `table`: `[{ family, call, args, options, help }]`. */
 export function render(table) {
@@ -119,12 +121,15 @@ export interface CallForm {
   long: readonly string[];
   parts?: { readonly [key: string]: CallForm | { scalar: string } };
 }
-/** One positional or option; \`shell\` is the flag of a secret option the shell reads from stdin. */
+/** One positional or option; \`shell\` is the flag of a secret option the shell reads from stdin,
+ * \`repeat\` marks an option the shell takes more than once, \`required\` an option that must be given. */
 export interface CallArg {
   name: string;
   kind: string;
   optional: boolean;
   shell?: string;
+  repeat?: boolean;
+  required?: boolean;
 }
 export interface CallSpec {
   family: string;
@@ -214,7 +219,7 @@ ${lines.join("\n")}
       const signatures = [];
       {
         const type = hasOptions(spec) ? `${pascal(spec.family)}${pascal(spec.call)}Options` : "CallOptions";
-        params.push(`options?: ${type}`);
+        params.push(`options${needsOptions(spec) ? "" : "?"}: ${type}`);
         // the binding takes a plain object in a text, name or number slot as the
         // options (index.js, `bind`): so the options may follow the required
         // positionals directly, omitting the optional ones

@@ -70,7 +70,7 @@ def method(spec, asynchronous):
         params.append(f"{spelled(arg['name'])}: {annotation(arg)}" + (" | None = None" if arg["optional"] else ""))
     params.append("*")
     for opt in spec["options"]:
-        default = " = ..." if opt["kind"] == "function" else " | None = None"
+        default = " = ..." if opt["kind"] == "function" else "" if opt.get("required") else " | None = None"
         params.append(f"{spelled(opt['name'])}: {annotation(opt)}{default}")
     # every call takes the global options: the long form, the sections its
     # entry lists (call surface 2.0) and the tag of its call log line (#659)

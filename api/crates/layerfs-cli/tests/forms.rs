@@ -80,12 +80,18 @@ fn a_secret_is_read_from_stdin_through_its_flag_and_no_other_way() {
 
 #[test]
 fn detail_and_with_are_passed_to_the_library_as_they_were_written() {
-    let line = words(&["db", "--detail", "--with", "live,stats"]);
+    let line = words(&["db", "--detail", "--with", "live, live"]);
     let parsed = parse(&SECRET, &line, &mut &b""[..]).unwrap_or_else(|u| panic!("{}", u.0));
     assert!(parsed.switches.detail);
     assert_eq!(parsed.args.get("detail"), Some(&SdkValue::Bool(true)));
-    // the library, not the parser, says which sections the call takes
-    assert_eq!(parsed.args.get_text("with"), Some("live,stats"));
+    assert_eq!(parsed.args.get_text("with"), Some("live, live"));
+    // a section the entry does not declare is a wrong command line
+    let line = words(&["db", "--with", "live,stats"]);
+    let refused = parse(&SECRET, &line, &mut &b""[..]).err().unwrap().0;
+    assert_eq!(
+        refused,
+        "made.up: --with names `stats`; this call takes live"
+    );
     let parsed = parse(&SECRET, &words(&["db", "--with=live"]), &mut &b""[..])
         .unwrap_or_else(|u| panic!("{}", u.0));
     assert!(!parsed.switches.detail);
@@ -134,15 +140,25 @@ fn home_get_prints_the_form_asked_and_a_refusal_is_one_line_on_stderr() {
     let platforms = both.get("platforms").unwrap();
     assert!(platforms.get_text("host").is_some());
     assert!(both.get("tree").unwrap().get("machines").is_some());
-    // a section the call does not take: the library refuses, exit 125, one
-    // JSON line on stderr, nothing on stdout
+    // a section the call does not take: the table says so, so the shell
+    // refuses the line (exit 2) and nothing is called
     let (code, stdout, stderr) = out(&home, &["home", "get", "--with", "live"]);
-    assert_eq!((code, stdout.as_str()), (Some(125), ""));
-    assert_eq!(
-        stderr,
-        "{\"error\":\"InvalidInput\",\"message\":\"home.get: `with` names `live`; this call takes platforms, tree\"}\n"
+    assert_eq!((code, stdout.as_str()), (Some(2), ""));
+    assert!(
+        stderr.contains("home.get: --with names `live`; this call takes platforms, tree"),
+        "{stderr}"
     );
-    let (code, _, stderr) = out(&home, &["home", "get", "--with", "live", "--detail"]);
+    // a library refusal: exit 125, one JSON line on stderr, nothing on
+    // stdout; its long form with --detail
+    let (code, stdout, stderr) = out(&home, &["home", "log", "--limit", "0"]);
+    assert_eq!((code, stdout.as_str()), (Some(125), ""));
+    assert!(
+        stderr.starts_with("{\"error\":\"InvalidInput\",\"message\":\"home.log: `limit` is 1 to ")
+            && stderr.ends_with("\"}\n")
+            && stderr.lines().count() == 1,
+        "{stderr}"
+    );
+    let (code, _, stderr) = out(&home, &["home", "log", "--limit", "0", "--detail"]);
     assert_eq!(code, Some(125));
     assert!(
         stderr.ends_with("\"fix\":null,\"detail\":null}\n"),

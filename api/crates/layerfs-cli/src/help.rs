@@ -40,16 +40,21 @@ pub fn usage(call: &Call) -> String {
     line
 }
 
+/// One option as the usage line shows it: in brackets unless required;
+/// a Commit message by its short flag `-m`.
 fn option(arg: &Arg) -> String {
-    if let Some(flag) = arg.shell {
-        return format!(" [{flag}]");
-    }
-    match (arg.name, arg.kind) {
-        ("on_progress", _) => " [--progress]".to_owned(),
-        ("stdout" | "stderr", _) => String::new(),
-        (name, Kind::Bool | Kind::Content) => format!(" [--{}]", shell(name)),
-        (name, Kind::Json) if arg.repeat => format!(" [--{} K=V]...", shell(name)),
-        (name, _) => format!(" [--{} <{}>]", shell(name), shell(name)),
+    let word = match (arg.shell, arg.name, arg.kind) {
+        (Some(flag), _, _) => flag.to_owned(),
+        (_, "on_progress", _) => "--progress".to_owned(),
+        (_, "stdout" | "stderr", _) => return String::new(),
+        (_, "message", Kind::Text) => "-m <message>".to_owned(),
+        (_, name, Kind::Bool | Kind::Content) => format!("--{}", shell(name)),
+        (_, name, Kind::Json) if arg.repeat => return format!(" [--{} K=V]...", shell(name)),
+        (_, name, _) => format!("--{} <{}>", shell(name), shell(name)),
+    };
+    match arg.required {
+        true => format!(" {word}"),
+        false => format!(" [{word}]"),
     }
 }
 

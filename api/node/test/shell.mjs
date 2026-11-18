@@ -77,6 +77,15 @@ test("every call is refused the same way by the command and the package", { skip
       else words.push(String(positionals[i]));
     }
     const fromNode = await node(lfs, spec.family, spec.call, positionals);
+    if (spec.options.some((opt) => opt.required)) {
+      // a missing required option: the shell judges the line itself (exit
+      // 2, nothing called); the package's call is refused before any effect
+      const run = spawnSync(command, words, { env: { ...process.env, LAYERFS_HOME: home }, input: input ?? "" });
+      assert.equal(run.status, 2, `${spec.family}.${spec.call}: ${run.stderr}`);
+      assert.match(run.stderr.toString(), / is required/);
+      assert.equal(fromNode.refused?.error, "InvalidInput", `${spec.family}.${spec.call}`);
+      continue;
+    }
     same(`${spec.family}.${spec.call}`, shell(home, words, input), fromNode);
   }
   // a wrong command line is exit 2 and calls nothing

@@ -104,7 +104,7 @@ does not.
 - **Sections.** `with` adds a named part of the answer that costs a read of
   its own: `home get --with platforms`, `--with tree`. A call takes only the
   sections its row lists; another name is refused `InvalidInput`, naming the
-  ones it takes. A section is in both forms, and only when asked for.
+  ones it takes (in the shell it is a wrong command line, exit 2). A section is in both forms, and only when asked for.
   Python spells the option `with_`, because `with` is a keyword.
 - **Lists.** A list call answers `{ items, next_cursor }`: `next_cursor` is
   left out of the short form on the last page and null in the long form.
@@ -1019,7 +1019,7 @@ refusals, and
 | `create` | `name` | `machine` | an empty sqlite Store, on this computer or made on `machine` directly |
 | `connect` | `store`, `url` | `auth`, `machine`, `synchronous_commit` | connects a PostgreSQL database as a Store with a saved login; on a connected Store, sets its address, or with `machine` that machine's own (checked from it first) |
 | `disconnect` | `store` | `machine` | forgets a PostgreSQL Store, its data staying; with `machine`, removes only that machine's own address |
-| `save_auth` | `auth` | `user`, `password` (`--password-stdin`) | saves or replaces a PostgreSQL login in the home's secret folder |
+| `save_auth` | `auth` | `user`, `password` (both required; `--password-stdin`) | saves or replaces a PostgreSQL login in the home's secret folder |
 | `auths` | — | — | the saved logins and the Stores that use each; never a password |
 | `remove_auth` | `auth` | — | deletes a saved login no Store uses |
 | `update` | `store` | `auth`, `synchronous_commit` | a PostgreSQL Store's login or write setting |
@@ -1196,7 +1196,7 @@ See [Stores](machines-and-stores.md#stores).
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `connect` | `name`, `url` | `access_key`, `secret_key` (shell: `--key-stdin`) | connects a bucket (r2, or an S3 endpoint) for Store backups |
+| `connect` | `name`, `url` | `access_key`, `secret_key` (both required; shell: `--key-stdin`) | connects a bucket (r2, or an S3 endpoint) for Store backups |
 | `disconnect` | `bucket` | — | forgets a bucket and its key; its files stay |
 | `list` | — | `bucket` | the Store files in the connected buckets, with the Store each is linked to |
 | `create` | `store`, `bucket` | `file`, `on_progress` | backs up a sqlite Store to a bucket |
@@ -1210,6 +1210,9 @@ the Store.
 
 - **The key.** `--access-key` is the key's id; its secret comes on stdin
   with `--key-stdin` and no other way (Node and Python pass `secret_key`).
+  Both are required: a command line without one is exit 2, and a Node,
+  Python or MCP call without one is refused `InvalidInput` before anything
+  runs.
   The secret is kept in the home's secret folder (`secret/bucket/<bucket>`,
   0600), never answered, and the call log records its byte count only, as
   it does for the URL. `connect` makes one listing before it records
@@ -1427,14 +1430,19 @@ Every call is one attempt. After `Unknown`, read the state with `list`,
 | `--stream` | `workspace exec` | passes the command's stdout and stderr through (output over 1 MiB too) and exits with its code |
 | `--from <file>` | `file write`, `file apply` | reads the content or JSON from a file instead of stdin |
 | `--<option>-from <file>` | any optional text option (`--old-from`, `--new-from`, `--message-from`) | reads the option's value from a file |
-| `-m <text>` | calls with `message` | the same as `--message` |
+| `-m <text>` | calls with `message` | the same as `--message`; help shows it as `[-m <message>]` |
 | `--scope <folder>` | all | a folder scope (see below); needs `--scope-project` |
 | `--scope-project <store>/<project>` | all, with `--scope` | the one project the scope is bound to |
 | `--scope-branch <name>` | all, with `--scope` | the scope's Branch namespace |
 | `--` | all | every later word is a positional |
 
 `--option=value` works for every option. A bool option alone
-(`sandbox close … --force`) is true; `--force=false` is false.
+(`sandbox close … --force`) is true; `--force=false` is false. An option
+the table marks required (`backup connect`'s `--access-key` and
+`--key-stdin`, `store save-auth`'s `--user` and `--password-stdin`, `file
+edit`'s `--old-string` and `--new-string`) is shown without brackets in
+help, and a line without it is exit 2; the table's JSON says `required:
+true`, and the Node typings, Python stubs and MCP schemas mark it.
 
 `store push` and `store pull` report their phases (`check`, `snapshot`,
 `send`, `verify`, `install`, `record`, `retire`) as `{"phase", "done",

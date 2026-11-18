@@ -33,6 +33,29 @@ fn the_secret_comes_on_stdin_and_old_options_are_gone() {
         let refused = parse(connect, &words(line), &mut &b""[..]).err().unwrap().0;
         assert!(!refused.contains("s3cr3t"), "{line:?}: {refused}");
     }
+    // both key options are required: a line without one is wrong (exit 2)
+    for (line, missing) in [
+        (
+            &["b1", "http://h/b", "--key-stdin"][..],
+            "--access-key is required",
+        ),
+        (
+            &["b1", "http://h/b", "--access-key", "AKID"],
+            "--key-stdin is required",
+        ),
+    ] {
+        let refused = parse(connect, &words(line), &mut &b"s3cr3t"[..])
+            .err()
+            .unwrap()
+            .0;
+        assert!(refused.contains(missing), "{line:?}: {refused}");
+    }
+    // help shows them without brackets
+    let usage = layerfs_cli::help::usage(connect);
+    assert!(
+        usage.ends_with("<name> <url> --access-key <access-key> --key-stdin"),
+        "{usage}"
+    );
     // restore names the bucket, its file, then the Store
     let restore = layerfs_api::find("backup.restore").expect("backup.restore");
     let parsed = parse(restore, &words(&["b1", "shop", "copy"]), &mut &b""[..])

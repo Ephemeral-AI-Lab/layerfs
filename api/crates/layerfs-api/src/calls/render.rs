@@ -88,7 +88,8 @@ pub fn bare(name: &str) -> Vec<SdkValue> {
 
 /// The call's `argv` from its checked arguments (in table order): its
 /// positionals while present, then each option as `--name value` (a Bool
-/// option as a bare flag when true), then `--detail` and `--with` as asked,
+/// option as a bare flag when true, a secret as its stdin flag and byte
+/// count), then `--detail` and `--with` as asked,
 /// then the folder scope.
 pub fn argv(spec: &Call, args: &SdkValue, asked: &Asked, scope: Option<&Scope>) -> Vec<SdkValue> {
     let mut words = bare(&spec.name());
@@ -110,7 +111,12 @@ pub fn argv(spec: &Call, args: &SdkValue, asked: &Asked, scope: Option<&Scope>) 
             continue;
         }
         if let Some(value) = word(option, value) {
-            words.push(SdkValue::Text(flag(option.name)));
+            // a secret goes by the shell flag that reads it from stdin
+            // (`--key-stdin`), followed by its byte count
+            let named = option
+                .shell
+                .map_or_else(|| flag(option.name), str::to_owned);
+            words.push(SdkValue::Text(named));
             words.push(value);
         }
     }

@@ -6,7 +6,7 @@ use crate::calls::table::Kind::{Bool, Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call, MESSAGE};
 use crate::calls::{Context, Form, Policy, Saves};
 use layerfs_bridge::control::SdkValue;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::file::{edit, FileEdit};
 
 /// A write's answer and, with `--replace-all`, how many were `replaced`.
@@ -45,8 +45,8 @@ pub(crate) const CALL: Call = call(
         a("path", Text).redact_path(),
     ],
     &[
-        opt("old_string", Text).redact(),
-        opt("new_string", Text).redact(),
+        opt("old_string", Text).redact().required(),
+        opt("new_string", Text).redact().required(),
         opt("replace_all", Bool),
         EXPECTED,
         MESSAGE,
@@ -60,22 +60,14 @@ pub(crate) const CALL: Call = call(
 .form(&FORM)
 .agent();
 
-/// Runs `file.edit`; `--old-string` and `--new-string` are required.
+/// Runs `file.edit`; the table requires `--old-string` and `--new-string`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    let required = |name: &str| {
-        text(args, name).ok_or_else(|| {
-            refused(
-                "InvalidInput",
-                format!("file.edit needs `{name}` (`--{}`)", name.replace('_', "-")),
-            )
-        })
-    };
     let request = FileEdit {
         project: text(args, "project").unwrap_or_default(),
         branch: text(args, "branch").unwrap_or_default(),
         path: text(args, "path").unwrap_or_default(),
-        old_string: required("old_string")?,
-        new_string: required("new_string")?,
+        old_string: text(args, "old_string").unwrap_or_default(),
+        new_string: text(args, "new_string").unwrap_or_default(),
         replace_all: args.get_bool("replace_all"),
         guard: guard(args),
     };
