@@ -363,7 +363,7 @@ fn the_cli_reads_a_machine_s_files_and_logs_no_line() {
     let home = tempdir("machine-files");
     // the home's first call: it is logged, as `machine files` is not
     assert_eq!(cli(&home, &["sandbox", "list"], None).0, Some(0));
-    let usage = "layerfs machine files <machine> [<path>] [--depth <depth>] [--cursor <cursor>] [--limit <limit>] [--offset <offset>] [--length <length>]\n";
+    let usage = "layerfs machine files <machine> [<path>] [--depth <depth>] [--limit <limit>] [--cursor <cursor>] [--byte-offset <byte-offset>] [--byte-length <byte-length>]\n";
     let (code, out, _) = run_cli(&home, &["help", "machine", "files"]);
     assert_eq!(code, Some(0));
     assert!(out.starts_with(usage), "{out}");
@@ -400,7 +400,7 @@ fn the_cli_reads_a_machine_s_files_and_logs_no_line() {
         json::parse(out.trim()).unwrap()
     };
     let each = |answer: &SdkValue, field: &str| -> Vec<String> {
-        let Some(SdkValue::List(entries)) = answer.get("entries") else {
+        let Some(SdkValue::List(entries)) = answer.get("items") else {
             panic!("{answer:?}")
         };
         entries
@@ -409,30 +409,36 @@ fn the_cli_reads_a_machine_s_files_and_logs_no_line() {
             .collect()
     };
     // no path: the LayerFS folders of the home, by role, and no `/`
-    let roots = read(&[]);
+    let roots = read(&["--detail"]);
     assert_eq!(
         each(&roots, "role"),
         ["stores", "sandbox_records", "run_folders", "logs"]
     );
     let run_root = each(&roots, "path")[2].clone();
     assert_eq!(Path::new(&run_root), folder.parent().unwrap());
-    // a folder page, continued from its `next`
+    // a folder page, continued from its `next_cursor`
     let run = folder.display().to_string();
     let name = |path: &str| format!("{run}/{path}");
-    let page = read(&[&run, "--limit", "2"]);
+    let page = read(&[&run, "--limit", "2", "--detail"]);
     assert_eq!(each(&page, "path"), [name("config"), name("daemon.log")]);
-    assert_eq!(each(&page, "kind"), ["restricted", "file"]);
+    assert_eq!(each(&page, "type"), ["dir", "file"]);
+    assert_eq!(each(&page, "not_read"), ["restricted", "-"]);
     assert_eq!(each(&page, "role"), ["-", "log"]);
-    assert_eq!(page.get_text("reason"), Some("limit"));
-    let next = page.get_text("next").unwrap().to_owned();
+    let next = page.get_text("next_cursor").unwrap().to_owned();
     let rest = read(&[&run, "--cursor", &next, "--depth", "2"]);
     assert!(each(&rest, "path").contains(&name("tmp/a.txt")), "{rest:?}");
-    assert_eq!(rest.get("has_more"), Some(&SdkValue::Bool(false)));
+    assert_eq!(rest.get("next_cursor"), None);
     // a file window
-    let window = read(&[&name("tmp/a.txt"), "--offset", "1", "--length", "3"]);
+    let window = read(&[
+        &name("tmp/a.txt"),
+        "--byte-offset",
+        "1",
+        "--byte-length",
+        "3",
+    ]);
     assert_eq!(
         json::print(&window),
-        r#"{"kind":"file","size":6,"offset":1,"content":"lph","binary":false,"next":4}"#
+        r#"{"text":"lph","next_byte_offset":4}"#
     );
 
     // refusals are JSON on stderr, exit 125
