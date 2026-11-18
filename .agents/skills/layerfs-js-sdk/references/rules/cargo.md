@@ -3,15 +3,16 @@
 > **Status:** Current general guide. Live Cargo 1.85.1 checks in issue #337
 > Phase A used product `db5b1bac9` (1.1.0 era); at that pin the receipt path was
 > `core/target/issue337/phase-a/`. These are diagnostics, not benchmarks. Call
-> names are updated for LayerFS 2.0 (#533); the Cargo workflow was not re-run
-> on 2.0.
+> names are updated for the LayerFS 2.0 call surface; the Cargo workflow was not
+> re-run on 2.0.
 
 ## Put all mutable Cargo state in the view
 
 Supply Rust/Rustfmt/Clippy and SQLite build prerequisites in the Sandbox's
 image (or, on a `native` Sandbox, on the host). On every Bash call set the
 cache/output variables again: shell exports do not persist between calls, and
-in 1.1.0 Workspace commands started with HOME=/tmp (not re-checked on 2.0).
+in 1.1.0 Workspace commands started with HOME=/tmp (not re-checked on 2.0;
+`workspace.exec`'s `env` option can pass them instead).
 
 ```sh
 timeout 110 bash -c 'set -eu
@@ -37,7 +38,8 @@ The ordinary default remains one mount/exec/commit/unmount per call. Cargo
 steps may instead keep one Workspace mounted across a declared build sequence,
 calling exec then commit for every step and unmounting at the end. This is the
 existing [longer-lived Workspace behavior](../methods/workspace.md#shared-rules).
-Use the returned `ws` for every call; do not invent a fixed mount path.
+Use the returned `workspace` handle (`<sandbox>:<name>`) for every call; do not
+invent a fixed mount path.
 
 A fresh mount is a different Workspace, with a different path. The #337 probe observed dependency
 compilation after fresh mounts, while the unchanged build on a retained mount
@@ -64,15 +66,16 @@ package inspection according to the specification. `cargo package --list
 --locked --allow-dirty -p PACKAGE` inspects contents; it does not publish.
 
 Commit each Bash step even after a nonzero exit, and inspect refusals before
-choosing another operation. A failed/uncertain Commit is not an UpToDate result;
-retain the exact error, logs and Workspace state. Do not replay it blindly.
-When replacing a daemon, preserve both log streams before close and keep the
-existing Store/history unless its unusability has been established.
+choosing another operation. A refused or uncertain Commit is not an
+`unchanged: true` answer; retain the exact error, logs and Workspace state. Do not
+replay it blindly. When replacing a Sandbox, save its daemon log
+(`sandbox.log`) before `sandbox.remove` and keep the existing Store/history
+unless its unusability has been established.
 
 ## Merge source and generated state deliberately
 
 A Rust project can select only generated `target/` and `.cargo-home/` in its
-explicit [LWW rules](lww.md). Never add Cargo.lock, Cargo manifests, source, tests
+explicit [newer-write-wins rules](lww.md). Never add Cargo.lock, Cargo manifests, source, tests
 or application data to those rules. Inspect actual source conflicts, preserve
 both changes, and rebuild/verify generated output after the source merge.
 

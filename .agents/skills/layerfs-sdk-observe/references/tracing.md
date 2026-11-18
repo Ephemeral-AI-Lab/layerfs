@@ -1,22 +1,27 @@
 # Call trace
 
-> **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
-> `layerfs-sdk-observe` skill. **In this 2.0 build the traces are the
+> **Status:** Current general guide for the LayerFS 2.0 call surface. Part of
+> the `layerfs-sdk-observe` skill. **In 2.0 the traces are the
 > worker-connection line** (#535 phase 8 item 6): with `LAYERFS_TRACE=<file>`,
 > each connection the caller opens to a machine's worker appends one line,
 > **and the step lines**: with `LAYERFS_TRACE_STEP` set too, each call
 > appends one line per step it timed. Calls that run in the caller's process
 > (`native`, any PostgreSQL Store call) write no connection line.
 > **Independently, the home's call log** (#659) records one line per public
-> call in `<home>/trace/calls.jsonl`, on by default. The call-line format
-> further down is 1.1.0's (#333), kept for reading old traces.
+> call in `<home>/trace/calls.jsonl`, on by default, read with `home.log`
+> (1.x `logs.list`; `logs.reset` is now `home.clear_log`, with no alias). The
+> call-line format further down is 1.1.0's (#333), kept for reading old
+> traces. The call-log row shapes were printed by the built `layerfs`
+> command on 2026-11-18; the trace line formats are from source.
 
 ## The call log
 
 Every call made through the dispatcher (the `layerfs` command, Node,
 Python, direct `layerfs_api::call`) appends one line to
 `<home>/trace/calls.jsonl` when it ends; `LAYERFS_LOGS=0` turns it off,
-and `LAYERFS_TRACE` / `LAYERFS_TRACE_STEP` do not affect it.
+and `LAYERFS_TRACE` / `LAYERFS_TRACE_STEP` do not affect it. The stored
+format is `{ v, at, ms, client, argv, outcome, kind?, commit?, … }`
+(`layerfs-home/src/logs.rs`); an illustration, not from a run:
 
 ```json
 {"v":1,"at":1793000004120,"ms":212,"client":"node","argv":["file","write","demo/app","main","<8 bytes>","<5321 bytes>"],"outcome":"ok","kind":"Committed","commit":"<66 hex>","tag":"dsh:s_4d2a:a91e"}
@@ -32,13 +37,32 @@ never traced, so a `Removed` path stays out of the line. `argv` is
 the call as CLI words (`argv[0]`/`argv[1]` are the family and call),
 `outcome` is `"ok"` or the refusal code, `kind` and `commit`/`layer` come
 from the result, `client` is `cli`/`node`/`python`/`rust`, and `tag` is the
-caller's (`log_tag` argument, else `LAYERFS_LOGS_TAG`). Read it with
-`layerfs home log` (filters `--call`, `--project`, `--client`, `--tag`,
-`--outcome`, `--since`; newest first; `--cursor` pages; `--detail` adds
-`duration_ms`, `client`, `argv`, `commit` and `tag` to each row) and clear it
-with `layerfs home clear-log`. A row's `error` is the public code; the stored
-line keeps the code as it was raised. It rotates once to `calls.1.jsonl` past 16 MiB. See
+caller's (`log_tag` argument, else `LAYERFS_LOGS_TAG`). That is the stored
+line; read it with `home.log` (shell `layerfs home log`), which answers rows
+`{ call, outcome, logged_at }` with `project` and `error` when set, newest
+first. Filters `call`, `project`, `client`, `tag`, `outcome`, `since`;
+`limit` (default 200) and `cursor` page; `detail: true` adds `duration_ms`,
+`client`, `argv`, `commit` and `tag` to each row. Clear it with
+`home.clear_log` (`layerfs home clear-log`). A row's `error` is the public
+code; the stored line keeps the code as it was raised. It rotates once to
+`calls.1.jsonl` past 16 MiB. See
 [Home: traces and the call log](../../../../docs/architecture/control/home/README.md#traces-and-the-call-log).
+
+```bash
+$ layerfs home log --limit 3                                       # seen
+{"items":[{"call":"home.leftovers","outcome":"ok","logged_at":"2026-11-18T22:05:33Z"},{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-18T22:05:33Z"},{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-18T22:05:32Z"}],"next_cursor":"eyJmb3Ii…"}
+```
+
+```js
+// every call of one tagged run, with its time
+import layerfs from "@layerfs/node";
+let cursor;
+do {
+  const page = await layerfs.home.log({ tag: "run-7:", limit: 1000, cursor, detail: true });
+  for (const row of page.items) console.log(row.duration_ms, row.call, row.outcome, row.error ?? "");
+  cursor = page.next_cursor;
+} while (cursor);
+```
 
 ```bash
 # slowest calls in the home's log
@@ -122,7 +146,7 @@ outcome. Written by `layerfs-home/src/trace.rs` (`stepped`, `step`),
 | Piece | 1.1.0 | 2.0 build |
 | --- | --- | --- |
 | Settings `LAYERFS_TRACE`, `LAYERFS_TRACE_STEP`, `LAYERFS_TRACE_START` | read by `@layerfs/agent` (`api/agent/sdk/src/trace.js` at tag `v1.1.0`) | kept as the only settings besides `LAYERFS_HOME` (S §2.5); `LAYERFS_TRACE` is read for the worker-connection line, and with `LAYERFS_TRACE_STEP` for the step lines; `LAYERFS_TRACE_START` is not read |
-| The trace line writer | in that JavaScript file | deleted with `@layerfs/agent` (#533 step 14); the call log (#659, `layerfs-home/src/logs.rs`) is its per-call replacement, without daemon telemetry |
+| The trace line writer | in that JavaScript file | deleted with `@layerfs/agent` (#533 step 14); the call log (#659, `layerfs-home/src/logs.rs`, read with `home.log`) is its per-call replacement, without daemon telemetry |
 | In-process collector | `host/trace.rs` in the Node binding | `api/crates/layerfs-api/src/host/trace.rs`: takes a 64-hex scope from an `observe` argument, traces the call's daemon control exchanges under it and collects up to 64 telemetry values. **No front end calls it** (`take_scope` and `run` have no callers) |
 | The home's `trace/` folder | `traces/` | `paths::trace_dir` (a 1.1.0 `traces/` folder is renamed to it); O26 makes trace files there the feed. Holds the call log, `calls.jsonl` and `calls.1.jsonl` (#659) |
 

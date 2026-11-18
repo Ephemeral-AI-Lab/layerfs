@@ -2,8 +2,9 @@
 
 > **Status:** Current general guide. Part of the `layerfs-js-sdk` skill. Read from
 > `core/crates/layerfs-content/src/merge/lww.rs` and the compare-and-merge contract;
-> the Commit case is covered by verification case B10. Call names updated for
-> LayerFS 2.0 (#533); the merge rules themselves did not change.
+> the Commit case is covered by verification case B10. Calls and answer keys are
+> the LayerFS 2.0 call surface's (from its spec rows; the 2.0 answers were not
+> exercised with a rule in this pass); the merge rules themselves did not change.
 
 ## Treat it as your `.gitignore`
 
@@ -14,9 +15,9 @@ In the normal case `/.lww` is one line:
 %include .gitignore
 ```
 
-That makes every `.gitignore` pattern a merge rule. Dependencies, build output, caches
-and logs then take the newer version whole instead of conflicting line by line, which
-is what you want for files a tool regenerates.
+That makes every `.gitignore` pattern a newer-write-wins merge rule. Dependencies,
+build output, caches and logs then take the newer version whole instead of conflicting
+line by line, which is what you want for files a tool regenerates.
 
 **Add more lines only in the extreme case:** a file Git tracks that is still produced
 by a tool, not written by hand, and that keeps conflicting. Lockfiles
@@ -29,7 +30,7 @@ by a tool, not written by hand, and that keeps conflicting. Lockfiles
 package-lock.json
 ```
 
-**Never add source files.** Last-writer-wins silently drops the other side's change; a
+**Never add source files.** Newer-write-wins silently drops the other side's change; a
 source conflict should surface so you read both sides and resolve it.
 
 If the project has no `.gitignore` yet, create one first, with the usual entries for
@@ -41,17 +42,18 @@ those files. `/.lww` changes only how they merge, never whether they're saved.
 
 ## Where it applies
 
-LayerFS merges in exactly two places, and `/.lww` applies to both:
+LayerFS merges in these places, and `/.lww` applies to each:
 
 | Merge | When it happens | Which `/.lww` is read | "ours" / "theirs" |
 | --- | --- | --- | --- |
-| **Commit merge** | `workspace.commit` when the Branch moved since the mount | The one on the Branch's current head | ours = the Workspace, theirs = the head |
-| **Branch merge** | `branch.merge(project, name, a, b)` | The one on `a` | ours = `a`, theirs = `b` |
+| **Commit merge** | `workspace.commit` when the Branch moved since the mount (not with `force: true`) | The one on the Branch's current head | ours = the Workspace, theirs = the head |
+| **File-write merge** | a `file.*` write when the Branch moved during the call (not with `expected`, which refuses `Conflict` instead) | As a Commit merge: the call writes through a private Workspace bound at the head it read | ours = the write, theirs = the head |
+| **Branch merge** | `branch.merge(project, branch, from)` | The one on `branch`, the Branch merged into | ours = `branch`, theirs = `from` |
 
-Nothing else merges, so nothing else reads it: `file.*` writes are refused with
-`HeadMoved` if the Branch moved during the call, and `branch.publish` replaces `main`'s
-view. A path only one side changed takes that side's change, with or without a rule. A
-change to `/.lww` takes effect once it's committed on the Branch the merge reads.
+Nothing else merges, so nothing else reads it: `branch.publish` replaces `main`'s
+view (it refuses `Conflict` when `main` moved, unless `force`). A path only one side
+changed takes that side's change, with or without a rule. A change to `/.lww` takes
+effect once it's committed on the Branch the merge reads.
 
 ## How a path is decided
 
@@ -65,8 +67,11 @@ For each path both sides changed differently:
    changes become marker blocks and a `Conflict`
    (see [resolving conflicts](conflicts.md)).
 
-Every rule decision is reported in the result's `lww` list, on success and inside a
-`Conflict`'s `detail` alike:
+Every rule decision is reported. On success the answer names each decided path in
+`overwritten` (the first 20; `overwritten_count` only when the list was cut), as
+`workspace.commit`, the `file.*` writes, `branch.merge` and the long form of
+`commit.get` answer it. Inside a `Conflict`'s `detail` (with `detail: true`) the
+decisions are a `lww` list of objects:
 
 | Field | Meaning |
 | --- | --- |

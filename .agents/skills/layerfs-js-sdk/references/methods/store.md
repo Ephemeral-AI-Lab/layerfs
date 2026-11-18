@@ -1,91 +1,83 @@
 # store calls
 
-> **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
-> `layerfs-js-sdk` skill. `create`, `list`, `get`, `status` and a `remove`
-> refusal were run on macOS in a private home on 2026-11-02. `connect`,
-> `push`, `pull`, `disconnect` and a successful `remove` were not run; those
-> rows come from the table, S §3.8, #536 §7.3 and source. An agent working on a project rarely needs
-> this family.
+> **Status:** Current general guide for the LayerFS 2.0 call surface. Part of
+> the `layerfs-js-sdk` skill. Outputs marked "seen" were printed by the built
+> `layerfs` command on a throwaway home on 2026-11-18 (macOS, a sqlite Store
+> on `native`); PostgreSQL and `move` rows come from the table, the spec rows
+> and the manual. Removed with no alias: `store.status` (now `get` with
+> `with: ["live"]`), `store.stats` (now `get` with `with: ["stats"]`),
+> `store.push` and `store.pull` (now `store.move`). An agent working on a
+> project rarely needs this family.
 
 ```js
-store.list()
-store.get(name)
-store.status(name, { machine })
-store.stats(name)
-store.create(name)
-store.connect(name, url, { password, synchronous_commit })
-store.update(name, { machine, url, password, synchronous_commit, clear })
-store.push(name, machine, { on_progress })
-store.pull(name, { on_progress })
-store.remove(name)
-store.compact(name, { on_progress })
-store.disconnect(name)
+store.list({ machine, with: ["stats"] })
+store.get(store, { with: ["live", "stats"] })
+store.create(name, { machine })
+store.connect(store, url, { auth, machine, synchronous_commit })
+store.disconnect(store, { machine })
+store.save_auth(auth, { user, password })
+store.auths()
+store.remove_auth(auth)
+store.update(store, { auth, synchronous_commit })
+store.move(store, machine, { on_progress })
+store.remove(store)
+store.compact(store, { on_progress })
+store.doctor(store, { machine, on_progress })
 ```
 
 A Store holds projects and all their history. The verb says the kind:
-`create` makes a sqlite Store (one file, on one machine at a time; it starts on
-`native`); `connect` connects a PostgreSQL database. Every sqlite Store is
-Disposable (WAL, `synchronous=OFF`), the only allowed profile.
+`create` makes a sqlite Store (one file, on one machine at a time; on
+`native` unless `machine` names another); `connect` connects a PostgreSQL
+database with a saved login.
 
-## Reads
+## `store.list` and `store.get`
 
-`store.list()` reads the home's records: `{ items: [record, …] }`, each
-item the record `store.get` shows plus a last `state`, derived as
-`store.status` derives it (from source and tests, #536 §10b; not run here).
-It starts no machine but asks a sqlite Store's machine's recorded worker,
-once per machine, whether the file is there; a machine that does not answer
-makes its Stores `down`. `store.get(name)` is one record (no `state`):
+From the home's records, with no probe. A Store's `state` is `ready`, `busy`
+(`op`: a move, remove, create, compaction, backup or restore), `blocked`
+(its machine is not ready) or `broken` (`reason`, with a `fix` naming the
+call that clears it). `get` short: `{ engine, state }` with `machine`,
+`projects`, `backups`, `connections` and the companion when they say
+something; long adds `auth`, `projects_count`, `op`, `blocked_by`, `reason`,
+`fix`, `observed_at`, `store`, `profile`, `synchronous_commit`,
+`sqlite_version`, `created_at`, `last_transfer`. `list` rows are the same
+with `store` first; `machine` keeps the sqlite Stores on one machine.
 
-```json
-{"name":"shop","kind":"sqlite","machine":"native","profile":"disposable","created":1793574061147,"sqlite":"3.53.2","projects":["api"]}
+```bash
+$ layerfs store list                                                           # seen
+{"items":[{"store":"shop","engine":"sqlite","machine":"native","projects":["api"]}]}
+$ layerfs store get shop                                                       # seen
+{"engine":"sqlite","state":"ready","machine":"native","projects":["api"]}
 ```
 
-`store.status(name)` is the live state, read from the Store's machine:
+Sections of `get`:
 
-```json
-{"name":"shop","kind":"sqlite","state":"idle","holders":[],"op":null,"machine":"native",
- "file":{"exists":true,"bytes":212992,"wal_bytes":799312}}
+- `with: ["live"]` reads the Store where it lives, starting nothing: state
+  and `observed_at` from that read, and `live: { holders, phases, behind,
+  server_version, latency_ms }` (`holders`: pids of other live processes
+  holding the Store; `phases`: a running compaction's; `behind`: the
+  buckets whose backup is behind).
+- `with: ["stats"]` opens the Store for its counters: `stats: { size,
+  logical_bytes, canonical_bytes, stored_bytes, metadata_bytes, file_bytes,
+  reusable_bytes, dedupe, compression, init }` (ratios as text, six
+  decimals). `list`'s `with: ["stats"]` adds only each row's `size`.
+
+```bash
+$ layerfs store get shop --with live,stats                                     # seen
+{"engine":"sqlite","state":"ready","machine":"native","projects":["api"],"observed_at":"2026-11-18T22:05:32Z","stats":{"size":307200,"logical_bytes":199,"canonical_bytes":6815,"stored_bytes":3354,"metadata_bytes":278242,"file_bytes":307200,"reusable_bytes":28672,"dedupe":"0.029200","compression":"2.031902"}}
 ```
-
-`holders` are live processes holding the Store open (a dead process's
-stale lease is left out, not removed: reads change nothing); `op` names a push, pull or remove
-under way (`{ id, name, phase, started, uncertain }`; `get` and `list` items
-show it too). For a PostgreSQL Store a `server`
-field carries the server's status instead of `file` (not run here).
-`store.status` starts no machine (from source, `75f83ec9b6`): a Store whose
-machine is stopped, or whose worker does not answer, is `state: "down"` with
-`down_reason` and `file.unavailable`. `state` is `idle`, `in_use`, `busy`
-(a live `op`), `down` or `unresolved` (a gone process's uncertain `op`).
-
-`store.stats(name)` is the Store-wide counters, read in constant work with no
-history, tree or object scan:
-
-```json
-{"name":"shop","kind":"sqlite","history_logical":18432,"canonical":217088,"stored":217088,
- "metadata":32768,"file":212992,"free":0,
- "init":{"entries":3,"files":2,"bytes":18432,"canonical":18432,"stored":18432,"metadata":4096,"millis":12}}
-```
-
-`history_logical` sums saved-tree bytes over Commit and Layer records (each
-publication counts its tree again); `canonical` and `stored` are allocated
-immutable content, not reclaimed by `project.delete`; `metadata` is accounted
-metadata plus database overhead; `file` is database pages, not the file
-length; `free` is SQLite free-page bytes (`null` for PostgreSQL). A sqlite
-Store on another machine is read through its worker; a stopped worker is
-`Unavailable`.
 
 ## Changes
 
 | Call | What it does | Notes |
 | --- | --- | --- |
-| `create(name)` | An empty sqlite Store on `native` | Live result: the record above, with `projects: []`. `Exists` for a taken name |
-| `connect(name, url, …)` | Connects a PostgreSQL database | `url` is `postgresql://<user>@<host>:<port>/<database>[?sslmode=…]` without a password (one in the user part or in any query parameter whose name contains `password` is `InvalidInput`); `password` is a reference, `env:LAYERFS_<NAME>` or `file:/path`. `synchronous_commit` defaults to `local`. The same database under a second name is `Exists` |
-| `update(name, …)` | Changes a PostgreSQL Store's connection, or one machine's own | Without `machine`: sets the Store's `url`, `password` reference and `synchronous_commit`; a new URL or password must reach the same Store. With `machine`: `url` and/or `password` become that machine's own connection, checked from the machine first; `clear: true` removes it. A PostgreSQL Store's Sandboxes run on every supported machine with no step before `sandbox.create`. `InvalidInput` for sqlite or nothing to update; `Unsupported` when the platform runs no PostgreSQL Sandboxes; `Unavailable` (not reached, machine stopped, another Store's database); `Denied` (login or privilege); `Conflict` while the Store is disconnected or reconnected |
-| `push(name, machine, …)` | Sends a sqlite Store's file from `native` to `machine` | `InvalidInput` unless the Store is on `native` (pull it first). Progress `{ phase, done, total }` on `on_progress` / `--progress`: `done` and `total` are bytes during `send`, null in the other phases (`check`, `snapshot`, `verify`, `install`, `record`, `retire`). `InUse` while the Store is held (Sandbox records, processes with it open; `detail.related` lists them as `{ kind, name }`); `Capacity` when the target has less free disk than the Store plus a headroom of 1 GiB (or a tenth of the Store), checked before anything changes; `Unavailable` naming `layerfs machine start <m>` for a stopped machine; while it runs, Store calls and operations on it are `Busy`, from the caller's process too. An uncertain push whose process is gone (it ended during install or record, or a step's answer was lost) leaves every later call `Unresolved`, naming `store status` and the push that clears it: a new `push` (or `pull`) first deletes the copy on the machine the record does not name, then runs. A push whose `retire` did not finish leaves the Store in use on `machine` and `last_transfer.retired: false`; the next `pull` deletes the old copy first |
-| `pull(name, …)` | Brings a sqlite Store's file from its machine to `native` | `InvalidInput` when it is already on `native`; otherwise as `push`. Between two machines: `pull`, then `push` |
-| `remove(name)` | Deletes a sqlite Store with every project in it | Returns `{ removed }`. `NotFound` for an unknown name (live); `Unavailable` for a Store whose machine is unknown; `Busy` while a live process pushes, pulls or removes it. It clears an `Unresolved` Store. Backups stay |
-| `compact(name, { on_progress })` | Rebuilds the Store from its live history, reclaiming dead bytes | The only byte-reclaiming call: no confirm, force or dry run. `on_progress` gets `{ phase, done, total }` as each phase starts (`mark`, `build`, `verify`, `install` on sqlite; `mark`, `build`, `swap`, `cleanup` on PostgreSQL), with null counts. Returns `{ kind: "Compacted", path, generation, … }` with `dead_bytes_bound`, `dead_bytes_refined`, `logical_discarded`, `backend_reusable`, `physical_shrink`, `kept_waste`, `peak_temp_bytes`, `residue`, `estimate` and `zero_reasons` (a list of `{field, reason}`). A Store with under 10% dead packs takes the `none` path and only marks. A sqlite Store on another machine is compacted by that machine's worker (`Unavailable` when it is not running). `MountsActive`, `Busy`, `Unresolved`, `StaleStore`, `Conflict`, `Capacity`, `Unknown` |
-| `disconnect(name)` | Forgets a PostgreSQL Store; its data stays | `InUse` while another process holds the Store (its calls hold it while it stays open) or a Sandbox of it runs; `detail.related` lists them as `{ kind: "lease", name: <pid> }` and `{ kind: "sandbox", name }` |
-
-Pushing or pulling a Store moves where its Sandboxes can run: a Sandbox of a sqlite Store
-runs only on the Store's machine.
+| `create(name)` | An empty sqlite Store | `{"ok":true}` (seen). A taken name is `Exists` (seen: `a Store named shop exists`). `machine` makes it on that running machine through its worker |
+| `save_auth(auth, { user, password })` | Saves or replaces a PostgreSQL login in the home's secret folder | Shell: `--user U --password-stdin`; the password is never answered, logged or traced. `{"ok":true}` |
+| `auths()` | The saved logins and the Stores that use each | `{ items: [{ auth, user, stores? }] }`; never a password. Seen on a fresh home: `{"items":[]}` |
+| `remove_auth(auth)` | Deletes a saved login no Store uses | `InUse` (flat `stores`) while one uses it |
+| `connect(store, url, …)` | Connects a PostgreSQL database as a Store (`auth` required the first time; `synchronous_commit` defaults to `local`); on a connected Store, sets its address, or with `machine` that machine's own | The URL holds host, port, database and TLS settings only: one naming a user or password is `InvalidInput`. Short `{ projects }`, or `{"ok":true}` |
+| `update(store, …)` | A PostgreSQL Store's login (`auth`) or `synchronous_commit` | `{"ok":true}` |
+| `disconnect(store)` | Forgets a PostgreSQL Store, its data staying; with `machine`, only that machine's own address | `InUse` while a Sandbox or Workspace uses it |
+| `move(store, machine)` | Moves a sqlite Store between this computer and a machine | To or from `native` only (seen when already there: `store move, check: Store shop is already on native`, `InvalidInput`). Progress `check`, `snapshot`, `send`, `verify`, `install`, `record`, `retire`. Short `{ moved_bytes }`. A sqlite Store's Sandboxes run only on its machine |
+| `remove(store)` | Deletes a sqlite Store with every project in it | `{"ok":true}`. `NotFound` for an unknown name (seen). A PostgreSQL Store is disconnected instead |
+| `compact(store)` | Reclaims the dead bytes of one Store | The only byte-reclaiming call. Short `{ freed_bytes }` (seen: `{"freed_bytes":0}`); long `outcome` (`compacted` or `unchanged`), `dead_bytes`, `kept_waste`, `peak_temp_bytes`, `zero_reasons`, …. Progress `mark`, `build`, `verify`, `install` (sqlite; an `unchanged` run sends `mark` only). A sqlite Store on another machine is compacted by its worker. `InUse` while Workspaces are mounted; `Busy` (with `op`); `Unavailable`, `Unknown` and `Unresolved` (each with a `fix`) |
+| `doctor(store)` | Checks the Store, then each of its projects | See [doctors](doctor.md); seen: `{"ok":true}` |

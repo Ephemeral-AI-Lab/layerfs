@@ -92,18 +92,21 @@ Workspace, confined by its Sandbox backend, not by this list.
 ## Profiles
 
 Each call belongs to exactly one bucket: `work` (listed by both profiles),
-`admin` (listed only by `admin`), `ui` (listed by neither: `UI_CALLS`, the
-monitoring reads a UI polls, which no agent is offered) or `none` (no tool in
-either). A migrated entry names its own bucket (`form.profile`: `agent` is
-`work`, `full` is `admin`); the lists below place the others
-([`profiles.js`](../../../../api/mcp/src/profiles.js)):
+`admin` (listed only by `admin`), `ui` (listed by neither) or `none` (no
+tool in either). Every 2.0 entry names its own bucket in its table entry
+(`form.profile`: `agent` is `work`, `full` is `admin`), so all 85 calls are
+placed that way and no list in
+[`profiles.js`](../../../../api/mcp/src/profiles.js) decides one: 17 are in
+`work` and 68 in `admin` only. Its fallback lists (`WORK_CALLS`,
+`ADMIN_CALLS`, `UI_CALLS`, the work and admin families) apply only to an
+entry without a form, and no built entry lacks one; `ui` and `none` are
+empty.
 
 | Bucket | Calls |
 | --- | --- |
-| `work` | the `branch`, `commit`, `file` and `workspace` families; `project.list`, `project.get`, `project.export`, `sandbox.list`, `sandbox.get` |
-| `admin` | `project.init`, `project.delete`, `project.remove_file`, `branch.remove`, `store.compact`, `sandbox.create`, `sandbox.close`; the `home` family (`home.get`, `home.log` and `home.clear_log` by their entries' `full` profile), the `machine` (but `machine.stats`, `machine.space` and `machine.files`), `store` and `backup` families |
-| `ui` (no profile) | `sandbox.files`, `machine.stats`, `machine.space`, `machine.files`, `logs.machine`, `logs.sandbox` |
-| `none` | the `doctor` family (`doctor.fix`): like `layerfs doctor` itself, which is outside the table and no tool, removing a leftover is a person's repair |
+| `work` | `branch.fork`; `commit.list`, `commit.diff`; `file.read`, `file.list`, `file.glob`, `file.grep`, `file.write`, `file.edit`, `file.rm`, `file.mv`; `sandbox.create`; `workspace.list`, `workspace.exec`, `workspace.cancel`, `workspace.commit`, `workspace.status` |
+| `admin` | every other call, the six doctors included |
+| `ui`, `none` | none |
 
 `work` lets an agent read a project, work on Branches and files (each write
 is one explicit Commit), run in a mounted Workspace and export a snapshot.
@@ -211,12 +214,12 @@ built addon).
 ## Tools and schemas
 
 One tool per call, named `<family>_<call>` (`store_create`,
-`workspace_exec_cancel`, …), generated from `layerfs.table`
+`workspace_cancel`, …), generated from `layerfs.table`
 ([`tools.js`](../../../../api/mcp/src/tools.js)). Each tool's JSON Schema is
 the entry's arguments, in order, then its options, minus the functions
 (`on_progress`, `stdout`, `stderr`); `additionalProperties` is false. A
-migrated entry (one with a `form`) also takes `detail` (the long form) and,
-when it lists sections, `with` (an array of their names). The
+2.0 entry (every entry has a `form`) also takes `detail` (the long form)
+and, when it lists sections, `with` (an array of their names). The
 `stream` option of `workspace.exec` is not exposed: it would write the
 command's output to this process's stdout, which carries the protocol.
 
@@ -243,14 +246,14 @@ the SDK's request schema (`-32603`). The call does not run.
 | Rule | Behaviour | Source |
 | --- | --- | --- |
 | Result | the call's answer as JSON, exactly once | [`server.js`](../../../../api/mcp/src/server.js) |
-| Refusal | `isError: true` and a text block `{ "code", "message", "detail" }`, the library's own | [`errors.js`](../../../../api/mcp/src/errors.js) |
+| Refusal | `isError: true` and a text block `{ "error", "message", "fix" }` with the fields beside them that the library put there, and `detail` when it has one; the library's own | [`errors.js`](../../../../api/mcp/src/errors.js) |
 | Uncertain outcome | `Unknown`, `Unresolved`, or `Failed` with `attempted: true`, adds `outcome uncertain: read state before acting again; nothing was retried.` (`UNCERTAIN`) | [`errors.js`](../../../../api/mcp/src/errors.js) |
 | Retry, replay, Commit, unmount | none of its own: one library call per tool call; Commit and unmount only through `workspace_commit` and `workspace_unmount`, never on an error, disconnect or shutdown | [`server.js`](../../../../api/mcp/src/server.js) |
 | Progress | with a progress token, `on_progress` events become `notifications/progress`: the first at once, then at most one per 100 ms (`INTERVAL_MS`) carrying the latest, and the last before the result, which waits 10 ms so the note arrives first. `progress` counts 1, 2, …; `total` only when positive; `message` the event as JSON, cut at 512 characters. Without a token, no handler is passed | [`progress.js`](../../../../api/mcp/src/progress.js) |
-| `workspace.exec` | output is buffered: inline text up to 1 MiB per stream in the result; a larger stream is not delivered (no `stdout`/`stderr` function), and `stdout_bytes`, `stderr_bytes`, `streamed: true` report it | [Errors and events](../calls/errors-and-events.md#workspaceexec-output) |
+| `workspace.exec` | output is buffered (no `stdout`/`stderr` function): each stream's text is in the result up to its last 1 MiB; a longer stream answers its last 1 MiB and `stdout_file` or `stderr_file` names the file on the machine that holds all of it; `stdout_bytes` and `stderr_bytes` (long form) give its full size | [Errors and events](../calls/errors-and-events.md#workspaceexec-output) |
 | Cancel notification | acknowledged on stderr; the native call cannot be cancelled and runs to its end | [`server.js`](../../../../api/mcp/src/server.js) |
 | stdin close, `SIGTERM`, `SIGINT` | stop accepting calls, wait up to 2 s (`GRACE_MS`) for in-flight ones, run `layerfs.close()` (idle Stores only), exit 0. A Workspace stays mounted; a call still running is cut off and its outcome is unknown | [`server.js`](../../../../api/mcp/src/server.js) |
-| stdout, stderr | stdout carries one JSON-RPC message per line and nothing else while serving; one `layerfs-mcp: …` line per call, startup and shutdown on stderr. Argument values are never logged (a `store.connect` password, a `backup.connect` key) | [`server.js`](../../../../api/mcp/src/server.js) |
+| stdout, stderr | stdout carries one JSON-RPC message per line and nothing else while serving; one `layerfs-mcp: …` line per call, startup and shutdown on stderr. Argument values are never logged (a `store.save_auth` password, a `backup.connect` key) | [`server.js`](../../../../api/mcp/src/server.js) |
 
 ## Limits
 
@@ -259,8 +262,8 @@ the SDK's request schema (`-32603`). The call does not run.
 - One home and one fixed scope per process; no `init`/`open`/`close` tool.
 - Calls run on Node's default thread pool (`UV_THREADPOOL_SIZE` 4): many long
   concurrent calls can starve each other. The server does not raise it.
-- No batching or automatic paging: `page_size`, `page_pos` and `cursor` pass
-  through, and `next_page_pos` comes back as the call gives it.
+- No batching or automatic paging: `limit` and `cursor` pass through, and
+  `next_cursor` comes back as the call gives it.
 
 ## Tests
 
