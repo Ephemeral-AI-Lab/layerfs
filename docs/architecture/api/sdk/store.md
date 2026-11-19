@@ -485,7 +485,7 @@ remove`. It replaces `store.push` and `store.pull`, removed with no alias.
 | --- | --- |
 | `InvalidInput` | a PostgreSQL Store; the Store is already on `machine`; neither side is `native` |
 | `NotFound` | no such Store or machine; no Store file at snapshot |
-| `InUse` | a live process holds the Store, or a Sandbox of one of its projects is recorded (`detail.related`) |
+| `InUse` | a live process holds the Store, or a Sandbox of one of its projects is recorded (`detail.related`); the next field `sandboxes` names them, and when no process holds it the `fix` removes them (`layerfs sandbox remove a && layerfs sandbox remove b`; [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle`) |
 | `Exists` | the target already holds a Store file of that name |
 | `Capacity` | the target's free disk is below the bytes plus max(1 GiB, 10%) |
 | `Unavailable` | the machine is stopped or its worker gone; `fix: layerfs machine start <machine>` |
@@ -530,7 +530,7 @@ The long form is `ok, outcome ("removed"), store`.
 | `InvalidInput` | a PostgreSQL Store (`store disconnect` forgets one) |
 | `NotFound` | no Store of that name |
 | `Busy` | another live process's operation runs on the Store |
-| `InUse` | a live process, or this one, holds it; a Sandbox of one of its projects is recorded |
+| `InUse` | a live process, or this one, holds it; a Sandbox of one of its projects is recorded: the next field `sandboxes` names them, and when no process holds it the `fix` removes them ([`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle`) |
 | `Conflict` | the Store moved to another machine meanwhile; nothing removed |
 | `Unknown` | the worker's answer was lost; the `op` stays uncertain; remove again |
 

@@ -604,7 +604,13 @@ is `Unavailable` until `machine start`. A stopped machine answers
 `{"unchanged":true}`. Progress phases: `check`, `stop`.
 
 Without `--force` it is refused `InUse` while Sandboxes are recorded on the
-machine (`detail.related` lists them). `--force` stops the machine anyway:
+machine (`detail.related` lists them): the message names them and `--force`
+as the other way, the next field `sandboxes` lists them, and the `fix`
+removes each, then stops the machine
+(`layerfs sandbox remove a && layerfs sandbox remove b && layerfs machine stop <m>`;
+`sandbox remove` refuses while a Workspace is mounted or a command runs, so
+the chain loses nothing). `--force` is not offered as the fix: its
+Workspaces become `unknown_workspaces` ([`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `can_stop_machine`). `--force` stops the machine anyway:
 it goes straight to the provider, does not call the worker, commit or
 unmount Workspaces one by one, and deletes no record; it answers
 `stopped_sandboxes` and `unknown_workspaces` (Workspaces whose state could
@@ -708,7 +714,7 @@ Progress phases: `check`, `delete`.
 | Refusal | When |
 | --- | --- |
 | `Busy` | a live process's create or remove holds it |
-| `InUse` | sqlite Stores or Sandboxes are on it (`detail.related`) |
+| `InUse` | sqlite Stores, Sandboxes or old Firecracker records are on it (`detail.related`); the next fields `stores`, `sandboxes`, `machines` name each kind. Held by Sandboxes alone, the `fix` removes them, then the machine (`layerfs sandbox remove a && layerfs machine remove <m>`); a machine its record says is stopped gets no fix, since `sandbox remove` cannot reach a daemon on it, and the message says so ([`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `can_remove_machine`) |
 | `Unavailable`, `Failed` | the provider refused or failed; the record is put back |
 | `Unknown` | the provider timed out: `op` kept, uncertain; read `machine get --with live`, then remove again |
 
@@ -741,7 +747,10 @@ Python  layerfs.machine.update(machine, *, cpus=None, memory=None, image=None, d
 Changes a machine's recorded settings; a new setting takes effect at the
 next `machine start` or `sandbox create`
 ([`update.rs`](../../../../control/crates/layerfs-machine/src/update.rs)).
-Refused `InUse` while Sandboxes run on the machine. There is no `--disk`:
+Refused `InUse` while Sandboxes run on the machine: the next field
+`sandboxes` names them and the `fix` removes each
+(`layerfs sandbox remove a && layerfs sandbox remove b`;
+[`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `can_change_machine`). There is no `--disk`:
 resizing is not in 2.0.
 
 | Option | Applies to | Rule |

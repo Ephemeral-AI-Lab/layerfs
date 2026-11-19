@@ -167,7 +167,13 @@ and does not descend into a directory on another device. Nothing is started:
 a machine that is stopped or held by an operation is in `not_listed` with
 `blocked_by`, one that does not answer or whose walk stopped at its bound
 with `reason: timeout` (what that walk found is still listed), and a refused
-ask with `reason: busy` or `refused`. An unknown `--machine` is `NotFound`.
+ask with `reason: busy` or `refused`. When a machine's worker does not
+answer, its provider is asked once, bounded like the walk, with the
+provider-only probe (`provider_within`: no worker dial, no guest command);
+a VM or container it says is stopped is `blocked_by {machine, reason:
+"stopped"}` ("machine `<m>` is stopped"), else the entry is `reason:
+timeout`
+([`leftover_list.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_list.rs) `provider_stopped`). An unknown `--machine` is `NotFound`.
 
 | Kind (`kind`) | Entry | Listed when | `home.prune` removes it when (else `InUse`) |
 | --- | --- | --- | --- |
