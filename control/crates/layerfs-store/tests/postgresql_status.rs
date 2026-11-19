@@ -18,7 +18,8 @@
 //! recorded in `pg_stat_activity`.
 //!
 //! Needs a writable PostgreSQL server: set `LAYERFS_TEST_POSTGRES_URL` to a
-//! libpq connection string or URL (docs/architecture/engine/store/testing.md).
+//! URL (docs/architecture/engine/store/testing.md); its user becomes the
+//! Store's saved login.
 //! The test creates and drops its own database, because `store.status` reads
 //! the one schema a 2.0 PostgreSQL Store uses (`layerfs`); a shared schema
 //! would collide with another run. Without the variable it reports NOT_RUN.
@@ -275,8 +276,17 @@ fn postgresql_store_status_projects_busy_leftover_and_idle() {
 
     let home = tempdir("home");
     home::ensure(&home).unwrap();
-    // `store.connect` records exactly this shape; `store.status` reads it.
-    StoreRecord::connected("pgs", &url, "layerfs", "off", None)
+    // `store.connect` records exactly this shape, with its saved login
+    // (`store.save_auth`); `store.status` reads it. A trust-auth server
+    // takes any password.
+    let user = url
+        .split_once("://")
+        .and_then(|(_, rest)| rest.split_once('@'))
+        .map_or("postgres", |(user, _)| {
+            user.split(':').next().unwrap_or(user)
+        });
+    layerfs_store::postgresql::login::save(&home, "pg", user, "unused").unwrap();
+    StoreRecord::connected("pgs", &url, "layerfs", "off", Some("pg"))
         .write(&home)
         .unwrap();
     let mut admin = postgres::Client::connect(&url, postgres::NoTls).unwrap();
