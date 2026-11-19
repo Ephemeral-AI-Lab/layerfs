@@ -377,8 +377,10 @@ fn a_sandbox_s_root_is_read_through_its_init_with_what_layerfs_keeps_restricted(
         ]
     );
     let mount = (entries(&run).iter()).find(|entry| entry.get_text("kind") == Some("mount"));
-    let id = format!("{:064x}", 1);
-    assert_eq!(mount.unwrap().get_text("workspace"), Some(id.as_str()));
+    // a mount entry names the Workspace by its 2.0 handle: a nameless
+    // Workspace is `<sandbox>:<path>`
+    let handle = format!("s1:{}", fx.run.join("workspaces/1").display());
+    assert_eq!(mount.unwrap().get_text("workspace"), Some(handle.as_str()));
     assert_eq!(mount.unwrap().get("mode"), Some(&SdkValue::Null));
     let kept = "is kept private by LayerFS";
     let within = "is in a folder that is listed, not read";
