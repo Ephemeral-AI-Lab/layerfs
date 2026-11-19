@@ -1646,8 +1646,11 @@ every check was made and nothing was found; otherwise `findings` and
   lookup takes); a map as an indented block under its label; a list of
   records as a table with upper-case headers (a list other than `items`
   under its label); a list of plain values one per line. A row whose short
-  form left `state: ready` out shows `ready` in its STATE column; any other
-  value a row leaves out shows `-`. A `*_not_listed` flag is a note under
+  form left `state: ready` out shows `ready` in its STATE column, which
+  also says the row's reason (`broken: outdated`) and what blocks it
+  (`blocked by machine docker (outdated)`); a row's `fix` and `message`
+  are lines under the table (`fix <name>: <command>`); any other value a
+  row leaves out shows `-`. A `*_not_listed` flag is a note under
   the table. The next page or line window is printed on stderr as the
   command line that reads it (`more: … --cursor <c>`, `--line <n>`).
   Three calls read their own way: `workspace exec` writes the command's
