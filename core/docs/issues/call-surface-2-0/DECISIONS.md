@@ -629,8 +629,10 @@ holds the LayerFS data, and manage logins. Spec `tmp/pg-store-v23/SPEC.md` (owne
   address alone (the URL with its user part and login parameters dropped) and never the password:
   on a first connect `layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store
   connect <s> <address> --auth <auth>` (`<user>` filled from the URL's user when it names one); on a
-  connected Store, which takes no `--auth` (its login changes with `store update --auth`), `layerfs
-  store connect <s> <address>`, with `--machine <m>` for a machine's own address.
+  connected Store, which takes no `--auth` on connect, `layerfs store save-auth <auth> --user <user>
+  --password-stdin && layerfs store update <s> --auth <auth> && layerfs store connect <s> <address>`,
+  with `--machine <m>` for a machine's own address (the person who typed a login most likely meant
+  to change it; orchestrator review).
 - **LF11, conformance v23 fixes** (the overnight conformance review at `7ef14ed641`):
   - F1 (V23-3): a `connections` row's `url` is login-free also for an outdated record whose URL
     still holds a user or a login parameter (the row shows `without_login` of it).

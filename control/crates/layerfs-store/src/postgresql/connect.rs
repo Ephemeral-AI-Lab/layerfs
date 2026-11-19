@@ -113,25 +113,31 @@ pub fn refuse_login(url: &str) -> Result<()> {
 }
 
 /// [`refuse_login`]'s refusal for `store connect <store> <url>`, with its
-/// fix (spec v23 V23-13): the address alone and the login by name. A first
-/// connect saves the login and names it with `--auth`; a connected Store
-/// takes no `--auth` (its login changes with `store update --auth`), so its
-/// fix is the address alone, for `machine`'s own connection when given.
+/// fix (spec v23 V23-13): the login saved by name, then the address alone.
+/// A first connect names the saved login with `--auth`; a connected Store
+/// takes no `--auth` on connect, so its fix names the login with `store
+/// update --auth` before the address alone (for `machine`'s own connection
+/// when given). The URL's user fills `--user` when it names one.
 pub fn refuse_login_with_fix(
     store: &str,
     url: &str,
     first: bool,
     machine: Option<&str>,
 ) -> Result<()> {
+    // a URL that is not a PostgreSQL one is refused without a fix: its login
+    // cannot be told apart, so no line may repeat it
+    parts(url)?;
     refuse_login(url).map_err(|refusal| {
         let address = shell_word(&without_login(url));
+        let user = url_user(url).map_or("<user>".to_owned(), |user| shell_word(&user));
+        let store = shell_word(store);
+        let save = format!("layerfs store save-auth <auth> --user {user} --password-stdin");
         let fix = match (first, machine) {
-            (true, _) => {
-                let user = url_user(url).map_or("<user>".to_owned(), |user| shell_word(&user));
-                format!("layerfs store save-auth <auth> --user {user} --password-stdin && layerfs store connect {store} {address} --auth <auth>")
+            (true, _) => format!("{save} && layerfs store connect {store} {address} --auth <auth>"),
+            (false, machine) => {
+                let on = machine.map_or(String::new(), |m| format!(" --machine {}", shell_word(m)));
+                format!("{save} && layerfs store update {store} --auth <auth> && layerfs store connect {store} {address}{on}")
             }
-            (false, Some(machine)) => format!("layerfs store connect {store} {address} --machine {machine}"),
-            (false, None) => format!("layerfs store connect {store} {address}"),
         };
         with_fix(refusal, fix)
     })
@@ -153,8 +159,10 @@ pub fn without_login(url: &str) -> String {
     let Ok((scheme, _, rest)) = parts(url) else {
         return url.to_owned();
     };
+    // a fragment holding `?` is where `query` reads parameters: dropped
+    // with them, so no login parameter survives in it
     let (path, fragment) = match rest.split_once('#') {
-        Some((path, fragment)) => (path, Some(fragment)),
+        Some((path, fragment)) => (path, Some(fragment).filter(|f| !f.contains('?'))),
         None => (rest, None),
     };
     let (path, kept) = match path.split_once('?') {

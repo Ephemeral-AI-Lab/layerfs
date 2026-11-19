@@ -425,9 +425,8 @@ fn a_postgresql_store_call_holds_the_stores_lease() {
 
 /// The refusal of a URL carrying a login has a fix that gives the address
 /// alone and names the login with `save-auth`/`--auth` (spec v23 V23-13,
-/// LF11); a connected Store, which takes no `--auth`, gets the address
-/// alone (for a machine's own connection, with `--machine`). The fix never
-/// carries the password.
+/// LF11); a connected Store, which takes no `--auth` on connect, names it
+/// with `store update --auth` first. The fix never carries the password.
 #[test]
 fn a_login_in_the_url_is_refused_with_the_address_alone_as_the_fix() {
     let home = tempdir("login-fix");
@@ -470,9 +469,28 @@ fn a_login_in_the_url_is_refused_with_the_address_alone_as_the_fix() {
     ]);
     assert_eq!(
         readdress,
-        "layerfs store connect pg postgresql://127.0.0.1:2/app"
+        "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store update pg --auth <auth> && layerfs store connect pg postgresql://127.0.0.1:2/app"
     );
-    for fix in [&first, &no_user, &readdress] {
+    // a URL that is not a PostgreSQL one is refused with no fix (a fix would
+    // repeat its login); a login hidden after a fragment is dropped with it
+    let args = SdkValue::map([
+        ("store", t("pg2")),
+        ("url", t("postgresq://alice:secret@127.0.0.1:1/app")),
+    ]);
+    let bad = layerfs_api::call(Some(&home), "store.connect", args, &mut |_| {}).unwrap_err();
+    assert_eq!(bad.detail.get_text("fix"), None, "{bad:?}");
+    assert!(!format!("{bad:?}").contains("secret"), "{bad:?}");
+    let fragment = refusal(&[
+        ("store", t("pg")),
+        ("url", t("postgresql://127.0.0.1:2/app#x?password=secret")),
+    ]);
+    assert!(
+        fragment.ends_with("store connect pg postgresql://127.0.0.1:2/app"),
+        "{fragment}"
+    );
+    // every shape names the login path (V23-13) and never the password
+    for fix in [&first, &no_user, &readdress, &fragment] {
+        assert!(fix.contains("save-auth") && fix.contains("--auth"), "{fix}");
         assert!(!fix.contains("secret"), "{fix}");
     }
     let _ = std::fs::remove_dir_all(home);
