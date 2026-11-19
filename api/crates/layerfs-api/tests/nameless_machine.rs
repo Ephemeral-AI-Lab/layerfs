@@ -13,6 +13,9 @@
 //!   (RT5 note 3); with nothing left on it the fix is `machine remove`.
 //!   `machine start` and `machine stop`, which need its VM, are refused
 //!   with that same fix.
+//! - A call on the Store recorded on it (`store compact`, `branch get`,
+//!   `branch list`) is refused `Unavailable` with the `blocked_by` that
+//!   `store get` shows for that Store and the same fix (LF10).
 //! - `native` has no provider name and is not such a record: its remove is
 //!   still refused as built in.
 //! - A Store record this build does not read goes alone, and `left` names
@@ -181,6 +184,11 @@ fn a_nameless_machines_holders_and_the_machine_go_by_their_records() {
     )
     .unwrap();
     write_record(
+        &paths::project_record(&home, "shop", "app"),
+        &SdkValue::map([("created", SdkValue::Int(1))]),
+    )
+    .unwrap();
+    write_record(
         &paths::sandbox_record(&home, "sb"),
         &SdkValue::map([
             ("name", t("sb")),
@@ -208,14 +216,37 @@ fn a_nameless_machines_holders_and_the_machine_go_by_their_records() {
     assert_eq!(stop.detail.get_text("fix"), Some(chain), "{stop:?}");
     // so is a call that needs its worker, before anything is dialled, in
     // place of a `machine start` that is itself refused (RC-B F3)
+    let stats = call(&home, "machine.stats", &machine).unwrap_err();
+    assert_eq!(stats.code, "Failed", "{stats:?}");
+    assert!(stats.message.contains("has no vm_name"), "{stats:?}");
+    assert_eq!(stats.detail.get_text("fix"), Some(chain), "{stats:?}");
+    // a call on the Store on it answers what `store get` says of the Store,
+    // `blocked` by the machine, with the machine's fix (LF10)
+    let store = call(&home, "store.get", &[("store", t("shop"))]).unwrap();
+    assert_eq!(store.get_text("state"), Some("blocked"), "{store:?}");
+    let blocked_by = store.get("blocked_by").expect("blocked_by").clone();
+    assert_eq!(blocked_by.get_text("machine"), Some("old"), "{store:?}");
+    assert_eq!(blocked_by.get_text("reason"), Some("outdated"), "{store:?}");
+    let app = ("project", t("shop/app"));
     for (name, args) in [
-        ("machine.stats", vec![("machine", t("old"))]),
         ("store.compact", vec![("store", t("shop"))]),
+        ("branch.get", vec![app.clone(), ("branch", t("main"))]),
+        ("branch.list", vec![app.clone()]),
     ] {
         let refused = call(&home, name, &args).unwrap_err();
-        assert_eq!(refused.code, "Failed", "{name}: {refused:?}");
-        assert!(refused.message.contains("has no vm_name"), "{refused:?}");
+        assert_eq!(refused.code, "Unavailable", "{name}: {refused:?}");
+        let said = &refused.message;
+        assert!(
+            said.contains("Store shop is blocked by machine old"),
+            "{said}"
+        );
+        assert!(said.contains("has no vm_name"), "{said}");
         assert_eq!(refused.detail.get_text("fix"), Some(chain), "{refused:?}");
+        let next = refused
+            .detail
+            .get("next")
+            .and_then(|next| next.get("blocked_by"));
+        assert_eq!(next, Some(&blocked_by), "{name}: {refused:?}");
     }
 
     let refused = call(&home, "machine.remove", &[("machine", t("old"))]).unwrap_err();

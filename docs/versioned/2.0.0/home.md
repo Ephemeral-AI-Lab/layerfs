@@ -193,8 +193,9 @@ worker's root:
   `docker` machine, records the name as `vm_name`. No name starts with
   `lfs-`, and none is computed for a record (owner, 2026-11-19): a machine
   record without `vm_name`, made by an earlier build, reads `broken`
-  `outdated`, and every call that needs its VM or container is refused
-  `Failed` with the fix `layerfs machine remove <machine>`, which removes the
+  `outdated`, and every machine call that needs its VM or container is
+  refused `Failed` (a call on a sqlite Store on it `Unavailable`, with the
+  Store's `blocked_by`) with the fix `layerfs machine remove <machine>`, which removes the
   record alone (the built-in `docker` is then recorded again with its 2.0
   name by the next call); nothing outside the home is touched. While
   Sandboxes or Stores are recorded on it, that remove is refused `InUse`,

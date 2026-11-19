@@ -889,6 +889,16 @@
           "state": "blocked, reason outdated"
         },
         {
+          "error": "Unavailable",
+          "when": "the machine's record has no vm_name (LF10): refused before anything is dialled, with the Store's blocked_by beside it",
+          "adds": [
+            "fix",
+            "blocked_by"
+          ],
+          "fix": "the machine's own: layerfs store remove S && … && layerfs machine remove M (UI2-8)",
+          "state": "blocked, blocked_by {machine, reason: outdated}"
+        },
+        {
           "error": "Busy",
           "when": "a machine operation holds the machine",
           "adds": [

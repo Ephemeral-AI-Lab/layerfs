@@ -23,16 +23,19 @@ pub const RELATED: Related = Related {
 
 /// `refusal` with the chain of what is on its machine as its fix, when its
 /// fix is the bare `layerfs machine remove <m>` of a machine whose record
-/// has no `vm_name` (UI2-8; RC-B F3): a Store, Sandbox or machine call
-/// refused before a nameless machine's worker is dialled. The holders are
-/// read here, on the refusal path alone; any other refusal is kept.
+/// has no `vm_name` (UI2-8; RC-B F3): a Sandbox or machine call refused
+/// `Failed`, or a Store call refused `Unavailable` (LF10), before a
+/// nameless machine's worker is dialled. The holders are read here, on the
+/// refusal path alone; any other refusal is kept.
 pub fn nameless_chain(home: &Path, refusal: SdkRefusal) -> SdkRefusal {
     let named = (refusal.detail.get_text(layerfs_home::outcome::FIX))
         .and_then(|fix| fix.strip_prefix("layerfs machine remove "))
         .filter(|name| layerfs_home::names::MachineName::parse(name).is_ok())
         .map(str::to_owned);
     match named {
-        Some(name) if refusal.code == "Failed" => RELATED.nameless_fix(home, &name, refusal),
+        Some(name) if matches!(refusal.code.as_str(), "Failed" | "Unavailable") => {
+            RELATED.nameless_fix(home, &name, refusal)
+        }
         _ => refusal,
     }
 }

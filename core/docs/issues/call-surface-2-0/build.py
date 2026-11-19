@@ -168,7 +168,8 @@ REFUSAL_SHAPE = {
     "long": ["error", "message", "fix", "detail"],
     "extra": "the fields the next call needs, flat beside them: a Conflict names the head as commit, "
              "a Busy or Unresolved names its op, a Dirty lists its paths, an InvalidInput for a Commit prefix or an "
-             "edit string that matches more than once carries matches (a count)",
+             "edit string that matches more than once carries matches (a count), an Unavailable for a Store whose machine "
+             "record has no vm_name carries the Store's blocked_by (LF10)",
     "stream": "stderr",
     "exit": 125,
     "error": CODE_NAMES,

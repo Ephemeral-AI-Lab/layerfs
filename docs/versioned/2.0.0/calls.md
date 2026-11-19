@@ -1458,8 +1458,9 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   the machine or a compaction runs (here or in the worker); `Unknown` when
   the reply is lost and `Unresolved` when an earlier run left its outcome
   unknown (both `fix: layerfs store compact <store>`); `InUse` while
-  Workspaces are mounted; `Failed` on a machine whose record has no
-  `vm_name`, with the chain of removes of what is on it as its fix. A
+  Workspaces are mounted; `Unavailable` with `blocked_by {machine, reason:
+  outdated}` on a machine whose record has no `vm_name`, with the chain of
+  removes of what is on it as its fix. A
   compaction ends no mount intent itself: it settles only an intent whose
   owner the Store's admission proves gone, and a mount whose Sandbox this
   home no longer records still holds it. While a compaction runs on a machine, a move's or

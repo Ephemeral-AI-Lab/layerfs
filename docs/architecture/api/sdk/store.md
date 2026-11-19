@@ -619,6 +619,7 @@ Progress phases, sent as each starts with null counts: `mark`, `build`,
 | --- | --- | --- |
 | `Unavailable` | the Store's machine is stopped, records no worker, or its worker does not answer (the Store is `blocked`) | `fix: layerfs machine start <machine>` |
 | `Unavailable` | the machine's worker is of another build | `fix: layerfs machine stop <machine> && layerfs machine start <machine>` (`--force` on the stop when Sandboxes are on it) |
+| `Unavailable` | the machine's record has no `vm_name` (the Store is `blocked`, `outdated`); it carries `blocked_by {machine, reason: outdated}` and nothing is dialled (LF10) | `fix`: the machine's own, `layerfs store remove <store> && … && layerfs machine remove <machine>` (UI2-8) |
 | `Busy` | a machine operation holds the machine, or a compaction of the Store runs here or in the worker; it carries `op` (`{name: compact, phase, started_at}`) | |
 | `InUse` | Workspaces of the Store are mounted (raised `MountsActive`) | |
 | `Unknown` | the reply was lost after the request went out; the Store is `broken` `unresolved` | `fix: layerfs store compact <store>` |
@@ -690,7 +691,7 @@ $ layerfs store doctor shop
 | `InvalidInput` | a bad name or option; a folder scope | [`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `NotFound` | no Store of that name | [`record.rs`](../../../../control/crates/layerfs-store/src/record.rs) |
 | `Busy`, `Unresolved` | another operation's `op`; an unresolved one is shown by `store get` and cleared by the call its `fix` names | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) |
-| `Unavailable` | a stopped machine; a server that does not answer | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`postgresql/open.rs`](../../../../control/crates/layerfs-store/src/postgresql/open.rs) |
+| `Unavailable` | a stopped machine; a machine whose record has no `vm_name`, with `blocked_by {machine, reason: outdated}` and the machine's fix (LF10); a server that does not answer | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`postgresql/open.rs`](../../../../control/crates/layerfs-store/src/postgresql/open.rs) |
 | `Unsupported` | new work on a removed platform's machine | [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs), [`calls/platform_policy.rs`](../../../../api/crates/layerfs-api/src/calls/platform_policy.rs) |
 | `Unknown` | a step's answer was lost; an uncertain move or remove appends to `log/uncertain.jsonl`, and nothing is cleaned up on a guess | [`sqlite/family.rs`](../../../../control/crates/layerfs-store/src/sqlite/family.rs) |
 

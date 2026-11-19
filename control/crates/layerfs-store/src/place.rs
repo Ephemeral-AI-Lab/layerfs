@@ -9,7 +9,7 @@
 use crate::record::StoreRef;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{refused, with_fix, Outcome};
+use layerfs_home::outcome::{refused, with_fix, with_next, Outcome, FIX};
 use layerfs_machine::worker::{self, Budget, Endpoint, EventSink, Unreached};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -42,8 +42,44 @@ pub struct Worker {
 pub fn plan(home: &Path, store: &StoreRef) -> Result<Executor> {
     match store {
         StoreRef::Postgres { .. } => Ok(Executor::Local),
-        StoreRef::Sqlite { .. } => on_machine(home, store.machine()?),
+        StoreRef::Sqlite { name, machine } => {
+            on_machine(home, machine).map_err(|refusal| blocked(name, machine, refusal))
+        }
     }
+}
+
+/// A Store call's refusal for its machine whose record has no `vm_name`
+/// (LF10): the Store reads `blocked` by that machine, `outdated` (`store
+/// list`), so the call is `Unavailable`, as for the machine's other
+/// not-ready states, with that `blocked_by` beside it and the machine's
+/// own fix, which the call boundary widens to the chain of what is on it
+/// (UI2-8). Any other refusal is kept.
+fn blocked(store: &str, machine: &str, refusal: SdkRefusal) -> SdkRefusal {
+    use layerfs_home::state::{BlockedBy, Reason};
+    use layerfs_machine::record::{no_vm_name_fix, Holders};
+    let bare = no_vm_name_fix(machine, Holders::default());
+    if refusal.code != "Failed" || refusal.detail.get_text(FIX) != Some(bare.as_str()) {
+        return refusal;
+    }
+    let by = BlockedBy {
+        thing: "machine",
+        handle: machine.to_owned(),
+        reason: Reason::Outdated.word(),
+    };
+    let message = format!(
+        "Store {store} is blocked by machine {machine} (outdated): {}",
+        refusal.message
+    );
+    let code = "Unavailable".to_owned();
+    with_next(
+        SdkRefusal {
+            code,
+            message,
+            ..refusal
+        },
+        "blocked_by",
+        by.to_sdk(),
+    )
 }
 
 /// Where a call on machine `machine` runs: its Sandboxes' host operations,
@@ -76,7 +112,8 @@ pub fn on_machine_read(home: &Path, machine: &str) -> Result<Executor> {
     // a machine whose record has no `vm_name` has no worker this build
     // reaches: refused `Failed` before anything is dialled (V20-8), with
     // its remove as the fix, which the call boundary widens to the chain
-    // of what is on it (UI2-8; RC-B F3)
+    // of what is on it (UI2-8; RC-B F3); a Store call answers it
+    // `Unavailable` with the Store's `blocked_by` ([`plan`], LF10)
     if let Some(record) = layerfs_machine::record::MachineRecord::read(home, machine)? {
         if record.nameless() {
             record.provider_name()?;
