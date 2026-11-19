@@ -88,10 +88,22 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
             "its container of the retired docker backend was not touched: {}",
             super::reopen::container_fix(container.as_deref())
         );
-        return forget(&home, events, name, container);
+        return forget(&home, events, name, container, Worker::Ask);
+    }
+    // a Sandbox on a machine whose record has no 2.0 name (RV3 FAIL 1):
+    // nothing on that machine is reached, its worker included
+    let machine = found.machine();
+    let on = layerfs_machine::record::MachineRecord::read(&home, machine)?;
+    if on.is_some_and(|record| record.nameless()) {
+        let first = format!(
+            "machine {machine}'s record has no 2.0 name, so nothing on it was touched: the \
+             Sandbox's daemon and run folder there, if any, stay in the VM or container an \
+             earlier build made, which no call reaches"
+        );
+        return forget(&home, events, name, first, Worker::Skip);
     }
     if let Some(unnamed) = foreign(&home, &found)? {
-        return forget(&home, events, name, unnamed);
+        return forget(&home, events, name, unnamed, Worker::Ask);
     }
     let force = request.force;
     // the commands this home records, which a forced remove cancels first
@@ -286,12 +298,19 @@ fn foreign(home: &Path, record: &SandboxRecord) -> Result<Option<String>> {
 
 /// Removes the record of Sandbox `name` that this build does not reopen:
 /// one recorded under the retired docker backend (D-8,
-/// layerfs-project#111), or one whose daemon's name this home does not
-/// give ([`foreign`]). Its machine's worker is asked once to drop its own
-/// record of it (a worker that cannot be reached or refuses leaves that
-/// record, and `left` says so), then the home's record goes. Nothing it
+/// layerfs-project#111), one whose daemon's name this home does not give
+/// ([`foreign`]), or one on a machine whose record has no 2.0 name. Its
+/// machine's worker is asked once to drop its own record of it (a worker
+/// that cannot be reached or refuses leaves that record, and `left` says
+/// so), unless `worker` skips it, then the home's record goes. Nothing it
 /// ran is touched; `first`, the first of `left`, says what was left.
-fn forget(home: &Path, events: &mut Events<'_>, name: &str, first: String) -> Result<Removed> {
+fn forget(
+    home: &Path,
+    events: &mut Events<'_>,
+    name: &str,
+    first: String,
+    worker: Worker,
+) -> Result<Removed> {
     let record = {
         let _lock = home::lock::take(home)?;
         let _sandbox = record::lock(home, name)?;
@@ -301,9 +320,9 @@ fn forget(home: &Path, events: &mut Events<'_>, name: &str, first: String) -> Re
         clearable(&record)?;
         record
     };
-    let left = match record.machine() {
+    let left = match (record.machine(), worker) {
         // a `native` Sandbox's record is the folder removed below
-        "native" => None,
+        ("native", _) | (_, Worker::Skip) => None,
         _ => on_machine(
             home,
             events,
@@ -336,6 +355,16 @@ fn forget(home: &Path, events: &mut Events<'_>, name: &str, first: String) -> Re
     Ok(Removed::AlreadyGone {
         left: std::iter::once(first).chain(kept).collect(),
     })
+}
+
+/// Whether [`forget`] asks the Sandbox's machine's worker to drop its own
+/// record of it.
+#[derive(Clone, Copy)]
+enum Worker {
+    /// Asked once; a refusal is a sentence of `left`.
+    Ask,
+    /// Not reached at all: the machine's record has no 2.0 name.
+    Skip,
 }
 
 /// Refuses a remove while another operation's intent holds Sandbox

@@ -17,6 +17,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, with_field};
 use layerfs_home::op::{self, Op};
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, with_fix, Outcome};
 use std::path::Path;
 
@@ -166,7 +167,10 @@ fn reach(home: &Path, name: &str, from: &str, to: &str) -> Result<(Executor, Exe
     let mut target = place::on_machine(home, to)?;
     for (machine, executor) in [(from, &mut source), (to, &mut target)] {
         if let Executor::Worker(worker) = executor {
-            let start = format!("layerfs machine start {machine}");
+            let start = format!(
+                "layerfs machine start {machine}",
+                machine = shell_word(machine)
+            );
             worker.ready().map_err(|refusal| with_fix(refusal, start))?;
         }
     }

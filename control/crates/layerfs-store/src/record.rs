@@ -11,6 +11,7 @@ pub use layerfs_bridge::StoreKind;
 use layerfs_home::home::entity_lock::{self, EntityLock};
 use layerfs_home::home::{self, paths, read_record, with_field, write_entity};
 use layerfs_home::op::{self, Op};
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{failed, refused, with_fix, with_next};
 use std::path::Path;
 
@@ -87,7 +88,7 @@ pub enum StoreRef {
 /// `kind`, one it does not know, or a `machine` that is not text):
 /// `store remove`, which then removes its records alone.
 pub fn unread_fix(name: &str) -> String {
-    format!("layerfs store remove {name}")
+    format!("layerfs store remove {}", shell_word(name))
 }
 
 impl StoreRef {
@@ -515,8 +516,13 @@ pub fn stores(home: &Path) -> Result<Vec<StoreRecord>> {
 /// read (no `kind`, one it does not know, or a `machine` that is not text):
 /// under the home lock and the Store's, once nothing uses it, its record
 /// and its projects' records go. Nothing it names is opened or deleted: any
-/// other file in its folder (a Store file) stays where it is.
-pub(crate) fn forget_unread(home: &Path, name: &str, related: crate::Related) -> Result<()> {
+/// other file in its folder (a Store file) stays where it is, and the
+/// answer (`left`) says so, with the line that removes it.
+pub(crate) fn forget_unread(
+    home: &Path,
+    name: &str,
+    related: crate::Related,
+) -> Result<Vec<String>> {
     let _lock = home::lock::take(home)?;
     let _store = lock(home, name)?;
     let now = StoreRecord::of(home, name)?;
@@ -535,5 +541,14 @@ pub(crate) fn forget_unread(home: &Path, name: &str, related: crate::Related) ->
         Err(error) => return Err(failed(error)),
     }
     layerfs_home::home::generation::moved(home);
-    Ok(())
+    let file = paths::store_file(home, name);
+    if !file.exists() {
+        return Ok(Vec::new());
+    }
+    let shown = shell_word(&file.display().to_string());
+    Ok(vec![format!(
+        "Store {name}'s file {} was kept, since its record was not read: `rm -f {shown}*` \
+         removes it and its -wal and -shm files",
+        file.display()
+    )])
 }

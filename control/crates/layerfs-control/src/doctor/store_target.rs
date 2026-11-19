@@ -18,6 +18,7 @@ use layerfs_home::events::Events;
 use layerfs_home::helpers::map_of;
 use layerfs_home::home::paths;
 use layerfs_home::op::Standing;
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, Outcome as CallOutcome};
 use layerfs_home::state::{Reason, State};
 use layerfs_store::diagnostic::{self, Observation, Options, Outcome};
@@ -170,7 +171,10 @@ fn operation(
                 "a compaction on it left its outcome not known in phase {phase}, and its process is gone"
             );
             checks.fail(OPERATION, message);
-            checks.fix(OPERATION, format!("layerfs store compact {name}"));
+            checks.fix(
+                OPERATION,
+                format!("layerfs store compact {name}", name = shell_word(name)),
+            );
         }
         _ => checks.pass(OPERATION, "no operation on it is unfinished"),
     }
@@ -286,7 +290,14 @@ fn backups(record: &StoreRecord, now: Option<String>, error: Option<String>, che
         if link.heads().is_some_and(|then| then != now) {
             behind = true;
             checks.notice(BACKUPS, format!("its backup in {bucket} is behind"));
-            checks.fix(BACKUPS, format!("layerfs backup create {name} {bucket}"));
+            checks.fix(
+                BACKUPS,
+                format!(
+                    "layerfs backup create {name} {bucket}",
+                    name = shell_word(name),
+                    bucket = shell_word(&bucket)
+                ),
+            );
         }
     }
     if !behind {

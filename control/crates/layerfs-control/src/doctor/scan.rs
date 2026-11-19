@@ -11,6 +11,7 @@ use super::records::Findings;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{paths, read_record, RECORD_VERSION};
 use layerfs_home::outcome::failed;
+use layerfs_home::outcome::shell_word;
 use layerfs_machine::record::MachineRecord;
 use layerfs_sandbox::record::SandboxRecord;
 use layerfs_store::record::StoreRecord;
@@ -237,7 +238,8 @@ fn execs(workspaces: &Path, name: &str, findings: &mut Findings) -> Result<()> {
                     format!(
                         "layerfs workspace cancel {name}:{} --exec {}",
                         found.name.as_deref().unwrap_or(&found.path),
-                        found.id
+                        found.id,
+                        name = shell_word(name)
                     ),
                 );
             }
@@ -374,5 +376,5 @@ fn file_mode(path: &Path, entity: (&str, &str), findings: &mut Findings) {
 
 /// `path` as one shell word ([`layerfs_home::outcome::shell_word`]).
 pub(crate) fn shell(path: &Path) -> String {
-    layerfs_home::outcome::shell_word(&path.display().to_string())
+    shell_word(&path.display().to_string())
 }

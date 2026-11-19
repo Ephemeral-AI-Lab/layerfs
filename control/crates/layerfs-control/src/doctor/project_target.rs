@@ -14,6 +14,7 @@ use super::target::Checks;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::{hex, unhex};
 use layerfs_home::home::paths;
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, Outcome as CallOutcome};
 use layerfs_home::state::BlockedBy;
 use layerfs_store::diagnostic::{
@@ -93,7 +94,13 @@ fn listed(
             }
             None => {
                 checks.notice(LISTED, "on record, but the Store does not list it");
-                checks.fix(LISTED, format!("layerfs project delete {handle}"));
+                checks.fix(
+                    LISTED,
+                    format!(
+                        "layerfs project delete {handle}",
+                        handle = shell_word(handle)
+                    ),
+                );
                 checks.evidence(
                     LISTED,
                     SdkValue::map([
