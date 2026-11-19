@@ -101,15 +101,25 @@ pub fn connect(home: &Path, request: &BucketConnect) -> Outcome {
 /// Replaces connected bucket `kept`'s key with `request`'s, under the
 /// home's lock: the secret by one rename, then the record with the new key
 /// id by one rename; when the record cannot be written the secret kept
-/// before is put back. The Stores' links are in their own records and are
-/// not touched.
+/// before is put back, and a put-back that fails is said in the refusal.
+/// The Stores' links are in their own records and are not touched.
 fn rotate(home: &Path, kept: &BucketRecord, request: &BucketConnect) -> Outcome {
     let name = kept.name();
     let before = secret::kept(home, name)?;
     secret::write(home, name, &request.secret_key)?;
     let rotated = kept.with_access_key(&request.access_key);
-    if let Err(refusal) = rotated.write(home) {
-        let _ = secret::put_back(home, name, before.as_ref());
+    if let Err(mut refusal) = rotated.write(home) {
+        // the refusal says when the old secret could not be put back: the
+        // folder then holds the new secret beside the old key id, which
+        // the next listing refuses with the fix that connects again
+        if let Err(back) = secret::put_back(home, name, before.as_ref()) {
+            refusal.message = format!(
+                "{}; the secret it replaced could not be put back either ({}): bucket {name} \
+                 now holds the new secret with its old key id, and connecting it again \
+                 settles it",
+                refusal.message, back.message
+            );
+        }
         return Err(refusal);
     }
     Ok(rotated.answer("rotated"))

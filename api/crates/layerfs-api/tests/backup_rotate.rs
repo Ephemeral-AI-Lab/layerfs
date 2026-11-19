@@ -2,8 +2,9 @@
 //! every Store's link to it (spec v21), against a local fake S3 endpoint
 //! that accepts one key id at a time; it checks the key id only, so a key
 //! it refuses is a different id. A failed proof changes nothing, another URL
-//! under a taken name is `Exists` with the disconnect fix, and the call log
-//! keeps the secret's byte count only. Records only: runs on macOS.
+//! under a taken name is `Exists` with the disconnect fix, a record that
+//! cannot be written puts the old secret back, and the call log keeps the
+//! secret's byte count only. Records only: runs on macOS.
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::names::BucketName;
@@ -328,6 +329,16 @@ fn the_same_place_compares_the_parsed_url() {
     assert!(s3.same_place(&record("http://127.0.0.1:9000/bucket/pre/")));
     assert!(!s3.same_place(&record("https://127.0.0.1:9000/bucket/pre")));
     assert!(!s3.same_place(&record("http://127.0.0.1:9000/bucket")));
+    // the host's case and a default port do not change the place (RV3 NOTE 5)
+    let host = record("https://S3.Example.com/bucket/pre");
+    assert!(host.same_place(&record("https://s3.example.com/bucket/pre")));
+    assert!(host.same_place(&record("https://s3.example.com:443/bucket/pre/")));
+    assert!(!host.same_place(&record("https://s3.example.com:8443/bucket/pre")));
+    assert!(!host.same_place(&record("http://s3.example.com/bucket/pre")));
+    let plain = record("http://s3.example.com/bucket/pre");
+    assert!(plain.same_place(&record("http://S3.EXAMPLE.COM:80/bucket/pre")));
+    assert!(!plain.same_place(&record("http://s3.example.com/Bucket/pre")));
+    assert!(eu.same_place(&record("r2://ACCT/bucket/pre?jurisdiction=eu")));
 }
 
 /// The call log of a rotation: the URL and the secret as byte counts, the
@@ -401,6 +412,35 @@ fn a_record_with_no_key_id_is_fixed_by_connecting_again() {
         .unwrap();
     assert_eq!(credentials.access_key, "AKID-1");
     assert_eq!(bytes(&store), before_store, "the Store's link changed");
+    drop(fake);
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// A rotation whose record cannot be written puts the secret it replaced
+/// back (RV3 NOTE 4): the record and the secret are as they were.
+#[test]
+fn a_record_that_cannot_be_written_puts_the_old_secret_back() {
+    let home = tempdir("putback");
+    let fake = Fake::new("AKID-1");
+    let url = format!("{}/bucket/pre", fake.endpoint);
+    connect(&home, &url, "AKID-1", "secret-one", false).unwrap();
+    let record_path = paths::bucket_record(&home, "b1");
+    let (record, secret) = (bytes(&record_path), bytes(&secret_file(&home)));
+    // the record's folder takes no new file: its write fails after the
+    // secret's
+    let folder = record_path.parent().unwrap().to_owned();
+    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o500)).unwrap();
+    fake.allow("AKID-2");
+    let refused = connect(&home, &url, "AKID-2", "secret-two", false);
+    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let refused = refused.unwrap_err();
+    assert_ne!(refused.code, "Exists", "{refused:?}");
+    assert!(
+        !refused.message.contains("could not be put back"),
+        "{refused:?}"
+    );
+    assert_eq!(bytes(&record_path), record);
+    assert_eq!(bytes(&secret_file(&home)), secret);
     drop(fake);
     std::fs::remove_dir_all(home).unwrap();
 }
