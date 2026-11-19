@@ -206,7 +206,10 @@ $ echo $?
   (`"0700"`); `bundle` and `daemon` are
   `{ path, source, present, commit, dirty, matches }` for the Linux bundle
   and the native daemon this build would use (`matches` is null when either
-  side cannot tell); `cache` is `{ path }`. It reads `layerfs.json`, the
+  side cannot tell); the bundle's `source` is `env:LAYERFS_BUNDLE`,
+  `runtime` (an installed runtime's own, `<runtime>/bundle/linux-<arch>/`
+  beside `<runtime>/bin/layerfs`, chosen after `LAYERFS_BUNDLE` and before
+  the cache) or `cache`; `cache` is `{ path }`. It reads `layerfs.json`, the
   folder's mode, `bundle.json`, the native daemon's record and the daemon
   file, and changes nothing. The answer has no `warnings` list any more:
   what is wrong with a bundle, a daemon or the folder's mode is the home
@@ -1135,6 +1138,12 @@ positional `machine`, except `create`, which takes `name` and `platform`.
   leaves the machine `broken`/`unresolved` with `fix: layerfs machine get
   <m> --with live`, which settles it by observing; an uncertain create or
   remove is cleared by `machine remove`.
+- **A bundle of another build.** `create`, `start` and every call that
+  starts a worker refuse `Unavailable`, before anything starts, a Linux
+  bundle whose `bundle.json` `source.head` is not the commit this build was
+  compiled from (a build that names no commit cannot tell and uses it): a
+  worker started from it would not answer this build's calls. Point
+  `LAYERFS_BUNDLE` at this build's bundle or rebuild it.
 - **An outdated worker.** `start` refuses a worker of another build and
   leaves the machine `broken`/`outdated`, with `fix: layerfs machine stop
   <m> && layerfs machine start <m>`, or `layerfs machine stop <m> --force &&

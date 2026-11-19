@@ -470,3 +470,10 @@ rewritten, and 2.0 state answers as before.
 - **UI2-5** (item d) `store doctor` on a sqlite Store whose file another writer holds reports
   `store.identity` and `store.schema` as `not_checked` with reason `busy`, never as a schema or id
   error; `store.connection` passes when the file is there.
+- **UI2-6** (clibugs, f14fb23da0) `home get --detail`'s `bundle.source` gains the word `runtime`: the
+  bundle an installed runtime carries beside its command (`<runtime>/bundle/linux-<arch>/` beside
+  `<runtime>/bin/layerfs`, symlinks resolved), chosen after `LAYERFS_BUNDLE` and before the cache.
+- **UI2-7** (clibugs, f14fb23da0) `machine create`, `machine start` and every call that starts a
+  worker refuse `Unavailable`, before anything starts, a Linux bundle whose `bundle.json`
+  `source.head` is not the commit this build was compiled from; a build that names no commit cannot
+  tell and uses it.
