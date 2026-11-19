@@ -37,7 +37,16 @@ fn a_missing_or_empty_home_is_empty_and_gets_a_layout_and_id() {
     // a second ensure reads the same id
     assert_eq!(ensure(&home).unwrap(), file);
     assert_eq!(detect(&home).unwrap(), Layout::Current(file));
+    // a home of this layout keeps the call log
+    layerfs_home::logs::append(&home, &line());
+    assert!(layerfs_home::home::paths::calls_file(&home).is_file());
     std::fs::remove_dir_all(root).unwrap();
+}
+
+/// One call-log line.
+fn line() -> layerfs_bridge::control::SdkValue {
+    use layerfs_bridge::control::SdkValue;
+    SdkValue::map([("call", SdkValue::text("home.get"))])
 }
 
 /// The fix a refusal of an older home carries.
@@ -59,9 +68,12 @@ fn a_1_1_0_home_is_older_and_refused_with_a_fix_never_written() {
         );
     }
     assert!(!home.join("layerfs.json").exists());
-    // a folder holding something else and no 1.1.0 record is a new home
+    // a folder holding something else and no 1.1.0 record is a new home,
+    // the lock the first call takes and a `log/` folder included
     let other = tempdir("other");
     std::fs::write(other.join("notes.txt"), "kept").unwrap();
+    std::fs::write(other.join("layerfs.lock"), "").unwrap();
+    std::fs::create_dir(other.join("log")).unwrap();
     assert_eq!(detect(&other).unwrap(), Layout::Empty);
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(other).unwrap();
@@ -96,6 +108,9 @@ fn a_newer_or_broken_layout_is_refused() {
     )
     .unwrap();
     assert_eq!(detect(&home).unwrap(), Layout::Older);
+    // a call refused there writes no call log into it
+    layerfs_home::logs::append(&home, &line());
+    assert!(!home.join("trace").exists(), "the call log was written");
     let refused = open(&home).unwrap_err();
     assert_eq!(refused.code, "Unsupported");
     assert!(fix(&refused).is_some_and(|fix| fix.ends_with("&& layerfs home init")));

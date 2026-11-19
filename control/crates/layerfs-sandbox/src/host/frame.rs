@@ -207,8 +207,9 @@ pub fn decode(frame: &SdkValue) -> Result<Sent, SdkRefusal> {
     };
     let store = frame.get_text("store").unwrap_or("").to_owned();
     let project = frame.get_text("project").unwrap_or("").to_owned();
-    // a PostgreSQL Store's URL and password reference stay with the caller:
-    // the request's `postgresql` carries what this side dials (#535 §7.4)
+    // a PostgreSQL Store's URL and saved login stay with the caller (a
+    // `password` field an older record kept is not sent either): the
+    // request's `postgresql` carries what this side dials (#535 §7.4)
     let record = match frame.get("store_record").cloned().unwrap_or_default() {
         SdkValue::Map(fields) => SdkValue::Map(
             fields

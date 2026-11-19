@@ -115,8 +115,8 @@ pub fn update(home: &Path, request: &MachineUpdate, related: Related) -> Outcome
         }
     }
     // `--docker ""`: back to the automatic choice until the next start
-    // records one; null, not absent, which for a machine that ran means the
-    // default socket it ran on before sockets were recorded
+    // records one (a record with no socket, null or absent, takes the
+    // automatic choice)
     if docker == Some(None) {
         record = record.with("docker", SdkValue::Null);
     }

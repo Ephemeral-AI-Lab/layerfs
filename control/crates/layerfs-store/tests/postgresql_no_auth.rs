@@ -57,3 +57,31 @@ fn its_state_is_broken_outdated_with_the_same_fix() {
     let state = layerfs_store::state::recorded_under(&named, None).unwrap();
     assert_eq!(state, State::Ready);
 }
+
+/// A record naming its saved login is dialled with it: the login's user
+/// and password go into the record's URL (which keeps neither), for the
+/// Store and for a machine's own address; nothing needs a server.
+#[test]
+fn a_saved_login_goes_into_the_dialled_url() {
+    let home = std::env::temp_dir().join(format!("layerfs-pg-login-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    layerfs_home::home::ensure(&home).unwrap();
+    layerfs_store::postgresql::login::save(&home, "pg-app", "alice", "s3 cret").unwrap();
+    let record = StoreRecord::connected(
+        "pg",
+        "postgresql://db.example:5432/layerfs_db",
+        "layerfs",
+        "local",
+        Some("pg-app"),
+    )
+    .in_home(&home);
+    assert_eq!(
+        url(&record).unwrap(),
+        "postgresql://alice:s3%20cret@db.example:5432/layerfs_db"
+    );
+    assert_eq!(
+        url_on(&record, "lab").unwrap(),
+        "postgresql://alice:s3%20cret@db.example:5432/layerfs_db"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}

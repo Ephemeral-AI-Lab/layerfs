@@ -144,8 +144,8 @@ fn an_older_home_is_outdated_and_init_refuses_it_with_the_move_fix() {
         layerfs_api::call(Some(&home), "home.init", SdkValue::Null, &mut |_| {}).unwrap_err();
     assert_eq!(refused.code, "Unsupported", "{}", refused.message);
     assert_eq!(refused.detail.get_text("fix"), Some(fix.as_str()));
-    // any other call is refused the same way, and nothing but the call log
-    // is written
+    // any other call is refused the same way, and nothing is written, not
+    // even the call log
     let other =
         layerfs_api::call(Some(&home), "machine.list", SdkValue::Null, &mut |_| {}).unwrap_err();
     assert_eq!(other.code, "Unsupported", "{}", other.message);
@@ -155,7 +155,7 @@ fn an_older_home_is_outdated_and_init_refuses_it_with_the_move_fix() {
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     names.sort();
-    assert_eq!(names, ["layerfs.json", "trace"]);
+    assert_eq!(names, ["layerfs.json"]);
     let _ = std::fs::remove_dir_all(&home);
 }
 

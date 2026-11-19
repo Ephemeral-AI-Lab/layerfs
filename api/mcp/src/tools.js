@@ -80,8 +80,16 @@ export function visibleOptions(spec) {
   return spec.options.filter((option) => option.kind !== "function" && !HIDDEN_OPTIONS.has(option.name));
 }
 
+/** `workspace.exec`'s `env`: one object of names to text (call surface 2.0). */
+const EXEC_ENV = {
+  type: "object",
+  additionalProperties: { type: "string" },
+  description: "the command's environment variables, an object of names to text",
+};
+
 /** The JSON Schema property of one argument or option. */
 export function propertyOf(spec, entry) {
+  if (spec.family === "workspace" && spec.call === "exec" && entry.name === "env") return EXEC_ENV;
   const schema = COMMON[entry.kind];
   if (!schema) throw new Error(`${spec.family}.${spec.call}: no schema for kind "${entry.kind}"`);
   return schema;

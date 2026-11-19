@@ -16,6 +16,7 @@
 //!
 //! The lines of `log/*.jsonl` rotate the same way ([`rotate`], under
 //! `log/rotate.lock`; layerfs-project#180), all but `log/uncertain.jsonl`.
+use crate::home::layout::{detect, Layout};
 use crate::home::{flock, paths};
 use crate::json;
 use crate::outcome::{failed, public_code, refused, Outcome};
@@ -53,10 +54,11 @@ pub fn tag(tag: &str) -> Option<String> {
 }
 
 /// Appends `line` to the call log of `home`, best effort. Nothing is
-/// written in a folder that is not yet a LayerFS home (no
-/// `layerfs.json`), and the home itself is never created here.
+/// written in a folder that is not a home of this build's layout (one with
+/// no `layerfs.json`, or an older LayerFS's home, whose calls are refused),
+/// and the home itself is never created here.
 pub fn append(home: &Path, line: &SdkValue) {
-    if !home.join("layerfs.json").is_file() {
+    if !matches!(detect(home), Ok(Layout::Current(_))) {
         return;
     }
     let dir = paths::trace_dir(home);

@@ -5,8 +5,10 @@
 //! `<root>/sandbox/<name>/`. A Sandbox starts only when an agent asks for
 //! one ([`create`], through `launch::local`); its records go when an agent
 //! closes it ([`close`]), after a stopped runtime is deleted ([`reclaim`])
-//! when it ended by itself. A record of the retired docker backend is
-//! forgotten by its close. Nothing is retried on the caller's behalf.
+//! when it ended by itself. A record of the retired docker backend, or one
+//! whose daemon's name this home does not give, is forgotten by `sandbox
+//! remove`, which removes its records alone. Nothing is retried on the
+//! caller's behalf.
 use crate::daemon::values;
 use crate::host::{Deploy, Host, Started};
 use crate::record::DaemonRecord;
@@ -176,8 +178,8 @@ pub fn start(
 /// starts the Sandbox the call names on the call's image (`deploy.image`)
 /// and waits for its daemon: `{ sandbox, name, image, platform, runtime,
 /// route, runtime_id }`. A folder that already records a started Sandbox
-/// is `Exists`; one the retired docker backend recorded is forgotten first
-/// (D-8). `deploy.sandbox` names its backend, `native` or
+/// is `Exists`; one the retired docker backend recorded is forgotten first,
+/// as `sandbox remove` forgets it (D-8). `deploy.sandbox` names its backend, `native` or
 /// `namespaces`; a native one's `image` is `local`. `platform` (#529) is
 /// checked against that backend and recorded.
 /// The only call that starts a Sandbox. Failures are `Failed` or
@@ -198,8 +200,9 @@ pub fn create(host: &Host, named: Option<&str>) -> Outcome {
     let made = (|| {
         let _guard = layerfs_store::project::discovery::guard(&directory)?;
         let recorded = crate::files::started(&directory)?;
-        // a record of the retired docker backend is forgotten, as a close
-        // forgets it, so its name is free again (D-8): nothing it named runs
+        // a record of the retired docker backend is forgotten, as `sandbox
+        // remove` forgets it, so its name is free again (D-8): nothing it
+        // named runs
         match recorded {
             Some(retired) if retired.retired() => {
                 discard(&directory, &retired)?;
