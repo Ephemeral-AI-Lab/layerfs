@@ -42,7 +42,7 @@ pub mod worker;
 
 #[cfg(feature = "machine")]
 pub use bundle::bundle;
-pub use bundle::{bundle_dir, IMAGE_ARCHIVE};
+pub use bundle::{bundle_dir, bundle_place, IMAGE_ARCHIVE};
 #[cfg(feature = "machine")]
 pub use create::{create, MachineCreate, STOCK};
 #[cfg(feature = "machine")]

@@ -112,7 +112,7 @@ and it answers for a home that does not exist yet, creating nothing.
 | `generation` | the home's [generation](../../control/home/README.md#the-generation-counter): a number that moves when a record is written or removed and never for a read. Null unless the home is ready |
 | `message` | a sentence saying what is wrong, null when ready |
 | `layout`, `mode` | the layout `layerfs.json` records, and the folder's permission bits as text (`"0700"`); `layout` is null for a missing or foreign home, `mode` when there is no folder. Whether the mode is owner-only is the doctor's finding, not this call's |
-| `bundle` | The Linux bundle this build would deploy: `{ path, source, present, commit, dirty, matches }`; `source` is `env:LAYERFS_BUNDLE` or `cache` (`<cache>/layerfs/bundle/<version>/linux-<arch>`); `commit` and `dirty` from `bundle.json` `source` |
+| `bundle` | The Linux bundle this build would deploy: `{ path, source, present, commit, dirty, matches }`; `source` is `env:LAYERFS_BUNDLE`, `runtime` (an installed runtime's own, `<runtime>/bundle/linux-<arch>` beside `<runtime>/bin/layerfs`) or `cache` (`<cache>/layerfs/bundle/<version>/linux-<arch>`, shared by every build of the version); `commit` and `dirty` from `bundle.json` `source` |
 | `daemon` | macOS: native's daemon, `{ path, source, present, commit, dirty, matches }`, `source` `recorded` (native's record) or `default` (beside the macOS bundle). Null elsewhere |
 | `cache` | `{ path }`: `XDG_CACHE_HOME`, else `~/.cache` |
 

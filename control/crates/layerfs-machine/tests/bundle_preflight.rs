@@ -28,6 +28,24 @@ fn manifest_protocol_and_architecture_are_checked_while_legacy_is_readable() {
     assert_eq!(bundle::bundle().unwrap().hash, "abcd");
     write("");
     assert_eq!(bundle::bundle().unwrap().hash, "abcd");
+    // a bundle sealed from another commit than this build's is refused;
+    // a build that names no commit cannot tell, and takes it
+    let other = "0".repeat(40);
+    write(&format!(r#","source":{{"head":"{other}","dirty":false}}"#));
+    match option_env!("LAYERFS_BUILD_COMMIT").filter(|c| c.len() == 40) {
+        Some(ours) => {
+            let refusal = bundle::bundle().unwrap_err();
+            assert_eq!(refusal.code, "Unavailable");
+            assert!(refusal.message.contains("was sealed from 0000000000"));
+            write(&format!(r#","source":{{"head":"{ours}","dirty":false}}"#));
+            assert_eq!(bundle::bundle().unwrap().hash, "abcd");
+        }
+        None => assert_eq!(bundle::bundle().unwrap().hash, "abcd"),
+    }
+    assert_eq!(
+        layerfs_machine::bundle_place("linux").unwrap(),
+        (dir.clone(), "env:LAYERFS_BUNDLE")
+    );
     let cache = dir.join("cache");
     std::env::set_var("XDG_CACHE_HOME", &cache);
     let content = "e".repeat(64);

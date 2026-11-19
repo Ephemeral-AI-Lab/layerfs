@@ -332,3 +332,45 @@ fn folding_a_failed_capture_into_a_kept_row_counts_it() {
         "both kept rows were written by the fold"
     );
 }
+
+/// `workspace status` reads changed inodes from `active_inodes`: a kept row
+/// is no change there, and a window of only kept rows still reads on to the
+/// rows after it. A write of a kept serial makes it a change again.
+#[test]
+fn a_kept_row_is_no_active_change_until_written() {
+    let (_temp, db, _capture, reader) = kept();
+    let serials = |db: &Overlay| -> Vec<u64> {
+        let (mut all, mut after) = (Vec::new(), 0);
+        loop {
+            let window = db.active_inodes(after).unwrap();
+            let Some(last) = window.last() else { break all };
+            after = last.serial;
+            all.extend(window.iter().map(|inode| inode.serial));
+        }
+    };
+    assert_eq!(serials(&db), Vec::<u64>::new());
+    apply(
+        &db,
+        2,
+        &Changes {
+            created: Some(61),
+            inodes: vec![node(61, InodeKind::File, 0)],
+            ..Changes::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(serials(&db), vec![61], "kept 50 and 60 come before 61");
+    let mut file = node(FILE, InodeKind::File, 3);
+    file.mode = 0o600;
+    apply(
+        &db,
+        3,
+        &Changes {
+            inodes: vec![file],
+            ..Changes::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(serials(&db), vec![FILE, 61]);
+    db.release_captured_reader(reader).unwrap();
+}
