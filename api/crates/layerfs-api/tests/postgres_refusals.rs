@@ -422,3 +422,116 @@ fn a_postgresql_store_call_holds_the_stores_lease() {
     assert!(!lease.exists(), "a Store that did not open keeps no lease");
     let _ = std::fs::remove_dir_all(home);
 }
+
+/// The refusal of a URL carrying a login has a fix that gives the address
+/// alone and names the login with `save-auth`/`--auth` (spec v23 V23-13,
+/// LF11); a connected Store, which takes no `--auth`, gets the address
+/// alone (for a machine's own connection, with `--machine`). The fix never
+/// carries the password.
+#[test]
+fn a_login_in_the_url_is_refused_with_the_address_alone_as_the_fix() {
+    let home = tempdir("login-fix");
+    home::open(&home).unwrap();
+    let refusal = |args: &[(&str, SdkValue)]| {
+        let args = SdkValue::Map(
+            args.iter()
+                .map(|(n, v)| ((*n).to_owned(), v.clone()))
+                .collect(),
+        );
+        let refused =
+            layerfs_api::call(Some(&home), "store.connect", args, &mut |_| {}).unwrap_err();
+        assert_eq!(refused.code, "InvalidInput", "{refused:?}");
+        let fix = refused.detail.get_text("fix").map(str::to_owned);
+        fix.unwrap_or_else(|| panic!("no fix: {refused:?}"))
+    };
+    let first = refusal(&[
+        ("store", t("pg")),
+        (
+            "url",
+            t("postgresql://alice:secret@127.0.0.1:1/app?sslmode=disable&passfile=/p"),
+        ),
+    ]);
+    assert_eq!(
+        first,
+        "layerfs store save-auth <auth> --user alice --password-stdin && layerfs store connect pg 'postgresql://127.0.0.1:1/app?sslmode=disable' --auth <auth>"
+    );
+    let no_user = refusal(&[
+        ("store", t("pg")),
+        ("url", t("postgresql://127.0.0.1:1/app?password=secret")),
+    ]);
+    assert_eq!(
+        no_user,
+        "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store connect pg postgresql://127.0.0.1:1/app --auth <auth>"
+    );
+    connected(&home, "pg", "postgresql://127.0.0.1:1/app", Some("pg-app"));
+    let readdress = refusal(&[
+        ("store", t("pg")),
+        ("url", t("postgresql://127.0.0.1:2/app?sslpassword=secret")),
+    ]);
+    assert_eq!(
+        readdress,
+        "layerfs store connect pg postgresql://127.0.0.1:2/app"
+    );
+    for fix in [&first, &no_user, &readdress] {
+        assert!(!fix.contains("secret"), "{fix}");
+    }
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// An outdated record whose URL still holds a login never shows it in its
+/// `connections` rows (spec v23 V23-3; conformance v23 F1), and a login file
+/// that cannot be read is saved again by the fix its broken row gives
+/// (V23-8; conformance v23 F2).
+#[test]
+fn an_old_url_login_is_never_shown_and_a_broken_login_file_is_saved_again() {
+    let home = tempdir("old-url");
+    home::open(&home).unwrap();
+    connected(
+        &home,
+        "old",
+        "postgresql://alice:hunter2@127.0.0.1:1/app?sslmode=disable&sslpassword=sekrit",
+        Some("pg-app"),
+    );
+    let got = ok(
+        &home,
+        "store.get",
+        &[("store", t("old")), ("detail", SdkValue::Bool(true))],
+    );
+    let shown = layerfs_api::json::print(&got);
+    assert!(shown.contains("127.0.0.1"), "{shown}");
+    // the user may be named (the no-login fix names it); a password never
+    for secret in ["hunter2", "sekrit"] {
+        assert!(!shown.contains(secret), "{secret} in {shown}");
+    }
+    let listed = layerfs_api::json::print(&ok(
+        &home,
+        "store.list",
+        &[("detail", SdkValue::Bool(true))],
+    ));
+    for secret in ["hunter2", "sekrit"] {
+        assert!(!listed.contains(secret), "{secret} in {listed}");
+    }
+    let bad = layerfs_api::home::secrets::dir(&home).join("auth");
+    std::fs::create_dir_all(&bad).unwrap();
+    std::fs::set_permissions(&bad, std::fs::Permissions::from_mode(0o700)).unwrap();
+    std::fs::write(bad.join("bad.json"), "{not json").unwrap();
+    std::fs::set_permissions(bad.join("bad.json"), std::fs::Permissions::from_mode(0o600)).unwrap();
+    let saved = ok(
+        &home,
+        "store.save_auth",
+        &[
+            ("auth", t("bad")),
+            ("user", t("u")),
+            ("password", t("pw")),
+            ("detail", SdkValue::Bool(true)),
+        ],
+    );
+    assert!(
+        layerfs_api::json::print(&saved).contains("bad"),
+        "{saved:?}"
+    );
+    let auths = layerfs_api::json::print(&ok(&home, "store.auths", &[]));
+    assert!(auths.contains("\"bad\""), "{auths}");
+    assert!(!auths.contains("broken"), "{auths}");
+    let _ = std::fs::remove_dir_all(home);
+}

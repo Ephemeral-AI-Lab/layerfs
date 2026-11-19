@@ -430,7 +430,8 @@ shown in [the calls](calls.md#store-13).)
 - **`store connect <store> <url> --auth A`.** The URL starts `postgresql://`
   or `postgres://` and holds host, port, database and TLS settings; one that
   names a user or carries a login (`user`, a password, `passfile`) is
-  refused `InvalidInput`, before any effect. `--auth` is required on a Store's first connect. An empty database
+  refused `InvalidInput`, before any effect, with a fix that gives the address
+  alone (after `store save-auth`, named with `--auth` on a first connect). `--auth` is required on a Store's first connect. An empty database
   gets the `layerfs` schema with a new identity; a database that already
   holds it keeps its identity, and its projects become this home's project
   records. A Store name already in the home is `Exists`, and so is the same

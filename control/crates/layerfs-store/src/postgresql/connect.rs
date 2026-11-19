@@ -16,7 +16,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_home::home::{self, paths};
 use layerfs_home::names::StoreName;
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::outcome::{failed, refused, shell_word, with_fix, Outcome};
 use layerfs_home::secrets::parts;
 use std::path::Path;
 
@@ -110,6 +110,31 @@ pub fn refuse_login(url: &str) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+/// [`refuse_login`]'s refusal for `store connect <store> <url>`, with its
+/// fix (spec v23 V23-13): the address alone and the login by name. A first
+/// connect saves the login and names it with `--auth`; a connected Store
+/// takes no `--auth` (its login changes with `store update --auth`), so its
+/// fix is the address alone, for `machine`'s own connection when given.
+pub fn refuse_login_with_fix(
+    store: &str,
+    url: &str,
+    first: bool,
+    machine: Option<&str>,
+) -> Result<()> {
+    refuse_login(url).map_err(|refusal| {
+        let address = shell_word(&without_login(url));
+        let fix = match (first, machine) {
+            (true, _) => {
+                let user = url_user(url).map_or("<user>".to_owned(), |user| shell_word(&user));
+                format!("layerfs store save-auth <auth> --user {user} --password-stdin && layerfs store connect {store} {address} --auth <auth>")
+            }
+            (false, Some(machine)) => format!("layerfs store connect {store} {address} --machine {machine}"),
+            (false, None) => format!("layerfs store connect {store} {address}"),
+        };
+        with_fix(refusal, fix)
+    })
 }
 
 /// Whether query parameter `name` carries a login: `user`, any
@@ -301,7 +326,8 @@ fn row(
     );
     SdkValue::map([
         ("machine", SdkValue::opt_text(machine)),
-        ("url", SdkValue::opt_text(url)),
+        // an outdated record may still hold a login in its URL: a row never shows it (V23-3)
+        ("url", SdkValue::opt_text(url.as_deref().map(without_login))),
         ("own", SdkValue::Bool(own)),
         ("server", server),
         ("reached", crate::observed::reached(reach.as_ref())),
@@ -346,7 +372,7 @@ pub fn answer(
 pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     let name = request.store.as_str();
     let given = request.url.as_str();
-    refuse_login(given)?;
+    refuse_login_with_fix(name, given, true, None)?;
     target(given)?;
     let auth = request.auth.as_deref().ok_or_else(|| {
         refused(
@@ -415,7 +441,7 @@ pub fn readdress(home_dir: &Path, request: &StoreConnect, sandboxes: &[String]) 
     let name = request.store.as_str();
     let record = super::check::postgresql_record(home_dir, name)?;
     refuse_settings(name, request)?;
-    refuse_login(&request.url)?;
+    refuse_login_with_fix(name, &request.url, false, None)?;
     target(&request.url)?;
     record.unblocked()?;
     let trial = record.clone().with("url", SdkValue::text(&request.url));

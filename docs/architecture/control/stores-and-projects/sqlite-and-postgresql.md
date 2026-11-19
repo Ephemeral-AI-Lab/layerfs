@@ -166,7 +166,7 @@ update as its fix
 
 | Rule | Source |
 | --- | --- |
-| The login is a saved one: a URL that names a user, holds a password or names a `passfile` is refused `InvalidInput` (`refuse_login`); `sslkey` and `sslcert` pass; a named login not saved is `NotFound`, one with no user or password `Failed` | [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) `read` |
+| The login is a saved one: a URL that names a user, holds a password or names a `passfile` is refused `InvalidInput` (`refuse_login`), with a fix giving the address alone (`refuse_login_with_fix`: `save-auth` + `--auth` on a first connect, the address alone on a connected Store); `sslkey` and `sslcert` pass; a named login not saved is `NotFound`, one with no user or password `Failed` | [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) `read` |
 | Every byte outside `A-Z a-z 0-9 - . _ ~` is percent-encoded | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) `percent` |
 | Put in again on each call; the full URL is never written to a record, log, trace or `Debug` output | same; [`host/frame.rs`](../../../../control/crates/layerfs-sandbox/src/host/frame.rs) `decode` |
 | The daemon runs `--config <setup file>`; the setup is in neither its arguments nor its environment; `DaemonStore` prints `url` as `[redacted]` | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs), [`store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs) |

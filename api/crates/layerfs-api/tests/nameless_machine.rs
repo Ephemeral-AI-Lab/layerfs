@@ -321,3 +321,58 @@ fn a_nameless_machines_holders_and_the_machine_go_by_their_records() {
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(empty);
 }
+
+/// `store move` off a nameless machine is refused as the Store's other
+/// calls are (LF10; conformance v23 F3): `Unavailable` with the
+/// `blocked_by` of `store get` and the machine's chain, nothing dialled.
+#[test]
+fn a_store_move_off_a_nameless_machine_is_unavailable_with_its_blocked_by() {
+    let empty = tempdir("move-path");
+    std::env::set_var("PATH", &empty);
+    std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");
+    std::env::set_var("HOME", &empty);
+    std::env::set_var("LAYERFS_BUNDLE", empty.join("missing"));
+    let home = tempdir("move-home");
+    call(&home, "machine.list", &[]).unwrap();
+    write_entity(
+        &paths::machine_record(&home, "old"),
+        &SdkValue::map([
+            ("name", t("old")),
+            ("platform", t("lima")),
+            ("state", t("running")),
+        ]),
+    )
+    .unwrap();
+    write_record(
+        &paths::store_record(&home, "shop"),
+        &SdkValue::map([
+            ("name", t("shop")),
+            ("kind", t("sqlite")),
+            ("machine", t("old")),
+        ]),
+    )
+    .unwrap();
+    let store = call(&home, "store.get", &[("store", t("shop"))]).unwrap();
+    let blocked_by = store.get("blocked_by").expect("blocked_by").clone();
+    let refused = call(
+        &home,
+        "store.move",
+        &[("store", t("shop")), ("machine", t("native"))],
+    )
+    .unwrap_err();
+    assert_eq!(refused.code, "Unavailable", "{refused:?}");
+    assert!(
+        refused
+            .message
+            .contains("Store shop is blocked by machine old"),
+        "{refused:?}"
+    );
+    assert_eq!(
+        refused.detail.get_text("fix"),
+        Some("layerfs store remove shop && layerfs machine remove old"),
+        "{refused:?}"
+    );
+    let next = (refused.detail.get("next")).and_then(|next| next.get("blocked_by"));
+    assert_eq!(next, Some(&blocked_by), "{refused:?}");
+    let _ = std::fs::remove_dir_all(home);
+}

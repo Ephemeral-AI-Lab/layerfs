@@ -1314,7 +1314,9 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   A Store records only the login's name (`auth`); its URL holds host,
   port, database and TLS settings, and one naming a user or carrying a
   login (`user`, any `password` parameter, `passfile`) is refused
-  `InvalidInput`; `sslkey` and `sslcert` name files and pass. The login
+  `InvalidInput` with a fix that gives the address alone (a first connect
+  saves the login with `save-auth` and names it with `--auth`); `sslkey` and
+  `sslcert` name files and pass. The login
   goes into the URL only when the Store is dialled. `auths` answers
   `{ items }`, short `{ auth, user }` with `stores` (at most 20) when
   used, `stores_count` only past 20, and `state`, `reason`, `fix` when the
