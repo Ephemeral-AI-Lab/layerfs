@@ -85,7 +85,9 @@ the project record check is not new (and its finding is a notice with a fix, not
 - No Workspace file tools. No worker route for browsing a Store this computer cannot reach.
   Transaction-pooling proxies are documented, not detected. No login per machine.
 - Blocked projects stay in `project list`, marked `blocked`.
-- No raw-text mode for agent reads; JSON stays the default; `--text` stays as today.
+- No raw-text mode for agent reads; JSON stays the default; `--text` stays as today. *Superseded for
+  terminals by Version 22: a terminal gets the readable form by default; a pipe, file or program
+  (every agent read) still gets JSON.*
 
 ## Totals after the freeze
 
@@ -477,3 +479,39 @@ rewritten, and 2.0 state answers as before.
   worker refuse `Unavailable`, before anything starts, a Linux bundle whose `bundle.json`
   `source.head` is not the commit this build was compiled from; a build that names no commit cannot
   tell and uses it.
+- **UI2-8** (LF5, RT5 note 3) A machine whose record has no `vm_name` and still holds Sandboxes,
+  sqlite Stores or old Firecracker records shows, wherever its broken state shows a fix
+  (`machine list`, `machine get`, both with `--with live`; `home get --with tree`; `machine doctor`'s
+  `machine.configuration`), the chain its remove's `InUse` refusal carries: each Sandbox's remove,
+  each Store's, each old Firecracker record's, then the machine's, shell-quoted and joined by `&&`,
+  from the one builder and from records the read already holds (no probe). With nothing on it the
+  fix stays `layerfs machine remove <m>`.
+- **UI2-9** (LF5, RT5 note 4) UI2-7's refusal carries a `fix` when another place the CLI looks holds
+  a sealed bundle of this build: `unset LAYERFS_BUNDLE` when `LAYERFS_BUNDLE` was the source and the
+  place found without it (the runtime's bundle, else the cache's) holds this build's; else
+  `export LAYERFS_BUNDLE=<folder>` (shell-quoted) naming it, as when the runtime's bundle was refused
+  and the cache's is this build's. With none, no `fix`: the message says no bundle of this build is
+  where LayerFS looks, with the rebuild line. No plugin is named.
+
+## Version 22 (owner 2026-11-19): CLI terminal output and help
+
+Owner, after a terminal mock: "Yes, send it" (cliux, f5bb939206), then "Yes, fix it" for the table
+rule below (b2eb2de931).
+
+- **V22-1** stdout on a terminal gets the readable form by default; a pipe, a file or a program gets
+  the one JSON line as before, unchanged for dsh, MCP and agents.
+- **V22-2** `--json` forces the JSON line on a terminal too; `--text` forces the readable form;
+  `--text` with `--json` is a wrong command line (exit 2, nothing called).
+- **V22-3** A refusal comes in the matching form: the `{"error",…}` line on stderr when stdout gets
+  JSON, else readable `error:` and `fix:` lines. The exit codes do not change.
+- **V22-4** The next page or line window is printed as `more: …` (the command line that reads it)
+  on stderr, in the readable form only; the JSON keeps `next_cursor` as before.
+- **V22-5** A list table's STATE cell carries the row's reason (`broken: outdated`) and what blocks
+  it (`blocked by machine docker (outdated)`); REASON is not a column. A row's `fix` and `message`
+  print as lines under the table (`fix <first cell>: <command>`). Piped JSON is unchanged. The
+  manual's "Results" says the rest of the readable form.
+- **V22-6** `layerfs <family> --help` works, as `layerfs help <family>` does; each call's help comes
+  from one place, `layerfs_api::guide`.
+- **V22-7** Two refusals name their fix (cliux, 16a20bd09d): `branch merge` into `main` with no
+  `--into` (refused `InvalidInput`) gives `layerfs branch publish <project> <from>`; a `Dirty`
+  `workspace unmount` gives `layerfs workspace commit <workspace>`.

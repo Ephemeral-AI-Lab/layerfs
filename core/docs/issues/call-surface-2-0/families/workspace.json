@@ -498,7 +498,7 @@
   {
    "call": "workspace.unmount",
    "badge": "kept",
-   "note": "ends the Workspace and deletes its overlay; the Branch's history stays. Refused <code>Dirty</code> while it has uncommitted changes (the refusal lists the paths as <code>changes</code>, with a <code>fix</code> naming <code>workspace commit</code>); <code>--discard</code> drops them. Refused <code>Busy</code> while a command runs (it lists the exec ids as <code>running</code>); <code>--force</code> cancels each one first and aborts the Workspace's connection, and a cancel that is not confirmed refuses it <code>Unknown</code>",
+   "note": "ends the Workspace and deletes its overlay; the Branch's history stays. Refused <code>Dirty</code> while it has uncommitted changes (the refusal lists the paths as <code>changes</code>, with the <code>fix</code> <code>layerfs workspace commit &lt;workspace&gt;</code>, V22-7); <code>--discard</code> drops them. Refused <code>Busy</code> while a command runs (it lists the exec ids as <code>running</code>); <code>--force</code> cancels each one first and aborts the Workspace's connection, and a cancel that is not confirmed refuses it <code>Unknown</code>",
    "today": [
     "workspace.unmount"
    ],

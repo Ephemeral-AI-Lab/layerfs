@@ -104,7 +104,7 @@ TODAY_CODES = {
 EXIT_CODES = {
     "0": "done; a doctor exits 0 once its report is made, whatever it found",
     "2": "wrong command line; nothing was called",
-    "125": "refused or failed; the refusal is one line of JSON on stderr",
+    "125": "refused or failed; the refusal is on stderr, one line of JSON when stdout gets JSON, else readable error: and fix: lines (V22)",
     "command": "workspace exec exits with the command's own code (0 when it has none, 1 for a code outside 0 to 255) "
                "and prints its result JSON on stdout; a refusal still exits 125 with {\"error\",...} on stderr and nothing on stdout",
 }
@@ -127,7 +127,10 @@ GLOBAL_OPTIONS = [
     {"name": "on_progress", "kind": "Function", "cli": "--progress", "node": "on_progress: fn", "python": "on_progress=fn",
      "help": "progress events; only on the calls whose row says progress"},
     {"name": "text", "kind": "Bool", "cli": "--text", "node": None, "python": None,
-     "help": "a readable result instead of JSON; shell only, as today"},
+     "help": "the readable form, the default when stdout is a terminal (V22); shell only"},
+    {"name": "json", "kind": "Bool", "cli": "--json", "node": None, "python": None,
+     "help": "one line of JSON, the default when stdout is a pipe, a file or a program, also on a terminal; "
+             "with --text it is exit 2 (V22); shell only"},
     {"name": "log_tag", "kind": "Text", "cli": "LAYERFS_LOGS_TAG=tag (a setting)", "node": 'log_tag: "tag"',
      "python": 'log_tag="tag"',
      "help": "tags this call's line in the call log, as today; a setting of the caller, not call context"},
@@ -1885,7 +1888,7 @@ def render(S, fams, today, state, pairs_mod, draft):
           <span class="badge b-new">new</span>
         </div>
       </div>
-      <p class="small">The third column is the short form, one line of JSON on stdout; a labelled line is another case of the same call. The fourth lists what <code>--detail</code> adds on top, and what each <code>--with</code> section adds. Example values are illustrative; the key lists are the contract and are in <code>calls.json</code>.</p>
+      <p class="small">The third column is the short form, as the one line of JSON a pipe gets on stdout (a terminal gets its readable form, V22); a labelled line is another case of the same call. The fourth lists what <code>--detail</code> adds on top, and what each <code>--with</code> section adds. Example values are illustrative; the key lists are the contract and are in <code>calls.json</code>.</p>
     </section>'''
 
     fam_html = []
