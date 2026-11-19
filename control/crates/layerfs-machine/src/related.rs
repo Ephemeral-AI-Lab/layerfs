@@ -29,3 +29,42 @@ pub struct Related {
     /// `machine.update`: refused while a running Sandbox uses its settings.
     pub can_change: Check,
 }
+
+impl Related {
+    /// `refusal` of a call that needs machine `name`'s VM, with the fix
+    /// every view of its state shows when its record has no `vm_name`
+    /// (UI2-8): the bare `machine remove` it carries is refused `InUse`
+    /// while things are recorded on the machine, so the chain that removes
+    /// them first replaces it. The holders are read only here, on the
+    /// refusal path; any other refusal, or one whose reads fail, is kept.
+    pub fn nameless_fix(&self, home: &Path, name: &str, refusal: SdkRefusal) -> SdkRefusal {
+        use crate::record::{no_vm_name_fix, Holders, MachineRecord};
+        let bare = no_vm_name_fix(name, Holders::default());
+        if refusal.detail.get_text("fix") != Some(bare.as_str()) {
+            return refusal;
+        }
+        let read = || -> Result<_, SdkRefusal> {
+            let nameless = MachineRecord::read(home, name)?.is_some_and(|r| r.nameless());
+            let names = [self.sandboxes_on, self.stores_on, self.hosted_on];
+            let found: Vec<Vec<String>> = match nameless {
+                true => names
+                    .iter()
+                    .map(|on| on(home, name))
+                    .collect::<Result<_, _>>()?,
+                false => Vec::new(),
+            };
+            Ok(found)
+        };
+        match read().as_deref() {
+            Ok([sandboxes, stores, hosted]) => {
+                let held = Holders {
+                    sandboxes,
+                    stores,
+                    hosted,
+                };
+                layerfs_home::outcome::with_fix(refusal, no_vm_name_fix(name, held))
+            }
+            _ => refusal,
+        }
+    }
+}
