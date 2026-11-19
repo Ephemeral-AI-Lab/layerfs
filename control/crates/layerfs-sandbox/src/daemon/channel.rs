@@ -351,9 +351,22 @@ fn matches_reply(request: &Request, reply: &Reply) -> bool {
     }
 }
 
+/// In plain words, never `Debug` text: where the exchange stopped, then
+/// its cause.
 impl fmt::Display for ControlFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "control {:?}: {:?}", self.phase, self.cause)
+        let at = match self.phase {
+            ControlPhase::Encode => "before anything was sent",
+            ControlPhase::Send => "while the request was sent",
+            ControlPhase::Receive => "while its answer was awaited",
+            ControlPhase::Validate => "because its answer did not match the request",
+            ControlPhase::Fence => "while the connection was closed",
+        };
+        write!(f, "the connection to the Sandbox's daemon failed {at}: ")?;
+        match &self.cause {
+            ControlCause::Channel(error) => write!(f, "{error}"),
+            ControlCause::Protocol(error) => write!(f, "{error}"),
+        }
     }
 }
 impl std::error::Error for ControlFailure {}

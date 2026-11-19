@@ -63,7 +63,7 @@ impl fmt::Debug for ProviderFailure {
 }
 impl fmt::Display for ProviderFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Sandbox {:?}: {:?}", self.phase, self.cause)
+        write!(f, "stopped {}: {}", self.phase.words(), self.cause)
     }
 }
 impl std::error::Error for ProviderFailure {}

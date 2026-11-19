@@ -2,6 +2,7 @@
 use crate::{internal::Control, OperationFailure};
 use layerfs_bridge::control::{MountPlace, ReadyMount, Reply, Request, WorkspaceToken};
 use layerfs_history::{BranchId, BranchSnapshot, WorkspaceId};
+use std::fmt;
 
 /// Explicit filesystem operations on one caller-owned sequential control channel.
 /// Concurrent callers use separate authenticated channels. This owns no process.
@@ -74,6 +75,17 @@ pub struct MountFailure {
     pub bound: Option<BoundWorkspace>,
     /// Original failure of the step that stopped: bind when `bound` is absent.
     pub failure: Box<OperationFailure>,
+}
+/// In plain words, never `Debug` text: the failed step's cause, and
+/// whether the Workspace stayed bound.
+impl fmt::Display for MountFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.failure)?;
+        if self.bound.is_some() {
+            f.write_str("; the Workspace stays bound, not attached")?;
+        }
+        Ok(())
+    }
 }
 impl WorkspaceApi<'_> {
     /// Two separately acknowledged attempts: bind, then attach. Each keeps its

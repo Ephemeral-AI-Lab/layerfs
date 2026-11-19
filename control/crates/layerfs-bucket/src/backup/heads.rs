@@ -14,7 +14,7 @@ pub const HEADS: &str = "layerfs-heads";
 /// its own that is closed before this returns.
 pub fn heads(path: &Path) -> Result<[u8; 32], String> {
     let lines = layerfs_persistence::read_heads(path)
-        .map_err(|error| format!("reading the heads of {}: {error:?}", path.display()))?;
+        .map_err(|error| format!("reading the heads of {}: {error}", path.display()))?;
     let mut text = String::new();
     for line in lines {
         text.push_str(&line);

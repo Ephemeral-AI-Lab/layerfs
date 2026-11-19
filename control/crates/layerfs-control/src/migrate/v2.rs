@@ -380,7 +380,7 @@ fn probe(home: &Path, entry: &Numbered) -> Found {
     match recorded.reopen() {
         Ok(_) => Found::Running,
         Err(failure) if failure.container_stopped() => Found::Ended,
-        Err(failure) => Found::Unknown(format!("{failure:?}")),
+        Err(failure) => Found::Unknown(failure.to_string()),
     }
 }
 

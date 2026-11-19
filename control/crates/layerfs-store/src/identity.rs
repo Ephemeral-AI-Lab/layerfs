@@ -264,7 +264,15 @@ fn create_empty(
                     incarnation: 1,
                 },
             })
-            .map_err(|error| refused("Failed", format!("Store create: {error:?}")))?;
+            .map_err(|error| {
+                refused(
+                    "Failed",
+                    format!(
+                        "the Store could not be made: {}",
+                        crate::words::init_error(&error)
+                    ),
+                )
+            })?;
         // a daemon opens only a Store file only its user can read
         std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600))
             .map_err(failed)?;

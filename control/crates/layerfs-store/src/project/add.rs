@@ -283,13 +283,21 @@ pub fn add_failure(error: InitError, entry: Option<&Path>, name: &str, store: &s
                     None,
                 );
             }
-            _ => return failed(format!("adding project {name} to Store {store}: {error:?}")),
+            _ => return failed(added(name, store, &error)),
         },
-        _ => return failed(format!("adding project {name} to Store {store}: {error:?}")),
+        _ => return failed(added(name, store, &error)),
     };
     if let Some(entry) = entry {
         let _ = std::fs::remove_dir_all(entry);
         layerfs_home::home::generation::moved_above(entry);
     }
     refusal
+}
+
+/// Why adding project `name` to Store `store` failed, in plain words.
+fn added(name: &str, store: &str, error: &InitError) -> String {
+    format!(
+        "project {name} could not be added to Store {store}: {}",
+        crate::words::init_error(error)
+    )
 }

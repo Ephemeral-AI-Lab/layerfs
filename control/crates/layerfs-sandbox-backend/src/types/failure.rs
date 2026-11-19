@@ -68,3 +68,22 @@ impl WireFailure {
             && matches!(self.cause, RuntimeError::Protocol(STOPPED))
     }
 }
+/// In plain words, never `Debug` text: a daemon that is not running, else
+/// the cause, the runtime's HTTP status when it answered one, and whether
+/// anything was sent.
+impl fmt::Display for WireFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.container_stopped() {
+            return f.write_str("the Sandbox's daemon is not running");
+        }
+        write!(f, "{}", self.cause)?;
+        if let Some(status) = self.status {
+            write!(f, " (the runtime answered HTTP {status})")?;
+        }
+        if !self.attempted {
+            f.write_str("; nothing was sent")?;
+        }
+        Ok(())
+    }
+}
+impl std::error::Error for WireFailure {}
