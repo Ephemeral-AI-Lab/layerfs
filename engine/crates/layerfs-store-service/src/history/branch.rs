@@ -231,7 +231,7 @@ fn merge_inner(store: &Arc<Store>, stack: &LayerStackRecord, merge: &Merge<'_>) 
         Some(into) => into,
         None if left == MAIN => {
             return Err(invalid(
-                "main moves only by branch publish: merge into a Branch and publish it, or name a new Branch with into",
+                "main moves only by branch publish: publish the Branch, or merge into another Branch or a new one",
             ))
         }
         None => left,

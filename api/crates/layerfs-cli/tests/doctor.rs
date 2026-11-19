@@ -93,7 +93,11 @@ fn home_leftovers_and_home_prune_are_gone() {
         assert_eq!(out.status.code(), Some(2), "{words:?}: {out:?}");
     }
     let help = String::from_utf8(layerfs(&home, &["help", "home"]).stdout).unwrap();
-    assert!(help.contains("layerfs home doctor"), "{help}");
+    assert!(
+        help.lines()
+            .any(|l| l.split_whitespace().next() == Some("doctor")),
+        "{help}"
+    );
     assert!(
         !help.contains("leftovers") && !help.contains("home prune"),
         "{help}"

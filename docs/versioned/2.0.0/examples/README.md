@@ -136,10 +136,14 @@ $ layerfs file write shop/site main /x.txt
 [exit 125]
 $ layerfs file read shop/site agent /README.md --colour
 layerfs: file.read: unknown option --colour
-accepted options: --text, --detail, --at, --line, --limit
+accepted options: --text, --json, --detail, --at, --line, --limit
+usage: layerfs file read <project> <branch> <path> [--at C] [--line 1] [--limit 2000]
+`layerfs help file read` for more
 [exit 2]
 $ layerfs file read shop/site agent
-layerfs: file.read takes 3 positional arguments, not 2
+layerfs: file read is missing <path>
+usage: layerfs file read <project> <branch> <path> [--at C] [--line 1] [--limit 2000]
+`layerfs help file read` for more
 [exit 2]
 $ layerfs file list shop/site agent /docs --scope /docs --scope-project shop/site --scope-branch ns
 {"error":"NotFound","message":"Branch ns.agent does not exist"}

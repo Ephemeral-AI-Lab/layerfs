@@ -74,7 +74,9 @@ fn help_lists_each_gc_call_with_its_usage() {
         assert_eq!(code, Some(0), "{words:?}: {err}");
         assert!(err.is_empty(), "{words:?}: {err}");
         assert!(out.starts_with(usage), "{words:?}: {out}");
-        assert!(out.contains(help), "{words:?}: {out}");
+        // the one-line help, as a sentence
+        let sentence = format!("{}{}", help[..1].to_uppercase(), &help[1..]);
+        assert!(out.contains(&sentence), "{words:?}: {out}");
         // the same help after the call, through -h and --help
         for flag in ["-h", "--help"] {
             let with_flag: Vec<&str> = words.iter().copied().chain([flag]).collect();

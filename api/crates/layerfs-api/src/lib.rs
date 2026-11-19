@@ -38,9 +38,9 @@ use layerfs_home::outcome::Outcome;
 use std::path::Path;
 
 pub use calls::{
-    asks_detail, close, home, json, keys, refusal, shape, size, Arg, Asked, Call, CallRef, Calls,
-    Client, Context, Families, Family, Form, Kind, Paging, Part, Place, Policy, Profile, Redact,
-    Run, Scope, Section, DETAIL, WITH,
+    asks_detail, close, guide, home, json, keys, refusal, shape, size, Arg, Asked, Call, CallRef,
+    Calls, Client, Context, Families, Family, Form, Kind, Paging, Part, Place, Policy, Profile,
+    Redact, Run, Scope, Section, DETAIL, WITH,
 };
 pub use layerfs_home::names;
 /// The home (`layerfs-home`) and the Store leases, for the front ends and

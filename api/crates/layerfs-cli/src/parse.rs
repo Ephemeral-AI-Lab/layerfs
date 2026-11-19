@@ -15,8 +15,10 @@ pub struct Usage(pub String);
 /// The front-end switches that are not call arguments.
 #[derive(Default)]
 pub struct Switches {
-    /// `--text`: a readable result instead of JSON.
+    /// `--text`: the readable form, also when stdout is no terminal.
     pub text: bool,
+    /// `--json`: one line of JSON, also when stdout is a terminal.
+    pub json: bool,
     /// `--progress`: progress as JSON lines on stderr.
     pub progress: bool,
     /// `--stream` (`workspace exec`): the command's output passed through.
@@ -122,6 +124,7 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
         };
         match flag {
             "--text" => switches.text = true,
+            "--json" => switches.json = true,
             // the global options of every call (call surface 2.0): the
             // library takes them out of the arguments and checks them
             "--detail" if inline.is_none() => {
@@ -169,6 +172,7 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                         accepted.push("--progress".to_owned());
                     }
                     accepted.push("--text".to_owned());
+                    accepted.push("--json".to_owned());
                     accepted.push("--detail".to_owned());
                     if !call.with.is_empty() {
                         accepted.push("--with".to_owned());
@@ -265,6 +269,9 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
             }
         }
     }
+    if switches.text && switches.json {
+        return Err(usage("--text and --json ask for two forms; give one"));
+    }
     if (scope_branch.is_some() || scope_project.is_some()) && scope_folder.is_none() {
         return Err(usage("--scope-branch and --scope-project need --scope"));
     }
@@ -283,17 +290,25 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
     }
     let on_line: Vec<&Arg> = call.args.iter().filter(|a| !piped(a)).collect();
     let required = on_line.iter().filter(|a| !a.optional).count();
-    if positionals.len() < required || positionals.len() > on_line.len() {
+    let named = format!("{} {}", call.family, call.call.replace('_', "-"));
+    if positionals.len() < required {
+        let missing: Vec<String> = (on_line.iter().skip(positionals.len()))
+            .filter(|arg| !arg.optional)
+            .map(|arg| format!("<{}>", arg.name.replace('_', "-")))
+            .collect();
+        return Err(usage(format!("{named} is missing {}", missing.join(" "))));
+    }
+    if positionals.len() > on_line.len() {
+        let extra: Vec<&str> = positionals[on_line.len()..].to_vec();
+        let (many, verb) = match extra.len() {
+            1 => ("one too many", "is"),
+            _ => ("too many", "are"),
+        };
         return Err(usage(format!(
-            "{} takes {}{} positional arguments, not {}",
-            call.name(),
-            required,
-            if on_line.len() > required {
-                format!(" to {}", on_line.len())
-            } else {
-                String::new()
-            },
-            positionals.len()
+            "{named} takes {} argument{}; `{}` {verb} {many}",
+            on_line.len(),
+            if on_line.len() == 1 { "" } else { "s" },
+            extra.join(" ")
         )));
     }
     for (arg, word) in on_line.iter().zip(&positionals) {

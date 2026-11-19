@@ -291,7 +291,12 @@ pub fn unmount(home: &Path, events: &mut Events<'_>, request: &UnmountRequest) -
         discard: request.discard,
         force: request.force,
     };
-    changing(events, at, call, Message::Absent)
+    // uncommitted changes: committing them is the fix that keeps them
+    let commit = format!("layerfs workspace commit {}", shell_word(&request.ws));
+    changing(events, at, call, Message::Absent).map_err(|refusal| match refusal.code == "Dirty" {
+        true => with_fix(refusal, commit),
+        false => refusal,
+    })
 }
 
 /// `workspace.status`: the Workspace's state; it starts no machine (P4).
