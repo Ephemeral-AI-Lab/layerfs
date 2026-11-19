@@ -6,6 +6,7 @@ use crate::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::StoreManifest;
 use layerfs_bridge::sdk_values::unhex;
+use layerfs_history::LayerStackId;
 use layerfs_home::home::{now_ms, paths, read_record, with_field, write_entity};
 use layerfs_home::op::Op;
 use std::path::Path;
@@ -89,6 +90,12 @@ impl ProjectRecord {
             }
         }
         self.fields.get_text("stack").and_then(unhex)
+    }
+
+    /// The project's LayerStack as its record holds it ([`stack`](Self::stack)),
+    /// if that is one.
+    pub fn stack_id(&self) -> Option<LayerStackId> {
+        LayerStackId::from_slice(&self.stack()?).ok()
     }
 
     /// The record as written.

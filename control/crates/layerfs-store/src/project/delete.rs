@@ -60,10 +60,9 @@ use crate::project::frame::{
     DeleteReply,
 };
 use crate::project::record::ProjectRecord;
-use crate::record::{StoreRecord, StoreRef};
+use crate::record::StoreRecord;
 use crate::{lease, service};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::provision::StoreManifest;
 use layerfs_bridge::sdk_values::{hex, unhex};
 use layerfs_history::{GcScopeKind, HistoryCatalog, HistoryError, LayerStackId};
 use layerfs_home::events::Events;
@@ -81,7 +80,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 mod remote;
 pub use remote::listed_unknown;
-use remote::{listed_on_worker, listed_stack, open_args, Remote};
+use remote::{listed_on_worker, listed_stack, Remote};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -335,28 +334,6 @@ pub trait Effects {
     fn remove_entry(&mut self, entry: &Path) -> Result<()>;
 }
 
-/// The `project` part of a Stack record from a home record: the `manifest`'s
-/// Stack for a local sqlite record, the record's `stack` for a PostgreSQL or
-/// worker record.
-fn stack_of_value(value: &SdkValue) -> Option<LayerStackId> {
-    if let Some(SdkValue::Bytes(bytes)) = value.get("manifest") {
-        if let Ok(manifest) = StoreManifest::decode(bytes) {
-            if let Ok(stack) = LayerStackId::from_slice(&manifest.stack) {
-                return Some(stack);
-            }
-        }
-    }
-    value
-        .get_text("stack")
-        .and_then(unhex)
-        .and_then(|bytes| LayerStackId::from_slice(&bytes).ok())
-}
-
-/// The Stack a home record names, if it names one.
-fn stack_of(record: &ProjectRecord) -> Option<LayerStackId> {
-    stack_of_value(record.to_record())
-}
-
 /// `{kind: "Removed", project, deleted_ms, home_entry_removed}` (spec §10;
 /// `home_entry_removed: false` is still success, the marker being the commit
 /// point).
@@ -458,7 +435,7 @@ pub fn delete_with(
     effects: &mut impl Effects,
 ) -> Outcome {
     let record = ProjectRecord::read(home, store, project)?;
-    let record_stack = record.as_ref().and_then(stack_of);
+    let record_stack = record.as_ref().and_then(ProjectRecord::stack_id);
     let intent = Intent::read(home, store, project)?;
 
     // The Stack the name resolves to now: the caller's listing first, then
@@ -702,7 +679,7 @@ pub fn delete(
     if record.is_some() || project_record.is_some() {
         (related.can_remove_project)(&home, project.to_string().as_str())?;
     }
-    let stack = project_record.as_ref().and_then(stack_of);
+    let stack = project_record.as_ref().and_then(ProjectRecord::stack_id);
     match record {
         Some(record) => {
             record.unblocked()?;
@@ -712,7 +689,7 @@ pub fn delete(
             let _lease = lease::hold(&home, store)?;
             match place::plan(&home, &store_ref)? {
                 Executor::Local => {
-                    let open = open_args(&home, store, name, &record)?;
+                    let open = OpenArgs::of_record(&home, store, &record)?.with_project(name);
                     // Resolve the project by the Stack its Store lists now,
                     // never by the home record alone: a fresh delete of a
                     // retired project is `NoSuchProject`, and a stale record
@@ -748,24 +725,6 @@ pub fn delete(
             }
         }
         None => Err(refused("NoSuchStore", format!("no Store named {store}"))),
-    }
-}
-
-/// The `OpenArgs` a worker's `project.delete` ops open the Store with: the
-/// Store file under the worker's own root and the caller's Store record.
-fn worker_open(
-    root: &Path,
-    store: &str,
-    project: Option<String>,
-    store_record: SdkValue,
-) -> OpenArgs {
-    OpenArgs {
-        home: Some(root.to_path_buf()),
-        store: Some(store.to_owned()),
-        project,
-        store_path: Some(paths::store_file(root, store).display().to_string()),
-        store_record: Some(store_record),
-        postgresql: None,
     }
 }
 
@@ -818,7 +777,7 @@ pub fn admit_project(root: &Path, frame: &DeleteAdmitFrame) -> Outcome {
             "project.delete.admit needs the Store's record",
         )
     })?;
-    let open = worker_open(root, frame.store.as_str(), None, store_record);
+    let open = OpenArgs::in_root(root, frame.store.as_str(), Some(store_record));
     service::with_service(&open, |service| {
         let project = worker_project(service.store.history(), frame.stack, frame.project.clone())?;
         let intent = store_admission::project_removal_at(frame.stack, frame.op, project.as_deref());
@@ -850,7 +809,7 @@ pub fn release_project(root: &Path, frame: &DeleteReleaseFrame) -> Outcome {
             "project.delete.release needs the Store's record",
         )
     })?;
-    let open = worker_open(root, frame.store.as_str(), None, store_record);
+    let open = OpenArgs::in_root(root, frame.store.as_str(), Some(store_record));
     service::with_service(&open, |service| {
         match store_admission::release_or_mark(service.store.history(), &frame.op) {
             Ok(()) | Err(HistoryError::Unsupported(_)) => Ok(released(frame.op)),
@@ -870,7 +829,10 @@ pub fn delete_project(root: &Path, frame: &DeleteFrame) -> Outcome {
         .store_record
         .clone()
         .ok_or_else(|| refused("InvalidInput", "project.delete needs the Store's record"))?;
-    let open = worker_open(root, store, frame.project.clone(), store_record);
+    let open = OpenArgs {
+        project: frame.project.clone(),
+        ..OpenArgs::in_root(root, store, Some(store_record))
+    };
     let op = frame.op_id.unwrap_or_else(store_admission::op_id);
     let requested = frame.deleted_ms.unwrap_or_else(now_ms);
     let deletion = service::with_service(&open, |service| {
@@ -936,7 +898,8 @@ pub fn remove_worker_entry(
         let Some(value) = layerfs_home::home::read_record(&record)? else {
             continue;
         };
-        let matches = stack_of_value(&value) == Some(stack) || name == store;
+        let matches = ProjectRecord::from_record(store, &name, value).stack_id() == Some(stack)
+            || name == store;
         if matches {
             remove_tree(&paths::project_dir(root, store, &name))?;
             removed.get_or_insert(name);

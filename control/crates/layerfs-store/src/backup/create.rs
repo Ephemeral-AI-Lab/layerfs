@@ -1,7 +1,7 @@
 //! `backup.create`: a snapshot on the Store's machine, uploaded by this process.
-use super::family::hex;
 use super::progress::Shown;
 use super::record::{remote_error, BucketRecord, StoreLink};
+use crate::get::hex_text;
 use crate::intent;
 use crate::lease;
 use crate::place::{self, Executor};
@@ -9,6 +9,7 @@ use crate::record::{StoreRecord, StoreRef};
 use crate::sqlite::transfer::step::{StepFrame, StoreStep};
 use crate::sqlite::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::sdk_values::hex;
 use layerfs_bucket::backup as remote;
 use layerfs_bucket::bucket::{pieces, Driver, Metadata};
 use layerfs_home::events::Events;
@@ -121,7 +122,7 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
                 shown.bytes(events, "send", done, total)
             })?;
             let (_, sha256) = pieces::sha256_file(&local, None).map_err(remote_error)?;
-            if Some(pieces::hex(&sha256).as_str()) != staged.get_text("sha256") {
+            if Some(hex(&sha256).as_str()) != staged.get_text("sha256") {
                 return Err(refused(
                     "Failed",
                     "the staged copy is not the snapshot the worker made",
@@ -134,14 +135,11 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
                 remote::create::SQLITE_VERSION.to_owned(),
                 staged.get_text("sqlite").unwrap_or("").to_owned(),
             ),
-            (
-                remote::create::BINDING.to_owned(),
-                pieces::hex(&identity.binding),
-            ),
+            (remote::create::BINDING.to_owned(), hex(&identity.binding)),
             (EXPORTED_FROM.to_owned(), format!("{home_id}/{machine}")),
         ]);
         if let Some(heads) = &heads {
-            metadata.insert(remote::HEADS.to_owned(), pieces::hex(heads));
+            metadata.insert(remote::HEADS.to_owned(), hex(heads));
         }
         // the bucket may have changed while the snapshot was made
         check(driver.as_ref(), &object, expected, &home_id)?;
@@ -176,8 +174,14 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
         ("store", SdkValue::text(store)),
         ("bucket", SdkValue::text(bucket)),
         ("object", SdkValue::text(&object)),
-        ("sha256", hex(&moved.sha256)),
-        ("heads_sha256", heads.as_ref().map(hex).unwrap_or_default()),
+        ("sha256", hex_text(&moved.sha256)),
+        (
+            "heads_sha256",
+            heads
+                .as_ref()
+                .map(|heads| hex_text(heads))
+                .unwrap_or_default(),
+        ),
     ]))
 }
 

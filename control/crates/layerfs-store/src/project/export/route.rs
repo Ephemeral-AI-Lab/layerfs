@@ -6,7 +6,7 @@
 //! progress events are `{ phase, done, total }` (`prepare`, `export`,
 //! `finalize`, `done` the bytes written so far).
 use crate::lease;
-use crate::open_args::{OpenArgs, PgSelection};
+use crate::open_args::OpenArgs;
 use crate::place::{self, Executor, Worker};
 use crate::project::discovery::home_of;
 use crate::project::frame::ExportFrame;
@@ -17,7 +17,6 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::unhex;
 use layerfs_history::HistoryName;
 use layerfs_home::events::Events;
-use layerfs_home::home::paths;
 use layerfs_home::names::ProjectRef;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store_service::history::MAIN;
@@ -75,18 +74,25 @@ pub fn run(home: &Path, context: &mut Events<'_>, request: &ProjectExport) -> Ou
     target.record.unblocked()?;
     let (lease, record) = lease::claim(&home, &target.store)?;
     let store_ref = record.store_ref()?.clone();
-    let summary = match &store_ref {
-        StoreRef::Postgres { .. } => {
-            export_postgres(context, &home, &target, &record, pin, &destination, lease)?
-        }
+    let worker = match &store_ref {
+        StoreRef::Postgres { .. } => None,
         StoreRef::Sqlite { .. } => match place::plan(&home, &store_ref)? {
-            Executor::Local => {
-                export_local_sqlite(context, &home, &target, &record, pin, &destination, lease)?
-            }
-            Executor::Worker(worker) => {
-                export_on_worker(context, worker, &target, &record, pin, &destination, lease)?
-            }
+            Executor::Local => None,
+            Executor::Worker(worker) => Some(worker),
         },
+    };
+    let summary = match worker {
+        Some(worker) => {
+            export_on_worker(context, worker, &target, &record, pin, &destination, lease)?
+        }
+        // a sqlite Store on `native` or a PostgreSQL Store, in this process
+        // under the lease
+        None => {
+            let _lease = lease;
+            let open = OpenArgs::of_record(&home, &target.store, &record)?;
+            let open = open.with_project(&target.project);
+            export_in_process(context, &open, &target.project, pin, &destination)?
+        }
     };
     Ok(build_result(summary))
 }
@@ -110,52 +116,6 @@ fn validate_branch_arg(branch: &str) -> Result<()> {
         )
     })?;
     Ok(())
-}
-
-fn export_local_sqlite(
-    context: &mut Events<'_>,
-    home: &Path,
-    target: &Target,
-    record: &StoreRecord,
-    pin: Pin<'_>,
-    dest: &Path,
-    _lease: lease::Lease,
-) -> Result<SnapshotSummary> {
-    let store_file = paths::store_file(home, &target.store);
-    let open = OpenArgs {
-        home: Some(home.to_path_buf()),
-        store: Some(target.store.clone()),
-        project: Some(target.project.clone()),
-        store_path: Some(store_file.display().to_string()),
-        store_record: Some(record.to_record().clone()),
-        postgresql: None,
-    };
-    export_in_process(context, &open, &target.project, pin, dest)
-}
-
-fn export_postgres(
-    context: &mut Events<'_>,
-    home: &Path,
-    target: &Target,
-    record: &StoreRecord,
-    pin: Pin<'_>,
-    dest: &Path,
-    _lease: lease::Lease,
-) -> Result<SnapshotSummary> {
-    let url = crate::record::url(record)?;
-    let key = record.postgresql_key(home, &target.store);
-    let open = OpenArgs {
-        home: Some(home.to_path_buf()),
-        store: Some(target.store.clone()),
-        project: Some(target.project.clone()),
-        store_path: Some(key.display().to_string()),
-        store_record: Some(record.to_record().clone()),
-        postgresql: Some(PgSelection {
-            url: Some(url),
-            ..PgSelection::default()
-        }),
-    };
-    export_in_process(context, &open, &target.project, pin, dest)
 }
 
 fn export_in_process(
@@ -240,14 +200,7 @@ pub fn in_worker(
     let branch = request.branch.as_deref().unwrap_or(MAIN);
     validate_branch_arg(branch)?;
     let _lease = lease::hold_locked(&root, store)?;
-    let open = OpenArgs {
-        home: Some(root.clone()),
-        store: Some(store.to_owned()),
-        project: Some(project.to_owned()),
-        store_path: Some(paths::store_file(&root, store).display().to_string()),
-        store_record: request.store_record.clone(),
-        postgresql: None,
-    };
+    let open = OpenArgs::in_root(&root, store, request.store_record.clone()).with_project(project);
     crate::service::with_service(&open, |service| {
         let pinned = pin_snapshot(service, project, branch, request.at.as_deref())?;
         events(SdkValue::map([("phase", SdkValue::text("prepare"))]))?;

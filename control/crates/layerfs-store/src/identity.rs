@@ -13,12 +13,10 @@ use crate::open_args::OpenArgs;
 use crate::project::discovery;
 use crate::record::{required, StoreKind, StoreRecord, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::sdk_values::hex;
 use layerfs_history::{HistoryCatalogConfig, HistoryName};
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::outcome::{failed, refused};
 use layerfs_persistence::{PersistenceConfig, SealedStore, SqlitePersistenceProfile};
 use layerfs_project::store::{CreateRequest, ProjectApi};
-use layerfs_store_service::history::lookup;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -249,30 +247,4 @@ fn create_empty(
         let _ = std::fs::remove_file(&temporary);
     }
     result
-}
-
-/// The projects of `{ home, store, storePath, postgresql? }`:
-/// `[{ name, stack, headLayer }]` by name, read from the Store itself.
-pub fn list_projects(open: &OpenArgs) -> Outcome {
-    crate::service::with_service(open, |service| {
-        let stacks = service
-            .store
-            .published(layerfs_project::store::projects)
-            .map_err(lookup::published)?;
-        Ok(SdkValue::List(
-            stacks
-                .into_iter()
-                .map(|stack| {
-                    SdkValue::map([
-                        ("name", SdkValue::text(stack.name.as_str())),
-                        ("stack", SdkValue::text(hex(&stack.id.to_bytes()))),
-                        (
-                            "headLayer",
-                            SdkValue::text(hex(stack.head_layer.as_slice())),
-                        ),
-                    ])
-                })
-                .collect(),
-        ))
-    })
 }

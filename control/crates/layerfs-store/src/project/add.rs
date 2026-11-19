@@ -127,13 +127,7 @@ pub struct ProjectAdd {
 impl ProjectAdd {
     /// What opens the Store: its home, name, file and record.
     pub fn open(&self) -> OpenArgs {
-        OpenArgs {
-            home: Some(self.home.clone()),
-            store: Some(self.store.to_string()),
-            store_path: Some(self.store_file().display().to_string()),
-            store_record: self.store_record.clone(),
-            ..OpenArgs::default()
-        }
+        OpenArgs::in_root(&self.home, &self.store, self.store_record.clone())
     }
 
     /// The Store's file.

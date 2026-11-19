@@ -86,10 +86,6 @@ pub fn step_observed(
     }
 }
 
-pub fn fields_map(fields: Vec<(&str, SdkValue)>) -> SdkValue {
-    SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect())
-}
-
 /// Starts a move or a remove: under the home lock (the Sandbox check) and
 /// the Store's lock, re-reads the record, lets `check` refuse it or answer
 /// what the call needs, finds the Store idle and writes `op` into the

@@ -1,7 +1,7 @@
 //! `store.remove`: a sqlite Store deleted wherever it is, with its projects.
 use crate::place::{self, Executor};
 use crate::record::{self, StoreRef};
-use crate::sqlite::family::{advance, begin, ended, fields_map, settle, step_on};
+use crate::sqlite::family::{advance, begin, ended, settle, step_on};
 use crate::sqlite::transfer::step::StoreStep;
 use crate::Related;
 use layerfs_bridge::control::SdkValue;
@@ -47,7 +47,7 @@ pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
     if let Some((left, _)) = &leftover_executor {
         fields.push(("leftover", SdkValue::text(&left.on)));
     }
-    let args = fields_map(fields);
+    let args = layerfs_home::helpers::map_of(fields);
     let mut op = Op::begin(crate::intent::REMOVE, "check", args)?;
     let previous = begin(home, name, &op, related, |record| {
         if record.machine()? != machine {

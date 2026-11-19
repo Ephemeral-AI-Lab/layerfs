@@ -61,9 +61,15 @@ pub fn word(name: &str) -> &str {
 /// `{ name, phase, started_at }`.
 pub fn shown(op: &Op) -> SdkValue {
     let started = op.to_record().get_int("started");
+    shown_as(word(op.name()), op.phase(), started)
+}
+
+/// An operation `name` in `phase`, started at `started` (ms since 1970),
+/// as [`shown`] shows one: `{ name, phase, started_at }`.
+pub fn shown_as(name: &str, phase: &str, started: Option<i64>) -> SdkValue {
     SdkValue::map([
-        ("name", SdkValue::text(word(op.name()))),
-        ("phase", SdkValue::text(op.phase())),
+        ("name", SdkValue::text(name)),
+        ("phase", SdkValue::text(phase)),
         (
             "started_at",
             started.map_or(SdkValue::Null, |ms| SdkValue::Text(time::iso(ms))),

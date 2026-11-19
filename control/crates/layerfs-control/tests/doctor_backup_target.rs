@@ -26,8 +26,7 @@ impl Fixture {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         home::ensure(&home).unwrap();
-        layerfs_store::backup::secret::write(&home, "bucket/production", "mock-secret-key")
-            .unwrap();
+        layerfs_store::backup::secret::write(&home, "production", "mock-secret-key").unwrap();
         let server = Server::new(mode);
         write_entity(
             &paths::bucket_record(&home, "production"),
@@ -229,7 +228,7 @@ fn read_corruption_does_not_hide_failed_cleanup() {
 #[test]
 fn a_key_the_home_does_not_keep_blocks_all_network() {
     let f = Fixture::new(Mode::default());
-    layerfs_store::backup::secret::remove(&f.home, "bucket/production").unwrap();
+    layerfs_store::backup::secret::remove(&f.home, "production").unwrap();
     let report = f.report(true);
     outcome(&report, "bucket.configuration", "pass");
     outcome(&report, "bucket.credentials", "fail");

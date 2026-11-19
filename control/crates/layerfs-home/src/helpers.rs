@@ -1,7 +1,7 @@
 //! General helpers every entity uses (moved from `sandbox/registry.rs`,
 //! layerfs-project#103): the lock of a process table, a required text
-//! argument, fresh random bytes, and an answer's list with its
-//! `<list>_count` companion.
+//! argument, fresh random bytes, an answer's list with its `<list>_count`
+//! companion, and a map of ordered fields.
 use crate::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::sync::{Mutex, MutexGuard};
@@ -54,4 +54,20 @@ pub fn shown(mut items: Vec<SdkValue>, total: usize, cut: bool) -> (SdkValue, Sd
         false => SdkValue::Null,
     };
     (SdkValue::List(items), count)
+}
+
+/// `names` as an answer's list of text and its `<list>_count` companion, as
+/// [`shown`] makes them.
+pub fn shown_names(names: &[String]) -> (SdkValue, SdkValue) {
+    shown(names.iter().map(SdkValue::text).collect(), 0, false)
+}
+
+/// A map of `fields`, in their order.
+pub fn map_of(fields: Vec<(&str, SdkValue)>) -> SdkValue {
+    SdkValue::Map(
+        fields
+            .into_iter()
+            .map(|(name, value)| (name.to_owned(), value))
+            .collect(),
+    )
 }

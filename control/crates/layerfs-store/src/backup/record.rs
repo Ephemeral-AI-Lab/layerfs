@@ -4,7 +4,9 @@
 //! in the home's secret folder ([`super::secret`]), never in the record.
 //! Also each Store's link to a bucket, which the Store's record holds.
 use super::secret;
+use crate::get::hex_text;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::sdk_values::hex;
 use layerfs_bucket::backup::Provider;
 use layerfs_bucket::bucket::minio::{MinioSettings, DEFAULT_PART_SIZE};
 use layerfs_bucket::bucket::r2::R2Settings;
@@ -31,11 +33,6 @@ pub fn remote_error(error: RemoteError) -> SdkRefusal {
         RemoteError::Invalid(why) => refused("InvalidInput", why),
         other => refused("Failed", other.to_string()),
     }
-}
-
-/// The name of bucket `bucket`'s secret in the home's secret folder.
-pub fn secret_name(bucket: &str) -> String {
-    format!("bucket/{bucket}")
 }
 
 impl BucketRecord {
@@ -139,7 +136,7 @@ impl BucketRecord {
         };
         Ok(Credentials {
             access_key: access_key.to_owned(),
-            secret_key: secret::read(home, &secret_name(&self.name))?,
+            secret_key: secret::read(home, &self.name)?,
         })
     }
 
@@ -301,17 +298,19 @@ impl StoreLink {
         sha256: &[u8; 32],
         heads: Option<&[u8; 32]>,
     ) -> Self {
-        let hex = |bytes: &[u8; 32]| SdkValue::text(pieces::hex(bytes));
         Self::from_record(SdkValue::map([
             ("file", SdkValue::text(file)),
-            ("heads", heads.map(hex).unwrap_or_default()),
+            (
+                "heads",
+                heads.map(|heads| hex_text(heads)).unwrap_or_default(),
+            ),
             (
                 "last",
                 SdkValue::map([
                     ("op", SdkValue::text(op)),
                     ("at", SdkValue::Int(home::now_ms())),
                     ("bytes", SdkValue::Int(bytes as i64)),
-                    ("sha256", hex(sha256)),
+                    ("sha256", hex_text(sha256)),
                 ]),
             ),
         ]))
@@ -326,7 +325,7 @@ impl StoreLink {
     pub fn heads(&self) -> Option<String> {
         match self.fields.get("heads") {
             Some(SdkValue::Text(text)) => Some(text.clone()),
-            Some(SdkValue::Bytes(bytes)) => Some(pieces::hex(bytes)),
+            Some(SdkValue::Bytes(bytes)) => Some(hex(bytes)),
             _ => None,
         }
     }

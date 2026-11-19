@@ -18,50 +18,48 @@ use std::sync::Arc;
 /// `identity`'s binding and cursor key. `Ok(false)` when the schema
 /// exists already (nothing written).
 pub fn create_schema(postgresql: &PgSelection, identity: &Identity) -> Result<bool, SdkRefusal> {
-    {
-        use crate::postgresql::open::selection;
-        use layerfs_history::HistoryCatalogConfig;
-        use layerfs_project::store::{CreateRequest, InitError, ProjectApi};
-        use layerfs_storage::port::PersistenceError;
-        let selection = selection(
-            postgresql.url()?,
-            &postgresql.schema()?,
-            &postgresql.setting()?,
-        );
-        let made = ProjectApi::new().create_postgresql_store(CreateRequest {
-            store: layerfs_persistence::StoreSelection::Postgres(selection),
-            policy: layerfs_storage::StoragePolicy::frozen_default(),
-            catalog: HistoryCatalogConfig {
-                binding_key: identity.binding.clone(),
-                cursor_key: identity.cursor_key,
-                incarnation: 1,
-            },
-        });
-        match made {
-            Ok(()) => Ok(true),
-            Err(InitError::Persistence(PersistenceError::Refused { status, .. }))
-                if status == "schema exists" =>
-            {
-                Ok(false)
-            }
-            Err(InitError::Persistence(error)) => Err(crate::postgresql::open::no_session(&error)
-                .unwrap_or_else(|| {
-                    refused(
-                        "Failed",
-                        format!(
-                            "the PostgreSQL Store could not be made: {}",
-                            crate::words::persistence(&error)
-                        ),
-                    )
-                })),
-            Err(error) => Err(refused(
-                "Failed",
-                format!(
-                    "the PostgreSQL Store could not be made: {}",
-                    crate::words::init_error(&error)
-                ),
-            )),
+    use crate::postgresql::open::selection;
+    use layerfs_history::HistoryCatalogConfig;
+    use layerfs_project::store::{CreateRequest, InitError, ProjectApi};
+    use layerfs_storage::port::PersistenceError;
+    let selection = selection(
+        postgresql.url()?,
+        &postgresql.schema()?,
+        &postgresql.setting()?,
+    );
+    let made = ProjectApi::new().create_postgresql_store(CreateRequest {
+        store: layerfs_persistence::StoreSelection::Postgres(selection),
+        policy: layerfs_storage::StoragePolicy::frozen_default(),
+        catalog: HistoryCatalogConfig {
+            binding_key: identity.binding.clone(),
+            cursor_key: identity.cursor_key,
+            incarnation: 1,
+        },
+    });
+    match made {
+        Ok(()) => Ok(true),
+        Err(InitError::Persistence(PersistenceError::Refused { status, .. }))
+            if status == "schema exists" =>
+        {
+            Ok(false)
         }
+        Err(InitError::Persistence(error)) => Err(crate::postgresql::open::no_session(&error)
+            .unwrap_or_else(|| {
+                refused(
+                    "Failed",
+                    format!(
+                        "the PostgreSQL Store could not be made: {}",
+                        crate::words::persistence(&error)
+                    ),
+                )
+            })),
+        Err(error) => Err(refused(
+            "Failed",
+            format!(
+                "the PostgreSQL Store could not be made: {}",
+                crate::words::init_error(&error)
+            ),
+        )),
     }
 }
 
@@ -113,32 +111,30 @@ fn run(
     deadline: std::time::Instant,
     counters: Arc<layerfs_project::InitCounters>,
 ) -> Result<(Added, Vec<u8>), SdkRefusal> {
-    {
-        use crate::postgresql::open::selection;
-        use layerfs_history::{BranchId, HistoryName, LayerStackId};
-        use layerfs_project::store::{AddRequest, ProjectApi};
-        let history = |text: &str| HistoryName::new(text).map_err(layerfs_home::outcome::failed);
-        let stack = LayerStackId::from_authority(crate::project::init::sixteen(random()?));
-        let branch = BranchId::from_authority(crate::project::init::sixteen(random()?));
-        let request = AddRequest {
-            source: source.to_path_buf(),
-            store: layerfs_persistence::StoreSelection::Postgres(selection(
-                postgresql.url()?,
-                &postgresql.schema()?,
-                &postgresql.setting()?,
-            )),
-            binding: identity.binding.clone(),
-            cursor_key: identity.cursor_key,
-            stack,
-            stack_name: history(name)?,
-            branch,
-            branch_name: history("main")?,
-            scope_seed: random()?,
-            deadline,
-        };
-        let (added, _) = layerfs_telemetry::timer::Timing::disabled("store.add_project", |timer| {
-            ProjectApi::new().add_project(request, timer, counters)
-        });
-        Ok((added, stack.to_bytes().to_vec()))
-    }
+    use crate::postgresql::open::selection;
+    use layerfs_history::{BranchId, HistoryName, LayerStackId};
+    use layerfs_project::store::{AddRequest, ProjectApi};
+    let history = |text: &str| HistoryName::new(text).map_err(layerfs_home::outcome::failed);
+    let stack = LayerStackId::from_authority(crate::project::init::sixteen(random()?));
+    let branch = BranchId::from_authority(crate::project::init::sixteen(random()?));
+    let request = AddRequest {
+        source: source.to_path_buf(),
+        store: layerfs_persistence::StoreSelection::Postgres(selection(
+            postgresql.url()?,
+            &postgresql.schema()?,
+            &postgresql.setting()?,
+        )),
+        binding: identity.binding.clone(),
+        cursor_key: identity.cursor_key,
+        stack,
+        stack_name: history(name)?,
+        branch,
+        branch_name: history("main")?,
+        scope_seed: random()?,
+        deadline,
+    };
+    let (added, _) = layerfs_telemetry::timer::Timing::disabled("store.add_project", |timer| {
+        ProjectApi::new().add_project(request, timer, counters)
+    });
+    Ok((added, stack.to_bytes().to_vec()))
 }

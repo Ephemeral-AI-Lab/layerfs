@@ -5,8 +5,8 @@
 use crate::place::{self, Executor};
 use crate::record::{StoreKind, StoreRecord};
 use crate::sqlite::transfer::step::{StepFrame, StoreStep};
+use layerfs_bridge::sdk_values::hex;
 use layerfs_bucket::backup as remote;
-use layerfs_bucket::bucket::pieces;
 use layerfs_home::home::paths;
 use std::path::Path;
 
@@ -19,9 +19,7 @@ pub fn store_heads(home: &Path, record: &StoreRecord) -> Result<String, String> 
     let store_ref = record.store_ref().map_err(|refusal| refusal.message)?;
     let executor = place::plan(home, store_ref).map_err(|refusal| refusal.message)?;
     match executor {
-        Executor::Local => {
-            remote::heads(&paths::store_file(home, store)).map(|heads| pieces::hex(&heads))
-        }
+        Executor::Local => remote::heads(&paths::store_file(home, store)).map(|heads| hex(&heads)),
         Executor::Worker(mut worker) => {
             let frame = StepFrame::on(store, StoreStep::Heads);
             let answer = worker

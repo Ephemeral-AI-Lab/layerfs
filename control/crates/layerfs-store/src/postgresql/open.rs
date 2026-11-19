@@ -4,8 +4,8 @@
 //! A PostgreSQL Store is one schema; its URL, which may hold a password, is
 //! passed per call (`postgresql: { url }`) and never stored. Nothing
 //! converts a SQLite Store into one (#533 step 10c): a project reaches
-//! PostgreSQL only by an Init into it. Built without the `postgresql`
-//! feature, every call here is `Unsupported`.
+//! PostgreSQL only by an Init into it. The PostgreSQL engine is always
+//! built beside SQLite (#726).
 use crate::identity as stores;
 use crate::identity::{Identity, Kind};
 use crate::open_args::{OpenArgs, PgSelection};
@@ -79,23 +79,21 @@ pub fn open(
     identity: &Identity,
     template: &Path,
 ) -> Result<StoreService, SdkRefusal> {
-    {
-        StoreService::open_postgres(
-            &selection(url, schema, sync),
-            &identity.binding,
-            identity.cursor_key,
-            template,
-        )
-        .map_err(|refusal| {
-            let reason = match refusal {
-                OpenRefusal::Unsupported(reason) => reason.0,
-                OpenRefusal::Missing(reason)
-                | OpenRefusal::Busy(reason)
-                | OpenRefusal::Failed(reason) => reason,
-            };
-            refused("Failed", reason)
-        })
-    }
+    StoreService::open_postgres(
+        &selection(url, schema, sync),
+        &identity.binding,
+        identity.cursor_key,
+        template,
+    )
+    .map_err(|refusal| {
+        let reason = match refusal {
+            OpenRefusal::Unsupported(reason) => reason.0,
+            OpenRefusal::Missing(reason)
+            | OpenRefusal::Busy(reason)
+            | OpenRefusal::Failed(reason) => reason,
+        };
+        refused("Failed", reason)
+    })
 }
 
 /// The binding key the schema of a call's `postgresql { url, schema,
@@ -125,16 +123,14 @@ pub fn no_session(error: &layerfs_storage::port::PersistenceError) -> Option<Sdk
 
 /// The binding key the LayerFS schema `schema` records.
 fn binding(url: &str, schema: &str, sync: &str) -> Result<Vec<u8>, SdkRefusal> {
-    {
-        (layerfs_persistence::PostgresHandles::binding(&selection(url, schema, sync))).map_err(
-            |error| {
-                no_session(&error).unwrap_or_else(|| {
-                    let said = crate::words::persistence(&error);
-                    refused("Failed", format!("reading schema {schema}: {said}"))
-                })
-            },
-        )
-    }
+    (layerfs_persistence::PostgresHandles::binding(&selection(url, schema, sync))).map_err(
+        |error| {
+            no_session(&error).unwrap_or_else(|| {
+                let said = crate::words::persistence(&error);
+                refused("Failed", format!("reading schema {schema}: {said}"))
+            })
+        },
+    )
 }
 
 /// The PostgreSQL Store a `sandbox.create` call's daemon opens (#506), or
@@ -175,53 +171,51 @@ pub fn sandbox_store(open: &OpenArgs) -> Result<Option<layerfs_bridge::DaemonSto
 /// error: { code: Unavailable | Denied, message } }`. A failed query after
 /// connecting is refused `Failed`.
 pub fn status(url: &str, schemas: &[String]) -> Outcome {
-    {
-        use layerfs_bridge::control::SdkValue;
-        use layerfs_persistence::PostgresStatusError as E;
-        let unreached = |code: &str, message: String| {
-            SdkValue::map([
-                ("reachable", SdkValue::Bool(false)),
-                (
-                    "error",
-                    SdkValue::map([
-                        ("code", SdkValue::text(code)),
-                        ("message", SdkValue::text(message)),
-                    ]),
+    use layerfs_bridge::control::SdkValue;
+    use layerfs_persistence::PostgresStatusError as E;
+    let unreached = |code: &str, message: String| {
+        SdkValue::map([
+            ("reachable", SdkValue::Bool(false)),
+            (
+                "error",
+                SdkValue::map([
+                    ("code", SdkValue::text(code)),
+                    ("message", SdkValue::text(message)),
+                ]),
+            ),
+        ])
+    };
+    match layerfs_persistence::postgresql_status(url, schemas) {
+        Ok(status) => Ok(SdkValue::map([
+            ("reachable", SdkValue::Bool(true)),
+            ("serverVersion", SdkValue::text(status.server_version)),
+            (
+                "latencyMs",
+                SdkValue::Int(status.latency.as_millis() as i64),
+            ),
+            (
+                "latencyUs",
+                SdkValue::Int(status.latency.as_micros() as i64),
+            ),
+            (
+                "schemas",
+                SdkValue::Map(
+                    status
+                        .schemas
+                        .into_iter()
+                        .map(|(name, bytes)| {
+                            (
+                                name,
+                                bytes.map_or(SdkValue::Null, |b| SdkValue::Int(b as i64)),
+                            )
+                        })
+                        .collect(),
                 ),
-            ])
-        };
-        match layerfs_persistence::postgresql_status(url, schemas) {
-            Ok(status) => Ok(SdkValue::map([
-                ("reachable", SdkValue::Bool(true)),
-                ("serverVersion", SdkValue::text(status.server_version)),
-                (
-                    "latencyMs",
-                    SdkValue::Int(status.latency.as_millis() as i64),
-                ),
-                (
-                    "latencyUs",
-                    SdkValue::Int(status.latency.as_micros() as i64),
-                ),
-                (
-                    "schemas",
-                    SdkValue::Map(
-                        status
-                            .schemas
-                            .into_iter()
-                            .map(|(name, bytes)| {
-                                (
-                                    name,
-                                    bytes.map_or(SdkValue::Null, |b| SdkValue::Int(b as i64)),
-                                )
-                            })
-                            .collect(),
-                    ),
-                ),
-            ])),
-            Err(error @ E::Unreachable(_)) => Ok(unreached("Unavailable", error.to_string())),
-            Err(error @ E::Denied(_)) => Ok(unreached("Denied", error.to_string())),
-            Err(error @ E::Failed(_)) => Err(refused("Failed", error.to_string())),
-        }
+            ),
+        ])),
+        Err(error @ E::Unreachable(_)) => Ok(unreached("Unavailable", error.to_string())),
+        Err(error @ E::Denied(_)) => Ok(unreached("Denied", error.to_string())),
+        Err(error @ E::Failed(_)) => Err(refused("Failed", error.to_string())),
     }
 }
 

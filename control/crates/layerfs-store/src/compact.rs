@@ -252,14 +252,7 @@ fn live_run(file: &Path) -> Option<(String, SdkValue)> {
     if status.state != "busy" {
         return None;
     }
-    let op = SdkValue::map([
-        ("name", SdkValue::text("compact")),
-        ("phase", SdkValue::text(&status.phase)),
-        (
-            "started_at",
-            SdkValue::Text(layerfs_home::time::iso(status.started)),
-        ),
-    ]);
+    let op = intent::shown_as("compact", &status.phase, Some(status.started));
     Some((status.phase, op))
 }
 
@@ -353,14 +346,7 @@ fn compact_sqlite(
         note_refusal(&refusal);
         return Err(refusal);
     }
-    let args = OpenArgs {
-        home: Some(home.clone()),
-        store: Some(store.to_owned()),
-        project: None,
-        store_path: Some(path.display().to_string()),
-        store_record: Some(record.to_record().clone()),
-        postgresql: None,
-    };
+    let args = OpenArgs::in_root(&home, store, Some(record.to_record().clone()));
     let identity = identity::identity(&args)?;
     let handles = SqliteHandles::open_writable(
         PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Normal),

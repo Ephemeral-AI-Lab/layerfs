@@ -7,7 +7,7 @@
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::{hex, unhex};
 use layerfs_history::LayerStackId;
-use layerfs_home::helpers::required;
+use layerfs_home::helpers::{map_of, required};
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::refused;
 
@@ -70,11 +70,6 @@ pub struct StageFrame {
     pub step: StageStep,
 }
 
-/// A frame's fields, in order.
-fn map(fields: Vec<(&str, SdkValue)>) -> SdkValue {
-    SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect())
-}
-
 /// The copy id a frame's `staged` holds.
 fn staged_id(frame: &SdkValue) -> Result<String> {
     let id = frame.get_text("staged").unwrap_or("");
@@ -120,7 +115,7 @@ impl InitFrame {
         fields.push(("staged", SdkValue::text(&self.staged)));
         fields.extend(self.timeout_ms.map(|ms| ("timeoutMs", SdkValue::Int(ms))));
         fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
-        map(fields)
+        map_of(fields)
     }
 
     /// A `project.init` frame: no Store, a bad Store name, then a bad
@@ -153,7 +148,7 @@ impl StageFrame {
         if let StageStep::Write(part) = self.step {
             fields.push(("part", SdkValue::Bytes(part)));
         }
-        map(fields)
+        map_of(fields)
     }
 
     /// A `project.stage` frame: a bad copy id, then a `write` without
@@ -205,7 +200,7 @@ impl ExportFrame {
         );
         fields.extend(self.at.as_deref().map(|at| ("at", SdkValue::text(at))));
         fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
-        map(fields)
+        map_of(fields)
     }
 
     /// A `project.export` frame: no Store, no project, then a bad Store
@@ -321,7 +316,7 @@ impl DeleteFrame {
                 .map(|retry| ("pending_retry", SdkValue::Bool(retry))),
         );
         fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
-        map(fields)
+        map_of(fields)
     }
 
     /// A `project.delete` frame: no Store, a bad Store name, no Stack id, a
@@ -360,7 +355,7 @@ impl DeleteAdmitFrame {
                 .map(|project| ("project", SdkValue::text(project))),
         );
         fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
-        map(fields)
+        map_of(fields)
     }
 
     /// A `project.delete.admit` frame: its Store, Stack and operation
@@ -388,7 +383,7 @@ impl DeleteReleaseFrame {
             ("op_id", SdkValue::text(hex(&self.op))),
         ];
         fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
-        map(fields)
+        map_of(fields)
     }
 
     /// A `project.delete.release` frame: its Store and operation identity
@@ -417,7 +412,7 @@ impl DeleteReply {
             self.retired
                 .map(|retired| ("retired", SdkValue::Bool(retired))),
         );
-        map(fields)
+        map_of(fields)
     }
 
     /// The reply fields; `kind` must be `Removed`.
@@ -485,7 +480,7 @@ impl DeleteEntryFrame {
                 .as_deref()
                 .map(|project| ("project", SdkValue::text(project))),
         );
-        map(fields)
+        map_of(fields)
     }
 
     /// A `project.delete.entry` frame: its Store and Stack are required and
@@ -574,7 +569,7 @@ impl ListingFrame {
         if self.stats {
             fields.push(("stats", SdkValue::Bool(true)));
         }
-        map(fields)
+        map_of(fields)
     }
 
     /// A `project.list` frame: no Store, then a bad Store name are refused.
@@ -594,7 +589,7 @@ impl ListingReply {
             .projects
             .iter()
             .map(|project| {
-                map(vec![
+                map_of(vec![
                     ("name", SdkValue::text(&project.name)),
                     ("stack_id", SdkValue::text(hex(&project.stack.to_bytes()))),
                     ("head", SdkValue::opt_text(project.head.clone())),
@@ -602,7 +597,7 @@ impl ListingReply {
                 ])
             })
             .collect();
-        map(vec![
+        map_of(vec![
             ("kind", SdkValue::text("Listed")),
             ("projects", SdkValue::List(projects)),
         ])

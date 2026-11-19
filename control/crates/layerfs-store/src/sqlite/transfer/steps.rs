@@ -7,6 +7,7 @@
 //! (a worker keeps a Store open after its calls); a call running on it is
 //! `InUse`.
 use super::step::{StepFrame, StoreStep};
+use crate::get::hex_text;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup::heads::heads;
 use layerfs_bucket::bucket::pieces;
@@ -42,10 +43,6 @@ fn free(path: &Path) -> Result<u64, SdkRefusal> {
     Ok(u64::try_from(free).unwrap_or(u64::MAX))
 }
 
-fn hex(bytes: &[u8]) -> SdkValue {
-    SdkValue::text(layerfs_bridge::sdk_values::hex(bytes))
-}
-
 /// `{ bytes, sha256, heads }` of the closed Store file at `file`.
 fn digest(file: &Path, progress: Option<&mut dyn FnMut(u64, u64)>) -> Outcome {
     let (bytes, sha256) = match progress {
@@ -56,8 +53,8 @@ fn digest(file: &Path, progress: Option<&mut dyn FnMut(u64, u64)>) -> Outcome {
     let heads = heads(file).map_err(|why| refused("Failed", why))?;
     Ok(SdkValue::map([
         ("bytes", SdkValue::Int(bytes as i64)),
-        ("sha256", hex(&sha256)),
-        ("heads", hex(&heads)),
+        ("sha256", hex_text(&sha256)),
+        ("heads", hex_text(&heads)),
     ]))
 }
 
@@ -169,7 +166,7 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
         StoreStep::Heads => Ok(SdkValue::map([(
             "heads",
             match file.is_file() {
-                true => hex(&heads(&file).map_err(|why| refused("Failed", why))?),
+                true => hex_text(&heads(&file).map_err(|why| refused("Failed", why))?),
                 false => SdkValue::Null,
             },
         )])),
@@ -203,13 +200,7 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
         StoreStep::Stage => {
             let staged = with_suffix(&file, ".backup");
             let _ = std::fs::remove_file(&staged);
-            let open = crate::open_args::OpenArgs {
-                home: Some(root.to_path_buf()),
-                store: Some(store.to_owned()),
-                store_path: Some(file.display().to_string()),
-                store_record: frame.store_record.clone(),
-                ..Default::default()
-            };
+            let open = crate::open_args::OpenArgs::in_root(root, store, frame.store_record.clone());
             let sealed = crate::service::with_service(&open, |service| {
                 service
                     .opened
