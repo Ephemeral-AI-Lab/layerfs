@@ -148,17 +148,24 @@ impl BucketRecord {
             );
             return Err(layerfs_home::outcome::with_fix(
                 refusal,
-                format!(
-                    "layerfs backup connect {} {} --access-key <key> --key-stdin",
-                    layerfs_home::outcome::shell_word(name),
-                    layerfs_home::outcome::shell_word(&self.url())
-                ),
+                self.connect_again(),
             ));
         };
         Ok(Credentials {
             access_key: access_key.to_owned(),
             secret_key: secret::read(home, &self.name)?,
         })
+    }
+
+    /// The fix of a bucket whose key is missing or refused: connecting it
+    /// again at its URL with its key, which keeps its Stores' links (spec
+    /// v21, V21-4); name and URL shell-quoted.
+    pub fn connect_again(&self) -> String {
+        format!(
+            "layerfs backup connect {} {} --access-key <key> --key-stdin",
+            layerfs_home::outcome::shell_word(&self.name),
+            layerfs_home::outcome::shell_word(&self.url())
+        )
     }
 
     /// The driver of this bucket. Reads its key now; sends nothing.

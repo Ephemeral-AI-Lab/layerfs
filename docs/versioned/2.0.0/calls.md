@@ -1491,7 +1491,10 @@ the Store.
   otherwise); `changed` says the bucket's file is not the one the link last
   moved; each is null with a `message` when it could not be read. A bucket
   that cannot be listed is named in `not_listed` (`reason` `refused`,
-  `timeout` or `lost`) and the others are still listed.
+  `timeout` or `lost`) and the others are still listed. An entry whose
+  bucket was not asked for want of its key, or refused its key (HTTP 401
+  or 403), carries `fix`: `layerfs backup connect <name> <url>
+  --access-key <key> --key-stdin`, which keeps its Stores' links.
 - **`create` and `restore`** are recorded as the Store's `op` (`backup`,
   or `restore` when it replaces a Store), so every client reads the Store
   `busy`; a backup runs beside the Store's readers, a restore holds the

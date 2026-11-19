@@ -24,11 +24,12 @@ const ITEM: Form = Form::of(
         "heads_sha256",
     ],
 );
-/// A bucket that could not be listed.
+/// A bucket that could not be listed, with the call that connects it
+/// again when its key was missing or refused.
 const NOT_LISTED: Form = Form::of(
     &["bucket"],
-    &["blocked_by", "reason", "message"],
-    &["bucket", "blocked_by", "reason", "message"],
+    &["blocked_by", "reason", "message", "fix"],
+    &["bucket", "blocked_by", "reason", "message", "fix"],
 );
 const FORM: Form = Form::of(&["items"], &["not_listed"], &["items", "not_listed"]).parts(&[
     ("items", Part::Rows(&ITEM)),

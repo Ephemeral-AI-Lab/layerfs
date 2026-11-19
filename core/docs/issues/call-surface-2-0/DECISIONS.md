@@ -416,3 +416,20 @@ added; the table keeps 83 calls.
   `.DS_Store`, is a new home; `layerfs.json` at layout 3 is current; any other
   `layerfs.json`, or anything else in a folder with no `layerfs.json`, is not a LayerFS 2.0 home
   and gets V20-6's refusal, state and fix, and nothing is written in it.
+
+## UI pass 2 rulings (coordinator, 2026-11-19)
+
+- **UI2-1** (F1) A machine whose record alone makes it broken (a removed platform's, `unsupported`;
+  one with no `vm_name`, `outdated`) is not probed by a live read: `machine get --with live` and
+  `machine list --with live` answer the record's state, `reason` and `fix`, never `unknown`.
+- **UI2-2** (F6) V20-7's no-login fix names the user the record's URL names when it names one
+  (`--user owner`, shell-quoted), else `<user>`; `store list`, `store get`, a refused dial and
+  `store doctor`'s `store.connection` give the same line. `store doctor`'s `store.record` on a
+  record of a kind this build does not read carries V20-8a's `layerfs store remove <store>`.
+- **UI2-3** A `backup list` `not_listed` entry carries `fix`, V21-4's
+  `layerfs backup connect <name> <url> --access-key <key> --key-stdin` (shell-quoted), when its
+  bucket was not asked for want of its key (no key id, no saved secret) or refused its key
+  (HTTP 401 or 403); any other entry has none (left out of the short form, null in the long).
+- **UI2-4** `--text` prints `ready` in a list's STATE column for a row whose short form left
+  `state: ready` out, and keeps the column when every row was ready; `-` stays for any other
+  absent value. `layerfs help` says `--text` prints a readable form.
