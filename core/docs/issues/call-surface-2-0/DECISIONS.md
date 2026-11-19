@@ -484,8 +484,10 @@ rewritten, and 2.0 state answers as before.
   (`machine list`, `machine get`, both with `--with live`; `home get --with tree`; `machine doctor`'s
   `machine.configuration`), the chain its remove's `InUse` refusal carries: each Sandbox's remove,
   each Store's, each old Firecracker record's, then the machine's, shell-quoted and joined by `&&`,
-  from the one builder and from records the read already holds (no probe). With nothing on it the
-  fix stays `layerfs machine remove <m>`.
+  from the one builder and from records the read already holds (no probe). A call that needs its
+  VM (`machine start`, `machine stop`, forced or not, and a PostgreSQL Store's reach check from it)
+  is refused `Failed` with that same chain, its holders read on the refusal path alone. With nothing
+  on it the fix stays `layerfs machine remove <m>`.
 - **UI2-9** (LF5, RT5 note 4) UI2-7's refusal carries a `fix` when another place the CLI looks holds
   a sealed bundle of this build: `unset LAYERFS_BUNDLE` when `LAYERFS_BUNDLE` was the source and the
   place found without it (the runtime's bundle, else the cache's) holds this build's; else

@@ -92,7 +92,8 @@ pub fn stop(home: &Path, name: &MachineName, related: Related, events: &mut Even
         let _lock = lock::take(&home)?;
         let machine = machine_of(&home, name)?;
         (related.can_stop)(&home, name)?;
-        let spec = record::spec(&home, &machine)?;
+        let spec = record::spec(&home, &machine)
+            .map_err(|r| related.nameless_fix(&home, name.as_str(), r))?;
         let op = Op::begin(STOP, "stop", SdkValue::Null)?;
         machine.with_op(&op).write(&home)?;
         (spec, op)

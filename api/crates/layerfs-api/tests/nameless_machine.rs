@@ -11,6 +11,8 @@
 //!   list`, both with `--with live`, short and long, `home get --with
 //!   tree` and `machine doctor`'s finding) shows the same chain as its fix, shrinking as each step runs
 //!   (RT5 note 3); with nothing left on it the fix is `machine remove`.
+//!   `machine start` and `machine stop`, which need its VM, are refused
+//!   with that same fix.
 //! - `native` has no provider name and is not such a record: its remove is
 //!   still refused as built in.
 //! - A Store record this build does not read goes alone, and `left` names
@@ -194,6 +196,17 @@ fn a_nameless_machines_holders_and_the_machine_go_by_their_records() {
         "layerfs sandbox remove sb && layerfs store remove shop && layerfs machine remove old";
     assert_eq!(shown_fix(&home, "old"), chain);
 
+    // a call that needs its VM is refused with the same chain, not the
+    // bare remove that is itself refused
+    let machine = [("machine", t("old"))];
+    let start = call(&home, "machine.start", &machine).unwrap_err();
+    assert_eq!(start.code, "Failed", "{start:?}");
+    assert!(start.message.contains("has no vm_name"), "{start:?}");
+    assert_eq!(start.detail.get_text("fix"), Some(chain), "{start:?}");
+    let force = [("machine", t("old")), ("force", SdkValue::Bool(true))];
+    let stop = call(&home, "machine.stop", &force).unwrap_err();
+    assert_eq!(stop.detail.get_text("fix"), Some(chain), "{stop:?}");
+
     let refused = call(&home, "machine.remove", &[("machine", t("old"))]).unwrap_err();
     assert_eq!(refused.code, "InUse", "{refused:?}");
     assert!(
@@ -219,10 +232,11 @@ fn a_nameless_machines_holders_and_the_machine_go_by_their_records() {
     );
     assert!(left[0].contains("nothing on it was touched"), "{left:?}");
     assert!(!paths::sandbox_record(&home, "sb").exists());
-    assert_eq!(
-        shown_fix(&home, "old"),
-        "layerfs store remove shop && layerfs machine remove old"
-    );
+    let rest = "layerfs store remove shop && layerfs machine remove old";
+    assert_eq!(shown_fix(&home, "old"), rest);
+    // a stop with no Sandbox left on it reaches the VM, and is refused so
+    let stop = call(&home, "machine.stop", &machine).unwrap_err();
+    assert_eq!(stop.detail.get_text("fix"), Some(rest), "{stop:?}");
 
     let store = step(&home, steps[1]);
     assert_eq!(store.get_text("outcome"), Some("removed"));
@@ -231,6 +245,9 @@ fn a_nameless_machines_holders_and_the_machine_go_by_their_records() {
     assert!(!paths::store_dir(&home, "shop").exists());
     // nothing left on it: the bare remove, which now succeeds
     assert_eq!(shown_fix(&home, "old"), "layerfs machine remove old");
+    let start = call(&home, "machine.start", &machine).unwrap_err();
+    let bare = Some("layerfs machine remove old");
+    assert_eq!(start.detail.get_text("fix"), bare, "{start:?}");
 
     let machine = step(&home, steps[2]);
     assert_eq!(machine.get_text("outcome"), Some("removed"));
