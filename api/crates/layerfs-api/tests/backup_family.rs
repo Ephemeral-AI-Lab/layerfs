@@ -2,7 +2,8 @@
 //! with the key's secret kept in the home, create, the list facts
 //! (`behind`, `changed`, `missing`), the restore Conflict, a restore as a
 //! new Store, a backup of a Store behind a worker (whose heads `list`
-//! reads through the worker), and disconnect keeping the objects. Needs the
+//! reads through the worker), a key rotation keeping the links (spec v21)
+//! and disconnect keeping the objects. Needs the
 //! LAYERFS_REMOTE_* variables tests/minio_service.sh of layerfs-bucket
 //! prints; without them the test says NOT_RUN and passes.
 use layerfs_api::home::{self, paths, read_record, write_record};
@@ -163,12 +164,17 @@ fn backups_against_minio() {
     let record = std::fs::read_to_string(paths::bucket_record(&home, "b1")).unwrap();
     let secret_key = std::env::var("LAYERFS_REMOTE_SECRET_KEY").unwrap();
     assert!(!record.contains(&secret_key), "{record}");
-    // a name that is taken is Exists
+    // a name that is taken at another URL is Exists (spec v21)
     let [access, secret_key] = key();
     let taken = call(
         &home,
         "backup.connect",
-        &[("name", t("b1")), ("url", t(&url)), access, secret_key],
+        &[
+            ("name", t("b1")),
+            ("url", t(&format!("{url}-other"))),
+            access,
+            secret_key,
+        ],
     );
     assert_eq!(taken.unwrap_err().0, "Exists");
     assert_eq!(states(&home), vec![]);
@@ -179,6 +185,27 @@ fn backups_against_minio() {
         &[("store", t("shop")), ("bucket", t("b1"))],
     );
     assert_eq!(made.get_text("file"), Some("shop"));
+    assert_eq!(states(&home), vec![pair("shop", "current")]);
+    // connected again at the same URL, the key is replaced and the Store's
+    // link stays (spec v21)
+    let store_record = std::fs::read(paths::store_record(&home, "shop")).unwrap();
+    let [access, secret_key] = key();
+    let rotated = ok(
+        &home,
+        "backup.connect",
+        &[
+            ("name", t("b1")),
+            ("url", t(&url)),
+            access,
+            secret_key,
+            ("detail", SdkValue::Bool(true)),
+        ],
+    );
+    assert_eq!(rotated.get_text("outcome"), Some("rotated"), "{rotated:?}");
+    assert_eq!(
+        std::fs::read(paths::store_record(&home, "shop")).unwrap(),
+        store_record
+    );
     assert_eq!(states(&home), vec![pair("shop", "current")]);
 
     // the Store changes: list says so, and a restore over it is refused

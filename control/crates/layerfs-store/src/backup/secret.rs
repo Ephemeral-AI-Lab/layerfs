@@ -24,7 +24,7 @@ pub fn read(home: &Path, bucket: &str) -> Result<String> {
         )),
         None => Err(refused(
             "Failed",
-            format!("the home keeps no secret {KIND}/{bucket}; disconnect it and connect it again"),
+            format!("the home keeps no secret {KIND}/{bucket}; connect it again at its URL with its key"),
         )),
     }
 }
@@ -37,6 +37,20 @@ pub fn write(home: &Path, bucket: &str, secret: &str) -> Result<()> {
         bucket,
         &SdkValue::map([("secret", SdkValue::text(secret))]),
     )
+}
+
+/// Bucket `bucket`'s secret as kept, whole, to put back with
+/// [`put_back`]; `None` when there is none.
+pub fn kept(home: &Path, bucket: &str) -> Result<Option<SdkValue>> {
+    read_secret(home, KIND, bucket)
+}
+
+/// Puts back what [`kept`] read: that secret, or none.
+pub fn put_back(home: &Path, bucket: &str, kept: Option<&SdkValue>) -> Result<()> {
+    match kept {
+        Some(value) => save_secret(home, KIND, bucket, value),
+        None => remove(home, bucket),
+    }
 }
 
 /// Forgets bucket `bucket`'s secret; one already gone is no error.

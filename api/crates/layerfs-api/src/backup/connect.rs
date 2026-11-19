@@ -1,6 +1,7 @@
 //! `backup.connect`: connect a bucket (r2, or an S3 endpoint) by name; its
 //! key's secret comes on stdin in the shell and is kept in the home's
-//! secret folder, never answered.
+//! secret folder, never answered. Connected again at the same URL it
+//! replaces the key and keeps the Stores' links (spec v21).
 use crate::calls::table::Kind::{Content, Name, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::{Context, Form};
@@ -10,8 +11,8 @@ use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store::backup::family::connect;
 use layerfs_store::backup::record::BucketConnect;
 
-/// Its answer: `ok`; the long form names the bucket, its provider, URL
-/// and key id.
+/// Its answer: `ok`; the long form says `connected` or `rotated` and names
+/// the bucket, its provider, URL and key id.
 const FORM: Form = Form::of(
     &["ok"],
     &[],
@@ -53,7 +54,7 @@ fn text(args: &SdkValue, name: &str) -> Result<String, layerfs_bridge::control::
 }
 
 /// Runs `backup.connect`: one listing with the key before anything is
-/// recorded.
+/// recorded or replaced.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let request = BucketConnect {
         name: BucketName::parse(args.get_text("name").unwrap_or(""))?,

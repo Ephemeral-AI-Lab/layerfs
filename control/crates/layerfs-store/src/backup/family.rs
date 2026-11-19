@@ -18,7 +18,7 @@ use layerfs_bucket::backup as remote;
 use layerfs_bucket::bucket::RemoteError;
 use layerfs_home::home::{self, paths};
 use layerfs_home::names::BucketName;
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::outcome::{failed, refused, shell_word, with_fix, Outcome};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -28,20 +28,36 @@ pub fn list(home: &Path, bucket: Option<&str>) -> Outcome {
     super::list::list(home, bucket)
 }
 
-fn taken(home: &Path, name: &str) -> Result<()> {
-    if paths::bucket_record(home, name).exists() {
-        return Err(refused(
-            "Exists",
-            format!("a bucket named {name} is connected; to change its key, disconnect it and connect it again"),
-        ));
+/// The bucket connected under `record`'s name: `None` when there is none,
+/// its record when it names the same place ([`BucketRecord::same_place`]),
+/// and `Exists` when it names another, with the fix that disconnects it (a
+/// new name works too).
+fn connected(home: &Path, record: &BucketRecord) -> Result<Option<BucketRecord>> {
+    let name = record.name();
+    let Some(value) = home::read_record(&paths::bucket_record(home, name))? else {
+        return Ok(None);
+    };
+    let kept = BucketRecord::from_record(name, value);
+    if kept.same_place(record) {
+        return Ok(Some(kept));
     }
-    Ok(())
+    let refusal = refused(
+        "Exists",
+        format!("a bucket named {name} is connected to another URL; connect this one under a new name, or disconnect {name} first"),
+    );
+    Err(with_fix(
+        refusal,
+        format!("layerfs backup disconnect {}", shell_word(name)),
+    ))
 }
 
 /// `backup.connect(name, url, { access_key, secret_key })`: one listing
 /// proves the bucket answers with this key before anything is recorded
-/// (`Unavailable` when it cannot be reached or refuses the key); then the
-/// secret goes to the home's secret folder and the record is written.
+/// (`Unavailable` when it cannot be reached or refuses the key, and nothing
+/// changes); then the secret goes to the home's secret folder and the
+/// record is written. A bucket already connected under the name at the same
+/// URL has its key replaced (`rotated`, spec v21); at another URL the name
+/// is `Exists`.
 pub fn connect(home: &Path, request: &BucketConnect) -> Outcome {
     let name = request.name.as_str();
     if request.access_key.is_empty() || request.secret_key.is_empty() {
@@ -51,7 +67,7 @@ pub fn connect(home: &Path, request: &BucketConnect) -> Outcome {
         ));
     }
     let record = BucketRecord::from_url(request)?;
-    taken(home, name)?;
+    connected(home, &record)?;
     let driver = record.driver_with(request.credentials())?;
     remote::list_stores(driver.as_ref()).map_err(|error| match error {
         RemoteError::Invalid(why) => refused("InvalidInput", why),
@@ -71,13 +87,32 @@ pub fn connect(home: &Path, request: &BucketConnect) -> Outcome {
         ),
     })?;
     let _lock = home::lock::take(home)?;
-    taken(home, name)?;
+    if let Some(kept) = connected(home, &record)? {
+        return rotate(home, &kept, request);
+    }
     secret::write(home, name, &request.secret_key)?;
     if let Err(refusal) = record.write(home) {
         let _ = secret::remove(home, name);
         return Err(refusal);
     }
     Ok(record.answer("connected"))
+}
+
+/// Replaces connected bucket `kept`'s key with `request`'s, under the
+/// home's lock: the secret by one rename, then the record with the new key
+/// id by one rename; when the record cannot be written the secret kept
+/// before is put back. The Stores' links are in their own records and are
+/// not touched.
+fn rotate(home: &Path, kept: &BucketRecord, request: &BucketConnect) -> Outcome {
+    let name = kept.name();
+    let before = secret::kept(home, name)?;
+    secret::write(home, name, &request.secret_key)?;
+    let rotated = kept.with_access_key(&request.access_key);
+    if let Err(refusal) = rotated.write(home) {
+        let _ = secret::put_back(home, name, before.as_ref());
+        return Err(refusal);
+    }
+    Ok(rotated.answer("rotated"))
 }
 
 /// `backup.disconnect(bucket)`: forgets a bucket, its key and every Store's
