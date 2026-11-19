@@ -52,6 +52,13 @@ fn take_down(
         phases.end();
         return Ok(answer);
     }
+    // a created machine whose record has no `vm_name` (an earlier build's):
+    // this build cannot name its VM, so only the record goes
+    if record.provider_name().is_err() && !record.platform()?.built_in() {
+        let answer = drop_record(&home, name, "its record has no vm_name", related)?;
+        phases.end();
+        return Ok(answer);
+    }
     let _start = super::endpoint::start_lock(&home, name)?;
     let (record, spec, op) = {
         let _lock = lock::take(&home)?;
@@ -81,8 +88,8 @@ fn take_down(
     Ok(removed(name, None))
 }
 
-/// Removes the record of a machine whose platform was removed in 2.0,
-/// under the home lock and the same `InUse` check as a remove; nothing
+/// Removes the record of a machine whose platform was removed in 2.0, or
+/// whose record has no `vm_name`, under the home lock and the same `InUse` check as a remove; nothing
 /// outside the home is touched, and `message` says so.
 fn drop_record(home: &Path, name: &MachineName, reason: &str, related: Related) -> Outcome {
     let _lock = lock::take(home)?;

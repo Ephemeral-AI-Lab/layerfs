@@ -233,6 +233,28 @@ fn provider_names_and_their_refusals() {
         ("Exists", "a machine named a.b exists")
     );
 
+    // the record with no `vm_name`: a start is refused with `machine
+    // remove` as its fix, and the remove takes its record alone, asking
+    // the provider nothing
+    let made = effects(&tools);
+    let machine = [("machine", t("e.f"))];
+    let (code, message) = call(&home, "machine.start", &machine).unwrap_err();
+    assert_eq!(code, "Failed", "{message}");
+    assert!(message.contains("has no vm_name"), "{message}");
+    let start = SdkValue::map([("machine", t("e.f"))]);
+    let refused = layerfs_api::call(Some(&home), "machine.start", start, &mut |_| {}).unwrap_err();
+    assert_eq!(
+        refused.detail.get_text("fix"),
+        Some("layerfs machine remove e.f")
+    );
+    let detail = [("machine", t("e.f")), ("detail", SdkValue::Bool(true))];
+    let removed = call(&home, "machine.remove", &detail).unwrap();
+    assert_eq!(removed.get_text("outcome"), Some("removed"), "{removed:?}");
+    let said = removed.get_text("message").unwrap_or("");
+    assert!(said.contains("its record has no vm_name"), "{said}");
+    assert!(!paths::machine_dir(&home, "e.f").exists());
+    assert_eq!(effects(&tools), made, "the provider was asked");
+
     // a name that collides with none reaches the provider, as `layerfs-`
     let (code, message) = create(&home, "ab");
     assert_eq!(code, "Failed", "{message}");
