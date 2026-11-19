@@ -183,7 +183,7 @@ test("through a worker: push, pull and init report bytes per phase; null outside
     const lfs = client({ home });
     await lfs.store.create("shop");
     mkdirSync(join(home, "machine", "box"), { recursive: true });
-    writeFileSync(join(home, "machine", "box", "record.json"), JSON.stringify({ name: "box", platform: "lima" }));
+    writeFileSync(join(home, "machine", "box", "record.json"), JSON.stringify({ name: "box", platform: "lima", vm_name: "layerfs-00000000-box" }));
     writeFileSync(join(home, "machine", "box", "worker.json"), JSON.stringify({ address: box.address, secret: "s3cret" }), { mode: 0o600 });
 
     const pushed = [];
