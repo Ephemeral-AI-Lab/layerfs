@@ -5,10 +5,17 @@
 //! prefix is stripped from a recorded name. A record whose name this home
 //! does not give names `sandbox remove` as its fix, and that remove takes
 //! its records alone: its run folder and daemon process are left, and
-//! `left` names both with the line that removes them.
+//! `left` names both with the line that removes them: the process only
+//! while the one its record identifies still runs, the folder as one shell
+//! word (RV3 FAIL 4).
+//!
+//! A record this build does not read (a field missing, here `boot`) is
+//! refused with `sandbox remove` as its fix, and that remove, forced or
+//! not, takes its records alone with no signal sent (RV3 FAIL 2). The
+//! native runtime is macOS only (RV3 FAIL 3), and so are these tests.
 //!
 //! Nothing runs a daemon: a record names this test's own process.
-#![cfg(any(target_os = "linux", target_os = "macos"))]
+#![cfg(target_os = "macos")]
 use layerfs_bridge::control::SdkValue;
 use layerfs_bridge::process::LocalProcess;
 use layerfs_home::home::{self, paths, write_record};
@@ -68,6 +75,50 @@ fn record(home: &Path, id: &str, name: &str, folder: &Path, pid: u32) -> DaemonR
     )
     .unwrap();
     daemon
+}
+
+/// Sandbox `id`'s record written again with its daemon record changed by
+/// `change`.
+fn rewrite(
+    home: &Path,
+    id: &str,
+    daemon: &DaemonRecord,
+    change: impl Fn(&str, SdkValue) -> Option<SdkValue>,
+) {
+    let SdkValue::Map(fields) = daemon.to_record() else {
+        panic!("a daemon record is a map")
+    };
+    let fields = (fields.into_iter())
+        .filter_map(|(name, value)| change(&name, value).map(|value| (name, value)))
+        .collect();
+    write_record(
+        &paths::sandbox_record(home, id),
+        &SdkValue::map([
+            ("name", t(id)),
+            ("project", t("shop/api")),
+            ("machine", t("native")),
+            ("id", t(id)),
+            ("runtime", t("native")),
+            ("daemon", SdkValue::Map(fields)),
+        ]),
+    )
+    .unwrap();
+}
+
+/// `sandbox.remove(id, { force })`'s outcome, which must be `already_gone`:
+/// its `left`, joined.
+fn removed_alone(home: &Path, id: &str, force: bool) -> String {
+    let mut sink = |_| {};
+    let mut events = layerfs_home::events::Events::new(&mut sink);
+    let request = RemoveRequest {
+        name: id.to_owned(),
+        force,
+    };
+    match remove(home, &mut events, &request) {
+        Ok(Removed::AlreadyGone { left }) => left.join(" | "),
+        Ok(Removed::Stopped { .. }) => panic!("Sandbox {id} was stopped"),
+        Err(refusal) => panic!("Sandbox {id}: {refusal:?}"),
+    }
 }
 
 /// Why `daemon` is not reopened as Sandbox `id`: always `InvalidInput`,
@@ -170,4 +221,64 @@ fn a_record_with_a_name_this_home_does_not_give_is_removed_by_its_records() {
     assert!(folder.is_dir(), "its run folder was removed");
     assert!(LocalProcess::observe(me).is_ok());
     std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_foreign_records_left_names_its_process_only_while_it_is_the_same_one() {
+    let (home, id8) = new_home("foreign-gone");
+    let me = std::process::id();
+    let old = format!("lfs-{id8}-s1");
+    // a folder whose path is not one shell word
+    let folder = home.join("my runs").join(&old);
+    let daemon = record(&home, "s1", &old, &folder, me);
+    // the same id with another start time: a reused id, never offered to kill
+    rewrite(&home, "s1", &daemon, |name, value| match (name, &value) {
+        ("start", SdkValue::Text(start)) => {
+            Some(t(&(start.parse::<u64>().unwrap() + 1).to_string()))
+        }
+        _ => Some(value),
+    });
+    let said = removed_alone(&home, "s1", false);
+    assert!(!said.contains("kill"), "{said}");
+    assert!(said.contains("is gone"), "{said}");
+    let quoted = format!("rm -rf '{}'", folder.display());
+    assert!(said.contains(&quoted), "{said}");
+    assert!(folder.is_dir(), "its run folder was removed");
+    assert!(LocalProcess::observe(me).is_ok());
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_record_this_build_does_not_read_is_removed_by_its_records_without_a_signal() {
+    for force in [false, true] {
+        let (home, id8) = new_home(&format!("unread-{force}"));
+        let me = std::process::id();
+        let host = native_host(&home, "s1").unwrap();
+        let new = format!("layerfs-{id8}-s1");
+        let folder = paths::run_root(&home).join(&new);
+        let daemon = record(&home, "s1", &new, &folder, me);
+        // a record an earlier build wrote, without `boot`
+        rewrite(&home, "s1", &daemon, |name, value| {
+            (name != "boot").then_some(value)
+        });
+        let unread = layerfs_sandbox::record::SandboxRecord::read(&home, "s1")
+            .unwrap()
+            .and_then(|record| record.daemon().cloned())
+            .unwrap();
+        let refusal = recorded(&host, "s1", &unread).err().unwrap();
+        assert_eq!(refusal.code, "InvalidInput", "{refusal:?}");
+        assert_eq!(
+            refusal.detail.get_text("fix"),
+            Some("layerfs sandbox remove s1"),
+            "{refusal:?}"
+        );
+        let said = removed_alone(&home, "s1", force);
+        assert!(said.contains("not one this build reads"), "{said}");
+        assert!(said.contains("no signal was sent"), "{said}");
+        assert!(said.contains(&folder.display().to_string()), "{said}");
+        assert!(!paths::sandbox_record(&home, "s1").exists());
+        // the process its record names was not signalled: it is this one
+        assert!(LocalProcess::observe(me).is_ok());
+        std::fs::remove_dir_all(home).unwrap();
+    }
 }

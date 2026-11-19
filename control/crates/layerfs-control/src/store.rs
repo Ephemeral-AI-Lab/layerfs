@@ -9,6 +9,7 @@ use crate::inventory;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::names::{MachineName, StoreName};
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, with_fix, Outcome, FIX};
 use layerfs_machine::worker::Unreached;
 use layerfs_store::place::{self, Executor};
@@ -47,10 +48,16 @@ pub fn compact(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcom
                     let on = inventory::sandboxes_on(home, &machine).map_or(0, |on| on.len());
                     Some(layerfs_machine::state::replace_worker(&machine, on))
                 }
-                Some(machine) => Some(format!("layerfs machine start {machine}")),
+                Some(machine) => Some(format!(
+                    "layerfs machine start {machine}",
+                    machine = shell_word(&machine)
+                )),
                 None => None,
             },
-            "Unknown" | "Unresolved" => Some(format!("layerfs store compact {store}")),
+            "Unknown" | "Unresolved" => Some(format!(
+                "layerfs store compact {store}",
+                store = shell_word(store)
+            )),
             _ => None,
         };
         match fix {

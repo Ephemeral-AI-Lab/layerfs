@@ -16,6 +16,7 @@ use crate::image_lock::{ImageLock, PruneGate};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home;
 use layerfs_home::names::MachineName;
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{failed, refused, with_next, Outcome};
 use layerfs_home::state::{Reason, State};
 use layerfs_sandbox_backend::rootfs::{self, Temporary};
@@ -177,7 +178,11 @@ fn item(home: &Path, machine: &str, id: &str, found: Found) -> SdkValue {
             },
             None => State::broken(
                 Reason::Partial,
-                Some(&format!("layerfs machine load-image {machine} {id}")),
+                Some(&format!(
+                    "layerfs machine load-image {machine} {id}",
+                    machine = shell_word(machine),
+                    id = shell_word(id)
+                )),
             ),
         },
     };

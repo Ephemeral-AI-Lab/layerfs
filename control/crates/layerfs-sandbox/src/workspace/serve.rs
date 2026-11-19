@@ -21,6 +21,7 @@ use layerfs_bridge::control::{CommitControl, MountPlace, Reply, SdkRefusal, SdkV
 use layerfs_history::{BranchId, CommitId, WorkspaceId};
 use layerfs_home::helpers::{lock, random, required, SHOWN};
 use layerfs_home::names::WorkspaceName;
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{failed, with_next, Outcome};
 
 /// A mount's `NoSuchSandbox`: `refusal` (its detail kept) with the next
@@ -97,7 +98,10 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
                 "Sandbox {sandbox} already holds {WORKSPACES} Workspaces. Create a new Sandbox with `layerfs sandbox create` and mount there, or list this one's Workspaces with `layerfs workspace list --sandbox {sandbox}` and unmount the ones you are done with (`layerfs workspace unmount <workspace>`)"
             ),
         );
-        let fix = format!("layerfs workspace list --sandbox {sandbox}");
+        let fix = format!(
+            "layerfs workspace list --sandbox {sandbox}",
+            sandbox = shell_word(sandbox)
+        );
         return Err(layerfs_home::outcome::with_fix(refusal, fix));
     }
     let project = host.project.as_str();
@@ -537,8 +541,8 @@ fn dirty(state: &crate::registry::SandboxState, path: &str, refusal: SdkRefusal)
         refusal,
         format!(
             "layerfs workspace commit {}:{} -m <message>",
-            state.id,
-            path_name(state, path)
+            shell_word(&state.id),
+            shell_word(&path_name(state, path))
         ),
     )
 }

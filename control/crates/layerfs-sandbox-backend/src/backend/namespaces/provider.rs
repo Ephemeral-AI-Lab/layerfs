@@ -118,7 +118,10 @@ impl NamespaceProvider {
             .record_paths(&record.local().name)
             .map_err(WireFailure::local)?;
         let image = self.image(record).map_err(WireFailure::local)?;
-        let helper = recorded_helper(&paths).map_err(WireFailure::local)?;
+        // the copy its create put in its own `bin` directory, so a later
+        // process runs the helper it was started with; a Sandbox without
+        // one (an earlier build's) is refused when a command needs it
+        let helper = paths.helper.clone();
         let recorded = super::sandbox::Recorded {
             init: super::sandbox::process(record.local()),
             port: record.local().port,
@@ -143,7 +146,10 @@ impl NamespaceProvider {
             .record_paths(&record.local().name)
             .map_err(WireFailure::local)?;
         let image = self.image(record).map_err(WireFailure::local)?;
-        let helper = recorded_helper(&paths).map_err(WireFailure::local)?;
+        // the copy its create put in its own `bin` directory, so a later
+        // process runs the helper it was started with; a Sandbox without
+        // one (an earlier build's) is refused when a command needs it
+        let helper = paths.helper.clone();
         let recorded = super::sandbox::Recorded {
             init: super::sandbox::process(record.local()),
             port: record.local().port,
@@ -199,18 +205,6 @@ fn refused(cause: RuntimeError) -> Box<LaunchFailure> {
         instance: None,
         cause,
     })
-}
-
-/// The helper a reopened Sandbox runs: the copy its create put in its own
-/// `bin` directory, so a later process (an in-process SDK whose executable
-/// is `node`, with no LAYERFS_SANDBOX_HELPER) finds the helper the Sandbox
-/// was started with. A Sandbox made before that copy existed falls back to
-/// the lookup below.
-fn recorded_helper(paths: &Paths) -> Result<PathBuf, RuntimeError> {
-    match std::fs::metadata(&paths.helper) {
-        Ok(metadata) if metadata.is_file() && metadata.len() > 0 => Ok(paths.helper.clone()),
-        _ => helper(None),
-    }
 }
 
 /// The helper this backend runs: `LAYERFS_SANDBOX_HELPER` when set, else

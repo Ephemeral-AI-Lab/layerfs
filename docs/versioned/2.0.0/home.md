@@ -22,9 +22,9 @@ writes every record itself.
 LayerFS reads no other user setting. A Node or Python client can name
 another home: `layerfs.client({ home })`, `layerfs.client(home=...)`.
 
-Secret references (`env:NAME`, `file:/path`) name variables or files that
-hold a password or a bucket key. They are not settings; see
-[machines, Stores and backups](machines-and-stores.md#secret-references).
+A PostgreSQL login and a bucket's secret key are not settings either: they
+are kept in the home's secret folder; see
+[machines, Stores and backups](machines-and-stores.md#secrets).
 
 ## Layout
 
@@ -253,8 +253,8 @@ deletion: numbered Sandbox folders (`store/*/project/*/sandboxes/`),
   0600). A started native Sandbox's run folder holds its daemon's setup
   (`config/daemon.setup`, 0600), with the daemon's private key and, for a
   PostgreSQL Store, the URL with its password. A PostgreSQL password or a
-  bucket key is otherwise never stored, only its reference
-  ([secret references](machines-and-stores.md#secret-references)). An
+  bucket key is otherwise kept only in the secret folder, `secret/`
+  ([secrets](machines-and-stores.md#secrets)). An
   integration keeps its own secrets under `secret/`. A copy of a home
   carries all of these.
 - **Moving.** No call moves a home, and nothing rewrites a path in a

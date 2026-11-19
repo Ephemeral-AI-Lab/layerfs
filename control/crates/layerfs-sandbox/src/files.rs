@@ -10,6 +10,7 @@ use crate::registry::{Mount, SandboxState};
 use crate::reopen::{gone, recorded};
 #[cfg(target_os = "linux")]
 use crate::runtime::NAMESPACES;
+#[cfg(target_os = "macos")]
 use crate::runtime::{LOCAL, NATIVE};
 use crate::{internal::workspace, BoundWorkspace, MountedWorkspace};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -66,7 +67,7 @@ pub fn save_sandbox(
     let platform = platform.to_owned();
     let runtime = state.runtime()?;
     let daemon = match runtime {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        #[cfg(target_os = "macos")]
         Sandbox::HostProcess(runtime) => {
             let record = runtime
                 .local_record()
@@ -113,7 +114,7 @@ pub fn save_sandbox(
 /// native (macOS) one, FUSE for every other.
 pub fn route(runtime: &Sandbox) -> &'static str {
     match runtime {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        #[cfg(target_os = "macos")]
         Sandbox::HostProcess(_) => "nfs",
         #[cfg(target_os = "linux")]
         Sandbox::Namespaces(_) => "fuse",

@@ -5,6 +5,7 @@
 use super::calls::Mounted;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::helpers;
+use layerfs_home::outcome::shell_word;
 use layerfs_home::state::{Reason, State};
 
 fn take(value: &SdkValue, name: &str) -> SdkValue {
@@ -147,7 +148,10 @@ pub fn state(activity: &str, phase: Option<&str>, since_ms: Option<i64>, ws: &st
         phase: phase.unwrap_or(first).to_owned(),
         started_ms: since_ms,
     };
-    let fix = format!("layerfs workspace unmount {ws} --force");
+    let fix = format!(
+        "layerfs workspace unmount {ws} --force",
+        ws = shell_word(ws)
+    );
     match activity {
         "attaching" => busy("mount", "attach"),
         "committing" => busy("commit", "publish"),

@@ -127,10 +127,12 @@ Sandbox), `daemon_capacity` and per-Workspace `overlay_bytes`.
 ## `sandbox.remove`
 
 Stops a Sandbox and removes its record. Answers `{"ok":true}`; with `force`
-also `unmounted` (the Workspaces it ended). Long `outcome`: `removed`,
-`already_gone` (`left` says what may remain) or `forgotten` (the retired
-docker backend, with its `container` and a `fix`). Progress: `cancel` (with
-`force`), `stop`, `delete`.
+also `unmounted` (the Workspaces it ended). Long `outcome`: `removed` or
+`already_gone`, with `left` saying what may remain: its runtime was gone,
+or only its records went (a Sandbox of the retired docker backend, one
+whose record this build does not read, or one on a machine whose record
+has no 2.0 name), with no signal sent. Progress: `cancel` (with `force`),
+`stop`, `delete`.
 
 ```bash
 $ layerfs sandbox remove tests                                                 # seen, exit 125

@@ -6,8 +6,10 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::Outcome;
 
-/// Its answer: nothing to say in the short form.
-const FORM: Form = Form::of(&["ok"], &[], &["ok", "outcome", "store"]);
+/// Its answer: `ok` alone, or `left` when only its records went (its
+/// record was not read, or its machine's record has no 2.0 name): each
+/// sentence about what may remain.
+const FORM: Form = Form::of(&[], &["ok", "left"], &["ok", "outcome", "store", "left"]);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(

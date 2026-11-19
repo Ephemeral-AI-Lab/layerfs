@@ -54,6 +54,8 @@ pub fn native_free(home: &Path) -> Result<(), SdkRefusal> {
 /// mounts and processes; its Delete independently checks the physical
 /// detach before the runtime goes. Answers each recorded or `held`
 /// Workspace as `unknown`: its uncommitted changes end with the Sandbox.
+/// A record this build does not read never reaches it: `sandbox.remove`
+/// forgets it first (`crate::reopen::unread`).
 pub fn close(host: &Host, held: &[String]) -> Outcome {
     let id = host.sandbox()?.to_owned();
     let directory = crate::files::sandbox_dir(host)?;

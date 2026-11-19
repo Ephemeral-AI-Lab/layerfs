@@ -19,6 +19,7 @@ use crate::state::Machines;
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::op::Standing;
 use layerfs_home::outcome::refused;
+use layerfs_home::outcome::shell_word;
 use layerfs_home::state::{Reason, State};
 use std::path::Path;
 
@@ -26,7 +27,11 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// `broken` `unresolved` for project `store`/`name`, with its fix.
 pub fn unresolved(store: &str, name: &str) -> State {
-    let fix = format!("layerfs project delete {store}/{name}");
+    let fix = format!(
+        "layerfs project delete {store}/{name}",
+        store = shell_word(store),
+        name = shell_word(name)
+    );
     State::broken(Reason::Unresolved, Some(&fix))
 }
 

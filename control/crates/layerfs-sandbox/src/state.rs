@@ -18,6 +18,7 @@
 use super::record::SandboxRecord;
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::op::Standing;
+use layerfs_home::outcome::shell_word;
 use layerfs_home::state::{Reason, State};
 use layerfs_machine::record::MachineRecord;
 use std::path::Path;
@@ -28,7 +29,7 @@ pub const OBSERVED: [Reason; 2] = [Reason::Lost, Reason::NotAnswering];
 
 /// The `fix` of every broken Sandbox.
 pub fn remove_fix(sandbox: &str) -> String {
-    format!("layerfs sandbox remove {sandbox}")
+    format!("layerfs sandbox remove {}", shell_word(sandbox))
 }
 
 /// The reason a record's `reason` word names, when a record may hold it.
@@ -141,7 +142,10 @@ pub fn state(home: &Path, record: &SandboxRecord) -> Result<State, SdkRefusal> {
 
 /// The `fix` of a broken Workspace.
 pub fn unmount_fix(workspace: &str) -> String {
-    format!("layerfs workspace unmount {workspace} --discard --force")
+    format!(
+        "layerfs workspace unmount {workspace} --discard --force",
+        workspace = shell_word(workspace)
+    )
 }
 
 /// The state of Workspace `workspace` (its handle) from its daemon's

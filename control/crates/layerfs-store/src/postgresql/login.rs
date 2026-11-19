@@ -99,8 +99,7 @@ pub fn dial(record: &StoreRecord, url: &str) -> Result<String> {
 /// then name it.
 pub fn no_auth_fix(store: &str) -> String {
     format!(
-        "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store update {store} --auth <auth>"
-    )
+        "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store update {store} --auth <auth>", store = layerfs_home::outcome::shell_word(store))
 }
 
 /// The PostgreSQL Stores whose record names login `auth`, by name.

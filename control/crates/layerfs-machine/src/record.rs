@@ -12,7 +12,7 @@
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, read_record, with_field, write_entity};
 use layerfs_home::op::{self, Op, Standing};
-use layerfs_home::outcome::{refused, with_fix};
+use layerfs_home::outcome::{refused, shell_word, with_fix};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -56,9 +56,11 @@ pub fn no_vm_name(name: &str) -> String {
 
 /// The fix of a machine whose record has no `vm_name`: `machine remove`,
 /// which then removes its record alone (a built-in `docker` is recorded
-/// again, with its 2.0 name, by the next call).
+/// again, with its 2.0 name, by the next call). While Stores or Sandboxes
+/// are recorded on it, that remove is refused `InUse` with the line that
+/// forgets them first (their removes take their records alone too).
 pub fn no_vm_name_fix(name: &str) -> String {
-    format!("layerfs machine remove {name}")
+    format!("layerfs machine remove {}", shell_word(name))
 }
 
 /// One machine's record as read (fields kept whole and in order).
@@ -120,6 +122,14 @@ impl MachineRecord {
             let fix = no_vm_name_fix(&self.name);
             with_fix(refused("Failed", no_vm_name(&self.name)), fix)
         })
+    }
+
+    /// Whether the record is one an earlier build made, with no provider
+    /// name (`vm_name`): this build reaches nothing of it, so a remove of
+    /// the machine, or of a Store or Sandbox recorded on it, takes records
+    /// alone. `native` has no provider name and is never nameless.
+    pub fn nameless(&self) -> bool {
+        self.name != "native" && self.text("vm_name").is_none()
     }
 
     /// The machine's name (its folder's).

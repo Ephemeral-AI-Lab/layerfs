@@ -7952,22 +7952,25 @@
      "quiet": false,
      "profile": "full",
      "short": {
-      "always": [
-       "ok"
-      ],
-      "sometimes": []
+      "always": [],
+      "sometimes": [
+       "ok",
+       "left"
+      ]
      },
      "long": [
       "ok",
       "outcome",
-      "store"
+      "store",
+      "left"
      ],
      "item": null,
      "examples": {
       "short": [
-       "{\"ok\":true}"
+       "{\"ok\":true}",
+       "records alone: {\"left\":[\"machine old's record has no 2.0 name, so only Store shop's records were removed: its file stays on that machine's disk, in the VM or container an earlier build made, which no call reaches\"]}"
       ],
-      "long": "{\"ok\":true,\"outcome\":\"removed\",\"store\":\"shop\"}"
+      "long": "{\"ok\":true,\"outcome\":\"removed\",\"store\":\"shop\",\"left\":null}"
      },
      "dropped": [
       {
