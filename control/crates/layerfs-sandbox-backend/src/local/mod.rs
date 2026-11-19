@@ -14,7 +14,11 @@ pub(crate) mod listener;
 pub(crate) mod os_impl;
 pub(crate) mod search;
 pub(crate) mod streams;
-pub use create::{Local, LocalCreateFailure, LocalPaths, LocalPhase};
+#[cfg(target_os = "macos")]
+pub use create::LocalCreateFailure;
+#[cfg(target_os = "macos")]
+pub(crate) use create::LOG;
+pub use create::{Local, LocalPaths, LocalPhase};
 #[cfg(target_os = "linux")]
 pub(crate) use os_impl::linux as os;
 #[cfg(target_os = "linux")]

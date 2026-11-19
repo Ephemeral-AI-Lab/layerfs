@@ -20,6 +20,7 @@ use crate::workspace::calls::at;
 use crate::workspace::dispatch::call as dispatch;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{with_fix, with_next, Outcome as Answer};
 use layerfs_machine::worker::Unreached;
 use layerfs_sandbox_backend::Stop;
@@ -156,7 +157,11 @@ fn lost(refusal: SdkRefusal, ws: &str, id: &ExecId) -> SdkRefusal {
     let refusal = with_next(refusal, "exec", SdkValue::text(id.as_str()));
     with_fix(
         refusal,
-        format!("layerfs workspace cancel {ws} --exec {id}"),
+        format!(
+            "layerfs workspace cancel {ws} --exec {id}",
+            ws = shell_word(ws),
+            id = shell_word(id.as_str())
+        ),
     )
 }
 

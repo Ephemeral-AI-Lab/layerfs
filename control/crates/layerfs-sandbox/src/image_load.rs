@@ -26,6 +26,7 @@ use crate::images::{refused_with, stopped};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home;
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{failed, refused, with_fix, Outcome};
 use layerfs_store::place::Worker;
 use sha2::{Digest, Sha256};
@@ -548,7 +549,10 @@ fn capacity(machine: &str, probe: &SdkValue, id: &str, size: u64, staged: u64) -
     );
     Err(with_fix(
         refusal,
-        format!("layerfs machine prune {machine} --unused"),
+        format!(
+            "layerfs machine prune {machine} --unused",
+            machine = shell_word(machine)
+        ),
     ))
 }
 

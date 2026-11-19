@@ -21,6 +21,7 @@ use crate::{dispatch, files};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::helpers;
 use layerfs_home::home::{self, paths};
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::Unreached;
 use layerfs_store::resolve::{self, Target};
@@ -57,7 +58,10 @@ pub fn check(home: &Path, id: &str, daemon: &DaemonRecord) -> Result<()> {
                 "machine {machine}, which runs Sandbox {id}, is not running; start it with `layerfs machine start {machine}`"
             ),
         );
-        let fix = format!("layerfs machine start {machine}");
+        let fix = format!(
+            "layerfs machine start {machine}",
+            machine = shell_word(machine)
+        );
         return Err(layerfs_home::outcome::with_fix(refusal, fix));
     }
     if forward.pid().is_none() || forward.alive() {

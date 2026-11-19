@@ -101,6 +101,17 @@ impl Sandbox {
         stdout: &mut (dyn Write + Send),
         stderr: &mut (dyn Write + Send),
     ) -> Result<ExecExit, Box<WireFailure>> {
+        // a reopened Sandbox runs the helper copy in its own folder; one
+        // made before that copy existed has none, and nothing else is used
+        // in its place
+        match std::fs::metadata(&self.helper) {
+            Ok(metadata) if metadata.is_file() && metadata.len() > 0 => {}
+            _ => {
+                return Err(WireFailure::local(RuntimeError::Unsupported(
+                    super::NO_HELPER_COPY,
+                )))
+            }
+        }
         let mut command = Command::new(&self.helper);
         command
             .arg("exec")

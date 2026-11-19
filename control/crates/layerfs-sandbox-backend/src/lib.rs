@@ -33,7 +33,7 @@ pub mod steps;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod stop;
 mod types;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "macos")]
 pub use backend::host_process;
 #[cfg(target_os = "linux")]
 pub use backend::namespaces::{self, NamespaceProvider};

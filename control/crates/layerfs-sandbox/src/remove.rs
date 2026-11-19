@@ -18,7 +18,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home;
 use layerfs_home::op::{Op, Standing};
-use layerfs_home::outcome::{refused, with_next};
+use layerfs_home::outcome::{refused, shell_word, with_next};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -104,6 +104,15 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
     }
     if let Some(unnamed) = foreign(&home, &found)? {
         return forget(&home, events, name, unnamed, Worker::Ask);
+    }
+    // a local record this build does not read (RV3 FAIL 2, 3): its
+    // identity cannot be checked, so nothing is signalled and no Store or
+    // daemon is resolved
+    if let Some(daemon) = found.daemon() {
+        if let Some(why) = crate::reopen::unread(daemon) {
+            let first = crate::lifecycle::unread_left(daemon, &why);
+            return forget(&home, events, name, first, Worker::Ask);
+        }
     }
     let force = request.force;
     // the commands this home records, which a forced remove cancels first
@@ -192,6 +201,19 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
         false => None,
     };
     match stopped {
+        // a record its side does not read went by its records alone, no
+        // signal sent (RV3 FAIL 2, 3): as gone, `left` saying what may remain
+        Ok(value) if value.get_text("kind") == Some("Forgotten") && value.get("left").is_some() => {
+            phase(events, "delete", None);
+            direct::release(&home, &record);
+            remove_folder(&dir)?;
+            done(events);
+            let left = match value.get("left") {
+                Some(SdkValue::List(items)) => texts(items).map(str::to_owned).collect(),
+                _ => Vec::new(),
+            };
+            Ok(Removed::AlreadyGone { left })
+        }
         Ok(value) => {
             phase(events, "delete", None);
             direct::release(&home, &record);
@@ -265,7 +287,10 @@ fn shown(refusal: SdkRefusal, handle_of: &dyn Fn(&str) -> String) -> SdkRefusal 
 /// one this home gives it (`<prefix><name>`, the run folder an earlier
 /// build named `lfs-<home id8>-<name>`): its run folder and daemon process,
 /// which this build neither reopens nor deletes, and the line that removes
-/// them. `None` for a record with the name this home gives, or none.
+/// them. The process is named only while the one its record identifies
+/// (id, start time and boot) still runs (RV3 FAIL 4): a reused id is never
+/// offered to `kill`. `None` for a record with the name this home gives,
+/// or none.
 fn foreign(home: &Path, record: &SandboxRecord) -> Result<Option<String>> {
     let Some(daemon) = record.daemon() else {
         return Ok(None);
@@ -283,17 +308,27 @@ fn foreign(home: &Path, record: &SandboxRecord) -> Result<Option<String>> {
         return Ok(None);
     }
     let folder = daemon.directory().unwrap_or(recorded);
-    let pid = daemon
-        .pid()
-        .map_or("its record names none".to_owned(), |pid| pid.to_string());
-    let fix = match daemon.pid() {
-        Some(pid) => format!("`kill {pid}; rm -rf {folder}` removes them"),
-        None => format!("`rm -rf {folder}` removes the folder"),
-    };
-    Ok(Some(format!(
+    let word = shell_word(folder);
+    let said = format!(
         "its record names {recorded}, which this build does not give it, so its run folder \
-         {folder} and its daemon process ({pid}) were not touched: {fix}"
-    )))
+         {folder} and its daemon process were not touched"
+    );
+    let process = crate::reopen::recorded_process(daemon);
+    Ok(Some(match process {
+        Ok(process) if process.alive() => {
+            let pid = process.pid;
+            format!(
+                "{said}: process {pid} still runs, and `kill {pid}; rm -rf {word}` removes them"
+            )
+        }
+        Ok(_) => format!(
+            "{said}: the process its record names is gone, and `rm -rf {word}` removes the folder"
+        ),
+        Err(_) => format!(
+            "{said}: its record does not identify that process, so none is named here, and \
+             `rm -rf {word}` removes the folder once nothing runs in it"
+        ),
+    }))
 }
 
 /// Removes the record of Sandbox `name` that this build does not reopen:

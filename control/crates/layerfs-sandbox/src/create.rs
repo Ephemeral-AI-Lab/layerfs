@@ -12,6 +12,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
 use layerfs_home::op::Op;
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{public_code, refused, with_fix, FIX};
 use layerfs_store::record::StoreRef;
 use layerfs_store::resolve;
@@ -199,7 +200,13 @@ pub fn create(
             let start_failed =
                 public_code(&refusal.code) == "Failed" && refusal.detail.get(FIX).is_none();
             Err(match start_failed {
-                true => with_fix(refusal, format!("layerfs machine doctor {machine}")),
+                true => with_fix(
+                    refusal,
+                    format!(
+                        "layerfs machine doctor {machine}",
+                        machine = shell_word(machine)
+                    ),
+                ),
                 false => refusal,
             })
         }
