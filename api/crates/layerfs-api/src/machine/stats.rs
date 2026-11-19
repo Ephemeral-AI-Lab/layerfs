@@ -7,6 +7,7 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
 use layerfs_home::time::iso;
+use layerfs_sandbox::inspect::process::shown_usage;
 use layerfs_sandbox::inspect::{machine_space, machine_stats};
 
 /// Its answer: the machine's processors, memory and data disk.
@@ -121,7 +122,7 @@ fn stats(read: &SdkValue) -> SdkValue {
             ("live", field(sandbox, "live")),
             ("live_reason", field(sandbox, "live_reason")),
             ("started_at", at(field(sandbox, "started_at"))),
-            ("usage", field(sandbox, "usage")),
+            ("usage", shown_usage(&field(sandbox, "usage"))),
             ("usage_reason", field(sandbox, "usage_reason")),
         ])
     });

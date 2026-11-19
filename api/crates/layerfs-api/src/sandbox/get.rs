@@ -10,6 +10,7 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_home::time::iso;
 use layerfs_sandbox::family::{get, GetRequest, Got, ListedWorkspace};
+use layerfs_sandbox::inspect::process::shown_usage;
 use layerfs_sandbox::record::SandboxRecord;
 use layerfs_sandbox::state::activity;
 
@@ -211,27 +212,6 @@ fn workspace(listed: &ListedWorkspace) -> SdkValue {
     ]))
 }
 
-/// A cgroup's usage as the rows name it: `cpu_usec` as `cpu_ms`,
-/// `memory_current` as `memory_bytes`, `pids` as `pid_count`, `oom_kills` as
-/// `oom_kill_count`; null stays null.
-fn usage(value: &SdkValue) -> SdkValue {
-    if !matches!(value, SdkValue::Map(_)) {
-        return SdkValue::Null;
-    }
-    let cpu = match value.get("cpu_usec") {
-        Some(SdkValue::Int(usec)) => SdkValue::Int(usec / 1000),
-        _ => SdkValue::Null,
-    };
-    SdkValue::map([
-        ("cpu_ms", cpu),
-        ("memory_bytes", field(value, "memory_current")),
-        ("memory_peak_bytes", field(value, "memory_peak")),
-        ("memory_file_bytes", field(value, "memory_file")),
-        ("pid_count", field(value, "pids")),
-        ("oom_kill_count", field(value, "oom_kills")),
-    ])
-}
-
 /// `--with stats`: null unless the Sandbox is ready.
 fn stats(got: &Got) -> SdkValue {
     if got.state != layerfs_home::state::State::Ready {
@@ -254,14 +234,14 @@ fn stats(got: &Got) -> SdkValue {
         SdkValue::map([
             ("workspace", SdkValue::text(&listed.ws)),
             ("overlay_bytes", field(&listed.item, "overlay_bytes")),
-            ("usage", usage(&field(&listed.item, "usage"))),
+            ("usage", shown_usage(&field(&listed.item, "usage"))),
             ("usage_reason", field(&listed.item, "usage_reason")),
         ])
     });
     let capacity = (got.daemon_capacity.as_ref()).map(|model| model.to_sdk());
     SdkValue::map([
         ("daemon", daemon),
-        ("usage", usage(&process("usage"))),
+        ("usage", shown_usage(&process("usage"))),
         ("usage_reason", process("usage_reason")),
         ("daemon_capacity", capacity.unwrap_or_default()),
         ("workspaces", SdkValue::List(workspaces.collect())),

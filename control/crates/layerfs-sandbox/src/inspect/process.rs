@@ -263,6 +263,31 @@ fn group_usage(group: &Path) -> (SdkValue, Option<&'static str>) {
     (usage, reason)
 }
 
+/// A usage [`usage_in`] read (here, or by a worker of any build, whose
+/// answer keeps these names) as the call surface names it in
+/// `sandbox.get --with stats` and `machine.stats`: `cpu_usec` as whole
+/// `cpu_ms`, `memory_current` as `memory_bytes`, `memory_peak` as
+/// `memory_peak_bytes`, `memory_file` as `memory_file_bytes`, `pids` as
+/// `pid_count`, `oom_kills` as `oom_kill_count`. Anything but a map is null.
+pub fn shown_usage(read: &SdkValue) -> SdkValue {
+    if !matches!(read, SdkValue::Map(_)) {
+        return SdkValue::Null;
+    }
+    let of = |name: &str| read.get(name).cloned().unwrap_or(SdkValue::Null);
+    let cpu = match read.get("cpu_usec") {
+        Some(SdkValue::Int(usec)) => SdkValue::Int(usec / 1000),
+        _ => SdkValue::Null,
+    };
+    SdkValue::map([
+        ("cpu_ms", cpu),
+        ("memory_bytes", of("memory_current")),
+        ("memory_peak_bytes", of("memory_peak")),
+        ("memory_file_bytes", of("memory_file")),
+        ("pid_count", of("pids")),
+        ("oom_kill_count", of("oom_kills")),
+    ])
+}
+
 /// `sandbox.get`'s per-Workspace usage of the Sandbox `daemon` records,
 /// under cgroup v2 hierarchy `root` ([`CGROUP_ROOT`]): `workspace_usage`,
 /// one `{ workspace, usage, usage_reason? }` for each `ws-<workspace>`
