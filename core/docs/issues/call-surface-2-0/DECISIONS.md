@@ -530,25 +530,38 @@ rule below (b2eb2de931).
 - **RC-3** (RC-A F3 and NOTE) A `Dirty` refusal's `changes` are `workspace status`'s short-form
   entries (`type` left out for a file); `changes_count` only beside a cut list. Its fix is V22-7's
   `layerfs workspace commit <workspace>`, with no `-m` placeholder.
-- **RC-4** (RC-A N5, RC-B N15) The fix of a mount of `main` is runnable:
-  `layerfs branch fork <project> work && layerfs workspace mount <sandbox> work`. A placeholder
-  stays only where LayerFS cannot know the value (a secret key, a saved login's name).
+- **RC-4** (RC-A N5, RC-B N15; RV5) The fix of a mount of `main` is runnable:
+  `layerfs branch fork <project> <work> && layerfs workspace mount <sandbox> <work>`, where
+  `<work>` is `work`, or the first of `work-2`, `work-3`, ... that no Branch of the project has,
+  read at refusal time. A placeholder stays only where LayerFS cannot know the value (a secret
+  key, a saved login's name).
 - **RC-5** (RC-A N9) Unchanged long forms are kept as built, since neither the spec nor the manual
   rules on them: `workspace commit`, the file writes and `branch publish` answer `parent`,
   `message` and `created_at` (publish: `source_commit`, `base`, `root`, `size`) null when nothing
   was made; `branch merge` unchanged fills `parent`, `second_parent` and `merge_base` with the
   head it already holds.
-- **RC-6** (RC-B F1, N12) A forced `sandbox remove` ends, once its daemon is stopped, each mount
-  intent its Workspaces still hold, once each (released, or marked uncertain when the Store
-  refuses the delete); one it could not end is a sentence of `left`. A sqlite Store's
-  `store compact` on this computer first ends the mount intents Sandboxes this home no longer
-  records left, and `store doctor`'s `store.operation` warns of them with
-  `fix: layerfs store compact <store>`. No Store format change.
+- **RC-6** (RC-B F1, N12; revised after RV5 FAIL-1 and FAIL-2) A forced `sandbox remove`, on
+  `native` and on a machine, ends once its runtime is confirmed stopped the mount intent each of
+  its Workspaces held, once each (released, or marked uncertain when the Store refuses the
+  delete): the call that stopped the intent's owner ends what that owner held. One it could not
+  end is a sentence of `left` saying why, what it refuses (`branch remove` of its Branch,
+  `store compact`) and what ends it where the Sandbox ran: the Store's own admission once it can
+  prove the owner gone (on a machine's sqlite Store after that machine's kernel restarts; never
+  on macOS `native` or a PostgreSQL Store), never `store compact` alone. Nothing else ends a
+  mount intent: under V20-2 and the persistence admission rule, `store compact` and the other GC
+  calls settle only intents whose owner the admission proves dead, and a Sandbox folder that is
+  gone is no such proof (`sandbox remove` forgets an unread or retired-docker record without
+  stopping its daemon). V20-4 stands: no doctor gains a leftover check; a held Store's `InUse`
+  refusal keeps naming its holders' count, with no guessed fix. No Store format change.
 - **RC-7** (RC-B F3) A call that needs the worker of a machine whose record has no `vm_name` is
   refused `Failed` before anything is dialled (V20-8), with UI2-8's chain as its fix, built at the
   call boundary on the refusal path alone.
-- **RC-8** (RC-B N1) A home whose `layerfs.json` cannot be read is `broken` `outdated` (MIG: not a
-  2.0 home) with V20-6's move-aside fix; `failed` is not a reason of `home get`.
+- **RC-8** (RC-B N1; revised after RV5) A home whose `layerfs.json` cannot be parsed, or names no
+  layout this build knows, is `broken` `outdated` (MIG: not a 2.0 home) with V20-6's move-aside
+  fix. One the system refuses to read (EACCES, EIO on `layerfs.json`, or the folder's listing) may
+  be a real 2.0 home and is never advised to be moved aside: it is `broken` `failed`, the row
+  note's reason for a `layerfs.json` it cannot read, with the OS error as `message` and no fix
+  (the spec gives none for permissions).
 - **RC-9** (RC-B N3) Help prints an optional positional as the rows do, `[name]`.
 - **RC-10** (RC-B N13) A native Sandbox's `platform` stays `mac`, #529's Sandbox platform word: the
   spec names no Sandbox platform for `native`.
