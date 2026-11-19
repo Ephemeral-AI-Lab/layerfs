@@ -127,12 +127,20 @@ fn the_mode_is_answered_as_it_is() {
 
 #[test]
 fn a_foreign_home_is_outdated_and_init_refuses_it_with_the_move_fix() {
-    // a `layerfs.json` of another layout, and a stray file with none
+    // a `layerfs.json` of another layout, older or newer; one that cannot be
+    // parsed (not JSON, no layout number: MIG, RC-8); and a stray file with
+    // none
     let cases = [
         (
             "layerfs.json",
             r#"{"layout":2,"id":"0123456789abcdef0123456789abcdef"}"#,
         ),
+        (
+            "layerfs.json",
+            r#"{"layout":9,"id":"0123456789abcdef0123456789abcdef"}"#,
+        ),
+        ("layerfs.json", "{not json"),
+        ("layerfs.json", "{}"),
         ("notes.txt", "kept"),
     ];
     for (name, text) in cases {
@@ -148,15 +156,24 @@ fn a_foreign_home_is_outdated_and_init_refuses_it_with_the_move_fix() {
         assert_eq!(got.get_text("state"), Some("broken"), "{name}");
         assert_eq!(got.get_text("reason"), Some("outdated"), "{name}");
         assert_eq!(got.get_text("fix"), Some(fix.as_str()), "{name}");
+        let message = layerfs_home::home::layout::foreign(&home).message;
+        assert_eq!(got.get_text("message"), Some(message.as_str()), "{text}");
         let refused =
             layerfs_api::call(Some(&home), "home.init", SdkValue::Null, &mut |_| {}).unwrap_err();
         assert_eq!(refused.code, "Unsupported", "{}", refused.message);
         assert_eq!(refused.detail.get_text("fix"), Some(fix.as_str()));
         // any other call is refused the same way, and nothing is written, not
         // even the call log
-        let other = layerfs_api::call(Some(&home), "machine.list", SdkValue::Null, &mut |_| {})
-            .unwrap_err();
-        assert_eq!(other.code, "Unsupported", "{}", other.message);
+        for call in ["machine.list", "store.list", "home.log"] {
+            let other =
+                layerfs_api::call(Some(&home), call, SdkValue::Null, &mut |_| {}).unwrap_err();
+            assert_eq!(
+                other.code, "Unsupported",
+                "{call} {text}: {}",
+                other.message
+            );
+            assert_eq!(other.detail.get_text("fix"), Some(fix.as_str()), "{call}");
+        }
         assert_eq!(std::fs::read_to_string(home.join(name)).unwrap(), text);
         let mut names: Vec<String> = (std::fs::read_dir(&home).unwrap())
             .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
@@ -165,28 +182,6 @@ fn a_foreign_home_is_outdated_and_init_refuses_it_with_the_move_fix() {
         assert_eq!(names, [name]);
         let _ = std::fs::remove_dir_all(&home);
     }
-}
-
-#[test]
-fn a_home_it_cannot_read_is_broken_not_refused() {
-    let home = place();
-    std::fs::DirBuilder::new()
-        .mode(0o700)
-        .create(&home)
-        .unwrap();
-    std::fs::write(home.join("layerfs.json"), "not json").unwrap();
-    let got = get(&home);
-    // not a 2.0 home's `layerfs.json` (MIG): `outdated`, one of the row's
-    // reasons, with the fix that moves it aside (C11; RC-B N1)
-    assert_eq!(got.get_text("state"), Some("broken"));
-    assert_eq!(got.get_text("reason"), Some("outdated"));
-    let shown = home.display().to_string();
-    assert_eq!(
-        got.get_text("fix"),
-        Some(format!("mv {shown} {shown}.old && layerfs home init").as_str())
-    );
-    assert!(got.get_text("message").is_some());
-    let _ = std::fs::remove_dir_all(&home);
 }
 
 /// `home.get` of `home` while `stage` makes the system refuse to read its

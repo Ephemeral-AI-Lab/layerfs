@@ -16,7 +16,7 @@ left on disk, and the report all six doctors answer, within
 ```text
  home.doctor -> home.layout
    detect(home)             layout read only
-     unreadable    -> home.layout fails
+     unreadable    -> home.layout fails, the OS error, no fix
      Empty         -> no home.layout, no home.records; the home stays absent
      Foreign       -> home.layout fails, fix `mv <home> <home>.old && layerfs home init`;
                       no records (not a LayerFS 2.0 home)

@@ -1,5 +1,6 @@
 //! `layerfs.json` and the layout version (#533 step 3): an empty home, the
-//! current layout, and a foreign folder (MIG), each in its own test.
+//! current layout, a foreign or unparsable `layerfs.json` (MIG, RC-8) and one
+//! the system refuses to read, each in its own test.
 use layerfs_home::home::{detect, ensure, open, Layout, LAYOUT_VERSION};
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
@@ -141,7 +142,7 @@ fn a_folder_with_a_stray_file_and_no_layerfs_json_is_foreign_and_left_as_it_was(
 }
 
 #[test]
-fn a_layerfs_json_of_another_layout_is_foreign_and_a_broken_one_is_refused() {
+fn a_layerfs_json_of_another_layout_or_unparsable_is_foreign() {
     let home = tempdir("other");
     let id = "b".repeat(32);
     // any layout but this build's, older or newer: refused with the fix,
@@ -157,14 +158,44 @@ fn a_layerfs_json_of_another_layout_is_foreign_and_a_broken_one_is_refused() {
         assert!(fix(&refused).is_some_and(|fix| fix.ends_with("&& layerfs home init")));
         assert_eq!(before, snapshot(&home), "layout {layout} was written");
     }
-    // a broken `layerfs.json` is refused `Failed`
+    // one that cannot be parsed (not JSON, no layout number, this layout
+    // with a bad id) is not a 2.0 home's either: the same refusal (MIG, RC-8)
     for broken in [
-        "{\"layout\":3,\"id\":\"xyz\"}".to_owned(),
-        format!("{{\"id\":\"{id}\"}}"),
+        "{not json".to_owned(),
+        "{}".to_owned(),
         "not json".to_owned(),
+        format!("{{\"id\":\"{id}\"}}"),
+        "{\"layout\":3,\"id\":\"xyz\"}".to_owned(),
+        "{\"layout\":3}".to_owned(),
     ] {
         std::fs::write(home.join("layerfs.json"), &broken).unwrap();
-        assert_eq!(detect(&home).unwrap_err().code, "Failed", "{broken}");
+        let before = snapshot(&home);
+        assert_eq!(detect(&home).unwrap(), Layout::Foreign, "{broken}");
+        layerfs_home::logs::append(&home, &line());
+        let refused = open(&home).unwrap_err();
+        assert_eq!(refused.code, "Unsupported", "{broken}");
+        assert_eq!(
+            fix(&refused),
+            Some(layerfs_home::home::layout::foreign_fix(&home).as_str())
+        );
+        assert_eq!(before, snapshot(&home), "{broken} was written");
     }
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_layerfs_json_the_system_refuses_to_read_is_refused_unreadable() {
+    let home = tempdir("unreadable");
+    // a folder in its place: the read is refused with EISDIR, for root too
+    std::fs::create_dir(home.join("layerfs.json")).unwrap();
+    let refused = detect(&home).unwrap_err();
+    assert_eq!(refused.code, "Failed");
+    assert!(refused.detail.get_bool("unreadable"), "{refused:?}");
+    assert!(
+        refused.message.ends_with("Is a directory (os error 21)"),
+        "{}",
+        refused.message
+    );
+    assert_eq!(fix(&refused), None);
     std::fs::remove_dir_all(home).unwrap();
 }
