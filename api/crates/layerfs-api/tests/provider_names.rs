@@ -5,9 +5,12 @@
 //! - A new home's `docker` machine records `vm_name`
 //!   `layerfs-<home id8>-docker`; its worker container and volume carry it.
 //! - A `docker` record from before that (no `vm_name`) is read as it is
-//!   and never rewritten; a start of it is refused `Failed` naming what made
-//!   it, with its doctor as the fix, before the provider is asked for
-//!   anything: this build computes no older name.
+//!   and never rewritten; it reads `broken` `outdated`, and a start of it is
+//!   refused `Failed` naming what made it, both with `machine remove docker`
+//!   as the fix, before the provider is asked for anything: this build
+//!   computes no older name. That remove takes its record alone, asking the
+//!   provider nothing, and the next call records `docker` again with its
+//!   2.0 name.
 //! - `machine.create` refuses `Exists` a name whose VM name is another
 //!   machine's recorded one (`a.b` then `a_b`), and refuses `InvalidInput`
 //!   a name over 46 characters, both before the provider is asked for
@@ -171,7 +174,7 @@ fn provider_names_and_their_refusals() {
     // --- a home from before: its `docker` record has no `vm_name`; it is
     // never rewritten, and a start of it is refused before any provider call
     let old = tempdir("old");
-    home::open(&old).unwrap();
+    let old_id = home::open(&old).unwrap().id;
     let old_docker = SdkValue::map([
         ("v", SdkValue::Int(1)),
         ("name", t("docker")),
@@ -204,9 +207,30 @@ fn provider_names_and_their_refusals() {
     );
     assert_eq!(
         refused.detail.get_text("fix"),
-        Some("layerfs machine doctor docker")
+        Some("layerfs machine remove docker")
     );
+    let docker = [("machine", t("docker")), ("detail", SdkValue::Bool(true))];
+    let got = call(&old, "machine.get", &docker).unwrap();
+    assert_eq!(got.get_text("state"), Some("broken"), "{got:?}");
+    assert_eq!(got.get_text("reason"), Some("outdated"), "{got:?}");
+    assert_eq!(got.get_text("fix"), Some("layerfs machine remove docker"));
+    assert!(
+        (got.get_text("message").unwrap_or("")).contains("has no vm_name"),
+        "{got:?}"
+    );
+    // the remove takes the record alone; the next call records it again
+    let removed = call(&old, "machine.remove", &docker).unwrap();
+    assert_eq!(removed.get_text("outcome"), Some("removed"), "{removed:?}");
+    let said = removed.get_text("message").unwrap_or("");
+    assert!(said.contains("its record has no vm_name"), "{said}");
     assert_eq!(effects(&tools), before, "the provider was asked");
+    let again = call(&old, "machine.get", &docker).unwrap();
+    assert_eq!(again.get_text("state"), Some("stopped"), "{again:?}");
+    let made = read_record(&paths::machine_record(&old, "docker"))
+        .unwrap()
+        .unwrap();
+    let name = format!("layerfs-{}-docker", &old_id[..8]);
+    assert_eq!(made.get_text("vm_name"), Some(name.as_str()));
 
     // --- collisions: a VM name keeps no punctuation
     let home = fresh;

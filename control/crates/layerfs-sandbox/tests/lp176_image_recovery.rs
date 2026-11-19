@@ -1896,6 +1896,7 @@ esac
         &SdkValue::map([
             ("name", SdkValue::text("vm1")),
             ("platform", SdkValue::text("lima")),
+            ("vm_name", SdkValue::text("layerfs-test-vm")),
         ]),
     )
     .unwrap();

@@ -10,10 +10,11 @@
 //! sentence behind it in `error`. In order: a live owner's `op` is `busy`;
 //! a gone owner's uncertain `op` is `broken` `unresolved`; a gone owner's
 //! certain `op` is ignored (a read writes nothing); a platform removed in
-//! 2.0 is `broken` `unsupported`; a recorded `reason` is `broken` with it;
-//! then `running` is `ready` and anything else `stopped`. `native` is
-//! always `ready`. `unknown` is never recorded: only a live read that
-//! could not be made answers it.
+//! 2.0 is `broken` `unsupported`; `native` is always `ready`; a record
+//! with no `vm_name` (an earlier build's) is `broken` `outdated` with the
+//! fix `machine remove`; a recorded `reason` is `broken` with it; then
+//! `running` is `ready` and anything else `stopped`. `unknown` is never
+//! recorded: only a live read that could not be made answers it.
 //!
 //! Built without the `machine` feature too: the caller says whether the
 //! record's platform was removed (`layerfs-control`'s
@@ -134,6 +135,12 @@ impl MachineRecord {
         if name == "native" {
             return State::Ready;
         }
+        // a record an earlier build made, with no provider name: only its
+        // record can go
+        if self.text("vm_name").is_none() {
+            let fix = super::record::no_vm_name_fix(name);
+            return State::broken(Reason::Outdated, Some(&fix));
+        }
         if let Some(reason) = self.reason() {
             let fix = fix(name, reason, false, sandboxes);
             return State::broken(reason, fix.as_deref());
@@ -152,6 +159,9 @@ impl MachineRecord {
         let State::Broken { reason, .. } = state else {
             return None;
         };
+        if self.name() != "native" && self.text("vm_name").is_none() {
+            return Some(super::record::no_vm_name(self.name()));
+        }
         let said = self.text("error").map(str::to_owned);
         match reason {
             Reason::Outdated if sandboxes > 0 => {

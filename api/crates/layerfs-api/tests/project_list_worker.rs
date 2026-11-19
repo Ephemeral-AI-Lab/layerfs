@@ -155,6 +155,7 @@ fn shop_on_box(tag: &str, listener: &TcpListener, root: Option<&Path>) -> PathBu
         &SdkValue::map([
             ("name", t("box")),
             ("platform", t("lima")),
+            ("vm_name", t("layerfs-test-vm")),
             ("state", t("running")),
         ]),
     )

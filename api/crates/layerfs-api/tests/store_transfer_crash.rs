@@ -50,16 +50,20 @@ fn call_ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
 fn home_with_shop() -> (PathBuf, PathBuf) {
     let home = tempdir("home");
     home::open(&home).unwrap();
-    for (name, platform) in [("native", "native"), ("box", "lima")] {
-        write_record(
-            &paths::machine_record(&home, name),
-            &SdkValue::map([
-                ("name", t(name)),
-                ("platform", t(platform)),
-                ("state", t("running")),
-            ]),
-        )
-        .unwrap();
+    // `box` records its provider name, as every 2.0 create does
+    for (name, platform, vm_name) in [
+        ("native", "native", None),
+        ("box", "lima", Some("layerfs-test-box")),
+    ] {
+        let mut record = SdkValue::map([
+            ("name", t(name)),
+            ("platform", t(platform)),
+            ("state", t("running")),
+        ]);
+        if let Some(vm_name) = vm_name {
+            record = home::with_field(record, "vm_name", t(vm_name));
+        }
+        write_record(&paths::machine_record(&home, name), &record).unwrap();
     }
     let root = tempdir("guest");
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -404,7 +408,11 @@ fn wrong_direction_refuses_unresolved_without_deleting_leftover_and_remove_clean
     // A move to another machine refuses it too, keeping `box`'s copy.
     write_record(
         &paths::machine_record(&home, "other"),
-        &SdkValue::map([("name", t("other")), ("platform", t("lima"))]),
+        &SdkValue::map([
+            ("name", t("other")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-test-other")),
+        ]),
     )
     .unwrap();
     let (code, message) = call(

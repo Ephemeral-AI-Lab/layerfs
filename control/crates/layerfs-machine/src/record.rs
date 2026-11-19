@@ -54,14 +54,11 @@ pub fn no_vm_name(name: &str) -> String {
     )
 }
 
-/// The fix of a machine whose record has no `vm_name`: a built-in one
-/// (`docker`), which is never removed, has its doctor; any other has
-/// `machine remove`, which then removes its record alone.
-pub fn no_vm_name_fix(name: &str, platform: Option<&str>) -> String {
-    match platform {
-        Some("native" | "docker") => format!("layerfs machine doctor {name}"),
-        _ => format!("layerfs machine remove {name}"),
-    }
+/// The fix of a machine whose record has no `vm_name`: `machine remove`,
+/// which then removes its record alone (a built-in `docker` is recorded
+/// again, with its 2.0 name, by the next call).
+pub fn no_vm_name_fix(name: &str) -> String {
+    format!("layerfs machine remove {name}")
 }
 
 /// One machine's record as read (fields kept whole and in order).
@@ -120,7 +117,7 @@ impl MachineRecord {
     /// older name.
     pub fn provider_name(&self) -> Result<&str> {
         self.text("vm_name").ok_or_else(|| {
-            let fix = no_vm_name_fix(&self.name, self.platform_name());
+            let fix = no_vm_name_fix(&self.name);
             with_fix(refused("Failed", no_vm_name(&self.name)), fix)
         })
     }

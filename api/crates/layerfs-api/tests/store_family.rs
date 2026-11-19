@@ -52,16 +52,20 @@ fn detail(
 fn home_with_box() -> (PathBuf, PathBuf) {
     let home = tempdir("home");
     home::open(&home).unwrap();
-    for (name, platform) in [("native", "native"), ("box", "lima")] {
-        write_record(
-            &paths::machine_record(&home, name),
-            &SdkValue::map([
-                ("name", t(name)),
-                ("platform", t(platform)),
-                ("state", t("running")),
-            ]),
-        )
-        .unwrap();
+    // `box` records its provider name, as every 2.0 create does
+    for (name, platform, vm_name) in [
+        ("native", "native", None),
+        ("box", "lima", Some("layerfs-test-box")),
+    ] {
+        let mut record = SdkValue::map([
+            ("name", t(name)),
+            ("platform", t(platform)),
+            ("state", t("running")),
+        ]);
+        if let Some(vm_name) = vm_name {
+            record = home::with_field(record, "vm_name", t(vm_name));
+        }
+        write_record(&paths::machine_record(&home, name), &record).unwrap();
     }
     let root = tempdir("guest");
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -591,7 +595,11 @@ fn compact_of_a_remote_sqlite_store_takes_its_machines_worker_route() {
     .unwrap();
     write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-test-box")),
+        ]),
     )
     .unwrap();
     // No worker is recorded for `box`: the call takes the machine's worker

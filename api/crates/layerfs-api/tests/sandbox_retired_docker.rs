@@ -102,6 +102,7 @@ fn home_with_retired(tag: &str, worker: SocketAddr, converted: bool) -> PathBuf 
         &SdkValue::map([
             ("name", t("docker")),
             ("platform", t("docker")),
+            ("vm_name", t("layerfs-test-vm")),
             ("state", t("running")),
         ]),
     )

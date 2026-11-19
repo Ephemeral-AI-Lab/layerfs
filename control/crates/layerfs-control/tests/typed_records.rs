@@ -126,15 +126,26 @@ mod machines {
         let dev = |state: &str| {
             machine(
                 "dev",
-                &format!(r#"{{"platform":"lima","state":"{state}"}}"#),
+                &format!(r#"{{"platform":"lima","vm_name":"layerfs-0-dev","state":"{state}"}}"#),
             )
         };
         assert_eq!(dev("running").recorded(0), State::Ready);
         assert_eq!(dev("stopped").recorded(0), State::Stopped);
         assert_eq!(
-            machine("vm", r#"{"platform":"lima"}"#).recorded(0),
+            machine("vm", r#"{"platform":"lima","vm_name":"layerfs-0-vm"}"#).recorded(0),
             State::Stopped
         );
+        // an earlier build's record, with no provider name: only its record
+        // can go
+        let old = machine("docker", r#"{"platform":"docker","state":"running"}"#);
+        assert_eq!(
+            broken(&old.recorded(0)),
+            (Reason::Outdated, Some("layerfs machine remove docker"))
+        );
+        assert!(old
+            .message(&old.recorded(0), 0)
+            .unwrap()
+            .contains("has no vm_name"));
         // a `failed` word with no reason is no 2.0 record: it reads stopped
         assert_eq!(dev("failed").recorded(0), State::Stopped);
         assert_eq!(
@@ -191,7 +202,7 @@ mod machines {
         machine(
             "dev",
             &format!(
-                r#"{{"name":"dev","platform":"lima","state":"running",
+                r#"{{"name":"dev","platform":"lima","vm_name":"layerfs-0-dev","state":"running",
                    "op":{{"name":"{name}","phase":"boot","owner":{{"pid":{pid}}},"uncertain":{uncertain}}}}}"#
             ),
         )

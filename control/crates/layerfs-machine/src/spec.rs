@@ -50,6 +50,14 @@ pub fn ensure_built_ins(home: &Path, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Forgets that this process found the built-in machines of the home at
+/// `home`: the next call writes a built-in record that is not there again
+/// (`machine remove docker` of a record with no `vm_name`).
+pub fn forget_built_ins(home: &Path) {
+    let mut ensured = ENSURED.lock().unwrap_or_else(|e| e.into_inner());
+    ensured.retain(|(path, _)| path != home);
+}
+
 /// Writes each built-in machine's record that is not there. A record that
 /// is there but cannot be read is left as it is, for its doctor to name
 /// (`machine.record`), and fails no call: every other machine, Store and

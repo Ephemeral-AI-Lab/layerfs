@@ -52,10 +52,17 @@ fn take_down(
         phases.end();
         return Ok(answer);
     }
-    // a created machine whose record has no `vm_name` (an earlier build's):
-    // this build cannot name its VM, so only the record goes
-    if record.provider_name().is_err() && !record.platform()?.built_in() {
-        let answer = drop_record(&home, name, "its record has no vm_name", related)?;
+    // a machine whose record has no `vm_name` (an earlier build's): this
+    // build cannot name its VM or container, so only the record goes; a
+    // built-in `docker` is recorded again, with its 2.0 name, by the next
+    // call
+    if record.provider_name().is_err() {
+        let reason = match record.platform()?.built_in() {
+            true => "its record has no vm_name; the next call records it again",
+            false => "its record has no vm_name",
+        };
+        let answer = drop_record(&home, name, reason, related)?;
+        super::spec::forget_built_ins(&home);
         phases.end();
         return Ok(answer);
     }
@@ -89,8 +96,9 @@ fn take_down(
 }
 
 /// Removes the record of a machine whose platform was removed in 2.0, or
-/// whose record has no `vm_name`, under the home lock and the same `InUse` check as a remove; nothing
-/// outside the home is touched, and `message` says so.
+/// whose record has no `vm_name`, under the home lock and the same `InUse`
+/// check as a remove; nothing outside the home is touched, and `message`
+/// says so.
 fn drop_record(home: &Path, name: &MachineName, reason: &str, related: Related) -> Outcome {
     let _lock = lock::take(home)?;
     let record = MachineRecord::of(home, name)?;

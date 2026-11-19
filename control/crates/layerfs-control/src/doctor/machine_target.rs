@@ -262,7 +262,11 @@ impl Machine<'_> {
                 Ok(spec)
             }
             Err(refusal) => {
+                let fix = refusal.detail.get_text("fix").map(str::to_owned);
                 self.checks.fail(ID, refusal.message);
+                if let Some(fix) = fix {
+                    self.checks.fix(ID, fix);
+                }
                 Err(Some("failed"))
             }
         }
