@@ -198,9 +198,11 @@ $ echo $?
 - **`get`**, short: `{ home, state, version }`, with `generation` when the
   home is ready, and `reason` and `fix` when it is broken (`missing`: no
   home there, fixed by `layerfs home init`; `outdated`: a folder that is
-  not a LayerFS 2.0 home, or one whose `layerfs.json` cannot be read, the
-  long form's `message` saying why, fixed by
-  `mv <home> <home>.old && layerfs home init`). Long:
+  not a LayerFS 2.0 home, or one whose `layerfs.json` cannot be parsed or
+  names no layout this build knows, fixed by
+  `mv <home> <home>.old && layerfs home init`; `failed`, with no fix: the
+  system refused to read `layerfs.json` or list the folder, a permission or
+  I/O error, which the long form's `message` names). Long:
   `home, state, version, generation, reason, fix, message, layout, mode,
   bundle, daemon, cache`. `mode` is the folder's permission bits as text
   (`"0700"`); `bundle` and `daemon` are

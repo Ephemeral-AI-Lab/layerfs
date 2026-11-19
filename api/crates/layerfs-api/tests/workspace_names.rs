@@ -227,3 +227,46 @@ fn a_start_that_fails_is_refused_in_words_with_a_fix() {
     assert!(!paths::sandbox_dir(&home, "two").exists());
     std::fs::remove_dir_all(&home).unwrap();
 }
+
+/// The fix of a mount of `main` forks a Branch no Branch has the name of
+/// (RC-4, RV5): `work` when free, else the first free of `work-2`,
+/// `work-3`, ... read from the project's Branches.
+#[test]
+fn a_mount_of_main_forks_an_unused_branch_name() {
+    let home = tempdir("unused");
+    home::open(&home).unwrap();
+    let folder = tempdir("unused-folder");
+    std::fs::write(folder.join("a.txt"), "a\n").unwrap();
+    call(&home, "store.create", &[("name", t("shop"))]).unwrap();
+    let project = ("project", t("shop/app"));
+    let folder_arg = ("folder", t(&folder.display().to_string()));
+    call(&home, "project.init", &[project.clone(), folder_arg]).unwrap();
+    write_record(
+        &paths::sandbox_record(&home, "one"),
+        &SdkValue::map([
+            ("name", t("one")),
+            ("project", t("shop/app")),
+            ("machine", t("native")),
+            ("id", t("one")),
+            ("daemon", SdkValue::map([("runtime", t("native"))])),
+        ]),
+    )
+    .unwrap();
+    let main_fix = || {
+        let args = [("sandbox", t("one")), ("branch", t("main"))];
+        fix_of(&home, "workspace.mount", &args).1
+    };
+    assert_eq!(
+        main_fix(),
+        "layerfs branch fork shop/app work && layerfs workspace mount one work"
+    );
+    for name in ["work", "work-2", "workshop"] {
+        call(&home, "branch.fork", &[project.clone(), ("name", t(name))]).unwrap();
+    }
+    assert_eq!(
+        main_fix(),
+        "layerfs branch fork shop/app work-3 && layerfs workspace mount one work-3"
+    );
+    std::fs::remove_dir_all(&home).unwrap();
+    let _ = std::fs::remove_dir_all(&folder);
+}

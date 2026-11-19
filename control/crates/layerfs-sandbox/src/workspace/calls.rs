@@ -105,6 +105,36 @@ pub struct StatusRequest {
     pub path: Option<String>,
 }
 
+/// The Branch name a fix forks from main in `project`: `work`, or the first
+/// of `work-2`, `work-3`, ... that no Branch has, read from one page of the
+/// project's Branches whose names start with `work`. `work` when that page
+/// cannot be read.
+fn unused_work(home: &Path, events: &mut Events<'_>, project: &str) -> String {
+    use layerfs_store::calls::{Names, StoreOp};
+    const PAGE: i64 = 1000;
+    let names = Names {
+        prefix: Some("work"),
+        exclude_prefix: None,
+        after: None,
+    };
+    let op = StoreOp::Branches { names, limit: PAGE };
+    let listed = layerfs_store::resolve::target(home, project)
+        .and_then(|target| layerfs_store::call::store_call(home, events, &target, &op));
+    let taken: Vec<String> = match listed.as_ref().ok().and_then(|page| page.get("items")) {
+        Some(SdkValue::List(items)) => (items.iter())
+            .filter_map(|item| item.get_text("branch").map(str::to_owned))
+            .collect(),
+        _ => Vec::new(),
+    };
+    (1..)
+        .map(|n| match n {
+            1 => "work".to_owned(),
+            n => format!("work-{n}"),
+        })
+        .find(|name| !taken.contains(name))
+        .unwrap_or_default()
+}
+
 /// A Workspace of the Sandbox, named `ws` from then on.
 pub fn mount(home: &Path, events: &mut Events<'_>, request: &MountRequest) -> Result<Mounted> {
     let home = home.to_path_buf();
@@ -121,11 +151,13 @@ pub fn mount(home: &Path, events: &mut Events<'_>, request: &MountRequest) -> Re
             "InvalidInput",
             "main is the project's published line, not a Branch, and is not mounted: fork a Branch from it and mount that",
         );
-        // a runnable line (RC-A N5): fork `work` from main, then mount it
+        // a runnable line (RC-4): fork a Branch no other has the name of
+        // from main, then mount it
+        let work = unused_work(&home, events, &project);
         return Err(with_fix(
             refusal,
             format!(
-                "layerfs branch fork {project} work && layerfs workspace mount {sandbox} work",
+                "layerfs branch fork {project} {work} && layerfs workspace mount {sandbox} {work}",
                 project = shell_word(&project),
                 sandbox = shell_word(name),
             ),
