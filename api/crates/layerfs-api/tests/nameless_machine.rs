@@ -124,6 +124,13 @@ fn shown_fix(home: &Path, name: &str) -> String {
         "{found:?}"
     );
     seen.push(found.get_text("fix").map(str::to_owned));
+    // what is on it is blocked for the reason its state says
+    if let Some(SdkValue::List(blocked)) = doctor.get("not_checked") {
+        for entry in blocked {
+            let by = entry.get("blocked_by").and_then(|by| by.get_text("reason"));
+            assert_eq!(by, Some("outdated"), "{entry:?}");
+        }
+    }
     let first = seen[0].clone().expect("a fix");
     for fix in &seen {
         assert_eq!(fix.as_deref(), Some(first.as_str()), "{seen:?}");

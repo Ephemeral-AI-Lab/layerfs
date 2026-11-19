@@ -280,7 +280,11 @@ impl Machine<'_> {
                 if let Some(fix) = fix {
                     self.checks.fix(ID, fix);
                 }
-                Err(Some("failed"))
+                // what is on it is blocked for the reason its state says
+                match record.nameless() {
+                    true => Err(Some("outdated")),
+                    false => Err(Some("failed")),
+                }
             }
         }
     }
