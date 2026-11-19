@@ -7,7 +7,7 @@
 //! only the relationships (by machine, Store or project) list `sandbox/*`.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
-use layerfs_home::outcome::{failed, refused};
+use layerfs_home::outcome::{failed, refused, with_fix, with_next};
 use layerfs_home::state::State;
 use layerfs_machine::record::MachineRecord;
 use layerfs_store::lease;
@@ -114,8 +114,9 @@ pub fn sandboxes_of_project(home: &Path, project: &str) -> Result<Vec<String>> {
 /// `machine.remove`: refused `InUse` while the machine holds Stores,
 /// Sandboxes or old Firecracker records it hosted (removing it would delete
 /// their microVMs' disks; forgetting those records first lets it go);
-/// `detail.related` lists them (#536 §10b). A PostgreSQL Store is on no
-/// machine and holds none.
+/// `detail.related` lists them (#536 §10b), and the next fields `stores`,
+/// `sandboxes` and `machines` name each kind that holds it. A PostgreSQL
+/// Store is on no machine and holds none.
 pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
     let stores = stores_on(home, name)?;
     let sandboxes = sandboxes_on(home, name)?;
@@ -123,31 +124,79 @@ pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
     if stores.is_empty() && sandboxes.is_empty() && hosted.is_empty() {
         return Ok(());
     }
-    let message = format!(
-        "machine {name} holds Stores [{}], Sandboxes [{}] and hosts [{}]",
-        stores.join(", "),
-        sandboxes.join(", "),
-        hosted.join(", ")
-    );
+    let parts = [
+        ("Stores", "stores", &stores),
+        ("Sandboxes", "sandboxes", &sandboxes),
+        ("old Firecracker machines", "machines", &hosted),
+    ];
+    let holds: Vec<String> = (parts.iter())
+        .filter(|(_, _, names)| !names.is_empty())
+        .map(|(kind, _, names)| format!("{kind} {}", names.join(", ")))
+        .collect();
+    let message = format!("machine {name} holds {}", holds.join("; "));
     let mut held = related("store", &stores);
     held.extend(related("sandbox", &sandboxes));
     held.extend(related("machine", &hosted));
-    Err(in_use(message, held))
+    let mut refusal = in_use(message, held);
+    for (_, field, names) in parts.iter().filter(|(_, _, names)| !names.is_empty()) {
+        refusal = with_next(refusal, field, listed(names));
+    }
+    // Sandboxes alone: removing them lets the machine go
+    if stores.is_empty() && hosted.is_empty() {
+        refusal = with_fix(
+            refusal,
+            then(&sandboxes, &format!("layerfs machine remove {name}")),
+        );
+    }
+    Err(refusal)
 }
 
 /// `machine.stop`: refused `InUse` while a Sandbox is recorded on machine
-/// `name`; `detail.related` lists them as `{kind: "sandbox", name}`. Under
-/// the home lock.
+/// `name`; `detail.related` lists them as `{kind: "sandbox", name}`, the
+/// next field `sandboxes` names them, and the `fix` removes each (a
+/// `sandbox remove` refuses while Workspaces are mounted) and stops the
+/// machine. Under the home lock.
 pub fn can_stop_machine(home: &Path, name: &str) -> Result<()> {
     let sandboxes = sandboxes_on(home, name)?;
     if sandboxes.is_empty() {
         return Ok(());
     }
     let message = format!(
-        "machine {name} runs Sandboxes [{}]; close them first",
-        sandboxes.join(", ")
+        "machine {name} runs {}: remove {} first, or stop it with --force",
+        sandboxes_named(&sandboxes),
+        if sandboxes.len() == 1 { "it" } else { "them" }
     );
-    Err(in_use(message, related("sandbox", &sandboxes)))
+    let refusal = in_use(message, related("sandbox", &sandboxes));
+    let refusal = with_next(refusal, "sandboxes", listed(&sandboxes));
+    Err(with_fix(
+        refusal,
+        then(&sandboxes, &format!("layerfs machine stop {name}")),
+    ))
+}
+
+/// `Sandbox a` or `Sandboxes a, b`.
+fn sandboxes_named(sandboxes: &[String]) -> String {
+    match sandboxes {
+        [one] => format!("Sandbox {one}"),
+        many => format!("Sandboxes {}", many.join(", ")),
+    }
+}
+
+/// `names` as a list value.
+fn listed(names: &[String]) -> SdkValue {
+    SdkValue::List(names.iter().map(SdkValue::text).collect())
+}
+
+/// One shell line: `layerfs sandbox remove` of each of `sandboxes`, then
+/// `last` when there is one, joined by `&&`.
+fn then(sandboxes: &[String], last: &str) -> String {
+    let removes = sandboxes
+        .iter()
+        .map(|s| format!("layerfs sandbox remove {s}"));
+    let steps: Vec<String> = removes
+        .chain((!last.is_empty()).then(|| last.to_owned()))
+        .collect();
+    steps.join(" && ")
 }
 
 /// `{kind, name}` for each of `names`, as `detail.related` lists them.
@@ -169,19 +218,25 @@ fn in_use(message: String, related: Vec<SdkValue>) -> SdkRefusal {
 }
 
 /// `machine.update`: refused `InUse` while Sandboxes run on machine `name`
-/// (a running Sandbox keeps the image and settings it started with).
+/// (a running Sandbox keeps the image and settings it started with); the
+/// next field `sandboxes` names them and the `fix` removes them.
 pub fn can_change_machine(home: &Path, name: &str) -> Result<()> {
     let running = sandboxes_on(home, name)?;
     if running.is_empty() {
         return Ok(());
     }
-    Err(refused(
+    let refusal = refused(
         "InUse",
-        format!(
-            "Sandboxes [{}] run on {name}; close them before changing it",
-            running.join(", ")
-        ),
-    ))
+        match running.as_slice() {
+            [one] => format!("Sandbox {one} runs on machine {name}: remove it before changing it"),
+            many => format!(
+                "Sandboxes {} run on machine {name}: remove them before changing it",
+                many.join(", ")
+            ),
+        },
+    );
+    let refusal = with_next(refusal, "sandboxes", listed(&running));
+    Err(with_fix(refusal, then(&running, "")))
 }
 
 /// `project.delete`: refused `Busy` while a Sandbox of `project`
@@ -219,14 +274,20 @@ pub fn can_remove_project(home: &Path, project: &str) -> Result<()> {
 /// `backup.restore`: refused `InUse` while
 /// another live process holds Store `store` (its lease) or a Sandbox of one
 /// of its projects is recorded; `detail.related` lists them as `{kind:
-/// "lease", name: <pid>}` and `{kind: "sandbox", name}`. Under the home
-/// lock and the Store's lock (it removes stale leases).
+/// "lease", name: <pid>}` and `{kind: "sandbox", name}`, the next field
+/// `sandboxes` names the Sandboxes, and when nothing else holds it the
+/// `fix` removes them. Under the home lock and the Store's lock (it
+/// removes stale leases).
 pub fn store_idle(home: &Path, store: &str) -> Result<()> {
     let holders = lease::holders(home, store)?;
     let sandboxes = sandboxes_of_store(home, store)?;
     let mut why = Vec::new();
     if !holders.is_empty() {
-        why.push(format!("Store {store} is open in process {holders:?}"));
+        let pids: Vec<String> = holders.iter().map(u32::to_string).collect();
+        why.push(match pids.as_slice() {
+            [one] => format!("Store {store} is open in process {one}"),
+            many => format!("Store {store} is open in processes {}", many.join(", ")),
+        });
     }
     if !sandboxes.is_empty() {
         let names = sandboxes.join(", ");
@@ -238,5 +299,13 @@ pub fn store_idle(home: &Path, store: &str) -> Result<()> {
     let pids: Vec<String> = holders.iter().map(u32::to_string).collect();
     let mut held = related("lease", &pids);
     held.extend(related("sandbox", &sandboxes));
-    Err(in_use(why.join("; "), held))
+    let mut refusal = in_use(why.join("; "), held);
+    if !sandboxes.is_empty() {
+        refusal = with_next(refusal, "sandboxes", listed(&sandboxes));
+    }
+    // Sandboxes alone: removing them frees the Store
+    if holders.is_empty() {
+        refusal = with_fix(refusal, then(&sandboxes, ""));
+    }
+    Err(refusal)
 }
