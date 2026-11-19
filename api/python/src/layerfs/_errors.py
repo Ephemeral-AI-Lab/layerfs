@@ -7,8 +7,9 @@ class LayerFSError(Exception):
     Dirty, Capacity, InvalidInput, Unsupported, Unavailable, Failed,
     Unknown. ``message`` says why; ``fix`` is one runnable shell line, or
     None. The fields the next call needs (a Conflict's ``commit``, a Busy's
-    ``op``, a Dirty's ``paths``) are in ``fields`` and are attributes of the
-    error. ``detail`` is the library's structured detail, present when the
+    ``op``, a Dirty's ``paths``, and ``attempted=True`` when the request was
+    sent and its outcome is not known) are in ``fields`` and are attributes
+    of the error. ``detail`` is the library's structured detail, present when the
     call asked for the long form (``detail=True``), else None."""
 
     def __init__(self, code, message, detail=None, fix=None, fields=None):

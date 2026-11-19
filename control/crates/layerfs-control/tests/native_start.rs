@@ -116,6 +116,16 @@ fn a_native_start_with_a_daemon_of_another_build_names_both_builds_and_the_fix()
     daemon(&pinned, THEIRS);
     let other = native_start(&home, build, failed_start(&home.join("elsewhere")));
     assert_eq!(other.message, failed_start(&pinned).message);
+    // a refusal that names no daemon (no start failed) comes back as it is
+    let plain = SdkRefusal {
+        code: "InvalidInput".to_owned(),
+        message: "a Sandbox name is a plain name".to_owned(),
+        detail: SdkValue::Null,
+    };
+    let kept = native_start(&home, build, plain);
+    assert_eq!(kept.code, "InvalidInput");
+    assert_eq!(kept.message, "a Sandbox name is a plain name");
+    assert_eq!(kept.detail, SdkValue::Null);
 
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&cache);

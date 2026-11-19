@@ -293,3 +293,40 @@ fn a_move_checks_the_stores_side() {
     assert_eq!(code(can_move(&home, &pg, "dev")), "InvalidInput");
     let _ = std::fs::remove_dir_all(&home);
 }
+
+/// Held by Sandboxes alone, a machine's removal is fixed by removing them
+/// first; a stopped machine gets no such fix, since `sandbox remove` cannot
+/// reach a daemon on it (LF2 review).
+#[test]
+fn a_stopped_machine_offers_no_sandbox_removal() {
+    let home = home();
+    let machine = paths::machine_record(&home, "box");
+    record(&machine, r#"{"platform":"lima","state":"running"}"#);
+    record(
+        &paths::sandbox_record(&home, "s1"),
+        r#"{"v":1,"name":"s1","project":"docs/web","machine":"box"}"#,
+    );
+    let refusal = inventory::can_remove_machine(&home, "box").unwrap_err();
+    assert_eq!(refusal.message, "machine box holds Sandboxes s1");
+    assert_eq!(
+        refusal.detail.get_text("fix"),
+        Some("layerfs sandbox remove s1 && layerfs machine remove box")
+    );
+    record(&machine, r#"{"platform":"lima","state":"stopped"}"#);
+    let refusal = inventory::can_remove_machine(&home, "box").unwrap_err();
+    assert_eq!(refusal.code, "InUse");
+    assert!(
+        refusal
+            .message
+            .starts_with("machine box holds Sandboxes s1; it is stopped"),
+        "{}",
+        refusal.message
+    );
+    assert_eq!(refusal.detail.get("fix"), None);
+    let next = refusal.detail.get("next").unwrap();
+    assert_eq!(
+        next.get("sandboxes"),
+        Some(&SdkValue::List(vec![SdkValue::text("s1")]))
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}

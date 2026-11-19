@@ -204,9 +204,9 @@ pub fn push(
         let sealed = opened
             .file()
             .ok_or_else(|| {
-                PushFailure::Snapshot(
-                    layerfs_storage::port::PersistenceError::BackendUnavailable.to_string(),
-                )
+                PushFailure::Snapshot(crate::words::persistence(
+                    &layerfs_storage::port::PersistenceError::BackendUnavailable,
+                ))
             })?
             .snapshot(&staged, &mut |done, total| {
                 if copied.is_none() {
@@ -216,7 +216,7 @@ pub fn push(
                 progress::add(done - copied.unwrap_or(0).min(done));
                 copied = Some(done);
             })
-            .map_err(|error| PushFailure::Snapshot(error.to_string()))?;
+            .map_err(|error| PushFailure::Snapshot(crate::words::persistence(&error)))?;
         let digest = heads(&staged).ok();
         let count = limits.pieces(sealed.bytes);
         if count.saturating_mul(MANIFEST_LINE) > MAX_MANIFEST {

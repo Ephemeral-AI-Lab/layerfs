@@ -5,7 +5,7 @@ use crate::calls::table::Kind::{Image, Name, Project};
 use crate::calls::table::{a, call, opt, Call, PROGRESS};
 use crate::calls::{Context, Form, Policy};
 use layerfs_bridge::control::SdkValue;
-use layerfs_home::outcome::{public_code, with_fix, with_next, Outcome, FIX};
+use layerfs_home::outcome::{shell_word, with_fix, with_next, Outcome, FIX};
 use layerfs_sandbox::family::{create, CreateRequest};
 use layerfs_sandbox::workspace::calls::{mount, MountRequest};
 
@@ -95,13 +95,17 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         };
         let mounted = mount(home, events, &asked).map_err(|refusal| {
             let sandbox = &request.name;
-            let again = format!("layerfs workspace mount {sandbox} {branch}");
+            let word = shell_word(&branch);
+            let again = format!("layerfs workspace mount {sandbox} {word}");
             // the mount's own fix stays (an `Exists` names `--name`); a
-            // Branch that is not there is forked first
-            let fix = match public_code(&refusal.code) {
+            // Branch that is not there is forked first, and only then: a
+            // missing Sandbox or path is not mended by a fork
+            let raised =
+                |code: &str| refusal.code == code || refusal.detail.get_text("code") == Some(code);
+            let fix = match () {
                 _ if refusal.detail.get(FIX).is_some() => None,
-                "NotFound" => Some(format!(
-                    "layerfs branch fork {} {branch} && {again}",
+                _ if raised("NoSuchBranch") => Some(format!(
+                    "layerfs branch fork {} {word} && {again}",
                     request.project
                 )),
                 _ => Some(again),

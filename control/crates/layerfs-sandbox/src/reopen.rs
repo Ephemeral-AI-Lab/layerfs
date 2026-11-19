@@ -300,7 +300,7 @@ impl Recorded {
     /// Stop an exact recorded runtime without endpoint admission or daemon RPC.
     pub fn stop_now(self) -> Result<()> {
         match self.for_stop()? {
-            Some(mut owner) => owner.stop(0).map_err(failed),
+            Some(mut owner) => owner.stop(0).map_err(crate::daemon::values::wire),
             None => Ok(()),
         }
     }
@@ -318,13 +318,13 @@ impl Recorded {
                 labels,
             } => Box::new(Sandbox::HostProcess(
                 host_process::Sandbox::reopen_for_stop(directory, id, process, port, labels)
-                    .map_err(failed)?,
+                    .map_err(crate::daemon::values::wire)?,
             )),
             #[cfg(target_os = "linux")]
             Self::Namespaces(runtime, id, record) => match runtime.reopen(id, &record) {
                 Ok(owner) => Box::new(owner),
                 Err(error) if error.container_stopped() => return Ok(None),
-                Err(error) => return Err(failed(error)),
+                Err(error) => return Err(crate::daemon::values::wire(error)),
             },
         }))
     }

@@ -115,8 +115,10 @@ pub fn sandboxes_of_project(home: &Path, project: &str) -> Result<Vec<String>> {
 /// Sandboxes or old Firecracker records it hosted (removing it would delete
 /// their microVMs' disks; forgetting those records first lets it go);
 /// `detail.related` lists them (#536 §10b), and the next fields `stores`,
-/// `sandboxes` and `machines` name each kind that holds it. A PostgreSQL
-/// Store is on no machine and holds none.
+/// `sandboxes` and `machines` name each kind that holds it. Held by
+/// Sandboxes alone, its `fix` removes them, then the machine; a stopped
+/// machine (its record says so) gets none, since `sandbox remove` cannot
+/// reach a daemon on it. A PostgreSQL Store is on no machine and holds none.
 pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
     let stores = stores_on(home, name)?;
     let sandboxes = sandboxes_on(home, name)?;
@@ -133,7 +135,16 @@ pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
         .filter(|(_, _, names)| !names.is_empty())
         .map(|(kind, _, names)| format!("{kind} {}", names.join(", ")))
         .collect();
-    let message = format!("machine {name} holds {}", holds.join("; "));
+    let mut message = format!("machine {name} holds {}", holds.join("; "));
+    // a stopped machine's Sandboxes cannot be removed: `sandbox remove`
+    // reaches their daemons only while it runs, so no removal is offered
+    let stopped = MachineRecord::read(home, name)?
+        .is_some_and(|machine| machine.recorded_state() == Some("stopped"));
+    if stopped && !sandboxes.is_empty() {
+        message.push_str(
+            "; it is stopped, and `layerfs sandbox remove` reaches a Sandbox's daemon only while it runs",
+        );
+    }
     let mut held = related("store", &stores);
     held.extend(related("sandbox", &sandboxes));
     held.extend(related("machine", &hosted));
@@ -141,8 +152,8 @@ pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
     for (_, field, names) in parts.iter().filter(|(_, _, names)| !names.is_empty()) {
         refusal = with_next(refusal, field, listed(names));
     }
-    // Sandboxes alone: removing them lets the machine go
-    if stores.is_empty() && hosted.is_empty() {
+    // Sandboxes alone: removing them lets the machine go, when it runs
+    if stores.is_empty() && hosted.is_empty() && !stopped {
         refusal = with_fix(
             refusal,
             then(&sandboxes, &format!("layerfs machine remove {name}")),

@@ -80,7 +80,9 @@ a directory if `/tmp` is not one.
   `{ detail: true }`.
 - Every call is one attempt. There is no automatic retry, busy handler or
   replay, and a lost reply does not undo a mutation that was already
-  published: read the state again.
+  published: read the state again. `Unknown`, and an error whose
+  `attempted` is `true` (its request was sent and no answer settled it),
+  mean the outcome is not known.
 - Call `close()` before the process exits to release the Stores this process
   holds open; a later call opens them again.
 

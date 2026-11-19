@@ -72,7 +72,7 @@ fn a_connection_failure_and_a_daemon_refusal_read_as_words() {
     assert_eq!(
         exchange.to_string(),
         "the connection to the Sandbox's daemon failed while its answer was awaited: \
-         control refusal code"
+         control refusal code; the request was sent; its outcome is not known"
     );
     let refused = OperationFailure {
         request: status(),

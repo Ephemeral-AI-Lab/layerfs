@@ -8,7 +8,7 @@
 use crate::host::{Call, Host, Message};
 use crate::registry;
 use layerfs_bridge::control::SdkValue;
-use layerfs_home::outcome::{self, refused, Outcome};
+use layerfs_home::outcome::{refused, Outcome};
 
 /// Runs one Sandbox operation once; a Commit `message` is checked for every
 /// operation.
@@ -124,13 +124,7 @@ fn daemon_backend(host: &Host, call: &Call) -> Outcome {
         op,
         args,
     );
-    answer.map_err(|error| match error {
-        crate::SdkError::Refused(refusal) => refusal,
-        crate::SdkError::Operation(failure) => {
-            crate::daemon::values::refusal(&failure).unwrap_or_else(|| outcome::failed(failure))
-        }
-        crate::SdkError::Mount(failure) => outcome::failed(failure),
-    })
+    answer.map_err(crate::daemon::values::sdk_error)
 }
 
 /// The daemon's `backend.daemon.connection_failures` read model (#540): the

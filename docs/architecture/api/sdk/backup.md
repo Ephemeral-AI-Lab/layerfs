@@ -256,7 +256,7 @@ next restore
 | Refusal | When |
 | --- | --- |
 | `Unsupported` | the Store to replace is not on `native` (move it there first); `store/<name>/` exists and is not a private `0700` folder of this user |
-| `InUse` | a process holds the Store, a Sandbox of it is recorded, or its `-wal`/`-shm` exists |
+| `InUse` | a process holds the Store, a Sandbox of it is recorded (the next field `sandboxes` names them; when no process holds it the `fix` removes them, as `store.move`'s), or its `-wal`/`-shm` exists |
 | `Conflict` | the Store changed since its last transfer through this bucket, has no link, or was replaced during the download |
 | `Exists` | a Store of that name was made during the download |
 | `Failed` | the download or its checks failed; the backup's binding is another Store's; the restored Store's projects cannot be read |

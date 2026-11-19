@@ -1,20 +1,25 @@
 //! Engine failures in plain words, for the message of a public refusal.
 //! The engine's own `Display` of some of them prints Rust `Debug` text
-//! (`InitFailure`, `ProjectError`, `AcquisitionError`), which no answer of
-//! the call surface carries; these say the same in words, keeping every
-//! inner cause that has words of its own.
+//! (`PersistenceError`, `InitFailure`, `ProjectError`, `AcquisitionError`,
+//! `AddFailure`, `InstallFailure`), which no answer of the call surface
+//! carries; these say the same in words, keeping every inner cause that has
+//! words of its own.
+use layerfs_history::HistoryError;
 use layerfs_project::store::InitError;
 use layerfs_project::ProjectError;
 use layerfs_storage::port::acquisition::AcquisitionError;
+
+/// A Store database operation that failed, in words.
+pub use layerfs_bucket::words::persistence;
 
 /// A Store creation or project add that failed.
 pub fn init_error(error: &InitError) -> String {
     match error {
         InitError::Manifest(what) => format!("the Store's setup was refused: {what}"),
-        InitError::Persistence(error) => error.to_string(),
+        InitError::Persistence(error) => persistence(error),
         InitError::Storage(error) => error.to_string(),
         InitError::Project(error) => project_error(error),
-        InitError::History(error) => error.to_string(),
+        InitError::History(error) => history(error),
         InitError::NameTaken(_) => "the Store already holds a project of that name".to_owned(),
         InitError::NoAcquisition => {
             "the Store was made without the tables a project is added through".to_owned()
@@ -36,7 +41,7 @@ pub fn project_error(error: &ProjectError) -> String {
         ProjectError::WorkerUnavailable => "the import's worker did not start".to_owned(),
         ProjectError::Content(error) => error.to_string(),
         ProjectError::Storage(error) => error.to_string(),
-        ProjectError::History(error) => error.to_string(),
+        ProjectError::History(error) => history(error),
         ProjectError::Acquisition(error) => acquisition(error),
         ProjectError::Io(error) => error.to_string(),
         ProjectError::Cleanup { cause, error, .. } => match cause {
@@ -53,10 +58,20 @@ pub fn project_error(error: &ProjectError) -> String {
     }
 }
 
+/// A history operation that failed: a moved head in words (its engine
+/// `Display` prints the moved state as `Debug`), every other one as the
+/// history crate says it.
+pub fn history(error: &HistoryError) -> String {
+    match error {
+        HistoryError::HeadMoved(_) => "the Branch's head moved since it was read".to_owned(),
+        other => other.to_string(),
+    }
+}
+
 /// The import's working tables in the Store that failed.
 pub fn acquisition(error: &AcquisitionError) -> String {
     match error {
-        AcquisitionError::Persistence(error) => error.to_string(),
+        AcquisitionError::Persistence(error) => persistence(error),
         AcquisitionError::Stale => "the import's working rows belong to no live import".to_owned(),
         AcquisitionError::Bounds => "an import window was too large or malformed".to_owned(),
         AcquisitionError::Changed { .. } => {

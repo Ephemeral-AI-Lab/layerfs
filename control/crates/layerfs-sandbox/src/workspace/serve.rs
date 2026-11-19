@@ -12,7 +12,7 @@
 use crate::daemon::values;
 use crate::host::Host;
 use crate::internal::workspace;
-use crate::lifecycle::{operation, WORKSPACES};
+use crate::lifecycle::WORKSPACES;
 use crate::record::{DaemonRecord, SandboxRecord, WorkspaceRecord};
 use crate::registry::{sandbox, sandbox_live, Mount};
 use crate::OperationCause;
@@ -116,7 +116,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
     let mounted = mounted.map_err(|failure| match (&failure.bound, &failure.failure.cause) {
         // the daemon's lookup refusal, nothing bound: the call's answer
         (None, OperationCause::Unexpected(Reply::SdkRefused(refusal))) => refusal.clone(),
-        _ => failed(failure),
+        _ => values::mount_failure(failure),
     })?;
     let mut value = values::mounted(&mounted, branch);
     if let SdkValue::Map(fields) = &mut value {
@@ -217,14 +217,7 @@ pub fn changed(control: &mut crate::internal::Control, path: &str, under: Option
     let mut args = vec![("path".to_owned(), SdkValue::text(path))];
     args.extend(under.map(|under| ("under".to_owned(), SdkValue::text(under))));
     let method = crate::daemon::operator::CHANGED;
-    crate::daemon::operator::call(control, method, SdkValue::Map(args)).map_err(|error| match error
-    {
-        crate::SdkError::Refused(refusal) => refusal,
-        crate::SdkError::Operation(failure) => {
-            values::refusal(&failure).unwrap_or_else(|| failed(failure))
-        }
-        crate::SdkError::Mount(failure) => failed(failure),
-    })
+    crate::daemon::operator::call(control, method, SdkValue::Map(args)).map_err(values::sdk_error)
 }
 
 /// Reads a Branch's head (Branch id and name), or `None` when it could not.
@@ -240,7 +233,9 @@ pub fn status_with(
     let state = sandbox(host)?;
     let token = state.token(required(path, "path")?)?;
     let mut control = crate::daemon::trace::control(&state.controls)?;
-    let status = workspace(&mut control).status(token).map_err(operation)?;
+    let status = workspace(&mut control)
+        .status(token)
+        .map_err(values::failure)?;
     let changes = match changed(&mut control, required(path, "path")?, under) {
         Err(refusal) if refusal.code == "UnknownMethod" => None,
         changes => Some(changes?),
@@ -357,7 +352,11 @@ pub fn commit_with(
     let token = state.token(path)?;
     let mut control = crate::daemon::trace::control(&state.controls)?;
     let status = match expected {
-        Some(_) => Some(workspace(&mut control).status(token).map_err(operation)?),
+        Some(_) => Some(
+            workspace(&mut control)
+                .status(token)
+                .map_err(values::failure)?,
+        ),
         None => None,
     };
     let branch = lock(&state.mounts)?
@@ -389,7 +388,7 @@ pub fn commit_with(
             force,
             message: host.message.text().map(str::to_owned),
         })
-        .map_err(operation)?;
+        .map_err(values::failure)?;
     let value = values::commit(&reply)?;
     // the Layer the Branch was forked at, from the mount this process
     // holds (no read): an unchanged fresh fork's head (call surface 2.0)
@@ -456,7 +455,7 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
             if matches!(&failure.cause, OperationCause::Exchange(exchange) if !exchange.attempted) {
                 sent = false;
             }
-            operation(failure)
+            values::failure(failure)
         };
         // Forced: one abort write ends the connection, also after a normal
         // unmount stalled at Join; uncommitted changes are dropped.

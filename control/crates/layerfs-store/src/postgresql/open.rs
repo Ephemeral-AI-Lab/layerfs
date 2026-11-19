@@ -131,7 +131,8 @@ fn binding(url: &str, schema: &str, sync: &str) -> Result<Vec<u8>, SdkRefusal> {
         (layerfs_persistence::PostgresHandles::binding(&selection(url, schema, sync))).map_err(
             |error| {
                 no_session(&error).unwrap_or_else(|| {
-                    refused("Failed", format!("reading schema {schema}: {error}"))
+                    let said = crate::words::persistence(&error);
+                    refused("Failed", format!("reading schema {schema}: {said}"))
                 })
             },
         )

@@ -100,10 +100,30 @@ Progress: with `--image`, the copy's `inspect`, `lock`, `export`, `send`,
 `--mount B` mounts Branch `B` in the started Sandbox under its default name
 (the Branch's name lowercased, each other character `-`) and answers the
 Workspace's `workspace` and `path`. A refused mount keeps the Sandbox and
-answers the mount's own refusal with `sandbox` and
-`fix: layerfs workspace mount <sandbox> <B>`. A create whose outcome is not
-known is `Unknown`; its record keeps the `op`, uncertain, until
-`sandbox remove`.
+answers the mount's own refusal with `sandbox` and a `fix`: the mount's own
+when it has one (an `Exists` names `--name`); for a Branch that is not there
+(raised `NoSuchBranch`, answered `NotFound`)
+`layerfs branch fork <project> <B> && layerfs workspace mount <sandbox> <B>`;
+else `layerfs workspace mount <sandbox> <B>`. `<B>` is one shell word
+(single-quoted when a shell would not take it literally)
+([`sandbox/create.rs`](../../../../api/crates/layerfs-api/src/sandbox/create.rs)).
+A create whose outcome is not known is `Unknown`; its record keeps the
+`op`, uncertain, until `sandbox remove`.
+
+A start that fails is `Failed` in words: "Sandbox `<name>` did not start:
+it stopped `<where>`: `<cause>`", then "Its daemon's last error: …" from
+its log. Its `detail` holds `daemon` (the program that was started),
+`log` (its last lines), `container` and `removed`
+([`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `abandon`).
+Its `fix` is `layerfs machine doctor <machine>` unless the refusal names a
+closer one. On `native`, when `detail.daemon` is the native machine's
+daemon and it is of another build than this one (or names no build), the
+message says so and the `fix` is
+`layerfs machine update native --daemon <this build's daemon>` when one is
+found beside the program or the bundle, else `layerfs home doctor`
+([`home.rs`](../../../../control/crates/layerfs-control/src/home.rs) `native_start`;
+a refusal with no `detail.daemon` is not looked at). A start whose cleanup
+failed is `Unknown` and says what is left.
 
 | Refusal | When |
 | --- | --- |
@@ -112,7 +132,8 @@ known is `Unknown`; its record keeps the `op`, uncertain, until
 | `Unsupported` | another machine than its sqlite Store's; an `--image` on macOS `native`; an image for another architecture or OS |
 | `Capacity` | copying the image needs `2 × size × 1.05` bytes, less what a resumed copy staged, and the machine has fewer (`detail { needed_bytes, free_bytes, path }`, `fix: layerfs machine prune <machine> --unused`) |
 | `Unavailable` | the machine is stopped (`detail { what: "machine" }`) or Docker cannot be read (`detail { what: "docker" }`) |
-| the mount's code | `--mount` was refused; the Sandbox is kept (`sandbox`, `fix`) |
+| `Failed` | the start failed: what stopped it in words, `detail.daemon` and `log`, `fix` as above |
+| the mount's code | `--mount` was refused; the Sandbox is kept (`sandbox`, `fix`: fork first only for a missing Branch) |
 | `Unknown` | the start's answer was lost; the record keeps the `op` |
 
 Run on macOS native with a debug build:
