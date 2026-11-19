@@ -254,8 +254,7 @@ impl Machine<'_> {
         record: &layerfs_machine::record::MachineRecord,
     ) -> Result<layerfs_machine::platform::Spec, Option<&'static str>> {
         const ID: &str = "machine.configuration";
-        let made = layerfs_home::home::opened(self.home)
-            .and_then(|file| layerfs_machine::machine_provider_spec(self.home, &file.id, record));
+        let made = layerfs_machine::machine_provider_spec(self.home, record);
         match made {
             Ok(spec) => {
                 self.checks

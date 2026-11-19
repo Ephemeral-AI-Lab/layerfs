@@ -59,7 +59,6 @@ enum Field {
     Route(String),
     RuntimeId(String),
     Daemon(DaemonRecord),
-    Left(String),
     MachineStopped(bool),
     MachineStopUnknown(bool),
     Reason(String),
@@ -84,7 +83,6 @@ impl fields::Field for Field {
             "route" => Self::Route(text()?),
             "runtime_id" => Self::RuntimeId(text()?),
             "daemon" => Self::Daemon(DaemonRecord::decode(value)?),
-            "left" => Self::Left(text()?),
             "machine_stopped" => Self::MachineStopped(match value {
                 SdkValue::Bool(v) => *v,
                 _ => return None,
@@ -115,7 +113,6 @@ impl fields::Field for Field {
             Self::Route(_) => "route",
             Self::RuntimeId(_) => "runtime_id",
             Self::Daemon(_) => "daemon",
-            Self::Left(_) => "left",
             Self::MachineStopped(_) => "machine_stopped",
             Self::MachineStopUnknown(_) => "machine_stop_unknown",
             Self::Reason(_) => "reason",
@@ -139,7 +136,6 @@ impl fields::Field for Field {
             | Self::Backend(text)
             | Self::Route(text)
             | Self::RuntimeId(text)
-            | Self::Left(text)
             | Self::Reason(text)
             | Self::Error(text) => SdkValue::text(text),
         }
@@ -277,7 +273,7 @@ impl SandboxRecord {
         if refusal.code == "Unresolved" {
             refusal = with_fix(refusal, crate::state::remove_fix(name));
         }
-        Err(with_next(refusal, "op", crate::state::op_shown(&op)))
+        Err(with_next(refusal, "op", op.shown()))
     }
 
     /// The Sandbox's folder in the home.
@@ -362,15 +358,6 @@ impl SandboxRecord {
         })
     }
 
-    /// Why a layout 2 Sandbox's runtime was found ended, as its conversion
-    /// recorded it.
-    pub fn left(&self) -> Option<&str> {
-        self.text(|f| match f {
-            Field::Left(text) => Some(text),
-            _ => None,
-        })
-    }
-
     /// Its kernel route (`fuse`, `nfs`), as recorded.
     pub fn route(&self) -> Option<&str> {
         self.text(|f| match f {
@@ -429,26 +416,16 @@ impl SandboxRecord {
 
     /// The container of a Sandbox recorded under the retired docker
     /// backend (D-8, layerfs-project#111): `backend` or `runtime` `docker`,
-    /// or a started Sandbox of the docker machine with no `runtime` (a
-    /// record converted from before runtimes were kept). The name is the
-    /// one its daemon record keeps, else the one the docker backend gave
-    /// it, `lfs-<home id prefix>-<name>` (that backend's prefix, kept for
-    /// its records only). `None` for every other record.
-    pub fn retired_container(&self, home: &Path) -> Result<Option<String>> {
+    /// or a started Sandbox of the docker machine with no `runtime`:
+    /// `Some` with the name its daemon record keeps, which is `None` when
+    /// it keeps none (this build computes no older name). `None` for every
+    /// other record.
+    pub fn retired_container(&self) -> Option<Option<String>> {
         if !self.retired() {
-            return Ok(None);
+            return None;
         }
-        let kept = (self.daemon())
-            .and_then(DaemonRecord::name)
-            .map(str::to_owned);
-        Ok(Some(match kept {
-            Some(name) => name,
-            None => {
-                let id = layerfs_home::home::opened(home)?.id;
-                let prefix = layerfs_home::names::legacy_provider_prefix(&id);
-                format!("{prefix}{}", self.name)
-            }
-        }))
+        let kept = (self.daemon()).and_then(DaemonRecord::name);
+        Some(kept.map(str::to_owned))
     }
 
     /// Whether it was recorded under the retired docker backend (D-8): see

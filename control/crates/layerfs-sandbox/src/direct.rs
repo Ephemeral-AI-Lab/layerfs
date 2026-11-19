@@ -228,7 +228,7 @@ fn carried(
 ) -> Result<Option<(SocketAddr, Option<u32>)>> {
     use layerfs_machine::platform::Code;
     let record = layerfs_machine::record::MachineRecord::of(home, machine)?;
-    let spec = layerfs_machine::machine_spec(home, &layerfs_home::home::opened(home)?.id, &record)?;
+    let spec = layerfs_machine::machine_spec(home, &record)?;
     match layerfs_machine::platform::forward(&spec, endpoint.port()) {
         Ok(forward) => Ok(Some((forward.address, forward.pid))),
         Err(error) if error.code == Code::Unsupported => Ok(None),
@@ -260,9 +260,8 @@ fn end(home: &Path, machine: &str, daemon: &DaemonRecord) {
         let Some(address) = forward_of(daemon) else {
             return;
         };
-        let spec = layerfs_machine::record::MachineRecord::of(home, machine).and_then(|record| {
-            layerfs_machine::machine_spec(home, &layerfs_home::home::opened(home)?.id, &record)
-        });
+        let spec = layerfs_machine::record::MachineRecord::of(home, machine)
+            .and_then(|record| layerfs_machine::machine_spec(home, &record));
         if let Ok(spec) = spec {
             let forward = layerfs_machine::platform::Forward {
                 address,

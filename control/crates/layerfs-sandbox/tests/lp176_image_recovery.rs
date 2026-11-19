@@ -747,7 +747,6 @@ fn interrupted_publish_with_renamed_dir_and_missing_sidecar_recovers_and_prunes(
             .to_str()
             .map(str::to_owned),
         container_prefix: None,
-        legacy_prefix: None,
         daemon: None,
         image_archive: None,
         image: Some(id.clone()),
@@ -1183,11 +1182,8 @@ fn real_docker_and_small_tar_preserve_mtime_mode_sha_and_record_config() {
         .raw("var/chr", b'3', 0o660, b"")
         .finish();
     let (filtered, report) = filtered_with_report(&input).unwrap();
-    assert_eq!(report.fifo_count(), 1);
     assert_eq!(report.fifos, vec!["var/fifo"]);
-    assert_eq!(report.device_count(), 1);
     assert_eq!(report.devices, vec!["var/chr"]);
-    assert_eq!(report.init_count(), 3);
     assert_eq!(report.init, vec![".dockerenv", "dev/console", "etc/hosts"]);
     let tar_path = scratch.base.join("meta.tar");
     fs::write(&tar_path, &filtered).unwrap();

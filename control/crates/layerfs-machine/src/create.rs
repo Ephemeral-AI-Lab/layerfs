@@ -65,16 +65,15 @@ fn new_name(home: &Path, id: &str, kind: Platform, name: &str) -> Result<()> {
     if paths::machine_dir(home, name).exists() {
         return Err(refused("Exists", format!("a machine named {name} exists")));
     }
-    let wanted = [
-        record::vm_name(id, name),
-        super::record::legacy_vm_name(id, name),
-    ];
+    let wanted = record::vm_name(id, name);
     for other in paths::names(&home.join("machine")).map_err(failed)? {
         let Some(theirs) = MachineRecord::read(home, &other)? else {
             continue;
         };
-        let taken = theirs.provider_name(id);
-        if wanted.contains(&taken) {
+        let Ok(taken) = theirs.provider_name() else {
+            continue;
+        };
+        if taken == wanted {
             return Err(refused(
                 "Exists",
                 format!(
@@ -232,7 +231,7 @@ pub fn create(
         let _lock = lock::take(&home)?;
         new_name(&home, &id, kind, name)?;
         record.write(&home)?;
-        record::spec(&home, &id, &record)
+        record::spec(&home, &record)
     };
     let spec = match spec {
         Ok(spec) => spec,

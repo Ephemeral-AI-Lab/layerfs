@@ -107,7 +107,7 @@ impl Sandbox {
             .arg("--init")
             .arg(init.to_string())
             .arg("--cgroup")
-            .arg(cgroup::helper_group(&self.cgroup));
+            .arg(cgroup::leaf(&self.cgroup));
         // the helper's stdin is one end of a socket: it writes one byte
         // there once the command is in its group, and its exit closes it
         // (and, with `--stdin inherit`, the command's standard input: the

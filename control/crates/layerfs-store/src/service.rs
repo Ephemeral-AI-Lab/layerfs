@@ -19,7 +19,7 @@ use crate::open_args::{OpenArgs, ROUTING};
 use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_home::helpers::lock;
 use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_store_service::{telemetry, OpenRefusal, StoreService};
+use layerfs_store_service::{OpenRefusal, StoreService};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
@@ -155,25 +155,7 @@ pub fn call(method: &str, open: &OpenArgs, args: SdkValue) -> Outcome {
         method: method.to_owned(),
         args,
     };
-    let run = || layerfs_store_service::methods::call(&service, &call);
-    if !layerfs_home::trace::traced() {
-        return run();
-    }
-    // A traced call records its own timing, SQL and delta work, as a daemon
-    // did for a traced observation.
-    let sessions = service.opened.sql_sessions();
-    let before = (sessions.totals(), service.store.save_counters());
-    let recording = telemetry::Recording::start();
-    let outcome = run();
-    let reports = recording.finish();
-    let mut fields = vec![("timing".to_owned(), telemetry::timing(&reports))];
-    let sql = telemetry::sql(before.0, sessions.totals());
-    let delta = telemetry::delta(before.1, service.store.save_counters());
-    for (name, value) in [("sql", sql), ("delta", delta)] {
-        fields.extend(value.map(|value| (name.to_owned(), value)));
-    }
-    layerfs_home::trace::collect(SdkValue::Map(fields));
-    outcome
+    layerfs_store_service::methods::call(&service, &call)
 }
 
 /// The newest Commit of `branch`, read in this process; `None` when it has none.

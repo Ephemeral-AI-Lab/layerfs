@@ -97,21 +97,6 @@ fn interrupted_copy_never_seals_the_new_bundle() {
     );
 }
 
-#[test]
-fn legacy_copy_failure_keeps_the_previous_complete_bundle() {
-    let s = Scratch::new("legacy-copy-failed");
-    setup(&s);
-    let mut b = s.bundle();
-    start(&s, &b);
-    let marker = s.path("guest/layerfs/bundle/.sealed");
-    assert_eq!(fs::read_to_string(&marker).unwrap().trim(), b.hash);
-    b.hash = "abcd5678".into();
-    s.tool("tar", "exit 1");
-    assert!(machine::start(&s.spec(Platform::Lima), &b).is_err());
-    assert_eq!(fs::read_to_string(marker).unwrap().trim(), "0123abcd");
-    assert!(s.path("guest/layerfs/bundle/layerfs").is_file());
-}
-
 /// R5: the runtime layer is one folder, copied in when the guest lacks it or
 /// its hash changed, and kept otherwise.
 #[test]

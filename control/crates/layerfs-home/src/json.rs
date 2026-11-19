@@ -36,15 +36,7 @@ pub fn print(value: &SdkValue) -> String {
     out
 }
 
-/// Appends `value` to `out` as [`print`] would, except that every byte
-/// value prints as `{"base64": ...}`, even UTF-8 bytes, so it keeps its
-/// type (the worker frame's form).
-pub fn write_typed(out: &mut String, value: &SdkValue) {
-    out.reserve(size(value, false));
-    write_value(out, value, &mut Form::Typed);
-}
-
-/// Appends `value` to `out` as [`write_typed`] would, except that every
+/// Appends `value` to `out` as [`print`] would, except that every
 /// byte value prints as `{"attachment": i}` and is added to `attachments`,
 /// `i` its place there (a worker frame with attachments).
 pub fn write_attached<'v>(out: &mut String, value: &'v SdkValue, attachments: &mut Vec<&'v [u8]>) {
@@ -56,8 +48,6 @@ pub fn write_attached<'v>(out: &mut String, value: &'v SdkValue, attachments: &m
 enum Form<'a, 'v> {
     /// As text when they are UTF-8, else as base64.
     Print,
-    /// Always as base64.
-    Typed,
     /// As `{"attachment": i}`, the bytes added to the list.
     Attached(&'a mut Vec<&'v [u8]>),
 }

@@ -17,8 +17,7 @@ use std::{
 
 /// The cache's own name under a runtime root: `<root>/images`.
 const CACHE: &str = "images";
-/// The layout an unpack is published under, after the digest: `.2` restores
-/// file times; a plain `<64 hex>` is an older unpack that did not.
+/// The layout an unpack is published under, after the digest: `.2`.
 const LAYOUT: &str = ".2";
 
 /// The cache directory below a runtime root, `<root>/images`, where unpacked
@@ -123,8 +122,8 @@ fn publish(
     Ok((ImageRoot::new(image.clone(), directory), held(lock)?, true))
 }
 
-/// Removes `image`'s unpacked copies from `cache` (`<64 hex>.2` and an older
-/// unpack's `<64 hex>`) unless `in_use` names one of them or another process
+/// Removes `image`'s unpacked copy from `cache` (`<64 hex>.2`) unless
+/// `in_use` names it or another process
 /// holds the image's lock (a create between its unpack and its spec):
 /// `false` then, and nothing is removed. `true` when nothing of it is left.
 pub fn remove(
@@ -147,33 +146,28 @@ pub fn remove(
         Err((_, nix::errno::Errno::EWOULDBLOCK)) => return Ok(false),
         Err((_, error)) => return Err(RuntimeError::Io(error.into())),
     };
-    let directories = [cache.join(name(image)), cache.join(image.hex())];
-    if directories.iter().any(|directory| in_use(directory)) {
+    let directory = cache.join(name(image));
+    if in_use(&directory) {
         return Ok(false);
     }
-    for directory in directories {
-        match fs::symlink_metadata(&directory) {
-            Ok(metadata) if metadata.is_dir() => {
-                fs::set_permissions(&directory, fs::Permissions::from_mode(0o700))?;
-                fs::remove_dir_all(&directory)?;
-            }
-            Ok(_) => fs::remove_file(&directory)?,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error.into()),
+    match fs::symlink_metadata(&directory) {
+        Ok(metadata) if metadata.is_dir() => {
+            fs::set_permissions(&directory, fs::Permissions::from_mode(0o700))?;
+            fs::remove_dir_all(&directory)?;
         }
+        Ok(_) => fs::remove_file(&directory)?,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
     }
     Ok(true)
 }
 
 /// The root a Sandbox of `image` was built on, `lower` as its spec records
-/// it, when this host still holds it, unpacking nothing. `lower` must be one
-/// of `cache`'s directories for that digest (`<64 hex>.2`, or an older
-/// unpack's `<64 hex>`): a reopen never moves a Sandbox to another root, and
+/// it, when this host still holds it, unpacking nothing. `lower` must be
+/// `cache`'s directory for that digest (`<64 hex>.2`): a reopen never moves a Sandbox to another root, and
 /// a record whose image is gone is refused.
 pub fn lookup(image: &Image, cache: &Path, lower: &Path) -> Result<ImageRoot, RuntimeError> {
-    let known = [image.hex().to_owned(), name(image)]
-        .iter()
-        .any(|name| cache.join(name) == lower);
+    let known = cache.join(name(image)) == lower;
     match fs::symlink_metadata(lower) {
         Ok(metadata) if known && metadata.is_dir() => {
             Ok(ImageRoot::new(image.clone(), lower.to_owned()))

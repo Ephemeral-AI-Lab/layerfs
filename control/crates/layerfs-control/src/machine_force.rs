@@ -53,7 +53,7 @@ pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> 
                 ));
             }
         }
-        let spec = machine_spec(&home, &home_id(&home)?, &machine)?;
+        let spec = machine_spec(&home, &machine)?;
         for child in &hosted {
             force_record(&home, child)?;
         }
@@ -309,10 +309,6 @@ fn workspaces(home: &Path, sandbox: &SandboxRecord) -> Result<Vec<String>> {
         workspaces.push(format!("{}:{value}", sandbox.name()));
     }
     Ok(workspaces)
-}
-
-fn home_id(home: &Path) -> Result<String> {
-    Ok(home::opened(home)?.id)
 }
 
 fn update(

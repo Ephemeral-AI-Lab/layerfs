@@ -67,9 +67,10 @@ fn a_docker_sandbox_with_no_image_named_uses_the_bundle_s_image() {
     let script = format!(
         r#"#!/bin/sh
 echo "$*" >> "${{0%/*}}/calls.log"
-case "$3" in
-  load) echo "Loaded image ID: {ID}" ;;
-  inspect) echo "Error: No such object" >&2; exit 1 ;;
+case "$3 $4" in
+  load*) echo "Loaded image ID: {ID}" ;;
+  inspect*|"image inspect") echo "Error: No such object" >&2; exit 1 ;;
+  "image tag") ;;
   *) echo "the stand-in refuses: $*" >&2; exit 9 ;;
 esac
 "#
@@ -79,13 +80,18 @@ esac
     std::env::set_var("PATH", &tools);
     // only the stand-ins: no fallback folder after PATH
     std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");
-    // a sealed bundle of empty stand-ins, with no image archive yet
+    // the image cache's locks live in a cache folder of the test's own
+    let cache = tempdir("cache");
+    std::env::set_var("XDG_CACHE_HOME", &cache);
+    // a sealed bundle of empty stand-ins, with no image archive yet; its
+    // bundle.json names the image's content identity, as every 2.0 bundle's
     let bundle = tempdir("bundle");
     std::env::set_var("LAYERFS_BUNDLE", &bundle);
     for name in ["layerfs", "layerfs-daemon", "layerfs-sandbox-helper"] {
         std::fs::write(bundle.join(name), b"").unwrap();
     }
-    std::fs::write(bundle.join("bundle.json"), r#"{"hash":"0123abcd"}"#).unwrap();
+    let manifest = format!(r#"{{"hash":"0123abcd","image":"{ID}"}}"#);
+    std::fs::write(bundle.join("bundle.json"), manifest).unwrap();
 
     let home = tempdir("home");
     home::open(&home).unwrap();
@@ -159,4 +165,5 @@ esac
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(tools);
     let _ = std::fs::remove_dir_all(bundle);
+    let _ = std::fs::remove_dir_all(cache);
 }

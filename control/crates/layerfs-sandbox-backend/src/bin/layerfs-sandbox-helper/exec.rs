@@ -1,6 +1,5 @@
 //! The exec stage: one command inside a running Sandbox. The helper opens
-//! the group `--cgroup` names, the leaf of the Sandbox's cgroup (or the
-//! Sandbox's own group for a Sandbox an earlier build started), and the
+//! the group `--cgroup` names, the leaf of the Sandbox's cgroup, and the
 //! command's, below, then forks itself into the first (`clone3` with
 //! `CLONE_INTO_CGROUP`, `local::OneThread`): the child does the work, inside the group, so the
 //! Sandbox's `cgroup.kill` ends it and its stop finds the group empty only

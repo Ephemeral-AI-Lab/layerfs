@@ -61,7 +61,6 @@ fn host_args(
         sandbox: Some(backend.to_owned()),
         local_dir: Some(local.display().to_string()),
         container_prefix: Some(layerfs_home::names::provider_prefix(&id)),
-        legacy_prefix: Some(layerfs_home::names::legacy_provider_prefix(&id)),
         ..settings
     };
     Ok(Host {
@@ -107,9 +106,8 @@ pub fn reached(
     // machine it is, which shares its loopback
     #[cfg(feature = "machine")]
     let (url, hint) = {
-        let id = layerfs_home::home::opened(home)?.id;
         let spec =
-            layerfs_machine::machine_spec(home, &id, &layerfs_machine::machine_of(home, machine)?)?;
+            layerfs_machine::machine_spec(home, &layerfs_machine::machine_of(home, machine)?)?;
         let hint = (spec.kind == layerfs_machine::platform::Platform::AppleContainer).then_some(
             "an apple-container machine reaches a server on this host only when it listens on the container network's bridge (0.0.0.0, as Docker Desktop publishes a port), not on 127.0.0.1 alone",
         );

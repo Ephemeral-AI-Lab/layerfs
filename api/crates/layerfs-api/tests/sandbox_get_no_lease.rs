@@ -380,10 +380,10 @@ fn keys(endpoint: SocketAddr) -> SdkValue {
 /// Sandbox `s1` in `root` (the home, or a worker's root) as the side that
 /// runs it records it: a native daemon process (this test's own, so it is
 /// found alive) listening at `endpoint`, under the name the home with id
-/// `home_id` gave it before layerfs-project#180 (`lfs-<id8>-s1`, which a
-/// Sandbox made then keeps), with one Workspace record per listed `items`.
+/// `home_id` gives it (`layerfs-<id8>-s1`), with one Workspace record per
+/// listed `items`.
 fn local_sandbox(root: &Path, home_id: &str, endpoint: SocketAddr, items: &[SdkValue]) {
-    let name = format!("lfs-{}-s1", &home_id[..8]);
+    let name = format!("layerfs-{}-s1", &home_id[..8]);
     sandbox_named(root, &name, endpoint, items);
 }
 
@@ -1379,7 +1379,7 @@ fn a_forwarded_sandbox_s_process_comes_from_its_machine_s_worker() {
         let daemon = map(&[("name", t("lfs-x-s1")), ("forward", forward)]);
         write_record(&path, &home::with_field(record, "daemon", daemon)).unwrap();
         local_sandbox(&root, &id, endpoint, &[]);
-        let run = paths::run_root(&root).join(format!("lfs-{}-s1", &id[..8]));
+        let run = paths::run_root(&root).join(format!("layerfs-{}-s1", &id[..8]));
         std::fs::create_dir_all(run.join("overlay")).unwrap();
         settle(&home);
         let _push = pushing(&home);

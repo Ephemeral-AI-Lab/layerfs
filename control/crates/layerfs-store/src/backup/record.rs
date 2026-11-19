@@ -1,10 +1,8 @@
 //! A bucket's record, `backup/<bucket>/record.json` (#536 §9.2): an r2 or
 //! S3-endpoint bucket and prefix with its key's id, made from the URL
 //! `backup.connect` is given, and the driver it names. The key's secret is
-//! in the home's secret folder ([`super::secret`]), never in the record. A
-//! record written before 2.0 (or converted from a 1.1.0 home) names a key
-//! reference (`key`, `env:` or `file:`) instead, which is still read. Also
-//! each Store's link to a bucket, which the Store's record holds.
+//! in the home's secret folder ([`super::secret`]), never in the record.
+//! Also each Store's link to a bucket, which the Store's record holds.
 use super::secret;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup::Provider;

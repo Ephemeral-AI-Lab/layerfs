@@ -62,16 +62,6 @@ impl<R: Read> Json<R> {
         }
         Ok(())
     }
-    pub fn string_equals(&mut self, expected: &str) -> Result<bool, RuntimeError> {
-        let mut expected = expected.chars();
-        let mut equal = true;
-        self.string_each(|c| {
-            if expected.next() != Some(c) {
-                equal = false;
-            }
-        })?;
-        Ok(equal && expected.next().is_none())
-    }
     fn string_each(&mut self, mut emit: impl FnMut(char)) -> Result<(), RuntimeError> {
         self.expect(b'"')?;
         loop {

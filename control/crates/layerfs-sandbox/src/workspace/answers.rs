@@ -3,31 +3,22 @@
 //! row's full long map, which the call boundary shapes into the short or
 //! long form. They read nothing.
 use super::calls::Mounted;
-use crate::workspace::serve::SHOWN;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::helpers;
 use layerfs_home::state::{Reason, State};
 
 fn take(value: &SdkValue, name: &str) -> SdkValue {
     value.get(name).cloned().unwrap_or_default()
 }
 
-/// The paths of a list of `{ path, .. }` maps, the first [`SHOWN`].
-fn paths(list: &SdkValue) -> (SdkValue, usize) {
+/// The paths of a list of `{ path, .. }` maps.
+fn paths(list: &SdkValue) -> Vec<SdkValue> {
     let SdkValue::List(items) = list else {
-        return (SdkValue::List(Vec::new()), 0);
+        return Vec::new();
     };
-    let shown = (items.iter().take(SHOWN))
+    (items.iter())
         .map(|item| item.get("path").cloned().unwrap_or_default())
-        .collect();
-    (SdkValue::List(shown), items.len())
-}
-
-/// A count shown only past the [`SHOWN`] entries a list holds.
-fn beyond(count: usize, cut: bool) -> SdkValue {
-    match count > SHOWN || cut {
-        true => SdkValue::Int(count as i64),
-        false => SdkValue::Null,
-    }
+        .collect()
 }
 
 /// `workspace.mount`: `{ workspace, path, outcome, branch, commit,
@@ -67,8 +58,8 @@ pub fn committed(answer: &SdkValue) -> SdkValue {
     let unchanged = answer.get_text("kind") == Some("UpToDate");
     let made = take(answer, "commit");
     let merged = take(answer, "merged");
-    let (overwritten, count) = paths(&take(answer, "lww"));
     let cut = answer.get_bool("lwwTruncated");
+    let (overwritten, overwritten_count) = helpers::shown(paths(&take(answer, "lww")), 0, cut);
     let created = made.get_int("time").map_or(SdkValue::Null, |ms| {
         SdkValue::Text(layerfs_home::time::iso(ms))
     });
@@ -86,7 +77,7 @@ pub fn committed(answer: &SdkValue) -> SdkValue {
         ("unchanged", SdkValue::Bool(unchanged)),
         ("merged", SdkValue::Bool(merged != SdkValue::Null)),
         ("overwritten", overwritten),
-        ("overwritten_count", beyond(count, cut)),
+        ("overwritten_count", overwritten_count),
         (
             "outcome",
             SdkValue::text(if unchanged { "unchanged" } else { "committed" }),
@@ -146,10 +137,8 @@ fn snake(word: &str) -> String {
 /// A Workspace's state from its daemon's `activity` (as `sandbox.get`
 /// reads it): `idle` is ready; attaching, committing and closing are busy
 /// with that operation, in the `phase` and since `since_ms` the daemon's
-/// changed-path read names. A daemon built before that read (2.0.0
-/// runtimes up to 7d2ac982c3) names neither: the activity's own phase word
-/// then, and no time. Its Status record has the same bytes as this
-/// build's, which is what lets this side read such a daemon at all.
+/// changed-path read names; without them, the activity's own phase word
+/// and no time.
 /// `uncertain` is broken `unresolved` and `local_failure` broken `failed`,
 /// each fixed by a forced unmount of handle `ws`.
 pub fn state(activity: &str, phase: Option<&str>, since_ms: Option<i64>, ws: &str) -> State {
@@ -172,7 +161,7 @@ pub fn state(activity: &str, phase: Option<&str>, since_ms: Option<i64>, ws: &st
 /// `workspace.status` of handle `ws`: `{ changes, changes_count, partial,
 /// branch_moved, state, op, reason, fix, branch, commit, base_layer,
 /// branch_head, activity, overlay, pending_merge }`. `changes` is the
-/// first [`SHOWN`] entries of the daemon's one bounded read, each `{ path,
+/// first [`helpers::SHOWN`] entries of the daemon's one bounded read, each `{ path,
 /// change, type }`; `changes_count` is the number read, given only past
 /// those shown; `partial` says the read hit its bound.
 pub fn status(answer: &SdkValue, ws: &str) -> SdkValue {
@@ -180,17 +169,14 @@ pub fn status(answer: &SdkValue, ws: &str) -> SdkValue {
         Some(SdkValue::List(entries)) => entries.clone(),
         _ => Vec::new(),
     };
-    let count = entries.len();
     let partial = answer.get_bool("partial");
+    let (changes, changes_count) = helpers::shown(entries, 0, partial);
     let activity = snake(answer.get_text("activity").unwrap_or("Idle"));
     let overlay = take(answer, "overlay");
     let pending = overlay.get_bool("pendingMerge");
     let mut fields: Vec<(String, SdkValue)> = vec![
-        (
-            "changes".to_owned(),
-            SdkValue::List(entries.into_iter().take(SHOWN).collect()),
-        ),
-        ("changes_count".to_owned(), beyond(count, partial)),
+        ("changes".to_owned(), changes),
+        ("changes_count".to_owned(), changes_count),
         ("partial".to_owned(), SdkValue::Bool(partial)),
         (
             "branch_moved".to_owned(),

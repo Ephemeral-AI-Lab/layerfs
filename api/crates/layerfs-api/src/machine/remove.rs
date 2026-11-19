@@ -1,5 +1,5 @@
-//! `machine.remove`: delete a VM machine and its disk; a machine of a
-//! platform removed in 2.0 is only forgotten.
+//! `machine.remove`: delete a VM machine and its disk; of a machine of a
+//! platform removed in 2.0 only the record goes.
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call, PROGRESS};
 use crate::calls::{Context, Form};
@@ -8,12 +8,8 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
 
-/// Its answer: `ok`, or `forgotten` for a machine of a removed platform.
-const FORM: Form = Form::of(
-    &[],
-    &["ok", "forgotten"],
-    &["ok", "forgotten", "outcome", "machine", "message"],
-);
+/// Its answer: `ok`; `message` says when only the record went.
+const FORM: Form = Form::of(&[], &["ok"], &["ok", "outcome", "machine", "message"]);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -21,7 +17,7 @@ pub(crate) const CALL: Call = call(
     "remove",
     &[a("machine", Name)],
     &[PROGRESS],
-    "delete a VM machine and its disk; one of a removed platform is only forgotten",
+    "delete a VM machine and its disk",
     run,
 )
 .form(&FORM);

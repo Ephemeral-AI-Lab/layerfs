@@ -4,8 +4,8 @@
 //! `blocked_by` and the machine doctor all say the same thing of it.
 //!
 //! The record holds what a lifecycle call or a live read last found: the
-//! `op` of a create, start, stop or remove in flight; `state` (`running`,
-//! `stopped`, and `failed` in records written before reasons were); and,
+//! `op` of a create, start, stop or remove in flight; `state` (`running`
+//! or `stopped`); and,
 //! while the machine is broken, `reason` (a [`Reason`] word) with the
 //! sentence behind it in `error`. In order: a live owner's `op` is `busy`;
 //! a gone owner's uncertain `op` is `broken` `unresolved`; a gone owner's
@@ -134,11 +134,7 @@ impl MachineRecord {
         if name == "native" {
             return State::Ready;
         }
-        let reason = self.reason().or_else(|| {
-            // a record written before reasons were: `failed` with a sentence
-            (self.recorded_state() == Some("failed")).then_some(Reason::Failed)
-        });
-        if let Some(reason) = reason {
+        if let Some(reason) = self.reason() {
             let fix = fix(name, reason, false, sandboxes);
             return State::broken(reason, fix.as_deref());
         }

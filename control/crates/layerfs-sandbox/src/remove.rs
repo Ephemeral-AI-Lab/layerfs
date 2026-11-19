@@ -43,17 +43,10 @@ pub enum Removed {
         /// The handles of the Workspaces the stop ended.
         unmounted: Vec<String>,
     },
-    /// Its runtime was gone already, or it never recorded one; its record
-    /// went.
+    /// Its runtime was gone already, it never recorded one, or it was
+    /// recorded under the retired docker backend; its record went.
     AlreadyGone {
         /// Each sentence about what may be left unrecorded.
-        left: Vec<String>,
-    },
-    /// A Sandbox recorded under the retired docker backend, forgotten (D-8).
-    Forgotten {
-        /// Its container, left for the user to remove.
-        container: String,
-        /// Each sentence about what its machine's worker kept.
         left: Vec<String>,
     },
 }
@@ -89,8 +82,8 @@ fn texts(items: &[SdkValue]) -> impl Iterator<Item = &str> {
 pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> Result<Removed> {
     let home = home.to_path_buf();
     let name = request.name.as_str();
-    if let Some(container) = named(&home, name)?.retired_container(&home)? {
-        return forget(&home, events, name, &container);
+    if let Some(container) = named(&home, name)?.retired_container() {
+        return forget(&home, events, name, container.as_deref());
     }
     let force = request.force;
     // the commands this home records, which a forced remove cancels first
@@ -248,13 +241,19 @@ fn shown(refusal: SdkRefusal, handle_of: &dyn Fn(&str) -> String) -> SdkRefusal 
     }
 }
 
-/// Forgets Sandbox `name`, recorded under the retired docker backend (D-8,
-/// layerfs-project#111), whose container is `container`: its machine's
-/// worker is asked once to forget its own record of it (a worker that
-/// cannot be reached or refuses leaves that record, and the answer says
-/// so), then the home's record goes. The container is left for the user
-/// to remove; the answer names the command.
-fn forget(home: &Path, events: &mut Events<'_>, name: &str, container: &str) -> Result<Removed> {
+/// Removes the record of Sandbox `name`, recorded under the retired docker
+/// backend (D-8, layerfs-project#111), whose record names its container
+/// `container` when it keeps the name: its
+/// machine's worker is asked once to drop its own record of it (a worker
+/// that cannot be reached or refuses leaves that record, and `left` says
+/// so), then the home's record goes. The container is not touched; `left`
+/// names it.
+fn forget(
+    home: &Path,
+    events: &mut Events<'_>,
+    name: &str,
+    container: Option<&str>,
+) -> Result<Removed> {
     let record = {
         let _lock = home::lock::take(home)?;
         let _sandbox = record::lock(home, name)?;
@@ -290,15 +289,18 @@ fn forget(home: &Path, events: &mut Events<'_>, name: &str, container: &str) -> 
     }
     remove_folder(&dir)?;
     done(events);
-    let left = left.map(|left| {
+    let kept = left.map(|left| {
         format!(
             "its machine {}'s worker keeps its record: {left}",
             record.machine()
         )
     });
-    Ok(Removed::Forgotten {
-        container: container.to_owned(),
-        left: left.into_iter().collect(),
+    let container = format!(
+        "its container of the retired docker backend was not touched: {}",
+        super::reopen::container_fix(container)
+    );
+    Ok(Removed::AlreadyGone {
+        left: std::iter::once(container).chain(kept).collect(),
     })
 }
 
@@ -323,7 +325,5 @@ fn remove_unstarted(home: &Path, record: &SandboxRecord) -> Result<Removed> {
     if unresolved {
         left.push("its create's outcome was unknown: a Sandbox it may have started on its machine is not recorded here".to_owned());
     }
-    // a layout 2 Sandbox whose runtime the conversion found ended
-    left.extend(record.left().map(str::to_owned));
     Ok(Removed::AlreadyGone { left })
 }

@@ -5,7 +5,6 @@
 //! for Sandboxes. The docker record keeps `loaded_image: { id, bundle }`;
 //! content tags in the Engine reuse the image across homes and runtime builds.
 //! A cached image is inspected before reuse; an import is one attempt.
-use super::spec::home_id;
 use super::spec::{self as record, refusal};
 use crate::bundle::IMAGE_ARCHIVE;
 use layerfs_bridge::control::SdkRefusal;
@@ -34,47 +33,44 @@ pub fn docker_default(home: &Path) -> Result<String, SdkRefusal> {
             ),
         ));
     }
-    let spec = record::spec(home, &home_id(home)?, &record)?;
+    let spec = record::spec(home, &record)?;
     let manifest = layerfs_home::home::read_record(&bundle.dir.join("bundle.json"))?;
-    let content = manifest.as_ref().and_then(|m| m.get_text("image"));
+    let content = manifest
+        .as_ref()
+        .and_then(|m| m.get_text("image"))
+        .ok_or_else(|| {
+            refused(
+                "InvalidInput",
+                format!(
+                    "the Linux bundle at {} names no image identity in bundle.json; rebuild it \
+                     with `python3 tools/linux_bundle.py`",
+                    bundle.dir.display()
+                ),
+            )
+        })?;
     let previous = record
         .loaded_image()
         .filter(|(_, of)| *of == bundle.hash)
         .map(|(id, _)| id);
-    let id = match content {
-        Some(content) => {
-            // One import per content at a time across homes and bundle builds.
-            // The Engine's tag is the mapping; this file only serializes imports.
-            let socket = std::fs::canonicalize(&spec.tools.docker_socket)
-                .unwrap_or_else(|_| spec.tools.docker_socket.clone());
-            let engine = layerfs_bridge::sdk_values::hex(socket.as_os_str().as_bytes());
-            let cache = super::bundle::cache_root()?
-                .join("layerfs/docker-images")
-                .join(engine);
-            layerfs_home::home::private_dir(&cache)?;
-            let hex = content
-                .strip_prefix("sha256:")
-                .filter(|s| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit()))
-                .ok_or_else(|| refused("InvalidInput", "the bundle image ID is not sha256"))?;
-            let _image = layerfs_home::home::entity_lock::take(
-                &cache.join(format!("{hex}.lock")),
-                std::time::Duration::from_secs(600),
-                "another process is importing the Sandbox image",
-            )?;
-            adapters::cached_image(&spec, &archive, content, previous).map_err(refusal)?
-        }
-        // Legacy bundles without a content identity retain their old load path.
-        None => match previous {
-            Some(_) => adapters::cached_image(
-                &spec,
-                &archive,
-                &format!("sha256:{}", bundle.hash),
-                previous,
-            )
-            .map_err(refusal)?,
-            None => adapters::load_image(&spec, &archive).map_err(refusal)?,
-        },
-    };
+    // One import per content at a time across homes and bundle builds.
+    // The Engine's tag is the mapping; this file only serializes imports.
+    let socket = std::fs::canonicalize(&spec.tools.docker_socket)
+        .unwrap_or_else(|_| spec.tools.docker_socket.clone());
+    let engine = layerfs_bridge::sdk_values::hex(socket.as_os_str().as_bytes());
+    let cache = super::bundle::cache_root()?
+        .join("layerfs/docker-images")
+        .join(engine);
+    layerfs_home::home::private_dir(&cache)?;
+    let hex = content
+        .strip_prefix("sha256:")
+        .filter(|s| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+        .ok_or_else(|| refused("InvalidInput", "the bundle image ID is not sha256"))?;
+    let _image = layerfs_home::home::entity_lock::take(
+        &cache.join(format!("{hex}.lock")),
+        std::time::Duration::from_secs(600),
+        "another process is importing the Sandbox image",
+    )?;
+    let id = adapters::cached_image(&spec, &archive, content, previous).map_err(refusal)?;
     let _lock = lock::take(home)?;
     record::update(home, "docker", |record| {
         record.with_loaded_image(&id, &bundle.hash)

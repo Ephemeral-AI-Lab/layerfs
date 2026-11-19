@@ -20,7 +20,7 @@
 //! create or remove is `machine remove`'s to clear, and a machine a live
 //! process holds is not probed: its `op` is its state.
 use super::record::{MachineRecord, CREATE, REMOVE};
-use super::spec::{self as record, home_id, refusal};
+use super::spec::{self as record, refusal};
 use crate::worker::{self, Endpoint, Hello};
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -268,7 +268,6 @@ pub(super) fn observe(
     records: &[MachineRecord],
     related: Related,
 ) -> Result<Vec<Option<Seen>>> {
-    let id = home_id(home)?;
     let (send, answers) = mpsc::channel();
     let late = format!("its probe did not answer within {} s", PROBE.as_secs());
     let mut found: Vec<Option<std::result::Result<Found, String>>> = Vec::new();
@@ -282,7 +281,7 @@ pub(super) fn observe(
             found.push(None);
             continue;
         }
-        let spec = record::provider_spec(home, &id, machine);
+        let spec = record::provider_spec(home, machine);
         let endpoint = record::worker(home, machine.name());
         match (spec, endpoint) {
             (Ok(spec), Ok(endpoint)) => {

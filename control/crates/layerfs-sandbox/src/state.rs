@@ -16,8 +16,8 @@
 //!
 //! A Workspace's state comes from its daemon's `activity` ([`activity`]).
 use super::record::SandboxRecord;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::op::{Op, Standing};
+use layerfs_bridge::control::SdkRefusal;
+use layerfs_home::op::Standing;
 use layerfs_home::state::{Reason, State};
 use layerfs_machine::record::MachineRecord;
 use std::path::Path;
@@ -29,21 +29,6 @@ pub const OBSERVED: [Reason; 2] = [Reason::Lost, Reason::NotAnswering];
 /// The `fix` of every broken Sandbox.
 pub fn remove_fix(sandbox: &str) -> String {
     format!("layerfs sandbox remove {sandbox}")
-}
-
-/// The call word of a Sandbox's `op`: `create` or `remove` (an op recorded
-/// as `sandbox.close` by a build before the call surface 2.0 is `remove`).
-pub fn op_word(op: &Op) -> &str {
-    match op.word() {
-        "close" => "remove",
-        word => word,
-    }
-}
-
-/// A Sandbox's `op` as a state's companion and a refusal show it: `{ name,
-/// phase, started_at }`.
-pub fn op_shown(op: &Op) -> SdkValue {
-    layerfs_home::home::with_field(op.shown(), "name", SdkValue::text(op_word(op)))
 }
 
 /// The reason a record's `reason` word names, when a record may hold it.
@@ -61,7 +46,7 @@ impl SandboxRecord {
             match op.standing() {
                 Standing::Running => {
                     return State::Busy {
-                        name: op_word(&op).to_owned(),
+                        name: op.word().to_owned(),
                         phase: op.phase().to_owned(),
                         started_ms: op.started_ms(),
                     }
@@ -109,21 +94,15 @@ impl SandboxRecord {
             Reason::Unresolved => match self.op() {
                 Some(op) => format!(
                     "the outcome of its {} (phase {}) is not known",
-                    op_word(&op),
+                    op.word(),
                     op.phase()
                 ),
                 None => "a stop of its runtime was attempted and its outcome is not known".into(),
             },
             Reason::Missing if self.machine_stopped() => "its runtime was stopped".to_owned(),
-            Reason::Missing => {
-                let said = "it has no runtime: its create never recorded one".to_owned();
-                match self.left() {
-                    Some(left) => format!("{said}; {left}"),
-                    None => said,
-                }
-            }
+            Reason::Missing => "it has no runtime: its create never recorded one".to_owned(),
             Reason::Unsupported => "it was started by the retired docker backend; removing it \
-                                    forgets it and names its container"
+                                    removes its records and leaves its container"
                 .to_owned(),
             Reason::Lost => (self.error())
                 .unwrap_or("its machine says it does not run")
@@ -151,7 +130,7 @@ pub fn machine_state(home: &Path, name: &str) -> Result<State, SdkRefusal> {
         Err(_) => return Ok(layerfs_machine::state::unreadable(name)),
     };
     let platform = record.platform_name().unwrap_or("");
-    let removed = layerfs_sandbox_backend::platform_policy::disabled_reason(platform).is_some();
+    let removed = layerfs_sandbox_backend::platform_policy::removed_reason(platform).is_some();
     Ok(record.status(removed, 0))
 }
 

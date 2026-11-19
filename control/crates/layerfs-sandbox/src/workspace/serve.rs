@@ -19,7 +19,7 @@ use crate::OperationCause;
 use crate::Unmounted;
 use layerfs_bridge::control::{CommitControl, MountPlace, Reply, SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, CommitId, WorkspaceId};
-use layerfs_home::helpers::{lock, random, required};
+use layerfs_home::helpers::{lock, random, required, SHOWN};
 use layerfs_home::names::WorkspaceName;
 use layerfs_home::outcome::{failed, with_next, Outcome};
 
@@ -103,7 +103,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
     let project = host.project.as_str();
     let id = WorkspaceId::from_authority(random()?).map_err(failed)?;
     let mounted = {
-        let mut control = crate::daemon::trace::control(&state.controls)?;
+        let mut control = state.controls.lend()?;
         // This Sandbox's record names the machine it runs on; the daemon
         // that binds the mount registers both names beside its Workspace.
         let machine =
@@ -232,14 +232,11 @@ pub fn status_with(
 ) -> Outcome {
     let state = sandbox(host)?;
     let token = state.token(required(path, "path")?)?;
-    let mut control = crate::daemon::trace::control(&state.controls)?;
+    let mut control = state.controls.lend()?;
     let status = workspace(&mut control)
         .status(token)
         .map_err(values::failure)?;
-    let changes = match changed(&mut control, required(path, "path")?, under) {
-        Err(refusal) if refusal.code == "UnknownMethod" => None,
-        changes => Some(changes?),
-    };
+    let changes = changed(&mut control, required(path, "path")?, under)?;
     drop(control);
     let branch = lock(&state.mounts)?
         .get(required(path, "path")?)
@@ -248,30 +245,18 @@ pub fn status_with(
     let mut value = values::status(&status, head);
     if let SdkValue::Map(fields) = &mut value {
         fields.push(("branch".to_owned(), SdkValue::opt_text(branch)));
-        fields.extend(changes_of(&status, changes.as_ref()));
+        fields.extend(changes_of(&status, &changes));
     }
     Ok(value)
 }
 
 /// A status's `changes`, `partial` and its activity's phase and start, from
 /// the daemon's changed-path read (`found`). The phase and start are kept
-/// only while the activity that read observed is the Status record's. A
-/// daemon built before that read (2.0.0 runtimes up to 7d2ac982c3) refuses
-/// it `UnknownMethod` (`found` is `None`): its Workspace then lists no
-/// changes, `partial` when its overlay counts any, and its activity has no
-/// phase or start of its own.
+/// only while the activity that read observed is the Status record's.
 fn changes_of(
     status: &layerfs_bridge::control::WorkspaceStatus,
-    found: Option<&SdkValue>,
+    found: &SdkValue,
 ) -> Vec<(String, SdkValue)> {
-    let Some(found) = found else {
-        let counted = (status.local.as_ref())
-            .is_some_and(|local| local.dirty_inodes > 0 || local.dirty_directory_entries > 0);
-        return vec![
-            ("changes".to_owned(), SdkValue::List(Vec::new())),
-            ("partial".to_owned(), SdkValue::Bool(counted)),
-        ];
-    };
     let held = |name: &str| found.get(name).cloned().unwrap_or_default();
     let mut fields = vec![
         ("changes".to_owned(), held("entries")),
@@ -350,7 +335,7 @@ pub fn commit_with(
         .transpose()?;
     let expected = expected.as_deref();
     let token = state.token(path)?;
-    let mut control = crate::daemon::trace::control(&state.controls)?;
+    let mut control = state.controls.lend()?;
     let status = match expected {
         Some(_) => Some(
             workspace(&mut control)
@@ -446,7 +431,7 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     // processes can take Sandbox ownership while the daemon helper waits.
     let mut sent = false;
     let outcome = (|| {
-        let mut control = crate::daemon::trace::control(&state.controls)?;
+        let mut control = state.controls.lend()?;
         sent = true;
         let mut api = workspace(&mut control);
         // A request whose sending was never attempted reached no daemon:
@@ -529,7 +514,9 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
 /// type }`), `changes_count` (the entries read) and `pending_merge`. When
 /// that read fails, the daemon's own paths stand, each as `{ path }`.
 fn dirty(state: &crate::registry::SandboxState, path: &str, refusal: SdkRefusal) -> SdkRefusal {
-    let read = crate::daemon::trace::control(&state.controls)
+    let read = state
+        .controls
+        .lend()
         .and_then(|mut control| changed(&mut control, path, None));
     let entries = match read.ok().and_then(|found| found.get("entries").cloned()) {
         Some(SdkValue::List(entries)) => entries,
@@ -555,9 +542,6 @@ fn dirty(state: &crate::registry::SandboxState, path: &str, refusal: SdkRefusal)
         ),
     )
 }
-
-/// The entries a refusal or a status shows of a bounded read.
-pub const SHOWN: usize = 20;
 
 /// The name of the Workspace at `path` in its Sandbox's records, else its
 /// path.

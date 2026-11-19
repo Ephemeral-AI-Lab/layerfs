@@ -4,13 +4,14 @@
 //!
 //! - A new home's `docker` machine records `vm_name`
 //!   `layerfs-<home id8>-docker`; its worker container and volume carry it.
-//! - A home whose `docker` record predates that (no `vm_name`) keeps
-//!   `lfs-<home id8>-docker` and the volume `lfs-<home id8>-docker-data`,
-//!   where its Stores are.
+//! - A `docker` record from before that (no `vm_name`) is read as it is
+//!   and never rewritten; a start of it is refused `Failed` naming what made
+//!   it, with its doctor as the fix, before the provider is asked for
+//!   anything: this build computes no older name.
 //! - `machine.create` refuses `Exists` a name whose VM name is another
-//!   machine's (`a.b` then `a_b`), whichever formula gave that machine its
-//!   name, and refuses `InvalidInput` a name over 46 characters, both
-//!   before the provider is asked for anything; a 46-character name
+//!   machine's recorded one (`a.b` then `a_b`), and refuses `InvalidInput`
+//!   a name over 46 characters, both before the provider is asked for
+//!   anything; a 46-character name
 //!   reaches the provider as a 63-character VM name.
 //! - A `lima` machine's name must also leave Lima's socket path
 //!   `<Lima home>/<VM name>/ssh.sock.<16 digits>` shorter than 104
@@ -167,10 +168,10 @@ fn provider_names_and_their_refusals() {
         "{run}"
     );
 
-    // --- a home from before: its `docker` record has no `vm_name`, and
-    // keeps the container and volume names it always had
+    // --- a home from before: its `docker` record has no `vm_name`; it is
+    // never rewritten, and a start of it is refused before any provider call
     let old = tempdir("old");
-    let old_id = home::open(&old).unwrap().id;
+    home::open(&old).unwrap();
     let old_docker = SdkValue::map([
         ("v", SdkValue::Int(1)),
         ("name", t("docker")),
@@ -187,34 +188,38 @@ fn provider_names_and_their_refusals() {
         kept, old_docker,
         "the first call rewrote an existing record"
     );
-    let worker = format!("lfs-{}-docker", &old_id[..8]);
-    let run = docker_run(&old, &tools);
-    assert!(run.contains(&format!(" --name {worker} ")), "{run}");
+    let before = effects(&tools);
+    let refused = layerfs_api::call(
+        Some(&old),
+        "machine.start",
+        SdkValue::map([("machine", t("docker"))]),
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert_eq!(refused.code, "Failed", "{}", refused.message);
     assert!(
-        run.contains(&format!(" -v {worker}-data:/layerfs/data ")),
-        "{run}"
+        refused.message.contains("has no vm_name") && refused.message.contains("No call repairs"),
+        "{}",
+        refused.message
     );
-    assert!(!run.contains("layerfs-"), "{run}");
+    assert_eq!(
+        refused.detail.get_text("fix"),
+        Some("layerfs machine doctor docker")
+    );
+    assert_eq!(effects(&tools), before, "the provider was asked");
 
     // --- collisions: a VM name keeps no punctuation
     let home = fresh;
-    // as this build's create records one, as a build before #180 recorded
-    // one, and a record with no `vm_name` at all (the earlier formula)
+    // as this build's create records one, and a record with no `vm_name`
+    // at all (which takes no name)
     lima(
         &home,
         "a.b",
         &[("vm_name", t(&format!("layerfs-{id8}-a-b")))],
     );
-    lima(&home, "c.d", &[("vm_name", t(&format!("lfs-{id8}-c-d")))]);
     lima(&home, "e.f", &[]);
     let made = effects(&tools);
-    for (wanted, taken) in [
-        ("a_b", "a.b"),
-        ("a-b", "a.b"),
-        ("c_d", "c.d"),
-        ("e_f", "e.f"),
-        ("e-f", "e.f"),
-    ] {
+    for (wanted, taken) in [("a_b", "a.b"), ("a-b", "a.b")] {
         let (code, message) = create(&home, wanted);
         assert_eq!(code, "Exists", "{wanted}: {message}");
         assert!(message.contains(&format!("machine {taken} ")), "{message}");

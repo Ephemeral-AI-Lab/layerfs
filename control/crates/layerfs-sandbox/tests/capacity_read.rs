@@ -372,7 +372,7 @@ fn ending_idle_sessions_leaves_a_lent_connection_alone() {
     let dial = dial(endpoint);
     let first = dial.open().unwrap();
     let controls = Controls::new(first, dial);
-    let mut lease = controls.lend().unwrap().0;
+    let mut lease = controls.lend().unwrap();
     assert_eq!(
         controls.end_idle(Instant::now() + Duration::from_secs(2)),
         0
@@ -414,7 +414,7 @@ fn a_fenced_connection_is_not_lent_again() {
     let first = dial.open().unwrap();
     let controls = Controls::new(first, dial);
     {
-        let lease = controls.lend().unwrap().0;
+        let lease = controls.lend().unwrap();
         // the fence's end, outside any exchange: the channel is shut down
         // while this `Control` never saw a call fail, which is the window
         // between a returned reply and `drop(fence)`
@@ -437,7 +437,7 @@ fn a_quarantined_connection_attempts_nothing() {
     let dial = dial(endpoint);
     let first = dial.open().unwrap();
     let controls = Controls::new(first, dial);
-    let mut lease = controls.lend().unwrap().0;
+    let mut lease = controls.lend().unwrap();
     lease.close_handle().unwrap().close().unwrap();
     // the call a pooled lease would make next: refused before sending, so it
     // is not an attempt whose effect is unknown

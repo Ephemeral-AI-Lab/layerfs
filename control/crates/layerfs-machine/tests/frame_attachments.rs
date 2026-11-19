@@ -49,8 +49,7 @@ fn a_frame_without_bytes_is_the_plain_frame_it_was() {
         ),
     ]);
     let frame = round_trip(&value);
-    let mut text = String::new();
-    json::write_typed(&mut text, &value);
+    let text = json::print(&value);
     let mut expected = (text.len() as u32).to_be_bytes().to_vec();
     expected.extend_from_slice(text.as_bytes());
     assert_eq!(frame, expected);

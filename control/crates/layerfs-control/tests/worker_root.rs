@@ -27,7 +27,10 @@ fn sandbox_call(endpoint: &Endpoint) -> Result<SdkValue, (String, String)> {
         ("project", SdkValue::text("api")),
         (
             "store_record",
-            SdkValue::map([("name", SdkValue::text("shop"))]),
+            SdkValue::map([
+                ("name", SdkValue::text("shop")),
+                ("kind", SdkValue::text("sqlite")),
+            ]),
         ),
         (
             "project_record",

@@ -3,7 +3,7 @@
 //! records may remain in a home.
 use layerfs_api::{call, json};
 use layerfs_bridge::control::SdkValue;
-use layerfs_sandbox_backend::platform_policy::disabled_reason;
+use layerfs_sandbox_backend::platform_policy::removed_reason;
 use std::collections::BTreeMap;
 use std::net::TcpListener;
 use std::path::Path;
@@ -55,7 +55,7 @@ fn every_new_work_route_refuses_before_writes_or_worker_and_daemon_connections()
         };
         for case in cases {
             let name = case.get_text("call").unwrap();
-            let reason = disabled_reason(platform).unwrap();
+            let reason = removed_reason(platform).unwrap();
             let refusal = call(
                 Some(&home),
                 name,
@@ -86,7 +86,7 @@ fn every_new_work_route_refuses_before_writes_or_worker_and_daemon_connections()
             &mut |_| {},
         )
         .unwrap_err();
-        assert_eq!(refusal.message, disabled_reason(platform).unwrap());
+        assert_eq!(refusal.message, removed_reason(platform).unwrap());
         std::fs::remove_dir_all(home).unwrap();
     }
 }
@@ -101,7 +101,7 @@ fn disabled_selection_does_not_create_a_home() {
             ("platform", SdkValue::text(platform)),
         ]);
         let refusal = call(Some(&home), "machine.create", args, &mut |_| {}).unwrap_err();
-        assert_eq!(refusal.message, disabled_reason(platform).unwrap());
+        assert_eq!(refusal.message, removed_reason(platform).unwrap());
         assert!(!home.exists());
     }
 }

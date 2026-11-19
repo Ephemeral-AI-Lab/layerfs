@@ -87,15 +87,17 @@ fn stats(home: &Path, machine: &str) -> Result<SdkValue, (String, String)> {
 /// when it runs.
 fn machine_record(home: &Path, machine: &str, platform: &str, worker: Option<(SocketAddr, &str)>) {
     let daemon = std::env::current_exe().unwrap().display().to_string();
-    write_record(
-        &paths::machine_record(home, machine),
-        &map(&[
-            ("name", t(machine)),
-            ("platform", t(platform)),
-            ("daemon", t(&daemon)),
-        ]),
-    )
-    .unwrap();
+    let mut fields = vec![
+        ("name", t(machine)),
+        ("platform", t(platform)),
+        ("daemon", t(&daemon)),
+    ];
+    // every 2.0 record of a machine with a provider names its VM
+    let vm_name = format!("layerfs-test-{machine}");
+    if platform != "native" {
+        fields.push(("vm_name", t(&vm_name)));
+    }
+    write_record(&paths::machine_record(home, machine), &map(&fields)).unwrap();
     if let Some((address, secret)) = worker {
         write_record(
             &paths::worker_record(home, machine),

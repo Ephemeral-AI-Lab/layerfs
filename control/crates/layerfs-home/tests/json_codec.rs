@@ -2,11 +2,10 @@
 //! exactly as the character-at-a-time codec before them did (the
 //! `oracle` module keeps that codec), so worker frames are unchanged.
 use layerfs_bridge::control::SdkValue;
-use layerfs_home::json::{base64, parse, print, unbase64, write_typed};
+use layerfs_home::json::{base64, parse, print, unbase64};
 
 /// The codec as it was before the bulk one, kept as the reference.
 mod oracle {
-    use layerfs_bridge::control::SdkValue;
     use std::fmt::Write as _;
 
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -63,28 +62,6 @@ mod oracle {
             }
         }
         Some(out)
-    }
-
-    /// `print` of the worker frame's form: bytes always as base64.
-    pub fn print_typed(value: &SdkValue) -> String {
-        match value {
-            SdkValue::Null => "null".to_owned(),
-            SdkValue::Bool(b) => b.to_string(),
-            SdkValue::Int(n) => n.to_string(),
-            SdkValue::Text(s) => quote(s),
-            SdkValue::Bytes(b) => format!("{{\"base64\":{}}}", quote(&base64(b))),
-            SdkValue::List(items) => {
-                let items: Vec<String> = items.iter().map(print_typed).collect();
-                format!("[{}]", items.join(","))
-            }
-            SdkValue::Map(fields) => {
-                let fields: Vec<String> = fields
-                    .iter()
-                    .map(|(name, item)| format!("{}:{}", quote(name), print_typed(item)))
-                    .collect();
-                format!("{{{}}}", fields.join(","))
-            }
-        }
     }
 }
 
@@ -242,35 +219,6 @@ fn strings_print_byte_for_byte_as_before_and_read_back() {
         format!("{{\"base64\":\"{}\"}}", oracle::base64(&bytes))
     );
     assert_eq!(parse(&printed), Ok(SdkValue::Bytes(bytes)));
-}
-
-#[test]
-fn the_typed_form_prints_as_before_with_every_byte_value_as_base64() {
-    let mut seq = Seq(3);
-    let value = SdkValue::map([
-        ("op", SdkValue::text("project.stage")),
-        (
-            "args",
-            SdkValue::map([
-                ("name", SdkValue::text("web \"x\"\n\u{1}é")),
-                ("part", SdkValue::Bytes(seq.bytes(10_000))),
-                ("utf8", SdkValue::Bytes(b"plain".to_vec())),
-                ("empty", SdkValue::Bytes(Vec::new())),
-                (
-                    "list",
-                    SdkValue::List(vec![
-                        SdkValue::Null,
-                        SdkValue::Bool(true),
-                        SdkValue::Int(-7),
-                    ]),
-                ),
-            ]),
-        ),
-    ]);
-    let mut out = String::from("prefix");
-    write_typed(&mut out, &value);
-    assert_eq!(out, format!("prefix{}", oracle::print_typed(&value)));
-    assert_eq!(parse(&out["prefix".len()..]), Ok(value));
 }
 
 #[test]

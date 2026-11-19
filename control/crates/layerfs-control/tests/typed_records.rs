@@ -135,8 +135,8 @@ mod machines {
             machine("vm", r#"{"platform":"lima"}"#).recorded(0),
             State::Stopped
         );
-        // a record written before reasons were
-        assert_eq!(broken(&dev("failed").recorded(0)).0, Reason::Failed);
+        // a `failed` word with no reason is no 2.0 record: it reads stopped
+        assert_eq!(dev("failed").recorded(0), State::Stopped);
         assert_eq!(
             machine("native", r#"{"platform":"native"}"#).recorded(0),
             State::Ready
@@ -337,8 +337,7 @@ fn a_sandbox_state_is_derived_from_its_record_and_intent() {
         sandbox_with(false, None).status(&ready),
         broken(Reason::Missing)
     );
-    // a live owner's op is busy, by its call word (`sandbox.close`, as a
-    // build before the call surface 2.0 recorded it, is `remove`)
+    // a live owner's op is busy, by its call word
     let busy = |id: bool, op: &str| match sandbox_with(id, Some((op, me, false))).status(&ready) {
         State::Busy { name, phase, .. } => (name, phase),
         other => panic!("{other:?}"),
@@ -348,25 +347,21 @@ fn a_sandbox_state_is_derived_from_its_record_and_intent() {
         ("create".into(), "stop".into())
     );
     assert_eq!(
-        busy(true, "sandbox.close"),
-        ("remove".into(), "stop".into())
-    );
-    assert_eq!(
         busy(true, "sandbox.remove"),
         ("remove".into(), "stop".into())
     );
     // a gone owner (id 0): uncertain is unresolved, certain is ignored
     assert_eq!(
-        sandbox_with(true, Some(("sandbox.close", 0, true))).status(&ready),
+        sandbox_with(true, Some(("sandbox.remove", 0, true))).status(&ready),
         broken(Reason::Unresolved)
     );
     assert_eq!(
-        sandbox_with(true, Some(("sandbox.close", 0, false))).status(&ready),
+        sandbox_with(true, Some(("sandbox.remove", 0, false))).status(&ready),
         State::Ready
     );
     // the op shows as `{name, phase, started_at}`, never its owner
-    let record = sandbox_with(true, Some(("sandbox.close", 0, true)));
-    let shown = layerfs_sandbox::state::op_shown(&record.op().unwrap());
+    let record = sandbox_with(true, Some(("sandbox.remove", 0, true)));
+    let shown = record.op().unwrap().shown();
     let text = print(&shown);
     assert!(text.contains(r#""name":"remove""#), "{text}");
     assert!(

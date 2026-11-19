@@ -58,6 +58,27 @@ fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
     call(home, name, args).unwrap_or_else(|e| panic!("{name}: {e:?}"))
 }
 
+/// PostgreSQL Store `pg` as a 2.0 home records it: its address and the
+/// saved login it names (a test login; nothing is dialled with it here).
+fn pg_record(home: &Path) {
+    let login = [
+        ("auth", t("pg")),
+        ("user", t("u")),
+        ("password", t("not-a-real-password")),
+    ];
+    ok(home, "store.save_auth", &login);
+    home::write_record(
+        &paths::store_record(home, "pg"),
+        &SdkValue::map([
+            ("name", t("pg")),
+            ("kind", t("postgresql")),
+            ("url", t("postgres://127.0.0.1:1/db")),
+            ("auth", t("pg")),
+        ]),
+    )
+    .unwrap();
+}
+
 fn env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.is_empty())
 }
@@ -128,15 +149,7 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
     ok(&home, "machine.list", &[]);
     // a PostgreSQL Store and a sqlite Store on native, written as records:
     // the refusals come before any connection
-    home::write_record(
-        &paths::store_record(&home, "pg"),
-        &SdkValue::map([
-            ("name", t("pg")),
-            ("kind", t("postgresql")),
-            ("url", t("postgres://u@127.0.0.1:1/db")),
-        ]),
-    )
-    .unwrap();
+    pg_record(&home);
     home::write_record(
         &paths::store_record(&home, "shop"),
         &SdkValue::map([("name", t("shop")), ("kind", t("sqlite"))]),
@@ -151,7 +164,11 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
     }
     home::write_record(
         &paths::machine_record(&home, "dev"),
-        &SdkValue::map([("name", t("dev")), ("platform", t("lima"))]),
+        &SdkValue::map([
+            ("name", t("dev")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-test-dev")),
+        ]),
     )
     .unwrap();
     home::write_record(
@@ -230,15 +247,7 @@ fn every_platform_refusal_is_the_support_table_s() {
     let home = tempdir("support");
     home::open(&home).unwrap();
     ok(&home, "machine.list", &[]);
-    home::write_record(
-        &paths::store_record(&home, "pg"),
-        &SdkValue::map([
-            ("name", t("pg")),
-            ("kind", t("postgresql")),
-            ("url", t("postgres://u@127.0.0.1:1/db")),
-        ]),
-    )
-    .unwrap();
+    pg_record(&home);
     home::write_record(
         &paths::project_record(&home, "pg", "app"),
         &SdkValue::map([("name", t("app"))]),
@@ -608,15 +617,7 @@ fn a_sandbox_with_no_machine_runs_on_its_store_s() {
         "a refused create leaves no claim"
     );
 
-    home::write_record(
-        &paths::store_record(&home, "pg"),
-        &SdkValue::map([
-            ("name", t("pg")),
-            ("kind", t("postgresql")),
-            ("url", t("postgres://u@127.0.0.1:1/db")),
-        ]),
-    )
-    .unwrap();
+    pg_record(&home);
     home::write_record(
         &paths::project_record(&home, "pg", "app"),
         &SdkValue::map([("name", t("app"))]),

@@ -446,7 +446,7 @@
   {
    "call": "sandbox.remove",
    "badge": "renamed",
-   "note": "renamed from <code>close</code>: it stops the Sandbox and deletes its runtime and its record. Without <code>--force</code> it is refused <code>Busy</code> while a command runs (the refusal lists the exec ids as <code>running</code>) and <code>InUse</code> while a Workspace is mounted (it lists <code>workspaces</code>). With <code>--force</code> each running command is cancelled first; one whose cancel is not confirmed refuses the call <code>Unknown</code> and nothing more is done. <code>unmounted</code> lists the Workspaces a forced removal ended: their uncommitted changes are gone. A Sandbox of the retired docker backend is forgotten: its <code>container</code> is left, with the <code>fix</code> line that removes it. <code>left</code> says what may remain on its machine unrecorded. A lost reply leaves the record <code>broken</code> with <code>reason: unresolved</code>; another <code>sandbox remove</code> settles it",
+   "note": "renamed from <code>close</code>: it stops the Sandbox and deletes its runtime and its record. Without <code>--force</code> it is refused <code>Busy</code> while a command runs (the refusal lists the exec ids as <code>running</code>) and <code>InUse</code> while a Workspace is mounted (it lists <code>workspaces</code>). With <code>--force</code> each running command is cancelled first; one whose cancel is not confirmed refuses the call <code>Unknown</code> and nothing more is done. <code>unmounted</code> lists the Workspaces a forced removal ended: their uncommitted changes are gone. Of a Sandbox of the retired docker backend only the records go (<code>already_gone</code>): its container is not touched, and <code>left</code> names it when its record keeps the name (this build computes no older name). <code>left</code> says what may remain on its machine unrecorded. A lost reply leaves the record <code>broken</code> with <code>reason: unresolved</code>; another <code>sandbox remove</code> settles it",
    "today": [
     "sandbox.close"
    ],
@@ -476,16 +476,12 @@
     "sometimes": [
      "ok",
      "unmounted",
-     "container",
-     "fix",
      "left"
     ]
    },
    "long": [
     "ok",
     "unmounted",
-    "container",
-    "fix",
     "left",
     "outcome",
     "sandbox"
@@ -494,10 +490,9 @@
    "examples": {
     "short": [
      "{\"ok\":true}",
-     "forced, with a Workspace mounted: {\"unmounted\":[\"tests:agent\"]}",
-     "a Sandbox of the retired docker backend: {\"container\":\"layerfs-5f0c7a1e-old\",\"fix\":\"docker rm -f layerfs-5f0c7a1e-old\"}"
+     "forced, with a Workspace mounted: {\"unmounted\":[\"tests:agent\"]}"
     ],
-    "long": "{\"ok\":true,\"unmounted\":[],\"container\":null,\"fix\":null,\"left\":[],\"outcome\":\"removed\",\"sandbox\":\"tests\"}"
+    "long": "{\"ok\":true,\"unmounted\":[],\"left\":[],\"outcome\":\"removed\",\"sandbox\":\"tests\"}"
    },
    "dropped": [
     {
@@ -506,7 +501,7 @@
      "why": "a thing goes by its own word"
     }
    ],
-   "new_work": "The rename (no alias, R1). `outcome` is `removed`, `already_gone` (its runtime was gone; today `was_gone` and the unstarted case) or `forgotten` (the retired docker backend). `unmounted` holds Workspace handles: today's `unknown` lists their paths. Today's `remove: \"docker rm -f ...\"` is `fix`. `left` is a list of sentences in every case (today a text on one outcome and a list on another). The refusal while a Workspace is mounted is `InUse` (`MountsActive` today) and lists `workspaces`; the `Busy` refusal lists `running` (`detail.execs` today). Progress is new: today the call records its op (phase `stop`) and takes no `on_progress`; the events are the op's phases, `cancel` (forced, one per command), `stop` and `delete`.",
+   "new_work": "The rename (no alias, R1). `outcome` is `removed`, `already_gone` (its runtime was gone; today `was_gone` and the unstarted case) (also a Sandbox of the retired docker backend, whose container `left` names when its record keeps the name; `forgotten` and its `container`/`fix` keys were removed in v20). `unmounted` holds Workspace handles: today's `unknown` lists their paths. `left` is a list of sentences in every case (today a text on one outcome and a list on another). The refusal while a Workspace is mounted is `InUse` (`MountsActive` today) and lists `workspaces`; the `Busy` refusal lists `running` (`detail.execs` today). Progress is new: today the call records its op (phase `stop`) and takes no `on_progress`; the events are the op's phases, `cancel` (forced, one per command), `stop` and `delete`.",
    "refusals": [
     {
      "error": "Busy",

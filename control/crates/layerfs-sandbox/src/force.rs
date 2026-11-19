@@ -22,10 +22,7 @@ pub fn native_host(home: &Path, sandbox: &str) -> Result<Host, SdkRefusal> {
         store_path: None,
         deploy: Some(Deploy {
             local_dir: Some(paths::run_root(home).display().to_string()),
-            // a Sandbox made before layerfs-project#180 is found by the
-            // earlier prefix its record keeps
             container_prefix: Some(layerfs_home::names::provider_prefix(&id)),
-            legacy_prefix: Some(layerfs_home::names::legacy_provider_prefix(&id)),
             ..Deploy::default()
         }),
         postgresql: None,

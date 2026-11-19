@@ -56,7 +56,7 @@ pub fn machine_state_with(name: &str, record: Option<&MachineRecord>, on: usize)
         return layerfs_machine::state::unrecorded(name);
     };
     let platform = record.platform_name().unwrap_or("");
-    let removed = layerfs_sandbox_backend::platform_policy::disabled_reason(platform).is_some();
+    let removed = layerfs_sandbox_backend::platform_policy::removed_reason(platform).is_some();
     record.status(removed, on)
 }
 

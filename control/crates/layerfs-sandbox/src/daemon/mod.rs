@@ -17,8 +17,6 @@ pub mod operator;
 #[doc(hidden)]
 pub mod pool;
 #[doc(hidden)]
-pub mod trace;
-#[doc(hidden)]
 pub mod values;
 #[doc(hidden)]
 pub mod workspace;

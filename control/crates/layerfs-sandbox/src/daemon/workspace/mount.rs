@@ -8,7 +8,6 @@ use std::fmt;
 /// Concurrent callers use separate authenticated channels. This owns no process.
 pub struct WorkspaceApi<'a> {
     pub control: &'a mut Control,
-    pub observation_scope: Option<&'a [u8; 32]>,
     /// The Sandbox and machine a mount through this channel belongs to,
     /// when its caller knows them: the daemon registers the holder with
     /// them. Both absent when the caller knows neither.
@@ -25,7 +24,6 @@ impl<'a> WorkspaceApi<'a> {
     pub fn from_control(control: &'a mut Control) -> Self {
         Self {
             control,
-            observation_scope: None,
             place: MountPlace::default(),
         }
     }
@@ -37,14 +35,6 @@ impl<'a> WorkspaceApi<'a> {
         self
     }
     pub fn exchange(&mut self, request: Request) -> Result<Reply, Box<crate::OperationFailure>> {
-        let request = match self.observation_scope {
-            Some(scope) => Request::Observed {
-                scope: *scope,
-                request: Box::new(request),
-                traced: false,
-            },
-            None => request,
-        };
         crate::daemon::failure::exchange(self.control, request)
     }
 }

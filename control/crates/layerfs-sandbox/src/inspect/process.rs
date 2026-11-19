@@ -45,8 +45,6 @@ pub const NO_COMMAND: &str = "no_command";
 
 /// The names of the fields [`observed`] answers.
 pub const FIELDS: [&str; 3] = ["daemon", "usage", "usage_reason"];
-/// The names of the fields [`workspaces`] answers.
-pub const WORKSPACE_FIELDS: [&str; 2] = ["workspace_usage", "workspace_usage_reason"];
 /// The most Workspace groups one read lists: a Sandbox holds
 /// `crate::lifecycle::WORKSPACES` at once, and a group something still runs
 /// in outlives its Workspace's unmount.

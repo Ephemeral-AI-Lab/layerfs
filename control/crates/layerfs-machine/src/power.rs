@@ -9,7 +9,7 @@
 use super::endpoint::{bring_up, start_lock};
 use super::progress::Phases;
 use super::record::{MachineRecord, STOP};
-use super::spec::{self as record, home_id, machine_of, refusal};
+use super::spec::{self as record, machine_of, refusal};
 use super::state::settle;
 use crate::Related;
 use layerfs_bridge::control::SdkValue;
@@ -62,7 +62,7 @@ fn stopped(home: &Path, machine: &MachineRecord) -> bool {
     if machine.recorded(0) != State::Stopped || paths::worker_record(home, name).exists() {
         return false;
     }
-    let spec = home_id(home).and_then(|id| record::provider_spec(home, &id, machine));
+    let spec = record::provider_spec(home, machine);
     let seen = spec.map(|spec| adapters::provider_within(&spec, Instant::now() + CHECK));
     matches!(
         seen,
@@ -92,7 +92,7 @@ pub fn stop(home: &Path, name: &MachineName, related: Related, events: &mut Even
         let _lock = lock::take(&home)?;
         let machine = machine_of(&home, name)?;
         (related.can_stop)(&home, name)?;
-        let spec = record::spec(&home, &home_id(&home)?, &machine)?;
+        let spec = record::spec(&home, &machine)?;
         let op = Op::begin(STOP, "stop", SdkValue::Null)?;
         machine.with_op(&op).write(&home)?;
         (spec, op)
