@@ -42,7 +42,7 @@ export function splice(text, block) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { table } = await import("layerfs");
+  const { table } = await import("@layerfs/node");
   const { block, problems } = render(table);
   if (problems.length > 0) {
     console.error(`${problems.length} profile problem(s):\n${problems.join("\n")}`);

@@ -460,9 +460,16 @@ fn a_worker_reads_its_log_and_its_sandboxes_logs_and_writes_nothing() {
     std::fs::write(&log, "started again\n").unwrap();
     let (code, message) = call(&home, "machine.log", &[("machine", t("box")), cursor]).unwrap_err();
     assert_eq!(code, "InvalidInput", "{message}");
+    // the worker's refusal names the call itself, as the host's check does
     assert!(
         message.starts_with("machine.log: the cursor is stale"),
         "{message}"
+    );
+    let wide = [("machine", t("box")), ("limit", SdkValue::Int(1001))];
+    let (code, message) = call(&home, "machine.log", &wide).unwrap_err();
+    assert_eq!(
+        (code.as_str(), message.as_str()),
+        ("InvalidInput", "machine.log: `limit` is 1 to 1000")
     );
     let fresh = call(&home, "machine.log", &[("machine", t("box"))]).unwrap();
     assert_eq!(texts(&fresh), ["started again"]);

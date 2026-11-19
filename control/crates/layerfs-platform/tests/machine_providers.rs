@@ -64,8 +64,14 @@ fn apple_container_status_reads_status_state_from_inspect() {
 esac"#,
     );
     let status = machine::status(&scratch.spec(Platform::AppleContainer)).unwrap();
-    // the VM runs, but no worker answers at a recorded endpoint
-    assert_eq!(status.state, State::Stopped);
+    // the VM runs, but no worker answers at a recorded endpoint: broken
+    // not_answering, as `machine get --with live` says, never stopped
+    assert_eq!(status.state, State::Running);
+    assert_eq!(status.worker, Some(false));
+    assert_eq!(
+        (status.word(), status.reason()),
+        ("broken", Some("not_answering"))
+    );
     assert_eq!(status.free_disk, Some(9990 * 1024));
     assert_eq!(
         status.tool_version.as_deref(),
@@ -75,6 +81,24 @@ esac"#,
     assert!(scratch
         .log()
         .contains("container exec lfs-dev df -kP /layerfs/data"));
+}
+
+#[test]
+fn a_docker_engine_that_does_not_answer_is_broken_engine_down() {
+    let scratch = Scratch::new("engine-down");
+    scratch.tool(
+        "docker",
+        r#"echo "Cannot connect to the Docker daemon" >&2; exit 1"#,
+    );
+    let status = machine::status(&scratch.spec(Platform::Docker)).unwrap();
+    // the provider did not answer: broken engine_down, as `machine get
+    // --with live` says, never stopped
+    assert_eq!((status.kernel, status.worker), (None, None));
+    assert_eq!(
+        (status.word(), status.reason()),
+        ("broken", Some("engine_down"))
+    );
+    assert!(status.down_reason.unwrap().contains("does not answer"));
 }
 
 #[test]
@@ -93,7 +117,13 @@ fn built_in_machines_are_never_created_or_removed() {
         .unwrap()
         .is_none());
     machine::stop(&native).unwrap();
-    assert_eq!(machine::status(&native).unwrap().state, State::Running);
+    let status = machine::status(&native).unwrap();
+    assert_eq!(status.state, State::Running);
+    // its calls run in the caller's process: no worker to ask, and ready
+    assert_eq!(
+        (status.worker, status.word(), status.reason()),
+        (None, "ready", None)
+    );
     assert!(scratch.log().is_empty());
 }
 

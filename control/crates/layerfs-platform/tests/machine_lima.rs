@@ -178,6 +178,11 @@ fn status_reports_a_stopped_instance_and_the_tool_version() {
     );
     let status = machine::status(&scratch.spec(Platform::Lima)).unwrap();
     assert_eq!(status.state, State::Stopped);
+    // a stopped VM's worker is not asked
+    assert_eq!(
+        (status.worker, status.word(), status.reason()),
+        (None, "stopped", None)
+    );
     assert_eq!(
         status.tool_version.as_deref(),
         Some("limactl version 9.9.9")

@@ -11,7 +11,7 @@
 //! a process taking its own lease on the Store ([`claim`]), removes it under
 //! the Store's lock and logs the removal (O35), so a process that ended
 //! without closing its Stores leaves nothing once the Store is used again;
-//! reads (`store.get`, `store.list`, `layerfs doctor`) ignore it and
+//! reads (`store.get`, `store.list`, the doctors) ignore it and
 //! change nothing.
 use crate::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -177,7 +177,7 @@ pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
     Ok(live)
 }
 
-/// Read only (`layerfs doctor`, `store.get`, `store.list`, a layout 2
+/// Read only (the doctors, `store.get`, `store.list`, a layout 2
 /// home's survey): the live and the stale holders of Store `store` other than this process; nothing is
 /// removed and no lock is taken.
 pub fn read_holders(home: &Path, store: &str) -> Result<(Vec<u32>, Vec<u32>), SdkRefusal> {

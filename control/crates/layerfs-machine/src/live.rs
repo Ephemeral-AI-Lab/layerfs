@@ -80,11 +80,22 @@ impl Seen {
     }
 }
 
-/// The `live` section of a machine that is not probed (`native`, one an
-/// `op` holds, one of a removed platform): nothing was read.
-pub(super) fn nothing() -> SdkValue {
+/// The `live` section of a machine that is not probed. `native` is this
+/// computer: its data disk is the one that holds the home, read with one
+/// `statvfs`; it has no provider tool and no worker (its calls run in the
+/// caller's process), so those are null. One an `op` holds or one of a
+/// removed platform: nothing was read.
+pub(super) fn unprobed(home: &Path, record: &MachineRecord) -> SdkValue {
+    let native = record.removed().is_none() && record.platform().ok() == Some(Platform::Native);
+    let free = native
+        .then(|| home::filesystem_available(home).ok())
+        .flatten()
+        .and_then(|bytes| i64::try_from(bytes).ok());
     SdkValue::map([
-        ("disk_free_bytes", SdkValue::Null),
+        (
+            "disk_free_bytes",
+            free.map_or(SdkValue::Null, SdkValue::Int),
+        ),
         ("tool_version", SdkValue::Null),
         ("worker", SdkValue::Null),
     ])

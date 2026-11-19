@@ -158,7 +158,10 @@ pub fn get(home: &Path, name: &MachineName, live: bool, related: Related) -> Out
     }
     let seen = live::observe(home, &rows, related)?.pop().flatten();
     let shown = summary(home, &rows[0], seen.as_ref(), related)?;
-    let section = seen.as_ref().map_or_else(live::nothing, Seen::section);
+    let section = match &seen {
+        Some(seen) => seen.section(),
+        None => live::unprobed(home, &rows[0]),
+    };
     Ok(layerfs_home::home::with_field(shown, "live", section))
 }
 

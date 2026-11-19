@@ -146,7 +146,7 @@ impl Op {
     /// Refuses a new operation on entity `kind` `entity` (`store`,
     /// `machine` or `sandbox`) while this intent holds it: `Busy` while its
     /// owner lives, `Unresolved` once a gone owner left it uncertain, naming
-    /// `show` (the call that shows it, such as `store status`) and `clear`
+    /// `show` (the call that shows it, such as `store get`) and `clear`
     /// (the call that clears it). The refusal's `detail` is `{entity: {kind,
     /// name}, phase, op}` (#536 §10).
     pub fn blocks(
@@ -193,7 +193,7 @@ impl Op {
         Err(refusal)
     }
 
-    /// The intent as `machine.status`, `store.status` and `sandbox.get`
+    /// The intent as `machine.get`, `store.get` and `sandbox.get`
     /// show it (H6): `{id, name, phase, started, uncertain}`.
     pub fn to_sdk(&self) -> SdkValue {
         let copied = |name: &str| self.fields.get(name).cloned().unwrap_or_default();

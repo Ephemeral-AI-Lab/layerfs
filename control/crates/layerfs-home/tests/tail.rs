@@ -54,11 +54,11 @@ impl Log {
     }
 
     fn read(&self, cursor: Option<&str>, before: Option<&str>, limit: Option<i64>) -> Answer {
-        Answer::of(tail::read(&self.pair, "logs.machine", cursor, before, limit).unwrap())
+        Answer::of(tail::read(&self.pair, "machine.log", cursor, before, limit).unwrap())
     }
 
     fn refused(&self, cursor: Option<&str>, before: Option<&str>, limit: Option<i64>) -> String {
-        let refusal = tail::read(&self.pair, "logs.machine", cursor, before, limit).unwrap_err();
+        let refusal = tail::read(&self.pair, "machine.log", cursor, before, limit).unwrap_err();
         format!("{}: {}", refusal.code, refusal.message)
     }
 
@@ -380,7 +380,7 @@ fn control_characters_are_escaped_and_bad_bytes_replaced() {
 
 #[test]
 fn a_cursor_into_a_rotated_or_replaced_file_is_refused() {
-    let stale = "InvalidInput: logs.machine: the cursor is stale";
+    let stale = "InvalidInput: machine.log: the cursor is stale";
     // a rotation: the cursor's file is now the rotated one
     let log = Log::new("stale-rotated");
     log.append(&numbered(0, 300));
@@ -473,13 +473,13 @@ fn a_window_is_checked_before_any_read() {
     for limit in [0, -1, 1001, i64::MAX] {
         assert_eq!(
             log.refused(None, None, Some(limit)),
-            "InvalidInput: logs.machine: `limit` is 1 to 1000"
+            "InvalidInput: machine.log: `limit` is 1 to 1000"
         );
     }
     let tail = log.tail();
     assert_eq!(
         log.refused(Some(&tail.cursor), tail.before.as_deref(), None),
-        "InvalidInput: logs.machine: give `cursor` or `before`, not both"
+        "InvalidInput: machine.log: give `cursor` or `before`, not both"
     );
     assert_eq!(log.read(None, None, Some(1)).texts(), names(1499, 1500));
     // 1000 short lines fit one window; a window bounds longer ones
@@ -505,7 +505,7 @@ fn a_link_in_the_log_s_place_is_not_followed() {
     let secret = log.dir.join("secret");
     fs::write(&secret, "key\n").unwrap();
     std::os::unix::fs::symlink(&secret, &log.pair.current).unwrap();
-    let refusal = tail::read(&log.pair, "logs.sandbox", None, None, None).unwrap_err();
+    let refusal = tail::read(&log.pair, "sandbox.log", None, None, None).unwrap_err();
     assert_eq!(refusal.code, "Failed", "{refusal:?}");
     assert!(!refusal.message.contains("key"), "{refusal:?}");
 }

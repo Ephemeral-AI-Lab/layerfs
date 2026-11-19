@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { table } from "layerfs";
+import { table } from "@layerfs/node";
 import { ToolSchema } from "@modelcontextprotocol/sdk/types.js";
 import { tools as toolsOfProfile } from "../src/profiles.js";
 import { call, connect, value, workspace } from "./helpers.mjs";

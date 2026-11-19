@@ -4,7 +4,7 @@ use super::stats::{field, rows};
 use crate::calls::table::Kind::{Int, Name, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::{Context, Form, Paging, Part};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::control::SdkValue;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
 use layerfs_sandbox::inspect::{machine_log, Window};
@@ -39,7 +39,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         before: args.get_text("cursor").map(str::to_owned),
         limit: args.get_int("limit"),
     };
-    let read = machine_log(&context.home, &machine, &window).map_err(renamed)?;
+    let read = machine_log(&context.home, &machine, &window)?;
     let items = rows(read.get("lines"), |line| {
         SdkValue::map([
             ("text", field(line, "text")),
@@ -50,13 +50,4 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         ("items", items),
         ("next_cursor", field(&read, "before")),
     ]))
-}
-
-/// A refusal of the log read, named as this call (the read names it by its
-/// name before the call surface 2.0, `logs.machine`).
-fn renamed(mut refusal: SdkRefusal) -> SdkRefusal {
-    if let Some(rest) = refusal.message.strip_prefix("logs.machine") {
-        refusal.message = format!("machine.log{rest}");
-    }
-    refusal
 }

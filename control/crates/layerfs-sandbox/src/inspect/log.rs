@@ -78,7 +78,7 @@ fn no_worker(machine: &str) -> SdkRefusal {
     }
 }
 
-/// `logs.machine(machine, { cursor, before, limit })`: one window of the
+/// `machine.log(machine, { cursor, before, limit })`: one window of the
 /// machine's worker log, `{ lines: [{ text, continued? }], cursor,
 /// before?, has_more }` (`layerfs_home::tail::read`). A machine with no
 /// worker (every `native`) is `Unsupported`; one whose worker does not
@@ -86,7 +86,7 @@ fn no_worker(machine: &str) -> SdkRefusal {
 pub fn machine_log(home: &Path, machine: &MachineName, window: &Window) -> Outcome {
     let machine = machine.as_str();
     tail::check(
-        "logs.machine",
+        "machine.log",
         window.cursor.is_some(),
         window.before.is_some(),
         window.limit,
@@ -127,7 +127,7 @@ pub(super) fn machine(side: &Side<'_>, args: &SdkValue) -> Outcome {
     let Side::Worker(root) = side else {
         return Err(no_worker("native"));
     };
-    Window::of(args).read(&Pair::of(paths::worker_log(root)), "logs.machine")
+    Window::of(args).read(&Pair::of(paths::worker_log(root)), "machine.log")
 }
 
 /// [`sandbox_log`] on the side that holds the Sandbox's run folder.

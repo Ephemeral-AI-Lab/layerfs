@@ -125,6 +125,6 @@ export function close() {
 }
 
 const fallback = client();
-export const { project, branch, commit, file, sandbox, workspace, machine, store, backup } = fallback;
+export const { home, project, branch, commit, file, sandbox, workspace, machine, store, backup } = fallback;
 export { LayerFSError };
 export default { ...fallback, client, close, table, families, LayerFSError };

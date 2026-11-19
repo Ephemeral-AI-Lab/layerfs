@@ -18,7 +18,7 @@ import {
   ListToolsRequestSchema,
   McpError,
 } from "@modelcontextprotocol/sdk/types.js";
-import layerfs, { LayerFSError } from "layerfs";
+import layerfs, { LayerFSError } from "@layerfs/node";
 import { errorResult } from "./errors.js";
 import { exportRefusal, resolveRoots } from "./exportroots.js";
 import { PROFILES, check as checkProfiles, tools as toolsOfProfile } from "./profiles.js";

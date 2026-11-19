@@ -13,17 +13,18 @@
 //!   and the progress event are the specification's.
 //! - The three pilot calls answer in the row's shape against a real home.
 //!
-//! When the last package lands, set [`PENDING_MUST_BE_EMPTY`].
+//! Every package has landed: [`PENDING_MUST_BE_EMPTY`] holds the pending
+//! file empty.
 use layerfs_api::{json, Asked, Call, Form, Kind, Paging, Part, Place, Section};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::{public_code, CODES, FOLDS};
 use layerfs_home::state::{Reason, State, WORDS};
 use std::path::{Path, PathBuf};
 
-/// The one switch: `true` once every package has landed. Nothing may be
-/// pending then: no unmigrated call, no old name, no difference from
-/// calls.json.
-const PENDING_MUST_BE_EMPTY: bool = false;
+/// The one switch, `true` since every package landed: nothing may be
+/// pending: no unmigrated call, no old name, nothing not built, no
+/// difference from calls.json.
+const PENDING_MUST_BE_EMPTY: bool = true;
 
 const SPEC: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),

@@ -12,6 +12,7 @@ pub(crate) fn status() -> Status {
     Status {
         state: State::Running,
         kernel: Some(State::Running),
+        worker: None,
         free_disk: None,
         tool_version: None,
         down_reason: (!missing.is_empty()).then(|| format!("missing: {}", missing.join(", "))),
