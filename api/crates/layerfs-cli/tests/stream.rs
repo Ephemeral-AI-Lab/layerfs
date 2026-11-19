@@ -53,7 +53,17 @@ fn exec_stream_passes_output_and_the_commands_exit_code() {
         return;
     };
     home::open(&home).unwrap();
-    home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    // the native machine's daemon is a setting of its record
+    layerfs_api::call(
+        Some(&home),
+        "machine.update",
+        SdkValue::map([
+            ("machine", SdkValue::text("native")),
+            ("daemon", SdkValue::text(daemon.as_str())),
+        ]),
+        &mut |_| {},
+    )
+    .unwrap();
     let folder = tempdir("folder");
     std::fs::write(folder.join("README.md"), "streamed\n").unwrap();
     ok(&home, "store.create", &[("name", t("shop"))]);

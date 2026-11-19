@@ -249,7 +249,17 @@ fn native_force_stops_live_daemon_and_command_and_detaches_mount_without_opening
             ("from", t("main")),
         ],
     );
-    home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    // the native machine's daemon is a setting of its record
+    layerfs_api::call(
+        Some(&home),
+        "machine.update",
+        SdkValue::map([
+            ("machine", SdkValue::text("native")),
+            ("daemon", SdkValue::text(daemon.as_str())),
+        ]),
+        &mut |_| {},
+    )
+    .unwrap();
     live_case(&home, "live", true);
     live_case(&home, "close", false);
     identity_case(&home);

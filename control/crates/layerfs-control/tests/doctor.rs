@@ -136,7 +136,7 @@ fn findings(report: &SdkValue) -> Vec<(String, String, String, String, String)> 
 #[test]
 fn a_clean_home_is_ok_with_no_findings() {
     let home = new_home("clean");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     store(&home, "shop", sqlite("shop", "native"));
     let project = SdkValue::map([("name", t("api"))]);
     write_entity(&paths::project_record(&home, "shop", "api"), &project).unwrap();
@@ -164,7 +164,7 @@ fn a_clean_home_is_ok_with_no_findings() {
 #[test]
 fn a_home_folder_is_0700_or_0701_and_the_message_names_both() {
     let home = new_home("modes-0701");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
     write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
     let run = paths::run_root(&home);
@@ -198,7 +198,7 @@ fn a_store_folder_others_may_pass_through_is_an_error_naming_chmod_700() {
     // #534: the daemon refuses a Store folder with any group/other bit, so
     // doctor must not call 0701 fine there; other home folders keep 0701.
     let home = new_home("store-0701");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     store(&home, "shop", sqlite("shop", "native"));
     let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
     write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
@@ -227,7 +227,7 @@ fn a_symlinked_store_folder_is_an_error_that_does_not_change_the_target() {
     // the home's `store/` as a link: its own mode is 0777, not the folder's,
     // and the remedy must not chmod through the link into its target
     let home = new_home("store-link");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     let elsewhere =
         std::env::temp_dir().join(format!("layerfs-doctor-link-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&elsewhere);
@@ -254,7 +254,7 @@ fn a_symlinked_store_entry_is_an_error_that_does_not_change_the_target() {
     // `store/<name>` as a link: the daemon refuses it, so doctor reports it;
     // the remedy is not a chmod, which would change the link's target
     let home = new_home("store-entry-link");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     store(&home, "shop", sqlite("shop", "native"));
     let elsewhere =
         std::env::temp_dir().join(format!("layerfs-doctor-entry-{}", std::process::id()));
@@ -282,7 +282,7 @@ fn a_symlink_to_a_file_under_store_does_not_abort_other_findings() {
     // `store/<name>` linked to a regular file: must not fail `read_dir(.../project)`
     // with ENOTDIR and discard findings for the rest of the home
     let home = new_home("store-entry-file-link");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
     write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
     store(&home, "other", sqlite("other", "native"));
@@ -340,7 +340,7 @@ fn a_symlink_to_a_file_under_store_does_not_abort_other_findings() {
 #[test]
 fn a_dangling_symlink_under_store_is_an_error_that_keeps_scanning() {
     let home = new_home("store-entry-dangling-link");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
     write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
     store(&home, "other", sqlite("other", "native"));
@@ -396,7 +396,7 @@ fn a_home_that_does_not_exist_is_ok_and_stays_absent() {
 #[test]
 fn each_problem_gives_one_finding_naming_its_fix() {
     let home = new_home("problems");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     // a record that does not parse
     let bad = paths::store_record(&home, "bad");
     private_dir(bad.parent().unwrap()).unwrap();
@@ -544,7 +544,7 @@ fn each_problem_gives_one_finding_naming_its_fix() {
 #[test]
 fn a_moves_copy_off_its_records_machine_is_one_warning_from_the_record() {
     let home = new_home("moved");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     let boxed = SdkValue::map([("name", t("box")), ("platform", t("lima"))]);
     write_entity(&paths::machine_record(&home, "box"), &boxed).unwrap();
     // a move to box failed certain at `send`: box holds a partial copy
@@ -609,7 +609,7 @@ fn a_moves_copy_off_its_records_machine_is_one_warning_from_the_record() {
 }
 
 #[test]
-fn a_layout_2_home_reports_what_refuses_its_conversion_and_converts_nothing() {
+fn a_layout_2_home_fails_its_layout_check_with_the_move_fix_and_is_left() {
     let home = new_home("layout2");
     private_dir(&home).unwrap();
     let file = SdkValue::map([
@@ -617,38 +617,24 @@ fn a_layout_2_home_reports_what_refuses_its_conversion_and_converts_nothing() {
         ("id", t("0123456789abcdef0123456789abcdef")),
     ]);
     write_record(&home.join("layerfs.json"), &file).unwrap();
-    // a live process holds a Store open
-    let mut holder = std::process::Command::new("sleep")
-        .arg("60")
-        .spawn()
-        .unwrap();
-    let leases = paths::lease_dir(&home, "shop");
-    private_dir(&leases).unwrap();
-    std::fs::write(leases.join(holder.id().to_string()), "1\n").unwrap();
-    // and a dead one held another: its stale lease stays
-    private_dir(&paths::lease_dir(&home, "old")).unwrap();
-    let stale = paths::lease_dir(&home, "old").join("99999999");
-    std::fs::write(&stale, "1\n").unwrap();
-
     let before = tree(&home);
-    let report = doctor(&home);
-    let _ = holder.kill();
-    let _ = holder.wait();
-    let report = report.unwrap();
+    let shown = home.display().to_string();
+    let report = doctor_own::own(&home, Kind::Home, &shown, &Options::default());
     assert_eq!(before, tree(&home), "the doctor wrote in the home");
-    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)));
-    let found = findings(&report);
-    // the conversion still to come is home.layout's warning, not a record's
-    assert_eq!(found.len(), 1, "{found:#?}");
-    let (severity, kind, name, message, fix) = &found[0];
-    assert_eq!(
-        (severity.as_str(), kind.as_str(), name.as_str()),
-        ("error", "store", "shop")
-    );
-    assert!(message.contains(&holder.id().to_string()), "{message}");
-    assert!(message.contains("end that process"), "{message}");
-    assert!(fix.is_empty(), "{fix}");
-    assert!(stale.exists());
+    let Some(SdkValue::List(found)) = report.get("findings") else {
+        panic!("no findings: {report:?}")
+    };
+    let layout: Vec<&SdkValue> = (found.iter())
+        .filter(|finding| finding.get_text("check") == Some("home.layout"))
+        .collect();
+    assert_eq!(layout.len(), 1, "{report:?}");
+    assert_eq!(layout[0].get_text("severity"), Some("error"));
+    let fix = layout[0].get_text("fix").unwrap();
+    assert_eq!(fix, format!("mv {shown} {shown}.old && layerfs home init"));
+    // no records are read in a home this build does not read
+    assert!(found
+        .iter()
+        .all(|finding| finding.get_text("check") != Some("home.records")));
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -675,7 +661,7 @@ fn exec_record(home: &Path, wsid: &str, id: &str, pid: i64) -> PathBuf {
 #[test]
 fn exec_records_are_checked_and_left_as_they_are() {
     let home = new_home("execs");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     store(&home, "shop", sqlite("shop", "native"));
     let project = SdkValue::map([("name", t("api"))]);
     write_entity(&paths::project_record(&home, "shop", "api"), &project).unwrap();

@@ -52,7 +52,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     let unused = args.get_bool("unused");
     let image = args.get_text("image");
-    let pruned = layerfs_control::machine::prune(&context.home, &machine, image, unused)?;
+    let pruned = layerfs_sandbox::images::prune(&context.home, &machine, image, unused)?;
     let removed = pruned.get("removed").cloned().unwrap_or_default();
     let skipped: Vec<SdkValue> = match pruned.get("skipped") {
         Some(SdkValue::List(rows)) => rows

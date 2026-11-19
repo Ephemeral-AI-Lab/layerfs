@@ -67,7 +67,7 @@ pub(crate) const CALL: Call = call(
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     let docker = context.with("docker");
-    let answer = layerfs_control::machine::images(&context.home, &machine, docker)?;
+    let answer = layerfs_sandbox::images::list(&context.home, &machine, docker)?;
     Ok(shown(&answer, docker))
 }
 

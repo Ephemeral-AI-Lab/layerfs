@@ -30,7 +30,17 @@ fn native_exec_keeps_large_binary_output_cancellation_and_effects_on_closed_stdo
     let home = tempdir("phase1-live-home");
     let source = tempdir("phase1-live-source");
     home::open(&home).unwrap();
-    home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    // the native machine's daemon is a setting of its record
+    layerfs_api::call(
+        Some(&home),
+        "machine.update",
+        SdkValue::map([
+            ("machine", SdkValue::text("native")),
+            ("daemon", SdkValue::text(daemon.as_str())),
+        ]),
+        &mut |_| {},
+    )
+    .unwrap();
     call(&home, "store.create", &[("name", t("live"))]);
     call(
         &home,

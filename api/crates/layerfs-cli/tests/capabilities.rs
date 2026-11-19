@@ -55,7 +55,7 @@ fn capabilities_include_the_table_and_cli_only_commands() {
     assert!(commands
         .iter()
         .all(|c| !c.get_text("name").unwrap_or("").starts_with("doctor")));
-    for name in ["worker", "import-env"] {
+    for name in ["worker"] {
         assert!(commands.iter().any(|c| c.get_text("name") == Some(name)));
     }
     let Some(SdkValue::List(switches)) = value.get("switches") else {

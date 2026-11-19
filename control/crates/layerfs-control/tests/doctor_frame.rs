@@ -64,7 +64,7 @@ static STORE_RUNS: AtomicUsize = AtomicUsize::new(0);
 /// A machine named `bad` fails its worker check and blocks what is on it;
 /// `quiet` gives a notice.
 fn machine(probe: &Probe<'_>, node: &mut Node) {
-    let mut checks = Checks::new("machine", &probe.thing.name);
+    let mut checks = Checks::default();
     checks.pass("m.record", "on record");
     match probe.thing.name.as_str() {
         "bad" => {
@@ -88,7 +88,7 @@ fn machine(probe: &Probe<'_>, node: &mut Node) {
 /// A Store named `slow` outlives its budget before its second check.
 fn store(probe: &Probe<'_>, node: &mut Node) {
     STORE_RUNS.fetch_add(1, Ordering::SeqCst);
-    let mut checks = Checks::new("store", &probe.thing.name);
+    let mut checks = Checks::default();
     checks.pass("s.record", "on record");
     if probe.thing.name == "slow" {
         while !probe.budget.expired() {
@@ -107,7 +107,7 @@ fn silent(probe: &Probe<'_>, _: &mut Node) {
 }
 
 fn bucket(probe: &Probe<'_>, node: &mut Node) {
-    let mut checks = Checks::new("bucket", &probe.thing.name);
+    let mut checks = Checks::default();
     checks.pass("b.list", "listed");
     if probe.full {
         checks.pass("b.write", "written and removed");

@@ -54,7 +54,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     let image = args.get_text("image").unwrap_or("").to_owned();
     let (home, events) = context.parts();
-    let loaded = layerfs_control::machine::load_image(home, events, &machine, &image)?;
+    let loaded = layerfs_sandbox::image_load::machine_load(home, events, &machine, &image)?;
     let reused = loaded.get_bool("reused");
     // the copy's filter report, when it sent the image: the FIFOs and
     // devices it left out (init files are always left out and not listed)

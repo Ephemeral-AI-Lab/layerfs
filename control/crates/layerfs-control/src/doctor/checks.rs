@@ -123,7 +123,7 @@ fn sandboxes(scanned: &Scanned, findings: &mut Findings) {
     for sandbox in &scanned.sandboxes {
         let name = sandbox.name();
         let entity = ("sandbox", name);
-        let fix = format!("layerfs sandbox remove {name}");
+        let fix = layerfs_sandbox::state::remove_fix(name);
         if let Some(op) = sandbox.op() {
             intent(entity, &op, &fix, findings);
         }

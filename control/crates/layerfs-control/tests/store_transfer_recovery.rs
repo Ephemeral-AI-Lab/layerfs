@@ -58,7 +58,7 @@ fn box_machine(home: &Path, address: &str) {
 /// root in this process.
 fn home_with_box(tag: &str) -> (PathBuf, PathBuf) {
     let home = new_dir(tag);
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     let root = new_dir(&format!("{tag}-root"));
     private_dir(&root).unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -212,7 +212,7 @@ fn steals_the_target(root: &Path) -> String {
 #[test]
 fn a_certain_install_failure_keeps_the_target_in_the_record() {
     let home = new_dir("install");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     let root = new_dir("install-root");
     private_dir(&root).unwrap();
     let address = steals_the_target(&root);
@@ -333,7 +333,7 @@ fn flaky(root: &Path, drops: u32) -> (String, Arc<AtomicU32>) {
 #[test]
 fn a_pull_reads_each_piece_once() {
     let home = new_dir("lost");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     let root = new_dir("lost-root");
     private_dir(&root).unwrap();
     let (address, reads) = flaky(&root, 1);

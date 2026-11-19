@@ -221,7 +221,6 @@ impl Server {
             std::fs::set_permissions(&self.root, std::fs::Permissions::from_mode(0o701))?;
         }
         layerfs_home::home::guest::serve_root(&self.root);
-        layerfs_home::home::guest::retire_layout_2(&self.root);
         // what earlier Sandbox starts and removals left in this machine's
         // run root goes before the first request (spec v20), inside its
         // bound; its outcome is in `log/sweep.jsonl`

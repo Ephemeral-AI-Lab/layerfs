@@ -105,21 +105,3 @@ fn disabled_selection_does_not_create_a_home() {
         assert!(!home.exists());
     }
 }
-
-#[test]
-fn import_env_reports_disabled_settings_without_suggesting_setup() {
-    let home = std::env::temp_dir().join(format!("lfs-disabled-import-{}", std::process::id()));
-    let env = vec![
-        ("LAYERFS_SSH_HOST".to_owned(), "example.invalid".to_owned()),
-        ("LAYERFS_PLACEMENT".to_owned(), "vm:firecracker".to_owned()),
-    ];
-    let answer = layerfs_api::home::import_env(&home, &env).unwrap();
-    let shown = json::print(&answer);
-    assert!(shown.contains(disabled_reason("ssh").unwrap()));
-    assert!(shown.contains(disabled_reason("firecracker").unwrap()));
-    assert!(!shown.contains("machine connect"));
-    assert!(!shown.contains("machine create"));
-    assert!(!home.join("machine/ssh").exists());
-    assert!(!home.join("machine/firecracker").exists());
-    std::fs::remove_dir_all(home).unwrap();
-}

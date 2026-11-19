@@ -314,7 +314,17 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
     let home = tempdir("pg");
     let folder = source("pg-src");
     let id = home::open(&home).unwrap().id;
-    home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    // the native machine's daemon is a setting of its record
+    layerfs_api::call(
+        Some(&home),
+        "machine.update",
+        SdkValue::map([
+            ("machine", SdkValue::text("native")),
+            ("daemon", SdkValue::text(daemon.as_str())),
+        ]),
+        &mut |_| {},
+    )
+    .unwrap();
     let (scheme, rest) = url.split_once("://").unwrap();
     let (user, address) = rest.split_once('@').unwrap();
     let password = std::env::var("LAYERFS_TEST_PG_PASSWORD").unwrap();

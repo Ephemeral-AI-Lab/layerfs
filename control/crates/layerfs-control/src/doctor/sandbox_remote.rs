@@ -87,9 +87,10 @@ pub(super) fn remote(
         );
         checks.pass(ROUTE, format!("machine {machine}'s worker answers"));
         checks.fail(COMPATIBLE, message);
+        // `on` is at least 1, so the stop is forced
         checks.fix(
             COMPATIBLE,
-            format!("layerfs machine stop {machine} --force && layerfs machine start {machine}"),
+            layerfs_machine::state::replace_worker(machine, on),
         );
         return;
     }
@@ -142,8 +143,8 @@ fn merge(report: SdkValue, checks: &mut Checks, seen: &mut Observed) {
             (Some("fail"), Some("warning")) => checks.warning(id, message),
             (Some("fail"), Some("notice")) => checks.notice(id, message),
             (Some("fail"), _) => checks.fail(id, message),
-            (Some("skipped"), _) => checks.skip(id, message),
-            (Some("blocked"), _) => checks.blocked(id, message, "sandbox.route"),
+            // a check the worker's own checks kept from running is not shown
+            (Some("blocked"), _) => continue,
             _ => checks.unknown(id, message),
         }
         if let Some(fix) = row.get_text("fix").filter(|fix| !fix.is_empty()) {
@@ -178,13 +179,13 @@ pub(crate) fn worker_diagnose(root: &Path, args: SdkValue) -> Outcome {
         .filter(|n| *n > 0)
         .ok_or_else(|| refused("InvalidInput", "sandbox diagnostic timeout"))?;
     let budget = Budget::new(Some(Duration::from_millis(millis as u64)));
-    let mut checks = Checks::new("sandbox", name);
+    let mut checks = Checks::default();
     let mut seen = Observed::default();
     if let Some(record) = read(root, name, &mut checks) {
         local(root, &record, &budget, &mut checks, false, &mut seen);
     }
     let report = layerfs_home::home::with_field(
-        checks.to_sdk(),
+        checks.to_wire(),
         "workspaces",
         SdkValue::List(seen.workspaces.iter().map(Seen::to_sdk).collect()),
     );

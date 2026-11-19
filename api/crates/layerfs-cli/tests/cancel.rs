@@ -153,7 +153,17 @@ fn exec_ids_records_and_cancel_on_native() {
         return;
     };
     home::open(&home).unwrap();
-    home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    // the native machine's daemon is a setting of its record
+    layerfs_api::call(
+        Some(&home),
+        "machine.update",
+        SdkValue::map([
+            ("machine", SdkValue::text("native")),
+            ("daemon", SdkValue::text(daemon.as_str())),
+        ]),
+        &mut |_| {},
+    )
+    .unwrap();
     let folder = tempdir("folder");
     std::fs::write(folder.join("README.md"), "cancel\n").unwrap();
     let folder_text = folder.display().to_string();
@@ -428,7 +438,17 @@ fn two_commands_run_at_once_in_one_workspace_on_native() {
     };
     let home = tempdir("both");
     home::open(&home).unwrap();
-    home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    // the native machine's daemon is a setting of its record
+    layerfs_api::call(
+        Some(&home),
+        "machine.update",
+        SdkValue::map([
+            ("machine", SdkValue::text("native")),
+            ("daemon", SdkValue::text(daemon.as_str())),
+        ]),
+        &mut |_| {},
+    )
+    .unwrap();
     let folder = tempdir("both-folder");
     std::fs::write(folder.join("README.md"), "both\n").unwrap();
     let folder_text = folder.display().to_string();
@@ -528,7 +548,17 @@ fn forced_native_machine_stop_cancels_running_commands() {
     };
     let home = tempdir("stop-home");
     home::open(&home).unwrap();
-    home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    // the native machine's daemon is a setting of its record
+    layerfs_api::call(
+        Some(&home),
+        "machine.update",
+        SdkValue::map([
+            ("machine", SdkValue::text("native")),
+            ("daemon", SdkValue::text(daemon.as_str())),
+        ]),
+        &mut |_| {},
+    )
+    .unwrap();
     let folder = tempdir("stop-folder");
     std::fs::write(folder.join("README.md"), "stop\n").unwrap();
     ok(&home, "store.create", &[("name", t("shop"))]);

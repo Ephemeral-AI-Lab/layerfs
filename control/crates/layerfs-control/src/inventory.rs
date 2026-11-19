@@ -203,7 +203,7 @@ fn listed(names: &[String]) -> SdkValue {
 fn then(sandboxes: &[String], last: &str) -> String {
     let removes = sandboxes
         .iter()
-        .map(|s| format!("layerfs sandbox remove {s}"));
+        .map(|s| layerfs_sandbox::state::remove_fix(s));
     let steps: Vec<String> = removes
         .chain((!last.is_empty()).then(|| last.to_owned()))
         .collect();

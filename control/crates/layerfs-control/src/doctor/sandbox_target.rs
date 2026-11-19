@@ -19,6 +19,7 @@ use layerfs_home::names::{self, MachineName, SandboxName};
 use layerfs_home::op::Standing;
 use layerfs_home::state::{BlockedBy, Reason, State};
 use layerfs_sandbox::record::SandboxRecord;
+use layerfs_sandbox::state::remove_fix;
 use layerfs_store::record::{Placement, StoreRecord, StoreRef};
 use std::path::Path;
 
@@ -61,11 +62,6 @@ struct Observed {
     workspaces: Vec<Seen>,
 }
 
-/// The fix of every Sandbox that cannot be used again: removing it.
-fn remove_fix(sandbox: &str) -> String {
-    format!("layerfs sandbox remove {sandbox}")
-}
-
 /// The Sandbox's state from its records and its machine's records: the
 /// Sandbox package's one derivation (`layerfs_sandbox::state::state`), so
 /// the doctor and `sandbox get` agree. Its machine's record that cannot be
@@ -78,17 +74,9 @@ fn recorded_state(home: &Path, record: &SandboxRecord) -> State {
 /// nodes as `node`'s children, unless what it found blocks them.
 pub(super) fn doctor(probe: &Probe<'_>, node: &mut Node) {
     let name = probe.thing.name.as_str();
-    let mut checks = Checks::new("sandbox", name);
+    let mut checks = Checks::default();
     let mut seen = Observed::default();
     let (route, machine) = diagnose(probe, &mut checks, &mut seen);
-    // a worker's report naming a check this build does not know is not one
-    // this build reads
-    let strange = checks.unlisted(probe.checks);
-    if !strange.is_empty() {
-        let names: Vec<&str> = strange.iter().map(String::as_str).collect();
-        checks.forget(&names);
-        seen.lost = true;
-    }
     checks.fill(node, probe.checks, probe.budget.expired());
     let at = |check: &str| probe.checks.iter().position(|listed| listed.id == check);
     node.rows.sort_by_key(|row| at(&row.check));

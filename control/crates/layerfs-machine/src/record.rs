@@ -219,7 +219,7 @@ impl MachineRecord {
         self.fields.get_text("docker")
     }
 
-    /// The daemon a built-in machine's Sandboxes run (`import-env` writes it).
+    /// The daemon a built-in machine's Sandboxes run (`machine update --daemon` writes it).
     pub fn daemon(&self) -> Option<&str> {
         self.fields.get_text("daemon")
     }

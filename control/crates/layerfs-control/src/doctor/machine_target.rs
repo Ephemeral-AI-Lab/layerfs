@@ -291,8 +291,7 @@ impl Machine<'_> {
             worker: None,
             ..spec.clone()
         };
-        let started = Instant::now();
-        let stop = started + self.budget.limit(Duration::from_secs(10));
+        let stop = Instant::now() + self.budget.limit(Duration::from_secs(10));
         let status = match platform::status_within(&spec, stop) {
             Ok(status) => status,
             Err(error) if error.code == Code::Unsupported => {
@@ -304,16 +303,13 @@ impl Machine<'_> {
                     true => self.checks.timeout(ID, error.message),
                     false => self.checks.lost(ID, error.message),
                 }
-                self.checks.duration(ID, started.elapsed());
                 return Ok(None);
             }
             Err(error) => {
                 self.checks.fail(ID, error.message);
-                self.checks.duration(ID, started.elapsed());
                 return Err(Some("failed"));
             }
         };
-        self.checks.duration(ID, started.elapsed());
         let evidence = SdkValue::map([
             (
                 "state",
@@ -449,13 +445,10 @@ impl Machine<'_> {
             "machine.worker.endpoint",
             "a worker endpoint and secret are saved for it",
         );
-        let started = Instant::now();
-        let stop = started + self.budget.limit(Duration::from_secs(5));
+        let stop = Instant::now() + self.budget.limit(Duration::from_secs(5));
         let worker = match diagnostic_connect(&endpoint, stop) {
             Ok(worker) => worker,
             Err(error) => {
-                self.checks
-                    .duration("machine.worker.auth", started.elapsed());
                 if self.budget.expired() {
                     self.checks.timeout(
                         "machine.worker.auth",
@@ -477,8 +470,6 @@ impl Machine<'_> {
             "machine.worker.auth",
             "its worker accepts the secret and answers hello",
         );
-        self.checks
-            .duration("machine.worker.auth", started.elapsed());
         self.checks
             .evidence("machine.worker.auth", worker.hello.to_sdk());
         if worker.hello.expected().is_some() {
@@ -508,11 +499,8 @@ impl Machine<'_> {
         start: &str,
         replace: &str,
     ) -> Result<Option<u64>, Option<&'static str>> {
-        use std::time::Instant;
         const ID: &str = "machine.worker.ping";
-        let started = Instant::now();
         let answer = worker.ping();
-        self.checks.duration(ID, started.elapsed());
         match answer {
             Ok(value)
                 if value.get_text("kind") == Some("worker")

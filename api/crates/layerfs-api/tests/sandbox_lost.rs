@@ -41,7 +41,17 @@ fn a_sandbox_killed_behind_controls_back_is_lost_until_removed() {
     };
     let home = tempdir("home");
     home::open(&home).unwrap();
-    home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    // the native machine's daemon is a setting of its record
+    layerfs_api::call(
+        Some(&home),
+        "machine.update",
+        SdkValue::map([
+            ("machine", SdkValue::text("native")),
+            ("daemon", SdkValue::text(daemon.as_str())),
+        ]),
+        &mut |_| {},
+    )
+    .unwrap();
     let folder = tempdir("folder");
     std::fs::write(folder.join("README.md"), "lost\n").unwrap();
     ok(&home, "store.create", &[("name", t("shop"))]);

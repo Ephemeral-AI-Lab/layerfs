@@ -21,72 +21,64 @@ use layerfs_home::state::{BlockedBy, Reason, State};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-const fn own(id: &'static str) -> CheckId {
-    CheckId::own(id)
-}
-
-const fn full(id: &'static str) -> CheckId {
-    CheckId::full(id)
-}
-
 /// The home's checks.
 const HOME: &[CheckId] = &[
-    own("home.build"),
-    own("home.prerequisites"),
-    own("home.layout"),
-    own("home.records"),
-    own("home.bundle"),
-    own("home.native_daemon"),
-    own("home.artifacts"),
-    own("home.capacity"),
+    CheckId::own("home.build"),
+    CheckId::own("home.prerequisites"),
+    CheckId::own("home.layout"),
+    CheckId::own("home.records"),
+    CheckId::own("home.bundle"),
+    CheckId::own("home.native_daemon"),
+    CheckId::own("home.artifacts"),
+    CheckId::own("home.capacity"),
 ];
 
 /// A machine's checks.
 const MACHINE: &[CheckId] = &[
-    own("machine.record"),
-    own("machine.operation"),
-    own("machine.configuration"),
-    own("machine.provider"),
-    own("machine.state"),
-    own("machine.worker.endpoint"),
-    own("machine.worker.auth"),
-    own("machine.worker.compatibility"),
-    own("machine.worker.ping"),
-    own("machine.capacity"),
+    CheckId::own("machine.record"),
+    CheckId::own("machine.operation"),
+    CheckId::own("machine.configuration"),
+    CheckId::own("machine.provider"),
+    CheckId::own("machine.state"),
+    CheckId::own("machine.worker.endpoint"),
+    CheckId::own("machine.worker.auth"),
+    CheckId::own("machine.worker.compatibility"),
+    CheckId::own("machine.worker.ping"),
+    CheckId::own("machine.capacity"),
 ];
 
 /// A Sandbox's checks; its Workspaces' are `workspace_target::CHECKS`.
 const SANDBOX: &[CheckId] = &[
-    own("sandbox.record"),
-    own("sandbox.machine_reference"),
-    own("sandbox.store_reference"),
-    own("sandbox.project_reference"),
-    own("sandbox.store_placement"),
-    own("sandbox.operation"),
-    own("sandbox.runtime"),
-    own("sandbox.route"),
-    own("sandbox.forward_process"),
-    own("sandbox.worker_compatibility"),
-    own("sandbox.daemon_keys"),
-    own("sandbox.daemon_connect"),
-    own("sandbox.daemon_auth"),
-    own("sandbox.daemon_instance"),
-    own("sandbox.daemon_ready"),
-    own("sandbox.session"),
-    own("sandbox.observation"),
+    CheckId::own("sandbox.record"),
+    CheckId::own("sandbox.machine_reference"),
+    CheckId::own("sandbox.store_reference"),
+    CheckId::own("sandbox.project_reference"),
+    CheckId::own("sandbox.store_placement"),
+    CheckId::own("sandbox.operation"),
+    CheckId::own("sandbox.runtime"),
+    CheckId::own("sandbox.route"),
+    CheckId::own("sandbox.forward_process"),
+    CheckId::own("sandbox.worker_compatibility"),
+    CheckId::own("sandbox.daemon_keys"),
+    CheckId::own("sandbox.daemon_connect"),
+    CheckId::own("sandbox.daemon_auth"),
+    CheckId::own("sandbox.daemon_instance"),
+    CheckId::own("sandbox.daemon_ready"),
+    CheckId::own("sandbox.session"),
+    CheckId::own("sandbox.observation"),
 ];
 
 /// A bucket's checks; the write test is its Full check.
 const BUCKET: &[CheckId] = &[
-    own("bucket.configuration"),
-    own("bucket.credentials"),
-    own("bucket.transport"),
-    own("bucket.list"),
-    full("bucket.write_capability"),
-    full("bucket.put"),
-    full("bucket.get"),
-    full("bucket.delete"),
-    full("bucket.reconcile"),
+    CheckId::own("bucket.configuration"),
+    CheckId::own("bucket.credentials"),
+    CheckId::own("bucket.transport"),
+    CheckId::own("bucket.list"),
+    CheckId::full("bucket.write_capability"),
+    CheckId::full("bucket.put"),
+    CheckId::full("bucket.get"),
+    CheckId::full("bucket.delete"),
+    CheckId::full("bucket.reconcile"),
 ];
 
 /// The real kinds. A Workspace has no doctor of its own: its Sandbox's
@@ -157,14 +149,14 @@ fn blocker(state: &State, word: &'static str, name: &str) -> Option<BlockedBy> {
 }
 
 fn home(probe: &Probe<'_>, node: &mut Node) {
-    let mut checks = Checks::new("home", &probe.thing.name);
+    let mut checks = Checks::default();
     super::host_target::diagnose(probe.home, probe.options.build, probe.budget, &mut checks);
     checks.fill(node, probe.checks, probe.budget.expired());
 }
 
 fn machine(probe: &Probe<'_>, node: &mut Node) {
     let name = probe.thing.name.as_str();
-    let mut checks = Checks::new("machine", name);
+    let mut checks = Checks::default();
     let found = super::machine_target::diagnose(probe.home, name, probe.budget, &mut checks);
     checks.fill(node, probe.checks, probe.budget.expired());
     // what its own checks found blocks what is on it (a machine they found
@@ -185,7 +177,7 @@ fn machine(probe: &Probe<'_>, node: &mut Node) {
 
 fn bucket(probe: &Probe<'_>, node: &mut Node) {
     let name = probe.thing.name.as_str();
-    let mut checks = Checks::new("bucket", name);
+    let mut checks = Checks::default();
     super::backup_target::diagnose(probe.home, name, probe.full, probe.budget, &mut checks);
     checks.fill(node, probe.checks, probe.budget.expired());
 }

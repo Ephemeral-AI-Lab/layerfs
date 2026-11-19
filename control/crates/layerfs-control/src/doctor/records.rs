@@ -1,8 +1,7 @@
-//! The collector of the records checks (`scan`, `checks`, `convert`):
-//! findings by the entity each is about, in the order the checks made
-//! them. The home's doctor publishes them under its records check
-//! (`host_target`).
-use layerfs_bridge::control::SdkValue;
+//! The collector of the records checks (`scan`, `checks`): findings by the
+//! entity each is about, in the order the checks made them. The home's
+//! doctor publishes them under its records check (`host_target`).
+use super::target::Checks;
 
 /// How bad a finding is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,34 +53,23 @@ impl Findings {
         self.add(Severity::Warning, entity, message, fix);
     }
 
-    pub(super) fn to_sdk(&self) -> SdkValue {
-        let ok = !self.0.iter().any(|f| f.severity == Severity::Error);
-        let findings = self.0.iter().map(|finding| {
-            let severity = match finding.severity {
-                Severity::Error => "error",
-                Severity::Warning => "warning",
-            };
-            let fields = vec![
-                ("severity", SdkValue::text(severity)),
-                (
-                    "entity",
-                    SdkValue::map([
-                        ("kind", SdkValue::text(&finding.kind)),
-                        ("name", SdkValue::text(&finding.name)),
-                    ]),
-                ),
-                ("message", SdkValue::text(&finding.message)),
-                ("fix", SdkValue::text(&finding.fix)),
-            ];
-            SdkValue::Map(
-                (fields.into_iter())
-                    .map(|(field, value)| (field.to_owned(), value))
-                    .collect(),
-            )
-        });
-        SdkValue::map([
-            ("ok", SdkValue::Bool(ok)),
-            ("findings", SdkValue::List(findings.collect())),
-        ])
+    /// Whether no check found anything.
+    pub(super) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Each finding as a row of check `id`, on the thing it is about, in
+    /// the order the checks made them.
+    pub(super) fn publish(self, id: &'static str, checks: &mut Checks) {
+        for finding in self.0 {
+            match finding.severity {
+                Severity::Error => checks.fail(id, finding.message),
+                Severity::Warning => checks.warning(id, finding.message),
+            }
+            if !finding.fix.is_empty() {
+                checks.fix(id, finding.fix);
+            }
+            checks.about(id, &finding.kind, &finding.name);
+        }
     }
 }

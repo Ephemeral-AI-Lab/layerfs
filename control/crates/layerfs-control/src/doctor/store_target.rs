@@ -52,7 +52,7 @@ const CUT: &str = "schema";
 /// Store blocks its projects too.
 pub(super) fn run(probe: &Probe<'_>, node: &mut Node) {
     let name = probe.thing.name.as_str();
-    let mut checks = Checks::new("store", name);
+    let mut checks = Checks::default();
     let mut state = probe.state.clone();
     if let Some((record, identity)) = resolve(probe.home, name, &mut checks) {
         let machines = crate::store::machine_state;

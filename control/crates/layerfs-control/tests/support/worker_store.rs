@@ -60,7 +60,7 @@ pub fn placed(tag: &str, serve: impl FnOnce(TcpListener, PathBuf)) -> Placed {
     let (home, root) = (scratch.join("home"), scratch.join("data"));
     std::fs::create_dir_all(&home).unwrap();
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     write_record(

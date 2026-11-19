@@ -13,6 +13,7 @@ use super::report::{NoVerdict, Node, NotChecked, Thing};
 use super::target::Checks;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::state::BlockedBy;
+use layerfs_sandbox::state::unmount_fix;
 use std::path::Path;
 
 /// The `workspace` kind's checks, in the order they run.
@@ -159,11 +160,6 @@ pub(super) fn seen(sandbox: &str, recorded: &[(String, String)], listed: Vec<Lis
     seen
 }
 
-/// The fix of a Workspace its daemon cannot serve.
-fn unmount_fix(handle: &str) -> String {
-    format!("layerfs workspace unmount {handle} --discard --force")
-}
-
 /// One node per Workspace in `seen` of Sandbox `sandbox`, from the
 /// daemon's list as `listing` left it.
 pub(super) fn nodes(sandbox: &str, seen: &[Seen], listing: Listing) -> Vec<Node> {
@@ -183,7 +179,7 @@ fn node(sandbox: &str, seen: &Seen, listing: Listing) -> Node {
         return unchecked(thing, reason);
     }
     let mut node = Node::new(thing);
-    let mut checks = Checks::new("workspace", &seen.handle);
+    let mut checks = Checks::default();
     let handle = seen.handle.as_str();
     const MOUNTED: &str = "workspace.mounted";
     const ACTIVITY: &str = "workspace.activity";

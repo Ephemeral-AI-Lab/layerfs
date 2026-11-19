@@ -50,7 +50,7 @@ impl Fixture {
     }
     fn report_with_budget(&self, write: bool, timeout: Duration) -> SdkValue {
         let before = contents(&self.home);
-        let mut checks = target::Checks::new("bucket", "production");
+        let mut checks = target::Checks::default();
         backup_target::diagnose(
             &self.home,
             "production",
@@ -59,7 +59,7 @@ impl Fixture {
             &mut checks,
         );
         assert_eq!(before, contents(&self.home));
-        let report = checks.to_sdk();
+        let report = checks.to_wire();
         let text = format!("{report:?}");
         assert!(!text.contains("mock-access-key") && !text.contains("mock-secret-key"));
         report
@@ -98,6 +98,16 @@ fn outcome(report: &SdkValue, id: &str, value: &str) {
         "{report:?}"
     );
 }
+/// A check kept from running is not in the report.
+fn absent(report: &SdkValue, id: &str) {
+    let Some(SdkValue::List(checks)) = report.get("checks") else {
+        panic!("missing checks")
+    };
+    assert!(
+        checks.iter().all(|row| row.get_text("id") != Some(id)),
+        "{report:?}"
+    );
+}
 #[test]
 fn default_is_one_read_only_prefix_page() {
     let f = Fixture::new(Mode::default());
@@ -127,7 +137,7 @@ fn unversioned_and_capability_denied_destinations_receive_no_put() {
         let f = Fixture::new(mode);
         let report = f.report(true);
         outcome(&report, "bucket.write_capability", "unknown");
-        outcome(&report, "bucket.put", "blocked");
+        absent(&report, "bucket.put");
         assert_eq!(f.server.state.lock().unwrap().requests.len(), 2);
         assert!(f
             .server
@@ -161,7 +171,7 @@ fn list_permission_does_not_imply_write_permission() {
     let report = f.report(true);
     outcome(&report, "bucket.list", "pass");
     outcome(&report, "bucket.put", "fail");
-    outcome(&report, "bucket.delete", "skipped");
+    absent(&report, "bucket.delete");
     assert_eq!(f.server.state.lock().unwrap().requests.len(), 3);
 }
 #[test]
@@ -224,7 +234,7 @@ fn a_key_the_home_does_not_keep_blocks_all_network() {
     let report = f.report(true);
     outcome(&report, "bucket.configuration", "pass");
     outcome(&report, "bucket.credentials", "fail");
-    outcome(&report, "bucket.list", "blocked");
+    absent(&report, "bucket.list");
     assert!(f.server.state.lock().unwrap().requests.is_empty());
 }
 

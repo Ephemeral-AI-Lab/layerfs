@@ -444,11 +444,7 @@ impl SandboxRecord {
         Ok(Some(match kept {
             Some(name) => name,
             None => {
-                // a layout 2 home is read by its conversion before it opens
-                let id = match layerfs_home::home::layout::detect(home) {
-                    Ok(layerfs_home::home::layout::Layout::Previous(file)) => file.id,
-                    _ => layerfs_home::home::opened(home)?.id,
-                };
+                let id = layerfs_home::home::opened(home)?.id;
                 let prefix = layerfs_home::names::legacy_provider_prefix(&id);
                 format!("{prefix}{}", self.name)
             }

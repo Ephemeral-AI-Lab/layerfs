@@ -92,24 +92,3 @@ pub fn remove(home: &Path, events: &mut Events<'_>, name: &MachineName) -> Outco
 pub fn update(home: &Path, request: &MachineUpdate) -> Outcome {
     layerfs_machine::update(home, request, RELATED)
 }
-
-/// `machine.images`: the Sandbox images on this machine; with `docker`,
-/// the host's Docker images it can copy.
-pub fn images(home: &Path, name: &MachineName, docker: bool) -> Outcome {
-    layerfs_sandbox::images::list(home, name, docker)
-}
-
-/// `machine.load_image`: copies an image to this machine without a Sandbox.
-pub fn load_image(
-    home: &Path,
-    events: &mut Events<'_>,
-    name: &MachineName,
-    image: &str,
-) -> Outcome {
-    layerfs_sandbox::image_load::machine_load(home, events, name, image)
-}
-
-/// `machine.prune`: removes one image, or every unused one.
-pub fn prune(home: &Path, name: &MachineName, image: Option<&str>, unused: bool) -> Outcome {
-    layerfs_sandbox::images::prune(home, name, image, unused)
-}

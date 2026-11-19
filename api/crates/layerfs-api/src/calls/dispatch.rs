@@ -287,9 +287,7 @@ fn scoped(
     let home = home(home_path)?;
     super::platform_policy::check(&home, spec.policy, &args)?;
     if spec.opens {
-        let id = layerfs_control::migrate::open(&home)
-            .inspect_err(|refusal| layerfs_control::migrate::note_failure(&home, refusal))?
-            .id;
+        let id = layerfs_home::home::open(&home)?.id;
         // `machine/native/` and `machine/docker/` exist from the first call;
         // checked once per process for each home (R6)
         #[cfg(feature = "machine")]

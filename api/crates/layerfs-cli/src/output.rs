@@ -3,7 +3,7 @@
 use crate::run::REFUSED;
 use layerfs_api::json;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use std::io::{IsTerminal, Write};
+use std::io::Write;
 use std::process::ExitCode;
 
 /// Prints `refusal` as one line of JSON on stderr: `{"error","message"}`,
@@ -326,13 +326,10 @@ fn table(name: &str, rows: &[SdkValue]) -> String {
         text
     };
     let raw_header = line(columns.iter().map(|c| c.to_uppercase()).collect());
-    let mut out = if std::io::stdout().is_terminal() {
-        // Paint header in bold (1)
-        let trimmed = raw_header.trim_end_matches('\n');
-        format!("{}\n", crate::banner::paint(trimmed, "1"))
-    } else {
-        raw_header
-    };
+    let mut out = format!(
+        "{}\n",
+        crate::banner::bold(raw_header.trim_end_matches('\n'))
+    );
     for row in cells {
         out.push_str(&line(row));
     }

@@ -5166,7 +5166,7 @@
      "today": [
       "home.init"
      ],
-     "help": "create this home, or convert an older one; a current home is left as it is",
+     "help": "create this home; a current home is left as it is",
      "cli": "layerfs home init",
      "positionals": [],
      "options": [],
@@ -5181,14 +5181,12 @@
        "home"
       ],
       "sometimes": [
-       "unchanged",
-       "converted"
+       "unchanged"
       ]
      },
      "long": [
       "home",
       "unchanged",
-      "converted",
       "outcome",
       "layout",
       "version"
@@ -5197,13 +5195,12 @@
      "examples": {
       "short": [
        "{\"home\":\"/Users/me/.layerfs\"}",
-       "already a current home: {\"home\":\"/Users/me/.layerfs\",\"unchanged\":true}",
-       "an older home, converted: {\"home\":\"/Users/me/.layerfs\",\"converted\":true}"
+       "already a current home: {\"home\":\"/Users/me/.layerfs\",\"unchanged\":true}"
       ],
-      "long": "{\"home\":\"/Users/me/.layerfs\",\"unchanged\":false,\"converted\":false,\"outcome\":\"created\",\"layout\":3,\"version\":\"2.0.0\"}"
+      "long": "{\"home\":\"/Users/me/.layerfs\",\"unchanged\":false,\"outcome\":\"created\",\"layout\":3,\"version\":\"2.0.0\"}"
      },
      "dropped": [],
-     "new_work": "No new capability. `outcome` is `created`, `converted` or `unchanged`, from today's `created` and `converted` booleans; `unchanged` is new as a key; `version` is the build's version. No `created_at`: the home's own file (`layerfs.json`) records its layout and id and no time."
+     "new_work": "No new capability. `outcome` is `created` or `unchanged`, from today's `created` boolean; `unchanged` is new as a key; `version` is the build's version. No `created_at`: the home's own file (`layerfs.json`) records its layout and id and no time. An older home is refused, not converted (v20)."
     },
     {
      "call": "home.get",
@@ -5601,7 +5598,7 @@
       "short": [
        "{\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182}",
        "no home yet: {\"home\":\"/Users/me/.layerfs\",\"state\":\"broken\",\"version\":\"2.0.0\",\"reason\":\"missing\",\"fix\":\"layerfs home init\"}",
-       "an older layout: {\"home\":\"/Users/me/.layerfs\",\"state\":\"broken\",\"version\":\"2.0.0\",\"reason\":\"outdated\",\"fix\":\"layerfs home init\"}",
+       "an older layout: {\"home\":\"/Users/me/.layerfs\",\"state\":\"broken\",\"version\":\"2.0.0\",\"reason\":\"outdated\",\"fix\":\"mv /Users/me/.layerfs /Users/me/.layerfs.old && layerfs home init\"}",
        "--with tree: {\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182,\"tree\":{\"machines\":[{\"machine\":\"native\",\"platform\":\"native\",\"stores\":[{\"store\":\"qv2-store\",\"engine\":\"sqlite\",\"projects\":[\"qv2-strata\",\"qv2-probe\"]}],\"sandboxes\":[{\"sandbox\":\"tests\",\"project\":\"qv2-store/qv2-strata\",\"image\":\"node:22\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\"}]}]},{\"machine\":\"demo-build\",\"platform\":\"lima\",\"cpus\":4,\"memory_bytes\":8589934592,\"sandboxes\":[{\"sandbox\":\"build-1\",\"project\":\"demo-experiments/abc\",\"image\":\"node:22\",\"workspaces_not_listed\":true}]},{\"machine\":\"docker\",\"platform\":\"docker\",\"state\":\"stopped\",\"stores\":[{\"store\":\"sim-website\",\"engine\":\"sqlite\",\"projects\":[\"website\"],\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}],\"sandboxes\":[{\"sandbox\":\"sim-1\",\"project\":\"sim-website/website\",\"image\":\"node:22\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}],\"stores\":[{\"store\":\"demo-experiments\",\"engine\":\"postgresql\",\"projects\":[\"abc\"],\"connections\":[{\"url\":\"postgres://db.internal:5432/experiments\"},{\"machine\":\"demo-build\",\"url\":\"postgres://10.0.2.2:5432/experiments\"}]}],\"buckets\":[{\"bucket\":\"r2-main\",\"provider\":\"r2\"}]}}"
       ],
       "long": "{\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182,\"reason\":null,\"fix\":null,\"message\":null,\"layout\":3,\"mode\":\"0700\",\"bundle\":{\"path\":\"/Users/me/Library/Caches/layerfs/2.0.0/linux\",\"source\":\"cache\",\"present\":true,\"commit\":\"caff58a43b\",\"dirty\":false,\"matches\":true},\"daemon\":{\"path\":\"/Users/me/Library/Caches/layerfs/2.0.0/darwin/layerfs-daemon\",\"source\":\"default\",\"present\":true,\"commit\":\"caff58a43b\",\"dirty\":false,\"matches\":true},\"cache\":{\"path\":\"/Users/me/Library/Caches/layerfs\"}}"

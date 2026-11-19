@@ -43,8 +43,8 @@ pub struct MachineUpdate {
 /// `machine.update(name, { cpus, memory, image, docker, wsl, daemon })`
 /// (O11): the built-in machines' image, Docker socket (`""` clears it: the
 /// next start chooses and records one again), WSL distribution and the
-/// daemon their Sandboxes run (an absolute path to a file; it replaces what
-/// `import-env` recorded). Resizing a VM is refused while
+/// daemon their Sandboxes run (an absolute path to a file). Resizing a VM
+/// is refused while
 /// Sandboxes run on it.
 pub fn update(home: &Path, request: &MachineUpdate, related: Related) -> Outcome {
     let home = home.to_path_buf();

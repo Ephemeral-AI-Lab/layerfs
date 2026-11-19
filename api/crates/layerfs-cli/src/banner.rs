@@ -1,7 +1,7 @@
-//! The startup banner, shown only on an interactive terminal (TTY): brand,
-//! purpose and the agents-side customization knobs. Machine output (JSON
-//! results, help piped into another program) never carries it. Colors are
-//! raw ANSI escapes; no color dependency.
+//! The startup banner, shown only on an interactive terminal (TTY): brand
+//! and purpose. Machine output (JSON results, help piped into another
+//! program) never carries it. Colors are raw ANSI escapes; no color
+//! dependency.
 use std::io::IsTerminal;
 
 // Brand blue: bright blue foreground; reset afterwards. NO_COLOR turns
@@ -11,6 +11,14 @@ pub fn paint(text: &str, code: &str) -> String {
         text.to_owned()
     } else {
         format!("\x1b[{code}m{text}\x1b[0m")
+    }
+}
+
+/// `text` in bold on an interactive terminal; as it is otherwise.
+pub fn bold(text: &str) -> String {
+    match std::io::stdout().is_terminal() {
+        true => paint(text, "1"),
+        false => text.to_owned(),
     }
 }
 
@@ -39,20 +47,9 @@ fn tagline() -> String {
     dim("a versioned filesystem for AI agents: commit, branch and roll back every file an agent touches")
 }
 
-fn customize() -> String {
-    format!(
-        "{}
-  LAYERFS_HOME      the home: projects and the Store live here (else ~/.layerfs)
-  LAYERFS_PROJECT   every call names its project
-  LAYERFS_IMAGE     the docker machine's Sandbox image agents run in
-  LAYERFS_DAEMON    the native machine's daemon",
-        blue("Agents customization")
-    )
-}
-
-/// The banner text (logo, tagline, customization knobs).
+/// The banner text (logo, tagline).
 pub fn render() -> String {
-    format!("{}\n\n{}\n\n{}\n\n", logo(), tagline(), customize())
+    format!("{}\n\n{}\n\n", logo(), tagline())
 }
 
 /// The banner text, or nothing when stdout is not an interactive terminal.
