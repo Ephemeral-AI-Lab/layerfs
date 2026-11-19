@@ -43,11 +43,25 @@ pub fn read_record(path: &Path) -> Result<Option<SdkValue>, SdkRefusal> {
     let text = match fs::read_to_string(path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(refused("Failed", format!("{}: {error}", path.display()))),
+        Err(error) => return Err(unreadable(path, &error)),
     };
-    json::parse(&text)
-        .map(|value| Some(from_hex(value)))
+    record_of(path, &text).map(Some)
+}
+
+/// The record `text`, read from `path`, as [`read_record`] parses it.
+pub fn record_of(path: &Path, text: &str) -> Result<SdkValue, SdkRefusal> {
+    json::parse(text)
+        .map(from_hex)
         .map_err(|error| refused("Failed", format!("{}: {}", path.display(), error.0)))
+}
+
+/// The refusal of a read of `path` the system refused (`error`, such as a
+/// permission or I/O error): `Failed` with `unreadable` set in its
+/// detail, which a parse failure never sets.
+pub fn unreadable(path: &Path, error: &std::io::Error) -> SdkRefusal {
+    let mut refusal = refused("Failed", format!("{}: {error}", path.display()));
+    refusal.detail = with_field(refusal.detail, "unreadable", SdkValue::Bool(true));
+    refusal
 }
 
 /// Writes `value` as the record at `path`: a private temporary file in the

@@ -342,9 +342,9 @@ fn store_compact_sends_each_phase_as_a_progress_event() {
     let _ = std::fs::remove_dir_all(folder);
 }
 
-/// Registers a mount intent on a new Branch `sandbox` of `shop/api`,
-/// placed with Sandbox `sandbox` and owned by this live process, as a
-/// daemon's mount registers one.
+/// Registers a mount intent of Workspace `[7; 32]` on a new Branch
+/// `sandbox` of `shop/api`, placed with Sandbox `sandbox` and owned by this
+/// live process, as a daemon's mount registers one.
 fn plant_mount(home: &Path, sandbox: &str) {
     use layerfs_history::{GcIntent, GcIntentKind, GcScopeKind};
     use layerfs_store_service::history::admission;
@@ -384,29 +384,137 @@ fn plant_mount(home: &Path, sandbox: &str) {
     .unwrap();
 }
 
-/// A mount intent a Sandbox this home no longer records left (RC-B F1: a
-/// forced remove whose daemon stopped before its queued release) is named
-/// by `store doctor` with the compaction as its fix, and `store compact`
-/// ends it before its run; one of a Sandbox the home still records keeps
-/// holding the Store.
+/// A live-owned mount intent of a Sandbox this home no longer records (one
+/// `sandbox remove` forgot without stopping its daemon) is not ended by
+/// anything that cannot prove its owner gone (RV5 FAIL-1): `store compact`
+/// and `branch remove` stay `InUse` (mounts active), and `store
+/// doctor` adds no leftover check (V20-4).
 #[test]
-fn store_compact_ends_mount_intents_of_removed_sandboxes() {
+fn a_live_mount_intent_of_a_forgotten_sandbox_keeps_holding_the_store() {
     let (home, folder) = project();
     plant_mount(&home, "gone");
     let doctor = ok(&home, "store.doctor", &[("store", t("shop"))]);
-    let findings = format!("{doctor:?}");
-    assert!(findings.contains("gone"), "{findings}");
-    assert!(
-        findings.contains("layerfs store compact shop"),
-        "{findings}"
+    assert!(!format!("{doctor:?}").contains("gone"), "{doctor:?}");
+    for _ in 0..2 {
+        let (code, message) = refused(&home, "store.compact", &[("store", t("shop"))]);
+        assert_eq!(code, "InUse", "{message}");
+    }
+    let (code, message) = refused(&home, "branch.remove", &[p(), ("branch", t("gone"))]);
+    assert_eq!(
+        (code.as_str(), message.as_str()),
+        ("InUse", "mounts active: 1 holder(s)")
     );
-    // answered, not refused InUse
-    ok(&home, "store.compact", &[("store", t("shop"))]);
-    // a Sandbox the home still records: its mount still holds the Store
-    std::fs::create_dir_all(home.join("sandbox").join("kept")).unwrap();
-    plant_mount(&home, "kept");
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(folder);
+}
+
+/// Records native Sandbox `sb1` of project `project`, started: a daemon
+/// whose process has already ended (a child of this test), so nothing runs
+/// a daemon, and its Workspace `[7; 32]` of Branch `sb1` mounted at
+/// `/w/sb1`.
+#[cfg(target_os = "macos")]
+fn ended_native_sandbox(home: &Path, project: &str) {
+    use layerfs_home::home::{paths, write_record};
+    use layerfs_sandbox::record::{DaemonRecord, Local, WorkspaceRecord};
+    let mut child = std::process::Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .unwrap();
+    let process = layerfs_bridge::process::LocalProcess::observe(child.id()).unwrap();
+    child.kill().unwrap();
+    child.wait().unwrap();
+    let id = layerfs_home::home::opened(home).unwrap().id;
+    let name = format!("{}sb1", layerfs_home::names::provider_prefix(&id));
+    let run = paths::run_root(home).join(&name);
+    std::fs::create_dir_all(&run).unwrap();
+    let daemon = DaemonRecord::local(Local {
+        platform: "mac".to_owned(),
+        name,
+        container: "ab".repeat(32),
+        runtime: "native",
+        uid: layerfs_home::home::flock::euid(),
+        gid: layerfs_home::home::flock::egid(),
+        directory: run.display().to_string(),
+        process: (
+            process.pid,
+            process.start,
+            format!("{:032x}", process.boot.unwrap()),
+        ),
+        port: 9,
+        image: "local".to_owned(),
+        labels: Vec::new(),
+    });
+    write_record(
+        &paths::sandbox_record(home, "sb1"),
+        &map(&[
+            ("name", t("sb1")),
+            ("project", t(project)),
+            ("machine", t("native")),
+            ("id", t("sb1")),
+            ("runtime", t("native")),
+            ("daemon", daemon.to_record()),
+        ]),
+    )
+    .unwrap();
+    let workspace = "07".repeat(32);
+    let records = paths::sandbox_dir(home, "sb1").join("workspace");
+    std::fs::create_dir_all(&records).unwrap();
+    WorkspaceRecord::mounted(workspace.clone(), None, "sb1", "/w/sb1", 1)
+        .write(&records.join(format!("{workspace}.json")))
+        .unwrap();
+}
+
+/// `sandbox.remove sb1 --force`'s `unmounted` and `left`.
+#[cfg(target_os = "macos")]
+fn force_removed(home: &Path) -> (Vec<String>, Vec<String>) {
+    let mut sink = |_| {};
+    let mut events = layerfs_home::events::Events::new(&mut sink);
+    let request = layerfs_sandbox::family::RemoveRequest {
+        name: "sb1".to_owned(),
+        force: true,
+    };
+    match layerfs_sandbox::family::remove(home, &mut events, &request) {
+        Ok(layerfs_sandbox::family::Removed::Stopped { unmounted, left }) => (unmounted, left),
+        Ok(_) => panic!("Sandbox sb1 was not stopped"),
+        Err(refusal) => panic!("sandbox.remove: {refusal:?}"),
+    }
+}
+
+/// A forced remove of a native Sandbox ends, once its runtime is stopped,
+/// the mount intent each of its Workspaces held (RV5 FAIL-2): `left` is
+/// empty, and `branch remove` and `store compact` are admitted after it.
+#[cfg(target_os = "macos")]
+#[test]
+fn a_forced_native_remove_ends_its_workspaces_mount_intents() {
+    let (home, folder) = project();
+    plant_mount(&home, "sb1");
     let (code, message) = refused(&home, "store.compact", &[("store", t("shop"))]);
     assert_eq!(code, "InUse", "{message}");
+    ended_native_sandbox(&home, "shop/api");
+    let (unmounted, left) = force_removed(&home);
+    assert_eq!(unmounted, ["sb1:/w/sb1"]);
+    assert!(left.is_empty(), "{left:?}");
+    ok(&home, "branch.remove", &[p(), ("branch", t("sb1"))]);
+    ok(&home, "store.compact", &[("store", t("shop"))]);
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(folder);
+}
+
+/// A mount intent a forced native remove cannot end (here its Store cannot
+/// be opened) is a sentence of `left` saying why, what it refuses and what
+/// ends it on this computer, not an answer that claims it ended.
+#[cfg(target_os = "macos")]
+#[test]
+fn a_mount_intent_a_forced_remove_cannot_end_is_left() {
+    let (home, folder) = project();
+    ended_native_sandbox(&home, "ghost/api");
+    let (_, left) = force_removed(&home);
+    assert_eq!(
+        left,
+        ["Workspace /w/sb1's mount intent was not ended (no Store named ghost): `layerfs branch \
+          remove` of its Branch and `layerfs store compact` are refused while it remains; nothing \
+          on this computer can prove its owner gone, so it stays"]
+    );
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }

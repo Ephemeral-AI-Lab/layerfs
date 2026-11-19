@@ -33,7 +33,7 @@ use layerfs_history::records::{
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod removal;
-pub(crate) use removal::{all_intents, delete_stack, intents, remove_branch, remove_path};
+pub(crate) use removal::{delete_stack, intents, remove_branch, remove_path};
 
 const INSERT: &str = "gc_intent_insert";
 const GET: &str = "gc_intent_get";
