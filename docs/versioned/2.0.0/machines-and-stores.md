@@ -423,20 +423,36 @@ shown in [the calls](calls.md#store-13).)
   deletes one no Store uses. There is no login per machine.
 - **`store connect <store> <url> --auth A`.** The URL starts `postgresql://`
   or `postgres://` and holds host, port, database and TLS settings; one that
-  names a user or holds a password is refused `InvalidInput`, before any
-  effect. `--auth` is required on a Store's first connect. An empty database
+  names a user or carries a login (`user`, a password, `passfile`) is
+  refused `InvalidInput`, before any effect. `--auth` is required on a Store's first connect. An empty database
   gets the `layerfs` schema with a new identity; a database that already
   holds it keeps its identity, and its projects become this home's project
   records. A Store name already in the home is `Exists`, and so is the same
-  database under a second name (checked by server and database before any
-  request, and again under the home lock by the schema's binding).
+  database under a second name, whatever address or login reaches it: a
+  database is known by the binding (the id) in its `layerfs` schema, read on
+  connect and checked again under the home lock. A replica or a copy of the
+  database carries the same binding, so it is the same Store; `store get`'s
+  long form shows the binding's first 16 hex characters.
   `synchronous_commit` is `off`, `local` (the default), `remote_write`, `on`
   or `remote_apply`.
 - **One machine's own address.** `store connect <store> <url> --machine M`
   gives machine `M` an address of its own (a proxy, another host name),
   checked from `M` with the Store's login before it is saved; it refuses
-  `--auth`. `store disconnect <store> --machine M` removes it; `machine
-  remove` forgets a machine's own addresses.
+  `--auth`, and its check is recorded as `M`'s reach. `store disconnect
+  <store> --machine M` removes it and forgets `M`'s reach; `machine remove`
+  forgets a machine's own addresses and reaches.
+- **Who connects.** `store get` and `store list` answer `connections`: this
+  computer, then every machine with an address of its own, a reach seen
+  from it or a Sandbox of the Store, each with `reached` (`ok`, `failed`,
+  or absent when nothing was seen) and, in the long form, the address, the
+  server it names and the last reach (`at`, `ok`, `latency_ms`,
+  `server_version`, `error`). Nothing about a database is stored on a
+  machine; reaches are kept beside the Store's record.
+- **Old records.** A PostgreSQL record that still holds a `password`, a URL
+  with a user, or an old `machines.<m>.checked` reads `broken` `outdated`;
+  `store update <store> --auth <its auth>` writes it clean. A record naming
+  a login the home does not hold reads `broken` `missing`, fixed by saving
+  that login and running the same update.
 - **`store update <store>`** changes the login (`--auth`, checked against the
   same Store) or `--synchronous-commit`. A new address is `store connect`
   again, checked against the same Store's id.
@@ -456,8 +472,9 @@ shown in [the calls](calls.md#store-13).)
   request. The server always runs off the machine; nothing installs
   PostgreSQL in a machine (D12).
 - `store doctor <store>` checks the Store from this computer and from each
-  machine that has a Sandbox of it (`--machine M` adds one), each as one
-  `store.connection` row with `from`.
+  machine that has an address of its own or a Sandbox of it (`--machine M`
+  adds one), each as one `store.connection` row with `from`, and records
+  each reach.
 - Not built: backups of PostgreSQL Stores (back it up with PostgreSQL's own
   tools).
 

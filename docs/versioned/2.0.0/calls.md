@@ -240,9 +240,8 @@ $ echo $?
   sandboxes`; Store `store, engine, projects, connections, state, op,
   blocked_by, reason, fix`; Sandbox `sandbox, project, image, workspaces,
   workspaces_not_listed, state, op, blocked_by, reason, fix`; bucket
-  `bucket, provider`. A PostgreSQL Store's `connections` are `{ machine,
-  url }`: the home's own address first (`machine` null), then each machine
-  that has its own; a sqlite Store's are null. A Workspace is in the home's
+  `bucket, provider`. A PostgreSQL Store's `connections` are `store get`'s
+  rows (every side that connects, below); a sqlite Store's are null. A Workspace is in the home's
   records only on `native` and for a Sandbox reached directly: any other
   Sandbox answers `workspaces` null and `workspaces_not_listed: true`. A Store or Sandbox whose machine is stopped, busy or
   broken is `blocked`, and `blocked_by` names that machine. A machine that
@@ -1293,14 +1292,26 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   with the fix `layerfs store save-auth <auth> --user <user>
   --password-stdin && layerfs store update <store> --auth <auth>`, its
   `--user` the one its URL names when it names one; `store doctor`'s
-  `store.connection` gives the same fix.
+  `store.connection` gives the same fix. A Store naming a login the home
+  does not hold is `broken` `missing`, with the fix `layerfs store
+  save-auth <auth> --user <user> --password-stdin && layerfs store update
+  <store> --auth <auth>` for that name; it wins over `outdated`. A record
+  that still holds what 2.0 no longer writes (a `password`, a URL with a
+  user or a login parameter, a `machines.<m>` entry with anything but its
+  `url`, such as an old `checked`) is `broken` `outdated` with the fix
+  `layerfs store update <store> --auth <auth>`: every PostgreSQL record
+  write (`connect`, `update`, `disconnect --machine`, `machine remove`)
+  drops those fields, and a read never does. Neither state refuses a call.
   A Store records only the login's name (`auth`); its URL holds host,
-  port, database and TLS settings, and one naming a user or holding a
-  password is refused `InvalidInput`. The login goes into the URL only
-  when the Store is dialled. `auths` answers `{ items }`, short `{ auth,
-  user }` with `stores` (at most 20) when used, and `stores_count` only
-  past 20; long
-  adds `created_at, updated_at`. `remove_auth` is refused `InUse` (with
+  port, database and TLS settings, and one naming a user or carrying a
+  login (`user`, any `password` parameter, `passfile`) is refused
+  `InvalidInput`; `sslkey` and `sslcert` name files and pass. The login
+  goes into the URL only when the Store is dialled. `auths` answers
+  `{ items }`, short `{ auth, user }` with `stores` (at most 20) when
+  used, `stores_count` only past 20, and `state`, `reason`, `fix` when the
+  login's file cannot be read (`broken` `failed`, fixed by saving it
+  again; the other logins are listed as usual); long `auth, user, state,
+  reason, fix, stores, stores_count, created_at, updated_at`. `remove_auth` is refused `InUse` (with
   `stores`) while a Store uses the login, `NotFound` when there is none;
   long `ok, outcome: "removed", auth`.
 - **`connect`**, first time: `--auth` is required and must be saved;
@@ -1315,13 +1326,17 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   checks the new address against the same Store's id and takes no `--auth`
   or `--synchronous-commit` (`InvalidInput`, naming `store update`); with
   `--machine M` the address is `M`'s own, checked from `M` with the
-  Store's login. `projects` is null when only an address changed.
-- **`update`** changes the login (checked against the same Store) or
-  `synchronous_commit`; at least one. Long `ok, outcome: "updated", store,
+  Store's login, and its check is recorded as `M`'s reach. `projects` is
+  null when only an address changed. Its `connections` are `get`'s rows.
+- **`update`** changes the login (checked against the same Store, and
+  again under the home lock, so a login removed meanwhile is `NotFound`)
+  or `synchronous_commit`; at least one. Its write drops the fields 2.0 no
+  longer writes. Long `ok, outcome: "updated", store,
   auth, synchronous_commit`.
 - **`disconnect`** long `ok, outcome: "disconnected", store, machine`;
-  refused `InUse` while a Sandbox or Workspace uses the Store, and
-  `NotFound` for a machine with no address of its own.
+  refused `InUse` while a Sandbox or Workspace uses the Store. With
+  `--machine M` it removes `M`'s own address and forgets what was seen of
+  `M`'s reach; `NotFound` when `M` has neither.
 
 - **A Store's state** comes from its records only, with no probe: `busy`
   while an operation it records (`op: { name, phase, started_at }`: a
@@ -1339,13 +1354,26 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
 - **`get`**, short: `{ engine, state }`, with `machine`, `projects`,
   `projects_count`, `backups` (each `{ bucket }`), `connections` and the
   state's companion when they say something. Long: `engine, state,
-  machine, auth, connections, projects, projects_count, backups, op,
-  blocked_by, reason, fix, observed_at, store, profile, synchronous_commit,
-  sqlite_version, created_at, last_transfer`. A sqlite Store answers
-  `machine`, `profile` and `sqlite_version`; a PostgreSQL Store
-  `connections` (the Store's own address, with no `machine`, then each
-  machine's own; never a password) and `synchronous_commit`; the other
-  engine's keys are null. `projects` shows at most 20 names;
+  machine, auth, binding, connections, projects, projects_count, backups,
+  op, blocked_by, reason, fix, observed_at, store, profile,
+  synchronous_commit, sqlite_version, created_at, last_transfer`. A sqlite
+  Store answers `machine`, `profile` and `sqlite_version`; a PostgreSQL
+  Store `binding` (the first 8 bytes of the id in its schema as 16 hex:
+  one database behind two addresses has one binding), `connections` and
+  `synchronous_commit`; the other engine's keys are null. `connections`
+  lists every side that connects to the database: this computer first
+  (`machine` null, dialling the Store's address), then by name each
+  machine with an address of its own, a reach seen from it, or a Sandbox
+  of the Store (`native` with no address of its own is this computer's
+  row). A row's short form is `{ url }` with `machine` and `reached`
+  (`ok` or `failed`; absent when nothing was seen); its long form
+  `machine, url, own, server, reached, reach`: `own` says the URL is the
+  machine's own, `server` is the `{ host, port, database }` the URL names,
+  `reach` the last one seen, `{ at, ok, latency_ms, server_version,
+  error }`, or null. No URL holds a login. A reach is written beside the
+  Store's record (its observation file, which moves no `generation`) by
+  `connect --machine`, every `store doctor` reach and each Sandbox made on
+  a machine. `projects` shows at most 20 names;
   `projects_count` counts them all, only when there are more. A `backups` row's long form is
   `bucket, file, sha256, heads_sha256, last, attempt`: `last` the last
   transfer that worked (`{ call, ended_at, size }`), `attempt` the last one
@@ -1451,13 +1479,13 @@ outputs):
 $ printf '%s' "$PG_PASSWORD" | layerfs store save-auth pg-app --user postgres --password-stdin --detail
 {"ok":true,"outcome":"saved","auth":"pg-app","user":"postgres","stores":[],"stores_count":null}
 $ layerfs store connect shop-pg 'postgresql://127.0.0.1:55231/shop?sslmode=disable' --auth pg-app --detail
-{"ok":true,"projects":[],"projects_count":null,"outcome":"connected","store":"shop-pg","engine":"postgresql","auth":"pg-app","connections":[{"machine":null,"url":"postgresql://127.0.0.1:55231/shop?sslmode=disable"}],"synchronous_commit":"local"}
+{"ok":true,"projects":[],"projects_count":null,"outcome":"connected","store":"shop-pg","engine":"postgresql","auth":"pg-app","connections":[{"machine":null,"url":"postgresql://127.0.0.1:55231/shop?sslmode=disable","own":false,"server":{"host":"127.0.0.1","port":55231,"database":"shop"},"reached":null,"reach":null}],"synchronous_commit":"local"}
 $ layerfs store auths
 {"items":[{"auth":"pg-app","user":"postgres","stores":["shop-pg"]}]}
 $ layerfs store get shop-pg
 {"engine":"postgresql","state":"ready","auth":"pg-app","connections":[{"url":"postgresql://127.0.0.1:55231/shop?sslmode=disable"}]}
 $ layerfs store connect shop-pg 'postgresql://postgres:pw@127.0.0.1:55231/shop'
-{"error":"InvalidInput","message":"the URL names a user or holds a password; give the address alone and the login with --auth (`layerfs store save-auth` saves one)"}
+{"error":"InvalidInput","message":"the URL names a user or holds a password (or a password file); give the address alone and the login with --auth (`layerfs store save-auth` saves one)"}
 $ layerfs store update shop-pg --synchronous-commit off --detail
 {"ok":true,"outcome":"updated","store":"shop-pg","auth":"pg-app","synchronous_commit":"off"}
 $ layerfs store remove-auth pg-app
