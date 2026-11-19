@@ -390,7 +390,9 @@ fn a_second_create_of_a_store_is_busy() {
 }
 
 /// A bucket whose record cannot be read (conformance R1 N10) is named in
-/// `not_listed`; it does not fail the listing of the others.
+/// `not_listed` with `reason: refused` (it was not asked; `lost` is only for
+/// a request that got no answer, RF re-check N-E); it does not fail the
+/// listing of the others.
 #[test]
 fn an_unreadable_bucket_record_is_not_listed() {
     let home = tempdir("unreadable-record");
@@ -405,7 +407,7 @@ fn an_unreadable_bucket_record_is_not_listed() {
     };
     assert_eq!(skipped.len(), 1, "{listed:?}");
     assert_eq!(skipped[0].get_text("bucket"), Some("broken"));
-    assert_eq!(skipped[0].get_text("reason"), Some("lost"));
+    assert_eq!(skipped[0].get_text("reason"), Some("refused"));
     let message = skipped[0].get_text("message").unwrap_or_default();
     assert!(
         message.starts_with("the record of bucket broken could not be read: "),
