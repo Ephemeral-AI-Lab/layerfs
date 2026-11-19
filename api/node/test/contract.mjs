@@ -132,13 +132,14 @@ function runCli(ctx) {
 
 // --- normalizing: what differs between homes and runs but not in meaning
 // times (a number, or 2.0's `..._at` text); inode numbers (a process hands out its own range);
-// stored sizes (they hold the times)
+// stored sizes (they hold the times); a Commit's short label `<branch>@<14 hex>` (its tag byte
+// and 12 hex digits, a prefix commit.get accepts, since 7233635435)
 const TIMES = new Set(["created", "time", "inode", "new_stored", "new_metadata"]);
 const time = (key, item) => (TIMES.has(key) && typeof item === "number") || (key.endsWith("_at") && typeof item === "string");
 const ids = (text, ctx) =>
   /^[0-9a-f]{32,}$/.test(text)
     ? "<id>"
-    : text.replaceAll(ctx.home, "<home>").replaceAll(ctx.folder, "<folder>").replace(/@[0-9a-f]{12}\b/g, "@<id12>").replace(/at byte \d+/g, "at byte N");
+    : text.replaceAll(ctx.home, "<home>").replaceAll(ctx.folder, "<folder>").replace(/@[0-9a-f]{14}\b/g, "@<id14>").replace(/at byte \d+/g, "at byte N");
 
 function normalize(value, ctx) {
   if (typeof value === "string") return ids(value, ctx);
