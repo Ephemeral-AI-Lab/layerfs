@@ -101,7 +101,7 @@ unknown call suggests the closest one in its family
 
 `layerfs help [<family> [<call>]]` and `layerfs <family> <call> -h` print
 usage lines built from the entry ([`help.rs`](../../../../api/crates/layerfs-cli/src/help.rs)):
-`<name>` required, `[<name>]` optional, `[--name <name>]` per option (`[--name]`
+`<name>` required, `[name]` optional (as the rows write it), `[--name <name>]` per option (`[--name]`
 for a `Bool`, `[--progress]` for `on_progress`). The banner
 ([`banner.rs`](../../../../api/crates/layerfs-cli/src/banner.rs)) prints only
 when stdout is a terminal; `NO_COLOR` turns colour off. `--version --json`

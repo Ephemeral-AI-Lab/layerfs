@@ -284,7 +284,7 @@ It was `machine.load`, removed with no alias.
 Remove a Sandbox image from a machine, or every unused one.
 
 ```text
-CLI     layerfs machine prune <machine> [<image>] [--unused]
+CLI     layerfs machine prune <machine> [image] [--unused]
 Node    await layerfs.machine.prune(machine, image?, { unused })
 Python  layerfs.machine.prune(machine, image=None, *, unused=None)
 ```
@@ -405,7 +405,7 @@ stopped or its worker did not answer within 8 s; nothing starts it);
 A machine's files: its LayerFS folders by role, or a folder or file of the machine.
 
 ```text
-CLI     layerfs machine files <machine> [<path>] [--depth 1] [--limit 100] [--cursor C] [--byte-offset 0] [--byte-length 262144]
+CLI     layerfs machine files <machine> [path] [--depth 1] [--limit 100] [--cursor C] [--byte-offset 0] [--byte-length 262144]
 Node    await layerfs.machine.files(machine, path?, { depth, limit, cursor, byte_offset, byte_length })
 Python  layerfs.machine.files(machine, path=None, *, depth=None, limit=None, cursor=None, byte_offset=None, byte_length=None)
 ```

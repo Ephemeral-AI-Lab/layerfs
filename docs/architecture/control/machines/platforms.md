@@ -229,7 +229,7 @@ Windows column is table data, not a built host (`#![cfg(unix)]`).
 | Refusal text (word for word) | For |
 | --- | --- |
 | `LayerFS names no host other than macOS, Linux and Windows` | any platform on another host |
-| `no Sandbox backend on Windows (O5)` | `native` on Windows |
+| `no Sandbox backend on Windows` | `native` on Windows |
 | `docker through WSL2 is not designed yet` | `docker` on Windows |
 | `apple-container runs on macOS hosts only`, `lima runs on macOS hosts only` | those off macOS |
 
