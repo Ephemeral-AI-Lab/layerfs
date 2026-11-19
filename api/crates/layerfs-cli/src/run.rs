@@ -177,7 +177,7 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
         Ok(value) if exits => {
             let printed = match stream {
                 true => ExitCode::SUCCESS,
-                false => output::result(&value, switches.text),
+                false => output::result(&value, switches.text, call.form),
             };
             let _ = std::io::stdout().flush();
             // a result with none is a plain success (125 is for refusals)
@@ -188,6 +188,6 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
         }
         // a doctor's report reads as its findings and what it could not check
         Ok(value) if switches.text && call.call == "doctor" => output::doctor(&value),
-        Ok(value) => output::result(&value, switches.text),
+        Ok(value) => output::result(&value, switches.text, call.form),
     }
 }

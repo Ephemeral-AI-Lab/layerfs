@@ -1631,7 +1631,10 @@ every check was made and nothing was found; otherwise `findings` and
 - **stdout** carries the call's result as one line of JSON.
 - **`--text`** prints a readable form instead: a file's text as it is; a
   result's list of records as a table with upper-case headers; other fields
-  as `key  value` lines. It is one generic form, not a layout per call.
+  as `key  value` lines. It is one generic form, not a layout per call. A
+  row whose short form left `state: ready` out shows `ready` in its STATE
+  column (the column stays when every row is ready); any other value a row
+  leaves out shows `-`.
 - Every call answers its short form, or its long form with `--detail`
   ([the form of an answer](#the-form-of-an-answer)); its lists carry `items`
   and `next_cursor`, passed back as `cursor`. 1.x's `page`, `page_size`,
