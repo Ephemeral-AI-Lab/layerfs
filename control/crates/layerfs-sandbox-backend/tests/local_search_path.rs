@@ -76,7 +76,7 @@ fn command_path(sandbox: &Sandbox, environment: &[&str]) -> String {
         arguments: vec!["/bin/sh".into(), "-c".into(), "printf %s \"$PATH\"".into()],
         environment: environment.iter().map(|e| e.to_string()).collect(),
         directory: sandbox.directory().display().to_string(),
-        stdin: false,
+        stdin: None,
     };
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let exit = sandbox.run(&request, &mut out, &mut err).unwrap();
@@ -128,7 +128,7 @@ fn command_script(sandbox: &Sandbox, script: &str, environment: &[&str]) -> Stri
         arguments: vec!["/bin/sh".into(), "-c".into(), script.into()],
         environment: environment.iter().map(|e| e.to_string()).collect(),
         directory: sandbox.directory().display().to_string(),
-        stdin: false,
+        stdin: None,
     };
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let exit = sandbox.run(&request, &mut out, &mut err).unwrap();

@@ -7,10 +7,12 @@
 //! only the relationships (by machine, Store or project) list `sandbox/*`.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
-use layerfs_home::outcome::{failed, refused};
-use layerfs_machine::record::MachineRecord;
+use layerfs_home::outcome::{failed, refused, shell_word, with_fix, with_next};
+use layerfs_home::state::State;
+use layerfs_machine::record::{Holders, MachineRecord};
+use layerfs_sandbox::state::remove_fix;
 use layerfs_store::lease;
-use layerfs_store::record::{Placement, StoreRef};
+use layerfs_store::record::StoreRef;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -33,14 +35,85 @@ pub fn machines(home: &Path) -> Result<Vec<MachineRecord>> {
 
 pub use layerfs_sandbox::record::{sandbox, sandboxes};
 
+/// The state of machine `name` from the home's records alone, with no
+/// probe (call surface 2.0): its record's ([`MachineRecord::status`]), its
+/// platform checked against the ones 2.0 removed, the `fix` of an outdated
+/// worker forced while Sandboxes are recorded on it; with no record,
+/// `native` is ready, `docker` stopped and any other `broken` `missing`.
+/// What the home's tree, a Store's or Sandbox's `blocked_by` and the
+/// doctor say of a machine, as `machine list` and `machine get` do.
+/// A record with no 2.0 name shows the line that removes what is
+/// recorded on it first ([`Held`]); its Stores and old Firecracker records
+/// are read for it alone.
+pub fn machine_state(home: &Path, name: &str, record: Option<&MachineRecord>) -> Result<State> {
+    let held = match record {
+        Some(record) if record.nameless() => Held::read(home, name)?,
+        Some(_) => Held {
+            sandboxes: sandboxes_on(home, name)?,
+            ..Held::default()
+        },
+        None => Held::default(),
+    };
+    Ok(machine_state_with(name, record, held.holders()))
+}
+
+/// [`machine_state`] with what is recorded on it already read (the
+/// Sandboxes always; the Stores and old Firecracker records when its
+/// record has no 2.0 name).
+pub fn machine_state_with(name: &str, record: Option<&MachineRecord>, held: Holders<'_>) -> State {
+    let Some(record) = record else {
+        return layerfs_machine::state::unrecorded(name);
+    };
+    let platform = record.platform_name().unwrap_or("");
+    let removed = layerfs_sandbox_backend::platform_policy::removed_reason(platform).is_some();
+    record.status_held(removed, held)
+}
+
+/// What is recorded on a machine, by name: its sqlite Stores, its
+/// Sandboxes and the old Firecracker records it hosted, as its remove's
+/// `InUse` refusal and the `fix` of a record with no 2.0 name name them.
+#[derive(Debug, Default)]
+pub struct Held {
+    /// The sqlite Stores whose record names the machine.
+    pub stores: Vec<String>,
+    /// The Sandboxes whose record names the machine.
+    pub sandboxes: Vec<String>,
+    /// The old Firecracker machine records naming it as their host.
+    pub hosted: Vec<String>,
+}
+
+impl Held {
+    /// What is recorded on machine `name` in `home`.
+    pub fn read(home: &Path, name: &str) -> Result<Self> {
+        Ok(Self {
+            stores: stores_on(home, name)?,
+            sandboxes: sandboxes_on(home, name)?,
+            hosted: hosted_on(home, name)?,
+        })
+    }
+
+    /// The names, as the machine crate takes them.
+    pub fn holders(&self) -> Holders<'_> {
+        Holders {
+            sandboxes: &self.sandboxes,
+            stores: &self.stores,
+            hosted: &self.hosted,
+        }
+    }
+
+    /// Whether nothing is recorded on it.
+    pub fn is_empty(&self) -> bool {
+        self.stores.is_empty() && self.sandboxes.is_empty() && self.hosted.is_empty()
+    }
+}
+
 /// The sqlite Stores whose record names machine `machine`. A Store record
 /// of a kind LayerFS does not write is refused, as before.
 pub fn stores_on(home: &Path, machine: &str) -> Result<Vec<String>> {
     let mut on = Vec::new();
     for store in stores(home)? {
         if let StoreRef::Sqlite {
-            machine: Placement::Machine(placed),
-            ..
+            machine: placed, ..
         } = store.store_ref()?
         {
             if placed == machine {
@@ -87,40 +160,119 @@ pub fn sandboxes_of_project(home: &Path, project: &str) -> Result<Vec<String>> {
 /// `machine.remove`: refused `InUse` while the machine holds Stores,
 /// Sandboxes or old Firecracker records it hosted (removing it would delete
 /// their microVMs' disks; forgetting those records first lets it go);
-/// `detail.related` lists them (#536 §10b). A PostgreSQL Store is on no
-/// machine and holds none.
+/// `detail.related` lists them (#536 §10b), and the next fields `stores`,
+/// `sandboxes` and `machines` name each kind that holds it. Held by
+/// Sandboxes alone, its `fix` removes them, then the machine; a stopped
+/// machine (its record says so) gets none, since `sandbox remove` cannot
+/// reach a daemon on it. A machine whose record has no 2.0 name gets the
+/// whole chain (RV3 FAIL 1): each Sandbox's and Store's remove, then each
+/// old Firecracker record's, then the machine's, every one of which takes
+/// records alone. A PostgreSQL Store is on no machine and holds none.
 pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
-    let stores = stores_on(home, name)?;
-    let sandboxes = sandboxes_on(home, name)?;
-    let hosted = hosted_on(home, name)?;
-    if stores.is_empty() && sandboxes.is_empty() && hosted.is_empty() {
+    let held = Held::read(home, name)?;
+    if held.is_empty() {
         return Ok(());
     }
-    let message = format!(
-        "machine {name} holds Stores [{}], Sandboxes [{}] and hosts [{}]",
-        stores.join(", "),
-        sandboxes.join(", "),
-        hosted.join(", ")
-    );
-    let mut held = related("store", &stores);
-    held.extend(related("sandbox", &sandboxes));
-    held.extend(related("machine", &hosted));
-    Err(in_use(message, held))
+    let Held {
+        stores,
+        sandboxes,
+        hosted,
+    } = &held;
+    let parts = [
+        ("Stores", "stores", stores),
+        ("Sandboxes", "sandboxes", sandboxes),
+        ("old Firecracker machines", "machines", hosted),
+    ];
+    let holds: Vec<String> = (parts.iter())
+        .filter(|(_, _, names)| !names.is_empty())
+        .map(|(kind, _, names)| format!("{kind} {}", names.join(", ")))
+        .collect();
+    let mut message = format!("machine {name} holds {}", holds.join("; "));
+    let record = MachineRecord::read(home, name)?;
+    // a record without a 2.0 name: each holder's remove takes its records
+    // alone (nothing on the machine is reached), so the fix forgets them,
+    // then the machine
+    let nameless = record.as_ref().is_some_and(MachineRecord::nameless);
+    if nameless {
+        message.push_str(
+            "; its record has no 2.0 name, so removing each of them forgets its records alone",
+        );
+    }
+    // a stopped machine's Sandboxes cannot be removed: `sandbox remove`
+    // reaches their daemons only while it runs, so no removal is offered
+    let stopped =
+        !nameless && record.is_some_and(|machine| machine.recorded_state() == Some("stopped"));
+    if stopped && !sandboxes.is_empty() {
+        message.push_str(
+            "; it is stopped, and `layerfs sandbox remove` reaches a Sandbox's daemon only while it runs",
+        );
+    }
+    let mut listed_held = related("store", stores);
+    listed_held.extend(related("sandbox", sandboxes));
+    listed_held.extend(related("machine", hosted));
+    let mut refusal = in_use(message, listed_held);
+    for (_, field, names) in parts.iter().filter(|(_, _, names)| !names.is_empty()) {
+        refusal = with_next(refusal, field, listed(names));
+    }
+    if nameless {
+        // the one line every view of such a machine shows as its fix
+        let chain = layerfs_machine::record::no_vm_name_fix(name, held.holders());
+        refusal = with_fix(refusal, chain);
+    } else if stores.is_empty() && hosted.is_empty() && !stopped {
+        // Sandboxes alone: removing them lets the machine go, when it runs
+        let last = format!("layerfs machine remove {}", shell_word(name));
+        refusal = with_fix(refusal, then(sandboxes, &last));
+    }
+    Err(refusal)
 }
 
 /// `machine.stop`: refused `InUse` while a Sandbox is recorded on machine
-/// `name`; `detail.related` lists them as `{kind: "sandbox", name}`. Under
-/// the home lock.
+/// `name`; `detail.related` lists them as `{kind: "sandbox", name}`, the
+/// next field `sandboxes` names them, and the `fix` removes each (a
+/// `sandbox remove` refuses while Workspaces are mounted) and stops the
+/// machine. Under the home lock.
 pub fn can_stop_machine(home: &Path, name: &str) -> Result<()> {
     let sandboxes = sandboxes_on(home, name)?;
     if sandboxes.is_empty() {
         return Ok(());
     }
     let message = format!(
-        "machine {name} runs Sandboxes [{}]; close them first",
-        sandboxes.join(", ")
+        "machine {name} runs {}: remove {} first, or stop it with --force",
+        sandboxes_named(&sandboxes),
+        if sandboxes.len() == 1 { "it" } else { "them" }
     );
-    Err(in_use(message, related("sandbox", &sandboxes)))
+    let refusal = in_use(message, related("sandbox", &sandboxes));
+    let refusal = with_next(refusal, "sandboxes", listed(&sandboxes));
+    Err(with_fix(
+        refusal,
+        then(
+            &sandboxes,
+            &format!("layerfs machine stop {}", shell_word(name)),
+        ),
+    ))
+}
+
+/// `Sandbox a` or `Sandboxes a, b`.
+fn sandboxes_named(sandboxes: &[String]) -> String {
+    match sandboxes {
+        [one] => format!("Sandbox {one}"),
+        many => format!("Sandboxes {}", many.join(", ")),
+    }
+}
+
+/// `names` as a list value.
+fn listed(names: &[String]) -> SdkValue {
+    SdkValue::List(names.iter().map(SdkValue::text).collect())
+}
+
+/// One shell line: `layerfs sandbox remove` of each of `sandboxes`, then
+/// `last` when there is one, joined by `&&`.
+fn then(sandboxes: &[String], last: &str) -> String {
+    let removes = sandboxes.iter().map(|s| remove_fix(s));
+    let steps: Vec<String> = removes
+        .chain((!last.is_empty()).then(|| last.to_owned()))
+        .collect();
+    steps.join(" && ")
 }
 
 /// `{kind, name}` for each of `names`, as `detail.related` lists them.
@@ -142,19 +294,25 @@ fn in_use(message: String, related: Vec<SdkValue>) -> SdkRefusal {
 }
 
 /// `machine.update`: refused `InUse` while Sandboxes run on machine `name`
-/// (a running Sandbox keeps the image and settings it started with).
+/// (a running Sandbox keeps the image and settings it started with); the
+/// next field `sandboxes` names them and the `fix` removes them.
 pub fn can_change_machine(home: &Path, name: &str) -> Result<()> {
     let running = sandboxes_on(home, name)?;
     if running.is_empty() {
         return Ok(());
     }
-    Err(refused(
+    let refusal = refused(
         "InUse",
-        format!(
-            "Sandboxes [{}] run on {name}; close them before changing it",
-            running.join(", ")
-        ),
-    ))
+        match running.as_slice() {
+            [one] => format!("Sandbox {one} runs on machine {name}: remove it before changing it"),
+            many => format!(
+                "Sandboxes {} run on machine {name}: remove them before changing it",
+                many.join(", ")
+            ),
+        },
+    );
+    let refusal = with_next(refusal, "sandboxes", listed(&running));
+    Err(with_fix(refusal, then(&running, "")))
 }
 
 /// `project.delete`: refused `Busy` while a Sandbox of `project`
@@ -188,18 +346,24 @@ pub fn can_remove_project(home: &Path, project: &str) -> Result<()> {
     Err(refusal)
 }
 
-/// `store.push`, `store.pull`, `store.remove`, `store.disconnect` and
+/// `store.move`, `store.remove`, `store.disconnect` and
 /// `backup.restore`: refused `InUse` while
 /// another live process holds Store `store` (its lease) or a Sandbox of one
 /// of its projects is recorded; `detail.related` lists them as `{kind:
-/// "lease", name: <pid>}` and `{kind: "sandbox", name}`. Under the home
-/// lock and the Store's lock (it removes stale leases).
+/// "lease", name: <pid>}` and `{kind: "sandbox", name}`, the next field
+/// `sandboxes` names the Sandboxes, and when nothing else holds it the
+/// `fix` removes them. Under the home lock and the Store's lock (it
+/// removes stale leases).
 pub fn store_idle(home: &Path, store: &str) -> Result<()> {
     let holders = lease::holders(home, store)?;
     let sandboxes = sandboxes_of_store(home, store)?;
     let mut why = Vec::new();
     if !holders.is_empty() {
-        why.push(format!("Store {store} is open in process {holders:?}"));
+        let pids: Vec<String> = holders.iter().map(u32::to_string).collect();
+        why.push(match pids.as_slice() {
+            [one] => format!("Store {store} is open in process {one}"),
+            many => format!("Store {store} is open in processes {}", many.join(", ")),
+        });
     }
     if !sandboxes.is_empty() {
         let names = sandboxes.join(", ");
@@ -211,5 +375,13 @@ pub fn store_idle(home: &Path, store: &str) -> Result<()> {
     let pids: Vec<String> = holders.iter().map(u32::to_string).collect();
     let mut held = related("lease", &pids);
     held.extend(related("sandbox", &sandboxes));
-    Err(in_use(why.join("; "), held))
+    let mut refusal = in_use(why.join("; "), held);
+    if !sandboxes.is_empty() {
+        refusal = with_next(refusal, "sandboxes", listed(&sandboxes));
+    }
+    // Sandboxes alone: removing them frees the Store
+    if holders.is_empty() {
+        refusal = with_fix(refusal, then(&sandboxes, ""));
+    }
+    Err(refusal)
 }

@@ -1,0 +1,420 @@
+<div class="wrap">
+  <nav class="index" aria-label="Contents">
+    <a href="#verdict">Verdict</a>
+    <a href="#rulings">Rulings needed <span class="n">8</span></a>
+    <a href="#corrections">Corrections <span class="n">14</span></a>
+    <div class="sep"></div>
+    <a href="#correct">Correctness</a>
+    <a href="#simple">Simplicity</a>
+    <a href="#ui">Doctor page</a>
+    <a href="#diagrams">Diagrams</a>
+    <a href="#split">Work split</a>
+    <div class="sep"></div>
+    <a href="#rollout">Phase rollout</a>
+    <a href="#pkgs">Packages</a>
+    <a href="#rules">Rules for every package</a>
+    <a href="#limits">What was not checked</a>
+  </nav>
+
+  <main>
+    <header class="top">
+      <div class="eyebrow">Review before implementation · rollout draft 1</div>
+      <h1>LayerFS 2.0 Rollout</h1>
+      <p>Four reviewers read version 16 of the <a href="https://claude.ai/artifact/BmxLgkhw3oDeZEMLv256SP">call surface proposal</a>, the Doctor page mock and the code on <code>layerfs_v2_0_0</code>. This page ranks what they found, lists what needs your ruling, and drafts the phases for building it. Since the review, one ruling has been applied to the proposal and the mock: <code>--offline</code> is dropped. The other findings are not applied yet.</p>
+      <div class="meta">
+        <div>LayerFS <span>layerfs_v2_0_0 @ caff58a43b</span></div>
+        <div>dsh-layerfs <span>layerfs_v2_0_0 @ 176324d</span></div>
+        <div>Reviewed <span>2026-11-18</span></div>
+      </div>
+      <div class="counts">
+        <div class="count"><div class="v">83 of 84</div><div class="l">calls change in some way</div></div>
+        <div class="count"><div class="v">~40</div><div class="l">files touched by one rename today</div></div>
+        <div class="count"><div class="v">25</div><div class="l">work packages in 6 phases</div></div>
+        <div class="count"><div class="v">11</div><div class="l">agents at once, at the widest point</div></div>
+      </div>
+    </header>
+
+    <section id="verdict">
+      <h2>Verdict</h2>
+      <p>The shape holds. The spec is not ready to build from.</p>
+      <ul class="fam-why">
+        <li><b>What holds:</b> today's table has 84 calls in 12 families, every old call maps to a new row, and the new total is 84. Each doctor's own checks already exist in the code under today's check ids, the bucket write test included. The handle chain between calls is consistent.</li>
+        <li><b>What does not:</b> 7 statements about today's code are wrong, 9 cases an implementer will hit in the first week are undefined, and the doctor answer has no outcome for a check that could not be made.</li>
+        <li><b>The largest hidden cost:</b> nothing exists to build the short and long forms on. Results are untyped maps today, so "every key always present" means declaring a schema for all 84 calls.</li>
+        <li><b>The riskiest new piece:</b> <code>project doctor --full</code>. The integrity check has no scope smaller than a Store.</li>
+        <li><b>The mock:</b> the tree and the failure path read well. Two interactions are broken, one state is missing, and the progress it draws is finer than the calls report.</li>
+      </ul>
+      <p class="small">Recommendation: one phase with no code first, to settle the rulings and apply the corrections, then a mechanism phase that proves itself on one family before ten agents build on it.</p>
+    </section>
+
+    <section id="rulings">
+      <h2>Rulings needed before any code</h2>
+      <p>Each has real alternatives. The first option is my recommendation. R4 is decided; eight remain.</p>
+      <div class="tbl"><table style="min-width:860px">
+        <thead><tr><th style="width:4%">#</th><th style="width:22%">Question</th><th style="width:37%">Recommended</th><th>Alternative, and what decides it</th></tr></thead>
+        <tbody>
+          <tr><td class="plain">R1</td><td class="plain">Aliases for old call and option names</td><td class="plain">None. 2.0.0 is unreleased and the manual is marked as a proposal. This also closes the open items on old paging and the <code>layerfs doctor</code> alias.</td><td class="plain">Keep aliases for one release. Costs a second way to do everything on a surface nobody depends on yet.</td></tr>
+          <tr><td class="plain">R2</td><td class="plain">The fix for an outdated worker</td><td class="plain"><code>layerfs machine stop &lt;m&gt;</code> then <code>layerfs machine start &lt;m&gt;</code>, two commands behind one button. The button is off while Sandboxes run, with the count in its tip.</td><td class="plain">A new <code>machine restart</code>, or let <code>start</code> replace a mismatched worker. Today <code>start</code> refuses on purpose (#535 D11: "never replaced by a start over it"), so both change that decision.</td></tr>
+          <tr><td class="plain">R3</td><td class="plain">A check that could not be made, with no failed parent</td><td class="plain">A <code>not_checked</code> entry carries either <code>blocked_by</code> or <code>reason</code>: <code>timeout</code>, <code>busy</code> or <code>lost</code>. A check that does not apply is left out. The page shows one "Could not check" signal with Check as its action.</td><td class="plain">A fifth outcome beside ok, warning, error and not checked. Today's code has <code>unknown</code> and <code>skipped</code> at about 60 sites.</td></tr>
+          <tr><td class="plain">R4</td><td class="plain">What <code>--offline</code> covers, and what opening the page checks</td><td class="plain"><b>Decided, 2026-11-18: <code>--offline</code> is dropped.</b> Opening the page runs no doctor; it reads <code>home get --with tree</code> and shows each thing as not checked. The records checks run inside <code>home doctor</code>, and a records finding may name a thing at any depth.</td><td class="plain">Settled. A broken reference or a stale lease now shows after the first Check, not when the page loads.</td></tr>
+          <tr><td class="plain">R5</td><td class="plain">The bucket's deeper check</td><td class="plain"><code>layerfs backup doctor &lt;bucket&gt; --full</code>. The page says Full check for both, so the command should too. <code>--with</code> then only ever adds a section to an answer.</td><td class="plain">Keep <code>--with write</code>. Then the decision reads "project and bucket have a deeper check, spelled differently".</td></tr>
+          <tr><td class="plain">R6</td><td class="plain">Where the leftover list lives</td><td class="plain">Its own call, <code>layerfs home leftovers [--machine M]</code>, with <code>home prune &lt;leftover&gt;</code> removing one. 85 calls.</td><td class="plain">Keep <code>home get --with leftovers</code> (84 calls). <code>home get</code> is the call a UI polls, and the walk can take 2 s per running machine.</td></tr>
+          <tr><td class="plain">R7</td><td class="plain">How an agent cancels a command</td><td class="plain"><code>layerfs workspace cancel &lt;workspace&gt; [--exec E]</code>, every running command by default. Add <code>workspace.list</code> to the agent profile.</td><td class="plain">Keep the required <code>&lt;exec&gt;</code> and bring back the caller-chosen <code>--exec-id</code>. Today no call in the agent profile returns the id.</td></tr>
+          <tr><td class="plain">R8</td><td class="plain">What <code>project doctor --full</code> reads</td><td class="plain">Everything reachable from the head of each of its Branches: what a mount can reach. Streamed with bounded memory, no writes, no format change. An object shared by two projects is read once per project.</td><td class="plain">All retained history of the project. Larger and slower; decides how long "can take minutes" really is.</td></tr>
+          <tr><td class="plain">R9</td><td class="plain">A PostgreSQL Store's reach from machines</td><td class="plain"><code>store doctor</code> probes from each machine that has a Sandbox of that Store. Without it, Check all can read "All clear" while a Sandbox's machine cannot reach its Store.</td><td class="plain">Leave it to <code>store doctor --machine M</code> on the command line, and accept that gap on the page.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="corrections">
+      <h2>Corrections I will apply unless you object</h2>
+      <p>These are errors or omissions, not choices. Each restores what the code does today or states a case the spec left out.</p>
+      <div class="tbl"><table style="min-width:820px">
+        <thead><tr><th style="width:4%">#</th><th style="width:30%">Correction</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td class="plain">C1</td><td class="plain">Keep <code>--discard</code> and <code>--force</code> on <code>workspace unmount</code>, and <code>--force</code> on <code>workspace commit</code>, <code>sandbox close</code> and <code>machine stop</code></td><td class="plain">All four exist today and vanish from the rows without a "(dropped)" entry. The spec says a dirty unmount "asks first", but no call could then discard.</td></tr>
+          <tr><td class="plain">C2</td><td class="plain">Keep <code>-m</code> on every call that makes a Commit, and <code>mode</code> on <code>file write</code> and <code>file mkdir</code></td><td class="plain">The rows show <code>-m</code> on write only. The long form still answers <code>message</code>.</td></tr>
+          <tr><td class="plain">C3</td><td class="plain">Rebuild the "Today" column of the argument table from the code's own table, and list every removed option as dropped</td><td class="plain">It cites options that do not exist (<code>--base</code>, <code>--stats</code>, <code>--space</code>, <code>--usage</code>, <code>--platforms</code>, <code>--patch</code>, <code>--prune-images</code>) and omits about 20 that do.</td></tr>
+          <tr><td class="plain">C4</td><td class="plain"><code>machine prune &lt;machine&gt; [image] [--unused]</code></td><td class="plain">Today it removes one named image or every unused one, and the UI uses the named form. <code>--keep-images</code> leaves nothing to prune.</td></tr>
+          <tr><td class="plain">C5</td><td class="plain"><code>machine update</code> keeps <code>--image --docker --wsl --daemon</code>; <code>--disk</code> and resizing a VM are marked new or left out of 2.0</td><td class="plain">Today's doctor fixes name <code>machine update --daemon</code>. The manual says resizing is not built.</td></tr>
+          <tr><td class="plain">C6</td><td class="plain"><code>machine load-image &lt;machine&gt; &lt;image&gt;</code></td><td class="plain">Today it copies a Docker reference from the host's Docker. The row takes an archive file under the badge "renamed".</td></tr>
+          <tr><td class="plain">C7</td><td class="plain">State that comparing two different paths is dropped with <code>file.diff</code></td><td class="plain"><code>file.diff</code> takes a left and a right path. <code>commit diff --path P</code> covers one path only.</td></tr>
+          <tr><td class="plain">C8</td><td class="plain">Mark merging into an existing Branch as new work, and say that <code>--expected</code> on <code>branch publish</code> guards main's head</td><td class="plain">Today <code>branch.merge</code> always makes a new Branch, and publish has two guards, one for main and one for the Branch.</td></tr>
+          <tr><td class="plain">C9</td><td class="plain">Keep exit codes 0, 2 and 125 with the refusal on stderr; a doctor exits 0 once its report is made; complete the code list</td><td class="plain">The open decision ignores today's contract. The list of 7 codes omits <code>InUse</code>, <code>Unresolved</code>, <code>InvalidInput</code>, <code>Unsupported</code>, <code>Dirty</code> and <code>Failed</code>, two of which the spec itself uses.</td></tr>
+          <tr><td class="plain">C10</td><td class="plain">Workspaces are in the home's records only on <code>native</code> and for a Sandbox reached directly</td><td class="plain">Elsewhere the machine's worker keeps them. <code>home get --with tree</code>, <code>sandbox list</code> and <code>workspace list</code> cannot list them from records while that machine is stopped, and the <code>changes</code> counter cannot move for them.</td></tr>
+          <tr><td class="plain">C11</td><td class="plain">One table for state and its companion: busy has <code>op</code>, blocked has <code>blocked_by</code>, broken has <code>reason</code> and <code>fix</code>, unknown has <code>observed_at</code>, ready and stopped have none</td><td class="plain">The rule is worded three ways. Docker not running becomes broken with <code>reason: engine_down</code>. Every <code>get</code> example gains its <code>state</code>.</td></tr>
+          <tr><td class="plain">C12</td><td class="plain">Python spells the option <code>with_=["live"]</code></td><td class="plain"><code>with</code> is a Python keyword, and the package takes options as keywords.</td></tr>
+          <tr><td class="plain">C13</td><td class="plain">State the partial results: a <code>sandbox create --mount</code> whose mount is refused keeps the Sandbox and names it in the refusal; <code>store move</code> goes to or from this computer only; a lost reply on <code>machine start</code> or <code>stop</code> is settled by <code>machine get --with live</code></td><td class="plain">Today the only call that clears an uncertain machine operation is <code>machine remove</code>, which deletes the VM and its disk.</td></tr>
+          <tr><td class="plain">C14</td><td class="plain">Describe progress and the shallow Store check as new work; the project record check is not new</td><td class="plain">Checks do not all pass through one function today, and one call is one target. The cheapest Store mode still scans the file. <code>project.get</code> already compares a record with the Store's list.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="correct">
+      <h2>Correctness</h2>
+      <p>Checked against the code's own call table, the control crates and the engine's integrity check. The call counts balance in every family.</p>
+      <h3>Wrong about today, or not possible as written</h3>
+      <div class="tbl"><table style="min-width:860px">
+        <thead><tr><th style="width:26%">The spec says</th><th style="width:40%">The code says</th><th>Handled by</th></tr></thead>
+        <tbody>
+          <tr><td class="plain">The fix for an outdated worker is <code>machine start</code></td><td class="plain">A mismatched worker makes start refuse (<code>layerfs-machine/src/endpoint.rs:147</code>). The code names the fix as stop, then start (<code>worker/hello.rs:141</code>). Stop is refused while Sandboxes run.</td><td class="plain">R2, C1</td></tr>
+          <tr><td class="plain">Workspaces are listed from the home's records</td><td class="plain">Kept in the machine's worker unless the Sandbox is on <code>native</code> or reached directly (<code>docs/versioned/2.0.0/home.md:150</code>).</td><td class="plain">C10</td></tr>
+          <tr><td class="plain"><code>machine prune</code> removes leftovers and images, with <code>--keep-images</code></td><td class="plain">It removes one image or every unused one: <code>prune &lt;name&gt; [image] [--unused]</code>.</td><td class="plain">C4</td></tr>
+          <tr><td class="plain"><code>machine update --cpus --memory --disk</code></td><td class="plain">Options are <code>cpus, memory, image, docker, wsl, daemon</code>. There is no disk option.</td><td class="plain">C5</td></tr>
+          <tr><td class="plain"><code>file.diff</code> is <code>commit.diff</code> narrowed to one path</td><td class="plain">It compares two files: <code>left_branch, left_path, right_branch, right_path</code>.</td><td class="plain">C7</td></tr>
+          <tr><td class="plain">Eight cost options become one</td><td class="plain">Two exist today: <code>--live</code> on <code>sandbox.list</code> and <code>--include-storage</code> on <code>branch.commits</code>.</td><td class="plain">C3</td></tr>
+          <tr><td class="plain">All checks already pass through one function, so progress is cheap</td><td class="plain">Target checks, the records sweep and a worker-run Sandbox report take three different routes.</td><td class="plain">C14</td></tr>
+          <tr><td class="plain">The project record check is new</td><td class="plain"><code>project.get</code> and <code>project.list</code> already make it and hide such a project by design (<code>layerfs-store/src/project/family.rs:154</code>). It is a normal state after a delete that kept the home entry.</td><td class="plain">C14; the finding needs a <code>fix</code> and may be a notice, not an error</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Left undefined</h3>
+      <div class="tbl"><table style="min-width:820px">
+        <thead><tr><th style="width:34%">Case</th><th>What happens today, or what is missing</th><th style="width:12%">Handled by</th></tr></thead>
+        <tbody>
+          <tr><td class="plain">A doctor's budget expires, or a probe's reply is lost</td><td class="plain">Only findings and <code>not_checked</code> with a failed parent exist in the spec.</td><td class="plain">R3</td></tr>
+          <tr><td class="plain"><code>--offline</code> can never answer <code>{"ok":true}</code></td><td class="plain">The rule says ok only when everything was checked; offline checks nothing live. The page opens on this call and shows "Records look fine".</td><td class="plain">Settled by R4: the option is gone</td></tr>
+          <tr><td class="plain">The scope of records checks</td><td class="plain">Stated three ways: one level, everything, and the whole tree. A broken sqlite Store or Workspace record has no node to land on under a home doctor.</td><td class="plain">Settled by R4: a records finding names its thing at any depth</td></tr>
+          <tr><td class="plain"><code>project doctor --full --offline</code>, <code>backup doctor --with write --offline</code></td><td class="plain">No meaning.</td><td class="plain">Settled by R4</td></tr>
+          <tr><td class="plain">What "everything its Branches reach" means</td><td class="plain">Heads or all history, shared objects, memory bound: none stated.</td><td class="plain">R8</td></tr>
+          <tr><td class="plain">A dirty unmount, a close with mounts, a stop with Sandboxes</td><td class="plain">The options that decide these are gone from the rows.</td><td class="plain">C1</td></tr>
+          <tr><td class="plain">Cancel when the worker does not answer</td><td class="plain">Today it answers <code>outcome: unknown</code>. The short forms are only <code>signal</code> and <code>already_ended</code>.</td><td class="plain">R7</td></tr>
+          <tr><td class="plain">A lost reply once start and stop record an operation</td><td class="plain">An uncertain operation blocks every later call, and the only clearing call deletes the VM.</td><td class="plain">C13</td></tr>
+          <tr><td class="plain">Composite calls under one attempt</td><td class="plain"><code>sandbox create --mount</code> and a machine-to-machine <code>store move</code> have a state in between.</td><td class="plain">C13</td></tr>
+        </tbody>
+      </table></div>
+      <h3>New work the badges hide</h3>
+      <ul class="fam-why">
+        <li><b><code>project doctor --full</code>:</b> a new walk on both engines and through the worker. Reusable parts: the per-stack root queries and the per-object check in the integrity scan. The GC mark is not a fit, since it reads metadata only and writes a table.</li>
+        <li><b>The shallow Store check:</b> a new cut that stops after the schema check, plus a new argument on the worker's Store diagnosis that an older worker will not know.</li>
+        <li><b>Under "reshaped" or "extended":</b> <code>workspace exec --cwd --env --stdin</code>, <code>stdout_file</code>, <code>project export --at</code>, <code>commit get</code> without a Branch, the <code>changes</code> counter on <code>home.get</code>, and merging into an existing Branch.</li>
+      </ul>
+    </section>
+
+    <section id="simple">
+      <h2>Simplicity and cleanness</h2>
+      <p>Measured on the rows: 51 distinct call words, 52 option names (28 used by one call only), 11 <code>--with</code> values, 6 states, 7 refusal codes.</p>
+      <div class="tbl"><table style="min-width:860px">
+        <thead><tr><th style="width:26%">Finding</th><th style="width:38%">Evidence</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr><td class="plain"><code>--with</code> is defined twice, and three values break its rule</td><td class="plain">One list has 8 values, the other 11. <code>write</code> is not a read. <code>stats</code>, <code>storage</code>, <code>usage</code> and <code>space</code> all mean "numbers about it".</td><td class="plain">Define it once as "adds one named section". R5 moves <code>write</code>. Fold <code>storage</code> and <code>usage</code> into <code>stats</code>.</td></tr>
+          <tr><td class="plain">Doctor depth is worded three ways</td><td class="plain">"Only project has two depths", "a project and a bucket also have a full check", and "three depths, cheapest first".</td><td class="plain">Settled by R4: with <code>--offline</code> gone, depth is the only axis. A project and a bucket have a Full check.</td></tr>
+          <tr><td class="plain">Examples break four stated rules</td><td class="plain">Two long forms of <code>store.get</code> with different keys; a <code>get</code> with no <code>state</code>; <code>name</code> where the rule forbids it; a plural that is a number (<code>changes</code>).</td><td class="plain">Add a key-set check to the example builder. Rename <code>home.get</code>'s <code>changes</code> to <code>generation</code>.</td></tr>
+          <tr><td class="plain">One paging convention is really five</td><td class="plain">Of 20 list calls: 7 take limit and cursor, 2 limit only, 3 logs take <code>--before</code> yet answer <code>next_cursor</code>, 2 take byte windows, 6 take nothing. Three default limits.</td><td class="plain">Logs take <code>--cursor</code>. Glob and grep gain it. Say which lists are unpaged because they are bounded.</td></tr>
+          <tr><td class="plain"><code>store connect --machine</code> requires <code>--auth</code></td><td class="plain">The text says a machine never has its own login.</td><td class="plain"><code>--auth</code> required on a Store's first connect, refused afterwards.</td></tr>
+          <tr><td class="plain">The positional rule needs an exception list</td><td class="plain"><code>backup list [bucket]</code> is outside the list. In <code>commit diff &lt;project&gt; &lt;from&gt; [to]</code>, one argument lands in <code>to</code>.</td><td class="plain"><code>backup list [--bucket B]</code>; <code>commit diff &lt;project&gt; &lt;ref&gt; [--from R]</code>.</td></tr>
+          <tr><td class="plain">The same merge is done three ways</td><td class="plain">Store folds status and stats into <code>get</code>. Machine keeps <code>stats</code> as a call. Project keeps <code>stats</code> and adds <code>--with storage</code>.</td><td class="plain">Keep <code>project list --with stats</code>; drop it from <code>project get</code>. Fold <code>machine.stats</code> into <code>machine get</code> only if polling can stay out of the call log.</td></tr>
+          <tr><td class="plain">Open decisions with a plainly simpler answer</td><td class="plain">Close or remove a Sandbox; a default machine for a PostgreSQL Store's Sandboxes; a doctor on page open.</td><td class="plain"><code>sandbox remove</code>; drop the default machine; records only on open.</td></tr>
+        </tbody>
+      </table></div>
+      <p class="small">Found clean: the totals, the <code>--at</code> and <code>--expected</code> coverage, the handle chain from one call to the next, and one shape for <code>blocked_by</code> in status answers and doctor answers.</p>
+    </section>
+
+    <section id="ui">
+      <h2>Doctor page</h2>
+      <p>The reviewer drove the mock in the browser at desktop and phone width, in both themes, with mouse and keyboard.</p>
+      <div class="tbl"><table style="min-width:860px">
+        <thead><tr><th style="width:11%">Kind</th><th style="width:33%">Problem</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><td class="chg"><span class="badge b-gone">broken</span></td><td class="plain">Check and Full check leave the row while it runs. Keyboard focus is lost and the marks jump sideways.</td><td class="plain">Keep both in place, disabled and marked busy; reserve the column width.</td></tr>
+          <tr><td class="chg"><span class="badge b-gone">broken</span></td><td class="plain">Check all stays live during a fix or a Full check and silently discards it.</td><td class="plain">Disable Check all while either runs, and decide the reverse case the same way.</td></tr>
+          <tr><td class="chg"><span class="badge b-merged">missing</span></td><td class="plain">No state for a doctor call that fails, is interrupted or comes back incomplete. No failure path for the fix. A Full check has no Stop and no elapsed time.</td><td class="plain">R3's "Could not check" signal. Design the fix-refused row.</td></tr>
+          <tr><td class="chg"><span class="badge b-merged">data</span></td><td class="plain">Marks fill one by one and Full check shows a percentage. <code>--progress</code> reports one event per finished thing.</td><td class="plain">A row's marks land together when its thing finishes. Full check shows a spinner and elapsed time.</td></tr>
+          <tr><td class="chg"><span class="badge b-extended">access</span></td><td class="plain">Passed and failed marks differ by colour only. Hollow marks are about 2:1 against white. Marks cannot be reached by keyboard or touch.</td><td class="plain">Give failure a shape, as notice already has. One hollow mark instead of two. Make the mark group one focusable signal.</td></tr>
+          <tr><td class="chg"><span class="badge b-extended">access</span></td><td class="plain">A row's state is not in its accessible name. Half the folder rows point at a detail element that does not exist.</td><td class="plain">Hidden state word per row; "1 problem inside"; link only to elements that exist.</td></tr>
+          <tr><td class="chg"><span class="badge b-kept">noisy</span></td><td class="plain">Row tips open instantly over the whole row and cover the rows above. Many say nothing ("Project.").</td><td class="plain">Hang the tip off the dot with the plugin's <code>Signal</code> and its 120 ms delay.</td></tr>
+          <tr><td class="chg"><span class="badge b-kept">noisy</span></td><td class="plain">The detail panel repeats the row and the tip as sentences. Check all's tip lists one line per Store.</td><td class="plain">Detail is the call, the check list and the fix line. Check all's tip counts: <code>store doctor &lt;store&gt; ×7</code>.</td></tr>
+          <tr><td class="chg"><span class="badge b-kept">unclear</span></td><td class="plain">A waiting row has no route to its root cause. "Waiting on docker" promises something that will not happen when the machine is stopped on purpose.</td><td class="plain">Make the parent's name a link that opens and focuses it. Use "Stopped" under a stopped machine.</td></tr>
+          <tr><td class="chg"><span class="badge b-kept">unclear</span></td><td class="plain">The fix button looks like Check. Two troubled rows have no action at all.</td><td class="plain">Primary style for the fix, as the plugin does. Give "Not in the Store" and "Backup behind" an action or a tip.</td></tr>
+          <tr><td class="chg"><span class="badge b-renamed">phone</span></td><td class="plain">The status word is cut off ("Waiting on de…"). The tab bar scrolls with two tabs off-screen and shifts as marks appear.</td><td class="plain">Status word first and never cut; reason in the tip. Reserve the mark slot; fade the bar's edge.</td></tr>
+          <tr><td class="chg"><span class="badge b-renamed">dark</span></td><td class="plain">Check all is white on light blue at 2.3:1. The tip has the card's own colour.</td><td class="plain">Both go away with the real <code>Button</code> and <code>HoverCard</code>; verify in the port.</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Signal plus tips</h3>
+      <p>The page uses about 30 status words and 7 dot states. The plugin's own dot has 5. A shared set of five words would do, with the reason in the tip:</p>
+      <div class="sigrow">
+        <span class="sigword"><span class="dot ok"></span>OK</span>
+        <span class="sigword"><span class="dot run"></span>Checking</span>
+        <span class="sigword"><span class="dot off"></span>Not checked</span>
+        <span class="sigword"><span class="dot warn"></span>Notice</span>
+        <span class="sigword"><span class="dot bad"></span>Problem</span>
+      </div>
+      <p class="small">"Not checked" carries its reason in the tip: never, stopped, or waiting on a named thing. A finding keeps its own word, such as Outdated. Sentences such as "All checks passed." and "Its worker is from another build, so calls to it are refused." become dots plus the failed check's tip.</p>
+      <h3>Porting to the plugin</h3>
+      <ul class="fam-why">
+        <li><b>Reuse:</b> <code>Page</code>, <code>Card</code> and <code>CopyLine</code> from <code>src/client/ui</code>; the tab bar from <code>storage/HomeHero.tsx</code>; <code>StateDot</code> through <code>storage/Signal.tsx</code>; the fix parsing in <code>doctor/FindingActions.tsx</code>; the glyphs in <code>machines/icons.tsx</code> and <code>overview/glyph.tsx</code>.</li>
+        <li><b>Missing in the plugin:</b> a running state and an icon slot on a tab, a hollow dot, and a Workspace glyph.</li>
+        <li><b>Words:</b> every label needs English and Chinese keys in <code>doctor/locale.ts</code>. The mock builds English by hand.</li>
+        <li><b>Assumed solved:</b> a project target, progress per thing, and more than today's limit of 40 kept jobs.</li>
+      </ul>
+    </section>
+
+    <section id="diagrams">
+      <h2>Diagrams</h2>
+      <p>The page needs none: the folder tree already is the ownership diagram. The spec needs three, and they go into its Doctor section in phase 0.</p>
+      <h3>Who owns what, and which doctor covers it</h3>
+      <div class="dia">
+        <ul class="tree">
+          <li><span class="node"><b>home</b><code>home doctor</code><i>itself, then quick: machines, PostgreSQL Stores, buckets</i></span>
+            <ul>
+              <li><span class="node"><b>machine</b><code>machine doctor</code><i>itself, then quick: Stores, Sandboxes</i></span>
+                <ul>
+                  <li><span class="node"><b>Store</b><code>store doctor</code><i>itself, then quick: projects</i></span>
+                    <ul><li><span class="node"><b>project</b><code>project doctor</code><i>its record</i><em>Full check reads its data</em></span></li></ul>
+                  </li>
+                  <li><span class="node"><b>Sandbox</b><code>sandbox doctor</code><i>itself, its daemon, then its Workspaces</i></span>
+                    <ul><li><span class="node"><b>Workspace</b><i>no doctor of its own</i></span></li></ul>
+                  </li>
+                </ul>
+              </li>
+              <li><span class="node"><b>PostgreSQL Store</b><code>store doctor</code><i>itself, then quick: projects</i></span></li>
+              <li><span class="node"><b>bucket</b><code>backup doctor</code><i>configuration, transport, list</i><em>Full check tests a write</em></span></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+      <h3>What Check all runs</h3>
+      <div class="dia">
+        <div class="fan">
+          <div class="fan-src">Check all</div>
+          <div class="fan-rows">
+            <div class="fan-row"><code>home doctor</code><span>this install, each machine, PostgreSQL Store and bucket</span></div>
+            <div class="fan-row"><code>store doctor</code> <b>× each Store</b><span>the Store and its projects, quickly</span></div>
+            <div class="fan-row"><code>sandbox doctor</code> <b>× each Sandbox</b><span>the Sandbox, its daemon and its Workspaces</span></div>
+          </div>
+        </div>
+        <p class="small">Left out: everything under a stopped or failed machine, and all project data. Run twice: a PostgreSQL Store's own checks.</p>
+      </div>
+      <h3>What a failed parent blocks</h3>
+      <div class="dia">
+        <ul class="tree">
+          <li><span class="node"><span class="dot bad"></span><b>demo-build</b><i>Outdated</i><em>the only button: the fix</em></span>
+            <ul>
+              <li><span class="node"><span class="dot off"></span><b>demo-build-cache</b><i>not checked, blocked by demo-build</i></span>
+                <ul><li><span class="node"><span class="dot off"></span><b>compiler, sdk</b><i>not checked</i></span></li></ul>
+              </li>
+              <li><span class="node"><span class="dot off"></span><b>build-1</b><i>not checked</i></span>
+                <ul><li><span class="node"><span class="dot off"></span><b>build-1:main</b><i>not checked</i></span></li></ul>
+              </li>
+              <li><span class="node"><span class="dot off"></span><b>build-2</b><i>not checked</i></span></li>
+            </ul>
+          </li>
+        </ul>
+        <p class="small">Records were read; live checks were not attempted. These are <code>not_checked</code> with <code>blocked_by</code>, never findings. After the fix: <code>machine doctor</code>, then <code>store doctor</code> and <code>sandbox doctor</code> for what is on it.</p>
+      </div>
+    </section>
+
+    <section id="split">
+      <h2>Work split</h2>
+      <h3>Where one call lives</h3>
+      <div class="tbl"><table style="min-width:780px">
+        <thead><tr><th style="width:24%">Layer</th><th style="width:44%">Path</th><th>Written how</th></tr></thead>
+        <tbody>
+          <tr><td class="plain">Table entry and run function</td><td class="cli" style="width:auto">api/crates/layerfs-api/src/&lt;family&gt;/&lt;call&gt;.rs</td><td class="plain">By hand, one file per call</td></tr>
+          <tr><td class="plain">What the call does</td><td class="cli" style="width:auto">control/crates/layerfs-{store,machine,sandbox,home,bucket,control}</td><td class="plain">By hand; results are untyped maps</td></tr>
+          <tr><td class="plain">CLI parser and help, Node and Python bindings, MCP tools</td><td class="cli" style="width:auto">api/crates/layerfs-cli, layerfs-node, layerfs-python; api/mcp/src/tools.js</td><td class="plain">Built from the table</td></tr>
+          <tr><td class="plain">Typings and coverage blocks</td><td class="cli" style="width:auto">api/node/src/index.d.ts, the .pyi files, coverage.md, mcp.md</td><td class="plain">Generated and committed, so every table change makes them stale</td></tr>
+          <tr><td class="plain">MCP profiles, manual, skill</td><td class="cli" style="width:auto">api/mcp/src/profiles.js; docs/versioned/2.0.0/calls.md; .agents/skills/layerfs-js-sdk</td><td class="plain">By hand; <code>calls.md</code> is one 992-line file for all families</td></tr>
+          <tr><td class="plain">dsh-layerfs host</td><td class="cli" style="width:auto">src/host/layerfs/cli.ts, src/host/routes/*</td><td class="plain">Client built from the CLI's table; about 200 call uses and every result field read are by hand</td></tr>
+        </tbody>
+      </table></div>
+      <h3>What decides the order</h3>
+      <ul class="fam-why">
+        <li><b>The mechanism comes first and alone.</b> The dispatcher, the result forms, the list and refusal shapes, the state type and the progress shape are in files every package touches.</li>
+        <li><b>Name lists hide in the machinery.</b> <code>scope.rs</code>, <code>platform_policy.rs</code> and <code>render.rs</code> hold call names as strings. They move onto the table entries in the mechanism phase, or every rename collides there.</li>
+        <li><b>Shared files that every family touches:</b> the count assert in <code>calls_table.rs</code>, the family list in <code>lib.rs</code>, the generated typings, and <code>profiles.js</code>, which throws on a call it does not classify. Family packages do not regenerate and do not edit the manual; one integrator does, after each merge.</li>
+        <li><b>All six doctors live in <code>layerfs-control</code>.</b> The crate order is home, machine, store, sandbox, control, so a machine doctor cannot sit in the machine crate and still check its Stores.</li>
+        <li><b>The engine keeps its method names,</b> so a public rename never reaches the engine.</li>
+        <li><b>dsh-layerfs moves on one pinned CLI.</b> Its test requires every host call to exist in the pinned table, so each new pin is a flag day for the whole plugin.</li>
+      </ul>
+    </section>
+
+    <section id="rollout">
+      <h2>Phase rollout</h2>
+      <p>Sizes are S, M and L, with no dates. A phase starts only when the one before it has passed its exit check.</p>
+      <div class="dia wide">
+        <div class="lanes2" role="img" aria-label="Six phases across four tracks: spec, calls, doctors and dsh-layerfs">
+          <div class="lh"></div>
+          <div class="ph">0<small>Spec freeze</small></div>
+          <div class="ph">1<small>Mechanism and pilot</small></div>
+          <div class="ph">2<small>Names and doctor frame</small></div>
+          <div class="ph">3<small>Families and doctors</small></div>
+          <div class="ph">4<small>Late pieces and the UI</small></div>
+          <div class="ph">5<small>Close</small></div>
+
+          <div class="lh">Spec and docs</div>
+          <div class="cell"><span class="pk t-doc">Rulings R1–R9</span><span class="pk t-doc">Corrections C1–C14</span><span class="pk t-doc">Mock fixes</span></div>
+          <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+          <div class="cell"><span class="pk t-doc">Z manual, typings, profiles</span></div>
+
+          <div class="lh">Calls</div>
+          <div class="cell"></div>
+          <div class="cell"><span class="pk t-api">G1 mechanism</span><span class="pk t-api">pilot: home family</span></div>
+          <div class="cell"><span class="pk t-api">G2 rename pass</span></div>
+          <div class="cell"><span class="pk t-api">F-file</span><span class="pk t-api">F-hist</span><span class="pk t-api">F-proj</span><span class="pk t-api">F-store</span><span class="pk t-api">F-backup</span><span class="pk t-api">F-machine</span><span class="pk t-api">F-home</span><span class="pk t-api">F-sbx</span></div>
+          <div class="cell"><span class="pk t-api">F-pg<small>after F-store</small></span></div>
+          <div class="cell"></div>
+
+          <div class="lh">Doctors</div>
+          <div class="cell"></div><div class="cell"></div>
+          <div class="cell"><span class="pk t-doctor">G3 doctor frame</span></div>
+          <div class="cell"><span class="pk t-doctor">D-home + leftovers</span><span class="pk t-doctor">D-machine</span><span class="pk t-doctor">D-store</span><span class="pk t-doctor">D-sbx</span><span class="pk t-doctor">D-backup</span></div>
+          <div class="cell"><span class="pk t-doctor">P-full<small>after D-store</small></span></div>
+          <div class="cell"></div>
+
+          <div class="lh">dsh-layerfs</div>
+          <div class="cell"></div><div class="cell"></div><div class="cell"></div>
+          <div class="cell"><span class="pk t-ui">U0 host seam<small>on pin 1</small></span></div>
+          <div class="cell"><span class="pk t-ui">U-doc Doctor page</span><span class="pk t-ui">U-mach</span><span class="pk t-ui">U-stor</span><span class="pk t-ui">U-proj</span><span class="pk t-ui">U-sess</span></div>
+          <div class="cell"><span class="pk t-ui">3080 rollout</span></div>
+
+          <div class="lh">Agents</div>
+          <div class="ag">1</div><div class="ag">1</div><div class="ag">2</div><div class="ag">up to 11</div><div class="ag">up to 7</div><div class="ag">1</div>
+        </div>
+      </div>
+
+      <h3>Phase 0. Spec freeze</h3>
+      <div class="tbl"><table style="min-width:680px"><tbody>
+        <tr><td class="plain" style="width:16%"><b>Starts when</b></td><td class="plain">You have ruled on the eight open rulings.</td></tr>
+        <tr><td class="plain"><b>Work</b></td><td class="plain">Apply the rulings and C1 to C14 to the proposal. Rebuild its "Today" columns from the code's table. Add the key-set check to the examples. Add the three diagrams. Fix the mock's two broken interactions and add the missing state. Move the proposal out of the scratch folder into the repository on <code>layerfs_v2_0_0</code>, under an issue folder you name.</td></tr>
+        <tr><td class="plain"><b>Exit check</b></td><td class="plain">A fresh correctness reviewer finds nothing in the classes "wrong" or "not possible as written". Every option that exists today is either in a row or in the dropped list.</td></tr>
+        <tr><td class="plain"><b>Size</b></td><td class="plain">M, one agent, no code.</td></tr>
+      </tbody></table></div>
+
+      <h3>Phase 1. Mechanism and pilot</h3>
+      <div class="tbl"><table style="min-width:680px"><tbody>
+        <tr><td class="plain" style="width:16%"><b>Starts when</b></td><td class="plain">Phase 0 has passed.</td></tr>
+        <tr><td class="plain"><b>Work</b></td><td class="plain"><b>G1:</b> <code>--detail</code> and <code>--with</code> as global options; the short projection and long schema declared on each table entry; the list shape, the refusal shape with a code map at the boundary, the state type with a <code>blocked_by</code> helper, the progress shape; the name lists in the machinery moved onto the entries. <b>Pilot:</b> <code>home.get</code>, <code>home.log</code> and <code>home.clear_log</code> taken through every layer: CLI, Node, Python, MCP and the manual.</td></tr>
+        <tr><td class="plain"><b>Why a pilot</b></td><td class="plain">If the mechanism picks the wrong seam, every family package redoes its work. Three small calls prove it before ten agents depend on it.</td></tr>
+        <tr><td class="plain"><b>Exit check</b></td><td class="plain">One generic test passes for the pilot calls: the long form contains the short form, the short form has no empty field, every long key is always present. Table and scope tests pass. You look at the pilot's real output before phase 2.</td></tr>
+        <tr><td class="plain"><b>Size</b></td><td class="plain">L, one agent, alone on the branch.</td></tr>
+      </tbody></table></div>
+
+      <h3>Phase 2. Names and the doctor frame</h3>
+      <div class="tbl"><table style="min-width:680px"><tbody>
+        <tr><td class="plain" style="width:16%"><b>Work</b></td><td class="plain"><b>G2:</b> every name-only change in one pass, with no result changes: the four log calls and <code>doctor.fix</code> move, the five renames, <code>name</code> becomes the thing's own word, families go from 12 to 10. The per-family tests are split out of the shared table test here. <b>G3:</b> one doctor report type, one runner with a budget per thing and a progress hook, six doctor entries wired to today's checks; the off-table <code>layerfs doctor</code> goes.</td></tr>
+        <tr><td class="plain"><b>Order</b></td><td class="plain">G2 and the control half of G3 run side by side. The six doctor entries land last as one small commit, since they add lines to files G2 owns.</td></tr>
+        <tr><td class="plain"><b>Exit check</b></td><td class="plain">The whole <code>layerfs-api</code> and <code>layerfs-cli</code> test build passes with no result changed by G2. Each of the six doctors answers through the frame with today's checks. <b>Pin 1</b> is built for dsh-layerfs.</td></tr>
+        <tr><td class="plain"><b>Size</b></td><td class="plain">M and M, two agents.</td></tr>
+      </tbody></table></div>
+
+      <h3>Phase 3. Families and doctors in parallel</h3>
+      <div class="tbl"><table style="min-width:680px"><tbody>
+        <tr><td class="plain" style="width:16%"><b>Work</b></td><td class="plain">Eight family packages and five doctor packages, each owning its own folders. D-backup runs with F-backup under one agent, since both touch the bucket crate. U0 moves the dsh-layerfs host onto pin 1 beside them.</td></tr>
+        <tr><td class="plain"><b>Cross-family moves</b></td><td class="plain">One owner per side: F-file deletes <code>file.diff</code> while F-hist adds <code>--path</code>; F-machine deletes <code>platforms</code> while F-home adds <code>--with platforms</code>; D-home exports one leftover function that F-home calls.</td></tr>
+        <tr><td class="plain"><b>Merging</b></td><td class="plain">One integrator merges a package at a time and regenerates the typings and coverage blocks after each. No package regenerates or edits the manual.</td></tr>
+        <tr><td class="plain"><b>Exit check</b></td><td class="plain">Each package passes its own tests and the generic form test for its calls. After the last merge the count assert reads 6, 8, 6, 3, 14, 7, 7, 14, 13, 6, adjusted for R6 and R7. <b>Pin 2</b> is built.</td></tr>
+        <tr><td class="plain"><b>Size</b></td><td class="plain">Four L, the rest M and S; about 10 agents plus one for U0.</td></tr>
+      </tbody></table></div>
+
+      <h3>Phase 4. Late pieces and the UI</h3>
+      <div class="tbl"><table style="min-width:680px"><tbody>
+        <tr><td class="plain" style="width:16%"><b>Work</b></td><td class="plain"><b>P-full:</b> the reach walk for <code>project doctor --full</code> on both engines and through the worker. <b>F-pg:</b> saved logins, connect and update. <b>U-doc:</b> the Doctor page as in the corrected mock. <b>U-mach, U-stor, U-proj, U-sess:</b> each area of the plugin moved to the new calls and fields.</td></tr>
+        <tr><td class="plain"><b>Exit check</b></td><td class="plain">P-full: one sample on a clone of a real Store, with time and peak memory reported together, and a planted fault found. The Doctor page: driven in a browser on the dsh at port 3080 through success, progress and failure, with keyboard, phone width and dark theme. Each plugin area passes its own tests on a private home.</td></tr>
+        <tr><td class="plain"><b>Size</b></td><td class="plain">P-full is L and the riskiest package. Up to 7 agents.</td></tr>
+      </tbody></table></div>
+
+      <h3>Phase 5. Close</h3>
+      <div class="tbl"><table style="min-width:680px"><tbody>
+        <tr><td class="plain" style="width:16%"><b>Work</b></td><td class="plain"><b>Z:</b> <code>calls.md</code>, <code>migration.md</code>, <code>sdk.md</code> and the examples; the final regeneration; the MCP profile lists; the skill's method pages. Then the dsh on port 3080 moves to the final build.</td></tr>
+        <tr><td class="plain"><b>Exit check</b></td><td class="plain">The generators' own checks pass, with the MCP and Node contract tests. The 3080 move happens only while no dsh run is live.</td></tr>
+        <tr><td class="plain"><b>After</b></td><td class="plain">The "Status in the UI" restyle (six signals and the blocker chip across every page) is its own piece of work. It needs one shared signal component first.</td></tr>
+      </tbody></table></div>
+    </section>
+
+    <section id="pkgs">
+      <h2>Packages</h2>
+      <div class="tbl"><table style="min-width:900px">
+        <thead><tr><th style="width:11%">Package</th><th style="width:30%">Delivers</th><th style="width:31%">Owns</th><th style="width:11%">After</th><th>Size</th></tr></thead>
+        <tbody>
+          <tr><td class="call">G1</td><td class="plain">The mechanism (phase 1)</td><td class="plain"><code>layerfs-api/src/calls</code>, the CLI and binding crates, the Node, Python and MCP glue, home events and outcome</td><td class="plain">phase 0</td><td class="plain">L</td></tr>
+          <tr><td class="call">G2</td><td class="plain">Name-only pass, about 40 calls</td><td class="plain">every family folder once, <code>lib.rs</code></td><td class="plain">G1</td><td class="plain">M</td></tr>
+          <tr><td class="call">G3</td><td class="plain">Doctor report type, runner, six entries</td><td class="plain"><code>layerfs-control/src/doctor/{check_report,target,dispatch,mod}.rs</code></td><td class="plain">G1</td><td class="plain">M</td></tr>
+          <tr><td class="call">F-file</td><td class="plain">14 file calls: line windows, <code>--at</code>, <code>--expected</code></td><td class="plain"><code>src/file</code>, the Store file calls, the engine's file methods</td><td class="plain">G2</td><td class="plain">L</td></tr>
+          <tr><td class="call">F-hist</td><td class="plain">6 Branch and 3 Commit calls</td><td class="plain"><code>src/branch</code>, <code>src/commit</code>, the engine's Branch and history methods</td><td class="plain">G2</td><td class="plain">L</td></tr>
+          <tr><td class="call">F-proj</td><td class="plain">7 project calls</td><td class="plain"><code>src/project</code> without the doctor, <code>layerfs-store/src/project</code></td><td class="plain">G2</td><td class="plain">M</td></tr>
+          <tr><td class="call">F-store</td><td class="plain">7 sqlite Store calls</td><td class="plain"><code>src/store</code>, the Store crate's sqlite, status, stats and list code</td><td class="plain">G2</td><td class="plain">L</td></tr>
+          <tr><td class="call">F-backup</td><td class="plain">5 backup calls, with D-backup</td><td class="plain"><code>src/backup</code>, <code>layerfs-bucket</code></td><td class="plain">G2, G3</td><td class="plain">M</td></tr>
+          <tr><td class="call">F-machine</td><td class="plain">13 machine calls</td><td class="plain"><code>src/machine</code>, <code>layerfs-machine</code>, <code>layerfs-platform</code></td><td class="plain">G2</td><td class="plain">L</td></tr>
+          <tr><td class="call">F-home</td><td class="plain">The rest of the home family</td><td class="plain"><code>src/home</code> without doctor and prune, the home crate's records and logs</td><td class="plain">G2</td><td class="plain">M</td></tr>
+          <tr><td class="call">F-sbx</td><td class="plain">12 Sandbox and Workspace calls</td><td class="plain"><code>src/sandbox</code>, <code>src/workspace</code>, <code>layerfs-sandbox</code> and its backend</td><td class="plain">G2</td><td class="plain">L</td></tr>
+          <tr><td class="call">D-home</td><td class="plain">Home doctor; the leftover walk out of the doctor</td><td class="plain">the doctor's host, scan and leftover files, <code>home/prune.rs</code></td><td class="plain">G3</td><td class="plain">L</td></tr>
+          <tr><td class="call">D-machine</td><td class="plain">Machine checks, then its Stores and Sandboxes</td><td class="plain"><code>doctor/machine_target.rs</code></td><td class="plain">G3</td><td class="plain">M</td></tr>
+          <tr><td class="call">D-store</td><td class="plain">Store checks without integrity; the project record check</td><td class="plain"><code>doctor/store_target.rs</code>, a new <code>project_target.rs</code></td><td class="plain">G3</td><td class="plain">M</td></tr>
+          <tr><td class="call">D-sbx</td><td class="plain">Sandbox, daemon, each Workspace</td><td class="plain"><code>doctor/sandbox_*.rs</code></td><td class="plain">G3</td><td class="plain">M</td></tr>
+          <tr><td class="call">P-full</td><td class="plain"><code>project doctor --full</code></td><td class="plain"><code>layerfs-persistence/src/diagnostic</code>, the Store diagnosis frame</td><td class="plain">D-store</td><td class="plain">L</td></tr>
+          <tr><td class="call">F-pg</td><td class="plain">6 PostgreSQL calls</td><td class="plain"><code>layerfs-store/src/postgresql</code>, home secrets</td><td class="plain">F-store</td><td class="plain">M–L</td></tr>
+          <tr><td class="call">U0</td><td class="plain">dsh host on the new names and forms</td><td class="plain"><code>src/host/layerfs</code>, <code>src/shared/logs.ts</code>, the test fixtures</td><td class="plain">pin 1</td><td class="plain">M</td></tr>
+          <tr><td class="call">U-doc</td><td class="plain">The Doctor page</td><td class="plain"><code>src/client/doctor</code>, <code>src/client/health</code>, <code>routes/doctor.ts</code></td><td class="plain">U0, every D, P-full for Full check</td><td class="plain">L</td></tr>
+          <tr><td class="call">U-mach, U-stor, U-proj, U-sess</td><td class="plain">Each plugin area on the new calls</td><td class="plain">that area's routes and client folder</td><td class="plain">U0 and its family</td><td class="plain">L each</td></tr>
+          <tr><td class="call">Z</td><td class="plain">Manual, generated files, profiles, skill</td><td class="plain"><code>docs/versioned/2.0.0</code>, the generated files, <code>profiles.js</code></td><td class="plain">everything</td><td class="plain">M</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="rules">
+      <h2>Rules for every package</h2>
+      <div class="rules">
+        <div class="rule"><div class="k">Branch</div><div class="d"><span>LayerFS work lands on <code>layerfs_v2_0_0</code> through one pull request per package. dsh-layerfs work is edited directly on its <code>layerfs_v2_0_0</code> branch, with no pull request and no side branch (owner, 2026-11-18). No CI lane runs for either branch, so each package verifies its own scope and reports what it ran and what it did not.</span></div></div>
+        <div class="rule"><div class="k">Worktrees</div><div class="d"><span>For LayerFS, one worktree per agent from the parallel worktree launcher, with its own Cargo target and its own writable Stores, homes and containers. dsh-layerfs has one checkout, the one port 3080 runs from, so its packages own separate folders and each commits only its own files. Two packages never write the same file.</span></div></div>
+        <div class="rule"><div class="k">Tests</div><div class="d"><span>No test command runs longer than 2 minutes. A test that is hard to adapt is deleted and listed in the commit message, never weakened. Behaviour that still holds gets a test on the new code.</span></div></div>
+        <div class="rule"><div class="k">Commits</div><div class="d"><span>Each records production lines before, after and the difference, from the pinned counter. A rename pass reports its relocation as relocation.</span></div></div>
+        <div class="rule"><div class="k">Calls</div><div class="d"><span>One attempt, no retry, no replay of a lost reply. Disposable profile only. No context environment variables. Engine method names do not change.</span></div></div>
+        <div class="rule"><div class="k">Files</div><div class="d"><span>Production files stay under 999 lines. A package that would push <code>op.rs</code> or a doctor target over it splits the file first.</span></div></div>
+        <div class="rule"><div class="k">Not touched</div><div class="d"><span>fs-bench-pro stays frozen. The Store format does not change. Third-party code is not patched.</span></div></div>
+        <div class="rule"><div class="k">The UI</div><div class="d"><span>Anything shown in dsh-layerfs is verified in the page itself across success, progress and failure, not only from the command line. Status is a signal and a tip.</span></div></div>
+        <div class="rule"><div class="k">The 3080 dsh</div><div class="d"><span>The plugin is built and checked on the default dsh at port 3080, with no side server (owner, 2026-11-18). A client change needs only a bundle rebuild. A host change needs a restart, which ends every live agent turn and changes the sign-in link, so host changes are batched and loaded only while no run is live. The LayerFS runtime under it moves only at a pin.</span></div></div>
+      </div>
+    </section>
+
+    <section id="limits">
+      <h2>What was not checked</h2>
+      <ul class="fam-why">
+        <li><b>Nothing was built or run.</b> The reviewers read source and the manual. I re-read the lines behind the most serious claim in each report and they match; I did not re-verify every finding.</li>
+        <li><b>The mock:</b> no real screen reader, no real touch input, and the DSH <code>Button</code> and <code>HoverCard</code> were inferred from how the plugin calls them, since the primitives are not in the snapshot.</li>
+        <li><b>Not verified in the proposal:</b> the byte figures in its header, the "17 cache layers" and "~40 labels" claims, whether the daemon can take stdin, and whether <code>machine get</code> can say "outdated" from records alone.</li>
+        <li><b>Sizes are judgments,</b> from file counts and what has to change. No package has been estimated in time.</li>
+        <li><b>The proposal cites <code>4c296e9297</code>;</b> the reviewers read <code>caff58a43b</code>. The call table and doctor code differ between them by four lines.</li>
+      </ul>
+    </section>
+  </main>
+</div>

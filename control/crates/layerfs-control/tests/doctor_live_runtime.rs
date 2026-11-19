@@ -1,7 +1,9 @@
 //! Opt-in negative observations against exclusively owned, real runtime fixtures.
 #![cfg(all(unix, feature = "machine"))]
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::doctor::{doctor_target, DoctorRequest, DoctorTarget};
+#[path = "support/doctor_own.rs"]
+mod doctor_own;
+use layerfs_control::doctor::{Kind, Options};
 use layerfs_home::home::{paths, private_dir, read_record, write_record};
 use std::{
     collections::BTreeMap,
@@ -53,33 +55,21 @@ fn copy(source: &Path, n: u32) -> CopyHome {
     }
     CopyHome(root)
 }
-fn report(home: &Path, target: DoctorTarget) -> SdkValue {
+fn report(home: &Path, kind: Kind, name: &str) -> SdkValue {
     let before = records(home);
-    let result = doctor_target(
-        home,
-        &DoctorRequest {
-            target,
-            timeout: Some(Duration::from_secs(3)),
-            quick: false,
-            write_test: false,
-            build: Default::default(),
-        },
-    )
-    .unwrap();
+    let options = Options::default();
+    let budget = Some(Duration::from_secs(3));
+    let result = doctor_own::own_within(home, kind, name, &options, budget);
     assert!(
         records(home) == before,
         "diagnosis changed logical fixture records or leases"
     );
     result
 }
-fn outcome<'a>(report: &'a SdkValue, id: &str) -> Option<&'a str> {
-    let Some(SdkValue::List(checks)) = report.get("checks") else {
-        panic!("missing checks")
-    };
-    checks
-        .iter()
-        .find(|row| row.get_text("id") == Some(id))
-        .and_then(|row| row.get_text("outcome"))
+/// Check `id`'s outcome in today's words; none when it did not apply (a
+/// check a failed check of the same thing kept from running).
+fn outcome(report: &SdkValue, id: &str) -> Option<String> {
+    doctor_own::outcome(report, id)
 }
 fn field(value: &mut SdkValue, key: &str, new: SdkValue) {
     let SdkValue::Map(map) = value else {
@@ -108,22 +98,25 @@ fn actual_runtime_negative_observations_preserve_records_and_ownership() {
     keys(&stale.0, |value| {
         field(value, "instance", SdkValue::Bytes(vec![0; 32]))
     });
-    let r = report(&stale.0, DoctorTarget::Sandbox("b6-native".into()));
-    assert_eq!(outcome(&r, "sandbox.daemon_instance"), Some("fail"));
-    assert_eq!(outcome(&r, "sandbox.workspaces"), Some("blocked"));
-    assert_eq!(outcome(&r, "sandbox.session"), Some("pass"));
+    let r = report(&stale.0, Kind::Sandbox, "b6-native");
+    assert_eq!(
+        outcome(&r, "sandbox.daemon_instance").as_deref(),
+        Some("fail")
+    );
+    assert_eq!(outcome(&r, "sandbox.daemon_ready"), None);
+    assert_eq!(outcome(&r, "sandbox.session").as_deref(), Some("pass"));
 
     let auth = copy(&source, 2);
     keys(&auth.0, |value| {
         field(value, "secret", SdkValue::Bytes(vec![0xA5; 32]))
     });
-    let r = report(&auth.0, DoctorTarget::Sandbox("b6-native".into()));
+    let r = report(&auth.0, Kind::Sandbox, "b6-native");
     assert_eq!(
-        outcome(&r, "sandbox.daemon_auth"),
+        outcome(&r, "sandbox.daemon_auth").as_deref(),
         Some("unknown"),
         "raw authentication close remains ambiguous"
     );
-    assert_eq!(r.get("complete"), Some(&SdkValue::Bool(false)));
+    assert!(!doctor_own::complete(&r));
 
     let carrier = copy(&source, 3);
     let path = paths::sandbox_record(&carrier.0, "b6-lima-box");
@@ -152,15 +145,18 @@ fn actual_runtime_negative_observations_preserve_records_and_ownership() {
     forward.retain(|(name, _)| name != "pid_start");
     forward.push(("pid_start".into(), SdkValue::text("0")));
     write_record(&path, &value).unwrap();
-    let r = report(&carrier.0, DoctorTarget::Sandbox("b6-lima-box".into()));
-    assert_eq!(outcome(&r, "sandbox.forward_process"), Some("fail"));
-    assert_eq!(outcome(&r, "sandbox.daemon"), Some("blocked"));
+    let r = report(&carrier.0, Kind::Sandbox, "b6-lima-box");
+    assert_eq!(
+        outcome(&r, "sandbox.forward_process").as_deref(),
+        Some("fail")
+    );
+    assert_eq!(outcome(&r, "sandbox.daemon_connect"), None);
 
     let missing = copy(&source, 4);
     std::fs::remove_file(paths::worker_record(&missing.0, "b6-vm")).unwrap();
-    let r = report(&missing.0, DoctorTarget::Sandbox("b6-lima-box".into()));
-    assert_eq!(outcome(&r, "sandbox.route"), Some("unknown"));
-    assert_eq!(outcome(&r, "sandbox.daemon"), Some("blocked"));
+    let r = report(&missing.0, Kind::Sandbox, "b6-lima-box");
+    assert_eq!(outcome(&r, "sandbox.route").as_deref(), Some("unknown"));
+    assert_eq!(outcome(&r, "sandbox.daemon_connect"), None);
 
     let denied = copy(&source, 5);
     let path = paths::worker_record(&denied.0, "docker");
@@ -171,9 +167,9 @@ fn actual_runtime_negative_observations_preserve_records_and_ownership() {
         SdkValue::text("intentionally-wrong-b6-fixture-secret"),
     );
     write_record(&path, &value).unwrap();
-    let r = report(&denied.0, DoctorTarget::Machine("docker".into()));
-    assert_eq!(outcome(&r, "machine.worker.auth"), Some("fail"));
-    assert_eq!(outcome(&r, "machine.worker.ping"), Some("blocked"));
+    let r = report(&denied.0, Kind::Machine, "docker");
+    assert_eq!(outcome(&r, "machine.worker.auth").as_deref(), Some("fail"));
+    assert_eq!(outcome(&r, "machine.worker.ping"), None);
     // A separately owned temporary runtime establishes a genuinely gone PID,
     // without killing or altering the primary qualification daemon.
     let cli = std::env::var_os("LAYERFS_DOCTOR_FIXTURE_CLI").expect("absolute fixture CLI");
@@ -189,7 +185,7 @@ fn actual_runtime_negative_observations_preserve_records_and_ownership() {
     );
     let gone = copy(&source, 6);
     let closed = std::process::Command::new(&cli)
-        .args(["sandbox", "close", "b6-gone"])
+        .args(["sandbox", "remove", "b6-gone"])
         .env("LAYERFS_HOME", &source)
         .env("LAYERFS_CONSTRUCTION_WORKERS", "1")
         .output()
@@ -198,9 +194,9 @@ fn actual_runtime_negative_observations_preserve_records_and_ownership() {
         closed.status.success(),
         "temporary owned daemon close failed; no replay"
     );
-    let r = report(&gone.0, DoctorTarget::Sandbox("b6-gone".into()));
-    assert_eq!(outcome(&r, "sandbox.runtime"), Some("fail"));
-    assert_eq!(r.get("complete"), Some(&SdkValue::Bool(false)));
+    let r = report(&gone.0, Kind::Sandbox, "b6-gone");
+    assert_eq!(outcome(&r, "sandbox.runtime").as_deref(), Some("fail"));
+    assert_eq!(outcome(&r, "sandbox.daemon_connect"), None);
     assert!(
         records(&source) == before,
         "real source runtime records/leases changed"

@@ -1,99 +1,111 @@
 # commit calls
 
-> **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
-> `layerfs-js-sdk` skill. New in 2.0 as a family; `list` and `diff` were
-> 1.1.0's `branch.list_commits` and `branch.diff_commits`. Results were captured
-> from the built `layerfs` command on 2026-11-02; ids are shortened.
+> **Status:** Current general guide for the LayerFS 2.0 call surface. Part of
+> the `layerfs-js-sdk` skill. `commit.list` absorbs 1.x `branch.commits`,
+> `commit.get` absorbs `branch.get_commit`, and `commit.diff` absorbs
+> `branch.diff` and `file.diff` (no aliases). Outputs marked "seen" were
+> printed by the built `layerfs` command on a throwaway home on 2026-11-18
+> (ids shortened); the rest is from the table, the spec rows and the manual.
 
 ```js
-commit.list(project, branch, { page_size, page_pos })
-commit.get(project, branch, commit)
-commit.diff(project, from_commit, to_commit, { paths_only, page_size, page_pos, cursor })
+commit.list(project, branch, { at, limit, cursor })
+commit.get(project, commit, { branch })
+commit.diff(project, ref, { from, path, limit, cursor, with: ["patch"] })
 ```
 
-A Commit id is 66 hex characters and unique in its project. All three calls are
-refused under a folder scope (`out of scope: history`).
+A Commit id is 66 hex characters and unique in its project. Where a call
+takes a Commit it accepts the full id or a prefix of 8 or more characters,
+resolved by the Store in one call: a prefix more than one Commit starts with
+is `InvalidInput` with `matches` (a count), one no Commit starts with is
+`NotFound`. Where a call takes a `ref` or `from`, a Branch of that name comes
+first, then a Commit. Every id in an answer is the full id. All three calls
+are refused under a folder scope (`out of scope: history`).
 
 ## `commit.list`
 
-`commit.list(project, branch, { page_size, page_pos })`: a Branch's Commits,
-newest first along first parents. `page_size` is 1–1000, default 50.
+A Branch's Commits, newest first, from its head or from `at` (`NotFound` when
+`at` is not in the Branch's history). On `main` it lists `main`'s
+publications. `limit` is 1 to 1000, default 100.
 
-```js
-const log = await layerfs.commit.list("shop/api", "work", { page_size: 10 });
-console.log(log.items.map((c) => `${c.id.slice(0, 12)} ${c.message}`).join("\n"));
+Row short form: `{ commit }`, with `message`, `message_truncated` (a list cuts
+the message at 128 characters; `get` answers it whole) and `source_branch` (a
+publication's Branch) when set. The long row adds `branch`, `parent`,
+`second_parent`, `base`, `root`, `via`, `created_at`, `merged_from`,
+`source_commit`, `size`, `new_canonical_bytes`, `new_stored_bytes` and
+`new_metadata_bytes`. `via` is how the Commit was made: `workspace`, `file`
+or `merge`, and on `main` `publish` or `init`.
+
+```bash
+$ layerfs commit list shop/api agent --limit 2                                 # seen
+{"items":[{"commit":"12d12fbd…","message":"Apply filesystem changes"},{"commit":"1244862d…","message":"Apply filesystem changes"}],"next_cursor":"eyJmb3Ii…"}
+$ layerfs commit list shop/api main                                            # seen
+{"items":[{"commit":"32220c54…","source_branch":"agent"},{"commit":"32919f55…"}]}
 ```
 
-Each item is a Commit record:
+One long row, seen with `--detail`:
 
-| Field | Meaning |
-| --- | --- |
-| `id` | Commit id |
-| `branch` | Branch name |
-| `parent`, `second_parent` | Parents (`second_parent` only for merges) |
-| `base` | The `main` Layer underneath |
-| `root` | Filesystem root id |
-| `via` | What made it: `fs` for `file.*` writes, `exec` for a Workspace Commit |
-| `message` | Commit message |
-| `merged_from` | Merge source, for merge Commits |
-| `time` | Commit time, ms since the epoch |
-| `logical`, `new_canonical`, `new_stored`, `new_metadata` | Storage of this Commit (see the observe skill's [storage metrics](../../../layerfs-sdk-observe/references/storage-metrics.md)) |
-| `displaced`, `lww`, `lww_truncated` | A forced Commit's displaced head; `/.lww` decisions |
+```json
+{"commit":"12d12fbd…","message":"Apply filesystem changes","message_truncated":false,"source_branch":null,
+ "branch":"agent","parent":"1244862d…","second_parent":null,"base":"32919f55…","root":"a6dd2e42…",
+ "via":"file","created_at":"2026-11-18T22:04:16Z","merged_from":null,"source_commit":null,"size":16,
+ "new_canonical_bytes":787,"new_stored_bytes":373,"new_metadata_bytes":334}
+```
 
-`commit.list` on `main` is refused `NoSuchBranch`: `main` is a Layer chain,
-and 2.0 has no call that lists its Layers. After an uncertain outcome
-(`Unknown`, `Failed`), this is how you check whether a Commit happened.
+The `next_cursor` carries the Commit the first page started at, so a later
+page lists the same history while the Branch moves on; it is `NotFound` once
+that Commit is gone. After an uncertain outcome (`Unknown`), this is how you
+check whether a Commit happened.
+
+```js
+const log = [];
+let cursor;
+do {
+  const page = await layerfs.commit.list("shop/api", "agent", { limit: 1000, cursor });
+  log.push(...page.items);
+  cursor = page.next_cursor;
+} while (cursor);
+```
 
 ## `commit.get`
 
-`commit.get(project, branch, commit)`: one Commit of that Branch, as the record
-above. It also takes an id prefix of 8 or more characters. A Commit that is not
-on that Branch's first-parent line is refused `NoSuchCommit`
-(`no Commit <id> on Branch <branch>`; `NotFound` before `88b033cfa9`). It
-pages the Branch's history to the end (following `next_page_pos`) to find
-the id, so it is slower on a long Branch.
+One Commit of the project, by id or prefix, without naming its Branch;
+`branch` refuses `NotFound` unless the Commit is in that Branch's history.
+Short: `{ branch, parent, message }`, each when set. The long form has the
+list row's keys (no `message_truncated`) plus `displaced`, `overwritten` (the
+paths a merge took from the side with the later write, the first 20),
+`overwritten_count` (only when cut) and `units`. Not run in this pass.
 
 ```bash
-layerfs commit get shop/api work 12c7ef811a
+layerfs commit get shop/api 12c7ef81 --detail
 ```
 
 ## `commit.diff`
 
-`commit.diff(project, from_commit, to_commit, { paths_only, page_size, page_pos, cursor })`:
-files that differ between two Commits. No Branch is needed. Use
-`branch.diff` for two Branch heads.
+The paths that differ between `from` and `ref`. Without `from` the side
+compared from is a Branch's fork point, a Commit's parent (or, for a
+Branch's first Commit, the base it was forked at), and for `main`'s first
+publication the empty tree. `path` keeps only that file or folder and what
+is under it.
+
+Row short form: `{ path, change }` (`added`, `removed`, `modified`); the long
+row adds `type` and `content`, `metadata`, `identity` (which of them differ).
+`with: ["patch"]` adds each changed text file's lines as `hunks` (rows
+`{ op, text }`, `op` one of `" "`, `"-"`, `"+"`) and `hunks_omitted`. The
+answer's long form adds `from`, `to`, `from_root` and `to_root`. The
+`next_cursor` carries both Commits the first page compared and the filters.
+
+```bash
+$ layerfs commit diff shop/api agent                                           # seen: since agent's fork point
+{"items":[{"path":"/README.md","change":"modified"},{"path":"/docs/a.txt","change":"modified"},{"path":"/x.txt","change":"added"},{"path":"/y","change":"added"}]}
+$ layerfs commit diff shop/api agent --with patch --path /docs/a.txt           # seen
+{"items":[{"path":"/docs/a.txt","change":"modified","hunks":[{"op":" ","text":"one"},{"op":"-","text":"two"},{"op":"+","text":"three"},{"op":" ","text":""}]}]}
+```
 
 ```js
-const [newest, previous] = (await layerfs.commit.list("shop/api", "work", { page_size: 2 })).items;
-const d = await layerfs.commit.diff("shop/api", previous.id, newest.id);
-console.log(d.items.map((c) => `${c.kind} ${c.path}`).join("\n"));
+// what one file looks like on two Branches (was file.diff)
+const d = await layerfs.commit.diff("shop/api", "agent", { from: "main", path: "/src/index.js", with: ["patch"] });
+for (const row of d.items) console.log(row.change, row.path, (row.hunks ?? []).filter((h) => h.op !== " ").map((h) => h.op + h.text).join("\n"));
 ```
 
-```json
-{"kind":"ok","from":{"commit":"12c7ef811a49…","root":"0a12a8d94231…"},
- "to":{"commit":"12a99d99faf5…","root":"f55fa9660a73…"},
- "items":[{"path":"/src/index.js","kind":"Modified","type":"file",
-   "before":{"type":"file","inode":6},"after":{"type":"file","inode":6},
-   "content":true,"identity":false,"metadata":true,
-   "hunks":[{"op":"-","text":"export const retries = 3;"},{"op":"+","text":"export const retries = 1;"},{"op":" ","text":""}],
-   "hunks_omitted":false}],
- "has_more":false,"next_page_pos":null,"next_cursor":null}
-```
-
-| Item field | Meaning |
-| --- | --- |
-| `path` | Changed path |
-| `kind` | `Added`, `Removed` or `Modified` |
-| `type` | `file`, `dir` or `symlink` |
-| `before`, `after` | `{ type, inode }`, or `null` on the side where it is absent |
-| `content`, `metadata`, `identity` | What changed: bytes, mode or attributes, file identity |
-| `hunks`, `hunks_omitted` | Line diff for text files (`null` with `paths_only`) |
-
-Folders show up as items too (an added folder is `Added`, a folder whose
-entries changed is `Modified` with `metadata: true`). Resume a long diff with
-`cursor: next_cursor`.
-
-**Refusals** (seen live): `NoSuchCommit` for a full id that doesn't exist;
-`InvalidInput` (`diff_commits takes two saved Commits`) for Branch names;
-`NoSuchBranch` for a short id prefix, which is read as a Branch name. Pass full
-ids.
+Comparing two different paths (1.x `file.diff`'s left and right paths) is
+gone; line ownership is `file.blame` on each side.

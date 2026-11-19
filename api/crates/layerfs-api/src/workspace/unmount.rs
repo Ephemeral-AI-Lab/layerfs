@@ -1,28 +1,38 @@
 //! `workspace.unmount`: end a Workspace.
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Bool, Text};
 use crate::calls::table::{a, call, opt, Call};
-use crate::calls::Context;
+use crate::calls::{Context, Form};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_sandbox::workspace::answers::unmounted;
 use layerfs_sandbox::workspace::calls::{unmount, UnmountRequest};
+
+const FORM: Form = Form::of(
+    &["ok"],
+    &[],
+    &["ok", "outcome", "abort", "detach", "cleanup"],
+);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
     "workspace",
     "unmount",
-    &[a("ws", Text)],
+    &[a("workspace", Text)],
     &[opt("discard", Bool), opt("force", Bool)],
     "end a Workspace",
     run,
-);
+)
+.form(&FORM)
+.scoped(Rule::Workspace);
 
-/// Runs `workspace.unmount`: its side's answer.
+/// Runs `workspace.unmount`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let request = UnmountRequest {
-        ws: args.get_text("ws").unwrap_or("").to_owned(),
+        ws: args.get_text("workspace").unwrap_or("").to_owned(),
         discard: args.get("discard").map(|_| args.get_bool("discard")),
         force: args.get("force").map(|_| args.get_bool("force")),
     };
     let (home, events) = context.parts();
-    unmount(home, events, &request)
+    Ok(unmounted(&unmount(home, events, &request)?))
 }

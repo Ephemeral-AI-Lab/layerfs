@@ -1,13 +1,19 @@
 //! `home.init` and `home.get`: setting a home up on purpose, and reading what
 //! this build would use with it without changing anything. `init` opens the
-//! home as every call does (created when empty, converted from layout 2 or
-//! 1.1.0, an interrupted conversion finished) and says which of those it did.
+//! home as every call does (created when empty; a folder that is not a
+//! LayerFS 2.0 home is refused with the fix that moves it aside) and says which it did
+//! (`outcome`: `created` or `unchanged`).
 //! `get` reads files only: no process, Docker, network, lock or log line, so a
 //! client can poll it, and it answers for a home that does not exist yet.
-use layerfs_bridge::control::SdkValue;
+//! What it answers is the call surface's (2.0): the home's `state` with
+//! its `reason` and `fix`, the build's `version`, the home's `generation`,
+//! and, only when asked, the platforms this computer supports (a probe)
+//! and the tree of everything in the home ([`crate::home_tree`]).
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::layout::{detect, Layout};
-use layerfs_home::home::read_record;
+use layerfs_home::home::{generation, read_record, with_field};
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::state::{Reason, State};
 use std::path::Path;
 
 /// The identity of the build making the call (`LAYERFS_BUILD_COMMIT` and
@@ -28,39 +34,39 @@ pub const BUILD_MARKER: &[u8] = b"layerfs-build-identity:";
 
 /// What a home is, before anything opens it.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum State {
+enum Found {
     Missing,
     Current,
-    NeedsConversion,
+    Foreign,
 }
 
-impl State {
-    fn name(self) -> &'static str {
-        match self {
-            State::Missing => "missing",
-            State::Current => "current",
-            State::NeedsConversion => "needs_conversion",
-        }
-    }
+/// The sections `home.get` adds when asked (`--with`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct With {
+    /// `platforms`: what this computer supports, probed.
+    pub platforms: bool,
+    /// `tree`: everything in the home, from its records.
+    pub tree: bool,
 }
+
+/// The one command that makes a missing home.
+const INIT: &str = "layerfs home init";
 
 /// The home's state and layout, read only; a `layerfs.json` this build
 /// cannot read (or of a newer layout) is refused, as `detect` does.
-fn state(home: &Path) -> Result<(State, Option<i64>), layerfs_bridge::control::SdkRefusal> {
+fn state(home: &Path) -> Result<(Found, Option<i64>), layerfs_bridge::control::SdkRefusal> {
     Ok(match detect(home)? {
-        Layout::Empty => (State::Missing, None),
-        Layout::Old => (State::NeedsConversion, None),
-        Layout::Previous(file) => (State::NeedsConversion, Some(file.layout)),
-        Layout::Current(file) if crate::migrate::layout_3_pending(home) => {
-            (State::NeedsConversion, Some(file.layout))
-        }
-        Layout::Current(file) => (State::Current, Some(file.layout)),
+        Layout::Empty => (Found::Missing, None),
+        Layout::Foreign => (Found::Foreign, None),
+        Layout::Current(file) => (Found::Current, Some(file.layout)),
     })
 }
 
 /// `home.init`: the home ready for calls, as the first call of any other
-/// kind makes it. Refused inside a machine's worker root, which is not a
-/// home, and `InUse` while a layout 2 home has live Sandboxes.
+/// kind makes it: `{ home, unchanged, outcome, layout, version }`. Refused
+/// inside a machine's worker root, which is not a home, and for a folder
+/// that is not a LayerFS 2.0 home (`Unsupported`, with the fix that moves
+/// it aside).
 pub fn init(home: &Path) -> Outcome {
     if layerfs_home::home::guest::is_root(home) {
         return Err(refused(
@@ -69,108 +75,117 @@ pub fn init(home: &Path) -> Outcome {
         ));
     }
     let (before, _) = state(home)?;
-    let file = crate::migrate::open(home)
-        .inspect_err(|refusal| crate::migrate::note_failure(home, refusal))?;
+    let file = layerfs_home::home::open(home)?;
     #[cfg(feature = "machine")]
     layerfs_machine::ensure_built_ins(home, &file.id)?;
+    let outcome = match before {
+        Found::Current => "unchanged",
+        _ => "created",
+    };
     Ok(SdkValue::map([
         ("home", SdkValue::text(home.display().to_string())),
-        ("created", SdkValue::Bool(before == State::Missing)),
-        (
-            "converted",
-            SdkValue::Bool(before == State::NeedsConversion),
-        ),
+        ("unchanged", SdkValue::Bool(before == Found::Current)),
+        ("outcome", SdkValue::text(outcome)),
         ("layout", SdkValue::Int(file.layout)),
+        ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
     ]))
 }
 
-/// `home.get`: the home's state and mode, the Linux bundle and native daemon
-/// this build would use and whether they come from the same build, the cache
-/// root, and warnings, each with its next step in its message.
-pub fn get(home: &Path, build: Build<'_>) -> Outcome {
-    let mut warnings = Vec::new();
-    let home_value = home_value(home, &mut warnings);
-    let bundle = bundle_value(build, &mut warnings);
-    let daemon = daemon_value(home, build, &mut warnings);
+/// `home.get`: the home's path, `state` (with `reason`, `fix` and the
+/// sentence behind them as `message` when it is broken), the build's
+/// `version`, the home's `generation`, `layout` and `mode`, the Linux
+/// bundle and native daemon this build would use and whether they come from
+/// the same build, and the cache root. A home it cannot read is answered
+/// `broken`, not refused. `with` adds `platforms` and `tree`; the tree is
+/// null unless the home is ready (there are no records of this layout to
+/// read).
+pub fn get(home: &Path, build: Build<'_>, with: With) -> Outcome {
+    let shown = home.display().to_string();
+    let (state, layout, message) = match state(home) {
+        Ok((Found::Current, layout)) => (State::Ready, layout, None),
+        Ok((Found::Missing, layout)) => (
+            State::broken(Reason::Missing, Some(INIT)),
+            layout,
+            Some(format!("no LayerFS home at {shown}; `{INIT}` creates it")),
+        ),
+        Ok((Found::Foreign, layout)) => (
+            State::broken(
+                Reason::Outdated,
+                Some(&layerfs_home::home::layout::foreign_fix(home)),
+            ),
+            layout,
+            Some(layerfs_home::home::layout::foreign(home).message),
+        ),
+        Err(refusal) => (
+            State::broken(Reason::Failed, None),
+            None,
+            Some(refusal.message),
+        ),
+    };
+    let ready = state == State::Ready;
     let cache = match layerfs_machine::bundle::cache_root() {
         Ok(path) => SdkValue::map([("path", SdkValue::text(path.display().to_string()))]),
         Err(_) => SdkValue::Null,
     };
-    Ok(SdkValue::map([
-        ("home", home_value),
-        ("bundle", bundle),
-        ("daemon", daemon),
+    let mut value = state.write(SdkValue::map([
+        ("home", SdkValue::text(shown)),
+        ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
+        (
+            "generation",
+            match ready {
+                true => SdkValue::Int(generation::read(home)),
+                false => SdkValue::Null,
+            },
+        ),
+        ("message", SdkValue::opt_text(message)),
+        ("layout", layout.map_or(SdkValue::Null, SdkValue::Int)),
+        ("mode", mode(home).map_or(SdkValue::Null, SdkValue::text)),
+        ("bundle", bundle_value(build)),
+        ("daemon", daemon_value(home, build)),
         ("cache", cache),
-        ("warnings", SdkValue::List(warnings)),
-    ]))
-}
-
-fn warning(code: &str, message: String) -> SdkValue {
-    SdkValue::map([
-        ("code", SdkValue::text(code)),
-        ("message", SdkValue::text(message)),
-    ])
-}
-
-fn home_value(home: &Path, warnings: &mut Vec<SdkValue>) -> SdkValue {
-    let shown = home.display().to_string();
-    let (state, layout) = match state(home) {
-        Ok((state, layout)) => {
-            match state {
-                State::Missing => warnings.push(warning(
-                    "HomeMissing",
-                    format!("no LayerFS home at {shown}; `layerfs home init` creates it"),
-                )),
-                State::NeedsConversion => warnings.push(warning(
-                    "HomeNeedsConversion",
-                    format!("the home at {shown} needs converting to this build's layout; `layerfs home init` converts it (older LayerFS builds then refuse it)"),
-                )),
-                State::Current => {}
-            }
-            (
-                SdkValue::text(state.name()),
-                layout.map_or(SdkValue::Null, SdkValue::Int),
-            )
-        }
-        Err(refusal) => {
-            warnings.push(warning("HomeUnknown", refusal.message));
-            (SdkValue::text("unknown"), SdkValue::Null)
-        }
-    };
-    let (mode, mode_ok) = mode(home);
-    if mode_ok == Some(false) {
-        warnings.push(warning(
-            "HomeMode",
-            format!("other users can read or write {shown}; LayerFS needs it owner-only: `chmod go-rw {shown}`"),
-        ));
+    ]));
+    if with.platforms {
+        value = with_field(value, "platforms", platforms(home)?);
     }
-    SdkValue::map([
-        ("path", SdkValue::text(shown)),
-        ("state", state),
-        ("layout", layout),
-        ("mode", mode.map_or(SdkValue::Null, SdkValue::text)),
-        ("mode_ok", mode_ok.map_or(SdkValue::Null, SdkValue::Bool)),
-    ])
+    if with.tree {
+        let tree = match ready {
+            true => crate::home_tree::tree(home)?,
+            false => SdkValue::Null,
+        };
+        value = with_field(value, "tree", tree);
+    }
+    Ok(value)
 }
 
-/// The home folder's permission bits and whether they are owner-only. Others'
-/// execute bit is allowed: namespaces Sandboxes add it so their commands
-/// reach their Workspaces (`records::traversable`).
+/// `--with platforms`: `{ host, items }`, one row per platform this build
+/// knows with what it is missing here ([`layerfs_machine::platforms`]).
+#[cfg(feature = "machine")]
+fn platforms(home: &Path) -> Outcome {
+    layerfs_machine::platforms(home)
+}
+
+/// Without the `machine` feature (the guest worker's build) there are no
+/// machine adapters to ask.
+#[cfg(not(feature = "machine"))]
+fn platforms(_home: &Path) -> Outcome {
+    Err(refused(
+        "Unsupported",
+        "this build has no machine adapters, so it lists no platforms",
+    ))
+}
+
+/// The home folder's permission bits, as `0700`; none while there is no
+/// folder. Whether they are owner-only is the home doctor's to say.
 #[cfg(unix)]
-fn mode(home: &Path) -> (Option<String>, Option<bool>) {
+fn mode(home: &Path) -> Option<String> {
     use std::os::unix::fs::PermissionsExt;
-    match std::fs::metadata(home) {
-        Ok(meta) => {
-            let mode = meta.permissions().mode() & 0o7777;
-            (Some(format!("{mode:04o}")), Some(mode & 0o066 == 0))
-        }
-        Err(_) => (None, None),
-    }
+    let meta = std::fs::metadata(home).ok()?;
+    Some(format!("{:04o}", meta.permissions().mode() & 0o7777))
 }
 
 #[cfg(not(unix))]
-fn mode(_home: &Path) -> (Option<String>, Option<bool>) {
-    (None, None)
+fn mode(_home: &Path) -> Option<String> {
+    None
 }
 
 /// Whether a part with `commit`/`dirty` comes from `build`: `false` when the
@@ -192,14 +207,9 @@ fn optional(text: Option<&str>) -> SdkValue {
     text.map_or(SdkValue::Null, SdkValue::text)
 }
 
-fn bundle_value(build: Build<'_>, warnings: &mut Vec<SdkValue>) -> SdkValue {
-    let Ok(dir) = layerfs_machine::bundle_dir("linux") else {
+fn bundle_value(build: Build<'_>) -> SdkValue {
+    let Ok((dir, source)) = layerfs_machine::bundle_place("linux") else {
         return SdkValue::Null;
-    };
-    let source = if std::env::var_os("LAYERFS_BUNDLE").is_some_and(|d| !d.is_empty()) {
-        "env:LAYERFS_BUNDLE"
-    } else {
-        "cache"
     };
     let manifest = read_record(&dir.join("bundle.json")).ok().flatten();
     let origin = manifest.as_ref().and_then(|m| m.get("source"));
@@ -209,22 +219,8 @@ fn bundle_value(build: Build<'_>, warnings: &mut Vec<SdkValue>) -> SdkValue {
         _ => None,
     };
     let matched = matches(build, commit, dirty);
-    let shown = dir.display().to_string();
-    // only macOS runs Linux workers (docker, Lima, Apple Container)
-    if manifest.is_none() && cfg!(target_os = "macos") {
-        warnings.push(warning(
-            "BundleMissing",
-            format!("no Linux bundle at {shown}; docker and VM machines need one built from this build's commit (`python3 tools/linux_bundle.py`)"),
-        ));
-    }
-    if let (SdkValue::Bool(false), Some(theirs), Some(ours)) = (&matched, commit, build.commit) {
-        warnings.push(warning(
-            "BundleMismatch",
-            format!("the Linux bundle at {shown} was built from {}, this build from {}; build the bundle from {} before starting docker or VM machines", short(theirs), short(ours), short(ours)),
-        ));
-    }
     SdkValue::map([
-        ("dir", SdkValue::text(shown)),
+        ("path", SdkValue::text(dir.display().to_string())),
         ("source", SdkValue::text(source)),
         ("present", SdkValue::Bool(manifest.is_some())),
         ("commit", optional(commit)),
@@ -311,19 +307,82 @@ impl NativeDaemon {
     }
 }
 
+/// `refusal` of a Sandbox start whose daemon (its detail's `daemon`) is the
+/// native machine's and of another build than `build`, or names no build
+/// at all (one older than the build marker): it says so, and its `fix`
+/// records this build's daemon when [`own_daemon`] finds one, else runs
+/// `layerfs home doctor`, which names the daemon and its build. Any other
+/// refusal comes back as it is; one whose detail names no `daemon` (no
+/// start failed) without reading anything.
+pub fn native_start(home: &Path, build: Build<'_>, refusal: SdkRefusal) -> SdkRefusal {
+    let Some(started) = refusal
+        .detail
+        .get_text("daemon")
+        .map(std::path::PathBuf::from)
+    else {
+        return refusal;
+    };
+    let Some(ours) = build.commit else {
+        return refusal;
+    };
+    let Some(daemon) = NativeDaemon::of(home).filter(|d| d.path == started) else {
+        return refusal;
+    };
+    let said = match &daemon.stamp {
+        Some((theirs, _)) if daemon.matches(build) == SdkValue::Bool(false) => format!(
+            "The native machine's daemon {} was built from {}, this build from {}: \
+             it cannot be expected to read what this build writes",
+            daemon.path.display(),
+            short(theirs),
+            short(ours)
+        ),
+        Some(_) => return refusal,
+        None if daemon.present => format!(
+            "The native machine's daemon {} names no build: it is not this build ({}) \
+             and may not read what this build writes",
+            daemon.path.display(),
+            short(ours)
+        ),
+        None => return refusal,
+    };
+    let fix = match own_daemon(build) {
+        Some(path) => format!(
+            "layerfs machine update native --daemon {}",
+            crate::doctor::shell(&path)
+        ),
+        None => "layerfs home doctor".to_owned(),
+    };
+    let message = format!("{}. {said}", refusal.message);
+    layerfs_home::outcome::with_fix(SdkRefusal { message, ..refusal }, fix)
+}
+
+/// This build's own `layerfs-daemon`: the one beside the running program
+/// (a runtime's `bin/`), else the default beside this host's bundle, the
+/// first that is a file stamped with `build`'s commit. Read from files only.
+pub fn own_daemon(build: Build<'_>) -> Option<std::path::PathBuf> {
+    let ours = build.commit?;
+    let beside = std::env::current_exe()
+        .ok()
+        .and_then(|exe| Some(exe.parent()?.join("layerfs-daemon")));
+    let bundle = layerfs_machine::bundle_dir(std::env::consts::OS)
+        .ok()
+        .map(|dir| dir.join("layerfs-daemon"));
+    [beside, bundle].into_iter().flatten().find(|path| {
+        path.is_file()
+            && std::fs::read(path)
+                .ok()
+                .and_then(|bytes| stamp(&bytes))
+                .is_some_and(|(commit, _)| commit == ours)
+    })
+}
+
 /// The native machine's daemon (macOS only; null elsewhere): the one its
 /// record names, else the default beside the macOS bundle.
 #[cfg(target_os = "macos")]
-fn daemon_value(home: &Path, build: Build<'_>, warnings: &mut Vec<SdkValue>) -> SdkValue {
+fn daemon_value(home: &Path, build: Build<'_>) -> SdkValue {
     let Some(daemon) = NativeDaemon::of(home) else {
         return SdkValue::Null;
     };
-    if !daemon.present {
-        warnings.push(warning("DaemonMissing", daemon.missing()));
-    }
-    if let Some(message) = daemon.mismatch(build) {
-        warnings.push(warning("DaemonMismatch", message));
-    }
     let (commit, dirty) = match &daemon.stamp {
         Some((commit, dirty)) => (Some(commit.as_str()), Some(*dirty)),
         None => (None, None),
@@ -339,7 +398,7 @@ fn daemon_value(home: &Path, build: Build<'_>, warnings: &mut Vec<SdkValue>) -> 
 }
 
 #[cfg(not(target_os = "macos"))]
-fn daemon_value(_home: &Path, _build: Build<'_>, _warnings: &mut [SdkValue]) -> SdkValue {
+fn daemon_value(_home: &Path, _build: Build<'_>) -> SdkValue {
     SdkValue::Null
 }
 

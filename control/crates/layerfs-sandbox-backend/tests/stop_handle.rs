@@ -3,13 +3,15 @@
 //! background children included, with SIGTERM within the grace and SIGKILL
 //! after it, and a group with nothing left is `Ended` and not signalled.
 //! A command whose cancel came before its handle was told (the slot refuses
-//! it as interrupted) is ended as it starts and reports SIGKILL's exit.
+//! it as interrupted) is ended as it starts and reports SIGKILL's exit
+//! (macOS, where the native runtime runs).
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_bridge::process::LocalProcess;
-use layerfs_sandbox_backend::local::Local;
-use layerfs_sandbox_backend::stop::{cancel, component, Cancelled, ExecSlot, Stop};
-use layerfs_sandbox_backend::{CommandIdentity, ExecRequest};
+use layerfs_sandbox_backend::stop::{cancel, component, Cancelled, Stop};
+#[cfg(target_os = "macos")]
+use layerfs_sandbox_backend::{local::Local, stop::ExecSlot, CommandIdentity, ExecRequest};
 use nix::sys::signal::Signal;
+#[cfg(target_os = "macos")]
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command};
@@ -116,6 +118,7 @@ fn stop_handle_names_are_one_plain_path_component() {
     }
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn a_command_cancelled_before_its_handle_was_told_ends_as_it_starts() {
     let base = std::env::temp_dir()
@@ -160,7 +163,7 @@ fn a_command_cancelled_before_its_handle_was_told_ends_as_it_starts() {
         ],
         environment: Vec::new(),
         directory: sandbox.directory().display().to_string(),
-        stdin: false,
+        stdin: None,
     };
     let (sent, ran) = std::sync::mpsc::channel();
     std::thread::scope(|scope| {

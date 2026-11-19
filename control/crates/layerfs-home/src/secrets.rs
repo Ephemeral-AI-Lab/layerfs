@@ -1,7 +1,7 @@
-//! Secrets (#536 §9.2): PostgreSQL password references (`env:NAME` or
-//! `file:/path`, resolved on each call; the full URL is never written
-//! down), worker secrets in `worker.json` and Sandbox daemon keys in
-//! `control.json`.
+//! Secrets (#536 §9.2): a PostgreSQL URL with a saved login put into it
+//! (the login is in the home's secret folder, `home::secrets`); the full
+//! URL is never written down. Worker secrets in `worker.json` and Sandbox
+//! daemon keys in `control.json`.
 use crate::home::{paths, read_record, write_record};
 use crate::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -39,48 +39,15 @@ fn percent(text: &str) -> String {
         .collect()
 }
 
-/// A password reference's value: `env:NAME` or `file:/absolute/path`.
-pub fn resolve(reference: &str) -> Result<String> {
-    if let Some(name) = reference.strip_prefix("env:") {
-        return std::env::var(name)
-            .ok()
-            .filter(|v| !v.is_empty())
-            .ok_or_else(|| {
-                refused(
-                    "Unavailable",
-                    format!("the password variable {name} is not set"),
-                )
-            });
-    }
-    if let Some(path) = reference
-        .strip_prefix("file:")
-        .filter(|p| Path::new(p).is_absolute())
-    {
-        let text = std::fs::read_to_string(path)
-            .map_err(|e| refused("Unavailable", format!("{path}: {e}")))?;
-        return Ok(text.trim_end_matches(['\n', '\r']).to_owned());
-    }
-    Err(refused(
-        "InvalidInput",
-        "a password is a reference: env:NAME or file:/absolute/path",
-    ))
-}
-
-/// `url` with the password reference `password` resolved into it now.
-pub fn with_password(url: &str, password: Option<&str>) -> Result<String> {
-    let Some(reference) = password else {
-        return Ok(url.to_owned());
-    };
-    let (scheme, user, rest) = parts(url)?;
-    let user = user.ok_or_else(|| {
-        refused(
-            "InvalidInput",
-            "a URL with a password reference names its user",
-        )
-    })?;
+/// `url` (an address with no user and no password) with the login `user`
+/// and `password` put into it, each percent-encoded; any user part the
+/// URL holds is replaced. The URL it makes is never written down.
+pub fn with_login(url: &str, user: &str, password: &str) -> Result<String> {
+    let (scheme, _, rest) = parts(url)?;
     Ok(format!(
-        "{scheme}://{user}:{}@{rest}",
-        percent(&resolve(reference)?)
+        "{scheme}://{}:{}@{rest}",
+        percent(user),
+        percent(password)
     ))
 }
 

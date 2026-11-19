@@ -5,29 +5,30 @@
 //! `{ sandbox, path }`; status, Commit and unmount go to its Sandbox's
 //! daemon. Nothing is retried: a refused or failed step is the call's answer.
 //! A Sandbox whose daemon ended itself when idle is refused `NoSuchSandbox`
-//! by a mount and reclaimed by its `sandbox.close`. Each Workspace is
+//! by a mount and reclaimed by its `sandbox.remove`. Each Workspace is
 //! recorded in its Sandbox's folder, `workspace/<id>.json`, with the name
 //! its mount gave it, if any (unique in the Sandbox; the other calls take
 //! it in place of the path, [`by_name`]).
 use crate::daemon::values;
 use crate::host::Host;
 use crate::internal::workspace;
-use crate::lifecycle::{operation, WORKSPACES};
+use crate::lifecycle::WORKSPACES;
 use crate::record::{DaemonRecord, SandboxRecord, WorkspaceRecord};
 use crate::registry::{sandbox, sandbox_live, Mount};
 use crate::OperationCause;
 use crate::Unmounted;
 use layerfs_bridge::control::{CommitControl, MountPlace, Reply, SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, CommitId, WorkspaceId};
-use layerfs_home::helpers::{lock, random, required};
+use layerfs_home::helpers::{lock, random, required, SHOWN};
 use layerfs_home::names::WorkspaceName;
-use layerfs_home::outcome::{failed, Outcome};
+use layerfs_home::outcome::shell_word;
+use layerfs_home::outcome::{failed, with_next, Outcome};
 
 /// A mount's `NoSuchSandbox`: `refusal` (its detail kept) with the next
 /// step in its message, which agents read.
 fn no_sandbox(mut refusal: SdkRefusal) -> SdkRefusal {
     refusal.message.push_str(
-        ". Create a Sandbox with `sandbox.create()` and mount there: `workspace.mount(sandbox, branch)` with the `sandbox` it returns",
+        ". Create a Sandbox with `layerfs sandbox create` and mount there: `layerfs workspace mount <sandbox> <branch>` with the `sandbox` it returns",
     );
     refusal
 }
@@ -50,7 +51,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
         _ => {
             return Err(layerfs_home::outcome::refused(
                 "InvalidInput",
-                "workspace.mount names its Sandbox: workspace.mount(sandbox, branch), with a Sandbox from `sandbox.create()` or `project.list_sandboxes()`",
+                "workspace.mount names its Sandbox: `layerfs workspace mount <sandbox> <branch>`, with a Sandbox from `layerfs sandbox create` or `layerfs sandbox list`",
             ))
         }
     };
@@ -58,7 +59,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
         // main is the project's line of Layers, not a Branch (#535 terminal pass)
         return Err(layerfs_home::outcome::refused(
             "InvalidInput",
-            "main is the project's published line, not a Branch, and is not mounted: fork a Branch from it with `branch.fork(project, name, \"main\")` and mount that",
+            "main is the project's published line, not a Branch, and is not mounted: fork a Branch from it with `layerfs branch fork <project> <name>` and mount that",
         ));
     }
     let directory = crate::files::sandbox_dir(host)?;
@@ -91,17 +92,22 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
     // checked again under the guard, where it holds
     free(sandbox, &workspaces, name.as_ref())?;
     if workspaces.len() >= WORKSPACES as usize {
-        return Err(layerfs_home::outcome::refused(
+        let refusal = layerfs_home::outcome::refused(
             "Capacity",
             format!(
-                "Sandbox {sandbox} already holds {WORKSPACES} Workspaces. Create a new Sandbox with `sandbox.create()` and mount there, or list this one's Workspaces with `sandbox.list_workspaces(\"{sandbox}\")` and unmount the ones you are done with (`workspace.unmount(ws)`)"
+                "Sandbox {sandbox} already holds {WORKSPACES} Workspaces. Create a new Sandbox with `layerfs sandbox create` and mount there, or list this one's Workspaces with `layerfs workspace list --sandbox {sandbox}` and unmount the ones you are done with (`layerfs workspace unmount <workspace>`)"
             ),
-        ));
+        );
+        let fix = format!(
+            "layerfs workspace list --sandbox {sandbox}",
+            sandbox = shell_word(sandbox)
+        );
+        return Err(layerfs_home::outcome::with_fix(refusal, fix));
     }
     let project = host.project.as_str();
     let id = WorkspaceId::from_authority(random()?).map_err(failed)?;
     let mounted = {
-        let mut control = crate::daemon::trace::control(&state.controls)?;
+        let mut control = state.controls.lend()?;
         // This Sandbox's record names the machine it runs on; the daemon
         // that binds the mount registers both names beside its Workspace.
         let machine =
@@ -114,7 +120,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
     let mounted = mounted.map_err(|failure| match (&failure.bound, &failure.failure.cause) {
         // the daemon's lookup refusal, nothing bound: the call's answer
         (None, OperationCause::Unexpected(Reply::SdkRefused(refusal))) => refusal.clone(),
-        _ => failed(failure),
+        _ => values::mount_failure(failure),
     })?;
     let mut value = values::mounted(&mounted, branch);
     if let SdkValue::Map(fields) = &mut value {
@@ -198,13 +204,24 @@ fn platform_of(record: &DaemonRecord) -> SdkValue {
 }
 
 /// `backend.daemon.workspace.status(ws)` of the Workspace at `path`: the
-/// daemon's Status, which reads no Store, and the Branch head from one
-/// newest-first History read in this process.
-pub fn status(host: &Host, path: Option<&str>) -> Outcome {
+/// daemon's Status, which reads no Store, its changes at or below `under`
+/// from one bounded overlay read ([`changed`]), and the Branch head from
+/// one newest-first History read in this process.
+pub fn status(host: &Host, path: Option<&str>, under: Option<&str>) -> Outcome {
     let open = host.open_args();
-    status_with(host, path, &mut |branch, _| {
+    status_with(host, (path, under), &mut |branch, _| {
         layerfs_store::service::head(&open, branch).ok()
     })
+}
+
+/// The changes of the Workspace at `path` at or below `under`, from the
+/// daemon's one bounded overlay read: `{ entries: [{ path, change, type
+/// }], partial }`.
+pub fn changed(control: &mut crate::internal::Control, path: &str, under: Option<&str>) -> Outcome {
+    let mut args = vec![("path".to_owned(), SdkValue::text(path))];
+    args.extend(under.map(|under| ("under".to_owned(), SdkValue::text(under))));
+    let method = crate::daemon::operator::CHANGED;
+    crate::daemon::operator::call(control, method, SdkValue::Map(args)).map_err(values::sdk_error)
 }
 
 /// Reads a Branch's head (Branch id and name), or `None` when it could not.
@@ -212,11 +229,18 @@ pub type HeadOf<'a> = dyn FnMut(BranchId, Option<&str>) -> Option<Option<CommitI
 
 /// [`status`], the Branch's head read by `head_of` (given the Branch's id
 /// and name), or `None` when it could not be read.
-pub fn status_with(host: &Host, path: Option<&str>, head_of: &mut HeadOf<'_>) -> Outcome {
+pub fn status_with(
+    host: &Host,
+    (path, under): (Option<&str>, Option<&str>),
+    head_of: &mut HeadOf<'_>,
+) -> Outcome {
     let state = sandbox(host)?;
     let token = state.token(required(path, "path")?)?;
-    let mut control = crate::daemon::trace::control(&state.controls)?;
-    let status = workspace(&mut control).status(token).map_err(operation)?;
+    let mut control = state.controls.lend()?;
+    let status = workspace(&mut control)
+        .status(token)
+        .map_err(values::failure)?;
+    let changes = changed(&mut control, required(path, "path")?, under)?;
     drop(control);
     let branch = lock(&state.mounts)?
         .get(required(path, "path")?)
@@ -225,22 +249,148 @@ pub fn status_with(host: &Host, path: Option<&str>, head_of: &mut HeadOf<'_>) ->
     let mut value = values::status(&status, head);
     if let SdkValue::Map(fields) = &mut value {
         fields.push(("branch".to_owned(), SdkValue::opt_text(branch)));
+        fields.extend(changes_of(&status, &changes));
     }
     Ok(value)
 }
 
-/// `workspace.commit(ws, { message?, force? })` of the Workspace at `path`.
-pub fn commit(host: &Host, path: Option<&str>, force: bool) -> Outcome {
+/// A status's `changes`, `partial` and its activity's phase and start, from
+/// the daemon's changed-path read (`found`). The phase and start are kept
+/// only while the activity that read observed is the Status record's.
+fn changes_of(
+    status: &layerfs_bridge::control::WorkspaceStatus,
+    found: &SdkValue,
+) -> Vec<(String, SdkValue)> {
+    let held = |name: &str| found.get(name).cloned().unwrap_or_default();
+    let mut fields = vec![
+        ("changes".to_owned(), held("entries")),
+        ("partial".to_owned(), held("partial")),
+    ];
+    if found.get_text("activity") == Some(format!("{:?}", status.activity).as_str()) {
+        fields.push(("activityPhase".to_owned(), held("activityPhase")));
+        fields.push(("activitySinceMs".to_owned(), held("activitySinceMs")));
+    }
+    fields
+}
+
+/// `workspace.commit(ws, { message?, force?, expected? })` of the
+/// Workspace at `path`, the Branch's head read in this process for
+/// `expected`.
+pub fn commit(host: &Host, path: Option<&str>, force: bool, expected: Option<&str>) -> Outcome {
+    let open = host.open_args();
+    let mut resolve = |text: &str| {
+        let args = SdkValue::map([
+            ("project", SdkValue::text(&host.project)),
+            ("commit", SdkValue::text(text)),
+        ]);
+        layerfs_store::service::call("branch.get_commit", &open, args)
+    };
+    commit_with(
+        host,
+        path,
+        (force, expected),
+        (
+            &mut |branch, _| layerfs_store::service::head(&open, branch).ok(),
+            &mut resolve,
+        ),
+    )
+}
+
+/// Reads the Commit a text names (`branch.get_commit`'s answer): F-hist's
+/// resolver, a full id or a prefix of 8 or more of its characters.
+pub type Resolve<'a> = dyn FnMut(&str) -> Outcome + 'a;
+
+/// The full id of the Commit `--expected` names, resolved in the Store: a
+/// prefix more than one Commit starts with is refused `InvalidInput` with
+/// `matches` beside it; one no Commit has, `NoSuchCommit`.
+fn expected_id(text: &str, resolve: &mut Resolve<'_>) -> Result<String, SdkRefusal> {
+    let found = resolve(text).map_err(|refusal| {
+        match (
+            refusal.code == "InvalidInput",
+            refusal.detail.get("matches"),
+        ) {
+            (true, Some(matches)) => {
+                let matches = matches.clone();
+                with_next(refusal, "matches", matches)
+            }
+            _ => refusal,
+        }
+    })?;
+    found.get_text("commit").map(str::to_owned).ok_or_else(|| {
+        layerfs_home::outcome::refused("Failed", "the Store named no Commit for --expected")
+    })
+}
+
+/// [`commit`], the Branch's head read by `head_of` when `expected` (a
+/// Commit id or prefix, resolved by `resolve`) names the head the Commit is
+/// made over: a head that is not it refuses the Commit `Conflict`, naming
+/// the head as `commit`, before anything is captured. The check is one read before the Commit
+/// is sent; a head that moves after it is merged as any Commit merges.
+pub fn commit_with(
+    host: &Host,
+    path: Option<&str>,
+    (force, expected): (bool, Option<&str>),
+    (head_of, resolve): (&mut HeadOf<'_>, &mut Resolve<'_>),
+) -> Outcome {
     let state = sandbox(host)?;
-    let token = state.token(required(path, "path")?)?;
-    let reply = workspace(&mut *crate::daemon::trace::control(&state.controls)?)
+    let path = required(path, "path")?;
+    let expected = expected
+        .map(|text| expected_id(text, resolve))
+        .transpose()?;
+    let expected = expected.as_deref();
+    let token = state.token(path)?;
+    let mut control = state.controls.lend()?;
+    let status = match expected {
+        Some(_) => Some(
+            workspace(&mut control)
+                .status(token)
+                .map_err(values::failure)?,
+        ),
+        None => None,
+    };
+    let branch = lock(&state.mounts)?
+        .get(path)
+        .map(|mount| mount.branch.clone());
+    if let (Some(expected), Some(status)) = (expected, &status) {
+        let head = head_of(status.binding.branch.id, branch.as_deref()).ok_or_else(|| {
+            layerfs_home::outcome::refused(
+                "Unavailable",
+                "the Branch's head could not be read to check --expected; nothing was committed",
+            )
+        })?;
+        let shown = head.map(|id| layerfs_bridge::sdk_values::hex(id.as_slice()));
+        if shown.as_deref() != Some(expected) {
+            let refusal = layerfs_home::outcome::refused(
+                "Conflict",
+                format!(
+                    "the Branch's head is {}, not --expected {expected}; nothing was committed",
+                    shown.as_deref().unwrap_or("none")
+                ),
+            );
+            let refusal = with_next(refusal, "commit", SdkValue::opt_text(shown));
+            return Err(with_next(refusal, "conflicts", SdkValue::List(Vec::new())));
+        }
+    }
+    let reply = workspace(&mut control)
         .commit_with(CommitControl {
             token,
             force,
             message: host.message.text().map(str::to_owned),
         })
-        .map_err(operation)?;
-    values::commit(&reply)
+        .map_err(values::failure)?;
+    let value = values::commit(&reply)?;
+    // the Layer the Branch was forked at, from the mount this process
+    // holds (no read): an unchanged fresh fork's head (call surface 2.0)
+    let layer = lock(&state.mounts)?.get(path).map(|mount| {
+        let branch = &mount.workspace.bound.binding.branch;
+        layerfs_bridge::sdk_values::hex(branch.base_layer.as_slice())
+    });
+    let value = layerfs_home::home::with_field(value, "baseLayer", SdkValue::opt_text(layer));
+    Ok(layerfs_home::home::with_field(
+        value,
+        "branch",
+        SdkValue::opt_text(branch),
+    ))
 }
 
 /// How long unmount's Workspace status probe waits for the daemon. After
@@ -285,7 +435,7 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     // processes can take Sandbox ownership while the daemon helper waits.
     let mut sent = false;
     let outcome = (|| {
-        let mut control = crate::daemon::trace::control(&state.controls)?;
+        let mut control = state.controls.lend()?;
         sent = true;
         let mut api = workspace(&mut control);
         // A request whose sending was never attempted reached no daemon:
@@ -294,7 +444,7 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
             if matches!(&failure.cause, OperationCause::Exchange(exchange) if !exchange.attempted) {
                 sent = false;
             }
-            operation(failure)
+            values::failure(failure)
         };
         // Forced: one abort write ends the connection, also after a normal
         // unmount stalled at Join; uncommitted changes are dropped.
@@ -326,12 +476,17 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     if let Err(error) = publication {
         return crate::unmount_guard::cleanup_failure(outcome, error);
     }
+    let outcome = match outcome {
+        Err(refusal) if refusal.code == "Dirty" => Err(dirty(&state, path, refusal)),
+        other => other,
+    };
     if outcome.is_ok() {
         let cleanup = (|| {
             let _guard = layerfs_store::project::discovery::guard(&state.directory)?;
             let _sandbox = crate::record::lock_in(&state.directory, &state.id)?;
-            match std::fs::remove_file(crate::files::workspace_file(&state, token)) {
-                Ok(()) => {}
+            let record = crate::files::workspace_file(&state, token);
+            match std::fs::remove_file(&record) {
+                Ok(()) => layerfs_home::home::generation::moved_above(&record),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return Err(failed(error)),
             }
@@ -343,6 +498,10 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
                 }
                 _ => {}
             }
+            // its commands' output files, beside the daemon's log
+            if let Ok(runtime) = state.runtime() {
+                crate::output::remove(&crate::runtime::scratch(runtime), &wsid)?;
+            }
             lock(&state.mounts)?.remove(path);
             Ok(())
         })();
@@ -351,4 +510,51 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
         }
     }
     outcome
+}
+
+/// The entries a Dirty refusal of the Workspace at `path` lists, as
+/// `workspace status` lists them (call surface 2.0): `changes` (the first
+/// [`SHOWN`] entries of one bounded overlay read, each `{ path, change,
+/// type }`), `changes_count` (the entries read) and `pending_merge`. When
+/// that read fails, the daemon's own paths stand, each as `{ path }`.
+fn dirty(state: &crate::registry::SandboxState, path: &str, refusal: SdkRefusal) -> SdkRefusal {
+    let read = state
+        .controls
+        .lend()
+        .and_then(|mut control| changed(&mut control, path, None));
+    let entries = match read.ok().and_then(|found| found.get("entries").cloned()) {
+        Some(SdkValue::List(entries)) => entries,
+        _ => match refusal.detail.get("changed") {
+            Some(SdkValue::List(paths)) => (paths.iter())
+                .map(|path| SdkValue::map([("path", path.clone())]))
+                .collect(),
+            _ => Vec::new(),
+        },
+    };
+    let pending = refusal.detail.get_bool("pendingMerge");
+    let count = SdkValue::Int(entries.len() as i64);
+    let shown = SdkValue::List(entries.into_iter().take(SHOWN).collect());
+    let refusal = with_next(refusal, "changes", shown);
+    let refusal = with_next(refusal, "changes_count", count);
+    let refusal = with_next(refusal, "pending_merge", SdkValue::Bool(pending));
+    layerfs_home::outcome::with_fix(
+        refusal,
+        format!(
+            "layerfs workspace commit {}:{} -m <message>",
+            shell_word(&state.id),
+            shell_word(&path_name(state, path))
+        ),
+    )
+}
+
+/// The name of the Workspace at `path` in its Sandbox's records, else its
+/// path.
+fn path_name(state: &crate::registry::SandboxState, path: &str) -> String {
+    (crate::files::workspaces(&state.directory)
+        .ok()
+        .into_iter()
+        .flatten())
+    .find(|(_, record)| record.path() == Some(path))
+    .and_then(|(_, record)| record.name().map(str::to_owned))
+    .unwrap_or_else(|| path.to_owned())
 }

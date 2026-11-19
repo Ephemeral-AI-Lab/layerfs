@@ -68,7 +68,7 @@ fn a_workspace_is_its_sandbox_and_path_or_name() {
         assert_eq!(refusal.code, "InvalidInput");
         assert_eq!(
             refusal.message,
-            format!("a Workspace is <sandbox>:<path> or <sandbox>:<name>, not {bad:?}")
+            format!("a Workspace is <sandbox>:<name>, not {bad:?}")
         );
     }
     // a name follows the name rules

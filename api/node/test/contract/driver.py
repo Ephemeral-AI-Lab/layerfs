@@ -2,8 +2,8 @@
 
 stdin: JSON `{ "home": ..., "aio": bool, "steps": [{ "call": "file.read", "args": [...], "opts": {...} }] }`
 with bytes as `{"$bytes": base64}` and a float as `{"$float": text}` (a one-key `{"base64": ...}` map stays a map).
-stdout: JSON `[{ "ok": value } | { "refused": { code, message, detail } }]`, one per step,
-bytes as `{"$bytes": base64}`. `call` "doctor" is `layerfs.doctor(home)`.
+stdout: JSON `[{ "ok": value } | { "refused": { error, message, fix?, ...fields, detail? } }]`, one per step,
+bytes as `{"$bytes": base64}`.
 Nothing here converts values: the package's own encoder and decoder do.
 """
 
@@ -37,8 +37,17 @@ def plain(value):
     return value
 
 
-def refusal(error):
-    return {"refused": {"code": error.code, "message": error.message, "detail": error.detail}}
+def refusal(error, long=False):
+    """The refusal as the library answers it: `error` and `message`, `fix` when
+    there is one, the next call's fields flat; the long form (the call asked
+    `detail`) always has `fix`, and adds `detail`."""
+    refused = {"error": error.error, "message": error.message}
+    if long or error.fix is not None:
+        refused["fix"] = error.fix
+    refused.update(error.fields)
+    if long:
+        refused["detail"] = error.detail
+    return {"refused": refused}
 
 
 def run_sync(request):
@@ -46,13 +55,10 @@ def run_sync(request):
     out = []
     for step in request["steps"]:
         try:
-            if step["call"] == "doctor":
-                out.append({"ok": layerfs.doctor(request["home"])})
-                continue
             family, call = step["call"].split(".")
             out.append({"ok": getattr(getattr(client, family), call)(*step["args"], **step["opts"])})
         except layerfs.LayerFSError as error:
-            out.append(refusal(error))
+            out.append(refusal(error, step["opts"].get("detail") is True))
     return out
 
 
@@ -61,13 +67,10 @@ async def run_aio(request):
     out = []
     for step in request["steps"]:
         try:
-            if step["call"] == "doctor":
-                out.append({"ok": layerfs.doctor(request["home"])})
-                continue
             family, call = step["call"].split(".")
             out.append({"ok": await getattr(getattr(client, family), call)(*step["args"], **step["opts"])})
         except layerfs.LayerFSError as error:
-            out.append(refusal(error))
+            out.append(refusal(error, step["opts"].get("detail") is True))
     return out
 
 

@@ -1,12 +1,17 @@
 //! The library's one call with JSON text on both sides, for the front ends
 //! that cross a language boundary (the Node and Python bindings): arguments,
 //! scope, events and the answer are JSON, bytes as `{ "base64": … }`. The
-//! answer is always text: `{ value }` or `{ refused: { code, message,
-//! detail } }`. Nothing is retried here.
-use super::dispatch::{refuse_early, Client};
+//! answer is always text: `{ value }` or `{ refused }`, the refusal as
+//! every front end answers it (`{ error, message, fix }` and the fields the
+//! next call needs; `detail` when the call asked for the long form).
+//! Nothing is retried here.
+use super::dispatch::{asks_detail, refuse_early, Client};
 use super::{call_scoped, json, Family, Scope};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
+
+/// One call's outcome, and whether it asked for the long form.
+type Ran = (Outcome, bool);
 use std::path::Path;
 
 fn run(
@@ -17,7 +22,7 @@ fn run(
     args: &str,
     events: &mut dyn FnMut(String),
     client: Client,
-) -> Outcome {
+) -> Ran {
     let parse = |text: &str| json::parse(text).map_err(|why| refused("InvalidInput", why.0));
     let read = || -> Result<_, SdkRefusal> {
         let args = parse(args)?;
@@ -29,10 +34,11 @@ fn run(
     };
     let (args, scope) = match read() {
         Ok(read) => read,
-        Err(refusal) => return refuse_early(families, home, name, client, refusal),
+        Err(refusal) => return (refuse_early(families, home, name, client, refusal), false),
     };
+    let detail = asks_detail(&args);
     let mut send = |event: SdkValue| events(json::print(&event));
-    call_scoped(
+    let outcome = call_scoped(
         families,
         home,
         scope.as_ref(),
@@ -40,7 +46,8 @@ fn run(
         args,
         &mut send,
         client,
-    )
+    );
+    (outcome, detail)
 }
 
 /// Runs the call `name` of `families` once with JSON `args`, in `home` (else the default)
@@ -57,15 +64,10 @@ pub fn call_json(
     client: Client,
 ) -> String {
     let answer = match run(families, home, scope, name, args, events, client) {
-        Ok(value) => SdkValue::map([("value", value)]),
-        Err(refusal) => SdkValue::map([(
-            "refused",
-            SdkValue::map([
-                ("code", SdkValue::Text(refusal.code)),
-                ("message", SdkValue::Text(refusal.message)),
-                ("detail", refusal.detail),
-            ]),
-        )]),
+        (Ok(value), _) => SdkValue::map([("value", value)]),
+        (Err(refusal), detail) => {
+            SdkValue::map([("refused", super::refusal::value(&refusal, detail))])
+        }
     };
     json::print(&answer)
 }

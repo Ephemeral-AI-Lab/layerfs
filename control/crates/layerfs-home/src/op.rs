@@ -77,6 +77,13 @@ impl Op {
         self.fields.get_text("name").unwrap_or("")
     }
 
+    /// The operation's call word, as a state's `op.name` shows it: the
+    /// name without its family (`create` for `machine.create`).
+    pub fn word(&self) -> &str {
+        let name = self.name();
+        name.rsplit_once('.').map_or(name, |(_, word)| word)
+    }
+
     /// The phase it last recorded.
     pub fn phase(&self) -> &str {
         self.fields.get_text("phase").unwrap_or("")
@@ -105,6 +112,13 @@ impl Op {
         let fields = home::with_field(self.fields, "phase", SdkValue::text(phase));
         Self {
             fields: home::with_field(fields, "updated", SdkValue::Int(home::now_ms())),
+        }
+    }
+
+    /// The intent with `args` recorded in place of what it recorded.
+    pub fn with_args(self, args: SdkValue) -> Self {
+        Self {
+            fields: home::with_field(self.fields, "args", args),
         }
     }
 
@@ -139,7 +153,7 @@ impl Op {
     /// Refuses a new operation on entity `kind` `entity` (`store`,
     /// `machine` or `sandbox`) while this intent holds it: `Busy` while its
     /// owner lives, `Unresolved` once a gone owner left it uncertain, naming
-    /// `show` (the call that shows it, such as `store status`) and `clear`
+    /// `show` (the call that shows it, such as `store get`) and `clear`
     /// (the call that clears it). The refusal's `detail` is `{entity: {kind,
     /// name}, phase, op}` (#536 §10).
     pub fn blocks(
@@ -186,7 +200,7 @@ impl Op {
         Err(refusal)
     }
 
-    /// The intent as `machine.status`, `store.status` and `sandbox.get`
+    /// The intent as `machine.get`, `store.get` and `sandbox.get`
     /// show it (H6): `{id, name, phase, started, uncertain}`.
     pub fn to_sdk(&self) -> SdkValue {
         let copied = |name: &str| self.fields.get(name).cloned().unwrap_or_default();
@@ -196,6 +210,23 @@ impl Op {
             ("phase", copied("phase")),
             ("started", copied("started")),
             ("uncertain", SdkValue::Bool(self.uncertain())),
+        ])
+    }
+
+    /// When it began, in milliseconds since 1970.
+    pub fn started_ms(&self) -> Option<i64> {
+        self.fields.get_int("started")
+    }
+
+    /// The intent as a state's companion and a refusal's `op` show it
+    /// (call surface 2.0): `{ name, phase, started_at }`, the name its call
+    /// word.
+    pub fn shown(&self) -> SdkValue {
+        let started = self.started_ms().map(crate::time::iso);
+        SdkValue::map([
+            ("name", SdkValue::text(self.word())),
+            ("phase", SdkValue::text(self.phase())),
+            ("started_at", SdkValue::opt_text(started)),
         ])
     }
 

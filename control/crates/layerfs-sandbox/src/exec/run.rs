@@ -10,11 +10,11 @@
 use super::id::ExecId;
 use super::record::{ExecRecord, Running};
 use crate::host::Host;
-use crate::output::Spool;
+use crate::output::{Place, Spool};
 use crate::registry::{sandbox, SandboxState};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::helpers::required;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::outcome::{refused, Outcome};
 use layerfs_sandbox_backend::{ExecSlot, Stop};
 
 /// One exec as a host operation carries it.
@@ -27,8 +27,12 @@ pub struct Exec<'a> {
     pub directory: Option<&'a str>,
     /// The bash command.
     pub command: Option<&'a str>,
-    /// Send every non-empty stream to its file.
-    pub spool: bool,
+    /// The folder it starts in, as a path from the Workspace's root.
+    pub cwd: Option<&'a str>,
+    /// Its environment variables, `K=V` each.
+    pub env: &'a [String],
+    /// Its whole standard input; `None`: it reads `/dev/null`.
+    pub stdin: Option<&'a [u8]>,
     /// Its exec id (control makes one when a caller sends none).
     pub exec_id: Option<&'a str>,
     /// The Workspace's id, from a caller that keeps its record and the
@@ -38,17 +42,17 @@ pub struct Exec<'a> {
     pub tag: Option<&'a str>,
 }
 
-/// One command to its end: exit code, stdout, stderr and its stop handle's
-/// form. `spool` sends every non-empty stream to its file instead of
-/// keeping it inline. Its home is the Sandbox's scratch directory, since
-/// the command identity has no account there. While this thread's steps
-/// are timed, so are the runtime's (`layerfs_sandbox_backend::steps`), and
-/// `command` is the whole run.
+/// One command to its end: exit code, stdout, stderr and its stop
+/// handle's form. A stream past the inline window spills to its file at
+/// `place`. Its home is the Sandbox's scratch directory, since the command
+/// identity has no account there; the caller's variables come after it,
+/// so a `HOME` of theirs wins. While this thread's steps are timed, so are
+/// the runtime's (`layerfs_sandbox_backend::steps`), and `command` is the
+/// whole run.
 fn run(
     state: &SandboxState,
-    directory: &str,
-    arguments: Vec<String>,
-    spool: bool,
+    (directory, place): (&str, Option<&Place>),
+    (arguments, env, stdin): (Vec<String>, &[String], Option<&[u8]>),
     slot: ExecSlot<'_>,
 ) -> Result<(i32, Spool, Spool), SdkRefusal> {
     let runtime = state.runtime()?;
@@ -56,12 +60,13 @@ fn run(
     if stepped {
         layerfs_sandbox_backend::steps::begin();
     }
+    let mut environment = vec![format!("HOME={}", crate::runtime::scratch(runtime))];
+    environment.extend(env.iter().cloned());
     let ran = crate::runtime::run(
-        runtime,
+        (&state.id, runtime),
         state.identity,
-        arguments,
-        vec![format!("HOME={}", crate::runtime::scratch(runtime))],
-        (directory, spool),
+        (arguments, environment, stdin.map(<[u8]>::to_vec)),
+        (directory, place),
         slot,
     );
     if stepped {
@@ -73,24 +78,66 @@ fn run(
     ran
 }
 
-/// `workspace.exec(ws, command, { spool?, exec_id? })` on the Workspace at
+/// The folder a command starts in: Workspace directory `root`, or its
+/// folder `cwd` (a path from the root; a leading `/` is the root's).
+/// Refused `InvalidInput` for a `..`, `.` or empty component, or a NUL.
+pub fn start_folder(root: &str, cwd: Option<&str>) -> Result<String, SdkRefusal> {
+    let Some(cwd) = cwd else {
+        return Ok(root.to_owned());
+    };
+    let inside = cwd.trim_start_matches('/').trim_end_matches('/');
+    if inside.is_empty() {
+        return Ok(root.to_owned());
+    }
+    if cwd.contains('\0')
+        || inside
+            .split('/')
+            .any(|part| matches!(part, "" | "." | ".."))
+    {
+        return Err(refused(
+            "InvalidInput",
+            format!("cwd is a folder of the Workspace as a path from its root, not {cwd:?}"),
+        ));
+    }
+    Ok(format!("{}/{inside}", root.trim_end_matches('/')))
+}
+
+/// Refused `InvalidInput` unless every entry of `env` is `K=V`: a name of
+/// letters, digits and `_`, not starting with a digit, and no NUL.
+pub fn checked_env(env: &[String]) -> Result<(), SdkRefusal> {
+    for entry in env {
+        let good = entry.split_once('=').is_some_and(|(name, _)| {
+            !name.is_empty()
+                && !name.starts_with(|c: char| c.is_ascii_digit())
+                && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        }) && !entry.contains('\0');
+        if !good {
+            return Err(refused(
+                "InvalidInput",
+                format!("env is K=V with K a variable name, not {entry:?}"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// `workspace.exec(ws, command, { cwd, env, stdin })` on the Workspace at
 /// `path` (a `directory` a caller checked, and the `command`).
 ///
-/// A foreground result is `kind`, `exitCode`, `stdout`, `stderr`, `message`
-/// and `truncated` (always false: no output is cut), then `execId` and
-/// `stop` (`cgroup` or `group`, how a cancel ends it). A command a cancel
-/// ended is `kind: "cancelled"` with exit code 128 + the signal. A stream
-/// over the inline window (1 MiB), or any non-empty stream with `spool`, is
-/// null here and spooled; the result then also names its `output`, read
-/// with `workspace.exec_output` and closed with `sandbox.exec_release`, and
-/// the `stdoutBytes` and `stderrBytes` sizes. A `directory` from a caller
-/// that keeps the Workspace's record (#535 G4) is the one the command runs
-/// in; that caller keeps the command's record too.
+/// Its result is `exit_code`, `cancelled` (a cancel ended it: exit code
+/// 128 + the signal), the streams (`crate::output::fields`: each inline,
+/// or null with its tail and file once past 1 MiB, both sizes), then
+/// `exec`, `stop` (`cgroup` or `group`, how a cancel ends it) and
+/// `duration_ms`. A `directory` from a caller that keeps the Workspace's
+/// record (#535 G4) is the one the command runs in; that caller keeps the
+/// command's record too.
 pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
+    let begun = std::time::Instant::now();
     let state = sandbox(host)?;
     layerfs_home::trace::step("registry");
     let path = required(exec.path, "path")?;
     let command = required(exec.command, "command")?;
+    checked_env(exec.env)?;
     let id = match exec.exec_id {
         Some(id) => ExecId::parse(id)?,
         None => ExecId::mint()?,
@@ -104,8 +151,14 @@ pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
             layerfs_bridge::sdk_values::hex(&state.token(path)?.workspace.to_bytes()),
         ),
     };
+    let start = start_folder(&directory, exec.cwd)?;
     // a Sandbox with no runtime is refused before any record is made
-    state.runtime()?;
+    let runtime = state.runtime()?;
+    let place =
+        crate::output::folder(&crate::runtime::scratch(runtime), &workspace).map(|folder| Place {
+            folder,
+            exec: id.to_string(),
+        });
     let running = match exec.workspace {
         Some(_) => None,
         None => {
@@ -148,31 +201,27 @@ pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
     };
     let arguments = vec!["bash".into(), "-c".into(), command.into()];
     layerfs_home::trace::step("exec_record");
-    let ran = run(&state, &directory, arguments, exec.spool, slot);
+    let ran = run(
+        &state,
+        (&start, place.as_ref()),
+        (arguments, exec.env, exec.stdin),
+        slot,
+    );
     let cancelled = match running {
         Some(running) => running.end()?,
         None => false,
     };
     layerfs_home::trace::step("exec_record_end");
     let (code, stdout, stderr) = ran?;
-    let kind = match cancelled && code > 128 {
-        true => "cancelled".to_owned(),
-        false => format!("exit:{code}"),
-    };
-    let mut streams = crate::output::fields(stdout, stderr)?.into_iter();
     let mut result = vec![
-        ("kind", SdkValue::Text(kind)),
-        ("exitCode", SdkValue::Int(i64::from(code))),
+        ("exit_code", SdkValue::Int(i64::from(code))),
+        ("cancelled", SdkValue::Bool(cancelled && code > 128)),
     ];
-    result.extend(streams.by_ref().take(2));
-    result.push((
-        "message",
-        SdkValue::opt_text(host.message.text().map(str::to_owned)),
-    ));
-    result.push(("truncated", SdkValue::Bool(false)));
-    result.extend(streams);
-    result.push(("execId", SdkValue::text(id.as_str())));
+    result.extend(crate::output::fields(stdout, stderr)?);
+    result.push(("exec", SdkValue::text(id.as_str())));
     result.push(("stop", SdkValue::opt_text(form.map(str::to_owned))));
+    let took = i64::try_from(begun.elapsed().as_millis()).unwrap_or(i64::MAX);
+    result.push(("duration_ms", SdkValue::Int(took)));
     Ok(SdkValue::Map(
         result
             .into_iter()

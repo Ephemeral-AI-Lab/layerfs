@@ -1,9 +1,9 @@
 //! A PostgreSQL Store's connection, checked from the side that dials it.
 //! A Store's Sandboxes run on any machine whose platform runs PostgreSQL
 //! Sandboxes (supersedes the per-machine attachments of 2026-11-12; #536
-//! C4 again): each dials the Store's connection, or its own where
-//! `store.update --machine` gave it one (H9), kept in the Store's record as
-//! `machines.<machine>`. This module is the Store's part: the check run on
+//! C4 again): each dials the Store's address, or its own where
+//! `store.connect --machine` gave it one, kept in the Store's record as
+//! `machines.<machine>`, always with the Store's saved login. This module is the Store's part: the check run on
 //! the side that dials, and the record writes. Which side dials, and the
 //! URL a machine dials, are the caller's (`layerfs-control`, through the
 //! Sandbox route).
@@ -27,7 +27,7 @@ pub fn postgresql_record(home: &Path, name: &str) -> Result<StoreRecord> {
         StoreKind::Sqlite => Err(refused(
             "InvalidInput",
             format!(
-                "Store {name} is a sqlite Store, which has no connection; `store push {name} <machine>` places it"
+                "Store {name} is a sqlite Store, which has no connection; `layerfs store remove {name}` deletes it"
             ),
         )),
     }
@@ -42,53 +42,50 @@ pub const ANOTHER_STORE: &str = "the PostgreSQL server holds another Store than"
 /// role must have every privilege a Sandbox's writes need there. Answers
 /// the check to record, `{ at, server_version, latency_ms }`. The server
 /// not reached is `Unavailable`, a login refused or a privilege missing
-/// `Denied`, another Store's schema `Unavailable` naming it, and a build
-/// without the PostgreSQL engine `Unsupported`.
+/// `Denied`, and another Store's schema `Unavailable` naming it.
 pub fn check(record: &StoreRecord, postgresql: &PgSelection) -> Result<SdkValue> {
-    {
-        use layerfs_persistence::PostgresStatusError as E;
-        let access =
-            layerfs_persistence::postgresql_access(postgresql.url()?, SCHEMA).map_err(|error| {
-                match error {
-                    E::Denied(_) => refused("Denied", error.to_string()),
-                    E::Unreachable(_) => refused("Unavailable", error.to_string()),
-                    E::Failed(_) => refused("Failed", error.to_string()),
-                }
-            })?;
-        let another = || refused("Unavailable", format!("{ANOTHER_STORE} {}", record.name()));
-        let denied = |first: &str| {
-            refused(
-                "Denied",
-                format!(
-                    "role {} lacks {first} ({} privilege(s) missing in all)",
-                    access.role,
-                    access.missing.len()
-                ),
-            )
-        };
-        if !access.schema {
-            return Err(another());
-        }
-        // a role that may not use the schema cannot read its binding either
-        if let Some(first) = access.missing.first().filter(|m| m.contains(" on schema ")) {
-            return Err(denied(first));
-        }
-        let binding = crate::postgresql::open::read_binding(postgresql)?;
-        if record.binding() != Some(binding.as_slice()) {
-            return Err(another());
-        }
-        if let Some(first) = access.missing.first() {
-            return Err(denied(first));
-        }
-        Ok(SdkValue::map([
-            ("at", SdkValue::Int(home::now_ms())),
-            ("server_version", SdkValue::text(access.server_version)),
-            (
-                "latency_ms",
-                SdkValue::Int(i64::try_from(access.latency.as_millis()).unwrap_or(i64::MAX)),
+    use layerfs_persistence::PostgresStatusError as E;
+    let access =
+        layerfs_persistence::postgresql_access(postgresql.url()?, SCHEMA).map_err(|error| {
+            match error {
+                E::Denied(_) => refused("Denied", error.to_string()),
+                E::Unreachable(_) => refused("Unavailable", error.to_string()),
+                E::Failed(_) => refused("Failed", error.to_string()),
+            }
+        })?;
+    let another = || refused("Unavailable", format!("{ANOTHER_STORE} {}", record.name()));
+    let denied = |first: &str| {
+        refused(
+            "Denied",
+            format!(
+                "role {} lacks {first} ({} privilege(s) missing in all)",
+                access.role,
+                access.missing.len()
             ),
-        ]))
+        )
+    };
+    if !access.schema {
+        return Err(another());
     }
+    // a role that may not use the schema cannot read its binding either
+    if let Some(first) = access.missing.first().filter(|m| m.contains(" on schema ")) {
+        return Err(denied(first));
+    }
+    let binding = crate::postgresql::open::read_binding(postgresql)?;
+    if record.binding() != Some(binding.as_slice()) {
+        return Err(another());
+    }
+    if let Some(first) = access.missing.first() {
+        return Err(denied(first));
+    }
+    Ok(SdkValue::map([
+        ("at", SdkValue::Int(home::now_ms())),
+        ("server_version", SdkValue::text(access.server_version)),
+        (
+            "latency_ms",
+            SdkValue::Int(i64::try_from(access.latency.as_millis()).unwrap_or(i64::MAX)),
+        ),
+    ]))
 }
 
 /// The light check of a connection the Store's own calls use: the server
@@ -105,7 +102,7 @@ pub fn same_store(record: &StoreRecord, postgresql: &PgSelection) -> Result<()> 
     Ok(())
 }
 
-/// Saves `machine`'s own connection to Store `name` (an empty one removes
+/// Saves `machine`'s own address of Store `name` (an empty one removes
 /// it), under the home lock and the Store's: `Conflict` when the Store was
 /// disconnected, or connected again to another database (`binding`
 /// differs), since it was read.
@@ -122,7 +119,7 @@ pub fn save_own(
     let Some(record) = record else {
         return Err(refused(
             "Conflict",
-            format!("Store {name} changed while machine {machine} was checked; update it again"),
+            format!("Store {name} changed while machine {machine} was checked; connect it again"),
         ));
     };
     record.with_own_connection(machine, own).write(home_dir)

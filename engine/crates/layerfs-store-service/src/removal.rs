@@ -438,7 +438,7 @@ impl BoundWorkspace {
         for path in paths {
             let absolute = format!("/{}", path.path);
             if mutation.optional(&absolute)?.is_some() {
-                mutation.remove(&absolute)?;
+                mutation.remove(&absolute, true)?;
             }
         }
         mutation.finish()

@@ -3,10 +3,15 @@
 //! (0700, or 0701 where a namespaces Sandbox passes through; a Store's own
 //! folder is 0700 like the daemon's rule) and record files (0600). A Store
 //! folder with projects and no Store record is reported here too.
-use super::report::Findings;
+//!
+//! A finding's `fix` is one runnable shell line, or empty when no line
+//! repairs it (a record that does not parse, a symlink in place of a
+//! folder): its message then says what to do by hand.
+use super::records::Findings;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{paths, read_record, RECORD_VERSION};
 use layerfs_home::outcome::failed;
+use layerfs_home::outcome::shell_word;
 use layerfs_machine::record::MachineRecord;
 use layerfs_sandbox::record::SandboxRecord;
 use layerfs_store::record::StoreRecord;
@@ -128,12 +133,12 @@ fn store(home: &Path, name: &str, scanned: &mut Scanned, findings: &mut Findings
         if !has_record {
             findings.error(
                 entity,
-                format!("project {full} is in store/{name}, which has no Store record"),
                 format!(
-                    "no call reads it: restore {}, or delete {} by hand",
+                    "project {full} is in store/{name}, which has no Store record; no call reads it: restore {}, or delete {} by hand",
                     paths::store_record(home, name).display(),
                     paths::store_dir(home, name).display()
                 ),
+                String::new(),
             );
         }
     }
@@ -195,11 +200,11 @@ fn execs(workspaces: &Path, name: &str, findings: &mut Findings) -> Result<()> {
         if !workspaces.join(format!("{id}.json")).exists() {
             findings.warning(
                 ("workspace", &workspace),
-                format!("{} has no Workspace record beside it", folder.display()),
                 format!(
-                    "its Workspace was unmounted: remove {} by hand",
+                    "{} has no Workspace record beside it: its Workspace was unmounted",
                     folder.display()
                 ),
+                format!("rm -r {}", shell(&folder)),
             );
         }
         let records = match layerfs_sandbox::exec::record::listed(
@@ -210,8 +215,12 @@ fn execs(workspaces: &Path, name: &str, findings: &mut Findings) -> Result<()> {
             Err(refusal) => {
                 findings.error(
                     ("workspace", &workspace),
-                    format!("a command record does not read: {}", refusal.message),
-                    format!("repair or remove it under {} by hand", folder.display()),
+                    format!(
+                        "a command record does not read: {}; repair or remove it under {} by hand",
+                        refusal.message,
+                        folder.display()
+                    ),
+                    String::new(),
                 );
                 continue;
             }
@@ -222,12 +231,15 @@ fn execs(workspaces: &Path, name: &str, findings: &mut Findings) -> Result<()> {
             if !found.owned() {
                 findings.warning(
                     ("exec", &entity),
-                    format!("{} is stale: its owner process is gone", file.display()),
                     format!(
-                        "`layerfs workspace exec-cancel {name}:{} {}`, or the Workspace's unmount \
-                         or the Sandbox's close, ends what it still runs and removes it",
+                        "{} is stale: its owner process is gone; a cancel, the Workspace's unmount or the Sandbox's removal ends what it still runs and removes it",
+                        file.display()
+                    ),
+                    format!(
+                        "layerfs workspace cancel {name}:{} --exec {}",
                         found.name.as_deref().unwrap_or(&found.path),
-                        found.id
+                        found.id,
+                        name = shell_word(name)
                     ),
                 );
             }
@@ -251,11 +263,12 @@ fn record(
         Err(refusal) => {
             findings.error(
                 entity,
-                format!("{} does not parse: {}", path.display(), refusal.message),
                 format!(
-                    "no call reads it: repair or remove {} by hand",
-                    path.display()
+                    "{} does not parse: {}; no call reads it: repair or remove it by hand",
+                    path.display(),
+                    refusal.message
                 ),
+                String::new(),
             );
             return None;
         }
@@ -269,13 +282,10 @@ fn record(
         findings.error(
             entity,
             format!(
-                "{} has \"v\" {v}; this build reads \"v\": {RECORD_VERSION}",
+                "{} has \"v\" {v}; this build reads \"v\": {RECORD_VERSION}; use the LayerFS build that wrote it, or repair it by hand",
                 path.display()
             ),
-            format!(
-                "use the LayerFS build that wrote {}, or repair it by hand",
-                path.display()
-            ),
+            String::new(),
         );
     }
     Some(value)
@@ -301,13 +311,10 @@ fn link(path: &Path, entity: (&str, &str), findings: &mut Findings) -> bool {
     findings.error(
         entity,
         format!(
-            "{} is a symlink, not a folder; a `chmod` through it would change what it points at",
+            "{} is a symlink, not a folder; a `chmod` through it would change what it points at: remove the link and make it a real 0700 folder by hand",
             path.display()
         ),
-        format!(
-            "make it a real folder: remove the link and create {} as 0700",
-            path.display()
-        ),
+        String::new(),
     );
     true
 }
@@ -327,7 +334,7 @@ fn folder(path: &Path, entity: (&str, &str), findings: &mut Findings) {
                  Sandbox's commands pass through",
                 path.display()
             ),
-            format!("`chmod g-rwx,o-rw {}`", path.display()),
+            format!("chmod g-rwx,o-rw {}", shell(path)),
         );
     }
 }
@@ -347,7 +354,7 @@ fn store_folder(path: &Path, entity: (&str, &str), findings: &mut Findings) -> b
                 "{} has mode {mode:04o}; a Store's folder is 0700",
                 path.display()
             ),
-            format!("`chmod 700 {}`", path.display()),
+            format!("chmod 700 {}", shell(path)),
         );
     }
     false
@@ -362,7 +369,12 @@ fn file_mode(path: &Path, entity: (&str, &str), findings: &mut Findings) {
                 "{} has mode {mode:04o}; the home's records are 0600",
                 path.display()
             ),
-            format!("`chmod 600 {}`", path.display()),
+            format!("chmod 600 {}", shell(path)),
         );
     }
+}
+
+/// `path` as one shell word ([`layerfs_home::outcome::shell_word`]).
+pub(crate) fn shell(path: &Path) -> String {
+    shell_word(&path.display().to_string())
 }

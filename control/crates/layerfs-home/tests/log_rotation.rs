@@ -63,14 +63,8 @@ fn size(path: &Path) -> u64 {
 #[test]
 fn every_jsonl_log_rotates_once_past_its_size_and_replaces_the_older_one() {
     let home = Home::new("each");
-    // the home's four, and a worker root's exec.jsonl (the same writer)
-    for name in [
-        "leases",
-        "init-failures",
-        "migration-failures",
-        "import-env",
-        "exec",
-    ] {
+    // the home's own logs, and a worker root's exec.jsonl (the same writer)
+    for name in ["leases", "sweep", "exec"] {
         let current = home.log(&format!("{name}.jsonl"));
         let rotated = home.log(&format!("{name}.1.jsonl"));
         // small: appended to, never rotated
@@ -112,8 +106,8 @@ fn every_jsonl_log_rotates_once_past_its_size_and_replaces_the_older_one() {
         .collect();
     assert_eq!(
         names.len(),
-        11,
-        "five logs, five .1 and the lock: {names:?}"
+        7,
+        "three logs, three .1 and the lock: {names:?}"
     );
 }
 
@@ -162,7 +156,8 @@ fn a_held_rotation_lock_skips_the_rotation_without_waiting_or_failing() {
 #[test]
 fn the_call_log_still_rotates_under_its_own_lock() {
     let home = Home::new("calls");
-    fs::write(home.0.join("layerfs.json"), "{}").unwrap();
+    // a home of this build's layout: an older one gets no call log
+    layerfs_home::home::ensure(&home.0).unwrap();
     logs::append(&home.0, &line("a call"));
     let current = paths::calls_file(&home.0);
     let rotated = paths::calls_rotated(&home.0);

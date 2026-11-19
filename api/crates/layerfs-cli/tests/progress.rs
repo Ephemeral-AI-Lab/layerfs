@@ -89,17 +89,17 @@ fn progress_is_json_lines_on_stderr_before_the_result_on_stdout() {
     // stdout: the result alone, one JSON value
     let result = String::from_utf8(stdout).unwrap();
     assert_eq!(result.lines().count(), 1, "{result}");
-    assert!(result.contains("\"project\":\"shop/api\""), "{result}");
+    assert!(result.contains("{\"commit\":\""), "{result}");
     assert!(!result.contains("progress"), "{result}");
 
-    // stderr: one `{"progress":{phase,done,total}}` line per event, in order
+    // stderr: one `{phase,done,total}` line per event, in order
     let all: Vec<u8> = stderr_reads.iter().flat_map(|(_, b)| b.clone()).collect();
     assert_eq!(
         lines(&all),
         [
-            r#"{"progress":{"phase":"check","done":null,"total":null}}"#,
-            r#"{"progress":{"phase":"install","done":null,"total":null}}"#,
-            r#"{"progress":{"phase":"record","done":null,"total":null}}"#,
+            r#"{"phase":"check","done":null,"total":null}"#,
+            r#"{"phase":"install","done":null,"total":null}"#,
+            r#"{"phase":"record","done":null,"total":null}"#,
         ]
     );
     // the first event arrived before the command ended: it is not replayed
@@ -121,7 +121,7 @@ fn without_progress_stderr_is_empty() {
         "{}",
         String::from_utf8_lossy(&run.stderr)
     );
-    assert!(String::from_utf8_lossy(&run.stdout).contains("\"project\":\"shop/api\""));
+    assert!(String::from_utf8_lossy(&run.stdout).contains("{\"commit\":\""));
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&folder);
 }
@@ -139,7 +139,7 @@ fn a_closed_stderr_does_not_fail_the_call() {
         .output()
         .unwrap();
     assert_eq!(run.status.code(), Some(0), "{run:?}");
-    assert!(String::from_utf8_lossy(&run.stdout).contains("\"project\":\"shop/api\""));
+    assert!(String::from_utf8_lossy(&run.stdout).contains("{\"commit\":\""));
     assert!(run.stderr.is_empty());
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&folder);
@@ -156,7 +156,7 @@ fn a_refusal_before_the_first_phase_prints_no_progress() {
     assert!(run.stdout.is_empty());
     let err = lines(&run.stderr);
     assert_eq!(err.len(), 1, "{err:?}");
-    assert!(err[0].contains("\"code\":\"InvalidInput\""), "{err:?}");
+    assert!(err[0].contains("\"error\":\"InvalidInput\""), "{err:?}");
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&folder);
 }
@@ -175,8 +175,7 @@ fn only_calls_declaring_on_progress_accept_the_cli_switch() {
         ["machine", "create", "--help"],
         ["machine", "start", "--help"],
         ["project", "init", "--help"],
-        ["store", "push", "--help"],
-        ["store", "pull", "--help"],
+        ["store", "move", "--help"],
         ["store", "compact", "--help"],
         ["backup", "create", "--help"],
         ["backup", "restore", "--help"],

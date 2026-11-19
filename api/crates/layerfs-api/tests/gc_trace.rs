@@ -1,10 +1,10 @@
 //! T-G2: the call log redacts every path argument (#41 §4.3). A
-//! `project.remove_file` or a hidden `file.read`/`stat`/`list`/`glob` path is
+//! `project.hide_path` or a hidden `file.read`/`stat`/`list`/`glob` path is
 //! logged as `<N bytes>` of its normalized form (one leading `/` stripped),
 //! the `Removed` refusal still echoes the request path, the salted trace key
 //! changes with the salt, and a `store.compact` report's artifact names never
 //! reach the log.
-use layerfs_api::calls::REDACTED;
+use layerfs_api::Redact;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::path::{path_key, trace_key};
 use layerfs_history::LayerStackId;
@@ -136,17 +136,13 @@ fn removed_path(refusal: &SdkRefusal) -> &str {
 fn path_arguments_are_byte_counts_in_the_call_log() {
     let _env = serial();
     let (home, folder) = project();
-    let removed = ok(
-        &home,
-        "project.remove_file",
-        &[p(), ("path", t("/base.txt"))],
-    );
-    assert_eq!(removed.get_text("kind"), Some("Removed"));
+    let removed = ok(&home, "project.hide_path", &[p(), ("path", t("/base.txt"))]);
+    assert_eq!(removed, SdkValue::map([("ok", SdkValue::Bool(true))]));
     assert_eq!(
         argv(&last(&home)),
         [
             "project".to_owned(),
-            "remove-file".into(),
+            "hide-path".into(),
             "shop/api".into(),
             bytes("base.txt".len()),
         ]
@@ -158,7 +154,7 @@ fn path_arguments_are_byte_counts_in_the_call_log() {
         "file.read",
         &[p(), ("branch", t("main")), ("path", t("/base.txt"))],
     );
-    assert_eq!(read.code, "Removed");
+    assert_eq!(read.code, "NotFound");
     assert_eq!(
         argv(&last(&home)),
         [
@@ -174,15 +170,20 @@ fn path_arguments_are_byte_counts_in_the_call_log() {
         "file.stat",
         &[p(), ("branch", t("main")), ("path", t("/base.txt"))],
     );
-    assert_eq!(stat.code, "Removed");
+    assert_eq!(stat.code, "NotFound");
     assert_eq!(argv(&last(&home))[4], bytes("base.txt".len()));
 
     let listed = ok(
         &home,
         "file.list",
-        &[p(), ("branch", t("main")), ("path", t("/"))],
+        &[
+            p(),
+            ("branch", t("main")),
+            ("path", t("/")),
+            ("detail", SdkValue::Bool(true)),
+        ],
     );
-    assert_eq!(listed.get_int("removed_count"), Some(1));
+    assert_eq!(listed.get_int("skipped_hidden"), Some(1));
     assert_eq!(argv(&last(&home))[4], bytes(0));
 
     let globbed = ok(
@@ -191,14 +192,15 @@ fn path_arguments_are_byte_counts_in_the_call_log() {
         &[
             p(),
             ("branch", t("main")),
-            ("path", t("/")),
             ("pattern", t("*.txt")),
+            ("path", t("/")),
+            ("detail", SdkValue::Bool(true)),
         ],
     );
-    assert_eq!(globbed.get_int("removed_count"), Some(1));
+    assert_eq!(globbed.get_int("skipped_hidden"), Some(1));
     let words = argv(&last(&home));
-    assert_eq!(words[4], bytes(0));
-    assert_eq!(words[5], bytes("*.txt".len()));
+    assert_eq!(words[4], bytes("*.txt".len()));
+    assert_eq!(words[5], bytes(0));
 
     let text = log_text(&home);
     assert!(!text.contains("/base.txt"), "raw path in the log:\n{text}");
@@ -211,17 +213,13 @@ fn path_arguments_are_byte_counts_in_the_call_log() {
 fn a_removed_refusal_echoes_the_path_the_log_does_not() {
     let _env = serial();
     let (home, folder) = project();
-    ok(
-        &home,
-        "project.remove_file",
-        &[p(), ("path", t("/base.txt"))],
-    );
+    ok(&home, "project.hide_path", &[p(), ("path", t("/base.txt"))]);
     let refusal = refused(
         &home,
         "file.read",
         &[p(), ("branch", t("main")), ("path", t("/base.txt"))],
     );
-    assert_eq!(refusal.code, "Removed");
+    assert_eq!(refusal.code, "NotFound");
     assert_eq!(removed_path(&refusal), "/base.txt");
     let line = last(&home);
     assert_eq!(line.get_text("outcome"), Some("Removed"));
@@ -235,37 +233,49 @@ fn a_removed_refusal_echoes_the_path_the_log_does_not() {
 
 #[test]
 fn the_redacted_set_covers_every_path_bearing_call() {
-    for name in [
-        "path",
-        "left_path",
-        "right_path",
-        "from_path",
-        "to_path",
-        "path_prefix",
-        "pattern",
-    ] {
-        assert!(REDACTED.contains(&name), "{name} is not redacted");
+    // every argument of these names is logged only as a byte count: its
+    // table entry says so (the flag replaced the dispatcher's name list)
+    for name in ["path", "pattern"] {
+        let named = (layerfs_api::calls().into_iter())
+            .flat_map(|call| call.args.iter().chain(call.options))
+            .filter(|arg| arg.name == name);
+        let mut seen = 0;
+        for arg in named {
+            assert!(arg.redacted(), "{name} is not redacted");
+            seen += 1;
+        }
+        assert!(seen > 0, "no call takes {name}");
     }
     for (name, args) in [
-        ("project.remove_file", &["path"][..]),
+        ("project.hide_path", &["path"][..]),
         ("file.read", &["path"][..]),
         ("file.stat", &["path"][..]),
         ("file.list", &["path"][..]),
         ("file.glob", &["path", "pattern"][..]),
-        ("file.diff", &["left_path", "right_path"][..]),
-        ("file.cp", &["from_path", "to_path"][..]),
-        ("file.mv", &["from_path", "to_path"][..]),
-        ("branch.diff", &["path_prefix"][..]),
+        ("file.grep", &["path", "pattern"][..]),
+        ("file.cp", &["from", "to"][..]),
+        ("file.mv", &["from", "to"][..]),
+        ("commit.diff", &["path"][..]),
     ] {
         let spec = layerfs_api::find(name).unwrap_or_else(|| panic!("{name} is missing"));
         for arg in args {
             assert!(spec.arg(arg).is_some(), "{name} has no {arg}");
-            assert!(REDACTED.contains(arg), "{name}'s {arg} is not redacted");
+            let declared = spec.arg(arg).unwrap();
+            assert!(declared.redacted(), "{name}'s {arg} is not redacted");
+            // a path is counted in its normalized form (#41 §4.3)
+            if *arg != "pattern" {
+                assert_eq!(declared.redact, Redact::Path, "{name}'s {arg}");
+            }
         }
     }
     // text that is not a path stays visible
-    for name in ["project", "branch", "name", "commit", "content", "changes"] {
-        assert!(!REDACTED.contains(&name), "{name} is redacted");
+    for name in ["project", "branch", "name", "commit"] {
+        let named = (layerfs_api::calls().into_iter())
+            .flat_map(|call| call.args.iter().chain(call.options))
+            .filter(|arg| arg.name == name);
+        for arg in named {
+            assert_eq!(arg.redact, Redact::No, "{name} is redacted");
+        }
     }
 }
 
@@ -290,8 +300,8 @@ fn the_trace_key_is_salted_by_the_store_policy_salt() {
 fn store_compact_artifact_names_never_reach_the_log() {
     let _env = serial();
     let (home, folder) = project();
-    let report = ok(&home, "store.compact", &[("name", t("shop"))]);
-    assert_eq!(report.get_text("kind"), Some("Compacted"));
+    let report = ok(&home, "store.compact", &[("store", t("shop"))]);
+    assert!(report.get_int("freed_bytes").is_some(), "{report:?}");
     assert_eq!(
         argv(&last(&home)),
         ["store".to_owned(), "compact".into(), "shop".into()]

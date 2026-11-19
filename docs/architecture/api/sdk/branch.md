@@ -2,366 +2,349 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The `branch` calls: list and read a project's Branches and their saved history, fork, merge, publish to `main`, compare two Branches and retire one, within the [SDK](README.md).
+The `branch` calls: list and read a project's Branches, fork one, merge one into another, publish one to `main` and remove one, within the [SDK](README.md). A Branch's Commits are read by the [commit family](commit.md).
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-api/src/branch`](../../../../api/crates/layerfs-api/src/branch), [`layerfs-store/src/calls/branch.rs`](../../../../control/crates/layerfs-store/src/calls/branch.rs), [`layerfs-store-service/src/methods/branch`](../../../../engine/crates/layerfs-store-service/src/methods/branch), [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs), [`history/saved.rs`](../../../../engine/crates/layerfs-store-service/src/history/saved.rs) |
-| Runs by default | where the Store's calls run: the caller's process for PostgreSQL and for sqlite on a locally executing machine (`native`, except on Windows); else the Store machine's worker (`store.call`). No daemon serves a Store call |
-| Design | [Store calls](../../engine/store-calls/README.md), [reads](../../engine/store-calls/reads.md), [History](../../core/history/README.md), [merge flow](../../flows/merge.md) |
+| Source | [`api/crates/layerfs-api/src/branch`](../../../../api/crates/layerfs-api/src/branch) (one file per call), [`layerfs-store/src/calls/branch.rs`](../../../../control/crates/layerfs-store/src/calls/branch.rs), [`layerfs-store/src/calls/op.rs`](../../../../control/crates/layerfs-store/src/calls/op.rs), [`layerfs-store-service/src/methods/branch`](../../../../engine/crates/layerfs-store-service/src/methods/branch), [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs), [`history/units.rs`](../../../../engine/crates/layerfs-store-service/src/history/units.rs) |
+| Runs by default | where the Store's calls run: the caller's process for a PostgreSQL Store and for a sqlite Store on a locally executing machine (`native`, except on Windows); else the Store machine's worker (`store.call`). No daemon serves a Store call |
+| Design | [Store calls](../../engine/store-calls/README.md), [History](../../core/history/README.md), [merge flow](../../flows/merge.md) |
 
 ## Calls
 
 ```text
-                 main (the project's line of Layers)
+                 main (the project's line of publications)
                    |
-   list / get      | fork <name> main         fork <name> <branch> [commit]
-   commits         v                                   |
-   get_commit    agent  ---- file.* writes,            v
-                   |         workspace.commit -->  review
-                   +------ diff <from> <to> -----------+
-                   +------ merge <new> <a> <b> --------+--> joined
-                   main <---------- publish <branch> -------+
-                   (next Layer; overwritten Layers reported)
+   list / get      | fork <project> agent            fork <project> review agent --at C
+                   v                                          |
+                 agent ---- file.* writes,                    v
+                   |        workspace.commit --------->  review
+                   +------ merge <project> review agent ------+   (agent into review)
+                   +------ merge <project> agent main --into joined
+                   main <------- publish <project> agent
+                   (next publication; --expected guards main's head)
 ```
 
-| Call | Store method | Kind |
-| --- | --- | --- |
-| [`branch.list`](#branchlist) | `project.list_branches` | read |
-| [`branch.get`](#branchget) | `project.list_branches` with `name` | read |
-| [`branch.commits`](#branchcommits) | `branch.commits` | saved read |
-| [`branch.get_commit`](#branchget_commit) | `branch.get_commit` | saved read |
-| [`branch.fork`](#branchfork) | `branch.fork` | write |
-| [`branch.merge`](#branchmerge) | `branch.merge` | write |
-| [`branch.publish`](#branchpublish) | `branch.publish` | write |
-| [`branch.diff`](#branchdiff) | `branch.diff_branches` | saved read |
-| [`branch.remove`](#branchremove) | `branch.remove` | write |
+| Call | Store operation (`StoreOp`) | Kind | MCP |
+| --- | --- | --- | --- |
+| [`branch.list`](#branchlist) | `Branches` (one page by name) | read | `admin` |
+| [`branch.get`](#branchget) | `ListBranches` with the name | read | `admin` |
+| [`branch.fork`](#branchfork) | `Fork` | write | `work` |
+| [`branch.merge`](#branchmerge) | `Merge` | write | `admin` |
+| [`branch.publish`](#branchpublish) | `Publish` | write | `admin` |
+| [`branch.remove`](#branchremove) | `BranchRemove` | write | `admin` |
 
-Each entry forwards a typed request to `layerfs_store::calls::branch`, which
-renames the table's snake_case fields to the Store method's
-([`calls/op.rs`](../../../../control/crates/layerfs-store/src/calls/op.rs)) and
-selects one method of the engine's SDK facade
-([`methods/dispatch.rs`](../../../../engine/crates/layerfs-store-service/src/methods/dispatch.rs)).
-`main` is the project's line of publication Layers: its saved versions are
-Layers, a side Branch's are Commits. Reads use the read-only session and
-never take the publication lane; a write takes it only for its final
-publish step.
+Each call file builds a typed request and calls one function of
+[`layerfs_store::calls::branch`](../../../../control/crates/layerfs-store/src/calls/branch.rs).
+That function sends one `StoreOp` with `on_project`
+([`calls/op.rs`](../../../../control/crates/layerfs-store/src/calls/op.rs)),
+which renames the table's snake_case arguments to the engine's and runs the
+engine method on the project's Store, here or in its worker, and then maps
+the engine's answer to the call's full map: the keys of its long form, which
+the dispatcher cuts to the short form unless `detail` is asked. A refusal
+goes through `next_fields`, which puts the fields the next call needs flat
+beside it: the head a write found, as `commit`; how many Commits a prefix
+matches, as `matches`; a merge's conflicting paths, as `conflicts`.
 
-Under a folder scope, Branch names are composed as `<namespace>.<name>`,
-a scoped `branch.list` and `branch.get` answer namespace-relative names, and
-`branch.commits`, `branch.get_commit` and `branch.diff` are refused
-(`out of scope: history`)
-([`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs)).
+`main` is the project's line of publications. Where a call takes a Commit
+(`--at`, `--expected`), it is a full id (66 hex characters) or a prefix of 8
+or more characters, resolved by the Store in one call: a prefix more than one
+Commit starts with is refused `InvalidInput` with `matches` (a count), one no
+Commit starts with is `NotFound`. Where a call takes `from`, a Branch of that
+name comes first, then a Commit. Every id in an answer is the full id.
+
+Reads use the Store's read-only session and never take the publication lane;
+a write does its heavy work first and holds the lane only for its final
+publish step. Under a folder scope a Branch name is `<namespace>.<name>` and
+`list` and `get` answer the name within the namespace
+([`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs));
+`branch.remove` is outside the scope's allow list and is refused.
 
 ### branch.list
 
-A project's Branches, `main` first, one page at a time.
+A project's Branches, main included, in name order.
 
 ```text
-JS      await layerfs.branch.list(project, { page_size, page_pos, page })
-Python  layerfs.branch.list(project, *, page_size=None, page_pos=None, page=None)
-CLI     layerfs branch list <project> [--page-size <page-size>] [--page-pos <page-pos>] [--page <page>]
+CLI     layerfs branch list <project> [--prefix P] [--exclude-prefix P] [--limit 100] [--cursor C]
+Node    await layerfs.branch.list(project, { prefix, exclude_prefix, limit, cursor })
+Python  layerfs.branch.list(project, *, prefix=None, exclude_prefix=None, limit=None, cursor=None)
 ```
 
 | Argument | Kind | Rule |
 | --- | --- | --- |
-| `page_size` option | Int | 1..=1000, default 50 |
-| `page_pos` option | Int | legacy offset: the last page's `next_page_pos` |
-| `page` option | Int | one-based numbered page; not combined with `page_pos` |
+| `project` | project | `<store>/<project>` |
+| `prefix` option | text | only Branches whose name starts with this text |
+| `exclude_prefix` option | text | leave out Branches whose name starts with this text, such as dsh. |
+| `limit` option | int | the most rows in one page, 1 to 1000; default `100` |
+| `cursor` option | text | the `next_cursor` of the page before; it carries the filters only |
 
-```text
-{ items: [
-    { name: "main", id: null, base: <head Layer>, head: null, saved_head },
-    { name, id, base, head | null, forked_from | null, saved_head }, ...
-  ],
-  has_more, next_page_pos | null, consistency: "live" }
+| Answer | Keys |
+| --- | --- |
+| short | `items`; when set: `next_cursor` |
+| long | `items, next_cursor` |
+| `items[]` short | `branch`, `commit` |
+| `items[]` long | `branch, commit, forked_from, id, base, root` |
+| call | pages by `limit` and `cursor`; writes one call-log line; MCP `admin` |
+
+`main` is a row; its `commit` is `main`'s head. Any other row's `commit` is
+the Branch's head, or the Commit it was forked at while it has none of its
+own; `forked_from` (long form) is the Commit it was forked at. A Branch
+record has no time, so there is no `created_at`. `--prefix` keeps only the
+names that start with it and `--exclude-prefix` leaves those out (such as
+`dsh.`); the Store's name index skips what is left out instead of walking
+it. The `next_cursor` carries the filters and the last name listed, and pins
+no Commit, so a later page lists the Branches there are then; a cursor given
+with other filters, or to another call, is refused `InvalidInput`. A scoped
+list reads the namespace's names only and answers them without the
+namespace.
+
+Run on macOS native with a debug build:
+
+```console
+$ layerfs branch list shop/api
+{"items":[{"branch":"agent","commit":"32919f5590656a0ee8daeae5a82fe8a3ecd320349b661147c5bc3b7f912997ae6c"},{"branch":"main","commit":"32919f5590656a0ee8daeae5a82fe8a3ecd320349b661147c5bc3b7f912997ae6c"}]}
 ```
-
-Items after `main` are in byte-name order; `saved_head` is a typed
-reference `{ id, kind, branch, root }` (a Layer for `main` and for a side
-Branch with no Commit). The inventory is live: Branches added between pages
-can appear. A page also ends early at the 48 KiB reply budget. A scoped list
-keeps only `<ns>.<x>` Branches, shown as `<x>`, reading 1000 at a time
-(`branches_in`); a page that makes no progress is `Failed` "a list made no
-progress" ([`calls/branch.rs`](../../../../control/crates/layerfs-store/src/calls/branch.rs)).
 
 ### branch.get
 
-One Branch, or `main`: its base Layer, head Commit and typed saved head.
+One Branch and its head Commit.
 
 ```text
-JS      await layerfs.branch.get(project, branch)
-Python  layerfs.branch.get(project, branch)
 CLI     layerfs branch get <project> <branch>
-```
-
-Returns one `branch.list` item. The Store looks the name up in its name
-index; control answers the item whose `name` or `id` matches, else
-`NoSuchBranch`. It is the read to make after an uncertain fork, merge or
-publish.
-
-### branch.commits
-
-Saved side-Branch Commits, or `main`'s publications, newest first, from an
-immutable start.
-
-```text
-JS      await layerfs.branch.commits(project, branch, { page, page_size, at_commit, include_storage })
-Python  layerfs.branch.commits(project, branch, *, page=None, page_size=None, at_commit=None, include_storage=None)
-CLI     layerfs branch commits <project> <branch> [--page <page>] [--page-size <page-size>] [--at-commit <at-commit>] [--include-storage]
+Node    await layerfs.branch.get(project, branch)
+Python  layerfs.branch.get(project, branch)
 ```
 
 | Argument | Kind | Rule |
 | --- | --- | --- |
-| `page`, `page_size` options | Int | numbered pages ([saved queries](#saved-queries)) |
-| `at_commit` option | Text | a full saved id to start from; absent, the Branch head is resolved once |
-| `include_storage` option | Bool | adds each row's `new_canonical`, `new_stored`, `new_metadata` (null for a Layer, which performs no Save) |
+| `project` | project | `<store>/<project>` |
+| `branch` | name | a Branch name |
 
-```text
-{ branch, at_commit: { id, kind, branch, root }, items, page, page_size,
-  has_more, scan: { complete, examined, reason } }
-```
+| Answer | Keys |
+| --- | --- |
+| short | `commit` |
+| long | `commit, forked_from, branch, id, base, root` |
+| call | writes one call-log line; MCP `admin` |
 
-Each item has a full `ref: { id, kind, branch, root }` and compact metadata
-(`id`, `parent`, `second_parent`, `base`, `source_commit`, `source_branch`,
-`time`, `source_time`, `time_status`, `via`, `logical` where it applies), a
-message cut to 128 bytes with `message_truncated`, and `details_omitted`
-pointing to `branch.get_commit`. A side Branch follows its first-parent
-Commit chain (merge second parents are metadata, not rows); an empty side
-Branch has no rows and pins its base Layer. `main` follows publication Layer
-parents, Init included. A Layer stores no publication time: `time` is null
-with `time_status: "unavailable"`, and `source_time` is the source Commit's
-own time ([`history/saved.rs`](../../../../engine/crates/layerfs-store-service/src/history/saved.rs)).
-
-### branch.get_commit
-
-Full details of one saved Commit or `main` publication Layer admitted by the
-Branch.
-
-```text
-JS      await layerfs.branch.get_commit(project, branch, commit)
-Python  layerfs.branch.get_commit(project, branch, commit)
-CLI     layerfs branch get-commit <project> <branch> <commit>
-```
-
-`commit` is the complete id (no prefix matching, unlike `commit.get`). The
-answer keeps the recorded metadata and adds typed `ref`, `parent_ref`,
-`second_parent_ref`, `base_layer`, `source_commit_ref`, `source_time` and
-`time_status`; a relationship that does not apply is null. For a
-publication, `parent` is the previous Layer and `source_commit` what was
-published. `main` admits its Layer lineage; a side Branch admits its
-first-parent and base lineage and its own recorded Commits, displaced ones
-included. The context lookup visits at most 10,000 records, and the full
-answer, merge-unit reports included, must fit 48 KiB; either limit is
-`Capacity`.
+One `branch.list` row, read through the Store's name index. `commit` is the
+head to pass as `--expected` to a later write. A name no Branch has is
+`NotFound`. It is the read to make after a fork, merge or publish whose
+answer was lost.
 
 ### branch.fork
 
-A new Branch at another Branch's head, at `main`, or at a given Commit or
-Layer. Metadata only; no file is copied.
+A new Branch from another Branch's head, or from a Commit.
 
 ```text
-JS      await layerfs.branch.fork(project, name, from_branch, from_commit?)
-Python  layerfs.branch.fork(project, name, from_branch, from_commit=None)
-CLI     layerfs branch fork <project> <name> <from-branch> [<from-commit>]
+CLI     layerfs branch fork <project> <name> [<from>] [--at C]
+Node    await layerfs.branch.fork(project, name, from?, { at })
+Python  layerfs.branch.fork(project, name, from_=None, *, at=None)
 ```
 
-| `from` (`from_commit` if given, else `from_branch`) | The new Branch starts at |
-| --- | --- |
-| `main` | `main`'s head Layer, as its base, with no head |
-| a Branch name | its head Commit, or its base Layer when it has none |
-| a Layer id | that Layer |
-| a Commit id | that Commit, on the Branch its metadata names (none: `InvalidInput`) |
+| Argument | Kind | Rule |
+| --- | --- | --- |
+| `project` | project | `<store>/<project>` |
+| `name` | name | the new Branch |
+| `from` | name | the Branch forked from; optional, default `main` |
+| `at` option | name | fork at this Commit instead of the head of `from`: a full id, or a prefix of 8 or more characters |
 
-Returns `{ kind: "Forked", branch, base, head | null }`; the Branch id
-derives from the project and name. One short write through the Store's
-single writer; no tree is read. Errors: `ReservedName` (`name` is `main`),
-`NameTaken`, `NoSuchBranch`, `NoSuchCommit`, `NotFound`; after `Unknown`,
-`branch.get` of `name` tells whether it published (a second fork is
-`NameTaken`).
+| Answer | Keys |
+| --- | --- |
+| short | `commit` |
+| long | `commit, outcome, branch, base, root` |
+| call | writes one call-log line; MCP `work` |
+
+Forks from the head of `from` (`main` when it is left off), or with `--at`
+from one Commit of `from`'s history. The new Branch records no file: it is
+one short write through the Store's single writer and reads no tree.
+`commit` is the Commit the new Branch stands on.
+
+| Refusal | When | Next |
+| --- | --- | --- |
+| `Exists` | the name is taken (raised `NameTaken`), a removed Branch's name included until compaction | `fix`: the same fork with `<name>-2` |
+| `InvalidInput` | `name` is `main` (raised `ReservedName`); a prefix that more than one Commit starts with (`matches`) | |
+| `NotFound` | `from` names no Branch or Commit; `--at` is not in `from`'s history | |
+| `Unknown` | the reply was lost | `branch get <project> <name>` says whether it was made; a second fork is `Exists` |
+
+Run on macOS native with a debug build:
+
+```console
+$ layerfs branch fork shop/api agent main
+{"commit":"32919f5590656a0ee8daeae5a82fe8a3ecd320349b661147c5bc3b7f912997ae6c"}
+```
 
 ### branch.merge
 
-Merges two Branches (either may be `main`) into a new Branch; both sources
-stay unchanged.
+Merge one Branch into another, or into a new Branch.
 
 ```text
-JS      await layerfs.branch.merge(project, name, a, b, { message, units })
-Python  layerfs.branch.merge(project, name, a, b, *, message=None, units=None)
-CLI     layerfs branch merge <project> <name> <a> <b> [--message <message>] [--units <units>]
+CLI     layerfs branch merge <project> <branch> <from> [--into NEW] [--units JSON] [--expected C] [-m msg]
+Node    await layerfs.branch.merge(project, branch, from, { into, units, expected, message })
+Python  layerfs.branch.merge(project, branch, from_, *, into=None, units=None, expected=None, message=None)
 ```
 
 | Argument | Kind | Rule |
 | --- | --- | --- |
-| `name` | Name | the new Branch; not `main`, not taken |
-| `a`, `b` | Name | left ("ours", sent as `branch`) and right ("theirs", sent as `with`); different |
-| `message` option | Text | the merge Commit's message |
-| `units` option | Json | a list of glob patterns or `{ name, patterns }`; a unit both sides changed comes whole from the later write (`a` on a tie); overlapping units belong to the first listed ([`history/units.rs`](../../../../engine/crates/layerfs-store-service/src/history/units.rs)) |
+| `project` | project | `<store>/<project>` |
+| `branch` | name | the Branch merged into; its `/.lww` rules apply |
+| `from` | name | the Branch merged from |
+| `into` option | name | write the result to a new Branch of this name and leave `branch` as it is |
+| `units` option | json | merge units: a list of patterns or {name, patterns}; a unit both sides changed is taken whole from the side with the later write |
+| `expected` option | name | refuse `Conflict` unless `branch`'s head is this Commit |
+| `message` option | text | the merge Commit's message; `-m` in the shell; `Merge <branch> and <from>` when left off |
 
-```text
-{ kind: "Merged", fast_forward, branch, head, root,
-  sources: [ { ref, node }, { ref, node } ], merge_base,
-  conflicts: [], conflicts_truncated, lww: [ { path, rule, ... } ],
-  lww_truncated, units: [ decisions ], units_truncated }
-```
-
-`fast_forward` means one side was an ancestor of the other: the new Branch
-points at the newer side and nothing is saved. `lww` lists paths settled by
-`/.lww` last-writer-wins rules (taken from `a`). The merge Commit's base is
-`main`'s when either side is `main`, else `a`'s. All merge work happens
-before the lane; only the final `merge_branch` publish holds it.
-
-| Error | When |
+| Answer | Keys |
 | --- | --- |
-| `NoMergeBase` | the sides share no history |
-| `Conflict` | conflicting paths; nothing created; `detail` has `sources`, `merge_base`, `conflicts`, `lww`, `units` and the truncation flags |
-| `HeadMoved` | the catalog moved under the publish |
-| `Failed` | a Store without merge scratch (`BackendUnavailable`), other failures |
+| short | `commit`; when set: `unchanged`, `fast_forward`, `overwritten`, `overwritten_count` |
+| long | `commit, unchanged, fast_forward, overwritten, overwritten_count, outcome, branch, parent, second_parent, merge_base, root, units, units_count` |
+| call | writes one call-log line; MCP `admin` |
+
+Merges `from` into `branch`. When `branch` holds nothing `from` lacks, the
+merge is a fast-forward (`fast_forward`) and no Commit is made; when
+`branch` already holds `from`, nothing changes and the answer says
+`unchanged`; otherwise one merge Commit is made on `branch`, `parent` being
+`branch`'s head and `second_parent` `from`'s. `--into NEW` writes the result
+to a new Branch and changes neither side. `main` takes changes only by
+`publish`: merging into it without `--into` is `InvalidInput`.
+
+The `/.lww` rules of `branch` decide paths both sides changed:
+`overwritten` lists the paths a newer-write-wins rule took (the first 20,
+then `overwritten_count`). `--units` groups paths into units; a unit both
+sides changed comes whole from the side with the later write, and
+overlapping units belong to the first listed
+([`history/units.rs`](../../../../engine/crates/layerfs-store-service/src/history/units.rs)).
+The long form's `units` reports each unit's decision (the first 20, then
+`units_count`). All merge work happens before the publication lane; only
+the final publish holds it.
+
+| Refusal | When | Next |
+| --- | --- | --- |
+| `Conflict` | conflicting paths: nothing is changed, and `conflicts` lists them; or `branch`'s head is not `--expected`, with `commit` naming the head | merge again from the head |
+| `Exists` | the `--into` name is taken | `fix`: the same merge with `--into <into>-2` |
+| `InvalidInput` | merging into `main` without `--into`; the sides share no history (raised `NoMergeBase`); a bad `--units`; an ambiguous prefix (`matches`) | |
+| `NotFound` | `branch` or `from` is missing | |
+| `Failed` | a Store without merge scratch, or another failure that ran once | |
+
+Run on macOS native with a debug build:
+
+```console
+$ layerfs branch merge shop/api agent main --into merged
+{"commit":"12d12fbd01e3990284c374af5ed021fa2551db346d2a178cf4f1228794fc6f7f80","fast_forward":true}
+```
 
 ### branch.publish
 
-Makes a Branch's head, or one of its Commits, `main`'s next Layer. By
-default it refuses to drop work: if `main` gained a Layer since the Branch
-forked, the publish is refused `HeadMoved` and nothing is written (#691).
-Merge the Branch with `main` into a new Branch and publish that, or pass
-`force` to overwrite `main` deliberately.
+A Branch's head or Commit as main's next head, refusing a stale base.
 
 ```text
-JS      await layerfs.branch.publish(project, branch, commit?, { expected_base, expected_head, force })
-Python  layerfs.branch.publish(project, branch, commit=None, *, expected_base=None, expected_head=None, force=None)
-CLI     layerfs branch publish <project> <branch> [<commit>] [--expected-base <expected-base>] [--expected-head <expected-head>] [--force]
-```
-
-`branch` must be a side Branch (`main` is `NoSuchBranch`); `commit` is a
-66-hex Commit id (a Layer id is `InvalidInput`), default the head.
-
-| Option | Kind | Rule |
-| --- | --- | --- |
-| `expected_base` | Layer id | `main`'s head must still be this Layer |
-| `expected_head` | Commit id | the Branch's head must still be this Commit |
-| `force` | bool | publish over Layers `main` gained since the fork; they are reported in `overwrote` |
-
-Without `force`, a publish goes ahead when `main` is still at the Branch's
-fork point, when `main`'s head is this Branch's own earlier publication and
-the Commit contains it (publishing again at milestones), or when `main`
-already holds the Commit's tree (`NoChanges`). A Branch made by merging with
-`main` has `main`'s head as its base, so it publishes as a fast-forward.
-
-```text
-Added:     { kind: "Added", source: { branch, commit },
-             published_layer: { ...Layer, overwrote_count }, based_on,
-             overwrote_count, overwrote: [ <= 50 Layers ], overwrote_has_more }
-UpToDate:  { kind: "UpToDate", layer }      (this Commit is already published)
-NoChanges: { kind: "NoChanges", head_layer } (its tree equals main's head)
-```
-
-The add is a compare-and-set on `main`'s head and the Branch's base:
-`HeadMoved` when either moved, or when a check above refuses, never retried.
-Its `detail` has `expectedBase`/`actualBase` (or `expectedHead`/`actualHead`).
-Other errors: `NoCommit` (no saved Commit), `NotInHistory` (the Commit is not
-on the Branch). After `Unknown`, publishing the same Commit again answers
-`UpToDate` if it landed, even when `main` has moved on since or
-`expected_base` names the head read before the first attempt.
-
-### branch.diff
-
-Files that differ between two Branches' trees (either may be `main`), or
-between pinned saved endpoints.
-
-```text
-JS      await layerfs.branch.diff(project, from_branch, to_branch, { paths_only, page_size, page_pos, cursor, page, from_commit, to_commit, path_prefix, include_attribution, continuation })
-Python  layerfs.branch.diff(project, from_branch, to_branch, *, paths_only=None, page_size=None, page_pos=None, cursor=None, page=None, from_commit=None, to_commit=None, path_prefix=None, include_attribution=None, continuation=None)
-CLI     layerfs branch diff <project> <from-branch> <to-branch> [--paths-only] [--page-size <page-size>] [--page-pos <page-pos>] [--cursor <cursor>] [--page <page>] [--from-commit <from-commit>] [--to-commit <to-commit>] [--path-prefix <path-prefix>] [--include-attribution] [--continuation <continuation>]
+CLI     layerfs branch publish <project> <branch> [--at C] [--expected C] [--force]
+Node    await layerfs.branch.publish(project, branch, { at, expected, force })
+Python  layerfs.branch.publish(project, branch, *, at=None, expected=None, force=None)
 ```
 
 | Argument | Kind | Rule |
 | --- | --- | --- |
-| `from_branch`, `to_branch` | Name | a Branch or `main` each (a Commit id is `InvalidInput`; give it as `from_commit`/`to_commit` or use `commit.diff`) |
-| `paths_only` option | Bool | sent as `hunks = !paths_only` |
-| `page_pos`, `cursor` options | Int, Text | legacy paging: the last page's `next_page_pos` or `next_cursor` (a path) |
-| `page`, `page_size` options | Int | numbered matching-result pages |
-| `from_commit`, `to_commit` options | Text | full Commit or Layer ids admitted by each Branch |
-| `path_prefix` option | Text | matches whole path components |
-| `include_attribution` option | Bool | also find equal-content files whose unchanged lines have different known owners |
-| `continuation` option | Text | resume token ([saved queries](#saved-queries)) |
+| `project` | project | `<store>/<project>` |
+| `branch` | name | a Branch other than `main` |
+| `at` option | name | publish this Commit instead of the Branch's head: a full id, or a prefix of 8 or more characters |
+| `expected` option | name | refuse `Conflict` unless main's head is this Commit |
+| `force` option | bool | publish over what main gained since the Branch forked |
 
-```text
-{ kind: "ok", from: { ref, label, root }, to: { ref, label, root },
-  items: [ { path, kind: Added|Removed|Modified, type,
-             before | null, after | null, content, identity, metadata,
-             hunks | null, hunks_omitted } ],
-  has_more, next_page_pos, next_cursor }
+| Answer | Keys |
+| --- | --- |
+| short | `commit`; when set: `unchanged`, `previous` |
+| long | `commit, unchanged, previous, outcome, branch, source_commit, base, root, size` |
+| call | writes one call-log line; MCP `admin` |
+
+Publishes the Branch's head, or with `--at` one Commit of its history, as
+`main`'s next head. `commit` is `main`'s new head. A Commit `main` already
+holds, or whose tree equals `main`'s head, answers `unchanged` with
+`main`'s head. `previous` is `main`'s head before, when it was not the
+Branch's base.
+
+Without `--force` the publish is refused `Conflict` when `main` gained a
+publication since the Branch forked, so no work on `main` is dropped: merge
+`main` into the Branch and publish again. It goes ahead when `main` is still
+at the Branch's fork point, or when `main`'s head is this Branch's own
+earlier publication and the Commit contains it (publishing again at
+milestones); a Branch made by merging `main` in has `main`'s head as its
+base and publishes as a fast-forward. `--force` publishes over what `main`
+gained; the publications it replaced are the rows `commit list <project>
+main` shows between the new head and `base`. `--expected C` refuses
+`Conflict` unless `main`'s head is `C`. The add is one compare-and-set on
+`main`'s head inside the lane, never retried.
+
+| Refusal | When | Next |
+| --- | --- | --- |
+| `Conflict` | `main` gained a publication since the fork (without `--force`), or `main`'s head is not `--expected`; `commit` names `main`'s head | merge `main` in and publish again, or `--force` |
+| `NotFound` | the Branch is missing or is `main`; it has no Commit; `--at` is not in its history (raised `NoCommit`, `NotInHistory`) | |
+| `InvalidInput` | an ambiguous prefix (`matches`) | |
+| `Unknown` | the reply was lost | publish the same Commit again: it answers `unchanged` if it landed |
+
+Run on macOS native with a debug build:
+
+```console
+$ layerfs branch publish shop/api agent
+{"commit":"32220c54f9cc0f24b9f32bbb17fd8a1748130284aa07cc1c39348ec5888118c916"}
+$ layerfs branch publish shop/api agent --detail
+{"commit":"32220c54f9cc0f24b9f32bbb17fd8a1748130284aa07cc1c39348ec5888118c916","unchanged":true,"previous":null,"outcome":"unchanged","branch":"agent","source_commit":null,"base":null,"root":null,"size":null}
 ```
-
-`content`, `identity` and `metadata` say what changed (bytes, inode serial,
-attributes); a directory whose only change is in its children is not listed.
-Any of `page`, the endpoint, `path_prefix` or `include_attribution` options
-selects the extended mode: `from` and `to` become full typed references,
-items add `attribution`, `attribution_coverage` and `changed_owner_lines`,
-and the page carries `coverage.complete` and `scan.complete`. Unknown
-ownership stays null and is listed as an unresolved candidate. Hunks that do
-not fit are omitted explicitly (`file.diff` gives the bounded view); content
-comparison and attribution are each bounded to 64 MiB per request
-([`read/branch_compare.rs`](../../../../engine/crates/layerfs-store-service/src/read/branch_compare.rs),
-[`read/compare.rs`](../../../../engine/crates/layerfs-store-service/src/read/compare.rs)).
 
 ### branch.remove
 
-Retires one Branch in its Store (spec §4). Its row is hidden from listings and
-name resolution; fork, merge, publish and mount of it are refused, its Commits
-and objects stay until a later [`store.compact`](store.md#storecompact), and
-`main` is `ReservedName`.
+Remove one Branch; its name stays taken until compaction.
 
 ```text
-JS      await layerfs.branch.remove(project, branch)
-Python  layerfs.branch.remove(project, branch)
 CLI     layerfs branch remove <project> <branch>
+Node    await layerfs.branch.remove(project, branch)
+Python  layerfs.branch.remove(project, branch)
 ```
 
-Returns `{ kind: "Removed", project, branch, removed_ms }`. A repeat is
-`NoSuchBranch` (only `project.delete` is retry-idempotent); a concurrent
-remove is `Busy` with phase `"retire"`.
-
-| Error | When | Source |
+| Argument | Kind | Rule |
 | --- | --- | --- |
-| `ReservedName` | the Branch is `main` | [`methods/branch/remove.rs`](../../../../engine/crates/layerfs-store-service/src/methods/branch/remove.rs) |
-| `NoSuchStore`, `NoSuchBranch` | the Store or Branch is missing (or already retired) | same |
-| `MountsActive` | a mount of the Branch is live | [`history/admission.rs`](../../../../engine/crates/layerfs-store-service/src/history/admission.rs) |
-| `Busy`, `Unresolved` | another user or operation holds the Branch, or a dead owner left an uncertain one | spec §5.1 |
-| `Unknown` | worker route: the answer was lost | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| `project` | project | `<store>/<project>` |
+| `branch` | name | a Branch name |
 
-## Saved queries
+| Answer | Keys |
+| --- | --- |
+| short | `ok` |
+| long | `ok, outcome, branch, removed_at` |
+| call | writes one call-log line; MCP `admin` |
 
-Shared by `branch.commits`, `branch.get_commit`, `branch.diff` and the
-`file` saved reads ([`file.revision`](file.md#filerevision),
-[`file.diff`](file.md#filediff), [`file.blame`](file.md#fileblame)).
+Retires one Branch in its Store: a marker hides it from listings and name
+resolution, fork, merge, publish and mount of it are refused, and its
+Commits and objects stay until a later
+[`store.compact`](store.md#storecompact). Its name stays taken until then.
 
-| Rule | Detail | Source |
+| Refusal | When | Source |
 | --- | --- | --- |
-| Typed references | `{ id, kind: "Commit" \| "Layer", branch, root }` with full ids; display prefixes are never query identities. An id outside the project's Branch context is refused | [`history/saved.rs`](../../../../engine/crates/layerfs-store-service/src/history/saved.rs) |
-| Pin once | the first page resolves its anchor (`at_commit`, `from`/`to`); reuse those ids for later pages and file reads. A refreshed head is a new query | same |
-| Numbered pages | `page` one-based (default 1), `page_size` 1..=1000 (default 50); they count matching results, not candidates; not combined with `page_pos` or `cursor` | [`methods/args.rs`](../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
-| Budgets | at most 10,000 candidate visits per request, seeking included (`MAXIMUM_QUERY_WORK`), and a 48 KiB reply; a page that cannot complete is `Capacity`, never a short successful page | [`read/query.rs`](../../../../engine/crates/layerfs-store-service/src/read/query.rs) |
-| `has_more` | false only on observed exhaustion; no total or page count is promised | same |
-| Boundary cache | at most 128 page boundaries per Store, keyed by pin, filters, traversal and page size; eviction changes cost, never results | [`read/paged_boundaries.rs`](../../../../engine/crates/layerfs-store-service/src/read/paged_boundaries.rs), [`read/comparison_pages.rs`](../../../../engine/crates/layerfs-store-service/src/read/comparison_pages.rs) |
-| Continuation | `branch.diff` and `file.revision` answer an opaque `lfq1` token while more pages exist (null on the last). A new process repeats the same pins, filters and `page_size` and passes it; it is authenticated by the Store's cursor capability, and a mismatch or tampering is `InvalidInput` | [`read/continuation.rs`](../../../../engine/crates/layerfs-store-service/src/read/continuation.rs) |
-| Saved roots only | blame and diff run at immutable roots, never at a live Workspace overlay | [`read/blame.rs`](../../../../engine/crates/layerfs-store-service/src/read/blame.rs) |
+| `InvalidInput` | the Branch is `main` (raised `ReservedName`) | [`methods/branch/remove.rs`](../../../../engine/crates/layerfs-store-service/src/methods/branch/remove.rs) |
+| `NotFound` | the Branch is missing or already removed | same |
+| `InUse` | a Workspace of the Branch is mounted (raised `MountsActive`) | [`history/admission.rs`](../../../../engine/crates/layerfs-store-service/src/history/admission.rs) |
+| `Busy`, `Unresolved` | another operation holds the Branch, or a gone owner left one uncertain | |
+| `Unknown` | worker route: the answer was lost; it names the Branch | [`unknown.rs`](../../../../control/crates/layerfs-store/src/unknown.rs) |
+
+Run on macOS native with a debug build:
+
+```console
+$ layerfs branch remove shop/api merged
+{"ok":true}
+```
 
 ## Family errors
 
 | Error | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a bad argument, mixed paging styles, a bad continuation; out of scope | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs), [`methods/args.rs`](../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
-| `NoSuchStore`, `NoSuchProject` | the project's Store or project is not recorded | [`resolve.rs`](../../../../control/crates/layerfs-store/src/resolve.rs) |
-| `NoSuchBranch`, `NoSuchCommit`, `NotFound` | a Branch, Commit or Layer is missing | [`history/lookup.rs`](../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `Capacity` | a numbered page cannot fit its work or reply budget | [`read/query.rs`](../../../../engine/crates/layerfs-store-service/src/read/query.rs) |
-| `Busy`, `Unresolved` | a push, pull or remove holds the Store | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) |
-| `Unavailable` | the Store's worker is not recorded or does not answer; a PostgreSQL server is unreachable. Nothing starts a stopped machine | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
-| `Unknown` | a worker's answer was lost, or the Store reported an unknown outcome. A read may be called again; after a fork, merge or publish, read `branch.get` first | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| `InvalidInput` | a bad argument, a cursor of other filters or another call, an ambiguous Commit prefix (`matches`); out of scope | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs), [`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs) |
+| `NotFound` | the project's Store, the project, a Branch or a Commit is missing (raised `NoSuchStore`, `NoSuchProject`, `NoSuchBranch`, `NoSuchCommit`) | [`resolve.rs`](../../../../control/crates/layerfs-store/src/resolve.rs), [`history/lookup.rs`](../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
+| `Busy`, `Unresolved` | a move or remove holds the Store, or left its outcome unknown | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) |
+| `Unavailable` | the Store's worker is not recorded or does not answer; a PostgreSQL server is unreachable. Nothing starts a stopped machine: `fix: layerfs machine start <machine>` | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
+| `Unsupported` | a sqlite Store reached from another kernel, or on a removed platform's machine | [`calls/platform_policy.rs`](../../../../api/crates/layerfs-api/src/calls/platform_policy.rs) |
+| `Unknown` | a worker's answer was lost, or the Store reported an unknown outcome; after a fork, merge or publish, read `branch get` first | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 ## Related
 
-- [commit family](commit.md), [file family](file.md).
-- [Store calls](../../engine/store-calls/README.md) and [reads](../../engine/store-calls/reads.md).
+- [commit family](commit.md), [file family](file.md), [workspace family](workspace.md).
+- [Store calls](../../engine/store-calls/README.md).
 - [Merge flow](../../flows/merge.md), [compare and merge](../../core/compare-and-merge/README.md).
 - [Errors and events](../calls/errors-and-events.md).

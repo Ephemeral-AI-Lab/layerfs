@@ -48,7 +48,7 @@ never up. `layerfs-machine` reaches `layerfs-platform` only through its
 
 | Topic | Crates | What it covers | Pages |
 | --- | --- | --- | --- |
-| [Home](home/README.md) | `layerfs-home` | Layout, record files, locks, the `op` intent, names, secrets, traces and the call log | [Migration](home/migration.md) |
+| [Home](home/README.md) | `layerfs-home` | Opening a home, layout, record files, locks, the `op` intent, names, secrets, traces and the call log; the inventory of relationships | none |
 | [Machines](machines/README.md) | `layerfs-machine`, `layerfs-platform` | Machine records and calls; one adapter per platform; the support table | [Platforms](machines/platforms.md), [Workers and reach](machines/workers-and-reach.md) |
 | [Stores and projects](stores-and-projects/README.md) | `layerfs-store` (but `backup/`) | Store and project records, placement, leases, the open-Store cache, Store calls | [SQLite and PostgreSQL](stores-and-projects/sqlite-and-postgresql.md), [Projects](stores-and-projects/projects.md) |
 | [Sandboxes](sandboxes/README.md) | `layerfs-sandbox`, `layerfs-sandbox-backend` | Sandbox records and lifecycle, Workspace calls, exec; the two backends; the inspect route | [Daemon channel and exec](sandboxes/daemon-channel-and-exec.md), [Backends](sandboxes/backends.md), [Inspection](sandboxes/inspect.md) |
@@ -70,18 +70,18 @@ machine's worker, or in a Sandbox's daemon.
 | `project.init` | checks; walks and copies the folder | `project.stage` (parts), then `project.init` | — | [`project/family.rs`](../../../control/crates/layerfs-store/src/project/family.rs), [`project/send.rs`](../../../control/crates/layerfs-store/src/project/send.rs) |
 | `project.export` | destination checks, strict local writer, atomic rename | `project.export` streams pinned tree records | — | [`project/export/route.rs`](../../../control/crates/layerfs-store/src/project/export/route.rs) |
 | `project.delete` | record, durable intent and lock work | `project.delete.admit`, `project.delete`, `project.delete.entry`, `project.delete.release` | — | [`project/delete.rs`](../../../control/crates/layerfs-store/src/project/delete.rs), `project/family.rs` |
-| `store.push`, `store.pull` | phases, records, locks | `store.file` steps on the source and target | — | [`sqlite/transfer/phases.rs`](../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
+| `store.move` | phases, records, locks | `store.file` steps on the source and target | — | [`sqlite/transfer/phases.rs`](../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
 | `store.remove` | records, locks | `store.file` `remove` | — | [`sqlite/remove.rs`](../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
-| `store.status`, `store.list` | records, leases | `store.file` `stat`, when reached | — | [`status.rs`](../../../control/crates/layerfs-store/src/status.rs), [`list.rs`](../../../control/crates/layerfs-store/src/list.rs) |
+| `store.list`, `store.get` | records only; `--with live`: leases and `store.file` `stat`, compaction record and heads, when reached; `--with stats` opens the Store | `store.file` `stat`, when reached | — | [`get.rs`](../../../control/crates/layerfs-store/src/get.rs), [`live.rs`](../../../control/crates/layerfs-store/src/live.rs), [`list.rs`](../../../control/crates/layerfs-store/src/list.rs) |
 | `store.compact` | the Store's lease; PostgreSQL dials its URL, a sqlite file here rebuilds in this process | `store.compact`: a sqlite file on that machine rebuilds there (spec S6, #42 D5) | — | [`compact.rs`](../../../control/crates/layerfs-store/src/compact.rs) |
-| `store.update`, `store.status --machine` | records; a Store's own connection and a `native` check are dialled here | `store.reach`: the machine's own check | — | [`layerfs-control/src/store.rs`](../../../control/crates/layerfs-control/src/store.rs) |
+| `store.update` | records; a Store's own connection and a `native` check are dialled here | `store.reach`: the machine's own check | — | [`layerfs-control/src/store.rs`](../../../control/crates/layerfs-control/src/store.rs) |
 | `backup.create` | uploads to the bucket | `store.file` `stage`, `read`, `unstage` | — | [`backup/create.rs`](../../../control/crates/layerfs-store/src/backup/create.rs) |
 | `machine.*`, `store.create`, `store.connect`, `store.disconnect`, `backup.connect`, `backup.disconnect`, `backup.list`, `backup.restore` | all of it | — | — | [Machines](machines/README.md), [Backups](backups/README.md) |
-| `sandbox.create`, `sandbox.close` | records, intent | `sandbox.host` (the worker runs the same host code on its `native`) | started, stopped | [`route.rs`](../../../control/crates/layerfs-sandbox/src/route.rs) |
+| `sandbox.create`, `sandbox.remove` | records, intent | `sandbox.host` with the internal host ops `sandbox.create` and `sandbox.close` (the worker runs the same host code on its `native`) | started, stopped | [`route.rs`](../../../control/crates/layerfs-sandbox/src/route.rs), [`remove.rs`](../../../control/crates/layerfs-sandbox/src/remove.rs), [`host/call.rs`](../../../control/crates/layerfs-sandbox/src/host/call.rs) |
 | `workspace.mount`, `commit`, `unmount`, `status` on a forwarded Sandbox | dials the daemon directly | — | serves it | [`direct.rs`](../../../control/crates/layerfs-sandbox/src/direct.rs) |
 | the same, not forwarded | — (local machine: dials the daemon) | `sandbox.host`; the worker dials the daemon | serves it | `route.rs` |
 | `workspace.exec` | checks the directory; keeps the command's record when forwarded (route `machine:<name>`) | runs `bash -c` through the Sandbox runtime (always the machine) | — | [`workspace/exec.rs`](../../../control/crates/layerfs-sandbox/src/workspace/exec.rs) |
-| `workspace.exec_cancel` | where the record is: here when forwarded (then rides `sandbox.host`) | else here; an unreached worker answers `{outcome: "unknown"}`, nothing changed | — | `workspace/exec.rs`, [`exec/cancel.rs`](../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) |
+| `workspace.cancel` (`--exec E` for one command) | where the record is: here when forwarded (then rides `sandbox.host`) | else here; an unreached worker answers `{outcome: "unknown"}`, nothing changed | — | `workspace/exec.rs`, [`exec/cancel.rs`](../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) |
 
 | Platform | sqlite Store calls on macOS / Linux / Windows | Workspace calls skip the worker? | Source |
 | --- | --- | --- | --- |

@@ -129,9 +129,13 @@ fn unhex(text: &str) -> Option<Vec<u8>> {
 pub const RECORD_VERSION: i64 = 1;
 
 /// Writes entity record `value` at `path` ([`write_record`]) with its
-/// version first, `"v": 1`.
+/// version first, `"v": 1`. When `path` is one of a home's records, the
+/// home's generation moves ([`super::generation::recorded`]): the one place
+/// a record write moves it, so a record writer adds no call of its own.
 pub fn write_entity(path: &Path, value: &SdkValue) -> Result<(), SdkRefusal> {
-    write_record(path, &versioned(value))
+    write_record(path, &versioned(value))?;
+    super::generation::recorded(path);
+    Ok(())
 }
 
 /// `value` (a record) with `"v": 1` as its first field.
@@ -185,6 +189,36 @@ pub fn log_line(home: &Path, name: &str, value: &SdkValue) -> Result<(), SdkRefu
         crate::logs::rotate(&super::paths::log_rotate_lock(home), &path);
     }
     Ok(())
+}
+
+/// `log/sweep.jsonl`: what LayerFS removed of what interrupted operations
+/// left behind, and each removal that failed (spec v20).
+pub const SWEPT: &str = "sweep.jsonl";
+
+/// One line of [`SWEPT`] under `root` (a home, or a worker's root): `{ at,
+/// kind, path, outcome: removed | failed, bytes?, message? }`, `outcome`
+/// `removed` with the bytes freed when they were counted, else `failed`
+/// with why. A line that cannot be written changes nothing.
+pub fn log_swept(root: &Path, kind: &str, path: &Path, outcome: &Result<Option<u64>, String>) {
+    let mut fields = vec![
+        ("at", SdkValue::Int(now_ms())),
+        ("kind", SdkValue::text(kind)),
+        ("path", SdkValue::text(path.display().to_string())),
+    ];
+    match outcome {
+        Ok(bytes) => {
+            fields.push(("outcome", SdkValue::text("removed")));
+            if let Some(bytes) = bytes.and_then(|bytes| i64::try_from(bytes).ok()) {
+                fields.push(("bytes", SdkValue::Int(bytes)));
+            }
+        }
+        Err(why) => {
+            fields.push(("outcome", SdkValue::text("failed")));
+            fields.push(("message", SdkValue::text(why)));
+        }
+    }
+    let line = fields.into_iter().map(|(k, v)| (k.to_owned(), v)).collect();
+    let _ = log_line(root, SWEPT, &SdkValue::Map(line));
 }
 
 /// Milliseconds since the Unix epoch.

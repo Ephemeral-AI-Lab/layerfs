@@ -105,23 +105,19 @@ last count ([Backups](README.md)).
 ## Credentials
 
 ```text
- record:  "env:LAYERFS_…"                 "file:/absolute/path"
-               |                                   |
- resolve()     v                                   v
-          <PREFIX>_ACCESS_KEY             lines access_key=…, secret_key=…
-          <PREFIX>_SECRET_KEY             mode & 0o077 must be 0
+ backup/<b>/record.json  access_key (the key's id)
+ secret/bucket/<b>.json  the key's secret (0600)
                \______________ _______________/
                               v
-             Credentials { access_key, secret_key }
+             Credentials { access_key, secret_key }   read by the caller
              Debug: "Credentials([redacted])"
 ```
 
 | Rule | Source |
 | --- | --- |
-| An `env:` prefix starts with `LAYERFS_` and holds only `[A-Z0-9_]`: LayerFS reads only its own settings. | [`credentials.rs`](../../../../control/crates/layerfs-bucket/src/bucket/credentials.rs) |
-| A `file:` path is absolute; a file readable by group or others is refused `Invalid`. | same |
-| Keys must be non-empty printable ASCII; a missing variable is `Invalid` "… is not set". | same |
-| `connect` resolves the reference and sends nothing. | [`minio/provider.rs`](../../../../control/crates/layerfs-bucket/src/bucket/minio/provider.rs), [`r2/provider.rs`](../../../../control/crates/layerfs-bucket/src/bucket/r2/provider.rs) |
+| The caller reads the key (its id from the bucket's record, its secret from the home's secret folder) and hands it to the driver; no `env:` or `file:` key reference is read. A record with no `access_key` is refused `Failed` with the fix that connects it again at its URL, which keeps its Stores' links. A new key replaces the old one by connecting again at the same URL (spec v21) | [`credentials.rs`](../../../../control/crates/layerfs-bucket/src/bucket/credentials.rs), [`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) `credentials` |
+| Keys must be non-empty printable ASCII, else `Invalid` "empty or unprintable credentials". | [`credentials.rs`](../../../../control/crates/layerfs-bucket/src/bucket/credentials.rs) `checked` |
+| `connect` checks the key and sends nothing. | [`minio/provider.rs`](../../../../control/crates/layerfs-bucket/src/bucket/minio/provider.rs), [`r2/provider.rs`](../../../../control/crates/layerfs-bucket/src/bucket/r2/provider.rs) |
 
 ## Local folder
 

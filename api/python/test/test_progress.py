@@ -63,20 +63,28 @@ class Progress(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.home, True)
         self.addCleanup(shutil.rmtree, self.folder, True)
 
-    def test_the_table_twelve_calls_take_on_progress(self):
+    def test_the_table_nineteen_calls_take_on_progress(self):
+        # five of them doctors: each finished thing is one event
         self.assertEqual(
             declaring("on_progress"),
             [
+                "home.doctor",
                 "project.init",
                 "project.export",
+                "project.doctor",
                 "sandbox.create",
+                "sandbox.remove",
+                "sandbox.doctor",
                 "workspace.exec",
-                "machine.load",
+                "machine.load_image",
                 "machine.start",
+                "machine.stop",
                 "machine.create",
-                "store.push",
-                "store.pull",
+                "machine.remove",
+                "machine.doctor",
+                "store.move",
                 "store.compact",
+                "store.doctor",
                 "backup.create",
                 "backup.restore",
             ],
@@ -92,7 +100,7 @@ class Progress(unittest.TestCase):
         def on_progress(progress):
             events.append((time.perf_counter(), progress, threading.current_thread(), returned[0]))
 
-        made = lfs.project.init("shop/api", self.folder, on_progress=on_progress)
+        made = lfs.project.init("shop/api", self.folder, on_progress=on_progress, detail=True)
         returned[0] = True
         after = time.perf_counter()
         self.assertEqual(made["project"], "shop/api")
@@ -119,13 +127,13 @@ class Progress(unittest.TestCase):
                 phases.append(progress["phase"])
                 raise RuntimeError(f"boom at {progress['phase']}")
 
-            made = lfs.project.init("shop/api", self.folder, on_progress=on_progress)
+            made = lfs.project.init("shop/api", self.folder, on_progress=on_progress, detail=True)
         finally:
             sys.unraisablehook = previous
         self.assertEqual(made["project"], "shop/api")
         self.assertEqual(phases, ["check", "install", "record"])
         self.assertEqual(unraisable, [f"RuntimeError: boom at {p}" for p in phases])
-        self.assertEqual(lfs.project.get("shop/api")["project"], "shop/api", "the Init happened")
+        self.assertEqual(lfs.project.get("shop/api", detail=True)["project"], "shop/api", "the Init happened")
 
     def test_aio_init_reports_on_the_loop_thread_before_it_returns_and_a_raise_goes_to_the_loop(self):
         lfs = aio.client(home=self.home)
@@ -141,7 +149,7 @@ class Progress(unittest.TestCase):
                 events.append((time.perf_counter(), progress, threading.current_thread(), returned[0]))
                 raise RuntimeError(f"boom at {progress['phase']}")
 
-            made = await lfs.project.init("shop/api", self.folder, on_progress=on_progress)
+            made = await lfs.project.init("shop/api", self.folder, on_progress=on_progress, detail=True)
             returned[0] = True
             at_return = len(events)
             await asyncio.sleep(0.2)

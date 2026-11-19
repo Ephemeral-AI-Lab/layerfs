@@ -81,6 +81,9 @@ fn setup(name: &str) -> (Scratch, Standin, std::path::PathBuf) {
     let standin = Standin::new(&scratch.base.join("standin"));
     let home = scratch.base.join("home");
     fs::create_dir_all(&home).unwrap();
+    // the home is opened, as every call opens it before a copy: a folder
+    // holding a lock record and no `layerfs.json` is not a 2.0 home
+    layerfs_home::home::open(&home).unwrap();
     standin.image(ID, &["demo/pg:17"], ("linux", architecture()), 4000);
     standin.export(&export());
     (scratch, standin, home)
@@ -180,8 +183,7 @@ fn refusals_carry_their_detail() {
     standin.image(wrong, &["demo/x86:1"], ("linux", other), 10);
     let error = run(&standin, &home, "demo/x86:1").0.unwrap_err();
     assert_eq!(error.code, "Unsupported");
-    assert_eq!(error.detail.get_text("reason"), Some("arch"));
-    assert_eq!(error.detail.get_text("value"), Some(other));
+    assert_eq!(error.detail.get_text("architecture"), Some(other));
     let error = run(&standin, &home, "demo/none:1").0.unwrap_err();
     assert_eq!(error.code, "InvalidInput", "{}", error.message);
     let none = layerfs_sandbox::docker::Docker::at(None, None);
@@ -201,8 +203,8 @@ fn refusals_carry_their_detail() {
     standin.image(ID, &["demo/pg:17"], ("linux", architecture()), u64::MAX / 8);
     let error = run(&standin, &home, "demo/pg:17").0.unwrap_err();
     assert_eq!(error.code, "Capacity");
-    let needed = error.detail.get_int("needed").unwrap();
-    let free = error.detail.get_int("free").unwrap();
+    let needed = error.detail.get_int("needed_bytes").unwrap();
+    let free = error.detail.get_int("free_bytes").unwrap();
     assert!(needed > free, "{needed} {free}");
     assert_eq!(
         needed as u64,
@@ -210,9 +212,14 @@ fn refusals_carry_their_detail() {
         "a fresh copy needs the whole unpacked size"
     );
     assert_eq!(
-        error.detail.get_text("where"),
+        error.detail.get_text("path"),
         Some(cache::cache(&home).to_string_lossy().as_ref()),
         "the refusal names the filesystem it measured"
+    );
+    assert_eq!(
+        error.detail.get_text("fix"),
+        Some("layerfs machine prune native --unused"),
+        "the refusal says how to free room"
     );
     assert!(
         !standin.dir.join("containers").exists(),
@@ -235,7 +242,7 @@ fn need_counts_what_the_layers_unpack_to() {
     let error = run(&standin, &home, "demo/pg:17").0.unwrap_err();
     assert_eq!(error.code, "Capacity", "{}", error.message);
     let needed = layerfs_sandbox::docker::need(layers.iter().sum());
-    assert_eq!(error.detail.get_int("needed"), Some(needed as i64));
+    assert_eq!(error.detail.get_int("needed_bytes"), Some(needed as i64));
 }
 
 #[test]
@@ -305,6 +312,90 @@ fn a_staged_prefix_is_resumed_and_a_mismatched_one_restarted() {
     }
 }
 
+/// Plan Part 3 fix 4: a probe hashes the staged bytes only when the copy
+/// asks (`hash`), which a load does once, on the probe it resumes from.
+#[test]
+fn a_probe_hashes_the_staged_bytes_only_when_asked() {
+    let scratch = Scratch::new("copy-probe-hash");
+    let home = scratch.base.join("home");
+    cache::write(&cache::cache(&home), HEX, 0, b"abc").unwrap();
+    let probe = |hash: bool| {
+        cache::step(
+            &Side::Home(&home),
+            &SdkValue::map([
+                ("step", SdkValue::text("probe")),
+                ("id", SdkValue::text(ID)),
+                ("hash", SdkValue::Bool(hash)),
+            ]),
+        )
+        .unwrap()
+    };
+    let plain = probe(false);
+    assert_eq!(plain.get_int("offset"), Some(3));
+    assert_eq!(plain.get("prefix_sha256"), None, "not hashed unasked");
+    let hashed = probe(true);
+    assert_eq!(hashed.get_int("offset"), Some(3));
+    assert_eq!(
+        hashed.get_text("prefix_sha256"),
+        Some("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    );
+}
+
+/// Plan Part 3 fix 4 and v19: a listing says who holds a copy's lock from
+/// the lock's owner record (`ImageLock::holder`, which the item's `busy`
+/// state and `op` phase come from) and never takes or tests the kernel
+/// lock, so it cannot make a named prune's guard refuse. A guard that
+/// writes no record (a prune's) is not seen; a live copy's record is, with
+/// the phase the copy last wrote. The worker's raw row of a part carries no
+/// `resumable` flag any more.
+#[test]
+fn a_listing_reads_the_copy_lock_record_and_takes_no_lock() {
+    use layerfs_sandbox::image_load::ImageLock;
+    let scratch = Scratch::new("copy-list-lock");
+    let home = scratch.base.join("home");
+    cache::write(&cache::cache(&home), HEX, 0, b"abc").unwrap();
+    let part = |home: &Path| {
+        let listed =
+            images::in_worker(home, SdkValue::map([("machine", SdkValue::text("docker"))]));
+        let listed = listed.unwrap();
+        let Some(SdkValue::List(rows)) = listed.get("images") else {
+            panic!("no images in {listed:?}");
+        };
+        rows.iter()
+            .find(|row| row.get_text("id") == Some(ID) && row.get_bool("staged"))
+            .cloned()
+            .expect("the staged part is listed")
+    };
+    let guard = ImageLock::try_hold(&home, "docker", ID).unwrap().unwrap();
+    let row = part(&home);
+    assert_eq!(row.get_int("size"), Some(3));
+    assert_eq!(row.get("resumable"), None, "the flag is gone in v19");
+    assert!(
+        ImageLock::holder(&home, "docker", HEX).is_none(),
+        "a guard with no record is not seen"
+    );
+    drop(guard);
+    let copy = ImageLock::try_take(&home, "docker", ID).unwrap().unwrap();
+    part(&home);
+    let holder = ImageLock::holder(&home, "docker", HEX).expect("a live copy's record is seen");
+    assert_eq!(
+        holder.get("phase"),
+        None,
+        "no phase before the copy names one"
+    );
+    assert!(holder.get_int("since_ms").is_some());
+    copy.at("send");
+    let holder = ImageLock::holder(&home, "docker", HEX).unwrap();
+    assert_eq!(holder.get_text("phase"), Some("send"));
+    assert!(
+        ImageLock::try_hold(&home, "docker", ID).unwrap().is_none(),
+        "the copy still holds its lock"
+    );
+    drop(copy);
+    part(&home);
+    assert!(ImageLock::holder(&home, "docker", HEX).is_none());
+}
+
 #[test]
 fn frames_out_of_order_are_refused_and_publish_checks_the_bytes() {
     let scratch = Scratch::new("copy-frames");
@@ -331,7 +422,7 @@ fn frames_out_of_order_are_refused_and_publish_checks_the_bytes() {
         ("size", SdkValue::Int(3)),
         ("sha256", SdkValue::text("00")),
     ]));
-    assert_eq!(wrong.unwrap_err().code, "InvalidInput");
+    assert_eq!(wrong.unwrap_err().code, "Failed");
     assert!(
         dir.join(format!(".recv-{HEX}.part")).exists(),
         "kept for a resume"
@@ -410,7 +501,7 @@ fn prune_refuses_an_image_in_use_and_keeps_the_default() {
     .unwrap();
     let error = prune(&root, Some(ID), false, None).unwrap_err();
     assert_eq!(error.code, "InUse");
-    assert_eq!(error.detail.get_int("count"), Some(1));
+    assert_eq!(error.detail.get_int("sandbox_count"), Some(1));
     // a create between its unpack and its spec holds the image
     let image = Image::parse(second).unwrap();
     let tar = root.join("flat.tar");
@@ -452,4 +543,44 @@ fn prune_refuses_an_image_in_use_and_keeps_the_default() {
         out.get("removed"),
         Some(&SdkValue::List(vec![SdkValue::text(ID)]))
     );
+}
+
+/// v19: `machine.capacity`'s `reclaimable_image_bytes` is what `machine
+/// prune --unused` frees from a listing: a ready image no Sandbox uses but
+/// the default (with any stale part beside it), the stale part of an image
+/// in use, a part no copy holds; never a busy copy's part, the default or
+/// an image a Sandbox uses.
+#[test]
+fn reclaimable_counts_what_an_unused_prune_frees() {
+    let item = |id: &str, state: &str, size: Option<i64>, staged: Option<i64>, users: usize| {
+        SdkValue::map([
+            ("id", SdkValue::text(id)),
+            ("state", SdkValue::text(state)),
+            ("size", size.map_or(SdkValue::Null, SdkValue::Int)),
+            ("staged_bytes", staged.map_or(SdkValue::Null, SdkValue::Int)),
+            (
+                "sandboxes",
+                SdkValue::List(
+                    (0..users)
+                        .map(|n| SdkValue::text(format!("s{n}")))
+                        .collect(),
+                ),
+            ),
+        ])
+    };
+    let listed = SdkValue::map([
+        ("default", SdkValue::text("sha256:d")),
+        (
+            "images",
+            SdkValue::List(vec![
+                item("sha256:d", "ready", Some(1000), None, 0),
+                item("sha256:u", "ready", Some(100), Some(7), 0),
+                item("sha256:s", "ready", Some(2000), Some(20), 1),
+                item("sha256:p", "broken", None, Some(3), 0),
+                item("sha256:b", "busy", None, Some(5000), 0),
+            ]),
+        ),
+    ]);
+    assert_eq!(images::reclaimable(&listed), 100 + 7 + 20 + 3);
+    assert_eq!(images::reclaimable(&SdkValue::map([])), 0);
 }

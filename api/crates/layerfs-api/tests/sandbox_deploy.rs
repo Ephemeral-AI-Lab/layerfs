@@ -53,16 +53,31 @@ fn the_daemon_and_the_linux_bundle_come_from_the_versioned_cache() {
         ],
     )
     .unwrap();
-    let (code, message) = call(
-        &home,
-        "sandbox.create",
-        &[
-            ("project", t("shop/app")),
-            ("name", t("t")),
-            ("machine", t("native")),
-        ],
-    )
+    // its progress has no `claim`: `start` first, as the create's one
+    // phase (V19-8; no image named, so no copy phases come before it)
+    let mut events = Vec::new();
+    let args = SdkValue::map([
+        ("project", t("shop/app")),
+        ("name", t("t")),
+        ("machine", t("native")),
+    ]);
+    let refusal = layerfs_api::call(Some(&home), "sandbox.create", args, &mut |event| {
+        events.push(event)
+    })
     .unwrap_err();
+    let (code, message) = (refusal.code, refusal.message);
+    let phases: Vec<_> = (events.iter())
+        .filter_map(|event| {
+            let event = event.get("progress")?;
+            let phase = event.get_text("phase")?.to_owned();
+            Some((phase, event.get_int("done"), event.get_int("total")))
+        })
+        .collect();
+    assert_eq!(
+        phases,
+        [("start".to_owned(), Some(0), Some(1))],
+        "{events:?}"
+    );
     let expected = cache
         .join("layerfs/bundle")
         .join(version)

@@ -9,8 +9,8 @@
 //! with no other call running here, the Store's write-ahead log is
 //! checkpointed and truncated once (#86), so a quiesced Store's size is its
 //! file. The Store stays open. After a call this runs on its own thread once
-//! the call is answered; after `sandbox.close` it runs before that answer, so
-//! a `store status` right after sees the truncated log. A checkpoint that
+//! the call is answered; after `sandbox.remove` it runs before that answer, so
+//! a `store get --with live` right after sees the truncated log. A checkpoint that
 //! cannot complete now (another process writing, a reader still in the log)
 //! is left for the idle close and never retried.
 use crate::lease::Lease;

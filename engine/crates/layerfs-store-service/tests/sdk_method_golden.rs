@@ -71,7 +71,16 @@ fn render(value: &SdkValue, out: &mut String) {
                 out.push_str(name);
                 out.push_str(": ");
                 if matches!(item, SdkValue::Int(_))
-                    && matches!(name.as_str(), "time" | "newStored" | "newMetadata")
+                    && matches!(
+                        name.as_str(),
+                        "time"
+                            | "newStored"
+                            | "newMetadata"
+                            | "createdMs"
+                            | "newStoredBytes"
+                            | "newMetadataBytes"
+                            | "modifiedMs"
+                    )
                 {
                     out.push_str("<varies>");
                 } else {
@@ -132,9 +141,10 @@ fn public_methods_answer_as_recorded() {
     s.call("project.list_branches", vec![]);
     s.call("project.list_branches", vec![("name", t("main"))]);
     s.call("project.list_branches", vec![("name", SdkValue::Int(3))]);
+    s.call("project.list_branches", vec![("limit", SdkValue::Int(0))]);
     s.call(
         "project.list_branches",
-        vec![("pageSize", SdkValue::Int(0))],
+        vec![("prefix", t("f")), ("limit", SdkValue::Int(1))],
     );
 
     // branch.fork
@@ -408,15 +418,20 @@ fn public_methods_answer_as_recorded() {
     s.call("branch.list_commits", vec![("branch", t("feat"))]);
     s.call(
         "branch.list_commits",
-        vec![("branch", t("feat")), ("pageSize", SdkValue::Int(2))],
+        vec![("branch", t("feat")), ("limit", SdkValue::Int(2))],
     );
     s.call("branch.list_commits", vec![("branch", t("main"))]);
     s.call(
         "branch.list_commits",
+        vec![("branch", t("main")), ("limit", SdkValue::Int(1))],
+    );
+    s.call("commit.diff", vec![("ref", t("feat"))]);
+    s.call(
+        "commit.diff",
         vec![
-            ("branch", t("main")),
-            ("pageSize", SdkValue::Int(1)),
-            ("pagePos", SdkValue::Int(1)),
+            ("ref", t("feat")),
+            ("from", t("main")),
+            ("path", t("/a.txt")),
         ],
     );
     s.call(
@@ -450,12 +465,13 @@ fn public_methods_answer_as_recorded() {
     );
     let commits = fixture.call(
         "branch.list_commits",
-        vec![("branch", t("feat")), ("pageSize", SdkValue::Int(2))],
+        vec![("branch", t("feat")), ("limit", SdkValue::Int(2))],
     );
     let ids: Vec<String> = support::items(&commits)
         .iter()
-        .map(|item| item.get_text("id").unwrap().to_owned())
+        .map(|item| item.get_text("commit").unwrap().to_owned())
         .collect();
+    s.call("branch.get_commit", vec![("commit", t(&ids[0][..12]))]);
     s.call(
         "branch.diff_commits",
         vec![("from", t(&ids[1])), ("to", t(&ids[0]))],

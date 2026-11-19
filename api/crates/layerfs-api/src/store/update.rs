@@ -1,43 +1,38 @@
-//! `store.update`: change a PostgreSQL Store's connection, or the one a
-//! machine alone dials.
-use crate::calls::table::Kind::{Bool, Name, Text};
+//! `store.update`: change a PostgreSQL Store's saved login or its
+//! `synchronous_commit`.
+use crate::calls::table::Kind::{Name, Text};
 use crate::calls::table::{a, call, opt, Call};
-use crate::calls::Context;
+use crate::calls::{Context, Form};
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::store::StoreUpdate;
-use layerfs_home::names::{MachineName, StoreName};
+use layerfs_home::names::StoreName;
 use layerfs_home::outcome::Outcome;
+use layerfs_store::postgresql::update::{update, StoreUpdate};
+
+/// Its answer: `ok`.
+const FORM: Form = Form::of(
+    &["ok"],
+    &[],
+    &["ok", "outcome", "store", "auth", "synchronous_commit"],
+);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
     "store",
     "update",
-    &[a("name", Name)],
-    &[
-        opt("machine", Name),
-        opt("url", Text),
-        opt("password", Text),
-        opt("synchronous_commit", Text),
-        opt("clear", Bool),
-    ],
-    "change a PostgreSQL Store's connection, or the one a machine alone dials",
+    &[a("store", Name)],
+    &[opt("auth", Name), opt("synchronous_commit", Text)],
+    "change a PostgreSQL Store's saved login or its synchronous_commit",
     run,
-);
+)
+.form(&FORM);
 
 /// Runs `store.update`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let text = |name: &str| args.get_text(name).map(str::to_owned);
     let request = StoreUpdate {
-        name: StoreName::parse(args.get_text("name").unwrap_or(""))?,
-        machine: args
-            .get_text("machine")
-            .map(MachineName::parse)
-            .transpose()?,
-        url: text("url"),
-        password: text("password"),
+        store: StoreName::parse(args.get_text("store").unwrap_or(""))?,
+        auth: text("auth"),
         synchronous_commit: text("synchronous_commit"),
-        clear: args.get_bool("clear"),
     };
-    let (home, events) = context.parts();
-    layerfs_control::store::update(home, events, &request)
+    update(&context.home, &request)
 }

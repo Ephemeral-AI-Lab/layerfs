@@ -1,0 +1,1295 @@
+{
+  "family": "machine",
+  "who": null,
+  "old_count": 15,
+  "blurb": "Where Sandboxes and sqlite Stores run. Default reads use the home's records only; a probe is <code>--with live</code>. <code>machine.platforms</code> moved to <code>home get --with platforms</code>.",
+  "reasons": [
+    "<b>Why reads are records only:</b> today <code>machine list</code> and <code>machine get</code> probe every machine, up to 10 s, and a UI polls them. A state from the record costs nothing; <code>--with live</code> asks.",
+    "<b>Why <code>load_image</code>:</b> <code>machine load</code> reads as \"load the machine\". It copies a Docker reference from the host's Docker, not an archive file.",
+    "<b>Why prune names what it removes:</b> it removes one image, or with <code>--unused</code> every image no Sandbox uses. Nothing is removed by default.",
+    "<b>Why an outdated worker needs two commands:</b> <code>machine start</code> never replaces a worker of another build (#535 D11). The fix is <code>machine stop</code>, then <code>machine start</code>; with Sandboxes on the machine the stop needs <code>--force</code>, because nothing can be sent through the old worker to remove them.",
+    "<b>Why start and stop record an operation:</b> today only the client that pressed Start knows the machine is starting. With an <code>op</code> in the record, every client answers <code>busy</code>.",
+    "<b>Why <code>stats</code> stays a call:</b> a UI polls it, and it writes no call-log line. <code>--with space</code> adds the one walk that says where the disk goes."
+  ],
+  "calls": [
+    {
+      "call": "machine.list",
+      "badge": "extended",
+      "note": "today it probes every machine but <code>native</code>, up to 10 s in all; now it reads records and the probe is <code>--with live</code>. A row leaves <code>state</code> out when <code>ready</code>. Each item has <code>machine.get</code>'s keys. Unpaged: a home holds a handful of machines. Each item's <code>fix</code> is <code>machine.get</code>'s, the chain of UI2-8 included",
+      "today": [
+        "machine.list"
+      ],
+      "help": "every machine, from the home's records",
+      "cli": "layerfs machine list [--with live]",
+      "positionals": [],
+      "options": [],
+      "stdin": null,
+      "with": {
+        "live": {
+          "where": "item",
+          "keys": [
+            "observed_at"
+          ],
+          "help": "probes every machine once, all at the same time, within 10 s, starting nothing: each row's state and companion then come from one probe of its provider and one hello to its worker; observed_at is when (on unknown: the last probe that answered). A row whose state word or reason changed is written to its record"
+        }
+      },
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "items"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "items"
+      ],
+      "item": {
+        "short": {
+          "always": [
+            "machine",
+            "platform"
+          ],
+          "sometimes": [
+            "state",
+            "op",
+            "reason",
+            "fix",
+            "observed_at"
+          ]
+        },
+        "long": [
+          "machine",
+          "platform",
+          "state",
+          "op",
+          "reason",
+          "fix",
+          "observed_at",
+          "backend",
+          "supports",
+          "cpus",
+          "memory_bytes",
+          "disk_bytes",
+          "image",
+          "os_image",
+          "docker",
+          "wsl",
+          "daemon",
+          "message",
+          "stores",
+          "stores_count",
+          "sandboxes",
+          "sandboxes_count",
+          "created_at"
+        ]
+      },
+      "examples": {
+        "short": [
+          "{\"items\":[{\"machine\":\"native\",\"platform\":\"native\"},{\"machine\":\"dev\",\"platform\":\"lima\"},{\"machine\":\"docker\",\"platform\":\"docker\",\"state\":\"stopped\"},{\"machine\":\"demo-build\",\"platform\":\"lima\",\"state\":\"broken\",\"reason\":\"outdated\",\"fix\":\"layerfs machine stop demo-build && layerfs machine start demo-build\"}]}"
+        ],
+        "long": "{\"items\":[{\"machine\":\"dev\",\"platform\":\"lima\",\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"backend\":\"namespaces\",\"supports\":[\"sqlite\",\"postgresql_sandbox\",\"log\"],\"cpus\":4,\"memory_bytes\":8589934592,\"disk_bytes\":68719476736,\"image\":null,\"os_image\":null,\"docker\":null,\"wsl\":null,\"daemon\":null,\"message\":null,\"stores\":[\"shop\"],\"stores_count\":null,\"sandboxes\":[\"tests\"],\"sandboxes_count\":null,\"created_at\":\"2026-11-17T09:16:59Z\"},{\"machine\":\"docker\",\"platform\":\"docker\",\"state\":\"stopped\",\"op\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"backend\":\"namespaces\",\"supports\":[\"sqlite\",\"postgresql_sandbox\",\"log\"],\"cpus\":null,\"memory_bytes\":null,\"disk_bytes\":null,\"image\":null,\"os_image\":null,\"docker\":\"/var/run/docker.sock\",\"wsl\":null,\"daemon\":null,\"message\":null,\"stores\":[\"sim-website\"],\"stores_count\":null,\"sandboxes\":[],\"sandboxes_count\":null,\"created_at\":\"2026-11-17T09:16:59Z\"}]}"
+      },
+      "dropped": [],
+      "new_work": "The probe exists today and becomes opt-in; a records-only answer is new. The six states and the reason codes are new: today the record holds running, stopped or failed with a sentence in `error`, and the answer says running, stopped, failed, missing, unknown, creating, removing, unresolved or unsupported. The record must also keep the reason code a start or a live read found (`outdated` today is only a sentence), so that a records-only read answers it. The observation file that holds `observed_at` beside each record is new, as is the rule that a live read writes the record only when the state word or its reason changes (today a read writes nothing).",
+      "states": {
+        "reasons": [
+          "engine_down",
+          "not_answering",
+          "outdated",
+          "missing",
+          "failed",
+          "unresolved",
+          "unsupported"
+        ],
+        "ops": [
+          "create",
+          "start",
+          "stop",
+          "remove"
+        ]
+      }
+    },
+    {
+      "call": "machine.get",
+      "badge": "merged",
+      "note": "+ <code>machine.status</code>. <code>state</code> comes from the machine's record, with no probe: <code>ready</code> (recorded running; <code>native</code> always), <code>stopped</code>, <code>busy</code> with <code>op</code> <code>{name, phase, started_at}</code> (name is create, start, stop or remove), or <code>broken</code> with <code>reason</code> and <code>fix</code>. A lifecycle call records <code>failed</code>, <code>outdated</code>, <code>unresolved</code> and <code>unsupported</code>. A live read is what first sees <code>engine_down</code> (Docker not running; its <code>fix</code> is the host's own command that starts Docker), <code>not_answering</code> and <code>missing</code>; it writes the record only when the state word or its reason changes, and from then on a records-only read answers them too. <code>unknown</code> with <code>observed_at</code> is answered only by the live read that could not be made, and is never recorded. <code>observed_at</code> is kept beside the record, in an observation file the home's <code>generation</code> does not cover; a write of the record moves <code>generation</code>. An <code>op</code> whose owner is gone and whose outcome is certain is ignored on read, with no write, so <code>generation</code> does not move when an owner dies. A machine is never <code>blocked</code>, so it has no <code>blocked_by</code>. The <code>fix</code> for <code>outdated</code> is <code>layerfs machine stop &lt;m&gt; &amp;&amp; layerfs machine start &lt;m&gt;</code> when no Sandbox is recorded on the machine, and <code>layerfs machine stop &lt;m&gt; --force &amp;&amp; layerfs machine start &lt;m&gt;</code> when some are; the <code>message</code> then names how many (they cannot be removed first: no call is sent through a mismatched worker). <code>message</code> is the sentence behind a reason. <code>supports</code> lists what the platform does on this host (<code>sqlite</code>, <code>postgresql_sandbox</code>, <code>log</code>); <code>memory_bytes</code> and <code>disk_bytes</code> are the VM's size, null on a built-in machine. A record with no <code>vm_name</code> (an earlier build's, <code>broken</code> <code>outdated</code>) that still holds Sandboxes, sqlite Stores or old Firecracker records shows as its <code>fix</code> the chain its remove's <code>InUse</code> refusal carries: <code>layerfs sandbox remove &lt;s&gt; &amp;&amp; … &amp;&amp; layerfs store remove &lt;st&gt; &amp;&amp; layerfs machine remove &lt;m&gt;</code>, shell-quoted, in that order, built from the records the read already holds (UI2-8); with nothing on it, <code>layerfs machine remove &lt;m&gt;</code>",
+      "today": [
+        "machine.get",
+        "machine.status"
+      ],
+      "help": "a machine's record and state",
+      "cli": "layerfs machine get <machine> [--with live]",
+      "positionals": [
+        {
+          "name": "machine",
+          "kind": "Name"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {
+        "live": {
+          "keys": [
+            "disk_free_bytes",
+            "tool_version",
+            "worker"
+          ],
+          "help": "one probe of the provider and one hello to the worker, within 10 s, starting nothing. state, its companion, message and observed_at at the top level then come from the probe; the record is written only when the state word or its reason changed. disk_free_bytes: free bytes of its data disk; tool_version: the provider tool's version; worker: {protocol, bundle} as the worker answered. A value that was not read is null"
+        }
+      },
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "platform",
+          "state"
+        ],
+        "sometimes": [
+          "op",
+          "reason",
+          "fix",
+          "observed_at"
+        ]
+      },
+      "long": [
+        "platform",
+        "state",
+        "op",
+        "reason",
+        "fix",
+        "observed_at",
+        "machine",
+        "backend",
+        "supports",
+        "cpus",
+        "memory_bytes",
+        "disk_bytes",
+        "image",
+        "os_image",
+        "docker",
+        "wsl",
+        "daemon",
+        "message",
+        "stores",
+        "stores_count",
+        "sandboxes",
+        "sandboxes_count",
+        "created_at"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"platform\":\"lima\",\"state\":\"ready\"}",
+          "starting: {\"platform\":\"lima\",\"state\":\"busy\",\"op\":{\"name\":\"start\",\"phase\":\"boot\",\"started_at\":\"2026-11-18T09:16:59Z\"}}",
+          "stopped: {\"platform\":\"docker\",\"state\":\"stopped\"}",
+          "outdated worker: {\"platform\":\"lima\",\"state\":\"broken\",\"reason\":\"outdated\",\"fix\":\"layerfs machine stop demo-build && layerfs machine start demo-build\"}",
+          "outdated worker, Sandboxes on it: {\"platform\":\"lima\",\"state\":\"broken\",\"reason\":\"outdated\",\"fix\":\"layerfs machine stop demo-build --force && layerfs machine start demo-build\"}",
+          "lost reply on a start: {\"platform\":\"lima\",\"state\":\"broken\",\"reason\":\"unresolved\",\"fix\":\"layerfs machine get dev --with live\"}",
+          "--with live, Docker not running: {\"platform\":\"docker\",\"state\":\"broken\",\"reason\":\"engine_down\",\"fix\":\"open -a Docker\"}",
+          "--with live: {\"platform\":\"lima\",\"state\":\"ready\",\"observed_at\":\"2026-11-18T09:16:59Z\",\"live\":{\"disk_free_bytes\":52613349376,\"tool_version\":\"1.2.3\",\"worker\":{\"protocol\":3,\"bundle\":\"8888888888888888888888888888888888888888888888888888888888888888\"}}}",
+          "--with live, the probe did not answer: {\"platform\":\"lima\",\"state\":\"unknown\",\"observed_at\":\"2026-11-18T09:15:59Z\"}"
+        ],
+        "long": "{\"platform\":\"lima\",\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"machine\":\"dev\",\"backend\":\"namespaces\",\"supports\":[\"sqlite\",\"postgresql_sandbox\",\"log\"],\"cpus\":4,\"memory_bytes\":8589934592,\"disk_bytes\":68719476736,\"image\":null,\"os_image\":null,\"docker\":null,\"wsl\":null,\"daemon\":null,\"message\":null,\"stores\":[\"shop\"],\"stores_count\":null,\"sandboxes\":[\"tests\"],\"sandboxes_count\":null,\"created_at\":\"2026-11-17T09:16:59Z\"}"
+      },
+      "dropped": [
+        {
+          "today": "<name> (machine.get, machine.status)",
+          "now": "<machine>",
+          "why": "an existing thing is named by its own word, never `name`"
+        }
+      ],
+      "new_work": "Records-only state with the six states and reason codes (see machine.list). `--with live` adds one worker hello to today's provider probe, so it can tell not_answering and outdated; today machine.status asks the provider only. `engine_down` and the other codes replace today's `down_reason` sentence; the `fix` that starts Docker (`open -a Docker` on macOS, `sudo systemctl start docker` on Linux) is new. Settling: with `--with live`, an uncertain start or stop whose owner is gone is dropped once the probe answers and the observed state is recorded (C13); today a read never clears an intent and only `machine remove` clears one. An uncertain create or remove still needs `machine remove`. A live read writing the record when the state word or reason changes, the observation file for `observed_at`, and the `--force` form of the outdated fix with the Sandbox count in `message` are new.",
+      "states": {
+        "reasons": [
+          "engine_down",
+          "not_answering",
+          "outdated",
+          "missing",
+          "failed",
+          "unresolved",
+          "unsupported"
+        ],
+        "ops": [
+          "create",
+          "start",
+          "stop",
+          "remove"
+        ]
+      }
+    },
+    {
+      "call": "machine.images",
+      "badge": "reshaped",
+      "note": "<code>image</code> is the id <code>machine prune</code> and <code>sandbox create --image</code> take; <code>default:true</code> marks the machine's default image. <code>mode</code> is <code>images</code>, or <code>host</code> on macOS <code>native</code>, which runs no image. A copy that runs or stopped partway is a state on its item (v19), not a <code>source</code>: a published image is <code>ready</code>, left out of the row; a part a live copy holds is <code>busy</code> with <code>op</code> <code>{name: load_image, phase, started_at}</code> (<code>started_at</code> is when that copy took the image's lock); a part no copy holds, or an unpack that stopped before it was recorded, is <code>broken</code> with <code>reason: partial</code> and <code>fix</code> <code>layerfs machine load-image &lt;m&gt; sha256:&lt;hex&gt;</code>, which resumes the part or rebuilds the unpack. A partial image's <code>size</code> is null; <code>staged_bytes</code> is how much of it is staged. One item per image: a stale part beside a published image is in that image's row (<code>staged_bytes</code>), which stays <code>ready</code>, and <code>machine prune --unused</code> removes the part. <code>source</code> stays <code>bundle</code>, <code>machine</code> or <code>imported</code>. The host's Docker is read only with <code>--with docker</code>, and an image the machine does not hold <code>ready</code> is offered there. Unpaged: a machine holds a handful of images. A machine that does not answer is <code>Unavailable</code>; nothing starts it",
+      "today": [
+        "machine.images"
+      ],
+      "help": "the Sandbox images a machine holds",
+      "cli": "layerfs machine images <machine> [--with docker]",
+      "positionals": [
+        {
+          "name": "machine",
+          "kind": "Name"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {
+        "docker": {
+          "keys": [
+            "images",
+            "reason",
+            "message"
+          ],
+          "help": "reads the host's Docker. images: the host's Docker images the machine does not hold ready (a partial one is offered again), each {image, refs, size, os, architecture, usable, needed_bytes, fits, unusable: {kind, value}} (kind is os or arch); reason and message say why Docker did not answer, and images is then empty"
+        }
+      },
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "items"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "items",
+        "machine",
+        "mode",
+        "architecture",
+        "disk_free_bytes"
+      ],
+      "item": {
+        "short": {
+          "always": [
+            "image"
+          ],
+          "sometimes": [
+            "refs",
+            "size",
+            "default",
+            "state",
+            "op",
+            "reason",
+            "fix"
+          ]
+        },
+        "long": [
+          "image",
+          "refs",
+          "size",
+          "default",
+          "state",
+          "op",
+          "reason",
+          "fix",
+          "message",
+          "staged_bytes",
+          "architecture",
+          "source",
+          "sandboxes",
+          "sandboxes_count",
+          "last_used_at"
+        ]
+      },
+      "examples": {
+        "short": [
+          "{\"items\":[{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"refs\":[\"node:22\"],\"size\":412000000,\"default\":true},{\"image\":\"sha256:7777777777777777777777777777777777777777777777777777777777777777\",\"refs\":[\"postgres:17-bookworm\"],\"size\":455000000}]}",
+          "a copy is running: {\"items\":[{\"image\":\"sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"state\":\"busy\",\"op\":{\"name\":\"load_image\",\"phase\":\"send\",\"started_at\":\"2026-11-18T09:16:59Z\"}}]}",
+          "a copy stopped partway: {\"items\":[{\"image\":\"sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"state\":\"broken\",\"reason\":\"partial\",\"fix\":\"layerfs machine load-image dev sha256:8888888888888888888888888888888888888888888888888888888888888888\"}]}"
+        ],
+        "long": "{\"items\":[{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"refs\":[\"node:22\"],\"size\":412000000,\"default\":true,\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"message\":null,\"staged_bytes\":null,\"architecture\":\"arm64\",\"source\":\"imported\",\"sandboxes\":[\"tests\"],\"sandboxes_count\":null,\"last_used_at\":\"2026-11-18T09:15:59Z\"},{\"image\":\"sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"refs\":[],\"size\":null,\"default\":false,\"state\":\"broken\",\"op\":null,\"reason\":\"partial\",\"fix\":\"layerfs machine load-image dev sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"message\":\"a copy of this image stopped after 104857600 bytes; load-image resumes it\",\"staged_bytes\":104857600,\"architecture\":null,\"source\":\"imported\",\"sandboxes\":[],\"sandboxes_count\":null,\"last_used_at\":null}],\"machine\":\"dev\",\"mode\":\"images\",\"architecture\":\"arm64\",\"disk_free_bytes\":52613349376}"
+      },
+      "dropped": [
+        {
+          "today": "<name>",
+          "now": "<machine>",
+          "why": "an existing thing is named by its own word, never `name`"
+        }
+      ],
+      "new_work": "`sandboxes` as names is new: today the row answers how many Sandbox records name the image; the same read gives their names. Reading the host's Docker only on request is new: today every call reads it. Item states are new in v19: today a part a copy holds, a part left partway and a stranded unpack are rows with `source` `staged` or `stranded` and the flags `staged`, `stranded`, `resumable` and `age`; they become `busy` (op `load_image`) and `broken` (reason `partial`) on the item, with `message` and `staged_bytes`, one item per image, and `--with docker` counts only `ready` items as held. `staged`, `stranded`, `resumable`, `age`, `variant` and the image's `Env` stay out of the answer.",
+      "states": {
+        "reasons": [
+          "partial"
+        ],
+        "ops": [
+          "load_image"
+        ]
+      }
+    },
+    {
+      "call": "machine.load_image",
+      "badge": "renamed",
+      "note": "was <code>load</code>. <code>image</code> is a digest, a Docker image Id or a Docker reference, copied from the host's Docker (C6); the answer's <code>image</code> is its id on the machine. <code>reused:true</code> when the machine held it already and nothing was sent. <code>size</code> is the image's tar bytes on the machine (null when the machine holds it only in an archive that does not say). <code>dropped</code> lists the FIFO and device paths the copy left out, first 20 (<code>dropped_count</code> only beside a cut list); the container's init files (<code>.dockerenv</code>, <code>etc/hosts</code> and the rest) are always left out and never listed. <code>expanded_bytes</code> is the total of the image's sparse files once written out. Progress phases: inspect, lock (<code>{phase: lock}</code>, sent once a second while another copy of the image holds its lock; that copy is the <code>busy</code> item of <code>machine images --detail</code>), export, send (bytes), unpack. macOS <code>native</code> is <code>Unsupported</code>",
+      "today": [
+        "machine.load"
+      ],
+      "help": "copy an image from the host's Docker to a machine without creating a Sandbox",
+      "cli": "layerfs machine load-image <machine> <image>",
+      "positionals": [
+        {
+          "name": "machine",
+          "kind": "Name"
+        },
+        {
+          "name": "image",
+          "kind": "Image"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": true,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "image"
+        ],
+        "sometimes": [
+          "reused",
+          "dropped"
+        ]
+      },
+      "long": [
+        "image",
+        "reused",
+        "dropped",
+        "outcome",
+        "machine",
+        "refs",
+        "size",
+        "dropped_count",
+        "expanded_bytes"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\"}",
+          "already there: {\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"reused\":true}",
+          "a FIFO left out: {\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"dropped\":[\"run/initctl\"]}"
+        ],
+        "long": "{\"image\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"reused\":false,\"dropped\":[\"run/initctl\"],\"outcome\":\"loaded\",\"machine\":\"dev\",\"refs\":[\"node:22\"],\"size\":412000000,\"dropped_count\":null,\"expanded_bytes\":0}"
+      },
+      "dropped": [
+        {
+          "today": "<name>",
+          "now": "<machine>",
+          "why": "an existing thing is named by its own word, never `name`"
+        }
+      ],
+      "new_work": "v19: `dropped` (the FIFO and device paths, first 20, with `dropped_count`) and `expanded_bytes` come from the copy's tar filter report, which today's answer carries as `dropped {fifos, devices, init}` and `sparse`; init files leave the answer. The `lock` phase is `{phase: lock}` without today's `waiting` and `holder` (a pid). `Capacity` carries the prune fix and `{needed_bytes, free_bytes, path}` (today `{needed, free, where}`); `Unsupported` carries `{architecture}` or `{os}` (today `{reason, value}`); an ambiguous reference carries `{images}` (today `{reason, ref, ids}`); a staged part that does not match and a frame out of order are `Failed` (today `InvalidInput`). A reused image's `size` is the tar bytes its sidecar records, never Docker's own size.",
+      "refusals": [
+        {
+          "error": "Capacity",
+          "when": "the machine has no room for the image (checked before the first effect)",
+          "adds": [
+            "fix"
+          ],
+          "fix": "layerfs machine prune <m> --unused",
+          "detail": [
+            "needed_bytes",
+            "free_bytes",
+            "path"
+          ]
+        },
+        {
+          "error": "Unsupported",
+          "when": "the image is for another architecture or OS; macOS native runs no image",
+          "adds": [],
+          "detail": [
+            "architecture | os"
+          ]
+        },
+        {
+          "error": "InvalidInput",
+          "when": "a reference more than one held image claims (detail `images`), or Docker has no such image",
+          "adds": [],
+          "detail": [
+            "images"
+          ]
+        },
+        {
+          "error": "Unavailable",
+          "when": "Docker or the machine's worker cannot be reached",
+          "adds": [],
+          "detail": [
+            "what"
+          ]
+        },
+        {
+          "error": "InUse",
+          "when": "a stranded unpack of the image is in use",
+          "adds": [],
+          "detail": []
+        },
+        {
+          "error": "Failed",
+          "when": "the export failed or changed while it was sent, a staged part does not match what was sent, or a frame arrived out of order (the last two were InvalidInput)",
+          "adds": [],
+          "detail": []
+        }
+      ]
+    },
+    {
+      "call": "machine.prune",
+      "badge": "reshaped",
+      "note": "as today (C4): one image by its id, or with <code>--unused</code> every image no Sandbox uses but the default; one of the two is required. <code>--unused</code> also removes what copies left: parts no copy holds (even beside an image a Sandbox uses), unpacks that stopped before they were recorded, sidecars with no image and <code>.tmp-*</code> unpack folders; each image they belong to is in <code>removed</code>. A named image a live copy holds is <code>Busy</code> with that copy's <code>op</code>; one a Sandbox uses is <code>InUse</code> with detail <code>{sandbox_count}</code>; a copy lock that cannot be checked is <code>Failed</code>. What <code>--unused</code> could not remove is in <code>skipped</code> (<code>[{image, message}]</code>, first 20, <code>skipped_count</code> beside a cut list). <code>removed</code> shows its first 20 ids",
+      "today": [
+        "machine.prune"
+      ],
+      "help": "remove a Sandbox image from a machine, or every unused one",
+      "cli": "layerfs machine prune <machine> [image] [--unused]",
+      "positionals": [
+        {
+          "name": "machine",
+          "kind": "Name"
+        },
+        {
+          "name": "image",
+          "kind": "Image",
+          "optional": true
+        }
+      ],
+      "options": [
+        {
+          "name": "unused",
+          "kind": "Bool",
+          "help": "remove every image no Sandbox uses, except the machine's default"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "freed_bytes"
+        ],
+        "sometimes": [
+          "skipped"
+        ]
+      },
+      "long": [
+        "freed_bytes",
+        "skipped",
+        "outcome",
+        "machine",
+        "removed",
+        "removed_count",
+        "skipped_count"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"freed_bytes\":2147483648}",
+          "nothing to remove: {\"freed_bytes\":0}",
+          "a copy lock could not be checked: {\"freed_bytes\":0,\"skipped\":[{\"image\":\"sha256:7777777777777777777777777777777777777777777777777777777777777777\",\"message\":\"its copy lock cannot be read: Permission denied\"}]}"
+        ],
+        "long": "{\"freed_bytes\":2147483648,\"skipped\":[],\"outcome\":\"pruned\",\"machine\":\"dev\",\"removed\":[\"sha256:7777777777777777777777777777777777777777777777777777777777777777\"],\"removed_count\":null,\"skipped_count\":null}"
+      },
+      "dropped": [
+        {
+          "today": "<name>",
+          "now": "<machine>",
+          "why": "an existing thing is named by its own word, never `name`"
+        }
+      ],
+      "new_work": "v19: `skipped` and `skipped_count` reach the answer (today the worker's `skipped` rows, `{id, reason}`, are dropped). A named image a live copy holds is `Busy` with the copy's `op` (today `InUse` with `count`); one a Sandbox uses carries `{sandbox_count}` (today `count`). A part no copy holds is removed even when a Sandbox uses its image (today it is kept with the image).",
+      "nested": {
+        "skipped": {
+          "short": {
+            "always": [
+              "image",
+              "message"
+            ],
+            "sometimes": []
+          },
+          "long": [
+            "image",
+            "message"
+          ]
+        }
+      },
+      "refusals": [
+        {
+          "error": "Busy",
+          "when": "the named image is held by a live copy (a machine load-image or sandbox create --image)",
+          "adds": [
+            "op"
+          ],
+          "detail": []
+        },
+        {
+          "error": "InUse",
+          "when": "a Sandbox uses the named image",
+          "adds": [],
+          "detail": [
+            "sandbox_count"
+          ]
+        },
+        {
+          "error": "Failed",
+          "when": "the named image's copy lock cannot be checked",
+          "adds": [],
+          "detail": []
+        }
+      ]
+    },
+    {
+      "call": "machine.stats",
+      "badge": "merged",
+      "note": "+ <code>machine.space</code>. What the machine has and uses now, in one bounded request where its data is; a value that was not read is left out (null in the long form) and <code>reasons</code> names it (<code>memory_not_read</code>, <code>disk_not_read</code>, <code>cpu_unsupported</code>, <code>cpu_not_read</code>, <code>deadline</code>). <code>incomplete:true</code> when the budget ended the Store or Sandbox rows early. <code>scope</code> says whose processors and memory they are (<code>host</code>, <code>vm</code>, <code>engine_host</code>). Today's microsecond counters are answered in milliseconds. It writes no call-log line. A machine that does not answer is <code>Unavailable</code>",
+      "today": [
+        "machine.stats",
+        "machine.space"
+      ],
+      "help": "a machine's observed processors, memory and data disk, its Stores' sizes and live Sandboxes",
+      "cli": "layerfs machine stats <machine> [--with space]",
+      "positionals": [
+        {
+          "name": "machine",
+          "kind": "Name"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {
+        "space": {
+          "keys": [
+            "observed_at",
+            "layerfs_bytes",
+            "outside_bytes",
+            "parts",
+            "stores",
+            "sandboxes",
+            "unreadable_count",
+            "incomplete",
+            "reasons"
+          ],
+          "help": "one bounded walk of LayerFS's folders on the machine, saying where the data disk goes (today's machine.space); every size is the blocks a part takes. layerfs_bytes: the sum of parts; outside_bytes: what the disk uses that is not LayerFS's, null unless the walk and the disk read are complete; parts: a list [{part, bytes}], one entry for each of stores, sandboxes, images, other_runs, logs and other, in that order; stores: [{store, allocated_bytes}]; sandboxes: [{sandbox, allocated_bytes, overlays_bytes, writes_bytes, home_bytes, log_bytes, runtime_bytes, reason}] (reason: no_run_folder, outside_run_root, record_unreadable or deadline); unreadable_count: how many folders could not be listed; incomplete with reasons (deadline, unreadable, disk_not_read) when the walk stopped at 250,000 entries or its budget"
+        }
+      },
+      "paging": null,
+      "progress": false,
+      "quiet": true,
+      "profile": "full",
+      "short": {
+        "always": [],
+        "sometimes": [
+          "cpus",
+          "memory_used_bytes",
+          "memory_total_bytes",
+          "disk_free_bytes",
+          "disk_total_bytes",
+          "incomplete"
+        ]
+      },
+      "long": [
+        "cpus",
+        "memory_used_bytes",
+        "memory_total_bytes",
+        "disk_free_bytes",
+        "disk_total_bytes",
+        "incomplete",
+        "disk_used_bytes",
+        "reasons",
+        "machine",
+        "platform",
+        "observed_at",
+        "scope",
+        "cpu_busy_ms",
+        "cpu_total_ms",
+        "worker",
+        "data_disk",
+        "stores",
+        "sandboxes"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"cpus\":4,\"memory_used_bytes\":3221225472,\"memory_total_bytes\":8589934592,\"disk_free_bytes\":52613349376,\"disk_total_bytes\":68719476736}",
+          "macOS native, memory not read: {\"cpus\":10,\"disk_free_bytes\":212613349376,\"disk_total_bytes\":494384795648}"
+        ],
+        "long": "{\"cpus\":4,\"memory_used_bytes\":3221225472,\"memory_total_bytes\":8589934592,\"disk_free_bytes\":52613349376,\"disk_total_bytes\":68719476736,\"incomplete\":false,\"disk_used_bytes\":16106127360,\"reasons\":[],\"machine\":\"dev\",\"platform\":\"lima\",\"observed_at\":\"2026-11-18T09:16:59Z\",\"scope\":\"vm\",\"cpu_busy_ms\":81234,\"cpu_total_ms\":4812340,\"worker\":{\"version\":\"2.0.0\",\"pid\":412,\"started_at\":\"2026-11-17T09:16:59Z\",\"protocol\":3,\"bundle\":\"8888888888888888888888888888888888888888888888888888888888888888\"},\"data_disk\":{\"path\":\"/layerfs/data\",\"fs\":\"ext4\",\"scope\":\"volume\",\"volume\":\"layerfs-3f9a1c2e-dev\",\"inodes_free\":4194304},\"stores\":[{\"store\":\"shop\",\"size\":213263952,\"allocated_bytes\":213270528}],\"sandboxes\":[{\"sandbox\":\"tests\",\"live\":true,\"live_reason\":null,\"started_at\":\"2026-11-18T09:15:59Z\",\"usage\":{\"cpu_ms\":5120,\"memory_bytes\":268435456,\"memory_peak_bytes\":402653184,\"memory_file_bytes\":67108864,\"pid_count\":14,\"oom_kill_count\":0},\"usage_reason\":null}]}"
+      },
+      "dropped": [],
+      "new_work": null
+    },
+    {
+      "call": "machine.files",
+      "badge": "reshaped",
+      "note": "UI only. No path: the machine's roots, each with a <code>role</code>. A folder answers <code>items</code>, one page in tree order to <code>--depth</code> levels; a file answers <code>text</code> with <code>next_byte_offset</code> while more remains, or <code>binary:true</code> with its <code>size</code>. <code>type</code> is file, dir or symlink, and <code>other</code> for a special file; <code>not_read</code> says why an entry is listed and not read (<code>system</code>, <code>mount</code>, <code>unreadable</code>, <code>restricted</code>). Today's <code>entries</code>, <code>kind</code>, <code>next</code>, <code>content</code>, <code>mtime</code> and <code>has_more</code> are renamed or gone; a page that ends early answers <code>next_cursor</code>. Limits: depth 32, 1000 entries, a 1 MiB window; the default page goes from 500 entries to 100. It writes no call-log line. Paged by cursor for a folder and by byte window for a file",
+      "today": [
+        "machine.files"
+      ],
+      "help": "a machine's files: its LayerFS folders by role, or a folder or file of the machine",
+      "cli": "layerfs machine files <machine> [path] [--depth 1] [--limit 100] [--cursor C] [--byte-offset 0] [--byte-length 262144]",
+      "positionals": [
+        {
+          "name": "machine",
+          "kind": "Name"
+        },
+        {
+          "name": "path",
+          "kind": "Text",
+          "optional": true,
+          "redact": true
+        }
+      ],
+      "options": [
+        {
+          "name": "depth",
+          "kind": "Int",
+          "help": "how many levels of a folder a page walks",
+          "default": 1
+        },
+        {
+          "name": "limit",
+          "kind": "Int",
+          "help": "at most this many entries",
+          "default": 100
+        },
+        {
+          "name": "cursor",
+          "kind": "Text",
+          "help": "a page's next_cursor: the entries after it"
+        },
+        {
+          "name": "byte_offset",
+          "kind": "Int",
+          "help": "where a file window starts",
+          "default": 0
+        },
+        {
+          "name": "byte_length",
+          "kind": "Int",
+          "help": "at most this many bytes of a file",
+          "default": 262144
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": "cursor",
+      "progress": false,
+      "quiet": true,
+      "profile": "full",
+      "short": {
+        "always": [],
+        "sometimes": [
+          "items",
+          "next_cursor",
+          "text",
+          "binary",
+          "size",
+          "next_byte_offset"
+        ]
+      },
+      "long": [
+        "items",
+        "next_cursor",
+        "text",
+        "binary",
+        "size",
+        "next_byte_offset",
+        "type"
+      ],
+      "item": {
+        "short": {
+          "always": [
+            "path",
+            "type"
+          ],
+          "sometimes": [
+            "size",
+            "not_read"
+          ]
+        },
+        "long": [
+          "path",
+          "type",
+          "size",
+          "not_read",
+          "role",
+          "depth",
+          "mode",
+          "modified_at",
+          "target",
+          "fs",
+          "workspace",
+          "disk_free_bytes"
+        ]
+      },
+      "examples": {
+        "short": [
+          "roots: {\"items\":[{\"path\":\"/layerfs/data\",\"type\":\"dir\"},{\"path\":\"/layerfs/data/store\",\"type\":\"dir\"},{\"path\":\"/\",\"type\":\"dir\"}]}",
+          "a folder: {\"items\":[{\"path\":\"/layerfs/data/log/worker.log\",\"type\":\"file\",\"size\":20480},{\"path\":\"/layerfs/data/run\",\"type\":\"dir\"},{\"path\":\"/proc\",\"type\":\"dir\",\"not_read\":\"system\"}],\"next_cursor\":\"/proc\"}",
+          "a file: {\"text\":\"worker ready\\n\",\"next_byte_offset\":262144}",
+          "a binary file: {\"binary\":true,\"size\":90112}"
+        ],
+        "long": "{\"items\":[{\"path\":\"/layerfs/data/log/worker.log\",\"type\":\"file\",\"size\":20480,\"not_read\":null,\"role\":\"log\",\"depth\":1,\"mode\":\"0600\",\"modified_at\":\"2026-11-18T09:16:59Z\",\"target\":null,\"fs\":null,\"workspace\":null,\"disk_free_bytes\":null}],\"next_cursor\":null,\"text\":null,\"binary\":null,\"size\":null,\"next_byte_offset\":null,\"type\":\"dir\"}"
+      },
+      "dropped": [
+        {
+          "today": "--offset",
+          "now": "--byte-offset",
+          "why": "a byte window, named as the Windows rule names it"
+        },
+        {
+          "today": "--length",
+          "now": "--byte-length",
+          "why": "a byte window, named as the Windows rule names it"
+        }
+      ],
+      "new_work": null
+    },
+    {
+      "call": "machine.log",
+      "badge": "moved",
+      "note": "was <code>logs.machine</code>. The first call answers the last <code>--limit</code> lines, oldest first; <code>next_cursor</code> continues with the lines before them and is left out at the start of the log. A call reads at most 64 KiB, so it may answer fewer lines; a line longer than that comes in pieces, each but the last with <code>continued:true</code>. At most 1000 lines. The log is the worker's own text: no time, level or source is parsed. Today's forward <code>cursor</code> (the lines after a place, to follow a log) is gone: a log pages backwards only, and a client that follows one reads the newest page again. <code>native</code> has no worker and is <code>Unsupported</code>; a worker that does not answer is <code>Unavailable</code>. It writes no call-log line, as today",
+      "today": [
+        "logs.machine"
+      ],
+      "help": "a machine's worker log: its last lines, then the lines before a cursor",
+      "cli": "layerfs machine log <machine> [--limit 200] [--cursor C]",
+      "positionals": [
+        {
+          "name": "machine",
+          "kind": "Name"
+        }
+      ],
+      "options": [
+        {
+          "name": "limit",
+          "kind": "Int",
+          "help": "at most this many lines",
+          "default": 200
+        },
+        {
+          "name": "cursor",
+          "kind": "Text",
+          "help": "a page's next_cursor: the lines before it"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": "cursor",
+      "progress": false,
+      "quiet": true,
+      "profile": "full",
+      "short": {
+        "always": [
+          "items"
+        ],
+        "sometimes": [
+          "next_cursor"
+        ]
+      },
+      "long": [
+        "items",
+        "next_cursor"
+      ],
+      "item": {
+        "short": {
+          "always": [
+            "text"
+          ],
+          "sometimes": [
+            "continued"
+          ]
+        },
+        "long": [
+          "text",
+          "continued"
+        ]
+      },
+      "examples": {
+        "short": [
+          "{\"items\":[{\"text\":\"worker listening on 127.0.0.1:41873\"},{\"text\":\"worker ready\"}],\"next_cursor\":\"c1.0.2a41f.9c3e77d1.1f40\"}",
+          "the whole log fits: {\"items\":[{\"text\":\"worker ready\"}]}"
+        ],
+        "long": "{\"items\":[{\"text\":\"worker listening on 127.0.0.1:41873\",\"continued\":false},{\"text\":\"worker ready\",\"continued\":false}],\"next_cursor\":\"c1.0.2a41f.9c3e77d1.1f40\"}"
+      },
+      "dropped": [
+        {
+          "today": "--before",
+          "now": "--cursor",
+          "why": "one paging convention: next_cursor in, the page before it out"
+        }
+      ],
+      "new_work": null
+    },
+    {
+      "call": "machine.start",
+      "badge": "extended",
+      "note": "It records <code>op</code> <code>{name, phase, started_at}</code> in the machine's record before its first effect and drops it with the record write that ends it, so every client's <code>machine get</code> answers <code>busy</code> with that <code>op</code> meanwhile and other calls on the machine are refused <code>Busy</code>. The call's own answer carries no <code>op</code>: it is gone when the call answers. Phases: bundle, image (docker), boot, worker. A Linux bundle sealed from another commit than this build (<code>bundle.json</code> <code>source.head</code>) is refused <code>Unavailable</code> before anything starts. Its <code>fix</code> (UI2-9): <code>unset LAYERFS_BUNDLE</code> when <code>LAYERFS_BUNDLE</code> named the refused bundle and the place found without it holds this build's; <code>export LAYERFS_BUNDLE=&lt;folder&gt;</code> when another place the CLI looks holds this build's (the runtime's bundle refused, the cache's this build's); none when no place holds one, the message then saying so. Every call that starts a worker refuses it the same way. A running machine answers at once with <code>{\"unchanged\":true}</code> and records no <code>op</code>. A worker of another build is refused <code>Unavailable</code> and the machine is recorded <code>broken</code>, <code>outdated</code> (R2); the start never replaces it. The <code>fix</code> for <code>outdated</code> is <code>layerfs machine stop &lt;m&gt; &amp;&amp; layerfs machine start &lt;m&gt;</code> when no Sandbox is recorded on the machine, and <code>layerfs machine stop &lt;m&gt; --force &amp;&amp; layerfs machine start &lt;m&gt;</code> when some are; the <code>message</code> then names how many (they cannot be removed first: no call is sent through a mismatched worker). A lost reply leaves <code>broken</code>, <code>unresolved</code>, settled by <code>machine get &lt;m&gt; --with live</code>",
+      "today": [
+        "machine.start"
+      ],
+      "help": "start a stopped machine and its worker; a running one answers at once",
+      "cli": "layerfs machine start <machine>",
+      "positionals": [
+        {
+          "name": "machine",
+          "kind": "Name"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": true,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [],
+        "sometimes": [
+          "ok",
+          "unchanged"
+        ]
+      },
+      "long": [
+        "ok",
+        "unchanged",
+        "outcome",
+        "machine"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}",
+          "already running: {\"unchanged\":true}"
+        ],
+        "long": "{\"ok\":true,\"unchanged\":false,\"outcome\":\"started\",\"machine\":\"dev\"}"
+      },
+      "dropped": [
+        {
+          "today": "<name>",
+          "now": "<machine>",
+          "why": "an existing thing is named by its own word, never `name`"
+        }
+      ],
+      "new_work": "Recording an `op` for a start is new: today only create, remove and a forced stop record one, so a start shows as busy only in the client that made it. The four phase names and the {phase, done, total} events (done and total count phases) replace today's {stage, state, elapsed_ms} events. An uncertain start settled by `machine get --with live` is new. A start that finds a worker of another build must record the reason code `outdated`. `unchanged` is today's silent success on a running machine, now said."
+    },
+    {
+      "call": "machine.stop",
+      "badge": "extended",
+      "note": "It records <code>op</code> <code>{name, phase, started_at}</code> in the machine's record before its first effect and drops it with the record write that ends it, so every client's <code>machine get</code> answers <code>busy</code> with that <code>op</code> meanwhile and other calls on the machine are refused <code>Busy</code>. The call's own answer carries no <code>op</code>: it is gone when the call answers. Phases: check, stop. Its disks and Stores stay. Without <code>--force</code> it is refused <code>InUse</code> while Sandboxes are on it, naming each. <code>--force</code> (C1) stops the machine and this home's Sandboxes on it without asking the worker; it answers <code>stopped_sandboxes</code> and <code>unknown_workspaces</code>, the Workspaces whose uncommitted changes are then not known (<code>&lt;sandbox&gt;:*</code> when the home has no record of them). It is the only way to stop a machine whose worker is outdated while Sandboxes are on it: they cannot be removed first, because no call is sent through a mismatched worker. A stopped machine answers <code>{\"unchanged\":true}</code>. A lost reply is settled by <code>machine get &lt;m&gt; --with live</code>",
+      "today": [
+        "machine.stop"
+      ],
+      "help": "stop a machine's worker and VM; its disks stay",
+      "cli": "layerfs machine stop <machine> [--force]",
+      "positionals": [
+        {
+          "name": "machine",
+          "kind": "Name"
+        }
+      ],
+      "options": [
+        {
+          "name": "force",
+          "kind": "Bool",
+          "help": "stop it and this home's Sandboxes on it without asking its worker; data stays"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": true,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [],
+        "sometimes": [
+          "ok",
+          "unchanged",
+          "stopped_sandboxes",
+          "stopped_sandboxes_count",
+          "unknown_workspaces",
+          "unknown_workspaces_count"
+        ]
+      },
+      "long": [
+        "ok",
+        "unchanged",
+        "stopped_sandboxes",
+        "stopped_sandboxes_count",
+        "unknown_workspaces",
+        "unknown_workspaces_count",
+        "outcome",
+        "machine",
+        "forced"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}",
+          "already stopped: {\"unchanged\":true}",
+          "--force with a Sandbox on it: {\"stopped_sandboxes\":[\"tests\"],\"unknown_workspaces\":[\"tests:agent\"]}"
+        ],
+        "long": "{\"ok\":true,\"unchanged\":false,\"stopped_sandboxes\":null,\"stopped_sandboxes_count\":null,\"unknown_workspaces\":null,\"unknown_workspaces_count\":null,\"outcome\":\"stopped\",\"machine\":\"dev\",\"forced\":false}"
+      },
+      "dropped": [
+        {
+          "today": "<name>",
+          "now": "<machine>",
+          "why": "an existing thing is named by its own word, never `name`"
+        }
+      ],
+      "new_work": "Recording an `op` for a plain stop is new (a forced stop records one today). Progress events on a stop are new: today's call takes no on_progress. An uncertain stop settled by `machine get --with live` is new; today a new `machine stop --force` reconciles a forced stop it left."
+    },
+    {
+      "call": "machine.create",
+      "badge": "reshaped",
+      "note": "It records <code>op</code> <code>{name, phase, started_at}</code> in the machine's record before its first effect and drops it with the record write that ends it, so every client's <code>machine get</code> answers <code>busy</code> with that <code>op</code> meanwhile and other calls on the machine are refused <code>Busy</code>. The call's own answer carries no <code>op</code>: it is gone when the call answers. A create records it today. Phases: bundle, boot, worker. A Linux bundle sealed from another commit than this build (<code>bundle.json</code> <code>source.head</code>) is refused <code>Unavailable</code> before anything starts. Its <code>fix</code> (UI2-9): <code>unset LAYERFS_BUNDLE</code> when <code>LAYERFS_BUNDLE</code> named the refused bundle and the place found without it holds this build's; <code>export LAYERFS_BUNDLE=&lt;folder&gt;</code> when another place the CLI looks holds this build's (the runtime's bundle refused, the cache's this build's); none when no place holds one, the message then saying so. <code>platform</code> stays a required positional, as today: <code>lima</code> or <code>apple-container</code>. <code>--os-image stock</code> asks for the provider's own image. A create that fails before its VM exists removes what it made; one that fails after keeps the VM as <code>broken</code>, <code>failed</code>; a lost reply keeps everything as <code>broken</code>, <code>unresolved</code>, cleared by <code>machine remove</code>",
+      "today": [
+        "machine.create"
+      ],
+      "help": "create a VM machine (lima, apple-container) and start it",
+      "cli": "layerfs machine create <name> <platform> [--cpus 2] [--memory 4G] [--disk 20G] [--image I] [--os-image I]",
+      "positionals": [
+        {
+          "name": "name",
+          "kind": "Name"
+        },
+        {
+          "name": "platform",
+          "kind": "Name"
+        }
+      ],
+      "options": [
+        {
+          "name": "cpus",
+          "kind": "Int",
+          "help": "its processors",
+          "default": 2
+        },
+        {
+          "name": "memory",
+          "kind": "Size",
+          "help": "its memory",
+          "default": "4G"
+        },
+        {
+          "name": "disk",
+          "kind": "Size",
+          "help": "its data disk",
+          "default": "20G"
+        },
+        {
+          "name": "image",
+          "kind": "Text",
+          "help": "the Sandbox image its Sandboxes run: a digest or a file"
+        },
+        {
+          "name": "os_image",
+          "kind": "Text",
+          "help": "the VM's OS image or prepared machine image; stock for the provider's own"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": true,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "ok"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "ok",
+        "outcome",
+        "machine",
+        "platform",
+        "backend",
+        "cpus",
+        "memory_bytes",
+        "disk_bytes",
+        "image",
+        "os_image",
+        "created_at"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}"
+        ],
+        "long": "{\"ok\":true,\"outcome\":\"created\",\"machine\":\"lab\",\"platform\":\"lima\",\"backend\":\"namespaces\",\"cpus\":2,\"memory_bytes\":4294967296,\"disk_bytes\":21474836480,\"image\":null,\"os_image\":null,\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      },
+      "dropped": [],
+      "new_work": "The {phase, done, total} events with the three phase names replace today's {stage, state, elapsed_ms} and {phase: create, machine} events. Nothing else is new: the `op` is recorded today as machine.create and is shown as name `create`."
+    },
+    {
+      "call": "machine.remove",
+      "badge": "reshaped",
+      "note": "deletes a VM machine and its disk, under a recorded <code>op</code> (name <code>remove</code>), as today. Refused <code>InUse</code> while it holds Stores or Sandboxes; a built-in machine is <code>InvalidInput</code>. Of a machine of a platform removed in 2.0, or a machine whose record has no <code>vm_name</code> (an earlier build's, the built-in <code>docker</code> included; v20 computes no older name), only the record goes, and <code>message</code> says so (nothing on its host is touched); the next call records the built-in <code>docker</code> again with its 2.0 name. It clears an unresolved create or remove. It also removes the machine's own address from every PostgreSQL Store that has one; the Stores themselves are never touched. The home's image copy locks of the machine (<code>run/image-lock/&lt;machine&gt;/</code>) go with it. Phases: check, delete",
+      "today": [
+        "machine.remove"
+      ],
+      "help": "delete a VM machine and its disk",
+      "cli": "layerfs machine remove <machine>",
+      "positionals": [
+        {
+          "name": "machine",
+          "kind": "Name"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": true,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [],
+        "sometimes": [
+          "ok"
+        ]
+      },
+      "long": [
+        "ok",
+        "outcome",
+        "machine",
+        "message"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}"
+        ],
+        "long": "{\"ok\":true,\"outcome\":\"removed\",\"machine\":\"lab\",\"message\":null}"
+      },
+      "dropped": [
+        {
+          "today": "<name>",
+          "now": "<machine>",
+          "why": "an existing thing is named by its own word, never `name`"
+        }
+      ],
+      "new_work": "Progress events on a remove are new: today's call takes no on_progress. Removing the machine's own PostgreSQL addresses is new: today the remove deletes only the machine's folder, so a PostgreSQL Store's record keeps the removed machine's address (`machines.<machine>`), which nothing then uses or cleans. Deleting the home's image copy locks of the machine (`run/image-lock/<machine>/`) is new (v19): today they stay after the machine is gone."
+    },
+    {
+      "call": "machine.update",
+      "badge": "reshaped",
+      "note": "today's options (C5). <code>--cpus</code> and <code>--memory</code> are refused <code>Unsupported</code> for a VM: resizing is not in 2.0, and there is no <code>--disk</code>. <code>--image</code> sets the machine's Sandbox image; <code>--docker</code> (<code>\"\"</code> clears it), <code>--wsl</code> and <code>--daemon</code> are the built-in machines' settings. Refused <code>InUse</code> while Sandboxes are on it",
+      "today": [
+        "machine.update"
+      ],
+      "help": "set a machine's image, or a built-in machine's Docker socket, WSL distribution and daemon",
+      "cli": "layerfs machine update <machine> [--cpus N] [--memory M] [--image I] [--docker S] [--wsl D] [--daemon P]",
+      "positionals": [
+        {
+          "name": "machine",
+          "kind": "Name"
+        }
+      ],
+      "options": [
+        {
+          "name": "cpus",
+          "kind": "Int",
+          "help": "a VM's processors; refused Unsupported in 2.0"
+        },
+        {
+          "name": "memory",
+          "kind": "Size",
+          "help": "a VM's memory; refused Unsupported in 2.0"
+        },
+        {
+          "name": "image",
+          "kind": "Text",
+          "help": "the Sandbox image its Sandboxes run"
+        },
+        {
+          "name": "docker",
+          "kind": "Text",
+          "help": "the docker machine's Engine socket; \"\" chooses it again at the next start"
+        },
+        {
+          "name": "wsl",
+          "kind": "Text",
+          "help": "a Windows host's WSL distribution"
+        },
+        {
+          "name": "daemon",
+          "kind": "Text",
+          "help": "the absolute path of the daemon a built-in machine's Sandboxes run"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "ok"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "ok",
+        "outcome",
+        "machine",
+        "platform",
+        "cpus",
+        "memory_bytes",
+        "disk_bytes",
+        "image",
+        "docker",
+        "wsl",
+        "daemon"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}"
+        ],
+        "long": "{\"ok\":true,\"outcome\":\"updated\",\"machine\":\"docker\",\"platform\":\"docker\",\"cpus\":null,\"memory_bytes\":null,\"disk_bytes\":null,\"image\":null,\"docker\":\"/var/run/docker.sock\",\"wsl\":null,\"daemon\":null}"
+      },
+      "dropped": [
+        {
+          "today": "<name>",
+          "now": "<machine>",
+          "why": "an existing thing is named by its own word, never `name`"
+        }
+      ],
+      "new_work": null
+    },
+    {
+      "call": "machine.doctor",
+      "badge": "new",
+      "note": "the machine itself, by the ten checks of <code>checks.machine</code> in order, then a shallow check of each sqlite Store and each Sandbox on it: that kind's own list (<code>store doctor</code>'s, <code>sandbox doctor</code>'s) and nothing beneath it. A check that does not apply is left out: <code>native</code> has no provider, worker or separate data disk, and a stopped machine's worker checks are not made (stopped on purpose is not a finding). After a failed check the ones that need it are not made. Under a stopped, outdated or unanswering machine nothing beneath it is tried: one <code>not_checked</code> entry each, with <code>blocked_by</code>. The <code>fix</code> for <code>outdated</code> is <code>layerfs machine stop &lt;m&gt; &amp;&amp; layerfs machine start &lt;m&gt;</code> when no Sandbox is recorded on the machine, and <code>layerfs machine stop &lt;m&gt; --force &amp;&amp; layerfs machine start &lt;m&gt;</code> when some are; the <code>message</code> then names how many (they cannot be removed first: no call is sent through a mismatched worker). The <code>tree</code> is the machine's node with <code>stores</code> and <code>sandboxes</code>. No options (R4). Today's ids fold as follows: <code>machine.platform</code> into <code>machine.record</code>, <code>machine.home</code> into <code>machine.configuration</code>, <code>machine.provider.tool_version</code> into the evidence of <code>machine.provider</code>; <code>machine.worker</code> (a marker that <code>native</code> has no worker) is dropped. <code>machine.capacity</code>'s evidence adds <code>reclaimable_image_bytes</code>, the bytes of its image cache that <code>layerfs machine prune &lt;m&gt; --unused</code> frees (images no Sandbox uses but the default, and what copies left); that prune is the check's fix only when there are such bytes. Exits 0 once the report is made. <code>--progress</code> sends one event per finished thing, with its node",
+      "today": [],
+      "help": "check a machine, then each Store and Sandbox on it",
+      "cli": "layerfs machine doctor <machine>",
+      "positionals": [
+        {
+          "name": "machine",
+          "kind": "Name"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": true,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [],
+        "sometimes": [
+          "ok",
+          "findings",
+          "not_checked"
+        ]
+      },
+      "long": [
+        "ok",
+        "findings",
+        "not_checked",
+        "status",
+        "counts",
+        "observed_at",
+        "tree"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}",
+          "an outdated worker with a Sandbox on it: {\"findings\":[{\"machine\":\"demo-build\",\"check\":\"machine.worker.compatibility\",\"severity\":\"error\",\"message\":\"worker is from another build; 1 Sandbox is on it\",\"fix\":\"layerfs machine stop demo-build --force && layerfs machine start demo-build\"}],\"not_checked\":[{\"store\":\"demo-build-cache\",\"blocked_by\":{\"machine\":\"demo-build\",\"reason\":\"outdated\"}},{\"sandbox\":\"build-1\",\"blocked_by\":{\"machine\":\"demo-build\",\"reason\":\"outdated\"}}]}",
+          "a check ran out of time: {\"not_checked\":[{\"machine\":\"dev\",\"check\":\"machine.capacity\",\"reason\":\"timeout\"}]}"
+        ],
+        "long": "{\"ok\":false,\"findings\":[{\"machine\":\"demo-build\",\"check\":\"machine.worker.compatibility\",\"severity\":\"error\",\"message\":\"worker is from another build; 1 Sandbox is on it\",\"fix\":\"layerfs machine stop demo-build --force && layerfs machine start demo-build\",\"from\":null,\"evidence\":{\"protocol\":3}}],\"not_checked\":[{\"store\":\"demo-build-cache\",\"check\":null,\"blocked_by\":{\"machine\":\"demo-build\",\"reason\":\"outdated\"},\"reason\":null},{\"sandbox\":\"build-1\",\"check\":null,\"blocked_by\":{\"machine\":\"demo-build\",\"reason\":\"outdated\"},\"reason\":null}],\"status\":\"error\",\"counts\":{\"ok\":0,\"notice\":0,\"warning\":0,\"error\":1,\"not_checked\":2},\"observed_at\":\"2026-11-18T09:16:59Z\",\"tree\":{\"machine\":\"demo-build\",\"status\":\"error\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"machine.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.operation\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.configuration\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.provider\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.state\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.worker.endpoint\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.worker.auth\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.worker.compatibility\",\"outcome\":\"error\",\"from\":null}],\"blocked_by\":null,\"reason\":null,\"stores\":[{\"store\":\"demo-build-cache\",\"status\":\"not_checked\",\"coverage\":\"none\",\"checks\":[],\"blocked_by\":{\"machine\":\"demo-build\",\"reason\":\"outdated\"},\"reason\":null}],\"sandboxes\":[{\"sandbox\":\"build-1\",\"status\":\"not_checked\",\"coverage\":\"none\",\"checks\":[],\"blocked_by\":{\"machine\":\"demo-build\",\"reason\":\"outdated\"},\"reason\":null}]}}"
+      },
+      "dropped": [],
+      "new_work": "The call is new on the table; its own checks exist as today's `layerfs doctor machine <machine>`. New: the shallow check of each Store and Sandbox on the machine in the same call (today one call is one target), the one answer shape (findings, not_checked, tree) in place of today's per-check report with pass, fail, unknown, skipped and blocked, a time budget per thing in place of one --timeout for the call, and one progress event per finished thing: {phase: self|stores|sandboxes, done, total, node}. The shallow Store check is new work (C14; see store.doctor). The `--force` form of the outdated fix, with the Sandbox count in the message, is new. `reclaimable_image_bytes` in `machine.capacity`'s evidence, read from the machine's image listing, is new (v19); no new check id.",
+      "off_table": [
+        {
+          "today": "layerfs doctor machine <machine>",
+          "now": "layerfs machine doctor <machine>",
+          "why": "one doctor per thing, a call of its family (no alias, R1)"
+        },
+        {
+          "today": "--timeout",
+          "now": "",
+          "why": "each thing has its own time budget"
+        },
+        {
+          "today": "--text",
+          "now": "--text",
+          "why": "the global option, as on every call"
+        }
+      ],
+      "checks": {
+        "machine": [
+          {
+            "check": "machine.record",
+            "what": "its record is valid and names a platform this build runs",
+            "full_only": false
+          },
+          {
+            "check": "machine.operation",
+            "what": "no operation on it is half-finished or left with its outcome not known",
+            "full_only": false
+          },
+          {
+            "check": "machine.configuration",
+            "what": "its record makes a valid request to its provider",
+            "full_only": false
+          },
+          {
+            "check": "machine.provider",
+            "what": "its provider answers and its VM or container runs",
+            "full_only": false
+          },
+          {
+            "check": "machine.state",
+            "what": "the recorded state agrees with what the provider reports",
+            "full_only": false
+          },
+          {
+            "check": "machine.worker.endpoint",
+            "what": "a worker endpoint and secret are saved for it",
+            "full_only": false
+          },
+          {
+            "check": "machine.worker.auth",
+            "what": "the worker accepts the secret and answers hello",
+            "full_only": false
+          },
+          {
+            "check": "machine.worker.compatibility",
+            "what": "the worker is from this build",
+            "full_only": false
+          },
+          {
+            "check": "machine.worker.ping",
+            "what": "the worker answers a request",
+            "full_only": false
+          },
+          {
+            "check": "machine.capacity",
+            "what": "its data disk has room",
+            "full_only": false
+          }
+        ]
+      }
+    }
+  ]
+}

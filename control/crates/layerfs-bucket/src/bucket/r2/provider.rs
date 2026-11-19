@@ -2,7 +2,7 @@
 //! feature), SigV4 region `auto`. Objects up to 4.995 TiB; one PUT up to
 //! 4.995 GiB; multipart parts of 5 MiB–5 GiB, equal-sized but the last, at
 //! most 10,000.
-use crate::bucket::credentials::CredentialRef;
+use crate::bucket::credentials::Credentials;
 use crate::bucket::error::RemoteError;
 use crate::bucket::limits::Limits;
 use crate::bucket::s3_api::{S3Client, S3Config};
@@ -31,7 +31,7 @@ pub struct R2Settings {
     pub bucket: String,
     /// Namespace within the bucket; may be empty.
     pub prefix: String,
-    pub credentials: CredentialRef,
+    pub credentials: Credentials,
     pub part_size: u64,
 }
 
@@ -66,10 +66,7 @@ impl R2Settings {
     }
 
     /// The S3 client inputs, with `credentials` resolved by the caller.
-    pub fn config(
-        &self,
-        credentials: crate::bucket::credentials::Credentials,
-    ) -> Result<S3Config, RemoteError> {
+    pub fn config(&self, credentials: Credentials) -> Result<S3Config, RemoteError> {
         self.validate()?;
         Ok(S3Config {
             endpoint: self.endpoint(),
@@ -87,5 +84,5 @@ impl R2Settings {
 
 /// A driver for `settings`, resolving its credentials. Sends nothing.
 pub fn connect(settings: &R2Settings) -> Result<S3Client, RemoteError> {
-    S3Client::new(settings.config(settings.credentials.resolve()?)?)
+    S3Client::new(settings.config(settings.credentials.checked()?)?)
 }

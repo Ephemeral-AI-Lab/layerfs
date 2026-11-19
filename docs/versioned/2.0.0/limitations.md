@@ -7,10 +7,10 @@ Firecracker, Microsandbox and SSH machines were removed in 2.0 (owner,
 shows in `machine list` and `machine get` as `state: "unsupported"` with
 the reason (``platform `ssh` was removed in LayerFS 2.0``, or the same for
 `firecracker` or `microsandbox`). Every other call on it is `Unsupported`
-with that reason. `machine remove` forgets the record only; nothing on its
+with that reason. `machine remove` removes the record only; nothing on its
 host is touched, so remove a microsandbox VM yourself with
 `msb remove --force <vm>` and `msb volume remove <vm>-data`, and a
-firecracker microVM's files from its Lima host (the note names them). See
+firecracker microVM's files from its Lima host. See
 [machines](machines-and-stores.md#removed-platforms-firecracker-microsandbox-and-ssh)
 and [removed platforms](../../architecture/control/machines/platforms.md#removed-platforms-platform_policyrs).
 
@@ -38,8 +38,11 @@ for this manual.
   the Python wheel; the Node package is `2.0.0-rc.1` for its first npm
   prerelease. The bundle and daemon cache paths use
   `<cache>/layerfs/bundle/2.0.0/`.
-- Only the Disposable Store profile runs. Durable execution is `NOT_RUN —
-  disabled by owner until explicit reauthorization`.
+- Every sqlite Store opens with WAL and `synchronous=NORMAL` (owner,
+  2026-11-17), ahead of its safety and performance gate, which has not run:
+  no power-loss guarantee is claimed. Files written outside SQLite (install,
+  move, restore, snapshot) are not synchronized. Durable execution is
+  `NOT_RUN — disabled by owner until explicit reauthorization`.
 - Every call is one attempt. There is no retry, busy handler or replay.
 
 ## Not built (refused as `Unsupported`)
@@ -47,16 +50,16 @@ for this manual.
 | What | Refusal |
 | --- | --- |
 | A machine, Sandbox or Store call on a removed platform's record (`firecracker`, `ssh`, `microsandbox`) | ``platform `<name>` was removed in LayerFS 2.0``; only `machine list`, `machine get` and `machine remove` (forgets the record) answer |
-| A Sandbox on a platform and Store kind the support table refuses (`layerfs machine platforms`, `control/SUPPORT.json`): docker on Windows | the table's reason, word for word, such as "docker through WSL2 is not designed yet" |
-| A Sandbox on a machine other than its sqlite Store's | names the Store's machine; `store pull` and `store push` move the Store |
-| `backup restore` over a Store that is not on `native` | `store pull` it to `native` first |
+| A Sandbox on a platform and Store kind the support table refuses (`layerfs home get --with platforms`, `control/SUPPORT.json`): docker on Windows | the table's reason, word for word, such as "docker through WSL2 is not designed yet" |
+| A Sandbox on a machine other than its sqlite Store's | names the Store's machine; `store move` moves the Store |
+| `backup restore` over a Store that is not on `native` | `store move <store> native` first |
 | Resizing a VM with `machine update` | "not built yet; nothing was changed" (`InUse` first if Sandboxes run on it) |
 | Creating a machine without the sealed Linux bundle | names the expected folder in `detail.missing` (`bundle:<folder>`); fetching the bundle into the cache is not built, a build places it |
 | A machine kind whose tool is missing | `detail.missing`, such as `tool:limactl` |
 | `machine` calls in a build without the `machine` feature (the guest worker's build) | names the #533 step |
 | A `native` Sandbox on Linux started by a non-root user | namespaces need root for FUSE |
 | A Store made without the acquisition tables projects are added through | LayerFS adds no tables to an existing Store |
-| A home whose `layerfs.json` has a newer layout | "this build reads layout 2" |
+| A folder that is not a LayerFS 2.0 home (a `layerfs.json` of another layout, or files and no `layerfs.json`) | not converted or written (owner, 2026-11-19); fix `mv <home> <home>.old && layerfs home init` |
 
 Also not built:
 
@@ -65,16 +68,15 @@ Also not built:
 - **1.1.0's `local_folder` backup provider.** A 1.1.0 home's
   `local_folder` remote is kept only in `log/1.1.0/remotes`.
 - **A live output stream for `workspace exec`.** Output reaches the
-  `stdout` and `stderr` functions, `stream: true` and `--stream` after the
-  command ends. A stream over 1 MiB comes only as output events: the reply
-  has that stream `null` with its byte count (`stdout_bytes`,
-  `stderr_bytes`) and `streamed: true`, so a caller with no function, no
-  `stream` and no `--stream` does not get those bytes.
+  answer, the `stdout` and `stderr` functions, `stream: true` and
+  `--stream` after the command ends. A stream over 1 MiB is answered as its
+  last 1 MiB, with the file that holds all of it (`stdout_file`,
+  `stderr_file`, read with `sandbox files`; `workspace unmount` deletes it).
 - **Cancelling a call.** `layerfs.aio` stops calling a cancelled call's
   functions, but the native call runs to its end on its thread; read the
   state again after a cancel.
 - **A cancel that a worker takes and never answers has no time limit.**
-  `workspace exec-cancel` (and an unmount or close that cancels first)
+  `workspace cancel` (and an unmount or `sandbox remove --force` that cancels first)
   waits for the worker's answer until its connection closes, then answers
   `unknown` and keeps the command's record; there is no operation timeout.
 - **A cancel before a command starts, on a Sandbox this host reaches
@@ -82,11 +84,11 @@ Also not built:
   process ends the command in the worker as it starts, in one attempt.
   If the worker cannot be reached for that one attempt, the command runs
   on although the cancel answered `cancelled`; cancel it again by its id.
-- **A command's children on macOS `native`.** `workspace exec-cancel` ends
+- **A command's children on macOS `native`.** `workspace cancel` ends
   the command's process group; a child that starts its own session
   (`setsid`) is not in it and keeps running. On Linux every command has its
   own cgroup and nothing it starts escapes.
-- **`workspace exec-cancel` on a Linux Docker Engine** was not run for this
+- **`workspace cancel` on a Linux Docker Engine** was not run for this
   manual (no such host; layerfs-project#114). The docker machine on Docker
   Desktop (macOS) and `native` were.
 - **`backup list` of a Store not on `native`.** Its heads are read on
@@ -101,10 +103,6 @@ Also not built:
   runs as the user who launched it and is not published. MCP was dropped from
   2.0 by O32 and reinstated by the assignee's instruction of 2026-11-07, to be
   confirmed by the maintainers. Folder scope remains a client option.
-- **A by-id Commit lookup.** `commit.get` reads the Branch's Commits page
-  by page, following `next_page_pos` (a page holds what fits the reply
-  budget, about 47 Commits), until it finds the id or prefix; its cost grows
-  with the Branch's history.
 - **Moving a Sandbox's own state.** Daemon keys and mounts stay under the
   project's folder, as in 1.1.0; only the 2.0 record is under
   `machine/<machine>/sandbox/<name>/`.
@@ -119,10 +117,10 @@ step commits.
 - **VM kinds.** A `lima` (Lima 2.2.1, vz) and an `apple-container`
   (container 1.6.1) machine were created, started, stopped and started
   again on macOS with the release CLI, and ran the sqlite smoke and
-  `workspace exec-cancel` (on Lima also stale and unreachable forwarded
+  `workspace exec-cancel` (now `workspace cancel`; on Lima also stale and unreachable forwarded
   records); PostgreSQL Sandboxes on them were not run in that pass
   ([receipt](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/project-113/receipts/fb02aa0666/machines-live/RESULTS.md)). On macOS the `docker` machine's
-  worker did run (a private test bundle, `LAYERFS_BUNDLE`): `store move` (now `store push`) to
+  worker did run (a private test bundle, `LAYERFS_BUNDLE`): `store push` (now `store move`) to
   `docker`, its Sandboxes and the twelve cells passed; see the terminal pass.
   That run used the retired docker backend: the `docker` machine running
   `namespaces` Sandboxes in its worker container (D-8) has not been run
@@ -138,7 +136,7 @@ step commits.
   on the id it reports was tested with a stand-in `docker`
   only; a real Engine (Docker Desktop's classic or containerd image store)
   was not used.
-- **Images from Docker** (`sandbox create --image <ref>`, `machine load`).
+- **Images from Docker** (`sandbox create --image <ref>`, `machine load-image`).
   Tested with a stand-in `docker` and live on the `docker` machine with
   Docker Desktop's containerd store. An image runs the daemon inside its
   own root, so images without glibc 2.34, libssl3 and bash (alpine,
@@ -176,19 +174,34 @@ step commits.
 
 ## Observed in the runs for this manual
 
-On macOS arm64, with the debug build, in a private temporary home:
+On macOS arm64, with the debug builds of `cs20-pkg-z` (from
+`call-surface-2-0` at `61960e3f5f`), in private scratch homes:
 
-- `file.read` of a 3-byte binary file is refused `Binary`. Bytes can be
-  written (`file.write` with a `Buffer` or `bytes`), but no 2.0 call reads
-  them back as bytes.
-- `project init --progress` printed no progress lines for a small folder
-  (a later build reports its phases on every route; not rerun).
+- `file.read` of a 3-byte binary file answers `{"binary":true,"size":3}`
+  (the long form has `text` null). Bytes can be written (`file.write` with
+  a `Buffer` or `bytes`, or stdin in the shell), but no 2.0 call reads them
+  back as bytes.
+- **A path hidden after a Branch's head was written reads as a Workspace
+  change.** After `project hide-path shop/api /x.txt`, a fresh mount of a
+  Branch whose head holds `/x.txt` listed `{"path":"/x.txt","change":
+  "removed"}` in `workspace status` with nothing done in it, and
+  `workspace commit` committed that removal. Reported to the rollout as a
+  possible defect of `workspace.status` (its row says uncommitted changes);
+  not changed here.
+- **`workspace commit` with nothing to commit on a fresh fork** answered
+  `{"unchanged":true}`: its long form has `commit` null, where the row's
+  short form always names `commit` (the head; on a fresh fork the Layer it
+  was forked at, as `workspace mount` and `branch get` name it). On a Branch
+  with a Commit of its own it answered the head with `unchanged`. Reported
+  as a conformance failure; not changed here.
+- A `--with` section a call does not take is a wrong command line (exit 2)
+  in the shell and `InvalidInput` in Node and Python.
 
 ## Seen in the code, not tested
 
-- `file.apply` changes name their paths `path`, `from_path` and
-  `to_path` and their texts `old`, `new` and `content`. The Store's own
-  names (`from`, `to`, `oldText`, `newText`, `bytes`) are refused
-  `InvalidInput`, so a folder scope checks every path a change names.
+- `file.apply` changes use `op`, `path`, `from`, `to`, `content`,
+  `old_string`, `new_string`, `replace_all`, `mode` and `recursive`; any
+  other field is refused `InvalidInput` (run: `from_path` is refused), so a
+  folder scope checks every path a change names.
 - `workspace exec --stream` and the Node and Python `stdout`/`stderr`
   callbacks receive the output after the command ends, not live.

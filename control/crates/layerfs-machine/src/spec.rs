@@ -7,6 +7,7 @@ use super::record::MachineRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::outcome::refused;
+use layerfs_home::state::Reason;
 use layerfs_platform::{
     self as adapters, Endpoint, HostOs, Lasting, MachineError, Platform, Running, Spec, Tools,
 };
@@ -49,27 +50,44 @@ pub fn ensure_built_ins(home: &Path, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Forgets that this process found the built-in machines of the home at
+/// `home`: the next call writes a built-in record that is not there again
+/// (`machine remove docker` of a record with no `vm_name`).
+pub fn forget_built_ins(home: &Path) {
+    let mut ensured = ENSURED.lock().unwrap_or_else(|e| e.into_inner());
+    ensured.retain(|(path, _)| path != home);
+}
+
+/// Writes each built-in machine's record that is not there. A record that
+/// is there but cannot be read is left as it is, for its doctor to name
+/// (`machine.record`), and fails no call: every other machine, Store and
+/// Sandbox stays usable (RF re-check N-D).
 fn write_built_ins(home: &Path, id: &str) -> Result<()> {
-    let missing = |name: &str| -> Result<bool> { Ok(MachineRecord::read(home, name)?.is_none()) };
+    let missing = |name: &str| matches!(MachineRecord::read(home, name), Ok(None));
     if !layerfs_home::names::BUILT_IN
         .iter()
-        .any(|name| missing(name).unwrap_or(true))
+        .any(|name| missing(name))
     {
         return Ok(());
     }
     let _lock = home::lock::take(home)?;
     for name in layerfs_home::names::BUILT_IN {
-        if missing(name)? {
+        if missing(name) {
             MachineRecord::built_in(name, id).write(home)?;
         }
     }
     Ok(())
 }
 
+/// The id of the home at `home`, which names its machines at their providers.
+pub(super) fn home_id(home: &Path) -> Result<String> {
+    Ok(layerfs_home::home::opened(home)?.id)
+}
+
 /// The machine `name`'s record, or `NotFound`, for an operation on it.
-/// Refused `Busy` while a live process creates or removes it (its record's
-/// `op`), so no call starts, moves to or runs
-/// on it meanwhile; `Unresolved` once a gone one left that outcome unknown.
+/// Refused `Busy` while a live process creates, starts, stops or removes it
+/// (its record's `op`), so no call starts, moves to or runs on it
+/// meanwhile; `Unresolved` once a gone one left that outcome unknown.
 pub fn machine_of(home: &Path, name: &str) -> Result<MachineRecord> {
     let record = MachineRecord::of(home, name)?;
     record.not_held()?;
@@ -91,10 +109,7 @@ pub fn tools(home: &Path) -> Result<Tools> {
 /// The Docker Engine socket the docker machine uses and where it comes from,
 /// for the machine and for every Docker read of the home's (one choice): the
 /// socket its record holds (`recorded`; `machine update docker --docker`, or
-/// its first start), else, for a machine that already ran before sockets
-/// were recorded (it ran, or its record predates `vm_name`, so an older
-/// build used it), Docker's default socket it ran on (`legacy`; recorded
-/// at its next start), else the host's automatic choice
+/// its first start), else the host's automatic choice
 /// ([`adapters::docker_automatic`]: `env:DOCKER_HOST`, `context:<name>`,
 /// `desktop`, `colima`, `orbstack` or `default`). `--docker ""` leaves the
 /// field null: automatic again, ran or not.
@@ -102,12 +117,6 @@ pub fn docker_socket(home: &Path) -> Result<(PathBuf, String)> {
     let record = MachineRecord::read(home, "docker")?;
     if let Some(socket) = record.as_ref().and_then(MachineRecord::docker) {
         return Ok((PathBuf::from(socket), "recorded".to_owned()));
-    }
-    let cleared = record.as_ref().is_some_and(|r| r.field("docker").is_some());
-    let older = |r: &MachineRecord| r.ever_started() || r.text("vm_name").is_none();
-    if !cleared && record.as_ref().is_some_and(older) {
-        let socket = PathBuf::from(adapters::DEFAULT_DOCKER_SOCKET);
-        return Ok((socket, "legacy".to_owned()));
     }
     let chosen = adapters::docker_automatic(&adapters::DockerEnv::current());
     let path = chosen
@@ -117,21 +126,25 @@ pub fn docker_socket(home: &Path) -> Result<(PathBuf, String)> {
 }
 
 /// The adapters' description of the machine `record` describes.
-pub fn spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> {
-    let mut spec = provider_spec(home, home_id, record)?;
+pub fn spec(home: &Path, record: &MachineRecord) -> Result<Spec> {
+    let mut spec = provider_spec(home, record)?;
     spec.worker = worker(home, record.name())?;
     Ok(spec)
 }
 
 /// A provider description that does not read or authenticate the worker endpoint.
-pub fn provider_spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> {
+pub fn provider_spec(home: &Path, record: &MachineRecord) -> Result<Spec> {
     let name = record.name();
     let kind = record.platform()?;
     let lasting = record.field("lasting");
     Ok(Spec {
         name: name.to_owned(),
         kind,
-        vm_name: record.provider_name(home_id),
+        // `native` has no provider name: its record keeps none
+        vm_name: match kind {
+            Platform::Native => String::new(),
+            _ => record.provider_name()?.to_owned(),
+        },
         cpus: int(record, "cpus", DEFAULT_CPUS) as u32,
         memory: int(record, "memory", DEFAULT_MEMORY) as u64,
         disk: int(record, "disk", DEFAULT_DISK) as u64,
@@ -142,8 +155,8 @@ pub fn provider_spec(home: &Path, home_id: &str, record: &MachineRecord) -> Resu
             .text("image_archive")
             .or(record.image().filter(|i| i.starts_with('/')))
             .map(PathBuf::from),
-        // the docker machine's worker container runs its Sandbox image, as
-        // 1.1.0's macOS worker did
+        // the docker machine's worker container runs its Sandbox image
+        // (`machine update docker --image`) when it names no OS image
         os_image: record
             .text("os_image")
             .or(record.image().filter(|_| kind == Platform::Docker))
@@ -170,18 +183,32 @@ pub fn worker(home: &Path, name: &str) -> Result<Option<Endpoint>> {
 }
 
 /// Writes `worker.json` and the lasting state of a started machine; the
-/// record write that says `running` drops a create's `op` (a
-/// start runs under the machine's start lock, where no other one lives).
+/// record write that says `running` drops the `op` of the create or start
+/// that made it so, and what an earlier failure left (`reason`, `error`).
 pub fn save_running(home: &Path, name: &str, running: &Running) -> Result<()> {
     save_started(home, name, running, None)
 }
 
-/// Retains a started provider's endpoint and lasting state without claiming readiness.
-pub fn save_unready(home: &Path, name: &str, running: &Running, error: &str) -> Result<()> {
-    save_started(home, name, running, Some(error))
+/// Retains a started provider's endpoint and lasting state without
+/// claiming readiness: the machine is recorded broken for `reason` (its
+/// worker is of another build, or does not answer), with `error` as the
+/// sentence behind it, and the `op` is dropped.
+pub fn save_unready(
+    home: &Path,
+    name: &str,
+    running: &Running,
+    reason: Reason,
+    error: &str,
+) -> Result<()> {
+    save_started(home, name, running, Some((reason, error)))
 }
 
-fn save_started(home: &Path, name: &str, running: &Running, error: Option<&str>) -> Result<()> {
+fn save_started(
+    home: &Path,
+    name: &str,
+    running: &Running,
+    broken: Option<(Reason, &str)>,
+) -> Result<()> {
     let endpoint = &running.endpoint;
     write_record(
         &paths::worker_record(home, name),
@@ -200,12 +227,10 @@ fn save_started(home: &Path, name: &str, running: &Running, error: Option<&str>)
     }
     update(home, name, |record| {
         let record = record.with("lasting", SdkValue::Map(lasting));
-        match error {
-            Some(error) => record.failed_as("failed", error).without_op(),
-            None => record
-                .with("state", SdkValue::text("running"))
-                .with("error", SdkValue::Null)
-                .without_op(),
+        let record = record.with("state", SdkValue::text("running"));
+        match broken {
+            Some((reason, error)) => record.broken_as(reason, error).without_op(),
+            None => record.mended().without_op(),
         }
     })
 }

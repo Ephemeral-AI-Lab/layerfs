@@ -9,7 +9,8 @@
 //! directory whose mode differs from the base to its own. Two kinds of row are
 //! no change: an inode created locally that no name binds any more, and a
 //! base directory whose mode equals the base, since its names are their own
-//! rows and Commit ignores its mtime. A path is found among the active
+//! rows and Commit ignores its mtime. A file a Commit kept for its newer
+//! mtime alone is no row of the window at all. A path is found among the active
 //! bindings first, then by a bounded walk of the local base. Both indexed
 //! windows are streamed to the end in bounded pages and only paths are
 //! retained, so the number of no-op rows is not a cap on the check. At most
@@ -27,19 +28,19 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Paths one report names.
 const PATHS: usize = 256;
 /// Base directories one path walk may list.
-const WALK: usize = 4096;
+pub(super) const WALK: usize = 4096;
 /// Deepest local path resolved.
 const DEPTH: usize = 256;
 
 /// Paths of serials: local bindings first, then the local base.
-struct Names {
-    root: u64,
-    local: BTreeMap<u64, (u64, String)>,
-    base: BTreeMap<u64, String>,
+pub(super) struct Names {
+    pub(super) root: u64,
+    pub(super) local: BTreeMap<u64, (u64, String)>,
+    pub(super) base: BTreeMap<u64, String>,
 }
 
 impl Names {
-    fn path(&self, serial: u64, depth: usize) -> Option<String> {
+    pub(super) fn path(&self, serial: u64, depth: usize) -> Option<String> {
         if serial == self.root {
             return Some("/".to_owned());
         }
@@ -54,7 +55,7 @@ impl Names {
     }
 }
 
-fn join(parent: &str, name: &str) -> String {
+pub(super) fn join(parent: &str, name: &str) -> String {
     if parent == "/" {
         format!("/{name}")
     } else {

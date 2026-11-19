@@ -28,7 +28,7 @@ naming `tools/machine_image.py`), else the provider's stock image
 `prepared_os_image`). `os_image: "stock"` takes the stock image even when a
 prepared one exists and records none
 ([`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs) `STOCK`).
-`machine.platforms` gives each size option its `default` (`DEFAULT_CPUS`,
+`home.get --with platforms` gives each size option its `default` (`DEFAULT_CPUS`,
 `DEFAULT_MEMORY`, `DEFAULT_DISK` in `layerfs-machine` `spec.rs`).
 
 ## Tools and the docker socket
@@ -38,8 +38,8 @@ prepared one exists and records none
 | Tool lookup | `Tools.path` is this process's `PATH`, then the fallback folders not already on it: on macOS `/opt/homebrew/bin`, `/usr/local/bin`, `/Applications/Docker.app/Contents/Resources/bin` (an app started from the Dock has a short `PATH`), none elsewhere; `LAYERFS_TOOL_FALLBACKS` (a `PATH`-style list, empty for none) replaces them, which tests use. Every provider command runs with `Tools.path` as its `PATH`. The Sandbox code's own Docker reads find `docker` the same way (`find_tool`) | [`spec.rs`](../../../../control/crates/layerfs-platform/src/spec.rs) `Tools::from_env`, `tool_fallbacks`; [`setup/tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs) `command`, `find_tool` |
 | Socket candidates | read from files and variables only: `DOCKER_HOST`, the current context (`DOCKER_CONTEXT`, else `currentContext` in `config.json` under `DOCKER_CONFIG` or `~/.docker`) and the other contexts' `contexts/meta/*/meta.json`, Docker Desktop's `~/.docker/run/docker.sock`, colima's `~/.colima/default/docker.sock` and OrbStack's `~/.orbstack/run/docker.sock` when they exist, and `/var/run/docker.sock`; deduplicated by path; a non-`unix://` endpoint is listed `usable: false`, never followed | [`docker_socket.rs`](../../../../control/crates/layerfs-platform/src/docker_socket.rs) `docker_candidates` |
 | Automatic choice | `DOCKER_HOST` when `unix://`, else the current context's endpoint when `unix://`, else the first of Docker Desktop's, colima's and OrbStack's sockets that exists, else `/var/run/docker.sock` | same, `docker_automatic` |
-| The docker machine's socket | its record's `docker` (`machine update docker --docker`, or written by its first start: under the home lock once the socket answers a ping, before an image is loaded or anything is made in that Engine, and again once the provider started, so it never moves to another Engine, where its data volume and loaded image are not; a start whose Engine does not answer pins nothing); for a record that ran before sockets were recorded (it has `lasting` or a `running`/`failed` state, or no `vm_name`, so an older build used it) and has no `docker` field, `/var/run/docker.sock` (source `legacy`), which its next start records; else the automatic choice. `--docker ""` writes `docker: null`: automatic again until the next start records one. Changing it is refused `InUse` while the machine's worker is recorded running. The machine's adapter and the Sandbox code's Docker reads (`machine.images`, image copies) use this one choice | [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs) `docker_socket`, [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) `record_socket`, [`docker.rs`](../../../../control/crates/layerfs-sandbox/src/docker.rs) `Docker::of` |
-| Socket state | one connect (non-blocking on Linux, where a full backlog would hold a blocking one) and `GET /_ping` (2 s per read and write): `answering`, `absent` (no such file), `denied` (`EACCES`) or `silent`. The docker probe runs `docker version` only for an answering socket; `machine.platforms` pings again for `socket.state` only when the probe found no version. The automatic choice is named as the candidates name its socket | `docker_socket.rs` `socket_state`, [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
+| The docker machine's socket | its record's `docker` (`machine update docker --docker`, or written by its first start: under the home lock once the socket answers a ping, before an image is loaded or anything is made in that Engine, and again once the provider started, so it never moves to another Engine, where its data volume and loaded image are not; a start whose Engine does not answer pins nothing); else the automatic choice (`env:DOCKER_HOST`, `context:<name>`, `desktop`, `colima`, `orbstack` or `default`); no older record is given a fixed socket. `--docker ""` writes `docker: null`: automatic again until the next start records one. Changing it is refused `InUse` while the machine's worker is recorded running. The machine's adapter and the Sandbox code's Docker reads (`machine.images`, image copies) use this one choice | [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs) `docker_socket`, [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) `record_socket`, [`docker.rs`](../../../../control/crates/layerfs-sandbox/src/docker.rs) `Docker::of` |
+| Socket state | one connect (non-blocking on Linux, where a full backlog would hold a blocking one) and `GET /_ping` (2 s per read and write): `answering`, `absent` (no such file), `denied` (`EACCES`) or `silent`. The docker probe runs `docker version` only for an answering socket; `home.get --with platforms` pings again for `socket.state` only when the probe found no version. The automatic choice is named as the candidates name its socket | `docker_socket.rs` `socket_state`, [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
 
 ## native (`platforms/native/`)
 
@@ -245,7 +245,7 @@ worker log exists), false on every `native`.
 
 Generated by `support_json()`; never edited by hand. One block per host
 (`macos`, `linux`, `windows`), one row per platform: the rows
-`machine.platforms` answers without its live `ready`, `missing`, `version`.
+`home.get --with platforms` answers without its live `ready`, `missing`, `version`.
 
 | Key | Value |
 | --- | --- |
@@ -269,11 +269,11 @@ profile or row, and no setting brings one back. The refusal is
 | Call on a removed platform's record | Behaviour |
 | --- | --- |
 | `machine list`, `get` | shown, never probed: `backend: "-"`, `supports` false with the reason, `state: "unsupported"` |
-| `machine remove` | forgets the record only (same `InUse` check); its note names what is left on its host (the `msb` VM and volume, or the microVM folder and disk on its Lima host) |
+| `machine remove` | removes the record only (same `InUse` check), answering `{ok: true}`; the long form's `message` says "only its record was removed (<reason>); nothing on its host was touched" |
 | every other call, `machine create <name> firecracker\|microsandbox\|ssh` | `Unsupported`, before any effect |
 
 A Lima machine that an old Firecracker record names as its host is refused
-`machine remove` (`InUse`) until that record is forgotten
+`machine remove` (`InUse`) until that record is removed
 ([`record.rs`](../../../../control/crates/layerfs-machine/src/record.rs),
 [`remove.rs`](../../../../control/crates/layerfs-machine/src/remove.rs)).
 

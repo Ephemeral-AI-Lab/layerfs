@@ -5,3 +5,4 @@
 
 pub mod backup;
 pub mod bucket;
+pub mod words;

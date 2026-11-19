@@ -1,39 +1,34 @@
-//! `layerfs doctor` (#536 H7): a report of what is wrong in a home, which
-//! changes nothing and starts no machine. It reads the records, their modes
-//! and references, the `op` intents, the Store leases, a layout 2 home's
-//! conversion blockers, partial Store copies on `native` and the build of
-//! each running machine's worker (its hello alone: no request is sent), and
-//! a running Sandbox's daemon capacity (a best-effort query, bounded to 2 s).
-//! Each finding names the call that fixes it. It takes no lock: a home
-//! that changes meanwhile may be reported as it was part way.
+//! The six doctors (call surface 2.0): `home`, `machine`, `store`,
+//! `project`, `sandbox` and `backup doctor` answer one report ([`report`])
+//! made by one runner ([`frame`]) over each kind's checks ([`kinds`]). A
+//! doctor changes nothing and starts no machine; it takes no lock, so a
+//! home that changes meanwhile may be reported as it was part way.
 //!
-//! It also lists what interrupted operations left on `native` and on each
-//! running machine (`leftovers`, one bounded walk per side), and
-//! `doctor.fix` removes one of them under its guard (`leftover_fix`): the
-//! one call here that changes anything (layerfs-project#180).
+//! No doctor's report holds what interrupted operations left: LayerFS
+//! removes it itself where nothing can own it (spec v20,
+//! `layerfs_sandbox::sweep` and the sweeps of image copies and backups).
 mod capacity;
 mod checks;
-mod convert;
-pub mod leftover_fix;
-pub mod leftover_report;
-pub mod leftovers;
-mod report;
+mod records;
 mod scan;
-mod workers;
-
-pub use report::{doctor, doctor_json};
 
 mod check_report;
+pub mod frame;
+mod kinds;
+pub mod report;
 pub mod target;
 
-mod dispatch;
-pub use dispatch::doctor_target;
-pub use target::{DoctorRequest, DoctorTarget};
+pub use frame::{run, run_with, CheckId, KindDoctor, Located, Options, Probe, Registry};
+pub use kinds::kinds;
+pub use report::{Kind, Node, Report, Thing};
 
 mod host_target;
 mod machine_target;
+mod project_target;
 mod sandbox_target;
+mod workspace_target;
 pub(crate) use sandbox_target::worker_diagnose as diagnose_worker_sandbox;
+pub(crate) use scan::shell;
 mod backup_target;
 mod store_target;
 pub(crate) use store_target::in_worker as diagnose_store_in_worker;

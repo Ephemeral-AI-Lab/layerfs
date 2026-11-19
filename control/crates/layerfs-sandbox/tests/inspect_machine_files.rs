@@ -412,10 +412,10 @@ fn a_layerfs_folder_is_read_beneath_itself_and_keeps_what_layerfs_keeps() {
     assert_eq!(
         json(entry(&run, &mounted)),
         format!(
-            r#"{{"path":"{run_shown}/workspaces/1","depth":2,"kind":"mount","size":null,"mode":null,"mtime":null,"workspace":"{id}"}}"#
+            r#"{{"path":"{run_shown}/workspaces/1","depth":2,"kind":"mount","size":null,"mode":null,"mtime":null,"workspace":"s1:{run_shown}/workspaces/1"}}"#
         )
     );
-    // one no record names is a mount all the same, with no id
+    // one no record names is a mount all the same, with no handle
     assert_eq!(
         json(entry(&run, &fx.run.join("workspaces/2"))),
         format!(
@@ -432,7 +432,10 @@ fn a_layerfs_folder_is_read_beneath_itself_and_keeps_what_layerfs_keeps() {
     let ids: Vec<_> = (entries(&carried).iter())
         .map(|entry| entry.get_text("workspace").unwrap().to_owned())
         .collect();
-    assert_eq!(ids, [id.as_str(), "7f"]);
+    // the recorded one by its handle (`s1:<path>`, call surface 2.0), the
+    // carried one, which names no handle, by its id
+    let handle = format!("s1:{run_shown}/workspaces/1");
+    assert_eq!(ids, [handle.as_str(), "7f"]);
     for inside in ["workspaces/1", "workspaces/2"] {
         invalid(at(data, &fx.run.join(inside), &[]), "is a mount point");
     }

@@ -34,10 +34,13 @@ pub mod rootfs;
 mod sandbox;
 
 pub(crate) use adapter::ADAPTER;
+
 #[cfg(target_os = "linux")]
 pub(crate) use cgroup::ExecGroup;
 #[cfg(target_os = "linux")]
-pub use cgroup::{give_controllers, helper_group, leaf, split};
+pub use cgroup::{give_controllers, leaf, split};
+#[cfg(target_os = "linux")]
+pub use exec::NO_HELPER_COPY;
 #[cfg(target_os = "linux")]
 pub use provider::NamespaceProvider;
 #[cfg(target_os = "linux")]

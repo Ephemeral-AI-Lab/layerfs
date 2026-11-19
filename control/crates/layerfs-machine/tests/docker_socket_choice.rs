@@ -31,6 +31,7 @@ fn free(_: &Path, _: &str) -> Result<(), SdkRefusal> {
 const RELATED: Related = Related {
     stores_on: none,
     sandboxes_on: none,
+    hosted_on: none,
     can_remove: free,
     can_stop: free,
     can_change: free,
@@ -165,7 +166,7 @@ esac
     assert_eq!(chosen(&h), (first.clone(), "env:DOCKER_HOST".to_owned()));
 
     // the first start runs on that socket and records it, whatever its outcome
-    let started = running(&h, "docker").unwrap_err();
+    let started = running(&h, "docker", RELATED).unwrap_err();
     assert_eq!(started.code, "Unavailable", "{}", started.message);
     let calls = fs::read_to_string(root.join("calls")).unwrap();
     let on_first = format!("-H unix://{} ", first.display());
@@ -188,7 +189,7 @@ esac
 
     // `--docker ""`: automatic again, though the machine ran; get shows none
     let summary = set_docker(&h, "").unwrap();
-    assert_eq!(summary.get("docker"), None, "{summary:?}");
+    assert_eq!(summary.get_text("docker"), None, "{summary:?}");
     let record = MachineRecord::of(&h, "docker").unwrap();
     assert_eq!(record.field("docker"), Some(&SdkValue::Null));
     assert_eq!(record.docker(), None);
@@ -212,25 +213,13 @@ esac
         refused.message
     );
 
-    // a machine that ran before sockets were recorded keeps the default one,
-    // which its next start records: one with lasting state, or one whose
-    // record predates `vm_name`
-    let base = MachineRecord::of(&h, "docker")
+    // with no socket recorded, a machine that ran before is on the
+    // automatic choice like any other: no older default is kept
+    MachineRecord::of(&h, "docker")
         .unwrap()
         .without("docker")
-        .without("state")
-        .without("lasting");
-    let legacy = (PathBuf::from("/var/run/docker.sock"), "legacy".to_owned());
-    base.clone()
         .with("state", SdkValue::text("stopped"))
         .with("lasting", SdkValue::map([]))
-        .write(&h)
-        .unwrap();
-    assert_eq!(chosen(&h), legacy);
-    base.clone().without("vm_name").write(&h).unwrap();
-    assert_eq!(chosen(&h), legacy);
-    // a stop before any start records `stopped` alone: still never started
-    base.with("state", SdkValue::text("stopped"))
         .write(&h)
         .unwrap();
     assert_eq!(chosen(&h), (second.clone(), "env:DOCKER_HOST".to_owned()));
@@ -266,7 +255,7 @@ esac
         .with("image", SdkValue::text("test-base"))
         .write(&h2)
         .unwrap();
-    let failed = running(&h2, "docker").unwrap_err();
+    let failed = running(&h2, "docker", RELATED).unwrap_err();
     pinging.join().unwrap();
     let record = MachineRecord::of(&h2, "docker").unwrap();
     assert_eq!(
@@ -276,7 +265,12 @@ esac
         failed.code,
         failed.message
     );
-    assert!(!record.ever_started(), "{record:?}");
+    // never started: no lasting state, and no state only a start writes
+    assert!(record.field("lasting").is_none(), "{record:?}");
+    assert!(
+        !matches!(record.recorded_state(), Some("running" | "failed")),
+        "{record:?}"
+    );
     std::env::remove_var("LFS_FAIL_RUN");
 
     stop.store(true, Ordering::Relaxed);

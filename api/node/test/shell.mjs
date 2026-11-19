@@ -12,6 +12,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { client, table, LayerFSError } from "../src/index.js";
 import { decode } from "../src/values.js";
+import { refusalOf } from "./contract/refusal.mjs";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const target = process.env.CARGO_TARGET_DIR ? resolve(root, process.env.CARGO_TARGET_DIR) : join(root, "target");
@@ -42,7 +43,7 @@ async function node(lfs, family, call, positionals) {
     return { value: await lfs[family][call](...positionals) };
   } catch (error) {
     assert.ok(error instanceof LayerFSError, `${family}.${call}: ${error}`);
-    return { refused: { code: error.code, message: error.message, detail: error.detail } };
+    return { refused: refusalOf(error) };
   }
 }
 
@@ -66,8 +67,6 @@ test("every call is refused the same way by the command and the package", { skip
   // home.init would say `created` only to the first front end
   await lfs.home.init();
   for (const spec of table) {
-    // the first reset clears what the second would count
-    if (`${spec.family}.${spec.call}` === "logs.reset") continue;
     const args = spec.args.filter((a) => !a.optional);
     const positionals = args.map((a) => refusing[a.kind]);
     const words = [spec.family, spec.call];
@@ -78,6 +77,15 @@ test("every call is refused the same way by the command and the package", { skip
       else words.push(String(positionals[i]));
     }
     const fromNode = await node(lfs, spec.family, spec.call, positionals);
+    if (spec.options.some((opt) => opt.required)) {
+      // a missing required option: the shell judges the line itself (exit
+      // 2, nothing called); the package's call is refused before any effect
+      const run = spawnSync(command, words, { env: { ...process.env, LAYERFS_HOME: home }, input: input ?? "" });
+      assert.equal(run.status, 2, `${spec.family}.${spec.call}: ${run.stderr}`);
+      assert.match(run.stderr.toString(), / is required/);
+      assert.equal(fromNode.refused?.error, "InvalidInput", `${spec.family}.${spec.call}`);
+      continue;
+    }
     same(`${spec.family}.${spec.call}`, shell(home, words, input), fromNode);
   }
   // a wrong command line is exit 2 and calls nothing
@@ -97,9 +105,10 @@ test("a live Store gives the same answers both ways", { skip: !existsSync(comman
     env: { ...process.env, LAYERFS_HOME: home },
   });
   assert.equal(progress.status, 0, progress.stderr.toString());
-  // progress, when Init reports any, is one JSON line per update on stderr
+  // progress, when Init reports any, is one JSON line per event on stderr:
+  // the event itself, `{ phase, done, total }`
   for (const line of progress.stderr.toString().split("\n").filter(Boolean)) {
-    assert.ok(decode(line).progress !== undefined, line);
+    assert.deepEqual(Object.keys(decode(line)).slice(0, 3), ["phase", "done", "total"], line);
   }
   await lfs.branch.fork("shop/api", "agent", "main");
   // content from stdin, and bytes that are not UTF-8
@@ -116,19 +125,13 @@ test("a live Store gives the same answers both ways", { skip: !existsSync(comman
     ["file", "stat", "shop/api", "agent", "/README.md"],
     ["file", "list", "shop/api", "agent", "/"],
     ["file", "grep", "shop/api", "agent", "/", "hello"],
-    ["branch", "diff", "shop/api", "main", "agent"],
+    ["commit", "diff", "shop/api", "agent"],
   ];
   for (const [family, call, ...positionals] of reads) {
     const fromNode = await node(lfs, family, call, positionals);
     const fromShell = shell(home, [family, call, ...positionals]);
-    if (family === "store" && call === "list") {
-      // a Store's state counts the leases of other processes: this one
-      // keeps the Store open since the fork, so the shell sees it in use
-      // and this process does not
-      assert.equal(fromShell.value.items[0].state, "in_use");
-      assert.equal(fromNode.value.items[0].state, "idle");
-      for (const item of [...fromShell.value.items, ...fromNode.value.items]) delete item.state;
-    }
+    // a Store this process keeps open reads the same to the shell (2.0
+    // states: a lease is no state), so store answers compare whole
     same(`${family}.${call}`, fromShell, fromNode);
   }
   assert.equal((await lfs.file.read("shop/api", "agent", "/a.txt")).text, "piped\n");

@@ -137,7 +137,7 @@ fn the_worker_path_writes_the_sidecar_then_admits_and_releases_after_the_marker(
     // cases in the `layerfs-store` tests cover the same home path, and this
     // case runs where the Store's filesystem carries SQLite locks.
     let home = tempdir("home");
-    match create(&home, &StoreName::parse("shop").unwrap()) {
+    match create(&home, &StoreName::parse("shop").unwrap(), None) {
         Ok(_) => {}
         Err(refusal)
             if refusal.code == "Unsupported"
@@ -317,12 +317,15 @@ fn the_worker_path_writes_the_sidecar_then_admits_and_releases_after_the_marker(
     })
     .unwrap();
     let outcome = remove(&home).unwrap();
-    assert_eq!(outcome.get_text("kind"), Some("Removed"));
+    assert_eq!(outcome.get_text("outcome"), Some("deleted"));
     assert!(
-        !outcome.get_bool("home_entry_removed"),
+        outcome.get_bool("home_entry_kept"),
         "a pending retry settles without finishing the entry"
     );
-    assert_eq!(outcome.get_int("deleted_ms"), Some(pending.deleted_ms));
+    assert_eq!(
+        outcome.get_text("deleted_at"),
+        Some(layerfs_home::time::iso(pending.deleted_ms).as_str())
+    );
     assert!(paths::project_dir(&home, "shop", "app").is_dir());
     assert!(
         paths::project_dir(&root, "shop", "app").is_dir(),
@@ -345,8 +348,8 @@ fn the_worker_path_writes_the_sidecar_then_admits_and_releases_after_the_marker(
     // The marker is confirmed now: the next call removes both entries and
     // unlinks the sidecar.
     let outcome = remove(&home).unwrap();
-    assert_eq!(outcome.get_text("kind"), Some("Removed"));
-    assert!(outcome.get_bool("home_entry_removed"));
+    assert_eq!(outcome.get_text("outcome"), Some("deleted"));
+    assert!(!outcome.get_bool("home_entry_kept"));
     assert!(!paths::project_dir(&home, "shop", "app").exists());
     assert!(!paths::project_dir(&root, "shop", "app").exists());
     assert_eq!(
@@ -504,6 +507,11 @@ fn caller_home(tag: &str, address: &str, stack: LayerStackId) -> PathBuf {
     )
     .unwrap();
     home::write_record(
+        &paths::machine_record(&home, "box"),
+        &SdkValue::map([("name", text("box")), ("platform", text("lima"))]),
+    )
+    .unwrap();
+    home::write_record(
         &paths::worker_record(&home, "box"),
         &SdkValue::map([("address", text(address)), ("secret", text("k"))]),
     )
@@ -614,9 +622,12 @@ fn a_fake_workers_success_removes_the_entry_and_releases_the_admission() {
     });
 
     let outcome = remove(&home).unwrap();
-    assert_eq!(outcome.get_text("kind"), Some("Removed"));
-    assert_eq!(outcome.get_int("deleted_ms"), Some(42));
-    assert!(outcome.get_bool("home_entry_removed"));
+    assert_eq!(outcome.get_text("outcome"), Some("deleted"));
+    assert_eq!(
+        outcome.get_text("deleted_at"),
+        Some(layerfs_home::time::iso(42).as_str())
+    );
+    assert!(!outcome.get_bool("home_entry_kept"));
     assert!(!paths::project_dir(&home, "shop", "app").exists());
     assert_eq!(
         layerfs_store::project::delete::Intent::read(&home, "shop", "app").unwrap(),
@@ -682,9 +693,12 @@ fn a_fake_workers_pending_retry_settles_the_marker_and_then_finishes_the_entry()
     // The first call is the pending retry: it redos the marker with the
     // sidecar's deleted_ms, keeps the entry and leaves the sidecar marked.
     let outcome = remove(&home).unwrap();
-    assert_eq!(outcome.get_text("kind"), Some("Removed"));
-    assert!(!outcome.get_bool("home_entry_removed"));
-    assert_eq!(outcome.get_int("deleted_ms"), Some(77));
+    assert_eq!(outcome.get_text("outcome"), Some("deleted"));
+    assert!(outcome.get_bool("home_entry_kept"));
+    assert_eq!(
+        outcome.get_text("deleted_at"),
+        Some(layerfs_home::time::iso(77).as_str())
+    );
     assert!(paths::project_dir(&home, "shop", "app").is_dir());
     let settled = layerfs_store::project::delete::Intent::read(&home, "shop", "app")
         .unwrap()
@@ -706,7 +720,7 @@ fn a_fake_workers_pending_retry_settles_the_marker_and_then_finishes_the_entry()
     // The marker is confirmed: the next call sends only the entry-removal
     // frame, takes no admission and writes no marker.
     let outcome = remove(&home).unwrap();
-    assert!(outcome.get_bool("home_entry_removed"));
+    assert!(!outcome.get_bool("home_entry_kept"));
     assert!(!paths::project_dir(&home, "shop", "app").exists());
     assert_eq!(
         layerfs_store::project::delete::Intent::read(&home, "shop", "app").unwrap(),
@@ -761,9 +775,12 @@ fn a_fake_workers_marked_sidecar_finishes_with_only_the_entry_frame() {
     });
 
     let outcome = remove(&home).unwrap();
-    assert_eq!(outcome.get_text("kind"), Some("Removed"));
-    assert_eq!(outcome.get_int("deleted_ms"), Some(55));
-    assert!(outcome.get_bool("home_entry_removed"));
+    assert_eq!(outcome.get_text("outcome"), Some("deleted"));
+    assert_eq!(
+        outcome.get_text("deleted_at"),
+        Some(layerfs_home::time::iso(55).as_str())
+    );
+    assert!(!outcome.get_bool("home_entry_kept"));
     assert!(!paths::project_dir(&home, "shop", "app").exists());
     assert_eq!(
         layerfs_store::project::delete::Intent::read(&home, "shop", "app").unwrap(),
@@ -831,9 +848,12 @@ fn a_lost_worker_reply_is_unknown_and_keeps_the_sidecar_for_the_retry() {
 
     // The retry re-registers the same identity and finishes the entry.
     let outcome = remove(&home).expect("the retry settles the unknown outcome");
-    assert_eq!(outcome.get_text("kind"), Some("Removed"));
-    assert_eq!(outcome.get_int("deleted_ms"), Some(42));
-    assert!(outcome.get_bool("home_entry_removed"));
+    assert_eq!(outcome.get_text("outcome"), Some("deleted"));
+    assert_eq!(
+        outcome.get_text("deleted_at"),
+        Some(layerfs_home::time::iso(42).as_str())
+    );
+    assert!(!outcome.get_bool("home_entry_kept"));
     assert!(!paths::project_dir(&home, "shop", "app").exists());
     assert_eq!(
         layerfs_store::project::delete::Intent::read(&home, "shop", "app").unwrap(),
@@ -897,4 +917,264 @@ fn a_fake_workers_empty_unknown_release_names_the_project_and_op() {
     assert_eq!(sent_op(&requests[2]), op, "{requests:?}");
     drop(requests);
     let _ = std::fs::remove_dir_all(home);
+}
+
+/// A caller's home whose project `app` of Store `shop` (on machine `box`,
+/// the fake worker at `address`) was left by an Init through the worker
+/// whose outcome is not known: its record names no LayerStack and holds the
+/// Init's uncertain `op`, its owner gone (`broken` `unresolved`).
+fn unresolved_init_home(tag: &str, address: &str) -> PathBuf {
+    let stack = LayerStackId::from_authority([0; 16]);
+    let home = caller_home(tag, address, stack);
+    let op = SdkValue::map([
+        ("id", text("op-0000000000000001")),
+        ("name", text("project.init")),
+        ("phase", text("install")),
+        ("args", SdkValue::Null),
+        ("owner", SdkValue::map([("pid", SdkValue::Int(0))])),
+        ("started", SdkValue::Int(1_000)),
+        ("updated", SdkValue::Int(1_000)),
+        ("uncertain", SdkValue::Bool(true)),
+    ]);
+    write_record(
+        &paths::project_record(&home, "shop", "app"),
+        &SdkValue::map([("v", SdkValue::Int(1)), ("name", text("app")), ("op", op)]),
+    );
+    home
+}
+
+/// The worker's `project.list` answer: the Store lists `projects`.
+fn listed(projects: &[(&str, LayerStackId)]) -> SdkValue {
+    let items = projects.iter().map(|(name, stack)| {
+        SdkValue::map([
+            ("name", text(name)),
+            ("stack_id", text(&hex(&stack.to_bytes()))),
+            ("head", SdkValue::Null),
+            ("size", SdkValue::Null),
+        ])
+    });
+    SdkValue::map([(
+        "value",
+        SdkValue::map([
+            ("kind", text("Listed")),
+            ("projects", SdkValue::List(items.collect())),
+        ]),
+    )])
+}
+
+/// An uncertain worker Init that did reach the Store: `project delete` asks
+/// the Store's list once, retires the Stack it names there (admission,
+/// marker, release) and removes the home entry.
+#[test]
+fn an_uncertain_worker_init_the_store_lists_is_deleted_there_then_its_entry_goes() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let stack = LayerStackId::from_authority([0x2b; 16]);
+    let home = unresolved_init_home("unresolved-listed", &address);
+    let seen = fake_worker(listener, move |request| match op_of(request) {
+        "project.list" => listed(&[
+            ("other", LayerStackId::from_authority([9; 16])),
+            ("app", stack),
+        ]),
+        "project.delete.admit" => admitted_for(stack),
+        "project.delete" => removed_for(stack, 42, false),
+        "project.delete.release" => released_for(request),
+        other => panic!("unexpected op {other}"),
+    });
+
+    let outcome = remove(&home).unwrap();
+    assert_eq!(outcome.get_text("outcome"), Some("deleted"), "{outcome:?}");
+    assert!(!outcome.get_bool("home_entry_kept"));
+    assert!(!paths::project_dir(&home, "shop", "app").exists());
+    let requests = seen.lock().unwrap();
+    let ops: Vec<&str> = requests.iter().map(op_of).collect();
+    assert_eq!(
+        ops,
+        [
+            "project.list",
+            "project.delete.admit",
+            "project.delete",
+            "project.delete.release"
+        ],
+        "{requests:?}"
+    );
+    assert_eq!(
+        args_of(&requests[2]).get_text("stack_id"),
+        Some(hex(&stack.to_bytes()).as_str()),
+        "the marker names the Stack the Store listed"
+    );
+    drop(requests);
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// An uncertain worker Init that never reached the Store: the Store's list
+/// does not name it, so nothing is asked of the Store beyond that one list
+/// and only the home entry is removed.
+#[test]
+fn an_uncertain_worker_init_the_store_does_not_list_only_loses_its_entry() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let home = unresolved_init_home("unresolved-absent", &address);
+    let seen = fake_worker(listener, move |request| match op_of(request) {
+        "project.list" => listed(&[("other", LayerStackId::from_authority([9; 16]))]),
+        other => panic!("unexpected op {other}"),
+    });
+
+    let outcome = remove(&home).unwrap();
+    assert_eq!(outcome.get_text("outcome"), Some("deleted"), "{outcome:?}");
+    assert!(!outcome.get_bool("home_entry_kept"));
+    assert!(!paths::project_dir(&home, "shop", "app").exists());
+    let requests = seen.lock().unwrap();
+    let ops: Vec<&str> = requests.iter().map(op_of).collect();
+    assert_eq!(ops, ["project.list"], "{requests:?}");
+    drop(requests);
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// A lost answer to that one list is `Unknown`: nothing is resent, the entry
+/// stays and the project stays `unresolved` for the next `project delete`.
+#[test]
+fn a_lost_listing_of_an_uncertain_worker_init_is_unknown_and_keeps_the_entry() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let home = unresolved_init_home("unresolved-lost", &address);
+    let seen = fake_worker_with(listener, move |request| match op_of(request) {
+        "project.list" => None,
+        other => panic!("unexpected op {other}"),
+    });
+
+    let refusal = remove(&home).expect_err("the listing's answer was lost");
+    assert_eq!(refusal.code, "Unknown", "{refusal:?}");
+    assert!(paths::project_dir(&home, "shop", "app").is_dir());
+    let record = layerfs_store::project::record::ProjectRecord::read(&home, "shop", "app")
+        .unwrap()
+        .expect("the entry stays");
+    let op = record.op().expect("the project stays unresolved");
+    assert!(op.uncertain(), "{op:?}");
+    let requests = seen.lock().unwrap();
+    let ops: Vec<&str> = requests.iter().map(op_of).collect();
+    assert_eq!(ops, ["project.list"], "one attempt: {requests:?}");
+    drop(requests);
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// A record whose project the Store does not list (retired from another
+/// home): the Store finds no live Stack to mark, its list does not hold the
+/// record's Stack, so `project delete` (the fix `project doctor` names)
+/// removes the home entry and answers as a delete.
+#[test]
+fn a_record_the_store_does_not_list_loses_its_entry() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let stack = LayerStackId::from_authority([0x3c; 16]);
+    let home = caller_home("unlisted", &address, stack);
+    let seen = fake_worker(listener, move |request| match op_of(request) {
+        "project.delete.admit" => admitted_for(stack),
+        "project.delete" => removed_for(stack, 42, true),
+        "project.delete.release" => released_for(request),
+        "project.list" => listed(&[("app", LayerStackId::from_authority([9; 16]))]),
+        other => panic!("unexpected op {other}"),
+    });
+
+    let outcome = remove(&home).unwrap();
+    assert_eq!(outcome.get_text("outcome"), Some("deleted"), "{outcome:?}");
+    assert!(!outcome.get_bool("home_entry_kept"));
+    assert!(!paths::project_dir(&home, "shop", "app").exists());
+    let requests = seen.lock().unwrap();
+    let ops: Vec<&str> = requests.iter().map(op_of).collect();
+    assert_eq!(
+        ops,
+        [
+            "project.delete.admit",
+            "project.delete",
+            "project.delete.release",
+            "project.list"
+        ],
+        "{requests:?}"
+    );
+    drop(requests);
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// The same record when that list's answer is lost: the Store's
+/// `NoSuchProject` stands and the entry stays.
+#[test]
+fn a_lost_list_keeps_the_entry_of_a_record_the_store_did_not_mark() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let stack = LayerStackId::from_authority([0x3d; 16]);
+    let home = caller_home("unlisted-lost", &address, stack);
+    let _seen = fake_worker_with(listener, move |request| match op_of(request) {
+        "project.delete.admit" => Some(admitted_for(stack)),
+        "project.delete" => Some(removed_for(stack, 42, true)),
+        "project.delete.release" => Some(released_for(request)),
+        "project.list" => None,
+        other => panic!("unexpected op {other}"),
+    });
+
+    let refusal = remove(&home).expect_err("the list was not read");
+    assert_eq!(refusal.code, "NoSuchProject", "{refusal:?}");
+    assert!(paths::project_dir(&home, "shop", "app").is_dir());
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// A worker's root holds a Store's file and no Store record. A project named
+/// like its Store is added there and deleted there as on `native`: no
+/// `NameTaken`, and no Store record written under the root (CUT, 2.0
+/// behaviour fix: a root with no record was read as a pre-#506 Store made
+/// by its own project's Init).
+#[test]
+fn a_project_named_like_its_store_is_added_and_deleted_in_a_worker_root() {
+    let home = tempdir("own-home");
+    match create(&home, &StoreName::parse("shop").unwrap(), None) {
+        Ok(_) => {}
+        Err(refusal)
+            if refusal.code == "Unsupported"
+                && refusal.message.contains("does not carry SQLite locks") =>
+        {
+            eprintln!("NOT RUN: this filesystem cannot hold a directly opened Store: {refusal:?}");
+            let _ = std::fs::remove_dir_all(&home);
+            return;
+        }
+        Err(refusal) => panic!("store.create: {refusal:?}"),
+    }
+    let record = StoreRecord::read(&home, "shop").unwrap().unwrap();
+    let root = tempdir("own-root");
+    move_store_file(&home, &root, "shop");
+    assert!(!paths::store_record(&root, "shop").exists());
+    let source = plaindir("own-folder");
+    std::fs::write(source.join("a.txt"), b"a\n").unwrap();
+    add_project(&ProjectAdd {
+        home: root.clone(),
+        store: StoreName::parse("shop").unwrap(),
+        name: "shop".to_owned(),
+        source,
+        timeout_ms: Some(60_000),
+        store_record: Some(record.to_record().clone()),
+    })
+    .expect("a project named like its Store is added in a worker root");
+    let mut open = worker_open(&root, &record);
+    open.project = Some("shop".to_owned());
+    let stack = with_service(&open, |service| {
+        Ok(lookup::project(&service.store, "shop").unwrap().id)
+    })
+    .unwrap();
+    let frame = layerfs_store::project::frame::DeleteFrame {
+        store: StoreName::parse("shop").unwrap(),
+        project: Some("shop".to_owned()),
+        stack,
+        deleted_ms: None,
+        op_id: None,
+        pending_retry: None,
+        store_record: Some(record.to_record().clone()),
+    };
+    layerfs_store::project::delete::delete_project(&root, &frame)
+        .expect("the worker deletes the project");
+    assert!(
+        !paths::store_record(&root, "shop").exists(),
+        "no Store record is written under the worker's root"
+    );
+    assert!(project_names(&open).is_empty());
+    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(&root);
 }

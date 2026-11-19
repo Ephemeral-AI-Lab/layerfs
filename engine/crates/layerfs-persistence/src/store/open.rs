@@ -76,6 +76,16 @@ impl SqliteHandles {
             cursor_key,
         )
     }
+    /// Whether the sqlite Store at `path` records the identity `binding`,
+    /// read without validating its schema (diagnosis only).
+    pub fn diagnostic_identity(
+        path: &std::path::Path,
+        binding: &[u8],
+    ) -> Result<bool, PersistenceError> {
+        let session = Session::connect_diagnostic(path)?;
+        let catalog_id = CatalogId::derive(binding).map_err(|_| PersistenceError::Malformed)?;
+        Ok(session.identity_matches(catalog_id, binding)?)
+    }
     fn open(
         config: PersistenceConfig,
         binding: &[u8],

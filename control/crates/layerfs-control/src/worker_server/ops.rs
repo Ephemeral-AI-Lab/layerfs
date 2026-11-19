@@ -21,7 +21,7 @@ use std::path::Path;
 /// any other operation's panic closes the connection, so its caller
 /// reports `Unknown` (layerfs-project#179 D7). A new read-only operation
 /// is added here.
-const READ_ONLY: [&str; 7] = [
+const READ_ONLY: [&str; 8] = [
     "worker.ping",
     layerfs_sandbox::inspect::OP,
     "machine.images",
@@ -29,6 +29,7 @@ const READ_ONLY: [&str; 7] = [
     "doctor.sandbox",
     "store.diagnose",
     "project.list",
+    layerfs_sandbox::workspace::list::OP,
 ];
 
 /// Whether `op` is one of the read-only operations.
@@ -104,14 +105,17 @@ pub(super) fn run(
             ))
         }
         layerfs_sandbox::inspect::OP => inspect(server, args),
+        // the Workspace records of named Sandboxes, read as files
+        // (`workspace.list`, call surface 2.0)
+        layerfs_sandbox::workspace::list::OP => {
+            layerfs_sandbox::workspace::list::in_worker(root, &args)
+        }
         "machine.images" => layerfs_sandbox::images::in_worker(root, args),
         "machine.prune" => layerfs_sandbox::images::prune_in_worker(root, args),
         "doctor.sandbox" => crate::doctor::diagnose_worker_sandbox(root, args),
-        // removes one leftover under this root, under its guard (#180)
-        "doctor.fix" => crate::doctor::leftover_fix::fix_in_worker(root, &args),
         "store.diagnose" => crate::doctor::diagnose_store_in_worker(root, args, events),
         // the check of this machine's connection to a PostgreSQL Store
-        // (`store.update`, `store.status`): the caller sends the record and
+        // (`store.update`): the caller sends the record and
         // what it dials
         "store.reach" => crate::store::reach_in_worker(&args),
         // one Store call, on the Store file under this worker's root (2.0)
@@ -130,7 +134,8 @@ pub(super) fn run(
             };
             layerfs_store::open::run(&call.method, &open, call.fields, Some(lease))
         }
-        // one step of a Store move or remove on this machine
+        // one step of a Store move, remove or create, or a live read's, on
+        // this machine
         "store.file" => {
             let frame = layerfs_store::sqlite::transfer::step::StepFrame::decode(&args)?;
             // a hashing step (snapshot, verify) reports its bytes as events
@@ -155,7 +160,7 @@ pub(super) fn run(
         // `{ store, store_record }`; its phases go out as events
         layerfs_store::compact::WORKER_OP => layerfs_store::compact::in_worker(root, &args, events),
         // a Sandbox image copied to this machine (`sandbox.create --image`,
-        // `machine.load`), one step at a time
+        // `machine.load_image`), one step at a time
         "image.artifact" => layerfs_sandbox::image_artifact::in_worker(root, &args),
         // a Sandbox or Workspace operation on this machine's own native;
         // an event that cannot be written does not end it (#177)

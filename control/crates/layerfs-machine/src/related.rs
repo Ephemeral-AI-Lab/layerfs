@@ -17,6 +17,10 @@ pub struct Related {
     pub stores_on: Names,
     /// The Sandboxes whose record names the machine.
     pub sandboxes_on: Names,
+    /// The old Firecracker machine records naming the machine as their
+    /// host; read only for a record with no `vm_name`, whose fix removes
+    /// them first.
+    pub hosted_on: Names,
     /// `machine.remove`: refused while the machine
     /// holds Stores or Sandboxes.
     pub can_remove: Check,

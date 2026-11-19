@@ -13,8 +13,8 @@
 //! `inspect` reads this machine or one of its Sandboxes (`layerfs-sandbox`
 //! `inspect`: at most two at once, each on a helper thread with deadlines);
 //! `store.call`, `store.file`, `store.compact`, `store.reach`, `sandbox.host`,
-//! `project.stage`, `project.init`, `project.export`, `project.delete`,
-//! `project.list` and `doctor.fix` run one operation on this machine (`ops`),
+//! `project.stage`, `project.init`, `project.export`, `project.delete` and
+//! `project.list` run one operation on this machine (`ops`),
 //! with `home` set to the worker's own root (the machine's data disk),
 //! never a path the caller sends. `store.compact` runs a sqlite Store's
 //! compaction where its file is (spec S6, #42 D5). Answers are
@@ -221,7 +221,10 @@ impl Server {
             std::fs::set_permissions(&self.root, std::fs::Permissions::from_mode(0o701))?;
         }
         layerfs_home::home::guest::serve_root(&self.root);
-        layerfs_home::home::guest::retire_layout_2(&self.root);
+        // what earlier Sandbox starts and removals left in this machine's
+        // run root goes before the first request (spec v20), inside its
+        // bound; its outcome is in `log/sweep.jsonl`
+        layerfs_sandbox::sweep::run_root(&self.root);
         let server = Arc::new(self);
         let mut limited = Limited {
             every: server.waits.log_every,

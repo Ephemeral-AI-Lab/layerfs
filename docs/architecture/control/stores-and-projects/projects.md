@@ -69,7 +69,7 @@ runs and how the folder gets there.
 | Room: the machine needs the copy's bytes plus `max(1 GiB, total/10)` free, else `Capacity` naming both | same, `room` |
 | A request holds at most 8 MiB of records | same, `CHUNK` |
 | One attempt per part; after the first failure no new part is sent, parts in flight are waited for, and that failure is the copy's. A certain failure discards the copy with one more request; a lost part answer leaves the copy and names it | [`parts.rs`](../../../../control/crates/layerfs-store/src/project/parts.rs) |
-| A copy that may remain (a lost part answer, or a lost answer of the Init itself) is named in the home's `log/uncertain.jsonl`: `{ at, call: "project.init", store, project, machine, copy, phase: "send" \| "install", deadline, message }`, `deadline` being when the lost request went out plus the Init's `timeoutMs`. `layerfs doctor` lists the copy, and `doctor.fix` removes it only when such a line names it and that deadline passed more than an hour ago ([Leftovers](../doctor/checks.md#leftovers)) | [`send.rs`](../../../../control/crates/layerfs-store/src/project/send.rs) `log_left`, [`parts.rs`](../../../../control/crates/layerfs-store/src/project/parts.rs), [`family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs) |
+| A copy that may remain (a lost part answer, or a lost answer of the Init itself) is named in the home's `log/uncertain.jsonl`: `{ at, call: "project.init", store, project, machine, copy, phase: "send" \| "install", deadline, message }`, `deadline` being when the lost request went out plus the Init's `timeoutMs`. The Init records `{copy, machine}` in its op; `project delete` of the project, once the Init's owner is gone, sends the worker a `project.stage` discard of that copy, which removes it unless a running Init holds its folder lock ([Leftovers](../doctor/checks.md#leftovers)) | [`send.rs`](../../../../control/crates/layerfs-store/src/project/send.rs) `log_left`, [`parts.rs`](../../../../control/crates/layerfs-store/src/project/parts.rs), [`family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs) |
 | The worker writes into `<root>/incoming/init-<id>`, takes no lease and opens no Store; paths stay inside the staging folder and go through no link; the folder is removed on every outcome it knows | [`staged.rs`](../../../../control/crates/layerfs-store/src/project/staged.rs) |
 | Carried: kind, permission bits, mtime, link target, file bytes. Not carried: owners, access times, extended attributes, hard links | [`tree.rs`](../../../../control/crates/layerfs-store/src/project/tree.rs) |
 
@@ -119,6 +119,18 @@ refused `Busy` while a Sandbox of the project is recorded
 ([`family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs),
 [`delete.rs`](../../../../control/crates/layerfs-store/src/project/delete.rs),
 [`layerfs-control/src/project.rs`](../../../../control/crates/layerfs-control/src/project.rs)).
+
+A record the Store does not list is cleared by the same call: when the
+Store answers `NoSuchProject` and its own list, read once more, does not
+hold the record's stack id (or its name, for a record without one), the
+home entry is removed and the call answers as a delete; a list that cannot
+be read leaves the entry and the refusal. An Init through a machine's
+worker whose outcome is not known leaves a record with no stack id: the
+delete reads the Store's list once in that worker, retires the Stack it
+names there, then removes the entry; a project the list does not hold only
+loses its entry, and a lost answer is `Unknown` with the entry kept
+([`delete/remote.rs`](../../../../control/crates/layerfs-store/src/project/delete/remote.rs)
+`listed_on_worker`).
 
 ## Discovery (`discovery.rs`)
 

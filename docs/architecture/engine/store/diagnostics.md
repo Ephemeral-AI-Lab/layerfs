@@ -102,6 +102,34 @@ is revoked; a later denied read leaves coverage incomplete. Losing the backend
 during a check is a provider failure, never invented corruption. Reports omit
 passwords, credential-bearing URLs and raw driver parameters.
 
+## One project's data
+
+`SqliteHandles::diagnose_project` and `PostgresHandles::diagnose_project`
+(`project doctor --full`) check one project in one read view (a SQLite
+read transaction; a PostgreSQL REPEATABLE READ READ ONLY view after the
+same admission), writing nothing to the Store
+([`project.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/project.rs)).
+
+```text
+ the live layer_stack row by id (not retired)     missing -> Fail
+ heads: main's head Layer, each live Branch's head Commit (else base Layer)
+   -> scratch heads(root, label)                  missing/foreign -> Fail
+ for each distinct root (progress done/total trees):
+   qualify_root(root, stack scope, profile)       --> Fail | Unknown
+   closure over references from the root, visited set in scratch:
+     locate (absent -> Fail "missing"), Reader reconstruct, length,
+     FinalizedObject::admit, validate_stored_children
+ returns ProjectCoverage { trees, heads, objects, failed, incomplete }
+```
+
+| Rule | Source |
+| --- | --- |
+| The object checks are the whole-Store scan's; only the set differs: the closure of the project's heads instead of every `object_location` row. | [`project.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/project.rs), [`scan.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/scan.rs) |
+| Heads, the visited set and the queue live in the scratch temporary database outside the Store, removed when its connection closes; resident state is one batch of 64 identities and the Reader's caches. | [`scratch.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/scratch.rs) |
+| An object two trees of the project share is read once; each project's audit has its own visited set. | [`project.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/project.rs) |
+| An object whose own check failed still has its children visited; a context failure a missing child explains is left to that child's `missing` finding. | same |
+| Every observation has id `project.data`; storage outcomes are classified as in the scan (`Unknown` for an unavailable read, never a corruption verdict). | [`observation.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/observation.rs) |
+
 ## Inventory and coverage
 
 | Category | Validator | Quick | Source |

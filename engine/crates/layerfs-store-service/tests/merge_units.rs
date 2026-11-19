@@ -220,7 +220,9 @@ fn a_unit_both_sides_changed_comes_whole_from_the_later_side() {
     );
     // The record keeps the units the merge ran with.
     let commits = fixture.call("branch.list_commits", vec![("branch", text("m"))]);
-    let recorded = support::items(&commits)[0].get("units").expect("units");
+    let head = support::items(&commits)[0].get_text("commit").unwrap();
+    let record = fixture.call("branch.get_commit", vec![("commit", text(head))]);
+    let recorded = record.get("units").expect("units");
     assert_eq!(
         recorded,
         &SdkValue::List(vec![SdkValue::map([

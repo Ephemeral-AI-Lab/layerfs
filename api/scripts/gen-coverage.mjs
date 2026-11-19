@@ -2,9 +2,8 @@
 // from the four front ends' own call lists:
 //   Node    the package's `table` and its bound functions
 //   Python  `layerfs.TABLE`, the sync functions and the `layerfs.aio` coroutines
-//   CLI     `layerfs help <family>`, one usage line per call
+//   CLI     `layerfs help <family> <call>`, whose first line is the call's usage
 //   MCP     the generated tool list of api/mcp, and the profile that lists it
-//           (a call of the `none` bucket, the doctor family, is no tool: "no")
 //   node api/scripts/gen-coverage.mjs          rewrite the generated block
 //   node api/scripts/gen-coverage.mjs --check  exit 1 when the block is not what the front ends give,
 //                                              or when a front end disagrees with the Node table
@@ -75,16 +74,18 @@ export async function collect({ python, cli }) {
   view.python = JSON.parse(run.stdout);
   view.cli = {};
   for (const family of node.families) {
+    // the family's help lists its calls (`  <call>  <what it does>`); each
+    // call's own help starts with its usage line (V22)
     const help = spawnSync(cli, ["help", family], { encoding: "utf8", timeout: 60_000 });
     if (help.error || help.status !== 0) throw new Error(`layerfs help ${family} failed: ${help.error ?? help.stderr}`);
-    for (const line of help.stdout.split("\n")) {
-      const found = line.match(/^layerfs (\S+) (\S+)(.*)$/);
+    const calls = help.stdout.split("\n").flatMap((line) => line.match(/^  (\S+)  /)?.[1] ?? []);
+    for (const call of calls) {
+      const one = spawnSync(cli, ["help", family, call], { encoding: "utf8", timeout: 60_000 });
+      if (one.error || one.status !== 0) throw new Error(`layerfs help ${family} ${call} failed: ${one.error ?? one.stderr}`);
+      const found = one.stdout.split("\n")[0].match(/^layerfs (\S+) (\S+)(.*)$/);
       if (!found) continue;
-      // a call's shell name has `-` for its `_` (`workspace exec-cancel`)
+      // a call's shell name has `-` for its `_` (`machine load-image`)
       const name = `${found[1]}.${found[2].replaceAll("-", "_")}`;
-      // `layerfs help doctor` also lists the report's own forms (`doctor
-      // host`, `doctor machine <machine>`, ...), which are no calls
-      if (family === "doctor" && !node.table.some((spec) => nameOf(spec) === name)) continue;
       view.cli[name] = usage(found[3]);
     }
   }
@@ -94,22 +95,35 @@ export async function collect({ python, cli }) {
 /** A usage line's words as `{ positionals, options, from }`; names in snake_case. */
 function usage(words) {
   const out = { positionals: [], options: [], from: false };
-  for (const [, optionalPositional, positional, flag] of words.matchAll(/\[<([\w-]+)>\]|<([\w-]+)>|\[--([\w-]+)(?: <[\w-]+>)?\]/g)) {
+  // an option is `[--name]` or `[--name WORD]` (the row's value word, a
+  // default, or `<name>`), a required one the same without brackets, a
+  // repeated object option `[--name K=V]...`; a Commit message shows as
+  // `[-m msg]`; `[--with a,b]` lists the sections, no option
+  const pattern =
+    /\[<([\w-]+)>\]|\[--([\w-]+) K=V\]\.\.\.|\[(--[\w-]+|-m)(?: (<[\w-]+>|[^\s\][<]+))?\]|(?<=\s)(--[\w-]+)(?: (<[\w-]+>|[^\s\][<-][^\s\][]*))?(?=\s|$)|<([\w-]+)>/g;
+  const flagName = (word) => (word === "-m" ? "message" : word?.replace(/^--/, ""));
+  for (const [, optionalPositional, repeated, bracketed, bracketedValue, bare, bareValue, positional] of words.matchAll(pattern)) {
+    const flag = repeated ?? flagName(bracketed ?? bare);
+    const value = (bracketedValue ?? bareValue)?.replace(/^<(.*)>$/, "$1");
+    if (flag === "with") continue;
     const snake = (text) => text.replaceAll("-", "_");
     if (optionalPositional) out.positionals.push({ name: snake(optionalPositional), optional: true });
     else if (positional) out.positionals.push({ name: snake(positional), optional: false });
-    else if (flag === "from") out.from = true;
+    // the piped positional's flag is exactly `[--from <file>]`; a call's own
+    // `from` option (commit.diff's `--from <ref>`) is an ordinary option
+    else if (flag === "from" && value === "file") out.from = true;
     else out.options.push(snake(flag));
   }
   return out;
 }
 
 /** What the command line of `spec` must be, by the table: a content or JSON positional is read from
- * stdin or `--from`, `on_progress` is `--progress`, the output functions are `--stream`. */
+ * stdin or `--from`, `on_progress` is `--progress`, the output functions are no flag of their own
+ * (the `stream` option is `--stream`). */
 function expectedCli(spec) {
-  const options = spec.options.filter((o) => o.kind !== FUNCTION || o.name === "on_progress").map((o) => (o.name === "on_progress" ? "progress" : o.name));
-  // the command frames a call with a stdout sink as events: `--events`, last
-  if (spec.options.some((o) => o.name === "stdout")) options.push("events");
+  // a secret option is its own flag, read from stdin (`--password-stdin`)
+  const flagOf = (o) => (o.name === "on_progress" ? "progress" : o.shell ? o.shell.replace(/^--/, "").replaceAll("-", "_") : o.name);
+  const options = spec.options.filter((o) => o.kind !== FUNCTION || o.name === "on_progress").map(flagOf);
   return {
     positionals: spec.args.filter((a) => !piped(a)).map((a) => ({ name: a.name, optional: a.optional })),
     options,
@@ -161,17 +175,14 @@ export function render(view) {
         ? "the MCP tool's schema or description differs from the table"
         : bucket === null
           ? "no MCP profile bucket"
-          : bucket === "ui" || bucket === "none"
-            ? (listed.work || listed.admin ? (bucket === "ui" ? "an MCP profile lists a UI-only call" : "an MCP profile lists a call that is no tool") : null)
-            : bucket === "work" && !(listed.work && listed.admin)
+          : bucket === "work" && !(listed.work && listed.admin)
               ? "the MCP work profile does not list it"
               : bucket === "admin" && (listed.work || !listed.admin)
                 ? (listed.work ? "the MCP work profile lists an admin call" : "the MCP admin profile does not list it")
                 : null;
     if (mcpProblem !== null) problems.push(`${name}: ${mcpProblem}`);
-    else if (bucket !== "ui" && bucket !== "none") counts.mcp += 1;
-    // a UI-only call (layerfs-project#178 D2) and the doctor's repair call are in no profile by design
-    const mcp = mcpProblem !== null ? "NO" : bucket === "work" ? "yes" : bucket === "ui" ? "no (UI only)" : bucket === "none" ? "no (no tool)" : "admin";
+    else counts.mcp += 1;
+    const mcp = mcpProblem !== null ? "NO" : bucket === "work" ? "yes" : "admin";
     const notes = [
       spec.args.some(piped) ? "stdin/--from" : "",
       spec.options.some((o) => o.name === "on_progress") ? "--progress" : "",
@@ -181,11 +192,10 @@ export function render(view) {
     return `| \`${name}\` | ${shape(spec.args) || "-"} | ${options || "-"} | ${node} | ${py} | ${coroutine} | ${cli}${cli === "yes" && notes.length ? ` (${notes.join(", ")})` : ""} | ${mcp} |`;
   });
   const families = [...new Set(table.map((s) => s.family))];
-  const ui = table.filter((s) => bucketOf(s) === "ui").length;
   const lines = [
     BEGIN,
     "",
-    `${table.length} calls in ${families.length} families, counted from the Node table. Calls present: Node ${counts.node}, Python ${counts.python}, Python \`aio\` ${counts.aio}, CLI ${counts.cli}, MCP ${counts.mcp} (${work.size} in \`work\`, ${admin.size - work.size} admin only; ${ui} UI only, in no profile).`,
+    `${table.length} calls in ${families.length} families, counted from the Node table. Calls present: Node ${counts.node}, Python ${counts.python}, Python \`aio\` ${counts.aio}, CLI ${counts.cli}, MCP ${counts.mcp} (${work.size} in \`work\`, ${admin.size - work.size} admin only).`,
     "",
     `Argument names that are Python keywords: ${view.python.keywords.length === 0 ? "none" : view.python.keywords.join(", ")}.`,
     "",

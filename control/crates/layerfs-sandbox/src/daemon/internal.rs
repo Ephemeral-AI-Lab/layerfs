@@ -15,18 +15,6 @@ pub struct InternalWorkspaceApi<'a>(WorkspaceApi<'a>);
 pub fn workspace(control: &mut Control) -> InternalWorkspaceApi<'_> {
     InternalWorkspaceApi(WorkspaceApi {
         control,
-        observation_scope: None,
-        place: MountPlace::default(),
-    })
-}
-/// Applies explicit observation scope only to this borrow's filesystem calls.
-pub fn with_observations<'a>(
-    control: &'a mut Control,
-    scope: &'a [u8; 32],
-) -> InternalWorkspaceApi<'a> {
-    InternalWorkspaceApi(WorkspaceApi {
-        control,
-        observation_scope: Some(scope),
         place: MountPlace::default(),
     })
 }
@@ -75,15 +63,6 @@ impl InternalWorkspaceApi<'_> {
     ) -> Result<CleanupObservation, Box<OperationFailure>> {
         self.0.cleanup(token)
     }
-}
-/// Sends this channel's later ordinary requests as SDK-traced observations
-/// under `scope` (`None` ends it); results are unchanged.
-pub fn trace(control: &mut Control, scope: Option<[u8; 32]>) {
-    control.trace(scope);
-}
-/// Takes the telemetry of the traced replies received since the last take.
-pub fn take_telemetry(control: &mut Control) -> Vec<layerfs_bridge::control::SdkValue> {
-    control.take_telemetry()
 }
 /// Transfers the original terminal connection only for its fence proof.
 pub fn into_connection(control: Control) -> Connection {

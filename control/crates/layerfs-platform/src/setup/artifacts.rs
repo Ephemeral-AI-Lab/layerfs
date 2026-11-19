@@ -15,11 +15,22 @@ const FILES: [&str; 4] = [
     "sandbox-image.tar",
 ];
 
-/// `false` is a legacy bundle without file identities; its whole-folder path stays.
-pub(crate) fn install(spec: &Spec, guest: &Guest, bundle: &Bundle) -> Result<bool, MachineError> {
+/// Installs the bundle's files by their identities in `bundle.json`; a
+/// bundle without them is refused with the command that rebuilds it.
+pub(crate) fn install(spec: &Spec, guest: &Guest, bundle: &Bundle) -> Result<(), MachineError> {
+    let unidentified = || {
+        MachineError::new(
+            Code::InvalidInput,
+            format!(
+                "the Linux bundle at {} has no file identities in bundle.json; rebuild it with \
+                 `python3 tools/linux_bundle.py`",
+                bundle.dir.display()
+            ),
+        )
+    };
     let manifest = match std::fs::read_to_string(bundle.dir.join("bundle.json")) {
         Ok(text) => text,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(unidentified()),
         Err(e) => {
             return Err(MachineError::new(
                 Code::InvalidInput,
@@ -32,7 +43,7 @@ pub(crate) fn install(spec: &Spec, guest: &Guest, bundle: &Bundle) -> Result<boo
         .map(|name| file_hash(&manifest, name))
         .collect::<Result<Vec<_>, _>>()?;
     if fields.iter().all(Option::is_none) {
-        return Ok(false);
+        return Err(unidentified());
     }
     // Only the image is optional for bundles which supply their own Sandbox image.
     if fields[..3].iter().any(Option::is_none) {
@@ -104,7 +115,7 @@ rm -rf "$2/runtime.old""#,
         }
     }
     if !changed && old == manifest {
-        return Ok(true);
+        return Ok(());
     }
     guest.write_file(&spec.tools, &format!("{BUNDLE}/bundle.json"), &manifest)?;
     guest.write_file(
@@ -112,7 +123,7 @@ rm -rf "$2/runtime.old""#,
         &format!("{BUNDLE}/.sealed"),
         &format!("{}\n", bundle.hash),
     )?;
-    Ok(true)
+    Ok(())
 }
 
 /// The bundle's Sandbox runtime layer folder.

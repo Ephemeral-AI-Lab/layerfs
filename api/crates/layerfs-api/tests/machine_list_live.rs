@@ -1,17 +1,21 @@
-//! `machine.list` and `machine.get` answer each VM machine's live state, read
-//! as `machine.status` reads it (#533 step 19, delegated owner decision
-//! 2026-11-02), here with a stand-in `limactl`. A machine recorded `running`
-//! whose provider says it is stopped is listed `stopped`; one whose probe
-//! does not answer is `unknown` with the reason, within the list's bound.
-//! A running VM whose forwarded worker port accepts but does not answer the
-//! worker's secret (an `ssh -L` or Lima forward with no worker behind it) is
-//! `stopped`; one whose worker answers is `running`, and the probe sends no
-//! request. Nothing is started and the records are not rewritten.
+//! `machine.list` and `machine.get` answer from the records alone, probing
+//! nothing; with `--with live` (call surface 2.0, review fix 1) each VM
+//! machine is probed once, here with a stand-in `limactl`, all at the same
+//! time within 10 s. A machine recorded running whose provider says it is
+//! stopped is `stopped`; one whose probe does not answer is `unknown` with
+//! `observed_at`, and is never recorded so. A running VM whose forwarded
+//! worker port accepts but does not answer the worker's secret (an `ssh -L`
+//! or Lima forward with no worker behind it), refuses it, or never answers
+//! it within 2 s is `broken` `not_answering`; one whose worker is of
+//! another build is `broken` `outdated`; one whose worker answers is ready,
+//! and the probe sends no request. Nothing is started. The record is
+//! written, moving the home's generation, only when the state word or its
+//! reason changes; when it was observed is kept beside it, and a
+//! records-only read answers both. An uncertain start whose owner is gone
+//! is settled by a live read (C13).
 //!
 //! Final review: a probe past the bound is stopped, its command killed with
-//! its process group and reaped (finding 2), and the host's secret check
-//! counts a `Denied` reply, or an accept that never answers (its 2 s
-//! limit), as no worker (finding 6).
+//! its process group and reaped (finding 2).
 #![cfg(feature = "machine")]
 use layerfs_api::home::{paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
@@ -27,7 +31,7 @@ case "$1" in
   --version) echo "limactl version 0.0-stand-in" ;;
   list) case "$*" in
     *-slow*) /bin/sleep 40 & echo "$$ $!" > "${0%/*}/slow.pid"; wait ;;
-    *-fwd*|*-up*|*-deny*|*-mute*) printf 'Running\t/nonexistent\n' ;;
+    *-fwd*|*-up*|*-deny*|*-mute*|*-old*) printf 'Running\t/nonexistent\n' ;;
     *) printf 'Stopped\t/nonexistent\n' ;;
   esac ;;
   *) echo "the stand-in refuses: $*" >&2; exit 9 ;;
@@ -47,12 +51,19 @@ fn tempdir(tag: &str) -> PathBuf {
     dir
 }
 
-fn call(home: &Path, name: &str, args: &[(&str, &str)]) -> SdkValue {
-    let args = SdkValue::Map(
-        args.iter()
-            .map(|(n, v)| ((*n).to_owned(), SdkValue::text(*v)))
-            .collect(),
-    );
+/// The call's long form; with `live`, `--with live`.
+fn call(home: &Path, name: &str, args: &[(&str, &str)], live: bool) -> SdkValue {
+    let mut args: Vec<(String, SdkValue)> = (args.iter())
+        .map(|(n, v)| ((*n).to_owned(), SdkValue::text(*v)))
+        .collect();
+    args.push(("detail".to_owned(), SdkValue::Bool(true)));
+    if live {
+        args.push((
+            "with".to_owned(),
+            SdkValue::List(vec![SdkValue::text("live")]),
+        ));
+    }
+    let args = SdkValue::Map(args);
     layerfs_api::call(Some(home), name, args, &mut |_| {})
         .unwrap_or_else(|r| panic!("{name}: {} {}", r.code, r.message))
 }
@@ -63,6 +74,7 @@ fn recorded_running(home: &Path, name: &str) {
         &SdkValue::map([
             ("name", SdkValue::text(name)),
             ("platform", SdkValue::text("lima")),
+            ("vm_name", SdkValue::text(format!("layerfs-test-{name}"))),
             ("state", SdkValue::text("running")),
             ("cpus", SdkValue::Int(2)),
             ("memory", SdkValue::Int(4 << 30)),
@@ -77,8 +89,10 @@ fn recorded_running(home: &Path, name: &str) {
 enum Meet {
     /// Accepts and closes, as a forward with nothing behind it.
     Close,
-    /// Answers `ready`, as the worker does.
+    /// Answers `ready` with this build's protocol, as the worker does.
     Answer,
+    /// Answers `ready` with no protocol, as a worker of another build.
+    Old,
     /// Refuses the secret `Denied`, as a worker with another secret does.
     Deny,
     /// Reads the secret and never answers.
@@ -124,7 +138,10 @@ fn endpoint(home: &Path, name: &str, meet: Meet) -> std::thread::JoinHandle<Opti
             stream.write_all(denied).ok()?;
             return None;
         }
-        let ready = br#"{"ready":true}"#;
+        let ready: &[u8] = match meet {
+            Meet::Old => br#"{"ready":true}"#,
+            _ => br#"{"ready":true,"protocol":3}"#,
+        };
         stream.write_all(&(ready.len() as u32).to_be_bytes()).ok()?;
         stream.write_all(ready).ok()?;
         let mut more = [0u8; 1];
@@ -133,17 +150,31 @@ fn endpoint(home: &Path, name: &str, meet: Meet) -> std::thread::JoinHandle<Opti
 }
 
 fn listed<'a>(list: &'a SdkValue, name: &str) -> &'a SdkValue {
-    let Some(SdkValue::List(machines)) = list.get("machines") else {
+    let Some(SdkValue::List(machines)) = list.get("items") else {
         panic!("no machines in {list:?}")
     };
     machines
         .iter()
-        .find(|m| m.get_text("name") == Some(name))
+        .find(|m| m.get_text("machine") == Some(name))
         .unwrap_or_else(|| panic!("{name} not listed"))
 }
 
+fn record(home: &Path, name: &str) -> SdkValue {
+    read_record(&paths::machine_record(home, name))
+        .unwrap()
+        .unwrap()
+}
+
+fn generation(home: &Path) -> String {
+    std::fs::read_to_string(home.join("generation")).unwrap_or_default()
+}
+
+fn log(tools: &Path) -> String {
+    std::fs::read_to_string(tools.join("calls.log")).unwrap_or_default()
+}
+
 #[test]
-fn list_and_get_answer_the_live_state() {
+fn list_and_get_answer_the_records_then_the_live_state() {
     let tools = tempdir("tools");
     let limactl = tools.join("limactl");
     std::fs::write(&limactl, STAND_IN).unwrap();
@@ -152,48 +183,69 @@ fn list_and_get_answer_the_live_state() {
     // only the stand-ins: no fallback folder after PATH
     std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");
     let home = tempdir("home");
-    call(&home, "machine.list", &[]); // makes the home and its built-ins
+    call(&home, "machine.list", &[], false); // makes the home and its built-ins
     for name in ["quiet", "slow", "fwd", "up"] {
         recorded_running(&home, name);
     }
     let fwd = endpoint(&home, "fwd", Meet::Close);
     let up = endpoint(&home, "up", Meet::Answer);
 
+    // records only: what the records say, no probe and no write
+    let moved = generation(&home);
+    let list = call(&home, "machine.list", &[], false);
+    for name in ["quiet", "slow", "fwd", "up", "native"] {
+        let machine = listed(&list, name);
+        assert_eq!(machine.get_text("state"), Some("ready"), "{machine:?}");
+        assert_eq!(machine.get("observed_at"), Some(&SdkValue::Null));
+    }
+    assert_eq!(listed(&list, "docker").get_text("state"), Some("stopped"));
+    assert_eq!(log(&tools), "", "a records-only list probed");
+    assert_eq!(generation(&home), moved);
+
     let begun = Instant::now();
-    let list = call(&home, "machine.list", &[]);
+    let list = call(&home, "machine.list", &[], true);
     let took = begun.elapsed();
     let quiet = listed(&list, "quiet");
     assert_eq!(quiet.get_text("state"), Some("stopped"), "{quiet:?}");
-    assert_eq!(quiet.get("error"), None);
+    assert_eq!(quiet.get("message"), Some(&SdkValue::Null));
+    assert!(quiet.get_text("observed_at").is_some(), "{quiet:?}");
     let slow = listed(&list, "slow");
     assert_eq!(slow.get_text("state"), Some("unknown"), "{slow:?}");
-    let why = slow.get_text("error").unwrap_or("");
+    let why = slow.get_text("message").unwrap_or("");
     assert!(why.contains("did not answer within 10 s"), "{why}");
+    // when LayerFS last knew: the record's write, before any live read
+    assert!(slow.get_text("observed_at").is_some(), "{slow:?}");
     assert!(
         took >= Duration::from_secs(9) && took < Duration::from_secs(20),
         "the list waited {took:?}"
     );
     assert_eq!(listed(&list, "native").get_text("state"), Some("ready"));
-    // the built-in docker is probed as `machine.status` probes it (#535
-    // D11: its worker starts and stops by hand), never a fixed `ready`
-    let docker = listed(&list, "docker");
-    match layerfs_api::call(
-        Some(&home),
-        "machine.status",
-        SdkValue::map([("name", SdkValue::text("docker"))]),
-        &mut |_| {},
-    ) {
-        Ok(status) => assert_eq!(
-            docker.get_text("state"),
-            status.get_text("state"),
-            "{docker:?}"
-        ),
-        Err(_) => assert_eq!(docker.get_text("state"), Some("unknown"), "{docker:?}"),
-    }
-    assert_eq!(listed(&list, "fwd").get_text("state"), Some("stopped"));
-    assert_eq!(listed(&list, "up").get_text("state"), Some("running"));
+    let forward = listed(&list, "fwd");
+    assert_eq!(forward.get_text("state"), Some("broken"), "{forward:?}");
+    assert_eq!(forward.get_text("reason"), Some("not_answering"));
+    assert_eq!(forward.get_text("fix"), Some("layerfs machine start fwd"));
+    assert_eq!(listed(&list, "up").get_text("state"), Some("ready"));
     assert_eq!(fwd.join().unwrap(), None);
     assert_eq!(up.join().unwrap(), Some(false), "the probe sent a request");
+    // the two changes were written, and moved the generation; the
+    // unchanged and the unknown were not
+    assert_ne!(generation(&home), moved);
+    assert_eq!(record(&home, "quiet").get_text("state"), Some("stopped"));
+    assert_eq!(
+        record(&home, "fwd").get_text("reason"),
+        Some("not_answering")
+    );
+    for name in ["slow", "up"] {
+        let kept = record(&home, name);
+        assert_eq!(kept.get_text("state"), Some("running"), "{name}");
+        assert_eq!(kept.get("reason"), None, "{name}");
+    }
+    let observed = |name: &str| paths::machine_dir(&home, name).join("observed.json");
+    assert!(observed("quiet").is_file() && observed("up").is_file());
+    assert!(
+        !observed("slow").exists(),
+        "an unknown probe observed nothing"
+    );
 
     // the late probe's command and its child were killed and reaped: no
     // process (not even a zombie) is left once the probe's thread has
@@ -207,37 +259,75 @@ fn list_and_get_answer_the_live_state() {
         assert!(!alive(pid), "the late probe's process {pid} outlived it");
     }
 
-    let got = call(&home, "machine.get", &[("name", "quiet")]);
+    // a records-only read answers what the live read wrote, and when
+    let got = call(&home, "machine.get", &[("machine", "fwd")], false);
+    assert_eq!(got.get_text("reason"), Some("not_answering"), "{got:?}");
+    assert_eq!(got.get_text("observed_at"), forward.get_text("observed_at"));
+    // a live read that finds what is recorded writes no record
+    let moved = generation(&home);
+    let got = call(&home, "machine.get", &[("machine", "quiet")], true);
     assert_eq!(got.get_text("state"), Some("stopped"));
+    let live = got.get("live").unwrap();
+    assert_eq!(live.get("worker"), Some(&SdkValue::Null));
+    let version = live.get_text("tool_version");
+    assert_eq!(version, Some("limactl version 0.0-stand-in"), "{live:?}");
+    assert_eq!(generation(&home), moved);
 
-    // a worker that refuses the secret, and one that never answers it, are
-    // no worker; the silent one costs the host its 2 s limit, no more
-    for name in ["deny", "mute"] {
+    // a worker that refuses the secret, and one that never answers it, do
+    // not answer; the silent one costs the host its 2 s limit, no more; a
+    // worker of another build is outdated
+    for name in ["deny", "mute", "old"] {
         recorded_running(&home, name);
     }
     let deny = endpoint(&home, "deny", Meet::Deny);
     let mute = endpoint(&home, "mute", Meet::Mute);
-    let got = call(&home, "machine.get", &[("name", "deny")]);
-    assert_eq!(got.get_text("state"), Some("stopped"), "{got:?}");
+    let old = endpoint(&home, "old", Meet::Old);
+    let got = call(&home, "machine.get", &[("machine", "deny")], true);
+    assert_eq!(got.get_text("reason"), Some("not_answering"), "{got:?}");
     let begun = Instant::now();
-    let got = call(&home, "machine.get", &[("name", "mute")]);
+    let got = call(&home, "machine.get", &[("machine", "mute")], true);
     let took = begun.elapsed();
-    assert_eq!(got.get_text("state"), Some("stopped"), "{got:?}");
+    assert_eq!(got.get_text("reason"), Some("not_answering"), "{got:?}");
     assert!(
         took >= Duration::from_millis(1900) && took < Duration::from_secs(4),
         "the silent worker held the probe {took:?}"
     );
+    let got = call(&home, "machine.get", &[("machine", "old")], true);
+    assert_eq!(got.get_text("reason"), Some("outdated"), "{got:?}");
+    assert_eq!(
+        got.get_text("fix"),
+        Some("layerfs machine stop old && layerfs machine start old")
+    );
+    let worker = got.get("live").unwrap().get("worker").unwrap();
+    assert_eq!(worker.get("protocol"), Some(&SdkValue::Null), "{worker:?}");
     assert_eq!(deny.join().unwrap(), None);
     assert_eq!(mute.join().unwrap(), None);
+    assert_eq!(old.join().unwrap(), Some(false));
 
-    // read-only: the records still say what they said, and nothing started
-    for name in ["quiet", "slow", "fwd", "up", "deny", "mute"] {
-        let record = read_record(&paths::machine_record(&home, name))
-            .unwrap()
-            .unwrap();
-        assert_eq!(record.get_text("state"), Some("running"), "{name}");
-    }
-    let log = std::fs::read_to_string(tools.join("calls.log")).unwrap();
+    // a start whose owner is gone and whose outcome is not known is
+    // unresolved; a live read settles it by what it sees
+    let lost = SdkValue::map([
+        ("id", SdkValue::text("op-0000000000000001")),
+        ("name", SdkValue::text("machine.start")),
+        ("phase", SdkValue::text("boot")),
+        ("owner", SdkValue::map([("pid", SdkValue::Int(0))])),
+        ("uncertain", SdkValue::Bool(true)),
+    ]);
+    recorded_running(&home, "settle");
+    let held = layerfs_api::home::with_field(record(&home, "settle"), "op", lost);
+    write_record(&paths::machine_record(&home, "settle"), &held).unwrap();
+    let got = call(&home, "machine.get", &[("machine", "settle")], false);
+    assert_eq!(got.get_text("reason"), Some("unresolved"), "{got:?}");
+    assert_eq!(
+        got.get_text("fix"),
+        Some("layerfs machine get settle --with live")
+    );
+    let got = call(&home, "machine.get", &[("machine", "settle")], true);
+    assert_eq!(got.get_text("state"), Some("stopped"), "{got:?}");
+    assert_eq!(record(&home, "settle").get("op"), None);
+
+    // nothing was started: the stand-in saw only probes
+    let log = log(&tools);
     assert!(
         log.lines()
             .all(|l| l == "--version" || l.starts_with("list ") || l.starts_with("shell ")),
@@ -246,6 +336,30 @@ fn list_and_get_answer_the_live_state() {
     assert!(!log.contains("start"), "{log}");
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(tools);
+}
+
+/// `native` is this computer: `--with live` reads the free bytes of the
+/// disk that holds the home, its data disk, and answers no provider tool
+/// and no worker (its calls run in the caller's process), so the short
+/// form shows the one value it has.
+#[test]
+fn native_with_live_answers_the_free_bytes_of_the_homes_disk() {
+    let home = tempdir("native");
+    let got = call(&home, "machine.get", &[("machine", "native")], true);
+    assert_eq!(got.get_text("state"), Some("ready"), "{got:?}");
+    let live = got.get("live").unwrap();
+    assert!(live.get_int("disk_free_bytes").unwrap() > 0, "{live:?}");
+    assert_eq!(live.get("tool_version"), Some(&SdkValue::Null));
+    assert_eq!(live.get("worker"), Some(&SdkValue::Null));
+    let args = SdkValue::map([
+        ("machine", SdkValue::text("native")),
+        ("with", SdkValue::List(vec![SdkValue::text("live")])),
+    ]);
+    let short = layerfs_api::call(Some(&home), "machine.get", args, &mut |_| {}).unwrap();
+    let live = short.get("live").unwrap();
+    assert!(live.get_int("disk_free_bytes").unwrap() > 0, "{short:?}");
+    assert_eq!(live.get("worker"), None, "{short:?}");
+    std::fs::remove_dir_all(home).unwrap();
 }
 
 /// Whether process `pid` exists, a zombie included (`kill -0` finds one).

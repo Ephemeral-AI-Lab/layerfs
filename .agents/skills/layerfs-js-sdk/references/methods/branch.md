@@ -1,251 +1,154 @@
 # branch calls
 
-> **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
-> `layerfs-js-sdk` skill. Results were captured from the built `layerfs`
-> command in a private home on 2026-11-02; ids are shortened.
+> **Status:** Current general guide for the LayerFS 2.0 call surface. Part of
+> the `layerfs-js-sdk` skill. Outputs marked "seen" were printed by the built
+> `layerfs` command on a throwaway home on 2026-11-18 (ids shortened); the
+> rest is from the table, the spec rows and the manual, not run.
+> `branch.commits`, `branch.get_commit` and `branch.diff` are gone with no
+> alias: use [`commit.list`, `commit.get` and `commit.diff`](commit.md).
 
 ```js
-branch.list(project, { page_size, page_pos, page })
+branch.list(project, { prefix, exclude_prefix, limit, cursor })
 branch.get(project, branch)
-branch.commits(project, branch, { page, page_size, at_commit, include_storage })
-branch.get_commit(project, branch, commit)
-branch.fork(project, name, from_branch, from_commit?)
-branch.merge(project, name, a, b, { message, units })
-branch.publish(project, branch, commit?, { expected_base, expected_head, force })
-branch.diff(project, from_branch, to_branch, { paths_only, page_size, page_pos, cursor, page, from_commit, to_commit, path_prefix, include_attribution, continuation })
+branch.fork(project, name, from?, { at })
+branch.merge(project, branch, from, { into, units, expected, message })
+branch.publish(project, branch, { at, expected, force })
 branch.remove(project, branch)
 ```
 
-`main` is not a Branch: it is the project's published line of Layers. It shows
-in `branch.list`, you can read it and fork from it, and it changes only through
-`branch.publish`.
+`main` is the project's published line. It is listed, you can read it, fork
+from it and list its publications with `commit.list`, and it changes only
+through `branch.publish`: a write to it, a merge into it without `into` and
+a mount of it are `InvalidInput`.
+
+Where a call takes a Commit (`at`, `expected`) it is a full id or a prefix of
+8 or more characters. Where it takes `from`, a Branch of that name comes
+first, then a Commit.
 
 ## `branch.list` and `branch.get`
 
-`branch.list(project, { page_size, page_pos, page })`, `branch.get(project, branch)`
+`list` pages by name (`limit` 1 to 1000, default 100). A row's short form is
+`{ branch, commit }` (`commit`: the head, or the publication a Branch with no
+Commit of its own stands on); the long form adds `forked_from`, `id`, `base`
+and `root`. `prefix` keeps only the names that start with it,
+`exclude_prefix` leaves those out (such as `dsh.`). `get` answers one row,
+short `{ commit }`.
 
 ```bash
-layerfs branch list shop/api --text
+$ layerfs branch list shop/api                                                 # seen
+{"items":[{"branch":"agent","commit":"32919f55…"},{"branch":"main","commit":"32919f55…"}]}
+$ layerfs branch get shop/api agent                                            # seen
+{"commit":"32919f55…"}
 ```
 
-```
-NAME   ID            BASE           HEAD           FORKED_FROM
-main   -             3256e1f13d0b…  -              -
-work   1197d2181af4… 3275838904b6…  12ad2061f04f…  3275838904b6…
-```
-
-Each item is `{ name, id, base, head, forked_from }`. `base` is the `main`
-Layer underneath; `head` is the newest Commit, `null` before the first one.
-`branch.get` returns one item, or `NoSuchBranch` (`no Branch <name>`;
-`NotFound` before `88b033cfa9`).
-
-## `branch.commits`
-
-`branch.commits(project, branch, { page, page_size, at_commit, include_storage })`
-
-Saved side-Branch Commits, or `main`'s publication Layers, newest first from
-an immutable start. `page` and `page_size` number the pages; `at_commit` (a
-full saved id) starts from another point; `include_storage` adds each row's
-`new_canonical`, `new_stored` and `new_metadata` (`null` for a main Layer,
-which performs no Save).
-
-```json
-{"branch":"work","at_commit":{"id":"12ad2061f04f…","kind":"Commit","branch":"work","root":"f55fa9660a73…"},
- "items":[{"id":"12ad2061f04f…","parent":"12c7ef811a49…","base":"3275838904b6…",
-   "time":1793574061147,"via":"fs","message":"add retries","message_truncated":false,
-   "details_omitted":true}],
- "page":1,"page_size":50,"has_more":false,"scan":{"complete":true,"examined":1,"reason":null}}
-```
-
-Each item carries a full `ref: { id, kind, branch, root }`; `branch.get_commit`
-answers the rest. A side Branch follows its first-parent chain; `main` follows
-publication Layer parents, and a Layer's `time` is `null` with
-`time_status: "unavailable"` (its `source_time` is the source Commit's own
-time). A side Branch with no Commit has no rows.
-
-## `branch.get_commit`
-
-`branch.get_commit(project, branch, commit)`
-
-Full details of one saved Commit or `main` publication Layer admitted by the
-Branch. `commit` is the complete id: no prefix matching (unlike `commit.get`).
-
-The answer keeps the recorded metadata and adds typed `ref`, `parent_ref`,
-`second_parent_ref`, `base_layer`, `source_commit_ref`, `source_time` and
-`time_status`; a relationship that does not apply is null. For a publication,
-`parent` is the previous Layer and `source_commit` what was published. `main`
-admits its Layer lineage; a side Branch admits its first-parent and base
-lineage and its own recorded Commits, displaced ones included. The context
-lookup visits at most 10,000 records, and the whole answer, merge-unit
-reports included, must fit 48 KiB: either limit is `Capacity`.
+`NotFound` for a Branch that does not exist.
 
 ## `branch.fork`
 
-`branch.fork(project, name, from_branch, from_commit?)`
-
-Creates a Branch from another Branch's head, or from one of its Commits. It
-copies nothing, so it is instant.
+Creates Branch `name` from the head of `from` (`main` when left off), or with
+`at` from one Commit of `from`'s history (`NotFound` when it is not in it).
+It copies nothing, so it is instant. Short: `{ commit }`, the Commit the new
+Branch stands on; long: `commit, outcome ("forked"), branch, base, root`.
 
 ```js
-await layerfs.branch.fork("shop/api", "work", "main");
-await layerfs.branch.fork("shop/api", "old", "work", "12c7ef811a491a01…");   // full 66-hex id
+await layerfs.branch.fork("shop/api", "agent", "main");
+await layerfs.branch.fork("shop/api", "old", "agent", { at: "12c7ef81" });
 ```
 
-```json
-{"kind":"Forked","branch":"work","base":"3275838904b6…","head":null}
+```bash
+$ layerfs branch fork shop/api agent main                                      # seen
+{"commit":"32919f55…"}
 ```
 
-Forking `main` gives `head: null`; forking a Branch inherits its head.
-
-| Code | Meaning | Do |
-| --- | --- | --- |
-| `NameTaken` | A Branch with that name exists | Use it, or pick another name |
-| `ReservedName` | The name is `main` | Pick another name |
-| `NoSuchBranch` | `from_branch` doesn't exist | Check `branch.list` |
-| `InvalidInput` | `from_commit` is not a full Commit or Layer id (a short prefix is refused) | Copy the full id from `commit.list` |
-
-One working Branch is enough for linear work. Fork per feature when work runs
-in parallel.
+A taken name is `Exists`; `main` as a new name is `InvalidInput`. One working
+Branch is enough for linear work. Fork per feature when work runs in
+parallel.
 
 ## `branch.merge`
 
-`branch.merge(project, name, a, b, { message, units })`
+Merges `from` into `branch`: a fast-forward when `branch` holds nothing
+`from` lacks, else one merge Commit on `branch` (first parent: `branch`'s
+head). When `branch` already holds `from`, nothing changes and the answer
+says `unchanged`. **`into: "NEW"` writes the result to a new Branch** and
+leaves both sides as they are (1.x's only form). `expected` refuses
+`Conflict` unless `branch`'s head is that Commit. Merging into `main` without
+`into` is `InvalidInput`; publish instead. The rules of `branch`'s
+[`/.lww`](../rules/lww.md) apply.
 
-Merges Branches `a` and `b` into a **new** Branch `name`. `a` and `b` don't
-change. The new name comes second, as in `fork`.
+Short: `{ commit }`, with `unchanged`, `fast_forward`, `overwritten` (the
+paths `/.lww` rules took, the first 20) and `overwritten_count` when set;
+long: `commit, unchanged, fast_forward, overwritten, overwritten_count,
+outcome ("merged", "fast_forward" or "unchanged"), branch, parent,
+second_parent, merge_base, root, units, units_count`.
+
+```bash
+$ layerfs branch merge shop/api agent main --into merged                       # seen
+{"commit":"12d12fbd…","fast_forward":true}
+```
+
+Merging into an existing Branch (no `into`) was not run in this pass.
 
 ```js
-const m = await layerfs.branch.merge("shop/api", "work-on-main", "work", "main", { message: "merge main in" });
+const m = await layerfs.branch.merge("shop/api", "agent", "main", { message: "merge main in" });
 ```
-
-```json
-{"kind":"Merged","fast_forward":false,"branch":"m3","head":"1285e865f74a…","root":"34b5d29b8909…",
- "sources":[{"ref":"c1","node":"12b0855b8d51…"},{"ref":"c2","node":"12854bae4ba6…"}],
- "merge_base":"12ad2061f04f…","conflicts":[],"lww":[],"conflicts_truncated":false,
- "lww_truncated":false,"units":[…],"units_truncated":false}
-```
-
-`fast_forward: true` means one side already contained the other. `lww` lists
-files decided by `a`'s [`/.lww`](../rules/lww.md), each
-`{ path, kept, deleted, rule }`.
 
 **Merge units** (`units`, a JSON list; shell `--units '["src/"]'`): each entry
 is a pattern in the `/.lww` syntax, named by itself, or `{ name, patterns }`.
 A unit covers what its patterns match and everything below; a path two units
 match belongs to the first listed. When both sides changed a unit, the whole
-unit comes from the side with the later write (ours on a tie): no text merge,
-no conflict and no `/.lww` rule inside it, and the losing side's changes there
-are dropped. The result's `units` reports each one:
-
-```json
-{"unit":"src/","kept":"theirs","kept_time":"2026-11-01T23:01:34.987892000Z","changed_ours":1,"changed_theirs":1,"dropped":1,"cross_links":0}
-```
+unit comes from the side with the later write: no text merge, no conflict and
+no `/.lww` rule inside it, and the losing side's changes there are dropped.
+The long form's `units` reports each unit (the first 20; `units_count` past
+that). A malformed pattern or an empty or repeated unit name is
+`InvalidInput`.
 
 **Refusals**
 
-| Code | Meaning | Do |
+| `error` | When | Do |
 | --- | --- | --- |
-| `Conflict` | Overlapping changes; nothing was created | See [resolving conflicts](../rules/conflicts.md#branch-merge-conflicts) |
-| `NoMergeBase` | The Branches share no history | Fork from a common Branch |
-| `NameTaken` | `name` exists | Pick a new name |
-| `NoSuchBranch` | `a` or `b` doesn't exist | Check the names |
-| `InvalidInput` | A malformed unit pattern, or an empty or repeated unit name | Fix `units` |
-
-A live `Conflict` (stderr, exit 125). Its `detail` keeps camelCase keys:
-
-```json
-{"code":"Conflict","message":"c1 + c2 conflict in 1 file(s); nothing was created",
- "detail":{"sources":[…],"mergeBase":"12ad2061f04f…",
-  "conflicts":[{"path":"/src/index.js","kind":"content","blocks":1,"hunksOmitted":false,
-    "hunks":[{"line":1,"ours":["export const retries = 7;"],"theirs":["export const retries = 9;"]}]}],
-  "lww":[],"conflictsTruncated":false,"lwwTruncated":false,"units":[],"unitsTruncated":false}}
-```
-
-The lists are bounded: `conflictsTruncated`, `lwwTruncated`, `unitsTruncated`
-and each conflict's `hunksOmitted` say that something was left out of the
-reply, never out of the merge. For an incomplete summary, page
-`branch.diff(project, a, b)` through every path and read both sides.
+| `Conflict` | Overlapping changes (nothing changed; the conflicts are flat in `conflicts`, more under `detail: true`), or `branch`'s head is not `expected` (named as `commit`) | See [resolving conflicts](../rules/conflicts.md#branch-merge-conflicts) |
+| `InvalidInput` | The Branches share no history (`NoMergeBase`), a merge into `main`, a bad `units` | Fork from a common Branch; publish; fix `units` |
+| `Exists` | `into` names a Branch that exists | Pick a new name |
+| `NotFound` | `branch` or `from` doesn't exist | Check the names |
 
 ## `branch.publish`
 
-`branch.publish(project, branch, commit?, { expected_base, expected_head, force })`
-
-Makes `main` show the Branch's head, or the given Commit, by adding a Layer
-to `main`. It refuses (`HeadMoved`) when `main` gained a Layer since your
-Branch forked, so another agent's work is never dropped by accident.
-`expected_base` (a Layer id) and `expected_head` (a Commit id) refuse unless
-`main` and your Branch are still where you read them; `force: true`
-overwrites `main` on purpose.
+Makes `main`'s next head the Branch's head, or with `at` one Commit of its
+history (a Commit `main` already holds answers `unchanged`). Without
+`expected` it refuses `Conflict` when `main` gained a publication since the
+Branch forked, so another agent's work is never dropped by accident;
+`expected: <commit>` refuses `Conflict` unless `main`'s head is that Commit;
+`force: true` publishes over it on purpose. Either refusal names `main`'s
+head as `commit`. Short: `{ commit }` (the new publication), with
+`unchanged` and `previous` (`main`'s head before, when it was not the
+Branch's base); long: `commit, unchanged, previous, outcome ("published" or
+"unchanged"), branch, source_commit, base, root, size`.
 
 ```bash
-layerfs branch publish shop/api work
+$ layerfs branch publish shop/api agent                                        # seen
+{"commit":"32220c54…"}
+$ layerfs branch publish shop/api agent --detail                               # seen, again
+{"commit":"32220c54…","unchanged":true,"previous":null,"outcome":"unchanged","branch":"agent","source_commit":null,"base":null,"root":null,"size":null}
 ```
 
-```json
-{"kind":"Added","source":{"branch":"work","commit":"12ad2061f04f…"},
- "published_layer":{"id":"3256e1f13d0b…","parent":"3275838904b6…","root":"14a98eac1696…",
-  "source_branch":"work","source_commit":"12ad2061f04f…","logical":251,"overwrote_count":0},
- "based_on":"3275838904b6…","overwrote_count":0,"overwrote":[],"overwrote_has_more":false}
-```
-
-| `kind` | Meaning |
-| --- | --- |
-| `Added` | `main` now shows that Commit; `published_layer` is the new Layer; `overwrote` lists `main` Layers that a `force` publish skipped |
-| `UpToDate` | That Commit is already published (`{ kind, layer }`), even if `main` moved on since |
-| `NoChanges` | `main` already holds that tree (`{ kind, head_layer }`) |
-
-| Code | Meaning | Do |
-| --- | --- | --- |
-| `NoCommit` | The Branch has no Commit yet | Commit something first |
-| `NoSuchBranch` | No such Branch | Check the name |
-| `HeadMoved` | `main` moved since your Branch forked (or since `expected_base`), or the Branch head is not `expected_head`; `detail` has `expectedBase`/`actualBase` or `expectedHead`/`actualHead` | Merge with `main` into a new Branch (below), then publish that |
-| `InvalidInput` | `commit` is not a full Commit id, or an expected id names the wrong kind | Pass a full id |
-
-**Publishing replaces `main`'s view** with your Commit, so it is refused when
-`main` has Layers your Commit doesn't contain. Publishing your own Branch
-again at milestones is fine. If someone else published since you forked,
-merge `main` in (a merge makes a new Branch), check the result, then publish
-the merged Branch:
+**Publishing replaces `main`'s view** with your Commit. If someone else
+published since you forked, merge `main` into your Branch, check the result,
+then publish:
 
 ```js
 const P = "shop/api";
-const m = await layerfs.branch.merge(P, "work-release", "work", "main", { message: "merge main before publish" });
-// mount m.branch in a Sandbox and run the tests here, then:
-const p = await layerfs.branch.publish(P, m.branch);
-// a merge with main publishes as a fast-forward: nothing is skipped
+await layerfs.branch.merge(P, "agent", "main", { message: "merge main before publish" });
+// mount "agent" in a Sandbox and run the tests here, then:
+await layerfs.branch.publish(P, "agent");
 ```
-
-## `branch.diff`
-
-`branch.diff(project, from_branch, to_branch, { paths_only, page_size, page_pos, cursor })`
-
-Files that differ between two Branches' heads (`main` counts as one). The
-result is the same shape as [`commit.diff`](commit.md#commitdiff):
-`{ kind: "ok", from, to, items, has_more, next_page_pos, next_cursor }`, with
-`from` and `to` as `{ ref, label, root }`.
-
-```bash
-layerfs branch diff shop/api main work --paths-only
-```
-
-`paths_only` leaves out each item's `hunks` (they come back `null`). `page`,
-`page_size` and `page_pos` page the items; `from_commit` and `to_commit` pin
-the compared versions; `path_prefix` keeps one subtree; `include_attribution`
-adds each path's last writers; `continuation` resumes a saved query. Resume a
-long diff with `cursor: next_cursor`. Refused under a folder scope.
 
 ## `branch.remove`
 
-`branch.remove(project, branch)`
+Removes one Branch; its name stays taken until compaction, and its Commits
+and objects stay until a later `store.compact`. Short: `{"ok":true}`; long:
+`{ ok, outcome: "removed", branch, removed_at }`.
 
-Retires one Branch in its Store. Its row is hidden from listings and name
-resolution; fork, merge, publish and mount of it are refused, and its Commits
-and objects stay until a later `store.compact`. `main` is `ReservedName`.
-
-```json
-{"kind":"Removed","project":"shop/api","branch":"work","removed_ms":1793574061147}
+```bash
+$ layerfs branch remove shop/api merged                                        # seen
+{"ok":true}
 ```
-
-A repeat is `NoSuchBranch` (only `project.delete` is retry-idempotent); a
-concurrent remove is `Busy` with phase `"retire"`. `MountsActive` while a
-mount of the Branch is live.

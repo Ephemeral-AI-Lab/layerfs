@@ -20,13 +20,14 @@ chooses by `StoreKind`. Every new Store runs the Disposable profile
 | Call | Does | Refusals |
 | --- | --- | --- |
 | `store.create <s>` | an empty Store at `store/<s>/store.sqlite` on `native` | `Exists` |
-| `store.remove <s>` | deletes the file wherever it is (here or a worker `store.file remove`), its projects, and any copy an ended push or pull left on the other machine (`op.args.leftover`, so a second remove finishes an interrupted one); clears a gone process's unresolved `op` | `InvalidInput` for PostgreSQL (`store disconnect` keeps its data); `InUse`; `Conflict` if the Store moved meanwhile; a live `op` `Busy` |
+| `store.remove <s>` | deletes the file wherever it is (here or a worker `store.file remove`), its projects, and any copy an ended move left on the other machine (`op.args.leftover`, so a second remove finishes an interrupted one); clears a gone process's unresolved `op` | `InvalidInput` for PostgreSQL (`store disconnect` keeps its data); `InUse`; `Conflict` if the Store moved meanwhile; a live `op` `Busy` |
 
 ## Transfer (`sqlite/transfer/`)
 
-`store.push <s> <machine>` moves a sqlite Store's file from `native` to a
-machine's worker; `store.pull <s>` brings it back. Between two machines
-the caller pulls, then pushes; each half is its own operation
+`store.move <s> <machine>` moves a sqlite Store's file from `native` to a
+machine's worker; `store.move <s> native` brings it back. One side is always `native`: between two
+machines the caller moves the Store to `native`, then on; each half is its
+own operation
 ([`phases.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs)).
 
 ```text
@@ -64,9 +65,9 @@ running on it is `InUse`
 | Case | What is kept | Cleared by |
 | --- | --- | --- |
 | a phase fails certain | whatever exists; the refusal names the phase | — |
-| `Unknown`, or any failure at `record` (both copies exist) | both copies; `op` uncertain; `log/uncertain.jsonl` | a new push or pull, which first deletes the copy the record does not name |
-| a retire that did not finish | the source's copy; `last_transfer.retired: false` | the next push or pull |
-| a push that failed certain at `send`, `verify` or `install` | the target's `store.sqlite.incoming`; the record's `incoming_on` names the machine | the next `store push` or `store remove` (doctor reports its bytes) |
+| `Unknown`, or any failure at `record` (both copies exist) | both copies; `op` uncertain; `log/uncertain.jsonl` | a new `store move`, which first deletes the copy the record does not name |
+| a retire that did not finish | the source's copy; `last_transfer.retired: false` | the next `store move` |
+| a move that failed certain at `send`, `verify` or `install` | the target's `store.sqlite.incoming`; the record's `incoming_on` names the machine | the next `store move` or `store remove` (doctor reports its bytes) |
 
 The copy the record names is never touched, and nothing is deleted while
 another operation holds the Store
@@ -75,11 +76,13 @@ another operation holds the Store
 ## PostgreSQL (`postgresql/`)
 
 ```text
- store.connect(name, url, {password: "env:PG", synchronous_commit})
-   refuse_password(url)       user:pass@ or any *password* param -> InvalidInput
+ store.connect(name, url, {auth, synchronous_commit})
+   refuse_login(url)          a user, user:pass@ or any *password* param
+                              -> InvalidInput
+   auth                       required, and saved (`store save-auth`):
+                              else InvalidInput / NotFound
    synchronous_commit         off | local (default) | remote_write | on
                               | remote_apply, else InvalidInput
-   resolve(password)          checked once now
    Exists?                    same name, or same server+database, or
                               (once read) same schema binding
    schema `layerfs`           empty database: create it, new binding;
@@ -90,11 +93,9 @@ another operation holds the Store
 
 | Call | Does | Refusals | Source |
 | --- | --- | --- | --- |
-| `store.connect` | records the database as a Store in the fixed `layerfs` schema: URL without password, schema, `synchronous_commit`, password reference, binding, a cursor key of this home's own, no machine | `InvalidInput`, `Exists`, `Unavailable` | [`connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs) |
-| `store.disconnect` | forgets the Store; its data stays | `InvalidInput` for sqlite (`store remove`); `InUse` while leased or a Sandbox uses it | same |
-| `store.update <s> {url, password, synchronous_commit}` | changes the Store's own connection; a new URL or password is dialled once from here and must hold this Store's binding; this process's open sessions on it are closed | `InvalidInput`; `Exists` (another Store's database); `Unavailable` (not reached, or another Store's schema); `InUse` (a call running here); `Conflict` if the record changed meanwhile | [`update.rs`](../../../../control/crates/layerfs-store/src/postgresql/update.rs) |
-| `store.update <s> --machine <m> {url, password}` | gives one machine a connection of its own, `machines.<m>: {url?, password?}`: the machine's platform must run PostgreSQL Sandboxes (support table); the check runs on the side that dials (this process, or the worker's `store.reach`) before anything is saved. `--clear` removes it and dials nothing | `Unsupported` (row reason; a worker without `store.reach` names stop and start); `Unavailable` (server not reached, naming the host, never the URL, plus the platform's hint; or another Store's schema); `Denied` (login or privilege); `Conflict` if the record changed meanwhile | [`check.rs`](../../../../control/crates/layerfs-store/src/postgresql/check.rs), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) |
-| `store.status <s> --machine <m>` | runs that check now and answers it as `check: {machine, host, ok, ..}`; records nothing | a failed check is `ok: false`, not a refusal | same |
+| `store.connect` | records the database as a Store in the fixed `layerfs` schema: URL with no user or password, schema, `synchronous_commit`, its saved login `auth`, binding, a cursor key of this home's own, no machine. On a connected Store the URL becomes the address every machine dials (`readdress`); with `--machine <m>` it is that machine's own, `machines.<m>: {url}`, checked from the side that dials (this process, or the worker's `store.reach`), and the machine's platform must run PostgreSQL Sandboxes. Both refuse `--auth` and `--synchronous-commit` | `InvalidInput`, `Exists`, `NotFound` (no such saved login), `Unavailable`, `Unsupported` (`--machine` on a platform that runs no PostgreSQL Sandbox), `Denied`, `Conflict` | [`connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) `connect` |
+| `store.disconnect` | forgets the Store; its data stays. With `--machine <m>`, removes that machine's own address, which then dials the Store's | `InvalidInput` for sqlite (`store remove`); `InUse` while leased or a Sandbox uses it; `NotFound` when the machine has no address of its own | same |
+| `store.update <s> {auth, synchronous_commit}` | another saved login or `synchronous_commit` (one is required); a new login is checked once from this process on the Store's address, which must hold this Store | `InvalidInput`; `Unavailable` (not reached, or another Store's schema); `Conflict` if the record changed meanwhile | [`update.rs`](../../../../control/crates/layerfs-store/src/postgresql/update.rs) |
 | Store calls | open the schema in this process with the URL resolved now | — | [`open.rs`](../../../../control/crates/layerfs-store/src/postgresql/open.rs) |
 | Host read session | one read-only session per process for Sandbox host operations: a create's reach check and a status's head read, on every route; opened with the light check on first read, checked with one empty query before each use (a dead one is replaced, not retried), closed after 60 s unused | — | [`reader.rs`](../../../../control/crates/layerfs-store/src/postgresql/reader.rs) |
 
@@ -102,8 +103,7 @@ A PostgreSQL Store is on no machine. Its Sandboxes run on every machine
 whose platform runs PostgreSQL Sandboxes (#536 C4), and `sandbox.create`
 checks from the machine that it reaches this Store, so no call comes
 between `store.connect` and the first Sandbox. `machines` holds only the
-machines with a connection of their own (H9); an entry without `url` and
-`password` (a record written while machines were attached one by one,
+machines with a connection of their own (H9); an entry without `url` (a record written while machines were attached one by one,
 2026-11-12 to 2026-11-17) is read as none, and its `checked` is dropped at
 the record's next write. `machine.remove` forgets the machine's entry in
 every Store. Nothing converts a sqlite Store into PostgreSQL: a project
@@ -111,11 +111,23 @@ reaches PostgreSQL only by an Init into it.
 
 ### Credentials
 
+A PostgreSQL Store's record names a saved login (`auth`), which
+`postgresql/login.rs` `dial` puts into the address it dials
+(`secrets::with_login`); a machine's own address (`machines.<m>.url`) is
+dialled with the same login. A record that names no `auth` (written before
+saved logins) is `broken` `outdated`, and every call that dials it is
+refused `InvalidInput` with the fix `layerfs store save-auth <auth> --user
+<user> --password-stdin && layerfs store update <store> --auth <auth>`; its
+old `password` reference is not read
+([`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs)
+`dial`, `no_auth_fix`; [`state.rs`](../../../../control/crates/layerfs-store/src/state.rs)).
+
 ```text
- Store record: url postgres://u@h/db  password env:NAME | file:/abs/path
+ Store record: url postgres://h/db  auth <auth>
+ secret/auth/<auth>.json: user, password (0600)
       |  each call, in the caller only
       v
- secrets::with_password -> u:<percent-encoded password>@h/db  (memory)
+ secrets::with_login -> <user>:<percent-encoded password>@h/db  (memory)
       v
  machine reach(spec, url) -> postgresql field of ONE request
       |  native: same process; else worker sandbox.host, whose decode
@@ -127,9 +139,9 @@ reaches PostgreSQL only by an Init into it.
 
 | Rule | Source |
 | --- | --- |
-| A reference is `env:NAME` (unset or empty `Unavailable`) or `file:/absolute/path` (unreadable `Unavailable`, trailing newline trimmed); anything else `InvalidInput`; a reference needs a URL with a user | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) |
-| Every byte outside `A-Z a-z 0-9 - . _ ~` is percent-encoded | same, `percent` |
-| Resolved again on each call; the full URL is never written to a record, log, trace or `Debug` output | same; [`host/frame.rs`](../../../../control/crates/layerfs-sandbox/src/host/frame.rs) `decode` |
+| The login is a saved one: a URL that names a user or holds a password is refused `InvalidInput` (`refuse_login`); a named login not saved is `NotFound`, one with no user or password `Failed` | [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) `read` |
+| Every byte outside `A-Z a-z 0-9 - . _ ~` is percent-encoded | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) `percent` |
+| Put in again on each call; the full URL is never written to a record, log, trace or `Debug` output | same; [`host/frame.rs`](../../../../control/crates/layerfs-sandbox/src/host/frame.rs) `decode` |
 | The daemon runs `--config <setup file>`; the setup is in neither its arguments nor its environment; `DaemonStore` prints `url` as `[redacted]` | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs), [`store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs) |
 
 How the URL is rewritten for a machine is

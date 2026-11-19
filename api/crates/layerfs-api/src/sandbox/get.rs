@@ -1,96 +1,235 @@
-//! `sandbox.get`: a Sandbox and its Workspaces.
+//! `sandbox.get`: one Sandbox, its state and its Workspaces, a live read of
+//! its daemon; with `--with stats`, its daemon's process and capacity and
+//! what it and each Workspace use. This file also holds the helpers the
+//! family's entries share to answer what a library function returned under
+//! the rows' names.
 use crate::calls::table::Kind::Name;
-use crate::calls::table::{a, call, Call, PAGE};
-use crate::calls::Context;
+use crate::calls::table::{a, call, Call};
+use crate::calls::{Context, Form, Part, Section};
 use layerfs_bridge::control::SdkValue;
-use layerfs_home::home::with_field;
-use layerfs_home::outcome::{Outcome, View};
-use layerfs_sandbox::family::{get, GetRequest, Got, Page};
+use layerfs_home::outcome::Outcome;
+use layerfs_home::time::iso;
+use layerfs_sandbox::family::{get, GetRequest, Got, ListedWorkspace};
+use layerfs_sandbox::inspect::process::shown_usage;
+use layerfs_sandbox::record::SandboxRecord;
+use layerfs_sandbox::state::activity;
+
+/// One command running in a Workspace.
+const COMMAND: Form = Form::of(&["exec"], &[], &["exec", "started_at", "program", "tag"]);
+/// One Workspace: its handle and Branch, the commands running in it and
+/// its state when not ready, then what its daemon and record say of it.
+const WORKSPACE: Form = Form::of(
+    &["workspace", "branch"],
+    &["running", "state", "op", "reason", "fix"],
+    &[
+        "workspace",
+        "branch",
+        "running",
+        "state",
+        "op",
+        "reason",
+        "fix",
+        "path",
+        "commit",
+        "base_layer",
+        "mounted_at",
+        "branch_moved",
+        "pending_merge",
+        "commands",
+        "id",
+    ],
+)
+.parts(&[
+    ("running", Part::Scalars("exec")),
+    ("commands", Part::Rows(&COMMAND)),
+]);
+const FORM: Form = Form::of(
+    &["state"],
+    &[
+        "workspaces",
+        "op",
+        "blocked_by",
+        "reason",
+        "fix",
+        "observed_at",
+    ],
+    &[
+        "state",
+        "workspaces",
+        "op",
+        "blocked_by",
+        "reason",
+        "fix",
+        "observed_at",
+        "message",
+        "sandbox",
+        "project",
+        "machine",
+        "platform",
+        "image",
+        "backend",
+        "route",
+        "created_at",
+        "workspace_capacity",
+    ],
+)
+.parts(&[("workspaces", Part::Rows(&WORKSPACE))]);
+
+/// What one Workspace uses, in `--with stats`.
+const STATS_WORKSPACE: Form = Form::of(
+    &["workspace"],
+    &["overlay_bytes", "usage", "usage_reason"],
+    &["workspace", "overlay_bytes", "usage", "usage_reason"],
+);
+/// The keys of `--with stats`.
+const STATS_KEYS: [&str; 5] = [
+    "daemon",
+    "usage",
+    "usage_reason",
+    "daemon_capacity",
+    "workspaces",
+];
+const STATS: Form =
+    Form::of(&[], &STATS_KEYS, &STATS_KEYS).parts(&[("workspaces", Part::Rows(&STATS_WORKSPACE))]);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
     "sandbox",
     "get",
-    &[a("name", Name)],
-    &PAGE,
-    "a Sandbox and its Workspaces",
+    &[a("sandbox", Name)],
+    &[],
+    "one Sandbox: its state and its Workspaces",
     run,
-);
+)
+.form(&FORM)
+.with(&[Section::own("stats", &STATS_KEYS).shaped(&STATS)]);
 
-/// Runs `sandbox.get`: its record with its derived `state`, one page of its
-/// `workspaces` (each with its `path`, `name` and `ws`, and, from the side
-/// that keeps its record, the commands `running` in it and its
-/// `overlay_bytes`, layerfs-project#178; and, from the side that runs the
-/// Sandbox, its own cgroup's `usage` with `usage_reason`, described
-/// below), why its machine did
-/// not answer (`down_reason`, with the partial `down` counts when the
-/// daemon's capacity notice carried them, #649), the daemon's
-/// `daemon_capacity` read model when the Sandbox answered it (#540), its
-/// `workspace_capacity` (how many Workspaces a Sandbox holds, always), its
-/// daemon process as its machine saw it (`daemon`: `{ pid, started_at }`,
-/// `usage`: its cgroup's `{ cpu_usec, memory_current, memory_peak,
-/// memory_file, pids, oom_kills }` or null with `usage_reason`;
-/// layerfs-project#164, #182; the shape of each `machine.stats` row's
-/// `usage` too) and
-/// `next_page_pos`. The library reads it best effort and bounded, so this
-/// layer only shows what it got.
-///
-/// Each Workspace's `usage` is what its own cgroup
-/// (`<Sandbox group>/ws-<workspace>`, the group its commands run in) has
-/// used, in the Sandbox `usage` shape: `{ cpu_usec, memory_current,
-/// memory_peak, memory_file, pids, oom_kills }`, each value null when the
-/// group has no such file. `usage_reason` is there when `usage` or one of
-/// its values is null: `no_controller` (the group has no memory or pids
-/// controller: a Sandbox's group holds processes of its own, so it gives
-/// its Workspace groups none and only `cpu_usec` is read), `no_command`
-/// (no command runs in it, so it has no group), `host_process`,
-/// `not_supported`, `cgroup_v1` or `no_cgroup` (as for the Sandbox's
-/// `usage`), or `not_observed` (the side that runs the Sandbox did not
-/// answer, or is a worker of a build before this field). Like
-/// `overlay_bytes`, both are present on every Workspace this build lists
-/// and absent only from a worker that predates them entirely.
+/// Runs `sandbox.get`. Its state starts from records; a Sandbox they say
+/// is ready (or lost, or not answering) is asked for its Workspaces once,
+/// on its usual route, and the answer decides: ready, `broken` `lost` or
+/// `not_answering`, or `unknown` when its machine does not answer. The
+/// record is written only when that changes why it is broken. `--with
+/// stats` reads the daemon's capacity model, one more bounded call, only
+/// for a ready Sandbox; the section is null for any other.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let request = GetRequest {
-        name: args.get_text("name").unwrap_or("").to_owned(),
-        page: Page {
-            size: args.get_int("page_size"),
-            pos: args.get_int("page_pos"),
-        },
+        name: args.get_text("sandbox").unwrap_or("").to_owned(),
+        stats: context.with("stats"),
     };
     let (home, events) = context.parts();
-    let Got {
-        record,
-        state,
-        workspaces,
-        down_reason,
-        down,
-        next,
-        daemon_capacity,
-        workspace_capacity,
-        process,
-    } = get(home, events, &request)?;
-    let workspaces = workspaces.into_iter().map(|listed| {
-        let item = with_field(listed.item, "path", SdkValue::Text(listed.path));
-        let item = with_field(item, "name", SdkValue::opt_text(listed.name));
-        with_field(item, "ws", SdkValue::Text(listed.ws))
+    let got = get(home, events, &request)?;
+    let workspaces = (got.workspaces.as_ref())
+        .map(|listed| SdkValue::List(listed.iter().map(workspace).collect()));
+    let mut fields = vec![
+        ("workspaces", workspaces.unwrap_or_default()),
+        ("message", SdkValue::opt_text(got.message.clone())),
+        (
+            "workspace_capacity",
+            SdkValue::Int(i64::from(got.workspace_capacity)),
+        ),
+    ];
+    fields.extend(facts(&got.record));
+    if request.stats {
+        fields.push(("stats", stats(&got)));
+    }
+    let answer = SdkValue::Map(
+        (fields.into_iter())
+            .map(|(name, value)| (name.to_owned(), value))
+            .collect(),
+    );
+    Ok(got.state.write(answer))
+}
+
+/// What a Sandbox's record holds, as the rows name it.
+pub(super) fn facts(record: &SandboxRecord) -> Vec<(&'static str, SdkValue)> {
+    vec![
+        ("sandbox", SdkValue::text(record.name())),
+        ("project", SdkValue::opt_text(record.project())),
+        ("machine", SdkValue::text(record.machine())),
+        ("platform", SdkValue::opt_text(record.platform())),
+        ("image", SdkValue::opt_text(record.image())),
+        ("backend", SdkValue::opt_text(record.backend())),
+        ("route", SdkValue::opt_text(record.route())),
+        ("created_at", at(record.created_ms())),
+    ]
+}
+
+/// A time in milliseconds since 1970 as answers spell it (`..._at`).
+pub(super) fn at(ms: Option<i64>) -> SdkValue {
+    ms.map_or(SdkValue::Null, |ms| SdkValue::Text(iso(ms)))
+}
+
+/// `value`'s field `name`, null when it has none.
+pub(super) fn field(value: &SdkValue, name: &str) -> SdkValue {
+    value.get(name).cloned().unwrap_or_default()
+}
+
+/// One Workspace its daemon listed, as the row names it: its state from
+/// its daemon's `activity`.
+fn workspace(listed: &ListedWorkspace) -> SdkValue {
+    let item = &listed.item;
+    let commands: Vec<&SdkValue> = match item.get("running") {
+        Some(SdkValue::List(commands)) => commands.iter().collect(),
+        _ => Vec::new(),
+    };
+    let running = (commands.iter()).map(|command| field(command, "exec_id"));
+    let shown = (commands.iter()).map(|command| {
+        SdkValue::map([
+            ("exec", field(command, "exec_id")),
+            ("started_at", at(command.get_int("started"))),
+            ("program", field(command, "program")),
+            ("tag", field(command, "tag")),
+        ])
     });
-    let shown = record.to_sdk(View::Full);
-    let shown = with_field(shown, "state", SdkValue::text(state));
-    let mut shown = with_field(shown, "workspaces", SdkValue::List(workspaces.collect()));
-    if let Some(why) = down_reason {
-        shown = with_field(shown, "down_reason", SdkValue::Text(why));
+    let state = activity(item.get_text("activity").unwrap_or("idle"), &listed.ws);
+    state.write(SdkValue::map([
+        ("workspace", SdkValue::text(&listed.ws)),
+        ("branch", field(item, "branch")),
+        ("running", SdkValue::List(running.collect())),
+        ("path", SdkValue::text(&listed.path)),
+        ("commit", field(item, "base")),
+        // as its daemon spells them
+        ("base_layer", field(item, "baseLayer")),
+        ("mounted_at", at(item.get_int("created"))),
+        ("branch_moved", field(item, "headMovedSinceMount")),
+        ("pending_merge", field(item, "pendingMerge")),
+        ("commands", SdkValue::List(shown.collect())),
+        ("id", field(item, "workspace")),
+    ]))
+}
+
+/// `--with stats`: null unless the Sandbox is ready.
+fn stats(got: &Got) -> SdkValue {
+    if got.state != layerfs_home::state::State::Ready {
+        return SdkValue::Null;
     }
-    if let Some(down) = down {
-        shown = with_field(shown, "down", down.to_sdk());
-    }
-    if let Some(model) = daemon_capacity {
-        shown = with_field(shown, "daemon_capacity", model.to_sdk());
-    }
-    let capacity = SdkValue::Int(i64::from(workspace_capacity));
-    let shown = with_field(shown, "workspace_capacity", capacity);
-    let shown = (process.into_iter()).fold(shown, |shown, (field, value)| {
-        with_field(shown, &field, value)
+    let process = |name: &str| {
+        (got.process.iter())
+            .find(|(held, _)| held == name)
+            .map(|(_, value)| value.clone())
+            .unwrap_or_default()
+    };
+    let daemon = match process("daemon") {
+        daemon @ SdkValue::Map(_) => SdkValue::map([
+            ("pid", field(&daemon, "pid")),
+            ("started_at", at(daemon.get_int("started_at"))),
+        ]),
+        _ => SdkValue::Null,
+    };
+    let workspaces = (got.workspaces.iter().flatten()).map(|listed| {
+        SdkValue::map([
+            ("workspace", SdkValue::text(&listed.ws)),
+            ("overlay_bytes", field(&listed.item, "overlay_bytes")),
+            ("usage", shown_usage(&field(&listed.item, "usage"))),
+            ("usage_reason", field(&listed.item, "usage_reason")),
+        ])
     });
-    let next = super::list::next_page_pos(next);
-    Ok(with_field(shown, "next_page_pos", next))
+    let capacity = (got.daemon_capacity.as_ref()).map(|model| model.to_sdk());
+    SdkValue::map([
+        ("daemon", daemon),
+        ("usage", shown_usage(&process("usage"))),
+        ("usage_reason", process("usage_reason")),
+        ("daemon_capacity", capacity.unwrap_or_default()),
+        ("workspaces", SdkValue::List(workspaces.collect())),
+    ])
 }

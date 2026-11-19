@@ -55,13 +55,41 @@ const COMMON = {
   json: { description: "any JSON value; nested { \"base64\": \"...\" } content is read as bytes by the library" },
 };
 
+/**
+ * The global options of a call (call surface 2.0), as schema properties:
+ * `detail` for the long form, and `with` when the entry lists sections.
+ */
+export function globalOptions(spec) {
+  const out = {
+    detail: { type: "boolean", description: "the long form: every key, nulls included" },
+  };
+  const sections = Object.keys(spec.form.with ?? {});
+  if (sections.length > 0) {
+    out.with = {
+      type: "array",
+      items: { type: "string", enum: sections },
+      uniqueItems: true,
+      description: `sections to add to the answer: ${sections.join(", ")}`,
+    };
+  }
+  return out;
+}
+
 /** The options a client may send: every option that is not a function. */
 export function visibleOptions(spec) {
   return spec.options.filter((option) => option.kind !== "function" && !HIDDEN_OPTIONS.has(option.name));
 }
 
+/** `workspace.exec`'s `env`: one object of names to text (call surface 2.0). */
+const EXEC_ENV = {
+  type: "object",
+  additionalProperties: { type: "string" },
+  description: "the command's environment variables, an object of names to text",
+};
+
 /** The JSON Schema property of one argument or option. */
 export function propertyOf(spec, entry) {
+  if (spec.family === "workspace" && spec.call === "exec" && entry.name === "env") return EXEC_ENV;
   const schema = COMMON[entry.kind];
   if (!schema) throw new Error(`${spec.family}.${spec.call}: no schema for kind "${entry.kind}"`);
   return schema;
@@ -73,7 +101,7 @@ function descriptionOf(spec) {
     notes.push("The destination is a path on the machine running this MCP server, not on the caller; a folder scope refuses this call.");
   }
   if (spec.family === "workspace" && spec.call === "exec") {
-    notes.push("Output is buffered by the Node binding: text up to 1 MiB per stream is in the result; a larger stream is not delivered, and stdout_bytes, stderr_bytes and streamed=true report it.");
+    notes.push("Each stream's text is in the result up to its last 1 MiB; a longer stream answers its last 1 MiB, and stdout_file or stderr_file names the file on the machine that holds the whole stream; stdout_bytes and stderr_bytes give its full size.");
   }
   return [spec.help, ...notes].join(" ");
 }
@@ -86,7 +114,11 @@ export function toolFor(spec) {
     properties[arg.name] = propertyOf(spec, arg);
     if (!arg.optional) required.push(arg.name);
   }
-  for (const option of visibleOptions(spec)) properties[option.name] = propertyOf(spec, option);
+  for (const option of visibleOptions(spec)) {
+    properties[option.name] = propertyOf(spec, option);
+    if (option.required) required.push(option.name);
+  }
+  Object.assign(properties, globalOptions(spec));
   return {
     name: `${spec.family}_${spec.call}`,
     description: descriptionOf(spec),

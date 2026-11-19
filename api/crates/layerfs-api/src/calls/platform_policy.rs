@@ -1,7 +1,8 @@
 //! Refuse new work on removed platforms before home creation, locks, or
 //! dispatch. Read-only inspection and explicit teardown retain their routes.
 //! This also runs in builds without machine adapters, so a recorded worker or
-//! a forwarded daemon cannot bypass the product policy.
+//! a forwarded daemon cannot bypass the product policy. Each table entry
+//! says which [`Policy`] checks it, so no call name is written here.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::refused;
 use layerfs_machine::record::MachineRecord;
@@ -11,8 +12,33 @@ use std::path::Path;
 
 type Result = std::result::Result<(), SdkRefusal>;
 
+/// What of a call must not be on a removed platform; its table entry says
+/// which. Each variant names the argument that holds the thing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Policy {
+    /// Nothing: a read, or an explicit teardown.
+    None,
+    /// The platform this argument names.
+    Platform(&'static str),
+    /// The machine this argument names.
+    Machine(&'static str),
+    /// The Store this argument names, and its machine.
+    Store(&'static str),
+    /// The project this argument names: its Store and that Store's machine.
+    Project(&'static str),
+    /// The Sandbox this argument names: its platform, machine and project.
+    Sandbox(&'static str),
+    /// The Sandbox of the Workspace (`<sandbox>:<workspace>`) this argument names.
+    Workspace(&'static str),
+    /// A new Sandbox: its `machine` when given, and its `project`.
+    NewSandbox,
+    /// A Store's move to a machine: the Store this argument names, the
+    /// machines of a move it left unfinished, and the `machine` it goes to.
+    TransferTo(&'static str),
+}
+
 fn platform(name: &str) -> Result {
-    match layerfs_sandbox_backend::platform_policy::disabled_reason(name) {
+    match layerfs_sandbox_backend::platform_policy::removed_reason(name) {
         Some(reason) => Err(refused("Unsupported", reason)),
         None => Ok(()),
     }
@@ -70,34 +96,28 @@ fn transfer(home: &Path, name: &str) -> Result {
 }
 
 /// Checks the fully validated public call, independent of front end or features.
-pub(super) fn check(home: &Path, name: &str, args: &SdkValue) -> Result {
+pub(super) fn check(home: &Path, policy: Policy, args: &SdkValue) -> Result {
     let text = |field| args.get_text(field).unwrap_or("");
-    match name {
-        "machine.create" => platform(text("platform")),
-        "machine.start" | "machine.update" => machine(home, text("name")),
-        "sandbox.create" => {
+    match policy {
+        Policy::None => Ok(()),
+        Policy::Platform(field) => platform(text(field)),
+        Policy::Machine(field) => machine(home, text(field)),
+        Policy::Store(field) => store(home, text(field)),
+        Policy::Project(field) => project(home, text(field)),
+        Policy::Sandbox(field) => sandbox(home, text(field)),
+        Policy::Workspace(field) => match text(field).split_once(':') {
+            Some((name, _)) => sandbox(home, name),
+            None => Ok(()),
+        },
+        Policy::NewSandbox => {
             if let Some(name) = args.get_text("machine") {
                 machine(home, name)?;
             }
             project(home, text("project"))
         }
-        "workspace.mount" => sandbox(home, text("sandbox")),
-        "workspace.exec" | "workspace.commit" => {
-            if let Some((name, _)) = text("ws").split_once(':') {
-                sandbox(home, name)?;
-            }
-            Ok(())
-        }
-        "store.push" => {
+        Policy::TransferTo(field) => {
             machine(home, text("machine"))?;
-            transfer(home, text("name"))
+            transfer(home, text(field))
         }
-        "store.pull" => transfer(home, text("name")),
-        "backup.create" => store(home, text("store")),
-        "project.init" | "branch.fork" | "branch.merge" | "branch.publish" | "file.write"
-        | "file.edit" | "file.apply" | "file.rm" | "file.mkdir" | "file.mv" | "file.cp" => {
-            project(home, text("project"))
-        }
-        _ => Ok(()),
     }
 }

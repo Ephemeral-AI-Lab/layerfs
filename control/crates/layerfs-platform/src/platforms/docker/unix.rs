@@ -99,6 +99,8 @@ pub(crate) fn status(spec: &Spec) -> Result<Status, MachineError> {
     if version.is_none() {
         return Ok(Status {
             state: State::Stopped,
+            kernel: None,
+            worker: None,
             free_disk: None,
             tool_version: None,
             down_reason: Some(format!(

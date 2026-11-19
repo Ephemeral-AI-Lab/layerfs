@@ -1,7 +1,7 @@
-//! `table()`, `call(name, args, home=None, scope=None, on_event=None)`,
-//! `close()` and `doctor(home=None)`.
+//! `table()`, `call(name, args, home=None, scope=None, on_event=None)` and
+//! `close()`; the doctors are calls like any other.
 use pyo3::prelude::*;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// The call table as JSON text.
 #[pyfunction]
@@ -52,23 +52,5 @@ pub fn call(
 /// interpreter released. Returns how many Stores it closed.
 #[pyfunction]
 pub fn close(py: Python<'_>) -> usize {
-    py.detach(|| {
-        let closed = layerfs_api::close_idle(std::time::Duration::ZERO);
-        layerfs_api::end_idle_sessions(layerfs_api::SESSION_END);
-        closed
-    })
-}
-
-/// `layerfs doctor` (report-only, outside the call table) on `home` (else
-/// the library's default), with the interpreter released. Returns JSON
-/// text `{ value }` or `{ refused }`.
-#[pyfunction]
-#[pyo3(signature = (home=None, options=None))]
-pub fn doctor(py: Python<'_>, home: Option<String>, options: Option<String>) -> String {
-    py.detach(move || {
-        layerfs_api::doctor_options_json(
-            layerfs_api::home(home.as_deref().map(Path::new)),
-            options.as_deref().unwrap_or("{}"),
-        )
-    })
+    py.detach(layerfs_api::close)
 }

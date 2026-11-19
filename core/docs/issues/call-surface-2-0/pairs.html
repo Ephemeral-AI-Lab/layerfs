@@ -1,0 +1,426 @@
+<!-- totals short=5242 long=28565 pairs=83 -->
+      <h3>project</h3>
+      <div class="pair">
+        <div class="pair-head"><span class="call">project.init</span><code>layerfs project init &lt;project&gt; &lt;folder&gt; [--timeout 3600000]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">21 B</span></div><pre>{"commit":"32ab9e01"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">168 B</span></div><pre>{"commit":"32ab9e01","outcome":"created","project":"shop/api","store":"shop","engine":"sqlite","machine":"native","root":"9f3c0b7a","created_at":"2026-11-18T09:16:59Z"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">project.list</span><code>layerfs project list [--store S] [--with stats] [--limit 100] [--cursor C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">139 B</span></div><pre>{"items":[{"project":"shop/api"},{"project":"sim-website/website","state":"blocked","blocked_by":{"machine":"docker","reason":"stopped"}}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">479 B</span></div><pre>{"items":[{"project":"shop/api","state":"ready","op":null,"blocked_by":null,"reason":null,"fix":null,"store":"shop","engine":"sqlite","machine":"native","commit":"32ab9e01","created_at":"2026-11-17T09:16:59Z"},{"project":"sim-website/website","state":"blocked","op":null,"blocked_by":{"machine":"docker","reason":"stopped"},"reason":null,"fix":null,"store":"sim-website","engine":"sqlite","machine":"docker","commit":null,"created_at":"2026-11-17T09:16:59Z"}],"next_cursor":null}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">project.get</span><code>layerfs project get &lt;project&gt;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">52 B</span></div><pre>{"store":"shop","state":"ready","commit":"32ab9e01"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">199 B</span></div><pre>{"store":"shop","state":"ready","commit":"32ab9e01","op":null,"blocked_by":null,"reason":null,"fix":null,"project":"shop/api","engine":"sqlite","machine":"native","created_at":"2026-11-17T09:16:59Z"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">project.stats</span><code>layerfs project stats &lt;project&gt; [--branch B] [--at C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">69 B</span></div><pre>{"file_count":1834,"dir_count":212,"symlink_count":3,"size":52428800}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">123 B</span></div><pre>{"file_count":1834,"dir_count":212,"symlink_count":3,"size":52428800,"partial":false,"commit":"32ab9e01","root":"9f3c0b7a"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">project.export</span><code>layerfs project export &lt;project&gt; &lt;destination&gt; [--branch B] [--at C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">35 B</span></div><pre>{"file_count":1834,"size":52428800}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">107 B</span></div><pre>{"file_count":1834,"size":52428800,"dir_count":212,"symlink_count":3,"commit":"5c77a1d0","root":"9f3c0b7a"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">project.delete</span><code>layerfs project delete &lt;project&gt;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">91 B</span></div><pre>{"ok":true,"home_entry_kept":false,"outcome":"deleted","deleted_at":"2026-11-18T09:16:59Z"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">project.hide_path</span><code>layerfs project hide-path &lt;project&gt; &lt;path&gt;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">127 B</span></div><pre>{"ok":true,"unchanged":false,"outcome":"hidden","path":"/secrets.env","frontier_serial":412,"hidden_at":"2026-11-18T09:16:59Z"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">project.doctor</span><code>layerfs project doctor &lt;project&gt; [--full]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">380 B</span></div><pre>{"ok":true,"findings":[],"not_checked":[],"status":"ok","counts":{"ok":1,"notice":0,"warning":0,"error":0,"not_checked":0},"observed_at":"2026-11-18T09:16:59Z","tree":{"project":"shop/api","status":"ok","coverage":"shallow","checks":[{"check":"project.record","outcome":"pass","from":null},{"check":"project.listed","outcome":"pass","from":null}],"blocked_by":null,"reason":null}}</pre></div>
+      </div>
+      <h3>file</h3>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.read</span><code>layerfs file read &lt;project&gt; &lt;branch&gt; &lt;path&gt; [--at C] [--line 1] [--limit 2000]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">99 B</span></div><pre>{"text":"export function login(user) {\n  const s = await open(user)\n  return s\n","next_line":45}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">238 B</span></div><pre>{"text":"export function login(user) {\n  const s = await open(user)\n  return s\n","next_line":45,"line_truncated":false,"binary":false,"size":5120,"commit":"32ab9e01","root":"9f3c0b7a","path":"/src/app.ts","start_line":42,"end_line":44}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.stat</span><code>layerfs file stat &lt;project&gt; &lt;branch&gt; &lt;path&gt; [--at C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">41 B</span></div><pre>{"type":"file","size":4870,"mode":"0644"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">150 B</span></div><pre>{"type":"file","size":4870,"mode":"0644","commit":"7a0b11c2","root":"9f3c0b7a","path":"/src/app.ts","inode":1042,"modified_at":"2026-11-17T09:16:59Z"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.list</span><code>layerfs file list &lt;project&gt; &lt;branch&gt; &lt;path&gt; [--at C] [--limit 100] [--cursor C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">80 B</span></div><pre>{"items":[{"path":"/src/app.ts","type":"file"},{"path":"/src/db","type":"dir"}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">196 B</span></div><pre>{"items":[{"path":"/src/app.ts","type":"file","inode":1042},{"path":"/src/db","type":"dir","inode":1050}],"next_cursor":null,"commit":"32ab9e01","root":"9f3c0b7a","path":"/src","skipped_hidden":0}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.glob</span><code>layerfs file glob &lt;project&gt; &lt;branch&gt; &lt;pattern&gt; [path] [--exclude G] [--at C] [--limit 100] [--cursor C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">43 B</span></div><pre>{"items":["/src/app.ts","/src/db/pool.ts"]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">130 B</span></div><pre>{"items":["/src/app.ts","/src/db/pool.ts"],"next_cursor":null,"commit":"32ab9e01","root":"9f3c0b7a","path":"/","skipped_hidden":0}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.grep</span><code>layerfs file grep &lt;project&gt; &lt;branch&gt; &lt;pattern&gt; [path] [--include G] [--exclude G] [--ignore-case] [--at C] [--limit 100] [--cursor C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">83 B</span></div><pre>{"items":[{"path":"/src/app.ts","line":42,"text":"export function login(user) {"}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">196 B</span></div><pre>{"items":[{"path":"/src/app.ts","line":42,"text":"export function login(user) {","line_truncated":false}],"next_cursor":null,"commit":"32ab9e01","root":"9f3c0b7a","path":"/src","skipped_binary":2}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.history</span><code>layerfs file history &lt;project&gt; &lt;branch&gt; &lt;path&gt; [--at C] [--traversal provenance] [--limit 100] [--cursor C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">75 B</span></div><pre>{"items":[{"commit":"12d1c0ff","change":"modified","message":"fix login"}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">298 B</span></div><pre>{"items":[{"commit":"12d1c0ff","change":"modified","message":"fix login","parent":"32ab9e01","created_at":"2026-11-18T09:16:59Z","type":"file","size":5120,"mode":"0644","content":true,"metadata":false,"identity":false}],"next_cursor":null,"commit":"12d1c0ff","root":"9f3c0b7a","path":"/src/app.ts"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.blame</span><code>layerfs file blame &lt;project&gt; &lt;branch&gt; &lt;path&gt; [--at C] [--line 1] [--limit 2000]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">192 B</span></div><pre>{"ranges":[{"start":1,"end":41,"commit":"32ab9e01"},{"start":42,"end":44,"commit":"12d1c0ff"}],"commits":[{"commit":"32ab9e01","message":"import"},{"commit":"12d1c0ff","message":"fix login"}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">356 B</span></div><pre>{"ranges":[{"start":1,"end":41,"commit":"32ab9e01"},{"start":42,"end":44,"commit":"12d1c0ff"}],"commits":[{"commit":"32ab9e01","message":"import","created_at":"2026-11-17T09:16:59Z"},{"commit":"12d1c0ff","message":"fix login","created_at":"2026-11-18T09:16:59Z"}],"next_line":null,"partial":false,"commit":"12d1c0ff","root":"9f3c0b7a","path":"/src/app.ts"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.write</span><code>layerfs file write &lt;project&gt; &lt;branch&gt; &lt;path&gt; [--mode M] [--expected C] [-m msg] &lt; content</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">21 B</span></div><pre>{"commit":"12d1c0ff"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">246 B</span></div><pre>{"commit":"12d1c0ff","unchanged":false,"merged":false,"overwritten":[],"overwritten_count":null,"outcome":"committed","branch":"agent","parent":"32ab9e01","root":"9f3c0b7a","message":"Apply filesystem changes","created_at":"2026-11-18T09:16:59Z"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.edit</span><code>layerfs file edit &lt;project&gt; &lt;branch&gt; &lt;path&gt; --old-string S --new-string S [--replace-all] [--expected C] [-m msg]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">21 B</span></div><pre>{"commit":"12d1c0ff"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">259 B</span></div><pre>{"commit":"12d1c0ff","unchanged":false,"replaced":1,"merged":false,"overwritten":[],"overwritten_count":null,"outcome":"committed","branch":"agent","parent":"32ab9e01","root":"9f3c0b7a","message":"Apply filesystem changes","created_at":"2026-11-18T09:16:59Z"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.rm</span><code>layerfs file rm &lt;project&gt; &lt;branch&gt; &lt;path&gt; [--recursive] [--expected C] [-m msg]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">21 B</span></div><pre>{"commit":"12d1c0ff"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">246 B</span></div><pre>{"commit":"12d1c0ff","unchanged":false,"merged":false,"overwritten":[],"overwritten_count":null,"outcome":"committed","branch":"agent","parent":"32ab9e01","root":"9f3c0b7a","message":"Apply filesystem changes","created_at":"2026-11-18T09:16:59Z"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.mkdir</span><code>layerfs file mkdir &lt;project&gt; &lt;branch&gt; &lt;path&gt; [--mode M] [--expected C] [-m msg]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">21 B</span></div><pre>{"commit":"12d1c0ff"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">246 B</span></div><pre>{"commit":"12d1c0ff","unchanged":false,"merged":false,"overwritten":[],"overwritten_count":null,"outcome":"committed","branch":"agent","parent":"32ab9e01","root":"9f3c0b7a","message":"Apply filesystem changes","created_at":"2026-11-18T09:16:59Z"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.mv</span><code>layerfs file mv &lt;project&gt; &lt;branch&gt; &lt;from&gt; &lt;to&gt; [--expected C] [-m msg]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">21 B</span></div><pre>{"commit":"12d1c0ff"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">246 B</span></div><pre>{"commit":"12d1c0ff","unchanged":false,"merged":false,"overwritten":[],"overwritten_count":null,"outcome":"committed","branch":"agent","parent":"32ab9e01","root":"9f3c0b7a","message":"Apply filesystem changes","created_at":"2026-11-18T09:16:59Z"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.cp</span><code>layerfs file cp &lt;project&gt; &lt;branch&gt; &lt;from&gt; &lt;to&gt; [--expected C] [-m msg]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">21 B</span></div><pre>{"commit":"12d1c0ff"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">246 B</span></div><pre>{"commit":"12d1c0ff","unchanged":false,"merged":false,"overwritten":[],"overwritten_count":null,"outcome":"committed","branch":"agent","parent":"32ab9e01","root":"9f3c0b7a","message":"Apply filesystem changes","created_at":"2026-11-18T09:16:59Z"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">file.apply</span><code>layerfs file apply &lt;project&gt; &lt;branch&gt; [--expected C] [-m msg] &lt; changes.json</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">21 B</span></div><pre>{"commit":"12d1c0ff"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">246 B</span></div><pre>{"commit":"12d1c0ff","unchanged":false,"merged":false,"overwritten":[],"overwritten_count":null,"outcome":"committed","branch":"agent","parent":"32ab9e01","root":"9f3c0b7a","message":"Apply filesystem changes","created_at":"2026-11-18T09:16:59Z"}</pre></div>
+      </div>
+      <h3>sandbox</h3>
+      <div class="pair">
+        <div class="pair-head"><span class="call">sandbox.create</span><code>layerfs sandbox create &lt;project&gt; &lt;name&gt; [--machine M] [--image I] [--mount B]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">347 B</span></div><pre>{"ok":true,"workspace":"tests:agent","path":"/workspaces/1","outcome":"created","sandbox":"tests","project":"shop/api","machine":"dev","platform":"lima","image":"sha256:44444444…","backend":"namespaces","route":"fuse","state":"ready","created_at":"2026-11-18T09:16:59Z","forward_failed":null}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">sandbox.list</span><code>layerfs sandbox list [--project P] [--machine M] [--limit 100] [--cursor C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">307 B</span></div><pre>{"items":[{"sandbox":"tests","project":"shop/api","workspaces":[{"workspace":"tests:agent","branch":"agent"}]},{"sandbox":"build-1","project":"shop/api","workspaces_not_listed":true},{"sandbox":"sim-1","project":"sim-website/website","state":"blocked","blocked_by":{"machine":"docker","reason":"stopped"}}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">670 B</span></div><pre>{"items":[{"sandbox":"tests","project":"shop/api","workspaces":[{"workspace":"tests:agent","branch":"agent"}],"workspaces_not_listed":false,"state":"ready","op":null,"blocked_by":null,"reason":null,"fix":null,"message":null,"machine":"dev","platform":"lima","image":"node:22","created_at":"2026-11-18T09:02:11Z"},{"sandbox":"sim-1","project":"sim-website/website","workspaces":null,"workspaces_not_listed":false,"state":"blocked","op":null,"blocked_by":{"machine":"docker","reason":"stopped"},"reason":null,"fix":null,"message":"machine docker is stopped","machine":"docker","platform":"docker","image":"node:22","created_at":"2026-11-18T09:02:11Z"}],"next_cursor":null}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">sandbox.get</span><code>layerfs sandbox get &lt;sandbox&gt; [--with stats]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">113 B</span></div><pre>{"state":"ready","workspaces":[{"workspace":"tests:agent","branch":"agent","running":["exec-9c0f2a7b41d6e803"]}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">767 B</span></div><pre>{"state":"ready","workspaces":[{"workspace":"tests:agent","branch":"agent","running":["exec-9c0f2a7b41d6e803"],"state":"ready","op":null,"reason":null,"fix":null,"path":"/workspaces/1","commit":"5c77a1d0","base_layer":"a1e4c7d2","mounted_at":"2026-11-18T09:02:11Z","branch_moved":false,"pending_merge":false,"commands":[{"exec":"exec-9c0f2a7b41d6e803","started_at":"2026-11-18T09:16:59Z","program":"npm","tag":null}],"id":"5f0c7a1e…"}],"op":null,"blocked_by":null,"reason":null,"fix":null,"observed_at":null,"message":null,"sandbox":"tests","project":"shop/api","machine":"dev","platform":"lima","image":"node:22","backend":"namespaces","route":"fuse","created_at":"2026-11-18T09:02:11Z","workspace_capacity":16}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">sandbox.remove</span><code>layerfs sandbox remove &lt;sandbox&gt; [--force]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">74 B</span></div><pre>{"ok":true,"unmounted":[],"left":[],"outcome":"removed","sandbox":"tests"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">sandbox.files</span><code>layerfs sandbox files &lt;sandbox&gt; [path] [--depth 1] [--limit 100] [--cursor C] [--byte-offset 0] [--byte-length 262144]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">201 B</span></div><pre>{"items":[{"path":"/run/layerfs/tests/workspaces/1","type":"dir","not_read":"mount"},{"path":"/run/layerfs/tests/tmp","type":"dir"},{"path":"/run/layerfs/tests/daemon.log","type":"file","size":81234}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">503 B</span></div><pre>{"items":[{"path":"/run/layerfs/tests/workspaces/1","type":"dir","size":null,"not_read":"mount","role":"workspace","depth":1,"mode":null,"modified_at":null,"target":null,"fs":"fuse","workspace":"tests:agent"},{"path":"/run/layerfs/tests/daemon.log","type":"file","size":81234,"not_read":null,"role":"log","depth":1,"mode":"0644","modified_at":"2026-11-18T09:16:59Z","target":null,"fs":null,"workspace":null}],"next_cursor":null,"text":null,"binary":null,"size":null,"next_byte_offset":null,"type":"dir"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">sandbox.log</span><code>layerfs sandbox log &lt;sandbox&gt; [--limit 200] [--cursor C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">92 B</span></div><pre>{"items":[{"text":"daemon ready"},{"text":"mounted /workspaces/1"}],"next_cursor":"MTgyNDQ"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">128 B</span></div><pre>{"items":[{"text":"daemon ready","continued":false},{"text":"mounted /workspaces/1","continued":false}],"next_cursor":"MTgyNDQ"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">sandbox.doctor</span><code>layerfs sandbox doctor &lt;sandbox&gt;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">860 B</span></div><pre>{"ok":true,"findings":[],"not_checked":[],"status":"ok","counts":{"ok":2,"notice":0,"warning":0,"error":0,"not_checked":0},"observed_at":"2026-11-18T09:16:59Z","tree":{"sandbox":"tests","status":"ok","coverage":"shallow","checks":[{"check":"sandbox.record","outcome":"pass","from":null},{"check":"sandbox.runtime","outcome":"pass","from":null},{"check":"sandbox.route","outcome":"pass","from":null},{"check":"sandbox.daemon_connect","outcome":"pass","from":null},{"check":"sandbox.daemon_auth","outcome":"pass","from":null},{"check":"sandbox.daemon_ready","outcome":"pass","from":null}],"blocked_by":null,"reason":null,"workspaces":[{"workspace":"tests:agent","status":"ok","coverage":"shallow","checks":[{"check":"workspace.mounted","outcome":"pass","from":null},{"check":"workspace.activity","outcome":"pass","from":null}],"blocked_by":null,"reason":null}]}}</pre></div>
+      </div>
+      <h3>workspace</h3>
+      <div class="pair">
+        <div class="pair-head"><span class="call">workspace.list</span><code>layerfs workspace list [--sandbox S] [--limit 100] [--cursor C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">56 B</span></div><pre>{"items":[{"workspace":"tests:agent","branch":"agent"}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">189 B</span></div><pre>{"items":[{"workspace":"tests:agent","branch":"agent","sandbox":"tests","project":"shop/api","path":"/workspaces/1","mounted_at":"2026-11-18T09:02:11Z"}],"next_cursor":null,"not_listed":[]}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">workspace.mount</span><code>layerfs workspace mount &lt;sandbox&gt; &lt;branch&gt; [--name N]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">50 B</span></div><pre>{"workspace":"tests:agent","path":"/workspaces/1"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">235 B</span></div><pre>{"workspace":"tests:agent","path":"/workspaces/1","outcome":"mounted","branch":"agent","commit":"5c77a1d0","base_layer":"a1e4c7d2","root":"c41d77e2","id":"5f0c7a1e…","namespace":1}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">workspace.exec</span><code>layerfs workspace exec &lt;workspace&gt; &lt;command&gt; [--cwd D] [--env K=V] [--stdin] [--stream]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">39 B</span></div><pre>{"exit_code":0,"stdout":"42 passing\n"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">208 B</span></div><pre>{"exit_code":0,"stdout":"42 passing\n","stderr":"","stdout_file":null,"stderr_file":null,"cancelled":false,"exec":"exec-9c0f2a7b41d6e803","stop":"cgroup","stdout_bytes":11,"stderr_bytes":0,"duration_ms":8120}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">workspace.cancel</span><code>layerfs workspace cancel &lt;workspace&gt; [--exec E]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">20 B</span></div><pre>{"signal":"SIGTERM"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">167 B</span></div><pre>{"signal":"SIGTERM","already_ended":false,"unknown":false,"outcome":"cancelled","commands":[{"exec":"exec-9c0f2a7b41d6e803","outcome":"cancelled","signal":"SIGTERM"}]}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">workspace.commit</span><code>layerfs workspace commit &lt;workspace&gt; [-m msg] [--expected C] [--force]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">21 B</span></div><pre>{"commit":"5c77a1d0"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">275 B</span></div><pre>{"commit":"5c77a1d0","unchanged":false,"merged":false,"overwritten":[],"overwritten_count":null,"outcome":"committed","branch":"agent","parent":"32ab9e01","root":"c41d77e2","message":"fix login options","created_at":"2026-11-18T09:16:59Z","merged_from":null,"displaced":null}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">workspace.unmount</span><code>layerfs workspace unmount &lt;workspace&gt; [--discard] [--force]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">75 B</span></div><pre>{"ok":true,"outcome":"unmounted","abort":null,"detach":null,"cleanup":null}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">workspace.status</span><code>layerfs workspace status &lt;workspace&gt; [--path P]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">103 B</span></div><pre>{"changes":[{"path":"/src/app.ts","change":"modified"},{"path":"/src/login.test.ts","change":"added"}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">349 B</span></div><pre>{"changes":[{"path":"/src/app.ts","change":"modified","type":"file"}],"changes_count":null,"partial":false,"branch_moved":false,"state":"ready","op":null,"reason":null,"fix":null,"branch":"agent","commit":"5c77a1d0","base_layer":"a1e4c7d2","branch_head":"5c77a1d0","activity":"idle","overlay":{"inode_count":3,"entry_count":4},"pending_merge":false}</pre></div>
+      </div>
+      <h3>branch</h3>
+      <div class="pair">
+        <div class="pair-head"><span class="call">branch.list</span><code>layerfs branch list &lt;project&gt; [--prefix P] [--exclude-prefix P] [--limit 100] [--cursor C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">88 B</span></div><pre>{"items":[{"branch":"agent","commit":"5c77a1d0"},{"branch":"main","commit":"32ab9e01"}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">249 B</span></div><pre>{"items":[{"branch":"agent","commit":"5c77a1d0","forked_from":"32ab9e01","id":"b7e19a04","base":"32ab9e01","root":"c41d77e2"},{"branch":"main","commit":"32ab9e01","forked_from":null,"id":null,"base":"32ab9e01","root":"9f3c0b7a"}],"next_cursor":null}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">branch.get</span><code>layerfs branch get &lt;project&gt; &lt;branch&gt;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">21 B</span></div><pre>{"commit":"5c77a1d0"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">115 B</span></div><pre>{"commit":"5c77a1d0","forked_from":"32ab9e01","branch":"agent","id":"b7e19a04","base":"32ab9e01","root":"c41d77e2"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">branch.fork</span><code>layerfs branch fork &lt;project&gt; &lt;name&gt; [from] [--at C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">21 B</span></div><pre>{"commit":"32ab9e01"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">93 B</span></div><pre>{"commit":"32ab9e01","outcome":"forked","branch":"agent","base":"32ab9e01","root":"9f3c0b7a"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">branch.merge</span><code>layerfs branch merge &lt;project&gt; &lt;branch&gt; &lt;from&gt; [--into NEW] [--units JSON] [--expected C] [-m msg]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">21 B</span></div><pre>{"commit":"8d2e44f1"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">257 B</span></div><pre>{"commit":"8d2e44f1","unchanged":false,"fast_forward":false,"overwritten":[],"overwritten_count":null,"outcome":"merged","branch":"agent","parent":"5c77a1d0","second_parent":"6f0a2b9c","merge_base":"32ab9e01","root":"c41d77e2","units":[],"units_count":null}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">branch.publish</span><code>layerfs branch publish &lt;project&gt; &lt;branch&gt; [--at C] [--expected C] [--force]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">21 B</span></div><pre>{"commit":"6f0a2b9c"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">173 B</span></div><pre>{"commit":"6f0a2b9c","unchanged":false,"previous":null,"outcome":"published","branch":"agent","source_commit":"5c77a1d0","base":"32ab9e01","root":"c41d77e2","size":52428800}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">branch.remove</span><code>layerfs branch remove &lt;project&gt; &lt;branch&gt;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">84 B</span></div><pre>{"ok":true,"outcome":"removed","branch":"agent","removed_at":"2026-11-18T09:16:59Z"}</pre></div>
+      </div>
+      <h3>commit</h3>
+      <div class="pair">
+        <div class="pair-head"><span class="call">commit.list</span><code>layerfs commit list &lt;project&gt; &lt;branch&gt; [--at C] [--limit 100] [--cursor C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">155 B</span></div><pre>{"items":[{"commit":"5c77a1d0","message":"fix login options"},{"commit":"12d1c0ff","message":"Apply filesystem changes"}],"next_cursor":"eyJuIjoiMTJkMSJ9"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">796 B</span></div><pre>{"items":[{"commit":"5c77a1d0","message":"fix login options","message_truncated":false,"source_branch":null,"branch":"agent","parent":"12d1c0ff","second_parent":null,"base":"32ab9e01","root":"c41d77e2","via":"workspace","created_at":"2026-11-18T09:16:59Z","merged_from":null,"source_commit":null,"size":52428800,"new_canonical_bytes":4096,"new_stored_bytes":1890,"new_metadata_bytes":412},{"commit":"12d1c0ff","message":"Apply filesystem changes","message_truncated":false,"source_branch":null,"branch":"agent","parent":null,"second_parent":null,"base":"32ab9e01","root":"9f3c0b7a","via":"file","created_at":"2026-11-18T09:15:59Z","merged_from":null,"source_commit":null,"size":52428800,"new_canonical_bytes":612,"new_stored_bytes":377,"new_metadata_bytes":398}],"next_cursor":"eyJuIjoiMTJkMSJ9"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">commit.get</span><code>layerfs commit get &lt;project&gt; &lt;commit&gt; [--branch B]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">68 B</span></div><pre>{"branch":"agent","parent":"12d1c0ff","message":"fix login options"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">422 B</span></div><pre>{"branch":"agent","parent":"12d1c0ff","message":"fix login options","commit":"5c77a1d0","second_parent":null,"base":"32ab9e01","root":"c41d77e2","via":"workspace","created_at":"2026-11-18T09:16:59Z","merged_from":null,"displaced":null,"overwritten":[],"overwritten_count":null,"units":[],"source_branch":null,"source_commit":null,"size":52428800,"new_canonical_bytes":4096,"new_stored_bytes":1890,"new_metadata_bytes":412}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">commit.diff</span><code>layerfs commit diff &lt;project&gt; &lt;ref&gt; [--from R] [--path P] [--with patch] [--limit 100] [--cursor C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">54 B</span></div><pre>{"items":[{"path":"/src/app.ts","change":"modified"}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">214 B</span></div><pre>{"items":[{"path":"/src/app.ts","change":"modified","type":"file","content":true,"metadata":false,"identity":false}],"next_cursor":null,"from":"32ab9e01","to":"5c77a1d0","from_root":"9f3c0b7a","to_root":"c41d77e2"}</pre></div>
+      </div>
+      <h3>home</h3>
+      <div class="pair">
+        <div class="pair-head"><span class="call">home.init</span><code>layerfs home init</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">29 B</span></div><pre>{"home":"/Users/me/.layerfs"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">96 B</span></div><pre>{"home":"/Users/me/.layerfs","unchanged":false,"outcome":"created","layout":3,"version":"2.0.0"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">home.get</span><code>layerfs home get [--with platforms,tree]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">81 B</span></div><pre>{"home":"/Users/me/.layerfs","state":"ready","version":"2.0.0","generation":4182}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">512 B</span></div><pre>{"home":"/Users/me/.layerfs","state":"ready","version":"2.0.0","generation":4182,"reason":null,"fix":null,"message":null,"layout":3,"mode":"0700","bundle":{"path":"/Users/me/Library/Caches/layerfs/2.0.0/linux","source":"cache","present":true,"commit":"caff58a43b","dirty":false,"matches":true},"daemon":{"path":"/Users/me/Library/Caches/layerfs/2.0.0/darwin/layerfs-daemon","source":"default","present":true,"commit":"caff58a43b","dirty":false,"matches":true},"cache":{"path":"/Users/me/Library/Caches/layerfs"}}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">home.log</span><code>layerfs home log [--call C] [--project P] [--client C] [--tag T] [--outcome O] [--since T] [--limit 200] [--cursor C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">234 B</span></div><pre>{"items":[{"call":"file.write","outcome":"committed","logged_at":"2026-11-18T09:16:59Z","project":"shop/api"},{"call":"workspace.commit","outcome":"refused","logged_at":"2026-11-18T09:02:11Z","project":"shop/api","error":"Conflict"}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">287 B</span></div><pre>{"items":[{"call":"file.write","outcome":"committed","logged_at":"2026-11-18T09:16:59Z","project":"shop/api","error":null,"duration_ms":41,"client":"cli","argv":["file","write","shop/api","agent","&lt;10 bytes&gt;","&lt;24 bytes&gt;"],"commit":"12d1c0ff","tag":null}],"next_cursor":null,"skipped":0}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">home.clear_log</span><code>layerfs home clear-log</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">49 B</span></div><pre>{"ok":true,"outcome":"cleared","line_count":1204}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">home.doctor</span><code>layerfs home doctor</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">1,723 B</span></div><pre>{"ok":true,"findings":[],"not_checked":[],"status":"ok","counts":{"ok":5,"notice":0,"warning":0,"error":0,"not_checked":0},"observed_at":"2026-11-18T09:16:59Z","tree":{"home":"/Users/me/.layerfs","status":"ok","coverage":"shallow","checks":[{"check":"home.build","outcome":"pass","from":null},{"check":"home.prerequisites","outcome":"pass","from":null},{"check":"home.layout","outcome":"pass","from":null},{"check":"home.records","outcome":"pass","from":null},{"check":"home.bundle","outcome":"pass","from":null},{"check":"home.native_daemon","outcome":"pass","from":null},{"check":"home.capacity","outcome":"pass","from":null}],"blocked_by":null,"reason":null,"machines":[{"machine":"native","status":"ok","coverage":"shallow","checks":[{"check":"machine.record","outcome":"pass","from":null},{"check":"machine.state","outcome":"pass","from":null}],"blocked_by":null,"reason":null},{"machine":"docker","status":"ok","coverage":"shallow","checks":[{"check":"machine.record","outcome":"pass","from":null},{"check":"machine.state","outcome":"pass","from":null}],"blocked_by":null,"reason":null}],"stores":[{"store":"demo-experiments","status":"ok","coverage":"shallow","checks":[{"check":"store.record","outcome":"pass","from":null},{"check":"store.schema","outcome":"pass","from":null},{"check":"store.connection","outcome":"pass","from":null}],"blocked_by":null,"reason":null}],"buckets":[{"bucket":"r2-main","status":"ok","coverage":"shallow","checks":[{"check":"bucket.configuration","outcome":"pass","from":null},{"check":"bucket.credentials","outcome":"pass","from":null},{"check":"bucket.transport","outcome":"pass","from":null},{"check":"bucket.list","outcome":"pass","from":null}],"blocked_by":null,"reason":null}]}}</pre></div>
+      </div>
+      <h3>machine</h3>
+      <div class="pair">
+        <div class="pair-head"><span class="call">machine.list</span><code>layerfs machine list [--with live]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">303 B</span></div><pre>{"items":[{"machine":"native","platform":"native"},{"machine":"dev","platform":"lima"},{"machine":"docker","platform":"docker","state":"stopped"},{"machine":"demo-build","platform":"lima","state":"broken","reason":"outdated","fix":"layerfs machine stop demo-build &amp;&amp; layerfs machine start demo-build"}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">942 B</span></div><pre>{"items":[{"machine":"dev","platform":"lima","state":"ready","op":null,"reason":null,"fix":null,"observed_at":"2026-11-18T09:15:59Z","backend":"namespaces","supports":["sqlite","postgresql_sandbox","log"],"cpus":4,"memory_bytes":8589934592,"disk_bytes":68719476736,"image":null,"os_image":null,"docker":null,"wsl":null,"daemon":null,"message":null,"stores":["shop"],"stores_count":null,"sandboxes":["tests"],"sandboxes_count":null,"created_at":"2026-11-17T09:16:59Z"},{"machine":"docker","platform":"docker","state":"stopped","op":null,"reason":null,"fix":null,"observed_at":"2026-11-18T09:15:59Z","backend":"namespaces","supports":["sqlite","postgresql_sandbox","log"],"cpus":null,"memory_bytes":null,"disk_bytes":null,"image":null,"os_image":null,"docker":"/var/run/docker.sock","wsl":null,"daemon":null,"message":null,"stores":["sim-website"],"stores_count":null,"sandboxes":[],"sandboxes_count":null,"created_at":"2026-11-17T09:16:59Z"}]}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">machine.get</span><code>layerfs machine get &lt;machine&gt; [--with live]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">35 B</span></div><pre>{"platform":"lima","state":"ready"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">457 B</span></div><pre>{"platform":"lima","state":"ready","op":null,"reason":null,"fix":null,"observed_at":"2026-11-18T09:15:59Z","machine":"dev","backend":"namespaces","supports":["sqlite","postgresql_sandbox","log"],"cpus":4,"memory_bytes":8589934592,"disk_bytes":68719476736,"image":null,"os_image":null,"docker":null,"wsl":null,"daemon":null,"message":null,"stores":["shop"],"stores_count":null,"sandboxes":["tests"],"sandboxes_count":null,"created_at":"2026-11-17T09:16:59Z"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">machine.images</span><code>layerfs machine images &lt;machine&gt; [--with docker]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">279 B</span></div><pre>{"items":[{"image":"sha256:44444444…","refs":["node:22"],"size":412000000,"default":true},{"image":"sha256:77777777…","refs":["postgres:17-bookworm"],"size":455000000}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">931 B</span></div><pre>{"items":[{"image":"sha256:44444444…","refs":["node:22"],"size":412000000,"default":true,"state":"ready","op":null,"reason":null,"fix":null,"message":null,"staged_bytes":null,"architecture":"arm64","source":"imported","sandboxes":["tests"],"sandboxes_count":null,"last_used_at":"2026-11-18T09:15:59Z"},{"image":"sha256:88888888…","refs":[],"size":null,"default":false,"state":"broken","op":null,"reason":"partial","fix":"layerfs machine load-image dev sha256:88888888…","message":"a copy of this image stopped after 104857600 bytes; load-image resumes it","staged_bytes":104857600,"architecture":null,"source":"imported","sandboxes":[],"sandboxes_count":null,"last_used_at":null}],"machine":"dev","mode":"images","architecture":"arm64","disk_free_bytes":52613349376}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">machine.load_image</span><code>layerfs machine load-image &lt;machine&gt; &lt;image&gt;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">83 B</span></div><pre>{"image":"sha256:44444444…"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">235 B</span></div><pre>{"image":"sha256:44444444…","reused":false,"dropped":["run/initctl"],"outcome":"loaded","machine":"dev","refs":["node:22"],"size":412000000,"dropped_count":null,"expanded_bytes":0}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">machine.prune</span><code>layerfs machine prune &lt;machine&gt; [image] [--unused]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">26 B</span></div><pre>{"freed_bytes":2147483648}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">202 B</span></div><pre>{"freed_bytes":2147483648,"skipped":[],"outcome":"pruned","machine":"dev","removed":["sha256:77777777…"],"removed_count":null,"skipped_count":null}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">machine.stats</span><code>layerfs machine stats &lt;machine&gt; [--with space]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">134 B</span></div><pre>{"cpus":4,"memory_used_bytes":3221225472,"memory_total_bytes":8589934592,"disk_free_bytes":52613349376,"disk_total_bytes":68719476736}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">943 B</span></div><pre>{"cpus":4,"memory_used_bytes":3221225472,"memory_total_bytes":8589934592,"disk_free_bytes":52613349376,"disk_total_bytes":68719476736,"incomplete":false,"disk_used_bytes":16106127360,"reasons":[],"machine":"dev","platform":"lima","observed_at":"2026-11-18T09:16:59Z","scope":"vm","cpu_busy_ms":81234,"cpu_total_ms":4812340,"worker":{"version":"2.0.0","pid":412,"started_at":"2026-11-17T09:16:59Z","protocol":3,"bundle":"88888888…"},"data_disk":{"path":"/layerfs/data","fs":"ext4","scope":"volume","volume":"layerfs-3f9a1c2e-dev","inodes_free":4194304},"stores":[{"store":"shop","size":213263952,"allocated_bytes":213270528}],"sandboxes":[{"sandbox":"tests","live":true,"live_reason":null,"started_at":"2026-11-18T09:15:59Z","usage":{"cpu_ms":5120,"memory_bytes":268435456,"memory_peak_bytes":402653184,"memory_file_bytes":67108864,"pid_count":14,"oom_kill_count":0},"usage_reason":null}]}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">machine.files</span><code>layerfs machine files &lt;machine&gt; [path] [--depth 1] [--limit 100] [--cursor C] [--byte-offset 0] [--byte-length 262144]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">119 B</span></div><pre>{"items":[{"path":"/layerfs/data","type":"dir"},{"path":"/layerfs/data/store","type":"dir"},{"path":"/","type":"dir"}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">326 B</span></div><pre>{"items":[{"path":"/layerfs/data/log/worker.log","type":"file","size":20480,"not_read":null,"role":"log","depth":1,"mode":"0600","modified_at":"2026-11-18T09:16:59Z","target":null,"fs":null,"workspace":null,"disk_free_bytes":null}],"next_cursor":null,"text":null,"binary":null,"size":null,"next_byte_offset":null,"type":"dir"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">machine.log</span><code>layerfs machine log &lt;machine&gt; [--limit 200] [--cursor C]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">123 B</span></div><pre>{"items":[{"text":"worker listening on 127.0.0.1:41873"},{"text":"worker ready"}],"next_cursor":"c1.0.2a41f.9c3e77d1.1f40"}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">159 B</span></div><pre>{"items":[{"text":"worker listening on 127.0.0.1:41873","continued":false},{"text":"worker ready","continued":false}],"next_cursor":"c1.0.2a41f.9c3e77d1.1f40"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">machine.start</span><code>layerfs machine start &lt;machine&gt;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">65 B</span></div><pre>{"ok":true,"unchanged":false,"outcome":"started","machine":"dev"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">machine.stop</span><code>layerfs machine stop &lt;machine&gt; [--force]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">194 B</span></div><pre>{"ok":true,"unchanged":false,"stopped_sandboxes":null,"stopped_sandboxes_count":null,"unknown_workspaces":null,"unknown_workspaces_count":null,"outcome":"stopped","machine":"dev","forced":false}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">machine.create</span><code>layerfs machine create &lt;name&gt; &lt;platform&gt; [--cpus 2] [--memory 4G] [--disk 20G] [--image I] [--os-image I]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">213 B</span></div><pre>{"ok":true,"outcome":"created","machine":"lab","platform":"lima","backend":"namespaces","cpus":2,"memory_bytes":4294967296,"disk_bytes":21474836480,"image":null,"os_image":null,"created_at":"2026-11-18T09:16:59Z"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">machine.remove</span><code>layerfs machine remove &lt;machine&gt;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">62 B</span></div><pre>{"ok":true,"outcome":"removed","machine":"lab","message":null}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">machine.update</span><code>layerfs machine update &lt;machine&gt; [--cpus N] [--memory M] [--image I] [--docker S] [--wsl D] [--daemon P]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">190 B</span></div><pre>{"ok":true,"outcome":"updated","machine":"docker","platform":"docker","cpus":null,"memory_bytes":null,"disk_bytes":null,"image":null,"docker":"/var/run/docker.sock","wsl":null,"daemon":null}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">machine.doctor</span><code>layerfs machine doctor &lt;machine&gt;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">1,576 B</span></div><pre>{"ok":false,"findings":[{"machine":"demo-build","check":"machine.worker.compatibility","severity":"error","message":"worker is from another build; 1 Sandbox is on it","fix":"layerfs machine stop demo-build --force &amp;&amp; layerfs machine start demo-build","from":null,"evidence":{"protocol":3}}],"not_checked":[{"store":"demo-build-cache","check":null,"blocked_by":{"machine":"demo-build","reason":"outdated"},"reason":null},{"sandbox":"build-1","check":null,"blocked_by":{"machine":"demo-build","reason":"outdated"},"reason":null}],"status":"error","counts":{"ok":0,"notice":0,"warning":0,"error":1,"not_checked":2},"observed_at":"2026-11-18T09:16:59Z","tree":{"machine":"demo-build","status":"error","coverage":"shallow","checks":[{"check":"machine.record","outcome":"pass","from":null},{"check":"machine.operation","outcome":"pass","from":null},{"check":"machine.configuration","outcome":"pass","from":null},{"check":"machine.provider","outcome":"pass","from":null},{"check":"machine.state","outcome":"pass","from":null},{"check":"machine.worker.endpoint","outcome":"pass","from":null},{"check":"machine.worker.auth","outcome":"pass","from":null},{"check":"machine.worker.compatibility","outcome":"error","from":null}],"blocked_by":null,"reason":null,"stores":[{"store":"demo-build-cache","status":"not_checked","coverage":"none","checks":[],"blocked_by":{"machine":"demo-build","reason":"outdated"},"reason":null}],"sandboxes":[{"sandbox":"build-1","status":"not_checked","coverage":"none","checks":[],"blocked_by":{"machine":"demo-build","reason":"outdated"},"reason":null}]}}</pre></div>
+      </div>
+      <h3>store</h3>
+      <div class="pair">
+        <div class="pair-head"><span class="call">store.list</span><code>layerfs store list [--machine M] [--with stats]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">411 B</span></div><pre>{"items":[{"store":"shop","engine":"sqlite","machine":"dev","projects":["api","web"],"backups":[{"bucket":"r2-main"}]},{"store":"sim-website","engine":"sqlite","machine":"docker","state":"blocked","blocked_by":{"machine":"docker","reason":"stopped"},"projects":["website"]},{"store":"shop-pg","engine":"postgresql","auth":"pg-app","connections":[{"url":"postgres://db.internal:5432/shop"}],"projects":["abc"]}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">1,429 B</span></div><pre>{"items":[{"store":"shop","engine":"sqlite","state":"ready","machine":"dev","auth":null,"connections":null,"projects":["api","web"],"projects_count":null,"backups":[{"bucket":"r2-main","file":"shop","sha256":"88888888…","heads_sha256":"99999999…","last":{"call":"create","ended_at":"2026-11-18T09:15:59Z","size":213263952},"attempt":null}],"op":null,"blocked_by":null,"reason":null,"fix":null,"observed_at":"2026-11-18T09:15:59Z","profile":"disposable","synchronous_commit":null,"sqlite_version":"3.53.2","created_at":"2026-11-17T09:16:59Z","last_transfer":{"call":"move","from":"native","to":"dev","ended_at":"2026-11-17T09:16:59Z","size":213263952,"sha256":"88888888…","heads_sha256":"99999999…","retired":true}},{"store":"shop-pg","engine":"postgresql","state":"ready","machine":null,"auth":"pg-app","connections":[{"machine":null,"url":"postgres://db.internal:5432/shop"},{"machine":"lab","url":"postgres://proxy.lab:6432/shop"}],"projects":["api","web"],"projects_count":null,"backups":[],"op":null,"blocked_by":null,"reason":null,"fix":null,"observed_at":"2026-11-18T09:15:59Z","profile":null,"synchronous_commit":"local","sqlite_version":null,"created_at":"2026-11-17T09:16:59Z","last_transfer":null}]}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">store.get</span><code>layerfs store get &lt;store&gt; [--with live,stats]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">109 B</span></div><pre>{"engine":"sqlite","state":"ready","machine":"dev","projects":["api","web"],"backups":[{"bucket":"r2-main"}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">924 B</span></div><pre>{"engine":"sqlite","state":"ready","machine":"dev","auth":null,"connections":null,"projects":["api","web"],"projects_count":null,"backups":[{"bucket":"r2-main","file":"shop","sha256":"88888888…","heads_sha256":"99999999…","last":{"call":"create","ended_at":"2026-11-18T09:15:59Z","size":213263952},"attempt":null}],"op":null,"blocked_by":null,"reason":null,"fix":null,"observed_at":"2026-11-18T09:15:59Z","store":"shop","profile":"disposable","synchronous_commit":null,"sqlite_version":"3.53.2","created_at":"2026-11-17T09:16:59Z","last_transfer":{"call":"move","from":"native","to":"dev","ended_at":"2026-11-17T09:16:59Z","size":213263952,"sha256":"88888888…","heads_sha256":"99999999…","retired":true}}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">store.create</span><code>layerfs store create &lt;name&gt; [--machine M]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">168 B</span></div><pre>{"ok":true,"outcome":"created","store":"shop","engine":"sqlite","machine":"native","profile":"disposable","sqlite_version":"3.53.2","created_at":"2026-11-18T09:16:59Z"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">store.connect</span><code>layerfs store connect &lt;store&gt; &lt;url&gt; [--auth A] [--machine M] [--synchronous-commit local]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">26 B</span></div><pre>{"projects":["api","web"]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">239 B</span></div><pre>{"ok":true,"projects":["api","web"],"projects_count":null,"outcome":"connected","store":"shop-pg","engine":"postgresql","auth":"pg-app","connections":[{"machine":null,"url":"postgres://db.internal:5432/shop"}],"synchronous_commit":"local"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">store.disconnect</span><code>layerfs store disconnect &lt;store&gt; [--machine M]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">69 B</span></div><pre>{"ok":true,"outcome":"disconnected","store":"shop-pg","machine":null}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">store.save_auth</span><code>layerfs store save-auth &lt;auth&gt; --user U --password-stdin</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">90 B</span></div><pre>{"ok":true,"outcome":"saved","auth":"pg-app","user":"app","stores":[],"stores_count":null}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">store.auths</span><code>layerfs store auths</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">108 B</span></div><pre>{"items":[{"auth":"pg-app","user":"app","stores":["shop-pg","analytics"]},{"auth":"pg-ro","user":"reader"}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">167 B</span></div><pre>{"items":[{"auth":"pg-app","user":"app","stores":["shop-pg","analytics"],"stores_count":null,"created_at":"2026-11-17T09:16:59Z","updated_at":"2026-11-18T09:16:59Z"}]}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">store.remove_auth</span><code>layerfs store remove-auth &lt;auth&gt;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">46 B</span></div><pre>{"ok":true,"outcome":"removed","auth":"pg-ro"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">store.update</span><code>layerfs store update &lt;store&gt; [--auth A] [--synchronous-commit S]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">96 B</span></div><pre>{"ok":true,"outcome":"updated","store":"shop-pg","auth":"pg-app-2","synchronous_commit":"local"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">store.move</span><code>layerfs store move &lt;store&gt; &lt;machine&gt;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">25 B</span></div><pre>{"moved_bytes":213263952}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">167 B</span></div><pre>{"moved_bytes":213263952,"outcome":"moved","store":"shop","from":"native","to":"dev","heads_sha256":"99999999…"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">store.remove</span><code>layerfs store remove &lt;store&gt;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">58 B</span></div><pre>{"ok":true,"outcome":"removed","store":"shop","left":null}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">store.compact</span><code>layerfs store compact &lt;store&gt;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">24 B</span></div><pre>{"freed_bytes":73400320}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">582 B</span></div><pre>{"freed_bytes":73400320,"outcome":"compacted","store":"shop","generation_before":41,"generation_after":42,"dead_bytes":81264640,"discarded_bytes":195035136,"reusable_bytes":4096,"kept_waste":{"dead_in_retained_packs_bytes":1048576,"delta_bases_bytes":524288,"inode_blocks_bytes":0},"delta_base_references":["12d1c0ff…"],"delta_base_references_count":null,"peak_temp_bytes":139862016,"residue_bytes":0,"residue_artifacts":[],"residue_reason":null,"estimate":false,"zero_reasons":[{"field":"residue_bytes","reason":"settled"}]}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">store.doctor</span><code>layerfs store doctor &lt;store&gt; [--machine M]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">1,258 B</span></div><pre>{"ok":false,"findings":[{"project":"qv2-store/qv2-probe","check":"project.listed","severity":"notice","message":"on record, but the Store does not list it","fix":"layerfs project delete qv2-store/qv2-probe","from":null,"evidence":{"recorded":true,"listed":false}}],"not_checked":[],"status":"notice","counts":{"ok":2,"notice":1,"warning":0,"error":0,"not_checked":0},"observed_at":"2026-11-18T09:16:59Z","tree":{"store":"qv2-store","status":"ok","coverage":"shallow","checks":[{"check":"store.record","outcome":"pass","from":null},{"check":"store.operation","outcome":"pass","from":null},{"check":"store.connection","outcome":"pass","from":null},{"check":"store.identity","outcome":"pass","from":null},{"check":"store.schema","outcome":"pass","from":null}],"blocked_by":null,"reason":null,"projects":[{"project":"qv2-store/qv2-strata","status":"ok","coverage":"shallow","checks":[{"check":"project.record","outcome":"pass","from":null},{"check":"project.listed","outcome":"pass","from":null}],"blocked_by":null,"reason":null},{"project":"qv2-store/qv2-probe","status":"notice","coverage":"shallow","checks":[{"check":"project.record","outcome":"pass","from":null},{"check":"project.listed","outcome":"notice","from":null}],"blocked_by":null,"reason":null}]}}</pre></div>
+      </div>
+      <h3>backup</h3>
+      <div class="pair">
+        <div class="pair-head"><span class="call">backup.connect</span><code>layerfs backup connect &lt;name&gt; &lt;url&gt; --access-key K --key-stdin</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">145 B</span></div><pre>{"ok":true,"outcome":"connected","bucket":"r2-main","provider":"r2","url":"r2://3f9a1c2e/layerfs-backups/home-a","access_key":"9c3e77d1a2b44f0e"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">backup.disconnect</span><code>layerfs backup disconnect &lt;bucket&gt;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">97 B</span></div><pre>{"ok":true,"unlinked":["shop"],"unlinked_count":null,"outcome":"disconnected","bucket":"r2-main"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">backup.list</span><code>layerfs backup list [--bucket B]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">222 B</span></div><pre>{"items":[{"bucket":"r2-main","file":"shop","size":213263952,"store":"shop"},{"bucket":"r2-main","file":"old-demo","size":4096000},{"bucket":"r2-main","file":"analytics","size":88120000,"store":"analytics","behind":true}]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">351 B</span></div><pre>{"items":[{"bucket":"r2-main","file":"shop","size":213263952,"store":"shop","behind":false,"changed":false,"missing":false,"message":null,"modified_at":"2026-11-18T09:15:59Z","sha256":"88888888…","heads_sha256":"99999999…"}],"not_listed":[]}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">backup.create</span><code>layerfs backup create &lt;store&gt; &lt;bucket&gt; [--file F]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">32 B</span></div><pre>{"file":"shop","size":213263952}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">273 B</span></div><pre>{"file":"shop","size":213263952,"outcome":"created","store":"shop","bucket":"r2-main","object":"shop/store.sqlite","sha256":"88888888…","heads_sha256":"99999999…"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">backup.restore</span><code>layerfs backup restore &lt;bucket&gt; &lt;file&gt; &lt;store&gt;</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">26 B</span></div><pre>{"projects":["api","web"]}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">301 B</span></div><pre>{"ok":true,"projects":["api","web"],"projects_count":null,"outcome":"created","store":"shop","bucket":"r2-main","file":"shop","size":213263952,"sha256":"88888888…","heads_sha256":"99999999…"}</pre></div>
+      </div>
+      <div class="pair">
+        <div class="pair-head"><span class="call">backup.doctor</span><code>layerfs backup doctor &lt;bucket&gt; [--full]</code></div>
+        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
+        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">720 B</span></div><pre>{"ok":true,"findings":[],"not_checked":[],"status":"ok","counts":{"ok":1,"notice":0,"warning":0,"error":0,"not_checked":0},"observed_at":"2026-11-18T09:16:59Z","tree":{"bucket":"r2-main","status":"ok","coverage":"full","checks":[{"check":"bucket.configuration","outcome":"pass","from":null},{"check":"bucket.credentials","outcome":"pass","from":null},{"check":"bucket.transport","outcome":"pass","from":null},{"check":"bucket.list","outcome":"pass","from":null},{"check":"bucket.write_capability","outcome":"pass","from":null},{"check":"bucket.put","outcome":"pass","from":null},{"check":"bucket.get","outcome":"pass","from":null},{"check":"bucket.delete","outcome":"pass","from":null}],"blocked_by":null,"reason":null}}</pre></div>
+      </div>

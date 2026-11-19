@@ -681,7 +681,7 @@ fn what_is_not_a_file_or_folder_of_the_home_is_refused() {
         ("config/daemon.setup", "LayerFS keeps it private"),
         ("config", "LayerFS keeps it private"),
         ("overlay/1.sqlite", "LayerFS keeps it private"),
-        ("daemon.log", "a log is read with `logs.sandbox`"),
+        ("daemon.log", "a log is read with `sandbox.log`"),
         (
             "workspaces/1",
             "a Workspace's files are read through its mount",
@@ -863,7 +863,7 @@ fn the_roots_are_the_workspaces_from_their_records_then_home_and_log() {
     let mode = |name: &str| stat(name).permissions().mode() & 0o7777;
     let mount = |n: u8| {
         format!(
-            r#"{{"path":"{run}/workspaces/{n}","depth":1,"kind":"mount","size":null,"mode":null,"mtime":null,"role":"workspace","workspace":"{n:064x}"}}"#
+            r#"{{"path":"{run}/workspaces/{n}","depth":1,"kind":"mount","size":null,"mode":null,"mtime":null,"role":"workspace","workspace":"s1:{run}/workspaces/{n}"}}"#
         )
     };
     let expected = format!(
@@ -909,10 +909,10 @@ fn the_roots_are_the_workspaces_from_their_records_then_home_and_log() {
         below(&at(&fx, Path::new(home), &[]).unwrap(), &fx.tmp),
         ["hello"]
     );
-    // the log is listed, and read through `logs.sandbox` only
+    // the log is listed, and read through `sandbox.log` only
     invalid(
         at(&fx, &fx.run.join("daemon.log"), &[]),
-        "a log is read with `logs.sandbox`",
+        "a log is read with `sandbox.log`",
     );
 
     // a run folder a start left without a log lists no log

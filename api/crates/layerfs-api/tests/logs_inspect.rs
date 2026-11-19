@@ -1,4 +1,5 @@
-//! `logs.machine` and `logs.sandbox` (layerfs-project#178 step 1) on the
+//! `machine.log` (`logs.machine` before the call surface 2.0) and
+//! `sandbox.log` (`logs.sandbox` before it; layerfs-project#178 step 1) on the
 //! two routes of an inspect request: this process for a `native` Sandbox,
 //! and a machine's worker (this build's own server on a scratch root) for
 //! every other, a Sandbox whose daemon the home reaches directly included.
@@ -67,8 +68,9 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
         .expect("the call did not answer within 20 s")
 }
 
+/// The lines of a log read: its `items`.
 fn texts(answer: &SdkValue) -> Vec<String> {
-    let Some(SdkValue::List(lines)) = answer.get("lines") else {
+    let Some(SdkValue::List(lines)) = answer.get("items") else {
         panic!("{answer:?}")
     };
     lines
@@ -244,10 +246,10 @@ fn settle(home: &Path) {
 }
 
 /// A Store being pushed, as far as another call can see it: its record
-/// carries a running `store.push` intent and its lock is held. The lock is
+/// carries a running `store.move` intent and its lock is held. The lock is
 /// released when the answer drops.
 fn pushing(home: &Path) -> impl Drop {
-    let op = layerfs_home::op::Op::begin("store.push", "check", SdkValue::Null).unwrap();
+    let op = layerfs_home::op::Op::begin("store.move", "check", SdkValue::Null).unwrap();
     let record = layerfs_store::record::StoreRecord::read(home, "shop")
         .unwrap()
         .unwrap();
@@ -287,12 +289,19 @@ fn no_lease(root: &Path) {
 
 #[test]
 fn the_table_lists_both_calls_with_a_cursor_window() {
-    for (name, positional) in [("logs.machine", "machine"), ("logs.sandbox", "sandbox")] {
+    for (name, positional, want) in [
+        ("machine.log", "machine", ["limit", "cursor"].as_slice()),
+        ("sandbox.log", "sandbox", ["limit", "cursor"].as_slice()),
+    ] {
         let call = layerfs_api::find(name).unwrap_or_else(|| panic!("{name}"));
         let args: Vec<_> = call.args.iter().map(|a| (a.name, a.optional)).collect();
         assert_eq!(args, [(positional, false)], "{name}");
         let options: Vec<_> = call.options.iter().map(|a| a.name).collect();
-        assert_eq!(options, ["cursor", "before", "limit"], "{name}");
+        assert_eq!(options, want, "{name}");
+        assert!(call.quiet, "{name}");
+    }
+    for gone in ["logs.machine", "logs.sandbox"] {
+        assert!(layerfs_api::find(gone).is_none(), "{gone}: no alias (R1)");
     }
     // discovery: the table front ends build their functions from lists them
     let table = layerfs_api::json::parse(&layerfs_api::table_json()).unwrap();
@@ -304,7 +313,9 @@ fn the_table_lists_both_calls_with_a_cursor_window() {
         .filter(|c| c.get_text("family") == Some("logs"))
         .map(|c| c.get_text("call").unwrap())
         .collect();
-    assert_eq!(logs, ["list", "reset", "machine", "sandbox"]);
+    // the `logs` family is gone: the call log's own two calls are
+    // `home.log` and `home.clear_log`, the logs `machine.log` and `sandbox.log`
+    assert!(logs.is_empty(), "{logs:?}");
 }
 
 #[test]
@@ -319,31 +330,24 @@ fn a_native_sandbox_s_log_is_read_here_with_no_lock_and_nothing_written() {
     let _push = pushing(&home);
     let before = files(&home);
     let at = Instant::now();
-    let tail = call(&home, "logs.sandbox", &[("sandbox", t("s1"))]).unwrap();
+    let tail = call(&home, "sandbox.log", &[("sandbox", t("s1"))]).unwrap();
     // the Store's lock was held throughout
     assert!(at.elapsed() < Duration::from_secs(10), "{:?}", at.elapsed());
     assert_eq!(texts(&tail), names(100, 300));
-    assert_eq!(tail.get("has_more"), Some(&SdkValue::Bool(true)));
+    // older lines, by next_cursor
     let earlier = call(
         &home,
-        "logs.sandbox",
+        "sandbox.log",
         &[
             ("sandbox", t("s1")),
-            ("before", tail.get("before").unwrap().clone()),
+            ("cursor", tail.get("next_cursor").unwrap().clone()),
             ("limit", SdkValue::Int(1000)),
         ],
     )
     .unwrap();
     assert_eq!(texts(&earlier), names(0, 100));
-    assert!(earlier.get("before").is_none(), "{earlier:?}");
-    let cursor = ("cursor", tail.get("cursor").unwrap().clone());
-    let idle = call(
-        &home,
-        "logs.sandbox",
-        &[("sandbox", t("s1")), cursor.clone()],
-    )
-    .unwrap();
-    assert!(texts(&idle).is_empty());
+    // the start of the log: the short form leaves next_cursor out
+    assert!(earlier.get("next_cursor").is_none(), "{earlier:?}");
     // nothing changed in the home: no record, lock, lease or call-log line
     assert_eq!(
         files(&home),
@@ -352,36 +356,41 @@ fn a_native_sandbox_s_log_is_read_here_with_no_lock_and_nothing_written() {
     );
     no_lease(&home);
 
-    // the daemon writes on; the cursor follows
+    // the daemon writes on: the newest page ends with it
     let mut log = std::fs::OpenOptions::new()
         .append(true)
         .open(folder.join("daemon.log"))
         .unwrap();
     std::io::Write::write_all(&mut log, numbered(300, 303).as_bytes()).unwrap();
-    let next = call(&home, "logs.sandbox", &[("sandbox", t("s1")), cursor]).unwrap();
+    let next = call(
+        &home,
+        "sandbox.log",
+        &[("sandbox", t("s1")), ("limit", SdkValue::Int(3))],
+    )
+    .unwrap();
     assert_eq!(texts(&next), names(300, 303));
 
     // refusals: a native machine has no worker log; unknown names
-    let (code, message) = call(&home, "logs.machine", &[("machine", t("native"))]).unwrap_err();
+    let (code, message) = call(&home, "machine.log", &[("machine", t("native"))]).unwrap_err();
     assert_eq!(code, "Unsupported", "{message}");
     // a name no machine has: `NotFound` in a host build; a build without
     // the machine adapters knows only that no worker is recorded for it
-    let (code, _) = call(&home, "logs.machine", &[("machine", t("nobody"))]).unwrap_err();
+    let (code, _) = call(&home, "machine.log", &[("machine", t("nobody"))]).unwrap_err();
     let unknown = match cfg!(feature = "machine") {
         true => "NotFound",
         false => "Unavailable",
     };
     assert_eq!(code, unknown);
-    let (code, _) = call(&home, "logs.sandbox", &[("sandbox", t("nobody"))]).unwrap_err();
-    assert_eq!(code, "NoSuchSandbox");
+    let (code, _) = call(&home, "sandbox.log", &[("sandbox", t("nobody"))]).unwrap_err();
+    assert_eq!(code, "NotFound");
     let stale = [("sandbox", t("s1")), ("cursor", t("c1.0.1.2.3"))];
-    let (code, message) = call(&home, "logs.sandbox", &stale).unwrap_err();
+    let (code, message) = call(&home, "sandbox.log", &stale).unwrap_err();
     assert_eq!(code, "InvalidInput", "{message}");
     let wide = [("sandbox", t("s1")), ("limit", SdkValue::Int(1001))];
-    let (code, message) = call(&home, "logs.sandbox", &wide).unwrap_err();
+    let (code, message) = call(&home, "sandbox.log", &wide).unwrap_err();
     assert_eq!(
         (code.as_str(), message.as_str()),
-        ("InvalidInput", "logs.sandbox: `limit` is 1 to 1000")
+        ("InvalidInput", "sandbox.log: `limit` is 1 to 1000")
     );
     std::fs::remove_dir_all(home).unwrap();
 }
@@ -404,23 +413,23 @@ fn a_worker_reads_its_log_and_its_sandboxes_logs_and_writes_nothing() {
     let _push = pushing(&home);
     let (before, guest) = (files(&home), files(&root));
 
-    let tail = call(&home, "logs.machine", &[("machine", t("box"))]).unwrap();
+    let tail = call(&home, "machine.log", &[("machine", t("box"))]).unwrap();
     assert_eq!(texts(&tail), names(250, 300));
-    assert_eq!(tail.get("has_more"), Some(&SdkValue::Bool(true)));
-    // back into the rotated file
-    let before_arg = ("before", tail.get("before").unwrap().clone());
-    let earlier = call(&home, "logs.machine", &[("machine", t("box")), before_arg]).unwrap();
+    // back into the rotated file, by next_cursor
+    let back = ("cursor", tail.get("next_cursor").unwrap().clone());
+    let earlier = call(&home, "machine.log", &[("machine", t("box")), back]).unwrap();
     assert_eq!(texts(&earlier), names(50, 250));
     let limited = [
         ("machine", t("box")),
-        ("before", earlier.get("before").unwrap().clone()),
+        ("cursor", earlier.get("next_cursor").unwrap().clone()),
         ("limit", SdkValue::Int(1000)),
     ];
-    let first = call(&home, "logs.machine", &limited).unwrap();
+    let first = call(&home, "machine.log", &limited).unwrap();
     assert_eq!(texts(&first), names(0, 50));
-    assert_eq!(first.get("has_more"), Some(&SdkValue::Bool(false)));
+    // the start of the log: the short form leaves next_cursor out
+    assert_eq!(first.get("next_cursor"), None, "{first:?}");
     // the Sandbox's daemon log, from the run folder the worker's record names
-    let daemon = call(&home, "logs.sandbox", &[("sandbox", t("s1"))]).unwrap();
+    let daemon = call(&home, "sandbox.log", &[("sandbox", t("s1"))]).unwrap();
     assert_eq!(texts(&daemon), ["daemon up", "listening"]);
 
     // neither side changed: no record, lock, lease, log or call-log line
@@ -438,35 +447,37 @@ fn a_worker_reads_its_log_and_its_sandboxes_logs_and_writes_nothing() {
     no_lease(&root);
     assert!(!paths::store_record(&root, "shop").exists());
 
-    // the worker writes on; the cursor follows
-    let cursor = ("cursor", tail.get("cursor").unwrap().clone());
+    // the worker writes on: the newest page ends with it
+    let cursor = ("cursor", tail.get("next_cursor").unwrap().clone());
     let mut file = std::fs::OpenOptions::new().append(true).open(&log).unwrap();
     std::io::Write::write_all(&mut file, b"\x1b[1mbold\x1b[0m\n").unwrap();
-    let next = call(
-        &home,
-        "logs.machine",
-        &[("machine", t("box")), cursor.clone()],
-    )
-    .unwrap();
-    assert_eq!(texts(&next), ["\\u{1b}[1mbold\\u{1b}[0m"]);
+    let newest = call(&home, "machine.log", &[("machine", t("box"))]).unwrap();
+    let newest = texts(&newest);
+    assert_eq!(newest.last().unwrap(), "\\u{1b}[1mbold\\u{1b}[0m");
 
     // a restart rotates the log: the old cursor is refused, a new read follows
     std::fs::rename(&log, root.join("log/worker.1.log")).unwrap();
     std::fs::write(&log, "started again\n").unwrap();
-    let (code, message) =
-        call(&home, "logs.machine", &[("machine", t("box")), cursor]).unwrap_err();
+    let (code, message) = call(&home, "machine.log", &[("machine", t("box")), cursor]).unwrap_err();
     assert_eq!(code, "InvalidInput", "{message}");
+    // the worker's refusal names the call itself, as the host's check does
     assert!(
-        message.starts_with("logs.machine: the cursor is stale"),
+        message.starts_with("machine.log: the cursor is stale"),
         "{message}"
     );
-    let fresh = call(&home, "logs.machine", &[("machine", t("box"))]).unwrap();
+    let wide = [("machine", t("box")), ("limit", SdkValue::Int(1001))];
+    let (code, message) = call(&home, "machine.log", &wide).unwrap_err();
+    assert_eq!(
+        (code.as_str(), message.as_str()),
+        ("InvalidInput", "machine.log: `limit` is 1 to 1000")
+    );
+    let fresh = call(&home, "machine.log", &[("machine", t("box"))]).unwrap();
     assert_eq!(texts(&fresh), ["started again"]);
 
     // a Sandbox the worker holds no run folder for
     std::fs::remove_dir_all(paths::sandbox_dir(&root, "s1")).unwrap();
-    let (code, message) = call(&home, "logs.sandbox", &[("sandbox", t("s1"))]).unwrap_err();
-    assert_eq!(code, "NoSuchSandbox", "{message}");
+    let (code, message) = call(&home, "sandbox.log", &[("sandbox", t("s1"))]).unwrap_err();
+    assert_eq!(code, "NotFound", "{message}");
     std::fs::remove_dir_all(scratch).unwrap();
 }
 
@@ -476,17 +487,15 @@ fn a_machine_started_by_an_earlier_build_answers_an_empty_log() {
     let (scratch, home, root) = boxed("old");
     // its worker answers, and wrote no `log/worker.log`
     let guest = files(&root);
-    let empty = call(&home, "logs.machine", &[("machine", t("box"))]).unwrap();
+    let empty = call(&home, "machine.log", &[("machine", t("box"))]).unwrap();
     assert!(texts(&empty).is_empty());
-    assert_eq!(empty.get("has_more"), Some(&SdkValue::Bool(false)));
-    assert!(empty.get("before").is_none());
+    assert_eq!(empty.get("next_cursor"), None, "{empty:?}");
     assert_eq!(files(&root), guest, "nothing was made under the root");
     assert!(!paths::log_dir(&root).exists());
-    // once a later start writes one, the same cursor reads it from its start
-    let cursor = ("cursor", empty.get("cursor").unwrap().clone());
+    // once a later start writes one, a read answers it
     std::fs::create_dir_all(paths::log_dir(&root)).unwrap();
     std::fs::write(paths::worker_log(&root), "first\n").unwrap();
-    let next = call(&home, "logs.machine", &[("machine", t("box")), cursor]).unwrap();
+    let next = call(&home, "machine.log", &[("machine", t("box"))]).unwrap();
     assert_eq!(texts(&next), ["first"]);
     std::fs::remove_dir_all(scratch).unwrap();
 }
@@ -502,8 +511,8 @@ fn a_stopped_machine_is_unavailable_and_nothing_starts_it() {
     settle(&home);
     let before = files(&home);
     for (name, args) in [
-        ("logs.machine", [("machine", t("box"))]),
-        ("logs.sandbox", [("sandbox", t("s1"))]),
+        ("machine.log", [("machine", t("box"))]),
+        ("sandbox.log", [("sandbox", t("s1"))]),
     ] {
         let (code, message) = call(&home, name, &args).unwrap_err();
         assert_eq!(code, "Unavailable", "{name}: {message}");
@@ -524,11 +533,11 @@ fn a_stopped_machine_is_unavailable_and_nothing_starts_it() {
     settle(&home);
     let before = files(&home);
     let at = Instant::now();
-    let (code, message) = call(&home, "logs.machine", &[("machine", t("box"))]).unwrap_err();
+    let (code, message) = call(&home, "machine.log", &[("machine", t("box"))]).unwrap_err();
     assert_eq!(code, "Unavailable", "{message}");
     assert!(message.contains("layerfs machine start box"), "{message}");
     assert!(at.elapsed() < Duration::from_secs(3), "{:?}", at.elapsed());
-    let (code, _) = call(&home, "logs.sandbox", &[("sandbox", t("s1"))]).unwrap_err();
+    let (code, _) = call(&home, "sandbox.log", &[("sandbox", t("s1"))]).unwrap_err();
     assert_eq!(code, "Unavailable");
     assert_eq!(files(&home), before);
     std::fs::remove_dir_all(home).unwrap();
@@ -570,7 +579,7 @@ fn a_forwarded_sandbox_s_run_folder_is_read_in_its_machine() {
     std::fs::write(folder.join("overlay/5.sqlite"), vec![0u8; 12288]).unwrap();
     settle(&home);
     let (before, guest) = (files(&home), files(&root));
-    let log = call(&home, "logs.sandbox", &[("sandbox", t("s1"))]).unwrap();
+    let log = call(&home, "sandbox.log", &[("sandbox", t("s1"))]).unwrap();
     assert_eq!(texts(&log), ["in the guest"]);
     // the sizes of the Workspaces the home's records name, null for one
     // with no overlay file in the machine

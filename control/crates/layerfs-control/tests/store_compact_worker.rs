@@ -113,7 +113,7 @@ fn a_store_on_another_machine_is_compacted_by_its_worker() {
     // Store `shop` with a project whose content is then deleted: most of the
     // file is dead, so the compaction rebuilds.
     let home = tempdir("home");
-    match create(&home, &StoreName::parse("shop").unwrap()) {
+    match create(&home, "shop", None) {
         Ok(_) => {}
         Err(refusal)
             if refusal.code == "Unsupported"
@@ -188,8 +188,7 @@ fn a_store_on_another_machine_is_compacted_by_its_worker() {
 
     let (outcome, events) = compact(&home);
     let report = outcome.expect("the worker compacts the Store");
-    assert_eq!(report.get_text("kind"), Some("Compacted"), "{report:?}");
-    assert_eq!(report.get_text("path"), Some("rebuild"), "{report:?}");
+    assert_eq!(report.get_text("outcome"), Some("compacted"), "{report:?}");
     assert_eq!(
         phases(&events),
         ["mark", "build", "verify", "install"],
@@ -246,7 +245,7 @@ fn a_store_on_another_machine_is_compacted_by_its_worker() {
     // a second compaction through the worker finds nothing to rebuild
     let (outcome, events) = compact(&home);
     let report = outcome.expect("the second compaction");
-    assert_eq!(report.get_text("path"), Some("none"), "{report:?}");
+    assert_eq!(report.get_text("outcome"), Some("unchanged"), "{report:?}");
     assert_eq!(phases(&events), ["mark"]);
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&root);
@@ -283,6 +282,32 @@ fn the_worker_operation_needs_a_sqlite_store_record() {
     assert!(
         !paths::store_dir(&root, "shop").exists(),
         "nothing was made"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Plan Part 3 fix 4: a worker asked to compact a Store whose file it does
+/// not hold answers `NotFound`, and makes no lease folder for it first.
+#[test]
+fn a_worker_without_the_store_file_answers_not_found_and_makes_nothing() {
+    let root = tempdir("missing");
+    let endpoint = serve(&root);
+    let sqlite = SdkValue::map([
+        ("name", text("shop")),
+        ("kind", text("sqlite")),
+        ("machine", text("native")),
+    ]);
+    let refusal = worker::call(
+        &endpoint,
+        "store.compact",
+        SdkValue::map([("store", text("shop")), ("store_record", sqlite)]),
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert_eq!(refusal.code, "NotFound", "{}", refusal.message);
+    assert!(
+        !paths::store_dir(&root, "shop").exists(),
+        "no Store folder (and no open/ lease folder) was made"
     );
     let _ = std::fs::remove_dir_all(&root);
 }

@@ -25,6 +25,7 @@ fn the_frame_names_the_store_and_carries_its_record() {
     let frame = ListingFrame {
         store: StoreName::parse("shop").unwrap(),
         store_record: Some(record.clone()),
+        stats: false,
     };
     let encoded = frame.encode();
     assert_eq!(
@@ -34,6 +35,22 @@ fn the_frame_names_the_store_and_carries_its_record() {
     let decoded = ListingFrame::decode(&encoded).unwrap();
     assert_eq!(decoded.store, frame.store);
     assert_eq!(decoded.store_record, Some(record));
+    assert!(!decoded.stats);
+}
+
+#[test]
+fn a_frame_asking_for_sizes_says_so() {
+    let frame = ListingFrame {
+        store: StoreName::parse("shop").unwrap(),
+        store_record: None,
+        stats: true,
+    };
+    let encoded = frame.encode();
+    assert_eq!(
+        encoded,
+        map(vec![("store", t("shop")), ("stats", SdkValue::Bool(true))])
+    );
+    assert!(ListingFrame::decode(&encoded).unwrap().stats);
 }
 
 #[test]
@@ -57,17 +74,23 @@ fn the_reply_round_trips_and_requires_listed() {
             ListedProject {
                 name: "app".to_owned(),
                 stack: stack(1),
+                head: Some("aa".repeat(33)),
+                size: Some(12),
             },
             ListedProject {
                 name: "web".to_owned(),
                 stack: stack(2),
+                head: None,
+                size: None,
             },
         ],
     };
-    let listed = |name: &str, stack: &LayerStackId| {
+    let listed = |name: &str, stack: &LayerStackId, head: SdkValue, size: SdkValue| {
         map(vec![
             ("name", t(name)),
             ("stack_id", t(&hex(&stack.to_bytes()))),
+            ("head", head),
+            ("size", size),
         ])
     };
     let encoded = reply.encode();
@@ -77,7 +100,10 @@ fn the_reply_round_trips_and_requires_listed() {
             ("kind", t("Listed")),
             (
                 "projects",
-                SdkValue::List(vec![listed("app", &stack(1)), listed("web", &stack(2))]),
+                SdkValue::List(vec![
+                    listed("app", &stack(1), t(&"aa".repeat(33)), SdkValue::Int(12)),
+                    listed("web", &stack(2), SdkValue::Null, SdkValue::Null),
+                ]),
             ),
         ])
     );

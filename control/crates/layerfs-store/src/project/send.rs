@@ -2,7 +2,7 @@
 //! machine (#536 H11a): the folder is on the caller's host, so this process
 //! walks it and copies it to the machine's worker in `project.stage`
 //! requests of at most [`CHUNK`] bytes ([`super::tree`] records), as a
-//! `store push` sends a Store file; the worker's Init then reads the copy.
+//! `store move` sends a Store file; the worker's Init then reads the copy.
 //!
 //! The walk refuses, before anything is sent, what Init would refuse of the
 //! folder: an entry that is not a regular file, directory or symbolic link,
@@ -75,9 +75,9 @@ pub struct Left<'a> {
 /// `{ at, call: "project.init", store, project, machine, copy, phase,
 /// deadline, message }`. `deadline` (ms since the epoch) is when the request
 /// went out plus the Init's `timeoutMs`: nothing of this Init runs past it.
-/// `doctor.fix` removes the copy only when such a line names it and that
-/// deadline passed long enough ago. A log that cannot be written changes no
-/// outcome.
+/// The line is a record for people; the copy is removed by the call that
+/// settles the Init (`project delete`, which reads it from the Init's `op`;
+/// spec v20). A log that cannot be written changes no outcome.
 pub fn log_left(home: &Path, left: &Left<'_>, message: &str) {
     let _ = layerfs_home::home::log_line(
         home,
@@ -245,7 +245,7 @@ pub fn measure(folder: &Path, project: &str) -> Result<u64> {
 }
 
 /// Refuses `Capacity` unless the machine has the copy's `total` bytes and
-/// a store push's headroom free where its Stores are; asks its worker.
+/// a Store move's headroom free where its Stores are; asks its worker.
 pub fn room(worker: &mut Worker, copy: &Copy<'_>, total: u64) -> Result<()> {
     let stat = SdkValue::map([
         ("op", SdkValue::text("stat")),
@@ -258,8 +258,8 @@ pub fn room(worker: &mut Worker, copy: &Copy<'_>, total: u64) -> Result<()> {
     let machine = copy.machine;
     let Some(free) = there.get_int("free") else {
         return Err(refused(
-            "Unsupported",
-            format!("machine {machine}'s worker does not report its free disk (an older bundle)"),
+            "Failed",
+            format!("machine {machine}'s worker answered no free disk"),
         ));
     };
     let headroom = crate::sqlite::transfer::phases::HEADROOM.max(total / 10);

@@ -26,7 +26,7 @@ this process has open, and moves or removes a sqlite Store's file.
                      lease::claim under store/<s>/lock
       |
       +-- StoreRef::Postgres --> this process: URL from the record,
-      |                          password reference resolved now
+      |                          its saved login (auth) put in now
       |
       +-- StoreRef::Sqlite --> place::plan(machine)
               |                         |
@@ -50,8 +50,8 @@ full per-call table is "Where each call runs" in [Control](../README.md).
 | Behaviour | Detail | Source |
 | --- | --- | --- |
 | Store record | `store/<name>/record.json`, read once into `StoreRecord` with its parsed `StoreRef`; nobody reads a record's `kind` text or fields except through it; `v` is read past and never shown | [`record.rs`](../../../../control/crates/layerfs-store/src/record.rs) |
-| Kind | no `kind` is sqlite; `sqlite` or `postgresql`; any other text `InvalidInput` (only the step that needs the kind refuses) | same, `kind_of` |
-| Placement | a sqlite record names its `machine` (none is `native`); a 1.1.0 Store whose machine is unknown is `Unavailable`, naming `layerfs import-env`; a PostgreSQL Store is on no machine | same, `StoreRef::machine` |
+| Kind | `sqlite` or `postgresql`; no `kind` or any other text is `InvalidInput` "Store record kind" (only the step that needs the kind refuses; `store.get` shows such a record with engine unknown, `broken` `unsupported`, fix `layerfs store remove <store>`; a `machine` that is not text is the same; `store.remove` and `store.disconnect` remove such a record alone, `record::forget_unread`, and `store.remove`'s `left` names the Store file it keeps; a sqlite Store on a machine whose record has no 2.0 name is also removed by its records alone, `sqlite::remove`, `left` saying its file stays on that machine) | same, `kind_of` |
+| Placement | a sqlite record names its `machine` (none is `native`); a PostgreSQL Store is on no machine | same, `StoreRef::machine` |
 | New sqlite Store | `store.create`: an empty Store on `native`, record `{machine: native, profile: disposable, created, sqlite}` | [`sqlite/create.rs`](../../../../control/crates/layerfs-store/src/sqlite/create.rs), `record.rs` `created_on_native` |
 | Resolve | `<store>/<project>` split and both records read; a bare name `InvalidInput` | [`resolve.rs`](../../../../control/crates/layerfs-store/src/resolve.rs) |
 | Store calls | `branch`, `commit`, `file` (and project stats): each call translated once to one engine method (snake_case to camelCase, absent options not sent) and run on its route | [`calls/`](../../../../control/crates/layerfs-store/src/calls/mod.rs), [`calls/op.rs`](../../../../control/crates/layerfs-store/src/calls/op.rs) |
@@ -61,7 +61,7 @@ full per-call table is "Where each call runs" in [Control](../README.md).
 | Open-Store cache | one open Store per path per process, shared by the caller's route and a worker; closed by a reaper after 60 s unused, never while a call runs | [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs) |
 | WAL checkpoint | when the last call on a SQLite Store returns, or a Sandbox on it closes, its WAL is checkpointed and truncated once while the Store stays open; one that cannot complete waits for the idle close | same |
 | Store service | one engine `StoreService` per Store path per process, opened by the first client and closed by the last; its private overlays live under a random name in the temp directory | [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs) |
-| State | `store.list`, `status`: `idle`, `in_use` (another live lease), `busy` (live `op`), `down` (machine did not answer), `unresolved`; reads take no lock and leave stale leases | [`record.rs`](../../../../control/crates/layerfs-store/src/record.rs) `state`, [`status.rs`](../../../../control/crates/layerfs-store/src/status.rs), [`list.rs`](../../../../control/crates/layerfs-store/src/list.rs) |
+| State | `store.list`, `store.get`, `home.get --with tree`: from the records only, `busy` (live `op`), `broken` `unresolved` (gone owner), `blocked` (machine not ready, `blocked_by`), `broken` with the reason the last live read recorded, else `ready`; `store.get --with live` reads the Store where it lives and writes the record only when that reason changes; reads leave stale leases | [`state.rs`](../../../../control/crates/layerfs-store/src/state.rs) `recorded`, [`live.rs`](../../../../control/crates/layerfs-store/src/live.rs), [`list.rs`](../../../../control/crates/layerfs-store/src/list.rs) |
 | Stats, diagnostics | Store-wide counters on the ordinary route; read-only engine entry points without leases or writable opens | [`stats.rs`](../../../../control/crates/layerfs-store/src/stats.rs), [`diagnostic.rs`](../../../../control/crates/layerfs-store/src/diagnostic.rs) |
 | Who uses a Store | `store_idle`, `can_remove_project` read Sandbox records in `layerfs-control` and are passed in as `Related` | [`related.rs`](../../../../control/crates/layerfs-store/src/related.rs), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) |
 
@@ -69,11 +69,11 @@ full per-call table is "Where each call runs" in [Control](../README.md).
 
 | Call | Kind | Does | Source |
 | --- | --- | --- | --- |
-| `list`, `get`, `status`, `stats` | both | records, leases, size where it lives | [`sqlite/family.rs`](../../../../control/crates/layerfs-store/src/sqlite/family.rs) |
+| `list`, `get` (`--with live`, `--with stats`) | both | records and state; with `live` read where the Store lives, with `stats` opened for its counters | [`list.rs`](../../../../control/crates/layerfs-store/src/list.rs), [`get.rs`](../../../../control/crates/layerfs-store/src/get.rs), [`live.rs`](../../../../control/crates/layerfs-store/src/live.rs), [`stats.rs`](../../../../control/crates/layerfs-store/src/stats.rs) |
 | `create` | sqlite | empty Store on `native`; `Exists` if named | [`sqlite/create.rs`](../../../../control/crates/layerfs-store/src/sqlite/create.rs) |
-| `push`, `pull` | sqlite | move the file between `native` and a machine | [SQLite and PostgreSQL](sqlite-and-postgresql.md#transfer-sqlitetransfer) |
+| `move` | sqlite | moves the file between `native` and a machine (1.x and the 2.0 previews: `push`, `pull`) | [SQLite and PostgreSQL](sqlite-and-postgresql.md#transfer-sqlitetransfer) |
 | `remove` | sqlite | delete the file wherever it is, with its projects; PostgreSQL `InvalidInput` | [`sqlite/remove.rs`](../../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
-| `connect`, `disconnect`, `attach`, `detach` | PostgreSQL | record or forget a database; record or forget a machine that may run its Sandboxes | [SQLite and PostgreSQL](sqlite-and-postgresql.md#postgresql-postgresql) |
+| `connect`, `disconnect`, `update`, `save_auth`, `auths`, `remove_auth` | PostgreSQL | record or forget a database (with `machine`, one machine's own address); change its login or `synchronous_commit`; keep named logins in the home's secret folder | [SQLite and PostgreSQL](sqlite-and-postgresql.md#postgresql-postgresql) |
 
 ### Multi-step operations
 
@@ -86,18 +86,23 @@ full per-call table is "Where each call runs" in [Control](../README.md).
 
 A live `op` refuses every lease, Store call and new operation (`Busy`),
 this process included. A dead owner's uncertain `op` is `Unresolved`; its
-refusal names the clearing call: a new `store push <s> <m>` or `store pull
-<s>` for a transfer, else `store remove <s>`
+refusal names the clearing call: the same `store move <s> <to>` for a
+move, `store compact <s>` for a compaction, `store get <s> --with live`
+for a backup or restore, else `store remove <s>`
 ([`record.rs`](../../../../control/crates/layerfs-store/src/record.rs)
-`unblocked`, `clearing_call`).
+`unblocked`, [`intent.rs`](../../../../control/crates/layerfs-store/src/intent.rs) `clearing`).
+Without an `op`, a Store's state comes from its records only
+([`state.rs`](../../../../control/crates/layerfs-store/src/state.rs) `recorded`):
+`blocked` while its machine is not ready, `broken` with the reason the last
+live read found, else `ready`.
 
 ## Invariants
 
 | Rule | Enforced by |
 | --- | --- |
 | Every decision on a Store's kind matches on `StoreRef` or `StoreKind`; `sqlite/` and `postgresql/` never import each other | [`record.rs`](../../../../control/crates/layerfs-store/src/record.rs); test `kind_isolation` |
-| A lease is taken under the Store's lock after the record shows no `op`, so a lease and a push, pull or remove never overlap | [`lease.rs`](../../../../control/crates/layerfs-store/src/lease.rs) `claim` |
-| A lease names its process by pid, kernel start time and boot id; a stale one is removed under the Store lock by the next claim or by push, pull, remove, disconnect, and logged to `log/leases.jsonl`; reads ignore it | same |
+| A lease is taken under the Store's lock after the record shows no `op`, so a lease and a move or remove never overlap | [`lease.rs`](../../../../control/crates/layerfs-store/src/lease.rs) `claim` |
+| A lease names its process by pid, kernel start time and boot id; a stale one is removed under the Store lock by the next claim or by a move, remove or disconnect, and logged to `log/leases.jsonl`; reads ignore it | same |
 | The Store lock is taken after the home lock, never before, and never held across a worker call or byte transfer | [`record.rs`](../../../../control/crates/layerfs-store/src/record.rs) `lock` |
 | No call starts a machine: a worker not recorded or not answering is `Unavailable`, naming `layerfs machine start` | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
 | A guest never reads the home: the caller sends the Store's record with each call; the worker finds the file under its own root by name | [`call.rs`](../../../../control/crates/layerfs-store/src/call.rs), [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
@@ -112,7 +117,7 @@ refusal names the clearing call: a new `store push <s> <m>` or `store pull
 | No Store / no project | `NoSuchStore` / `NoSuchProject` from `resolve`; `NotFound` from the Store family | [`resolve.rs`](../../../../control/crates/layerfs-store/src/resolve.rs), [`record.rs`](../../../../control/crates/layerfs-store/src/record.rs) |
 | Live / dead uncertain `op` | `Busy` / `Unresolved` | `record.rs` `unblocked` |
 | Store lock held | `Unavailable` after 120 s | [Home](../home/README.md#locks-and-leases) |
-| Leased or used by a Sandbox (push, pull, remove, disconnect, restore) | `InUse`, `detail.related` lists `{kind: "lease", name: <pid>}` and `{kind: "sandbox", name}` | [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle` |
+| Leased or used by a Sandbox (move, remove, disconnect, restore) | `InUse`, `detail.related` lists `{kind: "lease", name: <pid>}` and `{kind: "sandbox", name}` | [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle` |
 | Open-Store idle close | 60 s (`IDLE`); a Store with a call running is never closed (`close` refuses `InUse`) | [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs) |
 | Store kernel guard | `Unsupported`, naming the directory requirement (`0700` owned by this user, not missing/symlink) or filesystem | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | Store file missing | `NoStore` | [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs) |
@@ -122,13 +127,13 @@ refusal names the clearing call: a new `store push <s> <m>` or `store pull
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
 | `layerfs-api/tests/store_routes.rs` | `cargo +1.85.1 test --locked -p layerfs-api --test store_routes` | Linux (ext4, xfs, btrfs), macOS (apfs) | a call goes where its records say, a worker gets the records, leases are held, read and cleaned |
-| `layerfs-api/tests/store_family.rs` | `cargo +1.85.1 test --locked -p layerfs-api --test store_family` | same | create on native, push to a worker machine and pull back with equal heads; push, pull and remove refusals |
-| `layerfs-control/tests/store_reads.rs` | `cargo +1.85.1 test --locked -p layerfs-control --test store_reads` | macOS, Linux | `store.status`, `list`, `get` take no lock and leave a stale lease as it was |
+| `layerfs-api/tests/store_family.rs` | `cargo +1.85.1 test --locked -p layerfs-api --test store_family` | same | create on native, move to a worker machine and back with equal heads; move and remove refusals |
+| `layerfs-control/tests/store_reads.rs` | `cargo +1.85.1 test --locked -p layerfs-control --test store_reads` | macOS, Linux | `store.list`, `get` take no lock and leave a stale lease as it was |
 | `layerfs-store/tests/kind_isolation.rs` | `cargo +1.85.1 test --locked -p layerfs-store --test kind_isolation` | any | `sqlite/` and `postgresql/` never import each other |
 
 ## Pages
 
 | Page | What it covers |
 | --- | --- |
-| [SQLite and PostgreSQL](sqlite-and-postgresql.md) | sqlite create, remove, push and pull; PostgreSQL connect, attach, open, the host read session and credentials |
+| [SQLite and PostgreSQL](sqlite-and-postgresql.md) | sqlite create, remove and move; PostgreSQL connect, open, the host read session and credentials |
 | [Projects](projects.md) | `project.init` (in process and through a worker), `export`, `remove`, project records and discovery |

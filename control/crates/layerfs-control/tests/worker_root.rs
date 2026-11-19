@@ -1,7 +1,7 @@
 //! A worker's root is not a home (#533 review P2-32, O33): host code the
 //! worker runs on it gets the caller's home id, sent with the request; the
-//! root is never converted or given an id of its own, even when it holds
-//! files a 1.1.0 home would.
+//! root is never created or given an id of its own, even when it holds
+//! files of its own.
 use layerfs_bridge::control::SdkValue;
 use layerfs_machine::worker::{self, Endpoint};
 use std::path::{Path, PathBuf};
@@ -27,7 +27,10 @@ fn sandbox_call(endpoint: &Endpoint) -> Result<SdkValue, (String, String)> {
         ("project", SdkValue::text("api")),
         (
             "store_record",
-            SdkValue::map([("name", SdkValue::text("shop"))]),
+            SdkValue::map([
+                ("name", SdkValue::text("shop")),
+                ("kind", SdkValue::text("sqlite")),
+            ]),
         ),
         (
             "project_record",
@@ -40,19 +43,21 @@ fn sandbox_call(endpoint: &Endpoint) -> Result<SdkValue, (String, String)> {
 
 fn untouched(root: &Path) {
     assert!(!root.join("layerfs.json").exists(), "no home id of its own");
-    assert!(!root.join("log/migration.json").exists(), "not converted");
-    assert!(!root.join("log/1.1.0").exists(), "nothing moved");
-    assert!(root.join("stores.json").is_file());
-    assert!(root.join(".stores/old").is_dir());
+    assert_eq!(
+        std::fs::read_to_string(root.join("notes.txt")).unwrap(),
+        "kept"
+    );
+    assert!(root.join("cache/old").is_dir());
+    assert!(!root.join("layerfs.lock").exists(), "no home lock taken");
 }
 
 #[test]
 fn a_worker_root_is_not_converted_and_uses_the_callers_home_id() {
     let scratch = tempdir("scratch");
     let root = scratch.join("data");
-    // a data disk holding names a 1.1.0 home has
-    std::fs::create_dir_all(root.join(".stores/old")).unwrap();
-    std::fs::write(root.join("stores.json"), "{}").unwrap();
+    // a data disk holding files of its own
+    std::fs::create_dir_all(root.join("cache/old")).unwrap();
+    std::fs::write(root.join("notes.txt"), "kept").unwrap();
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let endpoint = Endpoint {
         address: listener.local_addr().unwrap(),
@@ -84,14 +89,14 @@ fn a_worker_root_is_not_converted_and_uses_the_callers_home_id() {
 
     // a caller of a home sends its id; the Sandbox code gets past it
     let host = scratch.join("home");
-    let id = layerfs_control::migrate::open(&host).unwrap().id;
+    let id = layerfs_home::home::open(&host).unwrap().id;
     let with = sandbox_call(&endpoint);
     if let Err((_, message)) = &with {
         assert!(!message.contains("home id"), "{message}");
     }
     untouched(&root);
     // opening the root answers the id of the home this thread works for
-    assert_eq!(layerfs_control::migrate::open(&root).unwrap().id, id);
+    assert_eq!(layerfs_home::home::open(&root).unwrap().id, id);
     untouched(&root);
     std::fs::remove_dir_all(scratch).unwrap();
 }

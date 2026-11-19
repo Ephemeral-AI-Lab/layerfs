@@ -22,10 +22,7 @@ pub fn native_host(home: &Path, sandbox: &str) -> Result<Host, SdkRefusal> {
         store_path: None,
         deploy: Some(Deploy {
             local_dir: Some(paths::run_root(home).display().to_string()),
-            // a Sandbox made before layerfs-project#180 is found by the
-            // earlier prefix its record keeps
             container_prefix: Some(layerfs_home::names::provider_prefix(&id)),
-            legacy_prefix: Some(layerfs_home::names::legacy_provider_prefix(&id)),
             ..Deploy::default()
         }),
         postgresql: None,
@@ -50,13 +47,15 @@ pub fn native_free(home: &Path) -> Result<(), SdkRefusal> {
     }
 }
 
-/// Forced `sandbox.close` of the Sandbox `host` names, on this process's
+/// Forced `sandbox.remove` of the Sandbox `host` names, on this process's
 /// kernel: no daemon control call, Store open, active-Workspace refusal or
 /// retry. Its running commands are cancelled first, as every forced close
 /// does (`crate::exec::cancel::settle`). The backend's Stop checks the runtime identity and ends its
 /// mounts and processes; its Delete independently checks the physical
 /// detach before the runtime goes. Answers each recorded or `held`
 /// Workspace as `unknown`: its uncommitted changes end with the Sandbox.
+/// A record this build does not read never reaches it: `sandbox.remove`
+/// forgets it first (`crate::reopen::unread`).
 pub fn close(host: &Host, held: &[String]) -> Outcome {
     let id = host.sandbox()?.to_owned();
     let directory = crate::files::sandbox_dir(host)?;
@@ -92,13 +91,14 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
         .map_err(after_stop)?
         .stopped()
         .delete()
-        .map_err(|error| after_stop(failed(error)))?;
+        .map_err(|error| after_stop(crate::daemon::values::wire(error)))?;
     // the table is whole after a holder's panic (layerfs-project#177)
     crate::registry::SANDBOXES
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(|error| after_stop(failed(error)))?;
+    layerfs_home::home::generation::moved_above(&directory);
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Closed")),
         ("sandbox", SdkValue::text(id)),

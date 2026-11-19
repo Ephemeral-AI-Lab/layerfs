@@ -1,5 +1,5 @@
 //! A sqlite Store's file on the machine that holds it (H §7.3): the steps a
-//! `store push`, a `store pull` and a `store remove` take on each side. They run in the
+//! `store move`, a `store remove` and a `store create --machine` take on each side. They run in the
 //! caller's process for `native` (under the home) and in a machine's worker
 //! for every other machine (under the worker's root). Paths come from the
 //! root and the Store's name only, never from the caller. The steps that
@@ -7,6 +7,7 @@
 //! (a worker keeps a Store open after its calls); a call running on it is
 //! `InUse`.
 use super::step::{StepFrame, StoreStep};
+use crate::get::hex_text;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup::heads::heads;
 use layerfs_bucket::bucket::pieces;
@@ -23,16 +24,6 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     let mut name = path.as_os_str().to_owned();
     name.push(suffix);
     PathBuf::from(name)
-}
-
-/// Whether the process a compaction record names still runs on this machine.
-/// The kernel start time and boot id, when recorded, keep a reused id from
-/// passing as the owner.
-fn owner_alive(op: &layerfs_persistence::CompactOpStatus) -> bool {
-    let Some(pid) = op.owner_pid else {
-        return false;
-    };
-    layerfs_home::process::alive_as(pid, op.owner_pid_start, op.owner_pid_boot)
 }
 
 fn length(path: &Path) -> Result<u64, SdkRefusal> {
@@ -52,10 +43,6 @@ fn free(path: &Path) -> Result<u64, SdkRefusal> {
     Ok(u64::try_from(free).unwrap_or(u64::MAX))
 }
 
-fn hex(bytes: &[u8]) -> SdkValue {
-    SdkValue::text(layerfs_bridge::sdk_values::hex(bytes))
-}
-
 /// `{ bytes, sha256, heads }` of the closed Store file at `file`.
 fn digest(file: &Path, progress: Option<&mut dyn FnMut(u64, u64)>) -> Outcome {
     let (bytes, sha256) = match progress {
@@ -66,8 +53,8 @@ fn digest(file: &Path, progress: Option<&mut dyn FnMut(u64, u64)>) -> Outcome {
     let heads = heads(file).map_err(|why| refused("Failed", why))?;
     Ok(SdkValue::map([
         ("bytes", SdkValue::Int(bytes as i64)),
-        ("sha256", hex(&sha256)),
-        ("heads", hex(&heads)),
+        ("sha256", hex_text(&sha256)),
+        ("heads", hex_text(&heads)),
     ]))
 }
 
@@ -111,6 +98,18 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
     layerfs_home::names::StoreName::parse(store)?;
     let file = paths::store_file(root, store);
     let incoming = with_suffix(&file, ".incoming");
+    // a compaction running here (its caller's lease may be gone after a
+    // lost reply) keeps the file from being copied, replaced or deleted
+    if matches!(
+        frame.step,
+        StoreStep::Snapshot
+            | StoreStep::Stage
+            | StoreStep::Install
+            | StoreStep::Retire
+            | StoreStep::Remove
+    ) {
+        crate::compact::refuse_while_running(&file, store)?;
+    }
     if matches!(
         frame.step,
         StoreStep::Snapshot | StoreStep::Install | StoreStep::Retire | StoreStep::Remove
@@ -134,12 +133,46 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
             ),
             ("incoming_bytes", SdkValue::Int(length(&incoming)? as i64)),
         ])),
-        // the compaction record beside the Store only: `store.status` shows
+        // an empty Store at the file's place, by the identity the caller's
+        // record holds; nothing is left when it cannot be made, and a
+        // folder another caller made is never this step's to remove
+        StoreStep::Create => {
+            let record = frame
+                .store_record
+                .as_ref()
+                .ok_or_else(|| refused("InvalidInput", "a Store create carries its record"))?;
+            let identity = crate::identity::identity_of(record)?;
+            let directory = paths::store_dir(root, store);
+            if let Some(parent) = directory.parent() {
+                layerfs_home::home::private_dir(parent)?;
+            }
+            let policy = layerfs_storage::StoragePolicy::frozen_default();
+            let (created, made) = crate::identity::make_empty(&directory, &file, &identity, policy);
+            match created {
+                Ok(sealed) => Ok(SdkValue::map([(
+                    "sqlite",
+                    SdkValue::text(sealed.sqlite_version),
+                )])),
+                Err(refusal) => {
+                    if made == crate::identity::MadeDirectory::ThisCall {
+                        let _ = std::fs::remove_dir_all(&directory);
+                    }
+                    Err(refusal)
+                }
+            }
+        }
+        // the heads of the file as it is: a read of its pages, no Store
+        // opened and nothing written; null when there is no file
+        StoreStep::Heads => Ok(SdkValue::map([(
+            "heads",
+            match file.is_file() {
+                true => hex_text(&heads(&file).map_err(|why| refused("Failed", why))?),
+                false => SdkValue::Null,
+            },
+        )])),
+        // the compaction record beside the Store only: a live read shows
         // its op and phase without opening the Store database or an artifact
-        StoreStep::CompactOp => match layerfs_persistence::compact_op_status(&file) {
-            None => Ok(SdkValue::Null),
-            Some(op) => Ok(crate::report::compact_status(&op.status(owner_alive(&op)))),
-        },
+        StoreStep::CompactOp => Ok(crate::compact::recorded_run(&file).unwrap_or_default()),
         // snapshot: the idle Store's bytes, sha256 and history heads. A Store
         // nobody holds has no write-ahead log left unless a process crashed;
         // if a crashed opener left one, checkpoint and close it first.
@@ -167,13 +200,7 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
         StoreStep::Stage => {
             let staged = with_suffix(&file, ".backup");
             let _ = std::fs::remove_file(&staged);
-            let open = crate::open_args::OpenArgs {
-                home: Some(root.to_path_buf()),
-                store: Some(store.to_owned()),
-                store_path: Some(file.display().to_string()),
-                store_record: frame.store_record.clone(),
-                ..Default::default()
-            };
+            let open = crate::open_args::OpenArgs::in_root(root, store, frame.store_record.clone());
             let sealed = crate::service::with_service(&open, |service| {
                 service
                     .opened
@@ -183,12 +210,19 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
                             "Failed",
                             format!(
                                 "snapshot: {}",
-                                layerfs_storage::port::PersistenceError::BackendUnavailable
+                                crate::words::persistence(
+                                    &layerfs_storage::port::PersistenceError::BackendUnavailable
+                                )
                             ),
                         )
                     })?
                     .snapshot(&staged, &mut |_, _| {})
-                    .map_err(|e| refused("Failed", format!("snapshot: {e}")))
+                    .map_err(|e| {
+                        refused(
+                            "Failed",
+                            format!("snapshot: {}", crate::words::persistence(&e)),
+                        )
+                    })
             })?;
             let digest = digest(&staged, None)?;
             Ok(layerfs_home::home::with_field(
@@ -198,11 +232,16 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
             ))
         }
         StoreStep::Unstage => {
-            match std::fs::remove_file(with_suffix(&file, ".backup")) {
+            // `removed`: whether a staged snapshot was there
+            let removed = match std::fs::remove_file(with_suffix(&file, ".backup")) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(failed(e)),
-                _ => {}
-            }
-            Ok(SdkValue::map([("unstaged", SdkValue::Bool(true))]))
+                Err(_) => false,
+                Ok(()) => true,
+            };
+            Ok(SdkValue::map([
+                ("unstaged", SdkValue::Bool(true)),
+                ("removed", SdkValue::Bool(removed)),
+            ]))
         }
         StoreStep::Read {
             offset,

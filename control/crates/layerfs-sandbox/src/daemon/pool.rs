@@ -141,8 +141,8 @@ fn notice_refusal(notice: AdmissionNotice) -> SdkRefusal {
         other => SdkRefusal {
             code: "Unknown".to_owned(),
             message: format!(
-                "the Sandbox's daemon refused admission with a reason this client does not know ({:?}); the call was not admitted. Retrying is safe",
-                other
+                "the Sandbox's daemon refused admission with a reason this client does not know ({}); the call was not admitted. Retrying is safe",
+                other.as_str()
             ),
             detail: SdkValue::map([
                 ("observed", SdkValue::text(other.as_str())),
@@ -302,8 +302,8 @@ impl Controls {
         }
     }
 
-    /// A connection for one call, and how long the call waited for it.
-    pub fn lend(&self) -> Result<(Lease<'_>, Duration), SdkRefusal> {
+    /// A connection for one call.
+    pub fn lend(&self) -> Result<Lease<'_>, SdkRefusal> {
         self.lend_within(LEND_WAIT)
     }
 
@@ -311,7 +311,7 @@ impl Controls {
     /// in-use connection. A caller that must not hold an operation intent
     /// while a daemon refuses connections (an explicit close) uses a short
     /// wait and reports the exact refusal (#540).
-    pub fn lend_within(&self, wait: Duration) -> Result<(Lease<'_>, Duration), SdkRefusal> {
+    pub fn lend_within(&self, wait: Duration) -> Result<Lease<'_>, SdkRefusal> {
         let started = Instant::now();
         // the pool is two counts and a list, each changed in one step, so
         // it is whole after a holder's panic: its guard is taken back
@@ -319,7 +319,7 @@ impl Controls {
         let mut pool = self.held();
         loop {
             if let Some(control) = pool.idle.pop() {
-                return Ok((self.lease(control), started.elapsed()));
+                return Ok(self.lease(control));
             }
             if pool.open < pool.limit {
                 pool.open += 1;
@@ -333,7 +333,7 @@ impl Controls {
                 };
                 pool = self.held();
                 match opened {
-                    Ok(control) => return Ok((self.lease(control), started.elapsed())),
+                    Ok(control) => return Ok(self.lease(control)),
                     Err(refusal) => {
                         pool.open -= 1;
                         if pool.open == 0 {

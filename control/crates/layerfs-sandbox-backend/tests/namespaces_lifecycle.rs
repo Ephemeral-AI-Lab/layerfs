@@ -232,7 +232,7 @@ fn run(sandbox: &Sandbox, arguments: &[&str], environment: &[&str]) -> (i32, Str
             .map(|value| (*value).to_owned())
             .collect(),
         directory: directory.clone(),
-        stdin: false,
+        stdin: None,
     };
     let mut out = Vec::new();
     let mut err = Vec::new();
@@ -798,7 +798,7 @@ fn started(
             arguments: vec!["/bin/sh".into(), "-c".into(), script.into()],
             environment: Vec::new(),
             directory: sandbox.tmp().display().to_string(),
-            stdin: false,
+            stdin: None,
         };
         let mut spawned = |stop: &Stop| {
             let _ = sent.send(stop.clone());
@@ -849,7 +849,7 @@ fn a_cancelled_command_and_what_it_started_leave_its_own_group_empty() {
         arguments: vec!["/bin/true".into()],
         environment: Vec::new(),
         directory: sandbox.tmp().display().to_string(),
-        stdin: false,
+        stdin: None,
     };
     let slot = ExecSlot {
         workspace: "ws1",
@@ -904,7 +904,7 @@ fn a_command_cancelled_before_its_handle_was_told_ends_as_it_starts() {
         ],
         environment: Vec::new(),
         directory: sandbox.tmp().display().to_string(),
-        stdin: false,
+        stdin: None,
     };
     let (sent, ran) = std::sync::mpsc::channel();
     let mut procs = String::new();
@@ -1014,24 +1014,20 @@ fn the_layerfs_group_gives_only_the_controllers_it_has() {
 
 /// A new Sandbox group is split before any process joins it: its leaf
 /// `init` is made, then the groups below it are given the controllers it
-/// has (cgroup v2 allows that only of a group with no process). A Sandbox
-/// group an earlier build started has no leaf, and its commands' helpers
-/// are created in the group itself. Stand-in files in a scratch folder:
+/// has (cgroup v2 allows that only of a group with no process). Stand-in
+/// files in a scratch folder:
 /// needs neither root nor cgroup v2.
 #[test]
 fn a_sandbox_group_is_split_into_its_leaf_before_any_process() {
-    use layerfs_sandbox_backend::namespaces::{helper_group, leaf, split};
+    use layerfs_sandbox_backend::namespaces::{leaf, split};
     let base = std::env::temp_dir().join(format!("lfs-split-{}", std::process::id()));
     let _ = fs::remove_dir_all(&base);
     fs::create_dir_all(&base).unwrap();
-    // an earlier build's group: no leaf, its helpers go in the group itself
-    assert_eq!(helper_group(&base), base);
     fs::write(base.join("cgroup.controllers"), "cpu memory pids\n").unwrap();
     fs::write(base.join("cgroup.subtree_control"), "").unwrap();
     split(&base).unwrap();
     assert_eq!(leaf(&base), base.join("init"));
     assert!(base.join("init").is_dir());
-    assert_eq!(helper_group(&base), base.join("init"));
     assert_eq!(
         fs::read_to_string(base.join("cgroup.subtree_control")).unwrap(),
         "+memory +pids"

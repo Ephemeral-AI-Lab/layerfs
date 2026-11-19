@@ -1,12 +1,26 @@
 //! `machine.update`.
-use super::list::summary;
+use super::list::changed;
 use super::spec::machine_of;
 use crate::Related;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{lock, paths};
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_platform::HostOs;
 use std::path::Path;
+
+/// What an update answers beside `ok` and `outcome`.
+const ANSWER: [&str; 9] = [
+    "machine",
+    "platform",
+    "cpus",
+    "memory_bytes",
+    "disk_bytes",
+    "image",
+    "docker",
+    "wsl",
+    "daemon",
+];
 
 /// A `machine.update` request. The name stays text: it is checked under the
 /// home lock.
@@ -30,8 +44,8 @@ pub struct MachineUpdate {
 /// `machine.update(name, { cpus, memory, image, docker, wsl, daemon })`
 /// (O11): the built-in machines' image, Docker socket (`""` clears it: the
 /// next start chooses and records one again), WSL distribution and the
-/// daemon their Sandboxes run (an absolute path to a file; it replaces what
-/// `import-env` recorded). Resizing a VM is refused while
+/// daemon their Sandboxes run (an absolute path to a file). Resizing a VM
+/// is refused while
 /// Sandboxes run on it.
 pub fn update(home: &Path, request: &MachineUpdate, related: Related) -> Outcome {
     let home = home.to_path_buf();
@@ -66,9 +80,13 @@ pub fn update(home: &Path, request: &MachineUpdate, related: Related) -> Outcome
     // its worker container is in the Engine it records: moving the socket
     // under it would leave the container running where no call reaches it
     if docker.is_some() && paths::worker_record(&home, name).exists() {
-        return Err(refused(
+        let refusal = refused(
             "InUse",
-            format!("machine {name} is running on its Docker socket; `layerfs machine stop {name}` before changing it"),
+            format!("machine {name} is running on its Docker socket: stop it before changing the socket"),
+        );
+        return Err(layerfs_home::outcome::with_fix(
+            refusal,
+            format!("layerfs machine stop {name}", name = shell_word(name)),
         ));
     }
     if request.wsl.is_some() && HostOs::current() != HostOs::Windows {
@@ -98,13 +116,13 @@ pub fn update(home: &Path, request: &MachineUpdate, related: Related) -> Outcome
         }
     }
     // `--docker ""`: back to the automatic choice until the next start
-    // records one; null, not absent, which for a machine that ran means the
-    // default socket it ran on before sockets were recorded
+    // records one (a record with no socket, null or absent, takes the
+    // automatic choice)
     if docker == Some(None) {
         record = record.with("docker", SdkValue::Null);
     }
     record.write(&home)?;
-    summary(&home, &record, None, related)
+    changed(&record, "updated", &ANSWER)
 }
 
 /// The Docker socket `--docker` names: an absolute path, or `unix://` and

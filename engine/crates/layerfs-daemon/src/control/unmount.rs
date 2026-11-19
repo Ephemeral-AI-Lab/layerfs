@@ -109,7 +109,7 @@ impl Service {
                 layerfs_bridge::control::MountPhase::Probing,
             )?),
         };
-        value.activity = Activity::Closing;
+        value.enter(Activity::Closing);
         value.epoch = value.epoch.saturating_add(1);
         Ok((value.workspace.clone(), departure))
     }
@@ -208,11 +208,11 @@ impl Service {
         let _ = (kernel, forced);
         if let Ok(mut entries) = self.entries.lock() {
             if let Ok(binding) = bound_mut(&mut entries, token) {
-                binding.activity = if failure.uncertain() {
+                binding.enter(if failure.uncertain() {
                     Activity::Uncertain
                 } else {
                     Activity::Idle
-                };
+                });
                 binding.epoch = binding.epoch.saturating_add(1);
             }
         }

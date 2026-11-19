@@ -8,7 +8,7 @@
 use crate::host::{Call, Host, Message};
 use crate::registry;
 use layerfs_bridge::control::SdkValue;
-use layerfs_home::outcome::{self, refused, Outcome};
+use layerfs_home::outcome::{refused, Outcome};
 
 /// Runs one Sandbox operation once; a Commit `message` is checked for every
 /// operation.
@@ -36,8 +36,9 @@ pub fn call(host: Host, call: Call) -> Outcome {
 /// `sandbox.list_workspaces`: the daemon's read model without its history
 /// half, `{ kind, version, workspaces }`, which is all a daemon asked with
 /// `history: false` answers; the SDK pages and shapes them.
-/// Each Workspace gains its `path` (the daemon's `directory`) and the
-/// `name` its record in Sandbox folder `directory` gives it, or null; the
+/// Each Workspace gains its `path` (the daemon's `directory`), and the
+/// `name` and `created` (when it was mounted) its record in Sandbox folder
+/// `directory` gives it, or null; the
 /// commands `running` in it, from the exec records of that folder (null
 /// when they cannot be read); and its `overlay_bytes`, read by path where
 /// this side has the Sandbox's run folder, else null (`crate::run_folder`;
@@ -51,11 +52,10 @@ fn listed(answer: SdkValue, directory: &std::path::Path) -> Outcome {
         ));
     };
     let records = crate::files::workspaces(directory)?;
-    let name_at = |path: Option<&str>| {
-        let found = records
-            .iter()
-            .find(|(_, r)| path.is_some() && r.path() == path);
-        SdkValue::opt_text(found.and_then(|(_, r)| r.name()).map(str::to_owned))
+    let record_at = |path: Option<&str>| {
+        (records.iter())
+            .find(|(_, r)| path.is_some() && r.path() == path)
+            .map(|(_, r)| r)
     };
     let commands = crate::exec::record::running(directory);
     let running_in = |workspace: Option<&str>| match &commands {
@@ -69,10 +69,13 @@ fn listed(answer: SdkValue, directory: &std::path::Path) -> Outcome {
     };
     let named = |item: SdkValue| {
         let path = item.get("directory").cloned().unwrap_or_default();
-        let name = name_at(item.get_text("directory"));
+        let record = record_at(item.get_text("directory"));
+        let name = SdkValue::opt_text(record.and_then(|r| r.name()).map(str::to_owned));
+        let created = (record.and_then(|r| r.created())).map_or(SdkValue::Null, SdkValue::Int);
         let running = running_in(item.get_text("workspace"));
         let item = layerfs_home::home::with_field(item, "path", path);
         let item = layerfs_home::home::with_field(item, "name", name);
+        let item = layerfs_home::home::with_field(item, "created", created);
         layerfs_home::home::with_field(item, "running", running)
     };
     let listed = SdkValue::Map(
@@ -116,18 +119,8 @@ fn daemon_backend(host: &Host, call: &Call) -> Outcome {
         ),
         other => other,
     };
-    let answer = crate::daemon::operator::call(
-        &mut *crate::daemon::trace::control(&state.controls)?,
-        op,
-        args,
-    );
-    answer.map_err(|error| match error {
-        crate::SdkError::Refused(refusal) => refusal,
-        crate::SdkError::Operation(failure) => {
-            crate::daemon::values::refusal(&failure).unwrap_or_else(|| outcome::failed(failure))
-        }
-        crate::SdkError::Mount(failure) => outcome::failed(failure),
-    })
+    let answer = crate::daemon::operator::call(&mut *state.controls.lend()?, op, args);
+    answer.map_err(crate::daemon::values::sdk_error)
 }
 
 /// The daemon's `backend.daemon.connection_failures` read model (#540): the

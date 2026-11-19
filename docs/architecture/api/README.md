@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The public surface: the `layerfs-api` call table with its one dispatcher, and the front ends (the `layerfs` command, Node, Python and a local MCP server) that expose its **84 calls in 12 families** with the same names and arguments (the MCP server lists 78: six monitoring calls are for a UI only, and `doctor.fix` is no tool).
+The public surface: the `layerfs-api` call table with its one dispatcher, and the front ends (the `layerfs` command, Node, Python and a local MCP server) that expose its 83 calls in ten families with the same names and arguments (the MCP server lists 17 of them in its `work` profile and all 83 in `admin`).
 
 | | |
 | --- | --- |
@@ -34,12 +34,11 @@ The public surface: the `layerfs-api` call table with its one dispatcher, and th
 
 | Part | What it holds | Source |
 | --- | --- | --- |
-| `families()` | the twelve families in help order: `home`, `project`, `branch`, `commit`, `file`, `sandbox`, `workspace`, `machine`, `store`, `backup`, `logs`, `doctor` | [`lib.rs`](../../../api/crates/layerfs-api/src/lib.rs) |
-| `calls/` | the table types, argument checks, folder scope, dispatcher, argv rendering, key casing, text form, platform policy and call context | [`calls/`](../../../api/crates/layerfs-api/src/calls), [Calls](calls/README.md) |
+| `families()` | the ten families in help order: `home`, `project`, `branch`, `commit`, `file`, `sandbox`, `workspace`, `machine`, `store`, `backup` | [`lib.rs`](../../../api/crates/layerfs-api/src/lib.rs) |
+| `calls/` | the table types, argument checks, folder scope, dispatcher, argv rendering, key casing, the short and long answer forms, refusals, text form, platform policy and call context; `calls/doctor/` holds the six doctors' shared answer, which is no family | [`calls/`](../../../api/crates/layerfs-api/src/calls), [Calls](calls/README.md) |
 | `<family>/` | one file per call, `<family>/<call>.rs`; the family's `mod.rs` lists them in help order. Each `run` builds one typed request and calls one control-crate function | [`src/`](../../../api/crates/layerfs-api/src), [SDK](sdk/README.md) |
-| `doctor/` | explicit diagnostics outside the call table (`layerfs doctor`) | [`doctor/mod.rs`](../../../api/crates/layerfs-api/src/doctor/mod.rs) |
 | Entry points | `calls()`, `find`, `table_json`, `call`, `call_scoped`, `call_json` | [`lib.rs`](../../../api/crates/layerfs-api/src/lib.rs) |
-| Re-exports | the control-crate paths the front ends need (`home`, `worker`, `daemon`, `ProjectApi`, `WorkspaceApi`, doctor), so front ends reach control through this crate | [`lib.rs`](../../../api/crates/layerfs-api/src/lib.rs) |
+| Re-exports | the control-crate paths the front ends need (`home`, `worker`, `daemon`, `ProjectApi`, `WorkspaceApi`), so front ends reach control through this crate | [`lib.rs`](../../../api/crates/layerfs-api/src/lib.rs) |
 | Features | `machine` (machine calls; host builds only, not the guest worker), `tls` (`https://` remotes), on in the sealed Linux worker build; PostgreSQL Stores are always built, no feature | [`Cargo.toml`](../../../api/crates/layerfs-api/Cargo.toml) |
 
 ## Calling conventions
@@ -49,19 +48,19 @@ give each call's own arguments, answer and errors.
 
 | Convention | Rule | Source |
 | --- | --- | --- |
-| Names | `family.call`, snake_case in every front end (`branch.get_commit`, `workspace.exec_cancel`); the CLI writes `layerfs branch get-commit` and options as `--page-size` | [`calls/table.rs`](../../../api/crates/layerfs-api/src/calls/table.rs), [`layerfs-cli/src/parse.rs`](../../../api/crates/layerfs-cli/src/parse.rs) |
+| Names | `family.call`, snake_case in every front end (`machine.load_image`, `store.save_auth`); the CLI writes `layerfs machine load-image` and options as `--synchronous-commit`. Python spells the options `with` and `from` as `with_` and `from_` | [`calls/table.rs`](../../../api/crates/layerfs-api/src/calls/table.rs), [`layerfs-cli/src/parse.rs`](../../../api/crates/layerfs-cli/src/parse.rs) |
 | Positionals | required, in table order, from the outside in: owner, Branch, path or new name, other inputs, an optional Commit last | [`calls/table.rs`](../../../api/crates/layerfs-api/src/calls/table.rs) |
 | Options | named and optional: a trailing object (JS), keywords (Python), `--flags` (CLI); an unknown or misspelled one is `InvalidInput` before any effect | [`calls/check.rs`](../../../api/crates/layerfs-api/src/calls/check.rs) |
 | Kinds | `Name`, `Project` (`<store>/<project>`), `Text`, `Int`, `Bool`, `Json`, `Content` (text or bytes), `Size` (bytes, or `64K`, `512M`, `8G` in powers of 1024), `Function` (stays in the front end) | [Calls](calls/README.md) |
-| Answers | a map with snake_case keys, usually with a `kind` naming what happened (`Created`, `UpToDate`, `Committed`, ...); bytes that are not UTF-8 are `{ base64 }` (Node `Buffer`, Python `bytes`) | [`calls/keys.rs`](../../../api/crates/layerfs-api/src/calls/keys.rs), [`calls/text.rs`](../../../api/crates/layerfs-api/src/calls/text.rs) |
-| Refusals | `{ code, message, detail }`: Node throws `LayerFSError`, Python raises `layerfs.LayerFSError`, the CLI prints it on stderr and exits 125 (2 for a wrong command line) | [Errors and events](calls/errors-and-events.md) |
-| Uncertainty | `Unknown`, and `Failed` with `attempted: true`, mean the outcome is not known; `Unresolved` blocks later calls on that entity. Read state with `get`, `list` or `status` before acting again | [Uncertain outcomes](calls/errors-and-events.md#uncertain-outcomes) |
+| Answers | a map with snake_case keys. The short form has the call's `always` keys and, when set, its `sometimes` keys; `--detail` (`detail: true`) answers the long form, every key with nulls. `--with <section>` (`with: [...]`) adds a named section the call lists. Bytes that are not UTF-8 are `{ base64 }` (Node `Buffer`, Python `bytes`) | [`calls/form.rs`](../../../api/crates/layerfs-api/src/calls/form.rs), [`calls/shape.rs`](../../../api/crates/layerfs-api/src/calls/shape.rs), [`calls/keys.rs`](../../../api/crates/layerfs-api/src/calls/keys.rs), [`calls/text.rs`](../../../api/crates/layerfs-api/src/calls/text.rs) |
+| Refusals | `{ error, message, fix }` plus the fields the next call needs, `error` one of thirteen public codes; `detail` (the library's own code and structured detail) only in the long form. Node throws `LayerFSError`, Python raises `layerfs.LayerFSError`, the CLI prints it on stderr and exits 125 (2 for a wrong command line) | [Errors and events](calls/errors-and-events.md) |
+| Uncertainty | `Unknown`, and a refusal with `attempted: true` (a field beside `error`, also in the long form's `detail`), mean the outcome is not known; `Unresolved` blocks later calls on that entity. Read state with `get`, `list` or `status` before acting again | [Uncertain outcomes](calls/errors-and-events.md#uncertain-outcomes) |
 | One attempt | a call runs once; nothing retries, refreshes or replays it | [`calls/dispatch.rs`](../../../api/crates/layerfs-api/src/calls/dispatch.rs) |
-| Paging | lists that page take `page_size` and `page_pos` and answer `{ items, has_more, next_page_pos }`; pass `next_page_pos` back as `page_pos`. Diffs add `paths_only` and a `cursor`; `logs.list` uses `cursor` and `limit` | [`calls/table.rs`](../../../api/crates/layerfs-api/src/calls/table.rs) `PAGE`, `DIFF` |
-| Events | `on_progress` (twelve calls) and `workspace.exec`'s `stdout`/`stderr` functions receive events before the call answers; an event never means the call finished | [Errors and events](calls/errors-and-events.md) |
+| Paging | every list (15 calls) takes `--limit N --cursor C` and answers `{ items, next_cursor }`; pass `next_cursor` back as `cursor`, and a null `next_cursor` is the last page. `limit` is at most 1000 (default 100, 200 for a log). `file.read` and `file.blame` page by a line window (`line`, `limit`) | [`calls/table.rs`](../../../api/crates/layerfs-api/src/calls/table.rs) `CURSOR`, [`cursor.rs`](../../../control/crates/layerfs-home/src/cursor.rs) |
+| Events | `on_progress` (19 calls, `--progress` in the CLI), each event `{ phase, done, total }`, and `workspace.exec`'s `stdout`/`stderr` functions receive events before the call answers; an event never means the call finished | [Errors and events](calls/errors-and-events.md) |
 | Home | explicit, else `LAYERFS_HOME`, else `$HOME/.layerfs`; absolute | [`calls/dispatch.rs`](../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home` |
 | Scope | a client may be bound to one project, folder and Branch namespace: out-of-scope calls are `InvalidInput`, paths are relative to the folder and Branch names to the namespace | [`calls/scope.rs`](../../../api/crates/layerfs-api/src/calls/scope.rs), [folder scope](calls/README.md#folder-scope) |
-| Call log | every call except `logs.*` writes one line to `<home>/trace/calls.jsonl` when it ends (not with `LAYERFS_LOGS=0`) | [the call log](calls/README.md#the-call-log) |
+| Call log | every call whose entry is not `quiet` (eight: `home.get`, `home.log`, `home.clear_log`, and the polled `sandbox.files`, `sandbox.log`, `machine.stats`, `machine.files`, `machine.log`) writes one line to `<home>/trace/calls.jsonl` when it ends (not with `LAYERFS_LOGS=0`) | [the call log](calls/README.md#the-call-log) |
 
 ## Invariants
 
@@ -79,13 +78,13 @@ give each call's own arguments, answer and errors.
 | Unknown call or argument, wrong kind, out of scope | `InvalidInput`, before any effect | [`calls/check.rs`](../../../api/crates/layerfs-api/src/calls/check.rs) |
 | New work on a removed platform | `Unsupported`, before the home is opened | [`calls/platform_policy.rs`](../../../api/crates/layerfs-api/src/calls/platform_policy.rs) |
 | Where a Store call runs | the caller's process, or the Store machine's worker; no daemon serves a Store call | [Control](../control/README.md) |
-| Persistence | Disposable/WAL/synchronous=OFF is the only Store profile; Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [store family](sdk/store.md) |
+| Persistence | a sqlite Store opens with WAL and `synchronous=NORMAL` (its record label is still `disposable`); a PostgreSQL Store writes with `synchronous_commit` (default `local`). Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [store family](sdk/store.md) |
 
 ## Demonstration
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`calls_table.rs`](../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host | 84 calls in twelve families; one source file per call; refusals before any effect |
+| [`calls_table.rs`](../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host | 83 calls in ten families; one source file per call; refusals before any effect |
 | [`coverage.mjs`](../../../api/node/test/coverage.mjs) | `node --test api/node/test/coverage.mjs` | macOS or Linux, with the built addon, Python module and CLI | every front end matches the table |
 | [`file-history.mjs`](../../../api/node/examples/file-history.mjs) | `node api/node/examples/file-history.mjs` | macOS or Linux, with the built addon | a Store, Init, file writes and history reads |
 

@@ -8,7 +8,8 @@
 //! Workspace calls take that route in `sandbox/direct.rs`.
 use crate::record::StoreRef;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::outcome::shell_word;
+use layerfs_home::outcome::{refused, with_fix, Outcome};
 use layerfs_machine::worker::{self, Budget, Endpoint, EventSink, Unreached};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -81,7 +82,7 @@ pub fn on_machine_read(home: &Path, machine: &str) -> Result<Executor> {
 
 impl Worker {
     /// The worker an operation of several steps uses (`store.remove`,
-    /// `store.push`, `store.pull`), read before it marks anything: a machine with no
+    /// `store.move`), read before it marks anything: a machine with no
     /// recorded worker is refused now, naming `layerfs machine start`.
     pub fn ready(&mut self) -> Result<()> {
         if self.endpoint.is_none() {
@@ -199,13 +200,24 @@ fn stopped(machine: &str, why: SdkRefusal) -> SdkRefusal {
             why.message,
             worker::replace_with(machine)
         );
-        return SdkRefusal { message, ..why };
+        let fix = format!(
+            "layerfs machine stop {machine} && layerfs machine start {machine}",
+            machine = shell_word(machine)
+        );
+        return with_fix(SdkRefusal { message, ..why }, fix);
     }
-    refused(
+    let refusal = refused(
         "Unavailable",
         format!(
             "machine {machine}'s worker did not answer ({}); start it with `layerfs machine start {machine}`",
             why.message
+        ),
+    );
+    with_fix(
+        refusal,
+        format!(
+            "layerfs machine start {machine}",
+            machine = shell_word(machine)
         ),
     )
 }
@@ -215,10 +227,17 @@ fn stopped(machine: &str, why: SdkRefusal) -> SdkRefusal {
 /// fails when called.
 fn recorded(home: &Path, machine: &str) -> Result<Endpoint> {
     let Some(worker) = layerfs_home::secrets::worker_secret(home, machine)? else {
-        return Err(refused(
+        let refusal = refused(
             "Unavailable",
             format!(
                 "machine {machine} is not running; start it with `layerfs machine start {machine}`"
+            ),
+        );
+        return Err(with_fix(
+            refusal,
+            format!(
+                "layerfs machine start {machine}",
+                machine = shell_word(machine)
             ),
         ));
     };

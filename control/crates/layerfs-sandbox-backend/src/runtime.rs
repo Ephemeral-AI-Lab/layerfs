@@ -2,7 +2,7 @@
 //! choice, and [`Sandbox`] is the launched owner over it. What is fixed per
 //! backend (capabilities) comes from its `BackendAdapter` (`backend::adapter`);
 //! each provider and Sandbox is a concrete type, matched here.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "macos")]
 use crate::backend::host_process;
 #[cfg(target_os = "linux")]
 use crate::backend::namespaces::{self, NamespaceProvider};
@@ -140,7 +140,7 @@ impl Runtime {
 /// The launched owner of one Sandbox, on the runtime that started it.
 #[derive(Debug)]
 pub enum Sandbox {
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(target_os = "macos")]
     HostProcess(host_process::Sandbox),
     #[cfg(target_os = "linux")]
     Namespaces(Box<namespaces::Sandbox>),
@@ -150,7 +150,7 @@ impl Sandbox {
     /// The backend that launched it.
     pub fn backend(&self) -> Backend {
         match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::HostProcess(_) => Backend::HostProcess,
             #[cfg(target_os = "linux")]
             Self::Namespaces(_) => Backend::Namespaces,
@@ -159,7 +159,7 @@ impl Sandbox {
 
     pub fn identity(&self) -> ContainerId {
         match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::HostProcess(sandbox) => sandbox.identity(),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.identity(),
@@ -168,7 +168,7 @@ impl Sandbox {
 
     pub fn endpoint(&self) -> Result<SocketAddr, Box<WireFailure>> {
         match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::HostProcess(sandbox) => sandbox.endpoint(),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.endpoint(),
@@ -183,7 +183,7 @@ impl Sandbox {
         stderr: &mut (dyn Write + Send),
     ) -> Result<ExecExit, Box<WireFailure>> {
         match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::HostProcess(sandbox) => sandbox.run(request, stdout, stderr),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.run(request, stdout, stderr),
@@ -200,7 +200,7 @@ impl Sandbox {
         stderr: &mut (dyn Write + Send),
     ) -> Result<ExecExit, Box<WireFailure>> {
         match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::HostProcess(sandbox) => sandbox.run_in(request, Some(slot), stdout, stderr),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.run_in(request, Some(slot), stdout, stderr),
@@ -212,7 +212,7 @@ impl Sandbox {
     /// command group); a host-process group is known only at its spawn.
     pub fn exec_stop(&self, workspace: &str, exec: &str) -> Option<Stop> {
         match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::HostProcess(_) => {
                 let _ = (workspace, exec);
                 None
@@ -226,7 +226,7 @@ impl Sandbox {
     /// so it ends with the Sandbox.
     pub fn track(&self, pid: u32, start_time: u64) -> Result<(), Box<WireFailure>> {
         match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::HostProcess(sandbox) => sandbox.track(pid, start_time),
             // its cgroup owns every process the Sandbox started, whatever
             // session it left, so nothing needs naming
@@ -237,7 +237,7 @@ impl Sandbox {
 
     pub fn log_tail(&self, lines: u16, cap: usize) -> Result<Vec<u8>, Box<WireFailure>> {
         match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::HostProcess(sandbox) => sandbox.log_tail(lines, cap),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.log_tail(lines, cap),
@@ -246,7 +246,7 @@ impl Sandbox {
 
     pub fn inspect(&self) -> Result<SandboxInspection, Box<WireFailure>> {
         match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::HostProcess(sandbox) => {
                 sandbox.reap();
                 Ok(SandboxInspection {
@@ -273,7 +273,7 @@ impl Sandbox {
 
     pub fn stop(&mut self, timeout_seconds: u16) -> Result<(), Box<WireFailure>> {
         match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::HostProcess(sandbox) => sandbox.stop(timeout_seconds),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.stop(timeout_seconds),
@@ -282,7 +282,7 @@ impl Sandbox {
 
     pub fn delete(&mut self) -> Result<(), Box<WireFailure>> {
         match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::HostProcess(sandbox) => sandbox.delete(),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.delete(),
@@ -293,7 +293,7 @@ impl Sandbox {
     /// deleted with it.
     pub fn scratch_directory(&self) -> String {
         match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::HostProcess(sandbox) => sandbox.tmp().display().to_string(),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.tmp().display().to_string(),
@@ -303,7 +303,7 @@ impl Sandbox {
     /// Physical facts for the binding's existing record format, when this is native.
     pub fn local_record(&self) -> Option<LocalRecord> {
         match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::HostProcess(sandbox) => sandbox.local_record(),
             #[cfg(target_os = "linux")]
             Self::Namespaces(_) => None,
@@ -313,7 +313,7 @@ impl Sandbox {
     /// Persisted deployment facts for reopening this runtime instance.
     pub fn record(&self) -> Option<SandboxRecord> {
         match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::HostProcess(_) => self.local_record().map(SandboxRecord::Local),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.record(),

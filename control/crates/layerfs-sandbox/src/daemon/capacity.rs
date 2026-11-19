@@ -8,8 +8,8 @@
 //! deadline, so a daemon that trickles its handshake or its one reply keeps
 //! neither a thread, a connection nor a control slot past it.
 use crate::daemon::fence::Fence;
+use crate::daemon::operator;
 use crate::daemon::pool::{Controls, Dial};
-use crate::daemon::{operator, trace};
 use crate::direct;
 use crate::internal::Control;
 use crate::record::SandboxRecord;
@@ -52,7 +52,7 @@ pub fn read(
 /// again. Nothing is sent again.
 pub fn lent(controls: &Controls) -> Result<SdkValue, SdkRefusal> {
     let deadline = Instant::now() + WAIT;
-    let mut control = trace::control_within(controls, WAIT)?;
+    let mut control = controls.lend_within(WAIT)?;
     if deadline.saturating_duration_since(Instant::now()).is_zero() {
         // the admission wait used the whole window. The connection is healthy
         // and returns to the pool; arming a fence for a deadline that already
@@ -131,11 +131,5 @@ fn query(
 
 /// The one exchange: the daemon's answer, or the refusal it gave, kept exact.
 fn exchange(control: &mut Control) -> Result<SdkValue, SdkRefusal> {
-    operator::call(control, OPERATION, SdkValue::Null).map_err(|error| match error {
-        crate::SdkError::Refused(refusal) => refusal,
-        crate::SdkError::Operation(failure) => {
-            crate::daemon::values::refusal(&failure).unwrap_or_else(|| failed(failure))
-        }
-        crate::SdkError::Mount(failure) => failed(failure),
-    })
+    operator::call(control, OPERATION, SdkValue::Null).map_err(crate::daemon::values::sdk_error)
 }

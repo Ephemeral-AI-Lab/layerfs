@@ -2,11 +2,13 @@
 //! facts and at most one `op` intent (§7.1). A create claims the name with
 //! its project, machine and an `op` (`sandbox.create`); its success records
 //! the backend, kernel route, runtime id, platform, runtime and image and
-//! drops the `op` in one write. A close records its `op` (`sandbox.close`)
+//! drops the `op` in one write. A remove records its `op` (`sandbox.remove`)
 //! before it stops the runtime. On `native` the side that runs the Sandbox
 //! adds what reopens it (`daemon`) to the same file; its daemon keys are in
 //! `control.json` beside it. The name is the folder's: one read finds it.
-//! No state is stored: [`SandboxRecord::state`] derives it (§7.2).
+//! Its state is derived (`crate::state`, call surface 2.0); the one part a
+//! live read writes is why it is broken (`reason`, with the sentence in
+//! `error`) when `sandbox get` found it lost or not answering.
 //!
 //! The record is typed (layerfs-project#108): each known field has its
 //! type, and the codec here ([`SandboxRecord::from_record`],
@@ -20,15 +22,11 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::entity_lock::{self, EntityLock};
 use layerfs_home::home::fields::{self, Fields};
 use layerfs_home::home::{self, paths, read_record, write_entity};
-use layerfs_home::op::{self, Op, Standing};
-use layerfs_home::outcome::{failed, View};
+use layerfs_home::op::{self, Op};
+use layerfs_home::outcome::{failed, with_fix, with_next};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
-
-/// Fields a record keeps that its call results never show as written: what
-/// only reopens it, and the intent (shown as [`Op::to_sdk`]).
-const HIDDEN: [&str; 5] = ["v", "runtime_id", "daemon", "state", op::FIELD];
 
 /// Takes Sandbox `name`'s lock, `sandbox/<name>/lock` (#536 §8): it guards
 /// the Sandbox's record changes and its Workspace records, taken after the
@@ -61,9 +59,10 @@ enum Field {
     Route(String),
     RuntimeId(String),
     Daemon(DaemonRecord),
-    Left(String),
     MachineStopped(bool),
     MachineStopUnknown(bool),
+    Reason(String),
+    Error(String),
 }
 
 impl fields::Field for Field {
@@ -84,7 +83,6 @@ impl fields::Field for Field {
             "route" => Self::Route(text()?),
             "runtime_id" => Self::RuntimeId(text()?),
             "daemon" => Self::Daemon(DaemonRecord::decode(value)?),
-            "left" => Self::Left(text()?),
             "machine_stopped" => Self::MachineStopped(match value {
                 SdkValue::Bool(v) => *v,
                 _ => return None,
@@ -93,6 +91,8 @@ impl fields::Field for Field {
                 SdkValue::Bool(v) => *v,
                 _ => return None,
             }),
+            "reason" => Self::Reason(text()?),
+            "error" => Self::Error(text()?),
             _ => return None,
         })
     }
@@ -113,9 +113,10 @@ impl fields::Field for Field {
             Self::Route(_) => "route",
             Self::RuntimeId(_) => "runtime_id",
             Self::Daemon(_) => "daemon",
-            Self::Left(_) => "left",
             Self::MachineStopped(_) => "machine_stopped",
             Self::MachineStopUnknown(_) => "machine_stop_unknown",
+            Self::Reason(_) => "reason",
+            Self::Error(_) => "error",
         }
     }
 
@@ -135,7 +136,8 @@ impl fields::Field for Field {
             | Self::Backend(text)
             | Self::Route(text)
             | Self::RuntimeId(text)
-            | Self::Left(text) => SdkValue::text(text),
+            | Self::Reason(text)
+            | Self::Error(text) => SdkValue::text(text),
         }
     }
 }
@@ -257,13 +259,21 @@ impl SandboxRecord {
     }
 
     /// Refuses a new operation on this Sandbox while its intent holds it:
-    /// `Busy` while its owner lives, `Unresolved` (naming `sandbox get` and
-    /// `sandbox close`) once a gone owner left it uncertain.
+    /// `Busy` while its owner lives, `Unresolved` (naming `sandbox get` and,
+    /// as its `fix`, `sandbox remove`) once a gone owner left it uncertain.
+    /// Either names the `op` for the caller's next step.
     pub fn free(&self) -> Result<()> {
-        match self.op() {
-            None => Ok(()),
-            Some(op) => op.blocks("sandbox", &self.name, "sandbox get", "sandbox close"),
+        let Some(op) = self.op() else {
+            return Ok(());
+        };
+        let name = &self.name;
+        let Err(mut refusal) = op.blocks("sandbox", name, "sandbox get", "sandbox remove") else {
+            return Ok(());
+        };
+        if refusal.code == "Unresolved" {
+            refusal = with_fix(refusal, crate::state::remove_fix(name));
         }
+        Err(with_next(refusal, "op", op.shown()))
     }
 
     /// The Sandbox's folder in the home.
@@ -348,13 +358,52 @@ impl SandboxRecord {
         })
     }
 
-    /// Why a layout 2 Sandbox's runtime was found ended, as its conversion
-    /// recorded it.
-    pub fn left(&self) -> Option<&str> {
+    /// Its kernel route (`fuse`, `nfs`), as recorded.
+    pub fn route(&self) -> Option<&str> {
         self.text(|f| match f {
-            Field::Left(text) => Some(text),
+            Field::Route(text) => Some(text),
             _ => None,
         })
+    }
+
+    /// When its create claimed the name, in milliseconds since 1970.
+    pub fn created_ms(&self) -> Option<i64> {
+        self.fields.get(|f| match f {
+            Field::Created(ms) => Some(*ms),
+            _ => None,
+        })
+    }
+
+    /// Why a live read found it broken (`lost`, `not_answering`), as recorded.
+    pub fn reason_word(&self) -> Option<&str> {
+        self.text(|f| match f {
+            Field::Reason(text) => Some(text),
+            _ => None,
+        })
+    }
+
+    /// The sentence behind its recorded `reason`.
+    pub fn error(&self) -> Option<&str> {
+        self.text(|f| match f {
+            Field::Error(text) => Some(text),
+            _ => None,
+        })
+    }
+
+    /// The record as a live read found it: broken for `reason` (a word)
+    /// with the sentence behind it, or, with none, not broken.
+    pub fn observed_as(mut self, broken: Option<(&str, &str)>) -> Self {
+        match broken {
+            Some((reason, error)) => {
+                self.fields.set(Field::Reason(reason.to_owned()));
+                self.fields.set(Field::Error(error.to_owned()));
+            }
+            None => {
+                self.fields.remove("reason");
+                self.fields.remove("error");
+            }
+        }
+        self
     }
 
     /// What reopens it, when its record keeps that (`daemon`).
@@ -367,34 +416,25 @@ impl SandboxRecord {
 
     /// The container of a Sandbox recorded under the retired docker
     /// backend (D-8, layerfs-project#111): `backend` or `runtime` `docker`,
-    /// or a started Sandbox of the docker machine with no `runtime` (a
-    /// record converted from before runtimes were kept). The name is the
-    /// one its daemon record keeps, else the one the docker backend gave
-    /// it, `lfs-<home id prefix>-<name>` (that backend's prefix, kept for
-    /// its records only). `None` for every other record.
-    pub fn retired_container(&self, home: &Path) -> Result<Option<String>> {
-        let runtime = self.runtime();
-        let retired = runtime == Some("docker")
-            || self.backend() == Some("docker")
-            || (runtime.is_none() && self.machine() == "docker" && self.id().is_some());
-        if !retired {
-            return Ok(None);
+    /// or a started Sandbox of the docker machine with no `runtime`:
+    /// `Some` with the name its daemon record keeps, which is `None` when
+    /// it keeps none (this build computes no older name). `None` for every
+    /// other record.
+    pub fn retired_container(&self) -> Option<Option<String>> {
+        if !self.retired() {
+            return None;
         }
-        let kept = (self.daemon())
-            .and_then(DaemonRecord::name)
-            .map(str::to_owned);
-        Ok(Some(match kept {
-            Some(name) => name,
-            None => {
-                // a layout 2 home is read by its conversion before it opens
-                let id = match layerfs_home::home::layout::detect(home) {
-                    Ok(layerfs_home::home::layout::Layout::Previous(file)) => file.id,
-                    _ => layerfs_home::home::opened(home)?.id,
-                };
-                let prefix = layerfs_home::names::legacy_provider_prefix(&id);
-                format!("{prefix}{}", self.name)
-            }
-        }))
+        let kept = (self.daemon()).and_then(DaemonRecord::name);
+        Some(kept.map(str::to_owned))
+    }
+
+    /// Whether it was recorded under the retired docker backend (D-8): see
+    /// [`Self::retired_container`].
+    pub fn retired(&self) -> bool {
+        let runtime = self.runtime();
+        runtime == Some("docker")
+            || self.backend() == Some("docker")
+            || (runtime.is_none() && self.machine() == "docker" && self.id().is_some())
     }
 
     /// Whether a provider-confirmed crash stop ended this exact runtime.
@@ -414,57 +454,20 @@ impl SandboxRecord {
         self
     }
 
-    /// The Sandbox's state (#536 §7.2), from its record, its `op` and,
-    /// where the call asked, the daemon's answer (`gone`: its machine
-    /// answered that no such Sandbox runs): `creating` or `closing` while
-    /// that intent's owner lives, `unresolved` once a gone owner left it
-    /// uncertain, `gone` with no id (its create never recorded one, or a
-    /// conversion found it ended), `lost` when it has an id and no close
-    /// intent and its machine answered that its runtime is not there
-    /// (compute-plane 2.0 P-1: it ended behind control's back; its
-    /// `sandbox.close` clears it), else `running`.
-    pub fn state(&self, gone: bool) -> &'static str {
-        if self.machine_stopped() {
-            return "gone";
-        }
-        if self
-            .fields
+    /// Whether a stop of its machine was attempted and its outcome is not
+    /// known.
+    pub fn machine_stop_unknown(&self) -> bool {
+        self.fields
             .get(|f| match f {
                 Field::MachineStopUnknown(v) => Some(*v),
                 _ => None,
             })
             .unwrap_or(false)
-        {
-            return "unresolved";
-        }
-        let op = self.op();
-        match op.as_ref().map(|op| (op.standing(), op.name())) {
-            Some((Standing::Running, "sandbox.close")) => "closing",
-            Some((Standing::Running, _)) => "creating",
-            Some((Standing::Unresolved, _)) => "unresolved",
-            _ if self.id().is_none() => "gone",
-            _ if gone => "lost",
-            _ => "running",
-        }
     }
 
     /// The record as written (the record codec's write).
     pub fn to_record(&self) -> SdkValue {
         self.fields.encode()
-    }
-
-    /// The Sandbox as each `sandbox.list` item and the start of
-    /// `sandbox.get` show it: its record without what only reopens it
-    /// (`v`, `runtime_id`, `daemon`), its derived `state` and its `op`
-    /// (H6) when it has one. Both views show the same fields.
-    pub fn to_sdk(&self, view: View) -> SdkValue {
-        let _ = view;
-        let mut shown = self.fields.encode_without(&HIDDEN);
-        shown.push(("state".to_owned(), SdkValue::text(self.state(false))));
-        if let Some(op) = self.op() {
-            shown.push((op::FIELD.to_owned(), op.to_sdk()));
-        }
-        SdkValue::Map(shown)
     }
 }
 

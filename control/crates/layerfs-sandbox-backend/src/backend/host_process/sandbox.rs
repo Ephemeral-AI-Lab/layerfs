@@ -3,7 +3,7 @@
 //! reaps a daemon this process started that has already exited. A stop
 //! returns only once a daemon this process started is reaped, so it never
 //! stays a zombie of this process.
-use crate::local::{groups, os};
+use crate::local::{groups, os, LOG};
 use crate::LocalRecord;
 use crate::{ContainerId, RuntimeError, WireFailure};
 use layerfs_bridge::process::LocalProcess;
@@ -19,8 +19,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// The daemon's output file in a Sandbox directory, stdout and stderr together.
-pub(crate) const LOG: &str = "daemon.log";
 /// Pause between two looks at a stopping process.
 const PAUSE: Duration = Duration::from_millis(20);
 /// Wait for a killed process to be gone.

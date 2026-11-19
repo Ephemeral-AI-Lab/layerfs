@@ -5,72 +5,59 @@
 //! [`StoreKind`]; no caller compares a record's `kind` text, and no caller
 //! reads or writes a Store record's fields but through [`StoreRecord`].
 use crate::backup::record::StoreLink;
+use crate::intent;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 pub use layerfs_bridge::StoreKind;
 use layerfs_home::home::entity_lock::{self, EntityLock};
 use layerfs_home::home::{self, paths, read_record, with_field, write_entity};
-use layerfs_home::op::{self, Op, Standing};
-use layerfs_home::outcome::{failed, refused, View};
+use layerfs_home::op::{self, Op};
+use layerfs_home::outcome::shell_word;
+use layerfs_home::outcome::{failed, refused, with_fix, with_next};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// The kind a Store record names. A record with no `kind` is a sqlite
-/// Store (the records #506 wrote before PostgreSQL); any other text is
-/// refused, never read as sqlite.
+/// The kind a Store record names; a record with no `kind`, or any other
+/// text, is refused, never read as sqlite.
 pub fn kind_of(record: &SdkValue) -> Result<StoreKind> {
     match record.get("kind") {
-        None => Ok(StoreKind::Sqlite),
         Some(SdkValue::Text(text)) => {
             StoreKind::parse(text).ok_or_else(|| refused("InvalidInput", "Store record kind"))
         }
-        Some(_) => Err(refused("InvalidInput", "Store record kind")),
+        _ => Err(refused("InvalidInput", "Store record kind")),
     }
 }
 
-/// Where a sqlite Store's record places it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Placement {
-    /// On this machine (`native` when the record names none).
-    Machine(String),
-    /// A 1.1.0 home's Store whose machine the conversion could not tell.
-    Unknown,
-}
-
 /// A PostgreSQL Store's server, as its record names it (no password: the
-/// record holds only a reference, resolved per call). A field the record
-/// lacks is refused only by the step that needs it.
+/// record names its saved login, `auth`, put into the URL per call). A
+/// field the record lacks is refused only by the step that needs it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PgServer {
     pub schema: Option<String>,
     pub synchronous_commit: Option<String>,
 }
 
-/// A machine's own connection to a PostgreSQL Store, its record's
-/// `machines.<machine>`: the URL (no password) and the password's reference
-/// that machine dials where they are not the Store's (`store.update
-/// --machine`). A machine without one dials the Store's. No `Debug`, as
-/// with every value that names a password reference.
-#[derive(Clone, Default, PartialEq)]
+/// A machine's own address of a PostgreSQL Store, its record's
+/// `machines.<machine>`: the URL (no user, no password) that machine dials
+/// in place of the Store's (`store.connect --machine`), with the Store's
+/// saved login. A machine without one dials the Store's address.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct OwnConnection {
     /// The URL the machine dials, when not the Store's.
     pub url: Option<String>,
-    /// The password's reference, when not the Store's.
-    pub password: Option<String>,
 }
 
 impl OwnConnection {
     fn from_record(value: &SdkValue) -> Self {
         Self {
             url: value.get_text("url").map(str::to_owned),
-            password: value.get_text("password").map(str::to_owned),
         }
     }
 
-    /// Whether it names neither a URL nor a password: the Store's
-    /// connection, which no record entry is kept for.
+    /// Whether it names no URL: the Store's connection, which no record
+    /// entry is kept for.
     pub fn is_empty(&self) -> bool {
-        self.url.is_none() && self.password.is_none()
+        self.url.is_none()
     }
 
     /// The connection as its record holds it: only the fields it has.
@@ -79,9 +66,6 @@ impl OwnConnection {
         if let Some(url) = &self.url {
             fields.push(("url".to_owned(), SdkValue::text(url)));
         }
-        if let Some(password) = &self.password {
-            fields.push(("password".to_owned(), SdkValue::text(password)));
-        }
         SdkValue::Map(fields)
     }
 }
@@ -89,22 +73,39 @@ impl OwnConnection {
 /// One Store, decided once from `store/<name>/record.json`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StoreRef {
-    Sqlite { name: String, machine: Placement },
-    Postgres { name: String, server: PgServer },
+    /// A sqlite Store on `machine` (`native` when the record names none).
+    Sqlite {
+        name: String,
+        machine: String,
+    },
+    Postgres {
+        name: String,
+        server: PgServer,
+    },
+}
+
+/// The fix of Store `name` whose record this build does not read (no
+/// `kind`, one it does not know, or a `machine` that is not text):
+/// `store remove`, which then removes its records alone.
+pub fn unread_fix(name: &str) -> String {
+    format!("layerfs store remove {}", shell_word(name))
 }
 
 impl StoreRef {
-    /// Parses Store `name`'s record; only its kind can refuse it.
+    /// Parses Store `name`'s record; its kind, or a sqlite Store's
+    /// `machine` that is not text, refuses it, naming [`unread_fix`].
     pub fn from_record(name: &str, record: &SdkValue) -> Result<Self> {
+        let unread = |refusal| with_fix(refusal, unread_fix(name));
+        let kind = kind_of(record).map_err(unread)?;
         let name = name.to_owned();
-        Ok(match kind_of(record)? {
+        Ok(match kind {
             StoreKind::Sqlite => Self::Sqlite {
-                name,
                 machine: match record.get("machine") {
-                    None => Placement::Machine("native".to_owned()),
-                    Some(SdkValue::Text(machine)) => Placement::Machine(machine.clone()),
-                    Some(_) => Placement::Unknown,
+                    None => "native".to_owned(),
+                    Some(SdkValue::Text(machine)) => machine.clone(),
+                    Some(_) => return Err(unread(refused("InvalidInput", "Store record machine"))),
                 },
+                name,
             },
             StoreKind::Postgresql => Self::Postgres {
                 name,
@@ -123,24 +124,10 @@ impl StoreRef {
         }
     }
 
-    /// The machine a sqlite Store is on. A PostgreSQL Store is on none, and
-    /// a 1.1.0 Store whose machine is unknown is refused naming the fix.
+    /// The machine a sqlite Store is on. A PostgreSQL Store is on none.
     pub fn machine(&self) -> Result<&str> {
         match self {
-            Self::Sqlite {
-                machine: Placement::Machine(machine),
-                ..
-            } => Ok(machine),
-            Self::Sqlite {
-                name,
-                machine: Placement::Unknown,
-            } => Err(refused(
-                "Unavailable",
-                format!(
-                    "Store {name} came from a 1.1.0 home and its machine is not known; \
-                     run `layerfs import-env`"
-                ),
-            )),
+            Self::Sqlite { machine, .. } => Ok(machine),
             Self::Postgres { name, .. } => Err(refused(
                 "InvalidInput",
                 format!("Store {name} is a PostgreSQL database; it is on no machine"),
@@ -164,44 +151,9 @@ pub struct StoreRecord {
     name: String,
     parsed: Result<StoreRef>,
     fields: SdkValue,
-}
-
-/// What a Store's result shows beside its record.
-#[derive(Clone, Debug, Default)]
-pub struct StoreDerived {
-    /// The names of its projects' records, sorted.
-    pub projects: Vec<String>,
-    /// Its state, shown by a list item (a get shows none).
-    pub state: Option<StoreState>,
-}
-
-/// A Store's state (#536 §7.2), as `store.status` and each `store.list`
-/// item show it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum StoreState {
-    /// No other process holds it.
-    Idle,
-    /// Another live process holds its lease.
-    InUse,
-    /// A live process runs an operation on it (its record's `op`).
-    Busy,
-    /// Its machine did not answer (a sqlite Store's file could not be read).
-    Down,
-    /// A gone process left an operation on it whose outcome is not known.
-    Unresolved,
-}
-
-impl StoreState {
-    /// The state's name in results.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Idle => "idle",
-            Self::InUse => "in_use",
-            Self::Busy => "busy",
-            Self::Down => "down",
-            Self::Unresolved => "unresolved",
-        }
-    }
+    /// The home it was read from, where a PostgreSQL Store's saved login
+    /// is; none for a record a worker was sent.
+    home: Option<std::path::PathBuf>,
 }
 
 /// Takes Store `name`'s lock, `store/<name>/lock` (#536 §8): it guards the
@@ -224,12 +176,27 @@ impl StoreRecord {
             name: name.to_owned(),
             parsed: StoreRef::from_record(name, &value),
             fields: value,
+            home: None,
         }
     }
 
     /// Store `name`'s record in `home` (or a worker's root), if it has one.
     pub fn read(home: &Path, name: &str) -> Result<Option<Self>> {
-        Ok(read_record(&paths::store_record(home, name))?.map(|v| Self::from_record(name, v)))
+        let read = read_record(&paths::store_record(home, name))?;
+        Ok(read.map(|v| Self::from_record(name, v).in_home(home)))
+    }
+
+    /// This record, as one of `home`'s: its saved login is read there.
+    pub fn in_home(self, home: &Path) -> Self {
+        Self {
+            home: Some(home.to_path_buf()),
+            ..self
+        }
+    }
+
+    /// The home it was read from, if it was.
+    pub fn home(&self) -> Option<&Path> {
+        self.home.as_deref()
     }
 
     /// Store `name`'s record; a bad name is `InvalidInput`, no record
@@ -266,7 +233,10 @@ impl StoreRecord {
 
     /// The record with field `field` set to `value` (added when absent).
     pub fn with(self, field: &str, value: SdkValue) -> Self {
-        Self::from_record(&self.name, with_field(self.fields, field, value))
+        Self {
+            home: self.home,
+            ..Self::from_record(&self.name, with_field(self.fields, field, value))
+        }
     }
 
     /// Writes the record to `store/<name>/record.json` under `home`.
@@ -279,7 +249,7 @@ impl StoreRecord {
         self.fields.get(field)
     }
 
-    /// The text field `field` (a PostgreSQL Store's `url`, `password`,
+    /// The text field `field` (a PostgreSQL Store's `url`, `auth`,
     /// `synchronous_commit`).
     pub fn text(&self, field: &str) -> Option<&str> {
         self.fields.get_text(field)
@@ -309,7 +279,10 @@ impl StoreRecord {
             SdkValue::Map(fields) => fields.into_iter().filter(|(n, _)| n != field).collect(),
             _ => Vec::new(),
         };
-        Self::from_record(&self.name, SdkValue::Map(fields))
+        Self {
+            home: self.home,
+            ..Self::from_record(&self.name, SdkValue::Map(fields))
+        }
     }
 
     /// The operation the record holds (its `op`), if any.
@@ -317,31 +290,49 @@ impl StoreRecord {
         Op::of(&self.fields)
     }
 
-    /// Refuses a new operation, a lease or a Store call while the record's
-    /// `op` holds the Store: `Busy` while its process lives (this process
-    /// included: a push's or pull's own steps take no lease and make no Store call,
+    /// Refuses a lease or a Store call while the record's `op` holds the
+    /// Store to itself (a move or a remove, and any operation this build
+    /// does not name): `Busy` while its process lives (this process
+    /// included: a move's own steps take no lease and make no Store call,
     /// so nothing else in its process may either), `Unresolved` once a gone
     /// process left its outcome unknown. A gone process's certain failure
-    /// holds nothing. An unresolved push or pull names a new one as the
-    /// call that clears it (H6), anything else `store remove`.
+    /// holds nothing, and neither does a compaction or a backup: each is
+    /// recorded so every client sees `busy`, and the Store's own admission
+    /// decides what may run beside it.
     pub fn unblocked(&self) -> Result<()> {
-        let Some(op) = self.op() else {
-            return Ok(());
-        };
-        let clear = clearing_call(&op, &self.name);
-        op.blocks("store", &self.name, "store status", "store remove")
+        match self.op() {
+            Some(op) if intent::exclusive(op.name()) => self.refuse(&op),
+            _ => Ok(()),
+        }
+    }
+
+    /// Refuses a new operation while the record's `op` holds the Store,
+    /// whatever the operation: [`Self::unblocked`], and a compaction or a
+    /// backup too.
+    pub fn unheld(&self) -> Result<()> {
+        self.op().map_or(Ok(()), |op| self.refuse(&op))
+    }
+
+    /// The refusal `op` makes of a new operation: `Busy` or `Unresolved`,
+    /// naming the call that clears an unresolved one as its `fix`, with the
+    /// operation as the caller's next step reads it.
+    fn refuse(&self, op: &Op) -> Result<()> {
+        let clear = intent::clearing(op, &self.name);
+        op.blocks("store", &self.name, "store get", "store remove")
             .map_err(|mut refusal| {
                 let named = format!("`layerfs store remove {}`", self.name);
                 refusal.message = refusal
                     .message
                     .replace(&named, &format!("`layerfs {clear}`"));
-                refusal
+                if refusal.code == "Unresolved" {
+                    refusal = with_fix(refusal, format!("layerfs {clear}"));
+                }
+                with_next(refusal, op::FIELD, intent::shown(op))
             })
     }
 
-    /// The machines with their own connection to a PostgreSQL Store, in
-    /// record order. An entry that names neither a URL nor a password (a
-    /// record written while machines were attached one by one) is none.
+    /// The machines with their own address of a PostgreSQL Store, in
+    /// record order. An entry that names none is none.
     pub fn own_connections(&self) -> Vec<(String, OwnConnection)> {
         match self.fields.get("machines") {
             Some(SdkValue::Map(machines)) => machines
@@ -392,23 +383,6 @@ impl StoreRecord {
         }
     }
 
-    /// The Store's state from its record, whether its machine answered
-    /// (`down`) and the live processes other than this one that hold it.
-    pub fn state(&self, down: bool, holders: &[u32]) -> StoreState {
-        match self.op().map(|op| op.standing()) {
-            Some(Standing::Running) => return StoreState::Busy,
-            Some(Standing::Unresolved) => return StoreState::Unresolved,
-            _ => {}
-        }
-        if down {
-            StoreState::Down
-        } else if holders.is_empty() {
-            StoreState::Idle
-        } else {
-            StoreState::InUse
-        }
-    }
-
     /// The Store's link to each bucket, `(bucket, link)` in record order.
     pub fn links(&self) -> Vec<(String, StoreLink)> {
         let links = self.raw_links().iter();
@@ -444,51 +418,15 @@ impl StoreRecord {
         Some(self.with("backups", kept))
     }
 
-    /// The Store as `store.get` and each `store.list` item show it: the
-    /// record's fields with `name` first, never its cursor key, binding or
-    /// `v`, its `op` as H6 shows it, then its projects; a list item then
-    /// its `state`.
-    pub fn to_sdk(&self, view: View, derived: &StoreDerived) -> Result<SdkValue> {
-        let SdkValue::Map(fields) = &self.fields else {
-            return Err(refused(
-                "Failed",
-                format!("Store {}'s record is not a record", self.name),
-            ));
-        };
-        let mut out: Vec<(String, SdkValue)> = fields
-            .iter()
-            .filter(|(field, _)| !matches!(field.as_str(), "cursor" | "binding" | "v"))
-            .cloned()
-            .collect();
-        if let (Some(op), Some(slot)) = (self.op(), out.iter_mut().find(|(f, _)| f == op::FIELD)) {
-            slot.1 = op.to_sdk();
-        }
-        out.retain(|(field, _)| field != "name");
-        out.insert(0, ("name".to_owned(), SdkValue::text(&self.name)));
-        // `machines` shows only the machines with their own connection
-        out.retain(|(field, _)| field != "machines");
-        let own = self.own_connections();
-        if !own.is_empty() {
-            let machines = own.into_iter().map(|(m, own)| (m, own.to_record()));
-            out.push(("machines".to_owned(), SdkValue::Map(machines.collect())));
-        }
-        let names = derived.projects.iter().map(SdkValue::text).collect();
-        out.push(("projects".to_owned(), SdkValue::List(names)));
-        if let (View::List, Some(state)) = (view, derived.state) {
-            out.push(("state".to_owned(), SdkValue::text(state.as_str())));
-        }
-        Ok(SdkValue::Map(out))
-    }
-
-    /// A new sqlite Store's record on `native`: this record (its identity)
-    /// with its machine, profile, creation time and SQLite version.
-    pub fn created_on_native(self, sqlite_version: &str) -> Self {
+    /// A new sqlite Store's record on `machine`: this record (its identity)
+    /// with its machine, profile and creation time; its SQLite version is
+    /// added once its file is made ([`Self::with`] `sqlite`).
+    pub fn created_on(self, machine: &str) -> Self {
         let mut record = self;
         for (field, value) in [
-            ("machine", SdkValue::text("native")),
+            ("machine", SdkValue::text(machine)),
             ("profile", SdkValue::text("disposable")),
             ("created", SdkValue::Int(home::now_ms())),
-            ("sqlite", SdkValue::text(sqlite_version)),
         ] {
             record = record.with(field, value);
         }
@@ -509,15 +447,16 @@ impl StoreRecord {
         Self::from_record(name, fields)
     }
 
-    /// A PostgreSQL Store `store.connect` records: its URL without a
-    /// password, the schema, `synchronous_commit` and the password's
-    /// reference, if any (its binding and cursor key are added once read).
+    /// A PostgreSQL Store `store.connect` records: its URL without a user
+    /// or password, the schema, `synchronous_commit` and the name of its
+    /// saved login (`auth`), if any (its binding and cursor key are added
+    /// once read).
     pub fn connected(
         name: &str,
         url: &str,
         schema: &str,
         synchronous_commit: &str,
-        password: Option<&str>,
+        auth: Option<&str>,
     ) -> Self {
         let fields = SdkValue::map([
             ("name", SdkValue::text(name)),
@@ -528,26 +467,15 @@ impl StoreRecord {
             ("created", SdkValue::Int(home::now_ms())),
         ]);
         let record = Self::from_record(name, fields);
-        match password {
-            Some(password) => record.with("password", SdkValue::text(password)),
+        match auth {
+            Some(auth) => record.with("auth", SdkValue::text(auth)),
             None => record,
         }
     }
 }
 
-/// The call that clears Store `name`'s intent `op` once its process is
-/// gone, with its arguments: a new `store push <name> <machine>` or `store
-/// pull <name>` for a push or pull (it deletes the copy the record does not
-/// name first), else `store remove <name>`.
-pub fn clearing_call(op: &Op, name: &str) -> String {
-    match (op.name(), op.args().get_text("to")) {
-        ("store.push", Some(to)) => format!("store push {name} {to}"),
-        ("store.pull", _) => format!("store pull {name}"),
-        _ => format!("store remove {name}"),
-    }
-}
-
-/// The full URL of a PostgreSQL Store's record, its password resolved now.
+/// The full URL of a PostgreSQL Store's record, with its saved login put
+/// in now.
 pub fn url(record: &StoreRecord) -> Result<String> {
     let url = record.text("url").ok_or_else(|| {
         refused(
@@ -555,12 +483,12 @@ pub fn url(record: &StoreRecord) -> Result<String> {
             format!("PostgreSQL Store {}'s record has no url", record.name()),
         )
     })?;
-    layerfs_home::secrets::with_password(url, record.text("password"))
+    crate::postgresql::login::dial(record, url)
 }
 
-/// The full URL machine `machine` dials for PostgreSQL Store `record`, its
-/// password resolved now: its own connection's URL and password reference
-/// where it has one, else the Store's.
+/// The full URL machine `machine` dials for PostgreSQL Store `record`, with
+/// the Store's saved login put in now: its own address where it has one,
+/// else the Store's.
 pub fn url_on(record: &StoreRecord, machine: &str) -> Result<String> {
     let own = record.own_connection(machine).unwrap_or_default();
     let url = match own.url.as_deref().or(record.text("url")) {
@@ -572,8 +500,7 @@ pub fn url_on(record: &StoreRecord, machine: &str) -> Result<String> {
             ))
         }
     };
-    let password = own.password.as_deref().or(record.text("password"));
-    layerfs_home::secrets::with_password(url, password)
+    crate::postgresql::login::dial(record, url)
 }
 
 /// Every Store record, by name.
@@ -583,4 +510,45 @@ pub fn stores(home: &Path) -> Result<Vec<StoreRecord>> {
         found.extend(StoreRecord::read(home, &store)?);
     }
     Ok(found)
+}
+
+/// Removes the records of Store `name` whose record this build does not
+/// read (no `kind`, one it does not know, or a `machine` that is not text):
+/// under the home lock and the Store's, once nothing uses it, its record
+/// and its projects' records go. Nothing it names is opened or deleted: any
+/// other file in its folder (a Store file) stays where it is, and the
+/// answer (`left`) says so, with the line that removes it.
+pub(crate) fn forget_unread(
+    home: &Path,
+    name: &str,
+    related: crate::Related,
+) -> Result<Vec<String>> {
+    let _lock = home::lock::take(home)?;
+    let _store = lock(home, name)?;
+    let now = StoreRecord::of(home, name)?;
+    if now.store_ref().is_ok() {
+        return Err(refused(
+            "Conflict",
+            format!("Store {name}'s record changed meanwhile; nothing was removed"),
+        ));
+    }
+    (related.store_idle)(home, name)?;
+    std::fs::remove_file(paths::store_record(home, name)).map_err(failed)?;
+    let projects = paths::store_dir(home, name).join("project");
+    match std::fs::remove_dir_all(projects) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(failed(error)),
+    }
+    layerfs_home::home::generation::moved(home);
+    let file = paths::store_file(home, name);
+    if !file.exists() {
+        return Ok(Vec::new());
+    }
+    let shown = shell_word(&file.display().to_string());
+    Ok(vec![format!(
+        "Store {name}'s file {} was kept, since its record was not read: `rm -f {shown}*` \
+         removes it and its -wal and -shm files",
+        file.display()
+    )])
 }

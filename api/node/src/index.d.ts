@@ -19,13 +19,29 @@ export type ProgressHandler = (progress: Value) => void;
 /** Receives command output as it is passed on: a string when the bytes are UTF-8, else a Buffer. */
 export type OutputHandler = (bytes: string | Buffer) => void;
 
-/** A refused call: `code` is stable (InvalidInput, NotFound, InUse, Exists,
- * Conflict, Unsupported, Unavailable, Unknown, Failed, …). */
+/** The thirteen public refusal codes. */
+export type ErrorCode = "NotFound" | "Exists" | "InUse" | "Busy" | "Unresolved" | "Conflict" | "Dirty" | "Capacity" | "InvalidInput" | "Unsupported" | "Unavailable" | "Failed" | "Unknown";
+/** A refusal as the library answers it. */
+export interface Refusal {
+  error: ErrorCode;
+  message: string;
+  fix?: string | null;
+  detail?: Value | null;
+  [field: string]: Value | undefined;
+}
+/** A refused call: `code` (also `error`) is one of the thirteen public
+ * codes, `fix` one runnable shell line or null; the fields the next call
+ * needs (a Conflict's `commit`, a Busy's `op`) are properties of the error.
+ * `detail` is present when the call asked for the long form, else null. */
 export class LayerFSError extends Error {
   constructor(code: string, message: string, detail?: Value | null);
+  static from(refused: Refusal): LayerFSError;
   readonly name: "LayerFSError";
-  readonly code: string;
+  readonly code: ErrorCode | string;
+  readonly error: ErrorCode | string;
+  readonly fix: string | null;
   readonly detail: Value | null;
+  readonly [field: string]: unknown;
 }
 
 /** A folder scope binding a client to one project. */
@@ -35,9 +51,13 @@ export interface Scope {
   branch?: string;
 }
 
-/** What every call's options may carry: `log_tag`, an opaque tag (at most
- * 128 bytes) for the call's line in the home's call log. */
+/** What every call's options may carry: `detail` for the long form of its
+ * answer (every key, nulls included), `with` for the sections its table
+ * entry lists, and `log_tag`, an opaque tag (at most 128 bytes) for the
+ * call's line in the home's call log. */
 export interface CallOptions {
+  detail?: boolean;
+  with?: readonly string[];
   log_tag?: string;
 }
 
@@ -47,67 +67,61 @@ export interface ClientOptions {
   scope?: Scope;
 }
 
+/** The keys of one answer map; `parts` are the keys with a form of their own. */
+export interface CallForm {
+  short: { always: readonly string[]; sometimes: readonly string[] };
+  long: readonly string[];
+  parts?: { readonly [key: string]: CallForm | { scalar: string } };
+}
+/** One positional or option; `shell` is the flag of a secret option the shell reads from stdin,
+ * `repeat` marks an option the shell takes more than once, `required` an option that must be given. */
+export interface CallArg {
+  name: string;
+  kind: string;
+  optional: boolean;
+  shell?: string;
+  repeat?: boolean;
+  required?: boolean;
+}
 export interface CallSpec {
   family: string;
   call: string;
-  args: readonly { name: string; kind: string; optional: boolean }[];
-  options: readonly { name: string; kind: string; optional: boolean }[];
+  args: readonly CallArg[];
+  options: readonly CallArg[];
   help: string;
+  /** What a migrated call declares of its answer (call surface 2.0); absent until then. */
+  form?: CallForm & {
+    with: { readonly [section: string]: { where: "own" | "item" | "top"; keys: readonly string[]; form?: CallForm } };
+    paging: "cursor" | "line" | "byte" | null;
+    progress: boolean;
+    quiet: boolean;
+    profile: "agent" | "full";
+  };
 }
 
-export interface DoctorCheck {
-  id: string;
-  code: string;
-  outcome: "pass" | "fail" | "blocked" | "skipped" | "unknown";
-  severity: "error" | "warning" | null;
-  entity: { kind: string; name: string };
-  message: string;
-  evidence: Value;
-  fix: string;
-  blocked_by: string[];
-  observed_ms: number;
-  duration_ms: number | null;
-}
-export interface DoctorOptions {
-  home?: string;
-  target?: "host" | "machine" | "sandbox" | "store.integrity" | "store.connection" | "backup.connection";
-  name?: string;
-  timeout?: string;
-  quick?: boolean;
-  write_test?: boolean;
-}
-export interface DoctorReport {
-  ok: boolean;
-  complete?: boolean;
-  checks?: DoctorCheck[];
-  truncated?: boolean;
-  counts?: Record<string, number>;
-  target?: { kind: string; name: string };
-  home?: string;
-  operation?: "diagnose" | "integrity" | "connection";
-  mode?: "full" | "quick" | "observation" | "write-test";
-  observed_at_ms?: number;
-  duration_ms?: number;
-  findings: { severity: string; entity: { kind: string; name: string }; message: string; fix: string | null; leftover?: DoctorLeftover }[];
-  /** The legacy report: each machine walked for leftovers. */
-  leftovers?: { machine: string; complete: boolean; image_locks: number; unmount_markers: number }[];
-}
-/** What an interrupted operation left, on a finding of the legacy report;
- * `doctor.fix(id)` removes it when `fixable`. */
-export interface DoctorLeftover {
-  machine: string;
-  kind: "run-folder" | "empty-root" | "init-copy" | "backup-staging" | "image-tmp" | "image-part";
-  path: string;
-  /** null when the walk's bound ended before it was measured */
-  bytes: number | null;
-  /** seconds since it last changed */
-  age: number;
-  id: string;
-  fixable: boolean;
-  /** a folder copy: ms since the epoch from which `doctor.fix` removes it */
-  not_before?: number;
+
+
+/** Options of `home.get`; an unknown option is refused. */
+export interface HomeGetOptions extends CallOptions {
+  with?: readonly ("platforms" | "tree")[];
 }
 
+/** Options of `home.log`; an unknown option is refused. */
+export interface HomeLogOptions extends CallOptions {
+  call?: string;
+  project?: string;
+  client?: string;
+  tag?: string;
+  outcome?: string;
+  since?: WholeNumber;
+  limit?: WholeNumber;
+  cursor?: string;
+}
+
+/** Options of `home.doctor`; an unknown option is refused. */
+export interface HomeDoctorOptions extends CallOptions {
+  on_progress?: ProgressHandler;
+}
 
 /** Options of `project.init`; an unknown option is refused. */
 export interface ProjectInitOptions extends CallOptions {
@@ -117,194 +131,232 @@ export interface ProjectInitOptions extends CallOptions {
 
 /** Options of `project.list`; an unknown option is refused. */
 export interface ProjectListOptions extends CallOptions {
-  page_size?: WholeNumber;
-  page_pos?: WholeNumber;
+  store?: string;
+  limit?: WholeNumber;
+  cursor?: string;
+  with?: readonly ("stats")[];
+}
+
+/** Options of `project.stats`; an unknown option is refused. */
+export interface ProjectStatsOptions extends CallOptions {
+  branch?: string;
+  at?: string;
 }
 
 /** Options of `project.export`; an unknown option is refused. */
 export interface ProjectExportOptions extends CallOptions {
   branch?: string;
+  at?: string;
+  on_progress?: ProgressHandler;
+}
+
+/** Options of `project.doctor`; an unknown option is refused. */
+export interface ProjectDoctorOptions extends CallOptions {
+  full?: boolean;
   on_progress?: ProgressHandler;
 }
 
 /** Options of `branch.list`; an unknown option is refused. */
 export interface BranchListOptions extends CallOptions {
-  page_size?: WholeNumber;
-  page_pos?: WholeNumber;
-  page?: WholeNumber;
+  prefix?: string;
+  exclude_prefix?: string;
+  limit?: WholeNumber;
+  cursor?: string;
 }
 
-/** Options of `branch.commits`; an unknown option is refused. */
-export interface BranchCommitsOptions extends CallOptions {
-  page?: WholeNumber;
-  page_size?: WholeNumber;
-  at_commit?: string;
-  include_storage?: boolean;
+/** Options of `branch.fork`; an unknown option is refused. */
+export interface BranchForkOptions extends CallOptions {
+  at?: string;
 }
 
 /** Options of `branch.merge`; an unknown option is refused. */
 export interface BranchMergeOptions extends CallOptions {
-  message?: string;
+  into?: string;
   units?: Value;
+  expected?: string;
+  message?: string;
 }
 
 /** Options of `branch.publish`; an unknown option is refused. */
 export interface BranchPublishOptions extends CallOptions {
-  expected_base?: string;
-  expected_head?: string;
+  at?: string;
+  expected?: string;
   force?: boolean;
-}
-
-/** Options of `branch.diff`; an unknown option is refused. */
-export interface BranchDiffOptions extends CallOptions {
-  paths_only?: boolean;
-  page_size?: WholeNumber;
-  page_pos?: WholeNumber;
-  cursor?: string;
-  page?: WholeNumber;
-  from_commit?: string;
-  to_commit?: string;
-  path_prefix?: string;
-  include_attribution?: boolean;
-  continuation?: string;
 }
 
 /** Options of `commit.list`; an unknown option is refused. */
 export interface CommitListOptions extends CallOptions {
-  page_size?: WholeNumber;
-  page_pos?: WholeNumber;
+  at?: string;
+  limit?: WholeNumber;
+  cursor?: string;
+}
+
+/** Options of `commit.get`; an unknown option is refused. */
+export interface CommitGetOptions extends CallOptions {
+  branch?: string;
 }
 
 /** Options of `commit.diff`; an unknown option is refused. */
 export interface CommitDiffOptions extends CallOptions {
-  paths_only?: boolean;
-  page_size?: WholeNumber;
-  page_pos?: WholeNumber;
+  from?: string;
+  path?: string;
+  limit?: WholeNumber;
   cursor?: string;
+  with?: readonly ("patch")[];
 }
 
 /** Options of `file.read`; an unknown option is refused. */
 export interface FileReadOptions extends CallOptions {
-  start_line?: WholeNumber;
-  end_line?: WholeNumber;
+  at?: string;
+  line?: WholeNumber;
+  limit?: WholeNumber;
+}
+
+/** Options of `file.stat`; an unknown option is refused. */
+export interface FileStatOptions extends CallOptions {
+  at?: string;
 }
 
 /** Options of `file.list`; an unknown option is refused. */
 export interface FileListOptions extends CallOptions {
-  page_size?: WholeNumber;
-  page?: WholeNumber;
-  page_pos?: WholeNumber;
+  at?: string;
+  limit?: WholeNumber;
+  cursor?: string;
 }
 
 /** Options of `file.glob`; an unknown option is refused. */
 export interface FileGlobOptions extends CallOptions {
-  page_size?: WholeNumber;
-  page?: WholeNumber;
-  page_pos?: WholeNumber;
+  exclude?: string;
+  at?: string;
+  limit?: WholeNumber;
+  cursor?: string;
 }
 
 /** Options of `file.grep`; an unknown option is refused. */
 export interface FileGrepOptions extends CallOptions {
-  page_size?: WholeNumber;
-  page?: WholeNumber;
-  page_pos?: WholeNumber;
+  include?: string;
+  exclude?: string;
+  ignore_case?: boolean;
+  at?: string;
+  limit?: WholeNumber;
+  cursor?: string;
 }
 
-/** Options of `file.revision`; an unknown option is refused. */
-export interface FileRevisionOptions extends CallOptions {
-  at_commit?: string;
+/** Options of `file.history`; an unknown option is refused. */
+export interface FileHistoryOptions extends CallOptions {
+  at?: string;
   traversal?: string;
-  page?: WholeNumber;
-  page_size?: WholeNumber;
-  continuation?: string;
+  limit?: WholeNumber;
+  cursor?: string;
 }
 
 /** Options of `file.blame`; an unknown option is refused. */
 export interface FileBlameOptions extends CallOptions {
-  from_line?: WholeNumber;
-  line_count?: WholeNumber;
-}
-
-/** Options of `file.diff`; an unknown option is refused. */
-export interface FileDiffOptions extends CallOptions {
-  left_commit?: string;
-  right_commit?: string;
-  include_attribution?: boolean;
-  allow_missing?: boolean;
-  page?: WholeNumber;
-  page_size?: WholeNumber;
+  at?: string;
+  line?: WholeNumber;
+  limit?: WholeNumber;
 }
 
 /** Options of `file.write`; an unknown option is refused. */
 export interface FileWriteOptions extends CallOptions {
+  mode?: string;
+  expected?: string;
   message?: string;
-  mode?: WholeNumber;
 }
 
 /** Options of `file.edit`; an unknown option is refused. */
 export interface FileEditOptions extends CallOptions {
-  old?: string;
-  new?: string;
+  old_string: string;
+  new_string: string;
+  replace_all?: boolean;
+  expected?: string;
   message?: string;
 }
 
 /** Options of `file.rm`; an unknown option is refused. */
 export interface FileRmOptions extends CallOptions {
+  recursive?: boolean;
+  expected?: string;
   message?: string;
 }
 
 /** Options of `file.mkdir`; an unknown option is refused. */
 export interface FileMkdirOptions extends CallOptions {
+  mode?: string;
+  expected?: string;
   message?: string;
-  mode?: WholeNumber;
 }
 
 /** Options of `file.mv`; an unknown option is refused. */
 export interface FileMvOptions extends CallOptions {
+  expected?: string;
   message?: string;
 }
 
 /** Options of `file.cp`; an unknown option is refused. */
 export interface FileCpOptions extends CallOptions {
+  expected?: string;
   message?: string;
 }
 
 /** Options of `file.apply`; an unknown option is refused. */
 export interface FileApplyOptions extends CallOptions {
+  expected?: string;
   message?: string;
 }
 
 /** Options of `sandbox.create`; an unknown option is refused. */
 export interface SandboxCreateOptions extends CallOptions {
+  machine?: string;
   image?: string;
+  mount?: string;
   on_progress?: ProgressHandler;
 }
 
 /** Options of `sandbox.list`; an unknown option is refused. */
 export interface SandboxListOptions extends CallOptions {
-  page_size?: WholeNumber;
-  page_pos?: WholeNumber;
-  live?: boolean;
+  project?: string;
+  machine?: string;
+  limit?: WholeNumber;
+  cursor?: string;
 }
 
 /** Options of `sandbox.get`; an unknown option is refused. */
 export interface SandboxGetOptions extends CallOptions {
-  page_size?: WholeNumber;
-  page_pos?: WholeNumber;
+  with?: readonly ("stats")[];
 }
 
-/** Options of `sandbox.close`; an unknown option is refused. */
-export interface SandboxCloseOptions extends CallOptions {
+/** Options of `sandbox.remove`; an unknown option is refused. */
+export interface SandboxRemoveOptions extends CallOptions {
   force?: boolean;
+  on_progress?: ProgressHandler;
 }
 
 /** Options of `sandbox.files`; an unknown option is refused. */
 export interface SandboxFilesOptions extends CallOptions {
   depth?: WholeNumber;
-  cursor?: string;
   limit?: WholeNumber;
-  offset?: WholeNumber;
-  length?: WholeNumber;
+  cursor?: string;
+  byte_offset?: WholeNumber;
+  byte_length?: WholeNumber;
+}
+
+/** Options of `sandbox.log`; an unknown option is refused. */
+export interface SandboxLogOptions extends CallOptions {
+  limit?: WholeNumber;
+  cursor?: string;
+}
+
+/** Options of `sandbox.doctor`; an unknown option is refused. */
+export interface SandboxDoctorOptions extends CallOptions {
+  on_progress?: ProgressHandler;
+}
+
+/** Options of `workspace.list`; an unknown option is refused. */
+export interface WorkspaceListOptions extends CallOptions {
+  sandbox?: string;
+  limit?: WholeNumber;
+  cursor?: string;
 }
 
 /** Options of `workspace.mount`; an unknown option is refused. */
@@ -314,22 +366,24 @@ export interface WorkspaceMountOptions extends CallOptions {
 
 /** Options of `workspace.exec`; an unknown option is refused. */
 export interface WorkspaceExecOptions extends CallOptions {
-  message?: string;
+  cwd?: string;
+  env?: Value;
+  stdin?: Content;
   stream?: boolean;
   stdout?: OutputHandler;
   stderr?: OutputHandler;
-  exec_id?: string;
   on_progress?: ProgressHandler;
 }
 
-/** Options of `workspace.exec_cancel`; an unknown option is refused. */
-export interface WorkspaceExecCancelOptions extends CallOptions {
-  grace_ms?: WholeNumber;
+/** Options of `workspace.cancel`; an unknown option is refused. */
+export interface WorkspaceCancelOptions extends CallOptions {
+  exec?: string;
 }
 
 /** Options of `workspace.commit`; an unknown option is refused. */
 export interface WorkspaceCommitOptions extends CallOptions {
   message?: string;
+  expected?: string;
   force?: boolean;
 }
 
@@ -339,8 +393,28 @@ export interface WorkspaceUnmountOptions extends CallOptions {
   force?: boolean;
 }
 
-/** Options of `machine.load`; an unknown option is refused. */
-export interface MachineLoadOptions extends CallOptions {
+/** Options of `workspace.status`; an unknown option is refused. */
+export interface WorkspaceStatusOptions extends CallOptions {
+  path?: string;
+}
+
+/** Options of `machine.list`; an unknown option is refused. */
+export interface MachineListOptions extends CallOptions {
+  with?: readonly ("live")[];
+}
+
+/** Options of `machine.get`; an unknown option is refused. */
+export interface MachineGetOptions extends CallOptions {
+  with?: readonly ("live")[];
+}
+
+/** Options of `machine.images`; an unknown option is refused. */
+export interface MachineImagesOptions extends CallOptions {
+  with?: readonly ("docker")[];
+}
+
+/** Options of `machine.load_image`; an unknown option is refused. */
+export interface MachineLoadImageOptions extends CallOptions {
   on_progress?: ProgressHandler;
 }
 
@@ -349,13 +423,24 @@ export interface MachinePruneOptions extends CallOptions {
   unused?: boolean;
 }
 
+/** Options of `machine.stats`; an unknown option is refused. */
+export interface MachineStatsOptions extends CallOptions {
+  with?: readonly ("space")[];
+}
+
 /** Options of `machine.files`; an unknown option is refused. */
 export interface MachineFilesOptions extends CallOptions {
   depth?: WholeNumber;
-  cursor?: string;
   limit?: WholeNumber;
-  offset?: WholeNumber;
-  length?: WholeNumber;
+  cursor?: string;
+  byte_offset?: WholeNumber;
+  byte_length?: WholeNumber;
+}
+
+/** Options of `machine.log`; an unknown option is refused. */
+export interface MachineLogOptions extends CallOptions {
+  limit?: WholeNumber;
+  cursor?: string;
 }
 
 /** Options of `machine.start`; an unknown option is refused. */
@@ -366,6 +451,7 @@ export interface MachineStartOptions extends CallOptions {
 /** Options of `machine.stop`; an unknown option is refused. */
 export interface MachineStopOptions extends CallOptions {
   force?: boolean;
+  on_progress?: ProgressHandler;
 }
 
 /** Options of `machine.create`; an unknown option is refused. */
@@ -375,6 +461,11 @@ export interface MachineCreateOptions extends CallOptions {
   disk?: Size;
   image?: string;
   os_image?: string;
+  on_progress?: ProgressHandler;
+}
+
+/** Options of `machine.remove`; an unknown option is refused. */
+export interface MachineRemoveOptions extends CallOptions {
   on_progress?: ProgressHandler;
 }
 
@@ -388,33 +479,53 @@ export interface MachineUpdateOptions extends CallOptions {
   daemon?: string;
 }
 
-/** Options of `store.status`; an unknown option is refused. */
-export interface StoreStatusOptions extends CallOptions {
+/** Options of `machine.doctor`; an unknown option is refused. */
+export interface MachineDoctorOptions extends CallOptions {
+  on_progress?: ProgressHandler;
+}
+
+/** Options of `store.list`; an unknown option is refused. */
+export interface StoreListOptions extends CallOptions {
+  machine?: string;
+  with?: readonly ("stats")[];
+}
+
+/** Options of `store.get`; an unknown option is refused. */
+export interface StoreGetOptions extends CallOptions {
+  with?: readonly ("live" | "stats")[];
+}
+
+/** Options of `store.create`; an unknown option is refused. */
+export interface StoreCreateOptions extends CallOptions {
   machine?: string;
 }
 
 /** Options of `store.connect`; an unknown option is refused. */
 export interface StoreConnectOptions extends CallOptions {
-  password?: string;
+  auth?: string;
+  machine?: string;
   synchronous_commit?: string;
+}
+
+/** Options of `store.disconnect`; an unknown option is refused. */
+export interface StoreDisconnectOptions extends CallOptions {
+  machine?: string;
+}
+
+/** Options of `store.save_auth`; an unknown option is refused. */
+export interface StoreSaveAuthOptions extends CallOptions {
+  user: string;
+  password: Content;
 }
 
 /** Options of `store.update`; an unknown option is refused. */
 export interface StoreUpdateOptions extends CallOptions {
-  machine?: string;
-  url?: string;
-  password?: string;
+  auth?: string;
   synchronous_commit?: string;
-  clear?: boolean;
 }
 
-/** Options of `store.push`; an unknown option is refused. */
-export interface StorePushOptions extends CallOptions {
-  on_progress?: ProgressHandler;
-}
-
-/** Options of `store.pull`; an unknown option is refused. */
-export interface StorePullOptions extends CallOptions {
+/** Options of `store.move`; an unknown option is refused. */
+export interface StoreMoveOptions extends CallOptions {
   on_progress?: ProgressHandler;
 }
 
@@ -423,15 +534,26 @@ export interface StoreCompactOptions extends CallOptions {
   on_progress?: ProgressHandler;
 }
 
+/** Options of `store.doctor`; an unknown option is refused. */
+export interface StoreDoctorOptions extends CallOptions {
+  machine?: string;
+  on_progress?: ProgressHandler;
+}
+
 /** Options of `backup.connect`; an unknown option is refused. */
 export interface BackupConnectOptions extends CallOptions {
-  key?: string;
-  region?: string;
-  part_size?: Size;
+  access_key: string;
+  secret_key: Content;
+}
+
+/** Options of `backup.list`; an unknown option is refused. */
+export interface BackupListOptions extends CallOptions {
+  bucket?: string;
 }
 
 /** Options of `backup.create`; an unknown option is refused. */
 export interface BackupCreateOptions extends CallOptions {
+  file?: string;
   on_progress?: ProgressHandler;
 }
 
@@ -440,253 +562,211 @@ export interface BackupRestoreOptions extends CallOptions {
   on_progress?: ProgressHandler;
 }
 
-/** Options of `logs.list`; an unknown option is refused. */
-export interface LogsListOptions extends CallOptions {
-  op?: string;
-  project?: string;
-  client?: string;
-  tag?: string;
-  outcome?: string;
-  since?: WholeNumber;
-  cursor?: string;
-  limit?: WholeNumber;
-}
-
-/** Options of `logs.machine`; an unknown option is refused. */
-export interface LogsMachineOptions extends CallOptions {
-  cursor?: string;
-  before?: string;
-  limit?: WholeNumber;
-}
-
-/** Options of `logs.sandbox`; an unknown option is refused. */
-export interface LogsSandboxOptions extends CallOptions {
-  cursor?: string;
-  before?: string;
-  limit?: WholeNumber;
+/** Options of `backup.doctor`; an unknown option is refused. */
+export interface BackupDoctorOptions extends CallOptions {
+  full?: boolean;
 }
 
 export interface HomeFamily {
-  /** create this home, or convert an older one; a current home is left as it is */
+  /** create this home; a current home is left as it is */
   init(options?: CallOptions): Promise<Result>;
-  /** the home's state, and the Linux bundle and daemon this build would use; changes nothing */
-  get(options?: CallOptions): Promise<Result>;
+  /** the home's state and build; with --with, the platforms this computer supports or the tree of everything in the home */
+  get(options?: HomeGetOptions): Promise<Result>;
+  /** the calls made against this home, newest first */
+  log(options?: HomeLogOptions): Promise<Result>;
+  /** clear this home's call log */
+  clear_log(options?: CallOptions): Promise<Result>;
+  /** check the home, then each machine, PostgreSQL Store and bucket, shallowly */
+  doctor(options?: HomeDoctorOptions): Promise<Result>;
 }
 
 export interface ProjectFamily {
-  /** import a host folder as a new project into an existing Store */
+  /** import a folder on this computer as a new project into an existing Store */
   init(project: string, folder: string, options?: ProjectInitOptions): Promise<Result>;
   /** every project in the home, or one Store's */
-  list(options: ProjectListOptions): Promise<Result>;
-  list(store?: string | null, options?: ProjectListOptions): Promise<Result>;
-  /** a project's record: its Store, kind and machine */
+  list(options?: ProjectListOptions): Promise<Result>;
+  /** one project: its Store, state and main's head */
   get(project: string, options?: CallOptions): Promise<Result>;
-  /** entry counts of one pinned saved tree */
-  stats(project: string, options: CallOptions): Promise<Result>;
-  stats(project: string, branch?: string | null, options: CallOptions): Promise<Result>;
-  stats(project: string, branch?: string | null, commit?: string | null, options?: CallOptions): Promise<Result>;
-  /** export a project's snapshot from its Store to a local folder */
+  /** entry counts and size of the tree at a Branch's head or a Commit */
+  stats(project: string, options?: ProjectStatsOptions): Promise<Result>;
+  /** export a Branch's committed tree to a folder on this computer */
   export(project: string, destination: string, options?: ProjectExportOptions): Promise<Result>;
   /** retire one project in its Store and remove its home entry */
   delete(project: string, options?: CallOptions): Promise<Result>;
-  /** hide one absolute path from every node at or below its marker frontier */
-  remove_file(project: string, path: string, options?: CallOptions): Promise<Result>;
+  /** hide one absolute path from the project's whole history; frees no bytes */
+  hide_path(project: string, path: string, options?: CallOptions): Promise<Result>;
+  /** check one project's record; with --full, also read and check its data */
+  doctor(project: string, options?: ProjectDoctorOptions): Promise<Result>;
 }
 
 export interface BranchFamily {
-  /** a project's Branches */
+  /** a project's Branches, main included, in name order */
   list(project: string, options?: BranchListOptions): Promise<Result>;
   /** one Branch and its head Commit */
   get(project: string, branch: string, options?: CallOptions): Promise<Result>;
-  /** saved branch commits or main publications, newest first */
-  commits(project: string, branch: string, options?: BranchCommitsOptions): Promise<Result>;
-  /** one saved Commit or main publication */
-  get_commit(project: string, branch: string, commit: string, options?: CallOptions): Promise<Result>;
-  /** a new Branch from another Branch's head or Commit */
-  fork(project: string, name: string, from_branch: string, options: CallOptions): Promise<Result>;
-  fork(project: string, name: string, from_branch: string, from_commit?: string | null, options?: CallOptions): Promise<Result>;
-  /** merge two Branches into a new one */
-  merge(project: string, name: string, a: string, b: string, options?: BranchMergeOptions): Promise<Result>;
-  /** a Branch's head or Commit as main's next Layer, refusing a stale base */
-  publish(project: string, branch: string, options: BranchPublishOptions): Promise<Result>;
-  publish(project: string, branch: string, commit?: string | null, options?: BranchPublishOptions): Promise<Result>;
-  /** files that differ between two Branches' heads */
-  diff(project: string, from_branch: string, to_branch: string, options?: BranchDiffOptions): Promise<Result>;
-  /** soft-remove one Branch; its name stays taken until compaction */
+  /** a new Branch from another Branch's head, or from a Commit */
+  fork(project: string, name: string, options: BranchForkOptions): Promise<Result>;
+  fork(project: string, name: string, from?: string | null, options?: BranchForkOptions): Promise<Result>;
+  /** merge one Branch into another, or into a new Branch */
+  merge(project: string, branch: string, from: string, options?: BranchMergeOptions): Promise<Result>;
+  /** a Branch's head or Commit as main's next head, refusing a stale base */
+  publish(project: string, branch: string, options?: BranchPublishOptions): Promise<Result>;
+  /** remove one Branch; its name stays taken until compaction */
   remove(project: string, branch: string, options?: CallOptions): Promise<Result>;
 }
 
 export interface CommitFamily {
   /** a Branch's Commits, newest first */
   list(project: string, branch: string, options?: CommitListOptions): Promise<Result>;
-  /** one Commit of a Branch */
-  get(project: string, branch: string, commit: string, options?: CallOptions): Promise<Result>;
-  /** files that differ between two Commits */
-  diff(project: string, from_commit: string, to_commit: string, options?: CommitDiffOptions): Promise<Result>;
+  /** one Commit, by its id or a prefix of 8 or more characters */
+  get(project: string, commit: string, options?: CommitGetOptions): Promise<Result>;
+  /** the paths that differ between two Commits or Branches */
+  diff(project: string, ref: string, options?: CommitDiffOptions): Promise<Result>;
 }
 
 export interface FileFamily {
-  /** read a file */
-  read(project: string, branch: string, path: string, options: FileReadOptions): Promise<Result>;
-  read(project: string, branch: string, path: string, commit?: string | null, options?: FileReadOptions): Promise<Result>;
-  /** a path's kind, size and mode */
-  stat(project: string, branch: string, path: string, options: CallOptions): Promise<Result>;
-  stat(project: string, branch: string, path: string, commit?: string | null, options?: CallOptions): Promise<Result>;
+  /** read a text file, or a window of its lines */
+  read(project: string, branch: string, path: string, options?: FileReadOptions): Promise<Result>;
+  /** a path's type, size and mode */
+  stat(project: string, branch: string, path: string, options?: FileStatOptions): Promise<Result>;
   /** a folder's entries */
-  list(project: string, branch: string, path: string, options: FileListOptions): Promise<Result>;
-  list(project: string, branch: string, path: string, commit?: string | null, options?: FileListOptions): Promise<Result>;
-  /** paths under `path` matching a glob */
-  glob(project: string, branch: string, path: string, pattern: string, options: FileGlobOptions): Promise<Result>;
-  glob(project: string, branch: string, path: string, pattern: string, commit?: string | null, options?: FileGlobOptions): Promise<Result>;
-  /** lines under `path` matching a regular expression */
-  grep(project: string, branch: string, path: string, pattern: string, options: FileGrepOptions): Promise<Result>;
-  grep(project: string, branch: string, path: string, pattern: string, commit?: string | null, options?: FileGrepOptions): Promise<Result>;
-  /** saved changes to a literal path */
-  revision(project: string, branch: string, path: string, options?: FileRevisionOptions): Promise<Result>;
-  /** the Commit of each line */
-  blame(project: string, branch: string, path: string, options: FileBlameOptions): Promise<Result>;
-  blame(project: string, branch: string, path: string, commit?: string | null, options?: FileBlameOptions): Promise<Result>;
-  /** the difference between two files */
-  diff(project: string, left_branch: string, left_path: string, right_branch: string, right_path: string, options?: FileDiffOptions): Promise<Result>;
+  list(project: string, branch: string, path: string, options?: FileListOptions): Promise<Result>;
+  /** paths under a folder that match a glob */
+  glob(project: string, branch: string, pattern: string, options: FileGlobOptions): Promise<Result>;
+  glob(project: string, branch: string, pattern: string, path?: string | null, options?: FileGlobOptions): Promise<Result>;
+  /** lines under a folder that contain a literal text */
+  grep(project: string, branch: string, pattern: string, options: FileGrepOptions): Promise<Result>;
+  grep(project: string, branch: string, pattern: string, path?: string | null, options?: FileGrepOptions): Promise<Result>;
+  /** the Commits that changed one path, newest first */
+  history(project: string, branch: string, path: string, options?: FileHistoryOptions): Promise<Result>;
+  /** the Commit that last changed each line of a text file */
+  blame(project: string, branch: string, path: string, options?: FileBlameOptions): Promise<Result>;
   /** write a file; one Commit */
   write(project: string, branch: string, path: string, content: Content, options?: FileWriteOptions): Promise<Result>;
-  /** replace one unique text in a file; one Commit */
-  edit(project: string, branch: string, path: string, options?: FileEditOptions): Promise<Result>;
+  /** replace a text in a file; one Commit */
+  edit(project: string, branch: string, path: string, options: FileEditOptions): Promise<Result>;
   /** remove a path; one Commit */
   rm(project: string, branch: string, path: string, options?: FileRmOptions): Promise<Result>;
-  /** make a folder; one Commit */
+  /** make a folder and its missing parents; one Commit */
   mkdir(project: string, branch: string, path: string, options?: FileMkdirOptions): Promise<Result>;
   /** move a path; one Commit */
-  mv(project: string, branch: string, from_path: string, to_path: string, options?: FileMvOptions): Promise<Result>;
-  /** copy a path; one Commit */
-  cp(project: string, branch: string, from_path: string, to_path: string, options?: FileCpOptions): Promise<Result>;
-  /** apply a list of changes; one Commit */
+  mv(project: string, branch: string, from: string, to: string, options?: FileMvOptions): Promise<Result>;
+  /** copy a path, a folder with everything in it; one Commit */
+  cp(project: string, branch: string, from: string, to: string, options?: FileCpOptions): Promise<Result>;
+  /** apply a list of changes; one Commit, all or none */
   apply(project: string, branch: string, changes: Value, options?: FileApplyOptions): Promise<Result>;
 }
 
 export interface SandboxFamily {
-  /** start a named Sandbox of a project on a machine (default: its sqlite Store's, or native) */
-  create(project: string, name: string, options: SandboxCreateOptions): Promise<Result>;
-  create(project: string, name: string, machine?: string | null, options?: SandboxCreateOptions): Promise<Result>;
-  /** every Sandbox in the home, or one project's */
-  list(options: SandboxListOptions): Promise<Result>;
-  list(project?: string | null, options?: SandboxListOptions): Promise<Result>;
-  /** a Sandbox and its Workspaces */
-  get(name: string, options?: SandboxGetOptions): Promise<Result>;
-  /** stop a Sandbox */
-  close(name: string, options?: SandboxCloseOptions): Promise<Result>;
-  /** a Sandbox's files: its roots, or a folder or file under its home or in its root */
+  /** start a named Sandbox of a project on a machine; with --mount, also mount a Branch in it */
+  create(project: string, name: string, options?: SandboxCreateOptions): Promise<Result>;
+  /** every Sandbox in the home, or one project's or one machine's */
+  list(options?: SandboxListOptions): Promise<Result>;
+  /** one Sandbox: its state and its Workspaces */
+  get(sandbox: string, options?: SandboxGetOptions): Promise<Result>;
+  /** stop a Sandbox and remove it */
+  remove(sandbox: string, options?: SandboxRemoveOptions): Promise<Result>;
+  /** a Sandbox's files: its roots, one page of a folder, or one byte window of a file */
   files(sandbox: string, options: SandboxFilesOptions): Promise<Result>;
   files(sandbox: string, path?: string | null, options?: SandboxFilesOptions): Promise<Result>;
+  /** a Sandbox's daemon log: its last lines, or the lines before a cursor */
+  log(sandbox: string, options?: SandboxLogOptions): Promise<Result>;
+  /** check one Sandbox: its record, runtime and daemon, then each of its Workspaces */
+  doctor(sandbox: string, options?: SandboxDoctorOptions): Promise<Result>;
 }
 
 export interface WorkspaceFamily {
+  /** every mounted Workspace, or one Sandbox's */
+  list(options?: WorkspaceListOptions): Promise<Result>;
   /** mount a Branch in a Sandbox */
   mount(sandbox: string, branch: string, options?: WorkspaceMountOptions): Promise<Result>;
   /** run one bash command in a Workspace */
-  exec(ws: string, command: string, options?: WorkspaceExecOptions): Promise<Result>;
-  /** end a running command: SIGTERM, then SIGKILL after grace_ms */
-  exec_cancel(ws: string, exec_id: string, options?: WorkspaceExecCancelOptions): Promise<Result>;
+  exec(workspace: string, command: string, options?: WorkspaceExecOptions): Promise<Result>;
+  /** end the commands running in a Workspace, or one of them */
+  cancel(workspace: string, options?: WorkspaceCancelOptions): Promise<Result>;
   /** commit a Workspace's changes to its Branch */
-  commit(ws: string, options?: WorkspaceCommitOptions): Promise<Result>;
+  commit(workspace: string, options?: WorkspaceCommitOptions): Promise<Result>;
   /** end a Workspace */
-  unmount(ws: string, options?: WorkspaceUnmountOptions): Promise<Result>;
-  /** a Workspace's changes since its base */
-  status(ws: string, options?: CallOptions): Promise<Result>;
+  unmount(workspace: string, options?: WorkspaceUnmountOptions): Promise<Result>;
+  /** a Workspace's uncommitted changes, and whether its Branch moved */
+  status(workspace: string, options?: WorkspaceStatusOptions): Promise<Result>;
 }
 
 export interface MachineFamily {
-  /** every machine, with what it supports */
-  list(options?: CallOptions): Promise<Result>;
-  /** the platforms this host and build support, and what each is missing */
-  platforms(options?: CallOptions): Promise<Result>;
-  /** a machine's record */
-  get(name: string, options?: CallOptions): Promise<Result>;
-  /** the Sandbox images a machine holds, and the host's Docker images it can copy */
-  images(name: string, options?: CallOptions): Promise<Result>;
+  /** every machine, from the home's records */
+  list(options?: MachineListOptions): Promise<Result>;
+  /** a machine's record and state */
+  get(machine: string, options?: MachineGetOptions): Promise<Result>;
+  /** the Sandbox images a machine holds */
+  images(machine: string, options?: MachineImagesOptions): Promise<Result>;
   /** copy an image from the host's Docker to a machine without creating a Sandbox */
-  load(name: string, image: string, options?: MachineLoadOptions): Promise<Result>;
+  load_image(machine: string, image: string, options?: MachineLoadImageOptions): Promise<Result>;
   /** remove a Sandbox image from a machine, or every unused one */
-  prune(name: string, options: MachinePruneOptions): Promise<Result>;
-  prune(name: string, image?: string | null, options?: MachinePruneOptions): Promise<Result>;
-  /** a machine's live state, free disk and tool version */
-  status(name: string, options?: CallOptions): Promise<Result>;
+  prune(machine: string, options: MachinePruneOptions): Promise<Result>;
+  prune(machine: string, image?: string | null, options?: MachinePruneOptions): Promise<Result>;
   /** a machine's observed processors, memory and data disk, its Stores' sizes and live Sandboxes */
-  stats(machine: string, options?: CallOptions): Promise<Result>;
-  /** where a machine's data disk goes: its Stores, Sandboxes, images and logs, and what is not LayerFS's */
-  space(machine: string, options?: CallOptions): Promise<Result>;
+  stats(machine: string, options?: MachineStatsOptions): Promise<Result>;
   /** a machine's files: its LayerFS folders by role, or a folder or file of the machine */
   files(machine: string, options: MachineFilesOptions): Promise<Result>;
   files(machine: string, path?: string | null, options?: MachineFilesOptions): Promise<Result>;
+  /** a machine's worker log: its last lines, then the lines before a cursor */
+  log(machine: string, options?: MachineLogOptions): Promise<Result>;
   /** start a stopped machine and its worker; a running one answers at once */
-  start(name: string, options?: MachineStartOptions): Promise<Result>;
+  start(machine: string, options?: MachineStartOptions): Promise<Result>;
   /** stop a machine's worker and VM; its disks stay */
-  stop(name: string, options?: MachineStopOptions): Promise<Result>;
-  /** create an enabled VM machine (apple-container, lima) */
+  stop(machine: string, options?: MachineStopOptions): Promise<Result>;
+  /** create a VM machine (lima, apple-container) and start it */
   create(name: string, platform: string, options?: MachineCreateOptions): Promise<Result>;
-  /** delete a VM machine and its disk; one of a removed platform is only forgotten */
-  remove(name: string, options?: CallOptions): Promise<Result>;
-  /** resize a VM, or set a built-in machine's image, Docker socket and daemon */
-  update(name: string, options?: MachineUpdateOptions): Promise<Result>;
+  /** delete a VM machine and its disk */
+  remove(machine: string, options?: MachineRemoveOptions): Promise<Result>;
+  /** set a machine's image, or a built-in machine's Docker socket, WSL distribution and daemon */
+  update(machine: string, options?: MachineUpdateOptions): Promise<Result>;
+  /** check a machine, then each Store and Sandbox on it */
+  doctor(machine: string, options?: MachineDoctorOptions): Promise<Result>;
 }
 
 export interface StoreFamily {
   /** every Store, from the home's records */
-  list(options?: CallOptions): Promise<Result>;
-  /** a Store's record */
-  get(name: string, options?: CallOptions): Promise<Result>;
-  /** a Store's live state; with a machine, whether it reaches a PostgreSQL Store */
-  status(name: string, options?: StoreStatusOptions): Promise<Result>;
-  /** Store-wide publication and allocation counters */
-  stats(name: string, options?: CallOptions): Promise<Result>;
-  /** an empty sqlite Store on native */
-  create(name: string, options?: CallOptions): Promise<Result>;
-  /** connect a PostgreSQL database as a Store */
-  connect(name: string, url: string, options?: StoreConnectOptions): Promise<Result>;
-  /** change a PostgreSQL Store's connection, or the one a machine alone dials */
-  update(name: string, options?: StoreUpdateOptions): Promise<Result>;
-  /** send a sqlite Store from native to a machine */
-  push(name: string, machine: string, options?: StorePushOptions): Promise<Result>;
-  /** bring a sqlite Store from its machine to native */
-  pull(name: string, options?: StorePullOptions): Promise<Result>;
+  list(options?: StoreListOptions): Promise<Result>;
+  /** a Store's record and state */
+  get(store: string, options?: StoreGetOptions): Promise<Result>;
+  /** an empty sqlite Store */
+  create(name: string, options?: StoreCreateOptions): Promise<Result>;
+  /** connect a PostgreSQL database as a Store, or set an address of a connected one */
+  connect(store: string, url: string, options?: StoreConnectOptions): Promise<Result>;
+  /** forget a PostgreSQL Store, or one machine's own address; its data stays */
+  disconnect(store: string, options?: StoreDisconnectOptions): Promise<Result>;
+  /** save a PostgreSQL login in the home; saving again rotates it */
+  save_auth(auth: string, options: StoreSaveAuthOptions): Promise<Result>;
+  /** the saved PostgreSQL logins and the Stores that use each */
+  auths(options?: CallOptions): Promise<Result>;
+  /** remove a saved PostgreSQL login no Store uses */
+  remove_auth(auth: string, options?: CallOptions): Promise<Result>;
+  /** change a PostgreSQL Store's saved login or its synchronous_commit */
+  update(store: string, options?: StoreUpdateOptions): Promise<Result>;
+  /** move a sqlite Store between this computer and a machine */
+  move(store: string, machine: string, options?: StoreMoveOptions): Promise<Result>;
   /** delete a sqlite Store with every project in it */
-  remove(name: string, options?: CallOptions): Promise<Result>;
+  remove(store: string, options?: CallOptions): Promise<Result>;
   /** reclaim dead bytes from one Store */
-  compact(name: string, options?: StoreCompactOptions): Promise<Result>;
-  /** forget a PostgreSQL Store; its data stays */
-  disconnect(name: string, options?: CallOptions): Promise<Result>;
+  compact(store: string, options?: StoreCompactOptions): Promise<Result>;
+  /** check a Store, then each of its projects */
+  doctor(store: string, options?: StoreDoctorOptions): Promise<Result>;
 }
 
 export interface BackupFamily {
-  /** connect an r2 or MinIO bucket */
-  connect(name: string, url: string, options?: BackupConnectOptions): Promise<Result>;
-  /** forget a bucket and this home's links to it */
-  disconnect(name: string, options?: CallOptions): Promise<Result>;
-  /** every Store file on the connected buckets */
-  list(options: CallOptions): Promise<Result>;
-  list(bucket?: string | null, options?: CallOptions): Promise<Result>;
-  /** upload a sqlite Store to a bucket */
-  create(store: string, bucket: string, options: BackupCreateOptions): Promise<Result>;
-  create(store: string, bucket: string, file?: string | null, options?: BackupCreateOptions): Promise<Result>;
-  /** download a backup as a sqlite Store on native */
-  restore(store: string, bucket: string, options: BackupRestoreOptions): Promise<Result>;
-  restore(store: string, bucket: string, file?: string | null, options?: BackupRestoreOptions): Promise<Result>;
-}
-
-export interface LogsFamily {
-  /** the calls made against this home, newest first */
-  list(options?: LogsListOptions): Promise<Result>;
-  /** clear this home's call log */
-  reset(options?: CallOptions): Promise<Result>;
-  /** a machine's worker log: its last lines, or the lines after or before a cursor */
-  machine(machine: string, options?: LogsMachineOptions): Promise<Result>;
-  /** a Sandbox's daemon log: its last lines, or the lines after or before a cursor */
-  sandbox(sandbox: string, options?: LogsSandboxOptions): Promise<Result>;
-}
-
-export interface DoctorFamily {
-  /** remove one leftover `layerfs doctor` listed, under its guard */
-  fix(id: string, options?: CallOptions): Promise<Result>;
+  /** connect a bucket (r2, or an S3 endpoint) for Store backups */
+  connect(name: string, url: string, options: BackupConnectOptions): Promise<Result>;
+  /** forget a bucket; its files stay */
+  disconnect(bucket: string, options?: CallOptions): Promise<Result>;
+  /** the Store files in the connected buckets, with the Store each is linked to */
+  list(options?: BackupListOptions): Promise<Result>;
+  /** back up a sqlite Store to a bucket */
+  create(store: string, bucket: string, options?: BackupCreateOptions): Promise<Result>;
+  /** restore a Store file from a bucket as a sqlite Store on this computer */
+  restore(bucket: string, file: string, store: string, options?: BackupRestoreOptions): Promise<Result>;
+  /** check a bucket; --full also tests a write */
+  doctor(bucket: string, options?: BackupDoctorOptions): Promise<Result>;
 }
 
 export interface Client {
@@ -701,8 +781,6 @@ export interface Client {
   readonly machine: MachineFamily;
   readonly store: StoreFamily;
   readonly backup: BackupFamily;
-  readonly logs: LogsFamily;
-  readonly doctor: DoctorFamily;
 }
 
 /** The call table: one entry per call. */
@@ -712,12 +790,6 @@ export const families: readonly string[];
 
 /** A client of `home` with an optional folder scope. */
 export function client(options?: ClientOptions): Client;
-/** Diagnoses without LayerFS state changes; explicit backup write_test uses its own temporary S3 version. */
-export function doctor(options?: DoctorOptions): Promise<DoctorReport>;
-/** The `doctor` family's calls, on the package's report function. */
-export namespace doctor {
-  const fix: DoctorFamily["fix"];
-}
 /** Closes every Store this process holds open with no call running; answers how many. Outside the call table. */
 export function close(): number;
 
@@ -731,12 +803,10 @@ export const workspace: WorkspaceFamily;
 export const machine: MachineFamily;
 export const store: StoreFamily;
 export const backup: BackupFamily;
-export const logs: LogsFamily;
 
 declare const layerfs: Client & {
   client: typeof client;
   close: typeof close;
-  doctor: typeof doctor;
   table: typeof table;
   families: typeof families;
   LayerFSError: typeof LayerFSError;

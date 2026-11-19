@@ -1,7 +1,7 @@
 //! The call log (#659): one line per call in `trace/calls.jsonl`, its
 //! `argv` rendered from the table before the scope rewrites the arguments,
 //! free text and credentials as byte counts, the saved version a result
-//! names, and `logs.list` / `logs.reset`. The environment is shared by the
+//! names, and `home.log` / `home.clear_log`. The environment is shared by the
 //! test threads, so every test here takes one lock.
 use layerfs_api::Scope;
 use layerfs_bridge::control::SdkValue;
@@ -145,7 +145,7 @@ fn one_line_per_call_for_a_success_and_each_refusal() {
     assert!(call(&home, "store.get", &[("bogus", t("x"))]).is_err());
     assert_eq!(argv(&last(&home)), ["store", "get"]);
     // refused after the check: the whole argv
-    let code = call(&home, "store.get", &[("name", t("nope"))]).unwrap_err();
+    let code = call(&home, "store.get", &[("store", t("nope"))]).unwrap_err();
     let line = last(&home);
     assert_eq!(argv(&line), ["store", "get", "nope"]);
     assert_eq!(line.get_text("outcome"), Some(code.as_str()));
@@ -169,28 +169,28 @@ fn argv_has_positionals_options_flags_and_the_scope_before_it_rewrites() {
     let (home, folder) = project();
     let _ = call(
         &home,
-        "file.diff",
+        "file.grep",
         &[
             p(),
-            ("left_branch", t("main")),
-            ("left_path", t("/README.md")),
-            ("right_branch", t("main")),
-            ("right_path", t("/README.md")),
-            ("allow_missing", SdkValue::Bool(true)),
-            ("include_attribution", SdkValue::Bool(false)),
-            ("page_size", SdkValue::Int(5)),
+            ("branch", t("main")),
+            ("pattern", t("login")),
+            ("path", t("/src")),
+            ("include", t("*.ts")),
+            ("ignore_case", SdkValue::Bool(true)),
+            ("limit", SdkValue::Int(5)),
         ],
     );
     let want: Vec<String> = vec![
         "file".into(),
-        "diff".into(),
+        "grep".into(),
         "shop/api".into(),
         "main".into(),
-        bytes("README.md".len()),
-        "main".into(),
-        bytes("README.md".len()),
-        "--allow-missing".into(),
-        "--page-size".into(),
+        bytes("login".len()),
+        bytes("src".len()),
+        "--include".into(),
+        bytes("*.ts".len()),
+        "--ignore-case".into(),
+        "--limit".into(),
         "5".into(),
     ];
     assert_eq!(argv(&last(&home)), want);
@@ -209,7 +209,7 @@ fn argv_has_positionals_options_flags_and_the_scope_before_it_rewrites() {
         &home,
         &scope,
         "branch.fork",
-        &[p(), ("name", t("x")), ("from_branch", t("main"))],
+        &[p(), ("name", t("x")), ("from", t("main"))],
     );
     let scope_words = [
         "--scope",
@@ -226,7 +226,7 @@ fn argv_has_positionals_options_flags_and_the_scope_before_it_rewrites() {
         &home,
         &scope,
         "workspace.exec",
-        &[("ws", t("none")), ("command", t("make test"))],
+        &[("workspace", t("none")), ("command", t("make test"))],
     );
     let mut want = vec!["workspace".to_owned(), "exec".into(), "none".into()];
     want.push(bytes("make test".len()));
@@ -243,7 +243,7 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
     ok(
         &home,
         "branch.fork",
-        &[p(), ("name", t("dev")), ("from_branch", t("main"))],
+        &[p(), ("name", t("dev")), ("from", t("main"))],
     );
     let body = "x".repeat(5321);
     ok(
@@ -293,7 +293,7 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
     assert_eq!(argv(&last(&home))[4], bytes(long.len() - 1));
     // text that is not redacted is cut at 200 characters
     let long = "n".repeat(300);
-    let _ = call(&home, "store.get", &[("name", t(&long))]);
+    let _ = call(&home, "store.get", &[("store", t(&long))]);
     let name = &argv(&last(&home))[2];
     assert_eq!(name.chars().count(), 201);
     assert!(name.ends_with('…'));
@@ -305,19 +305,22 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
             p(),
             ("branch", t("main")),
             ("path", t("/missing")),
-            ("old", t("ab")),
-            ("new", t("cde")),
+            ("old_string", t("ab")),
+            ("new_string", t("cde")),
         ],
     );
     let words = argv(&last(&home));
-    assert_eq!(&words[5..], ["--old", &bytes(2), "--new", &bytes(3)]);
+    assert_eq!(
+        &words[5..],
+        ["--old-string", &bytes(2), "--new-string", &bytes(3)]
+    );
     let _ = call(
         &home,
         "store.connect",
         &[
-            ("name", t("pg")),
-            ("url", t("postgres://u:secret@db/x")),
-            ("password", t("hunter2")),
+            ("store", t("pg")),
+            ("url", t("postgres://db.internal/x")),
+            ("auth", t("pg-app")),
         ],
     );
     let words = argv(&last(&home));
@@ -328,14 +331,31 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
             "connect".into(),
             "pg".into(),
             bytes(24),
-            "--password".into(),
-            bytes(7)
+            "--auth".into(),
+            "pg-app".into()
         ]
     );
     let _ = call(
         &home,
+        "store.save_auth",
+        &[
+            ("auth", t("pg-app")),
+            ("user", t("app")),
+            ("password", t("hunter2")),
+        ],
+    );
+    let line = last(&home);
+    let printed = layerfs_api::json::print(&line);
+    assert!(!printed.contains("hunter2"), "{printed}");
+    assert!(argv(&line).contains(&bytes(7)), "{printed}");
+    assert!(
+        argv(&line).contains(&"--password-stdin".to_owned()),
+        "{printed}"
+    );
+    let _ = call(
+        &home,
         "workspace.exec",
-        &[("ws", t("none")), ("command", t("echo secret"))],
+        &[("workspace", t("none")), ("command", t("echo secret"))],
     );
     assert_eq!(argv(&last(&home))[3], bytes(11));
     // json, encoded length
@@ -351,6 +371,30 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
     for secret in ["secret", "hunter2", "make", "add a"] {
         assert!(!text.contains(secret), "{secret} logged");
     }
+    // a bucket's URL and its key's secret are byte counts; the key id is not
+    // (after the scan above: the option's own name says `secret`)
+    let _ = call(
+        &home,
+        "backup.connect",
+        &[
+            ("name", t("b1")),
+            ("url", t("http://127.0.0.1:9/b/p")),
+            ("access_key", t("AKID")),
+            ("secret_key", t("s3cr3t-key")),
+        ],
+    );
+    let words = argv(&last(&home));
+    assert_eq!(&words[..4], ["backup", "connect", "b1", &bytes(22)]);
+    assert!(words.contains(&"AKID".to_owned()), "{words:?}");
+    assert!(words.contains(&bytes(10)), "{words:?}");
+    assert!(!words.iter().any(|w| w.contains("s3cr3t")), "{words:?}");
+    // the secret goes by the shell flag that reads it, not its option name
+    let at = words
+        .iter()
+        .position(|w| w == "--key-stdin")
+        .expect("--key-stdin");
+    assert_eq!(words[at + 1], bytes(10), "{words:?}");
+    assert!(!words.contains(&"--secret-key".to_owned()), "{words:?}");
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(folder).unwrap();
 }
@@ -379,36 +423,43 @@ fn saved_versions_are_logged_for_saving_calls_only() {
             ],
         )
     };
-    // Forked: a new Branch has no head, so its base Layer
+    // forked: a new Branch has no head, so main's head, the Layer it stands on
+    let main = ok(&home, "branch.get", &[p(), ("branch", t("main"))]);
     ok(
         &home,
         "branch.fork",
-        &[p(), ("name", t("work")), ("from_branch", t("main"))],
+        &[p(), ("name", t("work")), ("from", t("main"))],
     );
     let line = last(&home);
-    assert_eq!(line.get_text("kind"), Some("Forked"));
-    assert!(line.get("commit").is_none());
-    hex66(&line, "layer");
-    // Committed: commit.id
-    let answer = write("one\n");
-    let line = last(&home);
-    assert_eq!(line.get_text("kind"), Some("Committed"));
-    assert_eq!(hex66(&line, "commit"), answer.get_text("head").unwrap());
+    assert_eq!(line.get_text("kind"), Some("forked"));
+    assert_eq!(
+        Some(hex66(&line, "commit").as_str()),
+        main.get_text("commit")
+    );
     assert!(line.get("layer").is_none());
-    // UpToDate: the head
+    // committed: the new Commit
     let answer = write("one\n");
     let line = last(&home);
-    assert_eq!(line.get_text("kind"), Some("UpToDate"));
-    assert_eq!(hex66(&line, "commit"), answer.get_text("head").unwrap());
-    // Forked from a Branch with a head: the head
-    ok(
+    assert_eq!(line.get_text("kind"), Some("committed"));
+    assert_eq!(hex66(&line, "commit"), answer.get_text("commit").unwrap());
+    assert!(line.get("layer").is_none());
+    // unchanged: the head
+    let answer = write("one\n");
+    let line = last(&home);
+    assert_eq!(line.get_text("kind"), Some("unchanged"));
+    assert_eq!(hex66(&line, "commit"), answer.get_text("commit").unwrap());
+    // forked from a Branch with a head: the head
+    let forked = ok(
         &home,
         "branch.fork",
-        &[p(), ("name", t("side")), ("from_branch", t("work"))],
+        &[p(), ("name", t("side")), ("from", t("work"))],
     );
-    assert_eq!(last(&home).get_text("kind"), Some("Forked"));
-    hex66(&last(&home), "commit");
-    // Merged: the head
+    assert_eq!(last(&home).get_text("kind"), Some("forked"));
+    assert_eq!(
+        Some(hex66(&last(&home), "commit").as_str()),
+        forked.get_text("commit")
+    );
+    // merged: the merge Commit
     ok(
         &home,
         "file.write",
@@ -422,31 +473,30 @@ fn saved_versions_are_logged_for_saving_calls_only() {
     let answer = ok(
         &home,
         "branch.merge",
-        &[p(), ("name", t("both")), ("a", t("work")), ("b", t("side"))],
+        &[
+            p(),
+            ("branch", t("work")),
+            ("from", t("side")),
+            ("into", t("both")),
+        ],
     );
     let line = last(&home);
-    assert_eq!(line.get_text("kind"), Some("Merged"));
-    assert_eq!(hex66(&line, "commit"), answer.get_text("head").unwrap());
-    // Added: published_layer.id; again: UpToDate with its layer
+    assert_eq!(line.get_text("kind"), Some("fast_forward"));
+    assert_eq!(
+        Some(hex66(&line, "commit").as_str()),
+        answer.get_text("commit")
+    );
+    // published: the new publication; again: unchanged, with it
     let answer = ok(&home, "branch.publish", &[p(), ("branch", t("work"))]);
     let line = last(&home);
-    assert_eq!(line.get_text("kind"), Some("Added"));
-    let published = answer.get("published_layer").unwrap().get_text("id");
-    assert_eq!(Some(hex66(&line, "layer").as_str()), published);
-    assert!(line.get("commit").is_none());
+    assert_eq!(line.get_text("kind"), Some("published"));
+    let published = answer.get_text("commit").unwrap().to_owned();
+    assert_eq!(hex66(&line, "commit"), published);
+    assert!(line.get("layer").is_none());
     let answer = ok(&home, "branch.publish", &[p(), ("branch", t("work"))]);
     let line = last(&home);
-    match answer.get_text("kind") {
-        Some("UpToDate") => assert_eq!(
-            Some(hex66(&line, "layer").as_str()),
-            answer.get_text("layer")
-        ),
-        Some("NoChanges") => assert_eq!(
-            Some(hex66(&line, "layer").as_str()),
-            answer.get_text("head_layer")
-        ),
-        other => panic!("publish again: {other:?}"),
-    }
+    assert_eq!(line.get_text("kind"), Some("unchanged"), "{answer:?}");
+    assert_eq!(hex66(&line, "commit"), published);
     // a read names no version
     ok(&home, "branch.get", &[p(), ("branch", t("work"))]);
     let line = last(&home);
@@ -508,8 +558,8 @@ fn the_tag_comes_from_the_environment_or_the_call() {
 fn the_logs_calls_and_logs_off_write_nothing() {
     let _env = serial();
     let home = home();
-    ok(&home, "logs.list", &[]);
-    ok(&home, "logs.reset", &[]);
+    ok(&home, "home.log", &[]);
+    ok(&home, "home.clear_log", &[]);
     assert!(lines(&home).is_empty());
     std::env::set_var("LAYERFS_LOGS", "0");
     ok(&home, "store.list", &[]);
@@ -547,7 +597,7 @@ fn eight_threads_appending_leave_whole_lines() {
     });
     let all = lines(&home);
     assert_eq!(all.len(), 8 * 201);
-    let page = ok(&home, "logs.list", &[("limit", SdkValue::Int(1000))]);
+    let page = ok(&home, "home.log", &[("limit", SdkValue::Int(1000)), DETAIL]);
     assert_eq!(page.get_int("skipped"), Some(0));
     std::fs::remove_dir_all(home).unwrap();
 }
@@ -567,40 +617,52 @@ fn the_log_rotates_past_16_mib_and_reset_clears_both_files() {
     ok(&home, "store.list", &[]);
     assert_eq!(lines(&home).len(), 1);
     // newest first across both files
-    let page = ok(&home, "logs.list", &[("limit", SdkValue::Int(3))]);
-    let SdkValue::List(items) = page.get("lines").unwrap() else {
-        panic!("no lines")
+    let page = ok(&home, "home.log", &[("limit", SdkValue::Int(3)), DETAIL]);
+    let SdkValue::List(items) = page.get("items").unwrap() else {
+        panic!("no items")
     };
     let words: Vec<_> = items.iter().map(|l| argv(l)[0].clone()).collect();
     assert_eq!(words, ["store", "store", "old"]);
-    let reset = ok(&home, "logs.reset", &[]);
-    assert_eq!(reset.get_text("kind"), Some("Reset"));
-    assert_eq!(reset.get_int("removed"), Some(count as i64 + 2));
+    let reset = ok(&home, "home.clear_log", &[DETAIL]);
+    assert_eq!(reset.get_text("outcome"), Some("cleared"));
+    assert_eq!(reset.get("ok"), Some(&SdkValue::Bool(true)));
+    assert_eq!(reset.get_int("line_count"), Some(count as i64 + 2));
     assert!(!paths::calls_rotated(&home).exists());
     assert_eq!(
         std::fs::metadata(paths::calls_file(&home)).unwrap().len(),
         0
     );
-    let reset = ok(&home, "logs.reset", &[]);
-    assert_eq!(reset.get_int("removed"), Some(0));
+    let reset = ok(&home, "home.clear_log", &[DETAIL]);
+    assert_eq!(reset.get_int("line_count"), Some(0));
+    // the short form has nothing to say
+    let short = ok(&home, "home.clear_log", &[]);
+    assert_eq!(short, map(&[("ok", SdkValue::Bool(true))]));
     std::fs::remove_dir_all(home).unwrap();
 }
 
+/// The long form, asked of a call.
+const DETAIL: (&str, SdkValue) = ("detail", SdkValue::Bool(true));
+
+/// One page of `home.log` in its long form: its rows, its `next_cursor`,
+/// whether more remain and how many lines it skipped.
 fn page(home: &Path, args: &[(&str, SdkValue)]) -> (Vec<SdkValue>, Option<String>, bool, i64) {
-    let page = ok(home, "logs.list", args);
-    let SdkValue::List(items) = page.get("lines").unwrap().clone() else {
-        panic!("no lines")
+    let mut asked = args.to_vec();
+    asked.push(DETAIL);
+    let page = ok(home, "home.log", &asked);
+    let SdkValue::List(items) = page.get("items").unwrap().clone() else {
+        panic!("no items")
     };
+    let next = page.get_text("next_cursor").map(str::to_owned);
     (
         items,
-        page.get_text("next").map(str::to_owned),
-        page.get("has_more") == Some(&SdkValue::Bool(true)),
+        next.clone(),
+        next.is_some(),
         page.get_int("skipped").unwrap(),
     )
 }
 
 #[test]
-fn logs_list_filters_pages_and_refuses_a_stale_cursor() {
+fn home_log_filters_pages_and_refuses_a_stale_cursor() {
     let _env = serial();
     let (home, folder) = project();
     let since = layerfs_home::home::now_ms();
@@ -609,17 +671,28 @@ fn logs_list_filters_pages_and_refuses_a_stale_cursor() {
         ok(&home, "store.list", &[]);
     }
     std::env::remove_var("LAYERFS_LOGS_TAG");
-    let _ = call(&home, "store.get", &[("name", t("nope"))]);
+    let _ = call(&home, "store.get", &[("store", t("nope"))]);
     ok(
         &home,
         "file.read",
         &[p(), ("branch", t("main")), ("path", t("/README.md"))],
     );
-    // op, project, tag prefix and exact tag, outcome, client, since
-    let (items, ..) = page(&home, &[("op", t("store.list"))]);
+    // call, project, tag prefix and exact tag, outcome, client, since
+    let (items, ..) = page(&home, &[("call", t("store.list"))]);
     assert_eq!(items.len(), 5);
-    let (items, ..) = page(&home, &[("op", t("file"))]);
+    let (items, ..) = page(&home, &[("call", t("file"))]);
     assert_eq!(items.len(), 1);
+    // a row names its call and its project from the line's argv, and
+    // splits the outcome word from the refusal code
+    assert_eq!(items[0].get_text("call"), Some("file.read"));
+    assert_eq!(items[0].get_text("project"), Some("shop/api"));
+    assert_eq!(items[0].get_text("outcome"), Some("ok"));
+    assert_eq!(items[0].get("error"), Some(&SdkValue::Null));
+    let at = items[0].get_text("logged_at").unwrap();
+    assert!(
+        at.len() == 20 && at.ends_with('Z') && at.contains('T'),
+        "{at}"
+    );
     let (items, ..) = page(&home, &[("project", t("shop/api"))]);
     assert_eq!(items.len(), 2, "project.init and file.read");
     let (items, ..) = page(&home, &[("tag", t("dsh:s0:"))]);
@@ -629,6 +702,10 @@ fn logs_list_filters_pages_and_refuses_a_stale_cursor() {
     let (items, ..) = page(&home, &[("tag", t("dsh:s1"))]);
     assert!(items.is_empty(), "a tag without `:` is exact");
     let (items, ..) = page(&home, &[("outcome", t("NotFound"))]);
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].get_text("outcome"), Some("refused"));
+    assert_eq!(items[0].get_text("error"), Some("NotFound"));
+    let (items, ..) = page(&home, &[("outcome", t("refused"))]);
     assert_eq!(items.len(), 1);
     let (items, ..) = page(&home, &[("client", t("cli"))]);
     assert!(items.is_empty());
@@ -642,6 +719,25 @@ fn logs_list_filters_pages_and_refuses_a_stale_cursor() {
     let (second, _, more, _) = page(&home, &[("limit", SdkValue::Int(3)), ("cursor", t(&next))]);
     assert!(more);
     assert_eq!(second[0].get_text("tag"), Some("dsh:s1:r3"));
+    // a cursor carries its call's filters: given with other filters it is refused
+    assert_eq!(
+        call(
+            &home,
+            "home.log",
+            &[("cursor", t(&next)), ("client", t("cli"))]
+        ),
+        Err("InvalidInput".into())
+    );
+    // and a filtered walk keeps its filter on the next page without repeating it
+    let (one, next_tagged, ..) = page(&home, &[("tag", t("dsh:s0:")), ("limit", SdkValue::Int(1))]);
+    assert_eq!(one[0].get_text("tag"), Some("dsh:s0:r4"));
+    let (rest, last_cursor, ..) = page(&home, &[("cursor", t(&next_tagged.unwrap()))]);
+    let tags: Vec<_> = rest
+        .iter()
+        .map(|row| row.get_text("tag").unwrap())
+        .collect();
+    assert_eq!(tags, ["dsh:s0:r2", "dsh:s0:r0"]);
+    assert!(last_cursor.is_none());
     let (all, next_all, more, _) = page(&home, &[]);
     assert_eq!(all.len(), 9);
     assert!(!more && next_all.is_none());
@@ -652,7 +748,7 @@ fn logs_list_filters_pages_and_refuses_a_stale_cursor() {
         (vec![("cursor", t("bogus"))], "a malformed cursor"),
     ] {
         assert_eq!(
-            call(&home, "logs.list", &args),
+            call(&home, "home.log", &args),
             Err("InvalidInput".into()),
             "{why}"
         );
@@ -667,13 +763,13 @@ fn logs_list_filters_pages_and_refuses_a_stale_cursor() {
     let (items, _, _, skipped) = page(&home, &[]);
     assert_eq!((items.len(), skipped), (9, 1));
     // after a reset the cursor is stale
-    ok(&home, "logs.reset", &[]);
+    ok(&home, "home.clear_log", &[]);
     ok(&home, "store.list", &[]);
     ok(&home, "store.list", &[]);
     ok(&home, "store.list", &[]);
     ok(&home, "store.list", &[]);
     assert_eq!(
-        call(&home, "logs.list", &[("cursor", t(&next))]),
+        call(&home, "home.log", &[("cursor", t(&next))]),
         Err("InvalidInput".into())
     );
     std::fs::remove_dir_all(home).unwrap();

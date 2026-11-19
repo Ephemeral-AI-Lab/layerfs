@@ -1,4 +1,4 @@
-//! Saved alias diagnostics preserve records, discriminate permissions and never write without safe cleanup capability.
+//! A bucket's checks preserve records, discriminate permissions and never write without safe cleanup capability.
 mod target {
     pub use layerfs_control::doctor::target::{Budget, Checks};
 }
@@ -10,7 +10,6 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{self, paths, write_entity};
 use peer::{Mode, Server};
 use std::collections::BTreeMap;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -27,13 +26,7 @@ impl Fixture {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         home::ensure(&home).unwrap();
-        let credentials = home.join("credentials");
-        std::fs::write(
-            &credentials,
-            "access_key=mock-access-key\nsecret_key=mock-secret-key\n",
-        )
-        .unwrap();
-        std::fs::set_permissions(&credentials, std::fs::Permissions::from_mode(0o600)).unwrap();
+        layerfs_store::backup::secret::write(&home, "production", "mock-secret-key").unwrap();
         let server = Server::new(mode);
         write_entity(
             &paths::bucket_record(&home, "production"),
@@ -44,10 +37,7 @@ impl Fixture {
                 ("bucket", SdkValue::text("bucket")),
                 ("prefix", SdkValue::text("saved/prefix")),
                 ("region", SdkValue::text("us-east-1")),
-                (
-                    "key",
-                    SdkValue::text(format!("file:{}", credentials.display())),
-                ),
+                ("access_key", SdkValue::text("mock-access-key")),
             ]),
         )
         .unwrap();
@@ -58,7 +48,7 @@ impl Fixture {
     }
     fn report_with_budget(&self, write: bool, timeout: Duration) -> SdkValue {
         let before = contents(&self.home);
-        let mut checks = target::Checks::new("backup", "production");
+        let mut checks = target::Checks::default();
         backup_target::diagnose(
             &self.home,
             "production",
@@ -67,7 +57,7 @@ impl Fixture {
             &mut checks,
         );
         assert_eq!(before, contents(&self.home));
-        let report = checks.to_sdk();
+        let report = checks.to_wire();
         let text = format!("{report:?}");
         assert!(!text.contains("mock-access-key") && !text.contains("mock-secret-key"));
         report
@@ -106,13 +96,29 @@ fn outcome(report: &SdkValue, id: &str, value: &str) {
         "{report:?}"
     );
 }
+/// A check kept from running is not in the report.
+fn absent(report: &SdkValue, id: &str) {
+    let Some(SdkValue::List(checks)) = report.get("checks") else {
+        panic!("missing checks")
+    };
+    assert!(
+        checks.iter().all(|row| row.get_text("id") != Some(id)),
+        "{report:?}"
+    );
+}
 #[test]
 fn default_is_one_read_only_prefix_page() {
     let f = Fixture::new(Mode::default());
     let report = f.report(false);
-    outcome(&report, "backup.list", "pass");
+    outcome(&report, "bucket.list", "pass");
     assert_eq!(f.server.state.lock().unwrap().requests.len(), 1);
-    outcome(&report, "backup.put", "skipped");
+    // without --full the write test is left out, not listed as skipped
+    let Some(SdkValue::List(checks)) = report.get("checks") else {
+        panic!("missing checks")
+    };
+    assert!(checks
+        .iter()
+        .all(|row| row.get_text("id") != Some("bucket.put")));
 }
 #[test]
 fn unversioned_and_capability_denied_destinations_receive_no_put() {
@@ -128,8 +134,8 @@ fn unversioned_and_capability_denied_destinations_receive_no_put() {
     ] {
         let f = Fixture::new(mode);
         let report = f.report(true);
-        outcome(&report, "backup.write_capability", "unknown");
-        outcome(&report, "backup.put", "blocked");
+        outcome(&report, "bucket.write_capability", "unknown");
+        absent(&report, "bucket.put");
         assert_eq!(f.server.state.lock().unwrap().requests.len(), 2);
         assert!(f
             .server
@@ -148,8 +154,8 @@ fn list_denied_does_not_block_independent_write_permission_probe() {
         ..Mode::default()
     });
     let report = f.report(true);
-    outcome(&report, "backup.list", "fail");
-    for id in ["backup.put", "backup.get", "backup.delete"] {
+    outcome(&report, "bucket.list", "fail");
+    for id in ["bucket.put", "bucket.get", "bucket.delete"] {
         outcome(&report, id, "pass");
     }
     assert!(f.server.state.lock().unwrap().versions.is_empty());
@@ -161,9 +167,9 @@ fn list_permission_does_not_imply_write_permission() {
         ..Mode::default()
     });
     let report = f.report(true);
-    outcome(&report, "backup.list", "pass");
-    outcome(&report, "backup.put", "fail");
-    outcome(&report, "backup.delete", "skipped");
+    outcome(&report, "bucket.list", "pass");
+    outcome(&report, "bucket.put", "fail");
+    absent(&report, "bucket.delete");
     assert_eq!(f.server.state.lock().unwrap().requests.len(), 3);
 }
 #[test]
@@ -174,16 +180,20 @@ fn lost_put_and_denied_cleanup_keep_ownership_evidence_without_mutation_retries(
         ..Mode::default()
     });
     let report = f.report(true);
-    outcome(&report, "backup.put", "unknown");
-    outcome(&report, "backup.reconcile", "pass");
-    outcome(&report, "backup.get", "pass");
-    outcome(&report, "backup.delete", "fail");
-    let evidence = check(&report, "backup.delete").get("evidence").unwrap();
+    outcome(&report, "bucket.put", "unknown");
+    outcome(&report, "bucket.reconcile", "pass");
+    outcome(&report, "bucket.get", "pass");
+    outcome(&report, "bucket.delete", "fail");
+    let evidence = check(&report, "bucket.delete").get("evidence").unwrap();
     assert!(evidence
         .get_text("possible_retained_key")
         .unwrap()
         .starts_with("saved/prefix/_layerfs_doctor/"));
     assert_eq!(evidence.get_text("owned_version"), Some("owned-v1"));
+    // guidance is evidence, never a prose `fix` (conformance R4 F6)
+    let fix = check(&report, "bucket.delete").get_text("fix");
+    assert!(fix.is_none_or(str::is_empty), "{fix:?}");
+    assert!(evidence.get_text("note").is_some(), "{evidence:?}");
     let state = f.server.state.lock().unwrap();
     assert_eq!(
         state
@@ -211,21 +221,40 @@ fn read_corruption_does_not_hide_failed_cleanup() {
         ..Mode::default()
     });
     let report = f.report(true);
-    outcome(&report, "backup.get", "fail");
-    outcome(&report, "backup.delete", "fail");
+    outcome(&report, "bucket.get", "fail");
+    outcome(&report, "bucket.delete", "fail");
 }
 
 #[test]
-fn denied_credential_file_permissions_block_all_network_without_disclosing_values() {
+fn a_key_the_home_does_not_keep_blocks_all_network() {
     let f = Fixture::new(Mode::default());
-    std::fs::set_permissions(
-        f.home.join("credentials"),
-        std::fs::Permissions::from_mode(0o644),
+    layerfs_store::backup::secret::remove(&f.home, "production").unwrap();
+    let report = f.report(true);
+    outcome(&report, "bucket.configuration", "pass");
+    outcome(&report, "bucket.credentials", "fail");
+    absent(&report, "bucket.list");
+    assert!(f.server.state.lock().unwrap().requests.is_empty());
+}
+
+#[test]
+fn a_record_from_before_2_0_with_no_access_key_fails_credentials_and_sends_nothing() {
+    let f = Fixture::new(Mode::default());
+    write_entity(
+        &paths::bucket_record(&f.home, "production"),
+        &SdkValue::map([
+            ("name", SdkValue::text("production")),
+            ("provider", SdkValue::text("minio")),
+            ("endpoint", SdkValue::text(&f.server.endpoint)),
+            ("bucket", SdkValue::text("bucket")),
+            ("prefix", SdkValue::text("saved/prefix")),
+            ("region", SdkValue::text("us-east-1")),
+            ("key", SdkValue::text("file:/no/such/credentials")),
+        ]),
     )
     .unwrap();
-    let report = f.report(true);
-    outcome(&report, "backup.configuration", "fail");
-    outcome(&report, "backup.list", "blocked");
+    let report = f.report(false);
+    outcome(&report, "bucket.credentials", "fail");
+    absent(&report, "bucket.list");
     assert!(f.server.state.lock().unwrap().requests.is_empty());
 }
 
@@ -251,9 +280,9 @@ fn signature_and_region_refusals_are_precise_without_echoing_error_bodies() {
     ] {
         let f = Fixture::new(mode);
         let report = f.report(false);
-        outcome(&report, "backup.transport", "pass");
-        outcome(&report, "backup.list", "fail");
-        let evidence = check(&report, "backup.list").get("evidence").unwrap();
+        outcome(&report, "bucket.transport", "pass");
+        outcome(&report, "bucket.list", "fail");
+        let evidence = check(&report, "bucket.list").get("evidence").unwrap();
         assert_eq!(evidence.get_text("s3_code"), Some(code));
         assert_eq!(evidence.get_int("http_status"), Some(status));
         assert_eq!(f.server.state.lock().unwrap().requests.len(), 1);
@@ -269,10 +298,10 @@ fn deadline_after_put_retains_exact_owned_version_and_never_sends_late_delete() 
     let started = std::time::Instant::now();
     let report = f.report_with_budget(true, Duration::from_millis(250));
     assert!(started.elapsed() < Duration::from_secs(2));
-    outcome(&report, "backup.put", "pass");
-    outcome(&report, "backup.get", "unknown");
-    outcome(&report, "backup.delete", "unknown");
-    let evidence = check(&report, "backup.delete").get("evidence").unwrap();
+    outcome(&report, "bucket.put", "pass");
+    outcome(&report, "bucket.get", "unknown");
+    outcome(&report, "bucket.delete", "unknown");
+    let evidence = check(&report, "bucket.delete").get("evidence").unwrap();
     assert_eq!(evidence.get_text("owned_version"), Some("owned-v1"));
     assert!(evidence
         .get_text("possible_retained_key")

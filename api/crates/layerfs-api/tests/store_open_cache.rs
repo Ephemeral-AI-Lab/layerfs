@@ -47,13 +47,21 @@ fn home_with_project() -> (PathBuf, PathBuf, PathBuf) {
     let home = tempdir("home");
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
     home::open(&home).unwrap();
-    for (name, platform) in [("native", "native"), ("box", "lima")] {
-        write_record(
-            &paths::machine_record(&home, name),
-            &SdkValue::map([("name", t(name)), ("platform", t(platform))]),
-        )
-        .unwrap();
-    }
+    write_record(
+        &paths::machine_record(&home, "native"),
+        &SdkValue::map([("name", t("native")), ("platform", t("native"))]),
+    )
+    .unwrap();
+    // a 2.0 record names its VM (one without is an earlier build's)
+    write_record(
+        &paths::machine_record(&home, "box"),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-00000000-box")),
+        ]),
+    )
+    .unwrap();
     let root = tempdir("guest");
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap().to_string();
@@ -81,7 +89,7 @@ fn home_with_project() -> (PathBuf, PathBuf, PathBuf) {
         &[
             ("project", t("shop/api")),
             ("name", t("fix")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     (home, root, folder)
@@ -118,20 +126,17 @@ fn read(home: &Path) -> String {
     }
 }
 
-/// `store.pull` to native, else `store.push` to `machine`.
+/// `store.move` to `machine`.
 fn to(home: &Path, machine: &str) -> Result<SdkValue, (String, String)> {
-    match machine {
-        "native" => call(home, "store.pull", &[("name", t("shop"))]),
-        _ => call(
-            home,
-            "store.push",
-            &[("name", t("shop")), ("machine", t(machine))],
-        ),
-    }
+    call(
+        home,
+        "store.move",
+        &[("store", t("shop")), ("machine", t(machine))],
+    )
 }
 
 #[test]
-fn a_worker_closes_its_open_copy_so_a_store_is_pulled_at_once_and_returns_fresh() {
+fn a_worker_closes_its_open_copy_so_a_store_moves_here_at_once_and_returns_fresh() {
     let (home, root, folder) = home_with_project();
     to(&home, "box").unwrap();
     // a write in the worker leaves the Store open there, under its lease
@@ -148,7 +153,7 @@ fn a_worker_closes_its_open_copy_so_a_store_is_pulled_at_once_and_returns_fresh(
     write(&home, "two\n").unwrap();
     to(&home, "box").unwrap();
     assert_eq!(read(&home), "two\n", "never the retired copy");
-    ok(&home, "store.remove", &[("name", t("shop"))]);
+    ok(&home, "store.remove", &[("store", t("shop"))]);
     assert!(!paths::store_dir(&root, "shop").exists());
     assert!(!paths::store_dir(&home, "shop").exists());
     std::fs::remove_dir_all(home).unwrap();
@@ -160,7 +165,7 @@ fn a_worker_closes_its_open_copy_so_a_store_is_pulled_at_once_and_returns_fresh(
 /// holding it here keeps one call running for as long as this test wants.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
-fn a_running_call_keeps_its_store_open_against_a_push_or_remove() {
+fn a_running_call_keeps_its_store_open_against_a_move_or_remove() {
     use nix::fcntl::{Flock, FlockArg};
     use std::time::Duration;
     let (home, root, folder) = home_with_project();
@@ -179,10 +184,10 @@ fn a_running_call_keeps_its_store_open_against_a_push_or_remove() {
         "the write waits for the writer lock"
     );
     for (name, args) in [
-        ("store.remove", vec![("name", t("shop"))]),
+        ("store.remove", vec![("store", t("shop"))]),
         (
-            "store.push",
-            vec![("name", t("shop")), ("machine", t("box"))],
+            "store.move",
+            vec![("store", t("shop")), ("machine", t("box"))],
         ),
     ] {
         let (code, message) = call(&home, name, &args).unwrap_err();
@@ -195,7 +200,7 @@ fn a_running_call_keeps_its_store_open_against_a_push_or_remove() {
     drop(writer.unlock().unwrap());
     running.join().unwrap().unwrap();
     assert_eq!(read(&home), "slow\n");
-    ok(&home, "store.remove", &[("name", t("shop"))]);
+    ok(&home, "store.remove", &[("store", t("shop"))]);
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
     let _ = std::fs::remove_dir_all(folder);

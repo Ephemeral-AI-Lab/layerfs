@@ -1,23 +1,53 @@
-//! `layerfs doctor` (#536 H7): a home with one of each problem gives one
-//! finding each, naming the call that fixes it; a clean home is `ok` with
-//! no findings; a layout 2 home reports what refuses its conversion; and
-//! the doctor writes nothing in the home. A live fake daemon's capacity model
-//! is explained as warnings, and its Capacity refusal is a warning, not an
-//! error.
-use layerfs_bridge::control::{
-    AdmissionModel, Answer, Call, CapacityModel, DaemonPhase, DaemonStatus, Reply, Request,
-    RetainedModel, SdkRefusal, SdkValue, OPERATION,
-};
-use layerfs_bridge::duplex;
-use layerfs_control::doctor::doctor;
+//! The home doctor's records check (`home.records`, #536 H7): a home with
+//! one of each problem gives one finding each, naming the thing it is about
+//! and the one runnable line that fixes it (none where no line does, the
+//! message then saying what to do by hand); a clean home has no findings; a foreign
+//! home (a `layerfs.json` of another layout) fails its layout check with the
+//! move fix; and the doctor writes nothing in the home. The check reads records only: it dials no worker or daemon.
+#[path = "support/doctor_own.rs"]
+mod doctor_own;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_control::doctor::{Kind, Options};
 use layerfs_home::home::{paths, private_dir, write_entity, write_record};
-use layerfs_machine::worker::{read_frame, read_frame_within, write_frame, MAX_HELLO};
 use std::collections::BTreeMap;
-use std::net::{SocketAddr, TcpListener};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
-use std::time::Duration;
+
+/// The home doctor's records findings as the whole-home report showed
+/// them: `{ ok, findings: [{ severity, entity: { kind, name }, message, fix
+/// }] }`, `ok` false when one is an error.
+fn doctor(home: &Path) -> Result<SdkValue, SdkRefusal> {
+    let shown = home.display().to_string();
+    let report = doctor_own::own(home, Kind::Home, &shown, &Options::default());
+    let Some(SdkValue::List(found)) = report.get("findings") else {
+        panic!("no findings: {report:?}")
+    };
+    let found: Vec<SdkValue> = (found.iter())
+        .filter(|finding| finding.get_text("check") == Some("home.records"))
+        .map(|finding| {
+            let SdkValue::Map(fields) = finding else {
+                panic!("{finding:?}")
+            };
+            let (kind, name) = fields.first().cloned().unwrap();
+            SdkValue::map([
+                ("severity", finding.get("severity").cloned().unwrap()),
+                (
+                    "entity",
+                    SdkValue::map([("kind", SdkValue::Text(kind)), ("name", name)]),
+                ),
+                ("message", finding.get("message").cloned().unwrap()),
+                ("fix", finding.get("fix").cloned().unwrap_or_default()),
+            ])
+        })
+        .collect();
+    let ok = !found
+        .iter()
+        .any(|f| f.get_text("severity") == Some("error"));
+    Ok(SdkValue::map([
+        ("ok", SdkValue::Bool(ok)),
+        ("findings", SdkValue::List(found)),
+    ]))
+}
 
 static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
@@ -103,29 +133,10 @@ fn findings(report: &SdkValue) -> Vec<(String, String, String, String, String)> 
         .collect()
 }
 
-/// A stand-in old worker (its hello names no protocol) that reports
-/// whether it received a request after its hello.
-fn old_worker() -> (String, mpsc::Receiver<Option<SdkValue>>) {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap().to_string();
-    let (sent, received) = mpsc::channel();
-    std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        stream
-            .set_read_timeout(Some(Duration::from_secs(10)))
-            .unwrap();
-        let _ = read_frame_within(&mut stream, MAX_HELLO);
-        let ready = SdkValue::map([("ready", SdkValue::Bool(true))]);
-        write_frame(&mut stream, &ready).unwrap();
-        let _ = sent.send(read_frame(&mut stream).ok().flatten());
-    });
-    (address, received)
-}
-
 #[test]
 fn a_clean_home_is_ok_with_no_findings() {
     let home = new_home("clean");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     store(&home, "shop", sqlite("shop", "native"));
     let project = SdkValue::map([("name", t("api"))]);
     write_entity(&paths::project_record(&home, "shop", "api"), &project).unwrap();
@@ -153,7 +164,7 @@ fn a_clean_home_is_ok_with_no_findings() {
 #[test]
 fn a_home_folder_is_0700_or_0701_and_the_message_names_both() {
     let home = new_home("modes-0701");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
     write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
     let run = paths::run_root(&home);
@@ -187,7 +198,7 @@ fn a_store_folder_others_may_pass_through_is_an_error_naming_chmod_700() {
     // #534: the daemon refuses a Store folder with any group/other bit, so
     // doctor must not call 0701 fine there; other home folders keep 0701.
     let home = new_home("store-0701");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     store(&home, "shop", sqlite("shop", "native"));
     let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
     write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
@@ -216,7 +227,7 @@ fn a_symlinked_store_folder_is_an_error_that_does_not_change_the_target() {
     // the home's `store/` as a link: its own mode is 0777, not the folder's,
     // and the remedy must not chmod through the link into its target
     let home = new_home("store-link");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     let elsewhere =
         std::env::temp_dir().join(format!("layerfs-doctor-link-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&elsewhere);
@@ -243,7 +254,7 @@ fn a_symlinked_store_entry_is_an_error_that_does_not_change_the_target() {
     // `store/<name>` as a link: the daemon refuses it, so doctor reports it;
     // the remedy is not a chmod, which would change the link's target
     let home = new_home("store-entry-link");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     store(&home, "shop", sqlite("shop", "native"));
     let elsewhere =
         std::env::temp_dir().join(format!("layerfs-doctor-entry-{}", std::process::id()));
@@ -271,7 +282,7 @@ fn a_symlink_to_a_file_under_store_does_not_abort_other_findings() {
     // `store/<name>` linked to a regular file: must not fail `read_dir(.../project)`
     // with ENOTDIR and discard findings for the rest of the home
     let home = new_home("store-entry-file-link");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
     write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
     store(&home, "other", sqlite("other", "native"));
@@ -329,7 +340,7 @@ fn a_symlink_to_a_file_under_store_does_not_abort_other_findings() {
 #[test]
 fn a_dangling_symlink_under_store_is_an_error_that_keeps_scanning() {
     let home = new_home("store-entry-dangling-link");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
     write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
     store(&home, "other", sqlite("other", "native"));
@@ -385,7 +396,7 @@ fn a_home_that_does_not_exist_is_ok_and_stays_absent() {
 #[test]
 fn each_problem_gives_one_finding_naming_its_fix() {
     let home = new_home("problems");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     // a record that does not parse
     let bad = paths::store_record(&home, "bad");
     private_dir(bad.parent().unwrap()).unwrap();
@@ -442,87 +453,60 @@ fn each_problem_gives_one_finding_naming_its_fix() {
         ("daemon", t("/no/such/layerfs-daemon")),
     ]);
     write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
-    // a running machine whose worker is of an older build
-    let (address, received) = old_worker();
-    let m1 = SdkValue::map([("name", t("m1")), ("platform", t("lima"))]);
-    write_entity(&paths::machine_record(&home, "m1"), &m1).unwrap();
-    let worker = SdkValue::map([("address", t(&address)), ("secret", t("k"))]);
-    write_record(&paths::worker_record(&home, "m1"), &worker).unwrap();
 
     let before = tree(&home);
     let report = doctor(&home).unwrap();
     assert_eq!(before, tree(&home), "the doctor wrote in the home");
-    let request = received.recv_timeout(Duration::from_secs(15)).unwrap();
-    assert!(request.is_none(), "the worker got a request: {request:?}");
     assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)));
 
     let found = findings(&report);
+    // (severity, kind, name, in the message, the fix: none, or in it)
     let expect = [
-        ("error", "store", "bad", "does not parse", "by hand"),
-        ("error", "machine", "old", "\"v\" 9", "build that wrote"),
-        ("error", "bucket", "b1", "0644", "chmod 600"),
+        ("error", "store", "bad", "does not parse", None),
+        ("error", "machine", "old", "build that wrote it", None),
+        ("error", "bucket", "b1", "0644", Some("chmod 600 ")),
         (
             "error",
             "sandbox",
             "sx",
-            "Store gone is gone",
-            "`layerfs sandbox close sx`",
+            "its record names Store gone, which has no record",
+            Some("layerfs sandbox remove sx"),
         ),
         (
             "error",
             "store",
             "s2",
-            "machine ghost",
             "restore machine ghost's record for inspection and explicit cleanup",
+            None,
         ),
-        (
-            "error",
-            "project",
-            "orphan/p",
-            "no Store record",
-            "store/orphan",
-        ),
+        ("error", "project", "orphan/p", "store/orphan", None),
         (
             "error",
             "store",
             "s3",
             "unresolved store.remove",
-            "`layerfs store remove s3`",
-        ),
-        (
-            "warning",
-            "store",
-            "s4",
-            "certain outcome",
-            "next operation",
+            Some("layerfs store remove s3"),
         ),
         (
             "warning",
             "store",
             "s5",
             "stale lease of process 99999999",
-            "`store/s5/open/99999999` by hand",
+            Some("store/s5/open/99999999"),
         ),
         (
             "error",
             "machine",
             "native",
             "recorded daemon /no/such/layerfs-daemon is not there",
-            "`layerfs machine update native --daemon <path>`",
+            None,
         ),
         (
             "warning",
             "store",
             "s6",
             "store.sqlite.incoming",
-            "`layerfs store pull s6`",
-        ),
-        (
-            "warning",
-            "machine",
-            "m1",
-            "another build",
-            "`layerfs machine stop m1`, then `layerfs machine start m1`; if the start says the Linux bundle was sealed before this build, rebuild it",
+            Some("rm "),
         ),
     ];
     for (severity, kind, name, message, fix) in expect {
@@ -533,7 +517,17 @@ fn each_problem_gives_one_finding_naming_its_fix() {
         let (s, _, _, m, x) = matching[0];
         assert_eq!(s, severity, "{kind} {name}: {m}");
         assert!(m.contains(message), "{kind} {name}: {m}");
-        assert!(x.contains(fix), "{kind} {name}: {x}");
+        match fix {
+            None => assert!(x.is_empty(), "{kind} {name}: {x}"),
+            Some(fix) => assert!(x.contains(fix), "{kind} {name}: {x}"),
+        }
+    }
+    // a certain intent whose owner is gone holds nothing: no finding
+    assert!(!found.iter().any(|f| f.2 == "s4"), "{found:#?}");
+    // every fix is one runnable line: no prose, no quoting
+    for finding in &found {
+        let fix = &finding.4;
+        assert!(!fix.contains('`') && !fix.contains("by hand"), "{fix}");
     }
     assert_eq!(found.len(), expect.len(), "{found:#?}");
     assert!(found
@@ -542,74 +536,26 @@ fn each_problem_gives_one_finding_naming_its_fix() {
     std::fs::remove_dir_all(home).unwrap();
 }
 
+/// A copy a move left on the machine its record does not name is one
+/// warning, read from the record with no machine asked: a target's whole or
+/// partial copy (a certain failure's `incoming_on`, or a gone process's move
+/// from `native` past `send`) and
+/// a source's copy a move did not retire.
 #[test]
-fn a_layout_2_home_reports_what_refuses_its_conversion_and_converts_nothing() {
-    let home = new_home("layout2");
-    private_dir(&home).unwrap();
-    let file = SdkValue::map([
-        ("layout", SdkValue::Int(2)),
-        ("id", t("0123456789abcdef0123456789abcdef")),
-    ]);
-    write_record(&home.join("layerfs.json"), &file).unwrap();
-    // a live process holds a Store open
-    let mut holder = std::process::Command::new("sleep")
-        .arg("60")
-        .spawn()
-        .unwrap();
-    let leases = paths::lease_dir(&home, "shop");
-    private_dir(&leases).unwrap();
-    std::fs::write(leases.join(holder.id().to_string()), "1\n").unwrap();
-    // and a dead one held another: its stale lease stays
-    private_dir(&paths::lease_dir(&home, "old")).unwrap();
-    let stale = paths::lease_dir(&home, "old").join("99999999");
-    std::fs::write(&stale, "1\n").unwrap();
-
-    let before = tree(&home);
-    let report = doctor(&home);
-    let _ = holder.kill();
-    let _ = holder.wait();
-    let report = report.unwrap();
-    assert_eq!(before, tree(&home), "the doctor wrote in the home");
-    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)));
-    let found = findings(&report);
-    assert_eq!(found.len(), 2, "{found:#?}");
-    let (severity, kind, name, message, fix) = &found[0];
-    assert_eq!(
-        (severity.as_str(), kind.as_str(), name.as_str()),
-        ("error", "store", "shop")
-    );
-    assert!(message.contains(&holder.id().to_string()), "{message}");
-    assert!(fix.contains("end that process"), "{fix}");
-    assert_eq!(found[1].0, "warning");
-    assert!(found[1].3.contains("layout 2"), "{found:#?}");
-    assert!(stale.exists());
-    std::fs::remove_dir_all(home).unwrap();
-}
-
-/// A partial copy on the machine a push names is reported without writing
-/// anywhere: the doctor reads it through that worker's `stat`.
-#[test]
-fn a_remote_partial_copy_is_reported_without_modifying_home_or_worker() {
-    let home = new_home("remote-incoming");
-    layerfs_control::migrate::open(&home).unwrap();
-    let root = new_home("remote-root");
-    private_dir(&root).unwrap();
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap().to_string();
-    let guest = root.clone();
-    std::thread::spawn(move || {
-        layerfs_control::worker_server::serve(listener, "k".to_owned(), guest)
-    });
-    let m1 = SdkValue::map([("name", t("box")), ("platform", t("lima"))]);
-    write_entity(&paths::machine_record(&home, "box"), &m1).unwrap();
-    let worker = SdkValue::map([("address", t(&address)), ("secret", t("k"))]);
-    write_record(&paths::worker_record(&home, "box"), &worker).unwrap();
-
-    // Store `shop` on native with a certain `store.push` intent to `box`, and
-    // a partial `store.sqlite.incoming` under `box`'s worker root.
-    let stale_push = SdkValue::map([
+fn a_moves_copy_off_its_records_machine_is_one_warning_from_the_record() {
+    let home = new_home("moved");
+    layerfs_home::home::open(&home).unwrap();
+    let boxed = SdkValue::map([("name", t("box")), ("platform", t("lima"))]);
+    write_entity(&paths::machine_record(&home, "box"), &boxed).unwrap();
+    // a move to box failed certain at `send`: box holds a partial copy
+    let mut failed = sqlite("failed", "native");
+    failed.push(("incoming_on", t("box")));
+    store(&home, "failed", failed);
+    // a move whose process ended at `send`
+    let mut pushed = sqlite("pushed", "native");
+    let push = SdkValue::map([
         ("id", t("op-00000000000000bb")),
-        ("name", t("store.push")),
+        ("name", t("store.move")),
         ("phase", t("send")),
         (
             "args",
@@ -620,113 +566,76 @@ fn a_remote_partial_copy_is_reported_without_modifying_home_or_worker() {
         ("updated", SdkValue::Int(1)),
         ("uncertain", SdkValue::Bool(false)),
     ]);
-    let mut shop = sqlite("shop", "native");
-    shop.push(("op", stale_push));
-    store(&home, "shop", shop);
-    let remote_dir = paths::store_dir(&root, "shop");
-    private_dir(&remote_dir).unwrap();
-    std::fs::write(remote_dir.join("store.sqlite.incoming"), b"partial-bytes").unwrap();
+    pushed.push(("op", push));
+    store(&home, "pushed", pushed);
+    // a move to box whose retire did not finish: native keeps its copy
+    let mut kept = sqlite("kept", "box");
+    let last = SdkValue::map([
+        ("from", t("native")),
+        ("to", t("box")),
+        ("retired", SdkValue::Bool(false)),
+    ]);
+    kept.push(("last_transfer", last));
+    store(&home, "kept", kept);
 
-    // the worker is up and answering before the trees are read
-    let mut executor = layerfs_store::place::on_machine(&home, "box").unwrap();
-    layerfs_store::sqlite::family::step_on(
-        &home,
-        &mut executor,
-        "shop",
-        layerfs_store::sqlite::transfer::step::StoreStep::Stat,
-    )
-    .unwrap();
-
-    let before_home = tree(&home);
-    let before_root = tree(&root);
-    let report = doctor(&home).unwrap();
-    assert_eq!(before_home, tree(&home), "the doctor wrote in the home");
-    assert_eq!(
-        before_root,
-        tree(&root),
-        "the doctor wrote in the worker root"
-    );
-
-    let found = findings(&report);
-    assert!(
-        found.iter().any(|(sev, kind, name, msg, fix)| {
-            sev == "warning"
-                && kind == "store"
-                && name == "shop"
-                && msg.contains("machine box holds a 13-byte partial copy (store.sqlite.incoming)")
-                && fix.contains("`layerfs store push shop box`")
-        }),
-        "{found:#?}"
-    );
+    let before = tree(&home);
+    let found = findings(&doctor(&home).unwrap());
+    assert_eq!(before, tree(&home), "the doctor wrote in the home");
+    for (name, says) in [
+        (
+            "failed",
+            "store.move from native to box may have left a whole or partial copy on box",
+        ),
+        (
+            "pushed",
+            "store.move from native to box may have left a whole or partial copy on box",
+        ),
+        (
+            "kept",
+            "store.move from native to box did not retire the copy on native",
+        ),
+    ] {
+        let matching: Vec<_> = (found.iter())
+            .filter(|f| f.1 == "store" && f.2 == name)
+            .collect();
+        assert_eq!(matching.len(), 1, "{name}: {found:#?}");
+        assert_eq!(matching[0].0, "warning", "{name}");
+        assert!(matching[0].3.contains(says), "{name}: {}", matching[0].3);
+        assert!(matching[0]
+            .3
+            .contains(&format!("layerfs store move {name}")));
+    }
     std::fs::remove_dir_all(home).unwrap();
-    let _ = std::fs::remove_dir_all(root);
 }
 
-/// A partial copy a certain failure left (#13 F1): the push's intent is
-/// gone, so the record keeps the machine (`incoming_on`) and the doctor
-/// reports the bytes once, naming the calls that clear it.
 #[test]
-fn a_partial_copy_a_certain_failure_left_is_reported_from_the_record() {
-    let home = new_home("certain-incoming");
-    layerfs_control::migrate::open(&home).unwrap();
-    let root = new_home("certain-root");
-    private_dir(&root).unwrap();
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap().to_string();
-    let guest = root.clone();
-    std::thread::spawn(move || {
-        layerfs_control::worker_server::serve(listener, "k".to_owned(), guest)
-    });
-    let m1 = SdkValue::map([("name", t("box")), ("platform", t("lima"))]);
-    write_entity(&paths::machine_record(&home, "box"), &m1).unwrap();
-    let worker = SdkValue::map([("address", t(&address)), ("secret", t("k"))]);
-    write_record(&paths::worker_record(&home, "box"), &worker).unwrap();
-
-    // Store `shop` on native with no intent at all, and the machine a
-    // certain `store.push` failure kept in place of that intent
-    let mut shop = sqlite("shop", "native");
-    shop.push(("incoming_on", t("box")));
-    store(&home, "shop", shop);
-    let remote_dir = paths::store_dir(&root, "shop");
-    private_dir(&remote_dir).unwrap();
-    std::fs::write(remote_dir.join("store.sqlite.incoming"), b"partial-bytes").unwrap();
-
-    let mut executor = layerfs_store::place::on_machine(&home, "box").unwrap();
-    layerfs_store::sqlite::family::step_on(
-        &home,
-        &mut executor,
-        "shop",
-        layerfs_store::sqlite::transfer::step::StoreStep::Stat,
-    )
-    .unwrap();
-
-    let before_home = tree(&home);
-    let before_root = tree(&root);
-    let report = doctor(&home).unwrap();
-    assert_eq!(before_home, tree(&home), "the doctor wrote in the home");
-    assert_eq!(
-        before_root,
-        tree(&root),
-        "the doctor wrote in the worker root"
-    );
-
-    let found = findings(&report);
-    assert_eq!(found.len(), 1, "one finding for one copy: {found:#?}");
-    let (severity, kind, name, message, fix) = &found[0];
-    assert_eq!(
-        (severity.as_str(), kind.as_str(), name.as_str()),
-        ("warning", "store", "shop")
-    );
-    assert!(
-        message.contains("machine box holds a 13-byte partial copy (store.sqlite.incoming)"),
-        "{message}"
-    );
-    assert!(
-        fix.contains("`layerfs store push shop box` replaces it, or `layerfs store remove shop`"),
-        "{fix}"
-    );
+fn a_foreign_home_fails_its_layout_check_with_the_move_fix_and_is_left() {
+    let home = new_home("foreign");
+    private_dir(&home).unwrap();
+    let file = SdkValue::map([
+        ("layout", SdkValue::Int(2)),
+        ("id", t("0123456789abcdef0123456789abcdef")),
+    ]);
+    write_record(&home.join("layerfs.json"), &file).unwrap();
+    let before = tree(&home);
+    let shown = home.display().to_string();
+    let report = doctor_own::own(&home, Kind::Home, &shown, &Options::default());
+    assert_eq!(before, tree(&home), "the doctor wrote in the home");
+    let Some(SdkValue::List(found)) = report.get("findings") else {
+        panic!("no findings: {report:?}")
+    };
+    let layout: Vec<&SdkValue> = (found.iter())
+        .filter(|finding| finding.get_text("check") == Some("home.layout"))
+        .collect();
+    assert_eq!(layout.len(), 1, "{report:?}");
+    assert_eq!(layout[0].get_text("severity"), Some("error"));
+    let fix = layout[0].get_text("fix").unwrap();
+    assert_eq!(fix, format!("mv {shown} {shown}.old && layerfs home init"));
+    // no records are read in a home this build does not read
+    assert!(found
+        .iter()
+        .all(|finding| finding.get_text("check") != Some("home.records")));
     std::fs::remove_dir_all(home).unwrap();
-    let _ = std::fs::remove_dir_all(root);
 }
 
 /// Exec record `id` of Workspace `wsid` in Sandbox `sb`, owned by `pid`.
@@ -752,7 +661,7 @@ fn exec_record(home: &Path, wsid: &str, id: &str, pid: i64) -> PathBuf {
 #[test]
 fn exec_records_are_checked_and_left_as_they_are() {
     let home = new_home("execs");
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     store(&home, "shop", sqlite("shop", "native"));
     let project = SdkValue::map([("name", t("api"))]);
     write_entity(&paths::project_record(&home, "shop", "api"), &project).unwrap();
@@ -781,16 +690,17 @@ fn exec_records_are_checked_and_left_as_they_are() {
     assert_eq!(before, tree(&home), "the doctor wrote in the home");
     let found = findings(&report);
     assert_eq!(found.len(), 2, "{found:?}");
-    let stale = found.iter().find(|f| f.1 == "exec").unwrap();
+    // a command record's finding names its Workspace
+    let stale = found.iter().find(|f| f.3.contains("is stale")).unwrap();
     assert_eq!(
-        (stale.0.as_str(), stale.2.as_str()),
-        ("warning", &*format!("sb:{live}/e2"))
+        (stale.0.as_str(), stale.1.as_str(), stale.2.as_str()),
+        ("warning", "workspace", &*format!("sb:{live}"))
     );
     assert!(
-        stale.3.contains("stale") && stale.4.contains("exec-cancel sb:w e2"),
+        stale.3.contains("stale") && stale.4 == "layerfs workspace cancel sb:w --exec e2",
         "{stale:?}"
     );
-    let leftover = found.iter().find(|f| f.1 == "workspace").unwrap();
+    let leftover = found.iter().find(|f| f.2 == format!("sb:{left}")).unwrap();
     assert_eq!(leftover.2, format!("sb:{left}"));
     assert!(leftover.3.contains("no Workspace record"), "{leftover:?}");
     // one that is not a record is an error
@@ -808,297 +718,5 @@ fn exec_records_are_checked_and_left_as_they_are() {
     assert!(findings(&report)
         .iter()
         .any(|f| f.0 == "error" && f.3.contains("not an exec record")));
-    std::fs::remove_dir_all(home).unwrap();
-}
-
-#[test]
-fn a_stalled_daemon_endpoint_is_a_bounded_warning_and_starts_nothing() {
-    let home = new_home("stalled");
-    layerfs_control::migrate::open(&home).unwrap();
-    store(&home, "shop", sqlite("shop", "native"));
-    let project = SdkValue::map([("name", t("api"))]);
-    write_entity(&paths::project_record(&home, "shop", "api"), &project).unwrap();
-    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
-    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
-    let sandbox = SdkValue::map([
-        ("name", t("sb")),
-        ("project", t("shop/api")),
-        ("machine", t("native")),
-        ("id", t("sb")),
-    ]);
-    write_entity(&paths::sandbox_record(&home, "sb"), &sandbox).unwrap();
-    // a daemon endpoint that accepts and then says nothing: the connect
-    // succeeds and only the bounded handshake read ends the query
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let endpoint = listener.local_addr().unwrap();
-    let (dialed, dialed_rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        if let Ok((stream, _)) = listener.accept() {
-            let _ = dialed.send(());
-            std::thread::sleep(Duration::from_secs(6));
-            drop(stream);
-        }
-    });
-    let keys = SdkValue::map([
-        ("endpoint", t(&endpoint.to_string())),
-        ("secret", SdkValue::Bytes(vec![1; 32])),
-        ("peer", SdkValue::Bytes(vec![2; 32])),
-        ("instance", SdkValue::Bytes(vec![3; 32])),
-    ]);
-    write_record(&paths::sandbox_control(&home, "sb"), &keys).unwrap();
-
-    let before = tree(&home);
-    let at = std::time::Instant::now();
-    let report = doctor(&home).unwrap();
-    let elapsed = at.elapsed();
-    assert!(
-        elapsed < Duration::from_secs(4),
-        "the doctor stalled for {elapsed:?}"
-    );
-    assert!(
-        elapsed >= Duration::from_secs(1),
-        "the doctor did not wait for its bounded query: {elapsed:?}"
-    );
-    dialed_rx
-        .recv_timeout(Duration::from_secs(2))
-        .expect("the doctor never dialed the endpoint");
-    assert_eq!(before, tree(&home), "the doctor wrote in the home");
-    // a daemon that does not answer is a warning, not an error: the doctor
-    // stays read-only and does not fail on an idle or stopped daemon
-    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(true)), "{report:?}");
-    let found = findings(&report);
-    assert_eq!(found.len(), 1, "{found:#?}");
-    let (severity, kind, name, message, fix) = &found[0];
-    assert_eq!(
-        (severity.as_str(), kind.as_str(), name.as_str()),
-        ("warning", "sandbox", "sb")
-    );
-    assert!(message.contains(&endpoint.to_string()), "{message}");
-    assert!(
-        message.contains("backend.daemon.connection_failures"),
-        "{message}"
-    );
-    assert!(message.contains("within 2s"), "{message}");
-    assert!(fix.contains("sandbox get sb"), "{fix}");
-    std::fs::remove_dir_all(home).unwrap();
-}
-
-#[test]
-fn a_sandbox_without_a_recorded_endpoint_is_not_queried() {
-    let home = new_home("noendpoint");
-    layerfs_control::migrate::open(&home).unwrap();
-    store(&home, "shop", sqlite("shop", "native"));
-    let project = SdkValue::map([("name", t("api"))]);
-    write_entity(&paths::project_record(&home, "shop", "api"), &project).unwrap();
-    let sandbox = SdkValue::map([
-        ("name", t("sb")),
-        ("project", t("shop/api")),
-        ("machine", t("native")),
-        ("id", t("sb")),
-    ]);
-    write_entity(&paths::sandbox_record(&home, "sb"), &sandbox).unwrap();
-    // daemon keys without an endpoint: nothing tells the doctor where to
-    // dial, and it starts nothing to find out
-    let keys = SdkValue::map([
-        ("secret", SdkValue::Bytes(vec![1; 32])),
-        ("peer", SdkValue::Bytes(vec![2; 32])),
-        ("instance", SdkValue::Bytes(vec![3; 32])),
-    ]);
-    write_record(&paths::sandbox_control(&home, "sb"), &keys).unwrap();
-    let at = std::time::Instant::now();
-    let report = doctor(&home).unwrap();
-    assert!(at.elapsed() < Duration::from_secs(1));
-    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(true)));
-    assert!(findings(&report).is_empty(), "{report:?}");
-    std::fs::remove_dir_all(home).unwrap();
-}
-
-/// A fake daemon that answers the doctor's two calls: its Hello, then the
-/// control-capacity read model with `reply`.
-fn capacity_daemon(reply: Reply) -> (SocketAddr, std::thread::JoinHandle<()>) {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let endpoint = listener.local_addr().unwrap();
-    let worker = std::thread::spawn(move || {
-        let (stream, _) = listener.accept().unwrap();
-        stream
-            .set_read_timeout(Some(Duration::from_secs(5)))
-            .unwrap();
-        stream
-            .set_write_timeout(Some(Duration::from_secs(5)))
-            .unwrap();
-        let mut channel = duplex::accept(
-            stream,
-            &DAEMON_PRIVATE,
-            duplex::public_key(&CLIENT_PRIVATE).unwrap(),
-        )
-        .unwrap();
-        let hello = Call::decode(channel.receive.receive().unwrap()).unwrap();
-        assert!(matches!(hello.request, Request::Hello(_)));
-        channel
-            .send
-            .send(
-                &Answer {
-                    id: hello.id,
-                    reply: Reply::Hello(DaemonStatus {
-                        instance: DAEMON_INSTANCE,
-                        phase: DaemonPhase::ControlReady,
-                        overlay_sqlite: Some("3.51.0".into()),
-                        store_sqlite: Some("3.51.0".into()),
-                    }),
-                }
-                .encode()
-                .unwrap(),
-            )
-            .unwrap();
-        let call = Call::decode(channel.receive.receive().unwrap()).unwrap();
-        let id = call.id;
-        let Request::Sdk(sdk) = call.request else {
-            panic!("expected the capacity read model");
-        };
-        assert_eq!(sdk.method, OPERATION);
-        channel
-            .send
-            .send(&Answer { id, reply }.encode().unwrap())
-            .unwrap();
-    });
-    (endpoint, worker)
-}
-
-const CLIENT_PRIVATE: [u8; 32] = [2; 32];
-const DAEMON_PRIVATE: [u8; 32] = [1; 32];
-const DAEMON_INSTANCE: [u8; 32] = [3; 32];
-
-/// A home with one running Sandbox whose daemon keys name `endpoint`.
-fn running_sandbox(home: &Path, endpoint: SocketAddr) {
-    layerfs_control::migrate::open(home).unwrap();
-    store(home, "shop", sqlite("shop", "native"));
-    let project = SdkValue::map([("name", t("api"))]);
-    write_entity(&paths::project_record(home, "shop", "api"), &project).unwrap();
-    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
-    write_entity(&paths::machine_record(home, "native"), &native).unwrap();
-    let sandbox = SdkValue::map([
-        ("name", t("sb")),
-        ("project", t("shop/api")),
-        ("machine", t("native")),
-        ("id", t("sb")),
-    ]);
-    write_entity(&paths::sandbox_record(home, "sb"), &sandbox).unwrap();
-    let keys = SdkValue::map([
-        ("endpoint", t(&endpoint.to_string())),
-        ("secret", SdkValue::Bytes(CLIENT_PRIVATE.to_vec())),
-        (
-            "peer",
-            SdkValue::Bytes(duplex::public_key(&DAEMON_PRIVATE).unwrap().to_vec()),
-        ),
-        ("instance", SdkValue::Bytes(DAEMON_INSTANCE.to_vec())),
-    ]);
-    write_record(&paths::sandbox_control(home, "sb"), &keys).unwrap();
-}
-
-#[test]
-fn capacity_model_warnings_name_retained_failures_and_an_exhausted_pool() {
-    let model = layerfs_bridge::control::CapacityModel {
-        admission: AdmissionModel {
-            pool_vacant: 0,
-            pool_running: 8,
-            reserved_vacant: 1,
-            reserved_running: 0,
-        },
-        retained: RetainedModel {
-            limit: 64,
-            ttl_ms: 3_600_000,
-            count: 3,
-            dropped: 2,
-            recorded: 3,
-            failures: Vec::new(),
-        },
-    };
-    let (endpoint, worker) = capacity_daemon(Reply::Sdk(model.to_sdk()));
-    let home = new_home("capacity");
-    running_sandbox(&home, endpoint);
-    let report = doctor(&home).unwrap();
-    worker.join().unwrap();
-    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(true)), "{report:?}");
-    let found = findings(&report);
-    assert_eq!(found.len(), 2, "{found:#?}");
-    let text: Vec<String> = found
-        .iter()
-        .map(|(_, _, _, message, fix)| format!("{message} {fix}"))
-        .collect();
-    assert!(text[0].contains("retained 3 of 64"), "{text:#?}");
-    assert!(text[0].contains("2 dropped"), "{text:#?}");
-    assert!(
-        text[0].contains("backend.daemon.connection_failures"),
-        "{text:#?}"
-    );
-    assert!(text[1].contains("pool_vacant 0"), "{text:#?}");
-    assert!(text[1].contains("pool_running 8"), "{text:#?}");
-    assert!(text[1].contains("Capacity"), "{text:#?}");
-    assert!(text[1].contains("daemon_control_slot"), "{text:#?}");
-    for (severity, kind, name, _, _) in &found {
-        assert_eq!(
-            (severity.as_str(), kind.as_str(), name.as_str()),
-            ("warning", "sandbox", "sb")
-        );
-    }
-    std::fs::remove_dir_all(home).unwrap();
-}
-
-#[test]
-fn a_healthy_capacity_model_gives_no_finding() {
-    let model = CapacityModel {
-        admission: AdmissionModel {
-            pool_vacant: 7,
-            pool_running: 1,
-            reserved_vacant: 1,
-            reserved_running: 0,
-        },
-        retained: RetainedModel {
-            limit: 64,
-            ttl_ms: 3_600_000,
-            count: 0,
-            dropped: 0,
-            recorded: 0,
-            failures: Vec::new(),
-        },
-    };
-    let (endpoint, worker) = capacity_daemon(Reply::Sdk(model.to_sdk()));
-    let home = new_home("capacity-healthy");
-    running_sandbox(&home, endpoint);
-    let report = doctor(&home).unwrap();
-    worker.join().unwrap();
-    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(true)));
-    assert!(findings(&report).is_empty(), "{report:?}");
-    std::fs::remove_dir_all(home).unwrap();
-}
-
-#[test]
-fn a_capacity_refusal_is_a_warning_not_an_error() {
-    let refusal = SdkRefusal {
-        code: "Capacity".to_owned(),
-        message: "the Sandbox's daemon has no vacant control slot".to_owned(),
-        detail: SdkValue::map([
-            ("resource", t("daemon_control_slot")),
-            ("retained", SdkValue::Int(3)),
-            ("pool_vacant", SdkValue::Int(0)),
-            ("reserved_vacant", SdkValue::Int(1)),
-            ("retryable", SdkValue::Bool(true)),
-        ]),
-    };
-    let (endpoint, worker) = capacity_daemon(Reply::SdkRefused(refusal));
-    let home = new_home("capacity-refused");
-    running_sandbox(&home, endpoint);
-    let report = doctor(&home).unwrap();
-    worker.join().unwrap();
-    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(true)));
-    let found = findings(&report);
-    assert_eq!(found.len(), 1, "{found:#?}");
-    let message = &found[0].3;
-    assert!(message.contains("Capacity"), "{message}");
-    assert!(message.contains("daemon_control_slot"), "{message}");
-    assert!(message.contains("pool_vacant 0"), "{message}");
-    assert!(message.contains("reserved_vacant 1"), "{message}");
-    assert!(message.contains("retained 3"), "{message}");
-    assert_eq!(found[0].0, "warning");
     std::fs::remove_dir_all(home).unwrap();
 }

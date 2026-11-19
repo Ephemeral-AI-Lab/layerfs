@@ -17,26 +17,15 @@ from ._client import (
     MachineFamily,
     StoreFamily,
     BackupFamily,
-    LogsFamily,
-    DoctorFamily,
 )
 from ._errors import LayerFSError as LayerFSError
 from ._values import (
     JSON as JSON,
-    DoctorLeftover as DoctorLeftover,
-    DoctorReport as DoctorReport,
     Progress as Progress,
     Result as Result,
     Scope as Scope,
 )
 
-class _Doctor(DoctorFamily):
-    """The report as a function, with the ``doctor`` family's calls: ``doctor()`` and ``doctor.fix(id)``."""
-
-    def __call__(self, home: str | PathLike[str] | None = None, *, target: str | None = None, name: str | None = None, timeout: str | None = None, quick: bool | None = None, write_test: bool | None = None) -> DoctorReport:
-        """Diagnoses without LayerFS state changes; backup write_test uses its own temporary S3 version."""
-
-doctor: _Doctor
 
 def close() -> int:
     """Closes every Store this process holds open with no call running."""
@@ -51,6 +40,5 @@ workspace: WorkspaceFamily
 machine: MachineFamily
 store: StoreFamily
 backup: BackupFamily
-logs: LogsFamily
 
-__all__ = ['FAMILIES', 'TABLE', 'Client', 'LayerFSError', 'backup', 'branch', 'client', 'close', 'commit', 'doctor', 'file', 'home', 'logs', 'machine', 'project', 'sandbox', 'store', 'workspace']
+__all__ = ['FAMILIES', 'TABLE', 'Client', 'LayerFSError', 'backup', 'branch', 'client', 'close', 'commit', 'file', 'home', 'machine', 'project', 'sandbox', 'store', 'workspace']

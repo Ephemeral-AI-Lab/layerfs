@@ -113,9 +113,7 @@ impl Sandbox {
         if !owner.paths.local.directory.is_absolute() || port == 0 {
             return Err(owner.invalid("saved namespaces Sandbox"));
         }
-        // its leaf, or its own group when an earlier build started it
-        let grouped = host::in_cgroup(init.pid, &cgroup::leaf(&owner.cgroup))
-            || host::in_cgroup(init.pid, &owner.cgroup);
+        let grouped = host::in_cgroup(init.pid, &cgroup::leaf(&owner.cgroup));
         if !init.alive() || !grouped {
             let mut failure = owner.invalid(crate::types::STOPPED);
             failure.observed_container = Some(owner.id);

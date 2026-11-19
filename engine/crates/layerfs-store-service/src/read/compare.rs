@@ -203,6 +203,25 @@ pub(crate) fn change(
                 }
             }
         }
+    } else if with_hunks {
+        // an added or removed text file: every line `+`, or every line `-`
+        let side = change.right.or(change.left);
+        if let Some(text) = snapshot::text(reader, side)? {
+            let op = match change.right {
+                Some(_) => LineOp::Added,
+                None => LineOp::Removed,
+            };
+            let all: Vec<DiffLine> = (layerfs_content::compare::lines(&text).into_iter())
+                .map(|line| DiffLine {
+                    op,
+                    text: line.to_owned(),
+                })
+                .collect();
+            match hunks(&all, budget) {
+                Some(value) => lines = value,
+                None => omitted = true,
+            }
+        }
     }
     Ok(Some(SdkValue::map([
         ("path", SdkValue::text(change.path.as_str())),
@@ -225,12 +244,42 @@ pub struct Request {
     pub pos: u64,
     pub cursor: Option<String>,
     pub hunks: bool,
+    /// Only this path and what is under it, when given.
+    pub scope: Option<String>,
+}
+
+/// Where `path` is from `scope`: in it, on the way to it, or elsewhere.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Within {
+    In,
+    Above,
+    Out,
+}
+
+/// Where `path` lies from `scope` (everything is in no scope).
+pub(crate) fn within(path: &str, scope: Option<&str>) -> Within {
+    let Some(scope) = scope.filter(|scope| *scope != "/") else {
+        return Within::In;
+    };
+    let below = |outer: &str, inner: &str| {
+        inner == outer
+            || inner
+                .strip_prefix(outer)
+                .is_some_and(|rest| rest.starts_with('/'))
+    };
+    if below(scope, path) {
+        Within::In
+    } else if path == "/" || below(path, scope) {
+        Within::Above
+    } else {
+        Within::Out
+    }
 }
 
 /// The page after the listed one: offset and cursor, `Null` when complete.
-struct Next {
-    pos: SdkValue,
-    cursor: SdkValue,
+pub(crate) struct Next {
+    pub(crate) pos: SdkValue,
+    pub(crate) cursor: SdkValue,
 }
 
 /// Component order of the walk: each directory before its children, names in
@@ -242,7 +291,7 @@ fn order(a: &str, b: &str) -> std::cmp::Ordering {
 /// The listed changes from `left` to `right` after the offset or cursor, within
 /// the reply budget, and where the next page starts. Content's change walk reads
 /// what changed; without recorded bindings it is the full walk of both trees.
-fn changes(
+pub(crate) fn changes(
     store: &Arc<Store>,
     reader: &StorePorts,
     left: &Snap,
@@ -327,6 +376,16 @@ fn emit(
         let (path, raw_before, raw_after) = &pair;
         let before = (*raw_before).filter(|_| left_seen.hidden(path).is_none());
         let after = (*raw_after).filter(|_| right_seen.hidden(path).is_none());
+        // Outside the scope: neither listed nor entered; on the way to it:
+        // entered only.
+        match within(path, request.scope.as_deref()) {
+            Within::Out => continue,
+            Within::Above => {
+                walk.enter(&pair).map_err(args::content)?;
+                continue;
+            }
+            Within::In => {}
+        }
         // Both hidden: the path is absent on both sides, not a change.
         if before.is_none() && after.is_none() {
             walk.enter(&pair).map_err(args::content)?;

@@ -6,11 +6,14 @@
 The table comes from the built native module (`layerfs._native.table()`),
 so build the module first (see api/python/README.md). Written:
 `src/layerfs/_client.pyi`, `aio.pyi` and `__init__.pyi`. `_values.pyi` and
-`_errors.pyi` are written by hand. The table has argument kinds and no
-result schema, so every result is the loose `Result`.
+`_errors.pyi` are written by hand. The table has argument kinds and, for a
+migrated call, the keys of its answer; every result is still the loose
+`Result`. An argument or option whose name is a Python keyword is spelled
+with a trailing underscore (`with_`, `from_`), as the package reads it.
 """
 
 import json
+import keyword
 import sys
 from pathlib import Path
 
@@ -53,18 +56,30 @@ def annotation(arg):
     return ANNOTATION[arg["kind"]]
 
 
+def spelled(name):
+    """An argument's or option's name as a Python parameter (`from_`)."""
+    return f"{name}_" if keyword.iskeyword(name) else name
+
+
 def method(spec, asynchronous):
     """One call as a stub method: positionals as they are, options keyword-only."""
     params, seen_optional = ["self"], False
     for arg in spec["args"]:
         assert arg["optional"] or not seen_optional, f"{spec['family']}.{spec['call']}: required after optional"
         seen_optional = seen_optional or arg["optional"]
-        params.append(f"{arg['name']}: {annotation(arg)}" + (" | None = None" if arg["optional"] else ""))
+        params.append(f"{spelled(arg['name'])}: {annotation(arg)}" + (" | None = None" if arg["optional"] else ""))
     params.append("*")
     for opt in spec["options"]:
-        default = " = ..." if opt["kind"] == "function" else " | None = None"
-        params.append(f"{opt['name']}: {annotation(opt)}{default}")
-    # every call takes the tag of its call log line (#659)
+        default = " = ..." if opt["kind"] == "function" else "" if opt.get("required") else " | None = None"
+        params.append(f"{spelled(opt['name'])}: {annotation(opt)}{default}")
+    # every call takes the global options: the long form, the sections its
+    # entry lists (call surface 2.0) and the tag of its call log line (#659)
+    params.append("detail: bool | None = None")
+    sections = list((spec.get("form") or {}).get("with") or {})
+    if sections:
+        params.append(f"with_: Sequence[Literal[{', '.join(repr(name) for name in sections)}]] | None = None")
+    else:
+        params.append("with_: Sequence[str] | None = None")
     params.append("log_tag: str | None = None")
     keyword = "async def" if asynchronous else "def"
     head = f"    {keyword} {spec['call']}({', '.join(params)}) -> Result:"
@@ -114,8 +129,9 @@ def render(entries):
     """Every generated stub as `{file name: text}`."""
     names = family_names(entries)
     imports = (
-        "from collections.abc import Callable, Mapping\n"
+        "from collections.abc import Callable, Mapping, Sequence\n"
         "from os import PathLike\n"
+        "from typing import Literal\n"
         "\n"
         "from ._values import JSON, Content, Output, Progress, Result, Scope, Size\n"
     )
@@ -144,26 +160,17 @@ def render(entries):
         "from ._errors import LayerFSError as LayerFSError\n"
         "from ._values import (\n"
         "    JSON as JSON,\n"
-        "    DoctorLeftover as DoctorLeftover,\n"
-        "    DoctorReport as DoctorReport,\n"
         "    Progress as Progress,\n"
         "    Result as Result,\n"
         "    Scope as Scope,\n"
         ")\n"
         "\n"
-        "class _Doctor(DoctorFamily):\n"
-        '    """The report as a function, with the ``doctor`` family\'s calls: ``doctor()`` and ``doctor.fix(id)``."""\n'
-        "\n"
-        f"    def __call__(self, home: {HOME} = None, *, target: str | None = None, name: str | None = None, timeout: str | None = None, quick: bool | None = None, write_test: bool | None = None) -> DoctorReport:\n"
-        '        """Diagnoses without LayerFS state changes; backup write_test uses its own temporary S3 version."""\n'
-        "\n"
-        "doctor: _Doctor\n"
         "\n"
         "def close() -> int:\n"
         '    """Closes every Store this process holds open with no call running."""\n'
         "\n"
-        f"{attributes([spec for spec in entries if spec['family'] != 'doctor'], '')}\n"
-        f"__all__ = {['FAMILIES', 'TABLE', 'Client', 'LayerFSError'] + sorted(set(names) | {'client', 'close', 'doctor'})!r}\n"
+        f"{attributes(entries, '')}\n"
+        f"__all__ = {['FAMILIES', 'TABLE', 'Client', 'LayerFSError'] + sorted(set(names) | {'client', 'close'})!r}\n"
     )
     return {"_client.pyi": sync, "aio.pyi": asynchronous, "__init__.pyi": package}
 

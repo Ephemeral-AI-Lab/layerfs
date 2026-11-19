@@ -3,10 +3,10 @@
 
 pub mod banner;
 mod capabilities;
-mod doctor;
-mod framed;
 pub mod help;
 pub mod output;
 pub mod parse;
 pub mod run;
+pub mod view;
+mod words;
 pub mod worker;

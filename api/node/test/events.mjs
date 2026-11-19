@@ -1,7 +1,7 @@
 // Events reach their handlers on their own handle (#533 review, group
 // calls): a handler that throws does not stop the call or the process, and
 // every event the call sent reaches its handler before the call settles.
-// A `store.push` to a worker (`layerfs worker`, the repository's debug
+// A `store.move` to a worker (`layerfs worker`, the repository's debug
 // build) sends a progress event at each phase.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -69,7 +69,7 @@ test("a throwing on_progress does not stop a push; every event comes before it s
     const onWarning = (warning) => warnings.push(String(warning.message));
     process.on("warning", onWarning);
     const thrown = [];
-    const pushed = await lfs.store.push("shop", "box", {
+    const pushed = await lfs.store.move("shop", "box", {
       on_progress: (p) => {
         thrown.push(p.phase);
         throw new Error(`a handler that throws at ${p.phase}`);
@@ -86,7 +86,7 @@ test("a throwing on_progress does not stop a push; every event comes before it s
 
     // and back, counting: no event after the call settles
     const phases = [];
-    await lfs.store.pull("shop", { on_progress: (p) => phases.push(p.phase) });
+    await lfs.store.move("shop", "native", { on_progress: (p) => phases.push(p.phase) });
     const settled = phases.slice();
     assert.equal(settled[0], "check");
     assert.equal(settled[settled.length - 1], "retire", settled.join(","));
@@ -107,14 +107,15 @@ test("exec output: the stdout and stderr functions, and stream: true without the
   writeFileSync(join(folder, "README.md"), "streamed\n");
   const lfs = client({ home });
   await lfs.store.create("shop");
-  const imported = spawnSync(command, ["import-env"], { env: { ...process.env, LAYERFS_HOME: home }, timeout: 30_000 });
-  assert.equal(imported.status, 0, String(imported.stderr));
+  const daemon = ["machine", "update", "native", "--daemon", process.env.LAYERFS_DAEMON];
+  const updated = spawnSync(command, daemon, { env: { ...process.env, LAYERFS_HOME: home }, timeout: 30_000 });
+  assert.equal(updated.status, 0, String(updated.stderr));
   await lfs.project.init("shop/api", folder);
   await lfs.branch.fork("shop/api", "dev", "main");
-  await lfs.sandbox.create("shop/api", "s1", "native");
+  await lfs.sandbox.create("shop/api", "s1", { machine: "native" });
   let ws;
   try {
-    ({ ws } = await lfs.workspace.mount("s1", "dev"));
+    ({ workspace: ws } = await lfs.workspace.mount("s1", "dev"));
     const out = [];
     const err = [];
     const ran = await lfs.workspace.exec(ws, "cat README.md; echo oops >&2", {
@@ -137,7 +138,7 @@ test("exec output: the stdout and stderr functions, and stream: true without the
     assert.equal(String(child.stderr), "oops\n");
   } finally {
     if (ws) await lfs.workspace.unmount(ws);
-    await lfs.sandbox.close("s1");
+    await lfs.sandbox.remove("s1");
     rmSync(home, { recursive: true, force: true });
     rmSync(folder, { recursive: true, force: true });
   }

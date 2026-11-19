@@ -1,26 +1,32 @@
-//! Explicit provider crash stop without a worker request, VM start or data deletion.
+//! `machine stop --force`: an explicit provider crash stop without a
+//! worker request, VM start or data deletion. Its phases are `check` and
+//! `stop`, as a plain stop's; it answers what a stop does, with `forced`,
+//! `stopped_sandboxes` and `unknown_workspaces` (call surface 2.0).
 use crate::inventory;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::events::Events;
 use layerfs_home::home::{self, lock, paths};
 use layerfs_home::names::MachineName;
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_machine::platform::{self as adapters, Platform};
 use layerfs_machine::record::MachineRecord;
-use layerfs_machine::{machine_refusal as refusal, machine_spec};
+use layerfs_machine::{machine_refusal as refusal, machine_spec, Phases, STOP_PHASES};
 use layerfs_sandbox::record::SandboxRecord;
 use layerfs_sandbox::{direct, files, reopen};
 use std::path::Path;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-pub(crate) fn stop(home: &Path, name: &MachineName) -> Outcome {
+pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> Outcome {
     let home = home.to_path_buf();
     let name = name.as_str();
+    let mut phases = Phases::new(events, &STOP_PHASES);
+    phases.begin("check");
     force_record(&home, name)?;
     let _start = layerfs_machine::force_stop_lock(&home, name)?;
     let intent = Op::begin(
         "machine.stop",
-        "force",
+        "stop",
         SdkValue::map([("force", SdkValue::Bool(true))]),
     )?;
     let (spec, hosted, sandboxes) = {
@@ -47,7 +53,7 @@ pub(crate) fn stop(home: &Path, name: &MachineName) -> Outcome {
                 ));
             }
         }
-        let spec = machine_spec(&home, &home_id(&home)?, &machine)?;
+        let spec = machine_spec(&home, &machine)?;
         for child in &hosted {
             force_record(&home, child)?;
         }
@@ -56,6 +62,7 @@ pub(crate) fn stop(home: &Path, name: &MachineName) -> Outcome {
         }
         (spec, hosted, sandboxes)
     };
+    phases.begin("stop");
     let mut unknown = Vec::new();
     let mut stopped = Vec::new();
     let mut skipped = Vec::new();
@@ -89,7 +96,9 @@ pub(crate) fn stop(home: &Path, name: &MachineName) -> Outcome {
                             continue;
                         }
                         native_attempt = Some(sandbox);
-                        runtime.stop(0).map_err(failed)?;
+                        runtime
+                            .stop(0)
+                            .map_err(layerfs_sandbox::daemon::values::wire)?;
                     }
                 }
                 mark(&home, sandbox, true)?;
@@ -189,33 +198,22 @@ pub(crate) fn stop(home: &Path, name: &MachineName) -> Outcome {
                 Err(error) => return Err(failed(error)),
             }
             update(&home, machine, |record| {
-                record.without_op().with(
-                    "state",
-                    SdkValue::text(if machine == "native" {
-                        "ready"
-                    } else {
-                        "stopped"
-                    }),
-                )
+                let state = if machine == "native" {
+                    "ready"
+                } else {
+                    "stopped"
+                };
+                // a worker that was outdated or did not answer is gone with it
+                (record.without_op().with("state", SdkValue::text(state))).mended()
             })?;
         }
     }
-    // Do not call get(): a live probe could contact the worker we just stopped.
-    let mut out = layerfs_machine::stopped_summary(&home, name, crate::machine::RELATED)?;
-    for (key, value) in [
-        ("forced", SdkValue::Bool(true)),
-        (
-            "stopped_sandboxes",
-            SdkValue::List(stopped.into_iter().map(SdkValue::Text).collect()),
-        ),
-        (
-            "unknown",
-            SdkValue::List(unknown.into_iter().map(SdkValue::Text).collect()),
-        ),
-    ] {
-        out = home::with_field(out, key, value);
-    }
-    Ok(out)
+    // no probe: it could contact the worker just stopped
+    phases.end();
+    let done = layerfs_machine::done(name, Some("stopped"));
+    Ok(layerfs_machine::with_stopped(
+        done, true, &stopped, &unknown,
+    ))
 }
 
 /// A new explicit force call may reconcile an unknown stop that this
@@ -311,10 +309,6 @@ fn workspaces(home: &Path, sandbox: &SandboxRecord) -> Result<Vec<String>> {
         workspaces.push(format!("{}:{value}", sandbox.name()));
     }
     Ok(workspaces)
-}
-
-fn home_id(home: &Path) -> Result<String> {
-    Ok(home::opened(home)?.id)
 }
 
 fn update(

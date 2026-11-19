@@ -83,7 +83,7 @@ pub fn sandbox_live(host: &Host) -> Result<Arc<SandboxState>, SdkRefusal> {
         return Err(if failure.container_stopped() {
             crate::reopen::gone(&state.id, &runtime.identity().to_string(), true)
         } else {
-            layerfs_home::outcome::failed(failure)
+            crate::daemon::values::wire(failure)
         });
     }
     Ok(state)

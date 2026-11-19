@@ -69,11 +69,15 @@ Capabilities "describe support, not qualification"
 | Enum | Variants | Methods |
 | --- | --- | --- |
 | `Runtime`: one deployment's choice | `HostProcess(HostProcessProvider)` (macOS), `Namespaces(NamespaceProvider)` (Linux) | `backend`, `capabilities`, `local_directory`, `native_paths`, `launch`, `launch_with_binds`, `reopen`, `reopen_stopped` |
-| `Sandbox`: the launched owner | `HostProcess` (macOS and Linux), `Namespaces(Box<_>)` (Linux) | `backend`, `identity`, `endpoint`, `run`, `run_in`, `exec_stop`, `track`, `log_tail`, `inspect`, `stop`, `delete`, `scratch_directory`, `local_record`, `record` |
+| `Sandbox`: the launched owner | `HostProcess` (macOS), `Namespaces(Box<_>)` (Linux) | `backend`, `identity`, `endpoint`, `run`, `run_in`, `exec_stop`, `track`, `log_tail`, `inspect`, `stop`, `delete`, `scratch_directory`, `local_record`, `record` |
 
-On Linux, `Sandbox::HostProcess` exists only to reopen, stop and delete a
-native Sandbox recorded before 2.0; Linux starts no native Sandbox
-([`host_process/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/mod.rs)).
+The host-process backend is macOS only: Linux starts no native Sandbox
+(#533 O27), and a native record found there is refused with the
+records-only `sandbox remove` as its fix (RV3 FAIL 3,
+[`host_process/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/mod.rs)).
+A reopened namespaces Sandbox runs the helper copy in its own `bin/`; one
+without it (an earlier build's) refuses a command with that fix
+(`namespaces::NO_HELPER_COPY`).
 `reopen` starts nothing and checks the recorded identity; `reopen_stopped`
 admits only one Delete. `endpoint` of a Sandbox whose daemon (or init) exited
 is the stopped observation (`WireFailure::container_stopped`). `inspect`
@@ -150,7 +154,7 @@ root, and `<name>` the Sandbox's run folder name
 A `native` Sandbox's entries are this user's; a `namespaces` Sandbox's are
 root's, and its commands run as another, nonroot identity. Everything in
 the folder goes with it: `delete` removes it whole after a known stop, at
-`sandbox.close` or when a start fails
+`sandbox.remove` or when a start fails
 ([Stop and delete](#stop-and-delete)).
 
 | Entry | Written by | Read by | Source |
@@ -165,7 +169,7 @@ the folder goes with it: `delete` removes it whole after a known stop, at
 | `tmp/` | commands: it is their `HOME` and scratch directory | anyone who can reach it (1777) | [`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs), [`runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs) `scratch_directory` |
 | `groups/` | each `native` command's start: one empty file per process group, removed once the group has no member | the caller's side only | [`local/groups.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/groups.rs) |
 | `bin/`, `runtime/` | the launcher: copies of the daemon, the helper and the runtime layer | anyone may read and run them; only root may change them | [`namespaces/paths.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/paths.rs) |
-| `owner` | the caller's side, once, after the daemon started | a reopen with no `deploy.localDir`, and `doctor`'s leftover walk and fix | [`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `mark_owner`, `owned` |
+| `owner` | the caller's side, once, after the daemon started | a reopen with no `deploy.localDir`, and the run root sweep, which removes a run folder only when its marker is older than a minute and names no live daemon ([`sweep.rs`](../../../../control/crates/layerfs-sandbox/src/sweep.rs) `owner`) | [`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `mark_owner`, `owned` |
 | `<root>/<name>.root/` | the launcher makes it empty; the init stage mounts the Sandbox's root on it inside the Sandbox's own mount namespace, so from outside it stays empty | nothing outside the Sandbox | [`namespaces/paths.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/paths.rs); `delete` removes it with `rmdir` |
 | `<root>/images/` | the first Sandbox that needs a digest unpacks it once, under that digest's `<64 hex>.2.lock`, beside its sidecar `<64 hex>.2.json` | every Sandbox built on it, read-only; it is not removed with a Sandbox, and the lock files stay | [`rootfs/cache.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/cache.rs), [`image_artifact.rs`](../../../../control/crates/layerfs-sandbox/src/image_artifact.rs) |
 
@@ -241,10 +245,10 @@ environment
 | Image | `sha256:<64 hex>`, the archive's config digest; a `docker save` archive with uncompressed layers (gzip or zstd layers refused); unpacked once per digest under `<root>/images` and shared read-only. A reopen unpacks nothing: an image gone is refused. | [`rootfs/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/mod.rs), [`types/image.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/image.rs), [`namespaces/provider.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/provider.rs) |
 | Helper | `LAYERFS_SANDBOX_HELPER`, else beside the daemon or this executable; copied into the Sandbox's `bin/`, which a reopen uses. | `namespaces/provider.rs` |
 | Runtime layer | `runtime/` beside the daemon (the sealed bundle's, R5), when it holds this architecture's loader; else none, and the daemon runs on the image's own loader and libraries as before. Copied into the Sandbox's `runtime/` (regular files of `lib/` and `bin/` only; anything else refused; the loader and programs 0755, the libraries 0644), so a bundle replaced under a running Sandbox changes nothing. The init stage binds it read-only, nosuid and nodev at `/.layerfs/runtime`, refusing an image whose `/.layerfs` or `/.layerfs/runtime` is not a plain directory, and starts the daemon through its loader (`--inhibit-cache --library-path /.layerfs/runtime/lib`) with `LAYERFS_SANDBOX_RUNTIME=/.layerfs/runtime` and no `LD_*` variable: the image's loader, libraries and `/etc/ld.so.cache` are never used, so an image with an older glibc, musl or no libc starts it. The image's `/etc/ld.so.preload` is still read by the loader. Its files are unmodified Debian binaries (glibc's loader and libraries, `libgcc_s`, OpenSSL, `getent`, `bash-static`, `busybox-static`), several GPL or LGPL: the bundle's `licenses/` holds each package's copyright file and `SOURCES`, the written source offer naming every file's Debian source package, version and snapshot.debian.org page (`sandbox_runtime.sources` in `bundle.json`); `tools/linux_bundle.py sources` downloads exactly those sources to publish beside a release. | `namespaces/provider.rs`, `namespaces/create.rs`, [`helper mounts.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/mounts.rs), [`helper init.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/init.rs), [`sandbox_runtime.rs`](../../../../engine/crates/layerfs-bridge/src/sandbox_runtime.rs) |
-| Commands | `helper exec --init <pid> --cgroup <dir> [--command-cgroup <dir>] [--runtime <dir>] --uid --gid --cwd -- <argv>`: forks itself into the Sandbox's leaf group `<id>/init` (or `<id>` for a Sandbox an earlier build started, which has no leaf; `helper_group`) (`clone3` with `CLONE_INTO_CGROUP`; the parent, outside it, waits and ends as its child did, a signal included), the child enters the namespaces, becomes uid:gid with no capabilities and no-new-privs, installs the filter below, execs. `--runtime /.layerfs/runtime` (a Sandbox with the runtime layer) appends `/.layerfs/runtime/bin` to the end of the command's `PATH` once; `argv[0]` (`bash`) is looked up on it inside the Sandbox, so the image's own `bash` wins and an image with none runs the runtime's static one. That directory holds only `bash`, `busybox` (no applet links) and `getent`. | [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs), [`helper exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/exec.rs) |
+| Commands | `helper exec --init <pid> --cgroup <dir> [--command-cgroup <dir>] [--runtime <dir>] --uid --gid --cwd -- <argv>`: forks itself into the Sandbox's leaf group `<id>/init`, the only group a command helper uses (`clone3` with `CLONE_INTO_CGROUP`; the parent, outside it, waits and ends as its child did, a signal included), the child enters the namespaces, becomes uid:gid with no capabilities and no-new-privs, installs the filter below, execs. `--runtime /.layerfs/runtime` (a Sandbox with the runtime layer) appends `/.layerfs/runtime/bin` to the end of the command's `PATH` once; `argv[0]` (`bash`) is looked up on it inside the Sandbox, so the image's own `bash` wins and an image with none runs the runtime's static one. That directory holds only `bash`, `busybox` (no applet links) and `getent`. | [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs), [`helper exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/exec.rs) |
 | Command cgroup | With an exec slot, the command (never the helper) is created inside `ws-<workspace>/exec-<exec>` (`clone3` with `CLONE_INTO_CGROUP`), without one inside the helper's (the leaf); once its exec succeeded the helper writes one byte on a socket it was given as stdin, and only then is the stop handle told. A command that cannot be created there never runs. No exec moves a process between groups: a write to `cgroup.procs` waits for an RCU grace period (5–28 ms after an idle spell), which every command paid before. Only the init stage joins its group, once per Sandbox. | `namespaces/exec.rs`, [`namespaces/cgroup.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/cgroup.rs) |
-| Sandbox group layout | The Sandbox's group `<id>` holds no process: its init stages, daemon, command helpers and commands with no exec slot are in its leaf `<id>/init`, commands with one in `ws-<workspace>/exec-<exec>`. cgroup v2's no-internal-process rule allows only such a group to enable controllers for its children, so `create` splits it before any process joins and gives `init` and each `ws-<workspace>` the memory and pids controllers it has: a Workspace's memory, processes and OOM kills can be read ([`sandbox.get`](../../api/sdk/sandbox.md#sandboxget) `workspaces[].usage`), and `<id>`'s own files still count everything. `ws-<workspace>` enables nothing for its command groups. No limit is ever written. A Sandbox an earlier build started keeps its processes in `<id>`, gives its Workspaces no memory or pids controller, and still runs commands. | `namespaces/cgroup.rs` `create`, `split`, `leaf`, `helper_group` |
-| End | One `cgroup.kill` on `<id>` ends everything the Sandbox started, its leaf and Workspace groups included, whatever session it left; `track` is a no-op. Reopen checks the recorded init and its membership of the leaf (or of `<id>` for a Sandbox an earlier build started). | `namespaces/cgroup.rs`, [`namespaces/host.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/host.rs) `in_cgroup` |
+| Sandbox group layout | The Sandbox's group `<id>` holds no process: its init stages, daemon, command helpers and commands with no exec slot are in its leaf `<id>/init`, commands with one in `ws-<workspace>/exec-<exec>`. cgroup v2's no-internal-process rule allows only such a group to enable controllers for its children, so `create` splits it before any process joins and gives `init` and each `ws-<workspace>` the memory and pids controllers it has: a Workspace's memory, processes and OOM kills can be read ([`sandbox.get`](../../api/sdk/sandbox.md#sandboxget) `workspaces[].usage`), and `<id>`'s own files still count everything. `ws-<workspace>` enables nothing for its command groups. No limit is ever written. | `namespaces/cgroup.rs` `create`, `split`, `leaf` |
+| End | One `cgroup.kill` on `<id>` ends everything the Sandbox started, its leaf and Workspace groups included, whatever session it left; `track` is a no-op. Reopen checks the recorded init and its membership of the leaf. | `namespaces/cgroup.rs`, [`namespaces/host.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/host.rs) `in_cgroup` |
 
 A command that made a user namespace could hold its own copy of a Workspace
 mount outside the daemon's unmount. Two guards stop it:
@@ -268,12 +272,14 @@ machine refuses a forward and every call goes through the worker
 
 A Sandbox record written by the retired docker backend (`backend` or
 `runtime` `docker`, or a started docker-machine record with no `runtime`) is
-never reopened: every call but `sandbox.close` is `Unsupported`, asking to
-recreate it; `sandbox.close` forgets it and names the container for
-`docker rm -f`; `sandbox.create` of that name forgets it first
+never reopened: every call but `sandbox.remove` is `Unsupported`, asking to
+recreate it; `sandbox.remove` removes its records (outcome `already_gone`)
+and touches no container, its `left` naming `docker rm -f <container>` when
+the daemon record keeps the container's name (no older name is computed);
+`sandbox.create` of that name clears the record first
 ([`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs),
 [`reopen.rs`](../../../../control/crates/layerfs-sandbox/src/reopen.rs),
-[`close.rs`](../../../../control/crates/layerfs-sandbox/src/close.rs)).
+[`remove.rs`](../../../../control/crates/layerfs-sandbox/src/remove.rs) `forget`).
 
 ## `stop.rs`: stop handles
 

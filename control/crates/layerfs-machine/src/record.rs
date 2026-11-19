@@ -1,17 +1,18 @@
 //! A machine's record, `machine/<name>/record.json` (#536 §9.2): its
-//! platform, size, images, lasting guest state, the state a create, start
-//! or stop left, the `op` of a create or remove in flight (#536 §7.1), and
-//! the built-in machines' settings. A record may still name a platform
-//! removed in 2.0 (`firecracker`, `microsandbox`, `ssh`): it is shown with
-//! that reason, every other call on it is refused `Unsupported`, and
-//! `machine remove` forgets it. Read once and kept whole, so `machine.get`
-//! and `machine.list` show what they showed before. Built without the `machine` feature too (the guest
-//! worker reads its own `native` and `docker` records); the platform and
-//! the summary need the adapters.
+//! platform, size, images, lasting guest state, what a create, start, stop
+//! or live read last found (`state`, and `reason` with `error` while it is
+//! broken; `state.rs` derives the machine's state from them), the `op` of
+//! a create, start, stop or remove in flight (#536 §7.1), and the built-in
+//! machines' settings. A record may still name a platform removed in 2.0
+//! (`firecracker`, `microsandbox`, `ssh`): it is shown `broken`
+//! `unsupported`, every other call on it is refused `Unsupported`, and
+//! `machine remove` removes its record alone. Read once and kept whole. Built without
+//! the `machine` feature too (the guest worker reads its own `native` and
+//! `docker` records); the platform and the summary need the adapters.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, read_record, with_field, write_entity};
 use layerfs_home::op::{self, Op, Standing};
-use layerfs_home::outcome::refused;
+use layerfs_home::outcome::{refused, shell_word, with_fix};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -20,6 +21,10 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 pub const CREATE: &str = "machine.create";
 /// A VM machine's remove.
 pub const REMOVE: &str = "machine.remove";
+/// A machine's start.
+pub const START: &str = "machine.start";
+/// A machine's stop, forced or not.
+pub const STOP: &str = "machine.stop";
 
 /// A machine name as provider names take it: every character that is not
 /// an ASCII letter or digit becomes `-`.
@@ -38,12 +43,48 @@ pub fn vm_name(home_id: &str, name: &str) -> String {
     format!("{prefix}{}", plain(name))
 }
 
-/// The name [`vm_name`] gave before layerfs-project#180,
-/// `lfs-<home id8>-<machine>`: what a record without `vm_name` means. No
-/// new machine is named so.
-pub fn legacy_vm_name(home_id: &str, name: &str) -> String {
-    let prefix = layerfs_home::names::legacy_provider_prefix(home_id);
-    format!("{prefix}{}", plain(name))
+/// Why machine `name`'s record without `vm_name` is not used: what made
+/// it, that no call repairs it, and that nothing outside the home was
+/// touched.
+pub fn no_vm_name(name: &str) -> String {
+    format!(
+        "machine {name}'s record has no vm_name: it was made by a build before LayerFS named \
+         machines layerfs-<home id8>-<machine>, and this build reads no older name. No call \
+         repairs the record; its VM or container and its data volume were not touched"
+    )
+}
+
+/// What is recorded on a machine, by name, as its remove's `InUse`
+/// refusal names them: its Sandboxes, its sqlite Stores and the old
+/// Firecracker machine records it hosted. Read by the caller
+/// (`layerfs-control`'s inventory) from the records it already holds.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Holders<'a> {
+    /// The Sandboxes whose record names the machine.
+    pub sandboxes: &'a [String],
+    /// The sqlite Stores whose record names the machine.
+    pub stores: &'a [String],
+    /// The old Firecracker machine records naming it as their host.
+    pub hosted: &'a [String],
+}
+
+/// The fix of a machine whose record has no `vm_name`: `machine remove`,
+/// which then removes its record alone (a built-in `docker` is recorded
+/// again, with its 2.0 name, by the next call). While things are recorded
+/// on it (`held`), that remove is refused `InUse`, so the line forgets
+/// them first, each of whose removes takes its records alone too:
+/// Sandboxes first (they hold their projects' Stores), then the Stores and
+/// the old Firecracker records, then the machine. The one builder of that
+/// line: the `InUse` refusal, the machine's state and the doctor's finding
+/// show it alike (RT5 note 3).
+pub fn no_vm_name_fix(name: &str, held: Holders<'_>) -> String {
+    let sandboxes = held.sandboxes.iter().map(|s| ("sandbox", s.as_str()));
+    let stores = held.stores.iter().map(|s| ("store", s.as_str()));
+    let hosted = held.hosted.iter().map(|m| ("machine", m.as_str()));
+    let steps = (sandboxes.chain(stores).chain(hosted))
+        .chain(std::iter::once(("machine", name)))
+        .map(|(family, name)| format!("layerfs {family} remove {}", shell_word(name)));
+    steps.collect::<Vec<_>>().join(" && ")
 }
 
 /// One machine's record as read (fields kept whole and in order).
@@ -95,15 +136,24 @@ impl MachineRecord {
     }
 
     /// The name the machine's provider knows it by (its VM or worker
-    /// container; its volume is `<name>-data`): the record's `vm_name`,
-    /// else, for a record written before every creation recorded one (an
-    /// existing home's `docker`), the name the formula of that time gives,
-    /// [`legacy_vm_name`]. So an existing machine keeps its container,
-    /// volume and Stores under any later formula.
-    pub fn provider_name(&self, home_id: &str) -> String {
-        self.text("vm_name")
-            .map(str::to_owned)
-            .unwrap_or_else(|| legacy_vm_name(home_id, &self.name))
+    /// container; its volume is `<name>-data`): the record's `vm_name`.
+    /// A record without one was made before LayerFS named machines
+    /// `layerfs-<home id8>-<machine>` (layerfs-project#180): refused
+    /// [`no_vm_name`] with [`no_vm_name_fix`], since this build reads no
+    /// older name.
+    pub fn provider_name(&self) -> Result<&str> {
+        self.text("vm_name").ok_or_else(|| {
+            let fix = no_vm_name_fix(&self.name, Holders::default());
+            with_fix(refused("Failed", no_vm_name(&self.name)), fix)
+        })
+    }
+
+    /// Whether the record is one an earlier build made, with no provider
+    /// name (`vm_name`): this build reaches nothing of it, so a remove of
+    /// the machine, or of a Store or Sandbox recorded on it, takes records
+    /// alone. `native` has no provider name and is never nameless.
+    pub fn nameless(&self) -> bool {
+        self.name != "native" && self.text("vm_name").is_none()
     }
 
     /// The machine's name (its folder's).
@@ -152,7 +202,7 @@ impl MachineRecord {
         self.fields.get_text("state")
     }
 
-    /// The intent of a create or remove, if the record holds one.
+    /// The intent of a create, start, stop or remove, if the record holds one.
     pub fn op(&self) -> Option<Op> {
         Op::of(&self.fields)
     }
@@ -176,43 +226,20 @@ impl MachineRecord {
         Self::from_record(&self.name, SdkValue::Map(fields.collect()))
     }
 
-    /// Whether the machine was ever started: a start recorded its lasting
-    /// state (every start that reached its provider writes it), or a state
-    /// only a start or create writes (`running`, `failed`). A `stopped`
-    /// alone is not one: a stop before any start records it too. A
-    /// built-in `docker` that never started has neither (its first record
-    /// names only itself).
-    pub fn ever_started(&self) -> bool {
-        self.field("lasting").is_some()
-            || matches!(self.recorded_state(), Some("running" | "failed"))
-    }
-
-    /// Whether a create or remove holds the machine:
-    /// its intent's owner lives, or is gone with the outcome unknown. A list
-    /// shows its state and probes nothing.
-    pub fn in_flight(&self) -> bool {
-        self.op().is_some_and(|op| op.standing() != Standing::Stale)
-    }
-
     /// Refuses a new operation on the machine while an intent holds it:
     /// `Busy` while its owner lives, `Unresolved` once a gone owner left
-    /// it uncertain, naming `machine status <name>` and the call that
-    /// clears it (`machine remove`).
+    /// it uncertain, with the call that settles it as its `fix`.
     pub fn not_held(&self) -> Result<()> {
-        self.op().map_or(Ok(()), |op| self.blocked_by(&op))
+        self.op().map_or(Ok(()), |op| self.held_by(&op))
     }
 
     /// Refuses only while a live process holds the machine (`Busy`): what
     /// a remove, which clears an unresolved intent, checks.
     pub fn not_running(&self) -> Result<()> {
         match self.op() {
-            Some(op) if op.standing() == Standing::Running => self.blocked_by(&op),
+            Some(op) if op.standing() == Standing::Running => self.held_by(&op),
             _ => Ok(()),
         }
-    }
-
-    fn blocked_by(&self, op: &Op) -> Result<()> {
-        op.blocks("machine", &self.name, "machine status", "machine remove")
     }
 
     /// The Sandbox image the record names (a digest, or a file).
@@ -226,15 +253,9 @@ impl MachineRecord {
         self.fields.get_text("docker")
     }
 
-    /// The daemon a built-in machine's Sandboxes run (`import-env` writes it).
+    /// The daemon a built-in machine's Sandboxes run (`machine update --daemon` writes it).
     pub fn daemon(&self) -> Option<&str> {
         self.fields.get_text("daemon")
-    }
-
-    /// The record with `state` and the `error` that left it there.
-    pub fn failed_as(self, state: &str, error: &str) -> Self {
-        let record = self.with("state", SdkValue::text(state));
-        record.with("error", SdkValue::text(error))
     }
 
     /// The docker machine's loaded default image, `(id, bundle hash)`.
@@ -251,19 +272,6 @@ impl MachineRecord {
         ]);
         self.with("loaded_image", loaded)
     }
-}
-
-/// What a machine's result shows beside its record.
-#[cfg(feature = "machine")]
-#[derive(Clone, Debug, Default)]
-pub struct MachineDerived {
-    /// Its live state and, when that could not be read, why; `None` keeps
-    /// the record's state (a built-in machine, or one being made or removed).
-    pub live: Option<(String, Option<String>)>,
-    /// The sqlite Stores on it.
-    pub stores: Vec<String>,
-    /// The Sandboxes recorded on it.
-    pub sandboxes: Vec<String>,
 }
 
 #[cfg(feature = "machine")]
@@ -287,103 +295,16 @@ impl MachineRecord {
             .and_then(layerfs_platform::platform_policy::removed_reason)
     }
 
-    /// The machine's state (#536 §7.2), from its record, `op`, `error` and
-    /// live probe: `creating` or `removing` while a live process creates or
-    /// removes it, `unresolved` once a gone one
-    /// left that outcome unknown; else its live probe's answer (`live`:
-    /// `running`, `stopped`, `failed`, `missing`, or `unknown` when the
-    /// probe could not answer), else the state its record holds (`failed`
-    /// with its `error` after a create that kept its VM), else `ready` for
-    /// a built-in machine and `stopped` for any other. A gone owner's
-    /// certain intent changes nothing.
-    pub fn state<'a>(&'a self, live: Option<&'a str>) -> Result<&'a str> {
-        let fallback = match self.platform()?.built_in() {
-            true => "ready",
-            false => "stopped",
-        };
-        if let Some(op) = self.op() {
-            match op.standing() {
-                Standing::Unresolved => return Ok("unresolved"),
-                Standing::Running if op.name() == REMOVE => return Ok("removing"),
-                Standing::Running => return Ok("creating"),
-                Standing::Stale => {}
-            }
-        }
-        Ok(live.or(self.recorded_state()).unwrap_or(fallback))
+    /// The machine's state as its record says it ([`Self::status`]), the
+    /// record's platform checked against the ones removed in 2.0.
+    pub fn recorded(&self, sandboxes: usize) -> layerfs_home::state::State {
+        self.status(self.removed().is_some(), sandboxes)
     }
 
-    /// The machine as `machine.get`, each `machine.list` item, `start`,
-    /// `stop`, `update` and `create` show it: name, platform, backend,
-    /// `supports`, state, size, sqlite Stores and Sandboxes, then the
-    /// settings it has (`image`, `docker`, `wsl`, `error`, and a removed platform's
-    /// `ssh`, `host` or `vm_name`). A machine of a removed
-    /// platform has backend `-`, supports nothing, state `unsupported` and
-    /// the removal as its `error`.
-    pub fn to_sdk(
-        &self,
-        _view: layerfs_home::outcome::View,
-        derived: &MachineDerived,
-    ) -> Result<SdkValue> {
-        let live = derived.live.as_ref();
-        let mut error = live.and_then(|(_, error)| error.clone());
-        let (platform, backend, supports, state) = match self.removed() {
-            Some(reason) => {
-                error = Some(reason.to_owned());
-                let supports = SdkValue::map([
-                    ("sqlite", SdkValue::Bool(false)),
-                    ("postgresql_sandbox", SdkValue::Bool(false)),
-                    ("reason", SdkValue::text(reason)),
-                    ("log", SdkValue::Bool(false)),
-                ]);
-                let name = self.platform_name().unwrap_or_default();
-                (name, "-", supports, "unsupported")
-            }
-            None => {
-                let kind = self.platform()?;
-                let state = self.state(live.map(|(state, _)| state.as_str()))?;
-                let supports = super::platforms::supports(kind);
-                (
-                    kind.name(),
-                    super::spec::backend_name(kind),
-                    supports,
-                    state,
-                )
-            }
-        };
-        let list = |items: &[String]| SdkValue::List(items.iter().map(SdkValue::text).collect());
-        let mut fields = vec![
-            ("name", SdkValue::text(&self.name)),
-            ("platform", SdkValue::text(platform)),
-            ("backend", SdkValue::text(backend)),
-            ("supports", supports),
-            ("state", SdkValue::text(state)),
-            ("cpus", self.field("cpus").cloned().unwrap_or_default()),
-            ("memory", self.field("memory").cloned().unwrap_or_default()),
-            ("disk", self.field("disk").cloned().unwrap_or_default()),
-            ("stores", list(&derived.stores)),
-            ("sandboxes", list(&derived.sandboxes)),
-        ];
-        for extra in ["image", "os_image", "docker", "wsl", "daemon", "error"] {
-            if let Some(value) = self
-                .field(extra)
-                .filter(|value| **value != SdkValue::Null)
-                .filter(|_| extra != "error" || error.is_none())
-            {
-                fields.push((extra, value.clone()));
-            }
-        }
-        if let Some(error) = error {
-            fields.push(("error", SdkValue::Text(error)));
-        }
-        if self.removed().is_some() {
-            for extra in ["ssh", "host", "vm_name"] {
-                if let Some(value) = self.field(extra) {
-                    fields.push((extra, value.clone()));
-                }
-            }
-        }
-        Ok(SdkValue::Map(
-            fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
-        ))
+    /// [`Self::recorded`] with what is recorded on the machine named
+    /// ([`Self::status_held`]): the state `machine list` and `machine get`
+    /// show.
+    pub fn recorded_held(&self, held: Holders<'_>) -> layerfs_home::state::State {
+        self.status_held(self.removed().is_some(), held)
     }
 }

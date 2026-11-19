@@ -2,14 +2,16 @@
 //! family (`<family>/<call>.rs`: the call's entry and the function that runs
 //! it, one call of a control crate), each family's calls listed in its
 //! `mod.rs`, and the call machinery in `calls/` (argument checks, folder
-//! scope, the one dispatcher; layerfs-project#107). Only this crate speaks
+//! scope, the one dispatcher, and the forms of an answer and a refusal;
+//! layerfs-project#107, call surface 2.0). Only this crate speaks
 //! the SDK; the control crates' public paths the front ends use are
 //! re-exported here. The `branch`, `commit` and `file`
 //! calls reach the Store engine's SDK facade (layerfs-store-service
 //! `methods/`) in the caller's process, the only route for Store calls
-//! (#352 F-020). The doctor's report and its explicit options live outside
-//! the call table and bypass normal home initialization/migration; its one
-//! table call is `doctor.fix`.
+//! (#352 F-020). The six doctors (`home`, `machine`, `store`, `project`,
+//! `sandbox`, `backup doctor`) are table calls of their families that never
+//! open the home; they share one answer (`calls/doctor/`), which is no
+//! family.
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
@@ -17,12 +19,10 @@ mod backup;
 mod branch;
 pub mod calls;
 mod commit;
-mod doctor;
 mod file;
 // the `home` family's folder; `home` itself names the re-exported home module below
 #[path = "home/mod.rs"]
 mod home_family;
-mod logs;
 mod machine;
 mod project;
 mod sandbox;
@@ -30,57 +30,39 @@ mod store;
 mod workspace;
 
 use calls as machinery;
+// the six doctors' shared answer (`calls/doctor/`), which each
+// family's doctor entry names
+use calls::doctor;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use std::path::Path;
 
 pub use calls::{
-    home, json, keys, size, Arg, Call, CallRef, Calls, Client, Context, Families, Family, Kind,
-    Run, Scope,
+    asks_detail, close, guide, home, json, keys, refusal, shape, size, Arg, Asked, Call, CallRef,
+    Calls, Client, Context, Families, Family, Form, Kind, Paging, Part, Place, Policy, Profile,
+    Redact, Run, Scope, Section, DETAIL, WITH,
 };
 pub use layerfs_home::names;
-/// The home (`layerfs-home`), with opening and converting it
-/// (`layerfs-control` `migrate`) and the Store leases, as the front ends
-/// used them before the control split (layerfs-project#103).
+/// The home (`layerfs-home`) and the Store leases, for the front ends and
+/// their tests.
 pub mod home {
-    pub use layerfs_control::migrate::{import_env, note_failure, open, open_from};
     pub use layerfs_home::home::*;
     pub use layerfs_home::process;
     pub use layerfs_store::lease;
 }
-pub use doctor::{
-    doctor_options_json, doctor_request, doctor_with_options, duration as doctor_duration,
-};
-/// `layerfs doctor` (#536 H7): report-only, outside the call table.
-pub use layerfs_control::doctor::{
-    doctor, doctor_json, doctor_target, DoctorRequest, DoctorTarget,
-};
 #[cfg(feature = "machine")]
 #[doc(hidden)]
-pub use layerfs_machine::running;
+pub use layerfs_control::machine::running;
 /// The worker protocol (`layerfs-machine`) and its server (`layerfs-control`),
-/// as the front ends used them before the control split (layerfs-project#104).
+/// for the front ends and their tests.
 pub mod worker {
-    pub use layerfs_control::worker_server::{serve, Served, REQUEST_WAIT};
+    pub use layerfs_control::worker_server::serve;
     pub use layerfs_machine::worker::*;
 }
 pub use layerfs_control::store::close_idle;
-pub use layerfs_control::{
-    projects, AddFailure, AddRequest, AddedProject, CreateRequest, InitCounters, InitCounts,
-    InitError, InitFailure, InitRequest, InitStep, InstallError, InstallFailure, InstallWork,
-    Installed, ProjectApi, ProjectError, SealedProject, SourceRefusal,
-};
-/// Ends this process's idle Sandbox daemon sessions inside a bound
-/// (layerfs-project#181): what a one-shot process calls when its call is
-/// over, beside [`close_idle`].
-pub use layerfs_sandbox::registry::{end_idle_sessions, SESSION_END};
-pub use layerfs_sandbox::{daemon, OperationCause, OperationFailure, SdkError, SdkResult};
-pub use layerfs_sandbox::{
-    BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
-};
 
-/// The twelve families, in the order help lists them: 84 calls, the same
-/// from the `layerfs` binary, Node and Python.
+/// The ten families, in the order help lists them, the same from the
+/// `layerfs` binary, Node and Python.
 pub fn families() -> Families {
     &[
         Family {
@@ -122,14 +104,6 @@ pub fn families() -> Families {
         Family {
             name: "backup",
             list: backup::calls,
-        },
-        Family {
-            name: "logs",
-            list: logs::calls,
-        },
-        Family {
-            name: "doctor",
-            list: doctor::calls,
         },
     ]
 }

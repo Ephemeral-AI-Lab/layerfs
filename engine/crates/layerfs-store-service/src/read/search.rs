@@ -2,9 +2,72 @@
 //! a whole text part, with line numbers counted across the gaps and line
 //! bounds found only around a match. A call scans each content once.
 use super::window::{self, after_last_newline, newlines, Line, Open};
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_content::merge::Rules;
 use layerfs_content::{compare::EntryFacts, file::FileView, AuthenticatedObjects, ObjectId};
 use std::collections::HashMap;
+
+/// Which paths a search reads and how it matches: each glob in the rules
+/// syntax matches a path or one of its folders (`node_modules` leaves out
+/// everything under such a folder), and `fold` matches ASCII letters of
+/// either case.
+#[derive(Default)]
+pub struct Filters {
+    /// Only paths this matches, when given.
+    pub include: Option<Rules>,
+    /// No path this matches.
+    pub exclude: Option<Rules>,
+    /// Whether ASCII letters match in either case.
+    pub fold: bool,
+}
+
+impl Filters {
+    /// The filters a search method's `include`, `exclude` and `ignoreCase`
+    /// arguments ask for.
+    pub fn of(args: &SdkValue) -> Result<Self, SdkRefusal> {
+        let rules = |name: &str| match args.get(name) {
+            None | Some(SdkValue::Null) => Ok(None),
+            Some(SdkValue::Text(glob)) if !glob.is_empty() => {
+                Ok(Some(Rules::of(std::slice::from_ref(glob))))
+            }
+            Some(_) => Err(crate::history::lookup::invalid(format!(
+                "{name} must be a nonempty glob"
+            ))),
+        };
+        Ok(Self {
+            include: rules("include")?,
+            exclude: rules("exclude")?,
+            fold: match args.get("ignoreCase") {
+                None | Some(SdkValue::Null) => false,
+                Some(SdkValue::Bool(fold)) => *fold,
+                Some(_) => {
+                    return Err(crate::history::lookup::invalid(
+                        "ignoreCase must be a boolean",
+                    ))
+                }
+            },
+        })
+    }
+
+    /// Whether any filter was given.
+    pub fn any(&self) -> bool {
+        self.include.is_some() || self.exclude.is_some() || self.fold
+    }
+
+    /// Whether the walk leaves out `path` and, when a folder, what is under it.
+    pub fn excluded(&self, path: &str) -> bool {
+        self.exclude
+            .as_ref()
+            .is_some_and(|rules| rules.matching(path).is_some())
+    }
+
+    /// Whether the file at `path`, not excluded, is searched.
+    pub fn included(&self, path: &str) -> bool {
+        self.include
+            .as_ref()
+            .is_none_or(|rules| rules.matching(path).is_some())
+    }
+}
 
 /// Every line holding `pattern`, in order, until `visit` stops. A line is its
 /// bytes with its final LF, so a pattern with an LF anywhere but last matches
@@ -16,28 +79,38 @@ pub fn matches(
     view: Option<FileView>,
     prefix: usize,
     pattern: &str,
+    fold: bool,
     visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
 ) -> Result<(), SdkRefusal> {
-    matches_bounded(reader, entry, view, prefix, pattern, u64::MAX, visit)
+    matches_bounded(reader, entry, view, prefix, pattern, fold, u64::MAX, visit)
         .map(|_| ())
         .map_err(window::without_scan_detail)
 }
 
 /// Literal matching with an actual delivered-byte budget; the legacy wrapper is unchanged.
+/// With `fold`, ASCII letters match in either case: the search runs over
+/// a lowercased copy of each part, as long as the part, and lines are
+/// taken from the part itself.
+#[allow(clippy::too_many_arguments)]
 pub fn matches_bounded(
     reader: &dyn AuthenticatedObjects,
     entry: &EntryFacts,
     view: Option<FileView>,
     prefix: usize,
     pattern: &str,
+    fold: bool,
     budget: u64,
     mut visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
 ) -> Result<window::Scan, SdkRefusal> {
+    let folded = fold.then(|| pattern.to_ascii_lowercase());
+    let pattern = folded.as_deref().unwrap_or(pattern);
     let never = pattern.as_bytes()[..pattern.len() - 1].contains(&b'\n');
     // The open line's last bytes, for a match that crosses into the next part.
     let keep = pattern.len() - 1;
     let (mut open, mut matched, mut tail, mut stopped) = (Open::new(), false, String::new(), false);
     let scan = window::texts_bounded(reader, entry, view, budget, |text| {
+        let lowered = fold.then(|| text.to_ascii_lowercase());
+        let hay = lowered.as_deref().unwrap_or(text);
         let bytes = text.as_bytes();
         if never {
             open.number += newlines(bytes);
@@ -52,7 +125,7 @@ pub fn matches_bounded(
             while !text.is_char_boundary(reach) {
                 reach += 1;
             }
-            matched = format!("{tail}{}", &text[..reach]).contains(pattern);
+            matched = format!("{tail}{}", &hay[..reach]).contains(pattern);
         }
         let mut at = 0;
         loop {
@@ -70,7 +143,7 @@ pub fn matches_bounded(
                 tail.clear();
                 continue;
             }
-            let found = text[at..].find(pattern).map(|i| at + i);
+            let found = hay[at..].find(pattern).map(|i| at + i);
             let end = found.unwrap_or(bytes.len());
             let gap = &bytes[at..end];
             let begin = match after_last_newline(gap) {
@@ -87,7 +160,7 @@ pub fn matches_bounded(
                 (matched, at) = (true, found);
                 continue;
             }
-            let part = &text[begin..];
+            let part = &hay[begin..];
             let mut cut = part.len().saturating_sub(keep);
             while !part.is_char_boundary(cut) {
                 cut -= 1;
@@ -137,6 +210,7 @@ impl Reuse {
 
     /// [`matches`] for `entry`, from a kept result when its content was
     /// scanned before in this call.
+    #[allow(clippy::too_many_arguments)]
     pub fn matches(
         &mut self,
         reader: &dyn AuthenticatedObjects,
@@ -144,6 +218,7 @@ impl Reuse {
         view: Option<FileView>,
         prefix: usize,
         pattern: &str,
+        fold: bool,
         mut visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
     ) -> Result<(), SdkRefusal> {
         let id = entry.value.content_root;
@@ -160,7 +235,7 @@ impl Reuse {
             };
         }
         let (mut lines, mut cost, mut complete) = (Vec::new(), ENTRY, true);
-        let result = matches(reader, entry, view, prefix, pattern, |n, line| {
+        let result = matches(reader, entry, view, prefix, pattern, fold, |n, line| {
             cost += line.text.len() + ENTRY;
             if self.spent + cost <= KEPT {
                 lines.push((n, line.clone()));

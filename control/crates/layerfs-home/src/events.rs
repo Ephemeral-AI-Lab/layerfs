@@ -21,6 +21,31 @@ impl Events<'_> {
         (self.sink)(SdkValue::map([("progress", value)]));
     }
 
+    /// Sends one progress event of the public shape, `{ phase, done, total }`
+    /// (call surface 2.0), by the same route as [`Self::progress`]: `done`
+    /// and `total` are null while they are not known, and `extra` keys go
+    /// beside the three (a doctor's `node`).
+    pub fn phase(
+        &mut self,
+        phase: &str,
+        done: Option<i64>,
+        total: Option<i64>,
+        extra: Vec<(&str, SdkValue)>,
+    ) {
+        let count = |n: Option<i64>| n.map_or(SdkValue::Null, SdkValue::Int);
+        let mut fields = vec![
+            ("phase".to_owned(), SdkValue::text(phase)),
+            ("done".to_owned(), count(done)),
+            ("total".to_owned(), count(total)),
+        ];
+        fields.extend(
+            extra
+                .into_iter()
+                .map(|(name, value)| (name.to_owned(), value)),
+        );
+        self.progress(SdkValue::Map(fields));
+    }
+
     /// Passes on one event a worker sent, as it came.
     pub fn event(&mut self, event: SdkValue) {
         (self.sink)(event);

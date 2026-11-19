@@ -20,18 +20,17 @@ const spec = {
   options: [{ name: "branch", kind: "name", optional: true },
     { name: "on_progress", kind: "function", optional: true }],
 };
+// project.export's long form and its progress events (call surface 2.0)
 const result = {
-  project: "shop/api", store: "shop", name: "api", kind: "sqlite", machine: "native",
-  branch: "main", snapshot: "main@0123456789ab", node: "01".repeat(33),
-  root: "02".repeat(32), destination: "/exports/api", files: 2, directories: 1,
-  symlinks: 1, bytes: 9,
+  file_count: 2, size: 9, dir_count: 1, symlink_count: 1,
+  commit: "01".repeat(33), root: "02".repeat(32),
 };
 const progress = [
-  { phase: "prepare", files: 0, directories: 0, symlinks: 0, bytes: 0, done: null, total: null },
-  { phase: "export", files: 0, directories: 0, symlinks: 0, bytes: 0, done: 0, total: null },
-  { phase: "export", files: 1, directories: 1, symlinks: 0, bytes: 4, done: 4, total: null },
-  { phase: "export", files: 2, directories: 1, symlinks: 1, bytes: 9, done: 9, total: null },
-  { phase: "finalize", files: 2, directories: 1, symlinks: 1, bytes: 9, done: 9, total: null },
+  { phase: "prepare", done: null, total: null },
+  { phase: "export", done: 0, total: null },
+  { phase: "export", done: 4, total: null },
+  { phase: "export", done: 9, total: null },
+  { phase: "finalize", done: 9, total: null },
 ];
 let calls = [];
 let answer = { value: result };
@@ -76,28 +75,24 @@ function checkProgress(events, exported) {
   assert.ok(events.length >= 3, "prepare, export and finalize must be observed");
   assert.equal(events[0].phase, "prepare");
   assert.equal(events.at(-1).phase, "finalize");
-  let previous = { files: 0, directories: 0, symlinks: 0, bytes: 0 };
+  // each event is { phase, done, total }: `done` counts the bytes written so far
+  let done = 0;
   let phase = 0;
   for (const event of events) {
+    assert.deepEqual(Object.keys(event), ["phase", "done", "total"]);
     const next = ["prepare", "export", "finalize"].indexOf(event.phase);
     assert.ok(next >= phase && next >= 0, JSON.stringify(event));
     phase = next;
     assert.equal(event.total, null);
-    for (const name of ["files", "directories", "symlinks", "bytes"]) {
-      assert.ok(Number.isSafeInteger(event[name]) && event[name] >= previous[name], name);
-    }
     if (event.phase === "prepare") {
       assert.equal(event.done, null);
     } else {
-      assert.equal(event.done, event.bytes);
+      assert.ok(Number.isSafeInteger(event.done) && event.done >= done, JSON.stringify(event));
+      done = event.done;
     }
-    previous = event;
   }
   assert.ok(events.some((e) => e.phase === "export"));
-  assert.equal(events.at(-1).files, exported.files);
-  assert.equal(events.at(-1).directories, exported.directories);
-  assert.equal(events.at(-1).symlinks, exported.symlinks);
-  assert.equal(events.at(-1).bytes, exported.bytes);
+  assert.equal(events.at(-1).done, exported.size);
 }
 
 test("export is generated; omission leaves the main default to the library", async () => {
@@ -163,12 +158,13 @@ test("a throwing progress handler warns, drains every event and keeps the result
 
 test("a refusal after finalize stays a refusal with its detail and is never replayed", async () => {
   calls = [];
-  answer = { refused: { code: "NotEmpty", message: "destination changed", detail: { phase: "finalize" } } };
+  // the library's answer to a call that asked the long form
+  answer = { refused: { error: "InvalidInput", message: "destination changed", fix: null, detail: { phase: "finalize", code: "NotEmpty" } } };
   const events = [];
   try {
-    await assert.rejects(sdk.project.export("shop/api", "/exports/api", { on_progress: (e) => events.push(e) }), (e) => {
-      assert.equal(e.code, "NotEmpty");
-      assert.deepEqual(e.detail, { phase: "finalize" });
+    await assert.rejects(sdk.project.export("shop/api", "/exports/api", { detail: true, on_progress: (e) => events.push(e) }), (e) => {
+      assert.deepEqual([e.error, e.code, e.fix], ["InvalidInput", "InvalidInput", null]);
+      assert.deepEqual(e.detail, { phase: "finalize", code: "NotEmpty" });
       return true;
     });
     assert.equal(events.at(-1).phase, "finalize");
@@ -215,15 +211,14 @@ test("native Node export: default main, selected Branch, callbacks, refusals and
   try {
     assert.equal(typeof lfs.project.export, "function", "LP53a table entry required");
     await lfs.store.create("shop"); // public create selects the sole Disposable profile
-    assert.equal((await lfs.store.get("shop")).profile, "disposable");
+    assert.equal((await lfs.store.get("shop", { detail: true })).profile, "disposable");
     await lfs.project.init("shop/api", f.source);
     await lfs.branch.fork("shop/api", "agent", "main");
     await lfs.file.write("shop/api", "agent", "/branch.txt", "agent\n");
     const events = [];
     const dest = join(f.parent, "main");
-    const out = await lfs.project.export("shop/api", dest, { on_progress: (e) => events.push(e) });
-    assert.equal(out.branch, "main");
-    assert.equal(out.destination, dest);
+    const out = await lfs.project.export("shop/api", dest, { on_progress: (e) => events.push(e), detail: true });
+    assert.equal(typeof out.commit, "string");
     for (const field of Object.keys(result)) assert.ok(Object.hasOwn(out, field), field);
     checkTree(dest);
     checkProgress(events, out);
@@ -235,13 +230,13 @@ test("native Node export: default main, selected Branch, callbacks, refusals and
     });
     assert.ok(seen >= 3);
     assert.equal(readFileSync(join(branchDest, "branch.txt"), "utf8"), "agent\n");
-    await assert.rejects(lfs.project.export("shop/api", dest), (e) => e.code === "NotEmpty");
+    await assert.rejects(lfs.project.export("shop/api", dest), (e) => e.error === "InvalidInput");
     checkTree(dest);
     const plainFile = join(f.parent, "plain-file");
     writeFileSync(plainFile, "not a folder");
-    await assert.rejects(lfs.project.export("shop/api", plainFile), (e) => ["Exists", "NotDirectory"].includes(e.code));
+    await assert.rejects(lfs.project.export("shop/api", plainFile), (e) => ["Exists", "InvalidInput"].includes(e.error));
     assert.equal(readFileSync(plainFile, "utf8"), "not a folder");
-    await assert.rejects(lfs.project.export("shop/api", join(f.parent, "missing"), { branch: "absent" }), (e) => e.code === "NoSuchBranch");
+    await assert.rejects(lfs.project.export("shop/api", join(f.parent, "missing"), { branch: "absent" }), (e) => e.error === "NotFound");
     const scoped = real.client({ home: f.home, scope: { project: "shop/api", folder: "/", branch: "agent" } });
     await assert.rejects(scoped.project.export("shop/api", join(f.parent, "scoped")), /out of scope: project.export/);
     assert.ok(!readdirSync(f.parent).some((n) => n.startsWith(".layerfs-export-")));
@@ -266,7 +261,8 @@ test("CLI export help and parser: two positionals, branch/progress, no commit", 
     const help = shell(f.home, ["help", "project", "export"]);
     assert.equal(help.status, 0, help.stderr);
     assert.match(help.stdout, /project export <project> <destination>/);
-    assert.match(help.stdout, /\[--branch <branch>\].*\[--progress\]/);
+    // 2.0 usage: an option value is a short word (`[--branch B] [--at C]`)
+    assert.match(help.stdout, /\[--branch B\] \[--at C\] \[--progress\]/);
     assert.doesNotMatch(help.stdout, /--commit/);
     for (const words of [["project", "export", "shop/api"],
       ["project", "export", "shop/api", "/exports/api", "--commit", "abc"],
@@ -288,31 +284,31 @@ test("CLI export: stdout JSON/text, stderr progress JSONL, default/selected Bran
       const run = shell(f.home, words);
       assert.equal(run.status, 0, run.stderr);
     }
-    assert.equal(JSON.parse(shell(f.home, ["store", "get", "shop"]).stdout).profile, "disposable");
+    assert.equal(JSON.parse(shell(f.home, ["store", "get", "shop", "--detail"]).stdout).profile, "disposable");
     const dest = join(f.parent, "out");
-    const run = shell(f.home, ["project", "export", "shop/api", dest, "--progress"]);
+    const run = shell(f.home, ["project", "export", "shop/api", dest, "--progress", "--detail"]);
     assert.equal(run.status, 0, run.stderr);
     assert.equal(run.stdout.trim().split("\n").length, 1);
     const out = JSON.parse(run.stdout);
-    assert.equal(out.branch, "main");
-    assert.equal(out.destination, dest);
+    assert.equal(typeof out.commit, "string");
     for (const field of Object.keys(result)) assert.ok(Object.hasOwn(out, field), field);
     const events = run.stderr.trim().split("\n").map((line) => {
+      // one event per line, the event itself (call surface 2.0)
       const event = JSON.parse(line);
-      assert.deepEqual(Object.keys(event), ["progress"]);
-      return event.progress;
+      assert.equal(typeof event.phase, "string", line);
+      return event;
     });
     checkProgress(events, out);
     checkTree(dest);
     const text = shell(f.home, ["project", "export", "shop/api", join(f.parent, "text"), "--branch=agent", "--text"]);
     assert.equal(text.status, 0, text.stderr);
     assert.equal(text.stderr, "");
-    assert.match(text.stdout, /branch\s+agent/);
-    assert.match(text.stdout, /destination\s+/);
+    assert.match(text.stdout, /file_count\s+\d/);
+    assert.match(text.stdout, /size\s+/);
     const refused = shell(f.home, ["project", "export", "shop/api", dest]);
     assert.equal(refused.status, 125);
     assert.equal(refused.stdout, "");
-    assert.equal(JSON.parse(refused.stderr).code, "NotEmpty");
+    assert.equal(JSON.parse(refused.stderr).error, "InvalidInput");
     checkTree(dest);
     assert.ok(!readdirSync(f.parent).some((n) => n.startsWith(".layerfs-export-")));
   } finally { rmSync(f.parent, { recursive: true, force: true }); }

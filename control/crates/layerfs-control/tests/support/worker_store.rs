@@ -60,7 +60,7 @@ pub fn placed(tag: &str, serve: impl FnOnce(TcpListener, PathBuf)) -> Placed {
     let (home, root) = (scratch.join("home"), scratch.join("data"));
     std::fs::create_dir_all(&home).unwrap();
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
-    layerfs_control::migrate::open(&home).unwrap();
+    layerfs_home::home::open(&home).unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     write_record(
@@ -75,7 +75,7 @@ pub fn placed(tag: &str, serve: impl FnOnce(TcpListener, PathBuf)) -> Placed {
     .unwrap();
     // made on native, then its file placed under the worker's root
     let shop = StoreName::parse("shop").unwrap();
-    layerfs_store::sqlite::family::create(&home, &shop).unwrap();
+    layerfs_store::sqlite::create::create(&home, &shop, None).unwrap();
     let (from, to) = (
         paths::store_dir(&home, "shop"),
         paths::store_dir(&root, "shop"),
@@ -138,11 +138,21 @@ pub fn init(
     (outcome, seen)
 }
 
-/// Store `shop`'s statistics: one `store.call` through the worker.
+/// Store `shop` with its statistics (`store get shop --with stats`): one
+/// `store.call` through the worker.
 pub fn stats(home: &Path) -> Result<SdkValue, SdkRefusal> {
-    let shop = StoreName::parse("shop").unwrap();
     let mut sink = |_| {};
-    layerfs_store::stats::stats(home, &mut Events::new(&mut sink), &shop)
+    let with = layerfs_store::get::With {
+        live: false,
+        stats: true,
+    };
+    layerfs_store::get::get(
+        home,
+        &mut Events::new(&mut sink),
+        "shop",
+        with,
+        &layerfs_control::store::machine_state,
+    )
 }
 
 /// The record a caller sends of Store `shop`.

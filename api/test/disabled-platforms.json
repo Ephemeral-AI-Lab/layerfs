@@ -36,7 +36,7 @@
       "profile": "disposable",
       "machine": "native",
       "last_transfer": {
-        "call": "store.pull",
+        "call": "store.move",
         "from": "legacy",
         "to": "native",
         "retired": false
@@ -67,13 +67,13 @@
     {
       "call": "machine.start",
       "args": {
-        "name": "legacy"
+        "machine": "legacy"
       }
     },
     {
       "call": "machine.update",
       "args": {
-        "name": "legacy",
+        "machine": "legacy",
         "image": "unused"
       }
     },
@@ -110,47 +110,49 @@
     {
       "call": "workspace.exec",
       "args": {
-        "ws": "box:one",
+        "workspace": "box:one",
         "command": "touch /must-not-run"
       }
     },
     {
       "call": "workspace.commit",
       "args": {
-        "ws": "box:one"
+        "workspace": "box:one"
       }
     },
     {
-      "call": "store.push",
+      "call": "store.move",
       "args": {
-        "name": "local",
+        "store": "local",
         "machine": "legacy"
       }
     },
     {
-      "call": "store.push",
+      "call": "store.move",
       "args": {
-        "name": "shop",
+        "store": "shop",
         "machine": "docker"
       }
     },
     {
-      "call": "store.pull",
+      "call": "store.move",
       "args": {
-        "name": "shop"
+        "store": "shop",
+        "machine": "native"
       }
     },
     {
-      "call": "store.push",
+      "call": "store.move",
       "args": {
-        "name": "leftover",
+        "store": "leftover",
         "machine": "docker"
       }
     },
     {
-      "call": "store.pull",
+      "call": "store.move",
       "args": {
-        "name": "leftover"
+        "store": "leftover",
+        "machine": "native"
       }
     },
     {
@@ -172,16 +174,16 @@
       "args": {
         "project": "shop/api",
         "name": "new",
-        "from_branch": "main"
+        "from": "main"
       }
     },
     {
       "call": "branch.merge",
       "args": {
         "project": "shop/api",
-        "name": "new",
-        "a": "a",
-        "b": "b"
+        "branch": "a",
+        "from": "b",
+        "into": "new"
       }
     },
     {
@@ -206,8 +208,8 @@
         "project": "shop/api",
         "branch": "work",
         "path": "/a",
-        "old": "x",
-        "new": "y"
+        "old_string": "x",
+        "new_string": "y"
       }
     },
     {
@@ -239,8 +241,8 @@
       "args": {
         "project": "shop/api",
         "branch": "work",
-        "from_path": "/a",
-        "to_path": "/b"
+        "from": "/a",
+        "to": "/b"
       }
     },
     {
@@ -248,8 +250,8 @@
       "args": {
         "project": "shop/api",
         "branch": "work",
-        "from_path": "/a",
-        "to_path": "/b"
+        "from": "/a",
+        "to": "/b"
       }
     }
   ]

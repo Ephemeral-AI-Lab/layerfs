@@ -4,23 +4,22 @@ use crate::{history::branch, StoreService};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::merge::MergeUnit;
 
-/// `merge(a, b, { name, units? })`: a new Branch from two, fast-forward or one merge Commit; a conflict creates nothing.
+/// `merge(branch, with, { name?, expected?, message?, units? })`: `with`
+/// merged into `branch`, the result a new Branch `name` when given, else
+/// `branch` moved to it; a fast-forward or one merge Commit; a conflict
+/// changes nothing.
 pub fn merge(service: &StoreService, args: &SdkValue) -> Answer {
     let stack = project(service, args)?;
-    let (left, right, name) = (
-        text(args, "branch")?,
-        text(args, "with")?,
-        text(args, "name")?,
-    );
-    branch::merge(
-        &service.store,
-        &stack,
-        left,
-        right,
-        name,
-        args.get_text("message"),
-        &units(args)?,
-    )
+    let units = units(args)?;
+    let request = branch::Merge {
+        left: text(args, "branch")?,
+        right: text(args, "with")?,
+        into: args.get_text("name"),
+        expected: args.get_text("expected"),
+        message: args.get_text("message"),
+        units: &units,
+    };
+    branch::merge(&service.store, &stack, &request)
 }
 
 /// The `units` argument (#352 F-057): each a bare pattern, named by itself,

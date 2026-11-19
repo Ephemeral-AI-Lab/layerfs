@@ -1,4 +1,4 @@
-//! A push or pull stopped at a phase (#536 §7.1, §7.3, H4–H6; lane K1's
+//! A move either way stopped at a phase (#536 §7.1, §7.3, H4–H6; lane K1's
 //! terminal-pass item 7). The binding calls the progress handler
 //! synchronously before the phase is written, so a panic there stands in
 //! for a kill at that point: the record keeps what a killed process would
@@ -50,12 +50,20 @@ fn call_ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
 fn home_with_shop() -> (PathBuf, PathBuf) {
     let home = tempdir("home");
     home::open(&home).unwrap();
-    for (name, platform) in [("native", "native"), ("box", "lima")] {
-        write_record(
-            &paths::machine_record(&home, name),
-            &SdkValue::map([("name", t(name)), ("platform", t(platform))]),
-        )
-        .unwrap();
+    // `box` records its provider name, as every 2.0 create does
+    for (name, platform, vm_name) in [
+        ("native", "native", None),
+        ("box", "lima", Some("layerfs-test-box")),
+    ] {
+        let mut record = SdkValue::map([
+            ("name", t(name)),
+            ("platform", t(platform)),
+            ("state", t("running")),
+        ]);
+        if let Some(vm_name) = vm_name {
+            record = home::with_field(record, "vm_name", t(vm_name));
+        }
+        write_record(&paths::machine_record(&home, name), &record).unwrap();
     }
     let root = tempdir("guest");
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -117,39 +125,45 @@ fn read(home: &Path) -> Result<SdkValue, (String, String)> {
     )
 }
 
-/// The doctor's findings for Store `shop` as `(severity, message, fix)`.
+/// The home doctor's records findings on Store `shop` as `(severity,
+/// message, fix)`.
 fn doctor_on_shop(home: &Path) -> Vec<(String, String, String)> {
-    let report = layerfs_api::doctor(home).unwrap();
+    let report = call_ok(home, "home.doctor", &[("detail", SdkValue::Bool(true))]);
     let Some(SdkValue::List(items)) = report.get("findings") else {
         panic!("{report:?}")
     };
     let text = |v: &SdkValue, k: &str| v.get_text(k).unwrap_or("").to_owned();
     items
         .iter()
-        .filter(|f| f.get("entity").and_then(|e| e.get_text("name")) == Some("shop"))
+        .filter(|f| f.get_text("store") == Some("shop"))
+        .filter(|f| f.get_text("check") == Some("home.records"))
         .map(|f| (text(f, "severity"), text(f, "message"), text(f, "fix")))
         .collect()
 }
 
 #[test]
-fn a_push_stopped_between_install_and_record_is_unresolved_and_a_new_push_clears_it() {
+fn a_move_stopped_between_install_and_record_is_unresolved_and_a_new_move_clears_it() {
     let (home, root) = home_with_shop();
     let bytes = std::fs::read(paths::store_file(&home, "shop")).unwrap();
-    let push = [("name", t("shop")), ("machine", t("box"))];
+    let push = [("store", t("shop")), ("machine", t("box"))];
 
     // stopped as install starts: nothing is in place yet, certain
-    let op = stopped_at(&home, "store.push", &push, "install");
+    let op = stopped_at(&home, "store.move", &push, "install");
     assert_eq!(op.get_text("phase"), Some("verify"));
     assert_eq!(op.get("uncertain"), Some(&SdkValue::Bool(false)));
     assert!(!paths::store_file(&root, "shop").exists());
     // a gone process's certain intent holds nothing: the next push goes
-    call_ok(&home, "store.push", &push);
+    call_ok(&home, "store.move", &push);
     assert_eq!(record(&home).get_text("machine"), Some("box"));
-    call_ok(&home, "store.pull", &[("name", t("shop"))]);
+    call_ok(
+        &home,
+        "store.move",
+        &[("store", t("shop")), ("machine", t("native"))],
+    );
 
     // stopped after install, before record: the target holds the installed
     // copy and the intent was written uncertain before install began
-    let op = stopped_at(&home, "store.push", &push, "record");
+    let op = stopped_at(&home, "store.move", &push, "record");
     assert_eq!(op.get_text("phase"), Some("install"));
     assert_eq!(op.get("uncertain"), Some(&SdkValue::Bool(true)));
     assert_eq!(
@@ -159,30 +173,32 @@ fn a_push_stopped_between_install_and_record_is_unresolved_and_a_new_push_clears
     assert!(paths::store_file(&home, "shop").exists());
     assert_eq!(record(&home).get_text("machine"), Some("native"));
 
-    // unresolved: other calls are refused naming the push that clears it
+    // unresolved: other calls are refused naming the move that clears it
     let (code, message) = read(&home).unwrap_err();
     assert_eq!(code, "Unresolved", "{message}");
-    for named in [
-        "`layerfs store status shop`",
-        "`layerfs store push shop box`",
-    ] {
+    for named in ["`layerfs store get shop`", "`layerfs store move shop box`"] {
         assert!(message.contains(named), "{named} not in {message}");
     }
-    let status = call_ok(&home, "store.status", &[("name", t("shop"))]);
-    assert_eq!(status.get_text("state"), Some("unresolved"));
+    let status = call_ok(&home, "store.get", &[("store", t("shop"))]);
+    assert_eq!(status.get_text("state"), Some("broken"));
+    assert_eq!(status.get_text("reason"), Some("unresolved"));
+    assert_eq!(status.get_text("fix"), Some("layerfs store move shop box"));
     let found = doctor_on_shop(&home);
     assert!(
         found
             .iter()
             .any(|(severity, message, fix)| severity == "error"
-                && message.contains("unresolved store.push")
-                && fix.contains("`layerfs store push shop box` clears it")),
+                && message.contains("unresolved store.move")
+                && fix == "layerfs store move shop box"),
         "{found:?}"
     );
 
-    // the named call deletes the copy the record does not name, then pushes
-    let moved = call_ok(&home, "store.push", &push);
-    assert_eq!(moved.get("bytes"), Some(&SdkValue::Int(bytes.len() as i64)));
+    // the named call deletes the copy the record does not name, then moves
+    let moved = call_ok(&home, "store.move", &push);
+    assert_eq!(
+        moved.get("moved_bytes"),
+        Some(&SdkValue::Int(bytes.len() as i64))
+    );
     let now = record(&home);
     assert_eq!(now.get_text("machine"), Some("box"));
     assert_eq!(now.get("op"), None);
@@ -196,16 +212,16 @@ fn a_push_stopped_between_install_and_record_is_unresolved_and_a_new_push_clears
 }
 
 #[test]
-fn a_pull_stopped_between_install_and_record_is_cleared_by_a_new_pull() {
+fn a_move_here_stopped_between_install_and_record_is_cleared_by_a_new_move_here() {
     let (home, root) = home_with_shop();
     let bytes = std::fs::read(paths::store_file(&home, "shop")).unwrap();
     call_ok(
         &home,
-        "store.push",
-        &[("name", t("shop")), ("machine", t("box"))],
+        "store.move",
+        &[("store", t("shop")), ("machine", t("box"))],
     );
-    let pull = [("name", t("shop"))];
-    let op = stopped_at(&home, "store.pull", &pull, "record");
+    let pull = [("store", t("shop")), ("machine", t("native"))];
+    let op = stopped_at(&home, "store.move", &pull, "record");
     assert_eq!(op.get_text("phase"), Some("install"));
     assert_eq!(op.get("uncertain"), Some(&SdkValue::Bool(true)));
     // native holds the installed copy the record does not name
@@ -213,9 +229,14 @@ fn a_pull_stopped_between_install_and_record_is_cleared_by_a_new_pull() {
     assert_eq!(record(&home).get_text("machine"), Some("box"));
     let (code, message) = read(&home).unwrap_err();
     assert_eq!(code, "Unresolved", "{message}");
-    assert!(message.contains("`layerfs store pull shop`"), "{message}");
+    assert!(
+        message.contains("`layerfs store move shop native`"),
+        "{message}"
+    );
 
-    let back = call_ok(&home, "store.pull", &pull);
+    let mut long = pull.to_vec();
+    long.push(("detail", SdkValue::Bool(true)));
+    let back = call_ok(&home, "store.move", &long);
     assert_eq!(back.get_text("to"), Some("native"));
     let now = record(&home);
     assert_eq!(now.get_text("machine"), Some("native"));
@@ -241,12 +262,12 @@ fn retired(home: &Path) -> Option<SdkValue> {
 fn a_transfer_stopped_at_retire_leaves_a_usable_store_and_the_next_one_deletes_the_old_copy() {
     let (home, root) = home_with_shop();
     let bytes = std::fs::read(paths::store_file(&home, "shop")).unwrap();
-    let push = [("name", t("shop")), ("machine", t("box"))];
-    let pull = [("name", t("shop"))];
+    let push = [("store", t("shop")), ("machine", t("box"))];
+    let pull = [("store", t("shop")), ("machine", t("native"))];
 
     // a push stopped at retire: the record names `box`, native keeps its
     // copy, and the record says it is not retired
-    let op = stopped_at(&home, "store.push", &push, "retire");
+    let op = stopped_at(&home, "store.move", &push, "retire");
     assert_eq!(op.get_text("phase"), Some("retire"));
     assert_eq!(op.get("uncertain"), Some(&SdkValue::Bool(false)));
     assert_eq!(record(&home).get_text("machine"), Some("box"));
@@ -254,19 +275,20 @@ fn a_transfer_stopped_at_retire_leaves_a_usable_store_and_the_next_one_deletes_t
     assert!(paths::store_file(&home, "shop").exists());
     assert!(paths::store_file(&root, "shop").exists());
     // the Store is in use on `box` as usual: the intent holds nothing
-    let status = call_ok(&home, "store.status", &[("name", t("shop"))]);
-    assert_eq!(status.get_text("state"), Some("idle"), "{status:?}");
+    let status = call_ok(&home, "store.get", &[("store", t("shop"))]);
+    assert_eq!(status.get_text("state"), Some("ready"), "{status:?}");
     let found = doctor_on_shop(&home);
     assert!(
         found
             .iter()
             .any(|(severity, message, fix)| severity == "warning"
                 && message.contains("did not retire the copy on native")
-                && fix == "the next `layerfs store pull shop` deletes it first"),
+                && message.contains("the next `layerfs store move shop` deletes it first")
+                && fix.is_empty()),
         "{found:?}"
     );
-    // the next pull deletes native's old copy first, then pulls
-    call_ok(&home, "store.pull", &pull);
+    // the next move here deletes native's old copy first, then moves
+    call_ok(&home, "store.move", &pull);
     let now = record(&home);
     assert_eq!(now.get_text("machine"), Some("native"));
     assert_eq!(now.get("op"), None);
@@ -282,9 +304,10 @@ fn a_transfer_stopped_at_retire_leaves_a_usable_store_and_the_next_one_deletes_t
         doctor_on_shop(&home)
     );
 
-    // a pull stopped at retire: `box` keeps its copy; the next push deletes it
-    call_ok(&home, "store.push", &push);
-    stopped_at(&home, "store.pull", &pull, "retire");
+    // a move here stopped at retire: `box` keeps its copy; the next move
+    // there deletes it
+    call_ok(&home, "store.move", &push);
+    stopped_at(&home, "store.move", &pull, "retire");
     assert_eq!(record(&home).get_text("machine"), Some("native"));
     assert!(paths::store_file(&root, "shop").exists());
     let found = doctor_on_shop(&home);
@@ -292,10 +315,11 @@ fn a_transfer_stopped_at_retire_leaves_a_usable_store_and_the_next_one_deletes_t
         found
             .iter()
             .any(|(_, message, fix)| message.contains("the copy on box")
-                && fix == "the next `layerfs store push shop <machine>` deletes it first"),
+                && message.contains("the next `layerfs store move shop` deletes it first")
+                && fix.is_empty()),
         "{found:?}"
     );
-    call_ok(&home, "store.push", &push);
+    call_ok(&home, "store.move", &push);
     assert_eq!(record(&home).get_text("machine"), Some("box"));
     assert_eq!(retired(&home), Some(SdkValue::Bool(true)));
     assert_eq!(
@@ -308,12 +332,12 @@ fn a_transfer_stopped_at_retire_leaves_a_usable_store_and_the_next_one_deletes_t
 }
 
 #[test]
-fn a_pull_leaves_no_store_folder_on_the_worker_and_follows_no_symlink_out_of_it() {
+fn a_move_here_leaves_no_store_folder_on_the_worker_and_follows_no_symlink_out_of_it() {
     let (home, root) = home_with_shop();
     call_ok(
         &home,
-        "store.push",
-        &[("name", t("shop")), ("machine", t("box"))],
+        "store.move",
+        &[("store", t("shop")), ("machine", t("box"))],
     );
     // what a worker keeps beside the file: records and a project's entry,
     // and a symlink out of the folder
@@ -328,7 +352,11 @@ fn a_pull_leaves_no_store_folder_on_the_worker_and_follows_no_symlink_out_of_it(
     std::fs::write(outside.join("keep"), b"kept").unwrap();
     std::os::unix::fs::symlink(&outside, folder.join("link")).unwrap();
 
-    call_ok(&home, "store.pull", &[("name", t("shop"))]);
+    call_ok(
+        &home,
+        "store.move",
+        &[("store", t("shop")), ("machine", t("native"))],
+    );
     assert!(
         std::fs::symlink_metadata(&folder).is_err(),
         "the worker keeps nothing of the Store"
@@ -340,8 +368,8 @@ fn a_pull_leaves_no_store_folder_on_the_worker_and_follows_no_symlink_out_of_it(
     // a push finds the worker's root clean
     call_ok(
         &home,
-        "store.push",
-        &[("name", t("shop")), ("machine", t("box"))],
+        "store.move",
+        &[("store", t("shop")), ("machine", t("box"))],
     );
     assert!(!paths::project_record(&root, "shop", "api").exists());
     std::fs::remove_dir_all(home).unwrap();
@@ -352,41 +380,45 @@ fn a_pull_leaves_no_store_folder_on_the_worker_and_follows_no_symlink_out_of_it(
 #[test]
 fn wrong_direction_refuses_unresolved_without_deleting_leftover_and_remove_cleans_both_sides() {
     let (home, root) = home_with_shop();
-    let push = [("name", t("shop")), ("machine", t("box"))];
-    let pull = [("name", t("shop"))];
+    let push = [("store", t("shop")), ("machine", t("box"))];
+    let pull = [("store", t("shop")), ("machine", t("native"))];
 
-    // 1. A push stopped between install and record is `Unresolved` (the
-    // record names native, `box` holds a copy). The opposite command must
-    // refuse it without deleting that copy or clearing the intent.
-    let op = stopped_at(&home, "store.push", &push, "record");
+    // 1. A move to `box` stopped between install and record is `Unresolved`
+    // (the record names native, `box` holds a copy). A move the other way
+    // must refuse it without deleting that copy or clearing the intent.
+    let op = stopped_at(&home, "store.move", &push, "record");
     assert_eq!(op.get("uncertain"), Some(&SdkValue::Bool(true)));
     assert!(paths::store_file(&root, "shop").exists());
 
-    let (code, message) = call(&home, "store.pull", &pull).unwrap_err();
+    let (code, message) = call(&home, "store.move", &pull).unwrap_err();
     assert_eq!(code, "Unresolved", "{message}");
     assert!(
-        message.contains("`layerfs store push shop box`"),
+        message.contains("`layerfs store move shop box`"),
         "{message}"
     );
     assert!(
         paths::store_file(&root, "shop").exists(),
-        "a wrong-direction pull must not delete the remote copy"
+        "a wrong-direction move must not delete the remote copy"
     );
     assert!(
         record(&home).get("op").is_some(),
-        "a wrong-direction pull must not clear the unresolved intent"
+        "a wrong-direction move must not clear the unresolved intent"
     );
 
-    // A push to another machine refuses it too, keeping `box`'s copy.
+    // A move to another machine refuses it too, keeping `box`'s copy.
     write_record(
         &paths::machine_record(&home, "other"),
-        &SdkValue::map([("name", t("other")), ("platform", t("lima"))]),
+        &SdkValue::map([
+            ("name", t("other")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-test-other")),
+        ]),
     )
     .unwrap();
     let (code, message) = call(
         &home,
-        "store.push",
-        &[("name", t("shop")), ("machine", t("other"))],
+        "store.move",
+        &[("store", t("shop")), ("machine", t("other"))],
     )
     .unwrap_err();
     assert_eq!(code, "Unresolved", "{message}");
@@ -395,19 +427,19 @@ fn wrong_direction_refuses_unresolved_without_deleting_leftover_and_remove_clean
 
     // 2. `store.remove` deletes both the record's machine's copy and the
     // leftover on `box`, so the name is free again.
-    call_ok(&home, "store.remove", &[("name", t("shop"))]);
+    call_ok(&home, "store.remove", &[("store", t("shop"))]);
     assert!(!paths::store_dir(&home, "shop").exists());
     assert!(
         !paths::store_dir(&root, "shop").exists(),
         "store.remove must delete the leftover remote Store directory on box"
     );
     call_ok(&home, "store.create", &[("name", t("shop"))]);
-    call_ok(&home, "store.push", &push);
+    call_ok(&home, "store.move", &push);
 
-    // 3. A pull stopped at retire names native and leaves the copy on `box`.
+    // 3. A move here stopped at retire names native and leaves the copy on `box`.
     // A `store.remove` whose cleanup of `box` loses its answer records
     // `leftover: "box"`, so a second call still cleans both sides.
-    stopped_at(&home, "store.pull", &pull, "retire");
+    stopped_at(&home, "store.move", &pull, "retire");
     assert_eq!(record(&home).get_text("machine"), Some("native"));
     assert_eq!(retired(&home), Some(SdkValue::Bool(false)));
     assert!(paths::store_file(&root, "shop").exists());
@@ -454,7 +486,7 @@ fn wrong_direction_refuses_unresolved_without_deleting_leftover_and_remove_clean
         &SdkValue::map([("address", t(&drop_addr)), ("secret", t("k"))]),
     )
     .unwrap();
-    let (code, _) = call(&home, "store.remove", &[("name", t("shop"))]).unwrap_err();
+    let (code, _) = call(&home, "store.remove", &[("store", t("shop"))]).unwrap_err();
     assert_eq!(code, "Unknown");
     let remove_op = record(&home)
         .get("op")
@@ -483,7 +515,7 @@ fn wrong_direction_refuses_unresolved_without_deleting_leftover_and_remove_clean
     )
     .unwrap();
 
-    call_ok(&home, "store.remove", &[("name", t("shop"))]);
+    call_ok(&home, "store.remove", &[("store", t("shop"))]);
     assert!(!paths::store_dir(&home, "shop").exists());
     assert!(
         !paths::store_dir(&root, "shop").exists(),
@@ -497,16 +529,16 @@ fn wrong_direction_refuses_unresolved_without_deleting_leftover_and_remove_clean
 #[test]
 fn retire_failure_reports_authority_switched_to_target_and_source_unretired() {
     let (home, root) = home_with_shop();
-    let push = [("name", t("shop")), ("machine", t("box"))];
-    call_ok(&home, "store.push", &push);
+    let push = [("store", t("shop")), ("machine", t("box"))];
+    call_ok(&home, "store.move", &push);
 
-    // A pull that reaches `retire` has already written `machine: native` and
+    // A move here that reaches `retire` has already written `machine: native` and
     // `last_transfer.retired: false`; make the source's folder undeletable so
     // retiring it fails.
     let refusal = layerfs_api::call(
         Some(&home),
-        "store.pull",
-        map(&[("name", t("shop"))]),
+        "store.move",
+        map(&[("store", t("shop")), ("machine", t("native"))]),
         &mut |event| {
             let progress = event.get("progress").unwrap();
             if progress.get_text("phase") == Some("retire") {

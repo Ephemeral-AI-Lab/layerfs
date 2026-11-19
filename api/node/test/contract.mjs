@@ -16,9 +16,10 @@ import { mkdtempSync, writeFileSync, chmodSync, rmSync, existsSync } from "node:
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { client, doctor, close, table, LayerFSError } from "../src/index.js";
+import { client, close, table, LayerFSError } from "../src/index.js";
 import { encode, decode } from "../src/values.js";
 import { steps, P } from "./contract/cases.mjs";
+import { refusalOf } from "./contract/refusal.mjs";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const driver = fileURLToPath(new URL("./contract/driver.py", import.meta.url));
@@ -68,16 +69,12 @@ async function runNode(ctx) {
   const out = [];
   for (const step of steps) {
     try {
-      if (step.call === "doctor") {
-        out.push({ ok: await doctor({ home: ctx.home }) });
-        continue;
-      }
       const [family, call] = step.call.split(".");
       const given = resolveArgs(step, ctx);
       out.push({ ok: await lfs[family][call](...given, ...(hasOptions(step) ? [step.opts] : [])) });
     } catch (error) {
       out.push(error instanceof LayerFSError
-        ? { refused: { code: error.code, message: error.message, detail: error.detail } }
+        ? { refused: refusalOf(error, step.opts?.detail === true) }
         : { crash: String(error?.stack ?? error) });
     }
   }
@@ -122,7 +119,7 @@ function cliWords(spec, step, ctx) {
 function runCli(ctx) {
   return steps.map((step) => {
     if (step.cli === "skip") return { skipped: true };
-    const { words, input } = step.call === "doctor" ? { words: ["doctor"] } : cliWords(specs.get(step.call), step, ctx);
+    const { words, input } = cliWords(specs.get(step.call), step, ctx);
     const run = spawnSync(command, words, { env: { ...process.env, LAYERFS_HOME: ctx.home }, input: input ?? "", timeout: 60_000 });
     assert.equal(run.error, undefined, `${step.id}: ${run.error}`);
     const lines = run.stderr.toString().trim().split("\n");
@@ -134,18 +131,21 @@ function runCli(ctx) {
 }
 
 // --- normalizing: what differs between homes and runs but not in meaning
-// times; inode numbers (a process hands out its own range); stored sizes (they hold the times)
+// times (a number, or 2.0's `..._at` text); inode numbers (a process hands out its own range);
+// stored sizes (they hold the times); a Commit's short label `<branch>@<14 hex>` (its tag byte
+// and 12 hex digits, a prefix commit.get accepts, since 7233635435)
 const TIMES = new Set(["created", "time", "inode", "new_stored", "new_metadata"]);
+const time = (key, item) => (TIMES.has(key) && typeof item === "number") || (key.endsWith("_at") && typeof item === "string");
 const ids = (text, ctx) =>
   /^[0-9a-f]{32,}$/.test(text)
     ? "<id>"
-    : text.replaceAll(ctx.home, "<home>").replaceAll(ctx.folder, "<folder>").replace(/@[0-9a-f]{12}\b/g, "@<id12>").replace(/at byte \d+/g, "at byte N");
+    : text.replaceAll(ctx.home, "<home>").replaceAll(ctx.folder, "<folder>").replace(/@[0-9a-f]{14}\b/g, "@<id14>").replace(/at byte \d+/g, "at byte N");
 
 function normalize(value, ctx) {
   if (typeof value === "string") return ids(value, ctx);
   if (Array.isArray(value)) return value.map((item) => normalize(item, ctx));
   if (value && typeof value === "object" && !Buffer.isBuffer(value)) {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, TIMES.has(key) && typeof item === "number" ? "<n>" : normalize(item, ctx)]));
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, time(key, item) ? "<n>" : normalize(item, ctx)]));
   }
   return value;
 }
@@ -193,9 +193,10 @@ function expectation(step, front, result) {
   if (want === "ok") return result.ok !== undefined ? null : `want a value, got ${shown(result)}`;
   if (want === "usage") return result.usage !== undefined ? null : `want exit 2 (a wrong command line), got ${shown(result)}`;
   if (result.refused === undefined) return `want ${want}, got ${shown(result)}`;
-  const keys = Object.keys(result.refused).sort().join();
-  if (keys !== "code,detail,message") return `refusal keys are ${keys}`;
-  return result.refused.code === want ? null : `want ${want}, got ${shown(result)}`;
+  // `error` and `message` first, in every front end; the old `code` key is gone
+  const keys = Object.keys(result.refused);
+  if (keys[0] !== "error" || keys[1] !== "message" || keys.includes("code")) return `refusal keys are ${keys.join()}`;
+  return result.refused.error === want ? null : `want ${want}, got ${shown(result)}`;
 }
 
 function failures(group) {
@@ -230,7 +231,7 @@ function failures(group) {
       const node = seen.node;
       if (mine.usage !== undefined) continue; // the command's wrong command line: checked by `expectation`
       const same = node.refused && step.loose
-        ? mine.refused?.code === node.refused.code
+        ? mine.refused?.error === node.refused.error
         : isDeepEqual(mine, node);
       if (!same) bad.push(`${step.id}: ${front} differs from node: ${shown(mine)} vs ${shown(node)}`);
     }
@@ -294,10 +295,10 @@ test("contract: the command reads content from --from and a text option from --N
   const message = join(homes.cli.folder, "message.txt");
   writeFileSync(content, Buffer.from([0, 255, 1]));
   writeFileSync(message, "from a file ☃");
-  const words = ["file", "write", P, "agent", "/from.bin", "--from", content, "--message-from", message];
+  const words = ["file", "write", P, "agent", "/from.bin", "--from", content, "--message-from", message, "--detail"];
   const run = spawnSync(command, words, { env, encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);
-  assert.equal(JSON.parse(run.stdout).commit.message, "from a file ☃");
+  assert.equal(JSON.parse(run.stdout).message, "from a file ☃");
   const stat = spawnSync(command, ["file", "stat", P, "agent", "/from.bin"], { env, encoding: "utf8" });
   assert.equal(JSON.parse(stat.stdout).size, 3);
   // no such file is a wrong command line, before any call

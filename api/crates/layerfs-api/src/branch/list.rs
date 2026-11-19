@@ -1,12 +1,22 @@
-//! `branch.list`: a project's Branches.
+//! `branch.list`: a project's Branches, main included, in name order.
+use crate::calls::scope::Rule;
 use crate::calls::scope::NAMESPACE;
-use crate::calls::table::Kind::Project;
-use crate::calls::table::{a, call, opt, Call, Kind::Int};
-use crate::calls::Context;
+use crate::calls::table::Kind::{Int, Project, Text};
+use crate::calls::table::{a, call, opt, Call};
+use crate::calls::{Context, Form, Paging, Part};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::branch::{list, BranchList};
-use layerfs_store::calls::Page;
+
+/// One Branch: `commit` is its head, or the Commit it was forked at while
+/// it has none of its own; main is a row.
+const ROW: Form = Form::of(
+    &["branch", "commit"],
+    &[],
+    &["branch", "commit", "forked_from", "id", "base", "root"],
+);
+const FORM: Form = Form::of(&["items"], &["next_cursor"], &["items", "next_cursor"])
+    .parts(&[("items", Part::Rows(&ROW))]);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -14,13 +24,17 @@ pub(crate) const CALL: Call = call(
     "list",
     &[a("project", Project)],
     &[
-        opt("page_size", Int),
-        opt("page_pos", Int),
-        opt("page", Int),
+        opt("prefix", Text),
+        opt("exclude_prefix", Text),
+        opt("limit", Int),
+        opt("cursor", Text).redact(),
     ],
-    "a project's Branches",
+    "a project's Branches, main included, in name order",
     run,
-);
+)
+.scoped(Rule::BranchList)
+.form(&FORM)
+.paged(Paging::Cursor);
 
 /// Runs `branch.list`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
@@ -28,11 +42,10 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let request = BranchList {
         project: text("project").unwrap_or_default(),
         namespace: text(NAMESPACE),
-        page: Page {
-            size: args.get_int("page_size"),
-            pos: args.get_int("page_pos"),
-            number: args.get_int("page"),
-        },
+        prefix: text("prefix"),
+        exclude_prefix: text("exclude_prefix"),
+        limit: args.get_int("limit"),
+        cursor: text("cursor"),
     };
     let (home, events) = context.parts();
     list(home, events, &request)

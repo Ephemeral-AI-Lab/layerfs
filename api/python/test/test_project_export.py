@@ -34,17 +34,16 @@ SPEC = {
         {"name": "on_progress", "kind": "function", "optional": True},
     ],
 }
+# project.export's long form and its progress events (call surface 2.0)
 RESULT = {
-    "project": "shop/api", "store": "shop", "name": "api", "kind": "sqlite",
-    "machine": "native", "branch": "main", "snapshot": "main@0123456789ab",
-    "node": "01" * 33, "root": "02" * 32, "destination": "/exports/api",
-    "files": 1, "directories": 1, "symlinks": 1, "bytes": 4,
+    "file_count": 1, "size": 4, "dir_count": 1, "symlink_count": 1,
+    "commit": "01" * 33, "root": "02" * 32,
 }
 PROGRESS = [
-    {"phase": "prepare", "files": 0, "directories": 0, "symlinks": 0, "bytes": 0, "done": None, "total": None},
-    {"phase": "export", "files": 0, "directories": 0, "symlinks": 0, "bytes": 0, "done": 0, "total": None},
-    {"phase": "export", "files": 1, "directories": 1, "symlinks": 1, "bytes": 4, "done": 4, "total": None},
-    {"phase": "finalize", "files": 1, "directories": 1, "symlinks": 1, "bytes": 4, "done": 4, "total": None},
+    {"phase": "prepare", "done": None, "total": None},
+    {"phase": "export", "done": 0, "total": None},
+    {"phase": "export", "done": 4, "total": None},
+    {"phase": "finalize", "done": 4, "total": None},
 ]
 
 # Isolate the stub in its own package name: do not replace an installed layerfs
@@ -55,7 +54,7 @@ FAMILIES = ["home", "branch", "commit", "file", "sandbox", "workspace", "machine
 native.table = lambda: json.dumps([SPEC] + [
     {"family": family, "call": "list", "args": [], "options": [], "help": "stub"}
     for family in FAMILIES
-] + [{"family": "doctor", "call": "fix", "args": [], "options": [], "help": "stub"}])
+])
 sys.modules[native.__name__] = native
 package_spec = importlib.util.spec_from_file_location(
     PACKAGE, SOURCE / "__init__.py", submodule_search_locations=[str(SOURCE)]
@@ -77,25 +76,22 @@ def check_progress(case, events, result):
     case.assertEqual(events[0]["phase"], "prepare")
     case.assertEqual(events[-1]["phase"], "finalize")
     case.assertIn("export", [event["phase"] for event in events])
-    previous = dict(files=0, directories=0, symlinks=0, bytes=0)
+    # each event is {phase, done, total}: `done` counts the bytes written so far
+    done = 0
     phase = 0
     for event in events:
+        case.assertEqual(list(event), ["phase", "done", "total"])
         next_phase = ["prepare", "export", "finalize"].index(event["phase"])
         case.assertGreaterEqual(next_phase, phase)
         phase = next_phase
         case.assertIsNone(event["total"])
-        for key in ("files", "directories", "symlinks", "bytes"):
-            case.assertIsInstance(event[key], int)
-            case.assertGreaterEqual(event[key], previous[key])
         if event["phase"] == "prepare":
             case.assertIsNone(event["done"])
         else:
-            case.assertEqual(event["done"], event["bytes"])
-        previous = event
-    case.assertEqual(events[-1]["files"], result["files"])
-    case.assertEqual(events[-1]["directories"], result["directories"])
-    case.assertEqual(events[-1]["symlinks"], result["symlinks"])
-    case.assertEqual(events[-1]["bytes"], result["bytes"])
+            case.assertIsInstance(event["done"], int)
+            case.assertGreaterEqual(event["done"], done)
+            done = event["done"]
+    case.assertEqual(events[-1]["done"], result["size"])
 
 
 class Binding(unittest.TestCase):
@@ -151,11 +147,17 @@ class Binding(unittest.TestCase):
         self.assertEqual(self.calls, [])
 
     def test_refusal_detail_is_preserved_without_replay(self):
-        refusal = {"code": "NotEmpty", "message": "destination changed", "detail": {"phase": "finalize"}}
+        # the library's answer to a call that asked the long form
+        refusal = {
+            "error": "InvalidInput",
+            "message": "destination changed",
+            "fix": None,
+            "detail": {"phase": "finalize", "code": "NotEmpty"},
+        }
         with patch.object(native, "call", return_value=json.dumps({"refused": refusal})) as dispatch:
             with self.assertRaises(sdk.LayerFSError) as caught:
-                sdk.project.export("shop/api", "/exports/api")
-            self.assertEqual(caught.exception.code, refusal["code"])
+                sdk.project.export("shop/api", "/exports/api", detail=True)
+            self.assertEqual((caught.exception.error, caught.exception.code), ("InvalidInput", "InvalidInput"))
             self.assertEqual(caught.exception.detail, refusal["detail"])
             dispatch.assert_called_once()
 
@@ -301,15 +303,14 @@ class NativeExport(unittest.TestCase):
             lfs = self.real.client(home=home)
             try:
                 lfs.store.create("shop")  # public create selects only Disposable
-                self.assertEqual(lfs.store.get("shop")["profile"], "disposable")
+                self.assertEqual(lfs.store.get("shop", detail=True)["profile"], "disposable")
                 lfs.project.init("shop/api", str(source))
                 lfs.branch.fork("shop/api", "agent", "main")
                 lfs.file.write("shop/api", "agent", "/branch.txt", "agent\n")
                 events = []
                 dest = parent / "out"
-                result = lfs.project.export("shop/api", str(dest), on_progress=events.append)
-                self.assertEqual(result["branch"], "main")
-                self.assertEqual(result["destination"], str(dest))
+                result = lfs.project.export("shop/api", str(dest), on_progress=events.append, detail=True)
+                self.assertIsInstance(result["commit"], str)
                 self.assertTrue(RESULT.keys() <= result.keys())
                 check_progress(self, events, result)
                 self.assertEqual((dest / "ignored.bin").read_bytes(), bytes([0, 255, 128, 1]))
@@ -321,13 +322,13 @@ class NativeExport(unittest.TestCase):
                 self.assertEqual((dest / ".git" / "config").read_bytes(), b"[core]\n")
                 with self.assertRaises(self.real.LayerFSError) as caught:
                     lfs.project.export("shop/api", str(dest))
-                self.assertEqual(caught.exception.code, "NotEmpty")
+                self.assertEqual(caught.exception.error, "InvalidInput")
                 self.assertEqual((dest / "ignored.bin").read_bytes(), bytes([0, 255, 128, 1]))
                 plain = parent / "plain-file"
                 plain.write_text("not a folder")
                 with self.assertRaises(self.real.LayerFSError) as caught:
                     lfs.project.export("shop/api", str(plain))
-                self.assertIn(caught.exception.code, ("Exists", "NotDirectory"))
+                self.assertIn(caught.exception.error, ("Exists", "InvalidInput"))
                 self.assertEqual(plain.read_text(), "not a folder")
 
                 async def export_branch():

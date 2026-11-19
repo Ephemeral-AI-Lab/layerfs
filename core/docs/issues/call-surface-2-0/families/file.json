@@ -1,0 +1,1394 @@
+{
+  "family": "file",
+  "who": "agents",
+  "old_count": 15,
+  "blurb": "Files on a Branch. Names match the tools agents already know. Reads answer content, not revisions; each write answers its Commit.",
+  "reasons": [
+    "<b>Why reads answer no Commit:</b> an agent asked for content. The Commit it read is noise in every result and tempts a guard the agent didn't ask for. To guard a write, pass <code>--expected</code> with the head from <code>branch get</code> or the last write; to read a fixed revision, pass <code>--at</code>.",
+    "<b>Why <code>--at</code> on every read:</b> read, stat, list, glob, grep, history and blame all pin a Commit the same way, so <code>file stat … --at 7a0b11c2</code> reads a file as it was.",
+    "<b>Why <code>file.diff</code> is gone:</b> it compared two files, each at its own Branch or Commit. One path between two Commits is now <code>commit diff … --path</code>; comparing two different paths is dropped, and so is its line-ownership option (<code>file blame</code> answers ownership).",
+    "<b>Why the single writes stay:</b> agents use them as tools named for the action. Folding them into <code>file.apply</code> would save six calls and cost ease of use.",
+    "<b>Why <code>-m</code> and <code>--expected</code> on every write:</b> each write is one Commit, so each takes its message and the one head guard."
+  ],
+  "calls": [
+    {
+      "call": "file.read",
+      "badge": "reshaped",
+      "note": "no <code>commit</code>; <code>--start-line</code> → <code>--line</code> (1-based), <code>--end-line</code> → <code>--limit</code>; <code>next_line</code> left out at the end; a text file always answers <code>text</code>, an empty one <code>\"\"</code>; a file that is not text answers <code>binary</code> and <code>size</code> and no <code>text</code>; <code>line_truncated</code> when a line longer than the reply was cut",
+      "today": [
+        "file.read"
+      ],
+      "help": "read a text file, or a window of its lines",
+      "cli": "layerfs file read <project> <branch> <path> [--at C] [--line 1] [--limit 2000]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        },
+        {
+          "name": "path",
+          "kind": "Text",
+          "redact": true
+        }
+      ],
+      "options": [
+        {
+          "name": "at",
+          "kind": "Name",
+          "help": "read as of this Commit: a full id, or a prefix of 8 or more characters"
+        },
+        {
+          "name": "line",
+          "kind": "Int",
+          "help": "the first line, 1-based",
+          "default": 1
+        },
+        {
+          "name": "limit",
+          "kind": "Int",
+          "help": "the most lines, 1 to 2000",
+          "default": 2000
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": "line",
+      "progress": false,
+      "quiet": false,
+      "profile": "agent",
+      "short": {
+        "always": [],
+        "sometimes": [
+          "text",
+          "next_line",
+          "line_truncated",
+          "binary",
+          "size"
+        ]
+      },
+      "long": [
+        "text",
+        "next_line",
+        "line_truncated",
+        "binary",
+        "size",
+        "commit",
+        "root",
+        "path",
+        "start_line",
+        "end_line"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"text\":\"export function login(user) {\\n  const s = await open(user)\\n  return s\\n\",\"next_line\":45}",
+          "binary: {\"binary\":true,\"size\":90112}"
+        ],
+        "long": "{\"text\":\"export function login(user) {\\n  const s = await open(user)\\n  return s\\n\",\"next_line\":45,\"line_truncated\":false,\"binary\":false,\"size\":5120,\"commit\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"path\":\"/src/app.ts\",\"start_line\":42,\"end_line\":44}"
+      },
+      "dropped": [
+        {
+          "today": "[commit]",
+          "now": "--at C",
+          "why": "one way to pin a read; an optional Commit is an option"
+        },
+        {
+          "today": "--start-line",
+          "now": "--line",
+          "why": "a 1-based line window"
+        },
+        {
+          "today": "--end-line",
+          "now": "--limit",
+          "why": "a count of lines, as every window and page takes"
+        }
+      ],
+      "new_work": "A file that is not text answering `binary` and `size` is new: today the call is refused `Binary`. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
+    },
+    {
+      "call": "file.stat",
+      "badge": "reshaped",
+      "note": "<code>type</code> is file, dir or symlink; <code>mode</code> is octal text (<code>\"0644\"</code>), a number today",
+      "today": [
+        "file.stat"
+      ],
+      "help": "a path's type, size and mode",
+      "cli": "layerfs file stat <project> <branch> <path> [--at C]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        },
+        {
+          "name": "path",
+          "kind": "Text",
+          "redact": true
+        }
+      ],
+      "options": [
+        {
+          "name": "at",
+          "kind": "Name",
+          "help": "read as of this Commit: a full id, or a prefix of 8 or more characters"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "type",
+          "size",
+          "mode"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "type",
+        "size",
+        "mode",
+        "commit",
+        "root",
+        "path",
+        "inode",
+        "modified_at"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"type\":\"file\",\"size\":4870,\"mode\":\"0644\"}"
+        ],
+        "long": "{\"type\":\"file\",\"size\":4870,\"mode\":\"0644\",\"commit\":\"7a0b11c2\",\"root\":\"9f3c0b7a\",\"path\":\"/src/app.ts\",\"inode\":1042,\"modified_at\":\"2026-11-17T09:16:59Z\"}"
+      },
+      "dropped": [
+        {
+          "today": "[commit]",
+          "now": "--at C",
+          "why": "one way to pin a read; an optional Commit is an option"
+        }
+      ],
+      "new_work": "`modified_at` is new in the answer: the call already reads the entry's modification time with its mode. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
+    },
+    {
+      "call": "file.list",
+      "badge": "paging",
+      "note": "one folder's own entries; <code>skipped_hidden</code> counts entries <code>project hide-path</code> hides; rows carry no size or mode (the listing reads neither): <code>file stat</code> answers them; no <code>name</code>: it is the last part of <code>path</code>; a cursor carries the Commit the first page read and the call's filters: given with another pin or other filters, or to another call, it is refused <code>InvalidInput</code>; when its Commit is gone, <code>NotFound</code>",
+      "today": [
+        "file.list"
+      ],
+      "help": "a folder's entries",
+      "cli": "layerfs file list <project> <branch> <path> [--at C] [--limit 100] [--cursor C]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        },
+        {
+          "name": "path",
+          "kind": "Text",
+          "redact": true
+        }
+      ],
+      "options": [
+        {
+          "name": "at",
+          "kind": "Name",
+          "help": "read as of this Commit: a full id, or a prefix of 8 or more characters"
+        },
+        {
+          "name": "limit",
+          "kind": "Int",
+          "help": "the most rows in one page, 1 to 1000",
+          "default": 100
+        },
+        {
+          "name": "cursor",
+          "kind": "Text",
+          "help": "the `next_cursor` of the page before; it carries the pinned Commit and the filters"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": "cursor",
+      "progress": false,
+      "quiet": false,
+      "profile": "agent",
+      "short": {
+        "always": [
+          "items"
+        ],
+        "sometimes": [
+          "next_cursor"
+        ]
+      },
+      "long": [
+        "items",
+        "next_cursor",
+        "commit",
+        "root",
+        "path",
+        "skipped_hidden"
+      ],
+      "item": {
+        "short": {
+          "always": [
+            "path",
+            "type"
+          ],
+          "sometimes": []
+        },
+        "long": [
+          "path",
+          "type",
+          "inode"
+        ]
+      },
+      "examples": {
+        "short": [
+          "{\"items\":[{\"path\":\"/src/app.ts\",\"type\":\"file\"},{\"path\":\"/src/db\",\"type\":\"dir\"}]}",
+          "more pages: {\"items\":[{\"path\":\"/src/app.ts\",\"type\":\"file\"}],\"next_cursor\":\"L3NyYy9hcHAudHM\"}"
+        ],
+        "long": "{\"items\":[{\"path\":\"/src/app.ts\",\"type\":\"file\",\"inode\":1042},{\"path\":\"/src/db\",\"type\":\"dir\",\"inode\":1050}],\"next_cursor\":null,\"commit\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"path\":\"/src\",\"skipped_hidden\":0}"
+      },
+      "dropped": [
+        {
+          "today": "[commit]",
+          "now": "--at C",
+          "why": "one way to pin a read; an optional Commit is an option"
+        },
+        {
+          "today": "--page-size",
+          "now": "--limit",
+          "why": "one paging convention"
+        },
+        {
+          "today": "--page · --page-pos",
+          "now": "--cursor",
+          "why": "one paging convention"
+        }
+      ],
+      "new_work": "`--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor must carry the Commit the first page read and the call's filters; one given with another pin or other filters, or to another call, is refused `InvalidInput`, and one whose Commit is gone `NotFound`. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
+    },
+    {
+      "call": "file.glob",
+      "badge": "reshaped",
+      "note": "pattern first; <code>path</code> defaults to <code>/</code>; gains <code>--exclude</code> and <code>--cursor</code>; a cursor carries the Commit the first page read and the call's filters: given with another pin or other filters, or to another call, it is refused <code>InvalidInput</code>; when its Commit is gone, <code>NotFound</code>",
+      "today": [
+        "file.glob"
+      ],
+      "help": "paths under a folder that match a glob",
+      "cli": "layerfs file glob <project> <branch> <pattern> [path] [--exclude G] [--at C] [--limit 100] [--cursor C]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        },
+        {
+          "name": "pattern",
+          "kind": "Text",
+          "redact": true
+        },
+        {
+          "name": "path",
+          "kind": "Text",
+          "optional": true,
+          "default": "/",
+          "redact": true
+        }
+      ],
+      "options": [
+        {
+          "name": "exclude",
+          "kind": "Text",
+          "help": "a glob of paths to leave out, such as node_modules",
+          "redact": true
+        },
+        {
+          "name": "at",
+          "kind": "Name",
+          "help": "read as of this Commit: a full id, or a prefix of 8 or more characters"
+        },
+        {
+          "name": "limit",
+          "kind": "Int",
+          "help": "the most rows in one page, 1 to 1000",
+          "default": 100
+        },
+        {
+          "name": "cursor",
+          "kind": "Text",
+          "help": "the `next_cursor` of the page before; it carries the pinned Commit and the filters"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": "cursor",
+      "progress": false,
+      "quiet": false,
+      "profile": "agent",
+      "short": {
+        "always": [
+          "items"
+        ],
+        "sometimes": [
+          "next_cursor"
+        ]
+      },
+      "long": [
+        "items",
+        "next_cursor",
+        "commit",
+        "root",
+        "path",
+        "skipped_hidden"
+      ],
+      "item": {
+        "scalar": "path"
+      },
+      "examples": {
+        "short": [
+          "{\"items\":[\"/src/app.ts\",\"/src/db/pool.ts\"]}",
+          "more pages: {\"items\":[\"/src/app.ts\"],\"next_cursor\":\"L3NyYy9hcHAudHM\"}"
+        ],
+        "long": "{\"items\":[\"/src/app.ts\",\"/src/db/pool.ts\"],\"next_cursor\":null,\"commit\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"path\":\"/\",\"skipped_hidden\":0}"
+      },
+      "dropped": [
+        {
+          "today": "<path>",
+          "now": "[path]",
+          "why": "the pattern comes first; the folder follows it and defaults to /"
+        },
+        {
+          "today": "[commit]",
+          "now": "--at C",
+          "why": "one way to pin a read; an optional Commit is an option"
+        },
+        {
+          "today": "--page-size",
+          "now": "--limit",
+          "why": "one paging convention"
+        },
+        {
+          "today": "--page · --page-pos",
+          "now": "--cursor",
+          "why": "one paging convention"
+        }
+      ],
+      "new_work": "`--exclude` is new: today the call takes one pattern and no exclusion. `--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor must carry the Commit the first page read and the call's filters; one given with another pin or other filters, or to another call, is refused `InvalidInput`, and one whose Commit is gone `NotFound`. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
+    },
+    {
+      "call": "file.grep",
+      "badge": "extended",
+      "note": "the pattern is literal text, as the code searches today (its help said regular expression); pattern first; <code>path</code> defaults to <code>/</code>; files that are not text are skipped and counted in <code>skipped_binary</code>; a cursor carries the Commit the first page read and the call's filters: given with another pin or other filters, or to another call, it is refused <code>InvalidInput</code>; when its Commit is gone, <code>NotFound</code>",
+      "today": [
+        "file.grep"
+      ],
+      "help": "lines under a folder that contain a literal text",
+      "cli": "layerfs file grep <project> <branch> <pattern> [path] [--include G] [--exclude G] [--ignore-case] [--at C] [--limit 100] [--cursor C]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        },
+        {
+          "name": "pattern",
+          "kind": "Text",
+          "redact": true
+        },
+        {
+          "name": "path",
+          "kind": "Text",
+          "optional": true,
+          "default": "/",
+          "redact": true
+        }
+      ],
+      "options": [
+        {
+          "name": "include",
+          "kind": "Text",
+          "help": "search only paths that match this glob, such as *.ts",
+          "redact": true
+        },
+        {
+          "name": "exclude",
+          "kind": "Text",
+          "help": "a glob of paths to leave out, such as node_modules",
+          "redact": true
+        },
+        {
+          "name": "ignore_case",
+          "kind": "Bool",
+          "help": "match letters of either case"
+        },
+        {
+          "name": "at",
+          "kind": "Name",
+          "help": "read as of this Commit: a full id, or a prefix of 8 or more characters"
+        },
+        {
+          "name": "limit",
+          "kind": "Int",
+          "help": "the most matching lines in one page, 1 to 1000",
+          "default": 100
+        },
+        {
+          "name": "cursor",
+          "kind": "Text",
+          "help": "the `next_cursor` of the page before; it carries the pinned Commit and the filters"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": "cursor",
+      "progress": false,
+      "quiet": false,
+      "profile": "agent",
+      "short": {
+        "always": [
+          "items"
+        ],
+        "sometimes": [
+          "next_cursor"
+        ]
+      },
+      "long": [
+        "items",
+        "next_cursor",
+        "commit",
+        "root",
+        "path",
+        "skipped_binary"
+      ],
+      "item": {
+        "short": {
+          "always": [
+            "path",
+            "line",
+            "text"
+          ],
+          "sometimes": [
+            "line_truncated"
+          ]
+        },
+        "long": [
+          "path",
+          "line",
+          "text",
+          "line_truncated"
+        ]
+      },
+      "examples": {
+        "short": [
+          "{\"items\":[{\"path\":\"/src/app.ts\",\"line\":42,\"text\":\"export function login(user) {\"}]}",
+          "more pages: {\"items\":[{\"path\":\"/src/app.ts\",\"line\":42,\"text\":\"export function login(user) {\"}],\"next_cursor\":\"L3NyYy9hcHAudHM6NDI\"}"
+        ],
+        "long": "{\"items\":[{\"path\":\"/src/app.ts\",\"line\":42,\"text\":\"export function login(user) {\",\"line_truncated\":false}],\"next_cursor\":null,\"commit\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"path\":\"/src\",\"skipped_binary\":2}"
+      },
+      "dropped": [
+        {
+          "today": "<path>",
+          "now": "[path]",
+          "why": "the pattern comes first; the folder follows it and defaults to /"
+        },
+        {
+          "today": "[commit]",
+          "now": "--at C",
+          "why": "one way to pin a read; an optional Commit is an option"
+        },
+        {
+          "today": "--page-size",
+          "now": "--limit",
+          "why": "one paging convention"
+        },
+        {
+          "today": "--page · --page-pos",
+          "now": "--cursor",
+          "why": "one paging convention"
+        }
+      ],
+      "new_work": "`--include`, `--exclude` and `--ignore-case` are new: today the search is case-sensitive over every text file under the folder. `--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor must carry the Commit the first page read and the call's filters; one given with another pin or other filters, or to another call, is refused `InvalidInput`, and one whose Commit is gone `NotFound`. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
+    },
+    {
+      "call": "file.history",
+      "badge": "renamed",
+      "note": "was <code>revision</code>; a Commit list, newest first, so it names Commits; <code>--at</code> starts at an older Commit (today's <code>at_commit</code>); <code>--traversal</code> is kept: the files view uses both values; <code>change</code> is added, removed or modified; the long row's <code>type</code>, <code>size</code> and <code>mode</code> are the path's after that Commit; a publication on <code>main</code> has no <code>message</code> or <code>created_at</code>; a cursor carries the Commit the first page read and the call's filters: given with another pin or other filters, or to another call, it is refused <code>InvalidInput</code>; when its Commit is gone, <code>NotFound</code>",
+      "today": [
+        "file.revision"
+      ],
+      "help": "the Commits that changed one path, newest first",
+      "cli": "layerfs file history <project> <branch> <path> [--at C] [--traversal provenance] [--limit 100] [--cursor C]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        },
+        {
+          "name": "path",
+          "kind": "Text",
+          "redact": true
+        }
+      ],
+      "options": [
+        {
+          "name": "at",
+          "kind": "Name",
+          "help": "start at this Commit instead of the Branch's head: a full id, or a prefix of 8 or more characters"
+        },
+        {
+          "name": "traversal",
+          "kind": "Text",
+          "help": "`provenance` follows the path into the Branches it came from; `branch` stays on this Branch's own Commits",
+          "default": "provenance"
+        },
+        {
+          "name": "limit",
+          "kind": "Int",
+          "help": "the most rows in one page, 1 to 1000",
+          "default": 100
+        },
+        {
+          "name": "cursor",
+          "kind": "Text",
+          "help": "the `next_cursor` of the page before; it carries the pinned Commit and the filters"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": "cursor",
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "items"
+        ],
+        "sometimes": [
+          "next_cursor"
+        ]
+      },
+      "long": [
+        "items",
+        "next_cursor",
+        "commit",
+        "root",
+        "path"
+      ],
+      "item": {
+        "short": {
+          "always": [
+            "commit",
+            "change"
+          ],
+          "sometimes": [
+            "message"
+          ]
+        },
+        "long": [
+          "commit",
+          "change",
+          "message",
+          "parent",
+          "created_at",
+          "type",
+          "size",
+          "mode",
+          "content",
+          "metadata",
+          "identity"
+        ]
+      },
+      "examples": {
+        "short": [
+          "{\"items\":[{\"commit\":\"12d1c0ff\",\"change\":\"modified\",\"message\":\"fix login\"}]}",
+          "more pages: {\"items\":[{\"commit\":\"12d1c0ff\",\"change\":\"modified\",\"message\":\"fix login\"}],\"next_cursor\":\"eyJuIjoiMzJhYiJ9\"}"
+        ],
+        "long": "{\"items\":[{\"commit\":\"12d1c0ff\",\"change\":\"modified\",\"message\":\"fix login\",\"parent\":\"32ab9e01\",\"created_at\":\"2026-11-18T09:16:59Z\",\"type\":\"file\",\"size\":5120,\"mode\":\"0644\",\"content\":true,\"metadata\":false,\"identity\":false}],\"next_cursor\":null,\"commit\":\"12d1c0ff\",\"root\":\"9f3c0b7a\",\"path\":\"/src/app.ts\"}"
+      },
+      "dropped": [
+        {
+          "today": "--at-commit",
+          "now": "--at C",
+          "why": "one way to pin a read"
+        },
+        {
+          "today": "--page-size",
+          "now": "--limit",
+          "why": "one paging convention"
+        },
+        {
+          "today": "--page · --continuation",
+          "now": "--cursor",
+          "why": "one paging convention"
+        }
+      ],
+      "new_work": "A reshaping of today's `file.revision`: no new reads. `--cursor` replaces its `continuation` (already a stateless position that carries the pin and the query) and its numbered `page`. The continuation is an authenticated token: one that does not match its pin and query is already refused `InvalidInput` today, as the cursor rule asks. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
+    },
+    {
+      "call": "file.blame",
+      "badge": "reshaped",
+      "note": "runs of lines, each Commit listed once in <code>commits</code> (a list: a plural is never a map); lines' text is not repeated: <code>file read</code> answers it for the same window; <code>partial</code> when the history budget ran out or a line was cut; a range without <code>commit</code> has no owner found",
+      "today": [
+        "file.blame"
+      ],
+      "help": "the Commit that last changed each line of a text file",
+      "cli": "layerfs file blame <project> <branch> <path> [--at C] [--line 1] [--limit 2000]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        },
+        {
+          "name": "path",
+          "kind": "Text",
+          "redact": true
+        }
+      ],
+      "options": [
+        {
+          "name": "at",
+          "kind": "Name",
+          "help": "read as of this Commit: a full id, or a prefix of 8 or more characters"
+        },
+        {
+          "name": "line",
+          "kind": "Int",
+          "help": "the first line, 1-based",
+          "default": 1
+        },
+        {
+          "name": "limit",
+          "kind": "Int",
+          "help": "the most lines, 1 to 2000",
+          "default": 2000
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": "line",
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "ranges",
+          "commits"
+        ],
+        "sometimes": [
+          "next_line",
+          "partial"
+        ]
+      },
+      "long": [
+        "ranges",
+        "commits",
+        "next_line",
+        "partial",
+        "commit",
+        "root",
+        "path"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ranges\":[{\"start\":1,\"end\":41,\"commit\":\"32ab9e01\"},{\"start\":42,\"end\":44,\"commit\":\"12d1c0ff\"}],\"commits\":[{\"commit\":\"32ab9e01\",\"message\":\"import\"},{\"commit\":\"12d1c0ff\",\"message\":\"fix login\"}]}",
+          "more lines: {\"ranges\":[{\"start\":1,\"end\":2000,\"commit\":\"32ab9e01\"}],\"commits\":[{\"commit\":\"32ab9e01\",\"message\":\"import\"}],\"next_line\":2001}"
+        ],
+        "long": "{\"ranges\":[{\"start\":1,\"end\":41,\"commit\":\"32ab9e01\"},{\"start\":42,\"end\":44,\"commit\":\"12d1c0ff\"}],\"commits\":[{\"commit\":\"32ab9e01\",\"message\":\"import\",\"created_at\":\"2026-11-17T09:16:59Z\"},{\"commit\":\"12d1c0ff\",\"message\":\"fix login\",\"created_at\":\"2026-11-18T09:16:59Z\"}],\"next_line\":null,\"partial\":false,\"commit\":\"12d1c0ff\",\"root\":\"9f3c0b7a\",\"path\":\"/src/app.ts\"}"
+      },
+      "dropped": [
+        {
+          "today": "[commit]",
+          "now": "--at C",
+          "why": "one way to pin a read; an optional Commit is an option"
+        },
+        {
+          "today": "--from-line",
+          "now": "--line",
+          "why": "a 1-based line window"
+        },
+        {
+          "today": "--line-count",
+          "now": "--limit",
+          "why": "a count of lines, as every window and page takes"
+        }
+      ],
+      "new_work": "A reshaping: today each line carries its text, owner and message; grouping lines into ranges and listing each Commit once reads nothing more. An id prefix for `--at` is new: today a read takes a full 66-character Commit or Layer id, and a shorter hex text is refused `InvalidInput`. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
+    },
+    {
+      "call": "file.write",
+      "badge": "reshaped",
+      "note": "was ~650 B; the content comes from stdin, or <code>--from &lt;file&gt;</code>; <code>--mode</code> is octal text (<code>0644</code>), the spelling <code>file stat</code> answers; adds <code>unchanged</code> (no Commit was made; <code>commit</code> is the head), <code>merged</code> (the Branch had moved and the change was merged) and <code>overwritten</code> paths when they happen; a write to <code>main</code> is refused with a <code>fix</code> naming <code>branch fork</code>",
+      "today": [
+        "file.write"
+      ],
+      "help": "write a file; one Commit",
+      "cli": "layerfs file write <project> <branch> <path> [--mode M] [--expected C] [-m msg] < content",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        },
+        {
+          "name": "path",
+          "kind": "Text",
+          "redact": true
+        },
+        {
+          "name": "content",
+          "kind": "Content",
+          "redact": true
+        }
+      ],
+      "options": [
+        {
+          "name": "mode",
+          "kind": "Text",
+          "help": "permission bits in octal, such as 0644, spelled as `file stat` answers them; a new file is 0644 and an existing one keeps its mode"
+        },
+        {
+          "name": "expected",
+          "kind": "Name",
+          "help": "refuse `Conflict` unless the Branch's head is this Commit"
+        },
+        {
+          "name": "message",
+          "kind": "Text",
+          "help": "the Commit message; `-m` in the shell",
+          "default": "Apply filesystem changes",
+          "redact": true
+        }
+      ],
+      "stdin": "content",
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "agent",
+      "short": {
+        "always": [
+          "commit"
+        ],
+        "sometimes": [
+          "unchanged",
+          "merged",
+          "overwritten",
+          "overwritten_count"
+        ]
+      },
+      "long": [
+        "commit",
+        "unchanged",
+        "merged",
+        "overwritten",
+        "overwritten_count",
+        "outcome",
+        "branch",
+        "parent",
+        "root",
+        "message",
+        "created_at"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"commit\":\"12d1c0ff\"}",
+          "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
+          "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
+        ],
+        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      },
+      "dropped": [],
+      "new_work": "`--mode` as octal text (`0644`, four digits, `0000` to `7777`) is new: today it is a whole number, 0 to 4095 (420 for 0644). `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
+    },
+    {
+      "call": "file.edit",
+      "badge": "extended",
+      "note": "<code>--old-string</code> and <code>--new-string</code> are both required; without <code>--replace-all</code> the old text must occur exactly once: no occurrence is refused <code>NotFound</code> (today's <code>NoMatch</code>), and more than one is refused <code>InvalidInput</code> with <code>matches</code>, the count, and a <code>fix</code> that adds <code>--replace-all</code> (today's <code>AmbiguousMatch</code>); with <code>--replace-all</code> only no occurrence is refused; adds <code>replaced</code> only when more than 1; adds <code>unchanged</code> (no Commit was made; <code>commit</code> is the head), <code>merged</code> (the Branch had moved and the change was merged) and <code>overwritten</code> paths when they happen",
+      "today": [
+        "file.edit"
+      ],
+      "help": "replace a text in a file; one Commit",
+      "cli": "layerfs file edit <project> <branch> <path> --old-string S --new-string S [--replace-all] [--expected C] [-m msg]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        },
+        {
+          "name": "path",
+          "kind": "Text",
+          "redact": true
+        }
+      ],
+      "options": [
+        {
+          "name": "old_string",
+          "kind": "Text",
+          "help": "the text to replace",
+          "required": true,
+          "redact": true
+        },
+        {
+          "name": "new_string",
+          "kind": "Text",
+          "help": "its replacement",
+          "required": true,
+          "redact": true
+        },
+        {
+          "name": "replace_all",
+          "kind": "Bool",
+          "help": "replace every occurrence instead of exactly one"
+        },
+        {
+          "name": "expected",
+          "kind": "Name",
+          "help": "refuse `Conflict` unless the Branch's head is this Commit"
+        },
+        {
+          "name": "message",
+          "kind": "Text",
+          "help": "the Commit message; `-m` in the shell",
+          "default": "Apply filesystem changes",
+          "redact": true
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "agent",
+      "short": {
+        "always": [
+          "commit"
+        ],
+        "sometimes": [
+          "unchanged",
+          "replaced",
+          "merged",
+          "overwritten",
+          "overwritten_count"
+        ]
+      },
+      "long": [
+        "commit",
+        "unchanged",
+        "replaced",
+        "merged",
+        "overwritten",
+        "overwritten_count",
+        "outcome",
+        "branch",
+        "parent",
+        "root",
+        "message",
+        "created_at"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"commit\":\"12d1c0ff\"}",
+          "--replace-all: {\"commit\":\"12d1c0ff\",\"replaced\":3}",
+          "the new text equals the old: {\"commit\":\"12d1c0ff\",\"unchanged\":true}"
+        ],
+        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"replaced\":1,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      },
+      "dropped": [
+        {
+          "today": "--old",
+          "now": "--old-string S",
+          "why": "the name agents' edit tools use"
+        },
+        {
+          "today": "--new",
+          "now": "--new-string S",
+          "why": "the name agents' edit tools use"
+        }
+      ],
+      "new_work": "`--replace-all` is new: today the old text must occur exactly once (`NoMatch` or `AmbiguousMatch` otherwise). Those two refusals fold into `NotFound` and `InvalidInput`; the count is in the refusal's detail today (`matches`), and the `fix` line is new. `replaced` is new in the answer (the edit already counts the matches). `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
+    },
+    {
+      "call": "file.rm",
+      "badge": "reshaped",
+      "note": "a folder that is not empty needs <code>--recursive</code> (today <code>rm</code> always removes it with everything in it); adds <code>unchanged</code> (no Commit was made; <code>commit</code> is the head), <code>merged</code> (the Branch had moved and the change was merged) and <code>overwritten</code> paths when they happen",
+      "today": [
+        "file.rm"
+      ],
+      "help": "remove a path; one Commit",
+      "cli": "layerfs file rm <project> <branch> <path> [--recursive] [--expected C] [-m msg]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        },
+        {
+          "name": "path",
+          "kind": "Text",
+          "redact": true
+        }
+      ],
+      "options": [
+        {
+          "name": "recursive",
+          "kind": "Bool",
+          "help": "remove a folder with everything in it"
+        },
+        {
+          "name": "expected",
+          "kind": "Name",
+          "help": "refuse `Conflict` unless the Branch's head is this Commit"
+        },
+        {
+          "name": "message",
+          "kind": "Text",
+          "help": "the Commit message; `-m` in the shell",
+          "default": "Apply filesystem changes",
+          "redact": true
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "agent",
+      "short": {
+        "always": [
+          "commit"
+        ],
+        "sometimes": [
+          "unchanged",
+          "merged",
+          "overwritten",
+          "overwritten_count"
+        ]
+      },
+      "long": [
+        "commit",
+        "unchanged",
+        "merged",
+        "overwritten",
+        "overwritten_count",
+        "outcome",
+        "branch",
+        "parent",
+        "root",
+        "message",
+        "created_at"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"commit\":\"12d1c0ff\"}",
+          "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
+          "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
+        ],
+        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      },
+      "dropped": [],
+      "new_work": "`--recursive` is new: today `rm` removes a folder with everything in it. Without the option a folder that is not empty is refused `InvalidInput`, with a `fix` that adds `--recursive`. `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
+    },
+    {
+      "call": "file.mkdir",
+      "badge": "extended",
+      "note": "gains <code>--expected</code>, like every write; <code>--mode</code> is octal text (<code>0755</code>), the spelling <code>file stat</code> answers; a folder that exists answers <code>unchanged</code>; adds <code>unchanged</code> (no Commit was made; <code>commit</code> is the head), <code>merged</code> (the Branch had moved and the change was merged) and <code>overwritten</code> paths when they happen",
+      "today": [
+        "file.mkdir"
+      ],
+      "help": "make a folder and its missing parents; one Commit",
+      "cli": "layerfs file mkdir <project> <branch> <path> [--mode M] [--expected C] [-m msg]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        },
+        {
+          "name": "path",
+          "kind": "Text",
+          "redact": true
+        }
+      ],
+      "options": [
+        {
+          "name": "mode",
+          "kind": "Text",
+          "help": "permission bits of the folder when it is made, in octal, such as 0755; missing parents get 0755"
+        },
+        {
+          "name": "expected",
+          "kind": "Name",
+          "help": "refuse `Conflict` unless the Branch's head is this Commit"
+        },
+        {
+          "name": "message",
+          "kind": "Text",
+          "help": "the Commit message; `-m` in the shell",
+          "default": "Apply filesystem changes",
+          "redact": true
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "commit"
+        ],
+        "sometimes": [
+          "unchanged",
+          "merged",
+          "overwritten",
+          "overwritten_count"
+        ]
+      },
+      "long": [
+        "commit",
+        "unchanged",
+        "merged",
+        "overwritten",
+        "overwritten_count",
+        "outcome",
+        "branch",
+        "parent",
+        "root",
+        "message",
+        "created_at"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"commit\":\"12d1c0ff\"}",
+          "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
+          "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
+        ],
+        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      },
+      "dropped": [],
+      "new_work": "`--mode` as octal text (`0644`, four digits, `0000` to `7777`) is new: today it is a whole number, 0 to 4095 (420 for 0644). `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
+    },
+    {
+      "call": "file.mv",
+      "badge": "reshaped",
+      "note": "adds <code>unchanged</code> (no Commit was made; <code>commit</code> is the head), <code>merged</code> (the Branch had moved and the change was merged) and <code>overwritten</code> paths when they happen",
+      "today": [
+        "file.mv"
+      ],
+      "help": "move a path; one Commit",
+      "cli": "layerfs file mv <project> <branch> <from> <to> [--expected C] [-m msg]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        },
+        {
+          "name": "from",
+          "kind": "Text",
+          "redact": true
+        },
+        {
+          "name": "to",
+          "kind": "Text",
+          "redact": true
+        }
+      ],
+      "options": [
+        {
+          "name": "expected",
+          "kind": "Name",
+          "help": "refuse `Conflict` unless the Branch's head is this Commit"
+        },
+        {
+          "name": "message",
+          "kind": "Text",
+          "help": "the Commit message; `-m` in the shell",
+          "default": "Apply filesystem changes",
+          "redact": true
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "agent",
+      "short": {
+        "always": [
+          "commit"
+        ],
+        "sometimes": [
+          "unchanged",
+          "merged",
+          "overwritten",
+          "overwritten_count"
+        ]
+      },
+      "long": [
+        "commit",
+        "unchanged",
+        "merged",
+        "overwritten",
+        "overwritten_count",
+        "outcome",
+        "branch",
+        "parent",
+        "root",
+        "message",
+        "created_at"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"commit\":\"12d1c0ff\"}",
+          "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
+          "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
+        ],
+        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      },
+      "dropped": [
+        {
+          "today": "<from_path>",
+          "now": "<from>",
+          "why": "shorter; the position says it is a path"
+        },
+        {
+          "today": "<to_path>",
+          "now": "<to>",
+          "why": "shorter; the position says it is a path"
+        }
+      ],
+      "new_work": "`--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
+    },
+    {
+      "call": "file.cp",
+      "badge": "reshaped",
+      "note": "adds <code>unchanged</code> (no Commit was made; <code>commit</code> is the head), <code>merged</code> (the Branch had moved and the change was merged) and <code>overwritten</code> paths when they happen",
+      "today": [
+        "file.cp"
+      ],
+      "help": "copy a path, a folder with everything in it; one Commit",
+      "cli": "layerfs file cp <project> <branch> <from> <to> [--expected C] [-m msg]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        },
+        {
+          "name": "from",
+          "kind": "Text",
+          "redact": true
+        },
+        {
+          "name": "to",
+          "kind": "Text",
+          "redact": true
+        }
+      ],
+      "options": [
+        {
+          "name": "expected",
+          "kind": "Name",
+          "help": "refuse `Conflict` unless the Branch's head is this Commit"
+        },
+        {
+          "name": "message",
+          "kind": "Text",
+          "help": "the Commit message; `-m` in the shell",
+          "default": "Apply filesystem changes",
+          "redact": true
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "commit"
+        ],
+        "sometimes": [
+          "unchanged",
+          "merged",
+          "overwritten",
+          "overwritten_count"
+        ]
+      },
+      "long": [
+        "commit",
+        "unchanged",
+        "merged",
+        "overwritten",
+        "overwritten_count",
+        "outcome",
+        "branch",
+        "parent",
+        "root",
+        "message",
+        "created_at"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"commit\":\"12d1c0ff\"}",
+          "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
+          "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
+        ],
+        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      },
+      "dropped": [
+        {
+          "today": "<from_path>",
+          "now": "<from>",
+          "why": "shorter; the position says it is a path"
+        },
+        {
+          "today": "<to_path>",
+          "now": "<to>",
+          "why": "shorter; the position says it is a path"
+        }
+      ],
+      "new_work": "`--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
+    },
+    {
+      "call": "file.apply",
+      "badge": "reshaped",
+      "note": "the JSON list comes from stdin, or <code>--from &lt;file&gt;</code>; each change has an <code>op</code> (write, edit, rm, mkdir, chmod, mv, cp) and that call's own fields: <code>path</code>, <code>from</code>, <code>to</code>, <code>content</code>, <code>old_string</code>, <code>new_string</code>, <code>replace_all</code>, <code>mode</code> (octal text, as <code>--mode</code>), <code>recursive</code>; no per-path list in the answer: <code>commit diff &lt;project&gt; &lt;commit&gt;</code> lists what changed; adds <code>unchanged</code> (no Commit was made; <code>commit</code> is the head), <code>merged</code> (the Branch had moved and the change was merged) and <code>overwritten</code> paths when they happen",
+      "today": [
+        "file.apply"
+      ],
+      "help": "apply a list of changes; one Commit, all or none",
+      "cli": "layerfs file apply <project> <branch> [--expected C] [-m msg] < changes.json",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        },
+        {
+          "name": "changes",
+          "kind": "Json",
+          "redact": true
+        }
+      ],
+      "options": [
+        {
+          "name": "expected",
+          "kind": "Name",
+          "help": "refuse `Conflict` unless the Branch's head is this Commit"
+        },
+        {
+          "name": "message",
+          "kind": "Text",
+          "help": "the Commit message; `-m` in the shell",
+          "default": "Apply filesystem changes",
+          "redact": true
+        }
+      ],
+      "stdin": "json",
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "commit"
+        ],
+        "sometimes": [
+          "unchanged",
+          "merged",
+          "overwritten",
+          "overwritten_count"
+        ]
+      },
+      "long": [
+        "commit",
+        "unchanged",
+        "merged",
+        "overwritten",
+        "overwritten_count",
+        "outcome",
+        "branch",
+        "parent",
+        "root",
+        "message",
+        "created_at"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"commit\":\"12d1c0ff\"}",
+          "nothing changed: {\"commit\":\"12d1c0ff\",\"unchanged\":true}",
+          "the Branch had moved: {\"commit\":\"12d1c0ff\",\"merged\":true}"
+        ],
+        "long": "{\"commit\":\"12d1c0ff\",\"unchanged\":false,\"merged\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"committed\",\"branch\":\"agent\",\"parent\":\"32ab9e01\",\"root\":\"9f3c0b7a\",\"message\":\"Apply filesystem changes\",\"created_at\":\"2026-11-18T09:16:59Z\"}"
+      },
+      "dropped": [],
+      "new_work": "A change's fields follow the single calls' new names (`from`, `to`, `old_string`, `new_string`, `replace_all`, `recursive`): today they are `from_path`, `to_path`, `old` and `new`, and `from` and `to` are refused. A folder scope checks a change's path fields by name, so its list of names moves with them. A change's `mode` is octal text, as `--mode` is; today it is a whole number. `--expected` is new: today a file write has no head guard; it merges when the Branch moved and is refused `Conflict` only when a path it changed conflicts. An id prefix is new as well. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
+    }
+  ]
+}

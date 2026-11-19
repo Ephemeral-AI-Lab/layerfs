@@ -1,6 +1,6 @@
 //! One command line, start to exit code.
 use crate::parse::{parse, Usage};
-use crate::{help, output, worker};
+use crate::{help, output, view, worker};
 use layerfs_api::Scope;
 use layerfs_bridge::control::SdkValue;
 use std::io::{IsTerminal, Write};
@@ -24,89 +24,61 @@ pub fn main(words: Vec<String>) -> ExitCode {
             _ => wrong("use layerfs --version [--json]".to_owned()),
         },
         Some("worker") if words.len() == 1 => worker::main(),
-        Some("import-env") if words.len() == 1 => import_env(),
-        // `doctor fix <id>` is the table's call; every other `doctor` is
-        // the report, outside the table
-        Some("doctor") if words.get(1).map(String::as_str) == Some("fix") => {
-            if words[2..].iter().any(|w| w == "-h" || w == "--help") {
-                return help::print(&["doctor", "fix"]);
-            }
-            match layerfs_api::find("doctor.fix") {
-                Some(call) => one(call, &words[2..]),
-                None => wrong("no call `doctor fix`".to_owned()),
-            }
-        }
-        Some("doctor") => crate::doctor::main(&words[1..]),
         Some(family) => {
             let Some(name) = words.get(1) else {
                 return help::print(&[family]);
             };
+            if name == "-h" || name == "--help" {
+                return help::print(&[family]);
+            }
             if words[2..].iter().any(|w| w == "-h" || w == "--help") {
                 return help::print(&[family, name]);
             }
             // a call's shell name has `-` for its `_` (`workspace exec-cancel`)
             match layerfs_api::find(&format!("{family}.{}", name.replace('-', "_"))) {
                 Some(call) => one(call, &words[2..]),
-                None if layerfs_api::families().iter().any(|f| f.name == family) => {
-                    let fam = layerfs_api::families()
-                        .iter()
-                        .find(|f| f.name == family)
-                        .unwrap();
-                    let target = name.replace('-', "_");
-                    let mut best_dist = usize::MAX;
-                    let mut best_call = "";
-                    for c in fam.calls() {
-                        let d = lev(&target, c.call);
-                        if d < best_dist {
-                            best_dist = d;
-                            best_call = c.call;
-                        }
+                None => match layerfs_api::families().iter().find(|f| f.name == family) {
+                    Some(fam) => {
+                        let target = name.replace('-', "_");
+                        let calls = fam.calls().iter().map(|c| c.call);
+                        let suggestion = match closest(&target, calls, 3) {
+                            Some(call) => format!(
+                                "; did you mean `layerfs {family} {}`?",
+                                call.replace('_', "-")
+                            ),
+                            None => String::new(),
+                        };
+                        wrong(format!(
+                            "no call `{family} {name}`; `layerfs help {family}` lists them{suggestion}"
+                        ))
                     }
-                    let suggestion = if best_dist <= 3 {
-                        format!(
-                            "; did you mean `layerfs {family} {}`?",
-                            best_call.replace('_', "-")
-                        )
-                    } else {
-                        String::new()
-                    };
-                    wrong(format!(
-                        "no call `{family} {name}`; `layerfs help {family}` lists them{suggestion}"
-                    ))
-                }
-                None => {
-                    let mut best_dist = usize::MAX;
-                    let mut best_fam = "";
-                    for f in layerfs_api::families() {
-                        let d = lev(family, f.name);
-                        if d < best_dist {
-                            best_dist = d;
-                            best_fam = f.name;
-                        }
+                    None => {
+                        let names = layerfs_api::families().iter().map(|f| f.name);
+                        let suggestion = match closest(family, names, 2) {
+                            Some(best) => format!("; did you mean `layerfs {best}`?"),
+                            None => String::new(),
+                        };
+                        wrong(format!(
+                            "no command `{family}`; `layerfs help` lists them{suggestion}"
+                        ))
                     }
-                    let suggestion = if best_dist <= 2 {
-                        format!("; did you mean `layerfs {best_fam}`?")
-                    } else {
-                        String::new()
-                    };
-                    wrong(format!(
-                        "no command `{family}`; `layerfs help` lists them{suggestion}"
-                    ))
-                }
+                },
             }
         }
     }
 }
 
-/// `layerfs import-env`: this environment's 1.1.0 settings as records, once.
-fn import_env() -> ExitCode {
-    let env: Vec<(String, String)> = std::env::vars().collect();
-    let outcome =
-        layerfs_api::home(None).and_then(|home| layerfs_api::home::import_env(&home, &env));
-    match outcome {
-        Ok(value) => output::result(&value, false),
-        Err(refusal) => output::refusal(&refusal),
+/// The name in `names` nearest `target` (the first of the nearest), when
+/// it is at most `max` edits away.
+fn closest<'a>(target: &str, names: impl Iterator<Item = &'a str>, max: usize) -> Option<&'a str> {
+    let mut best: Option<(usize, &str)> = None;
+    for name in names {
+        let distance = lev(target, name);
+        if best.is_none_or(|(d, _)| distance < d) {
+            best = Some((distance, name));
+        }
     }
+    best.filter(|(d, _)| *d <= max).map(|(_, name)| name)
 }
 
 fn lev(a: &str, b: &str) -> usize {
@@ -128,37 +100,37 @@ pub fn wrong(message: String) -> ExitCode {
     ExitCode::from(USAGE)
 }
 
+/// A wrong command line of `call`: the message, the call's usage line and
+/// where its help is.
+fn wrong_call(call: &layerfs_api::Call, message: String) -> ExitCode {
+    let name = format!("{} {}", call.family, call.call.replace('_', "-"));
+    output::diagnostic(&format!(
+        "layerfs: {message}\nusage: {}\n`layerfs help {name}` for more",
+        help::usage(call)
+    ));
+    ExitCode::from(USAGE)
+}
+
 /// One call of the table, made once.
 fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
     let parsed = match parse(call, words, &mut std::io::stdin()) {
         Ok(parsed) => parsed,
-        Err(Usage(message)) => return wrong(message),
+        Err(Usage(message)) => return wrong_call(call, message),
     };
     let switches = parsed.switches;
+    // the readable form on a terminal, JSON for a pipe; --text and --json
+    // choose either anywhere
+    let text = switches.text || (!switches.json && std::io::stdout().is_terminal());
     let scope = match switches.scope.as_ref().map(Scope::parse).transpose() {
         Ok(scope) => scope,
-        Err(refusal) => {
-            return if switches.events {
-                crate::framed::finish(Err(refusal), false)
-            } else {
-                output::refusal(&refusal)
-            }
-        }
+        Err(refusal) => return output::refusal(&refusal, switches.detail, text),
     };
     let (progress, stream) = (switches.progress, switches.stream);
     let is_term =
         std::io::stderr().is_terminal() && std::env::var_os("LAYERFS_PROGRESS_JSON").is_none();
     let mut last_progress_len = 0;
     let mut progress_start: Option<std::time::Instant> = None;
-    let mut framing_failed = false;
     let mut send = |event: SdkValue| {
-        if switches.events {
-            if !framing_failed && (event.get("progress").is_some() || event.get("stream").is_some())
-            {
-                framing_failed = crate::framed::event(&event).is_err();
-            }
-            return;
-        }
         if progress && event.get("progress").is_some() {
             let mut err = std::io::stderr().lock();
             if is_term {
@@ -169,20 +141,7 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
                 let now = std::time::Instant::now();
                 let start = *progress_start.get_or_insert(now);
                 let elapsed = (now - start).as_secs_f64();
-                let mut status = format!("phase: {phase}");
-                if let Some(d) = done {
-                    let d_str = output::format_size(d);
-                    if let Some(t) = total {
-                        let t_str = output::format_size(t);
-                        status.push_str(&format!("  {d_str}/{t_str}"));
-                    } else {
-                        status.push_str(&format!("  {d_str}"));
-                    }
-                    if elapsed > 0.5 && d > 0 {
-                        let rate = (d as f64) / elapsed;
-                        status.push_str(&format!("  ({}/s)", output::format_size(rate as i64)));
-                    }
-                }
+                let status = output::progress_line(phase, done, total, elapsed);
                 let len = status.chars().count();
                 let pad = if last_progress_len > len {
                     " ".repeat(last_progress_len - len)
@@ -192,8 +151,10 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
                 last_progress_len = len;
                 let _ = write!(err, "\r{status}{pad}");
                 let _ = err.flush();
-            } else {
-                let _ = writeln!(err, "{}", layerfs_api::json::print(&event));
+            } else if let Some(progress) = event.get("progress") {
+                // one event, one line: `{"phase","done","total"}` and what
+                // else the call sends beside them
+                let _ = writeln!(err, "{}", layerfs_api::json::print(progress));
             }
         } else if stream {
             let bytes = match event.get("bytes") {
@@ -221,28 +182,34 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
         let _ = write!(err, "\r{}\r", " ".repeat(last_progress_len));
         let _ = err.flush();
     }
-    // the Stores this one call opened close before the process ends, so a
-    // sqlite Store leaves no write-ahead log behind (lane K2: a later
-    // `store push` refused it)
-    layerfs_api::close_idle(std::time::Duration::ZERO);
-    // and its idle Sandbox daemon connections end their sessions, so this
-    // process's exit is not a dropped connection in the daemon's log and
-    // retained failures (layerfs-project#181). Bounded; the result is ready.
-    layerfs_api::end_idle_sessions(layerfs_api::SESSION_END);
-    if switches.events {
-        return crate::framed::finish(outcome, framing_failed);
-    }
+    // the Stores this one call opened close and its idle Sandbox daemon
+    // sessions end before the process does; bounded, the result is ready
+    layerfs_api::close();
+    // `workspace exec` exits with the command's own code in every form
+    // (call surface 2.0); its result JSON is still printed, its readable
+    // form is the command's own output, and `--stream` wrote that itself
+    let exits = call.arg("stream").is_some();
     match outcome {
-        Err(refusal) => output::refusal(&refusal),
-        Ok(value) if stream => {
+        Err(refusal) => output::refusal(&refusal, switches.detail, text),
+        Ok(value) if exits => {
+            let printed = match (stream, text) {
+                (true, _) => ExitCode::SUCCESS,
+                (false, true) => {
+                    view::exec(&value);
+                    ExitCode::SUCCESS
+                }
+                (false, false) => output::result(&value, false, call.form),
+            };
             let _ = std::io::stdout().flush();
-            // the command's own exit code, as 1.1.0 passed it through; a
-            // result with none is a plain success (125 is for refusals)
+            // a result with none is a plain success (125 is for refusals)
             match value.get_int("exit_code") {
-                None => ExitCode::SUCCESS,
+                None => printed,
                 Some(code) => ExitCode::from(u8::try_from(code).unwrap_or(1)),
             }
         }
-        Ok(value) => output::result(&value, switches.text),
+        // a doctor's report reads as its findings and what it could not check
+        Ok(value) if text && call.call == "doctor" => output::doctor(&value),
+        Ok(value) if text => view::show(call, words, &value),
+        Ok(value) => output::result(&value, false, call.form),
     }
 }

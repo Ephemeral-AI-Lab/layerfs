@@ -44,6 +44,10 @@ fn the_first_fault_met_is_the_refusal() {
     );
     assert_eq!(r.code, "NoSuchPath");
     assert!(r.message.starts_with("/absent does not exist at feat@"));
+    // the label's short id is a prefix a Commit lookup accepts
+    let label = r.message.rsplit('@').next().unwrap();
+    assert_eq!(label.len(), 14);
+    fixture.call("branch.get_commit", vec![("commit", t(label))]);
     let r = refused(
         &fixture,
         "fs.list",
@@ -202,7 +206,7 @@ fn a_short_identity_is_not_a_missing_branch() {
     });
     let listed = fixture.call("branch.list_commits", vec![("branch", t("main"))]);
     let id = support::items(&listed)[0]
-        .get_text("id")
+        .get_text("commit")
         .unwrap()
         .to_owned();
     fixture.call(
@@ -248,7 +252,7 @@ fn a_short_identity_is_not_a_missing_branch() {
     let r = refused(
         &fixture,
         "branch.list_commits",
-        vec![("branch", t("ghost")), ("pageSize", SdkValue::Int(0))],
+        vec![("branch", t("ghost")), ("limit", SdkValue::Int(0))],
     );
     assert_eq!(r.code, "NoSuchBranch");
     fixture.cleanup();

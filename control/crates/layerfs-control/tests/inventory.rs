@@ -46,7 +46,8 @@ fn home() -> PathBuf {
     );
     record(
         &paths::machine_record(&home, "dev"),
-        r#"{"platform":"lima"}"#,
+        // a 2.0 record names its VM (one without is an earlier build's)
+        r#"{"platform":"lima","vm_name":"layerfs-00000000-dev"}"#,
     );
     record(
         &paths::machine_record(&home, "fc"),
@@ -156,7 +157,7 @@ fn a_postgresql_store_holds_no_machine() {
     assert_eq!(inventory::stores_on(&home, "dev").unwrap(), ["shop"]);
     let refusal = inventory::can_remove_machine(&home, "dev").unwrap_err();
     assert!(
-        refusal.message.contains("Stores [shop]"),
+        refusal.message.contains("Stores shop;"),
         "{}",
         refusal.message
     );
@@ -170,8 +171,16 @@ fn the_checks_refuse_in_use_with_the_same_texts() {
     assert_eq!(refusal.code, "InUse");
     assert_eq!(
         refusal.message,
-        "machine dev holds Stores [shop], Sandboxes [a, c] and hosts [fc]"
+        "machine dev holds Stores shop; Sandboxes a, c; old Firecracker machines fc"
     );
+    // each kind as a next field; Stores hold it too, so no single fix
+    let listed =
+        |names: &[&str]| SdkValue::List(names.iter().map(|n| SdkValue::text(*n)).collect());
+    let next = refusal.detail.get("next").unwrap();
+    assert_eq!(next.get("stores"), Some(&listed(&["shop"])));
+    assert_eq!(next.get("sandboxes"), Some(&listed(&["a", "c"])));
+    assert_eq!(next.get("machines"), Some(&listed(&["fc"])));
+    assert_eq!(refusal.detail.get("fix"), None);
     // #536 §10b: what holds it, in `detail.related`
     let held = |kind: &str, name: &str| {
         SdkValue::map([
@@ -191,7 +200,13 @@ fn the_checks_refuse_in_use_with_the_same_texts() {
     let refusal = inventory::can_stop_machine(&home, "dev").unwrap_err();
     assert_eq!(
         refusal.message,
-        "machine dev runs Sandboxes [a, c]; close them first"
+        "machine dev runs Sandboxes a, c: remove them first, or stop it with --force"
+    );
+    let next = refusal.detail.get("next").unwrap();
+    assert_eq!(next.get("sandboxes"), Some(&listed(&["a", "c"])));
+    assert_eq!(
+        refusal.detail.get_text("fix"),
+        Some("layerfs sandbox remove a && layerfs sandbox remove c && layerfs machine stop dev")
     );
     let related = refusal.detail.get("related").unwrap();
     assert_eq!(
@@ -209,10 +224,22 @@ fn the_checks_refuse_in_use_with_the_same_texts() {
     let refusal = inventory::can_change_machine(&home, "native").unwrap_err();
     assert_eq!(
         refusal.message,
-        "Sandboxes [b] run on native; close them before changing it"
+        "Sandbox b runs on machine native: remove it before changing it"
+    );
+    let next = refusal.detail.get("next").unwrap();
+    assert_eq!(next.get("sandboxes"), Some(&listed(&["b"])));
+    assert_eq!(
+        refusal.detail.get_text("fix"),
+        Some("layerfs sandbox remove b")
     );
     let refusal = inventory::store_idle(&home, "shop").unwrap_err();
     assert_eq!(refusal.message, "Store shop has running Sandboxes: a, c");
+    let next = refusal.detail.get("next").unwrap();
+    assert_eq!(next.get("sandboxes"), Some(&listed(&["a", "c"])));
+    assert_eq!(
+        refusal.detail.get_text("fix"),
+        Some("layerfs sandbox remove a && layerfs sandbox remove c")
+    );
     let names = |related: &SdkValue| match related {
         SdkValue::List(items) => items
             .iter()
@@ -226,7 +253,8 @@ fn the_checks_refuse_in_use_with_the_same_texts() {
 }
 
 #[test]
-fn push_and_pull_check_the_stores_side() {
+fn a_move_checks_the_stores_side() {
+    use layerfs_store::sqlite::transfer::resolve::can_move;
     let home = home();
     let store = |name: &str, text: &str| StoreRecord::from_record(name, parse(text).unwrap());
     let on_dev = store("shop", r#"{"name":"shop","kind":"sqlite","machine":"dev"}"#);
@@ -238,48 +266,110 @@ fn push_and_pull_check_the_stores_side() {
         "pg",
         r#"{"name":"pg","kind":"postgresql","url":"postgresql://u@h/d"}"#,
     );
-    let code = |result: Result<(), layerfs_bridge::control::SdkRefusal>| result.unwrap_err().code;
-    assert_eq!(
-        layerfs_store::sqlite::transfer::resolve::can_pull(&on_dev).unwrap(),
-        "dev"
-    );
-    assert_eq!(
-        layerfs_store::sqlite::transfer::resolve::can_pull(&here)
-            .unwrap_err()
-            .code,
-        "InvalidInput"
-    );
-    let refusal = layerfs_store::sqlite::transfer::resolve::can_pull(&pg).unwrap_err();
+    let code =
+        |result: Result<String, layerfs_bridge::control::SdkRefusal>| result.unwrap_err().code;
+    // to or from this computer: the machine it goes from
+    assert_eq!(can_move(&home, &on_dev, "native").unwrap(), "dev");
+    assert_eq!(can_move(&home, &here, "dev").unwrap(), "native");
+    assert_eq!(code(can_move(&home, &here, "native")), "InvalidInput");
+    let refusal = can_move(&home, &pg, "native").unwrap_err();
     assert!(
         refusal.message.contains("does not move"),
         "{}",
         refusal.message
     );
-    let refusal =
-        layerfs_store::sqlite::transfer::resolve::can_push(&home, &on_dev, "fc").unwrap_err();
+    // between two other machines: refused, naming the move here first (C13)
+    let refusal = can_move(&home, &on_dev, "fc").unwrap_err();
+    assert_eq!(refusal.code, "InvalidInput");
     assert!(
-        refusal.message.contains("`layerfs store pull shop`"),
+        refusal.message.contains("`layerfs store move shop native`"),
         "{}",
         refusal.message
     );
-    assert!(layerfs_store::sqlite::transfer::resolve::can_push(&home, &here, "dev").is_ok());
     assert_eq!(
-        code(layerfs_store::sqlite::transfer::resolve::can_push(
-            &home, &here, "native"
-        )),
-        "InvalidInput"
+        refusal.detail.get_text("fix"),
+        Some("layerfs store move shop native")
     );
-    assert_eq!(
-        code(layerfs_store::sqlite::transfer::resolve::can_push(
-            &home, &here, "nosuch"
-        )),
-        "NotFound"
+    assert_eq!(code(can_move(&home, &here, "nosuch")), "NotFound");
+    assert_eq!(code(can_move(&home, &pg, "dev")), "InvalidInput");
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// Held by Sandboxes alone, a machine's removal is fixed by removing them
+/// first; a stopped machine gets no such fix, since `sandbox remove` cannot
+/// reach a daemon on it (LF2 review).
+#[test]
+fn a_stopped_machine_offers_no_sandbox_removal() {
+    let home = home();
+    let machine = paths::machine_record(&home, "box");
+    record(
+        &machine,
+        r#"{"platform":"lima","vm_name":"layerfs-00000000-box","state":"running"}"#,
     );
+    record(
+        &paths::sandbox_record(&home, "s1"),
+        r#"{"v":1,"name":"s1","project":"docs/web","machine":"box"}"#,
+    );
+    let refusal = inventory::can_remove_machine(&home, "box").unwrap_err();
+    assert_eq!(refusal.message, "machine box holds Sandboxes s1");
     assert_eq!(
-        code(layerfs_store::sqlite::transfer::resolve::can_push(
-            &home, &pg, "dev"
-        )),
-        "InvalidInput"
+        refusal.detail.get_text("fix"),
+        Some("layerfs sandbox remove s1 && layerfs machine remove box")
+    );
+    record(
+        &machine,
+        r#"{"platform":"lima","vm_name":"layerfs-00000000-box","state":"stopped"}"#,
+    );
+    let refusal = inventory::can_remove_machine(&home, "box").unwrap_err();
+    assert_eq!(refusal.code, "InUse");
+    assert!(
+        refusal
+            .message
+            .starts_with("machine box holds Sandboxes s1; it is stopped"),
+        "{}",
+        refusal.message
+    );
+    assert_eq!(refusal.detail.get("fix"), None);
+    let next = refusal.detail.get("next").unwrap();
+    assert_eq!(
+        next.get("sandboxes"),
+        Some(&SdkValue::List(vec![SdkValue::text("s1")]))
     );
     let _ = std::fs::remove_dir_all(&home);
+}
+
+/// A machine whose record has no 2.0 name (`vm_name`) and still holds
+/// Sandboxes, a Store and an old Firecracker record: its state, as the
+/// records give it, shows the same fix chain as its remove's `InUse`
+/// refusal (RT5 note 3), built by the one builder; with nothing on it the
+/// fix is the bare remove.
+#[test]
+fn a_nameless_machines_state_shows_its_refusals_chain() {
+    let home = home();
+    let machine = paths::machine_record(&home, "dev");
+    record(&machine, r#"{"platform":"lima","state":"running"}"#);
+    let chain = "layerfs sandbox remove a && layerfs sandbox remove c && \
+                 layerfs store remove shop && layerfs machine remove fc && \
+                 layerfs machine remove dev";
+    let refusal = inventory::can_remove_machine(&home, "dev").unwrap_err();
+    assert_eq!(refusal.code, "InUse");
+    assert_eq!(refusal.detail.get_text("fix"), Some(chain));
+    let read = layerfs_machine::record::MachineRecord::read(&home, "dev").unwrap();
+    let state = inventory::machine_state(&home, "dev", read.as_ref()).unwrap();
+    let fields = state.write(SdkValue::Map(Vec::new()));
+    assert_eq!(fields.get_text("reason"), Some("outdated"), "{fields:?}");
+    assert_eq!(fields.get_text("fix"), Some(chain));
+    // the same machine with nothing recorded on it
+    let bare = tempdir();
+    record(
+        &paths::machine_record(&bare, "dev"),
+        r#"{"platform":"lima","state":"running"}"#,
+    );
+    let read = layerfs_machine::record::MachineRecord::read(&bare, "dev").unwrap();
+    let state = inventory::machine_state(&bare, "dev", read.as_ref()).unwrap();
+    let fields = state.write(SdkValue::Map(Vec::new()));
+    assert_eq!(fields.get_text("fix"), Some("layerfs machine remove dev"));
+    inventory::can_remove_machine(&bare, "dev").unwrap();
+    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(&bare);
 }

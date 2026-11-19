@@ -1,34 +1,35 @@
 # backup calls
 
-> **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
-> `layerfs-js-sdk` skill. Only `backup list` on a home with no bucket was run
-> (`{"items":[]}`). Everything else comes from the table, `layerfs help backup`,
-> S §3.9, the decisions log (O23) and the source after the review fixes
-> (`842b4058b9`, `dfe87f9b68`, `943363f5b0`); no bucket was used in this pass. An agent
-> working on a project never needs this family.
+> **Status:** Current general guide for the LayerFS 2.0 call surface. Part of
+> the `layerfs-js-sdk` skill. Only `backup list` on a home with no bucket
+> (`{"items":[]}`) and `backup doctor` of a missing bucket were run (built
+> `layerfs` command, 2026-11-18); everything else comes from the table, the
+> spec rows and the manual. 1.x `key`, `region` and `part_size` are gone,
+> with no alias. An agent working on a project never needs this family.
 
 ```js
-backup.connect(name, url, { key, region, part_size })
-backup.disconnect(name)
-backup.list(bucket?)
-backup.create(store, bucket, file?, { on_progress })
-backup.restore(store, bucket, file?, { on_progress })
+backup.connect(name, url, { access_key, secret_key })
+backup.disconnect(bucket)
+backup.list({ bucket })
+backup.create(store, bucket, { file, on_progress })
+backup.restore(bucket, file, store, { on_progress })
+backup.doctor(bucket, { full })
 ```
 
-A backup is a copy of a sqlite Store in an r2 or MinIO bucket. Nothing runs
-from a backup. A PostgreSQL Store is `InvalidInput`. A Store has one link per
-bucket, so it can be backed up to several buckets.
+A backup is a copy of a sqlite Store in an r2 bucket or an S3 endpoint.
+Nothing runs from a backup. A Store has one link per bucket, so it can be
+backed up to several buckets.
 
 | Call | What it does |
 | --- | --- |
-| `connect(name, url, { key, region, part_size })` | Records a bucket: `url` is endpoint, bucket and prefix. A host `<account>[.<jurisdiction>].r2.cloudflarestorage.com` is R2; any other is MinIO. `key` is a reference: `env:LAYERFS_<NAME>` (reads `…_ACCESS_KEY` and `…_SECRET_KEY`) or `file:/path` (lines `access_key=…`, `secret_key=…`, readable only by its owner) |
-| `disconnect(name)` | Forgets the bucket and this home's links to it; its objects stay |
-| `list(bucket?)` | Every Store file on the connected buckets, checked live, one item per linked Store, each with a `state`: `current`, `store_changed`, `bucket_changed`, `both_changed`, `unknown` (with a `reason`: a Store not on `native`, a PostgreSQL Store, a link or listing without heads or sha256), `unlinked` or `missing` |
-| `create(store, bucket, file?)` | Uploads a snapshot of the Store and links the Store to it. `file` defaults to the Store's name. `Exists` when the object there was exported from another home; `Conflict` when it is not the copy this home last moved |
-| `restore(store, bucket, file?)` | Downloads a file and installs it as the sqlite Store `store` on `native`: a new Store, or replacing an idle one on `native`. `Conflict` when that Store changed since its last backup or restore; `InUse` while it is open or a Sandbox of its projects runs (`detail.related` lists them as `{ kind, name }`, leases and Sandboxes); `Exists` when another restore made the name first |
+| `connect(name, url, { access_key, secret_key })` | Records a bucket after one listing that checks it. Both keys are required (shell: `--access-key K --key-stdin`, the secret read from stdin only); the secret is kept in the home's secret folder and never answered or logged. A bucket that does not answer or refuses the key is `Unavailable`, and nothing changes. Under a taken name at the same URL it replaces the key and keeps every Store's link (long `outcome: "rotated"`); at another URL the name is `Exists` (fix: `layerfs backup disconnect <name>`, or use a new name). `{"ok":true}` |
+| `disconnect(bucket)` | Forgets the bucket and its key; its files stay. Short `{"ok":true}`, with `unlinked` (the Stores whose links went) |
+| `list({ bucket })` | One row per Store file in the connected buckets: `{ bucket, file }` with `size`, `store` (the linked Store), `behind` (the Store changed since its last backup), `changed` (the bucket's file is not the one the link last moved) and `missing`. A bucket that cannot be listed is named in `not_listed` |
+| `create(store, bucket, { file })` | Uploads a snapshot of the Store (`file` defaults to the Store's name) and links the Store to it. Short `{ file, size }`. Progress `check`, `snapshot`, `send` (from a machine), `hash`, `upload` |
+| `restore(bucket, file, store)` | Downloads a file and installs it as the sqlite Store `store` on this computer. Short `{"ok":true}` or `{ projects }`. Progress `check`, `download`, `verify`, `install`. `Conflict` when that Store changed since its last backup or restore |
+| `doctor(bucket, { full })` | Checks the bucket's record and reach; `full` also writes and reads one object. See [doctors](doctor.md) |
 
-`create` and `restore` report `{ phase, done, total, pieces }` updates on
-`on_progress` / `--progress`: bytes in `hash`, `upload` and `download`
-(`send` on a worker), null in `check`, `snapshot`, `verify` and `install`.
-A phase at its total is not success; the call's result is. LayerFS never deletes bucket
-objects. Secrets are read at each call and never written to the home.
+`create` and `restore` record the Store's `op` (`backup` or `restore`), so
+every client reads the Store `busy` meanwhile. A lost reply leaves the Store
+`broken` `unresolved` until `store.get(store, { with: ["live"] })` settles
+it.

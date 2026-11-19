@@ -1,17 +1,18 @@
 //! A Sandbox's runtime: `LAYERFS_SANDBOX=native` on macOS (loopback NFS,
 //! caller identity) or `LAYERFS_SANDBOX=namespaces` on Linux (root FUSE
 //! daemon, nonroot commands; a VM's worker and the docker machine's worker
-//! container, D-8). Linux starts no native Sandbox (#533 O27); a native
-//! record written there before 2.0 is still reopened by its record. The
+//! container, D-8). Linux starts no native Sandbox (#533 O27), and a native
+//! record found there is refused, its fix the records-only `sandbox
+//! remove` (RV3 FAIL 3). The
 //! docker backend is retired (D-8): a deployment naming it is refused. All
 //! use the same authenticated daemon control pipeline and the same concrete
 //! `layerfs_sandbox_backend::Sandbox` handle. A Sandbox also names its
 //! platform (#529), recorded beside the runtime; every later call follows
 //! the record, not the caller's deployment.
 use crate::host::Deploy;
-use crate::output::Spool;
+use crate::output::{Place, Spool};
 use layerfs_bridge::control::SdkRefusal;
-use layerfs_home::outcome::{failed, refused};
+use layerfs_home::outcome::refused;
 #[cfg(target_os = "linux")]
 use layerfs_sandbox_backend::Image;
 #[cfg(target_os = "linux")]
@@ -25,7 +26,7 @@ use std::path::PathBuf;
 /// the retired docker backend has no `runtime`).
 pub const LOCAL: &str = "local";
 /// A native Sandbox record's `runtime` (LAYERFS_SANDBOX=native): a local
-/// daemon serving loopback NFS on macOS, or FUSE on Linux before 2.0.
+/// daemon serving loopback NFS on macOS.
 pub const NATIVE: &str = "native";
 /// Why a native Sandbox does not start on Linux: its host-process pairing is
 /// removed (#533 O27), and a Linux host runs local Sandboxes in namespaces.
@@ -143,7 +144,7 @@ pub fn platform(named: Option<&str>, deploy: &Deploy) -> Result<String, SdkRefus
 /// A running Sandbox's `runtime`, as its record names it.
 pub fn kind(runtime: &Sandbox) -> &'static str {
     match runtime {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        #[cfg(target_os = "macos")]
         Sandbox::HostProcess(_) => NATIVE,
         #[cfg(target_os = "linux")]
         Sandbox::Namespaces(_) => NAMESPACES,
@@ -224,27 +225,47 @@ pub fn scratch(runtime: &Sandbox) -> String {
     runtime.scratch_directory()
 }
 
-/// One command to its end: exit code, stdout, stderr. `spool` sends every
-/// non-empty stream to its file instead of keeping it inline. `slot` names
-/// the command for its stop handle and is told it at spawn.
+/// One command to its end: exit code, stdout, stderr. A stream past the
+/// inline window spills to its file at `place` (`crate::output`); `stdin`
+/// is given to the command whole. `slot` names the command for its stop
+/// handle and is told it at spawn.
 pub fn run(
-    runtime: &Sandbox,
+    (sandbox, runtime): (&str, &Sandbox),
     identity: CommandIdentity,
-    arguments: Vec<String>,
-    environment: Vec<String>,
-    (directory, spool): (&str, bool),
+    (arguments, environment, stdin): (Vec<String>, Vec<String>, Option<Vec<u8>>),
+    (directory, place): (&str, Option<&Place>),
     slot: ExecSlot<'_>,
 ) -> Result<(i32, Spool, Spool), SdkRefusal> {
-    let (mut stdout, mut stderr) = (Spool::new(spool), Spool::new(spool));
+    let (mut stdout, mut stderr) = (Spool::at(place, "stdout"), Spool::at(place, "stderr"));
     let request = layerfs_sandbox_backend::ExecRequest {
         identity,
         arguments,
         environment,
         directory: directory.to_owned(),
-        stdin: false,
+        stdin,
     };
     let exit = runtime
         .run_in(&request, slot, &mut stdout, &mut stderr)
-        .map_err(failed)?;
+        .map_err(|failure| no_helper(sandbox, failure))?;
     Ok((exit.code, stdout, stderr))
+}
+
+/// A command's failure `failure` in Sandbox `sandbox`; one refused because
+/// its namespaces Sandbox has no helper copy (an earlier build made it)
+/// names the records-only `sandbox remove` as its fix (RV3 NOTE 14).
+fn no_helper(sandbox: &str, failure: Box<layerfs_sandbox_backend::WireFailure>) -> SdkRefusal {
+    #[cfg(target_os = "linux")]
+    if matches!(
+        failure.cause,
+        layerfs_sandbox_backend::RuntimeError::Unsupported(why)
+            if why == layerfs_sandbox_backend::namespaces::NO_HELPER_COPY
+    ) {
+        let refusal = refused(
+            "Unsupported",
+            format!("Sandbox {sandbox}: {}", failure.cause),
+        );
+        return layerfs_home::outcome::with_fix(refusal, crate::state::remove_fix(sandbox));
+    }
+    let _ = sandbox;
+    crate::daemon::values::wire(failure)
 }

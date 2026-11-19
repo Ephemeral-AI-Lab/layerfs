@@ -82,10 +82,10 @@ fn the_four_gc_calls_take_ids_only() {
         ),
         ("project.delete", &[("project", Kind::Project)]),
         (
-            "project.remove_file",
+            "project.hide_path",
             &[("project", Kind::Project), ("path", Kind::Text)],
         ),
-        ("store.compact", &[("name", Kind::Name)]),
+        ("store.compact", &[("store", Kind::Name)]),
     ];
     for &(name, args) in expected {
         let spec = layerfs_api::find(name).unwrap_or_else(|| panic!("{name} is missing"));
@@ -114,10 +114,10 @@ fn wrong_kinds_and_unknown_options_are_refused_before_any_effect() {
         ),
         ("project.delete", &[("project", SdkValue::Int(1))]),
         (
-            "project.remove_file",
+            "project.hide_path",
             &[("project", t("shop/api")), ("path", SdkValue::Int(1))],
         ),
-        ("store.compact", &[("name", SdkValue::Int(1))]),
+        ("store.compact", &[("store", SdkValue::Int(1))]),
     ];
     for &(name, fields) in wrong {
         let (code, message) = refused(&home, name, fields);
@@ -138,7 +138,7 @@ fn wrong_kinds_and_unknown_options_are_refused_before_any_effect() {
             &[("project", t("shop/api")), ("force", SdkValue::Bool(true))],
         ),
         (
-            "project.remove_file",
+            "project.hide_path",
             &[
                 ("project", t("shop/api")),
                 ("path", t("/base.txt")),
@@ -147,7 +147,7 @@ fn wrong_kinds_and_unknown_options_are_refused_before_any_effect() {
         ),
         (
             "store.compact",
-            &[("name", t("shop")), ("force", SdkValue::Bool(true))],
+            &[("store", t("shop")), ("force", SdkValue::Bool(true))],
         ),
     ];
     for &(name, fields) in unknown {
@@ -165,36 +165,48 @@ fn wrong_kinds_and_unknown_options_are_refused_before_any_effect() {
 fn branch_remove_refuses_reserved_and_absent_branches() {
     let (home, folder) = project();
     let (code, message) = refused(&home, "branch.remove", &[p(), ("branch", t("main"))]);
-    assert_eq!(code, "ReservedName", "{message}");
+    assert_eq!(code, "InvalidInput", "{message}");
     // nothing ran: main is still there
     ok(&home, "branch.get", &[p(), ("branch", t("main"))]);
     let (code, message) = refused(&home, "branch.remove", &[p(), ("branch", t("ghost"))]);
-    assert_eq!(code, "NoSuchBranch", "{message}");
-    // a live Branch is hidden by the marker and reported as `Removed`
-    ok(
-        &home,
-        "branch.fork",
-        &[p(), ("name", t("work")), ("from_branch", t("main"))],
-    );
+    assert_eq!(code, "NotFound", "{message}");
+    // a live Branch is hidden by the marker and reported as `removed`
+    for name in ["work", "work2"] {
+        ok(
+            &home,
+            "branch.fork",
+            &[p(), ("name", t(name)), ("from", t("main"))],
+        );
+    }
     let removed = ok(&home, "branch.remove", &[p(), ("branch", t("work"))]);
-    assert_eq!(removed.get_text("kind"), Some("Removed"));
-    // the project is the caller's <store>/<project>, not the Store's inner name
-    assert_eq!(removed.get_text("project"), Some("shop/api"));
-    assert_eq!(removed.get_text("branch"), Some("work"));
-    assert!(removed.get_int("removed_ms").is_some_and(|ms| ms >= 0));
+    assert_eq!(removed, SdkValue::map([("ok", SdkValue::Bool(true))]));
+    let removed = ok(
+        &home,
+        "branch.remove",
+        &[
+            p(),
+            ("branch", t("work2")),
+            ("detail", SdkValue::Bool(true)),
+        ],
+    );
+    assert_eq!(removed.get_text("outcome"), Some("removed"));
+    assert_eq!(removed.get_text("branch"), Some("work2"));
+    assert!(removed
+        .get_text("removed_at")
+        .is_some_and(|at| at.ends_with('Z')));
     let (code, message) = refused(&home, "branch.get", &[p(), ("branch", t("work"))]);
-    assert_eq!(code, "NoSuchBranch", "{message}");
+    assert_eq!(code, "NotFound", "{message}");
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }
 
 #[test]
-fn project_remove_file_checks_its_path_grammar_then_reports_markers() {
+fn project_hide_path_checks_its_path_grammar_then_reports_markers() {
     let (home, folder) = project();
     for bad in [
         "", "/", "//a", "a//b", "a/", "./a", "a/./b", ".", "..", "\\",
     ] {
-        let (code, message) = refused(&home, "project.remove_file", &[p(), ("path", t(bad))]);
+        let (code, message) = refused(&home, "project.hide_path", &[p(), ("path", t(bad))]);
         assert_eq!(code, "InvalidInput", "{bad:?}: {message}");
     }
     // no effect: the file the bad calls named is still readable
@@ -205,23 +217,28 @@ fn project_remove_file_checks_its_path_grammar_then_reports_markers() {
     );
     assert_eq!(read.get_text("text"), Some("hello\n"));
 
+    let detail = ("detail", SdkValue::Bool(true));
     let removed = ok(
         &home,
-        "project.remove_file",
-        &[p(), ("path", t("/base.txt"))],
+        "project.hide_path",
+        &[p(), ("path", t("/base.txt")), detail.clone()],
     );
-    assert_eq!(removed.get_text("kind"), Some("Removed"));
-    // the same full project name the caller passed
-    assert_eq!(removed.get_text("project"), Some("shop/api"));
+    assert_eq!(removed.get_text("outcome"), Some("hidden"));
+    assert_eq!(removed.get("unchanged"), Some(&SdkValue::Bool(false)));
+    assert_eq!(removed.get_text("path"), Some("/base.txt"));
     assert!(removed.get_int("frontier_serial").is_some());
-    assert!(removed.get_int("removed_ms").is_some_and(|ms| ms >= 0));
-    // a repeat at the same frontier is UpToDate
+    assert!(removed
+        .get_text("hidden_at")
+        .is_some_and(|at| at.ends_with('Z')));
+    // a repeat at the same frontier is unchanged; its short form says so
+    let short = ok(&home, "project.hide_path", &[p(), ("path", t("/base.txt"))]);
+    assert_eq!(short, SdkValue::map([("unchanged", SdkValue::Bool(true))]));
     let repeat = ok(
         &home,
-        "project.remove_file",
-        &[p(), ("path", t("/base.txt"))],
+        "project.hide_path",
+        &[p(), ("path", t("/base.txt")), detail],
     );
-    assert_eq!(repeat.get_text("kind"), Some("UpToDate"));
+    assert_eq!(repeat.get_text("outcome"), Some("unchanged"));
     assert_eq!(
         repeat.get_int("frontier_serial"),
         removed.get_int("frontier_serial")
@@ -232,7 +249,7 @@ fn project_remove_file_checks_its_path_grammar_then_reports_markers() {
         "file.read",
         &[p(), ("branch", t("main")), ("path", t("/base.txt"))],
     );
-    assert_eq!(code, "Removed", "{message}");
+    assert_eq!(code, "NotFound", "{message}");
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }
@@ -241,14 +258,20 @@ fn project_remove_file_checks_its_path_grammar_then_reports_markers() {
 fn project_delete_reports_removal_and_retires_the_entry() {
     let (home, folder) = project();
     let (code, message) = refused(&home, "project.delete", &[("project", t("shop/ghost"))]);
-    assert_eq!(code, "NoSuchProject", "{message}");
-    let removed = ok(&home, "project.delete", &[p()]);
-    assert_eq!(removed.get_text("kind"), Some("Removed"));
-    assert_eq!(removed.get_text("project"), Some("shop/api"));
-    assert!(removed.get_int("deleted_ms").is_some_and(|ms| ms >= 0));
-    assert!(removed.get_bool("home_entry_removed"));
+    assert_eq!(code, "NotFound", "{message}");
+    let removed = ok(
+        &home,
+        "project.delete",
+        &[p(), ("detail", SdkValue::Bool(true))],
+    );
+    assert_eq!(removed.get_text("outcome"), Some("deleted"));
+    assert_eq!(removed.get("ok"), Some(&SdkValue::Bool(true)));
+    assert!(removed
+        .get_text("deleted_at")
+        .is_some_and(|at| at.ends_with('Z')));
+    assert_eq!(removed.get("home_entry_kept"), Some(&SdkValue::Bool(false)));
     let (code, _) = refused(&home, "project.get", &[p()]);
-    assert_eq!(code, "NoSuchProject");
+    assert_eq!(code, "NotFound");
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }
@@ -270,7 +293,7 @@ fn project_init_after_delete_is_nametaken_deleted() {
         &mut |_| {},
     )
     .unwrap_err();
-    assert_eq!(refusal.code, "NameTaken", "{}", refusal.message);
+    assert_eq!(refusal.code, "Exists", "{}", refusal.message);
     let holder = refusal.detail.get("holder").expect("holder detail");
     assert_eq!(holder.get_text("kind"), Some("project"), "{refusal:?}");
     assert_eq!(holder.get_text("name"), Some("api"));
@@ -290,7 +313,7 @@ fn store_compact_sends_each_phase_as_a_progress_event() {
         let report = layerfs_api::call(
             Some(&home),
             "store.compact",
-            map(&[("name", t("shop"))]),
+            map(&[("store", t("shop")), ("detail", SdkValue::Bool(true))]),
             &mut |event| {
                 let progress = event.get("progress").expect("a progress event").clone();
                 assert_eq!(progress.get("done"), Some(&SdkValue::Null), "{progress:?}");
@@ -299,18 +322,21 @@ fn store_compact_sends_each_phase_as_a_progress_event() {
             },
         )
         .unwrap_or_else(|refusal| panic!("store.compact: {refusal:?}"));
-        (report.get_text("path").expect("path").to_owned(), phases)
+        (
+            report.get_text("outcome").expect("outcome").to_owned(),
+            phases,
+        )
     };
     // nothing is dead yet: the run stops after its mark
-    let (path, phases) = compact();
+    let (outcome, phases) = compact();
     assert_eq!(
-        (path.as_str(), phases.as_slice()),
-        ("none", ["mark".to_owned()].as_slice())
+        (outcome.as_str(), phases.as_slice()),
+        ("unchanged", ["mark".to_owned()].as_slice())
     );
     // a deleted project makes the next run a rebuild, through all four phases
     ok(&home, "project.delete", &[p()]);
-    let (path, phases) = compact();
-    assert_eq!(path, "rebuild");
+    let (outcome, phases) = compact();
+    assert_eq!(outcome, "compacted");
     assert_eq!(phases, ["mark", "build", "verify", "install"]);
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
@@ -320,48 +346,64 @@ fn store_compact_sends_each_phase_as_a_progress_event() {
 fn store_compact_refuses_an_unknown_store_and_reports_a_run() {
     let home = tempdir("compact-none");
     layerfs_api::home::open(&home).unwrap();
-    let (code, message) = refused(&home, "store.compact", &[("name", t("ghost"))]);
-    assert_eq!(code, "NoSuchStore", "{message}");
+    let (code, message) = refused(&home, "store.compact", &[("store", t("ghost"))]);
+    assert_eq!(code, "NotFound", "{message}");
     std::fs::remove_dir_all(home).unwrap();
 
     let (home, folder) = project();
-    let report = ok(&home, "store.compact", &[("name", t("shop"))]);
-    assert_eq!(report.get_text("kind"), Some("Compacted"));
-    let path = report.get_text("path").expect("path");
-    assert!(matches!(path, "none" | "rebuild"), "{path}");
-    let generation = report.get("generation").expect("generation");
-    let before = generation.get_int("before").unwrap();
-    let after = generation.get_int("after").unwrap();
-    if path == "none" {
+    // the short form: the bytes freed alone
+    let short = ok(&home, "store.compact", &[("store", t("shop"))]);
+    assert_eq!(
+        layerfs_api::json::print(&short),
+        r#"{"freed_bytes":0}"#,
+        "nothing is dead yet"
+    );
+    let report = ok(
+        &home,
+        "store.compact",
+        &[("store", t("shop")), ("detail", SdkValue::Bool(true))],
+    );
+    assert_eq!(report.get_text("store"), Some("shop"));
+    let outcome = report.get_text("outcome").expect("outcome");
+    assert!(matches!(outcome, "unchanged" | "compacted"), "{outcome}");
+    let before = report.get_int("generation_before").unwrap();
+    let after = report.get_int("generation_after").unwrap();
+    if outcome == "unchanged" {
         assert_eq!(before, after);
     } else {
         assert_eq!(after, before + 1);
     }
     for field in [
-        "dead_bytes_bound",
-        "dead_bytes_refined",
-        "logical_discarded",
-        "backend_reusable",
-        "physical_shrink",
+        "freed_bytes",
+        "dead_bytes",
+        "discarded_bytes",
+        "reusable_bytes",
         "peak_temp_bytes",
         "estimate",
         "zero_reasons",
         "kept_waste",
-        "residue",
+        "delta_base_references",
+        "delta_base_references_count",
+        "residue_bytes",
+        "residue_artifacts",
     ] {
         assert!(report.get(field).is_some(), "missing {field}");
     }
+    assert_eq!(report.get("residue_reason"), Some(&SdkValue::Null));
     let kept = report.get("kept_waste").expect("kept_waste");
     for field in [
         "dead_in_retained_packs_bytes",
-        "delta_bases",
+        "delta_bases_bytes",
         "inode_blocks_bytes",
     ] {
         assert!(kept.get(field).is_some(), "missing kept_waste.{field}");
     }
-    let residue = report.get("residue").expect("residue");
-    assert!(residue.get("bytes").is_some());
-    assert!(residue.get("artifacts").is_some());
+    // the run settled: the Store's record keeps no operation
+    let record =
+        layerfs_api::home::read_record(&layerfs_api::home::paths::store_record(&home, "shop"))
+            .unwrap()
+            .unwrap();
+    assert_eq!(record.get("op"), None, "{record:?}");
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }
@@ -377,7 +419,7 @@ fn a_bare_project_name_is_refused_by_every_project_call() {
         ),
         ("project.delete", &[("project", t("api"))]),
         (
-            "project.remove_file",
+            "project.hide_path",
             &[("project", t("api")), ("path", t("/base.txt"))],
         ),
     ];
@@ -387,7 +429,7 @@ fn a_bare_project_name_is_refused_by_every_project_call() {
         assert!(message.contains("with its Store"), "{name}: {message}");
     }
     // store.compact takes a Store name; a project path is not one
-    let (code, message) = refused(&home, "store.compact", &[("name", t("shop/api"))]);
+    let (code, message) = refused(&home, "store.compact", &[("store", t("shop/api"))]);
     assert_eq!(code, "InvalidInput", "{message}");
     assert!(message.contains("store name"), "{message}");
     std::fs::remove_dir_all(home).unwrap();

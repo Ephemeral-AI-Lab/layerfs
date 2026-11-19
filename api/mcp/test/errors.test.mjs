@@ -2,18 +2,25 @@
 // uncertainty or volume could mislead a client.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { LayerFSError } from "layerfs";
+import { LayerFSError } from "@layerfs/node";
 import { UNCERTAIN, errorResult } from "../src/errors.js";
 import { isUncertain } from "../src/values.js";
 import { progressReporter } from "../src/progress.js";
 
 const body = (result) => JSON.parse(result.content[0].text);
 
-test("a refusal is an isError result with { code, message, detail }", () => {
-  const result = errorResult(new LayerFSError("NoSuchBranch", "no Branch nope", { path: "/x" }));
-  assert.equal(result.isError, true);
-  assert.equal(result.content.length, 1);
-  assert.deepEqual(body(result), { code: "NoSuchBranch", message: "no Branch nope", detail: { path: "/x" } });
+test("a refusal is an isError result with { error, message }, its fix, its fields and its detail", () => {
+  // the short form: the library answered no detail and no fix
+  const short = errorResult(LayerFSError.from({ error: "NotFound", message: "no Branch nope" }));
+  assert.equal(short.isError, true);
+  assert.equal(short.content.length, 1);
+  assert.deepEqual(body(short), { error: "NotFound", message: "no Branch nope" });
+  // a fix, and the fields the next call needs, flat beside it
+  const conflict = errorResult(LayerFSError.from({ error: "Conflict", message: "the head moved", fix: "layerfs branch get shop/api main", commit: "12d1" }));
+  assert.deepEqual(body(conflict), { error: "Conflict", message: "the head moved", fix: "layerfs branch get shop/api main", commit: "12d1" });
+  // the long form's detail, when the call asked for it
+  const long = errorResult(LayerFSError.from({ error: "NotFound", message: "no Branch nope", fix: null, detail: { code: "NoSuchBranch", path: "/x" } }));
+  assert.deepEqual(body(long), { error: "NotFound", message: "no Branch nope", detail: { code: "NoSuchBranch", path: "/x" } });
 });
 
 test("an uncertain outcome says so; a known Failed does not", () => {
@@ -27,9 +34,18 @@ test("an uncertain outcome says so; a known Failed does not", () => {
   assert.equal(unresolved.content.length, 2);
   assert.equal(isUncertain({ code: "Unresolved" }), true);
 
-  const attempted = errorResult(new LayerFSError("Failed", "SDK operation: Exchange { attempted: true }", null));
+  // a request sent with no answer that settled it: `attempted` flat (the
+  // short form) and in the long form's detail
+  const sent = "the connection to the Sandbox's daemon failed while the request was sent: reset; the request was sent; its outcome is not known";
+  const attempted = errorResult(LayerFSError.from({ error: "Failed", message: sent, attempted: true }));
   assert.equal(attempted.content.length, 2);
+  assert.equal(body(attempted).attempted, true);
+  const long = errorResult(LayerFSError.from({ error: "Failed", message: sent, fix: null, attempted: true, detail: { attempted: true } }));
+  assert.equal(long.content.length, 2);
   assert.equal(isUncertain({ code: "Failed", message: "", detail: { attempted: true } }), true);
+  assert.equal(isUncertain({ code: "Unavailable", message: "", attempted: true }), true);
+  // the words alone, or the retired Debug form, are not read
+  assert.equal(isUncertain({ code: "Failed", message: "SDK operation: Exchange { attempted: true }" }), false);
 
   const known = errorResult(new LayerFSError("Failed", "nothing was attempted", { attempted: false }));
   assert.equal(known.content.length, 1);

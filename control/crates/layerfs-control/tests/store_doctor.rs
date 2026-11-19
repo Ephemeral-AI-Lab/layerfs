@@ -1,24 +1,23 @@
-//! Store target record validation and actual observational worker transport.
+//! The Store doctor (call surface 2.0, `checks.store`): its records checks,
+//! the shallow cut on this computer (reached, id and schema, heads against
+//! each bucket link) in the frozen order, and the same cut through a real
+//! worker's `store.diagnose`, which refuses a request without `cut`.
 use layerfs_bridge::control::SdkValue;
+use layerfs_control::doctor::{self, Kind, Options, Thing};
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_home::{
-    home::{paths, write_entity, write_record},
-    outcome::refused,
-};
+use layerfs_home::events::Events;
+use layerfs_home::home::{self, paths, with_field, write_entity};
+use layerfs_home::op::Op;
 use layerfs_machine::worker::{diagnostic_connect, Endpoint};
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::StoragePolicy;
-use std::{
-    path::PathBuf,
-    process::{Child, Command, Stdio},
-    time::{Duration, Instant},
-};
-mod target {
-    pub use layerfs_control::doctor::target::{Budget, Checks};
-}
-#[path = "../src/doctor/store_target.rs"]
-mod store_target;
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
+
 static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+const BINDING: &[u8] = b"doctor-store";
+
 struct Fixture {
     root: PathBuf,
 }
@@ -27,55 +26,192 @@ impl Fixture {
         let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let root =
             std::env::temp_dir().join(format!("layerfs-store-doctor-{}-{n}", std::process::id()));
-        std::fs::create_dir_all(&root).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+        home::private_dir(&root).unwrap();
+        home::ensure(&root).unwrap();
         Self { root }
     }
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
-        std::fs::remove_dir_all(&self.root).unwrap();
+        let _ = std::fs::remove_dir_all(&self.root);
     }
 }
+
 fn fields(name: &str) -> SdkValue {
     SdkValue::map([
         ("name", SdkValue::text(name)),
         ("kind", SdkValue::text("sqlite")),
         ("machine", SdkValue::text("native")),
-        ("binding", SdkValue::Bytes(b"doctor-worker".to_vec())),
+        ("binding", SdkValue::Bytes(BINDING.to_vec())),
         ("cursor", SdkValue::Bytes(vec![9; 32])),
     ])
 }
-#[test]
-fn malformed_saved_identity_is_rejected_before_database_access() {
-    let f = Fixture::new();
-    let path = paths::store_record(&f.root, "one");
-    for value in [
-        fields("two"),
-        layerfs_home::home::with_field(fields("one"), "v", SdkValue::Int(999)),
-    ] {
-        write_record(&path, &value).unwrap();
-        let mut checks = target::Checks::new("store", "one");
-        store_target::diagnose_integrity(
-            &f.root,
-            "one",
-            false,
-            &target::Budget::new(None),
-            &mut checks,
-        );
-        let report = checks.to_sdk();
-        assert!(format!("{report:?}").contains("saved Store record name or version is invalid"));
-        assert!(!paths::store_file(&f.root, "one").exists());
-    }
-    // Correctly versioned records proceed to the unavailable database finding.
-    write_entity(&path, &fields("one")).unwrap();
-    let mut checks = target::Checks::new("store", "one");
-    store_target::diagnose_connection(&f.root, "one", &target::Budget::new(None), &mut checks);
-    assert!(format!("{:?}", checks.to_sdk())
-        .contains("connection diagnostics require a PostgreSQL Store"));
-    // Exercise the included handler's cancellation path without changing visibility.
-    let args = SdkValue::map([("store", SdkValue::text("../escape"))]);
-    assert!(store_target::in_worker(&f.root, args, &mut |_| Ok(())).is_err());
+
+/// A real sqlite Store file of the fixture's identity at `path`.
+fn store_file(path: &Path) -> SqliteHandles {
+    home::private_dir(path.parent().unwrap()).unwrap();
+    SqliteHandles::create(
+        PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        StoragePolicy::frozen_default(),
+        &HistoryCatalogConfig {
+            binding_key: BINDING.to_vec(),
+            cursor_key: [9; 32],
+            incarnation: 1,
+        },
+    )
+    .unwrap()
 }
+
+fn report(root: &Path, name: &str) -> SdkValue {
+    let mut sink = |_| {};
+    let mut events = Events::new(&mut sink);
+    let thing = Thing::new(Kind::Store, name);
+    doctor::run(root, thing, &Options::default(), &mut events)
+        .unwrap()
+        .to_sdk()
+}
+
+fn list<'a>(value: &'a SdkValue, key: &str) -> &'a [SdkValue] {
+    match value.get(key) {
+        Some(SdkValue::List(items)) => items,
+        _ => &[],
+    }
+}
+
+/// `(check, outcome)` of each row of the report's Store node.
+fn rows(report: &SdkValue) -> Vec<(String, String)> {
+    list(report.get("tree").unwrap(), "checks")
+        .iter()
+        .map(|row| {
+            let text = |key: &str| row.get_text(key).unwrap_or("").to_owned();
+            (text("check"), text("outcome"))
+        })
+        .collect()
+}
+
+fn pairs(rows: &[(&str, &str)]) -> Vec<(String, String)> {
+    rows.iter()
+        .map(|(a, b)| ((*a).to_owned(), (*b).to_owned()))
+        .collect()
+}
+
+#[test]
+fn a_native_store_is_reached_checked_to_its_schema_and_its_backups_compared() {
+    let f = Fixture::new();
+    let path = paths::store_file(&f.root, "one");
+    let writer = store_file(&path);
+    // one link whose heads are not the Store's now, one with none recorded
+    let link = |heads: SdkValue| SdkValue::map([("file", SdkValue::text("one")), ("heads", heads)]);
+    let record = with_field(
+        fields("one"),
+        "backups",
+        SdkValue::map([
+            ("r2-main", link(SdkValue::text("00".repeat(32)))),
+            ("old", link(SdkValue::Null)),
+        ]),
+    );
+    write_entity(&paths::store_record(&f.root, "one"), &record).unwrap();
+    let before = std::fs::read(paths::store_record(&f.root, "one")).unwrap();
+    let out = report(&f.root, "one");
+    assert_eq!(
+        rows(&out),
+        pairs(&[
+            ("store.record", "pass"),
+            ("store.operation", "pass"),
+            ("store.connection", "pass"),
+            ("store.identity", "pass"),
+            ("store.schema", "pass"),
+            ("store.backups", "notice"),
+        ]),
+        "{out:?}"
+    );
+    let findings = list(&out, "findings");
+    assert_eq!(findings.len(), 1, "{out:?}");
+    assert_eq!(findings[0].get_text("check"), Some("store.backups"));
+    assert_eq!(
+        findings[0].get_text("message"),
+        Some("its backup in r2-main is behind")
+    );
+    assert_eq!(
+        findings[0].get_text("fix"),
+        Some("layerfs backup create one r2-main")
+    );
+    // a doctor writes nothing
+    assert_eq!(
+        before,
+        std::fs::read(paths::store_record(&f.root, "one")).unwrap()
+    );
+    drop(writer);
+}
+
+/// A file of another Store (its record names another id) fails
+/// `store.identity`, and its schema is then not checked (R4 F4).
+#[test]
+fn a_file_of_another_store_fails_its_identity() {
+    let f = Fixture::new();
+    let path = paths::store_file(&f.root, "two");
+    let writer = store_file(&path);
+    let record = with_field(
+        fields("two"),
+        "binding",
+        SdkValue::Bytes(b"another-store".to_vec()),
+    );
+    write_entity(&paths::store_record(&f.root, "two"), &record).unwrap();
+    let out = report(&f.root, "two");
+    let rows = rows(&out);
+    assert!(
+        rows.contains(&("store.identity".to_owned(), "error".to_owned())),
+        "{out:?}"
+    );
+    assert!(
+        !rows.iter().any(|(check, _)| check == "store.schema"),
+        "{out:?}"
+    );
+    drop(writer);
+}
+
+#[test]
+fn records_checks_come_first_and_a_missing_file_stops_at_the_connection() {
+    let f = Fixture::new();
+    let record_path = paths::store_record(&f.root, "one");
+    // a record naming another Store fails its record check and stops
+    write_entity(&record_path, &fields("two")).unwrap();
+    assert_eq!(
+        rows(&report(&f.root, "one")),
+        pairs(&[("store.record", "error")])
+    );
+    // a valid record with no file: an unresolved operation, then no file
+    let op = Op::begin("store.remove", "delete", SdkValue::Null)
+        .unwrap()
+        .as_uncertain();
+    let gone = SdkValue::map([
+        ("pid", SdkValue::Int(0x7fff_fff0)),
+        ("start", SdkValue::Int(1)),
+    ]);
+    let op = with_field(op.to_record().clone(), "owner", gone);
+    write_entity(&record_path, &with_field(fields("one"), "op", op)).unwrap();
+    let out = report(&f.root, "one");
+    assert_eq!(
+        rows(&out),
+        pairs(&[
+            ("store.record", "pass"),
+            ("store.operation", "error"),
+            ("store.connection", "error"),
+        ]),
+        "{out:?}"
+    );
+    let findings = list(&out, "findings");
+    assert_eq!(
+        findings[0].get_text("fix"),
+        Some("layerfs store remove one")
+    );
+    assert_eq!(
+        findings[1].get_text("message"),
+        Some("machine native has no file where its record says")
+    );
+}
+
 struct Server(Child);
 impl Drop for Server {
     fn drop(&mut self) {
@@ -83,6 +219,7 @@ impl Drop for Server {
         let _ = self.0.wait();
     }
 }
+
 #[test]
 #[ignore]
 fn worker_child() {
@@ -101,22 +238,11 @@ fn worker_child() {
         .unwrap();
     }
 }
+
 #[test]
-fn actual_worker_audit_streams_and_cancelled_peer_does_not_poison_next_call() {
+fn a_worker_makes_the_shallow_cut_and_refuses_a_request_without_one() {
     let f = Fixture::new();
-    let path = paths::store_file(&f.root, "one");
-    layerfs_home::home::private_dir(path.parent().unwrap()).unwrap();
-    let authority = HistoryCatalogConfig {
-        binding_key: b"doctor-worker".to_vec(),
-        cursor_key: [9; 32],
-        incarnation: 1,
-    };
-    let writer = SqliteHandles::create(
-        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
-        StoragePolicy::frozen_default(),
-        &authority,
-    )
-    .unwrap();
+    let writer = store_file(&paths::store_file(&f.root, "one"));
     let mut child = Command::new(std::env::current_exe().unwrap())
         .args(["--ignored", "--exact", "worker_child"])
         .env("LAYERFS_DOCTOR_WORKER_FIXTURE_ROOT", &f.root)
@@ -126,71 +252,114 @@ fn actual_worker_audit_streams_and_cancelled_peer_does_not_poison_next_call() {
     let until = Instant::now() + Duration::from_secs(3);
     let endpoint = loop {
         if let Ok(text) = std::fs::read_to_string(f.root.join("endpoint")) {
-            break Endpoint {
-                address: text.parse().unwrap(),
-                secret: "fixture-secret".to_owned(),
-            };
+            if let Ok(address) = text.parse() {
+                break Endpoint {
+                    address,
+                    secret: "fixture-secret".to_owned(),
+                };
+            }
         }
-        assert!(Instant::now() < until);
+        assert!(Instant::now() < until, "the worker did not start");
         assert!(child.try_wait().unwrap().is_none());
         std::thread::sleep(Duration::from_millis(5));
     };
     let _server = Server(child);
-    let args = || {
+    let ask = |args: SdkValue| {
+        diagnostic_connect(&endpoint, Instant::now() + Duration::from_secs(2))
+            .unwrap()
+            .diagnose_store(
+                args,
+                Some(Instant::now() + Duration::from_secs(5)),
+                &mut |_| Ok(()),
+            )
+    };
+    let args = |store: &str, binding: &[u8]| {
         SdkValue::map([
-            ("store", SdkValue::text("one")),
-            ("binding", SdkValue::Bytes(authority.binding_key.clone())),
-            ("cursor", SdkValue::Bytes(authority.cursor_key.to_vec())),
-            ("quick", SdkValue::Bool(false)),
-            ("timeout_ms", SdkValue::Int(2000)),
+            ("store", SdkValue::text(store)),
+            ("binding", SdkValue::Bytes(binding.to_vec())),
+            ("cursor", SdkValue::Bytes(vec![9; 32])),
+            ("cut", SdkValue::text("schema")),
+            ("heads", SdkValue::Bool(true)),
         ])
     };
-    let mut observed = Vec::new();
-    let value = diagnostic_connect(&endpoint, Instant::now() + Duration::from_secs(2))
-        .unwrap()
-        .diagnose_store(
-            args(),
-            Some(Instant::now() + Duration::from_secs(2)),
-            &mut |e| {
-                observed.push(e);
-                Ok(())
-            },
-        )
-        .unwrap();
-    assert_eq!(value.get("completed"), Some(&SdkValue::Bool(true)));
-    assert!(observed
-        .iter()
-        .any(|e| e.get_text("id") == Some("store.snapshot")));
-    assert!(observed
-        .iter()
-        .any(|e| e.get_text("id") == Some("store.objects.summary")));
-    let error = diagnostic_connect(&endpoint, Instant::now() + Duration::from_secs(2))
-        .unwrap()
-        .diagnose_store(
-            args(),
-            Some(Instant::now() + Duration::from_secs(2)),
-            &mut |_| Err(refused("Cancelled", "fixture stops receiving")),
-        )
-        .unwrap_err();
-    assert_eq!(error.code, "Cancelled");
-    // A subsequent real audit succeeds after the interrupted peer; no source
-    // staging ownership or server-session state is retained across calls.
-    let value = diagnostic_connect(&endpoint, Instant::now() + Duration::from_secs(2))
-        .unwrap()
-        .diagnose_store(
-            args(),
-            Some(Instant::now() + Duration::from_secs(2)),
-            &mut |_| Ok(()),
-        )
-        .unwrap();
-    assert_eq!(value.get("completed"), Some(&SdkValue::Bool(true)));
-    // An independent SQLite connection must be able to truncate the WAL after
-    // the cancelled peer, demonstrating no worker read snapshot remains held.
-    let checkpoint=Command::new("python3").args(["-c",r#"import sqlite3,sys; c=sqlite3.connect(sys.argv[1],timeout=1); r=c.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone(); assert r[0]==0,r"#,path.to_str().unwrap()]).output().unwrap();
-    assert!(
-        checkpoint.status.success(),
-        "{}",
-        String::from_utf8_lossy(&checkpoint.stderr)
+    let found = ask(args("one", BINDING)).unwrap();
+    assert_eq!(found.get("found"), Some(&SdkValue::Bool(true)), "{found:?}");
+    assert!(found.get("schema_error").is_none(), "{found:?}");
+    assert_eq!(found.get_text("heads").map(str::len), Some(64), "{found:?}");
+    // another Store's id: the cut names the identity, not the schema
+    let other = ask(args("one", b"another-store")).unwrap();
+    assert!(other.get_text("identity_error").is_some(), "{other:?}");
+    assert!(other.get("schema_error").is_none(), "{other:?}");
+    // no file
+    let none = ask(args("two", BINDING)).unwrap();
+    assert_eq!(none.get("found"), Some(&SdkValue::Bool(false)));
+    // a request without the cut (today's whole-Store scan) is refused
+    let full = with_field(args("one", BINDING), "cut", SdkValue::Null);
+    assert_eq!(ask(full).unwrap_err().code, "InvalidInput");
+    drop(writer);
+}
+
+/// A `<store>.compact-op` record beside `file` naming this process as its
+/// owner (`live`), or a process that is gone.
+fn compact_record(file: &Path, live: bool) {
+    let (start, boot) = match (live, layerfs_home::process::me()) {
+        (true, Some((start, boot))) => (start.to_string(), format!("{boot:032x}")),
+        (true, None) => (String::new(), String::new()),
+        (false, _) => ("1".to_owned(), "0".repeat(32)),
+    };
+    let zeros = |n: usize| "0".repeat(n);
+    let text = format!(
+        "version=1\nop_id={}\ngeneration=4\nphase=build\nstarted_ms=1794993419000\n\
+owner_pid={}\nowner_pid_start={start}\nowner_pid_boot={boot}\nowner_pid_namespace=\n\
+catalog_id={}\nnext_history_serial=1\nnext_pack_id=1\nnext_ordinal=1\n\
+mark_serial=0\nmark_pack_id=1\nmark_digest={}\nmark_totals=0,0,0,0\nmark_stamp=0\nhistory_rows=0\n\
+live_heads_digest={}\nreturned=0\n",
+        zeros(32),
+        std::process::id(),
+        zeros(32),
+        zeros(64),
+        zeros(64),
     );
+    let mut path = file.as_os_str().to_owned();
+    path.push(".compact-op");
+    std::fs::write(path, text).unwrap();
+}
+
+/// v19: `store.operation` also reads the compaction record beside a sqlite
+/// Store's file through its machine: a run live there passes, naming its
+/// phase; a run whose process is gone fails with `store compact` as the fix.
+#[test]
+fn store_operation_reads_the_compaction_record_beside_the_file() {
+    let f = Fixture::new();
+    let path = paths::store_file(&f.root, "one");
+    let writer = store_file(&path);
+    write_entity(&paths::store_record(&f.root, "one"), &fields("one")).unwrap();
+    compact_record(&path, true);
+    let out = report(&f.root, "one");
+    assert_eq!(
+        rows(&out)[1],
+        ("store.operation".to_owned(), "pass".to_owned())
+    );
+    assert!(
+        !list(&out, "findings")
+            .iter()
+            .any(|f| f.get_text("check") == Some("store.operation")),
+        "{out:?}"
+    );
+    compact_record(&path, false);
+    let out = report(&f.root, "one");
+    let finding = list(&out, "findings")
+        .iter()
+        .find(|f| f.get_text("check") == Some("store.operation"))
+        .unwrap_or_else(|| panic!("an operation finding: {out:?}"))
+        .clone();
+    assert_eq!(finding.get_text("severity"), Some("error"), "{finding:?}");
+    assert!(
+        finding
+            .get_text("message")
+            .is_some_and(|m| m.contains("compaction") && m.contains("build")),
+        "{finding:?}"
+    );
+    assert_eq!(finding.get_text("fix"), Some("layerfs store compact one"));
     drop(writer);
 }

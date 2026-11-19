@@ -26,7 +26,7 @@ use std::fs;
 use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -254,9 +254,35 @@ fn setup(name: &str) -> (Scratch, Standin, PathBuf) {
     let standin = Standin::new(&scratch.base.join("standin"));
     let home = scratch.base.join("home");
     fs::create_dir_all(&home).unwrap();
+    // the home is opened, as every call opens it before a copy: a folder
+    // holding a lock record and no `layerfs.json` is not a 2.0 home
+    home::open(&home).unwrap();
     standin.image(ID, &["demo/app:1"], architecture(), 4000);
     standin.export(&filtered(&export()));
     (scratch, standin, home)
+}
+
+/// A folder with no `layerfs.json`: by the time a copy needs the home's
+/// id the image lock's record is in it, so it is no empty home and the
+/// copy is refused as foreign, creating no home and nothing in Docker.
+#[test]
+fn a_folder_that_is_no_home_is_refused_before_an_export() {
+    let scratch = Scratch::new("lp176-no-home");
+    let standin = Standin::new(&scratch.base.join("standin"));
+    let home = scratch.base.join("home");
+    fs::create_dir_all(&home).unwrap();
+    standin.image(ID, &["demo/app:1"], architecture(), 4000);
+    standin.export(&filtered(&export()));
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let refusal = copy(&standin.docker(), &home, "docker", "demo/app:1", &events).unwrap_err();
+    assert_eq!(refusal.code, "Unsupported", "{refusal:?}");
+    assert!(
+        refusal.message.contains("not a LayerFS 2.0 home"),
+        "{}",
+        refusal.message
+    );
+    assert_eq!(standin.creates(), 0, "an export container was made");
+    assert!(!home.join("layerfs.json").exists(), "a home was created");
 }
 
 #[test]
@@ -281,9 +307,16 @@ fn one_copy_of_an_image_per_machine() {
     wait_for("the second copy to say it waits", || {
         !phases(&second_events, "lock").is_empty()
     });
+    // v19: the wait is the plain `{phase: lock}` event; who it waits for is
+    // the owner record, which `machine images` shows as the busy item
     let waited = &phases(&second_events, "lock")[0];
-    assert_eq!(waited.get_text("waiting"), Some("lock"));
-    let holder = waited.get("holder").expect("the wait names its holder");
+    assert_eq!(waited.get("waiting"), None, "the event names no holder");
+    assert_eq!(waited.get("holder"), None, "the event names no holder");
+    let holder = ImageLock::holder(&home, "docker", HEX).expect("the holder's record");
+    assert!(
+        matches!(holder.get_text("phase"), Some("export" | "send")),
+        "the holder records where it is: {holder:?}"
+    );
     assert_eq!(
         holder.get_int("pid"),
         Some(std::process::id() as i64),
@@ -420,13 +453,16 @@ fn a_dead_owner_is_taken_over_and_a_reused_pid_holds_nothing() {
     assert!(!record.exists());
     // a copy in another process that is killed: the kernel releases its
     // lock, and the waiting copy takes over without a deadline
-    let helper = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "holds_the_lock_for_another_copy", "--nocapture"])
-        .env("LP176_LOCK_HOLD", &home)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
+    let mut helper = Holder(
+        Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "holds_the_lock_for_another_copy", "--nocapture"])
+            .env("LP176_LOCK_HOLD", &home)
+            .env("LP176_LOCK_PARENT", std::process::id().to_string())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap(),
+    );
     wait_for("the other process to hold the lock", || {
         home.join("helper-held").exists()
     });
@@ -444,18 +480,14 @@ fn a_dead_owner_is_taken_over_and_a_reused_pid_holds_nothing() {
         !phases(&events, "lock").is_empty()
     });
     assert!(!waiter.is_finished(), "a live owner is waited for");
-    let holder = &phases(&events, "lock")[0];
     assert_eq!(
-        holder
-            .get("holder")
-            .and_then(|record| record.get_int("pid")),
-        Some(helper.id() as i64),
-        "the wait names the other process"
+        ImageLock::holder(&home, "docker", HEX).and_then(|record| record.get_int("pid")),
+        Some(helper.0.id() as i64),
+        "the owner record names the other process"
     );
     // killed: no drop runs in it, so its record stays and its lock is freed
-    let mut helper = helper;
-    helper.kill().unwrap();
-    helper.wait().unwrap();
+    helper.0.kill().unwrap();
+    helper.0.wait().unwrap();
     let taken = waiter.join().unwrap().unwrap();
     assert!(
         start.elapsed() < Duration::from_secs(10),
@@ -466,19 +498,41 @@ fn a_dead_owner_is_taken_over_and_a_reused_pid_holds_nothing() {
     drop(taken);
 }
 
+/// The helper process of a test, killed and reaped however the test ends (a
+/// failed assertion or a panic included), so it never outlives the test.
+struct Holder(Child);
+
+impl Drop for Holder {
+    fn drop(&mut self) {
+        // SIGKILL cannot be caught, so the wait that follows is bounded; both
+        // answer `Ok` for a child the test already killed and reaped
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
 /// The other process of the test above: it takes the lock, says so and
-/// blocks until the test kills it. Run only with `LP176_LOCK_HOLD` set.
+/// blocks until the test kills it. Run only with `LP176_LOCK_HOLD` set. It
+/// also ends by itself, within 50 ms of its test process dying (killed, so
+/// no [`Holder`] drop ran) and at the latest after 60 s, three times the
+/// test's longest wait.
 #[test]
 fn holds_the_lock_for_another_copy() {
     let Ok(at_home) = std::env::var("LP176_LOCK_HOLD") else {
         return;
     };
+    let parent: u32 = std::env::var("LP176_LOCK_PARENT")
+        .expect("the test process's pid")
+        .parse()
+        .unwrap();
     let at_home = PathBuf::from(at_home);
     let mut sink = |_: SdkValue| {};
     let _held = ImageLock::take(&at_home, "docker", ID, &mut Events::new(&mut sink)).unwrap();
     fs::write(at_home.join("helper-held"), b"").unwrap();
-    loop {
-        std::thread::sleep(Duration::from_secs(1));
+    let start = Instant::now();
+    while std::os::unix::process::parent_id() == parent && start.elapsed() < Duration::from_secs(60)
+    {
+        std::thread::sleep(Duration::from_millis(50));
     }
 }
 
@@ -491,8 +545,8 @@ fn a_short_machine_is_refused_before_any_effect() {
     let events = Arc::new(Mutex::new(Vec::new()));
     let error = copy(&standin.docker(), &home, "docker", "demo/app:1", &events).unwrap_err();
     assert_eq!(error.code, "Capacity", "{}", error.message);
-    let needed = error.detail.get_int("needed").unwrap();
-    let free = error.detail.get_int("free").unwrap();
+    let needed = error.detail.get_int("needed_bytes").unwrap();
+    let free = error.detail.get_int("free_bytes").unwrap();
     assert!(needed > free, "{needed} {free}");
     assert_eq!(
         needed as u64,
@@ -500,9 +554,13 @@ fn a_short_machine_is_refused_before_any_effect() {
         "a fresh copy needs the whole image"
     );
     assert_eq!(
-        error.detail.get_text("where"),
+        error.detail.get_text("path"),
         Some(cache::cache(&home).to_string_lossy().as_ref()),
         "the refusal names the filesystem it measured"
+    );
+    assert_eq!(
+        error.detail.get_text("fix"),
+        Some("layerfs machine prune docker --unused")
     );
     assert!(error.message.contains("more bytes"), "{}", error.message);
     // nothing was created on the machine or in the home
@@ -524,23 +582,23 @@ fn a_resumed_copy_needs_only_the_bytes_it_has_not_staged() {
     let fresh = Arc::new(Mutex::new(Vec::new()));
     let error = copy(&standin.docker(), &home, "docker", "demo/app:1", &fresh).unwrap_err();
     assert_eq!(error.code, "Capacity", "{}", error.message);
-    let whole = error.detail.get_int("needed").unwrap();
+    let whole = error.detail.get_int("needed_bytes").unwrap();
     assert_eq!(whole as u64, docker::need(big));
-    assert!(error.detail.get_int("free").unwrap() < whole);
+    assert!(error.detail.get_int("free_bytes").unwrap() < whole);
     // 3 of the tar's 4 MiB are staged; the copy needs those 3 MiB less
     let staged = 3 << 20;
     cache::write(&cache::cache(&home), HEX, 0, &bytes[..staged]).unwrap();
     let events = Arc::new(Mutex::new(Vec::new()));
     let error = copy(&standin.docker(), &home, "docker", "demo/app:1", &events).unwrap_err();
     assert_eq!(error.code, "Capacity", "{}", error.message);
-    let left = error.detail.get_int("needed").unwrap();
+    let left = error.detail.get_int("needed_bytes").unwrap();
     assert_eq!(
         whole - left,
         staged as i64,
         "the staged bytes are not counted twice"
     );
     assert!(
-        error.detail.get_int("free").is_some(),
+        error.detail.get_int("free_bytes").is_some(),
         "a refusal names the free bytes"
     );
     // and a refusal changes nothing: no container, no export, same part

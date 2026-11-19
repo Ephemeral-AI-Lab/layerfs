@@ -190,7 +190,7 @@ pub fn sandbox_page(side: &Side<'_>, args: &SdkValue, spent: &dyn Fn() -> bool) 
         }
         let why = match roots::kept(root, path) {
             Kept::Workspace => "a Workspace's files are read through its mount, by its commands",
-            Kept::Log => "a log is read with `logs.sandbox`",
+            Kept::Log => "a log is read with `sandbox.log`",
             Kept::Restricted => "LayerFS keeps it private",
             Kept::Open => "only paths under the home are read",
         };
@@ -410,16 +410,15 @@ impl<'a> Scope<'a> {
         self
     }
 
-    /// The id of the Workspace mounted at `path`, from the Workspace
-    /// records: those the request carried and those under this side's
-    /// root, read once and only when a listing meets a Workspace mount.
+    /// The handle of the Workspace mounted at `path` (its id, from a
+    /// caller of a build before handles), from the Workspace records: those
+    /// the request carried and those under this side's root, read once and
+    /// only when a listing meets a Workspace mount.
     fn workspace(&self, path: &Path) -> Option<String> {
         let recorded = self.workspaces.get_or_init(|| {
             let pair = |item: &SdkValue| {
-                Some((
-                    item.get_text("path")?.to_owned(),
-                    item.get_text("id")?.to_owned(),
-                ))
+                let handle = item.get_text("workspace").or(item.get_text("id"))?;
+                Some((item.get_text("path")?.to_owned(), handle.to_owned()))
             };
             let mut all: Vec<(String, String)> = match self.sent {
                 Some(SdkValue::List(items)) => items.iter().filter_map(pair).collect(),

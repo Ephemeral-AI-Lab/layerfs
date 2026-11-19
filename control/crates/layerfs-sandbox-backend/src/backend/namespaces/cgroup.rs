@@ -56,18 +56,6 @@ pub fn leaf(sandbox: &Path) -> PathBuf {
     sandbox.join(LEAF)
 }
 
-/// The group a command's helper of Sandbox group `sandbox` is created in:
-/// its [`leaf`], or `sandbox` itself for a Sandbox an earlier build started,
-/// whose processes are in its own group and which has no leaf.
-pub fn helper_group(sandbox: &Path) -> PathBuf {
-    let leaf = leaf(sandbox);
-    if leaf.is_dir() {
-        leaf
-    } else {
-        sandbox.to_owned()
-    }
-}
-
 /// Makes new Sandbox group `sandbox`'s [`leaf`], then, while no process is
 /// in either, gives the groups below `sandbox` the controllers it has
 /// ([`give_controllers`]). A failed leaf is an error; a failed give is not:

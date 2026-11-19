@@ -32,14 +32,14 @@ fn invalid(home: &Path, words: &[&str]) {
     assert_eq!(
         json::parse(text(&out.stderr).trim())
             .unwrap()
-            .get_text("code"),
+            .get_text("error"),
         Some("InvalidInput")
     );
 }
 fn check(home: &Path, source: &Path) {
     call(home, &["project", "init", "q/p", source.to_str().unwrap()]);
-    let base = call(home, &["project", "stats", "q/p"]);
-    let layer = base.get("at").unwrap().get_text("id").unwrap();
+    let base = call(home, &["project", "stats", "q/p", "--detail"]);
+    let layer = base.get_text("commit").unwrap();
     call(home, &["branch", "fork", "q/p", "dev", "main"]);
     // Three paths in the first Commit; this is also the first-Commit/base-Layer case.
     for (path, value) in [("/a", "one"), ("/b", "two"), ("/c", "three")] {
@@ -49,66 +49,53 @@ fn check(home: &Path, source: &Path) {
         );
         assert!(out.status.success(), "{}", text(&out.stderr));
     }
-    let saved = call(home, &["project", "stats", "q/p", "dev"]);
-    let commit = saved.get("at").unwrap().get_text("id").unwrap();
-    let changed = call(
+    let saved = call(
         home,
-        &["commit", "diff", "q/p", layer, commit, "--paths-only"],
+        &["project", "stats", "q/p", "--branch", "dev", "--detail"],
     );
+    let commit = saved.get_text("commit").unwrap();
+    // `commit` (dev's head, the third write) from `layer`; by default from
+    // its parent, which lacks only the last write
+    let changed = call(home, &["commit", "diff", "q/p", commit, "--from", layer]);
     assert_eq!(items(&changed).len(), 3);
-    let query = [
-        "branch",
-        "diff",
-        "q/p",
-        "main",
-        "dev",
-        "--from-commit",
-        layer,
-        "--to-commit",
-        commit,
-        "--page-size",
-        "1",
-        "--paths-only",
-    ];
+    let parent = call(home, &["commit", "diff", "q/p", commit]);
+    assert_eq!(items(&parent).len(), 1);
+    assert_eq!(items(&parent)[0].get_text("path"), Some("/c"));
+    // one path a page; each next page in a new process, by the cursor
+    let query = ["commit", "diff", "q/p", "dev", "--limit", "1"];
     let first = call(home, &query);
-    let token = first.get_text("continuation").unwrap();
-    let second = call(home, &[&query[..], &["--continuation", token]].concat());
-    assert_eq!(second.get_int("page"), Some(2));
+    let token = first.get_text("next_cursor").unwrap();
+    let second = call(home, &[&query[..], &["--cursor", token]].concat());
     assert_ne!(items(&first)[0].get("path"), items(&second)[0].get("path"));
     let third = call(
         home,
         &[
             &query[..],
-            &["--continuation", second.get_text("continuation").unwrap()],
+            &["--cursor", second.get_text("next_cursor").unwrap()],
         ]
         .concat(),
     );
-    assert_eq!(third.get_int("page"), Some(3));
-    assert!(!third.get_bool("has_more"));
-    assert_eq!(third.get("continuation"), Some(&SdkValue::Null));
+    assert_eq!(items(&third).len(), 1);
+    assert_eq!(third.get("next_cursor"), None);
+    // a cursor given other filters, or altered, is refused
     invalid(
         home,
-        &[
-            &query[..],
-            &["--continuation", token, "--path-prefix", "/a"],
-        ]
-        .concat(),
+        &[&query[..], &["--cursor", token, "--path", "/a"]].concat(),
     );
     invalid(
         home,
-        &[&query[..], &["--continuation", token, "--page", "9"]].concat(),
+        &[&query[..], &["--cursor", token, "--from", "main"]].concat(),
     );
     let mut altered = token.to_owned();
-    let tail = altered.pop().unwrap();
-    altered.push(if tail == '0' { '1' } else { '0' });
-    invalid(home, &[&query[..], &["--continuation", &altered]].concat());
+    altered.insert(0, '!');
+    invalid(home, &[&query[..], &["--cursor", &altered]].concat());
     call(home, &["branch", "publish", "q/p", "dev"]);
-    let published = call(home, &["project", "stats", "q/p"]);
-    let new_layer = published.get("at").unwrap().get_text("id").unwrap();
+    let published = call(home, &["project", "stats", "q/p", "--detail"]);
+    let new_layer = published.get_text("commit").unwrap();
     assert_eq!(
         items(&call(
             home,
-            &["commit", "diff", "q/p", layer, new_layer, "--paths-only"]
+            &["commit", "diff", "q/p", new_layer, "--from", layer]
         ))
         .len(),
         3
@@ -121,79 +108,69 @@ fn check(home: &Path, source: &Path) {
         );
         assert!(out.status.success(), "{}", text(&out.stderr));
     }
-    let saved = call(home, &["project", "stats", "q/p", "dev"]);
-    let tip = saved.get("at").unwrap().get_text("id").unwrap();
+    let saved = call(
+        home,
+        &["project", "stats", "q/p", "--branch", "dev", "--detail"],
+    );
+    let tip = saved.get_text("commit").unwrap();
     let revisions = [
-        "file",
-        "revision",
-        "q/p",
-        "dev",
-        "/a",
-        "--at-commit",
-        tip,
-        "--page-size",
-        "1",
+        "file", "history", "q/p", "dev", "/a", "--at", tip, "--limit", "1",
     ];
     let all = call(
         home,
         &[
-            "file",
-            "revision",
-            "q/p",
-            "dev",
-            "/a",
-            "--at-commit",
-            tip,
-            "--page-size",
-            "100",
+            "file", "history", "q/p", "dev", "/a", "--at", tip, "--limit", "100",
         ],
     );
+    // one Commit a page, each next page in a new process, by the cursor
     let mut page = call(home, &revisions);
-    let mut refs = Vec::new();
+    let mut commits = Vec::new();
     for _ in 0..10 {
-        refs.extend(items(&page).iter().map(|i| i.get("ref").unwrap().clone()));
-        assert!(
-            page.get("scan")
-                .unwrap()
-                .get_int("candidates_examined")
-                .unwrap()
-                <= 5
+        commits.extend(
+            items(&page)
+                .iter()
+                .map(|i| i.get("commit").unwrap().clone()),
         );
-        let Some(token) = page.get_text("continuation") else {
+        let Some(token) = page.get_text("next_cursor") else {
             break;
         };
-        page = call(home, &[&revisions[..], &["--continuation", token]].concat());
+        page = call(home, &[&revisions[..], &["--cursor", token]].concat());
     }
-    assert_eq!(
-        refs,
-        items(&all)
-            .iter()
-            .map(|i| i.get("ref").unwrap().clone())
-            .collect::<Vec<_>>()
+    let listed: Vec<SdkValue> = (items(&all).iter())
+        .map(|i| i.get("commit").unwrap().clone())
+        .collect();
+    assert_eq!(commits, listed);
+    assert!(listed.len() >= 4, "{all:?}");
+    // full ids, and the first page pinned at `--at` by a prefix of it
+    assert!(
+        matches!(&listed[0], SdkValue::Text(id) if id.len() == 66),
+        "{listed:?}"
     );
+    let prefixed = call(
+        home,
+        &["file", "history", "q/p", "dev", "/a", "--at", &tip[..12]],
+    );
+    assert_eq!(items(&prefixed), items(&all));
+    // a cursor given another path, traversal or call is refused
     let first = call(home, &revisions);
-    let token = first.get_text("continuation").unwrap();
-    let changed_path = [
-        "file",
-        "revision",
-        "q/p",
-        "dev",
-        "/b",
-        "--at-commit",
-        tip,
-        "--page-size",
-        "1",
-        "--continuation",
-        token,
-    ];
-    invalid(home, &changed_path);
+    let token = first.get_text("next_cursor").unwrap();
+    invalid(
+        home,
+        &[
+            "file", "history", "q/p", "dev", "/b", "--limit", "1", "--cursor", token,
+        ],
+    );
     invalid(
         home,
         &[
             &revisions[..],
-            &["--continuation", token, "--traversal", "branch"],
+            &["--cursor", token, "--traversal", "branch"],
         ]
         .concat(),
+    );
+    invalid(
+        home,
+        &["file", "list", "q/p", "dev", "/", "--cursor", token],
     );
 }
 #[test]
@@ -213,9 +190,38 @@ fn postgresql_saved_queries_resume_in_new_processes() {
     };
     let home = tempdir("pg-continuation-home");
     let source = tempdir("pg-continuation-source");
+    // the URL's user becomes a saved login, its password on stdin (a
+    // trust-auth server takes any); the address is connected without it
+    let (scheme, rest) = url.split_once("://").unwrap();
+    let (user, address) = rest.split_once('@').unwrap();
+    let out = common::run_with_stdin(
+        &mut layerfs(
+            &home,
+            &[
+                "store",
+                "save-auth",
+                "pg",
+                "--user",
+                user,
+                "--password-stdin",
+            ],
+        ),
+        b"unused\n",
+    );
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    let address = format!("{scheme}://{address}");
     call(
         &home,
-        &["store", "connect", "q", &url, "--synchronous-commit", "off"],
+        &[
+            "store",
+            "connect",
+            "q",
+            &address,
+            "--auth",
+            "pg",
+            "--synchronous-commit",
+            "off",
+        ],
     );
     check(&home, &source);
     std::fs::remove_dir_all(home).unwrap();

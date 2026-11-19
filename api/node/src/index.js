@@ -1,8 +1,10 @@
 // The `layerfs` package (#533 step 14): one client per home (and optional
-// folder scope, O32), twelve families built from the library's call table.
+// folder scope, O32), ten families built from the library's call table.
 // Each function takes its positionals in the table's order, then an options
 // object; every call is one call into the library, made once. Any call's
-// options may also carry `log_tag`, the tag of its call log line (#659).
+// options may also carry `log_tag`, the tag of its call log line (#659),
+// `detail: true` for the long form of its answer, and `with: ["section"]`
+// for the sections its table entry lists (call surface 2.0).
 //
 //   import layerfs from "@layerfs/node";
 //   await layerfs.store.create("shop");
@@ -14,12 +16,13 @@ import { LayerFSError } from "./errors.js";
 
 /** The table: `[{ family, call, args, options, help }]`. */
 export const table = decode(native.table());
-/** The twelve families, in help order. */
+/** The ten families, in help order. */
 export const families = [...new Set(table.map((c) => c.family))];
 
 const FUNCTION = "function";
-// passed with any call's arguments; the library takes it out before checking
-const LOG_TAG = "log_tag";
+// passed with any call's arguments; the library takes them out before
+// checking: the log tag, and the global options `detail` and `with`
+const GLOBAL = new Set(["log_tag", "detail", "with"]);
 
 function invalid(message) {
   return new LayerFSError("InvalidInput", message, null);
@@ -48,7 +51,7 @@ function bind(client, spec) {
     });
     const on = {};
     for (const [key, value] of Object.entries(options)) {
-      if (!known.has(key) && key !== LOG_TAG) throw invalid(`${name}: unknown option "${key}"`);
+      if (!known.has(key) && !GLOBAL.has(key)) throw invalid(`${name}: unknown option "${key}"`);
       if (handlers.includes(key)) {
         if (typeof value !== "function") throw invalid(`${name}: ${key} must be a function`);
         on[key] = value;
@@ -93,7 +96,7 @@ function bind(client, spec) {
       });
     }
     const answer = reply.answer;
-    if (answer.refused) throw new LayerFSError(answer.refused.code, answer.refused.message, answer.refused.detail);
+    if (answer.refused) throw LayerFSError.from(answer.refused);
     return answer.value;
   };
 }
@@ -110,22 +113,6 @@ export function client({ home, scope } = {}) {
   return Object.freeze(made);
 }
 
-/** `layerfs doctor`: what is wrong in `home` (default `LAYERFS_HOME`, else
- * `~/.layerfs`), without changing LayerFS state or starting a machine. Resolves to
- * `{ ok, findings: [{ severity, entity: { kind, name }, message, fix }] }`;
- * `ok` is false when a finding is an error. Explicit `{ target, name?, timeout?,
- * quick?, write_test? }` selects one scope and adds checks/complete/coverage;
- * empty options retain the legacy report. Explicit backup write_test may create
- * and delete its own temporary S3 object version. Outside the call table.
- * The report also lists what interrupted operations left (`leftovers`, and
- * `leftover` on such a finding); `doctor.fix(id)`, the `doctor` family's one
- * call, removes one of them under its guard. */
-export async function doctor({ home, ...options } = {}) {
-  const answer = decode(await native.doctor(home ?? null, encode(options)));
-  if (answer.refused) throw new LayerFSError(answer.refused.code, answer.refused.message, answer.refused.detail);
-  return answer.value;
-}
-
 /** Closes every Store this process holds open with no call running,
  * releasing its leases, so it leaves none behind when it exits (a lease
  * of a process that ended is stale until the Store's next call). Call it
@@ -138,10 +125,6 @@ export function close() {
 }
 
 const fallback = client();
-export const { project, branch, commit, file, sandbox, workspace, machine, store, backup, logs } = fallback;
-// the package's `doctor` is the report, and carries the `doctor` family's
-// calls: `layerfs.doctor()` and `layerfs.doctor.fix(id)`. A client made by
-// `client()` has the family alone: `lfs.doctor.fix(id)`.
-Object.assign(doctor, fallback.doctor);
+export const { home, project, branch, commit, file, sandbox, workspace, machine, store, backup } = fallback;
 export { LayerFSError };
-export default { ...fallback, client, close, doctor, table, families, LayerFSError };
+export default { ...fallback, client, close, table, families, LayerFSError };

@@ -60,8 +60,6 @@ class Encoding(Fixture):
         with self.assertRaisesRegex(layerfs.LayerFSError, pattern) as caught:
             layerfs.client(home=lone)
         self.assertEqual(caught.exception.code, "InvalidInput")
-        with self.assertRaisesRegex(layerfs.LayerFSError, pattern):
-            layerfs.doctor(lone)
 
     def test_a_paired_surrogate_written_as_one_character_is_fine(self):
         text = "\U0001f600 pair\n"
@@ -70,7 +68,7 @@ class Encoding(Fixture):
 
     def test_nan_and_infinity_are_invalid_input(self):
         for number in (float("nan"), float("inf"), float("-inf")):
-            self.invalid(self.lfs.branch.list, "JSON", P, page_size=number)
+            self.invalid(self.lfs.branch.list, "JSON", P, limit=number)
             self.invalid(self.lfs.file.apply, "JSON", P, B, [{"op": "write", "path": "/n", "content": [number]}])
             self.invalid(
                 layerfs.client(home=self.home, scope={"project": P, "folder": "/", "x": number}).store.list, "JSON"
@@ -86,14 +84,14 @@ class Encoding(Fixture):
 
     def test_a_fraction_is_refused_by_the_library_as_invalid_input(self):
         with self.assertRaisesRegex(layerfs.LayerFSError, "whole numbers") as caught:
-            self.lfs.branch.list(P, page_size=1.5)
+            self.lfs.branch.list(P, limit=1.5)
         self.assertEqual(caught.exception.code, "InvalidInput")
 
 
 class Integers(Fixture):
     def refused(self, value):
         with self.assertRaises(layerfs.LayerFSError) as caught:
-            self.lfs.file.read(P, B, "/README.md", start_line=value)
+            self.lfs.file.read(P, B, "/README.md", line=value)
         self.assertEqual(caught.exception.code, "InvalidInput")
         return caught.exception.message
 
@@ -102,14 +100,17 @@ class Integers(Fixture):
             self.assertIn("number out of range", self.refused(value), value)
 
     def test_more_digits_than_python_will_print_is_invalid_input(self):
-        self.invalid(self.lfs.file.read, "not a JSON value", P, B, "/README.md", start_line=10**5000)
+        self.invalid(self.lfs.file.read, "not a JSON value", P, B, "/README.md", line=10**5000)
 
     def test_the_whole_signed_64_bit_range_reaches_the_call_exactly(self):
         # the text is parsed as an i64 (not out of range); the call itself
         # then refuses what is not a positive safe integer (2^53 - 1 at most)
-        for value in (2**63 - 1, -(2**63), 2**53, 2**53 + 1):
+        for value in (2**63 - 1, 2**53, 2**53 + 1):
             self.assertIn("positive safe integer", self.refused(value), value)
-        self.assertEqual(self.lfs.file.read(P, B, "/README.md", start_line=2**53 - 1)["start_line"], 2**53 - 1)
+        # below 1 the call refuses it itself: lines are 1-based
+        self.assertIn("1-based", self.refused(-(2**63)))
+        read = self.lfs.file.read(P, B, "/README.md", line=2**53 - 1, detail=True)
+        self.assertEqual(read["start_line"], 2**53 - 1)
 
     def test_a_bool_is_not_a_whole_number(self):
         self.assertIn("whole number", self.refused(True))
@@ -135,14 +136,16 @@ class Bytes(Fixture):
         for name, data in cases.items():
             self.lfs.file.write(P, B, f"/{name}", data)
             self.assertEqual(self.size(f"/{name}"), len(data), name)
-        self.assertEqual(self.lfs.file.read(P, B, "/empty")["text"], "")
+        # an empty file's `text` is "", which the short form leaves out
+        self.assertEqual(self.lfs.file.read(P, B, "/empty", detail=True)["text"], "")
         self.assertEqual(self.lfs.file.read(P, B, "/unicode")["text"], "héllo 你好 \U0001f600\n")
         self.assertEqual(self.lfs.file.read(P, B, "/memoryview")["text"], "cd")
 
-    def test_binary_content_is_stored_but_read_refuses_it(self):
-        # `file.read` returns text only (the baseline has no binary read, D2)
-        with self.assertRaisesRegex(layerfs.LayerFSError, "NUL or invalid UTF-8"):
-            self.lfs.file.read(P, B, "/binary") if self.lfs.file.write(P, B, "/binary", b"\x00\xff") else None
+    def test_binary_content_is_stored_and_read_says_so(self):
+        # `file.read` returns text only: a binary file answers `binary` and its size
+        self.lfs.file.write(P, B, "/binary", b"\x00\xff")
+        read = self.lfs.file.read(P, B, "/binary")
+        self.assertEqual((read["binary"], read["size"], "text" in read), (True, 2, False))
 
     def test_a_one_key_base64_map_is_bytes_when_it_is_base64(self):
         # `{"base64": "AP8B"}` is the wire form of b"\x00\xff\x01": a map a

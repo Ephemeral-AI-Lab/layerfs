@@ -2,9 +2,10 @@
 //! and finds the project on one host session, before anything starts: a
 //! project the schema does not hold is `NoSuchProject`, and a record whose
 //! binding is another Store's is `Unavailable`, both as before. Needs
-//! LAYERFS_TEST_PG_URL (a server URL without a password, to a database with
-//! no `layerfs` schema; the test leaves one behind) and
-//! LAYERFS_TEST_PG_PASSWORD; without them the test says so and passes.
+//! LAYERFS_TEST_PG_URL (a server URL with its user and no password, to a
+//! database with no `layerfs` schema; the test leaves one behind) and
+//! LAYERFS_TEST_PG_PASSWORD (saved as the Store's login); without them the
+//! test says so and passes.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths};
 use layerfs_bridge::control::SdkValue;
@@ -43,13 +44,26 @@ fn the_reach_check_finds_the_binding_and_the_project_on_one_session() {
     };
     let home = tempdir("home");
     home::open(&home).unwrap();
+    let (scheme, rest) = url.split_once("://").unwrap();
+    let (user, address) = rest.split_once('@').unwrap();
+    let password = std::env::var("LAYERFS_TEST_PG_PASSWORD").unwrap();
+    call(
+        &home,
+        "store.save_auth",
+        &[
+            ("auth", t("pg")),
+            ("user", t(user)),
+            ("password", t(&password)),
+        ],
+    )
+    .unwrap();
     call(
         &home,
         "store.connect",
         &[
-            ("name", t("pg")),
-            ("url", t(&url)),
-            ("password", t("env:LAYERFS_TEST_PG_PASSWORD")),
+            ("store", t("pg")),
+            ("url", t(&format!("{scheme}://{address}"))),
+            ("auth", t("pg")),
         ],
     )
     .unwrap();
@@ -65,7 +79,7 @@ fn the_reach_check_finds_the_binding_and_the_project_on_one_session() {
         &[("project", t("pg/ghost")), ("name", t("g1"))],
     )
     .unwrap_err();
-    assert_eq!(code, "NoSuchProject", "{message}");
+    assert_eq!(code, "NotFound", "{message}");
     assert_eq!(
         message, "no project ghost in the PostgreSQL Store's schema layerfs",
         "{message}"

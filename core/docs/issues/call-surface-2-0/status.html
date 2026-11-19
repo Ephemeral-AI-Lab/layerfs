@@ -1,0 +1,330 @@
+    <section id="status">
+      <h2>Status: one model in the API</h2>
+      <p>Every machine, Store, project, Sandbox and Workspace answers one of six states. Each state has the companion fields in this table and no others. The companion says why as a code, never as a sentence. The UI maps the code to a signal; an agent reads the code and the <code>fix</code>.</p>
+      <!--STATE_TABLE-->
+      <div class="exs">
+        <div><span class="mock-cap">A machine, by state (other keys left out)</span>
+<pre class="ex">$ layerfs machine get dev
+{…,"state":"ready"}
+$ layerfs machine get dev            # while starting
+{…,"state":"busy","op":{"name":"start","phase":"boot",
+  "started_at":"2026-11-18T09:16:40Z"}}
+$ layerfs machine get docker         # stopped on purpose
+{…,"state":"stopped"}
+$ layerfs machine get demo-build     # worker from another build
+{…,"state":"broken","reason":"outdated",
+ "fix":"<!--OUTDATED_FIX-->"}
+$ layerfs machine get lab --with live   # the probe got no answer
+{…,"state":"unknown","observed_at":"2026-11-18T09:02:11Z"}</pre></div>
+        <div><span class="mock-cap">What lives on a stopped machine</span>
+<pre class="ex">$ layerfs store get sim-website
+{…,"state":"blocked",
+ "blocked_by":{"machine":"docker","reason":"stopped"}}
+$ layerfs project list
+{"items":[{"project":"shop/api"},
+ {"project":"sim-website/website","state":"blocked",
+  "blocked_by":{"machine":"docker","reason":"stopped"}}]}
+$ layerfs sandbox get sim-1          # its Workspaces are not listed
+{…,"state":"blocked",
+ "blocked_by":{"machine":"docker","reason":"stopped"}}</pre></div>
+        <div><span class="mock-cap">The whole home, records only, one call</span>
+<pre class="ex"><!--HOME_TREE--></pre></div>
+      </div>
+      <div class="rules">
+        <div class="rule"><div class="k">Companions</div><div class="d"><span><code>op</code> is the recorded operation: <code>{name, phase, started_at}</code>. <code>blocked_by</code> is <code>{&lt;machine|store|sandbox&gt;, reason}</code>. <code>reason</code> is a code from the closed list below. <code>fix</code> is one runnable shell line; two commands are joined with <code>&amp;&amp;</code>. <code>observed_at</code> is when LayerFS last knew the state: the last live read that answered, else when the record was last written. It is kept beside the record, in an observation file that <code>generation</code> does not cover. In the short form a state carries its companions and nothing from another state; in the long form every key is present and the others are null.</span></div></div>
+        <div class="rule"><div class="k">Reason codes</div><div class="d"><span>A closed list: <!--REASON_CODES-->. In <code>blocked_by</code> the reason is the blocker's own state (<code>stopped</code>, <code>busy</code>) or its broken reason. A broken thing's <code>reason</code> is one of <!--BROKEN_REASONS-->. The sentence stays in the long form's <code>message</code>. This list is not the <code>reason</code> of a doctor's <code>not_checked</code> entry or of a <code>not_listed</code> entry (<code>timeout</code>, <code>busy</code>, <code>lost</code>): that one says why a check or a read that was tried gave no answer, and the two lists are separate.</span></div></div>
+        <div class="rule"><div class="k">One cause, named once</div><div class="d"><span><code>blocked_by</code> names the thing at the root, with that thing's own state or reason: a Workspace in a Sandbox on a stopped machine answers <code>{"machine":"docker","reason":"stopped"}</code>, not its Sandbox. A UI can then show the cause once and fold everything it blocks under it.</span></div></div>
+        <div class="rule"><div class="k">Docker not running</div><div class="d"><span>The <code>docker</code> machine is <code>broken</code> with <code>reason: engine_down</code> and a <code>fix</code> that starts the engine. <code>stopped</code> means a person stopped the machine, and nothing else.</span></div></div>
+        <div class="rule"><div class="k">Records first</div><div class="d"><span>A state comes from the home's records and costs no probe. <code>--with live</code> probes and stamps <code>observed_at</code>; only then can a state be <code>unknown</code>. A UI probes machines only; what lives on them inherits.</span></div></div>
+        <div class="rule"><div class="k">What a live read writes</div><div class="d"><span>A <code>--with live</code> read writes the record only when the state word or its reason changes. A read that finds the same state writes <code>observed_at</code> to the observation file and nothing else. A records-only read answers the last state word and reason that were written, so <code>engine_down</code>, <code>not_answering</code>, <code>missing</code> and <code>unreachable</code> can appear in a records-only answer, and in a records-only <code>blocked_by</code>, after a live read saw them.</span></div></div>
+        <div class="rule"><div class="k">Where Workspaces are recorded</div><div class="d"><span>The home's records hold Workspaces only for a Sandbox on <code>native</code> and for a Sandbox reached directly. Elsewhere the machine's worker keeps them. So <code>home get --with tree</code>, <code>sandbox list</code> and <code>workspace list</code> cannot list those Workspaces from records: a Sandbox row answers <code>workspaces_not_listed:true</code> while its machine is ready, and <code>workspace list --sandbox S</code> asks the machine. A stopped machine's Workspaces are not listed; its Sandboxes answer <code>blocked</code>.</span></div></div>
+        <div class="rule"><div class="k">Blocked things stay listed</div><div class="d"><span><code>project.list</code> keeps the recorded projects of a Store it cannot open and marks them <code>blocked</code>; <code>project.get</code> answers the same instead of refusing. Today the all-Stores listing drops that Store's projects, so the UI keeps its own catalog to show them.</span></div></div>
+        <div class="rule"><div class="k">Every operation is recorded</div><div class="d"><span><code>machine.start</code> and <code>machine.stop</code> record an <code>op</code>, as create and remove do today, so every client sees <code>busy</code>, not only the tab that pressed the button. This is new work.</span></div></div>
+        <div class="rule"><div class="k">A lost reply</div><div class="d"><span>When the reply to <code>machine start</code> or <code>machine stop</code> is lost, the recorded <code>op</code> stays with its outcome not known: the machine is <code>broken</code> with <code>reason: unresolved</code> and <code>fix: layerfs machine get &lt;machine&gt; --with live</code>. That live read settles it: it sees whether the machine runs and clears the <code>op</code>. Today the only call that clears an uncertain machine operation is <code>machine remove</code>, which deletes the VM and its disk.</span></div></div>
+        <div class="rule"><div class="k">Short form</div><div class="d"><span>A <code>get</code> always answers <code>state</code>. A list row leaves it out when it is <code>ready</code>: no news is good news, the same rule the UI follows.</span></div></div>
+        <div class="rule"><div class="k">One counter</div><div class="d"><span><code>home.get</code> answers <code>generation</code>, a number that moves when any record in the home changes. A UI polls that one number and re-reads only when it moves, in place of the 15 s and 60 s polls per page. A live read moves it only when it changes a state word or a reason; a new <code>observed_at</code> alone does not. It does not move for a Workspace the home does not record. It does not signal the death of an operation's owner: the <code>op</code> of an owner that has ended is ignored when the record is read, with no write.</span></div></div>
+      </div>
+      <h3>What LayerFS knows when a machine is stopped</h3>
+      <div class="tbl"><table style="min-width:640px">
+        <thead><tr><th>What</th><th>Known?</th><th>From</th></tr></thead>
+        <tbody>
+          <tr><td class="plain">Stores on it: name, engine</td><td class="plain">Yes</td><td class="plain">the home's Store records</td></tr>
+          <tr><td class="plain">Project names in those Stores</td><td class="plain">Yes, as last recorded</td><td class="plain">the home's project records (a project hidden or removed since may still be on record, hence <code>blocked</code>, not <code>ready</code>)</td></tr>
+          <tr><td class="plain">Sandboxes on it</td><td class="plain">Yes, as last recorded</td><td class="plain">the home's Sandbox records</td></tr>
+          <tr><td class="plain">Workspaces in those Sandboxes</td><td class="plain">No</td><td class="plain">the machine's worker keeps them; the home records Workspaces only on <code>native</code> and for a Sandbox reached directly</td></tr>
+          <tr><td class="plain">Commits, Branches, sizes, last write</td><td class="plain">No</td><td class="plain">needs the Store open on its machine; the UI keeps its own last-seen sizes</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="states">
+      <h2>Status in the UI: a signal and a tip</h2>
+      <p>Each status is four parts: a signal, at most two words, a hover tip with the reason and its age, and at most one action. No sentences, raw errors or commands on cards and rows. Six signals cover machines, Stores, projects, Sandboxes and Workspaces; they replace the labels dsh-layerfs builds by hand today.</p>
+      <div class="sigs" role="img" aria-label="The six status signals">
+        <div class="sigc"><div class="show"><span class="dot ok"></span></div><b>Ready</b><span class="m">A green dot and no word. Tip: what it is doing (idle, 1 command running, in use by 2).</span><code>ready</code></div>
+        <div class="sigc"><div class="show"><span class="dot run"></span> Starting…</div><b>Working</b><span class="m">A spinner and the verb. Tip: the phase and elapsed time. A bar only when LayerFS reports done and total.</span><code>busy</code></div>
+        <div class="sigc"><div class="show"><span class="dot off"></span> Stopped <span class="btn">Start</span></div><b>Stopped</b><span class="m">A hollow grey dot. Machines only. Never amber or red: someone stopped it.</span><code>stopped</code></div>
+        <div class="sigc"><div class="show"><span class="chip"><span class="dot off"></span> docker</span> <span class="btn">Start</span></div><b>Waiting on</b><span class="m">The blocker's own chip, with its signal and its action. The thing itself turns grey, never red.</span><code>blocked</code></div>
+        <div class="sigc"><div class="show"><span class="dot bad"></span> Outdated <span class="btn">Restart</span></div><b>Needs you</b><span class="m">A red dot, one or two words from the reason code, one fix. Tip: the message.</span><code>broken</code></div>
+        <div class="sigc"><div class="show"><span class="dot stale"></span> <span class="stale-v">2.0 MB</span></div><b>Not sure</b><span class="m">A dashed dot; last values kept and underlined. Tip: "as of 10:42, could not read".</span><code>unknown</code></div>
+      </div>
+      <p class="small">A seventh mark, an amber diamond <span class="dot warn"></span>, is for a notice that blocks nothing: a backup that is behind, a Branch that moved under a Workspace, a disk filling up. It never replaces the state signal.</p>
+
+      <h3>A stopped machine, on the Stores and Projects pages</h3>
+      <div class="mocks">
+        <div class="mock" role="img" aria-label="Mock-up: Stores page with one Store on a stopped machine">
+          <span class="mock-cap">Stores</span>
+          <div class="hero-line"><span class="chip" title="Stopped at 09:12 by you"><span class="dot off"></span> docker</span><span>Stopped</span><span class="grow">1 Store · 1 project waiting</span><span class="btn pri">Start</span></div>
+          <div class="mocks" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr))">
+            <div class="card">
+              <h4>demo-studio</h4>
+              <div class="kv"><span>410 KB</span><span class="m">4 d ago</span></div>
+              <div class="kv"><span class="m">On</span><span class="chip"><span class="dot ok"></span> LayerFS Home</span></div>
+              <div class="kv"><span>website</span><span>33.9 KB</span></div>
+              <div class="kv foot"><span class="m">No backup</span><span class="btn">Push to…</span></div>
+            </div>
+            <div class="card" title="Waiting on docker (stopped). Sizes as of 16 h ago.">
+              <h4>sim-website-0cefe1</h4>
+              <div class="kv"><span class="stale-v">2.0 MB</span><span class="m">16 h ago</span></div>
+              <div class="kv"><span class="m">On</span><span><span class="chip"><span class="dot off"></span> docker</span> <span class="btn">Start</span></span></div>
+              <div class="kv"><span>website-0cefe1</span><span class="stale-v">794 KB</span></div>
+              <div class="kv foot"><span class="m">No backup</span><span class="btn dis" title="Start docker first">Push to…</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="mock" role="img" aria-label="Mock-up: Projects list with one project waiting on a stopped machine">
+          <span class="mock-cap">Projects</span>
+          <div class="tabs-m"><span><b>Projects</b><span class="n">14</span></span><span>Stores<span class="n">8</span></span><span title="1 stopped">Machines<span class="n">4</span> <span class="dot off"></span></span></div>
+          <div class="rows-m">
+            <div class="row-m"><span>Project</span><span>Store</span><span class="num">Commits</span><span class="num">Branches</span><span class="num">Size</span></div>
+            <div class="row-m"><span><b>website</b><span class="sub">Session 375df9f2</span></span><span>demo-studio</span><span class="num">34</span><span class="num">13</span><span class="num">33.9 KB</span></div>
+            <div class="row-m" title="Waiting on docker (stopped). Numbers as of 16 h ago."><span><b>website-0cefe1</b><span class="sub"><span class="chip"><span class="dot off"></span> docker</span><span class="btn">Start</span></span></span><span>sim-website-0cefe1</span><span class="num"><span class="stale-v">363</span></span><span class="num"><span class="stale-v">28</span></span><span class="num"><span class="stale-v">794 KB</span></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="rules">
+        <div class="rule"><div class="k">Cause shown once</div><div class="d"><span>One line at the top per root cause, with what it blocks and its action. A tab's mark counts only trouble that starts in that tab: the stopped machine marks Machines, in grey; Projects and Stores stay clean. Today the same stop gives red, red and amber.</span></div></div>
+        <div class="rule"><div class="k">The blocker's chip</div><div class="d"><span>Wherever a thing waits, it shows the chip of what it waits on. The chip looks and acts the same on every page, so "Stopped" has one look, not four.</span></div></div>
+        <div class="rule"><div class="k">Last values stay</div><div class="d"><span>Sizes, commits and Branches keep their last-known numbers, underlined, with their age in the tip. A dash only for a number never seen. "Reading…" appears only while a read is running and always ends, as a value or as Not sure.</span></div></div>
+        <div class="rule"><div class="k">Actions</div><div class="d"><span>What needs the machine (Push, Pull, Move, Back up, New session) is disabled, with the tip "Start docker first". Today Pull home and Move stay enabled in the menu and New session fails silently.</span></div></div>
+        <div class="rule"><div class="k">Other causes</div><div class="d"><span>Docker itself not running: the machine is red, "Engine down", with Start Docker; its Stores and Sandboxes wait on it in grey. Worker not answering: red with Restart. Worker outdated: red with Restart, which runs <code>machine stop</code> then <code>machine start</code>; the button is off while Sandboxes are on the machine, with the tip "N Sandboxes are on it. Copy the fix to stop it anyway." (R2). A PostgreSQL Store one machine can't reach: that machine's dot on the Store card is red with Set address; the Store and the other machines are unaffected. One failed read: nothing changes for a minute, then Not sure.</span></div></div>
+      </div>
+
+      <h3>Transitions</h3>
+      <div class="steps" role="img" aria-label="Mock-up: the steps of starting a machine">
+        <div class="step"><span class="n">1 · before</span><div class="line"><span class="dot off"></span> docker · Stopped <span class="btn">Start</span></div><span class="m">Its Store and project show the docker chip.</span></div>
+        <div class="step"><span class="n">2 · on press</span><div class="line"><span class="dot run"></span> docker · Starting…</div><span class="m">At once, on every page and in every client. The button is gone. Waiting things show the same spinner chip.</span></div>
+        <div class="step"><span class="n">3 · while it runs</span><div class="line"><span class="dot run"></span> docker · Starting… <span class="m">boot · 12 s</span></div><span class="m">The phase LayerFS reports, or elapsed time. No invented progress.</span></div>
+        <div class="step"><span class="n">4 · settled</span><div class="line"><span class="dot ok"></span> docker</div><span class="m">One event: the machine and what lives on it re-read together. Underlines clear as fresh numbers land. Rows keep their place.</span></div>
+        <div class="step"><span class="n">4b · refused</span><div class="line"><span class="dot off"></span> docker · Stopped <span class="btn">Start</span></div><span class="m">Back to the old state, with the refusal as a tip on the machine only. Pressing again is a new call.</span></div>
+        <div class="step"><span class="n">4c · reply lost</span><div class="line"><span class="dot bad"></span> docker · Unresolved <span class="btn">Check</span></div><span class="m">Never "failed", never Retry: the call may have worked. Check runs <code>machine get --with live</code>, which settles it.</span></div>
+      </div>
+      <div class="rules">
+        <div class="rule"><div class="k">One model for every action</div><div class="d"><span>Create, remove, start, stop, mount, unmount, commit, cancel, move, delete and export all follow these steps. The verb comes from the recorded <code>op</code>, so the chip, the button and the tip never disagree ("Delete" beside "Closing" today).</span></div></div>
+        <div class="rule"><div class="k">Removed things</div><div class="d"><span>A removed machine, Store or Sandbox leaves a grey line "Removed 10:42" for a minute, then the row goes. Today only a closed Sandbox leaves a trace, and for an hour.</span></div></div>
+        <div class="rule"><div class="k">Destructive presses</div><div class="d"><span>Unmounting a Workspace with uncommitted changes is refused <code>Dirty</code> with the paths; the UI asks, then calls <code>workspace unmount --discard</code> and shows Unmounting…. Cancelling a command shows Cancelling… until LayerFS answers; an unknown outcome is Unresolved.</span></div></div>
+      </div>
+
+      <h3>Per entity</h3>
+      <p class="small">The <code>op</code> names and reason codes are exactly the ones the rows list in their <code>states</code> field; the verbs and words are how the UI says them. A project on record that its Store does not list is not in this table: <code>project list</code> hides it, and <code>project doctor</code> and <code>store doctor</code> report it as a notice. It is never "Missing".</p>
+      <!--ENTITY_STATES-->
+
+      <h3>What the review found in dsh-layerfs today</h3>
+      <ul class="fam-why">
+        <li><b>"Stopped" has four looks:</b> a grey chip on Machines, an amber row and tab, red on the Store page, a grey dot on the Store card.</li>
+        <li><b>"Reading…" never ends</b> for a project whose Store cannot be opened: the failed read is swallowed and the row stays empty. It re-reads only on a manual refresh.</li>
+        <li><b>The red box is LayerFS's sentence</b> printed as it came (<code>down_reason</code>). There is no code to map, so there is nothing to translate into a signal.</li>
+        <li><b>A Sandbox on a stopped machine reads "Running"</b>; <code>lost</code> and <code>unsupported</code> are shown as raw words.</li>
+        <li><b>Start says "Starting…" only in the tab that pressed it;</b> Stop changes only its button while the chip still says Running. LayerFS records an operation for create and remove only.</li>
+        <li><b>Other pages settle late:</b> Stores and Projects up to 15 s after a machine change, the sidebar up to 60 s.</li>
+        <li><b>Projects have ten UI-made labels</b> and the Storage pages use a second set; a Sandbox is "Running/Stopped", "Active/Not created" or "closed" depending on the page.</li>
+        <li><b>A failed status read becomes a state:</b> "Not answering" for a machine, the red box for a Store, "closed" for every Sandbox card.</li>
+      </ul>
+    </section>
+
+    <section id="doctor">
+      <h2>Doctor: a thing and what is on it</h2>
+      <p>Every thing has one owner, and the doctors and the page follow that one relationship. A doctor checks its own thing, then gives a shallow check to each thing directly on it; a project and a bucket also have a Full check. A shallow check is that thing's own checks and nothing beneath it. No option controls depth, no doctor has a records-only mode, and opening the page runs no doctor.</p>
+      <div class="tbl"><table style="min-width:760px">
+        <thead><tr><th>Thing</th><th>Has</th><th>Check</th><th>Full check</th></tr></thead>
+        <tbody>
+          <tr><td class="call">home</td><td class="plain">machines, PostgreSQL Stores, buckets</td><td class="plain">install, home folder, free disk, every record in the home; then each machine, PostgreSQL Store and bucket, shallowly</td><td class="plain">—</td></tr>
+          <tr><td class="call">machine</td><td class="plain">Stores, Sandboxes</td><td class="plain">record, state, worker, capacity; then each Store and Sandbox, shallowly</td><td class="plain">—</td></tr>
+          <tr><td class="call">store</td><td class="plain">projects</td><td class="plain">record, id, schema, reachable where it lives, its backups (<code>store.backups</code>: a notice when a bucket's copy is behind); a PostgreSQL Store also from each machine that has a Sandbox of it; then each project, shallowly</td><td class="plain">—</td></tr>
+          <tr><td class="call">sandbox</td><td class="plain">Workspaces</td><td class="plain">record, runtime, daemon; then each Workspace (mounted, activity)</td><td class="plain">—</td></tr>
+          <tr><td class="call">project</td><td class="plain">nothing</td><td class="plain">its record against the Store's own list</td><td class="plain">also reads everything reachable from the head of each of its Branches (<code>project doctor --full</code>)</td></tr>
+          <tr><td class="call">bucket</td><td class="plain">nothing</td><td class="plain">configuration, transport, list; never whether a Store's backup is behind, which the Store's doctor reports</td><td class="plain">also writes a small object and removes it (<code>backup doctor --full</code>)</td></tr>
+          <tr><td class="call">Workspace</td><td class="plain">nothing</td><td class="plain">no doctor of its own; its Sandbox checks it</td><td class="plain">—</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Who owns what, and which doctor covers it</h3>
+      <div class="dia">
+        <ul class="tree">
+          <li><span class="node"><b>home</b><code>home doctor</code><i>itself and its records, then shallowly: machines, PostgreSQL Stores, buckets</i></span>
+            <ul>
+              <li><span class="node"><b>machine</b><code>machine doctor</code><i>itself, then shallowly: Stores, Sandboxes</i></span>
+                <ul>
+                  <li><span class="node"><b>sqlite Store</b><code>store doctor</code><i>itself, then shallowly: projects</i></span>
+                    <ul><li><span class="node"><b>project</b><code>project doctor</code><i>its record</i><em>Full check reads its data</em></span></li></ul>
+                  </li>
+                  <li><span class="node"><b>Sandbox</b><code>sandbox doctor</code><i>itself, its daemon, then its Workspaces</i></span>
+                    <ul><li><span class="node"><b>Workspace</b><i>no doctor of its own</i></span></li></ul>
+                  </li>
+                </ul>
+              </li>
+              <li><span class="node"><b>PostgreSQL Store</b><code>store doctor</code><i>itself, its reach from each machine with a Sandbox of it, then shallowly: projects</i></span>
+                <ul><li><span class="node"><b>project</b><code>project doctor</code><i>its record</i><em>Full check reads its data</em></span></li></ul>
+              </li>
+              <li><span class="node"><b>bucket</b><code>backup doctor</code><i>configuration, transport, list</i><em>Full check tests a write</em></span></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+
+      <h3>What Check all runs</h3>
+      <div class="dia">
+        <div class="fan">
+          <div class="fan-src">Check all</div>
+          <div class="fan-rows">
+            <div class="fan-row"><code>home doctor</code><span>this install and its records; each machine, PostgreSQL Store and bucket, shallowly</span></div>
+            <div class="fan-row"><code>store doctor</code> <b>× each Store</b><span>the Store, then its projects, shallowly</span></div>
+            <div class="fan-row"><code>sandbox doctor</code> <b>× each Sandbox</b><span>the Sandbox, its daemon and its Workspaces</span></div>
+          </div>
+        </div>
+        <p class="small">Left out: everything under a stopped or failed machine, and all project data. Run twice: a PostgreSQL Store's own checks, once shallowly by <code>home doctor</code> and once by its own <code>store doctor</code>. Check all is the page running these calls side by side, not a doctor of its own.</p>
+      </div>
+
+      <h3>What a failed parent blocks</h3>
+      <div class="dia">
+        <ul class="tree">
+          <li><span class="node"><span class="dot bad"></span><b>demo-build</b><i>Outdated</i><em>the only action: the fix. Its button is off while Sandboxes are on the machine; the Fix line shows the --force command to copy</em></span>
+            <ul>
+              <li><span class="node"><span class="dot off"></span><b>demo-build-cache</b><i>not checked, blocked by demo-build</i></span>
+                <ul><li><span class="node"><span class="dot off"></span><b>compiler, sdk</b><i>not checked</i></span></li></ul>
+              </li>
+              <li><span class="node"><span class="dot off"></span><b>build-1</b><i>not checked</i></span>
+                <ul><li><span class="node"><span class="dot off"></span><b>build-1:main</b><i>not checked</i></span></li></ul>
+              </li>
+              <li><span class="node"><span class="dot off"></span><b>build-2</b><i>not checked</i></span></li>
+            </ul>
+          </li>
+        </ul>
+        <p class="small">Records were read; live checks were not attempted. These are <code>not_checked</code> entries with <code>blocked_by</code>, never findings. After the fix, pressed or pasted, the page runs <code>machine doctor</code>, then <code>store doctor</code> and <code>sandbox doctor</code> for what is on it.</p>
+      </div>
+
+      <h3>The report</h3>
+      <p>The six doctors answer one shape. A thing's status, and the whole answer's, is one of <!--STATUSES-->. One check's outcome is one of <!--OUTCOMES-->.</p>
+      <!--DOCTOR_KEYS-->
+      <div class="exs">
+        <div><span class="mock-cap">Clean, and a failed parent</span>
+<pre class="ex"><!--DOCTOR_EX_CLEAN-->
+<!--DOCTOR_EX_PROBLEM--></pre></div>
+        <div><span class="mock-cap">A notice with a fix, and a check that could not be made</span>
+<pre class="ex"><!--DOCTOR_EX_COULD_NOT--></pre></div>
+        <div><span class="mock-cap">Progress: one event per finished thing</span>
+<pre class="ex"><!--DOCTOR_EX_PROGRESS--></pre></div>
+        <div><span class="mock-cap">The long form of the failed parent</span>
+<pre class="ex"><!--DOCTOR_EX_PROBLEM_LONG--></pre></div>
+      </div>
+      <h3>The checks, by kind</h3>
+      <p>Each kind of thing has one closed, ordered list of checks, owned by that kind's doctor row and collected into <code>calls.json</code> as <code>doctor.checks</code>. A parent's shallow check of a child runs exactly that kind's list without the entries marked Full check only. Every check id in a report is from these lists.</p>
+      <!--DOCTOR_CHECKS-->
+      <div class="rules">
+        <div class="rule"><div class="k">Six doctors, one shape</div><div class="d"><span><code>home.doctor</code>, <code>machine.doctor</code>, <code>store.doctor</code>, <code>project.doctor</code>, <code>sandbox.doctor</code>, <code>backup.doctor</code>. A Workspace has no doctor of its own: <code>sandbox doctor</code> checks it from the daemon's list. Today the whole-home sweep and the per-target checks answer two different reports, and rate the same outdated worker as a warning in one and an error in the other.</span></div></div>
+        <div class="rule"><div class="k">Depth</div><div class="d"><span>A doctor checks its own thing, then gives a shallow check to each thing directly on it; a project and a bucket also have a Full check, <code>project doctor --full</code> and <code>backup doctor --full</code>. There is no other depth and no option for it. <code>--with</code> never changes what a doctor checks.</span></div></div>
+        <div class="rule"><div class="k">Short form</div><div class="d"><span><code>{"ok":true}</code> only when every check was made and nothing was found. Otherwise <code>findings</code> and <code>not_checked</code>, each present only when it has entries. A notice is a finding, so an answer with only a notice has no <code>ok</code>.</span></div></div>
+        <div class="rule"><div class="k">Severity</div><div class="d"><span><code>error</code>: the thing does not work until it is fixed. <code>warning</code>: it works and something is wrong (a disk nearly full, a backup behind). <code>notice</code>: a normal state worth saying, which blocks nothing. A check's outcome is <code>pass</code>, its finding's severity, or <code>not_checked</code>. A thing's status is <code>ok</code> when every check passed, else the worst outcome among them; the answer's status is the worst thing in it.</span></div></div>
+        <div class="rule"><div class="k">A failed parent</div><div class="d"><span>Live checks beneath a stopped, outdated or unreachable parent are not attempted: one <code>not_checked</code> entry each, with <code>blocked_by</code> naming the root cause, no severity. Today the same case is "skipped", "unknown" or a silent return, depending on the check.</span></div></div>
+        <div class="rule"><div class="k">Could not check</div><div class="d"><span>A check that was tried and gave no verdict is a <code>not_checked</code> entry with <code>reason</code>: <code>timeout</code> (the thing's time budget ran out), <code>busy</code> (an operation holds the thing) or <code>lost</code> (the probe's reply did not arrive). These three are their own list, separate from a state's reason codes; a state's code appears in a report only inside <code>blocked_by</code>. It is never a finding and never <code>ok</code>. A check that does not apply to the thing is left out. Today's <code>unknown</code> and <code>skipped</code> outcomes go away.</span></div></div>
+        <div class="rule"><div class="k">Budgets</div><div class="d"><span>Each thing has its own time budget; no doctor takes <code>--timeout</code>. A Full check has no budget and runs until it finishes or the caller stops it. Today one 30 s budget covers a whole call.</span></div></div>
+        <div class="rule"><div class="k">Progress</div><div class="d"><span><code>--progress</code> sends one event per finished thing: <code>{"phase","done","total","node"}</code>. <code>phase</code> is <!--PHASES-->: <code>self</code> is the named thing, the others are the kind being checked. <code>done</code> and <code>total</code> count things; the total is known from records before the first check. <code>node</code> is that thing's node as in <code>tree</code>, without child lists, so a row's marks can land together. This is new work: today target checks, the records sweep and a worker-run Sandbox report take three different routes, and one call is one target.</span></div></div>
+        <div class="rule"><div class="k">Records</div><div class="d"><span>One of <code>home doctor</code>'s own checks reads every record in the home: references between records, file modes, leases, half-finished operations. A finding from it names the thing it is about, at any depth, and the page shows it on that thing's row. Live checks still go one level only. No doctor takes <code>--offline</code>.</span></div></div>
+        <div class="rule"><div class="k">The Store doctor</div><div class="d"><span>Checks the Store (its record, the id in its data against the record, its schema, that it can be reached where it lives, no half-finished move or stale lease), then gives each project the shallow check. It stops after the schema check and reads no data; that cut is new work, since today's cheapest mode still scans the file, and it needs a new argument on the worker's Store diagnosis that an older worker will not know. On a PostgreSQL Store it also probes from each machine that has a Sandbox of that Store, and each probe is one check entry with <code>from</code> naming the machine. Without that, Check all could read "All clear" while a Sandbox's machine cannot reach its Store. <code>--machine M</code> adds a probe from one more machine and is for the command line only.</span></div></div>
+        <div class="rule"><div class="k">The project doctor</div><div class="d"><span>Shallow: the project's record against the Store's own list. This check exists today in <code>project.get</code> and <code>project.list</code>. A project on record that the Store does not list is a normal state after a delete that kept the home entry, so its finding is a <code>notice</code> with a <code>fix</code>, not an error; <code>store doctor</code> reports the same notice, and <code>project list</code> leaves the project out, as today. <code>--full</code>: also reads everything reachable from the head of each of the project's Branches, which is what a mount can reach. It is streamed with bounded memory, writes nothing to the Store and changes no format; it may keep its visited set in a scratch file outside the Store, as today's integrity scan does, removed when the call ends. An object shared by two projects is read once per project. That walk is new work on both engines and through the worker. The whole-Store scan is dropped from the doctors, so nothing checks the database file's structure or data that no Branch head reaches.</span></div></div>
+        <div class="rule"><div class="k">Exit code</div><div class="d"><span>A doctor exits 0 once its report is made, whatever it found. A doctor that cannot make a report at all (no such thing, a home it cannot read) is a refusal and exits 125.</span></div></div>
+        <div class="rule"><div class="k">A doctor never repairs</div><div class="d"><span><code>fix</code> is a runnable command, or null when no command helps. The fix for an outdated worker has two forms. With no Sandbox recorded on the machine it is <code>layerfs machine stop &lt;machine&gt; &amp;&amp; layerfs machine start &lt;machine&gt;</code>. With Sandboxes recorded on it, it is <code>layerfs machine stop &lt;machine&gt; --force &amp;&amp; layerfs machine start &lt;machine&gt;</code>, and the finding's <code>message</code> names their count: <code>machine stop</code> without <code>--force</code> is refused while Sandboxes are on the machine, and they cannot be closed first, because calls through a mismatched worker are not sent. <code>machine start</code> keeps refusing a mismatched worker. Today a Sandbox whose machine's worker is down is offered a forced Close.</span></div></div>
+        <div class="rule"><div class="k">Leftovers</div><div class="d"><span>No doctor walks for them, and <code>home get</code> does not list them: a leftover is disk to reclaim, not a fault. LayerFS removes what interrupted operations left itself, where it can prove nothing owns it (v20): there is no call that lists or removes them.</span></div></div>
+      </div>
+
+      <h3>The page</h3>
+      <p>Five status words cover every row, with the reason in the tip:</p>
+      <div class="sigrow">
+        <span class="sigword"><span class="dot ok"></span>OK</span>
+        <span class="sigword"><span class="dot run"></span>Checking</span>
+        <span class="sigword"><span class="dot off"></span>Not checked</span>
+        <span class="sigword"><span class="dot warn"></span>Notice</span>
+        <span class="sigword"><span class="dot bad"></span>Problem</span>
+      </div>
+      <p class="small">From the report: <code>ok</code> is OK, <code>notice</code> is Notice, <code>warning</code> and <code>error</code> are Problem, <code>not_checked</code> is Not checked. "Not checked" carries its reason in the tip: never, stopped, or waiting on a named thing. A finding keeps its own word, such as Outdated.</p>
+      <ul class="fam-why">
+        <li><b>Opening the page</b> runs no doctor. It reads <code>home get --with tree</code> and shows each thing as Not checked. Workspaces appear where the home records them; the others appear when their Sandbox is checked.</li>
+        <li><b>Head:</b> one headline ("2 problems", "All clear", "Checking… 31 of 38"), one line of counts, and Check all. No problem list and no "needs attention" list.</li>
+        <li><b>Home chip:</b> this install as one chip with its own Check. Clicking it opens its checks.</li>
+        <li><b>Tabs per kind:</b> Machines, Stores, Projects, Sandboxes, Backups, each with a count and a mark. A mark counts only trouble that starts in that tab. The mark's slot is reserved, so the bar does not shift.</li>
+        <li><b>Every row is a folder.</b> Closed, it shows what it has: "4 Stores · 1 Sandbox" on a machine, "2 projects" on a Store. Opened, it lists those things, and each opens the same way, down to projects and Workspaces. Going deeper is opening a folder, not an option.</li>
+        <li><b>Buttons on every row:</b> Check where the thing has a doctor, and Full check beside it on a project and a bucket. A Workspace has none. While a call runs its buttons stay in place, disabled and marked busy, and the column keeps its width, so focus is kept and nothing jumps.</li>
+        <li><b>Marks land per finished thing.</b> Each row shows one small mark per check. A row's marks land together when the progress event for its thing arrives, never one by one. A failed mark differs by shape as well as colour, there is one hollow mark for "not checked", and the mark group is one focusable signal whose accessible name says the state.</li>
+        <li><b>Full check</b> shows a spinner and the elapsed time, with Stop. No percentage: the walk does not know its total. Stop ends the call; it wrote nothing to the Store, so the row returns to its last result.</li>
+        <li><b>Check all is disabled</b> while a fix or a Full check runs, and a row's Check, Full check and fix are disabled while Check all runs. Its tip counts the calls it will make: <code>store doctor &lt;store&gt; ×7</code>.</li>
+        <li><b>Could not check:</b> one signal, with Check as its action, for a <code>not_checked</code> entry that carries a <code>reason</code>, and for a doctor call that was refused, lost or stopped. The tip says which.</li>
+        <li><b>A thing whose own check fails</b> shows what is on it as Not checked, with no buttons, and the tip "waiting on" its root cause. That name is a link that opens and focuses the root cause's row. Under a machine stopped on purpose the tip says "stopped", not waiting.</li>
+        <li><b>The fix button</b> is on the root cause only, in the primary style, with the command in its tip. If the fix is refused the row returns to its previous state with the refusal in its tip, and pressing again is a new call. If its reply is lost the row shows Could not check.</li>
+        <li><b>An outdated worker's fix</b> runs <code>machine stop</code> then <code>machine start</code> behind one button, the form without <code>--force</code> only. The button is off while Sandboxes are on the machine, with the tip "N Sandboxes are on it. Copy the fix to stop it anyway." (R2). The detail panel's Fix line then shows the <code>--force</code> command, with Copy; the page never runs it.</li>
+        <li><b>A closed folder with trouble inside</b> keeps its own dot and adds a mark with a count; its accessible name says "1 problem inside".</li>
+        <li><b>Clicking a row with nothing in it,</b> or a folder with trouble of its own, shows the call, its check list and the fix line with Copy. Nothing there repeats the row as a sentence.</li>
+        <li><b>Every troubled row has an action or a tip.</b> "Backup behind" is on the Store's row: a notice from <code>store doctor</code>, check <code>store.backups</code>, whose <code>message</code> names the bucket and whose <code>fix</code> is <code>layerfs backup create &lt;store&gt; &lt;bucket&gt;</code>. No bucket check reports it, so the bucket's row stays as it is. "Not in the Store" is on the project's row: a notice from <code>project doctor</code> or <code>store doctor</code> for a project on record that the Store does not list. It is a Notice, never a Problem and never "Missing".</li>
+        <li><b>Tips</b> hang off the dot, open after 120 ms, and say something the row does not.</li>
+        <li><b>At phone width</b> the status word comes first and is never cut; the reason is in the tip. The tab bar's edge fades where it scrolls.</li>
+        <li><b>An icon per kind,</b> the plugin's own glyphs: a machine by platform, a Store by engine, the LayerFS mark for a project, the box for a Sandbox, a branch for a Workspace, a bucket by provider. Brand marks draw in the text colour, so colour means state only.</li>
+        <li><b>Not on the page:</b> a Store's check from one more machine (<code>store doctor --machine</code>), and leftovers, which no doctor reports.</li>
+      </ul>
+
+      <h3>Each button and its calls</h3>
+      <div class="tbl"><table style="min-width:680px">
+        <thead><tr><th style="width:32%">Button</th><th>Calls</th></tr></thead>
+        <tbody>
+          <tr><td class="plain">Opening the page</td><td class="cli" style="width:auto">layerfs home get --with tree</td></tr>
+          <tr><td class="plain">Check all</td><td class="cli" style="width:auto">layerfs home doctor<br>layerfs store doctor &lt;store&gt;, for every Store<br>layerfs sandbox doctor &lt;sandbox&gt;, for every Sandbox</td></tr>
+          <tr><td class="plain">Check on the home chip</td><td class="cli" style="width:auto">layerfs home doctor</td></tr>
+          <tr><td class="plain">Check on a machine</td><td class="cli" style="width:auto">layerfs machine doctor &lt;machine&gt;</td></tr>
+          <tr><td class="plain">Check on a Store</td><td class="cli" style="width:auto">layerfs store doctor &lt;store&gt;</td></tr>
+          <tr><td class="plain">Check on a Sandbox</td><td class="cli" style="width:auto">layerfs sandbox doctor &lt;sandbox&gt;</td></tr>
+          <tr><td class="plain">Check on a project</td><td class="cli" style="width:auto">layerfs project doctor &lt;project&gt;</td></tr>
+          <tr><td class="plain">Full check on a project</td><td class="cli" style="width:auto">layerfs project doctor &lt;project&gt; --full</td></tr>
+          <tr><td class="plain">Check on a bucket</td><td class="cli" style="width:auto">layerfs backup doctor &lt;bucket&gt;</td></tr>
+          <tr><td class="plain">Full check on a bucket</td><td class="cli" style="width:auto">layerfs backup doctor &lt;bucket&gt; --full</td></tr>
+          <tr><td class="plain">The fix on an outdated worker, with no Sandbox on the machine</td><td class="cli" style="width:auto">layerfs machine stop &lt;machine&gt;<br>then layerfs machine start &lt;machine&gt;<br>then layerfs machine doctor &lt;machine&gt;<br>and the doctor of each Store on it</td></tr>
+          <tr><td class="plain">The same, with Sandboxes on the machine</td><td class="plain">no call: the button is off; the Fix line shows <code>layerfs machine stop &lt;machine&gt; --force &amp;&amp; layerfs machine start &lt;machine&gt;</code> to copy</td></tr>
+          <tr><td class="plain">Any other fix</td><td class="cli" style="width:auto">the finding's fix line<br>then the doctor of the thing it was on, and of what is on that</td></tr>
+          <tr><td class="plain">Stop on a Full check</td><td class="plain">ends that call; no other call</td></tr>
+          <tr><td class="plain">Copy, a row, a tab</td><td class="plain">no call</td></tr>
+        </tbody>
+      </table></div>
+      <p class="small">Check all leaves out anything waiting on a machine. Each call asks for the long form (<code>--detail</code>) and, where it covers more than one thing, <code>--progress</code>. A standalone page in the dsh-layerfs theme mocks this with working buttons: <code>tmp/doctor-page/index.html</code> in the LayerFS checkout.</p>
+
+      <h3>What each step costs</h3>
+      <div class="tbl"><table style="min-width:760px">
+        <thead><tr><th>Step</th><th>When</th><th>Takes</th><th>What it checks</th><th>Call</th></tr></thead>
+        <tbody>
+          <tr><td class="call">Open</td><td class="plain">On opening the page</td><td class="plain">under a second, contacts nothing</td><td class="plain">Nothing. No doctor runs. The page draws the tree from records and shows each thing as Not checked.</td><td class="cli">layerfs home get --with tree</td></tr>
+          <tr><td class="call">Check</td><td class="plain">Check all, or a row's Check</td><td class="plain">seconds; one call per thing, side by side</td><td class="plain">Platform tool and VM state, worker answers and matches this build, disk, Store reachable, Sandbox daemon, Workspace mounts.</td><td class="cli">layerfs machine doctor dev --progress</td></tr>
+          <tr><td class="call">Full check</td><td class="plain">Only on request, on a project or a bucket</td><td class="plain">a project: up to minutes; a bucket: one small write</td><td class="plain">A project's data, everything reachable from its Branch heads, read and checked. A bucket's write test. Shown as coverage ("data read 2 min ago", "never"), never as a warning.</td><td class="cli">layerfs project doctor qv2-store/qv2-strata --full</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>What the numbers on today's page count</h3>
+      <div class="tbl"><table style="min-width:760px">
+        <thead><tr><th>On screen</th><th>What it counts</th><th>Why it misleads</th></tr></thead>
+        <tbody>
+          <tr><td class="plain">15/26 checks OK</td><td class="plain">Pills: one per probe, plus setup, PostgreSQL and "Home sweep" pills</td><td class="plain">Neither LayerFS checks nor things; the cards below count 18 things</td></tr>
+          <tr><td class="plain">4 errors, beside a legend of 2 errors</td><td class="plain">Findings in the headline, pills in the legend</td><td class="plain">Two units under one word</td></tr>
+          <tr><td class="plain">3 warnings, beside 9 warnings</td><td class="plain">The legend also counts every incomplete report as a warning</td><td class="plain">Coverage shown as trouble</td></tr>
+          <tr><td class="plain">7 incomplete</td><td class="plain">Reports with any unknown or blocked check</td><td class="plain">Mostly things under a stopped or outdated machine, each listed on its own</td></tr>
+          <tr><td class="plain">8 integrity checks were quick</td><td class="plain">Every Store</td><td class="plain">Check all always runs quick, so it is always all of them</td></tr>
+          <tr><td class="plain">Needs attention 7</td><td class="plain">Findings before grouping</td><td class="plain">The list shows grouped rows, and at most 8 findings per report</td></tr>
+          <tr><td class="plain">qv2-store twice, "Also affects 1 more"</td><td class="plain">Findings grouped by message text</td><td class="plain">Different texts stay apart; the "1 more" is qv2-store itself</td></tr>
+        </tbody>
+      </table></div>
+      <p class="small">How a run works today: opening the page already runs the whole-home sweep, worker probes included. Check all runs it again plus one call per target, two at a time, always at quick integrity. A target's last result disappears while it is queued again. The host keeps at most 40 jobs, so a larger home cannot hold one full run. In the frozen report, <code>counts</code> counts things, once each.</p>
+    </section>

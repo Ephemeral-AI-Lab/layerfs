@@ -1,6 +1,6 @@
 //! `lost` is reachable (layerfs-project#113, compute-plane 2.0 P-1, §8): a
-//! Sandbox whose process tree is killed behind control's back reads `lost`
-//! in `sandbox.get`, and `sandbox.close` clears it. The live half needs the
+//! Sandbox whose process tree is killed behind control's back reads
+//! `broken` `lost` in `sandbox.get`, and `sandbox.remove` clears it. The live half needs the
 //! native daemon at LAYERFS_DAEMON; without it, it says NOT_RUN.
 use layerfs_api::home::{self, paths};
 use layerfs_bridge::control::SdkValue;
@@ -34,14 +34,24 @@ fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
 }
 
 #[test]
-fn a_sandbox_killed_behind_controls_back_is_lost_until_closed() {
+fn a_sandbox_killed_behind_controls_back_is_lost_until_removed() {
     let Ok(daemon) = std::env::var("LAYERFS_DAEMON") else {
         eprintln!("NOT_RUN: LAYERFS_DAEMON unset, no live Sandbox");
         return;
     };
     let home = tempdir("home");
     home::open(&home).unwrap();
-    home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    // the native machine's daemon is a setting of its record
+    layerfs_api::call(
+        Some(&home),
+        "machine.update",
+        SdkValue::map([
+            ("machine", SdkValue::text("native")),
+            ("daemon", SdkValue::text(daemon.as_str())),
+        ]),
+        &mut |_| {},
+    )
+    .unwrap();
     let folder = tempdir("folder");
     std::fs::write(folder.join("README.md"), "lost\n").unwrap();
     ok(&home, "store.create", &[("name", t("shop"))]);
@@ -57,12 +67,14 @@ fn a_sandbox_killed_behind_controls_back_is_lost_until_closed() {
         &[
             ("project", t("shop/api")),
             ("name", t("s1")),
+            ("detail", SdkValue::Bool(true)),
             ("machine", t("native")),
         ],
     );
-    assert_eq!(made.get_text("state"), Some("running"));
-    let got = ok(&home, "sandbox.get", &[("name", t("s1"))]);
-    assert_eq!(got.get_text("state"), Some("running"), "{got:?}");
+    assert_eq!(made.get_text("state"), Some("ready"));
+    let get = [("sandbox", t("s1")), ("detail", SdkValue::Bool(true))];
+    let got = ok(&home, "sandbox.get", &get);
+    assert_eq!(got.get_text("state"), Some("ready"), "{got:?}");
 
     // its daemon's process group, killed behind control's back
     let record = home::read_record(&paths::sandbox_record(&home, "s1"))
@@ -76,29 +88,34 @@ fn a_sandbox_killed_behind_controls_back_is_lost_until_closed() {
     assert!(killed.success());
     let deadline = Instant::now() + Duration::from_secs(10);
     let got = loop {
-        let got = ok(&home, "sandbox.get", &[("name", t("s1"))]);
-        if got.get_text("state") != Some("running") || Instant::now() >= deadline {
+        let got = ok(&home, "sandbox.get", &get);
+        if got.get_text("state") != Some("ready") || Instant::now() >= deadline {
             break got;
         }
         std::thread::sleep(Duration::from_millis(100));
     };
-    assert_eq!(got.get_text("state"), Some("lost"), "{got:?}");
-    // the list reads the record alone: it does not ask the machine
+    assert_eq!(got.get_text("state"), Some("broken"), "{got:?}");
+    assert_eq!(got.get_text("reason"), Some("lost"), "{got:?}");
+    // the list reads the record alone, which the get wrote the reason to:
+    // it does not ask the machine
     let listed = layerfs_api::json::print(&ok(&home, "sandbox.list", &[]));
-    assert!(listed.contains("\"s1\""), "{listed}");
+    assert!(
+        listed.contains("\"s1\"") && listed.contains("\"lost\""),
+        "{listed}"
+    );
 
-    // close clears it: the record goes and the name is free
-    let closed = ok(&home, "sandbox.close", &[("name", t("s1"))]);
+    // remove clears it: the record goes and the name is free
+    let closed = ok(&home, "sandbox.remove", &get);
     assert_eq!(
-        closed.get("was_gone"),
-        Some(&SdkValue::Bool(true)),
+        closed.get_text("outcome"),
+        Some("already_gone"),
         "{closed:?}"
     );
     assert_eq!(
-        call(&home, "sandbox.get", &[("name", t("s1"))])
+        call(&home, "sandbox.get", &[("sandbox", t("s1"))])
             .unwrap_err()
             .0,
-        "NoSuchSandbox"
+        "NotFound"
     );
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&folder);

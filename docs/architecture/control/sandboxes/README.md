@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-How a Sandbox is started, reached, used and closed: one `layerfs-daemon` on a
+How a Sandbox is started, reached, used and removed: one `layerfs-daemon` on a
 machine's kernel, the commands run beside it, and the caller-side channel that
 carries its Workspace calls.
 
@@ -31,7 +31,7 @@ runtime owns command launch, streams, exit status and cancel
  route.rs: Executor::Local ------or------ Executor::Worker
         |   (both sides run the same host code below)
         v
- lifecycle.rs, launch/, reopen.rs, close.rs      exec/: run, record, cancel
+ lifecycle.rs, launch/, reopen.rs, remove.rs     exec/: run, record, cancel
         |                                            |
  ======= layerfs-sandbox-backend ====================|=================
         v                                            v
@@ -52,26 +52,26 @@ runtime owns command launch, streams, exit status and cancel
 | Behaviour | Detail | Source |
 | --- | --- | --- |
 | Choose the backend | `deploy.sandbox` (`LAYERFS_SANDBOX`) is `native` (macOS) or `namespaces` (Linux). Unset or `docker` names the retired docker backend and is refused; `native` on Linux and `namespaces` off Linux are refused; all before any effect. | [`runtime.rs`](../../../../control/crates/layerfs-sandbox/src/runtime.rs) `backend` |
-| `sandbox.create` | Under the Sandbox folder's guard: a started record is `Exists` (a retired docker record is forgotten first). Builds a fresh `DaemonSetup` (listen `127.0.0.1:0`, keys, kernel route, overlay template, mount home, command identity, limits), launches once and waits up to 30 s for the daemon's listen line. A sqlite Store's directory is bound in; a PostgreSQL Store's server is reach-checked first. | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `create`, `setup`; [`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs); [`launch/provider.rs`](../../../../control/crates/layerfs-sandbox/src/launch/provider.rs); [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `reach_check` |
+| `sandbox.create` | Under the Sandbox folder's guard: a started record is `Exists` (a record of the retired docker backend is cleared first). Builds a fresh `DaemonSetup` (listen `127.0.0.1:0`, keys, kernel route, overlay template, mount home, command identity, limits), launches once and waits up to 30 s for the daemon's listen line. A sqlite Store's directory is bound in; a PostgreSQL Store's server is reach-checked first. | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `create`, `setup`; [`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs); [`launch/provider.rs`](../../../../control/crates/layerfs-sandbox/src/launch/provider.rs); [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `reach_check` |
 | Command identity | Linux: uid 501, gid 20. macOS: the caller's own uid and gid. | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `setup`, [`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) |
 | Launch on the kernel | `Runtime::launch_with_binds` starts the daemon once in a private directory and returns the owner; a failure after an effect returns it in `LaunchFailure::instance` for one stop and one delete. | [`runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs), [Backends](backends.md) |
 | Reopen | A later call reopens the Sandbox by its recorded runtime (`native` or `namespaces`); `Runtime::reopen` checks the recorded process identity and starts nothing. A daemon found gone or stopped is `NoSuchSandbox`, with every Workspace it held lost. | [`reopen.rs`](../../../../control/crates/layerfs-sandbox/src/reopen.rs), [`registry.rs`](../../../../control/crates/layerfs-sandbox/src/registry.rs) `sandbox_live` |
 | Route a host operation | One of ten operations (`OPS`) runs in this process or is sent once to the machine's worker as `sandbox.host`; nothing starts a stopped machine. | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs), [`host/call.rs`](../../../../control/crates/layerfs-sandbox/src/host/call.rs), [Daemon channel and exec](daemon-channel-and-exec.md#routers-and-host-the-host-operation) |
 | Workspace calls | Mount (bind, then attach), Commit, unmount and status go to the daemon over a pooled authenticated connection, one exchange each. | [`daemon/`](../../../../control/crates/layerfs-sandbox/src/daemon), [Daemon channel and exec](daemon-channel-and-exec.md#daemon-the-control-channel) |
 | `workspace.exec` | Runs `bash -c <command>` through `Sandbox::run_in` in the Workspace directory, `HOME` the Sandbox scratch directory; keeps an exec record while it runs; output inline up to 1 MiB per stream, else spooled. The daemon is not involved. | [`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs), [Daemon channel and exec](daemon-channel-and-exec.md#exec-commands-and-cancel) |
-| `workspace.exec_cancel` | Marks the record under the Sandbox lock, then signals once: SIGTERM, the grace (5000 ms default), SIGKILL. | [`exec/cancel.rs`](../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs), [`stop.rs`](../../../../control/crates/layerfs-sandbox-backend/src/stop.rs) |
-| `sandbox.close` | Settles running commands (`Busy`, or each cancelled with `force`); refuses `MountsActive` while a Workspace is mounted, unless `force`; then `stop(5)` and `delete`, each attempted once. | [`close.rs`](../../../../control/crates/layerfs-sandbox/src/close.rs), [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
+| `workspace.cancel` (`--exec E` for one command) | Marks the record under the Sandbox lock, then signals once: SIGTERM, the grace (5000 ms default), SIGKILL. | [`exec/cancel.rs`](../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs), [`stop.rs`](../../../../control/crates/layerfs-sandbox-backend/src/stop.rs) |
+| `sandbox.remove` | Records its `sandbox.remove` intent, then settles running commands (`Busy`, or each cancelled with `force`); refuses `MountsActive` while a Workspace is mounted, unless `force`; then `stop(5)` and `delete`, each attempted once, through the internal host op `sandbox.close` (`lifecycle::close`), and removes the record. | [`remove.rs`](../../../../control/crates/layerfs-sandbox/src/remove.rs), [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `close` |
 | Direct route | A Sandbox whose daemon port its machine forwards to this host (`lima`'s `ssh -L`) keeps its keys in the home's `control.json` (0600); its Workspace calls dial the daemon from the home, while exec still goes through the worker. | [`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs) |
 | `sandbox.get` | Its record, then two reads that ask only the daemon: the Workspace list (`sandbox.list_workspaces` with `history: false`, so the daemon reads no Branch page, Layer or Commit) and, on the same lent connection, `backend.daemon.connection_failures`, bounded to 2 s and fenced at that deadline. It takes no Store lease, opens no Store and writes no record or folder on any side ([Store leases](#store-leases)). | [`get.rs`](../../../../control/crates/layerfs-sandbox/src/get.rs), [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `host_op`, `in_worker`, [`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs) `served`, [`daemon/capacity.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/capacity.rs) |
-| Inspection | The reads a client polls (`logs.machine`, `logs.sandbox`, `sandbox.files`, `machine.files`, Workspace overlay sizes) go through one bounded route, the worker operation `inspect`: no lock, lease, daemon call or write; two at a time per process. | [`inspect/`](../../../../control/crates/layerfs-sandbox/src/inspect), [Inspection](inspect.md) |
-| Retired docker records | A record whose `backend` or `runtime` is `docker`, or a started docker-machine record with no `runtime`: every call but `sandbox.close` is `Unsupported`, naming `docker rm -f <container>`; `sandbox.close` forgets it. | [`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) `retired_container`, [`reopen.rs`](../../../../control/crates/layerfs-sandbox/src/reopen.rs) `retired`, [`close.rs`](../../../../control/crates/layerfs-sandbox/src/close.rs) `forget` |
+| Inspection | The reads a client polls (`machine.log`, `sandbox.log`, `sandbox.files`, `machine.files`, Workspace overlay sizes) go through one bounded route, the worker operation `inspect`: no lock, lease, daemon call or write; two at a time per process. | [`inspect/`](../../../../control/crates/layerfs-sandbox/src/inspect), [Inspection](inspect.md) |
+| Retired docker records | A record whose `backend` or `runtime` is `docker`, or a started docker-machine record with no `runtime`: every call but `sandbox.remove` is `Unsupported`, naming `docker rm -f <container>` when the daemon record keeps the container's name (else saying it does not); `sandbox.remove` removes its records, `outcome: already_gone`, and `left` says its container was not touched. | [`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) `retired_container`, [`reopen.rs`](../../../../control/crates/layerfs-sandbox/src/reopen.rs) `retired`, [`remove.rs`](../../../../control/crates/layerfs-sandbox/src/remove.rs) `forget` |
 | Machine-stop fields (record format) | A forced `machine.stop` adds two Bool fields to the Sandbox's `record.json`: `machine_stopped` (its runtime was stopped with the machine; shown `gone`) and `machine_stop_unknown` (the stop was not confirmed; shown `unresolved`). An absent field reads `false`, so older records need no change and `"v"` stays `1`. A build older than these fields keeps them as read but shows such a Sandbox as it was before the stop. | [`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) `machine_stopped`, `with_machine_stop`; [`machine_force.rs`](../../../../control/crates/layerfs-control/src/machine_force.rs) `mark` |
 
 ## Store leases
 
 A lease is `store/<store>/open/<pid>` in the home, taken under the Store's
-lock ([Stores and projects](../stores-and-projects/README.md)); `store push`,
-`pull`, `remove` and `disconnect` refuse `InUse` while another process holds
+lock ([Stores and projects](../stores-and-projects/README.md)); `store move`,
+`remove` and `disconnect` refuse `InUse` while another process holds
 one. Which Sandbox and Workspace calls take one depends on where the call
 runs:
 
@@ -79,16 +79,16 @@ runs:
 | --- | --- | --- | --- |
 | `sandbox.list` | none: records only | none | none |
 | `sandbox.get` | none; no Store opened, nothing written | none at the home; the worker writes no record and opens no Store | none; no Store opened, nothing written |
-| `sandbox.create`, `sandbox.close` | lease; a sqlite Store is opened here and keeps the lease until it closes (idle 60 s); a PostgreSQL Store's lease lasts the call | none at the home; the worker keeps the Store's and project's records and opens the Store under its root | as a machine with a worker |
+| `sandbox.create`, `sandbox.remove` | lease; a sqlite Store is opened here and keeps the lease until it closes (idle 60 s); a PostgreSQL Store's lease lasts the call | none at the home; the worker keeps the Store's and project's records and opens the Store under its root | as a machine with a worker |
 | `workspace.mount`, `commit`, `unmount`, `status` | as `sandbox.create` | as `sandbox.create` | lease for the call; no Store opened by the Sandbox code |
-| `workspace.exec`, `exec_cancel` | as `sandbox.create` | as `sandbox.create` | as a machine with a worker |
+| `workspace.exec`, `workspace.cancel` | as `sandbox.create` | as `sandbox.create` | as a machine with a worker |
 
 `sandbox.get` is the call a client polls, so it is the one that holds
 nothing: `Op::asks_daemon_only` names its two host operations, and
 `route::host_op`, `route::in_worker` and `direct::served` return for them
 before the lease, the Store open, the worker's record writes and the run
 root's creation (layerfs-project#181). A recorded Sandbox still holds its
-Store by its record: `store push`, `pull`, `remove` and `disconnect` refuse
+Store by its record: `store move`, `remove` and `disconnect` refuse
 `InUse` while one of the Store's projects has a Sandbox, whether or not
 anything reads it. Every public call, a get included, appends one line to the
 home's call log (`trace/calls.jsonl`).
@@ -124,7 +124,7 @@ home's call log (`trace/calls.jsonl`).
 | Exec output | 1 MiB per stream inline, then spooled to a file; no total cap, nothing cut. | [`output.rs`](../../../../control/crates/layerfs-sandbox/src/output.rs) |
 | Exec duration | No timeout; a command runs until it ends or is cancelled. | [`host_process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/exec.rs), [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs) |
 | Stop and delete | A second `stop`, and `delete` before a known stop, are refused. | [Backends](backends.md#stop-and-delete) |
-| Unmount or close with live commands | `Busy` (`detail.execs`); with `force` each is cancelled first; one not confirmed is `Unknown`. | `settle` ([`exec/cancel.rs`](../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs)) |
+| Unmount or remove with live commands | `Busy` (`detail.execs`); with `force` each is cancelled first; one not confirmed is `Unknown`. | `settle` ([`exec/cancel.rs`](../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs)) |
 
 ## Demonstration
 
@@ -138,8 +138,8 @@ home's call log (`trace/calls.jsonl`).
 | [`namespaces_userns.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/namespaces_userns.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox-backend --test namespaces_userns` | Linux, no root | Under the filter `unshare(CLONE_NEWUSER)` answers `EPERM` and `clone3` `ENOSYS`, while a threaded command still runs. |
 | [`exec_start_race.rs`](../../../../control/crates/layerfs-sandbox/tests/exec_start_race.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox --test exec_start_race` | Unix | A cancel before the command runs answers `cancelled` and the owner ends the command at spawn. |
 | [`pool_admission.rs`](../../../../control/crates/layerfs-sandbox/tests/pool_admission.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox --test pool_admission` | Unix | A full daemon answers the next connection with a capacity notice before the handshake: `Capacity`, nothing sent. |
-| [`sandbox_get_no_lease.rs`](../../../../api/crates/layerfs-api/tests/sandbox_get_no_lease.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test sandbox_get_no_lease` (also with `--features machine`) | Unix; a stand-in daemon and this build's worker on a scratch root | While the Store's lock is held and its record carries a running `store.push`, `sandbox.get` answers on the native, worker and forwarded routes for 0, 1 and 4 Workspaces; no lease folder, Store file or run root appears and no file changes in the home or under the worker's root; a daemon from before `history: false` gives the same answer. |
-| [`retired_docker.rs`](../../../../control/crates/layerfs-sandbox/tests/retired_docker.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox --test retired_docker` | Linux, macOS | A docker-backend record is refused `Unsupported` and `sandbox.close` forgets it, touching nothing it names. |
+| [`sandbox_get_no_lease.rs`](../../../../api/crates/layerfs-api/tests/sandbox_get_no_lease.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test sandbox_get_no_lease` (also with `--features machine`) | Unix; a stand-in daemon and this build's worker on a scratch root | While the Store's lock is held and its record carries a running `store.push` (a pre-2.0 move intent, still read as `store.move`), `sandbox.get` answers on the native, worker and forwarded routes for 0, 1 and 4 Workspaces; no lease folder, Store file or run root appears and no file changes in the home or under the worker's root; a daemon from before `history: false` gives the same answer. |
+| [`retired_docker.rs`](../../../../control/crates/layerfs-sandbox/tests/retired_docker.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox --test retired_docker` | Linux, macOS | A docker-backend record is refused `Unsupported` and `sandbox.remove` removes its records, touching nothing it names. |
 
 ## Pages
 

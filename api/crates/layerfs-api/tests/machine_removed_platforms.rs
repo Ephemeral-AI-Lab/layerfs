@@ -27,35 +27,29 @@ fn t(s: &str) -> SdkValue {
 }
 
 fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, (String, String)> {
+    let detail = ("detail".to_owned(), SdkValue::Bool(true));
     let args = SdkValue::Map(
-        args.iter()
-            .map(|(n, v)| ((*n).to_owned(), v.clone()))
+        (args.iter().map(|(n, v)| ((*n).to_owned(), v.clone())))
+            .chain([detail])
             .collect(),
     );
     layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 fn shows_removed(machine: &SdkValue, platform: &str, reason: &str) {
+    let name = machine.get_text("machine").unwrap();
     assert_eq!(machine.get_text("platform"), Some(platform), "{machine:?}");
-    assert_eq!(machine.get_text("backend"), Some("-"), "{machine:?}");
-    assert_eq!(
-        machine.get_text("state"),
-        Some("unsupported"),
-        "{machine:?}"
-    );
-    assert_eq!(machine.get_text("error"), Some(reason), "{machine:?}");
-    let supports = machine.get("supports").unwrap();
-    assert_eq!(supports.get("sqlite"), Some(&SdkValue::Bool(false)));
-    assert_eq!(
-        supports.get("postgresql_sandbox"),
-        Some(&SdkValue::Bool(false))
-    );
-    assert_eq!(supports.get_text("reason"), Some(reason));
-    assert_eq!(supports.get("log"), Some(&SdkValue::Bool(false)));
+    assert_eq!(machine.get("backend"), Some(&SdkValue::Null), "{machine:?}");
+    assert_eq!(machine.get_text("state"), Some("broken"), "{machine:?}");
+    assert_eq!(machine.get_text("reason"), Some("unsupported"));
+    let fix = format!("layerfs machine remove {name}");
+    assert_eq!(machine.get_text("fix"), Some(fix.as_str()));
+    assert_eq!(machine.get_text("message"), Some(reason), "{machine:?}");
+    assert_eq!(machine.get("supports"), Some(&SdkValue::List(Vec::new())));
 }
 
 #[test]
-fn a_removed_platform_is_shown_refused_and_forgotten() {
+fn a_removed_platform_is_shown_refused_and_its_record_removed() {
     // the built-in docker machine is probed by `machine.list`: no tool is found
     let empty = tempdir("path");
     std::env::set_var("PATH", &empty);
@@ -91,31 +85,29 @@ fn a_removed_platform_is_shown_refused_and_forgotten() {
     }
 
     let list = call(&home, "machine.list", &[]).unwrap();
-    let SdkValue::List(listed) = list.get("machines").unwrap() else {
+    let SdkValue::List(listed) = list.get("items").unwrap() else {
         panic!("{list:?}")
     };
-    for (name, platform, (field, value)) in &machines {
+    for (name, platform, _) in &machines {
         let reason = removed_reason(platform).unwrap();
         let shown = listed
             .iter()
-            .find(|m| m.get_text("name") == Some(name))
+            .find(|m| m.get_text("machine") == Some(name))
             .unwrap_or_else(|| panic!("{name} not listed: {list:?}"));
         shows_removed(shown, platform, reason);
-        assert_eq!(shown.get(field), Some(value), "{shown:?}");
-        let got = call(&home, "machine.get", &[("name", t(name))]).unwrap();
+        let got = call(&home, "machine.get", &[("machine", t(name))]).unwrap();
         shows_removed(&got, platform, reason);
     }
 
     for (name, platform, _) in &machines {
         let reason = removed_reason(platform).unwrap();
         let refused = [
-            ("machine.status", vec![]),
             ("machine.start", vec![]),
             ("machine.stop", vec![]),
             ("machine.update", vec![("cpus", SdkValue::Int(4))]),
         ];
         for (call_name, mut args) in refused {
-            args.push(("name", t(name)));
+            args.push(("machine", t(name)));
             assert_eq!(
                 call(&home, call_name, &args),
                 Err(("Unsupported".to_owned(), reason.to_owned())),
@@ -141,21 +133,22 @@ fn a_removed_platform_is_shown_refused_and_forgotten() {
 
     for (name, platform, _) in &machines {
         let reason = removed_reason(platform).unwrap();
-        let removed = call(&home, "machine.remove", &[("name", t(name))]).unwrap();
-        assert_eq!(removed.get_text("name"), Some(*name));
-        assert_eq!(removed.get("removed"), Some(&SdkValue::Bool(true)));
-        let note = removed.get_text("note").unwrap();
-        assert!(note.starts_with("forgot the record only: "), "{note}");
+        // v19: the home's image copy locks of the machine go with it
+        let locks = home.join("run/image-lock").join(name);
+        std::fs::create_dir_all(&locks).unwrap();
+        std::fs::write(locks.join(format!("{}.lock", "a".repeat(64))), b"").unwrap();
+        let removed = call(&home, "machine.remove", &[("machine", t(name))]).unwrap();
+        assert!(!locks.exists(), "{name}'s image copy locks are removed");
+        assert_eq!(removed.get_text("machine"), Some(*name));
+        assert_eq!(removed.get("forgotten"), None);
+        assert_eq!(removed.get_text("outcome"), Some("removed"));
+        let note = removed.get_text("message").unwrap();
+        assert!(note.starts_with("only its record was removed ("), "{note}");
         assert!(note.contains(reason), "{note}");
-        let left = match *platform {
-            "ssh" => "nothing on its host was touched",
-            "firecracker" => "its microVM lfs-0123abcd-old-fc was not touched: its folder /layerfs/data/firecracker/vms/lfs-0123abcd-old-fc and data disk /layerfs/data/firecracker/disks/lfs-0123abcd-old-fc.ext4 stay in Lima machine dev",
-            _ => "`msb remove --force lfs-0123abcd-old-msb` and `msb volume remove lfs-0123abcd-old-msb-data`",
-        };
-        assert!(note.contains(left), "{note}");
+        assert!(note.ends_with("nothing on its host was touched"), "{note}");
         assert!(!paths::machine_dir(&home, name).exists());
         assert_eq!(
-            call(&home, "machine.get", &[("name", t(name))])
+            call(&home, "machine.get", &[("machine", t(name))])
                 .unwrap_err()
                 .0,
             "NotFound"

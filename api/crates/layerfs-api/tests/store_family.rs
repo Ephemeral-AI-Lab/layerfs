@@ -1,7 +1,7 @@
-//! sqlite Stores (#533 step 8, #536 §7.3): create on native, list/get/status,
-//! a push to a machine behind a worker and a pull back with history heads
-//! equal, the refusals of push and pull, and the InUse refusals of push and
-//! remove.
+//! sqlite Stores (#533 step 8, #536 §7.3; call surface 2.0): create on
+//! native, list and get (records only and live), a move to a machine behind
+//! a worker and a move back with history heads equal, the refusals of a
+//! move, and the InUse refusals of a move and a remove.
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::net::TcpListener;
@@ -36,17 +36,36 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
     layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
+/// [`call`] asking for the long form.
+fn detail(
+    home: &Path,
+    name: &str,
+    args: &[(&str, SdkValue)],
+) -> Result<SdkValue, (String, String)> {
+    let mut args = args.to_vec();
+    args.push(("detail", SdkValue::Bool(true)));
+    call(home, name, &args)
+}
+
 /// A home with machines `native` and `box`; `box` is a worker in this test
 /// process whose root is a directory of its own.
 fn home_with_box() -> (PathBuf, PathBuf) {
     let home = tempdir("home");
     home::open(&home).unwrap();
-    for (name, platform) in [("native", "native"), ("box", "lima")] {
-        write_record(
-            &paths::machine_record(&home, name),
-            &SdkValue::map([("name", t(name)), ("platform", t(platform))]),
-        )
-        .unwrap();
+    // `box` records its provider name, as every 2.0 create does
+    for (name, platform, vm_name) in [
+        ("native", "native", None),
+        ("box", "lima", Some("layerfs-test-box")),
+    ] {
+        let mut record = SdkValue::map([
+            ("name", t(name)),
+            ("platform", t(platform)),
+            ("state", t("running")),
+        ]);
+        if let Some(vm_name) = vm_name {
+            record = home::with_field(record, "vm_name", t(vm_name));
+        }
+        write_record(&paths::machine_record(&home, name), &record).unwrap();
     }
     let root = tempdir("guest");
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -62,7 +81,7 @@ fn home_with_box() -> (PathBuf, PathBuf) {
 }
 
 #[test]
-fn create_list_get_and_status() {
+fn create_list_and_get() {
     use std::os::unix::fs::PermissionsExt;
     let (home, root) = home_with_box();
     // a pre-existing store directory with group/other access is refused up
@@ -93,7 +112,7 @@ fn create_list_get_and_status() {
     );
     std::fs::remove_dir_all(&bad_dir).unwrap();
 
-    let made = call(&home, "store.create", &[("name", t("shop"))]).unwrap();
+    let made = detail(&home, "store.create", &[("name", t("shop"))]).unwrap();
     assert_eq!(
         std::fs::metadata(paths::store_dir(&home, "shop"))
             .unwrap()
@@ -103,7 +122,10 @@ fn create_list_get_and_status() {
         0o700,
         "a Store's own folder is 0700"
     );
+    assert_eq!(made.get_text("outcome"), Some("created"));
     assert_eq!(made.get_text("machine"), Some("native"));
+    assert_eq!(made.get_text("engine"), Some("sqlite"));
+    assert!(made.get_text("sqlite_version").is_some(), "{made:?}");
     assert!(
         made.get("cursor").is_none(),
         "the cursor key never leaves the home"
@@ -116,30 +138,64 @@ fn create_list_get_and_status() {
         "Exists"
     );
 
-    let list = call(&home, "store.list", &[]).unwrap();
+    // the short form: a ready Store's row leaves its state out
+    let short = call(&home, "store.list", &[]).unwrap();
+    assert_eq!(
+        layerfs_api::json::print(&short),
+        r#"{"items":[{"store":"shop","engine":"sqlite","machine":"native"}]}"#
+    );
+    let list = detail(&home, "store.list", &[]).unwrap();
     let SdkValue::List(items) = list.get("items").unwrap() else {
         panic!()
     };
     assert_eq!(items.len(), 1);
-    // each item carries the state `store.status` shows (#536 §10b)
-    assert_eq!(items[0].get_text("state"), Some("idle"), "{items:?}");
+    // each item carries its records-only state
+    assert_eq!(items[0].get_text("state"), Some("ready"), "{items:?}");
     assert_eq!(
-        call(&home, "store.get", &[("name", t("nope"))])
+        call(&home, "store.get", &[("store", t("nope"))])
             .unwrap_err()
             .0,
         "NotFound"
     );
 
-    let status = call(&home, "store.status", &[("name", t("shop"))]).unwrap();
-    assert_eq!(status.get_text("state"), Some("idle"));
+    let got = call(&home, "store.get", &[("store", t("shop"))]).unwrap();
     assert_eq!(
-        status.get("file").and_then(|f| f.get("exists")),
-        Some(&SdkValue::Bool(true))
+        layerfs_api::json::print(&got),
+        r#"{"engine":"sqlite","state":"ready","machine":"native"}"#
     );
+    // a live read finds the file and nobody holding it, and notes when
+    let live = detail(
+        &home,
+        "store.get",
+        &[("store", t("shop")), ("with", t("live"))],
+    )
+    .unwrap();
+    assert_eq!(live.get_text("state"), Some("ready"), "{live:?}");
+    assert!(live.get_text("observed_at").is_some(), "{live:?}");
+    let section = live.get("live").unwrap();
+    assert_eq!(section.get("holders"), Some(&SdkValue::List(vec![])));
+    assert_eq!(section.get("behind"), Some(&SdkValue::List(vec![])));
+    // after that read the records hold when it was observed: a ready
+    // Store's short form leaves it out unless `--with live` asks (R3 F3);
+    // the long form keeps it
+    let got = call(&home, "store.get", &[("store", t("shop"))]).unwrap();
+    assert_eq!(got.get("observed_at"), None, "{got:?}");
+    let short = call(&home, "store.list", &[]).unwrap();
     assert_eq!(
-        status.get("file").and_then(|f| f.get("incoming_bytes")),
-        Some(&SdkValue::Int(0))
+        layerfs_api::json::print(&short),
+        r#"{"items":[{"store":"shop","engine":"sqlite","machine":"native"}]}"#
     );
+    let long = detail(&home, "store.get", &[("store", t("shop"))]).unwrap();
+    assert!(long.get_text("observed_at").is_some(), "{long:?}");
+    let asked = call(
+        &home,
+        "store.get",
+        &[("store", t("shop")), ("with", t("live"))],
+    )
+    .unwrap();
+    assert!(asked.get_text("observed_at").is_some(), "{asked:?}");
+    // nothing in the live section is news: it stays out (R4 F10)
+    assert_eq!(asked.get("live"), None, "{asked:?}");
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
 }
@@ -154,8 +210,12 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
     let mut snap = Vec::new();
     let mut sent = Vec::new();
     let mut verified = Vec::new();
-    let args = SdkValue::map([("name", t("shop")), ("machine", t("box"))]);
-    let moved = layerfs_api::call(Some(&home), "store.push", args, &mut |event| {
+    let args = SdkValue::map([
+        ("store", t("shop")),
+        ("machine", t("box")),
+        ("detail", SdkValue::Bool(true)),
+    ]);
+    let moved = layerfs_api::call(Some(&home), "store.move", args, &mut |event| {
         let progress = event.get("progress").unwrap();
         let phase = progress.get_text("phase").unwrap();
         if phases.last().map(String::as_str) != Some(phase) {
@@ -201,7 +261,9 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
             (Some(all.clone()), Some(all.clone())),
         ]
     );
-    let heads = moved.get("heads").cloned().unwrap();
+    assert_eq!(moved.get_text("outcome"), Some("moved"));
+    assert_eq!(moved.get_int("moved_bytes"), Some(bytes.len() as i64));
+    let heads = moved.get("heads_sha256").cloned().unwrap();
     assert!(
         !paths::store_file(&home, "shop").exists(),
         "the source copy is retired"
@@ -221,30 +283,38 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
             .and_then(|last| last.get("retired")),
         Some(&SdkValue::Bool(true))
     );
-    // its machine's worker answers: the list finds it idle there
-    let listed = call(&home, "store.list", &[]).unwrap();
+    // the list finds it ready there, and records the move
+    let listed = detail(&home, "store.list", &[]).unwrap();
     let Some(SdkValue::List(items)) = listed.get("items") else {
         panic!("{listed:?}")
     };
     assert_eq!(items[0].get_text("machine"), Some("box"));
-    assert_eq!(items[0].get_text("state"), Some("idle"), "{items:?}");
+    assert_eq!(items[0].get_text("state"), Some("ready"), "{items:?}");
+    let last = items[0].get("last_transfer").unwrap();
+    assert_eq!(last.get_text("call"), Some("move"));
+    assert_eq!(last.get_text("to"), Some("box"));
+    assert_eq!(last.get("heads_sha256"), Some(&heads));
 
-    // a second push is refused before any effect: the Store is not on native
+    // a second move there is refused before any effect: it is there
     let (code, message) = call(
         &home,
-        "store.push",
-        &[("name", t("shop")), ("machine", t("box"))],
+        "store.move",
+        &[("store", t("shop")), ("machine", t("box"))],
     )
     .unwrap_err();
     assert_eq!(code, "InvalidInput", "{message}");
-    assert!(message.contains("store pull shop"), "{message}");
+    assert!(message.contains("already on box"), "{message}");
 
     let mut pull_snap = Vec::new();
     let mut pull_verified = Vec::new();
     let back = layerfs_api::call(
         Some(&home),
-        "store.pull",
-        SdkValue::map([("name", t("shop"))]),
+        "store.move",
+        SdkValue::map([
+            ("store", t("shop")),
+            ("machine", t("native")),
+            ("detail", SdkValue::Bool(true)),
+        ]),
         &mut |event| {
             let progress = event.get("progress").unwrap();
             let phase = progress.get_text("phase").unwrap();
@@ -278,7 +348,7 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
     );
     assert_eq!(back.get_text("from"), Some("box"));
     assert_eq!(back.get_text("to"), Some("native"));
-    assert_eq!(back.get("heads"), Some(&heads));
+    assert_eq!(back.get("heads_sha256"), Some(&heads));
     assert_eq!(
         std::fs::read(paths::store_file(&home, "shop")).unwrap(),
         bytes
@@ -289,7 +359,7 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
 }
 
 #[test]
-fn push_and_remove_refuse_a_store_in_use_and_remove_deletes_it() {
+fn move_and_remove_refuse_a_store_in_use_and_remove_deletes_it() {
     let (home, root) = home_with_box();
     call(&home, "store.create", &[("name", t("shop"))]).unwrap();
     // process 1 is always alive: its lease holds the Store
@@ -298,22 +368,27 @@ fn push_and_remove_refuse_a_store_in_use_and_remove_deletes_it() {
     std::fs::write(&lease, "1\n").unwrap();
     let moved = call(
         &home,
-        "store.push",
-        &[("name", t("shop")), ("machine", t("box"))],
+        "store.move",
+        &[("store", t("shop")), ("machine", t("box"))],
     );
     assert_eq!(moved.unwrap_err().0, "InUse");
     assert_eq!(
-        call(&home, "store.remove", &[("name", t("shop"))])
+        call(&home, "store.remove", &[("store", t("shop"))])
             .unwrap_err()
             .0,
         "InUse"
     );
-    let status = call(&home, "store.status", &[("name", t("shop"))]).unwrap();
-    assert_eq!(status.get_text("state"), Some("in_use"));
-    let listed = call(&home, "store.list", &[]).unwrap();
-    assert!(
-        layerfs_api::json::print(&listed).contains(r#""state":"in_use""#),
-        "{listed:?}"
+    // a holder is no state of the Store: a live read names it
+    let live = call(
+        &home,
+        "store.get",
+        &[("store", t("shop")), ("with", t("live"))],
+    )
+    .unwrap();
+    assert_eq!(live.get_text("state"), Some("ready"), "{live:?}");
+    assert_eq!(
+        live.get("live").and_then(|live| live.get("holders")),
+        Some(&SdkValue::List(vec![SdkValue::Int(1)]))
     );
     std::fs::remove_file(&lease).unwrap();
 
@@ -322,8 +397,8 @@ fn push_and_remove_refuse_a_store_in_use_and_remove_deletes_it() {
     std::fs::write(paths::store_file(&root, "shop"), b"x").unwrap();
     let (code, message) = call(
         &home,
-        "store.push",
-        &[("name", t("shop")), ("machine", t("box"))],
+        "store.move",
+        &[("store", t("shop")), ("machine", t("box"))],
     )
     .unwrap_err();
     assert_eq!(code, "Exists", "{message}");
@@ -334,7 +409,7 @@ fn push_and_remove_refuse_a_store_in_use_and_remove_deletes_it() {
         .unwrap();
     assert_eq!(record.get_text("machine"), Some("native"));
 
-    call(&home, "store.remove", &[("name", t("shop"))]).unwrap();
+    call(&home, "store.remove", &[("store", t("shop"))]).unwrap();
     assert!(!paths::store_dir(&home, "shop").exists());
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
@@ -345,7 +420,7 @@ fn push_and_remove_refuse_a_store_in_use_and_remove_deletes_it() {
 /// (`process::exit` runs no destructor), which is what a `SIGKILL`ed opener
 /// leaves. It runs as a child of the test below, never on its own.
 #[test]
-#[ignore = "child of snapshot_checkpoints_an_unheld_leftover_wal_before_pushing_and_pulling"]
+#[ignore = "child of snapshot_checkpoints_an_unheld_leftover_wal_before_moving_either_way"]
 fn a_killed_opener_leaves_its_log_frames() {
     let Ok(home) = std::env::var("LAYERFS_TEST_WAL_HOME") else {
         return;
@@ -418,7 +493,7 @@ fn wal_bytes(file: &Path) -> u64 {
 }
 
 #[test]
-fn snapshot_checkpoints_an_unheld_leftover_wal_before_pushing_and_pulling() {
+fn snapshot_checkpoints_an_unheld_leftover_wal_before_moving_either_way() {
     use std::os::unix::fs::PermissionsExt;
     let (home, root) = home_with_box();
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
@@ -441,7 +516,7 @@ fn snapshot_checkpoints_an_unheld_leftover_wal_before_pushing_and_pulling() {
         &[
             ("project", t("shop/api")),
             ("name", t("dev")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     )
     .unwrap();
@@ -461,23 +536,28 @@ fn snapshot_checkpoints_an_unheld_leftover_wal_before_pushing_and_pulling() {
     let store_path = paths::store_file(&home, "shop");
     assert_eq!(wal_bytes(&store_path), 0, "a closed Store keeps no log");
 
-    // a killed opener's log on native: `store.push` folds it in and sends
+    // a killed opener's log on native: `store.move` folds it in and sends
     kill_an_opener(&home, &store_path);
     assert!(wal_bytes(&store_path) > 0, "the killed opener kept its log");
-    let pushed = call(
+    let pushed = detail(
         &home,
-        "store.push",
-        &[("name", t("shop")), ("machine", t("box"))],
+        "store.move",
+        &[("store", t("shop")), ("machine", t("box"))],
     )
     .unwrap();
     assert_eq!(pushed.get_text("to"), Some("box"));
     assert_eq!(wal_bytes(&store_path), 0, "the push folded the log in");
 
-    // and on the machine: `store.pull` folds it in there before reading
+    // and on the machine: the move back folds it in there before reading
     let remote = paths::store_file(&root, "shop");
     kill_an_opener(&home, &remote);
     assert!(wal_bytes(&remote) > 0, "the killed opener kept its log");
-    let pulled = call(&home, "store.pull", &[("name", t("shop"))]).unwrap();
+    let pulled = detail(
+        &home,
+        "store.move",
+        &[("store", t("shop")), ("machine", t("native"))],
+    )
+    .unwrap();
     assert_eq!(pulled.get_text("to"), Some("native"));
     let read = call(
         &home,
@@ -515,13 +595,17 @@ fn compact_of_a_remote_sqlite_store_takes_its_machines_worker_route() {
     .unwrap();
     write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-test-box")),
+        ]),
     )
     .unwrap();
     // No worker is recorded for `box`: the call takes the machine's worker
     // route (spec S6, #42 D5), starts nothing and is `Unavailable` naming the
     // fix. It never compacts a file here instead.
-    let (code, message) = call(&home, "store.compact", &[("name", t("shop"))]).unwrap_err();
+    let (code, message) = call(&home, "store.compact", &[("store", t("shop"))]).unwrap_err();
     assert_eq!(code, "Unavailable", "{message}");
     assert!(message.contains("layerfs machine start box"), "{message}");
     assert!(

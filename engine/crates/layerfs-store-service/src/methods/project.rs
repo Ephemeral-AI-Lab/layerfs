@@ -1,7 +1,7 @@
 //! `project.list_branches`, `project.stats` and `project.remove_file`.
-use crate::methods::args::{invalid, paging, project, text, Answer};
+use crate::methods::args::{invalid, project, text, Answer};
 use crate::{
-    history::{branch, lookup},
+    history::{listing, lookup, resolve},
     store::Store,
     StoreService,
 };
@@ -13,67 +13,40 @@ use layerfs_history::{
 };
 use std::sync::Arc;
 
-/// `list_branches({ name?, pageSize?, pagePos? })`: every Branch with its id, base and head, and main, in name order.
+/// `list_branches({ name?, prefix?, excludePrefix?, after?, limit? })`: the
+/// one Branch `name`, else one page of every Branch and main in name order,
+/// read through the name index from `after` on.
 pub fn list_branches(service: &StoreService, args: &SdkValue) -> Answer {
     let stack = project(service, args)?;
-    let (limit, pos) = if args.get("page").is_some() {
-        let page = crate::read::query::result_page(args)?;
-        (page.limit, page.skip)
-    } else {
-        paging(args)?
+    let word = |name: &str| match args.get(name) {
+        None | Some(SdkValue::Null) => Ok(None),
+        Some(SdkValue::Text(text)) => Ok(Some(text.as_str())),
+        Some(_) => Err(invalid(format!("{name} must be text"))),
     };
-    let name = match args.get("name") {
-        None => None,
-        Some(SdkValue::Text(name)) => Some(name.as_str()),
-        Some(_) => return Err(invalid("name must be text")),
+    if let Some(name) = word("name")? {
+        return listing::branch(&service.store, &stack, name);
+    }
+    let names = listing::Names {
+        prefix: word("prefix")?,
+        exclude: word("excludePrefix")?,
+        after: word("after")?,
     };
-    let mut result = branch::list_bounded(
-        &service.store,
-        &stack,
-        limit,
-        pos,
-        name,
-        args.get("page")
-            .map(|_| crate::read::query::MAXIMUM_QUERY_WORK as usize),
-    )?;
-    if args.get("page").is_some() && result.get_bool("hasMore") {
-        if let Some(SdkValue::List(items)) = result.get("items") {
-            if items.len() < limit {
-                return Err(crate::read::query::capacity(
-                    "branch inventory page exceeds reply budget; reduce page_size",
-                ));
-            }
-        }
-    }
-    if let SdkValue::Map(fields) = &mut result {
-        if let Some((_, SdkValue::List(items))) = fields.iter_mut().find(|(k, _)| k == "items") {
-            for item in items {
-                let id = item
-                    .get_text("head")
-                    .or_else(|| item.get_text("base"))
-                    .ok_or_else(|| invalid("branch has no saved head"))?;
-                let node = crate::history::lookup::node(id)?;
-                let reference = crate::history::saved::reference(&service.store, node)?;
-                if let SdkValue::Map(fields) = item {
-                    fields.push(("savedHead".into(), reference));
-                }
-            }
-        }
-        fields.push(("consistency".into(), SdkValue::text("live")));
-    }
-    Ok(result)
+    listing::branches(&service.store, &stack, names, listing::limit(args)?)
 }
 
-/// `project.stats`: resolve the Branch-qualified immutable pin once, then count it.
+/// `project.stats`: resolve the Branch-qualified immutable pin once, then
+/// count it. The pin (`commit`) is a full id or a prefix of 8 or more
+/// characters, resolved by the catalog in one read; it must be in the
+/// Branch's history.
 pub fn stats(service: &StoreService, args: &SdkValue) -> Answer {
     let stack = project(service, args)?;
     let branch = args.get_text("branch").unwrap_or("main");
-    let node = crate::history::saved::resolve_context(
-        &service.store,
-        &stack,
-        branch,
-        args.get_text("commit"),
-    )?;
+    let pin = match args.get_text("commit") {
+        Some(text) => Some(resolve::commit(&service.store, &stack, text)?.text()),
+        None => None,
+    };
+    let node =
+        crate::history::saved::resolve_context(&service.store, &stack, branch, pin.as_deref())?;
     let reader = crate::read::snapshot::reader(&service.store, &stack);
     let snap = crate::read::snapshot::resolve(
         &service.store,

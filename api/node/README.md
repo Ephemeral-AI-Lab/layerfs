@@ -1,8 +1,8 @@
 # layerfs
 
-The LayerFS SDK for Node: twelve families — `home`, `project`, `branch`, `commit`,
-`file`, `sandbox`, `workspace`, `machine`, `store`, `backup`, `logs`, `doctor` — over one call
-table of 84 calls into one native library. Each function makes one call; it
+The LayerFS SDK for Node: ten families — `home`, `project`, `branch`, `commit`,
+`file`, `sandbox`, `workspace`, `machine`, `store`, `backup` — over one call
+table of 83 calls into one native library. Each function makes one call; it
 does not retry, replay or commit on its own. Results are plain objects with
 snake_case keys, whole numbers are exact (`bigint` beyond
 `Number.MAX_SAFE_INTEGER`), bytes are `Buffer`s, and the TypeScript typings
@@ -73,11 +73,16 @@ a directory if `/tmp` is not one.
 
 ## Errors and uncertain outcomes
 
-- A refused call throws `LayerFSError` with a stable `code`, a `message` and
-  the library's structured `detail`; check `code`, not the text.
+- A refused call throws `LayerFSError` with a stable `code` (one of thirteen
+  public codes), a `message`, a `fix` (one shell line, or null) and the fields
+  the next call needs as properties; check `code`, not the text. The
+  library's structured `detail` is there only when the call passed
+  `{ detail: true }`.
 - Every call is one attempt. There is no automatic retry, busy handler or
   replay, and a lost reply does not undo a mutation that was already
-  published: read the state again.
+  published: read the state again. `Unknown`, and an error whose
+  `attempted` is `true` (its request was sent and no answer settled it),
+  mean the outcome is not known.
 - Call `close()` before the process exits to release the Stores this process
   holds open; a later call opens them again.
 

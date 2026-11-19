@@ -16,11 +16,14 @@ pub mod call;
 pub mod calls;
 pub mod compact;
 pub mod diagnostic;
+pub mod get;
 #[doc(hidden)]
 pub mod identity;
+pub mod intent;
 #[doc(hidden)]
 pub mod lease;
-mod list;
+pub mod list;
+mod live;
 #[doc(hidden)]
 pub mod open;
 pub mod open_args;
@@ -38,10 +41,11 @@ pub mod resolve;
 #[doc(hidden)]
 pub mod service;
 pub mod sqlite;
-pub mod stats;
-mod status;
+pub mod state;
+mod stats;
 #[doc(hidden)]
 pub mod unknown;
+pub mod words;
 
 /// The Store connection reaper (not lifecycle, #535 D11), for its test.
 #[doc(hidden)]

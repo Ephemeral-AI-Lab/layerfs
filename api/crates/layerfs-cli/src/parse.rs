@@ -2,7 +2,9 @@
 //! §2.2): positionals in the table's order, then `--options`. A content or
 //! JSON positional (`file write`'s content, `file apply`'s changes) is read
 //! from stdin, or from `--from <file>`; a text option `--x` also takes
-//! `--x-from <file>`. Anything wrong here is exit 2, before any call.
+//! `--x-from <file>`. A secret option (`password`) is read from stdin when
+//! its own flag is given (`--password-stdin`) and taken no other way.
+//! Anything wrong here is exit 2, before any call.
 use layerfs_api::{json, Arg, Call, Kind};
 use layerfs_bridge::control::SdkValue;
 use std::io::Read;
@@ -13,18 +15,19 @@ pub struct Usage(pub String);
 /// The front-end switches that are not call arguments.
 #[derive(Default)]
 pub struct Switches {
-    /// `--text`: a readable result instead of JSON.
+    /// `--text`: the readable form, also when stdout is no terminal.
     pub text: bool,
+    /// `--json`: one line of JSON, also when stdout is a terminal.
+    pub json: bool,
     /// `--progress`: progress as JSON lines on stderr.
     pub progress: bool,
-    /// `--stream` (`workspace exec`): the command's output and exit code
-    /// passed through.
+    /// `--stream` (`workspace exec`): the command's output passed through.
     pub stream: bool,
-    /// Framed output events followed by one result or refusal on stdout.
-    pub events: bool,
     /// `--scope <folder>` with `--scope-project <store>/<project>` and
     /// `--scope-branch <name>` (O32).
     pub scope: Option<SdkValue>,
+    /// `--detail`: the long form, of the result and of a refusal.
+    pub detail: bool,
 }
 
 /// One parsed call: its named arguments and the switches.
@@ -88,8 +91,11 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
     let mut scope_folder: Option<String> = None;
     let mut scope_branch: Option<String> = None;
     let mut scope_project: Option<String> = None;
+    let mut secret: Option<&Arg> = None;
     let mut i = 0;
     let mut only_positionals = false;
+    // the options given so far, to refuse one given twice
+    let mut given: Vec<String> = Vec::new();
     while i < words.len() {
         let word = &words[i];
         i += 1;
@@ -105,6 +111,7 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
             Some((flag, inline)) if flag.starts_with("--") => (flag, Some(inline.to_owned())),
             _ => (word.as_str(), None),
         };
+        once(call, flag, &mut given)?;
         let take = |i: &mut usize| -> Result<String, Usage> {
             if let Some(inline) = inline.clone() {
                 return Ok(inline);
@@ -117,7 +124,28 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
         };
         match flag {
             "--text" => switches.text = true,
-            "--events" if call.arg("stdout").is_some() => switches.events = true,
+            "--json" => switches.json = true,
+            // the global options of every call (call surface 2.0): the
+            // library takes them out of the arguments and checks them
+            "--detail" if inline.is_none() => {
+                switches.detail = true;
+                fields.push((layerfs_api::DETAIL.to_owned(), SdkValue::Bool(true)));
+            }
+            // `--with` may be given more than once: its sections add up
+            "--with" => {
+                let sections = take(&mut i)?;
+                sections_known(call, &sections)?;
+                match fields
+                    .iter_mut()
+                    .find(|(name, _)| name == layerfs_api::WITH)
+                {
+                    Some((_, SdkValue::Text(held))) => {
+                        held.push(',');
+                        held.push_str(&sections);
+                    }
+                    _ => fields.push((layerfs_api::WITH.to_owned(), SdkValue::Text(sections))),
+                }
+            }
             "--progress" if call.arg("on_progress").is_some() => switches.progress = true,
             "--stream" if call.arg("stream").is_some() => {
                 switches.stream = true;
@@ -143,12 +171,16 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                     if call.arg("on_progress").is_some() {
                         accepted.push("--progress".to_owned());
                     }
-                    if call.arg("stream").is_some() {
-                        accepted.push("--stream".to_owned());
-                    }
                     accepted.push("--text".to_owned());
+                    accepted.push("--json".to_owned());
+                    accepted.push("--detail".to_owned());
+                    if !call.with.is_empty() {
+                        accepted.push("--with".to_owned());
+                    }
                     for opt in call.options {
-                        if opt.kind != Kind::Function && opt.name != "message" {
+                        if let Some(flag) = opt.shell {
+                            accepted.push(flag.to_owned());
+                        } else if opt.kind != Kind::Function && opt.name != "message" {
                             accepted.push(format!("--{}", opt.name.replace('_', "-")));
                         }
                     }
@@ -165,6 +197,17 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                         ))
                     }
                 };
+                // a secret's own flag: its value is all of stdin
+                if let Some(arg) = call.options.iter().find(|a| a.shell == Some(flag)) {
+                    if inline.is_some() {
+                        return Err(usage(format!(
+                            "{}: {flag} takes no value; the value is read from stdin",
+                            call.name()
+                        )));
+                    }
+                    secret = Some(arg);
+                    continue;
+                }
                 let Some(name) = flag.strip_prefix("--") else {
                     return Err(fail());
                 };
@@ -177,8 +220,45 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                     }
                 }
                 match call.options.iter().find(|a| a.name == name) {
+                    Some(arg) if arg.shell.is_some() => {
+                        return Err(usage(format!(
+                            "{}: `{}` is read from stdin only; pass {}",
+                            call.name(),
+                            arg.name.replace('_', "-"),
+                            arg.shell.unwrap_or_default()
+                        )));
+                    }
                     Some(arg) if arg.kind == Kind::Bool && inline.is_none() => {
                         fields.push((name, SdkValue::Bool(true)))
+                    }
+                    // a content option (`workspace exec --stdin`): this
+                    // process's stdin, read whole
+                    Some(arg) if arg.kind == Kind::Content && inline.is_none() => {
+                        let mut bytes = Vec::new();
+                        stdin
+                            .read_to_end(&mut bytes)
+                            .map_err(|why| usage(format!("cannot read stdin: {why}")))?;
+                        fields.push((name, content(bytes)));
+                    }
+                    // a repeated option (`--env K=V`): one object of names
+                    // to text
+                    Some(arg) if arg.repeat => {
+                        let text = take(&mut i)?;
+                        let Some((key, value)) = text.split_once('=') else {
+                            return Err(usage(format!(
+                                "{}: `--{}` is K=V, not {text:?}",
+                                call.name(),
+                                arg.name.replace('_', "-")
+                            )));
+                        };
+                        let entry = (key.to_owned(), SdkValue::text(value));
+                        match fields.iter_mut().find(|(held, _)| *held == name) {
+                            Some((_, SdkValue::Map(held))) => {
+                                held.retain(|(k, _)| k != key);
+                                held.push(entry);
+                            }
+                            _ => fields.push((name, SdkValue::Map(vec![entry]))),
+                        }
                     }
                     Some(arg) if arg.kind != Kind::Function => {
                         let text = take(&mut i)?;
@@ -189,8 +269,8 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
             }
         }
     }
-    if switches.events && (switches.stream || switches.text) {
-        return Err(usage("--events is exclusive with --stream and --text"));
+    if switches.text && switches.json {
+        return Err(usage("--text and --json ask for two forms; give one"));
     }
     if (scope_branch.is_some() || scope_project.is_some()) && scope_folder.is_none() {
         return Err(usage("--scope-branch and --scope-project need --scope"));
@@ -210,21 +290,59 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
     }
     let on_line: Vec<&Arg> = call.args.iter().filter(|a| !piped(a)).collect();
     let required = on_line.iter().filter(|a| !a.optional).count();
-    if positionals.len() < required || positionals.len() > on_line.len() {
+    let named = format!("{} {}", call.family, call.call.replace('_', "-"));
+    if positionals.len() < required {
+        let missing: Vec<String> = (on_line.iter().skip(positionals.len()))
+            .filter(|arg| !arg.optional)
+            .map(|arg| format!("<{}>", arg.name.replace('_', "-")))
+            .collect();
+        return Err(usage(format!("{named} is missing {}", missing.join(" "))));
+    }
+    if positionals.len() > on_line.len() {
+        let extra: Vec<&str> = positionals[on_line.len()..].to_vec();
+        let (many, verb) = match extra.len() {
+            1 => ("one too many", "is"),
+            _ => ("too many", "are"),
+        };
         return Err(usage(format!(
-            "{} takes {}{} positional arguments, not {}",
-            call.name(),
-            required,
-            if on_line.len() > required {
-                format!(" to {}", on_line.len())
-            } else {
-                String::new()
-            },
-            positionals.len()
+            "{named} takes {} argument{}; `{}` {verb} {many}",
+            on_line.len(),
+            if on_line.len() == 1 { "" } else { "s" },
+            extra.join(" ")
         )));
     }
     for (arg, word) in on_line.iter().zip(&positionals) {
         fields.push((arg.name.to_owned(), value(call, arg, word)?));
+    }
+    if let Some(arg) = secret {
+        if from.is_none() && call.args.iter().any(piped) {
+            return Err(usage(format!(
+                "{}: stdin holds `{}`; give the content with --from <file>",
+                call.name(),
+                arg.name.replace('_', "-")
+            )));
+        }
+        let mut bytes = Vec::new();
+        stdin
+            .read_to_end(&mut bytes)
+            .map_err(|why| usage(format!("cannot read stdin: {why}")))?;
+        // one line ending is the terminal's or `echo`'s, not the secret's
+        if bytes.ends_with(b"\n") {
+            bytes.pop();
+            if bytes.ends_with(b"\r") {
+                bytes.pop();
+            }
+        }
+        fields.push((arg.name.to_owned(), content(bytes)));
+    }
+    for arg in call.options.iter().filter(|a| a.required) {
+        if !fields.iter().any(|(name, _)| name == arg.name) {
+            return Err(usage(format!(
+                "{}: {} is required",
+                call.name(),
+                flag_of(arg)
+            )));
+        }
     }
     for arg in call.args.iter().filter(|a| piped(a)) {
         let bytes = match &from {
@@ -249,6 +367,63 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
         args: SdkValue::Map(fields),
         switches,
     })
+}
+
+/// The shell flag that gives option `arg`: its stdin flag for a secret.
+fn flag_of(arg: &Arg) -> String {
+    match arg.shell {
+        Some(flag) => flag.to_owned(),
+        None => format!("--{}", arg.name.replace('_', "-")),
+    }
+}
+
+/// Refuses a `--with` that names a section the call does not take: the
+/// table says which it takes, so this is a wrong command line.
+fn sections_known(call: &Call, sections: &str) -> Result<(), Usage> {
+    let names = sections.split(',').map(str::trim).filter(|n| !n.is_empty());
+    for name in names {
+        if call.section(name).is_some() {
+            continue;
+        }
+        let takes: Vec<&str> = call.with.iter().map(|section| section.name).collect();
+        return Err(usage(match takes.is_empty() {
+            true => format!(
+                "{}: --with names `{name}`, and this call takes no section",
+                call.name()
+            ),
+            false => format!(
+                "{}: --with names `{name}`; this call takes {}",
+                call.name(),
+                takes.join(", ")
+            ),
+        }));
+    }
+    Ok(())
+}
+
+/// Refuses option `flag` given a second time, naming it: only `--with`
+/// (its sections add up) and an option the row marks `repeat` (`--env`)
+/// may be given more than once (RF re-check N-F). `-m` is `--message`.
+fn once(call: &Call, flag: &str, given: &mut Vec<String>) -> Result<(), Usage> {
+    let flag = match flag {
+        "-m" => "--message",
+        flag => flag,
+    };
+    let repeat = flag.strip_prefix("--").is_some_and(|name| {
+        let name = name.replace('-', "_");
+        (call.options.iter()).any(|arg| arg.name == name && arg.repeat)
+    });
+    if flag == "--with" || repeat {
+        return Ok(());
+    }
+    if given.iter().any(|seen| seen == flag) {
+        return Err(usage(format!(
+            "{}: {flag} is given more than once; give it once",
+            call.name()
+        )));
+    }
+    given.push(flag.to_owned());
+    Ok(())
 }
 
 fn option(

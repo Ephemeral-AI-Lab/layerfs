@@ -4,19 +4,24 @@
 //! keeps every other call off the machine meanwhile; the write that records
 //! it running drops the `op`. One attempt: a create that fails before its
 //! VM exists removes what it made, one that fails after keeps the VM as
-//! `failed`, and an `Unknown` outcome keeps everything, its `op` marked
-//! uncertain, and is logged.
+//! broken `failed`, and an `Unknown` outcome keeps everything, its `op`
+//! marked uncertain, and is logged. Its phases are `bundle`, `boot` and
+//! `worker` (call surface 2.0): the `op` moves through them and each is a
+//! `{ phase, done, total }` event on the caller's stream.
 use super::bundle::bundle;
-use super::list::summary;
+use super::endpoint::{endpoint_of, enter};
+use super::list::changed;
+use super::progress::Phases;
 use super::record::{MachineRecord, CREATE};
-use super::spec::{self as record, machine_of, refusal, save_running, update as update_record};
-use super::status::home_id;
+use super::spec::{self as record, home_id, machine_of, refusal, save_running};
+use super::spec::{save_unready, update as update_record};
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, lock, paths};
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::state::Reason;
 use layerfs_platform::{self as adapters, Code, Platform};
 use std::path::Path;
 
@@ -60,16 +65,15 @@ fn new_name(home: &Path, id: &str, kind: Platform, name: &str) -> Result<()> {
     if paths::machine_dir(home, name).exists() {
         return Err(refused("Exists", format!("a machine named {name} exists")));
     }
-    let wanted = [
-        record::vm_name(id, name),
-        super::record::legacy_vm_name(id, name),
-    ];
+    let wanted = record::vm_name(id, name);
     for other in paths::names(&home.join("machine")).map_err(failed)? {
         let Some(theirs) = MachineRecord::read(home, &other)? else {
             continue;
         };
-        let taken = theirs.provider_name(id);
-        if wanted.contains(&taken) {
+        let Ok(taken) = theirs.provider_name() else {
+            continue;
+        };
+        if taken == wanted {
             return Err(refused(
                 "Exists",
                 format!(
@@ -112,6 +116,22 @@ fn provider_room(kind: Platform, vm: &str, name: &str) -> Result<()> {
     ))
 }
 
+/// The phases of a create.
+const PHASES: [&str; 3] = ["bundle", "boot", "worker"];
+
+/// What a create answers beside `ok` and `outcome`.
+const ANSWER: [&str; 9] = [
+    "machine",
+    "platform",
+    "backend",
+    "cpus",
+    "memory_bytes",
+    "disk_bytes",
+    "image",
+    "os_image",
+    "created_at",
+];
+
 /// The `os_image` that asks for the provider's stock image: the machine
 /// records none, as one created before prepared images existed.
 pub const STOCK: &str = "stock";
@@ -142,7 +162,7 @@ pub fn create(
     home: &Path,
     events: &mut Events<'_>,
     request: &MachineCreate,
-    related: Related,
+    _related: Related,
 ) -> Outcome {
     let home = home.to_path_buf();
     let name = request.name.as_str();
@@ -168,7 +188,9 @@ pub fn create(
             probe.missing,
         )));
     }
-    let bundle = crate::progress::stage(events, "bundle-validation", bundle)?;
+    let mut phases = Phases::new(events, &PHASES);
+    phases.begin("bundle");
+    let bundle = bundle()?;
     // `stock` is the provider's own image even when a prepared one exists;
     // absent, the prepared image when there is one, else the stock one
     let os_image = match request.os_image.as_deref() {
@@ -202,67 +224,77 @@ pub fn create(
         fields.push(("os_image", SdkValue::text(image)));
     }
     let fields = fields.into_iter().map(|(n, v)| (n.to_owned(), v));
-    let op = Op::begin(CREATE, "create", SdkValue::Null)?;
+    let op = Op::begin(CREATE, "bundle", SdkValue::Null)?;
     let record = MachineRecord::from_record(name, SdkValue::Map(fields.collect())).with_op(&op);
     // claim the name under the lock; the VM is made outside it
     let spec = {
         let _lock = lock::take(&home)?;
         new_name(&home, &id, kind, name)?;
         record.write(&home)?;
-        record::spec(&home, &id, &record)
+        record::spec(&home, &record)
     };
     let spec = match spec {
         Ok(spec) => spec,
         Err(refusal) => {
             let _ = std::fs::remove_dir_all(paths::machine_dir(&home, name));
+            layerfs_home::home::generation::moved(&home);
             return Err(refusal);
         }
     };
-    events.progress(SdkValue::map([
-        ("phase", SdkValue::text("create")),
-        ("machine", SdkValue::text(name)),
-    ]));
     // a `machine start` waits for its create
     let _start = super::endpoint::start_lock(&home, name)?;
-    let outcome = crate::progress::stage(events, "provider-and-worker", || {
-        adapters::create(&spec, &bundle)
-    });
-    if let Ok(running) = &outcome {
-        let endpoint = crate::worker::Endpoint {
-            address: running.endpoint.address,
-            secret: running.endpoint.secret.clone(),
-        };
-        let checked = crate::progress::stage(events, "worker-compatibility", || {
-            let hello = crate::worker::hello(&endpoint)?;
-            match hello.stale_bundle(name, &bundle.dir, &endpoint.address.to_string()) {
-                Some(refusal) => Err(refusal),
-                None => Ok(()),
+    let op = enter(&home, name, op, "boot", &mut phases)?;
+    let outcome = adapters::create(&spec, &bundle);
+    let op = match &outcome {
+        Ok(running) => match checked(&home, name, op, running, &bundle.dir, &mut phases) {
+            Ok(op) => op,
+            Err((reason, error)) => {
+                let _lock = lock::take(&home)?;
+                save_unready(&home, name, running, reason, &error.message)?;
+                return Err(error);
             }
-        });
-        if let Err(error) = checked {
-            let _lock = lock::take(&home)?;
-            record::save_unready(&home, name, running, &error.message)?;
-            return Err(error);
-        }
-    }
-    finish(&home, name, op, outcome, related)
+        },
+        Err(_) => op,
+    };
+    let answer = finish(&home, name, op, outcome)?;
+    phases.end();
+    Ok(answer)
 }
 
-/// Records the outcome of a create (H §7.1.1 step 5) that `op` names: running drops it; a failure that kept the VM drops it with state
-/// `failed`; an `Unknown` one keeps it, uncertain, with the `error`.
+/// The worker a create just started, asked once: `op` at phase `worker`
+/// when it answers and is from this build; else why the machine is broken
+/// (its worker does not answer, or its bundle is older than this build).
+fn checked(
+    home: &Path,
+    name: &str,
+    op: Op,
+    running: &adapters::Running,
+    bundle: &Path,
+    phases: &mut Phases<'_, '_>,
+) -> std::result::Result<Op, (Reason, SdkRefusal)> {
+    let op = enter(home, name, op, "worker", phases).map_err(|why| (Reason::Failed, why))?;
+    let endpoint = endpoint_of(&running.endpoint);
+    let hello = crate::worker::hello(&endpoint).map_err(|why| (Reason::NotAnswering, why))?;
+    match hello.stale_bundle(name, bundle, &endpoint.address.to_string()) {
+        Some(stale) => Err((Reason::Outdated, stale)),
+        None => Ok(op),
+    }
+}
+
+/// Records the outcome of a create (H §7.1.1 step 5) that `op` names:
+/// running drops it; a failure that kept the VM drops it, the machine
+/// broken `failed`; an `Unknown` one keeps it, uncertain, with the `error`.
 fn finish(
     home: &Path,
     name: &str,
     op: Op,
     outcome: std::result::Result<adapters::Running, adapters::MachineError>,
-    related: Related,
 ) -> Outcome {
     let _lock = lock::take(home)?;
     match outcome {
         Ok(running) => {
             save_running(home, name, &running)?;
-            let record = machine_of(home, name)?;
-            summary(home, &record, None, related)
+            changed(&machine_of(home, name)?, "created", &ANSWER)
         }
         Err(error) if error.code == Code::Unknown => {
             let op = op.as_uncertain();
@@ -274,12 +306,15 @@ fn finish(
         }
         Err(error) if error.vm_exists => {
             update_record(home, name, |r| {
-                r.failed_as("failed", &error.message).without_op()
+                (r.with("state", SdkValue::text("failed")))
+                    .broken_as(Reason::Failed, &error.message)
+                    .without_op()
             })?;
             Err(refusal(error))
         }
         Err(error) => {
             std::fs::remove_dir_all(paths::machine_dir(home, name)).map_err(failed)?;
+            layerfs_home::home::generation::moved(home);
             Err(refusal(error))
         }
     }

@@ -1,17 +1,36 @@
 //! A started or already-running incompatible worker is never declared ready.
 #![cfg(all(feature = "machine", target_os = "macos"))]
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home;
+use layerfs_home::state::{Reason, State};
 use layerfs_machine::worker::{read_frame_within, write_frame, MAX_HELLO};
-use layerfs_machine::{ensure_built_ins, record::MachineRecord, running};
+use layerfs_machine::{ensure_built_ins, record::MachineRecord, running, Related};
 use std::fs;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
 use std::time::{Duration, Instant};
+
+fn none(_: &Path, _: &str) -> Result<Vec<String>, SdkRefusal> {
+    Ok(Vec::new())
+}
+
+fn free(_: &Path, _: &str) -> Result<(), SdkRefusal> {
+    Ok(())
+}
+
+const RELATED: Related = Related {
+    stores_on: none,
+    sandboxes_on: none,
+    hosted_on: none,
+    can_remove: free,
+    can_stop: free,
+    can_change: free,
+};
 
 #[test]
 fn incompatible_start_retains_custody_and_second_start_never_replays_provider_work() {
@@ -104,18 +123,32 @@ esac
         .with("image", SdkValue::text("test-base"))
         .write(&h)
         .unwrap();
-    let first = running(&h, "docker").unwrap_err();
+    let first = running(&h, "docker", RELATED).unwrap_err();
     assert_eq!(first.code, "Unavailable");
     assert_eq!(
-        MachineRecord::of(&h, "docker").unwrap().recorded_state(),
-        Some("failed")
+        first.detail.get_text("fix"),
+        Some("layerfs machine stop docker && layerfs machine start docker"),
+        "the fix replaces the worker (R2)"
+    );
+    let record = MachineRecord::of(&h, "docker").unwrap();
+    assert_eq!(record.reason(), Some(Reason::Outdated));
+    assert!(record.op().is_none(), "the start's op is dropped");
+    assert!(
+        matches!(
+            record.status(false, 0),
+            State::Broken {
+                reason: Reason::Outdated,
+                ..
+            }
+        ),
+        "recorded broken, outdated"
     );
     assert!(
         home::paths::worker_record(&h, "docker").is_file(),
         "endpoint remains in custody for explicit stop/remove"
     );
     let calls = fs::read_to_string(root.join("calls")).unwrap();
-    let second = running(&h, "docker").unwrap_err();
+    let second = running(&h, "docker", RELATED).unwrap_err();
     assert_eq!(second.code, "Unavailable");
     assert_eq!(
         fs::read_to_string(root.join("calls")).unwrap(),

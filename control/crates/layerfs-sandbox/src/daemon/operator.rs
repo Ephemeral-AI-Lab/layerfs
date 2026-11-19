@@ -8,6 +8,9 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 /// (`backend.daemon.connection_failures`, #540), or the operator reclaim
 /// (`backend.daemon.reclaim`, #547 slice 5). Any other method is refused
 /// before it is sent.
+/// The daemon's bounded changed-path read of one Workspace.
+pub const CHANGED: &str = "backend.daemon.workspace.list_changed";
+
 pub fn call(control: &mut Control, method: &str, args: SdkValue) -> SdkResult {
     match method {
         // The daemon's control admission and bounded retained-failure store
@@ -21,6 +24,9 @@ pub fn call(control: &mut Control, method: &str, args: SdkValue) -> SdkResult {
             crate::daemon::call::exchange_call(control, method, args)
         }
         "sandbox.list_workspaces" => crate::daemon::call::exchange_call(control, method, args),
+        // a Workspace's changes from one bounded overlay read (call surface
+        // 2.0 `workspace.status`, and a Dirty unmount's paths)
+        CHANGED => crate::daemon::call::exchange_call(control, method, args),
         _ => Err(SdkError::Refused(SdkRefusal {
             code: "UnknownMethod".into(),
             message: format!("no daemon backend method {method}"),

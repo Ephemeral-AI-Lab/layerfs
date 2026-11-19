@@ -28,14 +28,6 @@ pub fn provider_prefix(home_id: &str) -> String {
     format!("layerfs-{}-", &home_id[..8.min(home_id.len())])
 }
 
-/// The prefix those names had before layerfs-project#180,
-/// `lfs-<home id8>-`. Names already recorded keep it: a machine record
-/// without `vm_name`, a Sandbox whose record and run folder carry it, and
-/// the retired docker backend's containers. No new name is made with it.
-pub fn legacy_provider_prefix(home_id: &str) -> String {
-    format!("lfs-{}-", &home_id[..8.min(home_id.len())])
-}
-
 /// `name` as one machine, Store, bucket, project or Sandbox name, or why not.
 pub fn name(what: &str, name: &str) -> Result<(), String> {
     let bytes = name.as_bytes();
@@ -197,7 +189,7 @@ impl WorkspaceRef {
         let wrong = || {
             refused(
                 "InvalidInput",
-                format!("a Workspace is <sandbox>:<path> or <sandbox>:<name>, not {text:?}"),
+                format!("a Workspace is <sandbox>:<name>, not {text:?}"),
             )
         };
         let (sandbox, rest) = text

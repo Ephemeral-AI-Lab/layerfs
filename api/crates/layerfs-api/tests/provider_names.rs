@@ -4,13 +4,17 @@
 //!
 //! - A new home's `docker` machine records `vm_name`
 //!   `layerfs-<home id8>-docker`; its worker container and volume carry it.
-//! - A home whose `docker` record predates that (no `vm_name`) keeps
-//!   `lfs-<home id8>-docker` and the volume `lfs-<home id8>-docker-data`,
-//!   where its Stores are.
+//! - A `docker` record from before that (no `vm_name`) is read as it is
+//!   and never rewritten; it reads `broken` `outdated`, and a start of it is
+//!   refused `Failed` naming what made it, both with `machine remove docker`
+//!   as the fix, before the provider is asked for anything: this build
+//!   computes no older name. That remove takes its record alone, asking the
+//!   provider nothing, and the next call records `docker` again with its
+//!   2.0 name.
 //! - `machine.create` refuses `Exists` a name whose VM name is another
-//!   machine's (`a.b` then `a_b`), whichever formula gave that machine its
-//!   name, and refuses `InvalidInput` a name over 46 characters, both
-//!   before the provider is asked for anything; a 46-character name
+//!   machine's recorded one (`a.b` then `a_b`), and refuses `InvalidInput`
+//!   a name over 46 characters, both before the provider is asked for
+//!   anything; a 46-character name
 //!   reaches the provider as a 63-character VM name.
 //! - A `lima` machine's name must also leave Lima's socket path
 //!   `<Lima home>/<VM name>/ssh.sock.<16 digits>` shorter than 104
@@ -107,7 +111,7 @@ fn effects(tools: &Path) -> Vec<String> {
 /// stand-in refuses.
 fn docker_run(home: &Path, tools: &Path) -> String {
     let before = effects(tools).len();
-    let (code, message) = call(home, "machine.start", &[("name", t("docker"))]).unwrap_err();
+    let (code, message) = call(home, "machine.start", &[("machine", t("docker"))]).unwrap_err();
     assert_eq!(code, "Failed", "{message}");
     let after = effects(tools);
     let runs: Vec<_> = after[before..]
@@ -167,8 +171,8 @@ fn provider_names_and_their_refusals() {
         "{run}"
     );
 
-    // --- a home from before: its `docker` record has no `vm_name`, and
-    // keeps the container and volume names it always had
+    // --- a home from before: its `docker` record has no `vm_name`; it is
+    // never rewritten, and a start of it is refused before any provider call
     let old = tempdir("old");
     let old_id = home::open(&old).unwrap().id;
     let old_docker = SdkValue::map([
@@ -187,34 +191,97 @@ fn provider_names_and_their_refusals() {
         kept, old_docker,
         "the first call rewrote an existing record"
     );
-    let worker = format!("lfs-{}-docker", &old_id[..8]);
-    let run = docker_run(&old, &tools);
-    assert!(run.contains(&format!(" --name {worker} ")), "{run}");
+    let before = effects(&tools);
+    let refused = layerfs_api::call(
+        Some(&old),
+        "machine.start",
+        SdkValue::map([("machine", t("docker"))]),
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert_eq!(refused.code, "Failed", "{}", refused.message);
     assert!(
-        run.contains(&format!(" -v {worker}-data:/layerfs/data ")),
-        "{run}"
+        refused.message.contains("has no vm_name") && refused.message.contains("No call repairs"),
+        "{}",
+        refused.message
     );
-    assert!(!run.contains("layerfs-"), "{run}");
+    assert_eq!(
+        refused.detail.get_text("fix"),
+        Some("layerfs machine remove docker")
+    );
+    let docker = [("machine", t("docker")), ("detail", SdkValue::Bool(true))];
+    let got = call(&old, "machine.get", &docker).unwrap();
+    assert_eq!(got.get_text("state"), Some("broken"), "{got:?}");
+    assert_eq!(got.get_text("reason"), Some("outdated"), "{got:?}");
+    assert_eq!(got.get_text("fix"), Some("layerfs machine remove docker"));
+    assert!(
+        (got.get_text("message").unwrap_or("")).contains("has no vm_name"),
+        "{got:?}"
+    );
+    // a live read keeps what its record says (UI pass 2, F1): nothing is
+    // probed, and the long form, the short form and a live list all answer
+    // `broken` `outdated` with its fix, never `unknown`
+    let probes = std::fs::read_to_string(tools.join("calls.log")).unwrap_or_default();
+    let live = SdkValue::List(vec![t("live")]);
+    let mut asked = docker.to_vec();
+    asked.push(("with", live.clone()));
+    let got = call(&old, "machine.get", &asked).unwrap();
+    assert_eq!(got.get_text("state"), Some("broken"), "{got:?}");
+    assert_eq!(got.get_text("reason"), Some("outdated"), "{got:?}");
+    assert_eq!(got.get_text("fix"), Some("layerfs machine remove docker"));
+    assert!(
+        (got.get_text("message").unwrap_or("")).contains("has no vm_name"),
+        "{got:?}"
+    );
+    let short = [("machine", t("docker")), ("with", live.clone())];
+    let short = call(&old, "machine.get", &short).unwrap();
+    assert_eq!(short.get_text("reason"), Some("outdated"), "{short:?}");
+    assert_eq!(short.get_text("fix"), Some("layerfs machine remove docker"));
+    let list = call(&old, "machine.list", &[("with", live)]).unwrap();
+    let Some(SdkValue::List(items)) = list.get("items") else {
+        panic!("no items in {list:?}")
+    };
+    let item = (items.iter())
+        .find(|item| item.get_text("machine") == Some("docker"))
+        .unwrap();
+    assert_eq!(item.get_text("state"), Some("broken"), "{item:?}");
+    assert_eq!(item.get_text("reason"), Some("outdated"), "{item:?}");
+    assert_eq!(item.get_text("fix"), Some("layerfs machine remove docker"));
+    let after = std::fs::read_to_string(tools.join("calls.log")).unwrap_or_default();
+    assert_eq!(
+        after, probes,
+        "a live read probed a machine with no vm_name"
+    );
+    let kept = read_record(&paths::machine_record(&old, "docker"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(kept, old_docker, "a live read rewrote the record");
+    // the remove takes the record alone; the next call records it again
+    let removed = call(&old, "machine.remove", &docker).unwrap();
+    assert_eq!(removed.get_text("outcome"), Some("removed"), "{removed:?}");
+    let said = removed.get_text("message").unwrap_or("");
+    assert!(said.contains("its record has no vm_name"), "{said}");
+    assert_eq!(effects(&tools), before, "the provider was asked");
+    let again = call(&old, "machine.get", &docker).unwrap();
+    assert_eq!(again.get_text("state"), Some("stopped"), "{again:?}");
+    let made = read_record(&paths::machine_record(&old, "docker"))
+        .unwrap()
+        .unwrap();
+    let name = format!("layerfs-{}-docker", &old_id[..8]);
+    assert_eq!(made.get_text("vm_name"), Some(name.as_str()));
 
     // --- collisions: a VM name keeps no punctuation
     let home = fresh;
-    // as this build's create records one, as a build before #180 recorded
-    // one, and a record with no `vm_name` at all (the earlier formula)
+    // as this build's create records one, and a record with no `vm_name`
+    // at all (which takes no name)
     lima(
         &home,
         "a.b",
         &[("vm_name", t(&format!("layerfs-{id8}-a-b")))],
     );
-    lima(&home, "c.d", &[("vm_name", t(&format!("lfs-{id8}-c-d")))]);
     lima(&home, "e.f", &[]);
     let made = effects(&tools);
-    for (wanted, taken) in [
-        ("a_b", "a.b"),
-        ("a-b", "a.b"),
-        ("c_d", "c.d"),
-        ("e_f", "e.f"),
-        ("e-f", "e.f"),
-    ] {
+    for (wanted, taken) in [("a_b", "a.b"), ("a-b", "a.b")] {
         let (code, message) = create(&home, wanted);
         assert_eq!(code, "Exists", "{wanted}: {message}");
         assert!(message.contains(&format!("machine {taken} ")), "{message}");
@@ -227,6 +294,28 @@ fn provider_names_and_their_refusals() {
         (code.as_str(), message.as_str()),
         ("Exists", "a machine named a.b exists")
     );
+
+    // the record with no `vm_name`: a start is refused with `machine
+    // remove` as its fix, and the remove takes its record alone, asking
+    // the provider nothing
+    let made = effects(&tools);
+    let machine = [("machine", t("e.f"))];
+    let (code, message) = call(&home, "machine.start", &machine).unwrap_err();
+    assert_eq!(code, "Failed", "{message}");
+    assert!(message.contains("has no vm_name"), "{message}");
+    let start = SdkValue::map([("machine", t("e.f"))]);
+    let refused = layerfs_api::call(Some(&home), "machine.start", start, &mut |_| {}).unwrap_err();
+    assert_eq!(
+        refused.detail.get_text("fix"),
+        Some("layerfs machine remove e.f")
+    );
+    let detail = [("machine", t("e.f")), ("detail", SdkValue::Bool(true))];
+    let removed = call(&home, "machine.remove", &detail).unwrap();
+    assert_eq!(removed.get_text("outcome"), Some("removed"), "{removed:?}");
+    let said = removed.get_text("message").unwrap_or("");
+    assert!(said.contains("its record has no vm_name"), "{said}");
+    assert!(!paths::machine_dir(&home, "e.f").exists());
+    assert_eq!(effects(&tools), made, "the provider was asked");
 
     // a name that collides with none reaches the provider, as `layerfs-`
     let (code, message) = create(&home, "ab");

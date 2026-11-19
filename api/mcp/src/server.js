@@ -18,7 +18,7 @@ import {
   ListToolsRequestSchema,
   McpError,
 } from "@modelcontextprotocol/sdk/types.js";
-import layerfs, { LayerFSError } from "layerfs";
+import layerfs, { LayerFSError } from "@layerfs/node";
 import { errorResult } from "./errors.js";
 import { exportRefusal, resolveRoots } from "./exportroots.js";
 import { PROFILES, check as checkProfiles, tools as toolsOfProfile } from "./profiles.js";
@@ -37,7 +37,7 @@ const USAGE = `usage: layerfs-mcp [--profile work|admin] [--home DIR]
 
   --profile work   the calls an agent works with (default)
   --profile admin  every call, including machines, Stores, backups and the
-                   four GC calls project.delete, project.remove_file,
+                   four GC calls project.delete, project.hide_path,
                    branch.remove and store.compact
   --home DIR       the LayerFS home (default: LAYERFS_HOME, else ~/.layerfs)
   --scope-project  the folder scope's project, with --scope-folder

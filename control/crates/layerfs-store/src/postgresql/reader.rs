@@ -64,7 +64,8 @@ mod held {
         let (binding, handles) =
             PostgresHandles::attach_read_only(&selection, cursor).map_err(|error| {
                 crate::postgresql::open::no_session(&error).unwrap_or_else(|| {
-                    refused("Failed", format!("reading schema {schema}: {error}"))
+                    let said = crate::words::persistence(&error);
+                    refused("Failed", format!("reading schema {schema}: {said}"))
                 })
             })?;
         if record.binding() != Some(binding.as_slice()) {
@@ -149,21 +150,19 @@ pub fn reach(
     postgresql: &PgSelection,
     project: &str,
 ) -> Result<std::result::Result<bool, OtherStore>> {
-    {
-        let Some(handles) = held::session(key, record, postgresql)? else {
-            return Ok(Err(OtherStore));
-        };
-        let found = layerfs_store_service::history::lookup::project_in(project, |name| {
-            handles
-                .history
-                .layer_stack_named(name)
-                .map_err(layerfs_store_service::history::lookup::history)
-        });
-        match found {
-            Ok(_) => Ok(Ok(true)),
-            Err(refusal) if refusal.code == "NoSuchProject" => Ok(Ok(false)),
-            Err(refusal) => Err(refusal),
-        }
+    let Some(handles) = held::session(key, record, postgresql)? else {
+        return Ok(Err(OtherStore));
+    };
+    let found = layerfs_store_service::history::lookup::project_in(project, |name| {
+        handles
+            .history
+            .layer_stack_named(name)
+            .map_err(layerfs_store_service::history::lookup::history)
+    });
+    match found {
+        Ok(_) => Ok(Ok(true)),
+        Err(refusal) if refusal.code == "NoSuchProject" => Ok(Ok(false)),
+        Err(refusal) => Err(refusal),
     }
 }
 
@@ -179,18 +178,15 @@ pub(crate) fn branch(
     postgresql: &PgSelection,
     (project, name): (&str, &str),
 ) -> Result<(layerfs_history::BranchId, Option<layerfs_history::CommitId>)> {
-    {
-        let handles =
-            held::session(key, record, postgresql)?.ok_or_else(|| another(record.name()))?;
-        use layerfs_store_service::history::lookup;
-        let stack = lookup::project_in(project, |wanted| {
-            (handles.history.layer_stack_named(wanted)).map_err(lookup::history)
-        })?;
-        let branch = lookup::branch_in(name, |wanted| {
-            (handles.history.branch_named(stack.id, wanted)).map_err(lookup::history)
-        })?;
-        Ok((branch.id, branch.head_commit))
-    }
+    let handles = held::session(key, record, postgresql)?.ok_or_else(|| another(record.name()))?;
+    use layerfs_store_service::history::lookup;
+    let stack = lookup::project_in(project, |wanted| {
+        (handles.history.layer_stack_named(wanted)).map_err(lookup::history)
+    })?;
+    let branch = lookup::branch_in(name, |wanted| {
+        (handles.history.branch_named(stack.id, wanted)).map_err(lookup::history)
+    })?;
+    Ok((branch.id, branch.head_commit))
 }
 
 /// The newest Commit of `branch`, read on the held session; `None` when it
@@ -199,18 +195,16 @@ pub fn head(
     args: &OpenArgs,
     branch: layerfs_history::BranchId,
 ) -> Result<Option<layerfs_history::CommitId>> {
-    {
-        let page = held_of(args)?
-            .history
-            .commit_history(&layerfs_history::CommitHistoryRequest {
-                branch,
-                start: None,
-                cursor: None,
-                limit: 1,
-            })
-            .map_err(failed)?;
-        Ok(page.records.first().map(|record| record.id))
-    }
+    let page = held_of(args)?
+        .history
+        .commit_history(&layerfs_history::CommitHistoryRequest {
+            branch,
+            start: None,
+            cursor: None,
+            limit: 1,
+        })
+        .map_err(failed)?;
+    Ok(page.records.first().map(|record| record.id))
 }
 
 /// The held session of the call's Store, opened if this process holds none.

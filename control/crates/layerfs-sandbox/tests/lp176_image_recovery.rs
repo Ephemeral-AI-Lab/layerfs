@@ -284,7 +284,7 @@ fn native_name() -> MachineName {
 }
 
 fn image_rows(home: &Path) -> Vec<SdkValue> {
-    let out = images::list(home, &native_name()).unwrap();
+    let out = images::list(home, &native_name(), false).unwrap();
     match out.get("images") {
         Some(SdkValue::List(rows)) => rows.clone(),
         other => panic!("unexpected images field: {other:?}"),
@@ -422,24 +422,34 @@ fn real_docker_tag_move_leaves_enumerable_part_and_clears_stale_ref_on_publish()
     });
     child.kill_and_wait();
 
-    // 3. machine.images must enumerate both V1 (unpacked) and V2's staged part!
+    // 3. machine.images must enumerate both V1 (ready) and V2's staged part,
+    // which no live copy holds: broken, reason partial (v19)
     let rows = image_rows(&home);
     let v1_row = rows
         .iter()
-        .find(|r| r.get_text("id") == Some(v1_id.as_str()) && !r.get_bool("staged"))
+        .find(|r| r.get_text("id") == Some(v1_id.as_str()))
         .expect("V1 published row");
+    assert_eq!(v1_row.get_text("state"), Some("ready"));
     assert!(cache::texts(v1_row.get("refs")).contains(&repo_tag));
 
     let v2_part = rows
         .iter()
-        .find(|r| r.get_text("id") == Some(v2_id.as_str()) && r.get_bool("staged"))
+        .find(|r| r.get_text("id") == Some(v2_id.as_str()))
         .unwrap_or_else(|| panic!("missing staged part row for V2 in machine.images: {rows:?}"));
     let part_len = fs::symlink_metadata(cache::cache(&home).join(format!(".recv-{v2_hex}.part")))
         .unwrap()
         .len();
-    assert_eq!(v2_part.get_int("size"), Some(part_len as i64));
-    assert!(v2_part.get_int("age").is_some_and(|a| a >= 0));
-    assert!(v2_part.get_bool("resumable"));
+    assert_eq!(v2_part.get_int("staged_bytes"), Some(part_len as i64));
+    assert_eq!(v2_part.get("size"), Some(&SdkValue::Null));
+    assert_eq!(v2_part.get_text("state"), Some("broken"), "{v2_part:?}");
+    assert_eq!(v2_part.get_text("reason"), Some("partial"));
+    assert_eq!(
+        v2_part.get_text("fix"),
+        Some(format!("layerfs machine load-image native {v2_id}").as_str())
+    );
+    for gone in ["staged", "stranded", "resumable", "age"] {
+        assert_eq!(v2_part.get(gone), None, "{gone} stays out of the item");
+    }
 
     // 4. Finish loading repo_tag: V2 publishes, clears stale repo_tag from V1 sidecar, records config.
     std::thread::sleep(Duration::from_millis(2200));
@@ -471,7 +481,10 @@ fn real_docker_tag_move_leaves_enumerable_part_and_clears_stale_ref_on_publish()
     assert_eq!(probe_by_ref.get_text("id"), Some(v2_id.as_str()));
 
     let rows_after = image_rows(&home);
-    assert!(!rows_after.iter().any(|r| r.get_bool("staged")));
+    assert!(rows_after
+        .iter()
+        .all(|r| r.get_text("state") == Some("ready")
+            && r.get("staged_bytes") == Some(&SdkValue::Null)));
     let v2_row = rows_after
         .iter()
         .find(|r| r.get_text("id") == Some(v2_id.as_str()))
@@ -585,39 +598,62 @@ fn prune_reclaims_parts_temps_and_stranded_while_protecting_live_locks_and_in_us
     let (_, hold) =
         rootfs::ensure_held(&flat_tar, &Image::parse(&id_held).unwrap(), &cache_dir).unwrap();
 
-    // Verify machine.images shows unheld part as resumable=true and locked part as resumable=false.
+    // machine.images (v19): the unheld part is broken/partial, the part a
+    // live copy holds is busy with op load_image, the in-use image stays
+    // ready with its stale part as staged_bytes, one item per image.
     let rows = image_rows(&home);
-    let r_unheld = rows
-        .iter()
-        .find(|r| r.get_text("id") == Some(&format!("sha256:{hex_unheld}")) && r.get_bool("staged"))
-        .expect("unheld staged part listed");
-    assert!(r_unheld.get_bool("resumable"));
-    let r_locked = rows
-        .iter()
-        .find(|r| r.get_text("id") == Some(&id_locked) && r.get_bool("staged"))
-        .expect("locked staged part listed");
+    let row = |id: &str| {
+        let mut found = rows.iter().filter(|r| r.get_text("id") == Some(id));
+        let first = found
+            .next()
+            .unwrap_or_else(|| panic!("{id} listed: {rows:?}"));
+        assert!(found.next().is_none(), "one item per image: {rows:?}");
+        first.clone()
+    };
+    let r_unheld = row(&format!("sha256:{hex_unheld}"));
+    assert_eq!(r_unheld.get_text("state"), Some("broken"));
+    assert_eq!(r_unheld.get_text("reason"), Some("partial"));
+    let r_locked = row(&id_locked);
+    assert_eq!(
+        r_locked.get_text("state"),
+        Some("busy"),
+        "live-locked part is busy: {r_locked:?}"
+    );
+    let op = r_locked.get("op").expect("busy carries op");
+    assert_eq!(op.get_text("name"), Some("load_image"));
+    assert_eq!(op.get_text("phase"), Some("lock"));
+    let r_inuse = row(&id_inuse);
+    assert_eq!(r_inuse.get_text("state"), Some("ready"));
+    assert_eq!(
+        r_inuse.get_int("staged_bytes"),
+        Some(b"inuse-part".len() as i64)
+    );
+    let r_stranded = row(&format!("sha256:{hex_stranded}"));
+    assert_eq!(r_stranded.get_text("reason"), Some("partial"));
+    assert_eq!(r_stranded.get("staged_bytes"), Some(&SdkValue::Null));
+
+    // Targeted prune: a live copy's image is Busy with its op, an image a
+    // Sandbox uses is InUse with sandbox_count.
+    let busy = images::prune(&home, &native_name(), Some(&id_locked), false).unwrap_err();
+    assert_eq!(busy.code, "Busy");
+    assert_eq!(
+        (busy.detail.get("next"))
+            .and_then(|next| next.get("op"))
+            .and_then(|op| op.get_text("name")),
+        Some("load_image"),
+        "{busy:?}"
+    );
+    let inuse = images::prune(&home, &native_name(), Some(&id_inuse), false).unwrap_err();
+    assert_eq!(inuse.code, "InUse");
+    assert_eq!(inuse.detail.get_int("sandbox_count"), Some(1));
+
+    // Unused prune must clean unheld part, unheld temp, stranded image, dangling sidecar
+    // and the in-use image's part (v19), while leaving live-locked and InUse images untouched.
+    let swept = images::prune(&home, &native_name(), None, true).unwrap();
     assert!(
-        !r_locked.get_bool("resumable"),
-        "live-locked part must not be resumable: {r_locked:?}"
+        cache::texts(swept.get("removed")).contains(&id_inuse),
+        "the in-use image's part is removed: {swept:?}"
     );
-
-    // Targeted prune on live-locked or InUse must refuse InUse.
-    assert_eq!(
-        images::prune(&home, &native_name(), Some(&id_locked), false)
-            .unwrap_err()
-            .code,
-        "InUse"
-    );
-    assert_eq!(
-        images::prune(&home, &native_name(), Some(&id_inuse), false)
-            .unwrap_err()
-            .code,
-        "InUse"
-    );
-
-    // Unused prune must clean unheld part, unheld temp, stranded image, and dangling sidecar,
-    // while leaving live-locked and InUse artifacts untouched.
-    images::prune(&home, &native_name(), None, true).unwrap();
 
     assert!(!cache_dir.join(format!(".recv-{hex_unheld}.part")).exists());
     assert!(!cache_dir.join(format!(".tmp-{hex_unheld}.2-ab12")).exists());
@@ -628,7 +664,7 @@ fn prune_reclaims_parts_temps_and_stranded_while_protecting_live_locks_and_in_us
     assert!(cache_dir.join(format!(".tmp-{hex_locked}.2-cd34")).exists());
     assert!(cache_dir.join(format!("{hex_inuse}.2")).exists());
     assert!(cache_dir.join(format!("{hex_inuse}.2.json")).exists());
-    assert!(cache_dir.join(format!(".recv-{hex_inuse}.part")).exists());
+    assert!(!cache_dir.join(format!(".recv-{hex_inuse}.part")).exists());
     assert!(cache_dir.join(format!("{hex_held}.2")).exists());
 
     // Release locks and InUse, then prune locked part explicitly by target id before unused sweep.
@@ -711,17 +747,24 @@ fn interrupted_publish_with_renamed_dir_and_missing_sidecar_recovers_and_prunes(
             .to_str()
             .map(str::to_owned),
         container_prefix: None,
-        legacy_prefix: None,
         daemon: None,
         image_archive: None,
         image: Some(id.clone()),
         platform: None,
     };
     assert!(!cache::unpacked(&deploy, &Image::parse(&id).unwrap()));
+    // v19: the unrecorded unpack and its part are one broken/partial item
     let rows_before = image_rows(&home);
-    assert!(rows_before
+    let stranded = rows_before
         .iter()
-        .any(|r| r.get_text("id") == Some(id.as_str()) && r.get_bool("stranded")));
+        .find(|r| r.get_text("id") == Some(id.as_str()))
+        .unwrap_or_else(|| panic!("{id} listed: {rows_before:?}"));
+    assert_eq!(stranded.get_text("state"), Some("broken"));
+    assert_eq!(stranded.get_text("reason"), Some("partial"));
+    assert_eq!(
+        stranded.get_int("staged_bytes"),
+        Some(tar_bytes.len() as i64)
+    );
 
     // Stand-in Docker recovery load completes publish, writes sidecar, deletes .part.
     let standin_dir = scratch.base.join("standin");
@@ -1139,11 +1182,8 @@ fn real_docker_and_small_tar_preserve_mtime_mode_sha_and_record_config() {
         .raw("var/chr", b'3', 0o660, b"")
         .finish();
     let (filtered, report) = filtered_with_report(&input).unwrap();
-    assert_eq!(report.fifo_count(), 1);
     assert_eq!(report.fifos, vec!["var/fifo"]);
-    assert_eq!(report.device_count(), 1);
     assert_eq!(report.devices, vec!["var/chr"]);
-    assert_eq!(report.init_count(), 3);
     assert_eq!(report.init, vec![".dockerenv", "dev/console", "etc/hosts"]);
     let tar_path = scratch.base.join("meta.tar");
     fs::write(&tar_path, &filtered).unwrap();
@@ -1856,6 +1896,7 @@ esac
         &SdkValue::map([
             ("name", SdkValue::text("vm1")),
             ("platform", SdkValue::text("lima")),
+            ("vm_name", SdkValue::text("layerfs-test-vm")),
         ]),
     )
     .unwrap();

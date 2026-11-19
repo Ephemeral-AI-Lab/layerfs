@@ -1,426 +1,449 @@
-//! Targeted Sandbox diagnosis over its saved route, without normal host dispatch.
+//! The `sandbox` kind (call surface 2.0): one Sandbox's checks over its
+//! saved route, without normal host dispatch, then one node per Workspace
+//! its daemon lists or its folder records (`workspace_target`).
+//!
+//! Its records checks always run. A machine that is not ready keeps every
+//! live check from being made: the Sandbox is one `not_checked` entry with
+//! `blocked_by` its machine. An operation that holds it is one with
+//! `reason` `busy`. Otherwise the live checks run in order, each only when
+//! the one it needs did not fail; a daemon that is not seen ready blocks its
+//! Workspaces (`blocked_by` the thing at the root: the Sandbox, or its
+//! machine's worker) and none of their checks is tried.
+use super::frame::Probe;
+use super::report::{NoVerdict, Node, NotChecked};
 use super::target::{Budget, Checks};
+use super::workspace_target::{self, Listing, Seen};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{paths, read_record, RECORD_VERSION};
 use layerfs_home::names::{self, MachineName, SandboxName};
 use layerfs_home::op::Standing;
-use layerfs_home::outcome::{refused, Outcome};
-use layerfs_machine::worker::{diagnostic_connect, DiagnosticOperation, Endpoint};
+use layerfs_home::state::{BlockedBy, Reason, State};
 use layerfs_sandbox::record::SandboxRecord;
-use layerfs_store::record::{Placement, StoreRecord, StoreRef};
+use layerfs_sandbox::state::remove_fix;
+use layerfs_store::record::{StoreRecord, StoreRef};
 use std::path::Path;
-use std::time::{Duration, Instant};
 
 #[path = "sandbox_channel.rs"]
 mod channel;
+#[path = "sandbox_remote.rs"]
+mod remote;
 #[path = "sandbox_runtime.rs"]
 mod runtime;
 
-pub(super) fn diagnose(home: &Path, name: &str, budget: &Budget, checks: &mut Checks) {
-    let Some(record) = read(home, name, checks) else {
-        return;
+pub(crate) use remote::worker_diagnose;
+
+/// How the doctor reaches a Sandbox's daemon.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Route {
+    /// No live check was made.
+    None,
+    /// Directly, on this computer.
+    Native,
+    /// Through its saved forward.
+    Forward,
+    /// Through its machine's worker, which makes the live checks.
+    Worker,
+}
+
+/// What one Sandbox's checks observed beyond their rows.
+#[derive(Default)]
+struct Observed {
+    /// What outside it keeps its live checks from being made.
+    waits: Option<BlockedBy>,
+    /// An operation of a running process holds it.
+    busy: bool,
+    /// What its records say blocks the things on it.
+    gate: Option<BlockedBy>,
+    /// Its machine's worker answered no report this build reads.
+    lost: bool,
+    /// How its daemon's Workspace list went.
+    listing: Listing,
+    /// Its Workspaces.
+    workspaces: Vec<Seen>,
+}
+
+/// The Sandbox's state from its records and its machine's records: the
+/// Sandbox package's one derivation (`layerfs_sandbox::state::state`), so
+/// the doctor and `sandbox get` agree. Its machine's record that cannot be
+/// read is `sandbox.machine_reference`'s finding, not a state here.
+fn recorded_state(home: &Path, record: &SandboxRecord) -> State {
+    layerfs_sandbox::state::state(home, record).unwrap_or(State::Ready)
+}
+
+/// The `sandbox` kind's run: its checks into `node`, then its Workspaces'
+/// nodes as `node`'s children, unless what it found blocks them.
+pub(super) fn doctor(probe: &Probe<'_>, node: &mut Node) {
+    let name = probe.thing.name.as_str();
+    let mut checks = Checks::default();
+    let mut seen = Observed::default();
+    let (route, machine) = diagnose(probe, &mut checks, &mut seen);
+    checks.fill(node, probe.checks, probe.budget.expired());
+    let at = |check: &str| probe.checks.iter().position(|listed| listed.id == check);
+    node.rows.sort_by_key(|row| at(&row.check));
+    let whole = |node: &mut Node, blocked_by: Option<BlockedBy>, reason: Option<NoVerdict>| {
+        node.not_checked.push(NotChecked {
+            thing: probe.thing.clone(),
+            check: None,
+            blocked_by: blocked_by.clone(),
+            reason,
+        });
+        node.blocked_by = blocked_by;
+        node.reason = reason;
     };
-    references(home, &record, checks);
-    if let Some(op) = record.op() {
-        match op.standing() {
-            Standing::Running => checks.pass("sandbox.operation", "Sandbox operation owner is still active; diagnostic observation clears nothing"),
-            Standing::Stale => checks.warning("sandbox.operation", "Sandbox retains an ended owner's certain operation"),
-            Standing::Unresolved => checks.warning("sandbox.operation", "Sandbox retains an ended owner's uncertain operation; original outcome remains unresolved"),
-        }
-    } else {
-        checks.pass(
-            "sandbox.operation",
-            "No sandbox lifecycle operation is recorded",
-        );
-    }
-    if record.id().is_none() {
-        checks.warning("sandbox.runtime", "Sandbox has no recorded started runtime");
-        checks.blocked(
-            "sandbox.daemon",
-            "No started sandbox instance is recorded",
-            "sandbox.runtime",
-        );
+    if let Some(by) = seen.waits {
+        whole(node, Some(by.clone()), None);
+        node.gate = Some(by);
         return;
     }
-    if record.daemon().and_then(|d| d.forward()).is_some() {
-        if runtime::forward(home, &record, checks) {
-            local(home, &record, budget, checks, true);
-        } else {
-            checks.blocked(
-                "sandbox.daemon",
-                "Saved forward prerequisites prevent daemon observation",
-                "sandbox.route",
-            );
+    if seen.busy {
+        whole(node, None, Some(NoVerdict::Busy));
+        node.gate = Some(on(name, "busy"));
+        return;
+    }
+    if seen.lost {
+        whole(node, None, Some(NoVerdict::Lost));
+    }
+    node.gate = (node.gate.take())
+        .or(seen.gate)
+        .or_else(|| gate(&checks, name, machine.as_deref(), route));
+    if node.gate.is_some() {
+        return;
+    }
+    if let (Listing::NoVerdict(reason), true) = (seen.listing, seen.workspaces.is_empty()) {
+        // no Workspace can be named: the Sandbox answers for its list
+        if node.reason.is_none() {
+            whole(node, None, Some(reason));
         }
-    } else if record.machine() == "native" {
-        checks.pass(
-            "sandbox.route",
-            "Saved route reaches the native daemon directly",
-        );
-        local(home, &record, budget, checks, false);
-    } else {
-        remote(home, &record, budget, checks);
+        return;
+    }
+    node.children = workspace_target::nodes(name, &seen.workspaces, seen.listing);
+}
+
+/// `blocked_by` the Sandbox `sandbox`, for `reason`.
+fn on(sandbox: &str, reason: &'static str) -> BlockedBy {
+    BlockedBy {
+        thing: "sandbox",
+        handle: sandbox.to_owned(),
+        reason,
     }
 }
 
+/// What blocks the Workspaces of a Sandbox whose daemon was not seen
+/// ready: the first live check that failed or gave no verdict, by the
+/// thing at its root. None when its daemon is ready, or when nothing was
+/// tried (its Workspaces then give no verdict either).
+fn gate(checks: &Checks, sandbox: &str, machine: Option<&str>, route: Route) -> Option<BlockedBy> {
+    if matches!(checks.outcome("sandbox.daemon_ready"), Some(("pass", _))) {
+        return None;
+    }
+    let of = |id: &str| checks.outcome(id);
+    let bad = |id: &str| matches!(of(id), Some(("fail" | "unknown", _)));
+    let worker = |reason| {
+        machine.map(|machine| BlockedBy {
+            thing: "machine",
+            handle: machine.to_owned(),
+            reason,
+        })
+    };
+    if matches!(of("sandbox.runtime"), Some(("fail", Some("error")))) {
+        return Some(on(sandbox, "lost"));
+    }
+    if matches!(of("sandbox.route"), Some(("blocked", _))) {
+        return worker("not_answering");
+    }
+    if bad("sandbox.route") {
+        return match route {
+            Route::Worker => worker("not_answering"),
+            _ => Some(on(sandbox, "unreachable")),
+        };
+    }
+    if bad("sandbox.forward_process") {
+        return Some(on(sandbox, "unreachable"));
+    }
+    if bad("sandbox.worker_compatibility") {
+        return worker("outdated");
+    }
+    if bad("sandbox.daemon_keys") {
+        return Some(on(sandbox, "missing"));
+    }
+    if bad("sandbox.daemon_connect") {
+        return Some(on(sandbox, "not_answering"));
+    }
+    if bad("sandbox.daemon_auth") {
+        let reason = match of("sandbox.daemon_auth") {
+            Some(("fail", _)) => "failed",
+            _ => "not_answering",
+        };
+        return Some(on(sandbox, reason));
+    }
+    if bad("sandbox.daemon_instance") {
+        return Some(on(sandbox, "lost"));
+    }
+    match of("sandbox.daemon_ready") {
+        Some(("fail", Some("error"))) => Some(on(sandbox, "failed")),
+        Some(("fail", _)) => Some(on(sandbox, "busy")),
+        Some(("unknown", _)) => Some(on(sandbox, "not_answering")),
+        _ => None,
+    }
+}
+
+/// The Sandbox's checks: its records, then what its state lets run. Its
+/// route and machine, when its record names them.
+fn diagnose(
+    probe: &Probe<'_>,
+    checks: &mut Checks,
+    seen: &mut Observed,
+) -> (Route, Option<String>) {
+    let (home, name) = (probe.home, probe.thing.name.as_str());
+    let Some(record) = read(home, name, checks) else {
+        return (Route::None, None);
+    };
+    let machine = Some(record.machine().to_owned());
+    references(home, &record, checks);
+    operation(&record, checks);
+    let state = match probe.blocked {
+        Some(by) => State::Blocked(by.clone()),
+        None => recorded_state(home, &record),
+    };
+    match state {
+        State::Blocked(by) => {
+            seen.waits = Some(by);
+            return (Route::None, machine);
+        }
+        State::Busy { .. } => {
+            seen.busy = true;
+            return (Route::None, machine);
+        }
+        State::Broken {
+            reason: Reason::Missing,
+            ..
+        } => {
+            let message = match record.machine_stopped() {
+                true => "its runtime was stopped",
+                false => "it has no runtime: its create never recorded one",
+            };
+            checks.fail("sandbox.runtime", message);
+            checks.fix("sandbox.runtime", remove_fix(name));
+            seen.gate = Some(on(name, "missing"));
+            return (Route::None, machine);
+        }
+        _ => {}
+    }
+    let route = if record.daemon().and_then(|d| d.forward()).is_some() {
+        if runtime::forward(home, &record, checks) {
+            local(home, &record, probe.budget, checks, true, seen);
+        }
+        Route::Forward
+    } else if record.machine() == "native" {
+        checks.pass(
+            "sandbox.route",
+            "its daemon runs on this computer and is dialled directly",
+        );
+        local(home, &record, probe.budget, checks, false, seen);
+        Route::Native
+    } else {
+        remote::remote(home, &record, probe.budget, checks, seen);
+        Route::Worker
+    };
+    (route, machine)
+}
+
 fn read(home: &Path, name: &str, checks: &mut Checks) -> Option<SandboxRecord> {
+    const ID: &str = "sandbox.record";
     if SandboxName::parse(name).is_err() {
-        checks.fail("sandbox.record", "Invalid sandbox name");
+        checks.fail(ID, "its name is not a Sandbox name");
         return None;
     }
     match read_record(&paths::sandbox_record(home, name)) {
         Ok(Some(value)) if value.get_int("v") == Some(RECORD_VERSION) => {
-            checks.pass(
-                "sandbox.record",
-                "Sandbox record parses with a supported version",
-            );
+            checks.pass(ID, "its record parses and has a supported version");
             Some(SandboxRecord::from_record(name, value))
         }
         Ok(None) => {
-            checks.fail("sandbox.record", "Sandbox record does not exist");
+            checks.fail(ID, "it has no record");
             None
         }
         _ => {
             checks.fail(
-                "sandbox.record",
-                "Sandbox record is unreadable, malformed or has an unsupported version",
+                ID,
+                "its record cannot be read, is malformed or has an unsupported version",
             );
             None
         }
     }
 }
 
-fn references(home: &Path, record: &SandboxRecord, checks: &mut Checks) {
-    let project = record.project().and_then(|p| names::project(p).ok());
-    match project {
-        Some((store, project)) => {
-            for (id, file) in [
-                ("sandbox.store_reference", paths::store_record(home, store)),
-                (
-                    "sandbox.project_reference",
-                    paths::project_record(home, store, project),
-                ),
-            ] {
-                match read_record(&file) {
-                    Ok(Some(value)) if value.get_int("v") == Some(RECORD_VERSION) => {
-                        checks.pass(id, "Referenced record exists and has a supported version");
-                        if id == "sandbox.store_reference" {
-                            let store = StoreRecord::from_record(store, value);
-                            match store.store_ref() {
-                                Ok(StoreRef::Sqlite {
-                                    machine: Placement::Machine(machine),
-                                    ..
-                                }) if machine == record.machine() => checks.pass(
-                                    "sandbox.store_placement",
-                                    "SQLite Store and sandbox share the same machine",
-                                ),
-                                Ok(StoreRef::Postgres { .. }) => checks.pass(
-                                    "sandbox.store_placement",
-                                    "PostgreSQL Store has no SQLite machine-placement restriction",
-                                ),
-                                Ok(StoreRef::Sqlite {
-                                    machine: Placement::Unknown,
-                                    ..
-                                }) => checks.unknown(
-                                    "sandbox.store_placement",
-                                    "SQLite Store machine placement is unknown",
-                                ),
-                                Ok(_) => checks.fail(
-                                    "sandbox.store_placement",
-                                    "SQLite Store and sandbox are recorded on different machines",
-                                ),
-                                Err(_) => checks.fail(
-                                    "sandbox.store_reference",
-                                    "Referenced Store type is malformed or unsupported",
-                                ),
-                            }
-                        }
-                    }
-                    _ => checks.fail(
-                        id,
-                        "Referenced record is missing, unreadable or incompatible",
-                    ),
-                }
-            }
-        }
-        None => checks.fail(
-            "sandbox.project_reference",
-            "Sandbox project reference is missing or malformed",
-        ),
+/// Whether the record at `file` exists with a supported version.
+fn readable(file: &Path) -> Option<SdkValue> {
+    match read_record(file) {
+        Ok(Some(value)) if value.get_int("v") == Some(RECORD_VERSION) => Some(value),
+        _ => None,
     }
+}
+
+/// `sandbox.machine_reference`, `.store_reference`, `.project_reference`
+/// and `.store_placement`: the records it names. Each failure is fixed by
+/// removing the Sandbox.
+fn references(home: &Path, record: &SandboxRecord, checks: &mut Checks) {
+    let sandbox = record.name();
+    let fail = |checks: &mut Checks, id: &str, message: String| {
+        checks.fail(id, message);
+        checks.fix(id, remove_fix(sandbox));
+    };
     let machine = record.machine();
+    const MACHINE: &str = "sandbox.machine_reference";
     if MachineName::parse(machine).is_err() {
-        checks.fail(
-            "sandbox.machine_reference",
-            "Sandbox machine reference is invalid",
+        fail(
+            checks,
+            MACHINE,
+            format!("its machine `{machine}` is not a machine name"),
         );
     } else if matches!(machine, "native" | "docker") {
-        checks.pass(
-            "sandbox.machine_reference",
-            "Sandbox references a built-in machine",
-        );
+        checks.pass(MACHINE, "its machine is built in");
+    } else if readable(&paths::machine_record(home, machine)).is_some() {
+        checks.pass(MACHINE, format!("its machine {machine} has a record"));
     } else {
-        match read_record(&paths::machine_record(home, machine)) {
-            Ok(Some(value)) if value.get_int("v") == Some(RECORD_VERSION) => checks.pass(
-                "sandbox.machine_reference",
-                "Machine record exists with a supported version",
-            ),
-            _ => checks.fail(
-                "sandbox.machine_reference",
-                "Machine record is missing, unreadable or incompatible",
-            ),
+        fail(
+            checks,
+            MACHINE,
+            format!("its machine {machine} has no readable record"),
+        );
+    }
+    let Some((store, project)) = record.project().and_then(|p| names::project(p).ok()) else {
+        let message = "its record names no project, or a malformed one".to_owned();
+        fail(checks, "sandbox.project_reference", message);
+        return;
+    };
+    const STORE: &str = "sandbox.store_reference";
+    let Some(value) = readable(&paths::store_record(home, store)) else {
+        fail(
+            checks,
+            STORE,
+            format!("its Store {store} has no readable record"),
+        );
+        return;
+    };
+    let placed = StoreRecord::from_record(store, value);
+    match placed.store_ref() {
+        Ok(_) => checks.pass(STORE, format!("its Store {store} has a readable record")),
+        Err(_) => fail(
+            checks,
+            STORE,
+            format!("its Store {store}'s record names no kind this build reads"),
+        ),
+    }
+    const PROJECT: &str = "sandbox.project_reference";
+    match readable(&paths::project_record(home, store, project)) {
+        Some(_) => checks.pass(
+            PROJECT,
+            format!("its project {store}/{project} has a record"),
+        ),
+        None => fail(
+            checks,
+            PROJECT,
+            format!("its project {store}/{project} has no record"),
+        ),
+    }
+    const PLACEMENT: &str = "sandbox.store_placement";
+    match placed.store_ref() {
+        Ok(StoreRef::Sqlite { machine: on, .. }) if on == machine => {
+            checks.pass(PLACEMENT, "its sqlite Store is on its machine")
+        }
+        Ok(StoreRef::Sqlite { machine: on, .. }) => fail(
+            checks,
+            PLACEMENT,
+            format!("its sqlite Store {store} is on machine {on}, not on its machine {machine}"),
+        ),
+        Ok(StoreRef::Postgres { .. }) => {
+            checks.pass(PLACEMENT, "its PostgreSQL Store is on no machine")
+        }
+        Err(_) => {}
+    }
+}
+
+/// `sandbox.operation`: no operation of an ended owner on its record.
+fn operation(record: &SandboxRecord, checks: &mut Checks) {
+    const ID: &str = "sandbox.operation";
+    let Some(op) = record.op() else {
+        checks.pass(ID, "no operation is left on its record");
+        return;
+    };
+    let what = format!("{} (phase {})", op.name(), op.phase());
+    match op.standing() {
+        Standing::Running => checks.pass(ID, format!("its {what} has a running owner")),
+        Standing::Stale => checks.notice(
+            ID,
+            format!("its record keeps the {what} of a process that ended; it holds nothing"),
+        ),
+        Standing::Unresolved => {
+            checks.fail(
+                ID,
+                format!("the outcome of its {what} is not known: its process ended"),
+            );
+            checks.fix(ID, remove_fix(record.name()));
         }
     }
 }
 
+/// The live checks of a daemon on this kernel, or behind a forward: its
+/// runtime (not behind a forward), its saved keys, its daemon and its
+/// Workspace list, and whether its saved keys changed meanwhile. A
+/// worker's report is this too, from the worker's own root.
 fn local(
     home: &Path,
     record: &SandboxRecord,
     budget: &Budget,
     checks: &mut Checks,
     forwarded: bool,
+    seen: &mut Observed,
 ) {
-    if !forwarded {
-        runtime::local(record, checks);
+    let name = record.name();
+    if !forwarded && !runtime::local(record, checks) {
+        return;
     }
     let directory = record.dir(home);
-    let before = std::fs::metadata(directory.join("control.json"))
-        .and_then(|m| m.modified())
-        .ok();
-    match layerfs_home::secrets::daemon_keys(&directory) {
-        Ok(Some(keys)) => {
-            let forward_endpoint = record
-                .daemon()
-                .and_then(|d| d.forward())
-                .and_then(|f| f.address());
-            let saved_endpoint = keys
-                .get_text("endpoint")
-                .and_then(|s| s.parse::<std::net::SocketAddr>().ok());
-            if forwarded && forward_endpoint != saved_endpoint {
-                checks.fail(
-                    "sandbox.daemon_keys",
-                    "Saved daemon endpoint does not match the recorded forward",
-                );
-                checks.blocked(
-                    "sandbox.daemon",
-                    "Forward endpoint and discovery record disagree",
-                    "sandbox.daemon_keys",
-                );
-            } else {
-                channel::observe(&keys, budget, checks);
-            }
-        }
+    let modified = || {
+        std::fs::metadata(directory.join("control.json"))
+            .and_then(|m| m.modified())
+            .ok()
+    };
+    let before = modified();
+    const KEYS: &str = "sandbox.daemon_keys";
+    let keys = match layerfs_home::secrets::daemon_keys(&directory) {
+        Ok(Some(keys)) => keys,
         _ => {
             checks.fail(
-                "sandbox.daemon_keys",
-                "Saved daemon control record is missing or unreadable",
+                KEYS,
+                "its daemon's saved keys are missing or cannot be read",
             );
-            checks.blocked(
-                "sandbox.daemon",
-                "No usable daemon discovery record",
-                "sandbox.daemon_keys",
-            );
-        }
-    }
-    let after = std::fs::metadata(directory.join("control.json"))
-        .and_then(|m| m.modified())
-        .ok();
-    if before != after {
-        checks.unknown(
-            "sandbox.observation",
-            "Daemon discovery record changed during observation",
-        );
-    }
-    if forwarded {
-        checks.skip("sandbox.runtime_placement", "Guest runtime containment is not separately inspected; daemon connection/identity results provide available presence evidence without a worker RPC");
-    }
-}
-
-fn remote(home: &Path, record: &SandboxRecord, budget: &Budget, checks: &mut Checks) {
-    if MachineName::parse(record.machine()).is_err() {
-        checks.blocked(
-            "sandbox.route",
-            "Machine reference is invalid",
-            "sandbox.machine_reference",
-        );
-        return;
-    }
-    let endpoint = match layerfs_home::secrets::worker_secret(home, record.machine()) {
-        Ok(Some(endpoint)) => Endpoint {
-            address: endpoint.address,
-            secret: endpoint.secret,
-        },
-        Ok(None) => {
-            checks.unknown(
-                "sandbox.route",
-                "Machine has no recorded worker; it may be stopped",
-            );
-            checks.blocked(
-                "sandbox.daemon",
-                "Worker route is unavailable",
-                "sandbox.route",
-            );
-            return;
-        }
-        _ => {
-            checks.fail(
-                "sandbox.route",
-                "Worker discovery record is malformed or unreadable",
-            );
+            checks.fix(KEYS, remove_fix(name));
             return;
         }
     };
-    let duration = budget.remaining().unwrap_or(Duration::from_secs(10));
-    if duration.is_zero() {
-        checks.unknown("sandbox.route", "Deadline expired before reaching worker");
+    let forward_endpoint = (record.daemon())
+        .and_then(|d| d.forward())
+        .and_then(|f| f.address());
+    let saved_endpoint = keys
+        .get_text("endpoint")
+        .and_then(|s| s.parse::<std::net::SocketAddr>().ok());
+    if forwarded && forward_endpoint != saved_endpoint {
+        checks.fail(KEYS, "its daemon's saved endpoint is not its forward's");
+        checks.fix(KEYS, remove_fix(name));
         return;
     }
-    let started = Instant::now();
-    let worker = match diagnostic_connect(&endpoint, started + duration) {
-        Ok(worker) => worker,
-        Err(refusal) => {
-            if refusal.code == "Denied" {
-                checks.fail("sandbox.route", "Worker rejected saved authentication");
-            } else {
-                checks.unknown(
-                    "sandbox.route",
-                    "Worker route could not be authenticated within the diagnostic budget",
-                );
-            }
-            checks.blocked(
-                "sandbox.daemon",
-                "Worker route is unavailable",
-                "sandbox.route",
-            );
-            return;
-        }
+    let (listing, rows) = channel::observe(name, &keys, budget, checks);
+    const OBSERVATION: &str = "sandbox.observation";
+    match before == modified() {
+        true => checks.pass(
+            OBSERVATION,
+            "its daemon's saved keys did not change while read",
+        ),
+        false => checks.unknown(OBSERVATION, "its daemon's saved keys changed while read"),
+    }
+    seen.listing = listing;
+    let recorded = workspace_target::recorded(&directory);
+    seen.workspaces = match listing {
+        Listing::NotAsked => Vec::new(),
+        _ => workspace_target::seen(name, &recorded, rows),
     };
-    if worker.hello.expected().is_some() {
-        checks.fail("sandbox.worker_compatibility", "Worker protocol or sealed bundle differs from this caller; diagnostic request was not sent");
-        checks.blocked(
-            "sandbox.daemon",
-            "Worker is incompatible",
-            "sandbox.worker_compatibility",
-        );
-        return;
-    }
-    let remaining = duration.saturating_sub(started.elapsed());
-    match worker.diagnose(
-        DiagnosticOperation::Sandbox,
-        SdkValue::map([
-            ("name", SdkValue::text(record.name())),
-            (
-                "timeout_ms",
-                SdkValue::Int(
-                    i64::try_from(remaining.as_millis())
-                        .unwrap_or(i64::MAX)
-                        .max(1),
-                ),
-            ),
-        ]),
-        &mut |_| Ok(()),
-    ) {
-        Ok(report) => {
-            checks.pass(
-                "sandbox.route",
-                "Authenticated compatible worker served the observational sandbox route",
-            );
-            merge(report, checks);
-        }
-        Err(refusal) => {
-            let code = match refusal.code.as_str() {
-                "Unknown" | "Unavailable" | "Denied" | "Timeout" | "Unsupported"
-                | "InvalidInput" | "TooLarge" => refusal.code.as_str(),
-                _ => "Unrecognized",
-            };
-            checks.unknown(
-                "sandbox.route",
-                format!("Worker diagnostic failed or has an unknown outcome ({code})"),
-            );
-            checks.blocked(
-                "sandbox.daemon",
-                "Worker returned no complete diagnostic report",
-                "sandbox.route",
-            );
-        }
-    }
-}
-
-fn merge(report: SdkValue, checks: &mut Checks) {
-    let Some(SdkValue::List(rows)) = report
-        .get("checks")
-        .filter(|_| !report.get_bool("truncated"))
-    else {
-        checks.unknown(
-            "sandbox.worker_report",
-            "Worker diagnostic report was malformed or truncated",
-        );
-        return;
-    };
-    for row in rows {
-        let Some(id) = row
-            .get_text("id")
-            .filter(|id| id.starts_with("sandbox.") && id.len() < 80)
-        else {
-            checks.unknown(
-                "sandbox.worker_report",
-                "Worker returned an invalid diagnostic check identity",
-            );
-            return;
-        };
-        let message = row.get_text("message").unwrap_or("Worker observation");
-        match row.get_text("outcome") {
-            Some("pass") => checks.pass(id, message),
-            Some("fail") if row.get_text("severity") == Some("warning") => {
-                checks.warning(id, message)
-            }
-            Some("fail") => checks.fail(id, message),
-            Some("skipped") => checks.skip(id, message),
-            Some("blocked") => {
-                let dependency = row
-                    .get("blocked_by")
-                    .and_then(|v| match v {
-                        SdkValue::List(items) => items.first(),
-                        _ => None,
-                    })
-                    .and_then(|v| match v {
-                        SdkValue::Text(text) => Some(text.as_str()),
-                        _ => None,
-                    })
-                    .unwrap_or("sandbox.route");
-                checks.blocked(id, message, dependency);
-            }
-            _ => checks.unknown(id, message),
-        }
-        if let Some(evidence) = row.get("evidence") {
-            checks.evidence(id, evidence.clone());
-        }
-    }
-    if !report.get_bool("complete") {
-        checks.incomplete();
-    }
-}
-
-/// Worker-only fixed-root observation; no Store routes or caller-controlled paths.
-/// With `leftovers: true` it answers this root's leftover walk instead
-/// (`leftovers::walk_in_worker`, layerfs-project#180): the same read-only
-/// operation, with no Sandbox named.
-pub(crate) fn worker_diagnose(root: &Path, args: SdkValue) -> Outcome {
-    if args.get_bool("leftovers") {
-        return Ok(super::leftovers::walk_in_worker(root, &args));
-    }
-    let name = args
-        .get_text("name")
-        .ok_or_else(|| refused("InvalidInput", "sandbox diagnostic name"))?;
-    SandboxName::parse(name)?;
-    let millis = args
-        .get_int("timeout_ms")
-        .filter(|n| *n > 0)
-        .ok_or_else(|| refused("InvalidInput", "sandbox diagnostic timeout"))?;
-    let budget = Budget::new(Some(Duration::from_millis(millis as u64)));
-    let mut checks = Checks::new("sandbox", name);
-    if let Some(record) = read(root, name, &mut checks) {
-        local(root, &record, &budget, &mut checks, false);
-    }
-    Ok(checks.to_sdk())
 }

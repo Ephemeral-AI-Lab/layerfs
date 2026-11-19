@@ -21,6 +21,7 @@ use crate::{dispatch, files};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::helpers;
 use layerfs_home::home::{self, paths};
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::Unreached;
 use layerfs_store::resolve::{self, Target};
@@ -51,12 +52,17 @@ pub fn check(home: &Path, id: &str, daemon: &DaemonRecord) -> Result<()> {
     };
     let machine = forward.machine().unwrap_or("");
     if !paths::worker_record(home, machine).exists() {
-        return Err(refused(
+        let refusal = refused(
             "Unavailable",
             format!(
-                "machine {machine}, which runs Sandbox {id}, is not running; start it with                  `layerfs machine start {machine}`"
+                "machine {machine}, which runs Sandbox {id}, is not running; start it with `layerfs machine start {machine}`"
             ),
-        ));
+        );
+        let fix = format!(
+            "layerfs machine start {machine}",
+            machine = shell_word(machine)
+        );
+        return Err(layerfs_home::outcome::with_fix(refusal, fix));
     }
     if forward.pid().is_none() || forward.alive() {
         return Ok(());
@@ -66,7 +72,7 @@ pub fn check(home: &Path, id: &str, daemon: &DaemonRecord) -> Result<()> {
         format!(
             "the forward to Sandbox {id}'s daemon (pid {}) has ended: machine {machine} \
              stopped or the forward was ended. Start the machine if it is stopped \
-             (`layerfs machine start {machine}`), then `layerfs sandbox close {id}`",
+             (`layerfs machine start {machine}`), then `layerfs sandbox remove {id}`",
             forward.pid().unwrap_or(0)
         ),
     ))
@@ -105,7 +111,7 @@ pub fn unanswered(id: &str, daemon: &DaemonRecord, refusal: SdkRefusal) -> SdkRe
         .unwrap_or_default();
     let message = format!(
         "Sandbox {id}'s daemon does not answer at {at}: {}; `layerfs sandbox get {id}` \
-         shows whether it runs, `layerfs sandbox close {id}` closes it",
+         shows whether it runs, `layerfs sandbox remove {id}` removes it",
         refusal.message
     );
     SdkRefusal {
@@ -226,7 +232,7 @@ fn carried(
 ) -> Result<Option<(SocketAddr, Option<u32>)>> {
     use layerfs_machine::platform::Code;
     let record = layerfs_machine::record::MachineRecord::of(home, machine)?;
-    let spec = layerfs_machine::machine_spec(home, &layerfs_home::home::opened(home)?.id, &record)?;
+    let spec = layerfs_machine::machine_spec(home, &record)?;
     match layerfs_machine::platform::forward(&spec, endpoint.port()) {
         Ok(forward) => Ok(Some((forward.address, forward.pid))),
         Err(error) if error.code == Code::Unsupported => Ok(None),
@@ -258,9 +264,8 @@ fn end(home: &Path, machine: &str, daemon: &DaemonRecord) {
         let Some(address) = forward_of(daemon) else {
             return;
         };
-        let spec = layerfs_machine::record::MachineRecord::of(home, machine).and_then(|record| {
-            layerfs_machine::machine_spec(home, &layerfs_home::home::opened(home)?.id, &record)
-        });
+        let spec = layerfs_machine::record::MachineRecord::of(home, machine)
+            .and_then(|record| layerfs_machine::machine_spec(home, &record));
         if let Ok(spec) = spec {
             let forward = layerfs_machine::platform::Forward {
                 address,

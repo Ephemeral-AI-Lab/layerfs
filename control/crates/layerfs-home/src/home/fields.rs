@@ -127,16 +127,6 @@ impl<F: Field> Fields<F> {
     pub fn remove(&mut self, name: &str) {
         self.slots.retain(|slot| slot.name() != name);
     }
-
-    /// The fields but those named in `hidden`, as a map in file order.
-    pub fn encode_without(&self, hidden: &[&str]) -> Vec<(String, SdkValue)> {
-        match self.encode() {
-            SdkValue::Map(fields) => (fields.into_iter())
-                .filter(|(name, _)| !hidden.contains(&name.as_str()))
-                .collect(),
-            _ => Vec::new(),
-        }
-    }
 }
 
 /// A text field's value, stored as text.

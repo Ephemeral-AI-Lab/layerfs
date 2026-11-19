@@ -17,7 +17,7 @@ fn sent(call: Call, message: Message) -> Sent {
         project: "api".to_owned(),
         store_record: StoreRecord::from_record(
             "shop",
-            parse(r#"{"name":"shop","url":"postgresql://u@h/d","password":"env:P"}"#).unwrap(),
+            parse(r#"{"name":"shop","url":"postgresql://u@h/d"}"#).unwrap(),
         ),
         project_record: ProjectRecord::from_record("shop", "api", SdkValue::Null),
         choice: Choice {
@@ -37,14 +37,16 @@ fn a_frame_keeps_the_untyped_request_s_fields_and_order() {
         path: Some("/w/1".to_owned()),
         directory: None,
         command: Some("ls".to_owned()),
-        spool: false,
+        cwd: None,
+        env: Vec::new(),
+        stdin: None,
         exec_id: None,
         workspace: None,
         tag: None,
     };
     assert_eq!(
         print(&encode(&sent(exec, Message::Null)).unwrap()),
-        r#"{"op":"workspace.exec","store":"shop","project":"api","store_record":{"name":"shop","url":"postgresql://u@h/d","password":"env:P"},"project_record":null,"deploy":{"backend":"local","platform":"docker"},"more":{"path":"/w/1","command":"ls","message":null,"sandbox":"t1"}}"#
+        r#"{"op":"workspace.exec","store":"shop","project":"api","store_record":{"name":"shop","url":"postgresql://u@h/d"},"project_record":null,"deploy":{"backend":"local","platform":"docker"},"more":{"path":"/w/1","command":"ls","message":null,"sandbox":"t1"}}"#
     );
     let close = Call::Close {
         force: false,
@@ -58,6 +60,7 @@ fn a_frame_keeps_the_untyped_request_s_fields_and_order() {
     let commit = Call::Commit {
         path: Some("w".to_owned()),
         force: Some(true),
+        expected: None,
     };
     let frame = print(&encode(&sent(commit, Message::Text("m".to_owned()))).unwrap());
     assert!(
@@ -84,7 +87,9 @@ fn a_frame_reads_back_to_its_request() {
             path: Some("/w".to_owned()),
             directory: Some("/w".to_owned()),
             command: Some("true".to_owned()),
-            spool: true,
+            cwd: Some("src".to_owned()),
+            env: vec!["A=1".to_owned()],
+            stdin: Some(b"in\n".to_vec()),
             exec_id: Some("e1".to_owned()),
             workspace: Some("ab".repeat(32)),
             tag: Some("dsh:s1".to_owned()),
@@ -98,6 +103,7 @@ fn a_frame_reads_back_to_its_request() {
         Call::Commit {
             path: Some("/w".to_owned()),
             force: None,
+            expected: Some("ab".repeat(33)),
         },
         Call::Unmount {
             path: Some("/w".to_owned()),
@@ -106,6 +112,7 @@ fn a_frame_reads_back_to_its_request() {
         },
         Call::Status {
             path: Some("w2".to_owned()),
+            under: Some("src".to_owned()),
         },
     ];
     assert_eq!(calls.len(), OPS.len());
@@ -116,7 +123,7 @@ fn a_frame_reads_back_to_its_request() {
         assert_eq!(read.sandbox.as_deref(), Some("t1"));
         assert_eq!(read.message, Message::Absent);
         assert_eq!(read.choice.platform.as_deref(), Some("docker"));
-        // the URL and its password reference stay with the caller
+        // the URL stays with the caller
         let record = print(read.store_record.to_record());
         assert_eq!(record, r#"{"name":"shop"}"#);
     }
@@ -148,6 +155,7 @@ fn a_message_that_is_not_text_is_refused_before_it_is_sent() {
     let commit = Call::Commit {
         path: Some("w".to_owned()),
         force: None,
+        expected: None,
     };
     let refusal = encode(&sent(commit, Message::NotText)).err().unwrap();
     assert_eq!(
@@ -160,7 +168,13 @@ fn a_message_that_is_not_text_is_refused_before_it_is_sent() {
 /// machine and hint its reach check names, and reads back as sent.
 #[test]
 fn a_frame_carries_the_postgresql_selection() {
-    let mut with = sent(Call::Status { path: None }, Message::Absent);
+    let mut with = sent(
+        Call::Status {
+            path: None,
+            under: None,
+        },
+        Message::Absent,
+    );
     with.postgresql = Some(layerfs_store::open_args::PgSelection {
         url: Some("postgresql://u:pw@h/d".to_owned()),
         schema: Some("layerfs".to_owned()),

@@ -223,7 +223,12 @@ impl Driver for S3Client {
                 .offset
                 .checked_add(span.length)
                 .filter(|_| span.length > 0)
-                .ok_or_else(|| RemoteError::Invalid(format!("span {span:?}")))?;
+                .ok_or_else(|| {
+                    RemoteError::Invalid(format!(
+                        "the range of {} bytes at byte {} is empty or too large",
+                        span.length, span.offset
+                    ))
+                })?;
             headers.insert(
                 "range".to_owned(),
                 format!("bytes={}-{}", span.offset, end - 1),

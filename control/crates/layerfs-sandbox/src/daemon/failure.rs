@@ -63,10 +63,35 @@ impl OperationFailure {
             cause: OperationCause::Unexpected(reply),
         })
     }
+    /// The request was sent and no answer settles what it did, so its
+    /// outcome is not known: an exchange that stopped after sending began,
+    /// or an answer this call does not expect. A daemon refusal or a
+    /// retained teardown is a known answer.
+    pub fn attempted(&self) -> bool {
+        match &self.cause {
+            OperationCause::Exchange(exchange) => exchange.attempted,
+            OperationCause::Unexpected(_) => true,
+            OperationCause::Remote(_) | OperationCause::Retained(_) => false,
+        }
+    }
 }
+/// In plain words, never `Debug` text.
 impl fmt::Display for OperationFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "SDK operation: {:?}", self.cause)
+        match &self.cause {
+            OperationCause::Exchange(exchange) => write!(f, "{exchange}"),
+            OperationCause::Remote(refused) => f.write_str(&refused.detail),
+            OperationCause::Retained(custody) => write!(
+                f,
+                "the Sandbox's daemon stopped the teardown at its {} step and keeps it",
+                crate::daemon::values::stage_text(custody.stage)
+            ),
+            OperationCause::Unexpected(_) => write!(
+                f,
+                "the Sandbox's daemon answered something this call does not expect; {}",
+                layerfs_sandbox_backend::OUTCOME_UNKNOWN
+            ),
+        }
     }
 }
 impl std::error::Error for OperationFailure {}

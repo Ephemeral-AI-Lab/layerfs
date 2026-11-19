@@ -139,7 +139,7 @@ fn worker(meet: Meet) -> (SocketAddr, Arc<Mutex<Vec<String>>>) {
                     &mut stream,
                     &SdkValue::map([(
                         "value",
-                        SdkValue::map([("answered", SdkValue::Bool(true))]),
+                        SdkValue::map([("text", SdkValue::text("answered"))]),
                     )]),
                 )
                 .unwrap();
@@ -167,7 +167,7 @@ fn a_worker_call_dials_once_and_never_starts_its_machine() {
     let (address, log) = worker(Meet::Answer);
     let home = home_on_box("answer", address);
     let value = read(&home).unwrap();
-    assert_eq!(value.get("answered"), Some(&SdkValue::Bool(true)));
+    assert_eq!(value.get_text("text"), Some("answered"));
     let requests = log.lock().unwrap().clone();
     assert_eq!(requests.len(), 1, "{requests:?}");
     assert_eq!(requests[0], "store.call", "{requests:?}");

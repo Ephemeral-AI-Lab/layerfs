@@ -7,13 +7,22 @@
 //! A call runs once. Its arguments are checked against the table before any
 //! effect, then its family's function runs with a [`Context`]: the home and
 //! the call's one event stream (O22), which carries `workspace.exec`'s
-//! output and the progress of `project.init`, `project.export`, `store.push`,
-//! `store.pull`, `backup.create` and `backup.restore`. Result keys are
+//! output and the progress of `project.init`, `project.export`, `store.move`,
+//! `store.compact`, `backup.create` and `backup.restore`. Result keys are
 //! snake_case in every front end. When it ends, one line goes to the home's
-//! call log (#659), except for the `logs` calls, a call its table entry
-//! marks `quiet`, and with `LAYERFS_LOGS=0`.
-use super::{check, render, table, table::Family, Context};
-use layerfs_bridge::control::SdkValue;
+//! call log (#659), except for a call its table entry marks `quiet`, and
+//! with `LAYERFS_LOGS=0`.
+//!
+//! Three arguments belong to no table entry and are taken out before the
+//! check: `log_tag`, and the global options of the call surface (2.0),
+//! `detail` (the long form) and `with` (the sections to add). A migrated
+//! call's result is shaped by [`shape`](super::shape) into the form asked;
+//! a refusal leaves with one of the thirteen public codes
+//! ([`refusal`](super::refusal)).
+use super::form::Asked;
+use super::table::Call;
+use super::{check, refusal, render, shape, table, table::Family, Context};
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -45,6 +54,12 @@ impl Client {
 
 /// The argument that tags one call's log line; no table entry declares it.
 const LOG_TAG: &str = "log_tag";
+/// The global option that asks for the long form; no table entry declares it.
+pub const DETAIL: &str = "detail";
+/// The global option that names the sections to add; no table entry
+/// declares it. The shell takes `--with a,b`, Node `with: ["a", "b"]`,
+/// Python `with_=["a", "b"]`.
+pub const WITH: &str = "with";
 
 /// The home a call uses: `explicit` when given, else `LAYERFS_HOME`, else
 /// `~/.layerfs` (O28). It must be an absolute path.
@@ -83,7 +98,8 @@ pub fn call(
 /// rewrites the checked arguments before any effect. With
 /// `LAYERFS_TRACE_STEP` set, its steps are traced (`trace::stepped`). A
 /// top-level `log_tag` argument is taken out before checking and tags the
-/// call's log line, else `LAYERFS_LOGS_TAG` does.
+/// call's log line, else `LAYERFS_LOGS_TAG` does; `detail` and `with` are
+/// taken out the same way and say which form answers.
 pub fn call_scoped(
     families: &'static [Family],
     home_path: Option<&Path>,
@@ -97,8 +113,10 @@ pub fn call_scoped(
     let outcome = layerfs_home::trace::stepped(name, || {
         scoped(families, home_path, scope, name, args, events, &mut log)
     });
+    // the log keeps the refusing code as it was raised; the caller gets its
+    // public one
     log.finish(home_path, &outcome);
-    outcome
+    outcome.map_err(refusal::public)
 }
 
 /// Logs `refusal` for a call refused before its arguments could be read
@@ -108,24 +126,77 @@ pub fn refuse_early(
     home_path: Option<&Path>,
     name: &str,
     client: Client,
-    refusal: layerfs_bridge::control::SdkRefusal,
+    refusal: SdkRefusal,
 ) -> Outcome {
     let outcome = Err(refusal);
     Log::start(families, name, client, None).finish(home_path, &outcome);
-    outcome
+    outcome.map_err(refusal::public)
+}
+
+fn take(args: &mut SdkValue, name: &str) -> Option<SdkValue> {
+    let SdkValue::Map(fields) = args else {
+        return None;
+    };
+    let at = fields.iter().position(|(held, _)| held == name)?;
+    Some(fields.remove(at).1)
 }
 
 /// The `log_tag` argument, taken out of `args`; given but unusable, the
 /// call has no tag.
 fn take_tag(args: &mut SdkValue) -> Option<Option<String>> {
-    let SdkValue::Map(fields) = args else {
-        return None;
-    };
-    let at = fields.iter().position(|(name, _)| name == LOG_TAG)?;
-    Some(match fields.remove(at).1 {
+    Some(match take(args, LOG_TAG)? {
         SdkValue::Text(tag) => layerfs_home::logs::tag(&tag),
         _ => None,
     })
+}
+
+/// Whether `args` asks for the long form (`detail: true`), without taking
+/// it out: what a front end reads to print a refusal in the form asked.
+pub fn asks_detail(args: &SdkValue) -> bool {
+    args.get(DETAIL) == Some(&SdkValue::Bool(true))
+}
+
+/// The global options `detail` and `with`, taken out of `args` and checked
+/// against the entry: `detail` is true or false; `with` is a list of
+/// section names (or one text, names joined by `,`), each one the call
+/// declares.
+fn take_asked(spec: &Call, args: &mut SdkValue) -> Result<Asked, SdkRefusal> {
+    let invalid = |why: String| refused("InvalidInput", format!("{}: {why}", spec.name()));
+    let detail = match take(args, DETAIL) {
+        None | Some(SdkValue::Null) => false,
+        Some(SdkValue::Bool(detail)) => detail,
+        Some(_) => return Err(invalid("`detail` must be true or false".to_owned())),
+    };
+    let named = |text: &str| -> Vec<String> {
+        let names = text.split(',').map(str::trim);
+        names.filter(|n| !n.is_empty()).map(str::to_owned).collect()
+    };
+    let mut with: Vec<String> = Vec::new();
+    match take(args, WITH) {
+        None | Some(SdkValue::Null) => {}
+        Some(SdkValue::Text(text)) => with = named(&text),
+        Some(SdkValue::List(items)) => {
+            for item in items {
+                match item {
+                    SdkValue::Text(text) => with.extend(named(&text)),
+                    _ => return Err(invalid("`with` must be a list of section names".to_owned())),
+                }
+            }
+        }
+        Some(_) => return Err(invalid("`with` must be a list of section names".to_owned())),
+    }
+    with.dedup();
+    if let Some(unknown) = with.iter().find(|name| spec.section(name).is_none()) {
+        let takes: Vec<&str> = spec.with.iter().map(|section| section.name).collect();
+        return Err(invalid(match takes.is_empty() {
+            true => format!("`with` names `{unknown}`, and this call takes no section"),
+            false => format!(
+                "`with` names `{unknown}`; this call takes {}",
+                takes.join(", ")
+            ),
+        }));
+    }
+    Ok(Asked { detail, with })
 }
 
 /// One call's log line in the making: started when the call starts.
@@ -135,23 +206,23 @@ struct Log<'n> {
     tag: Option<String>,
     /// The call as the caller asked it, once its arguments were checked.
     argv: Option<Vec<SdkValue>>,
+    /// The word and saved version its full result named.
+    saved: Vec<(String, SdkValue)>,
     at: i64,
     started: Instant,
     on: bool,
 }
 
 impl<'n> Log<'n> {
-    /// A call named `name` writes its line unless the log is off, it is
-    /// one of the `logs` family (a name the table does not hold included),
-    /// or its entry in `families` is `quiet`.
+    /// A call named `name` writes its line unless the log is off or its
+    /// entry in `families` is `quiet`.
     fn start(
         families: &'static [Family],
         name: &'n str,
         client: Client,
         tag: Option<Option<String>>,
     ) -> Self {
-        let quiet = name.split('.').next() == Some("logs")
-            || table::find(families, name).is_some_and(|call| call.quiet);
+        let quiet = table::find(families, name).is_some_and(|call| call.quiet);
         let on = layerfs_home::logs::enabled() && !quiet;
         let tag = tag.unwrap_or_else(|| {
             std::env::var("LAYERFS_LOGS_TAG")
@@ -163,6 +234,7 @@ impl<'n> Log<'n> {
             client,
             tag,
             argv: None,
+            saved: Vec::new(),
             at: layerfs_home::home::now_ms(),
             started: Instant::now(),
             on,
@@ -185,8 +257,8 @@ impl<'n> Log<'n> {
             ms,
             self.client.name(),
             argv,
-            self.name,
             outcome,
+            self.saved,
             self.tag.as_deref(),
         );
         layerfs_home::logs::append(&home, &line);
@@ -204,18 +276,18 @@ fn scoped(
 ) -> Outcome {
     let spec = table::find(families, name)
         .ok_or_else(|| refused("InvalidInput", format!("no call named `{name}`")))?;
+    let mut args = args;
+    let asked = take_asked(spec, &mut args)?;
     let mut args = SdkValue::Map(check::check(spec, args)?);
     // logged as the caller asked, before the scope rewrites the arguments
-    log.argv = Some(render::argv(spec, &args, scope));
+    log.argv = Some(render::argv(spec, &args, &asked, scope));
     if let Some(scope) = scope {
-        args = scope.apply(name, args)?;
+        args = scope.apply(spec, args)?;
     }
     let home = home(home_path)?;
-    super::platform_policy::check(&home, name, &args)?;
+    super::platform_policy::check(&home, spec.policy, &args)?;
     if spec.opens {
-        let id = layerfs_control::migrate::open(&home)
-            .inspect_err(|refusal| layerfs_control::migrate::note_failure(&home, refusal))?
-            .id;
+        let id = layerfs_home::home::open(&home)?.id;
         // `machine/native/` and `machine/docker/` exist from the first call;
         // checked once per process for each home (R6)
         #[cfg(feature = "machine")]
@@ -224,26 +296,31 @@ fn scoped(
         let _ = id;
     }
     if let Some(scope) = scope {
-        scope.owns(&home, name, &args)?;
+        scope.owns(&home, spec, &args)?;
     }
     layerfs_home::trace::step("dispatch");
-    let mut context = Context::new(home, log.tag.clone(), events);
+    let mut context = Context::new(home, log.tag.clone(), asked.clone(), events);
     let value = (spec.run)(&mut context, &args)?;
-    // a scoped `branch.list` names its Branches relative to the namespace
-    // in the family (it pages through them there)
     let value = match scope {
-        Some(scope) if name == "branch.get" => {
-            let prefix = format!("{}.", scope.branch.as_deref().unwrap_or(""));
-            match value
-                .get_text("name")
-                .and_then(|n| n.strip_prefix(&prefix))
-                .map(str::to_owned)
-            {
-                Some(name) => layerfs_home::home::with_field(value, "name", SdkValue::Text(name)),
-                None => value,
-            }
-        }
-        _ => value,
+        Some(scope) => scope.answer(spec, value),
+        None => value,
     };
-    Ok(super::keys::snake(value))
+    let value = super::keys::snake(value);
+    // the line names what the full result said, before a form leaves it out
+    log.saved = render::saved(spec, &value);
+    Ok(match spec.form {
+        Some(form) => shape::shape(&spec.name(), form, spec.with, value, &asked),
+        None => value,
+    })
+}
+
+/// What a process calls before it exits: closes every Store it holds open
+/// with no call running (`close_idle`), so a sqlite Store leaves no
+/// write-ahead log behind, and ends its idle Sandbox daemon sessions inside
+/// a short bound (layerfs-project#181), so its exit is not a dropped
+/// connection in a daemon's log. Answers how many Stores it closed.
+pub fn close() -> usize {
+    let closed = layerfs_control::store::close_idle(std::time::Duration::ZERO);
+    layerfs_sandbox::registry::end_idle_sessions(layerfs_sandbox::registry::SESSION_END);
+    closed
 }

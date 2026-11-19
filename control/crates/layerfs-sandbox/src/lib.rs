@@ -18,7 +18,6 @@ pub use daemon::failure::{OperationCause, OperationFailure};
 pub use daemon::workspace::{
     BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
 };
-mod close;
 mod create;
 #[doc(hidden)]
 pub mod deploy;
@@ -45,6 +44,7 @@ pub mod image_artifact;
 pub mod image_load;
 #[doc(hidden)]
 pub mod image_lock;
+mod image_sweep;
 #[doc(hidden)]
 pub mod image_tar;
 #[doc(hidden)]
@@ -62,6 +62,7 @@ pub mod output;
 pub mod record;
 #[doc(hidden)]
 pub mod registry;
+mod remove;
 #[doc(hidden)]
 pub mod reopen;
 #[doc(hidden)]
@@ -70,6 +71,11 @@ pub mod route;
 pub mod run_folder;
 #[doc(hidden)]
 pub mod runtime;
+/// A Sandbox's state and a Workspace's, from records and daemon words.
+pub mod state;
+/// What interrupted Sandbox starts and removals left in a run root, removed
+/// where nothing can own it (spec v20).
+pub mod sweep;
 #[doc(hidden)]
 pub mod unmount_guard;
 #[cfg(unix)]

@@ -1,0 +1,476 @@
+{
+  "family": "branch",
+  "who": "agents",
+  "old_count": 9,
+  "blurb": "Branches as names and heads. Reading history moved to <code>commit</code>.",
+  "reasons": [
+    "<b>Why one <code>commit</code> per row:</b> today each row carries three full references (~550 B).",
+    "<b>Why <code>merge &lt;branch&gt; &lt;from&gt;</code>:</b> read as \"into agent, from main\", like <code>git merge</code> on a checked-out Branch. <code>--into</code> writes the result to a new Branch instead, which is the only form the code has today.",
+    "<b>Why <code>--expected</code> on publish guards main:</b> publish writes main. The Commit to publish is named with <code>--at</code>, so the Branch moving cannot change what is published.",
+    "<b>Why the prefix filters:</b> the UI fetches every Branch, then drops the internal <code>dsh.*</code> ones."
+  ],
+  "calls": [
+    {
+      "call": "branch.list",
+      "badge": "extended",
+      "note": "one <code>commit</code> replaces head/saved_head/base: the Branch's head, or the Commit it was forked at while it has none of its own; <code>main</code> is a row, and its <code>commit</code> is main's head; <code>forked_from</code> (long form) is the Commit the Branch was forked at, not a Branch name: the record keeps the Commit; no <code>created_at</code>: a Branch record has no time; a cursor carries the call's filters only, and pins no Commit: given with other filters, or to another call, it is refused <code>InvalidInput</code>",
+      "today": [
+        "branch.list"
+      ],
+      "help": "a project's Branches, main included, in name order",
+      "cli": "layerfs branch list <project> [--prefix P] [--exclude-prefix P] [--limit 100] [--cursor C]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        }
+      ],
+      "options": [
+        {
+          "name": "prefix",
+          "kind": "Text",
+          "help": "only Branches whose name starts with this text"
+        },
+        {
+          "name": "exclude_prefix",
+          "kind": "Text",
+          "help": "leave out Branches whose name starts with this text, such as dsh."
+        },
+        {
+          "name": "limit",
+          "kind": "Int",
+          "help": "the most rows in one page, 1 to 1000",
+          "default": 100
+        },
+        {
+          "name": "cursor",
+          "kind": "Text",
+          "help": "the `next_cursor` of the page before; it carries the filters only"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": "cursor",
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "items"
+        ],
+        "sometimes": [
+          "next_cursor"
+        ]
+      },
+      "long": [
+        "items",
+        "next_cursor"
+      ],
+      "item": {
+        "short": {
+          "always": [
+            "branch",
+            "commit"
+          ],
+          "sometimes": []
+        },
+        "long": [
+          "branch",
+          "commit",
+          "forked_from",
+          "id",
+          "base",
+          "root"
+        ]
+      },
+      "examples": {
+        "short": [
+          "{\"items\":[{\"branch\":\"agent\",\"commit\":\"5c77a1d0\"},{\"branch\":\"main\",\"commit\":\"32ab9e01\"}]}",
+          "more pages: {\"items\":[{\"branch\":\"agent\",\"commit\":\"5c77a1d0\"}],\"next_cursor\":\"YWdlbnQ\"}"
+        ],
+        "long": "{\"items\":[{\"branch\":\"agent\",\"commit\":\"5c77a1d0\",\"forked_from\":\"32ab9e01\",\"id\":\"b7e19a04\",\"base\":\"32ab9e01\",\"root\":\"c41d77e2\"},{\"branch\":\"main\",\"commit\":\"32ab9e01\",\"forked_from\":null,\"id\":null,\"base\":\"32ab9e01\",\"root\":\"9f3c0b7a\"}],\"next_cursor\":null}"
+      },
+      "dropped": [
+        {
+          "today": "--page-size",
+          "now": "--limit",
+          "why": "one paging convention"
+        },
+        {
+          "today": "--page · --page-pos",
+          "now": "--cursor",
+          "why": "one paging convention"
+        }
+      ],
+      "new_work": "`--prefix` and `--exclude-prefix` are new: today only a folder scope filters Branches, by its namespace, on the caller's side after reading every page. `--cursor` is new: today the call pages by position (`page_size`, `page_pos`, default 50). The cursor carries the call's filters only, and no Commit; one given with other filters, or to another call, is refused `InvalidInput`."
+    },
+    {
+      "call": "branch.get",
+      "badge": "reshaped",
+      "note": "the head to pass as <code>--expected</code>; <code>forked_from</code> (long form) is the Commit the Branch was forked at",
+      "today": [
+        "branch.get"
+      ],
+      "help": "one Branch and its head Commit",
+      "cli": "layerfs branch get <project> <branch>",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "commit"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "commit",
+        "forked_from",
+        "branch",
+        "id",
+        "base",
+        "root"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"commit\":\"5c77a1d0\"}"
+        ],
+        "long": "{\"commit\":\"5c77a1d0\",\"forked_from\":\"32ab9e01\",\"branch\":\"agent\",\"id\":\"b7e19a04\",\"base\":\"32ab9e01\",\"root\":\"c41d77e2\"}"
+      },
+      "dropped": [],
+      "new_work": null
+    },
+    {
+      "call": "branch.fork",
+      "badge": "reshaped",
+      "note": "<code>from</code> defaults to main; <code>--at</code> forks at a Commit instead of that Branch's head; <code>commit</code> is the Commit the new Branch starts at",
+      "today": [
+        "branch.fork"
+      ],
+      "help": "a new Branch from another Branch's head, or from a Commit",
+      "cli": "layerfs branch fork <project> <name> [from] [--at C]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "name",
+          "kind": "Name"
+        },
+        {
+          "name": "from",
+          "kind": "Name",
+          "optional": true,
+          "default": "main"
+        }
+      ],
+      "options": [
+        {
+          "name": "at",
+          "kind": "Name",
+          "help": "fork at this Commit instead of the head of `from`: a full id, or a prefix of 8 or more characters"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "agent",
+      "short": {
+        "always": [
+          "commit"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "commit",
+        "outcome",
+        "branch",
+        "base",
+        "root"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"commit\":\"32ab9e01\"}"
+        ],
+        "long": "{\"commit\":\"32ab9e01\",\"outcome\":\"forked\",\"branch\":\"agent\",\"base\":\"32ab9e01\",\"root\":\"9f3c0b7a\"}"
+      },
+      "dropped": [
+        {
+          "today": "<from_branch>",
+          "now": "[from]",
+          "why": "optional now; main when left off"
+        },
+        {
+          "today": "[from_commit]",
+          "now": "--at C",
+          "why": "one way to name a Commit"
+        }
+      ],
+      "new_work": "An id prefix is new: today the call takes a full 66-character id. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
+    },
+    {
+      "call": "branch.merge",
+      "badge": "reshaped",
+      "note": "merges <code>from</code> into <code>branch</code>; <code>--into NEW</code> writes the result to a new Branch and changes neither, as today; rules come from <code>branch</code>'s <code>/.lww</code>; <code>--units</code> is kept; <code>--expected</code> guards <code>branch</code>'s head in both forms; a conflict is the refusal <code>Conflict</code>, which lists the <code>conflicts</code> and changes nothing; <code>fast_forward</code> when one side held the other and no Commit was made; <code>overwritten</code> lists the paths a newer-write-wins rule decided; <code>parent</code> and <code>second_parent</code> are the two heads merged; a merge into <code>main</code> with no <code>--into</code> is refused <code>InvalidInput</code> (main moves only by <code>branch publish</code>) with the <code>fix</code> <code>layerfs branch publish &lt;project&gt; &lt;from&gt;</code> (V22-7)",
+      "today": [
+        "branch.merge"
+      ],
+      "help": "merge one Branch into another, or into a new Branch",
+      "cli": "layerfs branch merge <project> <branch> <from> [--into NEW] [--units JSON] [--expected C] [-m msg]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        },
+        {
+          "name": "from",
+          "kind": "Name"
+        }
+      ],
+      "options": [
+        {
+          "name": "into",
+          "kind": "Name",
+          "help": "write the result to a new Branch of this name and leave `branch` as it is"
+        },
+        {
+          "name": "units",
+          "kind": "Json",
+          "help": "merge units: a list of patterns or {name, patterns}; a unit both sides changed is taken whole from the side with the later write",
+          "redact": true
+        },
+        {
+          "name": "expected",
+          "kind": "Name",
+          "help": "refuse `Conflict` unless `branch`'s head is this Commit"
+        },
+        {
+          "name": "message",
+          "kind": "Text",
+          "help": "the merge Commit's message; `-m` in the shell; `Merge <branch> and <from>` when left off",
+          "redact": true
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "commit"
+        ],
+        "sometimes": [
+          "unchanged",
+          "fast_forward",
+          "overwritten",
+          "overwritten_count"
+        ]
+      },
+      "long": [
+        "commit",
+        "unchanged",
+        "fast_forward",
+        "overwritten",
+        "overwritten_count",
+        "outcome",
+        "branch",
+        "parent",
+        "second_parent",
+        "merge_base",
+        "root",
+        "units",
+        "units_count"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"commit\":\"8d2e44f1\"}",
+          "fast-forward: {\"commit\":\"5c77a1d0\",\"fast_forward\":true}",
+          "nothing to merge: {\"commit\":\"5c77a1d0\",\"unchanged\":true}",
+          "a rule decided a path: {\"commit\":\"8d2e44f1\",\"overwritten\":[\"/package-lock.json\"]}"
+        ],
+        "long": "{\"commit\":\"8d2e44f1\",\"unchanged\":false,\"fast_forward\":false,\"overwritten\":[],\"overwritten_count\":null,\"outcome\":\"merged\",\"branch\":\"agent\",\"parent\":\"5c77a1d0\",\"second_parent\":\"6f0a2b9c\",\"merge_base\":\"32ab9e01\",\"root\":\"c41d77e2\",\"units\":[],\"units_count\":null}"
+      },
+      "dropped": [
+        {
+          "today": "<name>",
+          "now": "--into NEW",
+          "why": "the new Branch is optional now"
+        },
+        {
+          "today": "<a>",
+          "now": "<branch>",
+          "why": "the Branch merged into; its rules apply"
+        },
+        {
+          "today": "<b>",
+          "now": "<from>",
+          "why": "the Branch merged from"
+        }
+      ],
+      "new_work": "Merging into an existing Branch is new: today `branch.merge` always makes a new Branch (`--into NEW` is that form) and never changes either side. Moving `branch`'s head to the merge result, `--expected`, and `unchanged` (when `branch` already holds `from`) are part of that work. An id prefix for `--expected` is new. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count."
+    },
+    {
+      "call": "branch.publish",
+      "badge": "reshaped",
+      "note": "<code>commit</code> is main's new head; <code>--expected</code> guards main's head (today's <code>expected_base</code>); naming the Commit with <code>--at</code> replaces <code>expected_head</code>; adds <code>unchanged:true</code> when main already holds it, or <code>previous</code> (main's head before) when that was not the Branch's base; the Layers a forced publication replaced are the rows <code>commit list &lt;project&gt; main</code> shows between the new head and <code>base</code>",
+      "today": [
+        "branch.publish"
+      ],
+      "help": "a Branch's head or Commit as main's next head, refusing a stale base",
+      "cli": "layerfs branch publish <project> <branch> [--at C] [--expected C] [--force]",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        }
+      ],
+      "options": [
+        {
+          "name": "at",
+          "kind": "Name",
+          "help": "publish this Commit instead of the Branch's head: a full id, or a prefix of 8 or more characters"
+        },
+        {
+          "name": "expected",
+          "kind": "Name",
+          "help": "refuse `Conflict` unless main's head is this Commit"
+        },
+        {
+          "name": "force",
+          "kind": "Bool",
+          "help": "publish over what main gained since the Branch forked"
+        }
+      ],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "commit"
+        ],
+        "sometimes": [
+          "unchanged",
+          "previous"
+        ]
+      },
+      "long": [
+        "commit",
+        "unchanged",
+        "previous",
+        "outcome",
+        "branch",
+        "source_commit",
+        "base",
+        "root",
+        "size"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"commit\":\"6f0a2b9c\"}",
+          "main already holds it: {\"commit\":\"6f0a2b9c\",\"unchanged\":true}",
+          "forced over a moved main: {\"commit\":\"6f0a2b9c\",\"previous\":\"41c7d2e0\"}"
+        ],
+        "long": "{\"commit\":\"6f0a2b9c\",\"unchanged\":false,\"previous\":null,\"outcome\":\"published\",\"branch\":\"agent\",\"source_commit\":\"5c77a1d0\",\"base\":\"32ab9e01\",\"root\":\"c41d77e2\",\"size\":52428800}"
+      },
+      "dropped": [
+        {
+          "today": "[commit]",
+          "now": "--at C",
+          "why": "one way to name a Commit"
+        },
+        {
+          "today": "--expected-base",
+          "now": "--expected C",
+          "why": "the one write guard; it guards main's head"
+        },
+        {
+          "today": "--expected-head",
+          "now": "--at C",
+          "why": "naming the Commit to publish pins what is published; a moved Branch head cannot change it"
+        }
+      ],
+      "new_work": "An id prefix is new: today the call takes a full 66-character id. A prefix that matches more than one Commit is refused `InvalidInput` with `matches`, a count. The refusal of a stale `--expected` is `Conflict` and names main's head as `commit` (`HeadMoved` today)."
+    },
+    {
+      "call": "branch.remove",
+      "badge": "kept",
+      "note": "a soft removal: the name stays taken until compaction",
+      "today": [
+        "branch.remove"
+      ],
+      "help": "remove one Branch; its name stays taken until compaction",
+      "cli": "layerfs branch remove <project> <branch>",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        },
+        {
+          "name": "branch",
+          "kind": "Name"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "ok"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "ok",
+        "outcome",
+        "branch",
+        "removed_at"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}"
+        ],
+        "long": "{\"ok\":true,\"outcome\":\"removed\",\"branch\":\"agent\",\"removed_at\":\"2026-11-18T09:16:59Z\"}"
+      },
+      "dropped": [],
+      "new_work": null
+    }
+  ]
+}

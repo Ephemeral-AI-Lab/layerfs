@@ -19,12 +19,10 @@ export function render(table) {
   const rows = renderRows(table);
   const work = table.filter((spec) => bucketOf(spec) === "work").length;
   const admin = table.filter((spec) => bucketOf(spec) === "admin").length;
-  const ui = table.filter((spec) => bucketOf(spec) === "ui").length;
-  const none = table.filter((spec) => bucketOf(spec) === "none").length;
   const blocks = [
     BEGIN,
     "",
-    `${table.length} calls: ${work} in \`work\`, ${admin} in \`admin\` only, ${ui} in no profile (\`ui\`), ${none} no tool; \`--profile admin\` lists ${work + admin}.`,
+    `${table.length} calls: ${work} in \`work\` (the table's \`agent\` profile), ${admin} in \`admin\` only (\`full\`); \`--profile admin\` lists ${work + admin}.`,
     "",
     "| Call | Bucket | Profiles that list it | Why |",
     "| --- | --- | --- | --- |",
@@ -44,7 +42,7 @@ export function splice(text, block) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { table } = await import("layerfs");
+  const { table } = await import("@layerfs/node");
   const { block, problems } = render(table);
   if (problems.length > 0) {
     console.error(`${problems.length} profile problem(s):\n${problems.join("\n")}`);

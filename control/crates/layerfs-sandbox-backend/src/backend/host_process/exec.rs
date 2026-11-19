@@ -35,7 +35,8 @@ impl Sandbox {
     /// with no supplementary groups, in its directory, its stdout and stderr
     /// streamed to the sinks as they arrive, then waits for its exit. A sink
     /// failure closes the command's pipes, still waits for its exit, and
-    /// returns the sink's error. Standard input is not offered. The exit
+    /// returns the sink's error. Its standard input is the request's bytes,
+    /// written whole and then closed, or `/dev/null` with none. The exit
     /// code is 128 + the signal for a command a signal ended, as the Engine
     /// reports it; the process id is diagnostic only. A `slot` is told the
     /// command's stop handle, its process group and leader, before its
@@ -62,7 +63,10 @@ impl Sandbox {
             .uid(request.identity.uid)
             .gid(request.identity.gid)
             .process_group(0)
-            .stdin(Stdio::null())
+            .stdin(match request.stdin {
+                Some(_) => Stdio::piped(),
+                None => Stdio::null(),
+            })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         for entry in &request.environment {
@@ -110,7 +114,9 @@ impl Sandbox {
         };
         let out = child.stdout.take();
         let err = child.stderr.take();
+        let input = child.stdin.take();
         let copied = std::thread::scope(|scope| {
+            scope.spawn(move || streams::feed(input, request.stdin.as_deref()));
             let errors = scope.spawn(move || streams::copy(err, stderr));
             let outs = streams::copy(out, stdout);
             let errs = errors
@@ -137,7 +143,7 @@ impl Sandbox {
     }
 }
 
-/// The Engine's own checks of an ordinary command, and no stdin.
+/// The Engine's own checks of an ordinary command.
 fn check(request: &ExecRequest) -> Result<(), RuntimeError> {
     request.identity.check()?;
     if request.arguments.is_empty()
@@ -153,16 +159,12 @@ fn check(request: &ExecRequest) -> Result<(), RuntimeError> {
     if (request.environment.iter()).any(|v| !v.contains('=') || v.starts_with('=')) {
         return Err(RuntimeError::Protocol("ordinary environment field"));
     }
-    if request.stdin {
-        return Err(RuntimeError::Unsupported("local command standard input"));
-    }
     Ok(())
 }
 
 /// The caller's Rust and Git locations on macOS, when present, so a command
 /// whose `HOME` is the Sandbox's scratch directory still sees them unless the
 /// caller's environment or the request sets its own.
-#[cfg(target_os = "macos")]
 fn user_environment() -> Vec<(&'static str, OsString)> {
     use std::path::PathBuf;
     let home = non_empty_env("HOME").map(PathBuf::from);
@@ -189,12 +191,6 @@ fn user_environment() -> Vec<(&'static str, OsString)> {
     vars
 }
 
-#[cfg(not(target_os = "macos"))]
-fn user_environment() -> Vec<(&'static str, OsString)> {
-    Vec::new()
-}
-
-#[cfg(target_os = "macos")]
 fn non_empty_env(name: &str) -> Option<OsString> {
     std::env::var_os(name).filter(|value| !value.is_empty())
 }

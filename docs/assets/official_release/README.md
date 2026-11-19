@@ -61,7 +61,7 @@ at up to 4× speed, and ends on its fullest frame.
    - **Content addressing.** Every object is named by the hash of its bytes, so identical content is stored once.
    - **Chunking.** Large files are cut by content into chunks, so an edit changes only nearby chunks.
    - **Deltas and compression.** Deltas against the last version, packed and compressed with zstd.
-   - **Measured per Store.** store.stats reports both ratios: dedupe and compression.
+   - **Measured per Store.** store.get --with stats reports both ratios: dedupe and compression.
 6. **Instant Bootstrap**: "Dependencies come with every mount. No wasting time for re-installation."
    - **Init takes everything, once.** Source, .git, dependencies, caches and every ignored file.
    - **A mount binds the whole tree.** No scan, copy or install.

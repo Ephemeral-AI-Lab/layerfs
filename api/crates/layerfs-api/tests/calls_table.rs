@@ -1,5 +1,5 @@
-//! The call table and its dispatcher (#533 step 2): 84 calls in twelve
-//! families, arguments checked before any effect, one test per family that
+//! The call table and its dispatcher (#533 step 2): 83 calls in ten
+//! families (the call surface 2.0), arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::{families, json, keys, size, Call, Kind};
 use layerfs_bridge::control::SdkValue;
@@ -51,9 +51,11 @@ fn code(name: &str, args: SdkValue) -> String {
 }
 
 #[test]
-fn the_table_has_twelve_families_and_84_calls() {
+fn each_family_holds_its_own_calls_and_names_are_unique() {
+    // which calls exist is the contract test's to say (`tests/contract.rs`
+    // compares the table with the frozen spec); no count is pinned here
+    // while the families move to the 2.0 call surface one package at a time
     let all: Vec<&Call> = layerfs_api::calls();
-    assert_eq!(all.len(), 84);
     // each family holds only its own calls, and has at least one
     for family in families() {
         assert!(!family.calls().is_empty(), "{}", family.name);
@@ -66,7 +68,7 @@ fn the_table_has_twelve_families_and_84_calls() {
     let mut names: Vec<_> = all.iter().map(|c| c.name()).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 84, "call names are unique");
+    assert_eq!(names.len(), all.len(), "call names are unique");
     // an optional positional is only ever followed by optional ones (D7)
     for c in &all {
         let first_optional = c.args.iter().position(|a| a.optional);
@@ -74,8 +76,6 @@ fn the_table_has_twelve_families_and_84_calls() {
             assert!(c.args[i..].iter().all(|a| a.optional), "{}", c.name());
         }
     }
-    let counts: Vec<usize> = families().iter().map(|f| f.calls().len()).collect();
-    assert_eq!(counts, [2, 7, 9, 3, 15, 5, 6, 15, 12, 5, 4, 1]);
 }
 
 #[test]
@@ -88,9 +88,9 @@ fn unknown_calls_and_arguments_are_refused_before_any_effect() {
     .starts_with("InvalidInput: project.get: unknown argument `bogus`"));
     // a function option never crosses into the library
     assert!(code(
-        "store.push",
+        "store.move",
         map(&[
-            ("name", t("s")),
+            ("store", t("s")),
             ("machine", t("m")),
             ("on_progress", t("f"))
         ])
@@ -134,24 +134,34 @@ fn project_family() {
 
 #[test]
 fn branch_family() {
-    assert!(code(
+    assert!(code("branch.fork", map(&[("project", t("shop/api"))])).contains("`name` is required"));
+    // the history calls moved to `commit`, with no alias
+    for gone in ["branch.commits", "branch.get_commit", "branch.diff"] {
+        assert!(layerfs_api::find(gone).is_none(), "{gone}");
+        assert_eq!(
+            code(gone, SdkValue::Null),
+            format!("InvalidInput: no call named `{gone}`")
+        );
+    }
+    // `from` is optional: main when left off
+    let reached = code(
         "branch.fork",
-        map(&[("project", t("shop/api")), ("name", t("fix"))])
-    )
-    .contains("`from_branch` is required"));
+        map(&[("project", t("shop/api")), ("name", t("fix"))]),
+    );
+    assert!(!reached.starts_with("InvalidInput"), "{reached}");
     let reached = code(
         "branch.fork",
         map(&[
             ("project", t("shop/api")),
             ("name", t("fix")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ]),
     );
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
 }
 
 #[test]
-fn branch_publish_declares_its_expected_base_options() {
+fn branch_publish_declares_its_at_expected_and_force_options() {
     // The shell, Node and Python front ends build their arguments from this
     // table, so these options (and their shapes) are the CLI's and SDK's.
     let call = layerfs_api::calls()
@@ -166,40 +176,24 @@ fn branch_publish_declares_its_expected_base_options() {
     assert_eq!(
         declared,
         vec![
-            ("expected_base", Kind::Name, true),
-            ("expected_head", Kind::Name, true),
+            ("at", Kind::Name, true),
+            ("expected", Kind::Name, true),
             ("force", Kind::Bool, true),
         ]
     );
     assert_eq!(
         call.help,
-        "a Branch's head or Commit as main's next Layer, refusing a stale base"
+        "a Branch's head or Commit as main's next head, refusing a stale base"
     );
 }
 
 #[test]
 fn branch_publish_expectations_are_plumbed() {
     for (name, value, why) in [
-        (
-            "expected_base",
-            SdkValue::Int(1),
-            "`expected_base` must be text",
-        ),
-        (
-            "expected_base",
-            SdkValue::Bool(true),
-            "`expected_base` must be text",
-        ),
-        (
-            "expected_head",
-            SdkValue::Bool(true),
-            "`expected_head` must be text",
-        ),
-        (
-            "expected_head",
-            SdkValue::Int(1),
-            "`expected_head` must be text",
-        ),
+        ("at", SdkValue::Int(1), "`at` must be text"),
+        ("at", SdkValue::Bool(true), "`at` must be text"),
+        ("expected", SdkValue::Bool(true), "`expected` must be text"),
+        ("expected", SdkValue::Int(1), "`expected` must be text"),
         ("force", t("yes"), "`force` must be true or false"),
         ("force", SdkValue::Int(1), "`force` must be true or false"),
     ] {
@@ -213,17 +207,17 @@ fn branch_publish_expectations_are_plumbed() {
         );
         assert!(refused.contains(why), "{name}: {refused}");
     }
-    // A misspelled option is not read as an argument of the call.
+    // An option of the old form is not read as an argument of the call.
     let typo = code(
         "branch.publish",
         map(&[
             ("project", t("shop/api")),
             ("branch", t("work")),
-            ("expectedBase", t("00")),
+            ("expected_base", t("00")),
         ]),
     );
     assert!(
-        typo.starts_with("InvalidInput: branch.publish: unknown argument `expectedBase`"),
+        typo.starts_with("InvalidInput: branch.publish: unknown argument `expected_base`"),
         "{typo}"
     );
     // A well-shaped expectation reaches the call instead of being refused by
@@ -233,8 +227,8 @@ fn branch_publish_expectations_are_plumbed() {
         map(&[
             ("project", t("shop/api")),
             ("branch", t("work")),
-            ("expected_base", t("00")),
-            ("expected_head", t("00")),
+            ("at", t("00")),
+            ("expected", t("00")),
             ("force", SdkValue::Bool(true)),
         ]),
     );
@@ -248,10 +242,10 @@ fn commit_family() {
         map(&[
             ("project", t("shop/api")),
             ("branch", t("main")),
-            ("page_size", t("9"))
+            ("limit", t("9"))
         ])
     )
-    .contains("`page_size` must be a whole number"));
+    .contains("`limit` must be a whole number"));
     let reached = code(
         "commit.list",
         map(&[("project", t("shop/api")), ("branch", t("main"))]),
@@ -280,10 +274,11 @@ fn file_family() {
         ])
     )
     .contains("`content` must be text or bytes"));
-    // a change names its paths as the table does, so a folder scope sees them
+    // a change names its fields as the single calls do (`from`, `to`), so
+    // a folder scope sees its paths; the old names are refused
     let moved = SdkValue::List(vec![map(&[
         ("op", t("mv")),
-        ("from", t("/a")),
+        ("from_path", t("/a")),
         ("to", t("/b")),
     ])]);
     assert!(code(
@@ -294,7 +289,45 @@ fn file_family() {
             ("changes", moved)
         ])
     )
-    .contains("`from` is not a change field"));
+    .contains("`from_path` is not a change field"));
+    // `--mode` is octal text, as `file stat` answers it
+    assert!(code(
+        "file.mkdir",
+        map(&[
+            ("project", t("shop/api")),
+            ("branch", t("dev")),
+            ("path", t("/d")),
+            ("mode", t("644"))
+        ])
+    )
+    .contains("`mode` is octal text"));
+    // a window is 1 to 2000 lines; `--old-string` is required
+    let read = |limit: &str| {
+        code(
+            "file.read",
+            map(&[
+                ("project", t("shop/api")),
+                ("branch", t("main")),
+                ("path", t("/a")),
+                ("limit", SdkValue::Int(limit.parse().unwrap())),
+            ]),
+        )
+    };
+    assert!(
+        read("2001").contains("`limit` is 1 to 2000"),
+        "{}",
+        read("2001")
+    );
+    assert!(code(
+        "file.edit",
+        map(&[
+            ("project", t("shop/api")),
+            ("branch", t("dev")),
+            ("path", t("/a")),
+            ("new_string", t("x"))
+        ])
+    )
+    .contains("file.edit: `old_string` is required"));
     let reached = code(
         "file.read",
         map(&[
@@ -318,39 +351,46 @@ fn sandbox_family() {
     );
     assert!(!reached.contains("`machine`"), "{reached}");
     let reached = code(
-        "sandbox.close",
-        map(&[("name", t("tests")), ("force", SdkValue::Bool(true))]),
+        "sandbox.remove",
+        map(&[("sandbox", t("tests")), ("force", SdkValue::Bool(true))]),
     );
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
+    // ruling R1: the old names are gone, with no alias
+    for gone in ["sandbox.close", "logs.sandbox"] {
+        assert_eq!(
+            code(gone, SdkValue::Null),
+            format!("InvalidInput: no call named `{gone}`")
+        );
+    }
 }
 
 #[test]
 fn workspace_family() {
     assert!(
-        code("workspace.exec", map(&[("ws", t("tests:/workspaces/1"))]))
+        code("workspace.exec", map(&[("workspace", t("tests:dev"))]))
             .contains("`command` is required")
     );
-    let reached = code("workspace.status", map(&[("ws", t("tests:/workspaces/1"))]));
+    // a Workspace by its name (#536 C3); the path form is gone (2.0)
+    let reached = code("workspace.status", map(&[("workspace", t("tests:dev"))]));
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
-    // a Workspace by its name (#536 C3)
-    let reached = code("workspace.status", map(&[("ws", t("tests:dev"))]));
-    assert!(!reached.starts_with("InvalidInput"), "{reached}");
+    let refused = code(
+        "workspace.status",
+        map(&[("workspace", t("tests:/workspaces/1"))]),
+    );
+    assert!(refused.starts_with("InvalidInput"), "{refused}");
     let mount = layerfs_api::find("workspace.mount").unwrap();
     let options: Vec<_> = mount.options.iter().map(|o| (o.name, o.kind)).collect();
     assert_eq!(options, [("name", Kind::Name)]);
-    // exec_cancel (layerfs-project#113): the Workspace, the exec id and a grace
-    let cancel = layerfs_api::find("workspace.exec_cancel").unwrap();
+    // cancel (was exec_cancel): the Workspace, and an exec id to end one
+    let cancel = layerfs_api::find("workspace.cancel").unwrap();
     let args: Vec<_> = cancel.args.iter().map(|a| (a.name, a.kind)).collect();
-    assert_eq!(args, [("ws", Kind::Text), ("exec_id", Kind::Text)]);
+    assert_eq!(args, [("workspace", Kind::Text)]);
     let options: Vec<_> = cancel.options.iter().map(|o| (o.name, o.kind)).collect();
-    assert_eq!(options, [("grace_ms", Kind::Int)]);
+    assert_eq!(options, [("exec", Kind::Text)]);
+    assert!(layerfs_api::find("workspace.exec_cancel").is_none());
     let exec = layerfs_api::find("workspace.exec").unwrap();
-    assert!(exec.options.iter().any(|o| o.name == "exec_id"));
-    assert!(code(
-        "workspace.exec_cancel",
-        map(&[("ws", t("tests:/workspaces/1"))])
-    )
-    .contains("`exec_id` is required"));
+    assert!(!exec.options.iter().any(|o| o.name == "exec_id"));
+    assert!(exec.options.iter().any(|o| o.name == "env" && o.repeat));
 }
 
 #[test]
@@ -370,7 +410,14 @@ fn machine_family() {
 
 #[test]
 fn store_family() {
-    assert!(code("store.push", map(&[("name", t("shop"))])).contains("`machine` is required"));
+    assert!(code("store.move", map(&[("store", t("shop"))])).contains("`machine` is required"));
+    // a required option is refused before the call runs
+    let auth = map(&[("auth", t("pg")), ("password", t("pw"))]);
+    assert!(code("store.save_auth", auth).contains("`user` is required"));
+    // the old names are gone, with no alias
+    for gone in ["store.status", "store.stats", "store.push", "store.pull"] {
+        assert!(layerfs_api::find(gone).is_none(), "{gone}");
+    }
     let reached = code("store.list", SdkValue::Null);
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
 }
@@ -378,6 +425,47 @@ fn store_family() {
 #[test]
 fn backup_family() {
     assert!(code("backup.create", map(&[("store", t("shop"))])).contains("`bucket` is required"));
+    assert!(code(
+        "backup.restore",
+        map(&[("bucket", t("b")), ("store", t("shop"))])
+    )
+    .contains("`file` is required"));
+    // the key's secret is an option; both key options are required
+    let connect = map(&[("name", t("b")), ("url", t("http://127.0.0.1:9/b"))]);
+    assert!(code("backup.connect", connect).contains("`access_key` is required"));
+    let connect = map(&[
+        ("name", t("b")),
+        ("url", t("http://127.0.0.1:9/b")),
+        ("access_key", t("AKID")),
+    ]);
+    assert!(code("backup.connect", connect).contains("`secret_key` is required"));
+    // the table says so, and its JSON tells the front ends
+    let table = json::parse(&layerfs_api::table_json()).unwrap();
+    let entry = |name: &str| {
+        let SdkValue::List(calls) = &table else {
+            panic!("the table is a list")
+        };
+        let (family, call) = name.split_once('.').unwrap();
+        calls
+            .iter()
+            .find(|c| c.get_text("family") == Some(family) && c.get_text("call") == Some(call))
+            .cloned()
+            .unwrap()
+    };
+    for (name, required) in [
+        ("backup.connect", ["access_key", "secret_key"]),
+        ("store.save_auth", ["user", "password"]),
+        ("file.edit", ["old_string", "new_string"]),
+    ] {
+        let Some(SdkValue::List(options)) = entry(name).get("options").cloned() else {
+            panic!("{name}: options")
+        };
+        for option in options {
+            let want = required.contains(&option.get_text("name").unwrap());
+            let said = option.get("required") == Some(&SdkValue::Bool(true));
+            assert_eq!(said, want, "{name} {:?}", option.get_text("name"));
+        }
+    }
     let reached = code("backup.list", SdkValue::Null);
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
 }
@@ -442,7 +530,6 @@ fn sizes_and_keys() {
     assert_eq!(keys::snake_name("nextPagePos"), "next_page_pos");
     assert_eq!(keys::snake_name("/src/README.md"), "/src/README.md");
     assert_eq!(keys::snake_name("Makefile"), "Makefile");
-    assert_eq!(keys::camel_name("start_line"), "startLine");
     assert!(layerfs_api::calls()
         .into_iter()
         .flat_map(|c| c.args.iter().chain(c.options))
@@ -454,21 +541,16 @@ fn sizes_and_keys() {
 }
 
 #[test]
-fn doctor_family() {
-    assert!(code("doctor.fix", SdkValue::Null).contains("`id` is required"));
-    assert!(code(
-        "doctor.fix",
-        map(&[("id", t("native:image-part:00")), ("path", t("/etc"))])
-    )
-    .starts_with("InvalidInput: doctor.fix: unknown argument `path`"));
-    // reached: an id that names nothing is not found, and one of a kind
-    // that is only counted is refused
-    let reached = code("doctor.fix", map(&[("id", t("native:run-folder:../x"))]));
-    assert!(reached.starts_with("NotFound: "), "{reached}");
-    let lock = format!("native:image-lock:{}.2", "ab".repeat(32));
-    let reached = code("doctor.fix", map(&[("id", t(&lock))]));
-    assert!(reached.starts_with("InvalidInput: "), "{reached}");
-    assert!(reached.contains("only reported"), "{reached}");
+fn home_leftovers_and_prune_are_gone() {
+    // spec v20: LayerFS removes leftovers itself; the two calls and the
+    // name before them are gone, with no alias
+    for gone in ["home.leftovers", "home.prune", "doctor.fix"] {
+        assert!(layerfs_api::find(gone).is_none(), "{gone}");
+        assert_eq!(
+            code(gone, SdkValue::Null),
+            format!("InvalidInput: no call named `{gone}`")
+        );
+    }
 }
 
 #[test]
@@ -510,12 +592,6 @@ fn the_source_is_one_file_per_call_under_its_family() {
             .map(|c| format!("{}.rs", c.call))
             .collect();
         files.push("mod.rs".to_owned());
-        if family.name == "doctor" {
-            // the report itself (explicit options and its run) stays
-            // outside the table and the home dispatcher, beside the family's
-            // one call
-            files.extend(["options.rs".to_owned(), "run.rs".to_owned()]);
-        }
         files.sort();
         assert_eq!(names(&src.join(family.name)), files, "{}", family.name);
     }
@@ -524,23 +600,23 @@ fn the_source_is_one_file_per_call_under_its_family() {
 #[cfg(all(feature = "machine", target_os = "macos"))]
 #[test]
 fn native_machine_images_reports_host_userland_without_a_bundle() {
-    let (outcome, events) = run("machine.images", map(&[("name", t("native"))]));
+    let args = map(&[("machine", t("native")), ("detail", SdkValue::Bool(true))]);
+    let (outcome, events) = run("machine.images", args);
     let result = outcome.unwrap();
     assert_eq!(result.get_text("mode"), Some("host"));
-    assert_eq!(result.get("default"), Some(&SdkValue::Null));
-    assert_eq!(result.get("images"), Some(&SdkValue::List(vec![])));
-    assert_eq!(result.get("docker"), Some(&SdkValue::Null));
-    assert_eq!(result.get("available"), Some(&SdkValue::List(vec![])));
+    assert_eq!(result.get("items"), Some(&SdkValue::List(vec![])));
+    // the host's Docker is read only with `--with docker`
+    assert_eq!(result.get("images"), None);
     assert!(events.is_empty());
     // no image on macOS native: a load or prune is refused, naming why
     for (call, args) in [
         (
-            "machine.load",
-            map(&[("name", t("native")), ("image", t("alpine:3"))]),
+            "machine.load_image",
+            map(&[("machine", t("native")), ("image", t("alpine:3"))]),
         ),
         (
             "machine.prune",
-            map(&[("name", t("native")), ("unused", SdkValue::Bool(true))]),
+            map(&[("machine", t("native")), ("unused", SdkValue::Bool(true))]),
         ),
     ] {
         let home = tempdir();
@@ -557,7 +633,7 @@ fn sandbox_images_are_named_by_the_image_kind() {
     let image = create.options.iter().find(|a| a.name == "image").unwrap();
     assert_eq!(image.kind, Kind::Image);
     assert!(create.options.iter().all(|a| a.name != "image_archive"));
-    let load = layerfs_api::find("machine.load").unwrap();
+    let load = layerfs_api::find("machine.load_image").unwrap();
     assert_eq!(load.args[1].kind, Kind::Image);
     assert!(load.options.iter().any(|a| a.name == "on_progress"));
     let prune = layerfs_api::find("machine.prune").unwrap();
@@ -577,10 +653,10 @@ fn the_four_gc_calls_take_only_ids() {
         ),
         ("project.delete", &[("project", Kind::Project)]),
         (
-            "project.remove_file",
+            "project.hide_path",
             &[("project", Kind::Project), ("path", Kind::Text)],
         ),
-        ("store.compact", &[("name", Kind::Name)]),
+        ("store.compact", &[("store", Kind::Name)]),
     ];
     for &(name, args) in expected {
         let spec = layerfs_api::find(name).unwrap_or_else(|| panic!("{name} is missing"));
@@ -593,5 +669,258 @@ fn the_four_gc_calls_take_only_ids() {
         } else {
             assert!(options.is_empty(), "{name} takes no option");
         }
+    }
+}
+
+#[test]
+fn the_call_log_calls_moved_to_home_with_no_alias() {
+    // ruling R1: an old name is gone, not kept beside the new one
+    for gone in ["logs.list", "logs.reset"] {
+        assert!(layerfs_api::find(gone).is_none(), "{gone}");
+        assert_eq!(
+            code(gone, SdkValue::Null),
+            format!("InvalidInput: no call named `{gone}`")
+        );
+    }
+    let home: Vec<_> = (families().iter())
+        .find(|family| family.name == "home")
+        .unwrap()
+        .calls()
+        .iter()
+        .map(|call| call.call)
+        .collect();
+    assert_eq!(home, ["init", "get", "log", "clear_log", "doctor",]);
+}
+
+#[test]
+fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
+    use layerfs_api::{Paging, Profile};
+    let migrated: Vec<String> = layerfs_api::calls()
+        .into_iter()
+        .filter(|call| call.form.is_some())
+        .map(|call| call.name())
+        .collect();
+    let machine = [
+        "machine.list",
+        "machine.get",
+        "machine.images",
+        "machine.load_image",
+        "machine.prune",
+        "machine.stats",
+        "machine.files",
+        "machine.log",
+        "machine.start",
+        "machine.stop",
+        "machine.create",
+        "machine.remove",
+        "machine.update",
+        "machine.doctor",
+    ];
+    let home = [
+        "home.init",
+        "home.get",
+        "home.log",
+        "home.clear_log",
+        "home.doctor",
+    ];
+    let branch = [
+        "branch.list",
+        "branch.get",
+        "branch.fork",
+        "branch.merge",
+        "branch.publish",
+        "branch.remove",
+    ];
+    let commit = ["commit.list", "commit.get", "commit.diff"];
+    let file = [
+        "file.read",
+        "file.stat",
+        "file.list",
+        "file.glob",
+        "file.grep",
+        "file.history",
+        "file.blame",
+        "file.write",
+        "file.edit",
+        "file.rm",
+        "file.mkdir",
+        "file.mv",
+        "file.cp",
+        "file.apply",
+    ];
+    let project = [
+        "project.init",
+        "project.list",
+        "project.get",
+        "project.stats",
+        "project.export",
+        "project.delete",
+        "project.hide_path",
+        "project.doctor",
+    ];
+    let sandbox = [
+        "sandbox.create",
+        "sandbox.list",
+        "sandbox.get",
+        "sandbox.remove",
+        "sandbox.files",
+        "sandbox.log",
+        "sandbox.doctor",
+    ];
+    let workspace = [
+        "workspace.list",
+        "workspace.mount",
+        "workspace.exec",
+        "workspace.cancel",
+        "workspace.commit",
+        "workspace.unmount",
+        "workspace.status",
+    ];
+    let store = [
+        "store.list",
+        "store.get",
+        "store.create",
+        "store.connect",
+        "store.disconnect",
+        "store.save_auth",
+        "store.auths",
+        "store.remove_auth",
+        "store.update",
+        "store.move",
+        "store.remove",
+        "store.compact",
+        "store.doctor",
+    ];
+    let after = [
+        "backup.connect",
+        "backup.disconnect",
+        "backup.list",
+        "backup.create",
+        "backup.restore",
+        "backup.doctor",
+    ];
+    // in family order: home, project, branch, commit, file, sandbox, …
+    assert_eq!(
+        migrated,
+        [
+            &home[..],
+            &project[..],
+            &branch[..],
+            &commit[..],
+            &file[..],
+            &sandbox[..],
+            &workspace[..],
+            &machine[..],
+            &store[..],
+            &after[..],
+        ]
+        .concat()
+    );
+    for call in layerfs_api::calls() {
+        if let Some(form) = call.form {
+            // every short key is a long key, and no key is listed twice
+            for key in form.always.iter().chain(form.sometimes) {
+                assert!(form.long.contains(key), "{}: {key}", call.name());
+                assert!(
+                    !(form.always.contains(key) && form.sometimes.contains(key)),
+                    "{}: {key}",
+                    call.name()
+                );
+            }
+            // a paged call answers items (maps, or `file.glob`'s paths)
+            // and a cursor
+            if call.paging == Paging::Cursor {
+                assert!(form.part("items").is_some(), "{}", call.name());
+                assert!(form.sometimes.contains(&"next_cursor"), "{}", call.name());
+                assert!(call.arg("limit").is_some() && call.arg("cursor").is_some());
+            }
+        } else {
+            // not migrated: nothing of the new surface is declared yet
+            assert!(call.with.is_empty(), "{}", call.name());
+            assert_eq!(call.paging, Paging::None, "{}", call.name());
+            assert_eq!(call.profile, Profile::Full, "{}", call.name());
+        }
+    }
+    let get = layerfs_api::find("home.get").unwrap();
+    let sections: Vec<_> = get.with.iter().map(|section| section.name).collect();
+    assert_eq!(sections, ["platforms", "tree"]);
+}
+
+#[test]
+fn the_global_options_are_taken_out_before_the_check_on_every_call() {
+    // `detail` is accepted by a call that is not migrated and changes nothing
+    let reached = code("backup.list", map(&[("detail", SdkValue::Bool(true))]));
+    assert!(reached.starts_with("ok "), "{reached}");
+    assert!(code("backup.list", map(&[("detail", t("yes"))]))
+        .starts_with("InvalidInput: backup.list: `detail` must be true or false"));
+    // a section the entry does not declare is refused, naming what it takes
+    let refused = code(
+        "home.get",
+        map(&[("with", SdkValue::List(vec![t("live")]))]),
+    );
+    assert_eq!(
+        refused,
+        "InvalidInput: home.get: `with` names `live`; this call takes platforms, tree"
+    );
+    let refused = code("backup.list", map(&[("with", t("live"))]));
+    assert_eq!(
+        refused,
+        "InvalidInput: backup.list: `with` names `live`, and this call takes no section"
+    );
+    let refused = code("store.list", map(&[("with", t("live"))]));
+    assert_eq!(
+        refused,
+        "InvalidInput: store.list: `with` names `live`; this call takes stats"
+    );
+    // an empty list asks for nothing
+    let reached = code("store.list", map(&[("with", SdkValue::List(vec![]))]));
+    assert!(reached.starts_with("ok "), "{reached}");
+}
+
+#[test]
+fn every_argument_the_old_name_list_redacted_is_flagged_on_its_entry() {
+    // the dispatcher's name list is gone: until its family is migrated, an
+    // argument of one of its names keeps its flag, so no value it hid
+    // enters the call log
+    use layerfs_api::Redact;
+    let bytes = [
+        "command", "message", "old", "new", "password", "url", "pattern",
+    ];
+    let paths = [
+        "path",
+        "left_path",
+        "right_path",
+        "from_path",
+        "to_path",
+        "path_prefix",
+    ];
+    for call in layerfs_api::calls() {
+        for arg in call.args.iter().chain(call.options) {
+            if arg.kind != Kind::Text {
+                continue;
+            }
+            if bytes.contains(&arg.name) {
+                assert_eq!(arg.redact, Redact::Bytes, "{} {}", call.name(), arg.name);
+            } else if paths.contains(&arg.name) {
+                assert_eq!(arg.redact, Redact::Path, "{} {}", call.name(), arg.name);
+            }
+        }
+    }
+}
+
+/// The guest worker's build (no `machine` feature) refuses each machine call
+/// that runs on the host, naming it.
+#[cfg(not(feature = "machine"))]
+#[test]
+fn a_guest_build_refuses_a_machine_call_naming_it() {
+    for (name, args) in [
+        ("machine.list", SdkValue::Null),
+        ("machine.stop", map(&[("machine", t("dev"))])),
+    ] {
+        let (outcome, _) = run(name, args);
+        assert_eq!(
+            outcome.unwrap_err(),
+            ("Unsupported".to_owned(), format!("{name} runs on the host"))
+        );
     }
 }

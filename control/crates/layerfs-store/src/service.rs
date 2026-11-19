@@ -19,7 +19,7 @@ use crate::open_args::{OpenArgs, ROUTING};
 use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_home::helpers::lock;
 use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_store_service::{telemetry, OpenRefusal, StoreService};
+use layerfs_store_service::{OpenRefusal, StoreService};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
@@ -71,8 +71,8 @@ fn open(store: &Path, args: &OpenArgs) -> Result<Opened, SdkRefusal> {
     }
 }
 
-/// `storeOpen`: one more client of the Store a call names, opening it first.
-pub fn acquire(args: &OpenArgs) -> Outcome {
+/// One more client of the Store a call names, opening it first.
+pub(crate) fn acquire(args: &OpenArgs) -> Result<(), SdkRefusal> {
     let store = args.store_path()?;
     let mut stores = lock(&STORES)?;
     if !stores.contains_key(&store) {
@@ -81,16 +81,13 @@ pub fn acquire(args: &OpenArgs) -> Outcome {
     }
     let opened = stores.get_mut(&store).expect("opened above");
     opened.clients += 1;
-    Ok(SdkValue::map([(
-        "clients",
-        SdkValue::Int(opened.clients as i64),
-    )]))
+    Ok(())
 }
 
-/// `storeClose`: one client less; the last one closes the Store and removes
-/// its overlay directory. A call still running keeps the service alive until
-/// it returns, and the service closes when it is dropped then.
-pub fn release(args: &OpenArgs) -> Outcome {
+/// One client less; the last one closes the Store and removes its overlay
+/// directory. A call still running keeps the service alive until it
+/// returns, and the service closes when it is dropped then.
+pub(crate) fn release(args: &OpenArgs) -> Result<(), SdkRefusal> {
     let store = args.store_path()?;
     let mut stores = lock(&STORES)?;
     let Some(opened) = stores.get_mut(&store) else {
@@ -98,10 +95,7 @@ pub fn release(args: &OpenArgs) -> Outcome {
     };
     opened.clients = opened.clients.saturating_sub(1);
     if opened.clients > 0 {
-        return Ok(SdkValue::map([(
-            "clients",
-            SdkValue::Int(opened.clients as i64),
-        )]));
+        return Ok(());
     }
     let opened = stores.remove(&store).expect("present above");
     drop(stores);
@@ -110,8 +104,7 @@ pub fn release(args: &OpenArgs) -> Outcome {
         Err(_) => Ok(()),
     };
     let removed = std::fs::remove_dir_all(&opened.directory).map_err(failed);
-    closed.and(removed)?;
-    Ok(SdkValue::map([("clients", SdkValue::Int(0))]))
+    closed.and(removed)
 }
 
 /// The open service of the Store a call names.
@@ -155,25 +148,7 @@ pub fn call(method: &str, open: &OpenArgs, args: SdkValue) -> Outcome {
         method: method.to_owned(),
         args,
     };
-    let run = || layerfs_store_service::methods::call(&service, &call);
-    if !layerfs_home::trace::traced() {
-        return run();
-    }
-    // A traced call records its own timing, SQL and delta work, as a daemon
-    // did for a traced observation.
-    let sessions = service.opened.sql_sessions();
-    let before = (sessions.totals(), service.store.save_counters());
-    let recording = telemetry::Recording::start();
-    let outcome = run();
-    let reports = recording.finish();
-    let mut fields = vec![("timing".to_owned(), telemetry::timing(&reports))];
-    let sql = telemetry::sql(before.0, sessions.totals());
-    let delta = telemetry::delta(before.1, service.store.save_counters());
-    for (name, value) in [("sql", sql), ("delta", delta)] {
-        fields.extend(value.map(|value| (name.to_owned(), value)));
-    }
-    layerfs_home::trace::collect(SdkValue::Map(fields));
-    outcome
+    layerfs_store_service::methods::call(&service, &call)
 }
 
 /// The newest Commit of `branch`, read in this process; `None` when it has none.

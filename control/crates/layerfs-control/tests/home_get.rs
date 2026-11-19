@@ -1,10 +1,11 @@
 //! `home.get`'s build comparison: a Linux bundle and a daemon match the
 //! calling build only when their commits are equal and both trees were
-//! clean; a different commit is a mismatch with a warning, and anything it
-//! cannot tell is null. One test, since it sets `LAYERFS_BUNDLE` for the
+//! clean; a different commit is a mismatch (the home doctor reports it; the
+//! answer carries no warning list since the call surface 2.0), and anything
+//! it cannot tell is null. One test, since it sets `LAYERFS_BUNDLE` for the
 //! whole process.
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::home::{get, stamp, Build, BUILD_MARKER};
+use layerfs_control::home::{get, stamp, Build, With, BUILD_MARKER};
 use std::path::PathBuf;
 
 const OURS: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -17,16 +18,6 @@ fn folder(name: &str) -> PathBuf {
     dir
 }
 
-fn codes(value: &SdkValue) -> Vec<String> {
-    match value.get("warnings") {
-        Some(SdkValue::List(list)) => list
-            .iter()
-            .filter_map(|w| w.get_text("code").map(str::to_owned))
-            .collect(),
-        _ => panic!("no warnings list"),
-    }
-}
-
 #[test]
 fn bundle_commits_match_mismatch_or_cannot_tell() {
     let home = folder("home");
@@ -37,14 +28,13 @@ fn bundle_commits_match_mismatch_or_cannot_tell() {
         dirty: false,
     };
 
-    let got = get(&home, clean).unwrap();
+    let got = get(&home, clean, With::default()).unwrap();
     let b = got.get("bundle").unwrap();
     assert_eq!(b.get_text("source"), Some("env:LAYERFS_BUNDLE"));
     assert_eq!(b.get("present"), Some(&SdkValue::Bool(false)));
     assert_eq!(b.get("matches"), Some(&SdkValue::Null));
-    if cfg!(target_os = "macos") {
-        assert!(codes(&got).contains(&"BundleMissing".to_owned()));
-    }
+    assert!(b.get_text("path").is_some() && b.get("dir").is_none());
+    assert!(got.get("warnings").is_none());
 
     let manifest = |head: &str, dirty: bool| {
         std::fs::write(
@@ -54,24 +44,22 @@ fn bundle_commits_match_mismatch_or_cannot_tell() {
         .unwrap()
     };
     manifest(THEIRS, false);
-    let got = get(&home, clean).unwrap();
+    let got = get(&home, clean, With::default()).unwrap();
     let b = got.get("bundle").unwrap();
     assert_eq!(b.get("present"), Some(&SdkValue::Bool(true)));
     assert_eq!(b.get_text("commit"), Some(THEIRS));
     assert_eq!(b.get("matches"), Some(&SdkValue::Bool(false)));
-    assert!(codes(&got).contains(&"BundleMismatch".to_owned()));
 
     manifest(OURS, false);
-    let got = get(&home, clean).unwrap();
+    let got = get(&home, clean, With::default()).unwrap();
     assert_eq!(
         got.get("bundle").unwrap().get("matches"),
         Some(&SdkValue::Bool(true))
     );
-    assert!(!codes(&got).iter().any(|c| c.starts_with("Bundle")));
 
     // a dirty tree on either side cannot be told apart
     manifest(OURS, true);
-    let got = get(&home, clean).unwrap();
+    let got = get(&home, clean, With::default()).unwrap();
     assert_eq!(
         got.get("bundle").unwrap().get("matches"),
         Some(&SdkValue::Null)
@@ -83,6 +71,7 @@ fn bundle_commits_match_mismatch_or_cannot_tell() {
             commit: Some(OURS),
             dirty: true,
         },
+        With::default(),
     )
     .unwrap();
     assert_eq!(
@@ -96,6 +85,7 @@ fn bundle_commits_match_mismatch_or_cannot_tell() {
             commit: None,
             dirty: false,
         },
+        With::default(),
     )
     .unwrap();
     assert_eq!(

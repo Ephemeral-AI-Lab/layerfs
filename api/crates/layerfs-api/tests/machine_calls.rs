@@ -26,10 +26,12 @@ fn t(s: &str) -> SdkValue {
     SdkValue::text(s)
 }
 
+/// The call's long form (`detail`).
 fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, (String, String)> {
+    let detail = std::iter::once(("detail".to_owned(), SdkValue::Bool(true)));
     let args = SdkValue::Map(
-        args.iter()
-            .map(|(n, v)| ((*n).to_owned(), v.clone()))
+        (args.iter().map(|(n, v)| ((*n).to_owned(), v.clone())))
+            .chain(detail)
             .collect(),
     );
     layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
@@ -48,30 +50,32 @@ fn machines_over_records() {
     let home = tempdir("home");
 
     let list = call(&home, "machine.list", &[]).unwrap();
-    let SdkValue::List(machines) = list.get("machines").unwrap() else {
+    let SdkValue::List(machines) = list.get("items").unwrap() else {
         panic!()
     };
     let names: Vec<_> = machines
         .iter()
-        .map(|m| m.get_text("name").unwrap())
+        .map(|m| m.get_text("machine").unwrap())
         .collect();
     assert_eq!(names, ["docker", "native"]);
-    assert_eq!(list.get("can_create"), None);
+    let supports = |machine: &SdkValue, word: &str| {
+        let SdkValue::List(words) = machine.get("supports").unwrap() else {
+            panic!("{machine:?}")
+        };
+        words.contains(&t(word))
+    };
     for machine in machines {
-        let supports = machine.get("supports").unwrap();
-        assert!(supports.get("sqlite").is_some(), "{machine:?}");
+        assert!(supports(machine, "sqlite"), "{machine:?}");
         // a worker log exists only where the machine's calls go to a
         // worker: `docker` here, never `native` (layerfs-project#178)
-        let worker = machine.get_text("name") == Some("docker");
-        assert_eq!(
-            supports.get("log"),
-            Some(&SdkValue::Bool(worker)),
-            "{machine:?}"
-        );
+        let worker = machine.get_text("machine") == Some("docker");
+        assert_eq!(supports(machine, "log"), worker, "{machine:?}");
     }
     // the support table for this host, each row with its live probe
-    let platforms = call(&home, "machine.platforms", &[]).unwrap();
-    let SdkValue::List(rows) = platforms.get("platforms").unwrap() else {
+    // (`home get --with platforms`, `machine.platforms` before 2.0)
+    let with = ("with", SdkValue::List(vec![t("platforms")]));
+    let platforms = call(&home, "home.get", &[with]).unwrap();
+    let SdkValue::List(rows) = platforms.get("platforms").unwrap().get("items").unwrap() else {
         panic!()
     };
     assert_eq!(rows.len(), 4);
@@ -83,14 +87,15 @@ fn machines_over_records() {
         }
     }
 
-    let native = call(&home, "machine.get", &[("name", t("native"))]).unwrap();
+    let native = call(&home, "machine.get", &[("machine", t("native"))]).unwrap();
     assert_eq!(native.get_text("platform"), Some("native"));
-    let log = |machine: &SdkValue| machine.get("supports").and_then(|s| s.get("log")).cloned();
-    assert_eq!(log(&native), Some(SdkValue::Bool(false)), "{native:?}");
-    let docker = call(&home, "machine.get", &[("name", t("docker"))]).unwrap();
-    assert_eq!(log(&docker), Some(SdkValue::Bool(true)), "{docker:?}");
+    assert_eq!(native.get_text("state"), Some("ready"));
+    assert!(!supports(&native, "log"), "{native:?}");
+    let docker = call(&home, "machine.get", &[("machine", t("docker"))]).unwrap();
+    assert!(supports(&docker, "log"), "{docker:?}");
+    assert_eq!(docker.get_text("state"), Some("stopped"), "never started");
     assert_eq!(
-        call(&home, "machine.get", &[("name", t("nope"))])
+        call(&home, "machine.get", &[("machine", t("nope"))])
             .unwrap_err()
             .0,
         "NotFound"
@@ -104,7 +109,7 @@ fn machines_over_records() {
     );
     assert_eq!(made.unwrap_err().0, "InvalidInput");
     assert_eq!(
-        call(&home, "machine.remove", &[("name", t("docker"))])
+        call(&home, "machine.remove", &[("machine", t("docker"))])
             .unwrap_err()
             .0,
         "InvalidInput"
@@ -112,7 +117,7 @@ fn machines_over_records() {
     let resized = call(
         &home,
         "machine.update",
-        &[("name", t("native")), ("cpus", SdkValue::Int(4))],
+        &[("machine", t("native")), ("cpus", SdkValue::Int(4))],
     );
     assert_eq!(resized.unwrap_err().0, "InvalidInput");
     let made = call(
@@ -132,12 +137,14 @@ fn machines_over_records() {
     assert!(!paths::machine_dir(&home, "dev").exists());
 
     // the docker machine's socket is a setting of its record
-    call(
+    let updated = call(
         &home,
         "machine.update",
-        &[("name", t("docker")), ("docker", t("/tmp/docker.sock"))],
+        &[("machine", t("docker")), ("docker", t("/tmp/docker.sock"))],
     )
     .unwrap();
+    assert_eq!(updated.get_text("outcome"), Some("updated"));
+    assert_eq!(updated.get_text("docker"), Some("/tmp/docker.sock"));
     let docker = read_record(&paths::machine_record(&home, "docker"))
         .unwrap()
         .unwrap();
@@ -148,7 +155,7 @@ fn machines_over_records() {
         let (code, message) = call(
             &home,
             "machine.update",
-            &[("name", t("native")), ("daemon", t(bad))],
+            &[("machine", t("native")), ("daemon", t(bad))],
         )
         .unwrap_err();
         assert_eq!(code, "InvalidInput", "{bad}: {message}");
@@ -159,14 +166,14 @@ fn machines_over_records() {
     call(
         &home,
         "machine.update",
-        &[("name", t("native")), ("daemon", t(&daemon))],
+        &[("machine", t("native")), ("daemon", t(&daemon))],
     )
     .unwrap();
     let native = read_record(&paths::machine_record(&home, "native"))
         .unwrap()
         .unwrap();
     assert_eq!(native.get_text("daemon"), Some(daemon.as_str()));
-    let shown = call(&home, "machine.get", &[("name", t("native"))]).unwrap();
+    let shown = call(&home, "machine.get", &[("machine", t("native"))]).unwrap();
     assert_eq!(shown.get_text("daemon"), Some(daemon.as_str()));
 
     // a machine with a Store is InUse
@@ -188,10 +195,12 @@ fn machines_over_records() {
         ]),
     )
     .unwrap();
-    let (code, message) = call(&home, "machine.remove", &[("name", t("box"))]).unwrap_err();
+    let (code, message) = call(&home, "machine.remove", &[("machine", t("box"))]).unwrap_err();
     assert_eq!(code, "InUse", "{message}");
-    let got = call(&home, "machine.get", &[("name", t("box"))]).unwrap();
+    let got = call(&home, "machine.get", &[("machine", t("box"))]).unwrap();
     assert_eq!(got.get("stores"), Some(&SdkValue::List(vec![t("shop")])));
+    // a list's count only beside a cut list (more than 20)
+    assert_eq!(got.get("stores_count"), Some(&SdkValue::Null));
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(empty);
 }

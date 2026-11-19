@@ -381,7 +381,7 @@ impl Service {
             ));
         }
         value.kernel = Kernel::Attaching;
-        value.activity = Activity::Attaching;
+        value.enter(Activity::Attaching);
         value.epoch = value.epoch.saturating_add(1);
         Ok(value.workspace.clone())
     }
@@ -831,7 +831,7 @@ impl Service {
             let value = bound_mut(&mut entries, token)?;
             let commit = super::force::guard(value, token, relinquish_unknown)?;
             let exported = take(&mut value.kernel, MountPhase::Stopping)?;
-            value.activity = Activity::Closing;
+            value.enter(Activity::Closing);
             value.epoch = value.epoch.saturating_add(1);
             (value.workspace.clone(), exported, commit)
         };

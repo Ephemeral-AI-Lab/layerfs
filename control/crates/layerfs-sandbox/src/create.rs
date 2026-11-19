@@ -1,6 +1,9 @@
 //! `sandbox.create`: the name claimed under the home lock with the create's
 //! `op` intent (#536 §7.1), the Sandbox started on its machine, and its
-//! result recorded with the intent dropped in one write.
+//! result recorded with the intent dropped in one write. Its progress is
+//! the image copy's phases when it names an image, then `start`, and
+//! `mount` when the caller mounts a Branch next (`sandbox create --mount`, which the call surface runs
+//! after this, with the Workspace calls).
 use super::direct;
 use super::record::{self, SandboxRecord};
 use crate::host::{Call, Message, Started};
@@ -9,7 +12,8 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
 use layerfs_home::op::Op;
-use layerfs_home::outcome::refused;
+use layerfs_home::outcome::shell_word;
+use layerfs_home::outcome::{public_code, refused, with_fix, FIX};
 use layerfs_store::record::StoreRef;
 use layerfs_store::resolve;
 use std::path::Path;
@@ -26,6 +30,20 @@ pub struct CreateRequest {
     /// The image a namespaces Sandbox runs: a digest, Docker image Id or
     /// Docker reference, copied to the machine when it does not hold it.
     pub image: Option<String>,
+    /// Whether the caller mounts a Branch once it started: its progress
+    /// then counts a `mount` phase, which the caller reports.
+    pub mount: bool,
+}
+
+/// A create's own phases, `start` and with `mount` `mount`, after the
+/// image copy's (V19-8: `inspect, lock, export, send, unpack, start,
+/// mount`).
+fn total(mount: bool) -> i64 {
+    if mount {
+        2
+    } else {
+        1
+    }
 }
 
 /// A Sandbox just started, as recorded.
@@ -67,7 +85,7 @@ pub fn create(
         ));
     }
     // the Store's place, a move and the name are checked under the lock
-    // that claims the name, so a store.push or pull cannot pass between them
+    // that claims the name, so a store.move cannot pass between them
     let _lock = home::lock::take(&home)?;
     let target = resolve::target(&home, project)?;
     target.record.unblocked()?;
@@ -110,7 +128,7 @@ pub fn create(
         if store_machine != machine {
             return Err(refused(
                 "Unsupported",
-                format!("Store {} is on machine {store_machine}; a Sandbox of {project} runs there (`store pull` and `store push` move the Store)", target.store),
+                format!("Store {} is on machine {store_machine}; a Sandbox of {project} runs there (`store move` moves the Store)", target.store),
             ));
         }
     }
@@ -140,6 +158,7 @@ pub fn create(
         call: Call::Create { platform: None },
         message: Message::Absent,
         image: request.image.clone(),
+        start: Some((0, total(request.mount))),
     };
     let started = on_machine(&home, events, &record, asked, crate::dispatch::call)
         .map(|value| Started::read(&value));
@@ -157,23 +176,39 @@ pub fn create(
                 record = direct::save(&home, record, opened)?;
             }
             record.write(&home)?;
+            if !request.mount {
+                events.phase("start", Some(1), Some(1), Vec::new());
+            }
             Ok(Created {
                 record,
                 forward_failed: opened.and_then(|opened| opened.failed),
             })
         }
         // its outcome is not known: the intent stays, uncertain, until
-        // `sandbox.close` clears it
+        // `sandbox.remove` clears it
         Err(refusal) if refusal.code == "Unknown" => {
             let op = op.as_uncertain();
             record.with_op(&op).write(&home)?;
             op.log_uncertain(&home, "sandbox", name, &refusal.message);
             Err(refusal)
         }
+        // a start that failed is the machine's to explain: its doctor is
+        // the fix unless the refusal names a closer one
         Err(refusal) => {
             remove_folder(&record.dir(&home))?;
             drop(sandbox);
-            Err(refusal)
+            let start_failed =
+                public_code(&refusal.code) == "Failed" && refusal.detail.get(FIX).is_none();
+            Err(match start_failed {
+                true => with_fix(
+                    refusal,
+                    format!(
+                        "layerfs machine doctor {machine}",
+                        machine = shell_word(machine)
+                    ),
+                ),
+                false => refusal,
+            })
         }
     }
 }
@@ -184,6 +219,9 @@ pub fn remove_folder(dir: &Path) -> Result<(), SdkRefusal> {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
             Err(layerfs_home::outcome::failed(error))
         }
-        _ => Ok(()),
+        _ => {
+            layerfs_home::home::generation::moved_above(dir);
+            Ok(())
+        }
     }
 }

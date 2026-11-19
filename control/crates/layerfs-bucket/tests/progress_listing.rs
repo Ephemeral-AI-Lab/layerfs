@@ -1,10 +1,13 @@
 //! #506 E4/E9: the progress cell and its throttle, the phases an upload and
 //! a download report, the folder listing, the size metadata and the two
 //! S3 timestamp forms.
+#[path = "support/progress_cell.rs"]
+mod progress_cell;
 use layerfs_bucket::bucket::local_folder::LocalFolder;
 use layerfs_bucket::bucket::pieces;
-use layerfs_bucket::bucket::progress::{self, Cell, Progress, Sample};
+use layerfs_bucket::bucket::progress::{self, Progress};
 use layerfs_bucket::bucket::{time, Driver, Limits, Metadata};
+use progress_cell::{Cell, Sample};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};

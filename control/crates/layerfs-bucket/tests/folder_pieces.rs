@@ -169,7 +169,7 @@ fn file_over_max_goes_up_as_pieces_and_is_verified() {
         assert_eq!(remote.stat(&piece_name("store", index)).unwrap(), None);
     }
     assert_eq!(download(&remote, "store", &root).unwrap(), bytes(500, 1));
-    pieces::delete(&remote, "store").unwrap();
+    remote.delete("store").unwrap();
     assert_eq!(remote.stat("store").unwrap(), None);
 }
 

@@ -1,10 +1,39 @@
-//! `file.blame`: the Commit of each line.
+//! `file.blame`: the Commit that last changed each line of a text file.
+use super::text;
+use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Int, Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call};
-use crate::calls::Context;
+use crate::calls::{Context, Form, Paging, Part};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::file::{blame, FileBlame};
+
+/// A run of lines with one owner; one without `commit` has none found.
+const RANGE: Form = Form::of(&["start", "end"], &["commit"], &["start", "end", "commit"]);
+/// Each owner once.
+const OWNER: Form = Form::of(
+    &["commit"],
+    &["message"],
+    &["commit", "message", "created_at"],
+);
+/// `partial` when the history budget ran out or a line was cut.
+const FORM: Form = Form::of(
+    &["ranges", "commits"],
+    &["next_line", "partial"],
+    &[
+        "ranges",
+        "commits",
+        "next_line",
+        "partial",
+        "commit",
+        "root",
+        "path",
+    ],
+)
+.parts(&[
+    ("ranges", Part::Rows(&RANGE)),
+    ("commits", Part::Rows(&OWNER)),
+]);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -13,24 +42,25 @@ pub(crate) const CALL: Call = call(
     &[
         a("project", Project),
         a("branch", Name),
-        a("path", Text),
-        opt("commit", Name),
+        a("path", Text).redact_path(),
     ],
-    &[opt("from_line", Int), opt("line_count", Int)],
-    "the Commit of each line",
+    &[opt("at", Name), opt("line", Int), opt("limit", Int)],
+    "the Commit that last changed each line of a text file",
     run,
-);
+)
+.scoped(Rule::File(&["path"]))
+.form(&FORM)
+.paged(Paging::Line);
 
 /// Runs `file.blame`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    let text = |name: &str| args.get_text(name).map(str::to_owned);
     let request = FileBlame {
-        project: text("project").unwrap_or_default(),
-        branch: text("branch").unwrap_or_default(),
-        commit: text("commit"),
-        path: text("path").unwrap_or_default(),
-        from_line: args.get_int("from_line"),
-        line_count: args.get_int("line_count"),
+        project: text(args, "project").unwrap_or_default(),
+        branch: text(args, "branch").unwrap_or_default(),
+        at: text(args, "at"),
+        path: text(args, "path").unwrap_or_default(),
+        line: args.get_int("line"),
+        limit: args.get_int("limit"),
     };
     let (home, events) = context.parts();
     blame(home, events, &request)

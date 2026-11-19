@@ -1,41 +1,44 @@
-//! What an ended push or pull left (#536 §7.1, §7.3, H4–H6): a copy of
-//! the Store on the machine its record does not name. A gone process's
-//! uncertain push or pull (it ended during install or record, or a step's
-//! answer was lost) may have put the Store's copy on its target while the
-//! record still names its source; a push or pull whose retire did not
-//! finish (it failed, or its process ended) leaves the source's copy, and
-//! its `last_transfer` says `retired: false`. The next `store push` or
-//! `store pull`, the call an unresolved intent's refusal and the doctor
-//! name, deletes that copy before anything else, under an intent of its
-//! own with the same call and sides, so a crash meanwhile leaves the same
-//! copy to the call after it. The copy the record names is never touched,
-//! and nothing is deleted while another operation holds the Store.
+//! What an ended move left (#536 §7.1, §7.3, H4–H6): a copy of the Store
+//! on the machine its record does not name. A gone process's uncertain
+//! move (it ended during install or record, or a step's answer was lost)
+//! may have put the Store's copy on its target while the record still
+//! names its source; a move whose retire did not finish (it failed, or its
+//! process ended) leaves the source's copy, and its `last_transfer` says
+//! `retired: false`. The next `store move`, the call an unresolved
+//! intent's refusal and the doctor name, deletes that copy before anything
+//! else, under an intent of its own with the same sides, so a crash
+//! meanwhile leaves the same copy to the call after it. The copy the
+//! record names is never touched, and nothing is deleted while another
+//! operation holds the Store.
 //!
-//! A `store.push` that failed certain at `send`, `verify` or `install` is the
-//! one case with no intent left to read: it keeps its target's partial copy
-//! (`store.sqlite.incoming`) and drops the `op` that named the machine, so
-//! the record keeps the machine itself (`incoming_on`, [`note_incoming`]).
-//! The doctor reports that copy's bytes through [`partial_on`], and the next
-//! `store push` or `store remove` deletes it there: until its record names the
-//! target the Store is on `native`, where `can_pull` refuses, so a pull is
-//! never what clears it.
+//! A move to a machine that failed certain at `send`, `verify` or `install`
+//! is the one case with no intent left to read: it keeps its target's
+//! partial copy (`store.sqlite.incoming`) and drops the `op` that named
+//! the machine, so the record keeps the machine itself (`incoming_on`,
+//! [`note_incoming`]). The doctor reports that copy's bytes through
+//! [`partial_on`], and the next `store move` or `store remove` deletes it
+//! there.
+
+use crate::intent;
 use crate::place::{self, Executor};
 use crate::record::{self, StoreRecord, StoreRef};
-use crate::sqlite::family::{begin, ended, record_of, step_on};
+use crate::sqlite::family::{begin, ended, step_on};
 use crate::sqlite::transfer::step::StoreStep;
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::op::{Op, Standing};
-use layerfs_home::outcome::refused;
+use layerfs_home::outcome::shell_word;
+use layerfs_home::outcome::{refused, with_fix};
 use layerfs_machine::record::MachineRecord;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// A Store copy its record does not name, left by an ended push or pull.
+/// A Store copy its record does not name, left by an ended move.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Leftover {
-    /// The call that left it: `store.push` or `store.pull`.
+    /// The call that left it: `store.move`, or `store.remove` for an
+    /// interrupted remove.
     pub call: String,
     /// That call's source machine.
     pub from: String,
@@ -47,7 +50,7 @@ pub struct Leftover {
 
 /// The copy `record` says an ended push or pull may have left, on
 /// whichever of its two machines the record does not name: a gone
-/// process's `store.push` or `store.pull` intent that is uncertain or
+/// process's move intent that is uncertain or
 /// whose record write was made, else a `last_transfer` not yet retired.
 /// None while another operation runs, or for a gone process's unresolved
 /// intent of another call (its own clearing call clears it).
@@ -57,12 +60,12 @@ pub fn leftover(record: &StoreRecord) -> Option<Leftover> {
     // an interrupted `store.remove` names the copy it had not cleaned yet
     if let Some(op) = op
         .as_ref()
-        .filter(|op| op.standing() == Standing::Unresolved && op.name() == "store.remove")
+        .filter(|op| op.standing() == Standing::Unresolved && op.name() == intent::REMOVE)
     {
         let on = op.args().get_text("leftover")?.to_owned();
         if on != machine {
             return Some(Leftover {
-                call: "store.remove".to_owned(),
+                call: intent::REMOVE.to_owned(),
                 from: on.clone(),
                 to: machine.to_owned(),
                 on,
@@ -70,7 +73,7 @@ pub fn leftover(record: &StoreRecord) -> Option<Leftover> {
         }
         return None;
     }
-    let transfer = |op: &Op| matches!(op.name(), "store.push" | "store.pull");
+    let transfer = |op: &Op| intent::is_move(op.name());
     match op.as_ref().map(|op| (op.standing(), transfer(op))) {
         Some((Standing::Running, _)) | Some((Standing::Unresolved, false)) => return None,
         _ => {}
@@ -83,15 +86,14 @@ pub fn leftover(record: &StoreRecord) -> Option<Leftover> {
         // written its first piece there: a push whose process died certain at
         // `send` or `verify` left that partial copy with nothing else naming
         // its machine
-        let staged = op.uncertain()
-            || (op.name() == "store.push" && matches!(op.phase(), "send" | "verify"));
+        let staged = op.uncertain() || (from == NATIVE && matches!(op.phase(), "send" | "verify"));
         let on = match machine {
             _ if machine == to => Some(from.clone()),
             _ if machine == from && staged => Some(to.clone()),
             _ => None,
         };
         if let Some(on) = on {
-            let call = op.name().to_owned();
+            let call = intent::MOVE.to_owned();
             return Some(Leftover { call, from, to, on });
         }
     }
@@ -106,37 +108,38 @@ fn unretired(record: &StoreRecord, machine: &str) -> Option<Leftover> {
         return None;
     }
     let side = |field| last.get_text(field).map(str::to_owned);
-    let (call, from, to) = (side("call")?, side("from")?, side("to")?);
+    let (from, to) = (side("from")?, side("to")?);
     (machine == to).then(|| Leftover {
-        call,
+        call: intent::MOVE.to_owned(),
         on: from.clone(),
         from,
         to,
     })
 }
 
-/// A certain `store.push` failure at `send`, `verify` or `install` left a
+/// A move to a machine that failed certain at `send`, `verify` or `install` left a
 /// partial copy on its target and dropped the intent that named it
 /// ([`note_incoming`] kept the machine in the record).
 fn partial(record: &StoreRecord, machine: &str) -> Option<Leftover> {
     let on = partial_on(record)?;
     (on != machine).then(|| Leftover {
-        call: "store.push".to_owned(),
+        call: intent::MOVE.to_owned(),
         from: NATIVE.to_owned(),
         to: on.clone(),
         on,
     })
 }
 
-/// The machine a `store.push` may have left a partial copy
-/// (`store.sqlite.incoming`) on: its target, read from the push's intent while
+/// The machine a move from `native` may have left a partial copy
+/// (`store.sqlite.incoming`) on: its target, read from the move's intent while
 /// the record holds one (from `send` on the target has a piece; `install` and
 /// later leave a whole file, which `stat` reports no partial copy of), else
 /// from `incoming_on`, the machine a certain failure kept.
 pub fn partial_on(record: &StoreRecord) -> Option<String> {
     let sent = record
         .op()
-        .filter(|op| op.name() == "store.push")
+        .filter(|op| intent::is_move(op.name()))
+        .filter(|op| op.args().get_text("from") == Some(NATIVE))
         .filter(|op| !matches!(op.phase(), "check" | "snapshot"))
         .and_then(|op| op.args().get_text("to").map(str::to_owned));
     if sent.is_some() {
@@ -148,13 +151,13 @@ pub fn partial_on(record: &StoreRecord) -> Option<String> {
     }
 }
 
-/// Records that a certain `store.push` failure left a partial copy on `to`:
-/// the intent that named that machine is gone, so the record keeps it for the
-/// doctor and for `store.remove`, and the next `store push` or `store remove`
-/// clears it (see [`leftover`]).
+/// Records that a certain failure of a move to `to` left a partial copy
+/// there: the intent that named that machine is gone, so the record keeps it
+/// for the doctor and for `store.remove`, and the next `store move` or
+/// `store remove` clears it (see [`leftover`]).
 pub fn note_incoming(home: &Path, name: &str, to: &str) -> Result<()> {
     let _store = record::lock(home, name)?;
-    record_of(home, name)?
+    StoreRecord::of(home, name)?
         .with("incoming_on", SdkValue::text(to))
         .write(home)
 }
@@ -162,32 +165,21 @@ pub fn note_incoming(home: &Path, name: &str, to: &str) -> Result<()> {
 /// Deletes Store `name`'s leftover copy, if its record names one (see
 /// [`leftover`]): `native`'s file (with its write-ahead log and any partial
 /// copy), or a machine's whole Store folder under its worker's root.
-/// An unresolved intent is cleared only by the call its refusal names in the
-/// same direction it named (a `store.push` to the same `to`, or a
-/// `store.pull`); a wrong direction or target is refused `Unresolved`
-/// without deleting either copy. A stopped machine is `Unavailable` (#535
-/// D11). A failure puts the ended intent back, so the copy stays this call's
-/// to delete next time.
-pub fn resolve(
-    home: &Path,
-    name: &str,
-    call: &str,
-    target: Option<&str>,
-    related: Related,
-) -> Result<()> {
-    let record = record_of(home, name)?;
+/// An unresolved move is cleared only by the move its refusal names, to
+/// the same machine `to`; a move to another machine is refused `Unresolved`
+/// without deleting either copy, and so is a move while another call's
+/// unresolved operation holds the Store. A stopped machine is `Unavailable`
+/// (#535 D11). A failure puts the ended intent back, so the copy stays this
+/// call's to delete next time.
+pub fn resolve(home: &Path, name: &str, to: &str, related: Related) -> Result<()> {
+    let record = StoreRecord::of(home, name)?;
     let held = record.op();
     if let Some(op) = held
         .as_ref()
         .filter(|op| op.standing() == Standing::Unresolved)
     {
-        let same_direction = match (call, target, op.name(), op.args().get_text("to")) {
-            ("store.push", Some(want), "store.push", Some(to)) => want == to,
-            ("store.pull", None, "store.pull", _) => true,
-            _ => false,
-        };
-        if !same_direction {
-            return record.unblocked();
+        if !intent::is_move(op.name()) || op.args().get_text("to") != Some(to) {
+            return record.unheld();
         }
     }
     let Some(left) = leftover(&record) else {
@@ -201,14 +193,14 @@ pub fn resolve(
         ("from", SdkValue::text(&left.from)),
         ("to", SdkValue::text(&left.to)),
     ]);
-    let mut op = Op::begin(&left.call, "retire", args)?;
+    let mut op = Op::begin(intent::MOVE, "retire", args)?;
     if held.as_ref().is_some_and(Op::uncertain) {
         op = op.as_uncertain();
     }
     let id = held.as_ref().map(|op| op.id().to_owned());
     begin(home, name, &op, related, |now| {
         if now.op().map(|op| op.id().to_owned()) != id || leftover(now).as_ref() != Some(&left) {
-            now.unblocked()?;
+            now.unheld()?;
             return Err(refused(
                 "Conflict",
                 format!("Store {name} changed meanwhile; nothing was deleted"),
@@ -231,7 +223,7 @@ pub fn resolve(
 /// and marks a `last_transfer` not yet retired as retired.
 pub fn retired(home: &Path, name: &str, id: &str) -> Result<()> {
     let _store = record::lock(home, name)?;
-    let mut now = record_of(home, name)?;
+    let mut now = StoreRecord::of(home, name)?;
     if now.op().is_some_and(|held| held.id() == id) {
         now = now.without(layerfs_home::op::FIELD);
     }
@@ -251,40 +243,38 @@ pub fn retired(home: &Path, name: &str, id: &str) -> Result<()> {
 /// The machine that is this host.
 const NATIVE: &str = "native";
 
-/// `store.push`: refused `InvalidInput` unless `record` is a sqlite Store
-/// on `native` and `to` another machine; `NotFound` for an unknown `to`.
-/// Its in-use half, `Related::store_idle`, runs under the Store's lock.
-pub fn can_push(home: &Path, record: &StoreRecord, to: &str) -> Result<()> {
+/// `store.move`: the machine sqlite Store `record` is on, from which it
+/// goes to `to`. Refused `InvalidInput` when it is on `to` already, or
+/// when neither is this computer (C13: a Store goes to or from `native`
+/// only), with the move to `native` as its fix; `NotFound` for an unknown
+/// `to`. Its in-use half, `Related::store_idle`, runs under the Store's
+/// lock.
+pub fn can_move(home: &Path, record: &StoreRecord, to: &str) -> Result<String> {
     let name = record.name();
     let on = sqlite_machine(record)?;
-    if on != NATIVE {
+    if on == to {
         return Err(refused(
             "InvalidInput",
-            format!("Store {name} is on machine {on}; `layerfs store pull {name}` brings it to {NATIVE} first"),
+            format!("Store {name} is already on {to}"),
         ));
     }
-    if to == NATIVE {
-        return Err(refused(
-            "InvalidInput",
-            format!("Store {name} is already on {NATIVE}"),
+    if on != NATIVE && to != NATIVE {
+        return Err(with_fix(
+            refused(
+                "InvalidInput",
+                format!(
+                    "Store {name} is on machine {on}: a Store moves to or from this computer \
+                     only; `layerfs store move {name} {NATIVE}` brings it here first"
+                ),
+            ),
+            format!(
+                "layerfs store move {name} {NATIVE}",
+                name = shell_word(name)
+            ),
         ));
     }
-    if MachineRecord::read(home, to)?.is_none() {
+    if to != NATIVE && MachineRecord::read(home, to)?.is_none() {
         return Err(refused("NotFound", format!("no machine named {to}")));
-    }
-    Ok(())
-}
-
-/// `store.pull`: refused `InvalidInput` unless `record` is a sqlite Store
-/// on a machine other than `native`; answers that machine. Its in-use half,
-/// `Related::store_idle`, runs under the Store's lock.
-pub fn can_pull(record: &StoreRecord) -> Result<String> {
-    let on = sqlite_machine(record)?;
-    if on == NATIVE {
-        return Err(refused(
-            "InvalidInput",
-            format!("Store {} is already on {NATIVE}", record.name()),
-        ));
     }
     Ok(on)
 }

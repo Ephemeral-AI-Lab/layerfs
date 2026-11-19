@@ -15,7 +15,6 @@ use crate::resolve::Target;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, CommitId};
 use layerfs_home::events::Events;
-use layerfs_home::home::paths;
 use layerfs_home::outcome::{refused, Outcome};
 use std::path::Path;
 
@@ -38,8 +37,8 @@ pub fn store_call(
     // the record read under the lock, parsed once (R4)
     match plan(&home, record.store_ref()?)? {
         Executor::Local => {
-            let file = paths::store_file(&home, &target.store);
-            let open = opened(target, &record, file.display().to_string(), None);
+            let open = OpenArgs::in_root(&home, &target.store, Some(record.to_record().clone()))
+                .with_project(&target.project);
             open::run(
                 method,
                 &open,
@@ -155,26 +154,8 @@ fn with_project(args: Vec<(String, SdkValue)>, target: &Target) -> Vec<(String, 
     fields
 }
 
-/// What opens `target`'s Store at `store_path`: its project, Store and
-/// Store record, and a PostgreSQL Store's server.
-fn opened(
-    target: &Target,
-    record: &StoreRecord,
-    store_path: String,
-    postgresql: Option<PgSelection>,
-) -> OpenArgs {
-    OpenArgs {
-        home: None,
-        store: Some(target.store.clone()),
-        project: Some(target.project.clone()),
-        store_path: Some(store_path),
-        store_record: Some(record.to_record().clone()),
-        postgresql,
-    }
-}
-
-/// A PostgreSQL Store's call in this process: its URL from the record, the
-/// password reference resolved now (H §7.4). Its lease is held while this
+/// A PostgreSQL Store's call in this process: its URL from the record, its
+/// saved login put in now (H §7.4). Its lease is held while this
 /// process keeps the Store open, as a sqlite Store's is: `store.disconnect`
 /// refuses `InUse` meanwhile.
 fn postgresql(
@@ -185,14 +166,20 @@ fn postgresql(
     lease: lease::Lease,
 ) -> Outcome {
     let url = crate::record::url(&target.record)?;
-    let postgresql = PgSelection {
-        url: Some(url),
-        ..PgSelection::default()
-    };
     // one open service per PostgreSQL Store and binding, keyed by a path no
     // file has
     let key = target.record.postgresql_key(home, &target.store);
-    let open = opened(target, record, key.display().to_string(), Some(postgresql));
+    let open = OpenArgs {
+        home: None,
+        store: Some(target.store.clone()),
+        project: Some(target.project.clone()),
+        store_path: Some(key.display().to_string()),
+        store_record: Some(record.to_record().clone()),
+        postgresql: Some(PgSelection {
+            url: Some(url),
+            ..PgSelection::default()
+        }),
+    };
     open::run(
         method,
         &open,

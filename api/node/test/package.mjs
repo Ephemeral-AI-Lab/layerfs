@@ -6,7 +6,8 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { table } from "../src/index.js";
+import * as layerfs from "../src/index.js";
+import { families, table } from "../src/index.js";
 import { render } from "../../scripts/gen-node-types.mjs";
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
@@ -39,6 +40,15 @@ test("index.d.ts is exactly what the call table generates", () => {
   assert.equal(manifest.exports["."].types, "./src/index.d.ts");
 });
 
+test("every family is a named export, as the typings declare it", () => {
+  const types = readFileSync(here("../src/index.d.ts"), "utf8");
+  for (const family of families) {
+    assert.equal(layerfs[family], layerfs.default[family], `${family} is a named export`);
+    assert.equal(typeof layerfs[family]?.[table.find((c) => c.family === family).call], "function", family);
+    assert.ok(types.includes(`\nexport const ${family}: `), `index.d.ts declares ${family}`);
+  }
+});
+
 test("every call, argument and option of the table is in the typings", () => {
   const types = readFileSync(here("../src/index.d.ts"), "utf8");
   const pascal = (word) => word.replace(/(^|_)([a-z])/g, (_, __, letter) => letter.toUpperCase());
@@ -59,12 +69,16 @@ test("every call, argument and option of the table is in the typings", () => {
     assert.ok(lines.length > 0 && lines.every((text) => text.endsWith("): Promise<Result>;")), `${spec.family}.${spec.call}`);
     assert.ok(block.includes(`  /** ${spec.help} */\n${lines[0]}`), `${spec.family}.${spec.call} help`);
     for (const arg of spec.args) assert.ok(line.includes(`${arg.name}${arg.optional ? "?" : ""}: `), `${spec.family}.${spec.call}(${arg.name})`);
-    if (spec.options.length === 0) {
+    // a migrated call's sections are the words its own `with` takes
+    const sections = Object.keys(spec.form?.with ?? {});
+    if (spec.options.length === 0 && sections.length === 0) {
       assert.ok(line.endsWith("options?: CallOptions): Promise<Result>;"), `${spec.family}.${spec.call}: CallOptions`);
       continue;
     }
     const name = `${pascal(spec.family)}${pascal(spec.call)}Options`;
-    assert.ok(line.endsWith(`options?: ${name}): Promise<Result>;`), `${spec.family}.${spec.call}: options?.${name}`);
+    // a call with a required option may not leave its options off
+    const mark = spec.options.some((opt) => opt.required) ? "" : "?";
+    assert.ok(line.endsWith(`options${mark}: ${name}): Promise<Result>;`), `${spec.family}.${spec.call}: options${mark}.${name}`);
     const declaration = `export interface ${name} extends CallOptions {\n`;
     const at = types.indexOf(declaration);
     assert.ok(at >= 0, `${spec.family}.${spec.call}: no ${name} interface`);
@@ -72,10 +86,11 @@ test("every call, argument and option of the table is in the typings", () => {
     const wanted = spec.options.map((opt) => {
       const type = opt.kind === "function" ? FUNCTION[opt.name] : ARGUMENT[opt.kind];
       assert.ok(type, `${spec.family}.${spec.call}: no typings for ${opt.kind} option ${opt.name}`);
-      return `  ${opt.name}?: ${type};`;
+      return `  ${opt.name}${opt.required ? "" : "?"}: ${type};`;
     });
+    if (sections.length > 0) wanted.push(`  with?: readonly (${sections.map((name) => JSON.stringify(name)).join(" | ")})[];`);
     assert.equal(declared, wanted.join("\n"), `${spec.family}.${spec.call}: ${name} options`);
-    for (const opt of spec.options) assert.ok(types.includes(`  ${opt.name}?: `), `${spec.family}.${spec.call} ${opt.name}`);
+    for (const opt of spec.options) assert.ok(types.includes(`  ${opt.name}${opt.required ? "" : "?"}: `), `${spec.family}.${spec.call} ${opt.name}`);
   }
 });
 

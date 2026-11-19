@@ -259,6 +259,8 @@ impl Service {
                     workspace: Arc::new(bound.workspace),
                     snapshot,
                     activity: Activity::Idle,
+                    phase: "",
+                    since_ms: super::registry::now_ms(),
                     epoch: 1,
                     published: None,
                 })),
@@ -284,6 +286,8 @@ impl Service {
             self.settle_activity(token, Activity::Idle);
             return Err(failure);
         }
+        // capture, construction, Save and publication, then the install
+        self.phase(token, "publish");
         let result = run(&workspace);
         // An install that replaced what the Workspace showed is invalidated
         // in the kernel before the answer.
@@ -291,7 +295,10 @@ impl Service {
             Ok(CommitSuccess {
                 replaced: Some((shown, installed)),
                 ..
-            }) => self.invalidate(token, &workspace, *shown, *installed),
+            }) => {
+                self.phase(token, "invalidate");
+                self.invalidate(token, &workspace, *shown, *installed)
+            }
             _ => Ok(()),
         };
         // A Commit whose reader or operation owner could not be released
@@ -310,11 +317,11 @@ impl Service {
             match &result {
                 Ok(commit) => {
                     binding.snapshot = workspace.snapshot().map_err(Failure::Workspace)?;
-                    binding.activity = if unreleased {
+                    binding.enter(if unreleased {
                         Activity::LocalFailure
                     } else {
                         Activity::Idle
-                    };
+                    });
                     binding.published = if unreleased {
                         commit.history.clone()
                     } else {
@@ -323,13 +330,13 @@ impl Service {
                 }
                 Err(failed) => {
                     binding.published = failed.published.clone();
-                    binding.activity = if failed.locally_settled && !unreleased {
+                    binding.enter(if failed.locally_settled && !unreleased {
                         Activity::Idle
                     } else if failed.published.is_some() {
                         Activity::LocalFailure
                     } else {
                         Activity::Uncertain
-                    };
+                    });
                 }
             }
             Ok(())
@@ -391,7 +398,7 @@ impl Service {
         let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
         if let Ok(binding) = bound_mut(&mut entries, token) {
             binding.kernel = kernel;
-            binding.activity = activity;
+            binding.enter(activity);
             binding.epoch = binding.epoch.saturating_add(1);
         }
     }
@@ -417,8 +424,16 @@ impl Service {
     fn settle_activity(&self, token: WorkspaceToken, activity: Activity) {
         if let Ok(mut entries) = self.entries.lock() {
             if let Ok(binding) = bound_mut(&mut entries, token) {
-                binding.activity = activity;
+                binding.enter(activity);
                 binding.epoch = binding.epoch.saturating_add(1);
+            }
+        }
+    }
+    /// Names the phase an admitted operation of `token` is in, for status.
+    fn phase(&self, token: WorkspaceToken, phase: &'static str) {
+        if let Ok(mut entries) = self.entries.lock() {
+            if let Ok(binding) = bound_mut(&mut entries, token) {
+                binding.phase = phase;
             }
         }
     }

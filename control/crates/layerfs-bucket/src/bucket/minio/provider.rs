@@ -2,7 +2,7 @@
 //! with the `tls` feature, HTTPS. Objects up to 50 TiB; one PUT up to 5 TiB;
 //! multipart parts of 5 MiB–5 GiB, at most 10,000, so one upload carries at
 //! most 48.83 TiB.
-use crate::bucket::credentials::CredentialRef;
+use crate::bucket::credentials::Credentials;
 use crate::bucket::error::RemoteError;
 use crate::bucket::limits::Limits;
 use crate::bucket::s3_api::{S3Client, S3Config, MAX_PART, MAX_PARTS};
@@ -23,7 +23,7 @@ pub fn limits() -> Limits {
     }
 }
 
-/// One MinIO remote. Holds a credential reference, never the secret.
+/// One MinIO remote and its key (`Debug` redacts it).
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MinioSettings {
     /// `http://host:port`.
@@ -32,7 +32,7 @@ pub struct MinioSettings {
     /// Namespace within the bucket; may be empty.
     pub prefix: String,
     pub region: String,
-    pub credentials: CredentialRef,
+    pub credentials: Credentials,
     pub part_size: u64,
 }
 
@@ -43,7 +43,7 @@ pub fn connect(settings: &MinioSettings) -> Result<S3Client, RemoteError> {
         bucket: settings.bucket.clone(),
         prefix: settings.prefix.clone(),
         region: settings.region.clone(),
-        credentials: settings.credentials.resolve()?,
+        credentials: settings.credentials.checked()?,
         connect_timeout: Duration::from_secs(5),
         io_timeout: Duration::from_secs(60),
         part_size: settings.part_size,

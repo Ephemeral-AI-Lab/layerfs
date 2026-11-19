@@ -134,6 +134,7 @@ impl Records {
             if !self.names.contains(&old) {
                 std::fs::remove_dir_all(paths::project_dir(home, &self.store, &old))
                     .map_err(failed)?;
+                layerfs_home::home::generation::moved(home);
             }
         }
         Ok(SdkValue::List(

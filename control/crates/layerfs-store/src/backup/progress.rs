@@ -1,14 +1,13 @@
 //! Live progress of `backup.create` and `backup.restore`: the call's own
-//! phases and the bucket library's byte and piece counts, sent as
-//! `{ phase, done, total, pieces }`. `done` and `total` are bytes while a
-//! phase moves bytes (`total` null when unknown) and null in a phase that
-//! moves none; `pieces` is `{ done, of }` while a file goes up or down as
-//! pieces, else null. An update is sent only when it differs from the last
+//! phases and the bucket library's byte counts, sent as the one public
+//! event `{ phase, done, total }` (call surface 2.0). `done` and `total`
+//! are bytes while a phase moves bytes (`total` null when unknown) and null
+//! in a phase that moves none; how many pieces a file goes up or down as is
+//! not reported. An update is sent only when it differs from the last
 //! one: byte counts at most once per [`INTERVAL`] while a transfer runs,
 //! and each phase's exact last count before the next phase. A phase that
 //! reaches its total says only that its bytes moved; the call has
 //! succeeded when it returns its result, never before.
-use layerfs_bridge::control::SdkValue;
 use layerfs_bucket::bucket::progress::{observe, Progress, INTERVAL};
 use layerfs_home::events::Events;
 use std::sync::mpsc::{self, RecvTimeoutError};
@@ -20,30 +19,17 @@ struct Update {
     phase: &'static str,
     done: Option<u64>,
     total: Option<u64>,
-    pieces: Option<(u64, u64)>,
 }
 
 impl Update {
-    fn to_sdk(self) -> SdkValue {
-        let count = |n: Option<u64>| n.map_or(SdkValue::Null, |n| SdkValue::Int(n as i64));
-        let pieces = match self.pieces {
-            Some((done, of)) => SdkValue::map([
-                ("done", SdkValue::Int(done as i64)),
-                ("of", SdkValue::Int(of as i64)),
-            ]),
-            None => SdkValue::Null,
-        };
-        SdkValue::map([
-            ("phase", SdkValue::text(self.phase)),
-            ("done", count(self.done)),
-            ("total", count(self.total)),
-            ("pieces", pieces),
-        ])
+    fn send(self, events: &mut Events<'_>) {
+        let count = |n: Option<u64>| n.map(|n| n.min(i64::MAX as u64) as i64);
+        events.phase(self.phase, count(self.done), count(self.total), vec![]);
     }
 }
 
 /// What a transfer reported since it was last read: the updates that
-/// ended a phase or counted a piece, in order, and the current one.
+/// ended a phase, in order, and the current one.
 #[derive(Default)]
 struct Reports {
     kept: Vec<Update>,
@@ -78,7 +64,6 @@ impl Progress for Recorder {
             phase,
             done: total.map(|_| 0),
             total,
-            pieces: None,
         });
     }
 
@@ -88,14 +73,8 @@ impl Progress for Recorder {
         }
     }
 
-    fn pieces(&self, done: u64, of: u64) {
-        let mut reports = self.reports();
-        if let Some(current) = &mut reports.current {
-            current.pieces = Some((done, of));
-            let counted = *current;
-            reports.kept.push(counted);
-        }
-    }
+    /// Pieces are not reported (call surface 2.0).
+    fn pieces(&self, _done: u64, _of: u64) {}
 }
 
 /// The progress one call sends: each update once, in order.
@@ -111,7 +90,7 @@ impl Shown {
 
     fn send(&mut self, events: &mut Events<'_>, update: Update) {
         if self.last != Some(update) {
-            events.progress(update.to_sdk());
+            update.send(events);
             self.last = Some(update);
         }
     }
@@ -141,7 +120,6 @@ impl Shown {
                 phase,
                 done: Some(done),
                 total,
-                pieces: None,
             },
         );
     }

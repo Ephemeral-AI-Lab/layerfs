@@ -1,64 +1,130 @@
 //! What a call prints (S §2.6): the result as one line of JSON on stdout,
-//! or with `--text` a readable form; a refusal as JSON on stderr, exit 125.
+//! or a readable form (`--text`, the default on a terminal); a refusal on
+//! stderr in the same form, exit 125.
 use crate::run::REFUSED;
-use layerfs_api::json;
+use layerfs_api::{json, Form, Part};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use std::io::{IsTerminal, Write};
+use std::io::Write;
 use std::process::ExitCode;
 
-/// Prints `refusal` as `{"code","message","detail"}` on stderr.
-pub fn refusal(refusal: &SdkRefusal) -> ExitCode {
-    let value = SdkValue::map([
-        ("code", SdkValue::text(&refusal.code)),
-        ("message", SdkValue::text(&refusal.message)),
-        ("detail", refusal.detail.clone()),
-    ]);
-    diagnostic(&json::print(&value));
+/// Prints `refusal` on stderr: one line of JSON, `{"error","message"}`,
+/// `fix` when there is one and the fields the next call needs; with
+/// `detail` (`--detail`) its long form, which adds `detail`. With `text`
+/// it reads as `error: <message>  (<code>)`, then the fix and the fields.
+pub fn refusal(refusal: &SdkRefusal, detail: bool, text: bool) -> ExitCode {
+    let value = layerfs_api::refusal::value(refusal, detail);
+    match text {
+        true => diagnostic(refusal_text(&value).trim_end()),
+        false => diagnostic(&json::print(&value)),
+    }
     ExitCode::from(REFUSED)
 }
 
-/// Prints a call's result.
-pub fn result(value: &SdkValue, text: bool) -> ExitCode {
+/// A refusal's readable form: its message and code, then `fix:` and each
+/// other field it carries, indented.
+pub fn refusal_text(value: &SdkValue) -> String {
+    let code = value.get_text("error").unwrap_or("Refused");
+    let message = value.get_text("message").unwrap_or("");
+    let mut text = format!("error: {message}  ({code})\n");
+    if let Some(fix) = value.get_text("fix") {
+        text.push_str(&format!("  fix: {fix}\n"));
+    }
+    if let SdkValue::Map(fields) = value {
+        let shown = ["error", "message", "fix"];
+        for (key, field) in fields.iter().filter(|(k, _)| !shown.contains(&k.as_str())) {
+            let news = !matches!(field, SdkValue::Null | SdkValue::Bool(false));
+            if news {
+                text.push_str(&format!("  {}: {}\n", label(key), inline(key, field)));
+            }
+        }
+    }
+    text
+}
+
+/// Prints a call's result; `form` is the call's declared answer, which
+/// the readable form reads for the columns its rows may leave out.
+pub fn result(value: &SdkValue, text: bool, form: Option<&Form>) -> ExitCode {
     let printed = if text {
-        readable(value)
+        readable(value, form)
     } else {
         format!("{}\n", json::print(value))
     };
     print(&printed)
 }
 
-/// `layerfs doctor --text`: a count line, then each finding as
-/// `<severity> <kind> <name>: <message>` and its fix on the next line.
-pub fn findings(report: &SdkValue) -> ExitCode {
-    if matches!(report.get("checks"), Some(SdkValue::List(_))) {
-        return checks(report);
-    }
+/// A doctor's report in the readable form: a count line, then each finding as
+/// `<severity> <thing> <name> <check>: <message>` with its fix on the next
+/// line, then each check that could not be made and why.
+pub fn doctor(report: &SdkValue) -> ExitCode {
     let empty = Vec::new();
-    let found = match report.get("findings") {
-        Some(SdkValue::List(found)) => found,
+    let rows = |key: &str| match report.get(key) {
+        Some(SdkValue::List(rows)) => rows,
         _ => &empty,
     };
+    let (found, open) = (rows("findings"), rows("not_checked"));
     let text = |value: &SdkValue, key: &str| value.get_text(key).unwrap_or("").to_owned();
-    let errors = found
-        .iter()
-        .filter(|f| text(f, "severity") == "error")
-        .count();
-    let mut printed = match found.len() {
-        0 => "ok: nothing to report\n".to_owned(),
-        n => format!("{errors} error(s), {} warning(s)\n", n - errors),
+    // a finding or entry names its thing by its own word, its first key
+    let named = |value: &SdkValue| match value {
+        SdkValue::Map(fields) => fields.first().map_or(String::new(), |(word, name)| {
+            format!("{word} {}", name_of(name))
+        }),
+        _ => String::new(),
+    };
+    let count = |severity: &str| {
+        (found.iter())
+            .filter(|f| text(f, "severity") == severity)
+            .count()
+    };
+    let mut printed = match (found.len(), open.len()) {
+        (0, 0) => "ok: every check was made and nothing was found\n".to_owned(),
+        _ => format!(
+            "{} error(s), {} warning(s), {} notice(s), {} not checked\n",
+            count("error"),
+            count("warning"),
+            count("notice"),
+            open.len()
+        ),
     };
     for finding in found {
-        let entity = finding.get("entity").cloned().unwrap_or_default();
         printed.push_str(&format!(
-            "{:<8} {} {}: {}\n         fix: {}\n",
+            "{:<8} {} {}: {}\n",
             text(finding, "severity"),
-            text(&entity, "kind"),
-            text(&entity, "name"),
+            named(finding),
+            text(finding, "check"),
             text(finding, "message"),
-            text(finding, "fix"),
+        ));
+        if let Some(from) = finding.get_text("from") {
+            printed.push_str(&format!("         from: {from}\n"));
+        }
+        if let Some(fix) = finding.get_text("fix") {
+            printed.push_str(&format!("         fix: {fix}\n"));
+        }
+    }
+    for entry in open {
+        let why = match (entry.get("blocked_by"), entry.get_text("reason")) {
+            (Some(by @ SdkValue::Map(_)), _) => {
+                format!("blocked by {} ({})", named(by), text(by, "reason"))
+            }
+            (_, Some(reason)) => reason.to_owned(),
+            _ => String::new(),
+        };
+        let check = entry
+            .get_text("check")
+            .map_or(String::new(), |check| format!(" {check}"));
+        printed.push_str(&format!(
+            "{:<8} {}{check}: {why}\n",
+            "not checked",
+            named(entry)
         ));
     }
     print(&printed)
+}
+
+fn name_of(value: &SdkValue) -> String {
+    match value {
+        SdkValue::Text(text) => text.clone(),
+        other => json::print(other),
+    }
 }
 
 /// Writes one line to stderr. A stderr that is gone loses it and the exit
@@ -81,54 +147,48 @@ pub fn print(printed: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Fields formatted as dates in UTC (YYYY-MM-DD HH:MM:SS) in `--text`.
-const TIME_FIELDS: &[&str] = &["created", "modified", "at"];
+/// Fields shown as human sizes, beside every `*_bytes`.
+const SIZE_FIELDS: &[&str] = &["size", "bytes"];
 
-/// Fields formatted as human sizes in `--text`.
-const SIZE_FIELDS: &[&str] = &[
-    "size",
-    "bytes",
-    "part_size",
-    "memory",
-    "disk",
-    "free",
-    "free_disk",
-    "wal_bytes",
-    "incoming_bytes",
-    "stdout_bytes",
-    "stderr_bytes",
-    "logical",
-    "new_canonical",
-    "new_stored",
-    "new_metadata",
+/// Whether field `key` holds a byte count.
+fn is_size(key: &str) -> bool {
+    SIZE_FIELDS.contains(&key) || key.ends_with("_bytes")
+}
+
+/// The progress phases whose `done` and `total` are bytes: a Store, a
+/// project's parts or an image sent to a machine (`send`), a Store move's
+/// `snapshot` and `verify` (each hashes the file), a backup's `hash`,
+/// `upload` and `download`, and the bytes `project.export` wrote
+/// (`export` and its last event `finalize`; an image copy's `export`
+/// carries no counts). Every other
+/// phase with counts counts steps or things: a doctor's, a create's,
+/// a start's, a remove's.
+const BYTE_PHASES: [&str; 8] = [
+    "send", "snapshot", "verify", "hash", "upload", "download", "export", "finalize",
 ];
 
-/// Formats epoch milliseconds as `YYYY-MM-DD HH:MM:SS` UTC.
-pub fn format_time(ms: i64) -> String {
-    if ms < 0 {
-        return ms.to_string();
+/// One progress event as the terminal line shows it, `elapsed` seconds
+/// after the first: `done`/`total` in bytes (with a rate) only in a phase
+/// that moves bytes, else as plain counts (a doctor's or a create's steps;
+/// conformance R4 F8).
+pub fn progress_line(phase: &str, done: Option<i64>, total: Option<i64>, elapsed: f64) -> String {
+    let bytes = BYTE_PHASES.contains(&phase);
+    let shown = |n: i64| match bytes {
+        true => format_size(n),
+        false => n.to_string(),
+    };
+    let mut status = format!("phase: {phase}");
+    if let Some(done) = done {
+        status.push_str(&format!("  {}", shown(done)));
+        if let Some(total) = total {
+            status.push_str(&format!("/{}", shown(total)));
+        }
+        if bytes && elapsed > 0.5 && done > 0 {
+            let rate = (done as f64) / elapsed;
+            status.push_str(&format!("  ({}/s)", format_size(rate as i64)));
+        }
     }
-    let s = ms / 1000;
-    let rem_s = s % 86400;
-    let sec = rem_s % 60;
-    let rem_m = rem_s / 60;
-    let min = rem_m % 60;
-    let hour = rem_m / 60;
-    let days = s / 86400;
-
-    let z = days + 719468;
-    let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
-    let doe = z - era * 146097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let mut y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    if m <= 2 {
-        y += 1;
-    }
-    format!("{y:04}-{m:02}-{d:02} {hour:02}:{min:02}:{sec:02}")
+    status
 }
 
 /// Formats byte counts as human units (B, KiB, MiB, GiB, TiB, PiB).
@@ -154,13 +214,22 @@ pub fn format_size(bytes: i64) -> String {
     format!("{bytes} B")
 }
 
-/// One scalar as a table cell, formatted for human reading if field name matches.
+/// One scalar as the readable form shows it: a byte count as a size, a
+/// Commit id by its first 14 characters (a prefix every lookup takes).
 pub fn format_field(key: &str, value: &SdkValue) -> String {
     match value {
-        SdkValue::Int(n) if TIME_FIELDS.contains(&key) => format_time(*n),
-        SdkValue::Int(n) if SIZE_FIELDS.contains(&key) => format_size(*n),
+        SdkValue::Int(n) if is_size(key) => format_size(*n),
+        SdkValue::Text(text) if is_node(text) => text[..SHORT_ID].to_owned(),
         _ => cell(value),
     }
+}
+
+/// The characters a Commit id shows: its tag and six bytes.
+const SHORT_ID: usize = 14;
+
+/// Whether `text` is a Commit or publication id: 66 hex characters.
+fn is_node(text: &str) -> bool {
+    text.len() == 66 && text.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// One scalar as a table cell.
@@ -174,37 +243,171 @@ fn cell(value: &SdkValue) -> String {
     }
 }
 
-/// `--text`: a file's text as it is; a result whose one list holds records
-/// as a table of their scalar fields; anything else as `key  value` lines.
-fn readable(value: &SdkValue) -> String {
+/// A value on one line: a scalar as [`format_field`], a list joined by
+/// commas (a record by its first value: a change by its path), anything
+/// else as JSON.
+fn inline(key: &str, value: &SdkValue) -> String {
+    let first = |item: &SdkValue| match item {
+        SdkValue::Map(fields) => fields.first().map(|(k, v)| format_field(k, v)),
+        other => Some(format_field(key, other)),
+    };
+    match value {
+        SdkValue::List(items) => {
+            let items: Vec<String> = items.iter().filter_map(first).collect();
+            items.join(", ")
+        }
+        other => format_field(key, other),
+    }
+}
+
+fn scalar(value: &SdkValue) -> bool {
+    !matches!(value, SdkValue::Map(_) | SdkValue::List(_))
+}
+
+/// A key as a label: `memory_used_bytes` reads `memory used` (its value
+/// shows as a size), `file_count` reads `file count`.
+fn label(key: &str) -> String {
+    let key = match key.strip_suffix("_bytes") {
+        Some(base) if !base.is_empty() => base,
+        _ => key,
+    };
+    key.replace('_', " ")
+}
+
+/// The readable form: a file's text as it is; `done` for a result that
+/// says only that it worked; otherwise each scalar as an aligned `label
+/// value` line, each map as an indented block under its label, each list
+/// of records as a table (a list other than `items` under its label) and
+/// each list of plain values one per line. `form`, the call's declared
+/// answer, gives each list's row form.
+pub fn readable(value: &SdkValue, form: Option<&Form>) -> String {
     if let Some(SdkValue::Text(text)) = value.get("text") {
         return text.clone();
     }
     let SdkValue::Map(fields) = value else {
         return format!("{}\n", cell(value));
     };
-    let mut out = String::new();
-    for (name, field) in fields {
-        match field {
-            SdkValue::List(rows) if rows.iter().all(|r| matches!(r, SdkValue::Map(_))) => {
-                if !out.is_empty() {
-                    out.push('\n');
-                }
-                out.push_str(&table(name, rows));
-            }
-            _ => out.push_str(&format!("{name}  {}\n", format_field(name, field))),
-        }
+    let only_ok = matches!(&fields[..], [(key, SdkValue::Bool(true))] if key == "ok");
+    if fields.is_empty() || only_ok {
+        return "done\n".to_owned();
     }
+    let mut out = String::new();
+    block(fields, form, 0, &mut out);
     out
 }
 
-/// Rows as aligned columns, upper-case headers; nested values are left out.
-fn table(name: &str, rows: &[SdkValue]) -> String {
+/// The fields of one map at `indent`, as [`readable`] lays them out.
+fn block(fields: &[(String, SdkValue)], form: Option<&Form>, indent: usize, out: &mut String) {
+    let pad = " ".repeat(indent);
+    let width = (fields.iter())
+        .filter(|(_, v)| scalar(v) || matches!(v, SdkValue::List(l) if l.iter().all(scalar)))
+        .map(|(k, _)| label(k).chars().count())
+        .max()
+        .unwrap_or(0);
+    for (name, field) in fields {
+        match field {
+            SdkValue::List(rows) if !rows.is_empty() && rows.iter().all(|r| !scalar(r)) => {
+                let declared = match form.and_then(|form| form.part(name)) {
+                    Some(Part::Rows(rows)) => Some(*rows),
+                    _ => None,
+                };
+                if !out.is_empty() {
+                    out.push('\n');
+                }
+                if name != "items" {
+                    out.push_str(&format!("{pad}{}\n", crate::banner::bold(&label(name))));
+                }
+                out.push_str(&table(rows, declared, &pad));
+            }
+            SdkValue::List(items) if name == "items" && indent == 0 => match items.is_empty() {
+                true => out.push_str("(none)\n"),
+                false => {
+                    for item in items {
+                        out.push_str(&format!("{}\n", format_field(name, item)));
+                    }
+                }
+            },
+            SdkValue::Map(inner) => {
+                out.push_str(&format!("{pad}{}\n", label(name)));
+                let declared = match form.and_then(|form| form.part(name)) {
+                    Some(Part::Rows(rows)) => Some(*rows),
+                    _ => None,
+                };
+                block(inner, declared, indent + 2, out);
+            }
+            other => {
+                let shown = match other {
+                    SdkValue::List(items) if items.is_empty() => "(none)".to_owned(),
+                    other => inline(name, other),
+                };
+                out.push_str(&format!("{pad}{:<width$}  {shown}\n", label(name)));
+            }
+        }
+    }
+}
+
+/// What a `*_not_listed` flag says under a table.
+fn note(flag: &str) -> String {
+    match flag {
+        "workspaces_not_listed" => {
+            "Workspaces kept on the machine (`layerfs workspace list` reads them)".to_owned()
+        }
+        other => format!("{} here", label(other)),
+    }
+}
+
+/// The cell of column `column` in a row that left it out. The short form
+/// leaves out `state: ready` (and null, false and empty values), so a row
+/// with no `state` is `ready`; any other absent value is `-`.
+fn absent(column: &str) -> &'static str {
+    match column {
+        "state" => "ready",
+        _ => "-",
+    }
+}
+
+/// The fields a row says beside its table, not in a column: its fix and
+/// its message, one line each under the table.
+const BESIDE: [&str; 2] = ["fix", "message"];
+
+/// A row's STATE cell: its state (`ready` when left out), with its
+/// `reason` (`broken: outdated`) and what it is blocked by (`blocked by
+/// machine docker (outdated)`).
+fn state(row: &SdkValue) -> String {
+    let mut cell = row.get_text("state").unwrap_or(absent("state")).to_owned();
+    if let Some(SdkValue::Map(by)) = row.get("blocked_by") {
+        if let Some((word, name)) = by.first() {
+            cell.push_str(&format!(" by {word} {}", self::cell(name)));
+        }
+        if let Some(reason) = row.get("blocked_by").and_then(|by| by.get_text("reason")) {
+            cell.push_str(&format!(" ({reason})"));
+        }
+    }
+    if let Some(reason) = row.get_text("reason") {
+        cell.push_str(&format!(": {reason}"));
+    }
+    cell
+}
+
+/// Rows as aligned columns under bold headers, each line after `pad`;
+/// nested values are left out. A row form (`declared`) whose rows carry a
+/// state keeps its STATE column when every row left `state: ready` out, in
+/// the place its long form gives it; the STATE cell carries the row's
+/// reason and what blocks it ([`state`]). A row's fix and message are
+/// lines under the table, named by the row's first cell. A `*_not_listed`
+/// flag is no column: a note under the table names the rows it is set on.
+fn table(rows: &[SdkValue], declared: Option<&Form>, pad: &str) -> String {
     let mut columns: Vec<&str> = Vec::new();
+    let mut flags: Vec<&str> = Vec::new();
     for row in rows {
         if let SdkValue::Map(fields) = row {
             for (key, value) in fields {
-                if !matches!(value, SdkValue::Map(_) | SdkValue::List(_))
+                if key.ends_with("_not_listed") {
+                    if !flags.contains(&key.as_str()) {
+                        flags.push(key);
+                    }
+                } else if scalar(value)
+                    && !BESIDE.contains(&key.as_str())
                     && !columns.contains(&key.as_str())
                 {
                     columns.push(key);
@@ -212,101 +415,91 @@ fn table(name: &str, rows: &[SdkValue]) -> String {
             }
         }
     }
-    if rows.is_empty() || columns.is_empty() {
-        return format!("{}  (none)\n", name.to_uppercase());
+    let long = declared.map_or(&[][..], |form| form.long);
+    if let Some(at) = long.iter().position(|key| *key == "state") {
+        if !columns.is_empty() && !columns.contains(&"state") {
+            let before = |key: &&str| long.iter().position(|k| k == key).is_some_and(|i| i < at);
+            let place = columns.iter().take_while(|key| before(key)).count();
+            columns.insert(place, "state");
+        }
+    }
+    // the STATE cell says the reason; a row blocked by something says so
+    // there too, so a STATE column stands for both
+    let blocked = rows.iter().any(|row| row.get("blocked_by").is_some());
+    if blocked && !columns.contains(&"state") {
+        columns.push("state");
+    }
+    if columns.contains(&"state") {
+        columns.retain(|column| *column != "reason");
+    }
+    if columns.is_empty() {
+        return format!("{pad}(none)\n");
     }
     let cells: Vec<Vec<String>> = rows
         .iter()
         .map(|row| {
             columns
                 .iter()
-                .map(|c| {
-                    row.get(c)
+                .map(|c| match *c {
+                    "state" => state(row),
+                    c => (row.get(c))
                         .map(|v| format_field(c, v))
-                        .unwrap_or_else(|| "-".to_owned())
+                        .unwrap_or_else(|| absent(c).to_owned()),
                 })
                 .collect()
         })
         .collect();
-    let widths: Vec<usize> = columns
-        .iter()
-        .enumerate()
-        .map(|(i, c)| {
-            cells
-                .iter()
-                .map(|r| r[i].chars().count())
+    let headers: Vec<String> = columns.iter().map(|c| label(c).to_uppercase()).collect();
+    let widths: Vec<usize> = (headers.iter().enumerate())
+        .map(|(i, header)| {
+            (cells.iter().map(|r| r[i].chars().count()))
                 .max()
                 .unwrap_or(0)
-                .max(c.len())
+                .max(header.chars().count())
         })
         .collect();
-    let line = |values: Vec<String>| {
-        let mut text = values
-            .iter()
-            .zip(&widths)
+    let line = |values: &[String]| {
+        let text = (values.iter().zip(&widths))
             .map(|(v, w)| format!("{v:<w$}"))
             .collect::<Vec<_>>()
             .join("  ");
-        text.truncate(text.trim_end().len());
-        text.push('\n');
-        text
+        format!("{pad}{}", text.trim_end())
     };
-    let raw_header = line(columns.iter().map(|c| c.to_uppercase()).collect());
-    let mut out = if std::io::stdout().is_terminal() {
-        // Paint header in bold (1)
-        let trimmed = raw_header.trim_end_matches('\n');
-        format!("{}\n", crate::banner::paint(trimmed, "1"))
-    } else {
-        raw_header
-    };
-    for row in cells {
-        out.push_str(&line(row));
+    let mut out = format!("{}\n", crate::banner::bold(&line(&headers)));
+    for row in &cells {
+        out.push_str(&format!("{}\n", line(row)));
     }
-    out
-}
-
-/// Shows every completed, failed or unverified explicit diagnostic check.
-fn checks(report: &SdkValue) -> ExitCode {
-    let mut shown = String::new();
-    let complete = report.get("complete") == Some(&SdkValue::Bool(true));
-    shown.push_str(if complete {
-        "Diagnostic coverage: complete\n"
-    } else {
-        "Diagnostic coverage: incomplete\n"
-    });
-    if let Some(SdkValue::List(checks)) = report.get("checks") {
-        for check in checks {
-            let outcome = check.get_text("outcome").unwrap_or("unknown");
-            let status = match check.get_text("severity") {
-                Some(severity) => format!("{outcome}/{severity}"),
-                None => outcome.to_owned(),
-            };
-            shown.push_str(&format!(
-                "{status:<12} {}: {}\n",
-                check.get_text("id").unwrap_or(""),
-                check.get_text("message").unwrap_or("")
-            ));
-            if let Some(fix) = check.get_text("fix").filter(|f| !f.is_empty()) {
-                shown.push_str(&format!("         suggested: {fix}\n"));
-            }
-            if outcome != "pass" && outcome != "skipped" {
-                if let Some(evidence) = check.get("evidence").filter(|v| **v != SdkValue::Null) {
-                    let evidence = json::print(evidence);
-                    let compact: String = evidence.chars().take(1024).collect();
-                    shown.push_str(&format!("         evidence: {compact}"));
-                    if evidence.chars().count() > 1024 {
-                        shown.push_str("... (use JSON for full evidence)");
-                    }
-                    shown.push('\n');
-                }
-            }
+    let beside: Vec<(String, String)> = (rows.iter().zip(&cells))
+        .flat_map(|(row, cells)| {
+            BESIDE.iter().filter_map(move |key| {
+                let said = row.get_text(key)?;
+                let named = match *key {
+                    "fix" => format!("fix {}:", cells[0]),
+                    _ => format!("{}:", cells[0]),
+                };
+                Some((named, said.to_owned()))
+            })
+        })
+        .collect();
+    if !beside.is_empty() {
+        out.push('\n');
+        let width = beside
+            .iter()
+            .map(|(n, _)| n.chars().count())
+            .max()
+            .unwrap_or(0);
+        for (named, said) in &beside {
+            out.push_str(&format!("{pad}{named:<width$} {said}\n"));
         }
     }
-    if report.get("truncated") == Some(&SdkValue::Bool(true)) {
-        shown.push_str("Report entries truncated.\n");
+    for flag in flags {
+        let named: Vec<String> = (rows.iter().zip(&cells))
+            .filter(|(row, _)| row.get(flag) == Some(&SdkValue::Bool(true)))
+            .map(|(_, cells)| cells[0].clone())
+            .collect();
+        if !named.is_empty() {
+            out.push_str(&format!("{pad}{}: {}\n", note(flag), named.join(", ")));
+        }
     }
-    if let Some(counts) = report.get("counts") {
-        shown.push_str(&format!("Check totals: {}\n", json::print(counts)));
-    }
-    print(&shown)
+    out
 }

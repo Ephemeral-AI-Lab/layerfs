@@ -26,7 +26,7 @@ pub mod r2;
 #[cfg(feature = "s3_api")]
 pub mod s3_api;
 
-pub use credentials::{CredentialRef, Credentials};
+pub use credentials::Credentials;
 pub use driver::{Driver, Listed, Metadata, Span, Stat};
 pub use error::RemoteError;
 pub use limits::Limits;

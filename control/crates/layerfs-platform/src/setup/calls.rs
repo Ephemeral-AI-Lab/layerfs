@@ -34,15 +34,54 @@ impl State {
     }
 }
 
-/// `machine.status` (O34): state, free disk, the provider tool's version and
-/// why the machine is down. A field a kind cannot report is `None`.
+/// A machine's status now (O34): what its provider reports, whether its
+/// worker answered, free disk, the provider tool's version and why the
+/// machine is down. A field a kind cannot report is `None`. [`Status::word`]
+/// and [`Status::reason`] say it in the call surface's state words
+/// (calls.json machine states), as `machine get --with live` does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Status {
+    /// What the provider reports of the VM or container itself; `Stopped`
+    /// when the provider did not answer (`kernel` is then `None`). A VM that
+    /// runs is `Running` here whether or not its worker answers.
     pub state: State,
+    /// What the provider said, `None` when it did not answer (the Docker
+    /// Engine is not running).
+    pub kernel: Option<State>,
+    /// Whether the worker at the spec's endpoint answered its hello, asked
+    /// only when the kernel runs: `Some(false)` when no endpoint was given.
+    /// `None` when not asked, and on a machine whose calls run in the
+    /// caller's process (it has no worker).
+    pub worker: Option<bool>,
     /// Free bytes of the data disk at `/layerfs/data`, as the guest sees them.
     pub free_disk: Option<u64>,
     pub tool_version: Option<String>,
     pub down_reason: Option<String>,
+}
+
+impl Status {
+    /// The state word: `broken` with a [`Status::reason`], `ready` when the
+    /// kernel runs and no worker was found silent, else `stopped`.
+    pub fn word(&self) -> &'static str {
+        match (self.reason(), self.kernel) {
+            (Some(_), _) => "broken",
+            (None, Some(State::Running)) => "ready",
+            (None, _) => "stopped",
+        }
+    }
+
+    /// Why it is broken, as calls.json's reason code: `engine_down` (the
+    /// provider did not answer), `missing`, `failed`, or `not_answering` (it
+    /// runs and its worker does not answer). `None` when it is not broken.
+    pub fn reason(&self) -> Option<&'static str> {
+        match self.kernel {
+            None => Some("engine_down"),
+            Some(State::Missing) => Some("missing"),
+            Some(State::Failed) => Some("failed"),
+            Some(State::Running) if self.worker == Some(false) => Some("not_answering"),
+            Some(State::Running | State::Stopped) => None,
+        }
+    }
 }
 
 /// The provider's own limit on the name of a `platform` VM on this host,
@@ -147,6 +186,8 @@ pub fn provider_within(spec: &Spec, deadline: Instant) -> Result<Status, Machine
         let state = adapter(spec.kind).provider_state(spec)?;
         Ok(Status {
             state,
+            kernel: Some(state),
+            worker: None,
             free_disk: None,
             tool_version: probe.version,
             down_reason: None,
@@ -234,35 +275,31 @@ fn guest_of(spec: &Spec) -> Result<Guest, MachineError> {
     adapter(spec.kind).guest(spec)
 }
 
-/// The status of a machine whose worker the host reaches through `spec.worker`:
-/// a kernel that runs with a worker that does not answer reads as stopped.
+/// The status of a machine whose worker the host reaches through
+/// `spec.worker`, asked once when the kernel runs: a kernel that runs with a
+/// worker that does not answer (or no endpoint) is `broken`
+/// `not_answering`, never `stopped` (calls.json machine states).
 pub(crate) fn with_worker(
     spec: &Spec,
     kernel: State,
     free_disk: Option<u64>,
     tool_version: Option<String>,
 ) -> Status {
-    let (state, down_reason) = match kernel {
-        State::Running if worker::answers(spec.worker.as_ref()) => (State::Running, None),
-        State::Running => (
-            State::Stopped,
-            Some("the machine runs but its worker does not answer".to_owned()),
-        ),
-        State::Stopped => (State::Stopped, Some("the machine is stopped".to_owned())),
-        State::Failed => (
-            State::Failed,
-            Some("the provider reports it broken".to_owned()),
-        ),
-        State::Missing => (
-            State::Missing,
-            Some("the provider holds no such VM".to_owned()),
-        ),
+    let worker = (kernel == State::Running).then(|| worker::answers(spec.worker.as_ref()));
+    let down_reason = match (kernel, worker) {
+        (State::Running, Some(true)) => None,
+        (State::Running, _) => Some("the machine runs but its worker does not answer"),
+        (State::Stopped, _) => Some("the machine is stopped"),
+        (State::Failed, _) => Some("the provider reports it broken"),
+        (State::Missing, _) => Some("the provider holds no such VM"),
     };
     Status {
-        state,
+        state: kernel,
+        kernel: Some(kernel),
+        worker,
         free_disk,
         tool_version,
-        down_reason,
+        down_reason: down_reason.map(str::to_owned),
     }
 }
 

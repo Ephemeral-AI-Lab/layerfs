@@ -51,11 +51,7 @@ fn the_last_call_leaves_an_open_store_with_an_empty_log() {
         ok(
             &home,
             "branch.fork",
-            &[
-                ("project", "shop/api"),
-                ("name", name),
-                ("from_branch", "main"),
-            ],
+            &[("project", "shop/api"), ("name", name), ("from", "main")],
         );
     }
     let file = paths::store_file(&home, "shop");

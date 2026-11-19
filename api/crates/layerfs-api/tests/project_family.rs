@@ -120,11 +120,15 @@ fn init_files_branches_move_and_remove() {
     let args = SdkValue::map([
         ("project", t("shop/api")),
         ("folder", t(&folder.display().to_string())),
+        ("detail", SdkValue::Bool(true)),
     ]);
     let made = layerfs_api::call(Some(&home), "project.init", args, &mut |e| events.push(e))
         .unwrap_or_else(|e| panic!("init: {} {}", e.code, e.message));
     assert_eq!(made.get_text("project"), Some("shop/api"));
     assert_eq!(made.get_text("machine"), Some("native"));
+    assert_eq!(made.get_text("outcome"), Some("created"));
+    // `commit` is main's first Layer, its full id
+    assert_eq!(made.get_text("commit").map(str::len), Some(66), "{made:?}");
     // in process on native, progress is a push's (#536 §10b): no `send`,
     // null counts, nothing but `phase`, `done` and `total`
     let expected: Vec<SdkValue> = ["check", "install", "record"]
@@ -150,8 +154,8 @@ fn init_files_branches_move_and_remove() {
     // A named Store the home does not record is `NoSuchStore`, the same code
     // every other project call reports (spec §4.2).
     let refused = call(&home, "project.list", &[("store", t("nope"))]).unwrap_err();
-    assert_eq!(refused.0, "NoSuchStore", "{refused:?}");
-    // project.list pages with `has_more` (#611)
+    assert_eq!(refused.0, "NotFound", "{refused:?}");
+    // project.list pages by cursor (call surface 2.0)
     let web = tempdir("web");
     std::fs::write(web.join("index.html"), "<h1>shop</h1>\n").unwrap();
     ok(
@@ -162,30 +166,25 @@ fn init_files_branches_move_and_remove() {
             ("folder", t(&web.display().to_string())),
         ],
     );
-    let page = ok(&home, "project.list", &[("page_size", SdkValue::Int(1))]);
+    let page = ok(&home, "project.list", &[("limit", SdkValue::Int(1))]);
     let SdkValue::List(one) = page.get("items").unwrap() else {
         panic!("{page:?}")
     };
     assert_eq!(one.len(), 1);
-    assert_eq!(page.get("has_more"), Some(&SdkValue::Bool(true)));
-    assert_eq!(page.get("next_page_pos"), Some(&SdkValue::Int(1)));
+    let next = page.get("next_cursor").cloned().expect("a next page");
     let page = ok(
         &home,
         "project.list",
-        &[
-            ("page_size", SdkValue::Int(1)),
-            ("page_pos", SdkValue::Int(1)),
-        ],
+        &[("limit", SdkValue::Int(1)), ("cursor", next)],
     );
     let SdkValue::List(two) = page.get("items").unwrap() else {
         panic!("{page:?}")
     };
     assert_eq!(two.len(), 1);
-    assert_eq!(page.get("has_more"), Some(&SdkValue::Bool(false)));
-    assert_eq!(page.get("next_page_pos"), Some(&SdkValue::Null));
+    assert_eq!(page.get("next_cursor"), None, "the last page");
     assert_eq!(
-        [one[0].get_text("name"), two[0].get_text("name")],
-        [Some("api"), Some("web")]
+        [one[0].get_text("project"), two[0].get_text("project")],
+        [Some("shop/api"), Some("shop/web")]
     );
     let _ = std::fs::remove_dir_all(web);
 
@@ -199,7 +198,7 @@ fn init_files_branches_move_and_remove() {
     ok(
         &home,
         "branch.fork",
-        &[p(), ("name", t("fix")), ("from_branch", t("main"))],
+        &[p(), ("name", t("fix")), ("from", t("main"))],
     );
     ok(
         &home,
@@ -217,71 +216,77 @@ fn init_files_branches_move_and_remove() {
         panic!("{commits:?}")
     };
     assert_eq!(commits.len(), 1);
-    let id = commits[0].get_text("id").unwrap().to_owned();
-    let got = ok(
-        &home,
-        "commit.get",
-        &[p(), ("branch", t("fix")), ("commit", t(&id))],
-    );
-    assert_eq!(got.get_text("id"), Some(id.as_str()));
-    let diff = ok(
-        &home,
-        "branch.diff",
-        &[
-            p(),
-            ("from_branch", t("main")),
-            ("to_branch", t("fix")),
-            ("paths_only", SdkValue::Bool(true)),
-        ],
-    );
+    let id = commits[0].get_text("commit").unwrap().to_owned();
+    assert_eq!(commits[0].get_text("message"), Some("add NEW"));
+    let detail = || ("detail", SdkValue::Bool(true));
+    let got = ok(&home, "commit.get", &[p(), ("commit", t(&id)), detail()]);
+    assert_eq!(got.get_text("commit"), Some(id.as_str()));
+    assert_eq!(got.get_text("branch"), Some("fix"));
+    // fix compared from its fork point by default
+    let diff = ok(&home, "commit.diff", &[p(), ("ref", t("fix"))]);
     assert!(
-        layerfs_api::json::print(&diff).contains("NEW.md"),
+        layerfs_api::json::print(&diff).contains("/NEW.md"),
         "{diff:?}"
     );
 
     // main lists its published Layers, where a Layer id stands for a Commit
-    // (S §3.3); a short identity is an identity fault, not a Branch fault
-    // (#611). The publish below advances main to fix's head before fix is
-    // edited again.
-    let main = ok(&home, "commit.list", &[p(), ("branch", t("main"))]);
+    // (S §3.3); a too-short identity is no Commit (#611). The publish
+    // below advances main to fix's head before fix is edited again.
+    let main = ok(
+        &home,
+        "commit.list",
+        &[p(), ("branch", t("main")), detail()],
+    );
     let SdkValue::List(layers) = main.get("items").unwrap() else {
         panic!("{main:?}")
     };
     assert_eq!(layers.len(), 1);
     assert_eq!(layers[0].get("parent"), Some(&SdkValue::Null));
-    let base_layer = layers[0].get_text("id").unwrap().to_owned();
+    assert_eq!(layers[0].get_text("via"), Some("init"));
+    let base_layer = layers[0].get_text("commit").unwrap().to_owned();
     ok(&home, "branch.publish", &[p(), ("branch", t("fix"))]);
-    let main = ok(&home, "commit.list", &[p(), ("branch", t("main"))]);
+    let main = ok(
+        &home,
+        "commit.list",
+        &[p(), ("branch", t("main")), detail()],
+    );
     let SdkValue::List(layers) = main.get("items").unwrap() else {
         panic!("{main:?}")
     };
     assert_eq!(layers.len(), 2);
     assert_eq!(layers[0].get_text("source_commit"), Some(id.as_str()));
     assert_eq!(layers[0].get_text("source_branch"), Some("fix"));
-    let short: String = id.chars().take(12).collect();
+    assert_eq!(layers[0].get_text("via"), Some("publish"));
+    // seven characters are too few for a Commit: `commit.get` refuses them
+    // as input, and `commit.diff` reads them as a Branch name, which is absent
+    let short: String = id.chars().take(7).collect();
     assert_eq!(
-        call(
-            &home,
-            "commit.diff",
-            &[
-                p(),
-                ("from_commit", t(&short)),
-                ("to_commit", t(&base_layer))
-            ]
-        )
-        .unwrap_err()
-        .0,
+        call(&home, "commit.get", &[p(), ("commit", t(&short))])
+            .unwrap_err()
+            .0,
         "InvalidInput"
     );
-    ok(
+    assert_eq!(
+        call(&home, "commit.diff", &[p(), ("ref", t(&short))])
+            .unwrap_err()
+            .0,
+        "NotFound"
+    );
+    // a Commit by a prefix, from its parent (here main's first publication)
+    let diff = ok(
         &home,
         "commit.diff",
-        &[
-            p(),
-            ("from_commit", t(&base_layer)),
-            ("to_commit", t(&base_layer)),
-        ],
+        &[p(), ("ref", t(&id[..12])), detail()],
     );
+    assert_eq!(diff.get_text("from"), Some(base_layer.as_str()), "{diff:?}");
+    // main's first publication, from the empty tree
+    let first = ok(
+        &home,
+        "commit.diff",
+        &[p(), ("ref", t(&base_layer)), detail()],
+    );
+    assert_eq!(first.get("from"), Some(&SdkValue::Null), "{first:?}");
+    assert!(layerfs_api::json::print(&first).contains("/README.md"));
 
     ok(
         &home,
@@ -290,8 +295,8 @@ fn init_files_branches_move_and_remove() {
             p(),
             ("branch", t("fix")),
             ("path", t("/NEW.md")),
-            ("old", t("new")),
-            ("new", t("newer")),
+            ("old_string", t("new")),
+            ("new_string", t("newer")),
         ],
     );
     let read = ok(
@@ -312,12 +317,11 @@ fn init_files_branches_move_and_remove() {
             p(),
             ("destination", t(&export_dir.display().to_string())),
             ("branch", t("fix")),
+            ("detail", SdkValue::Bool(true)),
         ],
     );
-    assert_eq!(exported.get_text("project"), Some("shop/api"));
-    assert_eq!(exported.get_text("branch"), Some("fix"));
-    assert_eq!(exported.get_int("files"), Some(3));
-    assert_eq!(exported.get_int("directories"), Some(1));
+    assert_eq!(exported.get_int("file_count"), Some(3));
+    assert_eq!(exported.get_int("dir_count"), Some(1));
     assert_eq!(
         std::fs::read_to_string(export_dir.join("NEW.md")).unwrap(),
         "newer\n"
@@ -329,8 +333,8 @@ fn init_files_branches_move_and_remove() {
     std::thread::sleep(std::time::Duration::from_millis(10));
     ok(
         &home,
-        "store.push",
-        &[("name", t("shop")), ("machine", t("box"))],
+        "store.move",
+        &[("store", t("shop")), ("machine", t("box"))],
     );
     let read = ok(
         &home,
@@ -342,15 +346,10 @@ fn init_files_branches_move_and_remove() {
     // `project.delete` retires the project in the Store under `box` and
     // removes both entries; its history stays until a compaction.
     let deleted = ok(&home, "project.delete", &[p()]);
-    assert_eq!(deleted.get_text("kind"), Some("Removed"));
-    assert_eq!(deleted.get_text("project"), Some("shop/api"));
-    assert_eq!(
-        deleted.get("home_entry_removed"),
-        Some(&SdkValue::Bool(true))
-    );
+    assert_eq!(deleted, SdkValue::map([("ok", SdkValue::Bool(true))]));
     assert_eq!(
         call(&home, "project.get", &[p()]).unwrap_err().0,
-        "NoSuchProject"
+        "NotFound"
     );
 
     std::fs::remove_dir_all(home).unwrap();
@@ -387,7 +386,7 @@ fn a_private_home_may_be_passable_and_nothing_more() {
     for (name, open) in [("a", 0o750), ("b", 0o711), ("c", 0o705), ("d", 0o702)] {
         set(&home, open);
         let (code, message) = init(name).unwrap_err();
-        assert_eq!(code, "Unauthorized", "{open:o}: {message}");
+        assert_eq!(code, "Unavailable", "{open:o}: {message}");
         assert!(
             message.contains("must be owned by this user and private"),
             "{message}"
@@ -444,7 +443,7 @@ fn project_init_name_collision_reports_holder_and_source() {
             ("folder", t(&folder.display().to_string())),
         ],
     );
-    assert_eq!(home_taken.code, "NameTaken", "{}", home_taken.message);
+    assert_eq!(home_taken.code, "Exists", "{}", home_taken.message);
     let holder = home_taken.detail.get("holder").expect("holder detail");
     assert_eq!(holder.get_text("kind"), Some("project"));
     assert_eq!(holder.get_text("name"), Some("api"));
@@ -461,7 +460,7 @@ fn project_init_name_collision_reports_holder_and_source() {
             ("folder", t(&folder.display().to_string())),
         ],
     );
-    assert_eq!(store_taken.code, "NameTaken", "{}", store_taken.message);
+    assert_eq!(store_taken.code, "Exists", "{}", store_taken.message);
     let holder = store_taken.detail.get("holder").expect("holder detail");
     assert_eq!(holder.get_text("kind"), Some("project"));
     assert_eq!(holder.get_text("name"), Some("api"));
@@ -494,7 +493,7 @@ fn a_retired_source_branch_still_renders_on_its_layers() {
         &[
             ("project", t("shop/api")),
             ("name", t("work")),
-            ("from_branch", t("main")),
+            ("from", t("main")),
         ],
     );
     ok(
@@ -522,7 +521,7 @@ fn a_retired_source_branch_still_renders_on_its_layers() {
     let SdkValue::List(layers) = main.get("items").expect("items") else {
         panic!("{main:?}")
     };
-    let id = layers[0].get_text("id").expect("layer id").to_owned();
+    let id = layers[0].get_text("commit").expect("layer id").to_owned();
     assert_eq!(
         layers[0].get_text("source_branch"),
         Some("work"),
@@ -557,6 +556,7 @@ fn a_retired_source_branch_still_renders_on_its_layers() {
             ("project", t("shop/api")),
             ("branch", t("main")),
             ("commit", t(&id)),
+            ("detail", SdkValue::Bool(true)),
         ],
     );
     assert_eq!(
@@ -571,7 +571,7 @@ fn a_retired_source_branch_still_renders_on_its_layers() {
         &[("project", t("shop/api")), ("branch", t("work"))],
     )
     .unwrap_err();
-    assert_eq!(code, "NoSuchBranch", "{message}");
+    assert_eq!(code, "NotFound", "{message}");
 
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);

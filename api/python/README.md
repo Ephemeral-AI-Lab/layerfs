@@ -3,7 +3,7 @@
 > **Status:** Current implementation guide for LayerFS 2.0 (#533 step 16);
 > not a release receipt.
 
-The same twelve families as the [JavaScript package](../README.md), from the
+The same ten families as the [JavaScript package](../README.md), from the
 same call table, through the PyO3 module `layerfs._native`
 (`api/crates/layerfs-python`). Calls are synchronous; `layerfs.aio` has
 the same calls as coroutines (O19).
@@ -22,8 +22,8 @@ lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/api", "folder": "
 
 Positionals follow the table's order; optional positionals and options may
 be keywords. Results are JSON values (dicts with snake_case keys for most
-calls); file content is `str` or `bytes`. A refusal raises `layerfs.LayerFSError` with `.code`, `.message`
-and `.detail`. Function options (`on_progress`, `stdout`, `stderr`) receive
+calls); file content is `str` or `bytes`. A refusal raises `layerfs.LayerFSError` with `.code` (one of thirteen public codes), `.message`,
+`.fix` and `.fields` (what the next call needs); `.detail` is set only when the call passed `detail=True`. Function options (`on_progress`, `stdout`, `stderr`) receive
 the call's events.
 
 A value JSON cannot hold (NaN, Infinity, a lone surrogate, a map with a
@@ -36,7 +36,7 @@ The package ships `py.typed` and `.pyi` stubs for `layerfs` and `layerfs.aio`:
 every call has typed keyword arguments (`on_progress`, `stdout` and `stderr`
 where the call declares them) and `aio` has the coroutine variants. The call
 table has argument kinds and no result schema, so every call returns the loose
-`Result` (a JSON value: a dict for most calls). `Scope`, `DoctorReport`,
+`Result` (a JSON value: a dict for most calls). `Scope`,
 `Progress`, `JSON` and `Result` are for annotations only (import them under
 `TYPE_CHECKING`; they are not defined at run time). The stubs of the families
 are generated from the table; after the table changes, rewrite them with the
