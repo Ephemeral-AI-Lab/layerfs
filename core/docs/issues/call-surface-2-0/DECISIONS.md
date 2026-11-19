@@ -664,3 +664,23 @@ holds the LayerFS data, and manage logins. Spec `tmp/pg-store-v23/SPEC.md` (owne
   5 s", evidence `step: handshake`) instead of reading `not_checked`, this computer's reach is
   recorded `failed` from that answer, and the server is not dialled a second time. A dial left
   waiting past the limit ends on its own thread when the server answers or the socket closes.
+
+## LF14 (follow-up round, 2026-11-20): a machine whose VM is gone lets what is on it go
+
+- **LF14** (area 10; extends LF10 and UI2-8 to `missing`) A machine whose record says a live read
+  found its provider holding no VM of its name (`broken` `missing`) is treated as a record with no
+  `vm_name` is: nothing on it can be reached again. Before, its fix `machine remove` was refused
+  `InUse` for the Stores and Sandboxes on it, `store remove` said "start it", and `machine start`
+  could not start it: a dead loop. Now:
+  - every view of its state (`machine get`, `machine list`, with and without `--with live`, the
+    home's tree, `machine doctor`'s `machine.provider`) and its remove's `InUse` refusal show the
+    chain `layerfs sandbox remove … && layerfs store remove … && layerfs machine remove <m>`;
+  - a call on a Store on it is refused `Unavailable` with `blocked_by {machine, reason: missing}`
+    (what `store get` shows) and that chain, nothing dialled;
+  - `machine start` is refused `Failed` ("its VM is gone"), with that chain;
+  - `store remove` and `sandbox remove` of what is on it go by their records alone, saying in
+    `left` that the file or daemon went with the VM;
+  - `machine remove` itself still asks the provider to delete the VM (a VM back under that name
+    is not leaked); a live read still probes the machine and mends the record if the VM is back.
+  A machine whose records say only `stopped` has to be read live first (the plugin's machine pages
+  do), since nothing short of the provider says the VM is gone.

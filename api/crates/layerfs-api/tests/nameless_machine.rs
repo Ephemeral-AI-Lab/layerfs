@@ -376,3 +376,119 @@ fn a_store_move_off_a_nameless_machine_is_unavailable_with_its_blocked_by() {
     assert_eq!(next, Some(&blocked_by), "{refused:?}");
     let _ = std::fs::remove_dir_all(home);
 }
+
+/// A machine whose VM a live read found gone (`missing`, area 10) while a
+/// Store and a Sandbox are recorded on it: before, `store remove` said
+/// "start it", `machine start` could not, and `machine remove` was refused
+/// `InUse` with no fix. Now every records view shows the chain, a Store call
+/// is `Unavailable` with `blocked_by {machine, reason: missing}` and that
+/// chain (LF10's shape), `machine start` is refused `Failed` with it, and
+/// the chain's holder steps go by their records alone, reaching nothing.
+#[test]
+fn a_machine_whose_vm_is_gone_lets_its_holders_go_by_their_records() {
+    let empty = tempdir("gone-path");
+    std::env::set_var("PATH", &empty);
+    std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");
+    std::env::set_var("HOME", &empty);
+    std::env::set_var("LAYERFS_BUNDLE", empty.join("missing"));
+    let home = tempdir("gone");
+    call(&home, "machine.list", &[]).unwrap();
+    // what a live read writes when the provider holds no VM of its name
+    write_entity(
+        &paths::machine_record(&home, "lost"),
+        &SdkValue::map([
+            ("name", t("lost")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-00000000-lost")),
+            ("state", t("stopped")),
+            ("reason", t("missing")),
+            (
+                "error",
+                t("its provider holds no VM named layerfs-00000000-lost"),
+            ),
+        ]),
+    )
+    .unwrap();
+    write_record(
+        &paths::store_record(&home, "shop"),
+        &SdkValue::map([
+            ("name", t("shop")),
+            ("kind", t("sqlite")),
+            ("machine", t("lost")),
+        ]),
+    )
+    .unwrap();
+    write_record(
+        &paths::project_record(&home, "shop", "app"),
+        &SdkValue::map([("created", SdkValue::Int(1))]),
+    )
+    .unwrap();
+    write_record(
+        &paths::sandbox_record(&home, "sb"),
+        &SdkValue::map([
+            ("name", t("sb")),
+            ("id", t("sb")),
+            ("machine", t("lost")),
+            ("project", t("shop/app")),
+        ]),
+    )
+    .unwrap();
+    let chain =
+        "layerfs sandbox remove sb && layerfs store remove shop && layerfs machine remove lost";
+    let machine = [("machine", t("lost"))];
+    for got in [
+        call(&home, "machine.get", &machine).unwrap(),
+        short(&home, "machine.get", &machine),
+    ] {
+        assert_eq!(got.get_text("reason"), Some("missing"), "{got:?}");
+        assert_eq!(got.get_text("fix"), Some(chain), "{got:?}");
+    }
+    let listed = call(&home, "machine.list", &[]).unwrap();
+    assert_eq!(item(&listed, "lost").get_text("fix"), Some(chain));
+
+    let store = call(&home, "store.get", &[("store", t("shop"))]).unwrap();
+    let blocked_by = store.get("blocked_by").expect("blocked_by").clone();
+    assert_eq!(blocked_by.get_text("reason"), Some("missing"), "{store:?}");
+    let compact = call(&home, "store.compact", &[("store", t("shop"))]).unwrap_err();
+    assert_eq!(compact.code, "Unavailable", "{compact:?}");
+    assert!(
+        compact
+            .message
+            .contains("Store shop is blocked by machine lost (missing)"),
+        "{compact:?}"
+    );
+    assert_eq!(compact.detail.get_text("fix"), Some(chain), "{compact:?}");
+    let next = (compact.detail.get("next")).and_then(|next| next.get("blocked_by"));
+    assert_eq!(next, Some(&blocked_by), "{compact:?}");
+
+    let start = call(&home, "machine.start", &machine).unwrap_err();
+    assert_eq!(start.code, "Failed", "{start:?}");
+    assert!(start.message.contains("VM is gone"), "{start:?}");
+    assert_eq!(start.detail.get_text("fix"), Some(chain), "{start:?}");
+    let refused = call(&home, "machine.remove", &machine).unwrap_err();
+    assert_eq!(refused.code, "InUse", "{refused:?}");
+    assert_eq!(refused.detail.get_text("fix"), Some(chain), "{refused:?}");
+
+    let steps: Vec<&str> = chain.split(" && ").collect();
+    let sandbox = step(&home, steps[0]);
+    assert_eq!(sandbox.get_text("outcome"), Some("already_gone"));
+    let left = texts(sandbox.get("left"));
+    assert!(left[0].contains("VM is gone"), "{left:?}");
+    assert!(!paths::sandbox_record(&home, "sb").exists());
+    let store = step(&home, steps[1]);
+    assert_eq!(store.get_text("outcome"), Some("removed"));
+    let left = texts(store.get("left"));
+    assert!(left[0].contains("VM is gone"), "{left:?}");
+    assert!(!paths::store_dir(&home, "shop").exists());
+    // nothing left on it: its fix is its own remove, no longer refused
+    // `InUse` (with no provider tool here it cannot delete a VM)
+    let got = call(&home, "machine.get", &machine).unwrap();
+    assert_eq!(got.get_text("fix"), Some("layerfs machine remove lost"));
+    let remove = call(&home, "machine.remove", &machine);
+    assert!(
+        remove.as_ref().map_or_else(|r| r.code != "InUse", |_| true),
+        "{remove:?}"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(empty);
+}

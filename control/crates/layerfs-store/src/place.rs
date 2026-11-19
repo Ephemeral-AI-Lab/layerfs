@@ -49,11 +49,12 @@ pub fn plan(home: &Path, store: &StoreRef) -> Result<Executor> {
 }
 
 /// A Store call's refusal for its machine whose record has no `vm_name`
-/// (LF10): the Store reads `blocked` by that machine, `outdated` (`store
-/// list`), so the call is `Unavailable`, as for the machine's other
-/// not-ready states, with that `blocked_by` beside it and the machine's
-/// own fix, which the call boundary widens to the chain of what is on it
-/// (UI2-8). Any other refusal is kept.
+/// (LF10) or whose VM a live read found gone (area 10): the Store reads
+/// `blocked` by that machine, `outdated` or `missing` (`store list`), so
+/// the call is `Unavailable`, as for the machine's other not-ready states,
+/// with that `blocked_by` beside it and the machine's own fix, which the
+/// call boundary widens to the chain of what is on it (UI2-8). Any other
+/// refusal is kept.
 pub(crate) fn blocked(store: &str, machine: &str, refusal: SdkRefusal) -> SdkRefusal {
     use layerfs_home::state::{BlockedBy, Reason};
     use layerfs_machine::record::{no_vm_name_fix, Holders};
@@ -61,13 +62,20 @@ pub(crate) fn blocked(store: &str, machine: &str, refusal: SdkRefusal) -> SdkRef
     if refusal.code != "Failed" || refusal.detail.get_text(FIX) != Some(bare.as_str()) {
         return refusal;
     }
+    // `vm_present`'s refusal says the VM is gone; `provider_name`'s that
+    // the record has no `vm_name`
+    let reason = match refusal.message.contains("'s VM is gone") {
+        true => Reason::Missing,
+        false => Reason::Outdated,
+    };
     let by = BlockedBy {
         thing: "machine",
         handle: machine.to_owned(),
-        reason: Reason::Outdated.word(),
+        reason: reason.word(),
     };
     let message = format!(
-        "Store {store} is blocked by machine {machine} (outdated): {}",
+        "Store {store} is blocked by machine {machine} ({}): {}",
+        reason.word(),
         refusal.message
     );
     let code = "Unavailable".to_owned();
@@ -118,6 +126,8 @@ pub fn on_machine_read(home: &Path, machine: &str) -> Result<Executor> {
         if record.nameless() {
             record.provider_name()?;
         }
+        // a VM a live read found gone: likewise, nothing is dialled (area 10)
+        record.vm_present()?;
     }
     Ok(Executor::Worker(Worker {
         home: home.to_owned(),

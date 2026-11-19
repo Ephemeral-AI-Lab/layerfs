@@ -97,12 +97,18 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
     // nothing on that machine is reached, its worker included
     let machine = found.machine();
     let on = layerfs_machine::record::MachineRecord::read(&home, machine)?;
-    if on.is_some_and(|record| record.nameless()) {
-        let first = format!(
-            "machine {machine}'s record has no 2.0 name, so nothing on it was touched: the \
-             Sandbox's daemon and run folder there, if any, stay in the VM or container an \
-             earlier build made, which no call reaches"
-        );
+    if let Some(on) = on.filter(|record| record.gone()) {
+        let first = match on.nameless() {
+            true => format!(
+                "machine {machine}'s record has no 2.0 name, so nothing on it was touched: the \
+                 Sandbox's daemon and run folder there, if any, stay in the VM or container an \
+                 earlier build made, which no call reaches"
+            ),
+            false => format!(
+                "machine {machine}'s VM is gone, so only the Sandbox's records were removed: \
+                 its daemon and run folder were in that VM, which its provider no longer holds"
+            ),
+        };
         return forget(&home, events, name, first, Worker::Skip);
     }
     if let Some(unnamed) = foreign(&home, &found)? {

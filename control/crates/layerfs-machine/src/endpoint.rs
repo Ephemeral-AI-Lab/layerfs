@@ -170,6 +170,9 @@ fn start(
     related: Related,
     events: &mut Events<'_>,
 ) -> Result<bool> {
+    machine
+        .vm_present()
+        .map_err(|r| related.nameless_fix(home, name, r))?;
     let mut spec = record::spec(home, machine).map_err(|r| related.nameless_fix(home, name, r))?;
     // the docker worker's container runs the bundle's image when the
     // machine names none (P5)

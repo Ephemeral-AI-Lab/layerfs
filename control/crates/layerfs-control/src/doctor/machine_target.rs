@@ -354,10 +354,14 @@ impl Machine<'_> {
             Some(State::Missing) => {
                 let message = format!("its provider holds no VM named {}", spec.vm_name);
                 self.checks.fail(ID, message);
-                self.checks.fix(
-                    ID,
-                    format!("layerfs machine remove {name}", name = shell_word(name)),
-                );
+                // the line that removes what is on it first, as its
+                // remove's `InUse` refusal carries (area 10)
+                let held = crate::inventory::Held::read(self.home, name);
+                let fix = match held {
+                    Ok(held) => layerfs_machine::record::no_vm_name_fix(name, held.holders()),
+                    Err(_) => format!("layerfs machine remove {name}", name = shell_word(name)),
+                };
+                self.checks.fix(ID, fix);
                 Some("missing")
             }
             Some(State::Failed) => {

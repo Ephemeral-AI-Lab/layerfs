@@ -8,7 +8,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{observed, paths};
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::{failed, with_fix, Outcome};
-use layerfs_home::state::State;
+use layerfs_home::state::{Reason, State};
 use layerfs_home::time::iso;
 use std::path::Path;
 
@@ -57,7 +57,24 @@ pub(super) fn summary(
     };
     let file = paths::machine_record(home, record.name());
     let (state, message, observed) = match seen {
-        Some(seen) => (seen.state.clone(), seen.message.clone(), seen.at),
+        // a VM a live read found gone shows the line that removes what is
+        // on it first, as its records do afterwards (area 10)
+        Some(seen) => match &seen.state {
+            State::Broken {
+                reason: Reason::Missing,
+                ..
+            } => {
+                let held = Holders {
+                    sandboxes: &sandboxes,
+                    stores: &stores,
+                    hosted: &[],
+                };
+                let fix = super::record::no_vm_name_fix(record.name(), held);
+                let state = State::broken(Reason::Missing, Some(&fix));
+                (state, seen.message.clone(), seen.at)
+            }
+            state => (state.clone(), seen.message.clone(), seen.at),
+        },
         None => {
             // a record with no `vm_name` shows the line that removes what
             // is on it first; the old Firecracker records it hosted are

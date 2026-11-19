@@ -177,7 +177,7 @@ fn held(
         sandboxes: on.map(|s| s.name().to_owned()).collect(),
         ..inventory::Held::default()
     };
-    if record.is_some_and(MachineRecord::nameless) {
+    if record.is_some_and(MachineRecord::gone) {
         let on = stores.iter().filter(|s| placed(s).as_deref() == Some(name));
         held.stores = on.map(|s| s.name().to_owned()).collect();
         let hosted = machines
