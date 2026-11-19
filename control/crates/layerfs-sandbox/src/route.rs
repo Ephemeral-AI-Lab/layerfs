@@ -247,7 +247,20 @@ pub fn reach(
     local: Local,
 ) -> std::result::Result<Outcome, Unreached> {
     let mut unreached = None;
-    let outcome = host_op(home, events, record, asked.into(), local, &mut unreached);
+    let asked = asked.into();
+    let create = asked.call.op() == Op::SandboxCreate;
+    let outcome = host_op(home, events, record, asked, local, &mut unreached);
+    // a PostgreSQL Sandbox made on a machine proves the machine reached its
+    // Store (spec v23 V23-2): recorded here, after the reply, best effort;
+    // a sqlite Store's record is left alone
+    if let (true, Ok(_), Some((store, _))) = (
+        create,
+        &outcome,
+        record.project().and_then(|p| p.split_once('/')),
+    ) {
+        let reached = layerfs_store::observed::Reach::reached();
+        layerfs_store::observed::record(home, store, Some(record.machine()), &reached);
+    }
     match unreached {
         Some(unreached) => Err(unreached),
         None => Ok(outcome),

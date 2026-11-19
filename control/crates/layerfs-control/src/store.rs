@@ -85,6 +85,35 @@ pub fn machine_state(home: &Path, name: &str) -> Result<layerfs_home::state::Sta
     }
 }
 
+/// Every Sandbox's `(store, machine)` from the Sandbox records
+/// ([`layerfs_store::get::Sandboxes`]): the machines a PostgreSQL Store's
+/// `connections` name for their Sandboxes. A record that cannot be read
+/// names none.
+pub fn sandbox_stores(home: &Path) -> Vec<(String, String)> {
+    let sandboxes = inventory::sandboxes(home).unwrap_or_default().into_iter();
+    sandboxes
+        .filter_map(|sandbox| {
+            let (store, _) = sandbox.project()?.split_once('/')?;
+            Some((store.to_owned(), sandbox.machine().to_owned()))
+        })
+        .collect()
+}
+
+/// What the Store reads take from the other entities: each machine's
+/// state ([`machine_state`]) and the Sandboxes' Stores
+/// ([`sandbox_stores`]).
+pub fn reads() -> (
+    layerfs_store::state::Machines<'static>,
+    layerfs_store::get::Sandboxes<'static>,
+) {
+    (&machine_state, &sandbox_stores)
+}
+
+/// The machines with a Sandbox of Store `store`.
+fn sandboxes_of(home: &Path, store: &str) -> Vec<String> {
+    layerfs_store::get::sandbox_machines(&sandbox_stores(home), store)
+}
+
 /// `store.remove`: a sqlite Store no Sandbox uses, with its file.
 pub fn remove(home: &Path, name: &StoreName) -> Outcome {
     layerfs_store::sqlite::remove::remove(home, name, RELATED)
@@ -99,18 +128,21 @@ pub fn move_to(home: &Path, events: &mut Events<'_>, store: &str, machine: &str)
 /// `store.disconnect(store, { machine })`: without `machine`, forget a
 /// PostgreSQL Store (its data stays), refused `InUse` while a process
 /// holds it or a Sandbox of its projects exists; with it, remove that
-/// machine's own address, after which it dials the Store's again
-/// (`NotFound` when it has none). A sqlite Store is `InvalidInput`, naming
-/// `store remove`.
+/// machine's own address, after which it dials the Store's again, and
+/// forget what was seen of its reach (spec v23): `NotFound` when it has
+/// neither. A sqlite Store is `InvalidInput`, naming `store remove`.
 pub fn disconnect(home: &Path, name: &StoreName, machine: Option<&MachineName>) -> Outcome {
     let Some(machine) = machine.map(|m| m.as_str()) else {
         return connect::disconnect(home, name, RELATED);
     };
     let record = check::postgresql_record(home, name)?;
-    if record.own_connection(machine).is_none() {
+    let seen = layerfs_store::observed::read(home, name)
+        .of(machine)
+        .is_some();
+    if record.own_connection(machine).is_none() && !seen {
         return Err(refused(
             "NotFound",
-            format!("machine {machine} has no address of its own for Store {name}"),
+            format!("machine {machine} has no address of its own for Store {name}, and none was seen connecting"),
         ));
     }
     check::save_own(
@@ -155,7 +187,7 @@ pub fn connect(
         ));
     }
     let Some(machine) = machine.map(|m| m.as_str()) else {
-        return connect::readdress(home, request);
+        return connect::readdress(home, request, &sandboxes_of(home, name));
     };
     if request.auth.is_some() {
         let uses = record.text("auth").unwrap_or("no saved login");
@@ -172,10 +204,18 @@ pub fn connect(
         url: Some(request.url.clone()),
     };
     let trial = record.clone().with_own_connection(machine, &own);
-    check_from(home, events, &trial, machine).1?;
+    let checked = check_from(home, events, &trial, machine).1?;
     check::save_own(home, &request.store, machine, &own, record.binding())?;
+    // its check is what was seen of the machine's reach (spec v23 V23-2)
+    let seen = layerfs_store::observed::Reach::of(&Ok(checked));
+    layerfs_store::observed::record(home, name, Some(machine), &seen);
     let saved = StoreRecord::of(home, name)?;
-    Ok(connect::answer(&saved, "updated", None))
+    Ok(connect::answer(
+        &saved,
+        "updated",
+        None,
+        &sandboxes_of(home, name),
+    ))
 }
 
 /// Refused unless machine `machine` exists and its platform runs

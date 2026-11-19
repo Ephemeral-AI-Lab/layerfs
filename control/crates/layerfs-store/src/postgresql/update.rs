@@ -45,7 +45,10 @@ fn changed(record: StoreRecord, request: &StoreUpdate) -> StoreRecord {
 /// Store's id (`Unavailable` otherwise). The record is written under the
 /// home lock and the Store's, `Conflict` when it was disconnected or
 /// connected to another database meanwhile; this process's open sessions
-/// on it are closed (`InUse` while one of its calls runs). A running
+/// on it are closed (`InUse` while one of its calls runs). The login is
+/// checked again under the lock, and the write leaves no old field (spec
+/// v23 V23-6): an update to the Store's own login is its `outdated` fix.
+/// A running
 /// Sandbox keeps the connection it started with. Answers `{ ok, outcome:
 /// updated, store, auth, synchronous_commit }`.
 pub fn update(home_dir: &Path, request: &StoreUpdate) -> Outcome {
@@ -76,8 +79,13 @@ pub fn update(home_dir: &Path, request: &StoreUpdate) -> Outcome {
         ));
     };
     current.unblocked()?;
+    // the login again under the home lock, which `store remove-auth` takes:
+    // one removed while it was checked is not named (spec v23 V23-7)
+    if let Some(auth) = &request.auth {
+        login::saved(home_dir, auth)?;
+    }
     crate::open::close(&current.postgresql_key(home_dir, name))?;
-    let current = changed(current, request);
+    let current = changed(current, request).cleaned();
     current.write(home_dir)?;
     drop((store_lock, home_lock));
     let text = |key: &str| current.text(key).map_or(SdkValue::Null, SdkValue::text);

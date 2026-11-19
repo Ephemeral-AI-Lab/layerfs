@@ -55,7 +55,7 @@
   {
    "call": "home.get",
    "badge": "merged",
-   "note": "+ <code>machine.platforms</code> (<code>--with platforms</code>). Reads the home and changes nothing; it writes no call-log line. <code>state</code> is <code>ready</code>, or <code>broken</code> with <code>reason: missing</code> (no home yet, <code>fix: layerfs home init</code>) or <code>reason: outdated</code> (a folder that is not a LayerFS 2.0 home, which this build does not convert: <code>fix: mv &lt;home&gt; &lt;home&gt;.old &amp;&amp; layerfs home init</code>); a <code>layerfs.json</code> it cannot read is <code>reason: failed</code>. <code>generation</code> is a number that moves when any record in the home is written: a UI polls it and re-reads only when it moves. A live read (<code>--with live</code>, or <code>sandbox get</code>) writes a record only when the state word or its reason changes, and that write moves it; <code>observed_at</code> is kept beside the record in an observation file it does not cover. It does not move when the owner of a recorded <code>op</code> dies (a dead owner's op is ignored on read, with no write), nor for a Workspace the home does not record. <code>--with tree</code> is the whole home from records only, with no machine contacted: every machine with its sqlite Stores and its Sandboxes, then the PostgreSQL Stores and the buckets. A node holds what the records hold: a machine its <code>platform</code> (and <code>cpus</code>, <code>memory_bytes</code> where it has them), a Store its <code>engine</code> and <code>projects</code> (bare names, as <code>store get</code> answers them; a PostgreSQL Store also its <code>connections</code>), a Sandbox its <code>project</code>, <code>image</code> and <code>workspaces</code> (each <code>{workspace, branch}</code>), a bucket its <code>provider</code>. A node leaves <code>state</code> out when <code>ready</code>; the state is the last one its record holds, so a <code>blocked_by</code> can name <code>engine_down</code>, <code>not_answering</code>, <code>missing</code> or <code>unreachable</code> after a live read saw it. A project and a Workspace take their Store's or Sandbox's state. Workspaces are listed only where the home keeps their records (a Sandbox on <code>native</code>, or one reached directly); elsewhere the node says <code>workspaces_not_listed:true</code> while that machine is ready. On a stopped machine a Store and a Sandbox answer <code>blocked</code> with <code>blocked_by</code> naming the machine, and no Workspaces are listed. Leftovers are not a section here: LayerFS removes them itself where nothing owns them (v20). The long form's <code>bundle.source</code> says where the Linux bundle this build would deploy was found: <code>env:LAYERFS_BUNDLE</code>, <code>runtime</code> (an installed runtime's own, <code>&lt;runtime&gt;/bundle/linux-&lt;arch&gt;/</code> beside <code>&lt;runtime&gt;/bin/layerfs</code>, chosen after <code>LAYERFS_BUNDLE</code> and before the cache) or <code>cache</code>",
+   "note": "+ <code>machine.platforms</code> (<code>--with platforms</code>). Reads the home and changes nothing; it writes no call-log line. <code>state</code> is <code>ready</code>, or <code>broken</code> with <code>reason: missing</code> (no home yet, <code>fix: layerfs home init</code>) or <code>reason: outdated</code> (a folder that is not a LayerFS 2.0 home, which this build does not convert: <code>fix: mv &lt;home&gt; &lt;home&gt;.old &amp;&amp; layerfs home init</code>); a <code>layerfs.json</code> it cannot read is <code>reason: failed</code>. <code>generation</code> is a number that moves when any record in the home is written: a UI polls it and re-reads only when it moves. A live read (<code>--with live</code>, or <code>sandbox get</code>) writes a record only when the state word or its reason changes, and that write moves it; <code>observed_at</code> is kept beside the record in an observation file it does not cover. It does not move when the owner of a recorded <code>op</code> dies (a dead owner's op is ignored on read, with no write), nor for a Workspace the home does not record. <code>--with tree</code> is the whole home from records only, with no machine contacted: every machine with its sqlite Stores and its Sandboxes, then the PostgreSQL Stores and the buckets. A node holds what the records hold: a machine its <code>platform</code> (and <code>cpus</code>, <code>memory_bytes</code> where it has them), a Store its <code>engine</code> and <code>projects</code> (bare names, as <code>store get</code> answers them; a PostgreSQL Store also its <code>connections</code>, <code>store get</code>'s rows, spec v23), a Sandbox its <code>project</code>, <code>image</code> and <code>workspaces</code> (each <code>{workspace, branch}</code>), a bucket its <code>provider</code>. A node leaves <code>state</code> out when <code>ready</code>; the state is the last one its record holds, so a <code>blocked_by</code> can name <code>engine_down</code>, <code>not_answering</code>, <code>missing</code> or <code>unreachable</code> after a live read saw it. A project and a Workspace take their Store's or Sandbox's state. Workspaces are listed only where the home keeps their records (a Sandbox on <code>native</code>, or one reached directly); elsewhere the node says <code>workspaces_not_listed:true</code> while that machine is ready. On a stopped machine a Store and a Sandbox answer <code>blocked</code> with <code>blocked_by</code> naming the machine, and no Workspaces are listed. Leftovers are not a section here: LayerFS removes them itself where nothing owns them (v20). The long form's <code>bundle.source</code> says where the Linux bundle this build would deploy was found: <code>env:LAYERFS_BUNDLE</code>, <code>runtime</code> (an installed runtime's own, <code>&lt;runtime&gt;/bundle/linux-&lt;arch&gt;/</code> beside <code>&lt;runtime&gt;/bin/layerfs</code>, chosen after <code>LAYERFS_BUNDLE</code> and before the cache) or <code>cache</code>",
    "today": [
     "home.get",
     "machine.platforms"
@@ -158,7 +158,7 @@
       "stores",
       "buckets"
      ],
-     "help": "everything in the home, from its records only: `machines` (each with its sqlite `stores` and its `sandboxes`), `stores` (the PostgreSQL Stores, which live on no machine) and `buckets`. A node holds what the records hold and no more: a machine {machine, platform, cpus, memory_bytes}; a Store {store, engine, projects}, and a PostgreSQL Store also `connections` (the home's own address, then each machine with its own); a Sandbox {sandbox, project, image, workspaces}; a bucket {bucket, provider}; each with `state` and its companion when it is not ready. Each node's keys are in `nodes`",
+     "help": "everything in the home, from its records only: `machines` (each with its sqlite `stores` and its `sandboxes`), `stores` (the PostgreSQL Stores, which live on no machine) and `buckets`. A node holds what the records hold and no more: a machine {machine, platform, cpus, memory_bytes}; a Store {store, engine, projects}, and a PostgreSQL Store also `connections` (every side that connects, as `store get` answers them: this computer, then each machine with its own address, a reach seen or a Sandbox); a Sandbox {sandbox, project, image, workspaces}; a bucket {bucket, provider}; each with `state` and its companion when it is not ready. Each node's keys are in `nodes`",
      "nodes": {
       "machine": {
        "short": {
@@ -283,12 +283,52 @@
          "url"
         ],
         "sometimes": [
-         "machine"
+         "machine",
+         "reached"
         ]
        },
        "long": [
         "machine",
-        "url"
+        "url",
+        "own",
+        "server",
+        "reached",
+        "reach"
+       ]
+      },
+      "server": {
+       "short": {
+        "always": [
+         "host",
+         "port",
+         "database"
+        ],
+        "sometimes": []
+       },
+       "long": [
+        "host",
+        "port",
+        "database"
+       ]
+      },
+      "reach": {
+       "short": {
+        "always": [
+         "at",
+         "ok"
+        ],
+        "sometimes": [
+         "latency_ms",
+         "server_version",
+         "error"
+        ]
+       },
+       "long": [
+        "at",
+        "ok",
+        "latency_ms",
+        "server_version",
+        "error"
        ]
       }
      },
@@ -395,7 +435,33 @@
         "connections": [
          {
           "machine": null,
-          "url": "postgres://db.internal:5432/experiments"
+          "url": "postgres://db.internal:5432/experiments",
+          "own": false,
+          "server": {
+           "host": "db.internal",
+           "port": 5432,
+           "database": "experiments"
+          },
+          "reached": "ok",
+          "reach": {
+           "at": "2026-11-18T09:15:59Z",
+           "ok": true,
+           "latency_ms": 2,
+           "server_version": "17.6",
+           "error": null
+          }
+         },
+         {
+          "machine": "demo-build",
+          "url": "postgres://db.internal:5432/experiments",
+          "own": false,
+          "server": {
+           "host": "db.internal",
+           "port": 5432,
+           "database": "experiments"
+          },
+          "reached": null,
+          "reach": null
          }
         ],
         "state": "ready",
@@ -450,7 +516,7 @@
      "{\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182}",
      "no home yet: {\"home\":\"/Users/me/.layerfs\",\"state\":\"broken\",\"version\":\"2.0.0\",\"reason\":\"missing\",\"fix\":\"layerfs home init\"}",
      "an older layout: {\"home\":\"/Users/me/.layerfs\",\"state\":\"broken\",\"version\":\"2.0.0\",\"reason\":\"outdated\",\"fix\":\"mv /Users/me/.layerfs /Users/me/.layerfs.old && layerfs home init\"}",
-     "--with tree: {\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182,\"tree\":{\"machines\":[{\"machine\":\"native\",\"platform\":\"native\",\"stores\":[{\"store\":\"qv2-store\",\"engine\":\"sqlite\",\"projects\":[\"qv2-strata\",\"qv2-probe\"]}],\"sandboxes\":[{\"sandbox\":\"tests\",\"project\":\"qv2-store/qv2-strata\",\"image\":\"node:22\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\"}]}]},{\"machine\":\"demo-build\",\"platform\":\"lima\",\"cpus\":4,\"memory_bytes\":8589934592,\"sandboxes\":[{\"sandbox\":\"build-1\",\"project\":\"demo-experiments/abc\",\"image\":\"node:22\",\"workspaces_not_listed\":true}]},{\"machine\":\"docker\",\"platform\":\"docker\",\"state\":\"stopped\",\"stores\":[{\"store\":\"sim-website\",\"engine\":\"sqlite\",\"projects\":[\"website\"],\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}],\"sandboxes\":[{\"sandbox\":\"sim-1\",\"project\":\"sim-website/website\",\"image\":\"node:22\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}],\"stores\":[{\"store\":\"demo-experiments\",\"engine\":\"postgresql\",\"projects\":[\"abc\"],\"connections\":[{\"url\":\"postgres://db.internal:5432/experiments\"},{\"machine\":\"demo-build\",\"url\":\"postgres://10.0.2.2:5432/experiments\"}]}],\"buckets\":[{\"bucket\":\"r2-main\",\"provider\":\"r2\"}]}}"
+     "--with tree: {\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182,\"tree\":{\"machines\":[{\"machine\":\"native\",\"platform\":\"native\",\"stores\":[{\"store\":\"qv2-store\",\"engine\":\"sqlite\",\"projects\":[\"qv2-strata\",\"qv2-probe\"]}],\"sandboxes\":[{\"sandbox\":\"tests\",\"project\":\"qv2-store/qv2-strata\",\"image\":\"node:22\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\"}]}]},{\"machine\":\"demo-build\",\"platform\":\"lima\",\"cpus\":4,\"memory_bytes\":8589934592,\"sandboxes\":[{\"sandbox\":\"build-1\",\"project\":\"demo-experiments/abc\",\"image\":\"node:22\",\"workspaces_not_listed\":true}]},{\"machine\":\"docker\",\"platform\":\"docker\",\"state\":\"stopped\",\"stores\":[{\"store\":\"sim-website\",\"engine\":\"sqlite\",\"projects\":[\"website\"],\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}],\"sandboxes\":[{\"sandbox\":\"sim-1\",\"project\":\"sim-website/website\",\"image\":\"node:22\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}],\"stores\":[{\"store\":\"demo-experiments\",\"engine\":\"postgresql\",\"projects\":[\"abc\"],\"connections\":[{\"url\":\"postgres://db.internal:5432/experiments\",\"reached\":\"ok\"},{\"machine\":\"demo-build\",\"url\":\"postgres://db.internal:5432/experiments\"}]}],\"buckets\":[{\"bucket\":\"r2-main\",\"provider\":\"r2\"}]}}"
     ],
     "long": "{\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182,\"reason\":null,\"fix\":null,\"message\":null,\"layout\":3,\"mode\":\"0700\",\"bundle\":{\"path\":\"/Users/me/Library/Caches/layerfs/2.0.0/linux\",\"source\":\"cache\",\"present\":true,\"commit\":\"caff58a43b\",\"dirty\":false,\"matches\":true},\"daemon\":{\"path\":\"/Users/me/Library/Caches/layerfs/2.0.0/darwin/layerfs-daemon\",\"source\":\"default\",\"present\":true,\"commit\":\"caff58a43b\",\"dirty\":false,\"matches\":true},\"cache\":{\"path\":\"/Users/me/Library/Caches/layerfs\"}}"
    },

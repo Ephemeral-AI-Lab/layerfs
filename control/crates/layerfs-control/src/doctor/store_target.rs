@@ -4,8 +4,10 @@
 //! Store is reached through its machine (this process for `native`, the
 //! worker's `store.diagnose` with `cut: schema` elsewhere), which also
 //! reads its heads when it has a bucket link; a PostgreSQL Store from this
-//! computer, then once more from each machine with a Sandbox of it and from
-//! `--machine` (R9), one `store.connection` each with `from`.
+//! computer, then once more from each machine with an address of its own
+//! or a Sandbox of it and from `--machine` (R9, spec v23 V23-9), one
+//! `store.connection` each with `from`; every reach is recorded
+//! (`layerfs_store::observed`).
 //! `store.operation` reads the home's record and, for a sqlite Store, the
 //! compaction record beside its file through its machine (the shallow cut
 //! answers it, spec v19). Under a machine that is not ready only
@@ -450,10 +452,25 @@ fn postgresql(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, chec
             // a refusal before any dial carries its own fix: a record
             // naming no saved login gives its `outdated` state's (V20-7)
             fix_of(&error, checks);
+            let failed = layerfs_store::observed::Reach::failed(&error.message);
+            layerfs_store::observed::record(probe.home, record.name(), None, &failed);
         }
-        _ => fold(record, &seen, checks),
+        _ => {
+            fold(record, &seen, checks);
+            here(probe.home, record);
+        }
     }
     reach(probe, record, checks);
+}
+
+/// Records this computer's reach of PostgreSQL Store `record` (spec v23
+/// V23-9): the check a machine's own connection is checked by, so the
+/// observation carries its latency and the server's version.
+fn here(home: &Path, record: &StoreRecord) {
+    use layerfs_store::postgresql::{check, connect};
+    let checked = connect::selection(record).and_then(|pg| check::check(record, &pg));
+    let seen = layerfs_store::observed::Reach::of(&checked);
+    layerfs_store::observed::record(home, record.name(), None, &seen);
 }
 
 /// The step id `o` gives, without its `store.connection.` prefix.
@@ -530,8 +547,9 @@ fn fold(record: &StoreRecord, seen: &[Observation], checks: &mut Checks) {
 }
 
 /// `store.connection` of PostgreSQL Store `record` from each machine that
-/// has a Sandbox of it, and from `--machine`, as those machines dial it. A
-/// machine that is not ready is not dialled.
+/// has an address of its own or a Sandbox of it, and from `--machine`, as
+/// those machines dial it; each result is what was seen of its reach
+/// (spec v23 V23-9). A machine that is not ready is not dialled.
 fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
     let name = record.name();
     let mut machines: Vec<String> = crate::inventory::sandboxes(probe.home)
@@ -544,6 +562,7 @@ fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
         .map(|sandbox| sandbox.machine().to_owned())
         .collect();
     machines.extend(probe.options.machine.clone());
+    machines.extend(record.own_connections().into_iter().map(|(m, _)| m));
     // this computer dialled the Store's own address above; `native` is
     // probed again only for an address of its own
     machines.retain(|machine| machine != "native" || record.own_connection(machine).is_some());
@@ -559,7 +578,10 @@ fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
             _ => {
                 let mut sink = |_| {};
                 let mut events = Events::new(&mut sink);
-                match crate::store::check_from(probe.home, &mut events, record, machine).1 {
+                let checked = crate::store::check_from(probe.home, &mut events, record, machine).1;
+                let seen = layerfs_store::observed::Reach::of(&checked);
+                layerfs_store::observed::record(probe.home, record.name(), Some(machine), &seen);
+                match checked {
                     Ok(_) => {
                         checks.pass(CONNECTION, format!("machine {machine} reaches the server"))
                     }

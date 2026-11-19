@@ -97,9 +97,8 @@ pub fn seen(record: &StoreRecord) -> Option<State> {
 /// machine's state for a sqlite Store on a machine (none for a PostgreSQL
 /// Store, which is on no machine; a sqlite Store given none is not
 /// blocked). A record this build cannot place (a kind it does not read)
-/// is `broken` `unsupported`; a PostgreSQL Store naming no saved login (one
-/// connected before saved logins) is `broken` `outdated`, with the fix
-/// that saves one and names it.
+/// is `broken` `unsupported`; a PostgreSQL Store's login and old fields
+/// may break it too ([`postgresql`]).
 pub fn recorded_under(record: &StoreRecord, under: Option<&State>) -> Result<State> {
     if let Some(state) = held(record) {
         return Ok(state);
@@ -114,13 +113,44 @@ pub fn recorded_under(record: &StoreRecord, under: Option<&State>) -> Result<Sta
                 return Ok(blocked);
             }
         }
-        Ok(StoreRef::Postgres { .. }) if record.text("auth").is_none() => {
-            let fix = crate::postgresql::login::no_auth_fix(record);
-            return Ok(State::broken(Reason::Outdated, Some(&fix)));
+        Ok(StoreRef::Postgres { .. }) => {
+            if let Some(state) = postgresql(record) {
+                return Ok(state);
+            }
         }
-        Ok(StoreRef::Postgres { .. }) => {}
     }
     Ok(seen(record).unwrap_or(State::Ready))
+}
+
+/// A PostgreSQL Store's own `broken` state from its record (spec v23):
+/// naming no saved login, `outdated` with the fix that saves one and names
+/// it; naming one this home does not hold, `missing` with the same fix for
+/// that name; holding what 2.0 no longer writes (V23-6), `outdated` with
+/// the update that rewrites it. A missing login wins over the old fields:
+/// its fix clears both.
+fn postgresql(record: &StoreRecord) -> Option<State> {
+    use crate::postgresql::login;
+    let Some(auth) = record.text("auth") else {
+        return Some(State::broken(
+            Reason::Outdated,
+            Some(&login::no_auth_fix(record)),
+        ));
+    };
+    let home = record.home()?;
+    if login::is_missing(home, auth) {
+        return Some(State::broken(
+            Reason::Missing,
+            Some(&login::missing_fix(record, auth)),
+        ));
+    }
+    record.outdated_fields().then(|| {
+        let fix = format!(
+            "layerfs store update {} --auth {}",
+            shell_word(record.name()),
+            shell_word(auth)
+        );
+        State::broken(Reason::Outdated, Some(&fix))
+    })
 }
 
 /// The machine a sqlite Store's record places it on, if it names one.

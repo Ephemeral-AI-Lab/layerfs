@@ -16,7 +16,7 @@ pub(crate) const CALL: Call = call(
     "disconnect",
     &[a("store", Name)],
     &[opt("machine", Name)],
-    "forget a PostgreSQL Store, or one machine's own address; its data stays",
+    "forget a PostgreSQL Store, or one machine's own address and reach; its data stays",
     run,
 )
 .form(&FORM);

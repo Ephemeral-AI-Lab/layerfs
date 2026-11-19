@@ -268,7 +268,7 @@ pub fn read(home: &Path, record: StoreRecord, machines: state::Machines) -> Resu
     // the Store answered: a gone owner's backup or restore is settled,
     // and what is wrong with it is remembered when it changed
     let now = now_ms();
-    let _ = observed::write(&paths::store_record(home, &store), now);
+    crate::observed::seen_at(home, &store, now);
     let record = settle(home, &store, record)?;
     let compaction = compacting(&record, &found.compaction);
     // a compaction's own record is observed by its bounded state label,

@@ -372,6 +372,18 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
             ("machine", t("native")),
         ],
     );
+    // the create proved this computer reaches the Store: `native` with no
+    // address of its own is this computer's row (spec v23 V23-2)
+    let got = ok(
+        &home,
+        "store.get",
+        &[("store", t("pg")), ("detail", SdkValue::Bool(true))],
+    );
+    let Some(SdkValue::List(rows)) = got.get("connections") else {
+        panic!("{got:?}");
+    };
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0].get_text("reached"), Some("ok"), "{rows:?}");
     work(&home, "pg/app", "n", "on-native", "native.txt");
     ok(&home, "sandbox.remove", &[("sandbox", t("n"))]);
     if let (Some(image), Some(_)) = (env("LAYERFS_TEST_IMAGE"), env("LAYERFS_BUNDLE")) {

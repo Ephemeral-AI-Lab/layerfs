@@ -248,7 +248,14 @@ fn status(home: &Path) -> SdkValue {
         live: true,
         stats: false,
     };
-    layerfs_store::get::get(home, &mut Events::new(&mut sink), "pgs", with, &machines).unwrap()
+    layerfs_store::get::get(
+        home,
+        &mut Events::new(&mut sink),
+        "pgs",
+        with,
+        (&machines, &|_: &std::path::Path| Vec::new()),
+    )
+    .unwrap()
 }
 
 /// The `live` section's `phases`.

@@ -144,14 +144,15 @@ it dials nothing, and is null unless the home is ready.
 | Node | Long form | Short form |
 | --- | --- | --- |
 | machine | `machine, platform, cpus, memory_bytes, state, op, reason, fix, stores, sandboxes` | `machine`, `platform`; its state and companion unless ready; `cpus`, `memory_bytes`, `stores` and `sandboxes` when set |
-| Store | `store, engine, projects, connections, state, op, blocked_by, reason, fix` | `store`, `engine`; `projects` and `connections` (`[{ machine, url }]`) unless empty; its state unless ready |
+| Store | `store, engine, projects, connections, state, op, blocked_by, reason, fix` | `store`, `engine`; `projects` and `connections` (`store get`'s rows) unless empty; its state unless ready |
 | Sandbox | `sandbox, project, image, workspaces, workspaces_not_listed, state, op, blocked_by, reason, fix` | `sandbox`, `project`; `image`, `workspaces` (`[{ workspace, branch }]`) unless empty; `workspaces_not_listed` when true; its state unless ready |
 | bucket | `bucket, provider` | `bucket`, `provider` |
 
 A sqlite Store is under its machine; a PostgreSQL Store lives on no machine
-and is in the top-level `stores`, with `connections` naming where it is
-reached from: first `{ machine: null, url }` (the Store's own URL), then one
-row per machine with its own address. A Sandbox's `workspaces` are listed
+and is in the top-level `stores`, with `connections` naming every side that
+connects to it, as `store get` answers them (spec v23): this computer first
+(`machine` null, the Store's own URL), then each machine with an address of
+its own, a reach seen or a Sandbox of the Store. A Sandbox's `workspaces` are listed
 only where the home keeps their records (on `native`, or a Sandbox reached
 directly); otherwise `workspaces_not_listed` is true, and for a blocked
 Sandbox `workspaces` is null. States come from the records: a recorded

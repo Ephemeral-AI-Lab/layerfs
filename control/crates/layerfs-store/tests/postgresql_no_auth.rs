@@ -68,10 +68,12 @@ fn its_state_is_broken_outdated_with_the_same_fix() {
         let state = layerfs_store::state::recorded_under(&record, None).unwrap();
         assert_eq!(state, State::broken(Reason::Outdated, Some(&fix)), "{url}");
     }
-    // a record naming its login reads ready
+    // a record naming a login the home does not hold reads `missing`, its
+    // fix saving that login and updating the Store to it (spec v23)
     let named = older(&home).with("auth", SdkValue::text("pg-app"));
     let state = layerfs_store::state::recorded_under(&named, None).unwrap();
-    assert_eq!(state, State::Ready);
+    let fix = "layerfs store save-auth pg-app --user owner --password-stdin && layerfs store update pg --auth pg-app";
+    assert_eq!(state, State::broken(Reason::Missing, Some(fix)));
 }
 
 /// A record naming its saved login is dialled with it: the login's user

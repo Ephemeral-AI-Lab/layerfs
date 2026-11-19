@@ -148,14 +148,28 @@ fn live(home: &Path) -> SdkValue {
         live: true,
         stats: false,
     };
-    layerfs_store::get::get(home, &mut Events::new(&mut sink), "s", with, &machines).unwrap()
+    layerfs_store::get::get(
+        home,
+        &mut Events::new(&mut sink),
+        "s",
+        with,
+        (&machines, &|_: &std::path::Path| Vec::new()),
+    )
+    .unwrap()
 }
 
 /// `store get <s>` from the records alone.
 fn recorded(home: &Path) -> SdkValue {
     let mut sink = |_| {};
     let with = With::default();
-    layerfs_store::get::get(home, &mut Events::new(&mut sink), "s", with, &machines).unwrap()
+    layerfs_store::get::get(
+        home,
+        &mut Events::new(&mut sink),
+        "s",
+        with,
+        (&machines, &|_: &std::path::Path| Vec::new()),
+    )
+    .unwrap()
 }
 
 #[test]

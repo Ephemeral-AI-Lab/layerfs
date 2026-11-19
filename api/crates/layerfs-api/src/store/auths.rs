@@ -4,13 +4,17 @@ use crate::calls::{Context, Form, Part};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 
-/// One login: never its password.
+/// One login: never its password. A login file that cannot be read is
+/// `broken` with its fix (spec v23).
 const ITEM: Form = Form::of(
     &["auth", "user"],
-    &["stores", "stores_count"],
+    &["state", "reason", "fix", "stores", "stores_count"],
     &[
         "auth",
         "user",
+        "state",
+        "reason",
+        "fix",
         "stores",
         "stores_count",
         "created_at",

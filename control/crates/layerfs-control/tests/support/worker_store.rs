@@ -151,7 +151,7 @@ pub fn stats(home: &Path) -> Result<SdkValue, SdkRefusal> {
         &mut Events::new(&mut sink),
         "shop",
         with,
-        &layerfs_control::store::machine_state,
+        layerfs_control::store::reads(),
     )
 }
 

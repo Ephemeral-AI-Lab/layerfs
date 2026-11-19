@@ -11,7 +11,7 @@ mod connect;
 mod create;
 mod disconnect;
 mod doctor;
-mod get;
+pub(crate) mod get;
 mod list;
 mod r#move;
 mod remove;

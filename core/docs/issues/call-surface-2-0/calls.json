@@ -5311,7 +5311,7 @@
         "stores",
         "buckets"
        ],
-       "help": "everything in the home, from its records only: `machines` (each with its sqlite `stores` and its `sandboxes`), `stores` (the PostgreSQL Stores, which live on no machine) and `buckets`. A node holds what the records hold and no more: a machine {machine, platform, cpus, memory_bytes}; a Store {store, engine, projects}, and a PostgreSQL Store also `connections` (the home's own address, then each machine with its own); a Sandbox {sandbox, project, image, workspaces}; a bucket {bucket, provider}; each with `state` and its companion when it is not ready. Each node's keys are in `nodes`",
+       "help": "everything in the home, from its records only: `machines` (each with its sqlite `stores` and its `sandboxes`), `stores` (the PostgreSQL Stores, which live on no machine) and `buckets`. A node holds what the records hold and no more: a machine {machine, platform, cpus, memory_bytes}; a Store {store, engine, projects}, and a PostgreSQL Store also `connections` (every side that connects, as `store get` answers them: this computer, then each machine with its own address, a reach seen or a Sandbox); a Sandbox {sandbox, project, image, workspaces}; a bucket {bucket, provider}; each with `state` and its companion when it is not ready. Each node's keys are in `nodes`",
        "nodes": {
         "machine": {
          "short": {
@@ -5436,12 +5436,52 @@
            "url"
           ],
           "sometimes": [
-           "machine"
+           "machine",
+           "reached"
           ]
          },
          "long": [
           "machine",
-          "url"
+          "url",
+          "own",
+          "server",
+          "reached",
+          "reach"
+         ]
+        },
+        "server": {
+         "short": {
+          "always": [
+           "host",
+           "port",
+           "database"
+          ],
+          "sometimes": []
+         },
+         "long": [
+          "host",
+          "port",
+          "database"
+         ]
+        },
+        "reach": {
+         "short": {
+          "always": [
+           "at",
+           "ok"
+          ],
+          "sometimes": [
+           "latency_ms",
+           "server_version",
+           "error"
+          ]
+         },
+         "long": [
+          "at",
+          "ok",
+          "latency_ms",
+          "server_version",
+          "error"
          ]
         }
        },
@@ -5548,7 +5588,33 @@
           "connections": [
            {
             "machine": null,
-            "url": "postgres://db.internal:5432/experiments"
+            "url": "postgres://db.internal:5432/experiments",
+            "own": false,
+            "server": {
+             "host": "db.internal",
+             "port": 5432,
+             "database": "experiments"
+            },
+            "reached": "ok",
+            "reach": {
+             "at": "2026-11-18T09:15:59Z",
+             "ok": true,
+             "latency_ms": 2,
+             "server_version": "17.6",
+             "error": null
+            }
+           },
+           {
+            "machine": "demo-build",
+            "url": "postgres://db.internal:5432/experiments",
+            "own": false,
+            "server": {
+             "host": "db.internal",
+             "port": 5432,
+             "database": "experiments"
+            },
+            "reached": null,
+            "reach": null
            }
           ],
           "state": "ready",
@@ -5603,7 +5669,7 @@
        "{\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182}",
        "no home yet: {\"home\":\"/Users/me/.layerfs\",\"state\":\"broken\",\"version\":\"2.0.0\",\"reason\":\"missing\",\"fix\":\"layerfs home init\"}",
        "an older layout: {\"home\":\"/Users/me/.layerfs\",\"state\":\"broken\",\"version\":\"2.0.0\",\"reason\":\"outdated\",\"fix\":\"mv /Users/me/.layerfs /Users/me/.layerfs.old && layerfs home init\"}",
-       "--with tree: {\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182,\"tree\":{\"machines\":[{\"machine\":\"native\",\"platform\":\"native\",\"stores\":[{\"store\":\"qv2-store\",\"engine\":\"sqlite\",\"projects\":[\"qv2-strata\",\"qv2-probe\"]}],\"sandboxes\":[{\"sandbox\":\"tests\",\"project\":\"qv2-store/qv2-strata\",\"image\":\"node:22\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\"}]}]},{\"machine\":\"demo-build\",\"platform\":\"lima\",\"cpus\":4,\"memory_bytes\":8589934592,\"sandboxes\":[{\"sandbox\":\"build-1\",\"project\":\"demo-experiments/abc\",\"image\":\"node:22\",\"workspaces_not_listed\":true}]},{\"machine\":\"docker\",\"platform\":\"docker\",\"state\":\"stopped\",\"stores\":[{\"store\":\"sim-website\",\"engine\":\"sqlite\",\"projects\":[\"website\"],\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}],\"sandboxes\":[{\"sandbox\":\"sim-1\",\"project\":\"sim-website/website\",\"image\":\"node:22\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}],\"stores\":[{\"store\":\"demo-experiments\",\"engine\":\"postgresql\",\"projects\":[\"abc\"],\"connections\":[{\"url\":\"postgres://db.internal:5432/experiments\"},{\"machine\":\"demo-build\",\"url\":\"postgres://10.0.2.2:5432/experiments\"}]}],\"buckets\":[{\"bucket\":\"r2-main\",\"provider\":\"r2\"}]}}"
+       "--with tree: {\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182,\"tree\":{\"machines\":[{\"machine\":\"native\",\"platform\":\"native\",\"stores\":[{\"store\":\"qv2-store\",\"engine\":\"sqlite\",\"projects\":[\"qv2-strata\",\"qv2-probe\"]}],\"sandboxes\":[{\"sandbox\":\"tests\",\"project\":\"qv2-store/qv2-strata\",\"image\":\"node:22\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\"}]}]},{\"machine\":\"demo-build\",\"platform\":\"lima\",\"cpus\":4,\"memory_bytes\":8589934592,\"sandboxes\":[{\"sandbox\":\"build-1\",\"project\":\"demo-experiments/abc\",\"image\":\"node:22\",\"workspaces_not_listed\":true}]},{\"machine\":\"docker\",\"platform\":\"docker\",\"state\":\"stopped\",\"stores\":[{\"store\":\"sim-website\",\"engine\":\"sqlite\",\"projects\":[\"website\"],\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}],\"sandboxes\":[{\"sandbox\":\"sim-1\",\"project\":\"sim-website/website\",\"image\":\"node:22\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}]}],\"stores\":[{\"store\":\"demo-experiments\",\"engine\":\"postgresql\",\"projects\":[\"abc\"],\"connections\":[{\"url\":\"postgres://db.internal:5432/experiments\",\"reached\":\"ok\"},{\"machine\":\"demo-build\",\"url\":\"postgres://db.internal:5432/experiments\"}]}],\"buckets\":[{\"bucket\":\"r2-main\",\"provider\":\"r2\"}]}}"
       ],
       "long": "{\"home\":\"/Users/me/.layerfs\",\"state\":\"ready\",\"version\":\"2.0.0\",\"generation\":4182,\"reason\":null,\"fix\":null,\"message\":null,\"layout\":3,\"mode\":\"0700\",\"bundle\":{\"path\":\"/Users/me/Library/Caches/layerfs/2.0.0/linux\",\"source\":\"cache\",\"present\":true,\"commit\":\"caff58a43b\",\"dirty\":false,\"matches\":true},\"daemon\":{\"path\":\"/Users/me/Library/Caches/layerfs/2.0.0/darwin/layerfs-daemon\",\"source\":\"default\",\"present\":true,\"commit\":\"caff58a43b\",\"dirty\":false,\"matches\":true},\"cache\":{\"path\":\"/Users/me/Library/Caches/layerfs\"}}"
      },
@@ -7291,6 +7357,7 @@
        "state",
        "machine",
        "auth",
+       "binding",
        "connections",
        "projects",
        "projects_count",
@@ -7309,9 +7376,9 @@
      },
      "examples": {
       "short": [
-       "{\"items\":[{\"store\":\"shop\",\"engine\":\"sqlite\",\"machine\":\"dev\",\"projects\":[\"api\",\"web\"],\"backups\":[{\"bucket\":\"r2-main\"}]},{\"store\":\"sim-website\",\"engine\":\"sqlite\",\"machine\":\"docker\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"},\"projects\":[\"website\"]},{\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"auth\":\"pg-app\",\"connections\":[{\"url\":\"postgres://db.internal:5432/shop\"}],\"projects\":[\"abc\"]}]}"
+       "{\"items\":[{\"store\":\"shop\",\"engine\":\"sqlite\",\"machine\":\"dev\",\"projects\":[\"api\",\"web\"],\"backups\":[{\"bucket\":\"r2-main\"}]},{\"store\":\"sim-website\",\"engine\":\"sqlite\",\"machine\":\"docker\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"},\"projects\":[\"website\"]},{\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"auth\":\"pg-app\",\"connections\":[{\"url\":\"postgres://db.internal:5432/shop\",\"reached\":\"ok\"},{\"machine\":\"lab\",\"url\":\"postgres://proxy.lab:6432/shop\",\"reached\":\"failed\"},{\"machine\":\"build\",\"url\":\"postgres://db.internal:5432/shop\"}],\"projects\":[\"abc\"]}]}"
       ],
-      "long": "{\"items\":[{\"store\":\"shop\",\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"auth\":null,\"connections\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"ended_at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"profile\":\"disposable\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"ended_at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}},{\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"state\":\"ready\",\"machine\":null,\"auth\":\"pg-app\",\"connections\":[{\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\"},{\"machine\":\"lab\",\"url\":\"postgres://proxy.lab:6432/shop\"}],\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"profile\":null,\"synchronous_commit\":\"local\",\"sqlite_version\":null,\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":null}]}"
+      "long": "{\"items\":[{\"store\":\"shop\",\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"auth\":null,\"binding\":null,\"connections\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"ended_at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"profile\":\"disposable\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"ended_at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}},{\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"state\":\"ready\",\"machine\":null,\"auth\":\"pg-app\",\"binding\":\"f64587b8a1c2d3e4\",\"connections\":[{\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\",\"own\":false,\"server\":{\"host\":\"db.internal\",\"port\":5432,\"database\":\"shop\"},\"reached\":\"ok\",\"reach\":{\"at\":\"2026-11-18T09:15:59Z\",\"ok\":true,\"latency_ms\":2,\"server_version\":\"17.6\",\"error\":null}},{\"machine\":\"lab\",\"url\":\"postgres://proxy.lab:6432/shop\",\"own\":true,\"server\":{\"host\":\"proxy.lab\",\"port\":6432,\"database\":\"shop\"},\"reached\":\"failed\",\"reach\":{\"at\":\"2026-11-18T09:14:02Z\",\"ok\":false,\"latency_ms\":null,\"server_version\":null,\"error\":\"machine lab cannot reach PostgreSQL Store shop-pg's server at proxy.lab: connection refused\"}},{\"machine\":\"build\",\"url\":\"postgres://db.internal:5432/shop\",\"own\":false,\"server\":{\"host\":\"db.internal\",\"port\":5432,\"database\":\"shop\"},\"reached\":null,\"reach\":null}],\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"profile\":null,\"synchronous_commit\":\"local\",\"sqlite_version\":null,\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":null}]}"
      },
      "dropped": [],
      "new_work": "A records-only state is new: today each item's state comes from the leases and a `stat` on the Store's machine, and is idle, in_use, busy, down or unresolved. `--machine` is a new filter. `blocked` with `blocked_by` replaces `down`.",
@@ -7320,7 +7387,8 @@
        "unresolved",
        "missing",
        "unreachable",
-       "unsupported"
+       "unsupported",
+       "outdated"
       ],
       "ops": [
        "move",
@@ -7404,6 +7472,7 @@
       "state",
       "machine",
       "auth",
+      "binding",
       "connections",
       "projects",
       "projects_count",
@@ -7427,9 +7496,9 @@
        "its machine is stopped: {\"engine\":\"sqlite\",\"state\":\"blocked\",\"machine\":\"docker\",\"projects\":[\"website\"],\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}",
        "moving: {\"engine\":\"sqlite\",\"state\":\"busy\",\"machine\":\"native\",\"projects\":[\"api\",\"web\"],\"op\":{\"name\":\"move\",\"phase\":\"send\",\"started_at\":\"2026-11-18T09:16:59Z\"}}",
        "lost reply on a move: {\"engine\":\"sqlite\",\"state\":\"broken\",\"machine\":\"native\",\"projects\":[\"api\",\"web\"],\"reason\":\"unresolved\",\"fix\":\"layerfs store move shop dev\"}",
-       "PostgreSQL: {\"engine\":\"postgresql\",\"state\":\"ready\",\"auth\":\"pg-app\",\"connections\":[{\"url\":\"postgres://db.internal:5432/shop\"},{\"machine\":\"lab\",\"url\":\"postgres://proxy.lab:6432/shop\"}],\"projects\":[\"api\",\"web\"]}"
+       "PostgreSQL: {\"engine\":\"postgresql\",\"state\":\"ready\",\"auth\":\"pg-app\",\"connections\":[{\"url\":\"postgres://db.internal:5432/shop\",\"reached\":\"ok\"},{\"machine\":\"lab\",\"url\":\"postgres://proxy.lab:6432/shop\",\"reached\":\"failed\"},{\"machine\":\"build\",\"url\":\"postgres://db.internal:5432/shop\"}],\"projects\":[\"api\",\"web\"]}"
       ],
-      "long": "{\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"auth\":null,\"connections\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"ended_at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"store\":\"shop\",\"profile\":\"disposable\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"ended_at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}}"
+      "long": "{\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"auth\":null,\"binding\":null,\"connections\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"ended_at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"store\":\"shop\",\"profile\":\"disposable\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"ended_at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}}"
      },
      "dropped": [
       {
@@ -7443,13 +7512,14 @@
        "why": "whether one machine reaches a Store is a check, and the doctor makes it"
       }
      ],
-     "new_work": "Records-only state with the six states is new: today store.get answers no state and store.status always reads the leases, the file or the server. So that every client sees `busy`, store.compact, backup.create and backup.restore must record an `op` in the Store's record; today only a move and a remove do (a compaction keeps its own record beside the Store, backup.create holds a file lock). `live.behind` is new: it reads the Store's heads where it lives, through its worker on a machine (today backup.list compares them on native only). `attempt` on a backup row is new: today a link is written only after a transfer succeeds. `auth` and `connections` are new (see store.save_auth, store.connect). The reason codes `missing` and `unreachable` replace today's `down_reason` sentence. A live read writing the record when the state word or reason changes, and the observation file for `observed_at`, are new (today a read writes nothing). Clearing an uncertain operation: a move by the same move or `store remove`, a remove by `store remove`, and a compaction by the next `store compact` all exist today (store.status names the clearing call). A backup and a restore record no `op` today, so nothing needs clearing; once they record one, `store get --with live` settling an uncertain backup or restore whose owner is gone is new work: a backup changes nothing in the Store and a restore installs by one rename, so the read sees which file is there, drops the `op` and writes what was tried to the link's `attempt`. v19: a live read lets a compaction live on the Store's machine win over this home's `unresolved` record of it (after a lost reply), and answers `blocked` before any read while the machine is stopped.",
+     "new_work": "Records-only state with the six states is new: today store.get answers no state and store.status always reads the leases, the file or the server. So that every client sees `busy`, store.compact, backup.create and backup.restore must record an `op` in the Store's record; today only a move and a remove do (a compaction keeps its own record beside the Store, backup.create holds a file lock). `live.behind` is new: it reads the Store's heads where it lives, through its worker on a machine (today backup.list compares them on native only). `attempt` on a backup row is new: today a link is written only after a transfer succeeds. `auth` and `connections` are new (see store.save_auth, store.connect). The reason codes `missing` and `unreachable` replace today's `down_reason` sentence. A live read writing the record when the state word or reason changes, and the observation file for `observed_at`, are new (today a read writes nothing). Clearing an uncertain operation: a move by the same move or `store remove`, a remove by `store remove`, and a compaction by the next `store compact` all exist today (store.status names the clearing call). A backup and a restore record no `op` today, so nothing needs clearing; once they record one, `store get --with live` settling an uncertain backup or restore whose owner is gone is new work: a backup changes nothing in the Store and a restore installs by one rename, so the read sees which file is there, drops the `op` and writes what was tried to the link's `attempt`. v19: a live read lets a compaction live on the Store's machine win over this home's `unresolved` record of it (after a lost reply), and answers `blocked` before any read while the machine is stopped. v23: `connections` rows list every side that connects (own address, a reach seen, a Sandbox), each with `reached` and the long `own`, `server`, `reach`; reaches are kept in the Store's observation file; `binding` is new in the long form; old record fields read `outdated` and a missing login `missing`.",
      "states": {
       "reasons": [
        "unresolved",
        "missing",
        "unreachable",
-       "unsupported"
+       "unsupported",
+       "outdated"
       ],
       "ops": [
        "move",
@@ -7581,7 +7651,7 @@
        "first connect: {\"projects\":[\"api\",\"web\"]}",
        "an empty database, or an address set: {\"ok\":true}"
       ],
-      "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"outcome\":\"connected\",\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"auth\":\"pg-app\",\"connections\":[{\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\"}],\"synchronous_commit\":\"local\"}"
+      "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"outcome\":\"connected\",\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"auth\":\"pg-app\",\"connections\":[{\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\",\"own\":false,\"server\":{\"host\":\"db.internal\",\"port\":5432,\"database\":\"shop\"},\"reached\":null,\"reach\":null}],\"synchronous_commit\":\"local\"}"
      },
      "dropped": [
       {
@@ -7603,7 +7673,7 @@
      "today": [
       "store.disconnect"
      ],
-     "help": "forget a PostgreSQL Store, or one machine's own address; its data stays",
+     "help": "forget a PostgreSQL Store, or one machine's own address and reach; its data stays",
      "cli": "layerfs store disconnect <store> [--machine M]",
      "positionals": [
       {
@@ -7740,6 +7810,9 @@
         "user"
        ],
        "sometimes": [
+        "state",
+        "reason",
+        "fix",
         "stores",
         "stores_count"
        ]
@@ -7747,6 +7820,9 @@
       "long": [
        "auth",
        "user",
+       "state",
+       "reason",
+       "fix",
        "stores",
        "stores_count",
        "created_at",
@@ -7757,10 +7833,16 @@
       "short": [
        "{\"items\":[{\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[\"shop-pg\",\"analytics\"]},{\"auth\":\"pg-ro\",\"user\":\"reader\"}]}"
       ],
-      "long": "{\"items\":[{\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[\"shop-pg\",\"analytics\"],\"stores_count\":null,\"created_at\":\"2026-11-17T09:16:59Z\",\"updated_at\":\"2026-11-18T09:16:59Z\"}]}"
+      "long": "{\"items\":[{\"auth\":\"pg-app\",\"user\":\"app\",\"state\":\"ready\",\"reason\":null,\"fix\":null,\"stores\":[\"shop-pg\",\"analytics\"],\"stores_count\":null,\"created_at\":\"2026-11-17T09:16:59Z\",\"updated_at\":\"2026-11-18T09:16:59Z\"},{\"auth\":\"pg-old\",\"user\":null,\"state\":\"broken\",\"reason\":\"failed\",\"fix\":\"layerfs store save-auth pg-old --user <user> --password-stdin\",\"stores\":[],\"stores_count\":null,\"created_at\":null,\"updated_at\":null}]}"
      },
      "dropped": [],
-     "new_work": "All of it (see store.save_auth)."
+     "new_work": "All of it (see store.save_auth).",
+     "states": {
+      "reasons": [
+       "failed"
+      ],
+      "ops": []
+     }
     },
     {
      "call": "store.remove_auth",

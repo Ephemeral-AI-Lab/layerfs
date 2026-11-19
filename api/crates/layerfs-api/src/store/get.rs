@@ -23,9 +23,33 @@ const BACKUP: Form = Form::of(
     ],
 );
 
-/// One `connections` row of a PostgreSQL Store: its address, and the
-/// machine whose own it is (none for the Store's own).
-const CONNECTION: Form = Form::of(&["url"], &["machine"], &["machine", "url"]);
+/// A row's `server`: what its URL names.
+const SERVER: Form = Form::of(
+    &["host", "port", "database"],
+    &[],
+    &["host", "port", "database"],
+);
+
+/// A row's `reach`: the last one seen.
+const REACH: Form = Form::of(
+    &["at", "ok"],
+    &["latency_ms", "server_version", "error"],
+    &["at", "ok", "latency_ms", "server_version", "error"],
+);
+
+/// One `connections` row of a PostgreSQL Store (spec v23): a side that
+/// connects (`machine` null for this computer), the URL it dials, and the
+/// word of its last reach; the long form adds whether the address is its
+/// own, the server it names and the reach itself.
+pub(crate) const CONNECTION: Form = Form::of(
+    &["url"],
+    &["machine", "reached"],
+    &["machine", "url", "own", "server", "reached", "reach"],
+)
+.parts(&[
+    ("server", Part::Rows(&SERVER)),
+    ("reach", Part::Rows(&REACH)),
+]);
 
 /// The rows inside a Store's answer; `store.list` items share them.
 pub(super) const PARTS: &[(&str, Part)] = &[
@@ -55,6 +79,7 @@ const FORM: Form = Form::of(
         "state",
         "machine",
         "auth",
+        "binding",
         "connections",
         "projects",
         "projects_count",
@@ -121,6 +146,6 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         stats: context.with("stats"),
     };
     let (home, events) = context.parts();
-    let machines = &layerfs_control::store::machine_state;
-    layerfs_store::get::get(home, events, store.as_str(), with, machines)
+    let reads = layerfs_control::store::reads();
+    layerfs_store::get::get(home, events, store.as_str(), with, reads)
 }

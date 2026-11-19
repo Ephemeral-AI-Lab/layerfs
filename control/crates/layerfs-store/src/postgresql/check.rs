@@ -40,7 +40,8 @@ pub const ANOTHER_STORE: &str = "the PostgreSQL server holds another Store than"
 /// The check of one machine's connection, run on the side that dials it:
 /// the schema at `postgresql` must hold Store `record`'s binding, and the
 /// role must have every privilege a Sandbox's writes need there. Answers
-/// the check to record, `{ at, server_version, latency_ms }`. The server
+/// the check, `{ at, server_version, latency_ms }`, which its caller
+/// records ([`crate::observed`]). The server
 /// not reached is `Unavailable`, a login refused or a privilege missing
 /// `Denied`, and another Store's schema `Unavailable` naming it.
 pub fn check(record: &StoreRecord, postgresql: &PgSelection) -> Result<SdkValue> {
@@ -103,7 +104,8 @@ pub fn same_store(record: &StoreRecord, postgresql: &PgSelection) -> Result<()> 
 }
 
 /// Saves `machine`'s own address of Store `name` (an empty one removes
-/// it), under the home lock and the Store's: `Conflict` when the Store was
+/// it, and forgets its reach observations), written clean (spec v23
+/// V23-6), under the home lock and the Store's: `Conflict` when the Store was
 /// disconnected, or connected again to another database (`binding`
 /// differs), since it was read.
 pub fn save_own(
@@ -122,20 +124,32 @@ pub fn save_own(
             format!("Store {name} changed while machine {machine} was checked; connect it again"),
         ));
     };
-    record.with_own_connection(machine, own).write(home_dir)
+    record
+        .with_own_connection(machine, own)
+        .cleaned()
+        .write(home_dir)?;
+    if own.is_empty() {
+        crate::observed::forget_locked(home_dir, name, machine)?;
+    }
+    Ok(())
 }
 
-/// Forgets machine `machine`'s own connection in every PostgreSQL Store of
-/// the home (its `machine.remove`): a later machine of the same name dials
-/// each Store's connection. Under the home lock and each Store's.
+/// Forgets machine `machine` in every PostgreSQL Store of the home (its
+/// `machine.remove`): its own connection, written clean, and its reach
+/// observations; a later machine of the same name dials each Store's
+/// connection and was never seen. Under the home lock and each Store's.
 pub fn forget_machine(home_dir: &Path, machine: &str) -> Result<()> {
     let _lock = home::lock::take(home_dir)?;
     for record in crate::record::stores(home_dir)? {
-        if record.own_connection(machine).is_none() {
+        if record.kind().ok() != Some(StoreKind::Postgresql) {
             continue;
         }
         let _store = crate::record::lock(home_dir, record.name())?;
-        record.without_own_connection(machine).write(home_dir)?;
+        if record.own_connection(machine).is_some() {
+            let record = record.clone().without_own_connection(machine);
+            record.cleaned().write(home_dir)?;
+        }
+        crate::observed::forget_locked(home_dir, record.name(), machine)?;
     }
     Ok(())
 }

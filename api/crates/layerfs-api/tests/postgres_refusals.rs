@@ -232,6 +232,9 @@ fn connect_refuses_a_login_in_the_url_a_missing_auth_and_a_settings_change() {
         "postgresql://127.0.0.1:1/app?pass%77ord=secret",
         "postgresql://127.0.0.1:1/app?sslpassword=secret",
         "postgresql://127.0.0.1:1/app?user=bob",
+        // a password file is a login too (spec v23 V23-13)
+        "postgresql://127.0.0.1:1/app?passfile=/home/a/.pgpass",
+        "postgresql://127.0.0.1:1/app?sslmode=require&PassFile=%2Ftmp%2Fp",
     ] {
         let refused = connect("pg", url, &auth).unwrap_err();
         assert_eq!(refused.0, "InvalidInput", "{url}: {refused:?}");

@@ -44,32 +44,23 @@ fn unreadable() -> State {
 
 /// One Store: `{ store, engine, projects, connections, state.. }`. `under`
 /// is its machine's name and state, for a sqlite Store; a PostgreSQL
-/// Store's `connections` are `{ machine, url }`, the home's own address
-/// first (`machine` null), then each machine that has one of its own; a
-/// sqlite Store has none (null). A URL is as the record holds it: a
-/// password is a reference, never written there. Its state is the Store's
-/// one records-only derivation; `engine` is null for a kind it does not
-/// read.
-fn store(home: &Path, record: &StoreRecord, under: Option<(&str, &State)>) -> SdkValue {
+/// Store's `connections` are every side that connects to it, as `store
+/// get` answers them (`layerfs_store::postgresql::connect::connections`,
+/// spec v23), with `sandboxes` the machines with a Sandbox of it; a
+/// sqlite Store has none (null). No URL holds a login. Its state is the
+/// Store's one records-only derivation; `engine` is null for a kind it
+/// does not read.
+fn store(
+    home: &Path,
+    record: &StoreRecord,
+    under: Option<(&str, &State)>,
+    sandboxes: &[String],
+) -> SdkValue {
     let state = layerfs_store::state::recorded_under(record, under.map(|(_, state)| state))
         .unwrap_or_else(|_| unreadable());
-    let connection = |machine: Option<String>, url: Option<&str>| {
-        SdkValue::map([
-            ("machine", SdkValue::opt_text(machine)),
-            ("url", SdkValue::opt_text(url.map(str::to_owned))),
-        ])
-    };
     let connections = match under {
         Some(_) => SdkValue::Null,
-        None => {
-            let home_own = connection(None, record.text("url"));
-            let own = (record.own_connections().into_iter())
-                .filter(|(_, own)| own.url.is_some())
-                .map(|(machine, own)| {
-                    connection(Some(machine), own.url.as_deref().or(record.text("url")))
-                });
-            SdkValue::List(std::iter::once(home_own).chain(own).collect())
-        }
+        None => layerfs_store::postgresql::connect::connections(record, sandboxes),
     };
     let engine = record.kind().ok().map(|kind| kind.as_str().to_owned());
     state.write(SdkValue::map([
@@ -218,7 +209,7 @@ fn machine(
     let built_in = matches!(name, "native" | "docker").then_some(name);
     let held_stores = (stores.iter())
         .filter(|record| placed(record).as_deref() == Some(name))
-        .map(|record| store(home, record, Some((name, &state))))
+        .map(|record| store(home, record, Some((name, &state)), &[]))
         .collect();
     let run = (sandboxes.iter())
         .filter(|s| s.machine() == name)
@@ -295,7 +286,18 @@ pub fn tree(home: &Path) -> Outcome {
     // a Store on no machine: PostgreSQL, or one whose placement is not read
     let mut elsewhere: Vec<SdkValue> = (stores.iter())
         .filter(|record| !matches!(record.store_ref(), Ok(StoreRef::Sqlite { .. })))
-        .map(|record| store(home, record, None))
+        .map(|record| {
+            let on = (sandboxes.iter())
+                .filter(|s| {
+                    let of = s
+                        .project()
+                        .and_then(|p| p.split_once('/'))
+                        .map(|(st, _)| st);
+                    of == Some(record.name())
+                })
+                .map(|s| s.machine().to_owned());
+            store(home, record, None, &on.collect::<Vec<_>>())
+        })
         .collect();
     elsewhere.extend(
         (unread_stores.into_iter()).filter_map(|read| Some(unreadable_store(home, &read.err()?))),

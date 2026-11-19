@@ -4,7 +4,7 @@
 //! it never moves the home's [`generation`](super::generation), so a client
 //! that polls a live read is not told to read every record again. A
 //! records-only read answers it as `observed_at`.
-use super::records::{read_record, write_record};
+use super::records::{read_record, with_field, write_record};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
@@ -22,10 +22,28 @@ pub fn read(record: &Path) -> Option<i64> {
     read_record(&file(record)).ok()??.get_int("at")
 }
 
-/// Notes that the thing whose record is at `record` was observed at `ms`.
-/// The generation does not move.
+/// Notes that the thing whose record is at `record` was observed at `ms`,
+/// keeping what else the file holds (a PostgreSQL Store's reach
+/// observations, spec v23). The generation does not move.
 pub fn write(record: &Path, ms: i64) -> Result<(), SdkRefusal> {
-    write_record(&file(record), &SdkValue::map([("at", SdkValue::Int(ms))]))
+    merge(record, "at", SdkValue::Int(ms))
+}
+
+/// The whole observation file of the thing whose record is at `record`;
+/// an empty map when there is none or it cannot be read.
+pub fn fields(record: &Path) -> SdkValue {
+    match read_record(&file(record)) {
+        Ok(Some(value @ SdkValue::Map(_))) => value,
+        _ => SdkValue::Map(Vec::new()),
+    }
+}
+
+/// Sets `key` of the observation file of the thing whose record is at
+/// `record` to `value`, keeping its other keys. Writers of one file that
+/// may race take that thing's lock first.
+pub fn merge(record: &Path, key: &str, value: SdkValue) -> Result<(), SdkRefusal> {
+    let fields = with_field(fields(record), key, value);
+    write_record(&file(record), &fields)
 }
 
 /// When LayerFS last knew the state of the thing whose record is at

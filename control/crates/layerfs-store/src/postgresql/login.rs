@@ -11,6 +11,7 @@ use layerfs_home::helpers::{map_of, shown_names};
 use layerfs_home::home;
 use layerfs_home::home::secrets::{read_secret, remove_secret, save_secret, secret_names};
 use layerfs_home::outcome::{refused, shell_word, with_fix, with_next, Outcome};
+use layerfs_home::state::{Reason, State};
 use layerfs_home::time::iso;
 use std::path::Path;
 
@@ -98,12 +99,37 @@ pub fn dial(record: &StoreRecord, url: &str) -> Result<String> {
 /// then name it. `--user` is the user its URL names when it names one (a
 /// record from before saved logins), shell-quoted, else `<user>`.
 pub fn no_auth_fix(record: &StoreRecord) -> String {
-    let user = record.text("url").and_then(super::connect::url_user);
-    let user = user.map_or_else(|| "<user>".to_owned(), |user| shell_word(&user));
     format!(
-        "layerfs store save-auth <auth> --user {user} --password-stdin && layerfs store update {} --auth <auth>",
+        "layerfs store save-auth <auth> --user {} --password-stdin && layerfs store update {} --auth <auth>",
+        fix_user(record),
         shell_word(record.name())
     )
+}
+
+/// Whether `home` holds no saved login `auth` (its file is absent; one
+/// that cannot be read is not missing, and `store auths` shows it broken).
+pub fn is_missing(home: &Path, auth: &str) -> bool {
+    matches!(read_secret(home, KIND, auth), Ok(None))
+}
+
+/// The fix of PostgreSQL Store `record` naming login `auth` that is not
+/// saved (spec v23 V23-7): save it under that name, then update the Store
+/// to it, which also rewrites any old field. `--user` as [`no_auth_fix`]
+/// chooses it.
+pub fn missing_fix(record: &StoreRecord, auth: &str) -> String {
+    format!(
+        "layerfs store save-auth {auth} --user {} --password-stdin && layerfs store update {} --auth {auth}",
+        fix_user(record),
+        shell_word(record.name()),
+        auth = shell_word(auth)
+    )
+}
+
+/// The `--user` a fix names: the user the record's URL names (one written
+/// before saved logins), shell-quoted, else `<user>`.
+fn fix_user(record: &StoreRecord) -> String {
+    let user = record.text("url").and_then(super::connect::url_user);
+    user.map_or_else(|| "<user>".to_owned(), |user| shell_word(&user))
 }
 
 /// The PostgreSQL Stores whose record names login `auth`, by name.
@@ -167,21 +193,38 @@ pub fn save(home_dir: &Path, auth: &str, user: &str, password: &str) -> Outcome 
     Ok(map_of(fields))
 }
 
-/// `store.auths()`: every saved login, `{ items: [{ auth, user, stores,
-/// stores_count, created_at, updated_at }] }`, never a password.
+/// `store.auths()`: every saved login, `{ items: [{ auth, user, state,
+/// reason, fix, stores, stores_count, created_at, updated_at }] }`, never a
+/// password. A login file that cannot be read is `broken` `failed` with the
+/// save that rewrites it (spec v23 V23-8), not a failed list.
 pub fn list(home_dir: &Path) -> Outcome {
     let mut items = Vec::new();
     for auth in secret_names(home_dir, KIND)? {
-        let login = read(home_dir, &auth)?;
         let stores = stores_using(home_dir, &auth)?;
         let at = |ms: Option<i64>| ms.map_or(SdkValue::Null, |ms| SdkValue::Text(iso(ms)));
+        // a login file that cannot be read is its own broken row, with the
+        // save that writes it again; the others are listed as usual
+        let (login, state) = match read(home_dir, &auth) {
+            Ok(login) => (Some(login), State::Ready),
+            Err(_) => {
+                let fix = format!(
+                    "layerfs store save-auth {} --user <user> --password-stdin",
+                    shell_word(&auth)
+                );
+                (None, State::broken(Reason::Failed, Some(&fix)))
+            }
+        };
         let mut fields = vec![
             ("auth", SdkValue::text(&auth)),
-            ("user", SdkValue::text(&login.user)),
+            (
+                "user",
+                SdkValue::opt_text(login.as_ref().map(|l| l.user.clone())),
+            ),
         ];
+        fields.extend(state.fields());
         fields.extend(shown(&stores));
-        fields.push(("created_at", at(login.created_ms)));
-        fields.push(("updated_at", at(login.updated_ms)));
+        fields.push(("created_at", at(login.as_ref().and_then(|l| l.created_ms))));
+        fields.push(("updated_at", at(login.as_ref().and_then(|l| l.updated_ms))));
         items.push(map_of(fields));
     }
     Ok(SdkValue::map([("items", SdkValue::List(items))]))

@@ -376,6 +376,50 @@ impl StoreRecord {
         self.with("machines", SdkValue::Map(machines.collect()))
     }
 
+    /// Whether a PostgreSQL Store's record holds what 2.0 no longer writes
+    /// (spec v23 V23-6): a `password`, a URL that names a user or holds a
+    /// login, or a `machines.<machine>` entry with anything but a `url`
+    /// (an old `checked`). Such a record reads `broken` `outdated` until a
+    /// write cleans it ([`Self::cleaned`]).
+    pub fn outdated_fields(&self) -> bool {
+        let names_login = |url: Option<&str>| {
+            url.is_some_and(|url| crate::postgresql::connect::refuse_login(url).is_err())
+        };
+        let machines = match self.fields.get("machines") {
+            Some(SdkValue::Map(machines)) => machines.as_slice(),
+            _ => &[],
+        };
+        self.fields.get("password").is_some()
+            || names_login(self.text("url"))
+            || machines.iter().any(|(_, entry)| match entry {
+                SdkValue::Map(fields) => {
+                    fields.iter().any(|(key, _)| key != "url") || names_login(entry.get_text("url"))
+                }
+                _ => true,
+            })
+            || !matches!(self.fields.get("machines"), None | Some(SdkValue::Map(_)))
+    }
+
+    /// The record as a PostgreSQL record write leaves it (V23-6): no
+    /// `password`, no login in any URL, and each machine entry its `url`
+    /// alone (none without one). Every write of `store connect`, `store
+    /// update`, `store disconnect --machine` and `machine remove` cleans.
+    pub fn cleaned(self) -> Self {
+        let clean = crate::postgresql::connect::without_login;
+        let record = self.without("password");
+        let record = match record.text("url").map(clean) {
+            Some(url) => record.with("url", SdkValue::text(url)),
+            None => record,
+        };
+        let machines = (record.own_connections().into_iter())
+            .map(|(machine, own)| {
+                let url = own.url.as_deref().map(clean);
+                (machine, OwnConnection { url })
+            })
+            .collect();
+        record.with_machines(machines)
+    }
+
     fn raw_links(&self) -> &[(String, SdkValue)] {
         match self.fields.get("backups") {
             Some(SdkValue::Map(links)) => links,

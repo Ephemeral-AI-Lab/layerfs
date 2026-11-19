@@ -2,7 +2,7 @@
 //! address of a connected one (every machine's, or one machine's own).
 use crate::calls::table::Kind::{Name, Text};
 use crate::calls::table::{a, call, opt, Call};
-use crate::calls::{Context, Form};
+use crate::calls::{Context, Form, Part};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::names::{MachineName, StoreName};
 use layerfs_home::outcome::Outcome;
@@ -23,7 +23,8 @@ const FORM: Form = Form::of(
         "connections",
         "synchronous_commit",
     ],
-);
+)
+.parts(&[("connections", Part::Rows(&super::get::CONNECTION))]);
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(

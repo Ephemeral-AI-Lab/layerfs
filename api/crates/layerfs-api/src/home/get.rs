@@ -3,6 +3,7 @@
 //! in the home.
 use crate::calls::table::{call, Call};
 use crate::calls::{Context, Form, Part, Section};
+use crate::store::get::CONNECTION;
 use layerfs_bridge::control::SdkValue;
 use layerfs_control::home::{Build, With};
 use layerfs_home::outcome::Outcome;
@@ -50,9 +51,6 @@ const PLATFORM: Form = Form::of(
 const PLATFORMS: Form = Form::of(&["host", "items"], &[], &["host", "items"])
     .parts(&[("items", Part::Rows(&PLATFORM))]);
 
-/// The nodes of `--with tree`: a PostgreSQL Store's address, the home's
-/// own (`machine` null) or one machine's.
-const CONNECTION: Form = Form::of(&["url"], &["machine"], &["machine", "url"]);
 const STORE: Form = Form::of(
     &["store", "engine"],
     &[

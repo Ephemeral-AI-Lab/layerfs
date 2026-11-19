@@ -515,3 +515,47 @@ rule below (b2eb2de931).
 - **V22-7** Two refusals name their fix (cliux, 16a20bd09d): `branch merge` into `main` with no
   `--into` (refused `InvalidInput`) gives `layerfs branch publish <project> <from>`; a `Dirty`
   `workspace unmount` gives `layerfs workspace commit <workspace>`.
+
+## Version 23 (owner 2026-11-19): PostgreSQL Stores, who connects
+
+Owner, on Stores ▸ PostgreSQL: the screen must show which machines connect to the database that
+holds the LayerFS data, and manage logins. Spec `tmp/pg-store-v23/SPEC.md` (owner answers to its
+§7 and to the review's three questions, 2026-11-19).
+
+- **V23-1** A login says who, the binding says which database, an address says how. One login may
+  serve Stores on several servers (V21-3 stands); a UI groups PostgreSQL Stores by login.
+- **V23-2** What was seen when a side dialled a PostgreSQL Store is kept beside its record, in its
+  observation file (`store/<s>/observed.json`, with the `at` a live read writes): `here` for this
+  computer, `reach.<machine>` per machine, each `{at, ok, latency_ms, server_version, error}`. It is
+  written by `store connect --machine` (its check), every `store doctor` reach (this computer's
+  included) and each Sandbox made on a machine (`{at, ok: true}`, after the reply); under the
+  Store's lock, never after the Store is gone, never failing the call, moving no `generation`.
+  `native` with no address of its own dials as this computer and is `here`.
+- **V23-3** `store get`, `store list`, the `store connect` answer and the home tree's
+  `connections` list every side that connects: this computer first (`machine` null), then by
+  name each machine with an address of its own, a reach seen, or a Sandbox of the Store. A row is
+  short `{url, machine, reached}` (`reached`: `ok`, `failed`, absent when nothing was seen) and
+  long `{machine, url, own, server, reached, reach}`.
+- **V23-4** Dropped (owner): `machine get` is unchanged. A UI derives machine → PostgreSQL Stores
+  from `store list` rows.
+- **V23-5** `store get` and `store list` long forms add `binding`: the first 8 bytes of the id in
+  the Store's schema as 16 hex, the open-Store cache's key.
+- **V23-6** No compatibility (owner rule of 2026-11-19): a PostgreSQL record holding a `password`,
+  a URL with a user or a login parameter, or a `machines.<m>` entry with anything but its `url`
+  is `broken` `outdated`, fix `layerfs store update <store> --auth <auth>`. Every PostgreSQL record
+  write (`store connect`, `store update`, `store disconnect --machine`, `machine remove`) drops
+  those fields; a read never does. Calls are not refused for them.
+- **V23-7** A record naming a login the home does not hold is `broken` `missing` (owner: no new
+  reason word), fix `layerfs store save-auth <auth> --user <user> --password-stdin && layerfs
+  store update <store> --auth <auth>`, which wins over `outdated`. `store update --auth` checks
+  the login again under the home lock, closing its race with `store remove-auth`.
+- **V23-8** `store auths` lists a login file it cannot read as a row `broken` `failed` with the
+  save that writes it again, instead of failing the list; every row has `state`.
+- **V23-9** `store doctor` of a PostgreSQL Store dials from this computer, then from every machine
+  with an address of its own, a Sandbox of it, or `--machine`, and records each reach.
+- **V23-10** `store disconnect --machine M` also forgets M's reach, and succeeds when M has only a
+  reach; `machine remove` forgets its reaches too.
+- **V23-11** URL hygiene: `passfile` joins `user` and any `password` parameter as a refused login
+  (`InvalidInput`); `sslkey` and `sslcert` name files and pass.
+- **V23-12** A replica or copy of a Store's database carries its binding, so it counts as the same
+  Store (`Exists` for a second name); the manual says so.
