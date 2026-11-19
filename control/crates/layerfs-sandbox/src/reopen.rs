@@ -159,7 +159,7 @@ fn local_record_of(host: &Host, id: &str, value: &DaemonRecord) -> Result<(PathB
     let named = name == given;
     let expected = crate::launch::local::directory(host.deploy(), id, &given, directory.parent())?;
     if !named || directory != expected {
-        return Err(refused(
+        let refusal = refused(
             "InvalidInput",
             format!(
                 "Sandbox {id}'s local record names {} (as {name}), but this deployment puts it at \
@@ -170,7 +170,15 @@ fn local_record_of(host: &Host, id: &str, value: &DaemonRecord) -> Result<(PathB
                 expected.display(),
                 crate::files::sandbox_dir(host)?.display()
             ),
-        ));
+        );
+        // a name this deployment does not give: `sandbox remove` removes
+        // its records alone
+        return Err(match named {
+            false => {
+                layerfs_home::outcome::with_fix(refusal, format!("layerfs sandbox remove {id}"))
+            }
+            true => refusal,
+        });
     }
     if (host.deploy())
         .and_then(|deploy| deploy.local_dir.as_deref())

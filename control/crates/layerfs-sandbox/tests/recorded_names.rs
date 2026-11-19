@@ -2,13 +2,17 @@
 //! `layerfs-<home id8>-<name>`. A record whose own name is not that one,
 //! exactly (the `lfs-` prefix before #180 included), or whose directory is
 //! not that name under the run root, is neither used nor deleted: no
-//! prefix is stripped from a recorded name.
+//! prefix is stripped from a recorded name. A record whose name this home
+//! does not give names `sandbox remove` as its fix, and that remove takes
+//! its records alone: its run folder and daemon process are left, and
+//! `left` names both with the line that removes them.
 //!
 //! Nothing runs a daemon: a record names this test's own process.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_bridge::control::SdkValue;
 use layerfs_bridge::process::LocalProcess;
 use layerfs_home::home::{self, paths, write_record};
+use layerfs_sandbox::family::{remove, RemoveRequest, Removed};
 use layerfs_sandbox::force::native_host;
 use layerfs_sandbox::host::Host;
 use layerfs_sandbox::lifecycle::sandbox_name;
@@ -130,5 +134,40 @@ fn a_record_holds_the_one_name_exactly() {
     let daemon = record(&home, "s1", &new, &elsewhere, me);
     refused(&host, "s1", &daemon);
     assert!(elsewhere.is_dir());
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_record_with_a_name_this_home_does_not_give_is_removed_by_its_records() {
+    let (home, id8) = new_home("foreign");
+    let run = paths::run_root(&home);
+    let me = std::process::id();
+    let host = native_host(&home, "s1").unwrap();
+    let old = format!("lfs-{id8}-s1");
+    let folder = run.join(&old);
+    let daemon = record(&home, "s1", &old, &folder, me);
+    let refusal = recorded(&host, "s1", &daemon).err().unwrap();
+    assert_eq!(
+        refusal.detail.get_text("fix"),
+        Some("layerfs sandbox remove s1"),
+        "{refusal:?}"
+    );
+    let mut sink = |_| {};
+    let mut events = layerfs_home::events::Events::new(&mut sink);
+    let request = RemoveRequest {
+        name: "s1".to_owned(),
+        force: false,
+    };
+    let left = match remove(&home, &mut events, &request).unwrap() {
+        Removed::AlreadyGone { left } => left,
+        Removed::Stopped { .. } => panic!("a record named {old} was stopped"),
+    };
+    let said = left.join(" | ");
+    assert!(said.contains(&old), "{said}");
+    assert!(said.contains(&folder.display().to_string()), "{said}");
+    assert!(said.contains(&format!("kill {me};")), "{said}");
+    assert!(!paths::sandbox_record(&home, "s1").exists());
+    assert!(folder.is_dir(), "its run folder was removed");
+    assert!(LocalProcess::observe(me).is_ok());
     std::fs::remove_dir_all(home).unwrap();
 }
