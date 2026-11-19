@@ -450,3 +450,30 @@ rewritten, and 2.0 state answers as before.
   otherwise it says the process is gone. Folders in a `left` or `fix` line are one shell word. A
   bucket's same place compares the host (and r2's account) in lower case and leaves out an
   endpoint's default port.
+
+## UI pass 2 rulings (coordinator, 2026-11-19)
+
+- **UI2-1** (F1) A machine whose record alone makes it broken (a removed platform's, `unsupported`;
+  one with no `vm_name`, `outdated`) is not probed by a live read: `machine get --with live` and
+  `machine list --with live` answer the record's state, `reason` and `fix`, never `unknown`.
+- **UI2-2** (F6) V20-7's no-login fix names the user the record's URL names when it names one
+  (`--user owner`, shell-quoted), else `<user>`; `store list`, `store get`, a refused dial and
+  `store doctor`'s `store.connection` give the same line. `store doctor`'s `store.record` on a
+  record of a kind this build does not read carries V20-8a's `layerfs store remove <store>`.
+- **UI2-3** A `backup list` `not_listed` entry carries `fix`, V21-4's
+  `layerfs backup connect <name> <url> --access-key <key> --key-stdin` (shell-quoted), when its
+  bucket was not asked for want of its key (no key id, no saved secret) or refused its key
+  (HTTP 401 or 403); any other entry has none (left out of the short form, null in the long).
+- **UI2-4** `--text` prints `ready` in a list's STATE column for a row whose short form left
+  `state: ready` out, and keeps the column when every row was ready; `-` stays for any other
+  absent value. `layerfs help` says `--text` prints a readable form.
+- **UI2-5** (item d) `store doctor` on a sqlite Store whose file another writer holds reports
+  `store.identity` and `store.schema` as `not_checked` with reason `busy`, never as a schema or id
+  error; `store.connection` passes when the file is there.
+- **UI2-6** (clibugs, f14fb23da0) `home get --detail`'s `bundle.source` gains the word `runtime`: the
+  bundle an installed runtime carries beside its command (`<runtime>/bundle/linux-<arch>/` beside
+  `<runtime>/bin/layerfs`, symlinks resolved), chosen after `LAYERFS_BUNDLE` and before the cache.
+- **UI2-7** (clibugs, f14fb23da0) `machine create`, `machine start` and every call that starts a
+  worker refuse `Unavailable`, before anything starts, a Linux bundle whose `bundle.json`
+  `source.head` is not the commit this build was compiled from; a build that names no commit cannot
+  tell and uses it.

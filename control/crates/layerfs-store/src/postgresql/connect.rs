@@ -116,6 +116,22 @@ pub fn refuse_login(url: &str) -> Result<()> {
     Ok(())
 }
 
+/// The user a URL names, decoded: its user part (before any password), or
+/// else its `user` parameter. A 2.0 record's URL names none; one recorded
+/// before saved logins may, and its no-login fix names that user.
+pub fn url_user(url: &str) -> Option<String> {
+    let (_, user, rest) = parts(url).ok()?;
+    let user = match user {
+        Some(user) => decode(user.split(':').next().unwrap_or("")),
+        None => {
+            (query(rest).into_iter())
+                .find(|(name, _)| name.eq_ignore_ascii_case("user"))?
+                .1
+        }
+    };
+    Some(user).filter(|user| !user.is_empty())
+}
+
 /// The server and database a URL names, as libpq reads it: `(host, port,
 /// database)` from the authority and path, overridden by `host`, `port`
 /// and `dbname` parameters; port 5432 by default; the host in lower case.

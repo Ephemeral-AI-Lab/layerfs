@@ -698,6 +698,7 @@
     "lost",
     "refused"
    ],
+   "fix": "a list may add fix, one runnable line, where one is honest (backup.list: a missing or refused bucket key); left out of the short form and null in the long form otherwise",
    "is": "what a list could not include: one entry per thing it could not ask, never a refusal of the whole call; refused is a thing that answered and refused, with the refusal in message"
   }
  },
@@ -8420,7 +8421,8 @@
      "examples": {
       "short": [
        "{\"items\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"size\":213263952,\"store\":\"shop\"},{\"bucket\":\"r2-main\",\"file\":\"old-demo\",\"size\":4096000},{\"bucket\":\"r2-main\",\"file\":\"analytics\",\"size\":88120000,\"store\":\"analytics\",\"behind\":true}]}",
-       "a bucket that cannot be listed: {\"items\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"size\":213263952,\"store\":\"shop\"}],\"not_listed\":[{\"bucket\":\"minio-lab\",\"reason\":\"lost\",\"message\":\"minio-lab did not answer at http://lab:9000\"}]}"
+       "a bucket that cannot be listed: {\"items\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"size\":213263952,\"store\":\"shop\"}],\"not_listed\":[{\"bucket\":\"minio-lab\",\"reason\":\"lost\",\"message\":\"minio-lab did not answer at http://lab:9000\"}]}",
+       "a bucket that refused its key: {\"items\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"size\":213263952,\"store\":\"shop\"}],\"not_listed\":[{\"bucket\":\"r2-old\",\"reason\":\"refused\",\"message\":\"r2-old refused the listing at r2://0123abcd/backups: HTTP 403 InvalidAccessKeyId\",\"fix\":\"layerfs backup connect r2-old r2://0123abcd/backups --access-key <key> --key-stdin\"}]}"
       ],
       "long": "{\"items\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"size\":213263952,\"store\":\"shop\",\"behind\":false,\"changed\":false,\"missing\":false,\"message\":null,\"modified_at\":\"2026-11-18T09:15:59Z\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\"}],\"not_listed\":[]}"
      },

@@ -45,6 +45,7 @@ pub fn version() -> ExitCode {
             ),
         ]),
         false,
+        None,
     )
 }
 
@@ -119,5 +120,6 @@ pub fn help() -> ExitCode {
             ("switches", SdkValue::List(switches)),
         ]),
         false,
+        None,
     )
 }

@@ -1,7 +1,7 @@
 //! What a call prints (S §2.6): the result as one line of JSON on stdout,
 //! or with `--text` a readable form; a refusal as JSON on stderr, exit 125.
 use crate::run::REFUSED;
-use layerfs_api::json;
+use layerfs_api::{json, Form, Part};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::io::Write;
 use std::process::ExitCode;
@@ -14,10 +14,11 @@ pub fn refusal(refusal: &SdkRefusal, detail: bool) -> ExitCode {
     ExitCode::from(REFUSED)
 }
 
-/// Prints a call's result.
-pub fn result(value: &SdkValue, text: bool) -> ExitCode {
+/// Prints a call's result; `form` is the call's declared answer, which
+/// `--text` reads for the columns its rows may leave out.
+pub fn result(value: &SdkValue, text: bool, form: Option<&Form>) -> ExitCode {
     let printed = if text {
-        readable(value)
+        readable(value, form)
     } else {
         format!("{}\n", json::print(value))
     };
@@ -202,7 +203,8 @@ fn cell(value: &SdkValue) -> String {
 
 /// `--text`: a file's text as it is; a result whose one list holds records
 /// as a table of their scalar fields; anything else as `key  value` lines.
-fn readable(value: &SdkValue) -> String {
+/// `form`, the call's declared answer, gives each list's row form.
+pub fn readable(value: &SdkValue, form: Option<&Form>) -> String {
     if let Some(SdkValue::Text(text)) = value.get("text") {
         return text.clone();
     }
@@ -216,7 +218,11 @@ fn readable(value: &SdkValue) -> String {
                 if !out.is_empty() {
                     out.push('\n');
                 }
-                out.push_str(&table(name, rows));
+                let declared = match form.and_then(|form| form.part(name)) {
+                    Some(Part::Rows(rows)) => Some(*rows),
+                    _ => None,
+                };
+                out.push_str(&table(name, rows, declared));
             }
             _ => out.push_str(&format!("{name}  {}\n", format_field(name, field))),
         }
@@ -224,8 +230,21 @@ fn readable(value: &SdkValue) -> String {
     out
 }
 
+/// The cell of column `column` in a row that left it out. The short form
+/// leaves out `state: ready` (and null, false and empty values), so a row
+/// with no `state` is `ready`; any other absent value is `-`.
+fn absent(column: &str) -> &'static str {
+    match column {
+        "state" => "ready",
+        _ => "-",
+    }
+}
+
 /// Rows as aligned columns, upper-case headers; nested values are left out.
-fn table(name: &str, rows: &[SdkValue]) -> String {
+/// A row form (`declared`) whose rows carry a state keeps its STATE column
+/// when every row left `state: ready` out, in the place its long form
+/// gives it.
+fn table(name: &str, rows: &[SdkValue], declared: Option<&Form>) -> String {
     let mut columns: Vec<&str> = Vec::new();
     for row in rows {
         if let SdkValue::Map(fields) = row {
@@ -236,6 +255,14 @@ fn table(name: &str, rows: &[SdkValue]) -> String {
                     columns.push(key);
                 }
             }
+        }
+    }
+    let long = declared.map_or(&[][..], |form| form.long);
+    if let Some(at) = long.iter().position(|key| *key == "state") {
+        if !columns.is_empty() && !columns.contains(&"state") {
+            let before = |key: &&str| long.iter().position(|k| k == key).is_some_and(|i| i < at);
+            let place = columns.iter().take_while(|key| before(key)).count();
+            columns.insert(place, "state");
         }
     }
     if rows.is_empty() || columns.is_empty() {
@@ -249,7 +276,7 @@ fn table(name: &str, rows: &[SdkValue]) -> String {
                 .map(|c| {
                     row.get(c)
                         .map(|v| format_field(c, v))
-                        .unwrap_or_else(|| "-".to_owned())
+                        .unwrap_or_else(|| absent(c).to_owned())
                 })
                 .collect()
         })

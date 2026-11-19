@@ -520,7 +520,8 @@ layerfs backup doctor lab --full
   Store changed since its last backup, `changed` that the bucket's file is
   not the one the link last moved, `missing` that a linked file is gone. A
   bucket that cannot be listed is named in `not_listed` and the others are
-  still listed.
+  still listed; one whose key is missing or refused carries the `fix` that
+  connects it again with its key.
 - **`backup disconnect <bucket>`** forgets the bucket and this home's links
   to it (`unlinked` names the Stores). Its objects stay. LayerFS never
   deletes a bucket object.

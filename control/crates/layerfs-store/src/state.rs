@@ -115,7 +115,7 @@ pub fn recorded_under(record: &StoreRecord, under: Option<&State>) -> Result<Sta
             }
         }
         Ok(StoreRef::Postgres { .. }) if record.text("auth").is_none() => {
-            let fix = crate::postgresql::login::no_auth_fix(record.name());
+            let fix = crate::postgresql::login::no_auth_fix(record);
             return Ok(State::broken(Reason::Outdated, Some(&fix)));
         }
         Ok(StoreRef::Postgres { .. }) => {}

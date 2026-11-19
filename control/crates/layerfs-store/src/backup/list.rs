@@ -102,20 +102,38 @@ fn row(
     ])
 }
 
+/// Why a bucket was not asked: its key could not be read (`keyed`: no key
+/// id in its record, or no saved secret), or another refusal before any
+/// request (settings this build cannot use).
+struct NotAsked {
+    message: String,
+    keyed: bool,
+}
+
 /// A bucket that could not be listed: `{bucket, blocked_by, reason,
-/// message}`, `reason` `refused` when it answered and refused, `timeout`
-/// when it ran out of time, `lost` when no answer came back. A bucket this
-/// home did not ask (no saved secret, settings it cannot use: `error` is
-/// `Err`) is `refused` too, the asking refused before a request: the list
-/// shape's reasons (`timeout`, `busy`, `lost`, `refused`) have no other
-/// word for it, and `lost` is only for a request that got no answer.
-fn not_listed(record: &BucketRecord, bucket: &str, error: Result<RemoteError, String>) -> SdkValue {
+/// message, fix}`, `reason` `refused` when it answered and refused,
+/// `timeout` when it ran out of time, `lost` when no answer came back. A
+/// bucket this home did not ask (no saved secret, settings it cannot use:
+/// `error` is `Err`) is `refused` too, the asking refused before a request:
+/// the list shape's reasons (`timeout`, `busy`, `lost`, `refused`) have no
+/// other word for it, and `lost` is only for a request that got no answer.
+/// `fix` is connecting it again with its key (V21-4) when its key was
+/// missing or the bucket refused it (HTTP 401 or 403); none otherwise.
+fn not_listed(
+    record: &BucketRecord,
+    bucket: &str,
+    error: Result<RemoteError, NotAsked>,
+) -> SdkValue {
     let url = record.url();
+    let mut keyed = false;
     let (reason, message) = match error {
-        Ok(RemoteError::Refused { status, code }) => (
-            "refused",
-            format!("{bucket} refused the listing at {url}: HTTP {status} {code}"),
-        ),
+        Ok(RemoteError::Refused { status, code }) => {
+            keyed = matches!(status, 401 | 403);
+            (
+                "refused",
+                format!("{bucket} refused the listing at {url}: HTTP {status} {code}"),
+            )
+        }
         Ok(other) => {
             let text = other.to_string();
             let lower = text.to_lowercase();
@@ -125,13 +143,21 @@ fn not_listed(record: &BucketRecord, bucket: &str, error: Result<RemoteError, St
             };
             (reason, format!("{bucket} did not answer at {url}: {text}"))
         }
-        Err(why) => ("refused", format!("{bucket} was not asked: {why}")),
+        Err(why) => {
+            keyed = why.keyed;
+            let message = format!("{bucket} was not asked: {}", why.message);
+            ("refused", message)
+        }
     };
     SdkValue::map([
         ("bucket", SdkValue::text(bucket)),
         ("blocked_by", SdkValue::Null),
         ("reason", SdkValue::text(reason)),
         ("message", SdkValue::text(message)),
+        (
+            "fix",
+            SdkValue::opt_text(keyed.then(|| record.connect_again())),
+        ),
     ])
 }
 
@@ -187,9 +213,11 @@ pub fn list(home: &Path, only: Option<&str>) -> Outcome {
     }
     for record in &buckets {
         let bucket = record.name().to_owned();
-        let listed = match record.driver(home) {
-            Err(refusal) => Err(Err(refusal.message)),
-            Ok(driver) => remote::list_stores(driver.as_ref()).map_err(Ok),
+        let not_asked = |message, keyed| Err(Err(NotAsked { message, keyed }));
+        let listed = match record.credentials(home).map(|key| record.driver_with(key)) {
+            Err(refusal) => not_asked(refusal.message, true),
+            Ok(Err(refusal)) => not_asked(refusal.message, false),
+            Ok(Ok(driver)) => remote::list_stores(driver.as_ref()).map_err(Ok),
         };
         let copies = match listed {
             Ok(copies) => copies,

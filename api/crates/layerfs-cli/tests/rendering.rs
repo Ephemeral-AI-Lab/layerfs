@@ -69,3 +69,81 @@ fn progress_counts_steps_and_bytes_apart() {
         "phase: data  3/3"
     );
 }
+
+/// `--text` of a list (UI pass 2, LF4): the short form leaves `state: ready`
+/// out, so a row with no `state` prints `ready` in the STATE column, never
+/// `-`; a list whose rows were all ready keeps that column; an absent
+/// value of any other column is still `-`. Every list call whose rows
+/// carry a state renders so.
+#[test]
+fn a_ready_row_prints_ready_in_a_list_s_text() {
+    use layerfs_api::{Form, Part};
+    use layerfs_cli::output::readable;
+    let mut checked = Vec::new();
+    for call in layerfs_api::calls() {
+        let Some(form) = call.form else { continue };
+        let Some(Part::Rows(rows)) = form.part("items") else {
+            continue;
+        };
+        let rows: &Form = rows;
+        if !rows.long.contains(&"state") {
+            continue;
+        }
+        let name = call.name();
+        // a row of its always keys, and one more that is stopped
+        let row = |id: &str, stopped: bool| {
+            let mut fields: Vec<(String, SdkValue)> = (rows.always.iter())
+                .filter(|key| **key != "state")
+                .map(|key| ((*key).to_owned(), SdkValue::text(format!("{id}-{key}"))))
+                .collect();
+            if stopped {
+                fields.push(("state".to_owned(), SdkValue::text("stopped")));
+            }
+            SdkValue::Map(fields)
+        };
+        let lines = |value: &SdkValue| -> Vec<String> {
+            readable(value, Some(form))
+                .lines()
+                .map(|line| line.to_owned())
+                .collect()
+        };
+        let mixed = SdkValue::map([(
+            "items",
+            SdkValue::List(vec![row("a", false), row("b", true)]),
+        )]);
+        let shown = lines(&mixed);
+        assert!(shown[0].contains("STATE"), "{name}: {shown:?}");
+        let word = |line: &str, word: &str| line.split_whitespace().any(|w| w == word);
+        assert!(word(&shown[1], "ready"), "{name}: {shown:?}");
+        assert!(!word(&shown[1], "-"), "{name}: {shown:?}");
+        assert!(word(&shown[2], "stopped"), "{name}: {shown:?}");
+        let ready = SdkValue::map([(
+            "items",
+            SdkValue::List(vec![row("a", false), row("c", false)]),
+        )]);
+        let shown = lines(&ready);
+        assert!(shown[0].contains("STATE"), "{name}: {shown:?}");
+        assert!(
+            shown[1..].iter().all(|l| word(l, "ready")),
+            "{name}: {shown:?}"
+        );
+        checked.push(name);
+    }
+    for family in ["machine", "store", "sandbox"] {
+        let list = format!("{family}.list");
+        assert!(checked.contains(&list), "{list}: {checked:?}");
+    }
+    // another column a row leaves out is still `-`
+    let value = SdkValue::map([(
+        "items",
+        SdkValue::List(vec![
+            SdkValue::map([
+                ("bucket", SdkValue::text("r2")),
+                ("store", SdkValue::text("shop")),
+            ]),
+            SdkValue::map([("bucket", SdkValue::text("r2"))]),
+        ]),
+    )]);
+    let shown = readable(&value, None);
+    assert!(shown.lines().nth(2).unwrap().ends_with("  -"), "{shown}");
+}

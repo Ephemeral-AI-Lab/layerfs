@@ -81,7 +81,7 @@ pub fn print(topic: &[&str]) -> ExitCode {
                 crate::banner::bold("worker"),
                 crate::banner::bold("help")
             ));
-            text.push_str("A result is one line of JSON: the short form, or with --detail the long form with every key. --with a,b adds the named sections a call lists.\n");
+            text.push_str("A result is one line of JSON: the short form, or with --detail the long form with every key; --text prints a readable form instead. --with a,b adds the named sections a call lists.\n");
             text.push_str("The home is LAYERFS_HOME, else ~/.layerfs. Exit 0: done; 2: wrong command line; 125: refused, with {\"error\",\"message\",\"fix\"} on stderr.\n");
             output::print(&text)
         }

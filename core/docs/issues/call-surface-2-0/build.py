@@ -155,6 +155,8 @@ LIST_SHAPE = {
               "a log pages from the newest line back, with the same options and shape"],
     "not_listed": {"entry": ["<thing>", "blocked_by", "reason", "message"], "one_of": ["blocked_by", "reason"],
                    "reason": NOT_LISTED_REASONS,
+                   "fix": "a list may add fix, one runnable line, where one is honest (backup.list: a missing or refused bucket key); "
+                          "left out of the short form and null in the long form otherwise",
                    "is": "what a list could not include: one entry per thing it could not ask, never a refusal of the whole call; "
                          "refused is a thing that answered and refused, with the refusal in message"},
 }
@@ -607,8 +609,8 @@ def check_lists(value, say):
             continue
         for entry in entries:
             thing = thing_key(entry) if isinstance(entry, dict) else None
-            if not thing or set(entry) - {thing, "blocked_by", "reason", "message"} or not entry.get("message"):
-                say(f"{at}: a not_listed entry is {{<thing>, blocked_by | reason, message}}: {entry}")
+            if not thing or set(entry) - {thing, "blocked_by", "reason", "message", "fix"} or not entry.get("message"):
+                say(f"{at}: a not_listed entry is {{<thing>, blocked_by | reason, message[, fix]}}: {entry}")
                 continue
             if (entry.get("blocked_by") is None) == (entry.get("reason") is None):
                 say(f"{at}: a not_listed entry carries blocked_by or reason, one of them")
@@ -1828,7 +1830,7 @@ def render(S, fams, today, state, pairs_mod, draft):
          + (f". {len(unpaged)} list calls take no cursor because they are bounded, and each row says why: {code_list(unpaged)}" if unpaged else "") + "."),
         ("Cursors", "A cursor carries its call's filters and, where the call pins a Commit, the pin; <code>project list</code> and <code>branch list</code> cursors carry filters only. A cursor given with different filters or another pin, or to another call, is refused <code>InvalidInput</code>. A cursor whose pinned Commit is gone is refused <code>NotFound</code>."),
         ("Partial lists", "A list that could not include everything still answers, and names what is missing in <code>not_listed</code>: <code>[{&lt;thing&gt;, blocked_by | reason, message}]</code>, one entry per thing it could not ask, with <code>blocked_by</code> as in a state or <code>reason</code> one of "
-         + code_list(NOT_LISTED_REASONS) + (f" ({code_list(not_listed)})" if not_listed else "") + ". <code>refused</code> is a thing that answered and refused, such as a bucket that rejects its key; <code>message</code> carries the refusal. It is never a refusal of the whole call. A doctor's <code>not_checked</code> entry takes " + code_list(NOT_CHECKED_REASONS) + " only."),
+         + code_list(NOT_LISTED_REASONS) + (f" ({code_list(not_listed)})" if not_listed else "") + ". <code>refused</code> is a thing that answered and refused, such as a bucket that rejects its key; <code>message</code> carries the refusal; where one runnable line honestly fixes it, the entry also carries <code>fix</code> (<code>backup list</code>: a missing or refused bucket key). It is never a refusal of the whole call. A doctor's <code>not_checked</code> entry takes " + code_list(NOT_CHECKED_REASONS) + " only."),
         ("Windows", f"Text by lines: <code>--line N</code> (1-based) and <code>--limit N</code> (default {LIST_SHAPE['default_limit']['line']}), answering <code>next_line</code> when more remains"
          + (f" ({code_list(line_calls)})" if line_calls else "") + "."
          + (f" Bytes, for UI file views only: {code_list(byte_calls)}." if byte_calls else "")),

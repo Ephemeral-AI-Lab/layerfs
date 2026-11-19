@@ -206,7 +206,10 @@ $ echo $?
   (`"0700"`); `bundle` and `daemon` are
   `{ path, source, present, commit, dirty, matches }` for the Linux bundle
   and the native daemon this build would use (`matches` is null when either
-  side cannot tell); `cache` is `{ path }`. It reads `layerfs.json`, the
+  side cannot tell); the bundle's `source` is `env:LAYERFS_BUNDLE`,
+  `runtime` (an installed runtime's own, `<runtime>/bundle/linux-<arch>/`
+  beside `<runtime>/bin/layerfs`, chosen after `LAYERFS_BUNDLE` and before
+  the cache) or `cache`; `cache` is `{ path }`. It reads `layerfs.json`, the
   folder's mode, `bundle.json`, the native daemon's record and the daemon
   file, and changes nothing. The answer has no `warnings` list any more:
   what is wrong with a bundle, a daemon or the folder's mode is the home
@@ -1108,7 +1111,9 @@ positional `machine`, except `create`, which takes `name` and `platform`.
   (`list`: every machine at the same time), within 10 s, starting nothing.
   The state, its companion, `message` and `observed_at` then come from the
   probe; `unknown` means the probe did not answer, and its `observed_at` is
-  the last probe that did. The record is written only when the state word
+  the last probe that did. A machine whose record alone makes it broken (a
+  removed platform's, `unsupported`; one with no `vm_name`, `outdated`) is
+  not probed: it keeps its record's state, `reason` and `fix`. The record is written only when the state word
   or reason changed (which moves the home's `generation`); `observed_at` is
   kept in `observed.json` beside the record, which does not. `get --with
   live` adds the `live` section: `disk_free_bytes`, `tool_version` (the
@@ -1133,6 +1138,12 @@ positional `machine`, except `create`, which takes `name` and `platform`.
   leaves the machine `broken`/`unresolved` with `fix: layerfs machine get
   <m> --with live`, which settles it by observing; an uncertain create or
   remove is cleared by `machine remove`.
+- **A bundle of another build.** `create`, `start` and every call that
+  starts a worker refuse `Unavailable`, before anything starts, a Linux
+  bundle whose `bundle.json` `source.head` is not the commit this build was
+  compiled from (a build that names no commit cannot tell and uses it): a
+  worker started from it would not answer this build's calls. Point
+  `LAYERFS_BUNDLE` at this build's bundle or rebuild it.
 - **An outdated worker.** `start` refuses a worker of another build and
   leaves the machine `broken`/`outdated`, with `fix: layerfs machine stop
   <m> && layerfs machine start <m>`, or `layerfs machine stop <m> --force &&
@@ -1266,6 +1277,11 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   0700 folder) and moves the home's `generation`; the password is read from
   stdin only and never answered, logged or traced. Short `{"ok":true}`;
   long `ok, outcome (saved or rotated), auth, user, stores, stores_count`.
+  A Store recorded before saved logins (no `auth`) is `broken` `outdated`
+  with the fix `layerfs store save-auth <auth> --user <user>
+  --password-stdin && layerfs store update <store> --auth <auth>`, its
+  `--user` the one its URL names when it names one; `store doctor`'s
+  `store.connection` gives the same fix.
   A Store records only the login's name (`auth`); its URL holds host,
   port, database and TLS settings, and one naming a user or holding a
   password is refused `InvalidInput`. The login goes into the URL only
@@ -1484,7 +1500,10 @@ the Store.
   otherwise); `changed` says the bucket's file is not the one the link last
   moved; each is null with a `message` when it could not be read. A bucket
   that cannot be listed is named in `not_listed` (`reason` `refused`,
-  `timeout` or `lost`) and the others are still listed.
+  `timeout` or `lost`) and the others are still listed. An entry whose
+  bucket was not asked for want of its key, or refused its key (HTTP 401
+  or 403), carries `fix`: `layerfs backup connect <name> <url>
+  --access-key <key> --key-stdin`, which keeps its Stores' links.
 - **`create` and `restore`** are recorded as the Store's `op` (`backup`,
   or `restore` when it replaces a Store), so every client reads the Store
   `busy`; a backup runs beside the Store's readers, a restore holds the
@@ -1621,7 +1640,10 @@ every check was made and nothing was found; otherwise `findings` and
 - **stdout** carries the call's result as one line of JSON.
 - **`--text`** prints a readable form instead: a file's text as it is; a
   result's list of records as a table with upper-case headers; other fields
-  as `key  value` lines. It is one generic form, not a layout per call.
+  as `key  value` lines. It is one generic form, not a layout per call. A
+  row whose short form left `state: ready` out shows `ready` in its STATE
+  column (the column stays when every row is ready); any other value a row
+  leaves out shows `-`.
 - Every call answers its short form, or its long form with `--detail`
   ([the form of an answer](#the-form-of-an-answer)); its lists carry `items`
   and `next_cursor`, passed back as `cursor`. 1.x's `page`, `page_size`,
