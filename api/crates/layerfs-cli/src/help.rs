@@ -151,7 +151,12 @@ fn top() -> String {
         .filter(|name| !listed(name))
         .collect();
     let groups = GROUPS.iter().copied().chain([("Other", &others[..])]);
-    for (heading, names) in groups.filter(|(_, names)| !names.is_empty()) {
+    let groups = groups.filter(|(_, names)| !names.is_empty());
+    for (at, (heading, names)) in groups.enumerate() {
+        // a blank line between groups
+        if at > 0 {
+            text.push('\n');
+        }
         text.push_str(&format!("{}\n", bold(heading)));
         for family in families.iter().filter(|f| names.contains(&f.name)) {
             let calls: Vec<String> = family.calls().iter().map(|c| shell(c.call)).collect();
