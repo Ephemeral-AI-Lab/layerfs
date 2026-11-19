@@ -226,10 +226,10 @@ Store on `native` or on a PostgreSQL Store runs in the calling process; a
 call on a Store on another machine goes to that machine's worker. See
 [routes](machines-and-stores.md#routes).
 
-The first call of this build on a layout 2 home converts it to layout 3,
-or is refused `InUse` while a Sandbox, lease or Store move in it is live; the
-refusal's `detail.related` names each (`{kind, name, why}`). See
-[the home](home.md#a-layout-2-home).
+A call of this build on an older LayerFS's home (layout 2, or 1.1.0's
+records) is refused `Unsupported` with the fix
+`mv <home> <home>.old && layerfs home init`; the home is not converted or
+written. See [the home](home.md#an-older-home).
 
 ## Checks on this branch
 

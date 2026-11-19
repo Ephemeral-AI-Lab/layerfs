@@ -46,8 +46,8 @@ Commit, merge, and publish to `main`.
 1. [Quickstart](quickstart.md): one home, a Store, Init, Branch and file
    calls, a Sandbox and a Workspace, a Commit; in the shell, JavaScript and
    Python.
-2. [The home](home.md): the layout of `LAYERFS_HOME`, the one-time
-   conversion of a 1.1.0 home, and `layerfs import-env`.
+2. [The home](home.md): the layout of `LAYERFS_HOME`, and what an older
+   LayerFS's home gets (it is not converted).
 3. [The calls](calls.md): all 83 calls with their positionals and options,
    the form of their answers, the doctors, errors and exit codes, the shell
    switches and the folder scope.
@@ -106,9 +106,11 @@ each old name):
 - **Results.** Result keys are snake_case in every front end (`exit_code`,
   not `exitCode`).
 - **Settings.** Only `LAYERFS_HOME` and the trace and measurement settings
-  are read. `layerfs import-env` writes a 1.1.0 environment as records once.
-- **Homes.** A 1.1.0 home is converted once, on its first 2.0 call. See
-  [the home](home.md#a-110-home).
+  are read; a 1.1.0 environment is not imported.
+- **Homes.** An older LayerFS's home (1.1.0, or 2.0 layout 2) is not
+  converted (owner, 2026-11-19): every call refuses it with the fix
+  `mv <home> <home>.old && layerfs home init`. See
+  [the home](home.md#an-older-home).
 
 The Store profile changed: every sqlite Store is opened with WAL and `synchronous=NORMAL` (owner,
 2026-11-17, ahead of its safety gate, so no power-loss guarantee is

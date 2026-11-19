@@ -7,10 +7,10 @@ Firecracker, Microsandbox and SSH machines were removed in 2.0 (owner,
 shows in `machine list` and `machine get` as `state: "unsupported"` with
 the reason (``platform `ssh` was removed in LayerFS 2.0``, or the same for
 `firecracker` or `microsandbox`). Every other call on it is `Unsupported`
-with that reason. `machine remove` forgets the record only; nothing on its
+with that reason. `machine remove` removes the record only; nothing on its
 host is touched, so remove a microsandbox VM yourself with
 `msb remove --force <vm>` and `msb volume remove <vm>-data`, and a
-firecracker microVM's files from its Lima host (the note names them). See
+firecracker microVM's files from its Lima host. See
 [machines](machines-and-stores.md#removed-platforms-firecracker-microsandbox-and-ssh)
 and [removed platforms](../../architecture/control/machines/platforms.md#removed-platforms-platform_policyrs).
 
@@ -59,7 +59,8 @@ for this manual.
 | `machine` calls in a build without the `machine` feature (the guest worker's build) | names the #533 step |
 | A `native` Sandbox on Linux started by a non-root user | namespaces need root for FUSE |
 | A Store made without the acquisition tables projects are added through | LayerFS adds no tables to an existing Store |
-| A home whose `layerfs.json` has a newer layout | "this build reads layout 2" |
+| A home whose `layerfs.json` has a newer layout | names the layout this build reads |
+| An older LayerFS's home (layout 2, or 1.1.0's records) | not converted (owner, 2026-11-19); fix `mv <home> <home>.old && layerfs home init` |
 
 Also not built:
 

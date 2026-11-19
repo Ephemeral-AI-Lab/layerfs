@@ -48,10 +48,10 @@ call's events.
 | MCP | one tool per call in a launch profile | the Node binding | a JSON text block, or `isError` | [MCP](mcp.md) |
 
 Entries outside the table: `close` in Node and Python
-(`close_idle(0)`: close this process's idle Stores and drop their leases, then
-`end_idle_sessions`: end its idle Sandbox daemon sessions inside 250 ms; the
-CLI does both after every call); in the CLI only, `worker`, `import-env`,
-`help` and `--version`. The six doctors are table calls of their families
+(`layerfs_api::close()`: close this process's idle Stores and drop their
+leases, then end its idle Sandbox daemon sessions inside 250 ms; the CLI
+calls it after every call); in the CLI only, `worker`, `help` and
+`--version`. `layerfs import-env` was removed (owner, 2026-11-19). The six doctors are table calls of their families
 ([Doctors](../../control/doctor/README.md)); the 1.x `doctor` entry outside
 the table, in every front end, was removed with no alias.
 
@@ -63,10 +63,8 @@ layerfs <family> <call> <positionals...> [--options] [switches]
   --version [--json]         -> version / capabilities      (no home)
   help --json                -> {calls, commands, switches} (no home)
   worker                     -> worker::main                (outside table)
-  import-env                 -> home::import_env            (outside table)
   <family> <call>            -> find -> parse -> Scope::parse
-                                -> call_scoped once -> close_idle(0)
-                                -> end_idle_sessions(250 ms)
+                                -> call_scoped once -> layerfs_api::close()
                                 -> print result or refusal
 ```
 
@@ -124,7 +122,7 @@ setting exits 125. The protocol is in
 Each table call appends one call-log line with `client: "cli"`;
 `LAYERFS_LOGS_TAG` sets its tag and `LAYERFS_LOGS=0` turns the log off
 ([`dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs)).
-A wrong command line, `help`, `--version`, `worker`, `import-env` and the
+A wrong command line, `help`, `--version`, `worker` and the
 eight `quiet` calls write none.
 
 ## Invariants
@@ -137,7 +135,7 @@ eight `quiet` calls write none.
 | A wrong call is refused the same way everywhere: the checks are the library's | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs); compared by `shell.mjs` and `test_calls.py` |
 | Functions (`on_progress`, `stdout`, `stderr`) never cross into the library | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs) |
 | LayerFS reads `LAYERFS_*` settings only and names no plugin | [`dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home`, [`worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
-| The CLI closes the Stores a call opened before it exits, so a sqlite Store leaves no write-ahead log | `close_idle(Duration::ZERO)` in [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) |
+| The CLI closes the Stores a call opened before it exits, so a sqlite Store leaves no write-ahead log | `layerfs_api::close()` in [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs), which runs `close_idle(Duration::ZERO)` ([`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs)) |
 | A one-shot process ends its idle Sandbox daemon sessions before it exits, so its exit is not a dropped connection in the daemon's log (layerfs-project#181). Best effort inside 250 ms in all (`SESSION_END`), sent once, after the call's result is ready; a lent or failed connection, or a daemon that does not answer in time, is dropped as before. The daemon's side is in [the daemon channel](../../control/sandboxes/daemon-channel-and-exec.md) | `end_idle_sessions` in [`registry.rs`](../../../../control/crates/layerfs-sandbox/src/registry.rs), `Controls::end_idle` in [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
 
 ## Limits and failures

@@ -15,7 +15,7 @@ class AsyncHomeFamily:
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """create this home, or convert an older one; a current home is left as it is"""
+        """create this home; a current home is left as it is"""
     async def get(
         self,
         *,
@@ -764,7 +764,7 @@ class AsyncMachineFamily:
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """delete a VM machine and its disk; one of a removed platform is only forgotten"""
+        """delete a VM machine and its disk"""
     async def update(
         self,
         machine: str,

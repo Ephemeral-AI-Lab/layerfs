@@ -64,7 +64,7 @@ enforces it.
 |  | [Kernel routes](engine/kernel-routes/README.md) | `layerfs-mount-ports`, `layerfs-fuse`, `layerfs-nfs` | How the kernel reaches a Workspace: route-neutral mount ports, FUSE and loopback NFSv3. |
 |  | [Bridge](engine/bridge/README.md) | `layerfs-bridge` | The wire between callers, workers and daemons: framing, handshake, control and SDK records, process identity. |
 |  | [Daemon](engine/daemon/README.md) | `layerfs-daemon` | The Workspace daemon process: startup, control calls, install, Workspace lifetime and forced teardown. |
-| [Control](control/README.md) | [Home](control/home/README.md) | `layerfs-home` | The home folder: records, locks, operation intent, names, secrets, traces, call logs and migration. |
+| [Control](control/README.md) | [Home](control/home/README.md) | `layerfs-home` | The home folder: records, locks, operation intent, names, secrets, traces, call logs, and opening (or refusing) a home. |
 |  | [Machines](control/machines/README.md) | `layerfs-machine`, `layerfs-platform` | Where Sandboxes run: platform adapters, the support matrix, workers and how they are reached. |
 |  | [Stores and projects](control/stores-and-projects/README.md) | `layerfs-store` | Which Stores and projects exist and where: records, placement, leases, SQLite and PostgreSQL, transfer. |
 |  | [Sandboxes](control/sandboxes/README.md) | `layerfs-sandbox`, `layerfs-sandbox-backend` | How a Sandbox runs on a machine's kernel: launch, the daemon channel, exec and the backends. |

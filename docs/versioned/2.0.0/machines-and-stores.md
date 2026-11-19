@@ -58,14 +58,14 @@ one:
   or the same for `firecracker` or `microsandbox`).
 - Every other call on it, its Sandboxes or a sqlite Store on it is
   `Unsupported` with that reason.
-- `machine remove <name>` only forgets the record (`InUse` while Stores or
+- `machine remove <name>` removes the record only (`InUse` while Stores or
   Sandboxes are recorded on it, as for any remove) and answers
-  `{"ok":true,"forgotten":true}`; its long form's `message` says nothing on
-  the host was touched. For microsandbox, remove the VM and its volume
-  yourself: `msb remove --force <vm>` and `msb volume remove <vm>-data`.
-  For firecracker, the message names the microVM's folder
+  `{"ok":true}`; its long form's `outcome` is `removed` and its `message`
+  says nothing on the host was touched. For microsandbox, remove the VM
+  and its volume yourself: `msb remove --force <vm>` and
+  `msb volume remove <vm>-data`. For firecracker, the microVM's folder
   `/layerfs/data/firecracker/vms/<vm>` and data disk
-  `/layerfs/data/firecracker/disks/<vm>.ext4`, left in its Lima host;
+  `/layerfs/data/firecracker/disks/<vm>.ext4` are left in its Lima host;
   removing that Lima machine removes them with its data disk.
 
 ### Creating a VM machine
@@ -78,8 +78,9 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
 - Defaults: 2 CPUs, 4 GiB memory, 20 GiB disk. Sizes are bytes, or text
   with `K`, `M` or `G`.
 - Each VM machine has one VM named `layerfs-<first 8 digits of the home
-  id>-<name>` (a machine made before the `layerfs-` prefix keeps its
-  recorded `lfs-...` name), one data disk mounted at `/layerfs/data` that
+  id>-<name>` (recorded as `vm_name`; a record without one, from an earlier
+  build, is refused with the fix `layerfs machine remove <name>`, which
+  removes the record alone, by every call that needs its VM), one data disk mounted at `/layerfs/data` that
   holds many Stores, and one worker. A VM name keeps no punctuation, so a
   name that differs from another machine's only in `.`, `_` or `-` is
   refused `Exists`; a new machine's name is at most 46 characters (the VM
@@ -148,7 +149,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   lives: it is the call that clears an `unresolved` machine.
 - `machine update native` and `machine update docker` set `image`,
   `docker` (the Docker socket) and `daemon` (the daemon their Sandboxes
-  run: an absolute path to a file, replacing what `import-env` recorded;
+  run: an absolute path to a file, replacing what was recorded;
   `machine get` shows it); `wsl` is a Windows host's setting. Any
   update is `InUse` while Sandboxes run on the machine, naming them.
 - A recorded daemon that is not there (its build moved or was removed)
@@ -253,7 +254,8 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   as a sqlite Store's on that machine; it binds no Store file. A Sandbox
   recorded under the retired docker backend (one container per Sandbox) is
   refused `Unsupported` with a message to recreate it; `sandbox remove`
-  forgets it and names its container for `docker rm`.
+  removes its records (`already_gone`) and leaves its container, which
+  `left` names for `docker rm` when its record keeps the name.
 - Every machine other than `native` is reached through its worker, `docker`
   on Linux included (its sqlite Stores live in a Docker volume). Checked in
   the terminal pass on a Linux VM.

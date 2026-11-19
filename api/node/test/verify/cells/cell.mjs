@@ -10,8 +10,8 @@
 //   verify  fresh mount, exec the identity and the verifier, unmount with discard;
 //   close   the Sandbox, and the home removed.
 // LFS533_DAEMON names the daemon for the `native` machine; it reaches the
-// home's record through `layerfs import-env` (the repository's debug
-// `layerfs`, or LFS533_LAYERFS), as a 1.1.0 environment would. On any other
+// home's record through `layerfs machine update native --daemon` (the
+// repository's debug `layerfs`, or LFS533_LAYERFS). On any other
 // machine the Store is pushed there after Init; for `docker`, LFS533_IMAGE is
 // the Sandbox image (`machine update docker --image`), and a docker worker
 // this home started (`lfs-<home id>-docker`) is removed with its data
@@ -100,9 +100,9 @@ const kindOf = (value) => value?.kind ?? value?.outcome ?? null;
 try {
   if (process.env.LFS533_DAEMON) {
     const binary = process.env.LFS533_LAYERFS ?? new URL("../../../../../target/debug/layerfs", import.meta.url).pathname;
-    await step("import-env", async () =>
-      execFileSync(binary, ["import-env"], {
-        env: { PATH: process.env.PATH, HOME: process.env.HOME, LAYERFS_HOME: home, LAYERFS_DAEMON: process.env.LFS533_DAEMON },
+    await step("machine.update", async () =>
+      execFileSync(binary, ["machine", "update", "native", "--daemon", process.env.LFS533_DAEMON], {
+        env: { PATH: process.env.PATH, HOME: process.env.HOME, LAYERFS_HOME: home },
         encoding: "utf8",
       }));
   }

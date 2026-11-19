@@ -568,7 +568,7 @@ export interface BackupDoctorOptions extends CallOptions {
 }
 
 export interface HomeFamily {
-  /** create this home, or convert an older one; a current home is left as it is */
+  /** create this home; a current home is left as it is */
   init(options?: CallOptions): Promise<Result>;
   /** the home's state and build; with --with, the platforms this computer supports or the tree of everything in the home */
   get(options?: HomeGetOptions): Promise<Result>;
@@ -717,7 +717,7 @@ export interface MachineFamily {
   stop(machine: string, options?: MachineStopOptions): Promise<Result>;
   /** create a VM machine (lima, apple-container) and start it */
   create(name: string, platform: string, options?: MachineCreateOptions): Promise<Result>;
-  /** delete a VM machine and its disk; one of a removed platform is only forgotten */
+  /** delete a VM machine and its disk */
   remove(machine: string, options?: MachineRemoveOptions): Promise<Result>;
   /** set a machine's image, or a built-in machine's Docker socket, WSL distribution and daemon */
   update(machine: string, options?: MachineUpdateOptions): Promise<Result>;

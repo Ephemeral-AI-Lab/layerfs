@@ -324,6 +324,39 @@ Owner, verbatim: "can we just remove them, and drop layerfs home leftovers".
 - **V20-3** Space stays visible without a list: `machine stats --with space` keeps counting
   `other_runs`.
 - **V20-4** The doctors are unchanged: no leftover check is added.
+- **V20-5** Older state is cut, not carried (package CUT). Owner, verbatim: "cut should be
+  aggressive, do not have compactibility against the old" and "cut and cleanup old incompatible
+  aggressively, no lfs, and fallback to old 2.0 or 1.x". No path reads, converts or falls back to a
+  1.x or an earlier 2.0 record. Old state shows a 2.0 state word or is refused with a fix; no
+  record is migrated or rewritten. 2.0-on-2.0 behaviour is unchanged.
+- **V20-6** An older home (layout 2, or 1.1.0's records) is never converted: `home.init` and every
+  call refuse it `Unsupported`, `home.get` answers it `broken` `outdated`, and `home.doctor`'s
+  `home.layout` fails; each gives the fix `mv <home> <home>.old && layerfs home init`.
+- **V20-7** A PostgreSQL Store record with no saved auth is `broken` `outdated`, and a call that
+  dials it is refused, both with the fix `layerfs store save-auth <auth> --user <user>
+  --password-stdin && layerfs store update <store> --auth <auth>`. A bucket record with no
+  `access_key` fails `bucket.credentials` with its disconnect and connect fix and sends nothing.
+  An unresolved op named `store.push` or `store.pull` is not mapped: `layerfs store get <store>
+  --with live` clears it, and that is its fix.
+- **V20-8** No `lfs-` names. A machine record with no `vm_name` keeps its recorded state word;
+  every call that needs its VM or container is refused `Failed` (its record has no `vm_name`, and
+  no call repairs it) before the provider is asked. Its fix is `layerfs machine remove <machine>`,
+  which then removes the record alone and touches no VM; the built-in `docker`, never removed,
+  gets `layerfs machine doctor docker`. A Sandbox of the retired docker backend names its container only when its record keeps
+  the name.
+- **V20-9** `forgotten` is gone. `machine.remove` of a machine of a removed platform answers
+  `removed` with a `message` that only its record went; `sandbox.remove` of a Sandbox of the retired
+  docker backend answers `already_gone`, with `left` saying its container was not touched. The
+  `forgotten`, `container` and `fix` answer keys are removed.
+- **V20-10** `workspace.exec`'s `env` is one object (`--env K=V` on the command line); a list is
+  refused.
+- **V20-11** Older runtime files are refused, not read: a Linux bundle without file identities
+  (rebuild with `python3 tools/linux_bundle.py`), a local Sandbox record without `boot` or with
+  labels of another shape, and image cache folders other than `<hex>.2`. A machine record's
+  reasonless `failed` reads `stopped`.
+- **V20-12** Two 2.0 behaviour fixes ride with the cut: a Store with no record in a worker root no
+  longer resolves through the old identity path (it misfired on 2.0 worker roots), and a
+  PostgreSQL Store's `synchronous_commit` is `local` on connect as on open (connect used `off`).
 
 ## Coordinator rulings after the 3080 pass
 

@@ -26,7 +26,7 @@ client `node` or `python`. The home defaults to `LAYERFS_HOME`, else
 api/crates/layerfs-node (cdylib, napi 2.16, napi4)
   call.rs  table()  -> layerfs_api::table_json()
            call()   -> AsyncTask: call_json once; events -> threadsafe fn
-           close()  -> close_idle(0), end_idle_sessions(250 ms)
+           close()  -> layerfs_api::close(): close_idle(0), end_idle_sessions(250 ms)
 api/node/src
   index.js    table, families, client(), bind(), close(),
               default export (all ten families) and named family exports

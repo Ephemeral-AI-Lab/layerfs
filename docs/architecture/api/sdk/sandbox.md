@@ -271,8 +271,8 @@ Python  layerfs.sandbox.remove(sandbox, *, force=None, on_progress=None)
 
 | Answer | Keys |
 | --- | --- |
-| short | each when set: `ok`, `unmounted`, `container`, `fix`, `left` |
-| long | `ok, unmounted, container, fix, left, outcome, sandbox` |
+| short | each when set: `ok`, `unmounted`, `left` |
+| long | `ok, unmounted, left, outcome, sandbox` |
 | call | sends progress; writes one call-log line; MCP `admin` |
 
 Records its `op` (`remove`) before it stops the Sandbox and removes the
@@ -285,9 +285,12 @@ from the Sandbox's own records: it opens no Store and calls no daemon,
 checks the runtime's identity and ends its mounts and processes
 ([`force.rs`](../../../../control/crates/layerfs-sandbox/src/force.rs)).
 `outcome` (long form) is `removed`, `already_gone` (its runtime was gone, or
-it never recorded one; `left` says what may remain) or `forgotten` (the
-retired docker backend: its `container` is left, with `fix: docker rm -f
-<container>`). A lost answer keeps the record with the `op` uncertain
+it never recorded one; `left` says what may remain). A Sandbox of the
+retired docker backend is also `already_gone`: its records go, and `left`
+says its container of the retired docker backend was not touched, with
+"`docker rm -f <container>` removes its container" when its daemon record
+keeps the container's name, else "its record does not name its container
+(`docker ps -a` lists them)". A lost answer keeps the record with the `op` uncertain
 (`broken` `unresolved`) until another `remove`; any other refusal leaves the
 Sandbox as it was ([`remove.rs`](../../../../control/crates/layerfs-sandbox/src/remove.rs)).
 It was `sandbox.close`, removed with no alias.

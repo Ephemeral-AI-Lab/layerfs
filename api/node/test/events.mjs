@@ -107,8 +107,9 @@ test("exec output: the stdout and stderr functions, and stream: true without the
   writeFileSync(join(folder, "README.md"), "streamed\n");
   const lfs = client({ home });
   await lfs.store.create("shop");
-  const imported = spawnSync(command, ["import-env"], { env: { ...process.env, LAYERFS_HOME: home }, timeout: 30_000 });
-  assert.equal(imported.status, 0, String(imported.stderr));
+  const daemon = ["machine", "update", "native", "--daemon", process.env.LAYERFS_DAEMON];
+  const updated = spawnSync(command, daemon, { env: { ...process.env, LAYERFS_HOME: home }, timeout: 30_000 });
+  assert.equal(updated.status, 0, String(updated.stderr));
   await lfs.project.init("shop/api", folder);
   await lfs.branch.fork("shop/api", "dev", "main");
   await lfs.sandbox.create("shop/api", "s1", { machine: "native" });

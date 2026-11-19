@@ -24,8 +24,8 @@ call to list or remove it. `home.doctor` is one of
                  bundle.json, native's record and the daemon file -> changes nothing
    --with platforms   the platforms this computer supports
    --with tree        the home's records: machines > Stores, Sandboxes; buckets
- home.init       migrate::open (create | convert | finish)
-                 + the built-in machine records   -> {outcome: created | converted | unchanged}
+ home.init       home::open (create an empty home; an older one refused)
+                 + the built-in machine records   -> {outcome: created | unchanged}
  home.doctor     the home's own checks, then each machine, PostgreSQL Store
                  and bucket, shallowly                    -> the doctor report
 
@@ -37,7 +37,7 @@ call to list or remove it. `home.doctor` is one of
 
 | Call | Short form | Long form |
 | --- | --- | --- |
-| [`home.init`](#homeinit) | `{ home }` + `unchanged`, `converted` when true | `{ home, unchanged, converted, outcome, layout, version }` |
+| [`home.init`](#homeinit) | `{ home }` + `unchanged` when true | `{ home, unchanged, outcome, layout, version }` |
 | [`home.get`](#homeget) | `{ home, state, version }` + `generation`, `reason`, `fix` when news | `{ home, state, version, generation, reason, fix, message, layout, mode, bundle, daemon, cache }` |
 | [`home.log`](#homelog) | `{ items }` + `next_cursor` when there is a next page | `{ items, next_cursor, skipped }` |
 | [`home.clear_log`](#homeclear_log) | `{ ok: true }` | `{ ok, outcome: "cleared", line_count }` |
@@ -47,7 +47,7 @@ All five are `admin` in the MCP server.
 
 ### home.init
 
-Create this home, or convert an older one; a current home is left as it is.
+Create this home; a current home is left as it is.
 
 ```text
 CLI     layerfs home init
@@ -57,21 +57,24 @@ Python  layerfs.home.init()
 
 | Answer | Keys |
 | --- | --- |
-| short | `home`; when set: `unchanged`, `converted` |
-| long | `home, unchanged, converted, outcome, layout, version` |
+| short | `home`; when set: `unchanged` |
+| long | `home, unchanged, outcome, layout, version` |
 | call | writes one call-log line; MCP `admin` |
 
 Makes the home ready for calls, as the first call of any other kind does: an
 empty or missing folder is created (0700, `layerfs.json`, `machine/native/`
-and `machine/docker/` with the `machine` feature), a 1.1.0 or layout 2 home
-is converted, and an interrupted conversion to layout 3 is finished. A current
-home is left as it is. `outcome` is `created`, `converted` or `unchanged`;
-`version` is this build's version and `layout` the layout it left. It writes
-one call-log line, and the records it writes move the generation.
+and `machine/docker/` with the `machine` feature). A current home is left
+as it is. `outcome` is `created` or `unchanged`; `version` is this build's
+version and `layout` the home's layout. It writes one call-log line, and the
+records it writes move the generation. Nothing is converted (owner,
+2026-11-19).
 
-Refused `InvalidInput` inside a machine's worker root (not a home), `InUse`
-while a layout 2 home has live Sandboxes (its conversion lists them), and as
-opening a home is refused otherwise (a newer layout is `Unsupported`).
+Refused `InvalidInput` inside a machine's worker root (not a home);
+`Unsupported` for an older LayerFS's home (layout 2, or 1.1.0's records with
+no `layerfs.json`), with the fix `mv <home> <home>.old && layerfs home init`,
+writing nothing; and as opening a home is refused otherwise (a newer layout
+is `Unsupported`, an unreadable `layerfs.json` `Failed`)
+([Migration](../../control/home/migration.md)).
 
 ```console
 $ layerfs home init
@@ -103,11 +106,11 @@ and it answers for a home that does not exist yet, creating nothing.
 | Field | Meaning |
 | --- | --- |
 | `home` | the home's path |
-| `state`, `reason`, `fix` | `ready`, or `broken` with why and the one shell line that fixes it ([`state.rs`](../../../../control/crates/layerfs-home/src/state.rs)): `missing` (no `layerfs.json` and no 1.1.0 record; `layerfs home init`), `outdated` (1.1.0, layout 2, or an unfinished conversion; `layerfs home init`), `failed` (a `layerfs.json` this build cannot read, or a newer layout than it knows; `message` says which; no fix line) |
+| `state`, `reason`, `fix` | `ready`, or `broken` with why and the one shell line that fixes it ([`state.rs`](../../../../control/crates/layerfs-home/src/state.rs)): `missing` (no `layerfs.json` and no 1.1.0 record; `layerfs home init`), `outdated` (an older LayerFS's home: layout 2, or 1.1.0's records; `mv <home> <home>.old && layerfs home init`), `failed` (a `layerfs.json` this build cannot read, or a newer layout than it knows; `message` says which; no fix line) |
 | `version` | this build's version |
 | `generation` | the home's [generation](../../control/home/README.md#the-generation-counter): a number that moves when a record is written or removed and never for a read. Null unless the home is ready |
 | `message` | a sentence saying what is wrong, null when ready |
-| `layout`, `mode` | the layout `layerfs.json` records, and the folder's permission bits as text (`"0700"`); null when there is no folder. Whether the mode is owner-only is the doctor's finding, not this call's |
+| `layout`, `mode` | the layout `layerfs.json` records, and the folder's permission bits as text (`"0700"`); `layout` is null for a missing or older home, `mode` when there is no folder. Whether the mode is owner-only is the doctor's finding, not this call's |
 | `bundle` | The Linux bundle this build would deploy: `{ path, source, present, commit, dirty, matches }`; `source` is `env:LAYERFS_BUNDLE` or `cache` (`<cache>/layerfs/bundle/<version>/linux-<arch>`); `commit` and `dirty` from `bundle.json` `source` |
 | `daemon` | macOS: native's daemon, `{ path, source, present, commit, dirty, matches }`, `source` `recorded` (native's record) or `default` (beside the macOS bundle). Null elsewhere |
 | `cache` | `{ path }`: `XDG_CACHE_HOME`, else `~/.cache` |
