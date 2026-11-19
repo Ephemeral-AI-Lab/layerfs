@@ -22,7 +22,7 @@ backed up to several buckets.
 
 | Call | What it does |
 | --- | --- |
-| `connect(name, url, { access_key, secret_key })` | Records a bucket after one listing that checks it. Both keys are required (shell: `--access-key K --key-stdin`, the secret read from stdin only); the secret is kept in the home's secret folder and never answered or logged. A bucket that does not answer or refuses the key is `Unavailable`; a taken name is `Exists`. `{"ok":true}` |
+| `connect(name, url, { access_key, secret_key })` | Records a bucket after one listing that checks it. Both keys are required (shell: `--access-key K --key-stdin`, the secret read from stdin only); the secret is kept in the home's secret folder and never answered or logged. A bucket that does not answer or refuses the key is `Unavailable`, and nothing changes. Under a taken name at the same URL it replaces the key and keeps every Store's link (long `outcome: "rotated"`); at another URL the name is `Exists` (fix: `layerfs backup disconnect <name>`, or use a new name). `{"ok":true}` |
 | `disconnect(bucket)` | Forgets the bucket and its key; its files stay. Short `{"ok":true}`, with `unlinked` (the Stores whose links went) |
 | `list({ bucket })` | One row per Store file in the connected buckets: `{ bucket, file }` with `size`, `store` (the linked Store), `behind` (the Store changed since its last backup), `changed` (the bucket's file is not the one the link last moved) and `missing`. A bucket that cannot be listed is named in `not_listed` |
 | `create(store, bucket, { file })` | Uploads a snapshot of the Store (`file` defaults to the Store's name) and links the Store to it. Short `{ file, size }`. Progress `check`, `snapshot`, `send` (from a machine), `hash`, `upload` |

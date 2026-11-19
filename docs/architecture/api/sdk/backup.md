@@ -77,14 +77,26 @@ stdin with `--key-stdin` and no other way (Node and Python pass
 a Node, Python or MCP call without one is refused `InvalidInput` before
 anything runs. The secret is kept in the home's secret folder
 (`secret/bucket/<bucket>`, `0600`), never answered, and the call log records
-its byte count only, as it does for the URL. A bucket connected before 2.0
-keeps the key reference its record names. The long form is `ok, outcome,
-bucket, provider, url, access_key`.
+its byte count only, as it does for the URL. The long form is `ok, outcome,
+bucket, provider, url, access_key`, with `outcome` `connected`.
+
+Connected again under a taken name at the same URL (the same provider,
+bucket and prefix after parsing, with r2's account and `?jurisdiction=`
+and an endpoint's scheme and host; `BucketRecord::same_place`), it replaces
+the key (spec v21): the one listing proves the new key first, and on
+`Unavailable` the old secret and the record stay byte for byte. Then, under
+the home lock, the secret is saved by one rename and the record's
+`access_key` by one record write (`with_access_key`; every other field is
+kept); if that write fails the old secret is put back. Store links live in
+the Stores' records and are not read or written. `outcome` is `rotated`;
+the short form is a first connect's. A record written before 2.0 has no
+`access_key`: every call that needs its key is refused `Failed` with the
+fix that connects it again at its URL.
 
 | Refusal | When |
 | --- | --- |
 | `InvalidInput` | a bad URL or name; an empty key or secret |
-| `Exists` | the name is taken, or the same bucket and prefix is connected under another name; to change a key, disconnect and connect |
+| `Exists` | the name is taken by a bucket at another URL, before any request; the fix is `layerfs backup disconnect <name>`, and a new name works too |
 | `Unavailable` | the bucket cannot be reached or refuses the key (the one listing failed) |
 
 ```bash

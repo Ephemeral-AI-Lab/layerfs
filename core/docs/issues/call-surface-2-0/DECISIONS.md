@@ -367,3 +367,31 @@ Owner, verbatim: "can we just remove them, and drop layerfs home leftovers".
 - **R-LF3-1** An uncertain refusal (a request was sent and its outcome is not known) carries
   `attempted: true` as a flat next field and also in `detail`, so the short form keeps the
   uncertainty.
+
+## Version 21 (owner 2026-11-19): a bucket key rotates in place
+
+Owner, verbatim: "Yes, send it". Rotating a bucket key must not drop its Store links. No call is
+added; the table keeps 83 calls.
+
+- **V21-1** `backup connect <name> <url> --access-key K --key-stdin` under a name that is connected
+  at the same URL replaces its key. The same URL means the same place after parsing: provider,
+  bucket and prefix, with r2's account and `?jurisdiction=` and an endpoint's scheme and host.
+  It first proves the new key with the one listing a connect makes; on `Unavailable` (the bucket
+  does not answer or refuses the key) nothing changes, and the old secret and the record stay byte
+  for byte. Then the secret is saved as always (one rename into the home's secret folder, 0600)
+  and the record's `access_key` in the same atomic record write; nothing else in the record
+  changes, and no Store's link to the bucket (`backups.<bucket>` with its `last` transfer) is
+  read or written. The long form's `outcome` is `rotated`; the short form is a first connect's.
+  The call log keeps the secret's byte count only. One attempt, no retry; no Store or record
+  format change.
+- **V21-2** A taken name at another URL stays `Exists`; its fix is
+  `layerfs backup disconnect <name>` (shell-quoted), and the message says a new name works too.
+  Nothing is sent to the bucket.
+- **V21-3** Buckets get no saved-login model. PostgreSQL saved logins (`store save-auth`) exist
+  because one identity spans several addresses: a login is shared by Stores on several servers
+  and reached from several machines. A bucket is reached only by the host, at one address, so its
+  key belongs to that one bucket record, and connecting it again is how a key changes.
+- **V21-4** V20-7's fix for a bucket record with no `access_key` becomes connecting it again at
+  its URL (`layerfs backup connect <name> <url> --access-key <key> --key-stdin`), which keeps its
+  Stores' links, in place of disconnect and connect. The message of a missing secret says the
+  same.
