@@ -219,12 +219,19 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
                             "Failed",
                             format!(
                                 "snapshot: {}",
-                                layerfs_storage::port::PersistenceError::BackendUnavailable
+                                crate::words::persistence(
+                                    &layerfs_storage::port::PersistenceError::BackendUnavailable
+                                )
                             ),
                         )
                     })?
                     .snapshot(&staged, &mut |_, _| {})
-                    .map_err(|e| refused("Failed", format!("snapshot: {e}")))
+                    .map_err(|e| {
+                        refused(
+                            "Failed",
+                            format!("snapshot: {}", crate::words::persistence(&e)),
+                        )
+                    })
             })?;
             let digest = digest(&staged, None)?;
             Ok(layerfs_home::home::with_field(

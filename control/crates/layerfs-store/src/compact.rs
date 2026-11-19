@@ -486,7 +486,7 @@ fn open_refusal(error: layerfs_storage::port::PersistenceError) -> SdkRefusal {
             "Busy",
             format!("the Store refused the compaction: {status}"),
         ),
-        other => failed(other),
+        other => failed(crate::words::persistence(&other)),
     };
     note_refusal(&refusal);
     refusal

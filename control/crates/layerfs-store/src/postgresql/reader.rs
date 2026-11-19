@@ -64,7 +64,8 @@ mod held {
         let (binding, handles) =
             PostgresHandles::attach_read_only(&selection, cursor).map_err(|error| {
                 crate::postgresql::open::no_session(&error).unwrap_or_else(|| {
-                    refused("Failed", format!("reading schema {schema}: {error}"))
+                    let said = crate::words::persistence(&error);
+                    refused("Failed", format!("reading schema {schema}: {said}"))
                 })
             })?;
         if record.binding() != Some(binding.as_slice()) {

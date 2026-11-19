@@ -30,14 +30,20 @@ pub fn sqlite(
         let _ = layerfs_persistence::diagnostic::sqlite_structure(path, options, observer);
         refused(
             "Unavailable",
-            format!("diagnostic read-only Store open failed: {error}"),
+            format!(
+                "diagnostic read-only Store open failed: {}",
+                crate::words::persistence(&error)
+            ),
         )
     })?;
     handles.diagnose(options, observer).map_err(|error| {
         let _ = layerfs_persistence::diagnostic::sqlite_structure(path, options, observer);
         refused(
             "Unavailable",
-            format!("Store audit did not complete: {error}"),
+            format!(
+                "Store audit did not complete: {}",
+                crate::words::persistence(&error)
+            ),
         )
     })
 }
@@ -55,14 +61,14 @@ pub fn sqlite_schema(path: &Path, identity: &Identity) -> Result<(), SdkRefusal>
         identity.cursor_key,
     )
     .map(drop)
-    .map_err(|error| refused("Unavailable", format!("{error}")))
+    .map_err(|error| refused("Unavailable", crate::words::persistence(&error)))
 }
 
 /// Whether the sqlite Store file at `path` records this Store's id, read
 /// without the schema checks [`sqlite_schema`] adds.
 pub fn sqlite_identity(path: &Path, identity: &Identity) -> Result<bool, SdkRefusal> {
     layerfs_persistence::SqliteHandles::diagnostic_identity(path, &identity.binding)
-        .map_err(|error| refused("Unavailable", format!("{error}")))
+        .map_err(|error| refused("Unavailable", crate::words::persistence(&error)))
 }
 
 /// Diagnoses a registered PostgreSQL Store, resolving credentials only here.
@@ -185,7 +191,10 @@ pub fn sqlite_project(
     .map_err(|error| {
         refused(
             "Unavailable",
-            format!("read-only Store open failed: {error}"),
+            format!(
+                "read-only Store open failed: {}",
+                crate::words::persistence(&error)
+            ),
         )
     })?;
     handles
@@ -193,7 +202,10 @@ pub fn sqlite_project(
         .map_err(|error| {
             refused(
                 "Unavailable",
-                format!("the project's data was not read to the end: {error}"),
+                format!(
+                    "the project's data was not read to the end: {}",
+                    crate::words::persistence(&error)
+                ),
             )
         })
 }

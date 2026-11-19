@@ -48,7 +48,10 @@ pub fn create_schema(postgresql: &PgSelection, identity: &Identity) -> Result<bo
                 .unwrap_or_else(|| {
                     refused(
                         "Failed",
-                        format!("the PostgreSQL Store could not be made: {error}"),
+                        format!(
+                            "the PostgreSQL Store could not be made: {}",
+                            crate::words::persistence(&error)
+                        ),
                     )
                 })),
             Err(error) => Err(refused(

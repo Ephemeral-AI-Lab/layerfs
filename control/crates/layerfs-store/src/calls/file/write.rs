@@ -58,6 +58,23 @@ fn not_a_mode(text: &str) -> SdkRefusal {
     )
 }
 
+/// A `mode` that is not text, named by what it was given as, never as
+/// Rust `Debug` text.
+fn not_text_mode(value: &SdkValue) -> SdkRefusal {
+    let given = match value {
+        SdkValue::Int(number) => format!("the number {number} (give it as text)"),
+        SdkValue::Bool(value) => format!("{value}"),
+        SdkValue::Bytes(_) => "bytes".to_owned(),
+        SdkValue::List(_) => "a list".to_owned(),
+        SdkValue::Map(_) => "a map".to_owned(),
+        SdkValue::Text(_) | SdkValue::Null => "text".to_owned(),
+    };
+    refused(
+        "InvalidInput",
+        format!("`mode` is octal text of four digits, 0000 to 7777, such as 0644; not {given}"),
+    )
+}
+
 /// The paths of a Commit's overwritten (`.lww`) decisions, the first 20,
 /// and their count only when the list was cut.
 fn overwritten(commit: &SdkValue) -> (SdkValue, SdkValue) {
@@ -255,7 +272,7 @@ fn change(change: &Change) -> Result<SdkValue, SdkRefusal> {
                 None => ("mode", SdkValue::Null),
             },
             ("mode", SdkValue::Null) => ("mode", SdkValue::Null),
-            ("mode", other) => return Err(not_a_mode(&format!("{other:?}"))),
+            ("mode", other) => return Err(not_text_mode(other)),
             (other, _) => (other, value.clone()),
         };
         fields.push((field.0.to_owned(), field.1));

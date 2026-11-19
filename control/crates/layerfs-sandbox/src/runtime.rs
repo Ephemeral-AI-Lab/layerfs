@@ -11,7 +11,7 @@
 use crate::host::Deploy;
 use crate::output::{Place, Spool};
 use layerfs_bridge::control::SdkRefusal;
-use layerfs_home::outcome::{failed, refused};
+use layerfs_home::outcome::refused;
 #[cfg(target_os = "linux")]
 use layerfs_sandbox_backend::Image;
 #[cfg(target_os = "linux")]
@@ -245,6 +245,6 @@ pub fn run(
     };
     let exit = runtime
         .run_in(&request, slot, &mut stdout, &mut stderr)
-        .map_err(failed)?;
+        .map_err(crate::daemon::values::wire)?;
     Ok((exit.code, stdout, stderr))
 }
