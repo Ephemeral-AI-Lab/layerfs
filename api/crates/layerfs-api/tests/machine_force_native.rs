@@ -56,6 +56,26 @@ fn exec_helper() {
         &mut |_| {},
     );
 }
+/// `machine.stop native --force`, its long answer: a forced stop, and
+/// `native` stays `ready` (the host itself never stops).
+fn forced_stop(home: &Path) -> SdkValue {
+    let stopped = call(
+        home,
+        "machine.stop",
+        &[
+            ("machine", t("native")),
+            ("force", SdkValue::Bool(true)),
+            ("detail", SdkValue::Bool(true)),
+        ],
+    );
+    assert_eq!(stopped.get_text("machine"), Some("native"), "{stopped:?}");
+    assert_eq!(stopped.get("forced"), Some(&SdkValue::Bool(true)));
+    let record = read_record(&paths::machine_record(home, "native"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(record.get_text("state"), Some("ready"));
+    stopped
+}
 fn live_case(home: &Path, name: &str, machine: bool) {
     call(
         home,
@@ -105,23 +125,18 @@ fn live_case(home: &Path, name: &str, machine: bool) {
     .unwrap();
     assert!(process.alive() && command.alive());
     if machine {
-        let stopped = call(
-            home,
-            "machine.stop",
-            &[("name", t("native")), ("force", SdkValue::Bool(true))],
+        let stopped = forced_stop(home);
+        assert_eq!(
+            stopped.get("stopped_sandboxes"),
+            Some(&SdkValue::List(vec![t(name)])),
+            "{stopped:?}"
         );
-        assert_eq!(stopped.get_text("state"), Some("ready"));
         assert_eq!(
             call(home, "sandbox.get", &[("sandbox", t(name))]).get_text("reason"),
             Some("missing")
         );
         // An explicit second stop of retained terminal records is an idempotent no-op.
-        let again = call(
-            home,
-            "machine.stop",
-            &[("name", t("native")), ("force", SdkValue::Bool(true))],
-        );
-        assert_eq!(again.get_text("state"), Some("ready"));
+        forced_stop(home);
     } else {
         let closed = call(
             home,
@@ -184,7 +199,7 @@ fn identity_case(home: &Path) {
     let refused = layerfs_api::call(
         Some(home),
         "machine.stop",
-        SdkValue::map([("name", t("native")), ("force", SdkValue::Bool(true))]),
+        SdkValue::map([("machine", t("native")), ("force", SdkValue::Bool(true))]),
         &mut |_| {},
     )
     .unwrap_err();

@@ -81,11 +81,10 @@ fn started(home: &Path, ws: &str, script: &str) -> (Child, String) {
         .read_line(&mut first)
         .unwrap();
     let event = layerfs_api::json::parse(first.trim()).unwrap_or_else(|e| panic!("{first}: {e:?}"));
-    let progress = event.get("progress").unwrap_or_else(|| panic!("{first}"));
-    assert_eq!(progress.get_text("phase"), Some("start"), "{first}");
-    let id = progress
-        .get_text("exec")
-        .unwrap_or_else(|| panic!("{first}"));
+    // a progress event is `{ phase, done, total }` itself (call surface 2.0
+    // `progress_event`); the start event adds the exec id
+    assert_eq!(event.get_text("phase"), Some("start"), "{first}");
+    let id = event.get_text("exec").unwrap_or_else(|| panic!("{first}"));
     assert!(id.starts_with("exec-") && id.len() == 21, "{id}");
     (child, id.to_owned())
 }
@@ -604,7 +603,7 @@ fn forced_native_machine_stop_cancels_running_commands() {
         .unwrap()
         .get_int("pgid")
         .unwrap();
-    let force = [("name", t("native")), ("force", SdkValue::Bool(true))];
+    let force = [("machine", t("native")), ("force", SdkValue::Bool(true))];
     let stopped = ok(&home, "machine.stop", &force);
     assert_eq!(
         stopped.get("stopped_sandboxes"),
