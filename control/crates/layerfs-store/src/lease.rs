@@ -177,8 +177,8 @@ pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
     Ok(live)
 }
 
-/// Read only (the doctors, `store.get`, `store.list`, a layout 2
-/// home's survey): the live and the stale holders of Store `store` other than this process; nothing is
+/// Read only (the doctors, `store.get`, `store.list`): the live and the
+/// stale holders of Store `store` other than this process; nothing is
 /// removed and no lock is taken.
 pub fn read_holders(home: &Path, store: &str) -> Result<(Vec<u32>, Vec<u32>), SdkRefusal> {
     let (mut live, mut stale) = (Vec::new(), Vec::new());

@@ -1,6 +1,6 @@
 //! Platforms removed from LayerFS, shared by host discovery and guest builds.
 //! A removed platform has no code left; a record that still names one is
-//! shown, refused and forgotten, never run. No platform is disabled with its
+//! shown and refused, and only its record can be removed; it never runs. No platform is disabled with its
 //! code kept. There is no environment or feature override; bringing a
 //! platform back requires an explicit owner decision and source change.
 
@@ -21,11 +21,4 @@ pub fn removed_reason(platform: &str) -> Option<&'static str> {
         "ssh" => Some(SSH_REMOVED),
         _ => None,
     }
-}
-
-/// Why new work on this platform is refused, on every host and Store kind:
-/// the platform was removed ([`removed_reason`]). The call-level policy
-/// asks this of every platform a call or a record names.
-pub fn disabled_reason(platform: &str) -> Option<&'static str> {
-    removed_reason(platform)
 }

@@ -4,10 +4,14 @@
 //! Docker images it could copy.
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call};
-use crate::calls::{Context, Form, Part, Section};
+#[cfg(feature = "machine")]
+use crate::calls::Context;
+use crate::calls::{Form, Part, Section};
+#[cfg(feature = "machine")]
 use layerfs_bridge::control::SdkValue;
 #[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
+#[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
 
 /// One image the machine holds, with its state.
@@ -67,7 +71,7 @@ pub(crate) const CALL: Call = call(
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     let docker = context.with("docker");
-    let answer = layerfs_control::machine::images(&context.home, &machine, docker)?;
+    let answer = layerfs_sandbox::images::list(&context.home, &machine, docker)?;
     Ok(shown(&answer, docker))
 }
 
@@ -130,12 +134,6 @@ fn shown(answer: &SdkValue, docker: bool) -> SdkValue {
     SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect())
 }
 
-/// Without the `machine` feature (the guest worker's build) it is
-/// refused before any effect.
-#[cfg(not(feature = "machine"))]
-fn run(_context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
-    Err(layerfs_home::outcome::refused(
-        "Unsupported",
-        "machine.images runs on the host",
-    ))
-}
+// without the `machine` feature (the guest worker's build) it is
+// refused before any effect
+crate::calls::host_only::host_only!("images");

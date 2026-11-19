@@ -30,24 +30,22 @@ mod store;
 mod workspace;
 
 use calls as machinery;
-// the six doctors' shared answer and entries (`calls/doctor/`), by the
-// path each family's entry names
+// the six doctors' shared answer (`calls/doctor/`), which each
+// family's doctor entry names
 use calls::doctor;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use std::path::Path;
 
 pub use calls::{
-    asks_detail, home, json, keys, refusal, shape, size, Arg, Asked, Call, CallRef, Calls, Client,
-    Context, Families, Family, Form, Kind, Paging, Part, Place, Policy, Profile, Redact, Run,
-    Saves, Scope, Section, DETAIL, WITH,
+    asks_detail, close, home, json, keys, refusal, shape, size, Arg, Asked, Call, CallRef, Calls,
+    Client, Context, Families, Family, Form, Kind, Paging, Part, Place, Policy, Profile, Redact,
+    Run, Scope, Section, DETAIL, WITH,
 };
 pub use layerfs_home::names;
-/// The home (`layerfs-home`), with opening and converting it
-/// (`layerfs-control` `migrate`) and the Store leases, as the front ends
-/// used them before the control split (layerfs-project#103).
+/// The home (`layerfs-home`) and the Store leases, for the front ends and
+/// their tests.
 pub mod home {
-    pub use layerfs_control::migrate::{import_env, note_failure, open, open_from};
     pub use layerfs_home::home::*;
     pub use layerfs_home::process;
     pub use layerfs_store::lease;
@@ -56,25 +54,12 @@ pub mod home {
 #[doc(hidden)]
 pub use layerfs_control::machine::running;
 /// The worker protocol (`layerfs-machine`) and its server (`layerfs-control`),
-/// as the front ends used them before the control split (layerfs-project#104).
+/// for the front ends and their tests.
 pub mod worker {
-    pub use layerfs_control::worker_server::{serve, Served, REQUEST_WAIT};
+    pub use layerfs_control::worker_server::serve;
     pub use layerfs_machine::worker::*;
 }
 pub use layerfs_control::store::close_idle;
-pub use layerfs_control::{
-    projects, AddFailure, AddRequest, AddedProject, CreateRequest, InitCounters, InitCounts,
-    InitError, InitFailure, InitRequest, InitStep, InstallError, InstallFailure, InstallWork,
-    Installed, ProjectApi, ProjectError, SealedProject, SourceRefusal,
-};
-/// Ends this process's idle Sandbox daemon sessions inside a bound
-/// (layerfs-project#181): what a one-shot process calls when its call is
-/// over, beside [`close_idle`].
-pub use layerfs_sandbox::registry::{end_idle_sessions, SESSION_END};
-pub use layerfs_sandbox::{daemon, OperationCause, OperationFailure, SdkError, SdkResult};
-pub use layerfs_sandbox::{
-    BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
-};
 
 /// The ten families, in the order help lists them, the same from the
 /// `layerfs` binary, Node and Python.

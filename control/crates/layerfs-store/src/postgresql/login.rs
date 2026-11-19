@@ -7,6 +7,7 @@
 //! answered, logged or written into a record.
 use crate::record::{StoreKind, StoreRecord};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::helpers::{map_of, shown_names};
 use layerfs_home::home;
 use layerfs_home::home::secrets::{read_secret, remove_secret, save_secret, secret_names};
 use layerfs_home::outcome::{refused, with_fix, with_next, Outcome};
@@ -69,18 +70,17 @@ pub fn auth_of(record: &StoreRecord) -> Option<&str> {
 }
 
 /// `url`, an address of PostgreSQL Store `record`, with the Store's saved
-/// login put in now, read from the home the record was read from. A
-/// record naming no login (one connected before saved logins) dials with
-/// its password reference `reference` (`env:NAME` or `file:/path`, the
-/// record's or the dialling machine's own) resolved now beside the URL's
-/// own user, as it did before saved logins; with none, its address as
-/// written. The record is only read, never converted.
-pub fn dial(record: &StoreRecord, url: &str, reference: Option<&str>) -> Result<String> {
+/// login put in now, read from the home the record was read from. A record
+/// naming no login (one connected before saved logins) is refused with the
+/// fix that saves one and names it.
+pub fn dial(record: &StoreRecord, url: &str) -> Result<String> {
     let Some(auth) = record.text("auth") else {
-        return match reference {
-            Some(reference) => legacy(record, url, reference),
-            None => Ok(url.to_owned()),
-        };
+        let name = record.name();
+        let message = format!("PostgreSQL Store {name} names no saved login");
+        return Err(with_fix(
+            refused("InvalidInput", message),
+            no_auth_fix(name),
+        ));
     };
     let home = record.home().ok_or_else(|| {
         refused(
@@ -95,23 +95,12 @@ pub fn dial(record: &StoreRecord, url: &str, reference: Option<&str>) -> Result<
     layerfs_home::secrets::with_login(url, &login.user, login.password())
 }
 
-/// `url` with password reference `reference` resolved now beside the
-/// URL's own user. A malformed reference, or an address with no user (one
-/// a 2.0 connect gave), is `InvalidInput` naming the saved login the Store
-/// needs first.
-fn legacy(record: &StoreRecord, url: &str, reference: &str) -> Result<String> {
-    layerfs_home::secrets::with_password(url, reference).map_err(|refusal| {
-        if refusal.code != "InvalidInput" {
-            return refusal;
-        }
-        let name = record.name();
-        let message = format!(
-            "PostgreSQL Store {name} has a password reference and no saved login: {}",
-            refusal.message
-        );
-        let fix = format!("layerfs store update {name} --auth <auth>");
-        with_fix(refused("InvalidInput", message), fix)
-    })
+/// The fix of PostgreSQL Store `store` naming no saved login: save one,
+/// then name it.
+pub fn no_auth_fix(store: &str) -> String {
+    format!(
+        "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store update {store} --auth <auth>"
+    )
 }
 
 /// The PostgreSQL Stores whose record names login `auth`, by name.
@@ -128,14 +117,8 @@ pub fn stores_using(home: &Path, auth: &str) -> Result<Vec<String>> {
 /// `stores` as an answer shows them: the first 20 names, and the count
 /// only when there were more.
 fn shown(stores: &[String]) -> [(&'static str, SdkValue); 2] {
-    let names = stores.iter().map(SdkValue::text).collect();
-    let (names, count) = layerfs_home::helpers::shown(names, 0, false);
+    let (names, count) = shown_names(stores);
     [("stores", names), ("stores_count", count)]
-}
-
-/// The answer's map of `fields`.
-fn answer(fields: Vec<(&'static str, SdkValue)>) -> SdkValue {
-    SdkValue::Map(fields.into_iter().map(|(k, v)| (k.to_owned(), v)).collect())
 }
 
 /// `store.save_auth(auth, { user, password })`: saves the login in the
@@ -178,7 +161,7 @@ pub fn save(home_dir: &Path, auth: &str, user: &str, password: &str) -> Outcome 
         ("user", SdkValue::text(user)),
     ];
     fields.extend(shown(&stores));
-    Ok(answer(fields))
+    Ok(map_of(fields))
 }
 
 /// `store.auths()`: every saved login, `{ items: [{ auth, user, stores,
@@ -196,7 +179,7 @@ pub fn list(home_dir: &Path) -> Outcome {
         fields.extend(shown(&stores));
         fields.push(("created_at", at(login.created_ms)));
         fields.push(("updated_at", at(login.updated_ms)));
-        items.push(answer(fields));
+        items.push(map_of(fields));
     }
     Ok(SdkValue::map([("items", SdkValue::List(items))]))
 }
@@ -223,7 +206,7 @@ pub fn remove(home_dir: &Path, auth: &str) -> Outcome {
     if !remove_secret(home_dir, KIND, auth)? {
         return Err(refused("NotFound", format!("no saved login named {auth}")));
     }
-    Ok(answer(vec![
+    Ok(map_of(vec![
         ("ok", SdkValue::Bool(true)),
         ("outcome", SdkValue::text("removed")),
         ("auth", SdkValue::text(auth)),

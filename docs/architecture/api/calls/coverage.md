@@ -148,7 +148,7 @@ These are not calls and are not in the matrix.
 | `close` | `close()` | `layerfs.close()` | none: the command closes its idle Stores after every call |
 | the error | `LayerFSError { code, message, fix, detail }` and the next-call fields | `LayerFSError` (`code`, also `error`; `message`, `fix`, `fields`, `detail`) | JSON `{ error, message, fix, … }` on stderr (`detail` with `--detail`), exit 125 |
 | `--text`, `--from`, `--NAME-from`, `-m`, `--password-stdin`, `--key-stdin` | — | — | readable output; content, JSON and text options from a file; `-m` is `--message`; a secret from stdin |
-| `layerfs worker`, `layerfs import-env` | — | — | serve a machine's worker; write 1.1.0 settings as records, once |
+| `layerfs worker` | — | — | serve a machine's worker |
 
 ## Where the front ends differ on purpose
 

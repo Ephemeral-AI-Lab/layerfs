@@ -32,16 +32,13 @@ pub enum Policy {
     Workspace(&'static str),
     /// A new Sandbox: its `machine` when given, and its `project`.
     NewSandbox,
-    /// A Store's move between machines: the Store this argument names and
-    /// the machines of a move it left unfinished.
-    Transfer(&'static str),
-    /// A Store's move to a machine: [`Policy::Transfer`], and the `machine`
-    /// it goes to.
+    /// A Store's move to a machine: the Store this argument names, the
+    /// machines of a move it left unfinished, and the `machine` it goes to.
     TransferTo(&'static str),
 }
 
 fn platform(name: &str) -> Result {
-    match layerfs_sandbox_backend::platform_policy::disabled_reason(name) {
+    match layerfs_sandbox_backend::platform_policy::removed_reason(name) {
         Some(reason) => Err(refused("Unsupported", reason)),
         None => Ok(()),
     }
@@ -118,7 +115,6 @@ pub(super) fn check(home: &Path, policy: Policy, args: &SdkValue) -> Result {
             }
             project(home, text("project"))
         }
-        Policy::Transfer(field) => transfer(home, text(field)),
         Policy::TransferTo(field) => {
             machine(home, text("machine"))?;
             transfer(home, text(field))

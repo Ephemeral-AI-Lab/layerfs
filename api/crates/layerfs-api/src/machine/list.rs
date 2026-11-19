@@ -1,8 +1,12 @@
 //! `machine.list`: every machine, from the home's records; with `--with
 //! live`, each probed once.
 use crate::calls::table::{call, Call};
-use crate::calls::{Context, Form, Part, Section};
+#[cfg(feature = "machine")]
+use crate::calls::Context;
+use crate::calls::{Form, Part, Section};
+#[cfg(feature = "machine")]
 use layerfs_bridge::control::SdkValue;
+#[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
 
 /// What is on a machine, by name: `machine.get` and each item here.
@@ -64,12 +68,6 @@ fn run(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
     layerfs_control::machine::list(&context.home, context.with("live"))
 }
 
-/// Without the `machine` feature (the guest worker's build) it is
-/// refused before any effect.
-#[cfg(not(feature = "machine"))]
-fn run(_context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
-    Err(layerfs_home::outcome::refused(
-        "Unsupported",
-        "machine.list runs on the host",
-    ))
-}
+// without the `machine` feature (the guest worker's build) it is
+// refused before any effect
+crate::calls::host_only::host_only!("list");

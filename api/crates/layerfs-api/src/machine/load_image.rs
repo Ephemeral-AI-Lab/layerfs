@@ -4,15 +4,15 @@
 //! (bytes), `unpack`.
 use crate::calls::table::Kind::{Image, Name};
 use crate::calls::table::{a, call, Call, PROGRESS};
-use crate::calls::{Context, Form, Part};
+#[cfg(feature = "machine")]
+use crate::calls::Context;
+use crate::calls::{Form, Part};
+#[cfg(feature = "machine")]
 use layerfs_bridge::control::SdkValue;
 #[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
-use layerfs_home::outcome::Outcome;
-
-/// The most paths `dropped` shows.
 #[cfg(feature = "machine")]
-const SHOWN: usize = 20;
+use layerfs_home::outcome::Outcome;
 
 /// Its answer: the image's id on the machine, `reused` when it was there,
 /// `dropped` the FIFO and device paths the copy left out.
@@ -54,7 +54,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     let image = args.get_text("image").unwrap_or("").to_owned();
     let (home, events) = context.parts();
-    let loaded = layerfs_control::machine::load_image(home, events, &machine, &image)?;
+    let loaded = layerfs_sandbox::image_load::machine_load(home, events, &machine, &image)?;
     let reused = loaded.get_bool("reused");
     // the copy's filter report, when it sent the image: the FIFOs and
     // devices it left out (init files are always left out and not listed)
@@ -78,7 +78,8 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 }
 
 /// The FIFO and device paths of a copy's `dropped {fifos, devices}`, the
-/// first [`SHOWN`], with how many there were when that cut the list.
+/// first [`layerfs_home::helpers::SHOWN`], with how many there were when
+/// that cut the list.
 #[cfg(feature = "machine")]
 fn dropped(report: &SdkValue) -> (SdkValue, SdkValue) {
     let paths = |key: &str| match report.get(key) {
@@ -86,19 +87,9 @@ fn dropped(report: &SdkValue) -> (SdkValue, SdkValue) {
         _ => Vec::new(),
     };
     let all: Vec<SdkValue> = paths("fifos").into_iter().chain(paths("devices")).collect();
-    let count = match all.len() > SHOWN {
-        true => SdkValue::Int(i64::try_from(all.len()).unwrap_or(i64::MAX)),
-        false => SdkValue::Null,
-    };
-    (SdkValue::List(all.into_iter().take(SHOWN).collect()), count)
+    layerfs_home::helpers::shown(all, 0, false)
 }
 
-/// Without the `machine` feature (the guest worker's build) it is
-/// refused before any effect.
-#[cfg(not(feature = "machine"))]
-fn run(_context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
-    Err(layerfs_home::outcome::refused(
-        "Unsupported",
-        "machine.load_image runs on the host",
-    ))
-}
+// without the `machine` feature (the guest worker's build) it is
+// refused before any effect
+crate::calls::host_only::host_only!("load_image");

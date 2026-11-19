@@ -54,6 +54,7 @@ esac
         &SdkValue::map([
             ("name", t("vm")),
             ("platform", t("lima")),
+            ("vm_name", t("layerfs-test-vm")),
             ("state", t("running")),
         ]),
     )

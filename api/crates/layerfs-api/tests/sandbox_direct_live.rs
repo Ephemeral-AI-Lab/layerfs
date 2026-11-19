@@ -157,7 +157,17 @@ fn a_forwarded_sandbox_s_workspace_calls_dial_its_daemon_from_here() {
             ("from", t("main")),
         ],
     );
-    home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    // the native machine's daemon is a setting of its record
+    layerfs_api::call(
+        Some(&home),
+        "machine.update",
+        SdkValue::map([
+            ("machine", SdkValue::text("native")),
+            ("daemon", SdkValue::text(daemon.as_str())),
+        ]),
+        &mut |_| {},
+    )
+    .unwrap();
     in_helper(&home, "create");
 
     // the record of a Sandbox on machine `box` whose daemon's port this
@@ -168,6 +178,7 @@ fn a_forwarded_sandbox_s_workspace_calls_dial_its_daemon_from_here() {
         &SdkValue::map([
             ("name", t("box")),
             ("platform", t("lima")),
+            ("vm_name", t("layerfs-test-vm")),
             ("state", t("running")),
         ]),
     )

@@ -52,9 +52,5 @@ pub fn call(
 /// interpreter released. Returns how many Stores it closed.
 #[pyfunction]
 pub fn close(py: Python<'_>) -> usize {
-    py.detach(|| {
-        let closed = layerfs_api::close_idle(std::time::Duration::ZERO);
-        layerfs_api::end_idle_sessions(layerfs_api::SESSION_END);
-        closed
-    })
+    py.detach(layerfs_api::close)
 }

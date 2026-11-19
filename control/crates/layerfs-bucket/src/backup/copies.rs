@@ -27,13 +27,6 @@ pub struct Copy {
     pub heads: Option<[u8; 32]>,
 }
 
-/// The result of one stat of a Store's copy.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Checked {
-    Absent,
-    Present(Copy),
-}
-
 /// The copy's size, sha256 and heads from its metadata; `listed` is the
 /// size of the object itself, used when the metadata has no size.
 fn described(file: &str, listed: u64, modified: Option<u64>, metadata: Option<&Metadata>) -> Copy {
@@ -47,20 +40,6 @@ fn described(file: &str, listed: u64, modified: Option<u64>, metadata: Option<&M
         sha256: get(pieces::SHA256).and_then(|text| parse_hex32(text)),
         heads: get(HEADS).and_then(|text| parse_hex32(text)),
     }
-}
-
-/// One stat of the remote file `file`: absent, or what it records.
-pub fn check(driver: &dyn Driver, file: &str) -> Result<Checked, RemoteError> {
-    let object = store_object(file).map_err(RemoteError::Invalid)?;
-    Ok(match driver.stat(&object)? {
-        None => Checked::Absent,
-        Some(stat) => Checked::Present(described(
-            file,
-            stat.bytes,
-            stat.modified,
-            Some(&stat.metadata),
-        )),
-    })
 }
 
 /// Every Store file on the remote (`FILE/store.sqlite`), in name order. A

@@ -25,7 +25,7 @@ The `machine` calls: list and read the machines that hold sqlite Stores and run 
                                           |     v      |
                                           |  stopped --+ start
                                           v
-            remove (VM + disk; a removed platform's record: forgotten)
+            remove (VM + disk; a removed platform's: its record only)
 ```
 
 | Call | Short answer | MCP |
@@ -41,7 +41,7 @@ The `machine` calls: list and read the machines that hold sqlite Stores and run 
 | [`machine.start`](#machinestart) | `{ ok }`, or `{ unchanged }` | `admin` |
 | [`machine.stop`](#machinestop) | `{ ok }`, or `{ unchanged }` | `admin` |
 | [`machine.create`](#machinecreate) | `{ ok }` | `admin` |
-| [`machine.remove`](#machineremove) | `{ ok }`, or `{ ok, forgotten }` | `admin` |
+| [`machine.remove`](#machineremove) | `{ ok }` | `admin` |
 | [`machine.update`](#machineupdate) | `{ ok }` | `admin` |
 | [`machine.doctor`](#machinedoctor) | the doctor report | `admin` |
 
@@ -59,8 +59,8 @@ recorded. Reasons: `engine_down` (Docker is not running; `fix` starts it:
 start or a live read recorded, and `observed_at` from the last live read.
 
 Firecracker, Microsandbox and SSH machines were removed in 2.0: a record for
-one is shown by `list` and `get` as `broken` `unsupported`, `remove` only
-forgets it, and every other call on it is `Unsupported`
+one is shown by `list` and `get` as `broken` `unsupported`, `remove`
+removes only its record, and every other call on it is `Unsupported`
 ([`calls/platform_policy.rs`](../../../../api/crates/layerfs-api/src/calls/platform_policy.rs)).
 Nothing but `machine start` starts a machine; a call that needs a stopped
 machine is `Unavailable` with `fix: layerfs machine start <machine>`
@@ -683,7 +683,7 @@ tool in `detail.missing`, no sealed bundle).
 
 ### machine.remove
 
-Delete a VM machine and its disk; one of a removed platform is only forgotten.
+Delete a VM machine and its disk.
 
 ```text
 CLI     layerfs machine remove <machine> [--progress]
@@ -698,16 +698,18 @@ Python  layerfs.machine.remove(machine, *, on_progress=None)
 
 | Answer | Keys |
 | --- | --- |
-| short | each when set: `ok`, `forgotten` |
-| long | `ok, forgotten, outcome, machine, message` |
+| short | `ok` |
+| long | `ok, outcome, machine, message` |
 | call | sends progress; writes one call-log line; MCP `admin` |
 
 Deletes a VM machine with its data disk; also clears an unresolved create
 or remove. Built-in machines are never removed. A running machine is removed
 as it is. Its own PostgreSQL addresses in Store records are forgotten and the
-home's image copy locks of it (`run/image-lock/<machine>/`) are deleted. A
-machine of a removed platform is only forgotten: `{"ok":true,
-"forgotten":true}`, the long form's `message` naming what was not touched
+home's image copy locks of it (`run/image-lock/<machine>/`) are deleted.
+The long form's `outcome` is `removed`. Of a machine of a removed platform
+(`firecracker`, `microsandbox`, `ssh`) only its record is removed: `{"ok":true}`,
+the long form's `message` "only its record was removed (<reason>); nothing
+on its host was touched"
 ([`remove.rs`](../../../../control/crates/layerfs-machine/src/remove.rs)).
 Progress phases: `check`, `delete`.
 

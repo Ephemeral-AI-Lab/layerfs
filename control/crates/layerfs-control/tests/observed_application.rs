@@ -1,11 +1,11 @@
-//! Authentic daemon observations preserve ordinary effects and explicit identities.
+//! Daemon observations (sent as the engine protocol carries them) preserve
+//! ordinary effects, and the serial low-water reaches the served Store.
 #![cfg(target_os = "linux")]
 #[path = "support/daemon_binary.rs"]
 mod daemon_binary;
 #[allow(dead_code)]
 #[path = "../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
 mod support;
-use layerfs_bridge::control::{CleanupObservation, ControlCode};
 use layerfs_bridge::{
     control::{Reply, Request},
     daemon_setup::{DaemonLimits, DaemonSetup},
@@ -17,7 +17,6 @@ use layerfs_bridge::{DaemonStore, KernelRoute};
 use layerfs_history::WorkspaceId;
 use layerfs_sandbox::internal::Control;
 use std::{
-    collections::BTreeSet,
     fs::{self, File},
     io::{BufRead, BufReader, Read},
     net::{SocketAddr, TcpStream},
@@ -28,6 +27,25 @@ use std::{
     thread,
     time::Duration,
 };
+
+/// One Status of `token` sent as an observation under `scope`, as the
+/// engine's protocol carries it: the daemon logs it as one, and its reply
+/// is the Status itself.
+fn observed_status(
+    control: &mut Control,
+    scope: [u8; 32],
+    token: layerfs_bridge::control::WorkspaceToken,
+) -> layerfs_bridge::control::WorkspaceStatus {
+    let request = Request::Observed {
+        scope,
+        request: Box::new(Request::Status(token)),
+        traced: false,
+    };
+    match control.call(request).unwrap() {
+        Reply::Status(status) => *status,
+        other => panic!("{other:?}"),
+    }
+}
 
 struct Process(Child);
 impl Drop for Process {
@@ -167,450 +185,10 @@ fn values(line: &str) -> Vec<u64> {
         text.split(',').map(|v| v.parse().unwrap()).collect()
     }
 }
-fn validate(rows: &[&str]) {
-    assert!(!rows.is_empty());
-    assert!(rows.len() <= 68);
-    for line in rows {
-        assert!(line.len() < 4096);
-        assert!(!line.contains("private_key") && !line.contains("control_peer"));
-        let decoded = values(line);
-        if line.contains("\"available\":false") {
-            assert!(decoded.is_empty());
-        }
-    }
-    let footer = values(rows.last().unwrap());
-    assert_eq!(number(rows.last().unwrap(), "section"), 99);
-    assert_eq!(footer[0] as usize, rows.len() - 1);
-    assert_eq!(
-        footer[1] as usize,
-        rows[..rows.len() - 1]
-            .iter()
-            .map(|line| values(line).len())
-            .sum::<usize>()
-    );
-}
-fn identity_words(line: &str, name: &str) -> [u64; 4] {
-    let text = line
-        .split_once(&format!("\"{name}\":["))
-        .unwrap()
-        .1
-        .split_once(']')
-        .unwrap()
-        .0;
-    text.split(',')
-        .map(|value| value.parse().unwrap())
-        .collect::<Vec<_>>()
-        .try_into()
-        .unwrap()
-}
-fn accepts_unique_completed_groups(log: &str) -> bool {
-    let mut completed = BTreeSet::new();
-    for line in log
-        .lines()
-        .filter(|line| line.starts_with("{\"layerfs_observation\":1,"))
-    {
-        if number(line, "section") == 99
-            && !completed.insert((
-                identity_words(line, "daemon"),
-                identity_words(line, "scope"),
-                number(line, "call"),
-            ))
-        {
-            return false;
-        }
-    }
-    true
-}
-fn task_ids(process: &Process) -> BTreeSet<u32> {
-    fs::read_dir(format!("/proc/{}/task", process.0.id()))
-        .unwrap()
-        .map(|entry| {
-            entry
-                .unwrap()
-                .file_name()
-                .to_str()
-                .unwrap()
-                .parse()
-                .unwrap()
-        })
-        .collect()
-}
-#[test]
-fn equal_calls_and_reused_slot_have_distinct_public_observation_identity() {
-    support::shared_control();
-    let f = support::Fixture::new("observed-correlation", None);
-    let log = f.directory.join("stderr.log");
-    let (process, address, mut initial) = start(&f, File::create(&log).unwrap());
-    let bound = layerfs_sandbox::internal::workspace(&mut initial)
-        .bind(
-            WorkspaceId::from_authority([111; 32]).unwrap(),
-            f.project.branch.branch.id,
-        )
-        .unwrap();
-    let before = task_ids(&process);
-    let mut first = Control::new(connect(address));
-    let after = task_ids(&process);
-    let created: Vec<_> = after.difference(&before).copied().collect();
-    assert_eq!(created.len(), 1);
-    let first_thread = created[0];
-    let mut second = Control::new(connect(address));
-    for (channel, scope) in [(&mut first, [7; 32]), (&mut second, [8; 32])] {
-        assert_eq!(
-            layerfs_sandbox::internal::with_observations(channel, &scope)
-                .status(bound.token)
-                .unwrap()
-                .token,
-            bound.token
-        );
-    }
-    assert_eq!(
-        first.call(Request::EndSession).unwrap(),
-        Reply::SessionEnded
-    );
-    // Readiness observation only. Worker slot becomes Vacant before this own
-    // daemon thread exits; no control operation, connection or effect is retried.
-    let deadline = std::time::Instant::now() + Duration::from_secs(2);
-    let thread_path = format!("/proc/{}/task/{first_thread}", process.0.id());
-    while std::path::Path::new(&thread_path).exists() {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "ended control worker failed to exit"
-        );
-        thread::sleep(Duration::from_millis(1));
-    }
-    let mut later = Control::new(connect(address));
-    assert_eq!(
-        layerfs_sandbox::internal::with_observations(&mut later, &[9; 32])
-            .status(bound.token)
-            .unwrap()
-            .token,
-        bound.token
-    );
-    let text = fs::read_to_string(&log).unwrap();
-    assert!(accepts_unique_completed_groups(&text));
-    let groups: Vec<_> = [7u8, 8, 9]
-        .into_iter()
-        .map(|byte| {
-            let word = u64::from_be_bytes([byte; 8]);
-            text.lines()
-                .filter(|line| {
-                    identity_words(line, "scope") == [word; 4] && number(line, "call") == 1
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect();
-    for rows in &groups {
-        validate(rows);
-        assert_eq!(number(rows[0], "index"), bound.token.namespace as u64);
-        assert_eq!(
-            identity_words(rows[0], "daemon"),
-            identity_words(groups[0][0], "daemon")
-        );
-    }
-    assert_ne!(number(groups[0][0], "slot"), number(groups[1][0], "slot"));
-    assert_eq!(number(groups[0][0], "slot"), number(groups[2][0], "slot"));
-    let mut duplicate = text.clone();
-    for line in &groups[0] {
-        duplicate.push_str(line);
-        duplicate.push('\n');
-    }
-    assert!(
-        !accepts_unique_completed_groups(&duplicate),
-        "duplicate complete group accepted"
-    );
-    assert_eq!(
-        second.call(Request::EndSession).unwrap(),
-        Reply::SessionEnded
-    );
-    assert_eq!(
-        later.call(Request::EndSession).unwrap(),
-        Reply::SessionEnded
-    );
-    layerfs_sandbox::internal::workspace(&mut initial)
-        .unmount(bound.token, false)
-        .unwrap();
-    assert_eq!(
-        initial.call(Request::EndSession).unwrap(),
-        Reply::SessionEnded
-    );
-    drop(process);
-    f.cleanup();
-}
-#[test]
-fn diagnostic_sink_failure_does_not_repeat_or_hide_successful_bind() {
-    support::shared_control();
-    let f = support::Fixture::new("observed-failed-sink", None);
-    let (process, address, mut control) =
-        start(&f, File::options().write(true).open("/dev/full").unwrap());
-    let workspace = WorkspaceId::from_authority([99; 32]).unwrap();
-    let bound = layerfs_sandbox::internal::with_observations(&mut control, &[7; 32])
-        .bind(workspace, f.project.branch.branch.id)
-        .unwrap();
-    // A fresh authenticated observer establishes existing state; it neither
-    // replays the bind nor settles a previously unknown reply.
-    let mut observer = Control::new(connect(address));
-    assert_eq!(
-        layerfs_sandbox::internal::workspace(&mut observer)
-            .status(bound.token)
-            .unwrap()
-            .token,
-        bound.token
-    );
-    assert!(
-        matches!(observer.call(Request::Mount { workspace, branch:f.project.branch.branch.id }).unwrap(),
-        Reply::Refused(refusal) if refusal.code == ControlCode::Busy)
-    );
-    assert_eq!(
-        layerfs_sandbox::internal::workspace(&mut observer)
-            .cleanup(bound.token)
-            .unwrap(),
-        CleanupObservation::Live
-    );
-    layerfs_sandbox::internal::workspace(&mut observer)
-        .unmount(bound.token, false)
-        .unwrap();
-    assert_eq!(
-        observer.call(Request::EndSession).unwrap(),
-        Reply::SessionEnded
-    );
-    drop(process);
-    f.cleanup();
-}
-/// The names of a traced reply's timing nodes.
-fn timing_names(telemetry: &layerfs_bridge::control::SdkValue) -> Vec<String> {
-    use layerfs_bridge::control::SdkValue;
-    match telemetry
-        .get("timing")
-        .and_then(|timing| timing.get("nodes"))
-    {
-        Some(SdkValue::List(nodes)) => nodes
-            .iter()
-            .filter_map(|node| match node {
-                SdkValue::List(fields) => match fields.first() {
-                    Some(SdkValue::Text(name)) => Some(name.clone()),
-                    _ => None,
-                },
-                _ => None,
-            })
-            .collect(),
-        _ => Vec::new(),
-    }
-}
-#[test]
-fn traced_diagnostic_failure_is_reported_and_keeps_the_connection() {
-    support::shared_control();
-    let f = support::Fixture::new("observed-traced-sink", None);
-    let (process, _address, mut control) =
-        start(&f, File::options().write(true).open("/dev/full").unwrap());
-    layerfs_sandbox::internal::trace(&mut control, Some([7; 32]));
-    let bound = layerfs_sandbox::internal::workspace(&mut control)
-        .bind(
-            WorkspaceId::from_authority([77; 32]).unwrap(),
-            f.project.branch.branch.id,
-        )
-        .unwrap();
-    let telemetry = layerfs_sandbox::internal::take_telemetry(&mut control);
-    assert_eq!(telemetry.len(), 1);
-    let error = telemetry[0]
-        .get("diagnosticError")
-        .expect("reported write failure");
-    assert!(error.get_text("kind").is_some() && error.get_text("message").is_some());
-    let names = timing_names(&telemetry[0]);
-    assert_eq!(
-        names.first().map(String::as_str),
-        Some("sandbox.mount.bind")
-    );
-    assert!(names.iter().any(|name| name == "store.bind"));
-    // The same connection keeps serving, traced and then untraced.
-    let status = layerfs_sandbox::internal::workspace(&mut control)
-        .status(bound.token)
-        .unwrap();
-    assert_eq!(status.token, bound.token);
-    let telemetry = layerfs_sandbox::internal::take_telemetry(&mut control);
-    assert_eq!(telemetry.len(), 1);
-    assert!(telemetry[0].get("diagnosticError").is_some());
-    layerfs_sandbox::internal::trace(&mut control, None);
-    let status = layerfs_sandbox::internal::workspace(&mut control)
-        .status(bound.token)
-        .unwrap();
-    assert_eq!(status.binding, bound.binding);
-    assert!(layerfs_sandbox::internal::take_telemetry(&mut control).is_empty());
-    layerfs_sandbox::internal::workspace(&mut control)
-        .unmount(bound.token, false)
-        .unwrap();
-    assert_eq!(
-        control.call(Request::EndSession).unwrap(),
-        Reply::SessionEnded
-    );
-    drop(process);
-    f.cleanup();
-}
-#[test]
-fn traced_records_share_the_scope_and_untraced_replies_stay_plain() {
-    support::shared_control();
-    let f = support::Fixture::new("observed-traced-records", None);
-    let log = f.directory.join("stderr.log");
-    let (process, _address, mut control) = start(&f, File::create(&log).unwrap());
-    let bound = layerfs_sandbox::internal::workspace(&mut control)
-        .bind(
-            WorkspaceId::from_authority([78; 32]).unwrap(),
-            f.project.branch.branch.id,
-        )
-        .unwrap();
-    assert!(layerfs_sandbox::internal::take_telemetry(&mut control).is_empty());
-    layerfs_sandbox::internal::trace(&mut control, Some([5; 32]));
-    let status = layerfs_sandbox::internal::workspace(&mut control)
-        .status(bound.token)
-        .unwrap();
-    assert_eq!(status.token, bound.token);
-    let telemetry = layerfs_sandbox::internal::take_telemetry(&mut control);
-    assert_eq!(telemetry.len(), 1);
-    assert!(telemetry[0].get("diagnosticError").is_none());
-    assert!(telemetry[0].get("storage").is_none());
-    layerfs_sandbox::internal::trace(&mut control, None);
-    let text = fs::read_to_string(&log).unwrap();
-    assert!(accepts_unique_completed_groups(&text));
-    let word = u64::from_be_bytes([5; 8]);
-    let rows: Vec<_> = text
-        .lines()
-        .filter(|line| identity_words(line, "scope") == [word; 4])
-        .collect();
-    validate(&rows);
-    layerfs_sandbox::internal::workspace(&mut control)
-        .unmount(bound.token, false)
-        .unwrap();
-    assert_eq!(
-        control.call(Request::EndSession).unwrap(),
-        Reply::SessionEnded
-    );
-    drop(process);
-    f.cleanup();
-}
-/// One counter of a traced reply's map at `path` (`sql` › `writer`, `fuse`, …).
-fn counter(telemetry: &layerfs_bridge::control::SdkValue, path: &[&str], name: &str) -> i64 {
-    path.iter()
-        .try_fold(telemetry, |value, step| value.get(step))
-        .and_then(|group| group.get_int(name))
-        .unwrap_or_else(|| panic!("{path:?}.{name} in {telemetry:?}"))
-}
-/// The size of a traced reply's map at `path`.
-fn width(telemetry: &layerfs_bridge::control::SdkValue, path: &[&str]) -> usize {
-    use layerfs_bridge::control::SdkValue;
-    match path
-        .iter()
-        .try_fold(telemetry, |value, step| value.get(step))
-    {
-        Some(SdkValue::Map(fields)) => fields.len(),
-        other => panic!("{path:?} is not a map: {other:?}"),
-    }
-}
 /// #352: a traced call carries its Store SQL work (the sessions' totals after
 /// it minus before it), and a traced status or unmount of an attached
 /// Workspace carries its kernel opcode counts since attach; a traced Commit
 /// carries its delta selection work.
-#[test]
-fn traced_calls_carry_sql_work_and_status_unmount_carry_opcodes() {
-    support::shared_control();
-    let f = support::Fixture::new("observed-traced-work", None);
-    let log = f.directory.join("stderr.log");
-    let (process, _address, mut control) = start(&f, File::create(&log).unwrap());
-    layerfs_sandbox::internal::trace(&mut control, Some([6; 32]));
-    let bound = layerfs_sandbox::internal::workspace(&mut control)
-        .bind(
-            WorkspaceId::from_authority([79; 32]).unwrap(),
-            f.project.branch.branch.id,
-        )
-        .unwrap();
-    let telemetry = layerfs_sandbox::internal::take_telemetry(&mut control);
-    assert_eq!(telemetry.len(), 1);
-    let bind = &telemetry[0];
-    assert_eq!(width(bind, &["sql", "writer"]), 30);
-    assert_eq!(width(bind, &["sql", "readers"]), 30);
-    // #367: and the request thread's own share of it.
-    assert_eq!(width(bind, &["sql", "call"]), 30);
-    // layerfs-project #62: the PostgreSQL wire counters are present; this
-    // fixture's Store is SQLite, which leaves them at zero.
-    for name in ["round_trips", "prepares", "connects"] {
-        assert_eq!(counter(bind, &["sql", "writer"], name), 0, "{name}");
-        assert_eq!(counter(bind, &["sql", "readers"], name), 0, "{name}");
-    }
-    // Bind opens the Workspace's reader: its opening statements are this call's.
-    assert!(counter(bind, &["sql", "readers"], "statements") > 0);
-    assert!(bind.get("fuse").is_none(), "bind carries no opcode counts");
-    assert!(bind.get("delta").is_none(), "bind finishes no Save");
-    let ready = layerfs_sandbox::internal::workspace(&mut control)
-        .attach(bound.token)
-        .unwrap();
-    let guard = MountGuard(ready.directory.clone());
-    let attach = layerfs_sandbox::internal::take_telemetry(&mut control);
-    assert!(attach.iter().all(|value| value.get("fuse").is_none()));
-    let file = Path::new(&ready.directory).join("traced.txt");
-    fs::write(&file, b"traced").unwrap();
-    assert_eq!(fs::read(&file).unwrap(), b"traced");
-    // A Commit finishes a Save: its delta selection work is the Store's Save
-    // totals after it minus before it.
-    layerfs_sandbox::internal::workspace(&mut control)
-        .commit(bound.token)
-        .unwrap();
-    let commit = layerfs_sandbox::internal::take_telemetry(&mut control);
-    assert_eq!(commit.len(), 1);
-    assert_eq!(width(&commit[0], &["delta", "payload"]), 11);
-    assert_eq!(width(&commit[0], &["delta", "metadata"]), 7);
-    assert!(counter(&commit[0], &["delta", "metadata"], "leaves") > 0);
-    // Unmount is admitted on a quiet connection: observe untraced, bounded.
-    layerfs_sandbox::internal::trace(&mut control, None);
-    let deadline = std::time::Instant::now() + Duration::from_secs(8);
-    let mut last = None;
-    loop {
-        let work = layerfs_sandbox::internal::workspace(&mut control)
-            .status(bound.token)
-            .unwrap()
-            .kernel
-            .unwrap()
-            .work
-            .unwrap();
-        let now = (work.active, work.completed);
-        if work.active == 0 && last == Some(now) {
-            break;
-        }
-        last = Some(now);
-        assert!(
-            std::time::Instant::now() < deadline,
-            "the connection did not become quiet: {work:?}"
-        );
-        thread::sleep(Duration::from_millis(2));
-    }
-    layerfs_sandbox::internal::trace(&mut control, Some([6; 32]));
-    layerfs_sandbox::internal::workspace(&mut control)
-        .status(bound.token)
-        .unwrap();
-    let status = layerfs_sandbox::internal::take_telemetry(&mut control);
-    assert_eq!(status.len(), 1);
-    let status = &status[0];
-    // 39 opcode counts, 10 counters, and the `ns` and `phases` maps.
-    assert_eq!(width(status, &["fuse"]), 39 + 10 + 2);
-    for name in ["lookup", "create", "write", "release", "served"] {
-        assert!(counter(status, &["fuse"], name) > 0, "{name}");
-    }
-    layerfs_sandbox::internal::workspace(&mut control)
-        .unmount(bound.token, false)
-        .unwrap();
-    let unmount = layerfs_sandbox::internal::take_telemetry(&mut control);
-    assert_eq!(unmount.len(), 1);
-    // Counts are since attach: the final ones are at least the status ones.
-    for name in ["lookup", "write", "served"] {
-        assert!(counter(&unmount[0], &["fuse"], name) >= counter(status, &["fuse"], name));
-    }
-    assert!(width(&unmount[0], &["sql"]) > 0);
-    drop(guard);
-    layerfs_sandbox::internal::trace(&mut control, None);
-    assert_eq!(
-        control.call(Request::EndSession).unwrap(),
-        Reply::SessionEnded
-    );
-    drop(process);
-    f.cleanup();
-}
 #[test]
 fn resource_and_output_failure_preserve_original_status_reply() {
     support::shared_control();
@@ -626,9 +204,7 @@ fn resource_and_output_failure_preserve_original_status_reply() {
     let backing = f.directory.join("overlay.sqlite");
     fs::rename(&backing, f.directory.join("original-overlay.sqlite")).unwrap();
     fs::write(&backing, b"external physical identity change").unwrap();
-    let original = layerfs_sandbox::internal::with_observations(&mut control, &[17; 32])
-        .status(bound.token)
-        .unwrap();
+    let original = observed_status(&mut control, [17; 32], bound.token);
     assert_eq!(original.token, bound.token);
     assert_eq!(original.binding, bound.binding);
     // The diagnostic conversation is fenced while its exact failed observer
@@ -736,9 +312,7 @@ fn configured_serial_low_water_reaches_a_mounted_create_on_both_startup_routes()
             .unwrap();
         let guard = MountGuard(ready.directory.clone());
         let observe = |control: &mut Control| {
-            layerfs_sandbox::internal::with_observations(control, &[21; 32])
-                .status(bound.token)
-                .unwrap();
+            observed_status(control, [21; 32], bound.token);
             serial_reservations(&log)
         };
         let mut counts = vec![observe(&mut control)];

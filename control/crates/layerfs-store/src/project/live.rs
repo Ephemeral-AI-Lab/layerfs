@@ -6,10 +6,9 @@ use crate::place::{self, Executor, Worker};
 use crate::project::frame::{ListedProject, ListingFrame, ListingReply};
 use crate::project::listing;
 use crate::project::record::ProjectRecord;
-use crate::record::{StoreRecord, StoreRef};
+use crate::record::StoreRecord;
 use crate::service;
 use layerfs_bridge::control::SdkRefusal;
-use layerfs_home::home::paths;
 use layerfs_home::names::StoreName;
 use std::path::Path;
 
@@ -32,21 +31,7 @@ pub fn projects(
     if let Executor::Worker(mut worker) = place::plan(home, store_ref)? {
         return on_worker(&mut worker, store, record, stats);
     }
-    let (store_path, postgresql) = match store_ref {
-        StoreRef::Postgres { .. } => (
-            record.postgresql_key(home, store),
-            Some(crate::postgresql::connect::selection(record)?),
-        ),
-        StoreRef::Sqlite { .. } => (paths::store_file(home, store), None),
-    };
-    let open = OpenArgs {
-        home: Some(home.to_path_buf()),
-        store: Some(store.to_owned()),
-        store_path: Some(store_path.display().to_string()),
-        store_record: Some(record.to_record().clone()),
-        postgresql,
-        ..OpenArgs::default()
-    };
+    let open = OpenArgs::of_record(home, store, record)?;
     service::with_service(&open, |service| listing::listed(service, stats))
 }
 

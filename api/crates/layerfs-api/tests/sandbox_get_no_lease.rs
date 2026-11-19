@@ -28,7 +28,7 @@
 //! capacity model, and the worker is this build's own server on a scratch
 //! root. Each home has a Store record and no Store file, so a get that
 //! opened the Store would be refused. While a get runs, the test holds the
-//! Store's lock and the Store's record carries a running `store.push`
+//! Store's lock and the Store's record carries a running `store.move`
 //! intent, as a push does while it checks that the Store is idle.
 #![cfg(unix)]
 use layerfs_api::home::{self, lease, paths, read_record, write_record};
@@ -334,6 +334,11 @@ fn home_records(home: &Path, machine: &str, platform: &str, worker: Option<(Sock
         ("platform", t(platform)),
         ("daemon", t(&daemon)),
     ];
+    // every 2.0 create records its provider name; `native` has none
+    let vm_name = format!("layerfs-test-{machine}");
+    if platform != "native" {
+        fields.push(("vm_name", t(&vm_name)));
+    }
     if worker.is_some() {
         fields.push(("state", t("running")));
     }
@@ -380,10 +385,10 @@ fn keys(endpoint: SocketAddr) -> SdkValue {
 /// Sandbox `s1` in `root` (the home, or a worker's root) as the side that
 /// runs it records it: a native daemon process (this test's own, so it is
 /// found alive) listening at `endpoint`, under the name the home with id
-/// `home_id` gave it before layerfs-project#180 (`lfs-<id8>-s1`, which a
-/// Sandbox made then keeps), with one Workspace record per listed `items`.
+/// `home_id` gives it (`layerfs-<id8>-s1`), with one Workspace record per
+/// listed `items`.
 fn local_sandbox(root: &Path, home_id: &str, endpoint: SocketAddr, items: &[SdkValue]) {
-    let name = format!("lfs-{}-s1", &home_id[..8]);
+    let name = format!("layerfs-{}-s1", &home_id[..8]);
     sandbox_named(root, &name, endpoint, items);
 }
 
@@ -470,10 +475,10 @@ fn settle(home: &Path) {
 }
 
 /// A Store being pushed, as far as another call can see it: its record
-/// carries a running `store.push` intent and its lock is held. The lock is
+/// carries a running `store.move` intent and its lock is held. The lock is
 /// released when the answer drops.
 fn pushing(home: &Path) -> impl Drop {
-    let op = layerfs_home::op::Op::begin("store.push", "check", SdkValue::Null).unwrap();
+    let op = layerfs_home::op::Op::begin("store.move", "check", SdkValue::Null).unwrap();
     let record = layerfs_store::record::StoreRecord::read(home, "shop")
         .unwrap()
         .unwrap();
@@ -1379,7 +1384,7 @@ fn a_forwarded_sandbox_s_process_comes_from_its_machine_s_worker() {
         let daemon = map(&[("name", t("lfs-x-s1")), ("forward", forward)]);
         write_record(&path, &home::with_field(record, "daemon", daemon)).unwrap();
         local_sandbox(&root, &id, endpoint, &[]);
-        let run = paths::run_root(&root).join(format!("lfs-{}-s1", &id[..8]));
+        let run = paths::run_root(&root).join(format!("layerfs-{}-s1", &id[..8]));
         std::fs::create_dir_all(run.join("overlay")).unwrap();
         settle(&home);
         let _push = pushing(&home);

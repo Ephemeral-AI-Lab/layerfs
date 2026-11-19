@@ -119,8 +119,6 @@ impl Form {
 pub const THING: &str = "<thing>";
 /// The key a list call answers its rows under.
 pub const ITEMS: &str = "items";
-/// The key a paged call answers the next page's cursor under.
-pub const NEXT_CURSOR: &str = "next_cursor";
 /// The key of an answer with nothing else to say.
 pub const OK: &str = "ok";
 
@@ -131,8 +129,6 @@ pub enum Place {
     Own,
     /// Flat on each item of the call's list.
     Item,
-    /// Flat at the top level.
-    Top,
 }
 
 impl Place {
@@ -141,7 +137,6 @@ impl Place {
         match self {
             Place::Own => "own",
             Place::Item => "item",
-            Place::Top => "top",
         }
     }
 }
@@ -179,14 +174,6 @@ impl Section {
         }
     }
 
-    /// A section whose keys go flat at the top level.
-    pub const fn top(name: &'static str, keys: &'static [&'static str]) -> Section {
-        Section {
-            place: Place::Top,
-            ..Section::own(name, keys)
-        }
-    }
-
     /// This section, its own map shaped by `form`.
     pub const fn shaped(self, form: &'static Form) -> Section {
         Section {
@@ -205,8 +192,6 @@ pub enum Paging {
     Cursor,
     /// A window of text lines: `--line` and `--limit` in, `next_line` out.
     Line,
-    /// A window of bytes, for a UI's file view.
-    Byte,
 }
 
 impl Paging {
@@ -216,7 +201,6 @@ impl Paging {
             Paging::None => None,
             Paging::Cursor => Some("cursor"),
             Paging::Line => Some("line"),
-            Paging::Byte => Some("byte"),
         }
     }
 }

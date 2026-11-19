@@ -11,7 +11,6 @@
 //! option is the option's name with `-` for `_` (`--start-line`).
 use super::form::{Form, Paging, Part, Profile, Section};
 use super::platform_policy::Policy;
-use super::render::Saves;
 use super::scope::Rule;
 use super::Context;
 use layerfs_bridge::control::SdkValue;
@@ -171,8 +170,8 @@ pub struct Call {
     pub scope: Rule,
     /// Which of its arguments must not name a removed platform.
     pub policy: Policy,
-    /// The saved version its call log line names.
-    pub saves: Saves,
+    /// Whether its call log line names the Commit it saved.
+    pub saves: bool,
 }
 
 impl Call {
@@ -233,9 +232,12 @@ impl Call {
         Call { policy, ..self }
     }
 
-    /// This call, its call log line naming the version it saved.
-    pub const fn saves(self, saves: Saves) -> Self {
-        Call { saves, ..self }
+    /// This call, its call log line naming the Commit it saved.
+    pub const fn saves(self) -> Self {
+        Call {
+            saves: true,
+            ..self
+        }
     }
 
     /// Whether it reports progress events (it takes `on_progress`).
@@ -340,7 +342,7 @@ pub const fn call(
         profile: Profile::Full,
         scope: Rule::Outside,
         policy: Policy::None,
-        saves: Saves::Nothing,
+        saves: false,
     }
 }
 

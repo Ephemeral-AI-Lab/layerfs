@@ -316,7 +316,7 @@ fn a_caller_that_stops_reading_is_cut_once_and_the_step_still_ends() {
     let wait = Duration::from_millis(1200);
     let worker = worker("stall", Faults::default().write_wait(wait));
     // this thread works for a home: its id goes with the Sandbox request
-    layerfs_control::migrate::open(&worker.root.parent().unwrap().join("home")).unwrap();
+    layerfs_home::home::open(&worker.root.parent().unwrap().join("home")).unwrap();
 
     // `store.file`: the write of a piece of a Store's incoming copy
     worker.faults.on("store.file", FLOOD);

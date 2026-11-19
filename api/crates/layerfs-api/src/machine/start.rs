@@ -1,10 +1,14 @@
 //! `machine.start`: start a stopped machine and its worker; a running one answers at once.
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call, PROGRESS};
-use crate::calls::{Context, Form, Policy};
+#[cfg(feature = "machine")]
+use crate::calls::Context;
+use crate::calls::{Form, Policy};
+#[cfg(feature = "machine")]
 use layerfs_bridge::control::SdkValue;
 #[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
+#[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
 
 /// Its answer: `ok`, or `unchanged` when it was running already.
@@ -35,12 +39,6 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     layerfs_control::machine::start(home, events, &machine)
 }
 
-/// Without the `machine` feature (the guest worker's build) it is
-/// refused before any effect.
-#[cfg(not(feature = "machine"))]
-fn run(_context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
-    Err(layerfs_home::outcome::refused(
-        "Unsupported",
-        "machine.start runs on the host",
-    ))
-}
+// without the `machine` feature (the guest worker's build) it is
+// refused before any effect
+crate::calls::host_only::host_only!("start");

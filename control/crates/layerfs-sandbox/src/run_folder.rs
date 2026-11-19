@@ -106,7 +106,7 @@ fn overlay_bytes(run: &Path, namespace: i64) -> SdkValue {
 /// it gave no size for, and for every Workspace when it did not answer
 /// (`None`). The daemon process fields `read` holds (`daemon`, `usage`,
 /// `usage_reason`) become fields of the listing; a `read` without them
-/// (a worker of an earlier build) adds none.
+/// adds none.
 ///
 /// Each Workspace also gets `usage`, what its own cgroup has used, in the
 /// shape of the Sandbox's (`{ cpu_usec, memory_current, memory_peak,
@@ -161,8 +161,7 @@ pub fn merged(listed: SdkValue, read: Option<&SdkValue>) -> SdkValue {
 /// for it, or null with the Sandbox's `workspace_usage_reason` when no
 /// Workspace of it has a group (`host_process`, `no_cgroup`, ...). Null
 /// with [`process::NOT_OBSERVED`] when the side that runs the Sandbox did
-/// not answer (`None`) or answered without these fields (a worker of an
-/// earlier build).
+/// not answer (`None`) or answered without these fields.
 pub fn workspace_usage<'a>(
     read: Option<&'a SdkValue>,
     workspace: Option<&str>,

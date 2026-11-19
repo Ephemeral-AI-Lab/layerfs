@@ -227,9 +227,6 @@ pub struct Deploy {
     /// The Sandbox directory prefix, `layerfs-<home id prefix>-`: a new
     /// Sandbox's run folder is `<prefix><name>`.
     pub container_prefix: Option<String>,
-    /// The prefix before layerfs-project#180, `lfs-<home id prefix>-`: a
-    /// Sandbox recorded under it is reopened by that name; none is made.
-    pub legacy_prefix: Option<String>,
     /// The daemon executable.
     pub daemon: Option<String>,
     /// A namespaces Sandbox's image archive.

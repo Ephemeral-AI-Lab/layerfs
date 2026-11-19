@@ -4,7 +4,6 @@
 //! the Sandboxes that use it; and the project reads, which take this
 //! layer's machine state (`project.get`, `project.list`). The other
 //! `project` calls are `layerfs-store`'s own.
-use crate::inventory;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::names::ProjectRef;
@@ -14,12 +13,6 @@ use layerfs_store::project::op::{self, DELETE, INIT};
 use layerfs_store::project::read::{self, ProjectList};
 use layerfs_store::project::record::ProjectRecord;
 use std::path::Path;
-
-/// The project-scope `Busy` checks `project.delete` takes from this layer.
-pub const PROJECT_RELATED: layerfs_store::Related = layerfs_store::Related {
-    store_idle: inventory::store_idle,
-    can_remove_project: inventory::can_remove_project,
-};
 
 /// `project.get(project)`: one project, its state and main's head; its
 /// Store's machine state is the inventory's.
@@ -53,26 +46,30 @@ pub fn delete(home: &Path, events: &mut Events<'_>, project: &ProjectRef) -> Out
         .as_ref()
         .is_some_and(|op| op.name() == INIT && op.standing() != Standing::Running);
     op::begin(home, store, name, DELETE, "mark")?;
-    let outcome =
-        match layerfs_store::project::delete::delete(home, events, project, PROJECT_RELATED) {
-            Err(refusal) if refusal.code == "NoSuchProject" => {
-                // a list that cannot be read leaves the Store's answer and
-                // the entry as they are
-                let clear = left_init || unlisted(home, store, name).unwrap_or(false);
-                match clear {
-                    true => op::remove_entry(home, store, name)
-                        .map(|()| removed(layerfs_home::home::now_ms(), true)),
-                    false => Err(refusal),
-                }
+    let outcome = match layerfs_store::project::delete::delete(
+        home,
+        events,
+        project,
+        crate::store::RELATED,
+    ) {
+        Err(refusal) if refusal.code == "NoSuchProject" => {
+            // a list that cannot be read leaves the Store's answer and
+            // the entry as they are
+            let clear = left_init || unlisted(home, store, name).unwrap_or(false);
+            match clear {
+                true => op::remove_entry(home, store, name)
+                    .map(|()| removed(layerfs_home::home::now_ms(), true)),
+                false => Err(refusal),
             }
-            Ok(value) => {
-                let deleted_ms = value
-                    .get_int("deleted_ms")
-                    .unwrap_or_else(layerfs_home::home::now_ms);
-                Ok(removed(deleted_ms, value.get_bool("home_entry_removed")))
-            }
-            Err(refusal) => Err(refusal),
-        };
+        }
+        Ok(value) => {
+            let deleted_ms = value
+                .get_int("deleted_ms")
+                .unwrap_or_else(layerfs_home::home::now_ms);
+            Ok(removed(deleted_ms, value.get_bool("home_entry_removed")))
+        }
+        Err(refusal) => Err(refusal),
+    };
     settle(home, store, name, &outcome);
     // an Init this process ran ended once it was marked uncertain
     let settled = prior.as_ref().filter(|op| {

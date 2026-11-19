@@ -10,21 +10,21 @@
 //   verify  fresh mount, exec the identity and the verifier, unmount with discard;
 //   close   the Sandbox, and the home removed.
 // LFS533_DAEMON names the daemon for the `native` machine; it reaches the
-// home's record through `layerfs import-env` (the repository's debug
-// `layerfs`, or LFS533_LAYERFS), as a 1.1.0 environment would. On any other
-// machine the Store is pushed there after Init; for `docker`, LFS533_IMAGE is
+// home's record through `layerfs machine update native --daemon` (the
+// repository's debug `layerfs`, or LFS533_LAYERFS). On any other
+// machine the Store is moved there after Init; for `docker`, LFS533_IMAGE is
 // the Sandbox image (`machine update docker --image`), and a docker worker
-// this home started (`lfs-<home id>-docker`) is removed with its data
+// this home started (`layerfs-<home id8>-docker`) is removed with its data
 // volume at the end.
 // LFS533_HOME names an existing home that already holds <machine> (a VM is
 // made once per kind, not per cell): the cell's own Store `c<nn>` is made
-// there, pushed native -> <machine> and, after the cells, pulled back to native, then
+// there, moved native -> <machine> and, after the cells, moved back to native, then
 // removed; the home stays.
 // LFS535_PG_URL makes the cell's Store a PostgreSQL Store (#535 phase 8
 // item 2): `store connect` of that URL ("{cell}" becomes the cell's
 // lower-case name, e.g. a database per cell; no password in it) with
 // LFS535_PG_PASSWORD as its password reference (`env:NAME`); the Store is
-// never pushed or pulled, and the cell disconnects it at the end (its data
+// never moved, and the cell disconnects it at the end (its data
 // stays in the server).
 // One cell per command; nothing else runs a cell at the same time, so the
 // 1.1.0 host-wide lock is not ported. The receipt holds every step's time,
@@ -100,9 +100,9 @@ const kindOf = (value) => value?.kind ?? value?.outcome ?? null;
 try {
   if (process.env.LFS533_DAEMON) {
     const binary = process.env.LFS533_LAYERFS ?? new URL("../../../../../target/debug/layerfs", import.meta.url).pathname;
-    await step("import-env", async () =>
-      execFileSync(binary, ["import-env"], {
-        env: { PATH: process.env.PATH, HOME: process.env.HOME, LAYERFS_HOME: home, LAYERFS_DAEMON: process.env.LFS533_DAEMON },
+    await step("machine.update", async () =>
+      execFileSync(binary, ["machine", "update", "native", "--daemon", process.env.LFS533_DAEMON], {
+        env: { PATH: process.env.PATH, HOME: process.env.HOME, LAYERFS_HOME: home },
         encoding: "utf8",
       }));
   }
@@ -186,10 +186,10 @@ try {
   }
   if (machine === "docker" && !shared) {
     // this home's own worker container and data volume, never another's
-    // the name its record keeps (`vm_name`); a record from before
-    // layerfs-project#180 has none and means `lfs-<id8>-docker`
+    // the name its record keeps (`vm_name`), which this build gives as
+    // `layerfs-<id8>-docker`
     const id = JSON.parse(readFileSync(join(home, "layerfs.json"), "utf8")).id.slice(0, 8);
-    let worker = `lfs-${id}-docker`;
+    let worker = `layerfs-${id}-docker`;
     try {
       worker = JSON.parse(readFileSync(join(home, "machine", "docker", "record.json"), "utf8")).vm_name ?? worker;
     } catch {

@@ -110,7 +110,7 @@ pub fn missing_daemon(machine: &str, path: &str) -> String {
 
 /// The daemon a Sandbox runs, on `side`: in a worker, the one beside its
 /// own executable (the bundle's); here (`native`), the machine record's
-/// `daemon` (`import-env` writes it from 1.1.0's `LAYERFS_DAEMON`), else
+/// `daemon` (`machine update --daemon` writes it), else
 /// this host's bundle's. A recorded daemon that is not there is refused
 /// before any launch, naming the call that records another.
 fn daemon(side: &Side<'_>) -> Result<String> {

@@ -107,7 +107,6 @@ pub fn help() -> ExitCode {
         ])
     };
     let commands = vec![
-        command("import-env", &[], &[]),
         command("worker", &[], &[]),
         command("help", &["[family]", "[call]"], &["--json"]),
         command("--version", &[], &["--json"]),

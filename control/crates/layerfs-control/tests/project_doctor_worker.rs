@@ -110,6 +110,7 @@ fn the_data_walk_of_a_store_on_another_machine_runs_in_its_worker() {
         &SdkValue::map([
             ("name", text("box")),
             ("platform", text("lima")),
+            ("vm_name", text("layerfs-test-box")),
             ("state", text("running")),
         ]),
     )

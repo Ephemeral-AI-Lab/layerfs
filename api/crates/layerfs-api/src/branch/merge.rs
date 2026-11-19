@@ -2,7 +2,7 @@
 use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Json, Name, Project};
 use crate::calls::table::{a, call, opt, Call, MESSAGE};
-use crate::calls::{Context, Form, Policy, Saves};
+use crate::calls::{Context, Form, Policy};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::branch::{merge, BranchMerge};
@@ -50,7 +50,7 @@ pub(crate) const CALL: Call = call(
 )
 .scoped(Rule::BranchMerge)
 .policy(Policy::Project("project"))
-.saves(Saves::Merge)
+.saves()
 .form(&FORM);
 
 /// Runs `branch.merge`.

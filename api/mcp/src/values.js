@@ -119,8 +119,8 @@ export function readArguments(spec, given) {
       options[option.name] = convert(spec, option, `${where}: option "${option.name}"`, value);
     }
   }
-  // the global options of a migrated call; the library checks the sections
-  if (globals.detail && given.detail !== undefined && given.detail !== null) {
+  // the global options; the library checks the sections
+  if (given.detail !== undefined && given.detail !== null) {
     if (typeof given.detail !== "boolean") refuse(`${where}: option "detail"`, "must be true or false");
     options.detail = given.detail;
   }

@@ -42,53 +42,50 @@ pub const ANOTHER_STORE: &str = "the PostgreSQL server holds another Store than"
 /// role must have every privilege a Sandbox's writes need there. Answers
 /// the check to record, `{ at, server_version, latency_ms }`. The server
 /// not reached is `Unavailable`, a login refused or a privilege missing
-/// `Denied`, another Store's schema `Unavailable` naming it, and a build
-/// without the PostgreSQL engine `Unsupported`.
+/// `Denied`, and another Store's schema `Unavailable` naming it.
 pub fn check(record: &StoreRecord, postgresql: &PgSelection) -> Result<SdkValue> {
-    {
-        use layerfs_persistence::PostgresStatusError as E;
-        let access =
-            layerfs_persistence::postgresql_access(postgresql.url()?, SCHEMA).map_err(|error| {
-                match error {
-                    E::Denied(_) => refused("Denied", error.to_string()),
-                    E::Unreachable(_) => refused("Unavailable", error.to_string()),
-                    E::Failed(_) => refused("Failed", error.to_string()),
-                }
-            })?;
-        let another = || refused("Unavailable", format!("{ANOTHER_STORE} {}", record.name()));
-        let denied = |first: &str| {
-            refused(
-                "Denied",
-                format!(
-                    "role {} lacks {first} ({} privilege(s) missing in all)",
-                    access.role,
-                    access.missing.len()
-                ),
-            )
-        };
-        if !access.schema {
-            return Err(another());
-        }
-        // a role that may not use the schema cannot read its binding either
-        if let Some(first) = access.missing.first().filter(|m| m.contains(" on schema ")) {
-            return Err(denied(first));
-        }
-        let binding = crate::postgresql::open::read_binding(postgresql)?;
-        if record.binding() != Some(binding.as_slice()) {
-            return Err(another());
-        }
-        if let Some(first) = access.missing.first() {
-            return Err(denied(first));
-        }
-        Ok(SdkValue::map([
-            ("at", SdkValue::Int(home::now_ms())),
-            ("server_version", SdkValue::text(access.server_version)),
-            (
-                "latency_ms",
-                SdkValue::Int(i64::try_from(access.latency.as_millis()).unwrap_or(i64::MAX)),
+    use layerfs_persistence::PostgresStatusError as E;
+    let access =
+        layerfs_persistence::postgresql_access(postgresql.url()?, SCHEMA).map_err(|error| {
+            match error {
+                E::Denied(_) => refused("Denied", error.to_string()),
+                E::Unreachable(_) => refused("Unavailable", error.to_string()),
+                E::Failed(_) => refused("Failed", error.to_string()),
+            }
+        })?;
+    let another = || refused("Unavailable", format!("{ANOTHER_STORE} {}", record.name()));
+    let denied = |first: &str| {
+        refused(
+            "Denied",
+            format!(
+                "role {} lacks {first} ({} privilege(s) missing in all)",
+                access.role,
+                access.missing.len()
             ),
-        ]))
+        )
+    };
+    if !access.schema {
+        return Err(another());
     }
+    // a role that may not use the schema cannot read its binding either
+    if let Some(first) = access.missing.first().filter(|m| m.contains(" on schema ")) {
+        return Err(denied(first));
+    }
+    let binding = crate::postgresql::open::read_binding(postgresql)?;
+    if record.binding() != Some(binding.as_slice()) {
+        return Err(another());
+    }
+    if let Some(first) = access.missing.first() {
+        return Err(denied(first));
+    }
+    Ok(SdkValue::map([
+        ("at", SdkValue::Int(home::now_ms())),
+        ("server_version", SdkValue::text(access.server_version)),
+        (
+            "latency_ms",
+            SdkValue::Int(i64::try_from(access.latency.as_millis()).unwrap_or(i64::MAX)),
+        ),
+    ]))
 }
 
 /// The light check of a connection the Store's own calls use: the server

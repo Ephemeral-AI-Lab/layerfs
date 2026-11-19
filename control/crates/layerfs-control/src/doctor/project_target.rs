@@ -53,7 +53,7 @@ pub(super) fn run(probe: &Probe<'_>, node: &mut Node) {
         return;
     }
     let handle = probe.thing.name.as_str();
-    let mut checks = Checks::new("project", handle);
+    let mut checks = Checks::default();
     let (store, name) = handle.split_once('/').unwrap_or((handle, ""));
     let recorded = StoreRecord::read(probe.home, store).and_then(|found| {
         let found = found.ok_or_else(|| refused("NotFound", format!("no Store {store}")))?;
@@ -176,7 +176,6 @@ fn data(probe: &Probe<'_>, store: &StoreRecord, stack: LayerStackId, checks: &mu
         deadline: probe.budget.deadline(),
         cancelled: None,
     };
-    let started = Instant::now();
     let mut found = Found::default();
     let mut progress = |done: u64, total: u64| (probe.progress)("data", done, total);
     let made = match store.store_ref() {
@@ -225,7 +224,6 @@ fn data(probe: &Probe<'_>, store: &StoreRecord, stack: LayerStackId, checks: &mu
         Ok(_) => {}
         Err(refusal) => not_made(probe.home, store, DATA, refusal, checks),
     }
-    checks.duration(DATA, started.elapsed());
 }
 
 /// The problems one walk reported, the first [`KEPT`] of them kept.

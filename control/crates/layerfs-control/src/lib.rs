@@ -1,6 +1,6 @@
 //! What spans the control entities (#536; split by layerfs-project#101):
 //! the worker's server, `inventory` (the relationships no record stores),
-//! `doctor`, the home's conversions (`migrate`), and the machine, Store,
+//! `doctor`, and the machine, Store,
 //! project and backup calls with the reads they need from other entities
 //! (`Related`). The call machinery is `layerfs-api`'s (layerfs-project#107).
 #![forbid(unsafe_code)]
@@ -16,7 +16,6 @@ pub mod inventory;
 pub mod machine;
 #[cfg(feature = "machine")]
 mod machine_force;
-pub mod migrate;
 pub mod project;
 pub mod store;
 pub mod worker_server;

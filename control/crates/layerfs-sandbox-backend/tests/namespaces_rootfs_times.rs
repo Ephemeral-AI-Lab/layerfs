@@ -2,8 +2,7 @@
 //! symbolic link's and a directory's (Python, for one, rejects a cached
 //! `.pyc` whose source's time is not the one it recorded). And the unpack that
 //! restores them is published under its own name, so a new Sandbox never uses
-//! an older unpack that did not, while a reopened one keeps the root it was
-//! built on. Like `namespaces_rootfs`, these need no root, no Engine and no
+//! an older unpack that did not, and a reopen finds only that root. Like `namespaces_rootfs`, these need no root, no Engine and no
 //! namespaces.
 #![cfg(target_os = "linux")]
 #[allow(dead_code)]
@@ -236,19 +235,17 @@ fn a_new_unpack_never_uses_an_older_layouts_directory() {
     // the older unpack is left as it was
     assert_eq!(fs::read(old.join("old-marker")).unwrap(), b"old\n");
 
-    // a reopen gets the root its spec names, whichever layout, even when the
-    // new one exists
-    for lower in [&old, &new] {
-        let found = rootfs::lookup(&image(DIGEST), &scratch.cache, lower).unwrap();
-        assert_eq!(found.directory(), lower.as_path());
-        assert_eq!(found.image().as_str(), DIGEST);
-    }
-    // anything else is refused, even a directory that exists: one outside
-    // the cache, another layout's name, another digest's root
+    // a reopen gets the root its spec names
+    let found = rootfs::lookup(&image(DIGEST), &scratch.cache, &new).unwrap();
+    assert_eq!(found.directory(), new.as_path());
+    assert_eq!(found.image().as_str(), DIGEST);
+    // anything else is refused, even a directory that exists: the older
+    // layout's (no compatibility), one outside the cache, another layout's
+    // name, another digest's root
     let outside = scratch.base.join("elsewhere");
     let unknown = scratch.cache.join(format!("{}.3", hex(DIGEST)));
     let other = unpacked_at(&scratch.cache, OTHER);
-    for directory in [&outside, &unknown, &other] {
+    for directory in [&old, &outside, &unknown, &other] {
         fs::create_dir_all(directory).unwrap();
         let error = rootfs::lookup(&image(DIGEST), &scratch.cache, directory).unwrap_err();
         assert!(format!("{error}").contains("cannot be found"), "{error}");

@@ -11,7 +11,6 @@ use crate::service;
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_bridge::sdk_values::node_text;
 use layerfs_history::NodeId;
-use layerfs_home::home::paths;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store_service::history::lookup;
 use layerfs_store_service::StoreService;
@@ -57,14 +56,7 @@ pub fn list_projects(root: &Path, frame: &ListingFrame) -> Outcome {
         .store_record
         .clone()
         .ok_or_else(|| refused("InvalidInput", "project.list needs the Store's record"))?;
-    let open = OpenArgs {
-        home: Some(root.to_path_buf()),
-        store: Some(store.to_owned()),
-        store_path: Some(paths::store_file(root, store).display().to_string()),
-        store_record: Some(store_record),
-        postgresql: None,
-        ..OpenArgs::default()
-    };
+    let open = OpenArgs::in_root(root, store, Some(store_record));
     let projects = service::with_service(&open, |service| listed(service, frame.stats))?;
     Ok(ListingReply { projects }.encode())
 }

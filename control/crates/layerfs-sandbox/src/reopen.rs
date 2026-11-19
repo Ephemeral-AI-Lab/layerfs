@@ -49,17 +49,29 @@ pub fn gone(id: &str, container: &str, stopped: bool) -> SdkRefusal {
 }
 /// The refusal of every call but `sandbox.remove` on Sandbox `id`, recorded
 /// under the retired docker backend (D-8, layerfs-project#111): its
-/// container `container` is never reopened, stopped or deleted here.
-pub fn retired(id: &str, container: &str) -> SdkRefusal {
+/// container (`container`, when its record names it) is never reopened,
+/// stopped or deleted here.
+pub fn retired(id: &str, container: Option<&str>) -> SdkRefusal {
     refused(
         "Unsupported",
         format!(
             "Sandbox {id} was created on the docker Sandbox backend, which this build no longer \
              runs (a docker machine's Sandboxes now run in namespaces in its worker): \
-             `layerfs sandbox remove {id}` forgets it, `docker rm -f {container}` removes its \
-             container, and `layerfs sandbox create` makes it again"
+             `layerfs sandbox remove {id}` removes its records, {}, and `layerfs sandbox create` \
+             makes it again",
+            container_fix(container)
         ),
     )
+}
+
+/// How the container of a Sandbox of the retired docker backend goes:
+/// `docker rm -f` with the name its record keeps; a record that keeps none
+/// says so, since this build does not compute an older name.
+pub fn container_fix(container: Option<&str>) -> String {
+    match container {
+        Some(container) => format!("`docker rm -f {container}` removes its container"),
+        None => "its record does not name its container (`docker ps -a` lists them)".to_owned(),
+    }
 }
 
 /// What a Sandbox record names: a local daemon process (`runtime`
@@ -89,7 +101,7 @@ pub fn recorded(host: &Host, id: &str, value: &DaemonRecord) -> Result<Recorded>
         return local_record(host, id, value);
     }
     match value.runtime() {
-        None | Some("docker") => Err(retired(id, value.name().unwrap_or(""))),
+        None | Some("docker") => Err(retired(id, value.name())),
         // the former `local` runtime (an earlier, unmerged build), or one
         // this host does not run: nothing it names is used or deleted
         Some(other) => Err(refused(
@@ -104,14 +116,12 @@ pub fn recorded(host: &Host, id: &str, value: &DaemonRecord) -> Result<Recorded>
     }
 }
 /// A local record is used only where this deployment puts that Sandbox:
-/// its own `name` must be exactly one this deployment gives Sandbox `id`
-/// (`<prefix><id>`, or under the earlier prefix a Sandbox made before
-/// layerfs-project#180 keeps; [`crate::lifecycle::recorded_names`]) and its
+/// its own `name` must be exactly the one this deployment gives Sandbox `id`
+/// (`<prefix><id>`, [`crate::lifecycle::sandbox_name`]) and its
 /// directory exactly `<LAYERFS_LOCAL_DIR>/<that name>`, so a damaged,
 /// edited or stale record (another
 /// LAYERFS_LOCAL_DIR or prefix) never points a delete elsewhere. A record
-/// without `boot` was written before boot ids were kept: its daemon is
-/// matched by id and start time as then, and never signalled.
+/// without `boot` is refused.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_record(host: &Host, id: &str, value: &DaemonRecord) -> Result<Recorded> {
     let (directory, record) = local_record_of(host, id, value)?;
@@ -136,25 +146,20 @@ fn local(directory: PathBuf, record: LocalRecord, value: &DaemonRecord) -> Resul
 /// deployment puts that Sandbox: under its LAYERFS_LOCAL_DIR when it sets
 /// one, else (#529: the record decides, so a caller of another backend has
 /// none) beside the record's own directory, which must still carry a
-/// name this deployment gives Sandbox `id` (the record's own, one of
-/// [`crate::lifecycle::recorded_names`]) and be owned by this record
+/// name this deployment gives Sandbox `id`
+/// ([`crate::lifecycle::sandbox_name`]) and be owned by this record
 /// ([`crate::launch::local::owned`]).
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_record_of(host: &Host, id: &str, value: &DaemonRecord) -> Result<(PathBuf, LocalRecord)> {
     let directory = PathBuf::from(helpers::required(value.directory(), "directory")?);
-    // the Sandbox's own name, exactly one this deployment gives it (a new
-    // Sandbox's, or the earlier prefix's): nothing is stripped from it
+    // the Sandbox's own name, exactly the one this deployment gives it:
+    // nothing is stripped from it
     let name = helpers::required(value.name(), "name")?;
-    let names = crate::lifecycle::recorded_names(host.deploy(), id)?;
-    let named = names.iter().any(|candidate| candidate == name);
-    let expected = crate::launch::local::directory(
-        host.deploy(),
-        id,
-        if named { name } else { &names[0] },
-        directory.parent(),
-    )?;
+    let given = crate::lifecycle::sandbox_name(host.deploy(), id)?;
+    let named = name == given;
+    let expected = crate::launch::local::directory(host.deploy(), id, &given, directory.parent())?;
     if !named || directory != expected {
-        return Err(refused(
+        let refusal = refused(
             "InvalidInput",
             format!(
                 "Sandbox {id}'s local record names {} (as {name}), but this deployment puts it at \
@@ -165,7 +170,15 @@ fn local_record_of(host: &Host, id: &str, value: &DaemonRecord) -> Result<(PathB
                 expected.display(),
                 crate::files::sandbox_dir(host)?.display()
             ),
-        ));
+        );
+        // a name this deployment does not give: `sandbox remove` removes
+        // its records alone
+        return Err(match named {
+            false => {
+                layerfs_home::outcome::with_fix(refusal, format!("layerfs sandbox remove {id}"))
+            }
+            true => refusal,
+        });
     }
     if (host.deploy())
         .and_then(|deploy| deploy.local_dir.as_deref())
@@ -195,27 +208,23 @@ fn local_parts(value: &DaemonRecord) -> Result<(PathBuf, LocalRecord)> {
     Ok((directory, record))
 }
 /// The daemon (native) or init (namespaces) process a local record names:
-/// its id, start time and boot. A record from before boot ids has none.
+/// its id, start time and boot.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn recorded_process(value: &DaemonRecord) -> Result<LocalProcess> {
     let pid = value
         .pid()
         .ok_or_else(|| refused("InvalidInput", "local Sandbox record pid"))?;
-    let boot = match value.boot() {
-        None => None,
-        Some(hex) => Some(
-            (hex.len() == 32)
-                .then(|| u128::from_str_radix(hex, 16).ok())
-                .flatten()
-                .ok_or_else(|| refused("InvalidInput", "local Sandbox record boot"))?,
-        ),
-    };
+    let boot = value
+        .boot()
+        .filter(|hex| hex.len() == 32)
+        .and_then(|hex| u128::from_str_radix(hex, 16).ok())
+        .ok_or_else(|| refused("InvalidInput", "local Sandbox record boot"))?;
     Ok(LocalProcess {
         pid: u32::try_from(pid).map_err(failed)?,
         start: helpers::required(value.start(), "start")?
             .parse::<u64>()
             .map_err(failed)?,
-        boot,
+        boot: Some(boot),
     })
 }
 /// A namespaces record is used only where its directory checks put that
@@ -262,29 +271,6 @@ fn namespaces(
         ContainerId::parse(container(value)?).map_err(failed)?,
         SandboxRecord::Namespaces(record),
     ))
-}
-
-/// What a layout 2 Sandbox record names (#536 H10), read for its home's
-/// conversion with no directory check: the conversion checks that a local
-/// one's directory is in the home's old local root itself.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub fn unchecked(id: &str, value: &DaemonRecord) -> Result<Recorded> {
-    match value.runtime() {
-        None | Some("docker") => Err(retired(id, value.name().unwrap_or(""))),
-        Some(NATIVE) => {
-            let (directory, record) = local_parts(value)?;
-            local(directory, record, value)
-        }
-        #[cfg(target_os = "linux")]
-        Some(NAMESPACES) => {
-            let (directory, record) = local_parts(value)?;
-            namespaces(id, directory, record, value)
-        }
-        Some(other) => Err(refused(
-            "InvalidInput",
-            format!("Sandbox {id} is a {other} Sandbox, which this host never reopens"),
-        )),
-    }
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]

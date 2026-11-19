@@ -52,9 +52,7 @@ pub fn call(
 /// daemon connection again. Answers how many Stores it closed.
 #[napi]
 pub fn close() -> u32 {
-    let closed = layerfs_api::close_idle(std::time::Duration::ZERO);
-    layerfs_api::end_idle_sessions(layerfs_api::SESSION_END);
-    u32::try_from(closed).unwrap_or(u32::MAX)
+    u32::try_from(layerfs_api::close()).unwrap_or(u32::MAX)
 }
 
 /// One call, run off the JavaScript thread.

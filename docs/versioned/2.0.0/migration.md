@@ -37,7 +37,7 @@ Nothing here is published to npm, PyPI or crates.io.
 | Old | 2.0.0 | Status and reason |
 | --- | --- | --- |
 | npm `@layerfs/agent` (`import { LayerFS } from "@layerfs/agent"`) | npm `@layerfs/node` (`api/node`): `import layerfs from "@layerfs/node"` or `import { client, LayerFSError } from "@layerfs/node"`. An ES module for Node 22 or later, MIT | **Replaced.** One package, one native addon. [`api/node/package.json`](../../../api/node/package.json), [Node](../../architecture/api/front-ends/bindings.md#layerfs-node) |
-| npm `@layerfs/cli` (the Node `layerfs` command; #521: 106 commands) | the native `layerfs` command, one Rust binary: the 83 calls plus `import-env`, `worker`, `help` and `--version` | **Replaced.** It is not an npm package: `layerfs-cli` has `publish = false`. The command counts are not comparable (the old ones included the backend and runtime commands). [CLI](../../architecture/api/front-ends/README.md#the-layerfs-command) |
+| npm `@layerfs/cli` (the Node `layerfs` command; #521: 106 commands) | the native `layerfs` command, one Rust binary: the 83 calls plus `worker`, `help` and `--version` | **Replaced.** It is not an npm package: `layerfs-cli` has `publish = false`. The command counts are not comparable (the old ones included the backend and runtime commands). [CLI](../../architecture/api/front-ends/README.md#the-layerfs-command) |
 | npm `@layerfs/backend` (`LayerFSBackend.of(client)`, 14 operator and diagnostic calls) | none, except `layerfs.workspace.status(workspace)` | **Removed** (O25). [Limitations](limitations.md#not-built-refused-as-unsupported), [README](README.md#compatibility-with-110) |
 | npm `@layerfs/runtime` (`LayerFSRuntime.open`, worker start and restart, `project.start_init` / `get_init` / `subscribe_init`, Sandbox and volume sweep) | no package. The `machine`, `store`, `project` and `sandbox` families; `project.init` with `on_progress`; `machine start` and `machine stop` by hand (nothing starts a machine on demand, D11) | **Replaced** in part, **Removed** for the job registry (O22) and the sweep. [Machines and Stores](machines-and-stores.md#starting-and-stopping-manual-535-d11), [Node and Python](sdk.md#functions-as-options) |
 | npm `@layerfs/mcp` (#521: 50 tools, stdio) | `@layerfs/mcp` in `api/mcp` (`layerfs-mcp`, stdio; not published): one tool per call, named `<family>_<call>`; the default `work` profile lists the 17 `agent` calls, `--profile admin` all 83 | **Replaced.** Generated from the Node package's table. [MCP](../../architecture/api/front-ends/mcp.md) |
@@ -81,10 +81,10 @@ that built it (2.39 on the host used). See
 | `await client.close()`, `Symbol.asyncDispose` (#521) | module-level `layerfs.close()` (Node) and `layerfs.close()` (Python): closes the Stores this process holds idle, answers how many | **Changed.** There is no client object to dispose; call `close()` before the process ends. [Node and Python](sdk.md) |
 | `LAYERFS_STORE_PATH`, `storePath` | none. A Store lives under the home (`store/<name>/`); `store.create`, `store.connect` and `store.move` make and move Stores | **Removed.** [The home](home.md), [Machines and Stores](machines-and-stores.md#stores) |
 | `LAYERFS_WORKER_ENDPOINT`, worker started by `@layerfs/runtime` | none. The home's machine records say where a Store's worker is; `layerfs worker` serves it | **Removed.** [Machines and Stores](machines-and-stores.md#routes) |
-| `LAYERFS_DAEMON`, `_IMAGE_ARCHIVE`, `_DOCKER`, `_IMAGE`, `_REMOTE_*`, `_SANDBOX`, `_PLACEMENT` and the other 1.1.0 platform settings | records under `LAYERFS_HOME`. Run `layerfs import-env` once to write the current environment as records; later changes by `machine update` | **Replaced.** Only `LAYERFS_HOME`, `LAYERFS_TRACE` and the measurement settings are read. [The home](home.md#layerfs-import-env), [README](README.md#compatibility-with-110) |
-| `LAYERFS_STORE_POLICY` (`storePolicy`) | none. Every sqlite Store opens with `synchronous=NORMAL` | **Removed.** Durable execution stays disabled by the owner. `import-env` ignores the setting |
+| `LAYERFS_DAEMON`, `_IMAGE_ARCHIVE`, `_DOCKER`, `_IMAGE`, `_REMOTE_*`, `_SANDBOX`, `_PLACEMENT` and the other 1.1.0 platform settings | records under `LAYERFS_HOME`, written by `machine create` and `machine update`; a 1.1.0 environment is not imported (owner, 2026-11-19) | **Replaced.** Only `LAYERFS_HOME`, `LAYERFS_TRACE` and the measurement settings are read. [README](README.md#compatibility-with-110) |
+| `LAYERFS_STORE_POLICY` (`storePolicy`) | none. Every sqlite Store opens with `synchronous=NORMAL` | **Removed.** Durable execution stays disabled by the owner |
 | init timeout (`LayerFS.init` third argument) | the `timeout` option of `project.init` | **Replaced.** There is no generic per-call deadline: every call is one attempt |
-| 1.1.0 homes and Stores | converted once, on the first 2.0 call | **Changed.** [The home](home.md#a-110-home) |
+| 1.1.0 homes and Stores | not converted (owner, 2026-11-19): refused with the fix `mv <home> <home>.old && layerfs home init` | **Removed.** [The home](home.md#an-older-home) |
 
 ## 3. Methods
 
@@ -130,8 +130,8 @@ short form; `detail: true` asks the long form
 Calls with no counterpart in the 1.1.0 method table above: the `home`
 family, `project.delete`, `project.hide_path`, `project.export`, the six
 doctors, `commit.get`, `workspace.cancel`, and the `machine`, `store` and
-`backup` families, plus the commands `layerfs import-env` and `layerfs
-worker` ([coverage](../../architecture/api/calls/coverage.md)).
+`backup` families, plus the command `layerfs worker`
+([coverage](../../architecture/api/calls/coverage.md)).
 
 ### Calls and options renamed in 2.0
 
@@ -532,8 +532,8 @@ scratch homes: the four [examples](examples/README.md) and the
 Workspace on `native` included), `layerfs sandbox close x` and `layerfs
 doctor` (both exit 2, no such call), Node `layerfs.sandbox.close` (not a
 function), the doctors of section 8, and the folder scope refusals in
-[the calls](calls.md#folder-scope). The install steps of section 1 and
-`layerfs import-env` were run on Linux x64 for the earlier version of this
+[the calls](calls.md#folder-scope). The install steps of section 1 were
+run on Linux x64 for the earlier version of this
 page (tree pinned in the
 [interface report](../../general/interface-report-2.0.0.md#pinned-identity))
 and not rerun.

@@ -271,12 +271,6 @@ pub fn download(driver: &dyn Driver, name: &str, out: &mut File) -> Result<Moved
     })
 }
 
-/// Deletes `name`, then its pieces.
-pub fn delete(driver: &dyn Driver, name: &str) -> Result<(), RemoteError> {
-    driver.delete(name)?;
-    remove_pieces_from(driver, name, 0)
-}
-
 /// Removes pieces `from`, `from + 1`, … of `name` while they exist.
 fn remove_pieces_from(driver: &dyn Driver, name: &str, from: u64) -> Result<(), RemoteError> {
     let mut index = from;

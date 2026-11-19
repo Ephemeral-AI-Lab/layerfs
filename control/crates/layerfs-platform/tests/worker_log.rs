@@ -164,44 +164,6 @@ fn a_start_appends_to_a_small_log_and_rotates_one_past_its_size_once() {
     assert_eq!(names, 2, "the log and one rotated file");
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-#[test]
-fn a_log_an_older_build_left_in_the_state_folder_moves_in_at_the_next_start() {
-    let scratch = Scratch::new("worker-log-older");
-    let old = scratch.path("state-worker.log");
-    let shared = log_start(&docker_entry(&scratch)).to_owned();
-    assert_eq!(shared.matches("/layerfs/state/worker.log").count(), 2);
-    // the same lines, with the older build's path in this scratch folder
-    let script = shared.replace("/layerfs/state/worker.log", old.to_str().unwrap());
-    let log = scratch.path("data/log/worker.log");
-    fs::create_dir_all(scratch.path("data")).unwrap();
-    let start = || {
-        let status = Command::new("sh")
-            .args(["-c", &script])
-            .env("LAYERFS_WORKER_LOG", &log)
-            .status()
-            .unwrap();
-        assert!(status.success());
-    };
-    fs::write(
-        &old,
-        "layerfs worker: listening on 0.0.0.0:7070, root /layerfs/data\n",
-    )
-    .unwrap();
-    fs::set_permissions(&old, fs::Permissions::from_mode(0o644)).unwrap();
-    start();
-    assert!(!old.exists(), "moved, not copied");
-    let text = fs::read_to_string(&log).unwrap();
-    assert!(text.starts_with("layerfs worker: listening on 0.0.0.0:7070"));
-    assert_eq!(launches(&log), 1);
-    assert_eq!(mode(&log), 0o600);
-    // once the log exists, a file at the older path is left alone
-    fs::write(&old, "not ours to move\n").unwrap();
-    start();
-    assert_eq!(fs::read_to_string(&old).unwrap(), "not ours to move\n");
-    assert_eq!(launches(&log), 2);
-}
-
 /// A docker worker that ends stops its container, which `docker exec`
 /// cannot enter: the start reports the log's end, copied out of the
 /// stopped container, without waiting out the readiness time.

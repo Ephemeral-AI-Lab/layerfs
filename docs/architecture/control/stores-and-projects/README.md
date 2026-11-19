@@ -26,7 +26,7 @@ this process has open, and moves or removes a sqlite Store's file.
                      lease::claim under store/<s>/lock
       |
       +-- StoreRef::Postgres --> this process: URL from the record,
-      |                          password reference resolved now
+      |                          its saved login (auth) put in now
       |
       +-- StoreRef::Sqlite --> place::plan(machine)
               |                         |
@@ -50,8 +50,8 @@ full per-call table is "Where each call runs" in [Control](../README.md).
 | Behaviour | Detail | Source |
 | --- | --- | --- |
 | Store record | `store/<name>/record.json`, read once into `StoreRecord` with its parsed `StoreRef`; nobody reads a record's `kind` text or fields except through it; `v` is read past and never shown | [`record.rs`](../../../../control/crates/layerfs-store/src/record.rs) |
-| Kind | no `kind` is sqlite; `sqlite` or `postgresql`; any other text `InvalidInput` (only the step that needs the kind refuses) | same, `kind_of` |
-| Placement | a sqlite record names its `machine` (none is `native`); a 1.1.0 Store whose machine is unknown is `Unavailable`, naming `layerfs import-env`; a PostgreSQL Store is on no machine | same, `StoreRef::machine` |
+| Kind | `sqlite` or `postgresql`; no `kind` or any other text is `InvalidInput` "Store record kind" (only the step that needs the kind refuses; `store.get` shows such a record with engine unknown, `broken` `unsupported`, fix `layerfs store remove <store>`; a `machine` that is not text is the same; `store.remove` and `store.disconnect` remove such a record alone, `record::forget_unread`) | same, `kind_of` |
+| Placement | a sqlite record names its `machine` (none is `native`); a PostgreSQL Store is on no machine | same, `StoreRef::machine` |
 | New sqlite Store | `store.create`: an empty Store on `native`, record `{machine: native, profile: disposable, created, sqlite}` | [`sqlite/create.rs`](../../../../control/crates/layerfs-store/src/sqlite/create.rs), `record.rs` `created_on_native` |
 | Resolve | `<store>/<project>` split and both records read; a bare name `InvalidInput` | [`resolve.rs`](../../../../control/crates/layerfs-store/src/resolve.rs) |
 | Store calls | `branch`, `commit`, `file` (and project stats): each call translated once to one engine method (snake_case to camelCase, absent options not sent) and run on its route | [`calls/`](../../../../control/crates/layerfs-store/src/calls/mod.rs), [`calls/op.rs`](../../../../control/crates/layerfs-store/src/calls/op.rs) |

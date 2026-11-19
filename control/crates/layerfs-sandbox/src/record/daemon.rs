@@ -9,8 +9,8 @@
 //! in file order.
 use crate::host::Started;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::helpers;
 use layerfs_home::home::fields::{self, Fields};
+use layerfs_home::outcome::refused;
 use std::net::SocketAddr;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -315,26 +315,17 @@ impl DaemonRecord {
         })
     }
 
-    /// Its labels; a record written before #373 has none.
+    /// Its labels, `[{ key, value }]`; none when it records none, and a
+    /// list of any other shape is refused.
     pub fn labels(&self) -> Result<Vec<(String, String)>> {
         let known = self.fields.get(|f| match f {
             Field::Labels(labels) => Some(labels),
             _ => None,
         });
-        if let Some(labels) = known {
-            return Ok(labels.clone());
-        }
-        // a list of another shape, read as before: each item's key and value
-        match self.fields.kept("labels") {
-            Some(SdkValue::List(items)) => (items.iter())
-                .map(|item| {
-                    Ok((
-                        helpers::text(item, "key")?.to_owned(),
-                        helpers::text(item, "value")?.to_owned(),
-                    ))
-                })
-                .collect(),
-            _ => Ok(Vec::new()),
+        match (known, self.fields.kept("labels")) {
+            (Some(labels), _) => Ok(labels.clone()),
+            (None, Some(_)) => Err(refused("InvalidInput", "local Sandbox record labels")),
+            (None, None) => Ok(Vec::new()),
         }
     }
 

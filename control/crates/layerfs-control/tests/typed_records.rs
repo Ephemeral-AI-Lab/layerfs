@@ -7,49 +7,10 @@ use layerfs_home::json::{parse, print};
 use layerfs_home::outcome::View;
 use layerfs_store::backup::record::BucketRecord;
 use layerfs_store::project::record::ProjectRecord;
-use layerfs_store::record::{StoreDerived, StoreRecord};
+use layerfs_store::record::StoreRecord;
 
 fn value(text: &str) -> SdkValue {
     parse(text).unwrap()
-}
-
-fn projects(names: &[&str]) -> StoreDerived {
-    StoreDerived {
-        projects: names.iter().map(|n| n.to_string()).collect(),
-    }
-}
-
-#[test]
-fn a_store_shows_its_record_without_secrets_then_its_projects() {
-    let record = StoreRecord::from_record(
-        "shop",
-        value(
-            r#"{"v":1,"binding":"b","name":"old","cursor":"c","kind":"sqlite","machine":"box",
-               "profile":"disposable","created":5,"sqlite":"3.50","backups":{"r2":{"file":"shop"}},
-               "op":{"id":"op-1","name":"store.push","phase":"send","args":{"to":"box"},
-                     "owner":{"pid":0},"started":3,"updated":4,"uncertain":true},
-               "last_transfer":{"from":"native","to":"box"}}"#,
-        ),
-    );
-    let want = r#"{"name":"shop","kind":"sqlite","machine":"box","profile":"disposable","created":5,"sqlite":"3.50","backups":{"r2":{"file":"shop"}},"op":{"id":"op-1","name":"store.push","phase":"send","started":3,"uncertain":true},"last_transfer":{"from":"native","to":"box"},"projects":["api","web"]}"#;
-    let shown = record.to_sdk(&projects(&["api", "web"])).unwrap();
-    assert_eq!(print(&shown), want);
-    // the record itself is written back as read, `v` and all
-    assert_eq!(record.to_record().get("v"), Some(&SdkValue::Int(1)));
-}
-
-#[test]
-fn a_store_record_of_an_unknown_kind_still_shows() {
-    let record = StoreRecord::from_record("odd", value(r#"{"kind":"oracle"}"#));
-    let shown = record.to_sdk(&projects(&[])).unwrap();
-    assert_eq!(
-        print(&shown),
-        r#"{"name":"odd","kind":"oracle","projects":[]}"#
-    );
-    let broken = StoreRecord::from_record("odd", SdkValue::Text("x".into()));
-    let refusal = broken.to_sdk(&projects(&[])).unwrap_err();
-    assert_eq!(refusal.code, "Failed");
-    assert_eq!(refusal.message, "Store odd's record is not a record");
 }
 
 #[test]
@@ -165,17 +126,28 @@ mod machines {
         let dev = |state: &str| {
             machine(
                 "dev",
-                &format!(r#"{{"platform":"lima","state":"{state}"}}"#),
+                &format!(r#"{{"platform":"lima","vm_name":"layerfs-0-dev","state":"{state}"}}"#),
             )
         };
         assert_eq!(dev("running").recorded(0), State::Ready);
         assert_eq!(dev("stopped").recorded(0), State::Stopped);
         assert_eq!(
-            machine("vm", r#"{"platform":"lima"}"#).recorded(0),
+            machine("vm", r#"{"platform":"lima","vm_name":"layerfs-0-vm"}"#).recorded(0),
             State::Stopped
         );
-        // a record written before reasons were
-        assert_eq!(broken(&dev("failed").recorded(0)).0, Reason::Failed);
+        // an earlier build's record, with no provider name: only its record
+        // can go
+        let old = machine("docker", r#"{"platform":"docker","state":"running"}"#);
+        assert_eq!(
+            broken(&old.recorded(0)),
+            (Reason::Outdated, Some("layerfs machine remove docker"))
+        );
+        assert!(old
+            .message(&old.recorded(0), 0)
+            .unwrap()
+            .contains("has no vm_name"));
+        // a `failed` word with no reason is no 2.0 record: it reads stopped
+        assert_eq!(dev("failed").recorded(0), State::Stopped);
         assert_eq!(
             machine("native", r#"{"platform":"native"}"#).recorded(0),
             State::Ready
@@ -230,7 +202,7 @@ mod machines {
         machine(
             "dev",
             &format!(
-                r#"{{"name":"dev","platform":"lima","state":"running",
+                r#"{{"name":"dev","platform":"lima","vm_name":"layerfs-0-dev","state":"running",
                    "op":{{"name":"{name}","phase":"boot","owner":{{"pid":{pid}}},"uncertain":{uncertain}}}}}"#
             ),
         )
@@ -310,7 +282,7 @@ fn a_store_state_from_its_records_is_busy_unresolved_blocked_broken_or_ready() {
     // a live operation (this process) wins over everything, named by its
     // call word; a gone one's uncertain outcome is unresolved with the call
     // that clears it, its certain one is ignored
-    let live = Op::begin("store.push", "send", SdkValue::Null).unwrap();
+    let live = Op::begin("store.move", "send", SdkValue::Null).unwrap();
     let with = |op: SdkValue| StoreRecord::from_record("s", SdkValue::map([("op", op)]));
     let busy = held(&with(live.to_record().clone())).unwrap();
     assert!(matches!(&busy, State::Busy { name, phase, .. } if name == "move" && phase == "send"));
@@ -327,6 +299,18 @@ fn a_store_state_from_its_records_is_busy_unresolved_blocked_broken_or_ready() {
         ))
     );
     assert_eq!(held(&with(gone(false))), None);
+    // a name this build has no call for (a build before 2.0's `store.push`)
+    // is cleared by the live read, which is the fix it shows
+    let old = value(
+        r#"{"id":"op-3","name":"store.push","phase":"send","args":{"to":"box"},"owner":{"pid":0},"uncertain":true}"#,
+    );
+    assert_eq!(
+        held(&with(old)),
+        Some(State::broken(
+            Reason::Unresolved,
+            Some("layerfs store get s --with live")
+        ))
+    );
     std::fs::remove_dir_all(&home).unwrap();
 }
 
@@ -364,8 +348,7 @@ fn a_sandbox_state_is_derived_from_its_record_and_intent() {
         sandbox_with(false, None).status(&ready),
         broken(Reason::Missing)
     );
-    // a live owner's op is busy, by its call word (`sandbox.close`, as a
-    // build before the call surface 2.0 recorded it, is `remove`)
+    // a live owner's op is busy, by its call word
     let busy = |id: bool, op: &str| match sandbox_with(id, Some((op, me, false))).status(&ready) {
         State::Busy { name, phase, .. } => (name, phase),
         other => panic!("{other:?}"),
@@ -375,25 +358,21 @@ fn a_sandbox_state_is_derived_from_its_record_and_intent() {
         ("create".into(), "stop".into())
     );
     assert_eq!(
-        busy(true, "sandbox.close"),
-        ("remove".into(), "stop".into())
-    );
-    assert_eq!(
         busy(true, "sandbox.remove"),
         ("remove".into(), "stop".into())
     );
     // a gone owner (id 0): uncertain is unresolved, certain is ignored
     assert_eq!(
-        sandbox_with(true, Some(("sandbox.close", 0, true))).status(&ready),
+        sandbox_with(true, Some(("sandbox.remove", 0, true))).status(&ready),
         broken(Reason::Unresolved)
     );
     assert_eq!(
-        sandbox_with(true, Some(("sandbox.close", 0, false))).status(&ready),
+        sandbox_with(true, Some(("sandbox.remove", 0, false))).status(&ready),
         State::Ready
     );
     // the op shows as `{name, phase, started_at}`, never its owner
-    let record = sandbox_with(true, Some(("sandbox.close", 0, true)));
-    let shown = layerfs_sandbox::state::op_shown(&record.op().unwrap());
+    let record = sandbox_with(true, Some(("sandbox.remove", 0, true)));
+    let shown = record.op().unwrap().shown();
     let text = print(&shown);
     assert!(text.contains(r#""name":"remove""#), "{text}");
     assert!(

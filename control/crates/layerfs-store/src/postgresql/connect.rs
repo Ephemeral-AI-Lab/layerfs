@@ -6,12 +6,14 @@
 //! each call; the full URL is never written down. A machine's own address
 //! is `layerfs-control`'s part of the call, proven from that machine.
 use super::login;
-use crate::open_args::PgSelection;
+use crate::open_args::{OpenArgs, PgSelection};
+use crate::project::listing;
 use crate::project::record::ProjectRecord;
 use crate::record::url;
 use crate::record::{StoreKind, StoreRecord};
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::sdk_values::hex;
 use layerfs_home::home::{self, paths};
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::{failed, refused, Outcome};
@@ -37,7 +39,7 @@ pub fn selection_at(record: &StoreRecord, url: String) -> PgSelection {
         synchronous_commit: Some(
             record
                 .text("synchronous_commit")
-                .unwrap_or("off")
+                .unwrap_or(crate::postgresql::open::DEFAULT_SYNCHRONOUS_COMMIT)
                 .to_owned(),
         ),
     }
@@ -209,9 +211,7 @@ pub fn connections(record: &StoreRecord) -> SdkValue {
 /// and the count only when there were more), the login, the addresses and the setting.
 pub fn answer(record: &StoreRecord, outcome: &str, projects: Option<&[String]>) -> SdkValue {
     let (names, count) = match projects {
-        Some(found) => {
-            layerfs_home::helpers::shown(found.iter().map(SdkValue::text).collect(), 0, false)
-        }
+        Some(found) => layerfs_home::helpers::shown_names(found),
         None => (SdkValue::Null, SdkValue::Null),
     };
     let text = |key: &str| record.text(key).map_or(SdkValue::Null, SdkValue::text);
@@ -276,14 +276,8 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     let directory = paths::store_dir(home_dir, name);
     // the projects the schema holds become this home's project records; a
     // schema that does not open is not connected
-    let listed = crate::identity::list_projects(&crate::open_args::OpenArgs {
-        home: Some(home_dir.to_path_buf()),
-        store: Some(name.to_owned()),
-        store_record: Some(record.to_record().clone()),
-        postgresql: Some(probe),
-        store_path: Some(record.postgresql_key(home_dir, name).display().to_string()),
-        ..Default::default()
-    })?;
+    let open = OpenArgs::dialled(home_dir, name, &record, probe);
+    let listed = crate::service::with_service(&open, |service| listing::listed(service, false))?;
     let _lock = home::lock::take(home_dir)?;
     if paths::store_record(home_dir, name).exists() {
         return Err(refused("Exists", format!("a Store named {name} exists")));
@@ -293,14 +287,10 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     home::private_dir(&directory)?;
     record.write(home_dir)?;
     let mut projects = Vec::new();
-    if let SdkValue::List(items) = &listed {
-        for item in items {
-            if let Some(project) = item.get_text("name") {
-                let stack = item.get("stack").cloned().unwrap_or_default();
-                ProjectRecord::found(name, project, stack).write(home_dir)?;
-                projects.push(project.to_owned());
-            }
-        }
+    for project in listed {
+        let stack = SdkValue::text(hex(&project.stack.to_bytes()));
+        ProjectRecord::found(name, &project.name, stack).write(home_dir)?;
+        projects.push(project.name);
     }
     Ok(answer(&record, "connected", Some(&projects)))
 }
@@ -365,6 +355,11 @@ pub fn refuse_settings(name: &str, request: &StoreConnect) -> Result<()> {
 /// data stays. Refused `InUse` while a process holds it or a Sandbox of its
 /// projects exists; a sqlite Store is `InvalidInput`, naming `store remove`.
 pub fn disconnect(home_dir: &Path, name: &StoreName, related: Related) -> Outcome {
+    // a record this build does not read: its records alone go
+    if StoreRecord::read(home_dir, name)?.is_some_and(|record| record.store_ref().is_err()) {
+        crate::record::forget_unread(home_dir, name, related)?;
+        return Ok(disconnected(name, None));
+    }
     let _lock = home::lock::take(home_dir)?;
     let _store = crate::record::lock(home_dir, name)?;
     let record = StoreRecord::read(home_dir, name)?

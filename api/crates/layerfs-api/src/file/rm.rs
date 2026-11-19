@@ -4,7 +4,7 @@ use super::{guard, text};
 use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Bool, Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call, MESSAGE};
-use crate::calls::{Context, Policy, Saves};
+use crate::calls::{Context, Policy};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::file::{rm, FileRm};
@@ -24,7 +24,7 @@ pub(crate) const CALL: Call = call(
 )
 .scoped(Rule::File(&["path"]))
 .policy(Policy::Project("project"))
-.saves(Saves::Commit)
+.saves()
 .form(&COMMITTED)
 .agent();
 

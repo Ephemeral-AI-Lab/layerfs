@@ -377,15 +377,9 @@ pub(crate) fn existing_home_id(home: &Path) -> Result<Option<String>> {
         return Ok(Some(home::guest::file(home)?.id));
     }
     match home::detect(home)? {
-        home::Layout::Current(file) | home::Layout::Previous(file) => Ok(Some(file.id)),
+        home::Layout::Current(file) => Ok(Some(file.id)),
         home::Layout::Empty => Ok(None),
-        home::Layout::Old => Err(refused(
-            "InvalidInput",
-            format!(
-                "{} is a LayerFS 1.1.0 home; it is converted on its first 2.0 call that writes",
-                home.display()
-            ),
-        )),
+        home::Layout::Older => Err(home::layout::older(home)),
     }
 }
 

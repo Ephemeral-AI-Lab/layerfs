@@ -393,7 +393,7 @@
     {
       "call": "store.disconnect",
       "badge": "reshaped",
-      "note": "PostgreSQL. Without <code>--machine</code> the Store is forgotten and its data stays; refused <code>InUse</code> while a process holds it or a Sandbox of its projects exists. With <code>--machine</code>, that machine's own address is removed and it dials the Store's again; refused <code>NotFound</code> when the machine has none. A sqlite Store is <code>InvalidInput</code>, naming <code>store remove</code>",
+      "note": "PostgreSQL. Without <code>--machine</code> the Store is forgotten and its data stays (a record that is not read, with no <code>kind</code>, goes the same way); refused <code>InUse</code> while a process holds it or a Sandbox of its projects exists. With <code>--machine</code>, that machine's own address is removed and it dials the Store's again; refused <code>NotFound</code> when the machine has none. A sqlite Store is <code>InvalidInput</code>, naming <code>store remove</code>",
       "today": [
         "store.disconnect"
       ],
@@ -741,7 +741,7 @@
     {
       "call": "store.remove",
       "badge": "reshaped",
-      "note": "sqlite only: deletes the file and every project in it. Refused <code>InUse</code> while a process holds it or a Sandbox of its projects exists. It clears an unresolved move or remove. A PostgreSQL Store is <code>InvalidInput</code>, naming <code>store disconnect</code>",
+      "note": "sqlite only: deletes the file and every project in it. A record that is not read (no <code>kind</code>, or a <code>machine</code> that is not text) goes alone, its file untouched. Refused <code>InUse</code> while a process holds it or a Sandbox of its projects exists. It clears an unresolved move or remove. A PostgreSQL Store is <code>InvalidInput</code>, naming <code>store disconnect</code>",
       "today": [
         "store.remove"
       ],

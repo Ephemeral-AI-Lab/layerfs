@@ -2,7 +2,7 @@
 use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Bool, Name, Text};
 use crate::calls::table::{a, call, opt, Call, MESSAGE};
-use crate::calls::{Context, Form, Policy, Saves};
+use crate::calls::{Context, Form, Policy};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_sandbox::host::Message;
@@ -43,7 +43,7 @@ pub(crate) const CALL: Call = call(
 .agent()
 .scoped(Rule::Workspace)
 .policy(Policy::Workspace("workspace"))
-.saves(Saves::Commit);
+.saves();
 
 /// Runs `workspace.commit`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

@@ -1,22 +1,15 @@
-//! `home.init`: creates an empty home, converts an older one, and leaves a
-//! current home as it is.
+//! `home.init`: creates an empty home and leaves a current home as it is;
+//! an older LayerFS's home is refused with the fix that moves it aside.
 use crate::calls::table::{call, Call};
 use crate::calls::{Context, Form};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 
-/// Its answer: the home, and what was done to it when it was not current.
+/// Its answer: the home, and whether it was there already.
 const FORM: Form = Form::of(
     &["home"],
-    &["unchanged", "converted"],
-    &[
-        "home",
-        "unchanged",
-        "converted",
-        "outcome",
-        "layout",
-        "version",
-    ],
+    &["unchanged"],
+    &["home", "unchanged", "outcome", "layout", "version"],
 );
 
 /// Its table entry: it opens the home itself, to say what it did.
@@ -25,7 +18,7 @@ pub(crate) const CALL: Call = call(
     "init",
     &[],
     &[],
-    "create this home, or convert an older one; a current home is left as it is",
+    "create this home; a current home is left as it is",
     run,
 )
 .unopened()

@@ -17,7 +17,7 @@ user-facing contract is [calls.md: The doctors](../../../versioned/2.0.0/calls.m
 | Source | [`layerfs-control/src/doctor`](../../../../control/crates/layerfs-control/src/doctor), [`layerfs-api/src/calls/doctor`](../../../../api/crates/layerfs-api/src/calls/doctor), [`layerfs-cli/src/output.rs`](../../../../api/crates/layerfs-cli/src/output.rs) |
 | Uses | [Home](../home/README.md), [Machines](../machines/README.md) and [workers](../machines/workers-and-reach.md), [Stores and projects](../stores-and-projects/README.md), [Sandboxes](../sandboxes/README.md), [Backups](../backups/README.md), [Store diagnostics](../../engine/store/diagnostics.md), [Daemon control calls](../../engine/daemon/control-calls.md), [Bridge](../../engine/bridge/README.md) |
 | Used by | [SDK](../../api/sdk/README.md): [`home.doctor`](../../api/sdk/home.md#homedoctor), [`machine.doctor`](../../api/sdk/machine.md#machinedoctor), [`store.doctor`](../../api/sdk/store.md#storedoctor), [`project.doctor`](../../api/sdk/project.md#projectdoctor), [`sandbox.doctor`](../../api/sdk/sandbox.md#sandboxdoctor), [`backup.doctor`](../../api/sdk/backup.md#backupdoctor) |
-| Flows | each is a table call of its family, dispatched like any other; every doctor is `unopened` (it never creates or converts the home) |
+| Flows | each is a table call of its family, dispatched like any other; every doctor is `unopened` (it never creates the home) |
 
 ## Picture
 
@@ -74,15 +74,15 @@ Python: `layerfs.store.doctor("team-db", machine="lima1")`.
 ### Home
 
 `home.doctor`'s own checks, in the order they run (`HOME` in `kinds.rs`).
-Never dials a worker. An absent home is reported and stays absent; layout
-1.1.0 and layout 2 homes are read without conversion. A check that does not
-apply is left out.
+Never dials a worker. An absent home is reported and stays absent; an older
+LayerFS's home (layout 2, or 1.1.0's records) fails `home.layout` and its
+records are not read. A check that does not apply is left out.
 
 | Check | What is observed | Source |
 | --- | --- | --- |
 | `home.build`, `home.prerequisites` | The calling executable; native runtime prerequisites | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs) |
-| `home.layout` | pass for a current layout; a warning for 1.1.0 or layout 2, `fix: layerfs home init` (nothing converted); fail when `layerfs.json` is unreadable; left out for a home not made yet | [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs) |
-| `home.records` | The records scan and record checks (`checks::check_local`; on a layout 2 home the conversion's blockers, `convert::check`), each finding as an error or warning on the thing it is about, with its fix; no verdict when the record inventory changed or could not be read; see [Checks](checks.md) | [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs), [`host_inventory.rs`](../../../../control/crates/layerfs-control/src/doctor/host_inventory.rs) |
+| `home.layout` | pass for a current layout; fail for an older LayerFS's home (layout 2, or 1.1.0's records), "this build does not convert it", `fix: mv <home> <home>.old && layerfs home init`; fail when `layerfs.json` is unreadable, malformed or of a newer layout; left out for a home not made yet | [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs) |
+| `home.records` | The records scan and record checks (`checks::check_local`, on a current-layout home only), each finding as an error or warning on the thing it is about, with its fix; no verdict when the record inventory changed or could not be read; see [Checks](checks.md) | [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs), [`host_inventory.rs`](../../../../control/crates/layerfs-control/src/doctor/host_inventory.rs) |
 | `home.bundle` | When a record names a non-native machine: the Linux bundle manifest (this version, `linux-<arch>`) and its files present | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs) |
 | `home.native_daemon` | The daemon the native machine runs, as its Sandbox launch chooses it (`NativeDaemon`, shared with `home.get`): its record's `daemon`, else the one beside this host's bundle; read from files. Missing or not executable: an error for a recorded one, a warning for the default (`fix: chmod +x <path>` where only the mode is wrong); its stamped commit (`layerfs-build-identity:`) against the calling build's (`Options.build`): another commit is a warning in `DaemonMismatch`'s words; unknown or dirty passes, saying it cannot compare | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs), [`home.rs`](../../../../control/crates/layerfs-control/src/home.rs) |
 | `home.artifacts` | Each non-native machine's recorded `daemon` executable | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs) |
@@ -248,7 +248,7 @@ Give each a wall limit of at most 120 s.
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
 | [`doctor_frame.rs`](../../../../control/crates/layerfs-control/tests/doctor_frame.rs) | `cargo +1.85.1 test --locked -p layerfs-control --test doctor_frame` | any | The one runner with made-up kinds: a budget that runs out is `timeout`, a failed parent blocks what is on it without calling it, one progress event per finished thing, counts and status; every kind's check ids against `calls.json` `doctor.checks` |
-| [`doctor.rs`](../../../../control/crates/layerfs-control/tests/doctor.rs) | `cargo +1.85.1 test --locked -p layerfs-control --test doctor` | macOS, Linux | `home.records`: one finding per planted problem with its fix; a layout 2 home reports what refuses its conversion; nothing written |
+| [`doctor.rs`](../../../../control/crates/layerfs-control/tests/doctor.rs) | `cargo +1.85.1 test --locked -p layerfs-control --test doctor` | macOS, Linux | `home.records`: one finding per planted problem with its fix; a layout 2 home fails `home.layout` with the move fix and is left as it was; nothing written |
 | [`sweep_run_root.rs`](../../../../control/crates/layerfs-control/tests/sweep_run_root.rs) | `cargo +1.85.1 test --locked -p layerfs-control --test sweep_run_root` | macOS, Linux | The run root sweep removes an orphan run folder and an empty private root and keeps every owned entry (a recorded folder, a live daemon's, no or a fresh `owner` marker, a create in flight, a private root beside its folder or holding something, the image cache, a link's target); a worker sweeps when it starts and before a `sandbox create` |
 | [`init_copy_hold.rs`](../../../../control/crates/layerfs-store/tests/init_copy_hold.rs) | `cargo +1.85.1 test --locked -p layerfs-store --test init_copy_hold` | macOS, Linux | A `project.stage` discard leaves a folder copy an Init holds and removes a free one |
 | [`image_sweep.rs`](../../../../control/crates/layerfs-sandbox/tests/image_sweep.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox --test image_sweep` | macOS, Linux | The `image.artifact` step `sweep` removes the unpack temporaries of free images and keeps a live copy's and a running unpack's |
@@ -275,4 +275,4 @@ qualify live Docker, Lima, Apple Container, R2 or MinIO installations.
 
 | Page | What it covers |
 | --- | --- |
-| [Checks](checks.md) | The home's records check (scan, record checks, layout 2 conversion), the report and its node rows, and where LayerFS removes leftovers itself |
+| [Checks](checks.md) | The home's records check (scan and record checks), the report and its node rows, and where LayerFS removes leftovers itself |

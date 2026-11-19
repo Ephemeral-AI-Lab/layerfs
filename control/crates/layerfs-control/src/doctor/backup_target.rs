@@ -27,7 +27,6 @@ pub(super) fn diagnose(
                 "bucket.configuration",
                 "saved backup alias is absent, unreadable or invalid",
             );
-            blocked_requests(checks, write_test, "bucket.configuration");
             return;
         }
     };
@@ -39,7 +38,6 @@ pub(super) fn diagnose(
             "bucket.configuration",
             "backup alias identity or record version is invalid",
         );
-        blocked_requests(checks, write_test, "bucket.configuration");
         return;
     }
     if !matches!(fields.get_text("provider"), Some("r2" | "minio")) {
@@ -47,7 +45,6 @@ pub(super) fn diagnose(
             "bucket.configuration",
             "backup alias does not name a supported S3-compatible provider",
         );
-        blocked_requests(checks, write_test, "bucket.configuration");
         return;
     }
     if !cfg!(feature = "tls")
@@ -67,7 +64,6 @@ pub(super) fn diagnose(
                 "saved S3 endpoint, region, bucket and prefix configuration is valid",
             );
             checks.fail("bucket.credentials", refusal.message);
-            blocked_requests(checks, write_test, "bucket.credentials");
             return;
         }
     };
@@ -75,7 +71,6 @@ pub(super) fn diagnose(
         Ok(client) => client.with_diagnostic_resolver(layerfs_bridge::network::resolve_all_within),
         Err(_) => {
             checks.fail("bucket.configuration", "saved endpoint, bucket, prefix, region or key could not be validated; secrets were not displayed");
-            blocked_requests(checks, write_test, "bucket.configuration");
             return;
         }
     };
@@ -93,7 +88,6 @@ pub(super) fn diagnose(
         } else {
             Duration::from_secs(10)
         });
-    let started = Instant::now();
     match client.diagnostic_list(until) {
         Ok(()) => {
             checks.pass(
@@ -111,7 +105,6 @@ pub(super) fn diagnose(
             failure(checks, "bucket.list", &error);
         }
     }
-    checks.duration("bucket.list", started.elapsed());
     // without `--full` the write test is left out of the report
     if !write_test {
         return;
@@ -121,7 +114,6 @@ pub(super) fn diagnose(
         Err(error) => {
             checks.unknown("bucket.write_capability", "safe temporary write-test capability could not be established; no object was written");
             error_evidence(checks, "bucket.write_capability", &error);
-            for id in ["bucket.put", "bucket.get", "bucket.delete"] { checks.blocked(id, "safe immutable-version ownership prerequisite unavailable; no write or delete attempted", "bucket.write_capability"); }
             return;
         }
     }
@@ -138,7 +130,6 @@ pub(super) fn diagnose(
     let key = client
         .diagnostic_key(&token)
         .expect("generated lowercase hex token");
-    let started = Instant::now();
     let object = match client.diagnostic_create(&token, until) {
         Ok(object) => {
             checks.pass(
@@ -156,36 +147,15 @@ pub(super) fn diagnose(
                 }
                 Err(reconcile) => {
                     failure(checks, "bucket.reconcile", &reconcile);
-                    checks.blocked(
-                        "bucket.get",
-                        "no immutable owned version established",
-                        "bucket.put",
-                    );
-                    checks.blocked(
-                        "bucket.delete",
-                        "no immutable owned version established; possible probe left untouched",
-                        "bucket.put",
-                    );
-                    retained(checks, "bucket.delete", &key, None);
                     return;
                 }
             }
         }
         Err(error) => {
             failure(checks, "bucket.put", &error);
-            checks.blocked(
-                "bucket.get",
-                "conditional create did not establish probe ownership",
-                "bucket.put",
-            );
-            checks.skip(
-                "bucket.delete",
-                "no owned version; collision/refused keys are never deleted",
-            );
             return;
         }
     };
-    checks.duration("bucket.put", started.elapsed());
     probe(&client, object, &key, until, checks);
 }
 
@@ -196,7 +166,6 @@ fn probe(
     until: Instant,
     checks: &mut Checks,
 ) {
-    let started = Instant::now();
     match client.diagnostic_read(&object, until) {
         Ok(()) => checks.pass(
             "bucket.get",
@@ -204,8 +173,6 @@ fn probe(
         ),
         Err(error) => failure(checks, "bucket.get", &error),
     }
-    checks.duration("bucket.get", started.elapsed());
-    let started = Instant::now();
     match client.diagnostic_delete(&object, until) {
         Ok(()) => checks.pass(
             "bucket.delete",
@@ -216,7 +183,6 @@ fn probe(
             retained(checks, "bucket.delete", key, Some(object.version()));
         }
     }
-    checks.duration("bucket.delete", started.elapsed());
 }
 fn retained(checks: &mut Checks, id: &str, key: &str, version: Option<&str>) {
     checks.evidence(
@@ -299,20 +265,4 @@ fn error_evidence(checks: &mut Checks, id: &str, error: &RemoteError) {
             ),
         ]),
     );
-}
-
-fn blocked_requests(checks: &mut Checks, write: bool, dependency: &str) {
-    for id in ["bucket.transport", "bucket.list"] {
-        checks.blocked(id, "saved connection configuration unavailable", dependency);
-    }
-    if write {
-        for id in [
-            "bucket.write_capability",
-            "bucket.put",
-            "bucket.get",
-            "bucket.delete",
-        ] {
-            checks.blocked(id, "saved connection configuration unavailable", dependency);
-        }
-    }
 }

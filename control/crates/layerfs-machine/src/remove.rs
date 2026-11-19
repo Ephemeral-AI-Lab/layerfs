@@ -1,10 +1,8 @@
-//! `machine.remove`, which only forgets a machine of a platform removed in
-//! 2.0. Its phases are `check` and `delete` (call surface 2.0), each a
-//! `{ phase, done, total }` event on the caller's stream; it answers `{ ok,
-//! forgotten, outcome, machine, message }`.
+//! `machine.remove`. Its phases are `check` and `delete` (call surface
+//! 2.0), each a `{ phase, done, total }` event on the caller's stream; it
+//! answers `{ ok, outcome, machine, message }`.
 use super::progress::Phases;
 use super::record::{MachineRecord, REMOVE};
-use super::spec::home_id;
 use super::spec::{self as record, refusal};
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -21,20 +19,13 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// The phases of a remove.
 const PHASES: [&str; 2] = ["check", "delete"];
 
-/// What a remove answers: `forgotten` for a machine of a removed platform,
-/// whose `message` says what was left on its host.
-fn removed(name: &str, forgotten: Option<String>) -> SdkValue {
-    let outcome = if forgotten.is_some() {
-        "forgotten"
-    } else {
-        "removed"
-    };
+/// What a remove answers; `message` says when only the record went.
+fn removed(name: &str, message: Option<String>) -> SdkValue {
     SdkValue::map([
         ("ok", SdkValue::Bool(true)),
-        ("forgotten", SdkValue::Bool(forgotten.is_some())),
-        ("outcome", SdkValue::text(outcome)),
+        ("outcome", SdkValue::text("removed")),
         ("machine", SdkValue::text(name)),
-        ("message", SdkValue::opt_text(forgotten)),
+        ("message", SdkValue::opt_text(message)),
     ])
 }
 
@@ -57,7 +48,21 @@ fn take_down(
     let record = MachineRecord::of(&home, name)?;
     record.not_running()?;
     if let Some(reason) = record.removed() {
-        let answer = forget(&home, name, reason, related)?;
+        let answer = drop_record(&home, name, reason, related)?;
+        phases.end();
+        return Ok(answer);
+    }
+    // a machine whose record has no `vm_name` (an earlier build's): this
+    // build cannot name its VM or container, so only the record goes; a
+    // built-in `docker` is recorded again, with its 2.0 name, by the next
+    // call
+    if record.provider_name().is_err() {
+        let reason = match record.platform()?.built_in() {
+            true => "its record has no vm_name; the next call records it again",
+            false => "its record has no vm_name",
+        };
+        let answer = drop_record(&home, name, reason, related)?;
+        super::spec::forget_built_ins(&home);
         phases.end();
         return Ok(answer);
     }
@@ -90,41 +95,20 @@ fn take_down(
     Ok(removed(name, None))
 }
 
-/// Forgets a machine whose platform was removed in 2.0: its record goes,
-/// under the home lock and the same `InUse` check as a remove, and nothing
-/// outside the home is touched; the answer's `note` says what is left.
-fn forget(home: &Path, name: &MachineName, reason: &str, related: Related) -> Outcome {
+/// Removes the record of a machine whose platform was removed in 2.0, or
+/// whose record has no `vm_name`, under the home lock and the same `InUse`
+/// check as a remove; nothing outside the home is touched, and `message`
+/// says so.
+fn drop_record(home: &Path, name: &MachineName, reason: &str, related: Related) -> Outcome {
     let _lock = lock::take(home)?;
     let record = MachineRecord::of(home, name)?;
     record.not_running()?;
     (related.can_remove)(home, name)?;
-    let vm = || -> Result<String> { Ok(record.provider_name(&home_id(home)?)) };
-    let left = match record.platform_name() {
-        Some("microsandbox") => {
-            let vm = vm()?;
-            format!(
-                "its VM {vm} and data volume {vm}-data were not touched; \
-                 `msb remove --force {vm}` and `msb volume remove {vm}-data` remove them"
-            )
-        }
-        Some("firecracker") => {
-            let vm = vm()?;
-            let host = match record.text("host") {
-                Some(host) => format!("Lima machine {host}"),
-                None => "its Lima host".to_owned(),
-            };
-            format!(
-                "its microVM {vm} was not touched: its folder \
-                 /layerfs/data/firecracker/vms/{vm} and data disk \
-                 /layerfs/data/firecracker/disks/{vm}.ext4 stay in {host}"
-            )
-        }
-        _ => "nothing on its host was touched".to_owned(),
-    };
     std::fs::remove_dir_all(paths::machine_dir(home, name)).map_err(failed)?;
     layerfs_home::home::generation::moved(home);
-    let left = format!("forgot the record only: {reason}; {left}");
-    Ok(removed(name, Some(left)))
+    let message =
+        format!("only its record was removed ({reason}); nothing on its host was touched");
+    Ok(removed(name, Some(message)))
 }
 
 /// The checks before a remove, under the home lock: the machine's record
@@ -140,12 +124,12 @@ fn removable(home: &Path, name: &str, related: Related) -> Result<(MachineRecord
         ));
     }
     (related.can_remove)(home, name)?;
-    let spec = record::spec(home, &home_id(home)?, &record)?;
+    let spec = record::spec(home, &record)?;
     Ok((record, spec))
 }
 
-/// `machine.remove(name)`: deletes a VM and its disk; a machine of a
-/// platform removed in 2.0 is only forgotten.
+/// `machine.remove(name)`: deletes a VM and its disk; of a machine of a
+/// platform removed in 2.0 only the record goes.
 pub fn remove(
     home: &Path,
     name: &MachineName,

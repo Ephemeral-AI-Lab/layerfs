@@ -287,9 +287,7 @@ fn scoped(
     let home = home(home_path)?;
     super::platform_policy::check(&home, spec.policy, &args)?;
     if spec.opens {
-        let id = layerfs_control::migrate::open(&home)
-            .inspect_err(|refusal| layerfs_control::migrate::note_failure(&home, refusal))?
-            .id;
+        let id = layerfs_home::home::open(&home)?.id;
         // `machine/native/` and `machine/docker/` exist from the first call;
         // checked once per process for each home (R6)
         #[cfg(feature = "machine")]
@@ -314,4 +312,15 @@ fn scoped(
         Some(form) => shape::shape(&spec.name(), form, spec.with, value, &asked),
         None => value,
     })
+}
+
+/// What a process calls before it exits: closes every Store it holds open
+/// with no call running (`close_idle`), so a sqlite Store leaves no
+/// write-ahead log behind, and ends its idle Sandbox daemon sessions inside
+/// a short bound (layerfs-project#181), so its exit is not a dropped
+/// connection in a daemon's log. Answers how many Stores it closed.
+pub fn close() -> usize {
+    let closed = layerfs_control::store::close_idle(std::time::Duration::ZERO);
+    layerfs_sandbox::registry::end_idle_sessions(layerfs_sandbox::registry::SESSION_END);
+    closed
 }

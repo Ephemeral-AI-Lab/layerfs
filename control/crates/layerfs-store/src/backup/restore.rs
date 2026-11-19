@@ -1,16 +1,17 @@
 //! `backup.restore`: a backup as a sqlite Store on `native`.
-use super::family::{hex, write_link};
+use super::family::write_link;
 use super::progress::Shown;
 use super::record::{BucketRecord, StoreLink};
 use super::restored::{records, Found, Main, Restored};
+use crate::get::hex_text;
 use crate::identity::{Identity, Kind};
 use crate::intent;
 use crate::lease;
 use crate::record::{StoreKind, StoreRecord};
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::sdk_values::hex;
 use layerfs_bucket::backup as remote;
-use layerfs_bucket::bucket::pieces;
 use layerfs_history::{HistoryName, NamedSnapshot};
 use layerfs_home::events::Events;
 use layerfs_home::home::flock::{try_lock, unlock};
@@ -117,9 +118,8 @@ pub fn restore(
             return Err(refusal);
         }
     };
-    let names = projects.into_iter().map(SdkValue::text).collect();
     // the first 20; `projects_count` only when there were more
-    let (projects, count) = layerfs_home::helpers::shown(names, 0, false);
+    let (projects, count) = layerfs_home::helpers::shown_names(&projects);
     Ok(SdkValue::map([
         ("ok", SdkValue::Bool(true)),
         ("projects", projects),
@@ -135,10 +135,14 @@ pub fn restore(
         ("bucket", SdkValue::text(bucket)),
         ("file", SdkValue::text(&file)),
         ("size", SdkValue::Int(loaded.bytes as i64)),
-        ("sha256", hex(&loaded.sha256)),
+        ("sha256", hex_text(&loaded.sha256)),
         (
             "heads_sha256",
-            loaded.heads.as_ref().map(hex).unwrap_or_default(),
+            loaded
+                .heads
+                .as_ref()
+                .map(|heads| hex_text(heads))
+                .unwrap_or_default(),
         ),
     ]))
 }
@@ -182,7 +186,7 @@ fn run(
                     "Failed",
                     format!(
                         "the bucket's {file} has another binding ({}), not Store {store}'s",
-                        pieces::hex(&loaded.binding)
+                        hex(&loaded.binding)
                     ),
                 ));
             }
@@ -332,7 +336,7 @@ impl Staging {
     fn make(home: &Path) -> Result<Self> {
         let random = layerfs_home::helpers::random()?;
         let parent = home.join("store");
-        let dir = parent.join(format!(".restore-{}", pieces::hex(&random[..12])));
+        let dir = parent.join(format!(".restore-{}", hex(&random[..12])));
         // under the home lock no folder is between its creation and its lock
         let _lock = home::lock::take(home)?;
         sweep(&parent);
@@ -405,7 +409,7 @@ fn replaceable(
     crate::open::close(&destination)?;
     (related.store_idle)(home, store)?;
     let linked = record.link(bucket).and_then(|link| link.heads());
-    let now = remote::heads(&destination).ok().map(|h| pieces::hex(&h));
+    let now = remote::heads(&destination).ok().map(|h| hex(&h));
     if linked.is_none() || now != linked {
         return Err(refused(
             "Conflict",
@@ -463,7 +467,7 @@ fn projects_in(home: &Path, store: &str, record: &StoreRecord, file: &Path) -> R
                     };
                     found.push(Found {
                         name: stack.name.as_str().to_owned(),
-                        stack: SdkValue::text(pieces::hex(&stack.id.to_bytes())),
+                        stack: SdkValue::text(hex(&stack.id.to_bytes())),
                         main: snapshot,
                     });
                 }

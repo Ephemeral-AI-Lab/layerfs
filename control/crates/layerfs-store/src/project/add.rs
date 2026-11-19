@@ -1,6 +1,6 @@
 //! A project added to a live SQLite Store (`project.init` into a shared
 //! Store): its entry in the home and the add through the Store's writer lane.
-use crate::identity::{identity, legacy, sqlite_only, store_dir, Identity};
+use crate::identity::{identity, sqlite_only, store_dir, Identity};
 use crate::open_args::OpenArgs;
 use crate::project::discovery;
 use crate::project::discovery::Project;
@@ -127,13 +127,7 @@ pub struct ProjectAdd {
 impl ProjectAdd {
     /// What opens the Store: its home, name, file and record.
     pub fn open(&self) -> OpenArgs {
-        OpenArgs {
-            home: Some(self.home.clone()),
-            store: Some(self.store.to_string()),
-            store_path: Some(self.store_file().display().to_string()),
-            store_record: self.store_record.clone(),
-            ..OpenArgs::default()
-        }
+        OpenArgs::in_root(&self.home, &self.store, self.store_record.clone())
     }
 
     /// The Store's file.
@@ -162,9 +156,6 @@ pub fn add_project(request: &ProjectAdd) -> Outcome {
         ));
     }
     let home = discovery::home_of(Some(&request.home))?;
-    if name == store && legacy(&home, store)? {
-        return Err(home_name_taken(store, name));
-    }
     let entry = make_entry(&home, store, name)?;
     let _guard = discovery::guard(&entry)?;
     let history = |text: &str| HistoryName::new(text).map_err(failed);

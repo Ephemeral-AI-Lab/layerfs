@@ -1,10 +1,14 @@
 //! `machine.stop`: stop a machine's worker and VM; its disks stay.
 use crate::calls::table::Kind::{Bool, Name};
 use crate::calls::table::{a, call, opt, Call, PROGRESS};
-use crate::calls::{Context, Form};
+#[cfg(feature = "machine")]
+use crate::calls::Context;
+use crate::calls::Form;
+#[cfg(feature = "machine")]
 use layerfs_bridge::control::SdkValue;
 #[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
+#[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
 
 /// Its answer: `ok`, `unchanged` when it was stopped already, and what a
@@ -53,12 +57,6 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     layerfs_control::machine::stop(home, events, &machine, force)
 }
 
-/// Without the `machine` feature (the guest worker's build) it is
-/// refused before any effect.
-#[cfg(not(feature = "machine"))]
-fn run(_context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
-    Err(layerfs_home::outcome::refused(
-        "Unsupported",
-        "machine.stop runs on the host",
-    ))
-}
+// without the `machine` feature (the guest worker's build) it is
+// refused before any effect
+crate::calls::host_only::host_only!("stop");

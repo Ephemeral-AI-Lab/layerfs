@@ -81,11 +81,10 @@ fn started(home: &Path, ws: &str, script: &str) -> (Child, String) {
         .read_line(&mut first)
         .unwrap();
     let event = layerfs_api::json::parse(first.trim()).unwrap_or_else(|e| panic!("{first}: {e:?}"));
-    let progress = event.get("progress").unwrap_or_else(|| panic!("{first}"));
-    assert_eq!(progress.get_text("phase"), Some("start"), "{first}");
-    let id = progress
-        .get_text("exec")
-        .unwrap_or_else(|| panic!("{first}"));
+    // a progress event is `{ phase, done, total }` itself (call surface 2.0
+    // `progress_event`); the start event adds the exec id
+    assert_eq!(event.get_text("phase"), Some("start"), "{first}");
+    let id = event.get_text("exec").unwrap_or_else(|| panic!("{first}"));
     assert!(id.starts_with("exec-") && id.len() == 21, "{id}");
     (child, id.to_owned())
 }
@@ -153,7 +152,17 @@ fn exec_ids_records_and_cancel_on_native() {
         return;
     };
     home::open(&home).unwrap();
-    home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    // the native machine's daemon is a setting of its record
+    layerfs_api::call(
+        Some(&home),
+        "machine.update",
+        SdkValue::map([
+            ("machine", SdkValue::text("native")),
+            ("daemon", SdkValue::text(daemon.as_str())),
+        ]),
+        &mut |_| {},
+    )
+    .unwrap();
     let folder = tempdir("folder");
     std::fs::write(folder.join("README.md"), "cancel\n").unwrap();
     let folder_text = folder.display().to_string();
@@ -428,7 +437,17 @@ fn two_commands_run_at_once_in_one_workspace_on_native() {
     };
     let home = tempdir("both");
     home::open(&home).unwrap();
-    home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    // the native machine's daemon is a setting of its record
+    layerfs_api::call(
+        Some(&home),
+        "machine.update",
+        SdkValue::map([
+            ("machine", SdkValue::text("native")),
+            ("daemon", SdkValue::text(daemon.as_str())),
+        ]),
+        &mut |_| {},
+    )
+    .unwrap();
     let folder = tempdir("both-folder");
     std::fs::write(folder.join("README.md"), "both\n").unwrap();
     let folder_text = folder.display().to_string();
@@ -528,7 +547,17 @@ fn forced_native_machine_stop_cancels_running_commands() {
     };
     let home = tempdir("stop-home");
     home::open(&home).unwrap();
-    home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    // the native machine's daemon is a setting of its record
+    layerfs_api::call(
+        Some(&home),
+        "machine.update",
+        SdkValue::map([
+            ("machine", SdkValue::text("native")),
+            ("daemon", SdkValue::text(daemon.as_str())),
+        ]),
+        &mut |_| {},
+    )
+    .unwrap();
     let folder = tempdir("stop-folder");
     std::fs::write(folder.join("README.md"), "stop\n").unwrap();
     ok(&home, "store.create", &[("name", t("shop"))]);
@@ -574,7 +603,7 @@ fn forced_native_machine_stop_cancels_running_commands() {
         .unwrap()
         .get_int("pgid")
         .unwrap();
-    let force = [("name", t("native")), ("force", SdkValue::Bool(true))];
+    let force = [("machine", t("native")), ("force", SdkValue::Bool(true))];
     let stopped = ok(&home, "machine.stop", &force);
     assert_eq!(
         stopped.get("stopped_sandboxes"),

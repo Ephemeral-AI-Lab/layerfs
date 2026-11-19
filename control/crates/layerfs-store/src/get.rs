@@ -9,7 +9,7 @@
 //! `synchronous_commit`; the other engine's keys are null.
 use crate::backup::record::StoreLink;
 use crate::intent;
-use crate::record::{Placement, StoreRecord, StoreRef};
+use crate::record::{StoreRecord, StoreRef};
 use crate::state;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
@@ -35,12 +35,17 @@ pub(crate) fn at(ms: Option<i64>) -> SdkValue {
     ms.map_or(SdkValue::Null, |ms| SdkValue::Text(time::iso(ms)))
 }
 
+/// Bytes as answers show them: lowercase hex text.
+pub(crate) fn hex_text(bytes: &[u8]) -> SdkValue {
+    SdkValue::text(layerfs_bridge::sdk_values::hex(bytes))
+}
+
 /// A digest as answers show it: hex text, whether the record holds text
 /// or bytes; null when absent.
 pub(crate) fn hex_of(value: Option<&SdkValue>) -> SdkValue {
     match value {
         Some(SdkValue::Text(text)) => SdkValue::text(text),
-        Some(SdkValue::Bytes(bytes)) => SdkValue::text(layerfs_bridge::sdk_values::hex(bytes)),
+        Some(SdkValue::Bytes(bytes)) => hex_text(bytes),
         _ => SdkValue::Null,
     }
 }
@@ -112,40 +117,6 @@ fn last_transfer(record: &StoreRecord) -> SdkValue {
     ])
 }
 
-/// A PostgreSQL Store's `connections`: the Store's own address (no
-/// `machine`: every machine without its own uses it), then each machine's
-/// own, in record order. Never a password.
-fn connections(record: &StoreRecord) -> SdkValue {
-    let store_url = record.text("url");
-    let mut rows = vec![SdkValue::map([
-        ("machine", SdkValue::Null),
-        ("url", SdkValue::opt_text(store_url)),
-    ])];
-    // an entry holding only a password reference (before saved logins)
-    // is no address of its own: not answered
-    let own = record.own_connections().into_iter();
-    for (machine, own) in own.filter(|(_, own)| own.url.is_some()) {
-        rows.push(SdkValue::map([
-            ("machine", SdkValue::text(machine)),
-            ("url", SdkValue::opt_text(own.url.as_deref().or(store_url))),
-        ]));
-    }
-    SdkValue::List(rows)
-}
-
-/// The machine a sqlite Store's record places it on (`native` when a
-/// record names none); null for a PostgreSQL Store and for one whose
-/// machine a 1.1.0 home did not tell.
-fn placed(record: &StoreRecord) -> SdkValue {
-    match record.store_ref() {
-        Ok(StoreRef::Sqlite {
-            machine: Placement::Machine(machine),
-            ..
-        }) => SdkValue::text(machine),
-        _ => SdkValue::Null,
-    }
-}
-
 /// The names of Store `store`'s projects, sorted.
 pub fn project_names(home: &Path, store: &str) -> Result<Vec<String>> {
     paths::names(&paths::store_dir(home, store).join("project")).map_err(failed)
@@ -162,8 +133,7 @@ pub fn summary(
 ) -> Result<SdkValue> {
     let store = record.name();
     let projects = project_names(home, store)?;
-    let names = projects.iter().map(SdkValue::text).collect();
-    let (shown, shown_count) = layerfs_home::helpers::shown(names, 0, false);
+    let (shown, shown_count) = layerfs_home::helpers::shown_names(&projects);
     let (engine, sqlite) = match record.store_ref() {
         Ok(StoreRef::Postgres { .. }) => ("postgresql", false),
         Ok(StoreRef::Sqlite { .. }) => ("sqlite", true),
@@ -183,12 +153,16 @@ pub fn summary(
         fields.push(("observed_at", at(observed)));
     }
     fields.extend([
-        ("machine", placed(record)),
+        // a sqlite Store's machine; null for a PostgreSQL Store
+        ("machine", SdkValue::opt_text(state::placed(record))),
         (
             "auth",
             SdkValue::opt_text(crate::postgresql::login::auth_of(record)),
         ),
-        ("connections", only(postgresql, connections(record))),
+        (
+            "connections",
+            only(postgresql, crate::postgresql::connect::connections(record)),
+        ),
         ("projects", shown),
         ("projects_count", shown_count),
         ("backups", SdkValue::List(backups.collect())),
@@ -210,12 +184,7 @@ pub fn summary(
         ("created_at", at(record.to_record().get_int("created"))),
         ("last_transfer", last_transfer(record)),
     ]);
-    Ok(SdkValue::Map(
-        fields
-            .into_iter()
-            .map(|(name, value)| (name.to_owned(), value))
-            .collect(),
-    ))
+    Ok(layerfs_home::helpers::map_of(fields))
 }
 
 /// `store.get(store)`: the Store's record and its records-only state. With

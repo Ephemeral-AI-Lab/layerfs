@@ -24,7 +24,6 @@ pub fn main(words: Vec<String>) -> ExitCode {
             _ => wrong("use layerfs --version [--json]".to_owned()),
         },
         Some("worker") if words.len() == 1 => worker::main(),
-        Some("import-env") if words.len() == 1 => import_env(),
         Some(family) => {
             let Some(name) = words.get(1) else {
                 return help::print(&[family]);
@@ -35,66 +34,48 @@ pub fn main(words: Vec<String>) -> ExitCode {
             // a call's shell name has `-` for its `_` (`workspace exec-cancel`)
             match layerfs_api::find(&format!("{family}.{}", name.replace('-', "_"))) {
                 Some(call) => one(call, &words[2..]),
-                None if layerfs_api::families().iter().any(|f| f.name == family) => {
-                    let fam = layerfs_api::families()
-                        .iter()
-                        .find(|f| f.name == family)
-                        .unwrap();
-                    let target = name.replace('-', "_");
-                    let mut best_dist = usize::MAX;
-                    let mut best_call = "";
-                    for c in fam.calls() {
-                        let d = lev(&target, c.call);
-                        if d < best_dist {
-                            best_dist = d;
-                            best_call = c.call;
-                        }
+                None => match layerfs_api::families().iter().find(|f| f.name == family) {
+                    Some(fam) => {
+                        let target = name.replace('-', "_");
+                        let calls = fam.calls().iter().map(|c| c.call);
+                        let suggestion = match closest(&target, calls, 3) {
+                            Some(call) => format!(
+                                "; did you mean `layerfs {family} {}`?",
+                                call.replace('_', "-")
+                            ),
+                            None => String::new(),
+                        };
+                        wrong(format!(
+                            "no call `{family} {name}`; `layerfs help {family}` lists them{suggestion}"
+                        ))
                     }
-                    let suggestion = if best_dist <= 3 {
-                        format!(
-                            "; did you mean `layerfs {family} {}`?",
-                            best_call.replace('_', "-")
-                        )
-                    } else {
-                        String::new()
-                    };
-                    wrong(format!(
-                        "no call `{family} {name}`; `layerfs help {family}` lists them{suggestion}"
-                    ))
-                }
-                None => {
-                    let mut best_dist = usize::MAX;
-                    let mut best_fam = "";
-                    for f in layerfs_api::families() {
-                        let d = lev(family, f.name);
-                        if d < best_dist {
-                            best_dist = d;
-                            best_fam = f.name;
-                        }
+                    None => {
+                        let names = layerfs_api::families().iter().map(|f| f.name);
+                        let suggestion = match closest(family, names, 2) {
+                            Some(best) => format!("; did you mean `layerfs {best}`?"),
+                            None => String::new(),
+                        };
+                        wrong(format!(
+                            "no command `{family}`; `layerfs help` lists them{suggestion}"
+                        ))
                     }
-                    let suggestion = if best_dist <= 2 {
-                        format!("; did you mean `layerfs {best_fam}`?")
-                    } else {
-                        String::new()
-                    };
-                    wrong(format!(
-                        "no command `{family}`; `layerfs help` lists them{suggestion}"
-                    ))
-                }
+                },
             }
         }
     }
 }
 
-/// `layerfs import-env`: this environment's 1.1.0 settings as records, once.
-fn import_env() -> ExitCode {
-    let env: Vec<(String, String)> = std::env::vars().collect();
-    let outcome =
-        layerfs_api::home(None).and_then(|home| layerfs_api::home::import_env(&home, &env));
-    match outcome {
-        Ok(value) => output::result(&value, false),
-        Err(refusal) => output::refusal(&layerfs_api::refusal::public(refusal), false),
+/// The name in `names` nearest `target` (the first of the nearest), when
+/// it is at most `max` edits away.
+fn closest<'a>(target: &str, names: impl Iterator<Item = &'a str>, max: usize) -> Option<&'a str> {
+    let mut best: Option<(usize, &str)> = None;
+    for name in names {
+        let distance = lev(target, name);
+        if best.is_none_or(|(d, _)| distance < d) {
+            best = Some((distance, name));
+        }
     }
+    best.filter(|(d, _)| *d <= max).map(|(_, name)| name)
 }
 
 fn lev(a: &str, b: &str) -> usize {
@@ -184,14 +165,9 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
         let _ = write!(err, "\r{}\r", " ".repeat(last_progress_len));
         let _ = err.flush();
     }
-    // the Stores this one call opened close before the process ends, so a
-    // sqlite Store leaves no write-ahead log behind (lane K2: a later
-    // `store push` refused it)
-    layerfs_api::close_idle(std::time::Duration::ZERO);
-    // and its idle Sandbox daemon connections end their sessions, so this
-    // process's exit is not a dropped connection in the daemon's log and
-    // retained failures (layerfs-project#181). Bounded; the result is ready.
-    layerfs_api::end_idle_sessions(layerfs_api::SESSION_END);
+    // the Stores this one call opened close and its idle Sandbox daemon
+    // sessions end before the process does; bounded, the result is ready
+    layerfs_api::close();
     // `workspace exec` exits with the command's own code in every form
     // (call surface 2.0); its result JSON is still printed, except with
     // `--stream`, which wrote the output itself

@@ -101,17 +101,20 @@ fn absent_home_stays_absent_and_reports_uninitialized() {
     in_order(&report);
 }
 #[test]
-fn current_and_previous_layouts_are_observed_without_conversion_or_files() {
+fn current_and_older_layouts_are_observed_without_conversion_or_files() {
     for layout in [2, 3] {
         let home = home(layout);
         let before = tree(&home);
         let report = run(&home);
         assert_eq!(before, tree(&home));
         if layout == 2 {
-            assert!(contains(&report, "a layout 2 home"));
+            // an older home is refused with the fix that moves it aside
+            assert!(contains(&report, "the home of an older LayerFS"));
+            assert_eq!(outcome(&report, "home.layout").as_deref(), Some("fail"));
             let check = row(&report, "home.layout");
-            assert_eq!(check.get_text("severity"), Some("warning"), "{check:?}");
-            assert_eq!(check.get_text("fix"), Some("layerfs home init"));
+            let fix = layerfs_home::home::layout::older_fix(&home);
+            assert_eq!(check.get_text("fix"), Some(fix.as_str()), "{check:?}");
+            assert_eq!(outcome(&report, "home.records"), None, "{report:?}");
         } else {
             assert_eq!(outcome(&report, "home.layout").as_deref(), Some("pass"));
         }

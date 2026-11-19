@@ -100,7 +100,7 @@ Refusals that come before any effect, in the order a call meets them
 | 4. apply folder scope | `InvalidInput` `out of scope: history`, `path`, `branch`, `project` or the call's name | [`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs) `apply` |
 | 5. resolve the home | `InvalidInput`: not absolute, or neither `LAYERFS_HOME` nor `HOME` set | `dispatch::home` |
 | 6. platform policy | `Unsupported`: new work on a removed platform's machine | [`calls/platform_policy.rs`](../../../../api/crates/layerfs-api/src/calls/platform_policy.rs) |
-| 7. open the home | the home's refusal (layout, migration, lock), also noted by `note_failure` | [`migrate/open.rs`](../../../../control/crates/layerfs-control/src/migrate/open.rs) |
+| 7. open the home | the home's refusal: an older LayerFS's home `Unsupported` with the fix `mv <home> <home>.old && layerfs home init`, a newer layout `Unsupported`, an unreadable `layerfs.json` `Failed`, the home lock `Unavailable` | [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs) `open` |
 | 8. scope owns the Sandbox | `InvalidInput` `out of scope: sandbox` | [`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs) `owns` |
 | 9. family checks | `NoSuch*`, `NotFound`, `Busy`, `Unresolved`, `InUse`, worker `Unavailable` | family code |
 

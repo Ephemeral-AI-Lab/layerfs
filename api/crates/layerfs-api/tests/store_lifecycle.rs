@@ -46,6 +46,9 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
 /// Machine `name`'s record; one that is not `running` is stopped.
 fn machine(home: &Path, name: &str, platform: &str, state: Option<&str>) {
     let mut fields = vec![("name", t(name)), ("platform", t(platform))];
+    // every 2.0 create records its provider name; `native` has none
+    let vm_name = format!("layerfs-test-{name}");
+    fields.extend((platform != "native").then(|| ("vm_name", t(&vm_name))));
     fields.extend(state.map(|state| ("state", t(state))));
     let fields = fields.into_iter().map(|(k, v)| (k.to_owned(), v));
     write_record(
@@ -92,13 +95,13 @@ fn set_op(home: &Path, value: SdkValue) {
     write_record(&path, &home::with_field(record(home), "op", value)).unwrap();
 }
 
-/// A `store.push` intent of this process, its start time moved by `skew`
+/// A `store.move` intent of this process, its start time moved by `skew`
 /// (a moved start time names a process that is gone).
 fn this_process_pushing(skew: u64, uncertain: bool) -> SdkValue {
     let me = LocalProcess::observe(std::process::id()).unwrap();
     SdkValue::map([
         ("id", t("op-00000000000000ab")),
-        ("name", t("store.push")),
+        ("name", t("store.move")),
         ("phase", t("record")),
         (
             "args",
@@ -137,7 +140,7 @@ fn a_store_call_during_a_push_is_busy_even_from_the_pushers_process() {
     set_op(&home, this_process_pushing(0, false));
     let (code, message) = read(&home).unwrap_err();
     assert_eq!(code, "Busy", "{message}");
-    assert!(message.contains("store.push"), "{message}");
+    assert!(message.contains("store.move"), "{message}");
     assert_eq!(
         lease::hold(&home, "shop").err().map(|r| r.code).as_deref(),
         Some("Busy")
@@ -337,13 +340,39 @@ fn a_live_read_is_blocked_first_even_over_a_held_op() {
     std::fs::remove_dir_all(home).unwrap();
 }
 
+/// A Store record this build does not read (a `machine` that is not
+/// text, no `kind`) reads `broken` `unsupported` with `store remove` as its
+/// fix, and `store remove` or `store disconnect` takes its records alone.
 #[test]
-fn remove_refuses_a_store_whose_machine_is_unknown() {
+fn a_store_whose_record_is_not_read_is_removed_by_its_records() {
     let home = home_with_stopped(SdkValue::Null);
-    let (code, message) = call(&home, "store.remove", &[("store", t("shop"))]).unwrap_err();
-    assert_eq!(code, "Unavailable", "{message}");
-    assert!(message.contains("import-env"), "{message}");
-    assert!(paths::store_record(&home, "shop").is_file(), "records kept");
+    let detail = [("store", t("shop")), ("detail", SdkValue::Bool(true))];
+    let got = call(&home, "store.get", &detail).unwrap();
+    assert_eq!(got.get_text("state"), Some("broken"), "{got:?}");
+    assert_eq!(got.get_text("reason"), Some("unsupported"), "{got:?}");
+    assert_eq!(got.get_text("fix"), Some("layerfs store remove shop"));
+    let moved = [("store", t("shop")), ("machine", t("vm"))];
+    let refused = refusal(&home, "store.move", &moved);
+    assert_eq!(refused.code, "InvalidInput", "{}", refused.message);
+    assert!(refused.message.contains("Store record machine"));
+    assert_eq!(
+        refused.detail.get_text("fix"),
+        Some("layerfs store remove shop")
+    );
+    let removed = call(&home, "store.remove", &detail).unwrap();
+    assert_eq!(removed.get_text("outcome"), Some("removed"), "{removed:?}");
+    assert!(!paths::store_record(&home, "shop").exists());
+
+    // a record with no `kind`: `store disconnect` takes its records too
+    write_record(
+        &paths::store_record(&home, "old"),
+        &SdkValue::map([("name", t("old"))]),
+    )
+    .unwrap();
+    let old = [("store", t("old"))];
+    let disconnected = call(&home, "store.disconnect", &old).unwrap();
+    assert!(disconnected.get_bool("ok"), "{disconnected:?}");
+    assert!(!paths::store_record(&home, "old").exists());
     std::fs::remove_dir_all(home).unwrap();
 }
 

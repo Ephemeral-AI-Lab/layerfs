@@ -71,5 +71,4 @@ pub(super) fn check(home: &Path, budget: &Budget, checks: &mut Checks) {
         ),
         None => checks.unknown(ID, "`df` gave no measurement of the disk"),
     }
-    checks.duration(ID, started.elapsed());
 }

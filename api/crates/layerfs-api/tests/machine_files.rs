@@ -228,10 +228,10 @@ fn settle(home: &Path) {
 }
 
 /// A Store being pushed, as far as another call can see it: its record
-/// carries a running `store.push` intent and its lock is held. The lock is
+/// carries a running `store.move` intent and its lock is held. The lock is
 /// released when the answer drops.
 fn pushing(home: &Path) -> impl Drop {
-    let op = layerfs_home::op::Op::begin("store.push", "check", SdkValue::Null).unwrap();
+    let op = layerfs_home::op::Op::begin("store.move", "check", SdkValue::Null).unwrap();
     let record = layerfs_store::record::StoreRecord::read(home, "shop")
         .unwrap()
         .unwrap();

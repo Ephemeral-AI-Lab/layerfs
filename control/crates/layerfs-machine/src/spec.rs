@@ -50,6 +50,14 @@ pub fn ensure_built_ins(home: &Path, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Forgets that this process found the built-in machines of the home at
+/// `home`: the next call writes a built-in record that is not there again
+/// (`machine remove docker` of a record with no `vm_name`).
+pub fn forget_built_ins(home: &Path) {
+    let mut ensured = ENSURED.lock().unwrap_or_else(|e| e.into_inner());
+    ensured.retain(|(path, _)| path != home);
+}
+
 /// Writes each built-in machine's record that is not there. A record that
 /// is there but cannot be read is left as it is, for its doctor to name
 /// (`machine.record`), and fails no call: every other machine, Store and
@@ -101,10 +109,7 @@ pub fn tools(home: &Path) -> Result<Tools> {
 /// The Docker Engine socket the docker machine uses and where it comes from,
 /// for the machine and for every Docker read of the home's (one choice): the
 /// socket its record holds (`recorded`; `machine update docker --docker`, or
-/// its first start), else, for a machine that already ran before sockets
-/// were recorded (it ran, or its record predates `vm_name`, so an older
-/// build used it), Docker's default socket it ran on (`legacy`; recorded
-/// at its next start), else the host's automatic choice
+/// its first start), else the host's automatic choice
 /// ([`adapters::docker_automatic`]: `env:DOCKER_HOST`, `context:<name>`,
 /// `desktop`, `colima`, `orbstack` or `default`). `--docker ""` leaves the
 /// field null: automatic again, ran or not.
@@ -112,12 +117,6 @@ pub fn docker_socket(home: &Path) -> Result<(PathBuf, String)> {
     let record = MachineRecord::read(home, "docker")?;
     if let Some(socket) = record.as_ref().and_then(MachineRecord::docker) {
         return Ok((PathBuf::from(socket), "recorded".to_owned()));
-    }
-    let cleared = record.as_ref().is_some_and(|r| r.field("docker").is_some());
-    let older = |r: &MachineRecord| r.ever_started() || r.text("vm_name").is_none();
-    if !cleared && record.as_ref().is_some_and(older) {
-        let socket = PathBuf::from(adapters::DEFAULT_DOCKER_SOCKET);
-        return Ok((socket, "legacy".to_owned()));
     }
     let chosen = adapters::docker_automatic(&adapters::DockerEnv::current());
     let path = chosen
@@ -127,21 +126,25 @@ pub fn docker_socket(home: &Path) -> Result<(PathBuf, String)> {
 }
 
 /// The adapters' description of the machine `record` describes.
-pub fn spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> {
-    let mut spec = provider_spec(home, home_id, record)?;
+pub fn spec(home: &Path, record: &MachineRecord) -> Result<Spec> {
+    let mut spec = provider_spec(home, record)?;
     spec.worker = worker(home, record.name())?;
     Ok(spec)
 }
 
 /// A provider description that does not read or authenticate the worker endpoint.
-pub fn provider_spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> {
+pub fn provider_spec(home: &Path, record: &MachineRecord) -> Result<Spec> {
     let name = record.name();
     let kind = record.platform()?;
     let lasting = record.field("lasting");
     Ok(Spec {
         name: name.to_owned(),
         kind,
-        vm_name: record.provider_name(home_id),
+        // `native` has no provider name: its record keeps none
+        vm_name: match kind {
+            Platform::Native => String::new(),
+            _ => record.provider_name()?.to_owned(),
+        },
         cpus: int(record, "cpus", DEFAULT_CPUS) as u32,
         memory: int(record, "memory", DEFAULT_MEMORY) as u64,
         disk: int(record, "disk", DEFAULT_DISK) as u64,
@@ -152,8 +155,8 @@ pub fn provider_spec(home: &Path, home_id: &str, record: &MachineRecord) -> Resu
             .text("image_archive")
             .or(record.image().filter(|i| i.starts_with('/')))
             .map(PathBuf::from),
-        // the docker machine's worker container runs its Sandbox image, as
-        // 1.1.0's macOS worker did
+        // the docker machine's worker container runs its Sandbox image
+        // (`machine update docker --image`) when it names no OS image
         os_image: record
             .text("os_image")
             .or(record.image().filter(|_| kind == Platform::Docker))

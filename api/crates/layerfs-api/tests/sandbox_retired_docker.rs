@@ -2,9 +2,11 @@
 //! layerfs-project#111), seen from the home: `sandbox.get` answers it
 //! `broken` `unsupported`, every other call on it but `sandbox.remove` is
 //! refused `Unsupported` before anything is routed, with how to recreate
-//! it; `sandbox.remove` forgets it (its machine's worker is asked once to
-//! forget its own record) and answers its container's name to remove by
-//! hand. A stand-in worker; no Docker or daemon runs.
+//! it; `sandbox.remove` removes its records (its machine's worker is asked
+//! once to drop its own) and answers `already_gone`, `left` saying its
+//! container was not touched. Its record keeps no container name, and this
+//! build computes no older one: the answer says so rather than guess. A
+//! stand-in worker; no Docker or daemon runs.
 #![cfg(all(unix, feature = "machine"))]
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_api::worker::{read_frame, write_frame};
@@ -100,6 +102,7 @@ fn home_with_retired(tag: &str, worker: SocketAddr, converted: bool) -> PathBuf 
         &SdkValue::map([
             ("name", t("docker")),
             ("platform", t("docker")),
+            ("vm_name", t("layerfs-test-vm")),
             ("state", t("running")),
         ]),
     )
@@ -161,8 +164,7 @@ fn a_retired_docker_sandbox_is_refused_and_remove_forgets_it() {
     for converted in [false, true] {
         let (address, log) = worker();
         let home = home_with_retired(&format!("home-{converted}"), address, converted);
-        let id = home::opened(&home).unwrap().id;
-        let container = format!("lfs-{}-d1", &id[..8]);
+        let unnamed = "its record does not name its container (`docker ps -a` lists them)";
         // a get answers it, broken: its runtime is the retired backend's,
         // and removing it is the fix
         let got = [("sandbox", t("d1")), ("detail", SdkValue::Bool(true))];
@@ -191,7 +193,7 @@ fn a_retired_docker_sandbox_is_refused_and_remove_forgets_it() {
                 "{name}: {message}"
             );
             assert!(
-                message.contains(&format!("`docker rm -f {container}`")),
+                message.contains(unnamed) && !message.contains("docker rm"),
                 "{name}: {message}"
             );
             assert!(message.contains("`layerfs sandbox create`"), "{message}");
@@ -199,13 +201,18 @@ fn a_retired_docker_sandbox_is_refused_and_remove_forgets_it() {
         assert!(log.lock().unwrap().is_empty(), "routed: {:?}", log.lock());
         let closed = remove(&home);
         assert_eq!(closed.get_text("sandbox"), Some("d1"), "{closed:?}");
-        assert_eq!(closed.get_text("outcome"), Some("forgotten"), "{closed:?}");
-        assert_eq!(closed.get_text("container"), Some(container.as_str()));
         assert_eq!(
-            closed.get_text("fix"),
-            Some(format!("docker rm -f {container}").as_str())
+            closed.get_text("outcome"),
+            Some("already_gone"),
+            "{closed:?}"
         );
-        assert_eq!(closed.get("left"), Some(&SdkValue::List(Vec::new())));
+        assert_eq!(closed.get("container"), None);
+        let left =
+            format!("its container of the retired docker backend was not touched: {unnamed}");
+        assert_eq!(
+            closed.get("left"),
+            Some(&SdkValue::List(vec![SdkValue::Text(left)]))
+        );
         // the worker's own operation keeps its name on the wire
         assert_eq!(*log.lock().unwrap(), ["sandbox.close"]);
         assert!(!paths::sandbox_dir(&home, "d1").exists());
@@ -225,7 +232,11 @@ fn remove_forgets_it_when_the_worker_cannot_be_reached_and_says_so() {
         .unwrap();
     let home = home_with_retired("unreached", gone, false);
     let closed = remove(&home);
-    assert_eq!(closed.get_text("outcome"), Some("forgotten"), "{closed:?}");
+    assert_eq!(
+        closed.get_text("outcome"),
+        Some("already_gone"),
+        "{closed:?}"
+    );
     let left = match closed.get("left") {
         Some(SdkValue::List(left)) => format!("{left:?}"),
         other => panic!("{other:?}"),

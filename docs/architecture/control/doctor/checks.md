@@ -3,14 +3,13 @@
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
 This page covers the home's records check (`home.records`, which
-`home.doctor` makes: the scan, the record checks and a layout 2 home's
-conversion blockers), where LayerFS removes what interrupted operations
+`home.doctor` makes: the scan and the record checks), where LayerFS removes what interrupted operations
 left on disk, and the report all six doctors answer, within
 [Doctor](README.md).
 
 | | |
 | --- | --- |
-| Source | [`layerfs-control/src/doctor`](../../../../control/crates/layerfs-control/src/doctor): `host_target.rs`, `records.rs`, `scan.rs`, `checks.rs`, `convert.rs`, `report.rs`, `check_report.rs` |
+| Source | [`layerfs-control/src/doctor`](../../../../control/crates/layerfs-control/src/doctor): `host_target.rs`, `records.rs`, `scan.rs`, `checks.rs`, `report.rs`, `check_report.rs` |
 
 ## The records check
 
@@ -19,8 +18,8 @@ left on disk, and the report all six doctors answer, within
    detect(home)             layout read only
      unreadable    -> home.layout fails
      Empty         -> no home.layout, no home.records; the home stays absent
-     Old (1.1.0)   -> home.layout warning, fix `layerfs home init`; no records
-     Previous (2)  -> home.layout warning; home.records = convert::check
+     Older         -> home.layout fails, fix `mv <home> <home>.old && layerfs home init`;
+                      no records (layout 2, or 1.1.0's records)
      Current (3)   -> home.records = scan -> checks::check_local
    inventory fingerprint before and after: changed or unreadable -> no verdict
    -> Findings [ { severity, entity {kind, name}, message, fix } ]
@@ -72,7 +71,7 @@ record. Built-in `native` and `docker` count as present without a record.
 
 ```text
  Scanned -> machines   daemon file, op
-         -> stores     op, placement, partial copies, leftover copy, leases
+         -> stores     op, machine record, partial copies, leftover copy, leases
          -> sandboxes  op, project, Store, machine
 ```
 
@@ -81,7 +80,6 @@ record. Built-in `native` and `docker` count as present without a record.
 | machine | recorded `daemon` file missing | error | none; the message names `layerfs machine update <m> --daemon <path>` |
 | store | record cannot be read | error | none: repair the record by hand |
 | store | SQLite Store on a non-built-in machine with no record | error | none: restore the machine's record, or delete the Store folder by hand |
-| store | 1.1.0 Store whose machine is unknown | warning | `layerfs import-env` |
 | store | stale lease of an ended process (read, never removed) | warning | `rm <home>/store/<s>/open/<pid>` (the next call on the Store also removes it) |
 | store | local `store.sqlite.incoming` | warning | `rm <path>` |
 | store | a copy a move did not retire (from the record) | warning | none: the next `layerfs store move <s>` deletes it first |
@@ -108,25 +106,16 @@ the worker's `stat`, fix `layerfs store move <s> <machine>` or `layerfs store
 move <s> native`) is in `check_scope`'s remote branch, which no doctor calls
 today.
 
-## Conversion
+## Older homes
 
-```text
- layout 2 home -> layout_2_blockers(home)   the conversion's own survey
-   each blocker: live lease or Store move/removal  -> store
-                 live or uncertain Sandbox          -> sandbox
-                 create intent of unknown outcome   -> project
-                 machine removal                    -> machine
-     -> error on that thing, no fix: the message says what ends it
- home.layout says the conversion is still to come (warning, fix `layerfs home init`)
-```
-
-| Case | Finding | Source |
-| --- | --- | --- |
-| survey fails | `error` on the home: the first call on the home reports what refuses the conversion | [`convert.rs`](../../../../control/crates/layerfs-control/src/doctor/convert.rs) |
-| blocker | `error` naming the state and the step that ends it (let the process finish, close the Sandbox with the build that started it, remove what an intent left); the survey's messages come from [`migrate/v2.rs`](../../../../control/crates/layerfs-control/src/migrate/v2.rs) `survey`, whose Sandbox step still names that older build's command, `layerfs sandbox close <x>` | [`convert.rs`](../../../../control/crates/layerfs-control/src/doctor/convert.rs) |
-| conversion still to come | `home.layout` warning, "a layout 2 home: it is converted on its first call; nothing was converted" | [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs) |
-
-Stale leases stay; nothing is converted.
+An older LayerFS's home (layout 2, or 1.1.0's records with no
+`layerfs.json`) gets no records check: `home.layout` fails, "the home of an
+older LayerFS: this build does not convert it; move it aside and make a new
+home", with the fix `mv <home> <home>.old && layerfs home init`, and
+`home.records` is not run. The conversion and its blocker survey were
+removed (owner, 2026-11-19;
+[`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs)
+`layout`, [Migration](../home/migration.md)).
 
 Worker reach and Sandbox daemon reach are not records checks: a machine's
 worker is `machine.doctor`'s (`machine.worker.*`), a Sandbox's daemon

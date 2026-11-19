@@ -4,6 +4,7 @@
 //! `logs.machine` is `machine log`). `stats` also holds the small helpers
 //! that rename what a library function answered to the row's keys.
 mod create;
+mod doctor;
 mod files;
 mod get;
 mod images;
@@ -35,6 +36,6 @@ pub(crate) fn calls() -> Calls {
         create::CALL,
         remove::CALL,
         update::CALL,
-        crate::doctor::machine::CALL,
+        doctor::CALL,
     ]
 }

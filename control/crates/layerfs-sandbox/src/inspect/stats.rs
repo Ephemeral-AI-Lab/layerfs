@@ -49,8 +49,7 @@ pub(super) const KIND: &str = "machine_stats";
 /// - `sandboxes`: `{ recorded, live, items }`; `items` holds one row per
 ///   recorded Sandbox, `{ name, live, live_reason?, started_at, usage,
 ///   usage_reason? }` (`usage` as `sandbox.get`'s). A row the soft budget
-///   did not reach stays, null with `deadline`. A worker of an older build
-///   answers no `items`, and none is shown.
+///   did not reach stays, null with `deadline`.
 /// - `complete`: false with `reason: "deadline"` when the soft budget
 ///   ended the Store or Sandbox part early.
 ///
@@ -188,8 +187,7 @@ pub(super) fn scopes(platform: &str) -> (&'static str, &'static str) {
 /// data, from its record alone; none on `native`.
 #[cfg(feature = "machine")]
 fn volume(home: &Path, record: Option<&MachineRecord>) -> Option<String> {
-    let id = home::opened(home).ok()?.id;
-    let spec = layerfs_machine::machine_provider_spec(home, &id, record?).ok()?;
+    let spec = layerfs_machine::machine_provider_spec(home, record?).ok()?;
     layerfs_machine::platform::data_volume(&spec)
 }
 

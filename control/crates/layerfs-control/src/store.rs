@@ -80,13 +80,13 @@ pub fn machine_state(home: &Path, name: &str) -> Result<layerfs_home::state::Sta
 
 /// `store.remove`: a sqlite Store no Sandbox uses, with its file.
 pub fn remove(home: &Path, name: &StoreName) -> Outcome {
-    layerfs_store::sqlite::family::remove(home, name, RELATED)
+    layerfs_store::sqlite::remove::remove(home, name, RELATED)
 }
 
 /// `store.move`: a sqlite Store from the machine that holds it to
 /// `machine`, one of the two being this computer (C13).
 pub fn move_to(home: &Path, events: &mut Events<'_>, store: &str, machine: &str) -> Outcome {
-    layerfs_store::sqlite::family::move_to(home, events, store, machine, RELATED)
+    layerfs_store::sqlite::transfer::phases::move_to(home, events, store, machine, RELATED)
 }
 
 /// `store.disconnect(store, { machine })`: without `machine`, forget a
@@ -161,11 +161,8 @@ pub fn connect(
     connect::refuse_login(&request.url)?;
     connect::target(&request.url)?;
     runs_postgresql_sandboxes(home, name, machine)?;
-    // the machine's whole own connection: a password reference an older
-    // entry held goes with it
     let own = OwnConnection {
         url: Some(request.url.clone()),
-        password: None,
     };
     let trial = record.clone().with_own_connection(machine, &own);
     check_from(home, events, &trial, machine).1?;

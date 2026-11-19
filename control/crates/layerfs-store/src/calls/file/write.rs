@@ -10,7 +10,7 @@ use super::{Change, Content};
 use crate::calls::op::Args;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
-use layerfs_home::helpers::shown;
+use layerfs_home::helpers::{map_of, shown};
 use layerfs_home::outcome::{refused, with_fix, Outcome};
 use std::path::Path;
 
@@ -120,7 +120,7 @@ fn answer(value: &SdkValue, replaced: Option<SdkValue>) -> SdkValue {
         ("message", take(&commit, "message")),
         ("created_at", date(commit.get("time"))),
     ]);
-    SdkValue::Map(fields.into_iter().map(|(k, v)| (k.to_owned(), v)).collect())
+    map_of(fields)
 }
 
 /// The engine arguments every write starts with.

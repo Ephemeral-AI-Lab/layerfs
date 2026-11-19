@@ -82,7 +82,7 @@ fn listed(ids: &[String]) -> SdkValue {
 fn shown(ids: &[String], read: Option<&SdkValue>) -> Vec<(String, Option<String>)> {
     let merged = run_folder::merged(listed(ids), read);
     // the per-Workspace read stays on the Workspaces, not on the listing
-    for field in process::WORKSPACE_FIELDS {
+    for field in ["workspace_usage", "workspace_usage_reason"] {
         assert!(merged.get(field).is_none(), "{field}: {merged:?}");
     }
     let Some(SdkValue::List(items)) = merged.get("workspaces") else {

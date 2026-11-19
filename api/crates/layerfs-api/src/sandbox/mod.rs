@@ -4,10 +4,11 @@
 //! helpers that answer a Sandbox's state and Workspaces under the rows'
 //! names.
 mod create;
-mod files;
+mod doctor;
+pub(crate) mod files;
 mod get;
 mod list;
-mod log;
+pub(crate) mod log;
 mod remove;
 
 use crate::calls::Calls;
@@ -21,6 +22,6 @@ pub(crate) fn calls() -> Calls {
         remove::CALL,
         files::CALL,
         log::CALL,
-        crate::doctor::sandbox::CALL,
+        doctor::CALL,
     ]
 }

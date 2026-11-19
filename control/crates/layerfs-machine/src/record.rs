@@ -6,13 +6,13 @@
 //! machines' settings. A record may still name a platform removed in 2.0
 //! (`firecracker`, `microsandbox`, `ssh`): it is shown `broken`
 //! `unsupported`, every other call on it is refused `Unsupported`, and
-//! `machine remove` forgets it. Read once and kept whole. Built without
+//! `machine remove` removes its record alone. Read once and kept whole. Built without
 //! the `machine` feature too (the guest worker reads its own `native` and
 //! `docker` records); the platform and the summary need the adapters.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, read_record, with_field, write_entity};
 use layerfs_home::op::{self, Op, Standing};
-use layerfs_home::outcome::refused;
+use layerfs_home::outcome::{refused, with_fix};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -43,12 +43,22 @@ pub fn vm_name(home_id: &str, name: &str) -> String {
     format!("{prefix}{}", plain(name))
 }
 
-/// The name [`vm_name`] gave before layerfs-project#180,
-/// `lfs-<home id8>-<machine>`: what a record without `vm_name` means. No
-/// new machine is named so.
-pub fn legacy_vm_name(home_id: &str, name: &str) -> String {
-    let prefix = layerfs_home::names::legacy_provider_prefix(home_id);
-    format!("{prefix}{}", plain(name))
+/// Why machine `name`'s record without `vm_name` is not used: what made
+/// it, that no call repairs it, and that nothing outside the home was
+/// touched.
+pub fn no_vm_name(name: &str) -> String {
+    format!(
+        "machine {name}'s record has no vm_name: it was made by a build before LayerFS named \
+         machines layerfs-<home id8>-<machine>, and this build reads no older name. No call \
+         repairs the record; its VM or container and its data volume were not touched"
+    )
+}
+
+/// The fix of a machine whose record has no `vm_name`: `machine remove`,
+/// which then removes its record alone (a built-in `docker` is recorded
+/// again, with its 2.0 name, by the next call).
+pub fn no_vm_name_fix(name: &str) -> String {
+    format!("layerfs machine remove {name}")
 }
 
 /// One machine's record as read (fields kept whole and in order).
@@ -100,15 +110,16 @@ impl MachineRecord {
     }
 
     /// The name the machine's provider knows it by (its VM or worker
-    /// container; its volume is `<name>-data`): the record's `vm_name`,
-    /// else, for a record written before every creation recorded one (an
-    /// existing home's `docker`), the name the formula of that time gives,
-    /// [`legacy_vm_name`]. So an existing machine keeps its container,
-    /// volume and Stores under any later formula.
-    pub fn provider_name(&self, home_id: &str) -> String {
-        self.text("vm_name")
-            .map(str::to_owned)
-            .unwrap_or_else(|| legacy_vm_name(home_id, &self.name))
+    /// container; its volume is `<name>-data`): the record's `vm_name`.
+    /// A record without one was made before LayerFS named machines
+    /// `layerfs-<home id8>-<machine>` (layerfs-project#180): refused
+    /// [`no_vm_name`] with [`no_vm_name_fix`], since this build reads no
+    /// older name.
+    pub fn provider_name(&self) -> Result<&str> {
+        self.text("vm_name").ok_or_else(|| {
+            let fix = no_vm_name_fix(&self.name);
+            with_fix(refused("Failed", no_vm_name(&self.name)), fix)
+        })
     }
 
     /// The machine's name (its folder's).
@@ -181,17 +192,6 @@ impl MachineRecord {
         Self::from_record(&self.name, SdkValue::Map(fields.collect()))
     }
 
-    /// Whether the machine was ever started: a start recorded its lasting
-    /// state (every start that reached its provider writes it), or a state
-    /// only a start or create writes (`running`, `failed`). A `stopped`
-    /// alone is not one: a stop before any start records it too. A
-    /// built-in `docker` that never started has neither (its first record
-    /// names only itself).
-    pub fn ever_started(&self) -> bool {
-        self.field("lasting").is_some()
-            || matches!(self.recorded_state(), Some("running" | "failed"))
-    }
-
     /// Refuses a new operation on the machine while an intent holds it:
     /// `Busy` while its owner lives, `Unresolved` once a gone owner left
     /// it uncertain, with the call that settles it as its `fix`.
@@ -219,7 +219,7 @@ impl MachineRecord {
         self.fields.get_text("docker")
     }
 
-    /// The daemon a built-in machine's Sandboxes run (`import-env` writes it).
+    /// The daemon a built-in machine's Sandboxes run (`machine update --daemon` writes it).
     pub fn daemon(&self) -> Option<&str> {
         self.fields.get_text("daemon")
     }

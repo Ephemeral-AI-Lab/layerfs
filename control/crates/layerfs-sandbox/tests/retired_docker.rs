@@ -78,7 +78,7 @@ fn a_retired_docker_record_is_refused_with_how_to_recreate_it() {
         assert_eq!(refusal.code, "Unsupported", "{}", refusal.message);
         for part in [
             "docker Sandbox backend",
-            "`layerfs sandbox remove old` forgets it",
+            "`layerfs sandbox remove old` removes its records",
             "`docker rm -f lfs-0123abcd-old`",
             "`layerfs sandbox create`",
         ] {

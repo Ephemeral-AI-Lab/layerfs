@@ -38,7 +38,7 @@ hold a password or a bucket key. They are not settings; see
     start.lock                 taken while a process starts, makes or removes the machine
     forward.log, forward.1.log what a lima machine's ssh forwards said, and its one rotated file
   machine/native/run/          native Sandboxes' run folders, and their image cache
-    layerfs-<id8>-<sandbox>/   one run folder per Sandbox (lfs-<id8>-<sandbox> if made earlier)
+    layerfs-<id8>-<sandbox>/   one run folder per Sandbox
     layerfs-<id8>-<sandbox>.root/  its private root (Linux; empty from outside)
     images/<64 hex>.2/         an unpacked image, with <64 hex>.2.lock and <64 hex>.2.json
   sandbox/<name>/
@@ -60,12 +60,10 @@ hold a password or a bucket key. They are not settings; see
     open/<pid>                 leases of processes that hold it open
     project/<name>/
       record.json
-  backup/<bucket>/record.json  provider, bucket, prefix, region, key reference
+  backup/<bucket>/record.json  provider, endpoint, bucket, prefix, region, access key id
   trace/                       calls.jsonl (the call log), calls.1.jsonl, calls.lock
-  log/                         uncertain.jsonl, leases.jsonl, migration-failures.jsonl,
-                               import-env.jsonl, exec.jsonl, <name>.1.jsonl (a rotated log),
-                               rotate.lock; migration.json, migration-2.json, init-failures.jsonl
-                               and 1.1.0/ after a conversion
+  log/                         uncertain.jsonl, leases.jsonl, exec.jsonl,
+                               <name>.1.jsonl (a rotated log), rotate.lock
 ```
 
 A machine's data disk, `/layerfs/data` inside the machine, is its
@@ -104,11 +102,9 @@ worker's root:
 - **`layerfs.json`** holds `{"layout": 3, "id": "<32 hex digits>"}`. The id
   is written once. The `docker` machine names its worker container with it (O33),
   VM, container and volume names and Sandbox run folders carry its first 8
-  digits (`layerfs-<id8>-<name>`; ones made before the `layerfs-` prefix
-  keep their recorded `lfs-<id8>-<name>`), and backups
-  record it as where they were exported from. A home of a newer layout is
-  refused `Unsupported`; a layout 2 home is converted once
-  ([below](#a-layout-2-home)).
+  digits (`layerfs-<id8>-<name>`), and backups record it as where they
+  were exported from. A home of a newer layout is refused `Unsupported`;
+  an older LayerFS's home is not converted ([below](#an-older-home)).
 - **`layerfs.lock`** guards record writes and Sandbox-name uniqueness.
   Taking it waits up to 120 s for another holder; that is a readiness wait,
   not a retry. If it is still held, the call is refused `Unavailable` and
@@ -194,10 +190,13 @@ worker's root:
   letter or digit becomes `-`; its data volume is that name with `-data`
   (`docker`, `apple-container`). A Sandbox's run folder is
   `layerfs-<id8>-<sandbox>`. Every `machine create`, and a new home's
-  `docker` machine, records the name as `vm_name`. A machine record
-  without `vm_name` (an earlier home's `docker`) means
-  `lfs-<id8>-<machine>`, and a Sandbox made under `lfs-<id8>-` keeps that
-  run folder: both keep working, and no new name starts with `lfs-`.
+  `docker` machine, records the name as `vm_name`. No name starts with
+  `lfs-`, and none is computed for a record (owner, 2026-11-19): a machine
+  record without `vm_name`, made by an earlier build, reads `broken`
+  `outdated`, and every call that needs its VM or container is refused
+  `Failed` with the fix `layerfs machine remove <machine>`, which removes the
+  record alone (the built-in `docker` is then recorded again with its 2.0
+  name by the next call); nothing outside the home is touched.
   Because a VM name keeps no punctuation, a new machine whose VM name
   another machine has is refused `Exists` (`a.b` after `a_b`). A new
   machine's name is at most 46 characters (a VM name is at most 63, the
@@ -292,147 +291,19 @@ $ cat /tmp/lfs-new/layerfs.json
 (Run before layout 3; the answer is the same at layout 3 but for the
 layout number.)
 
-## A layout 2 home
+## An older home
 
-A home whose `layerfs.json` says layout 2 (2.0 before #536) is converted
-by the first call of this build, under the home lock. It is refused
-`InUse` while anything in it is live, naming each in the message and in
-`detail.related` (`{kind, name, why}`) with what ends it:
-
-| Refused while | `kind` | Ends it |
-| --- | --- | --- |
-| a Sandbox's runtime runs (its container or local daemon, observed once) | `sandbox` | `layerfs sandbox close <name>` with the build that started it (a layout 2 build; this build's call is `sandbox remove`) |
-| a Sandbox on a machine behind a worker is recorded with an id (this build does not ask the old worker) | `sandbox` | the same |
-| a Sandbox create is in flight (its creating process lives) | `sandbox` | let it finish |
-| an earlier create's outcome is unknown (`create.intent`) | `intent` | remove what it left, then the file |
-| a Store lease is held by a live process | `lease` | end that process |
-| a Store move or remove runs (`in_progress`) | `store` | let it finish |
-| a machine removal runs (`removing`) | `machine` | let it finish |
-
-A refused conversion changes nothing (it only appends to
-`log/migration-failures.jsonl`); the next call tries again. Otherwise, in
-one pass:
-
-1. It writes each Sandbox record from `machine/<m>/sandbox/<name>/` to
-   `sandbox/<name>/record.json`, without layout 2's `state` and creator
-   `pid` (a 2.0 record names its creator by pid alone, so that is how the
-   check above reads it). A Sandbox whose native runtime had ended, or
-   whose create's process ended, is written with no id (`gone`); an ended
-   runtime is deleted once and its numbered folder removed; `sandbox
-   remove` then answers `outcome: already_gone`. A create whose outcome was
-   `unknown` is written with an uncertain `sandbox.create` `op` owned by no
-   process (`unresolved`; `sandbox remove` clears it). It drops a Store record's
-   `in_progress` whose process ended (2.0 did not let it hold the Store;
-   layout 3 records hold `op` instead), with a note. It writes `"v": 1`
-   into every machine, Store, project and bucket record, dropping a
-   machine record's 2.0 intent (a gone remover's `removing`, a `state` of
-   `creating` or `unknown`; its `error` stays).
-2. It writes `log/layout-3.pending`, then `layerfs.json` at layout 3.
-3. It deletes `machine/*/sandbox/` and `store/*/project/*/sandboxes/`,
-   renames `machine/native/sandbox-root/` to `machine/native/run/` (its
-   image cache kept; any other folder left there is noted, not deleted),
-   removes the marker and writes `log/migration-2.json`
-   (`from`, `at`, `sandboxes`, `reclaimed`, `versioned`, `removed`, `notes`).
-
-A conversion stopped before step 2 runs again from the start (each write is
-idempotent); one stopped after it is finished by the next call, which finds
-the marker. Checked by the `home_layout_3` tests on synthetic homes; no
-live layout 2 Sandbox was converted for this manual.
-
-## A 1.1.0 home
-
-A folder without `layerfs.json` that holds 1.1.0's own records (`.stores`,
-`stores.json`, `stores.v1.json`, `stores.json.lock`, `remotes`,
-`remote-state`, `.runtime`, `worker`, `traces`, or a `<p>/project.record`)
-is a 1.1.0 home; any other folder, with or without files of its own, is a
-new home. The first 2.0 call on a 1.1.0 home converts it once, under the
-home lock, to layout 2 and then on to layout 3 (above):
-
-| 1.1.0 | 2.0 |
-| --- | --- |
-| `.stores/<s>/store.record` and its `projects/` | `store/<s>/record.json` and `store/<s>/project/<p>/record.json` |
-| `<home>/<p>/project.record` (a project with a Store of its own) | Store `<p>` holding project `<p>` |
-| `stores.json`, `stores.v1.json` | folded into each Store's record (created time; a Docker volume sets the machine to `docker`, unless its file is placed, below) |
-| `remote-state/<s>` | the Store's backup link in the bucket of the same name |
-| `remotes` | one `backup/<bucket>/record.json` per r2 or MinIO remote |
-| `.runtime/init-failures.jsonl` | `log/init-failures.jsonl` |
-| `traces/` | `trace/` |
-
-- Every 1.1.0 file it read is moved, unchanged, under `log/1.1.0/`. Nothing
-  is deleted.
-- An unknown file is left where it is and listed in `log/migration.json`.
-- `layerfs.json` is written last. A conversion stopped part way is continued
-  by the next call; a second run changes nothing.
-- A `local_folder` remote has no 2.0 form. It is reported and kept only in
-  `log/1.1.0/remotes`.
-- A PostgreSQL Store from 1.1.0 kept no URL. Run `store connect` for it
-  again.
-- Each sqlite Store's file is placed where 2.0 opens it when this host can
-  read it in 1.1.0's Docker volume (`<volumes>/<volume>/_data/global/store.sqlite`,
-  Docker on Linux): a hard link at `store/<name>/store.sqlite`, or across
-  filesystems a copy whose sha256 is checked before it is renamed in. The
-  1.1.0 file is never moved or deleted. A placed Store's record says
-  `machine: native` and `file_1_1_0: <path>`, and `log/migration.json`
-  lists it under `placed`. A file with a write-ahead log, or one this host
-  cannot read (Docker Desktop's VM on macOS and Windows), is not placed:
-  the Store keeps its `volume` and the report says where the file is.
-- A sqlite Store whose machine 1.1.0 did not record has `machine: null`.
-  Calls on it are refused `Unavailable` until `layerfs import-env`
-  names its machine.
-- 1.1.0 Sandbox folders inside a project's folder are layout 2's numbered
-  state: the layout 3 conversion probes their runtimes as above.
-
-Run (a folder with a `traces/` folder and one unknown file; before
-`92c2db72b3` added `placed` to the report):
+This build converts no older home (owner, 2026-11-19: "cut and cleanup old
+incompatible aggressively, no lfs, and fallback to old 2.0 or 1.x"). A home
+whose `layerfs.json` says layout 2 (2.0 before #536), or a 1.1.0 home (its
+records and no `layerfs.json`), is never written: every call on it is
+refused `Unsupported`, `home get` answers it `broken` `outdated`, and the
+home doctor's `home.layout` check fails, each with the fix
 
 ```console
-$ LAYERFS_HOME=./old layerfs store list
-{"items":[]}
-$ cat old/log/migration.json
-{"from":"1.1.0","at":1793574185664,"stores":[],"projects":[],"buckets":[],"moved_to_log":["traces -> trace"],"unknown":["notes.txt"],"notes":[]}
+$ mv <home> <home>.old && layerfs home init
 ```
 
-A conversion with real 1.1.0 Store, project and remote records was checked
-by the branch's `home_migrate` tests, not by hand for this manual.
-
-## `layerfs import-env`
-
-`layerfs import-env` writes the current environment's 1.1.0 settings as
-records, once, so the home then works with `LAYERFS_HOME` alone. It is a
-shell command, not a call of the table.
-
-- It fills only fields that are not recorded yet, and keeps the rest.
-- It never writes a secret.
-- It never makes a VM. For those settings it answers the enabled `machine
-  create` command to run. Firecracker, SSH and Microsandbox settings are
-  reported as ignored with their removal reason (the platforms were removed
-  in 2.0).
-- Its answer lists `written`, `kept`, `commands` and `ignored`, by setting
-  name. Each run is also appended to `log/import-env.jsonl`.
-
-| 1.1.0 setting | What it becomes |
-| --- | --- |
-| `LAYERFS_DAEMON` | `machine/native/record.json` `daemon` |
-| `LAYERFS_IMAGE_ARCHIVE` | `machine/native/record.json` `image_archive` |
-| `LAYERFS_DOCKER` | `machine/docker/record.json` `docker` (a leading `unix://` is dropped) |
-| `LAYERFS_IMAGE` | `machine/docker/record.json` `image` |
-| `LAYERFS_REMOTE_ENDPOINT` and `LAYERFS_REMOTE_BUCKET` (with `_PREFIX`, `_REGION`, `_PART_SIZE`, `_CREDENTIALS`) | a MinIO bucket named `remote`; its key is a reference, default `env:LAYERFS_REMOTE` |
-| `LAYERFS_SANDBOX` or `LAYERFS_PLACEMENT` = `docker`, `local` | the machine `docker` for each Store with no machine recorded (and `LAYERFS_VOLUME` as its volume) |
-| `LAYERFS_SANDBOX` or `LAYERFS_PLACEMENT` = `native`, `mac`, `linux`, `namespaces` | the machine `native` for each Store with no machine recorded |
-| `LAYERFS_SANDBOX` = `vm:<kind>` (with `LAYERFS_VM_CPUS`, `_MEMORY`, `_STORE_SIZE`, `_IMAGE`) | answered: `layerfs machine create <kind> <kind> …`; `vm:firecracker` and `vm:microsandbox` are ignored with their reason |
-| `LAYERFS_SSH_HOST` (with `_USER`, `_PORT`, `_IDENTITY` or `_KEY`, `_KNOWN_HOSTS`, `_STORE`) | ignored: ``platform `ssh` was removed in LayerFS 2.0``; no command is suggested |
-| `LAYERFS_STORE_POSTGRESQL` | ignored: a secret; run `store connect <name> <url> --password env:NAME` |
-| `LAYERFS_STORE_POLICY` | ignored: Init uses the default policy |
-| `LAYERFS_LOCAL_DIR` | ignored: native Sandboxes live under `machine/native/run/` |
-| `LAYERFS_PROJECT` | ignored: every call names its project |
-
-Run (in an empty home):
-
-```console
-$ LAYERFS_DOCKER=unix:///var/run/docker.sock LAYERFS_SANDBOX=vm:lima \
-  LAYERFS_VM_CPUS=4 LAYERFS_PROJECT=x layerfs import-env
-{"written":[{"setting":"LAYERFS_DOCKER","what":"<home>/machine/docker/record.json docker"}],"kept":[],"commands":[{"setting":"LAYERFS_SANDBOX","what":"layerfs machine create lima lima --cpus 4"}],"ignored":[{"setting":"LAYERFS_PROJECT","what":"every call names its project"}]}
-```
-
-The old settings, and old Connect and dsh homes, are removed in 2.0; run
-`layerfs import-env` once instead (O4, G14).
+which keeps the old folder and makes a new, empty home. Its Stores, Sandboxes
+and machines are not carried over; a 1.1.0 environment's settings are not
+imported (there is no `layerfs import-env`).

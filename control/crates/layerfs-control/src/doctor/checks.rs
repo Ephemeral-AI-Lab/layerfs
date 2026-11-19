@@ -16,7 +16,7 @@ use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::home::paths;
 use layerfs_home::op::{Op, Standing};
 use layerfs_store::lease;
-use layerfs_store::record::{Placement, StoreRecord, StoreRef};
+use layerfs_store::record::{StoreRecord, StoreRef};
 use std::path::Path;
 
 /// `native` and `docker` exist with or without a record.
@@ -37,7 +37,7 @@ pub(super) fn check_local(
         let entity = ("store", name);
         let op = store.op();
         if let Some(op) = &op {
-            let clear = layerfs_store::record::clearing_call(op, name);
+            let clear = layerfs_store::intent::clearing(op, name);
             intent(entity, op, &format!("layerfs {clear}"), findings);
         }
         match store.store_ref() {
@@ -50,10 +50,7 @@ pub(super) fn check_local(
                 ),
                 String::new(),
             ),
-            Ok(StoreRef::Sqlite {
-                machine: Placement::Machine(machine),
-                ..
-            }) => {
+            Ok(StoreRef::Sqlite { machine, .. }) => {
                 if !built_in(machine) && !scanned.machine_names.contains(machine) {
                     findings.error(
                         entity,
@@ -71,14 +68,6 @@ pub(super) fn check_local(
                     leftover(store, machine, findings);
                 }
             }
-            Ok(StoreRef::Sqlite {
-                machine: Placement::Unknown,
-                ..
-            }) => findings.warning(
-                entity,
-                format!("Store {name} came from a 1.1.0 home and its machine is not known"),
-                "layerfs import-env".to_owned(),
-            ),
             Ok(StoreRef::Postgres { .. }) => {}
         }
         let (_, stale) = lease::read_holders(home, name)?;
@@ -123,7 +112,7 @@ fn sandboxes(scanned: &Scanned, findings: &mut Findings) {
     for sandbox in &scanned.sandboxes {
         let name = sandbox.name();
         let entity = ("sandbox", name);
-        let fix = format!("layerfs sandbox remove {name}");
+        let fix = layerfs_sandbox::state::remove_fix(name);
         if let Some(op) = sandbox.op() {
             intent(entity, &op, &fix, findings);
         }

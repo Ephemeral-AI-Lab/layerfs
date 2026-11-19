@@ -13,12 +13,10 @@ use crate::open_args::OpenArgs;
 use crate::project::discovery;
 use crate::record::{required, StoreKind, StoreRecord, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::sdk_values::hex;
 use layerfs_history::{HistoryCatalogConfig, HistoryName};
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::outcome::{failed, refused};
 use layerfs_persistence::{PersistenceConfig, SealedStore, SqlitePersistenceProfile};
 use layerfs_project::store::{CreateRequest, ProjectApi};
-use layerfs_store_service::history::lookup;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -63,23 +61,6 @@ fn load_record(home: &Path, store: &str) -> Result<StoreRecord> {
         .ok_or_else(|| refused("NoSuchStore", format!("no Store record {}", path.display())))
 }
 
-/// Whether `store` has no Store record: a Store made by its project's own Init.
-pub fn legacy(home: &Path, store: &str) -> Result<bool> {
-    Ok(!record_path(home, store)?.exists())
-}
-
-/// The Store a call's project shares with others, when it names one: the
-/// `store` argument, except for the one project of a Store made by its own
-/// Init, which keeps its unshared name.
-pub fn shared_store(open: &OpenArgs) -> Result<Option<String>> {
-    let Some(store) = open.store.as_deref() else {
-        return Ok(None);
-    };
-    let home = discovery::home_of(open.home.as_deref())?;
-    let own = open.project.as_deref() == Some(store) && legacy(&home, store)?;
-    Ok((!own).then(|| store.to_owned()))
-}
-
 fn bytes32(value: &SdkValue, key: &str) -> Result<[u8; 32]> {
     match value.get(key) {
         Some(SdkValue::Bytes(bytes)) => bytes
@@ -90,37 +71,19 @@ fn bytes32(value: &SdkValue, key: &str) -> Result<[u8; 32]> {
     }
 }
 
-/// The identity of the Store a call names: its `store`'s record, the
-/// project entry of a Store made by its own Init, or, with no `store`, the
-/// project's entry.
+/// The identity of the Store a call names: the record a worker was sent
+/// with it, else its `store`'s record in the home. A Store with no record
+/// is `NoSuchStore`.
 pub fn identity(open: &OpenArgs) -> Result<Identity> {
     // a worker is sent its Store's record with each call (2.0, #533 step 7)
     if let Some(record @ SdkValue::Map(_)) = &open.store_record {
         return identity_of(record);
     }
     let home = discovery::home_of(open.home.as_deref())?;
-    let store = open.store.as_deref();
-    if let Some(store) = store {
-        let path = record_path(&home, store)?;
-        if path.exists() {
-            return identity_in(&load_record(&home, store)?);
-        }
-    }
-    // a Store made by its project's own Init: that project's entry
-    let name = store.or(open.project.as_deref());
-    let project =
-        discovery::project(open.home.as_deref(), None, name).map_err(|refusal| match store {
-            Some(store) if refusal.code == "Failed" || refusal.code == "Unauthorized" => refused(
-                "NoSuchStore",
-                format!("no LayerFS Store named {store} in this home"),
-            ),
-            _ => refusal,
-        })?;
-    Ok(Identity {
-        kind: Kind::Sqlite,
-        binding: project.manifest.binding,
-        cursor_key: project.manifest.cursor_key,
-    })
+    let Some(store) = open.store.as_deref() else {
+        return Err(refused("NoSuchStore", "the call names no Store"));
+    };
+    identity_in(&load_record(&home, store)?)
 }
 
 /// The identity a Store record sent with a call holds.
@@ -284,30 +247,4 @@ fn create_empty(
         let _ = std::fs::remove_file(&temporary);
     }
     result
-}
-
-/// The projects of `{ home, store, storePath, postgresql? }`:
-/// `[{ name, stack, headLayer }]` by name, read from the Store itself.
-pub fn list_projects(open: &OpenArgs) -> Outcome {
-    crate::service::with_service(open, |service| {
-        let stacks = service
-            .store
-            .published(layerfs_project::store::projects)
-            .map_err(lookup::published)?;
-        Ok(SdkValue::List(
-            stacks
-                .into_iter()
-                .map(|stack| {
-                    SdkValue::map([
-                        ("name", SdkValue::text(stack.name.as_str())),
-                        ("stack", SdkValue::text(hex(&stack.id.to_bytes()))),
-                        (
-                            "headLayer",
-                            SdkValue::text(hex(stack.head_layer.as_slice())),
-                        ),
-                    ])
-                })
-                .collect(),
-        ))
-    })
 }

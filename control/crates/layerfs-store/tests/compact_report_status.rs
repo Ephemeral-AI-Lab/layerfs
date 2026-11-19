@@ -167,7 +167,7 @@ fn a_capped_reference_list_shows_its_first_ids_and_counts_them_all() {
     let wire = layerfs_store::report::compact_report("s", &capped);
     assert_eq!(
         texts(wire.get("delta_base_references").unwrap()).len(),
-        layerfs_store::report::REFERENCES_SHOWN
+        layerfs_home::helpers::SHOWN
     );
     assert_eq!(
         wire.get_int("delta_base_references_count"),
@@ -201,7 +201,7 @@ fn a_mark_over_the_delta_base_cap_counts_the_cap() {
     );
     assert_eq!(
         texts(wire.get("delta_base_references").unwrap()).len(),
-        layerfs_store::report::REFERENCES_SHOWN
+        layerfs_home::helpers::SHOWN
     );
     let waste = wire.get("kept_waste").unwrap();
     assert_eq!(waste.get_int("delta_bases_bytes"), Some(12));

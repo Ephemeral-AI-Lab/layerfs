@@ -14,7 +14,7 @@
 //! of another build is never replaced by a start over it (ruling R2).
 use super::progress::Phases;
 use super::record::{MachineRecord, START};
-use super::spec::{self as record, home_id, machine_of, refusal, save_running, save_unready};
+use super::spec::{self as record, machine_of, refusal, save_running, save_unready};
 use super::state::{replace_worker, settle};
 use crate::worker::{self, Endpoint};
 use crate::Related;
@@ -170,8 +170,7 @@ fn start(
     related: Related,
     events: &mut Events<'_>,
 ) -> Result<bool> {
-    let id = home_id(home)?;
-    let mut spec = record::spec(home, &id, machine)?;
+    let mut spec = record::spec(home, machine)?;
     // the docker worker's container runs the bundle's image when the
     // machine names none (P5)
     let loads = spec.kind == Platform::Docker && spec.os_image.is_none();

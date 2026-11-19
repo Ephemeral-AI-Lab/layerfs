@@ -154,10 +154,9 @@ impl StepFrame {
             }
             _ => {}
         }
-        let args = fields.into_iter().map(|(n, v)| (n.to_owned(), v));
         SdkValue::map([
             ("op", SdkValue::text(self.step.name())),
-            ("args", SdkValue::Map(args.collect())),
+            ("args", layerfs_home::helpers::map_of(fields)),
         ])
     }
 

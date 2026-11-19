@@ -164,15 +164,6 @@ pub(super) fn field(value: &SdkValue, name: &str) -> SdkValue {
     value.get(name).cloned().unwrap_or_default()
 }
 
-/// `value`'s field spelled `snake` or, as a daemon spells it, `camel`.
-fn either(value: &SdkValue, snake: &str, camel: &str) -> SdkValue {
-    value
-        .get(snake)
-        .or(value.get(camel))
-        .cloned()
-        .unwrap_or_default()
-}
-
 /// One Workspace its daemon listed, as the row names it: its state from
 /// its daemon's `activity`.
 fn workspace(listed: &ListedWorkspace) -> SdkValue {
@@ -197,16 +188,11 @@ fn workspace(listed: &ListedWorkspace) -> SdkValue {
         ("running", SdkValue::List(running.collect())),
         ("path", SdkValue::text(&listed.path)),
         ("commit", field(item, "base")),
-        ("base_layer", either(item, "base_layer", "baseLayer")),
+        // as its daemon spells them
+        ("base_layer", field(item, "baseLayer")),
         ("mounted_at", at(item.get_int("created"))),
-        (
-            "branch_moved",
-            either(item, "head_moved_since_mount", "headMovedSinceMount"),
-        ),
-        (
-            "pending_merge",
-            either(item, "pending_merge", "pendingMerge"),
-        ),
+        ("branch_moved", field(item, "headMovedSinceMount")),
+        ("pending_merge", field(item, "pendingMerge")),
         ("commands", SdkValue::List(shown.collect())),
         ("id", field(item, "workspace")),
     ]))

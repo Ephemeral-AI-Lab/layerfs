@@ -69,11 +69,11 @@ fn a_missing_store_or_project_keeps_the_1_1_0_codes() {
 }
 
 #[test]
-fn a_converted_store_with_no_machine_says_how_to_place_it() {
+fn a_store_record_whose_machine_is_not_text_is_refused() {
     let home = home_with(sqlite_record(SdkValue::Null));
     let (code, message) = read(&home, "shop/api").unwrap_err();
-    assert_eq!(code, "Unavailable");
-    assert!(message.contains("import-env"), "{message}");
+    assert_eq!(code, "InvalidInput");
+    assert!(message.contains("Store record machine"), "{message}");
     std::fs::remove_dir_all(home).unwrap();
 }
 

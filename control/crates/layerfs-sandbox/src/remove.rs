@@ -43,17 +43,10 @@ pub enum Removed {
         /// The handles of the Workspaces the stop ended.
         unmounted: Vec<String>,
     },
-    /// Its runtime was gone already, or it never recorded one; its record
-    /// went.
+    /// Its runtime was gone already, it never recorded one, or it was
+    /// recorded under the retired docker backend; its record went.
     AlreadyGone {
         /// Each sentence about what may be left unrecorded.
-        left: Vec<String>,
-    },
-    /// A Sandbox recorded under the retired docker backend, forgotten (D-8).
-    Forgotten {
-        /// Its container, left for the user to remove.
-        container: String,
-        /// Each sentence about what its machine's worker kept.
         left: Vec<String>,
     },
 }
@@ -89,8 +82,16 @@ fn texts(items: &[SdkValue]) -> impl Iterator<Item = &str> {
 pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> Result<Removed> {
     let home = home.to_path_buf();
     let name = request.name.as_str();
-    if let Some(container) = named(&home, name)?.retired_container(&home)? {
-        return forget(&home, events, name, &container);
+    let found = named(&home, name)?;
+    if let Some(container) = found.retired_container() {
+        let container = format!(
+            "its container of the retired docker backend was not touched: {}",
+            super::reopen::container_fix(container.as_deref())
+        );
+        return forget(&home, events, name, container);
+    }
+    if let Some(unnamed) = foreign(&home, &found)? {
+        return forget(&home, events, name, unnamed);
     }
     let force = request.force;
     // the commands this home records, which a forced remove cancels first
@@ -248,13 +249,49 @@ fn shown(refusal: SdkRefusal, handle_of: &dyn Fn(&str) -> String) -> SdkRefusal 
     }
 }
 
-/// Forgets Sandbox `name`, recorded under the retired docker backend (D-8,
-/// layerfs-project#111), whose container is `container`: its machine's
-/// worker is asked once to forget its own record of it (a worker that
-/// cannot be reached or refuses leaves that record, and the answer says
-/// so), then the home's record goes. The container is left for the user
-/// to remove; the answer names the command.
-fn forget(home: &Path, events: &mut Events<'_>, name: &str, container: &str) -> Result<Removed> {
+/// What Sandbox `record` left when its daemon's recorded name is not the
+/// one this home gives it (`<prefix><name>`, the run folder an earlier
+/// build named `lfs-<home id8>-<name>`): its run folder and daemon process,
+/// which this build neither reopens nor deletes, and the line that removes
+/// them. `None` for a record with the name this home gives, or none.
+fn foreign(home: &Path, record: &SandboxRecord) -> Result<Option<String>> {
+    let Some(daemon) = record.daemon() else {
+        return Ok(None);
+    };
+    let Some(recorded) = daemon.name() else {
+        return Ok(None);
+    };
+    let id = home::opened(home)?.id;
+    let given = format!(
+        "{}{}",
+        layerfs_home::names::provider_prefix(&id),
+        record.name()
+    );
+    if recorded == given {
+        return Ok(None);
+    }
+    let folder = daemon.directory().unwrap_or(recorded);
+    let pid = daemon
+        .pid()
+        .map_or("its record names none".to_owned(), |pid| pid.to_string());
+    let fix = match daemon.pid() {
+        Some(pid) => format!("`kill {pid}; rm -rf {folder}` removes them"),
+        None => format!("`rm -rf {folder}` removes the folder"),
+    };
+    Ok(Some(format!(
+        "its record names {recorded}, which this build does not give it, so its run folder \
+         {folder} and its daemon process ({pid}) were not touched: {fix}"
+    )))
+}
+
+/// Removes the record of Sandbox `name` that this build does not reopen:
+/// one recorded under the retired docker backend (D-8,
+/// layerfs-project#111), or one whose daemon's name this home does not
+/// give ([`foreign`]). Its machine's worker is asked once to drop its own
+/// record of it (a worker that cannot be reached or refuses leaves that
+/// record, and `left` says so), then the home's record goes. Nothing it
+/// ran is touched; `first`, the first of `left`, says what was left.
+fn forget(home: &Path, events: &mut Events<'_>, name: &str, first: String) -> Result<Removed> {
     let record = {
         let _lock = home::lock::take(home)?;
         let _sandbox = record::lock(home, name)?;
@@ -290,15 +327,14 @@ fn forget(home: &Path, events: &mut Events<'_>, name: &str, container: &str) -> 
     }
     remove_folder(&dir)?;
     done(events);
-    let left = left.map(|left| {
+    let kept = left.map(|left| {
         format!(
             "its machine {}'s worker keeps its record: {left}",
             record.machine()
         )
     });
-    Ok(Removed::Forgotten {
-        container: container.to_owned(),
-        left: left.into_iter().collect(),
+    Ok(Removed::AlreadyGone {
+        left: std::iter::once(first).chain(kept).collect(),
     })
 }
 
@@ -323,7 +359,5 @@ fn remove_unstarted(home: &Path, record: &SandboxRecord) -> Result<Removed> {
     if unresolved {
         left.push("its create's outcome was unknown: a Sandbox it may have started on its machine is not recorded here".to_owned());
     }
-    // a layout 2 Sandbox whose runtime the conversion found ended
-    left.extend(record.left().map(str::to_owned));
     Ok(Removed::AlreadyGone { left })
 }

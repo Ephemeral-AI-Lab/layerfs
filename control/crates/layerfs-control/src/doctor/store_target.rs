@@ -15,14 +15,16 @@ use super::report::Node;
 use super::target::{Budget, Checks};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
+use layerfs_home::helpers::map_of;
 use layerfs_home::home::paths;
 use layerfs_home::op::Standing;
 use layerfs_home::outcome::{refused, Outcome as CallOutcome};
 use layerfs_home::state::{Reason, State};
 use layerfs_store::diagnostic::{self, Observation, Options, Outcome};
 use layerfs_store::identity::{self, Identity};
+use layerfs_store::intent::clearing as clearing_call;
 use layerfs_store::place::{self, Executor};
-use layerfs_store::record::{clearing_call, StoreRecord, StoreRef};
+use layerfs_store::record::{StoreRecord, StoreRef};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -52,7 +54,7 @@ const CUT: &str = "schema";
 /// Store blocks its projects too.
 pub(super) fn run(probe: &Probe<'_>, node: &mut Node) {
     let name = probe.thing.name.as_str();
-    let mut checks = Checks::new("store", name);
+    let mut checks = Checks::default();
     let mut state = probe.state.clone();
     if let Some((record, identity)) = resolve(probe.home, name, &mut checks) {
         let machines = crate::store::machine_state;
@@ -300,7 +302,7 @@ fn backups(record: &StoreRecord, now: Option<String>, error: Option<String>, che
 fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
     let mut fields = vec![("found", SdkValue::Bool(path.is_file()))];
     if !path.is_file() {
-        return map(fields);
+        return map_of(fields);
     }
     if let Some(run) = layerfs_store::compact::recorded_run(path) {
         fields.push(("compaction", run));
@@ -322,11 +324,7 @@ fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
         },
         Ok(()) => {}
     }
-    map(fields)
-}
-
-fn map(fields: Vec<(&str, SdkValue)>) -> SdkValue {
-    SdkValue::Map(fields.into_iter().map(|(k, v)| (k.to_owned(), v)).collect())
+    map_of(fields)
 }
 
 /// The shallow cut through machine `machine`'s worker: one diagnostic

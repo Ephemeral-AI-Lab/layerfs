@@ -79,32 +79,30 @@ pub fn postgresql(
     connection_only: bool,
     observer: &mut dyn FnMut(Observation),
 ) -> Result<(), SdkRefusal> {
-    {
-        let selected = crate::postgresql::connect::selection(record)?;
-        let selection = crate::postgresql::open::selection(
-            selected.url()?,
-            &selected.schema()?,
-            &selected.setting()?,
-        );
-        if connection_only {
-            return layerfs_persistence::diagnostic::postgresql_connection(
-                &selection,
-                &identity.binding,
-                options,
-                &mut layerfs_bridge::network::resolve_all_within,
-                observer,
+    let selected = crate::postgresql::connect::selection(record)?;
+    let selection = crate::postgresql::open::selection(
+        selected.url()?,
+        &selected.schema()?,
+        &selected.setting()?,
+    );
+    if connection_only {
+        return layerfs_persistence::diagnostic::postgresql_connection(
+            &selection,
+            &identity.binding,
+            options,
+            &mut layerfs_bridge::network::resolve_all_within,
+            observer,
+        )
+        .map_err(|_| {
+            refused(
+                "Unavailable",
+                "PostgreSQL connection diagnosis did not complete",
             )
-            .map_err(|_| {
-                refused(
-                    "Unavailable",
-                    "PostgreSQL connection diagnosis did not complete",
-                )
-            });
-        }
-        open_admitted(&selection, identity, options, observer)?
-            .diagnose(options, observer)
-            .map_err(|_| refused("Unavailable", "PostgreSQL Store integrity diagnosis did not complete; credentials and driver error text omitted"))
+        });
     }
+    open_admitted(&selection, identity, options, observer)?
+        .diagnose(options, observer)
+        .map_err(|_| refused("Unavailable", "PostgreSQL Store integrity diagnosis did not complete; credentials and driver error text omitted"))
 }
 
 /// The read-only, admitted open of the PostgreSQL Store `selection` names

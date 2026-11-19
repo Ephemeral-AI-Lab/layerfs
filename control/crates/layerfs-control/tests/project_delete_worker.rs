@@ -1117,3 +1117,64 @@ fn a_lost_list_keeps_the_entry_of_a_record_the_store_did_not_mark() {
     assert!(paths::project_dir(&home, "shop", "app").is_dir());
     let _ = std::fs::remove_dir_all(home);
 }
+
+/// A worker's root holds a Store's file and no Store record. A project named
+/// like its Store is added there and deleted there as on `native`: no
+/// `NameTaken`, and no Store record written under the root (CUT, 2.0
+/// behaviour fix: a root with no record was read as a pre-#506 Store made
+/// by its own project's Init).
+#[test]
+fn a_project_named_like_its_store_is_added_and_deleted_in_a_worker_root() {
+    let home = tempdir("own-home");
+    match create(&home, &StoreName::parse("shop").unwrap(), None) {
+        Ok(_) => {}
+        Err(refusal)
+            if refusal.code == "Unsupported"
+                && refusal.message.contains("does not carry SQLite locks") =>
+        {
+            eprintln!("NOT RUN: this filesystem cannot hold a directly opened Store: {refusal:?}");
+            let _ = std::fs::remove_dir_all(&home);
+            return;
+        }
+        Err(refusal) => panic!("store.create: {refusal:?}"),
+    }
+    let record = StoreRecord::read(&home, "shop").unwrap().unwrap();
+    let root = tempdir("own-root");
+    move_store_file(&home, &root, "shop");
+    assert!(!paths::store_record(&root, "shop").exists());
+    let source = plaindir("own-folder");
+    std::fs::write(source.join("a.txt"), b"a\n").unwrap();
+    add_project(&ProjectAdd {
+        home: root.clone(),
+        store: StoreName::parse("shop").unwrap(),
+        name: "shop".to_owned(),
+        source,
+        timeout_ms: Some(60_000),
+        store_record: Some(record.to_record().clone()),
+    })
+    .expect("a project named like its Store is added in a worker root");
+    let mut open = worker_open(&root, &record);
+    open.project = Some("shop".to_owned());
+    let stack = with_service(&open, |service| {
+        Ok(lookup::project(&service.store, "shop").unwrap().id)
+    })
+    .unwrap();
+    let frame = layerfs_store::project::frame::DeleteFrame {
+        store: StoreName::parse("shop").unwrap(),
+        project: Some("shop".to_owned()),
+        stack,
+        deleted_ms: None,
+        op_id: None,
+        pending_retry: None,
+        store_record: Some(record.to_record().clone()),
+    };
+    layerfs_store::project::delete::delete_project(&root, &frame)
+        .expect("the worker deletes the project");
+    assert!(
+        !paths::store_record(&root, "shop").exists(),
+        "no Store record is written under the worker's root"
+    );
+    assert!(project_names(&open).is_empty());
+    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(&root);
+}

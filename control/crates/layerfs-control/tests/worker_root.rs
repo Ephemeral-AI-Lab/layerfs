@@ -27,7 +27,10 @@ fn sandbox_call(endpoint: &Endpoint) -> Result<SdkValue, (String, String)> {
         ("project", SdkValue::text("api")),
         (
             "store_record",
-            SdkValue::map([("name", SdkValue::text("shop"))]),
+            SdkValue::map([
+                ("name", SdkValue::text("shop")),
+                ("kind", SdkValue::text("sqlite")),
+            ]),
         ),
         (
             "project_record",
@@ -84,14 +87,14 @@ fn a_worker_root_is_not_converted_and_uses_the_callers_home_id() {
 
     // a caller of a home sends its id; the Sandbox code gets past it
     let host = scratch.join("home");
-    let id = layerfs_control::migrate::open(&host).unwrap().id;
+    let id = layerfs_home::home::open(&host).unwrap().id;
     let with = sandbox_call(&endpoint);
     if let Err((_, message)) = &with {
         assert!(!message.contains("home id"), "{message}");
     }
     untouched(&root);
     // opening the root answers the id of the home this thread works for
-    assert_eq!(layerfs_control::migrate::open(&root).unwrap().id, id);
+    assert_eq!(layerfs_home::home::open(&root).unwrap().id, id);
     untouched(&root);
     std::fs::remove_dir_all(scratch).unwrap();
 }

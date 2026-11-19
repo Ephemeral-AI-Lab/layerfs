@@ -11,7 +11,7 @@ use layerfs_home::outcome::{failed, refused, with_fix, with_next};
 use layerfs_home::state::State;
 use layerfs_machine::record::MachineRecord;
 use layerfs_store::lease;
-use layerfs_store::record::{Placement, StoreRef};
+use layerfs_store::record::StoreRef;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -56,7 +56,7 @@ pub fn machine_state_with(name: &str, record: Option<&MachineRecord>, on: usize)
         return layerfs_machine::state::unrecorded(name);
     };
     let platform = record.platform_name().unwrap_or("");
-    let removed = layerfs_sandbox_backend::platform_policy::disabled_reason(platform).is_some();
+    let removed = layerfs_sandbox_backend::platform_policy::removed_reason(platform).is_some();
     record.status(removed, on)
 }
 
@@ -66,8 +66,7 @@ pub fn stores_on(home: &Path, machine: &str) -> Result<Vec<String>> {
     let mut on = Vec::new();
     for store in stores(home)? {
         if let StoreRef::Sqlite {
-            machine: Placement::Machine(placed),
-            ..
+            machine: placed, ..
         } = store.store_ref()?
         {
             if placed == machine {
@@ -203,7 +202,7 @@ fn listed(names: &[String]) -> SdkValue {
 fn then(sandboxes: &[String], last: &str) -> String {
     let removes = sandboxes
         .iter()
-        .map(|s| format!("layerfs sandbox remove {s}"));
+        .map(|s| layerfs_sandbox::state::remove_fix(s));
     let steps: Vec<String> = removes
         .chain((!last.is_empty()).then(|| last.to_owned()))
         .collect();

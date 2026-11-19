@@ -1,5 +1,4 @@
-//! `store.move`: move a sqlite Store between this computer and a machine
-//! (it replaces `store.push` and `store.pull`).
+//! `store.move`: move a sqlite Store between this computer and a machine.
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call, PROGRESS};
 use crate::calls::{Context, Form, Policy};

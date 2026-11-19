@@ -14,8 +14,8 @@ There are 83 calls in ten families: `home` 5, `project` 8, `branch` 6,
 and `backup` 6. `layerfs help` lists them, `layerfs help <family> [<call>]`
 prints one family or one call, and `layerfs help --json` prints the whole
 table (each call's arguments and the form of its answer). Outside the table
-the command has `import-env`, `worker` (a machine's worker process),
-`help` and `--version`.
+the command has `worker` (a machine's worker process), `help` and
+`--version`.
 
 ## How a call is written
 
@@ -178,7 +178,7 @@ $ echo $?
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `init` | — | — | creates this home, converts an older layout to the current one, and leaves a current home as it is |
+| `init` | — | — | creates this home; a current home is left as it is |
 | `get` | — | `--with platforms,tree` | the home's state and build; with `--with`, the platforms this computer supports or the tree of everything in the home |
 | `log` | — | `call`, `project`, `client`, `tag`, `outcome`, `since`, `limit` (200), `cursor` | the calls made against this home, newest first |
 | `clear_log` | — | — | clears this home's call log |
@@ -189,13 +189,16 @@ $ echo $?
   `log` and `clear_log` write no line to the call log, and all five are
   `admin` in the MCP server.
 - **`init`**, short: `{ home }`, with `unchanged: true` when the home was
-  already current or `converted: true` when it was an older layout. Long:
-  `home, unchanged, converted, outcome, layout, version`: `outcome` is
-  `created`, `converted` or `unchanged`, and `version` is this build's.
+  already current. Long: `home, unchanged, outcome, layout, version`:
+  `outcome` is `created` or `unchanged`, and `version` is this build's.
+  An older LayerFS's home (layout 2, or 1.1.0's records) is never
+  converted: it is refused `Unsupported` with the fix
+  `mv <home> <home>.old && layerfs home init`, and nothing in it is written.
 - **`get`**, short: `{ home, state, version }`, with `generation` when the
   home is ready, and `reason` and `fix` when it is broken (`missing`: no
-  home there; `outdated`: an older layout; both fixed by
-  `layerfs home init`; `failed`: `layerfs.json` cannot be read, or is of a
+  home there, fixed by `layerfs home init`; `outdated`: an older
+  LayerFS's home, fixed by `mv <home> <home>.old && layerfs home init`;
+  `failed`: `layerfs.json` cannot be read, or is of a
   newer layout; the long form's `message` says which). Long:
   `home, state, version, generation, reason, fix, message, layout, mode,
   bundle, daemon, cache`. `mode` is the folder's permission bits as text
@@ -856,9 +859,10 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   A bundle without the archive is `Unsupported`, naming it (#535 P5).
   A Sandbox recorded under the retired docker backend is `broken`
   `unsupported`; every call on it but `get` and `remove` is refused
-  `Unsupported`, asking to recreate it; `sandbox remove` forgets it
-  (`outcome: "forgotten"`) and answers its `container` with `fix: docker rm
-  -f <container>`.
+  `Unsupported`, asking to recreate it; `sandbox remove` removes its
+  records (`outcome: "already_gone"`), and `left` says its container was
+  not touched: `docker rm -f <container>` when its record keeps the name,
+  else that the record does not name it.
 - **`remove`** records its `op` (`remove`) before it stops the Sandbox
   and removes the record at the end; progress is its phases `cancel` (with
   `force`, one event per command this home records), `stop` and `delete`.
@@ -869,8 +873,8 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   then the Sandbox is stopped anyway: `unmounted` lists the Workspaces it
   ended, whose uncommitted changes end with it. `outcome` (long form) is
   `removed`, `already_gone` (its runtime was gone, or it never recorded
-  one; `left` says what may remain) or `forgotten` (the retired docker
-  backend). A lost answer keeps the record with the `op` uncertain
+  one, or it was a Sandbox of the retired docker backend; `left` says what
+  may remain). A lost answer keeps the record with the `op` uncertain
   (`broken` `unresolved`) until another `remove`; any other refusal leaves
   the Sandbox as it was.
 - **`files`**, with no path, answers the Sandbox's roots, each with a
@@ -1085,7 +1089,7 @@ positional `machine`, except `create`, which takes `name` and `platform`.
 | `start` | `machine` | `on_progress` | starts a stopped machine and its worker; a running one answers at once |
 | `stop` | `machine` | `force`, `on_progress` | stops a machine's worker and VM; its disks stay |
 | `create` | `name`, `platform` | `cpus` (2), `memory` (4G), `disk` (20G), `image`, `os_image`, `on_progress` | creates a VM machine (`lima`, `apple-container`) and starts it |
-| `remove` | `machine` | `on_progress` | deletes a VM machine and its disk; one of a removed platform is only forgotten |
+| `remove` | `machine` | `on_progress` | deletes a VM machine and its disk |
 | `update` | `machine` | `cpus`, `memory`, `image`, `docker`, `wsl`, `daemon` | sets a machine's image, or a built-in machine's Docker socket, WSL distribution and daemon; no `disk` |
 | `doctor` | `machine` | `on_progress` | checks a machine, then each Store and Sandbox on it ([the doctors](#the-doctors)) |
 
@@ -1147,7 +1151,8 @@ positional `machine`, except `create`, which takes `name` and `platform`.
   machine's own PostgreSQL addresses in Store records and deletes the
   home's image copy locks of it (`run/image-lock/<machine>/`); a machine of a
   removed platform (`firecracker`, `ssh`, `microsandbox`), shown as
-  `broken`/`unsupported`, is only forgotten: `{"ok":true,"forgotten":true}`.
+  `broken`/`unsupported`, has only its record removed: `{"ok":true}`, the
+  long form's `message` saying nothing on its host was touched.
 - **`images`** rows are `{image}` with `refs, size, default, state, op,
   reason, fix` when they apply, long adding `message, staged_bytes,
   architecture, source, sandboxes, sandboxes_count, last_used_at`
@@ -1224,7 +1229,7 @@ $ layerfs machine files native /tmp/home1/store/shop --depth 1
 $ layerfs machine get old
 {"platform":"ssh","state":"broken","reason":"unsupported","fix":"layerfs machine remove old"}
 $ layerfs machine remove old --detail
-{"ok":true,"forgotten":true,"outcome":"forgotten","machine":"old","message":"forgot the record only: platform `ssh` was removed in LayerFS 2.0; nothing on its host was touched"}
+{"ok":true,"outcome":"removed","machine":"old","message":"only its record was removed (platform `ssh` was removed in LayerFS 2.0); nothing on its host was touched"}
 ```
 
 See [machines](machines-and-stores.md#machines) for kinds, defaults and
@@ -1668,7 +1673,7 @@ $ layerfs sandbox remove tests
 | --- | --- |
 | `NotFound` | no machine, bucket, Store, project, Branch, Commit, path, Sandbox or Workspace of that name; a path a project hid |
 | `Exists` | the name is taken, the same database or bucket is already connected (under any name), or a bucket object was exported from another home |
-| `InUse` | held: running Sandboxes, mounted Workspaces, processes with the Store open, Stores on a machine; a layout 2 home with any of these, or with a move, removal or create still running, which is not converted yet ([the home](home.md#a-layout-2-home)) |
+| `InUse` | held: running Sandboxes, mounted Workspaces, processes with the Store open, Stores on a machine |
 | `Busy` | an operation runs on the entity: a Store being moved, compacted, backed up, restored or removed, a machine being made, started, stopped or removed, a Sandbox being created or removed, a command running where a call needs none; the message names it (`op` id and phase) and its process (#536 §7.1), and the refusal carries `op` (`{name, phase, started_at}`) where the row says so; the long form's `detail` is `{entity: {kind, name}, phase, op}`. Also: another project is being added to the same Store; a Store's writable open met SQLite's busy lock before any effect (the open wrote nothing) |
 | `Unresolved` | an earlier operation on the entity ended with its outcome not known; its process is gone and its `op` stays. The message names the call that shows it (`store get`, `machine get`, `sandbox get`) and the one that clears it (`store remove`, `machine remove`, `sandbox remove`; a compaction's is `store compact`, with that `fix`); `detail` as for `Busy` |
 | `Conflict` | a merge or Commit conflict, or a head that moved; for `backup.restore`, the Store changed since its last backup or restore |

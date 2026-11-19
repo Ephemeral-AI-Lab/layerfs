@@ -81,21 +81,6 @@ pub struct TarReport {
 }
 
 impl TarReport {
-    /// Number of dropped FIFO entries.
-    pub fn fifo_count(&self) -> usize {
-        self.fifos.len()
-    }
-
-    /// Number of dropped device entries.
-    pub fn device_count(&self) -> usize {
-        self.devices.len()
-    }
-
-    /// Number of dropped init/runtime entries.
-    pub fn init_count(&self) -> usize {
-        self.init.len()
-    }
-
     /// `machine.load`'s `dropped` (`fifos`, `devices` and `init` paths left
     /// out) and `sparse` (each expanded file and the bytes in all) fields.
     pub fn to_value(&self) -> SdkValue {
@@ -158,12 +143,6 @@ impl<R: Read> Filtered<R> {
             report: TarReport::default(),
             done: false,
         }
-    }
-
-    /// Sets the maximum expanded sparse byte budget (per entry and cumulative).
-    pub fn with_sparse_max(mut self, max: u64) -> Self {
-        self.sparse_max = max;
-        self
     }
 
     /// Report of entries dropped or sparse files expanded so far.

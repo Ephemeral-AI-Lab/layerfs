@@ -11,11 +11,6 @@ pub(super) struct Remote {
 }
 
 impl Effects for Remote {
-    fn prepare(&mut self) -> Result<()> {
-        // the worker saves its own legacy identity before its marker
-        Ok(())
-    }
-
     fn admit(&mut self, stack: LayerStackId, op: [u8; 16], project: &str) -> Result<Admission> {
         let frame = DeleteAdmitFrame {
             store: StoreName::parse(&self.store)?,
@@ -160,34 +155,6 @@ pub(super) fn admit_reply(answer: &SdkValue, stack: LayerStackId) -> Result<()> 
         return Err(refused("Failed", "the worker admitted another LayerStack"));
     }
     Ok(())
-}
-
-/// The `OpenArgs` a local Store call opens with. `record` is absent for a
-/// Store made by its own project Init, whose identity is the project entry.
-pub(super) fn open_args(
-    home: &Path,
-    store: &str,
-    project: &str,
-    record: Option<&StoreRecord>,
-) -> Result<OpenArgs> {
-    let (store_path, postgresql) = match record {
-        Some(record) => match record.store_ref()? {
-            StoreRef::Postgres { .. } => (
-                record.postgresql_key(home, store),
-                Some(crate::postgresql::connect::selection(record)?),
-            ),
-            StoreRef::Sqlite { .. } => (paths::store_file(home, store), None),
-        },
-        None => (paths::store_file(home, store), None),
-    };
-    Ok(OpenArgs {
-        home: Some(home.to_path_buf()),
-        store: Some(store.to_owned()),
-        project: Some(project.to_owned()),
-        store_path: Some(store_path.display().to_string()),
-        store_record: record.map(|record| record.to_record().clone()),
-        postgresql,
-    })
 }
 
 /// Names the project in a `project.delete` Store-listing refusal whose detail

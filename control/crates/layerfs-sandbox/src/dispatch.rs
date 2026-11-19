@@ -119,11 +119,7 @@ fn daemon_backend(host: &Host, call: &Call) -> Outcome {
         ),
         other => other,
     };
-    let answer = crate::daemon::operator::call(
-        &mut *crate::daemon::trace::control(&state.controls)?,
-        op,
-        args,
-    );
+    let answer = crate::daemon::operator::call(&mut *state.controls.lend()?, op, args);
     answer.map_err(crate::daemon::values::sdk_error)
 }
 

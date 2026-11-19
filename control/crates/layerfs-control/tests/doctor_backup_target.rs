@@ -10,7 +10,6 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{self, paths, write_entity};
 use peer::{Mode, Server};
 use std::collections::BTreeMap;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -27,8 +26,7 @@ impl Fixture {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         home::ensure(&home).unwrap();
-        layerfs_store::backup::secret::write(&home, "bucket/production", "mock-secret-key")
-            .unwrap();
+        layerfs_store::backup::secret::write(&home, "production", "mock-secret-key").unwrap();
         let server = Server::new(mode);
         write_entity(
             &paths::bucket_record(&home, "production"),
@@ -50,7 +48,7 @@ impl Fixture {
     }
     fn report_with_budget(&self, write: bool, timeout: Duration) -> SdkValue {
         let before = contents(&self.home);
-        let mut checks = target::Checks::new("bucket", "production");
+        let mut checks = target::Checks::default();
         backup_target::diagnose(
             &self.home,
             "production",
@@ -59,7 +57,7 @@ impl Fixture {
             &mut checks,
         );
         assert_eq!(before, contents(&self.home));
-        let report = checks.to_sdk();
+        let report = checks.to_wire();
         let text = format!("{report:?}");
         assert!(!text.contains("mock-access-key") && !text.contains("mock-secret-key"));
         report
@@ -98,6 +96,16 @@ fn outcome(report: &SdkValue, id: &str, value: &str) {
         "{report:?}"
     );
 }
+/// A check kept from running is not in the report.
+fn absent(report: &SdkValue, id: &str) {
+    let Some(SdkValue::List(checks)) = report.get("checks") else {
+        panic!("missing checks")
+    };
+    assert!(
+        checks.iter().all(|row| row.get_text("id") != Some(id)),
+        "{report:?}"
+    );
+}
 #[test]
 fn default_is_one_read_only_prefix_page() {
     let f = Fixture::new(Mode::default());
@@ -127,7 +135,7 @@ fn unversioned_and_capability_denied_destinations_receive_no_put() {
         let f = Fixture::new(mode);
         let report = f.report(true);
         outcome(&report, "bucket.write_capability", "unknown");
-        outcome(&report, "bucket.put", "blocked");
+        absent(&report, "bucket.put");
         assert_eq!(f.server.state.lock().unwrap().requests.len(), 2);
         assert!(f
             .server
@@ -161,7 +169,7 @@ fn list_permission_does_not_imply_write_permission() {
     let report = f.report(true);
     outcome(&report, "bucket.list", "pass");
     outcome(&report, "bucket.put", "fail");
-    outcome(&report, "bucket.delete", "skipped");
+    absent(&report, "bucket.delete");
     assert_eq!(f.server.state.lock().unwrap().requests.len(), 3);
 }
 #[test]
@@ -220,24 +228,17 @@ fn read_corruption_does_not_hide_failed_cleanup() {
 #[test]
 fn a_key_the_home_does_not_keep_blocks_all_network() {
     let f = Fixture::new(Mode::default());
-    layerfs_store::backup::secret::remove(&f.home, "bucket/production").unwrap();
+    layerfs_store::backup::secret::remove(&f.home, "production").unwrap();
     let report = f.report(true);
     outcome(&report, "bucket.configuration", "pass");
     outcome(&report, "bucket.credentials", "fail");
-    outcome(&report, "bucket.list", "blocked");
+    absent(&report, "bucket.list");
     assert!(f.server.state.lock().unwrap().requests.is_empty());
 }
 
 #[test]
-fn a_record_from_before_2_0_still_reads_its_key_reference() {
+fn a_record_from_before_2_0_with_no_access_key_fails_credentials_and_sends_nothing() {
     let f = Fixture::new(Mode::default());
-    let credentials = f.home.join("credentials");
-    std::fs::write(
-        &credentials,
-        "access_key=mock-access-key\nsecret_key=mock-secret-key\n",
-    )
-    .unwrap();
-    std::fs::set_permissions(&credentials, std::fs::Permissions::from_mode(0o600)).unwrap();
     write_entity(
         &paths::bucket_record(&f.home, "production"),
         &SdkValue::map([
@@ -247,16 +248,14 @@ fn a_record_from_before_2_0_still_reads_its_key_reference() {
             ("bucket", SdkValue::text("bucket")),
             ("prefix", SdkValue::text("saved/prefix")),
             ("region", SdkValue::text("us-east-1")),
-            (
-                "key",
-                SdkValue::text(format!("file:{}", credentials.display())),
-            ),
+            ("key", SdkValue::text("file:/no/such/credentials")),
         ]),
     )
     .unwrap();
     let report = f.report(false);
-    outcome(&report, "bucket.credentials", "pass");
-    outcome(&report, "bucket.list", "pass");
+    outcome(&report, "bucket.credentials", "fail");
+    absent(&report, "bucket.list");
+    assert!(f.server.state.lock().unwrap().requests.is_empty());
 }
 
 #[test]

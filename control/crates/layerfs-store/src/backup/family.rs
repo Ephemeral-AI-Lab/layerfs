@@ -9,13 +9,13 @@
 //! This file connects and disconnects buckets and keeps the links; `list`,
 //! `create` and `restore` are in their own files.
 pub use super::create::{create, BackupCreate};
-use super::record::{secret_name, BucketConnect, BucketRecord, StoreLink};
+use super::record::{BucketConnect, BucketRecord, StoreLink};
 pub use super::restore::{restore, BackupRestore};
 use super::secret;
 use crate::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup as remote;
-use layerfs_bucket::bucket::{pieces, RemoteError};
+use layerfs_bucket::bucket::RemoteError;
 use layerfs_home::home::{self, paths};
 use layerfs_home::names::BucketName;
 use layerfs_home::outcome::{failed, refused, Outcome};
@@ -72,9 +72,9 @@ pub fn connect(home: &Path, request: &BucketConnect) -> Outcome {
     })?;
     let _lock = home::lock::take(home)?;
     taken(home, name)?;
-    secret::write(home, &secret_name(name), &request.secret_key)?;
+    secret::write(home, name, &request.secret_key)?;
     if let Err(refusal) = record.write(home) {
-        let _ = secret::remove(home, &secret_name(name));
+        let _ = secret::remove(home, name);
         return Err(refusal);
     }
     Ok(record.answer("connected"))
@@ -104,10 +104,9 @@ pub fn disconnect(home: &Path, name: &BucketName) -> Outcome {
             .expect("in a folder"),
     )
     .map_err(failed)?;
-    secret::remove(home, &secret_name(name))?;
+    secret::remove(home, name)?;
     layerfs_home::home::generation::moved(home);
-    let names = unlinked.iter().map(SdkValue::text).collect();
-    let (unlinked, count) = layerfs_home::helpers::shown(names, 0, false);
+    let (unlinked, count) = layerfs_home::helpers::shown_names(&unlinked);
     Ok(SdkValue::map([
         ("ok", SdkValue::Bool(true)),
         ("unlinked", unlinked),
@@ -117,16 +116,8 @@ pub fn disconnect(home: &Path, name: &BucketName) -> Outcome {
     ]))
 }
 
-pub fn hex(bytes: &[u8; 32]) -> SdkValue {
-    SdkValue::text(pieces::hex(bytes))
-}
-
-/// The Store's link to `bucket` after a transfer.
-pub fn save_link(home: &Path, store: &str, bucket: &str, link: StoreLink) -> Result<()> {
-    write_link(home, store, bucket, link)
-}
-
-/// [`save_link`], under the Store's lock (the caller does not hold it).
+/// The Store's link to `bucket` after a transfer, under the Store's lock
+/// (the caller does not hold it).
 pub fn write_link(home: &Path, store: &str, bucket: &str, link: StoreLink) -> Result<()> {
     let _store = crate::record::lock(home, store)?;
     let record = StoreRecord::read(home, store)?

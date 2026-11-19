@@ -9,7 +9,7 @@ The call table and the one dispatcher every front end goes through: what a call 
 | Layer | [API](../README.md) |
 | Crates | `layerfs-api` |
 | Source | [`layerfs-api/src/calls`](../../../../api/crates/layerfs-api/src/calls): `table.rs`, `form.rs`, `shape.rs`, `refusal.rs`, `check.rs`, `scope.rs`, `keys.rs`, `dispatch.rs`, `render.rs`, `text.rs`, `platform_policy.rs`, `context.rs`; [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) |
-| Uses | [Control](../../control/README.md) (home, machines, Stores, Sandboxes, backups), [Home](../../control/home/README.md) (migration, call log), [Store calls](../../engine/store-calls/README.md) |
+| Uses | [Control](../../control/README.md) (home, machines, Stores, Sandboxes, backups), [Home](../../control/home/README.md) (opening the home, call log), [Store calls](../../engine/store-calls/README.md) |
 | Used by | [Front ends](../front-ends/README.md), [SDK](../sdk/README.md) |
 | Flows | [A call, end to end](../../flows/call.md) |
 
@@ -25,7 +25,7 @@ The call table and the one dispatcher every front end goes through: what a call 
      v                   v
  call_scoped(home, scope, name, args, events, client)    dispatch.rs
    take log_tag, detail, with --> find --> check --> render argv --> scope.apply
-   --> home --> platform_policy --> migrate::open --> ensure_built_ins
+   --> home --> platform_policy --> home::open --> ensure_built_ins
        (skipped for a call whose entry has opens false: home.init, home.get
        and the six doctors)
    --> scope.owns --> Call.run(Context{home, asked, events}) --> keys::snake

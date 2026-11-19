@@ -1,5 +1,4 @@
-//! `home get --with platforms` (#535 §9a, D10, P2; `machine.platforms`
-//! before the call surface 2.0): the support table for this host
+//! `home get --with platforms` (#535 §9a, D10, P2): the support table for this host
 //! and build, the rows of `control/SUPPORT.json`, each with its live probe
 //! (`ready`, `missing`, `version`), the bundle a worker platform needs
 //! (`bundle:<dir>`), each option's default, and the docker row's socket and
@@ -15,12 +14,13 @@ use layerfs_platform::{
 };
 use std::path::{Path, PathBuf};
 
-/// The platforms of this host: `{ host, platforms: [row] }`.
+/// The platforms of this host: `{ host, items: [row] }`, the keys of
+/// `home.get`'s `platforms` section.
 pub fn platforms(home: &Path) -> Outcome {
     let host = HostOs::current();
     let env = DockerEnv::current();
-    // a docker record this build cannot read (a home to convert, a damaged
-    // record that `machine start` would refuse) leaves the host's choice
+    // a docker record this build cannot read (a damaged record that
+    // `machine start` would refuse) leaves the host's choice
     let (socket, source) = record::docker_socket(home).unwrap_or_else(|_| {
         let chosen = adapters::docker_automatic(&env);
         let path = chosen
@@ -55,7 +55,7 @@ pub fn platforms(home: &Path) -> Outcome {
         .collect();
     Ok(SdkValue::map([
         ("host", SdkValue::text(host.as_str())),
-        ("platforms", SdkValue::List(rows)),
+        ("items", SdkValue::List(rows)),
     ]))
 }
 
@@ -135,7 +135,7 @@ fn row_value(row: &SupportRow, probe: Probe) -> SdkValue {
         .iter()
         .map(|option| {
             SdkValue::map([
-                ("name", SdkValue::text(option.name)),
+                ("option", SdkValue::text(option.name)),
                 ("kind", SdkValue::text(option.kind.as_str())),
                 ("default", default_of(option.name)),
             ])
@@ -145,7 +145,7 @@ fn row_value(row: &SupportRow, probe: Probe) -> SdkValue {
         ("platform", SdkValue::text(row.platform.name())),
         ("how", SdkValue::text(row.how.as_str())),
         ("backend", optional(row.backend.map(|b| b.stored_name()))),
-        ("kernel", optional(row.kernel.map(|k| k.as_str()))),
+        ("route", optional(row.kernel.map(|k| k.as_str()))),
         ("sqlite", optional(row.sqlite.map(|s| s.as_str()))),
         (
             "postgresql",

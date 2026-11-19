@@ -1,16 +1,16 @@
 //! A bucket's record, `backup/<bucket>/record.json` (#536 §9.2): an r2 or
 //! S3-endpoint bucket and prefix with its key's id, made from the URL
 //! `backup.connect` is given, and the driver it names. The key's secret is
-//! in the home's secret folder ([`super::secret`]), never in the record. A
-//! record written before 2.0 (or converted from a 1.1.0 home) names a key
-//! reference (`key`, `env:` or `file:`) instead, which is still read. Also
-//! each Store's link to a bucket, which the Store's record holds.
+//! in the home's secret folder ([`super::secret`]), never in the record.
+//! Also each Store's link to a bucket, which the Store's record holds.
 use super::secret;
+use crate::get::hex_text;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::sdk_values::hex;
 use layerfs_bucket::backup::Provider;
 use layerfs_bucket::bucket::minio::{MinioSettings, DEFAULT_PART_SIZE};
 use layerfs_bucket::bucket::r2::R2Settings;
-use layerfs_bucket::bucket::{pieces, CredentialRef, Credentials, Driver, RemoteError};
+use layerfs_bucket::bucket::{pieces, Credentials, Driver, RemoteError};
 use layerfs_home::home::{self, paths, read_record, write_entity};
 use layerfs_home::names::BucketName;
 use layerfs_home::outcome::{refused, View};
@@ -33,11 +33,6 @@ pub fn remote_error(error: RemoteError) -> SdkRefusal {
         RemoteError::Invalid(why) => refused("InvalidInput", why),
         other => refused("Failed", other.to_string()),
     }
-}
-
-/// The name of bucket `bucket`'s secret in the home's secret folder.
-pub fn secret_name(bucket: &str) -> String {
-    format!("bucket/{bucket}")
 }
 
 impl BucketRecord {
@@ -122,16 +117,27 @@ impl BucketRecord {
     }
 
     /// The bucket's key: its id from the record and its secret from the
-    /// home's secret folder, or the key reference an older record names.
-    pub fn credentials(&self, home: &Path) -> Result<CredentialRef> {
-        match self.fields.get_text("access_key") {
-            Some(access_key) => Ok(CredentialRef::Given(Credentials {
-                access_key: access_key.to_owned(),
-                secret_key: secret::read(home, &secret_name(&self.name))?,
-            })),
-            None => CredentialRef::parse(self.fields.get_text("key").unwrap_or(""))
-                .map_err(remote_error),
-        }
+    /// home's secret folder. A record with no key id (written before 2.0)
+    /// is refused with the fix that connects it again.
+    pub fn credentials(&self, home: &Path) -> Result<Credentials> {
+        let Some(access_key) = self.fields.get_text("access_key") else {
+            let name = &self.name;
+            let refusal = refused(
+                "Failed",
+                format!("bucket {name}'s record names no access key; disconnect it and connect it again"),
+            );
+            return Err(layerfs_home::outcome::with_fix(
+                refusal,
+                format!(
+                    "layerfs backup disconnect {name} && layerfs backup connect {name} {} --access-key <key> --key-stdin",
+                    layerfs_home::outcome::shell_word(&self.url())
+                ),
+            ));
+        };
+        Ok(Credentials {
+            access_key: access_key.to_owned(),
+            secret_key: secret::read(home, &self.name)?,
+        })
     }
 
     /// The driver of this bucket. Reads its key now; sends nothing.
@@ -140,7 +146,7 @@ impl BucketRecord {
     }
 
     /// The driver of this bucket with key `credentials`; sends nothing.
-    pub fn driver_with(&self, credentials: CredentialRef) -> Result<Box<dyn Driver>> {
+    pub fn driver_with(&self, credentials: Credentials) -> Result<Box<dyn Driver>> {
         provider(&self.fields, credentials)?
             .driver()
             .map_err(remote_error)
@@ -150,7 +156,7 @@ impl BucketRecord {
     /// `credentials`; sends nothing.
     pub fn diagnostic_client(
         &self,
-        credentials: CredentialRef,
+        credentials: Credentials,
     ) -> Result<layerfs_bucket::bucket::s3_api::S3Client> {
         match provider(&self.fields, credentials)? {
             Provider::Minio(settings) => {
@@ -159,10 +165,6 @@ impl BucketRecord {
             Provider::R2(settings) => {
                 layerfs_bucket::bucket::r2::connect(&settings).map_err(remote_error)
             }
-            Provider::LocalFolder(_) => Err(refused(
-                "Unsupported",
-                "a bucket's checks need an S3-compatible provider",
-            )),
         }
     }
 
@@ -190,21 +192,17 @@ pub struct BucketConnect {
 
 impl BucketConnect {
     /// The key it names.
-    pub fn credentials(&self) -> CredentialRef {
-        CredentialRef::Given(Credentials {
+    pub fn credentials(&self) -> Credentials {
+        Credentials {
             access_key: self.access_key.clone(),
             secret_key: self.secret_key.clone(),
-        })
+        }
     }
 }
 
-fn provider(record: &SdkValue, credentials: CredentialRef) -> Result<Provider> {
+fn provider(record: &SdkValue, credentials: Credentials) -> Result<Provider> {
     let text = |name: &str| record.get_text(name).unwrap_or("").to_owned();
-    // a record from before 2.0 may name its own piece size
-    let part_size = record
-        .get_int("part_size")
-        .map(|n| n as u64)
-        .unwrap_or(DEFAULT_PART_SIZE);
+    let part_size = DEFAULT_PART_SIZE;
     let provider = match record.get_text("provider") {
         Some("minio") => Provider::Minio(MinioSettings {
             endpoint: text("endpoint"),
@@ -300,17 +298,19 @@ impl StoreLink {
         sha256: &[u8; 32],
         heads: Option<&[u8; 32]>,
     ) -> Self {
-        let hex = |bytes: &[u8; 32]| SdkValue::text(pieces::hex(bytes));
         Self::from_record(SdkValue::map([
             ("file", SdkValue::text(file)),
-            ("heads", heads.map(hex).unwrap_or_default()),
+            (
+                "heads",
+                heads.map(|heads| hex_text(heads)).unwrap_or_default(),
+            ),
             (
                 "last",
                 SdkValue::map([
                     ("op", SdkValue::text(op)),
                     ("at", SdkValue::Int(home::now_ms())),
                     ("bytes", SdkValue::Int(bytes as i64)),
-                    ("sha256", hex(sha256)),
+                    ("sha256", hex_text(sha256)),
                 ]),
             ),
         ]))
@@ -325,7 +325,7 @@ impl StoreLink {
     pub fn heads(&self) -> Option<String> {
         match self.fields.get("heads") {
             Some(SdkValue::Text(text)) => Some(text.clone()),
-            Some(SdkValue::Bytes(bytes)) => Some(pieces::hex(bytes)),
+            Some(SdkValue::Bytes(bytes)) => Some(hex(bytes)),
             _ => None,
         }
     }

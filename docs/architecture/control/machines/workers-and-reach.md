@@ -41,7 +41,7 @@ request carries what its operation needs. Which calls take a worker is the
 | Step | Failure | Source |
 | --- | --- | --- |
 | 2 | the guest keeps user namespaces: `Unsupported` | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
-| 2 | an unchanged Sandbox image is never recopied; an interrupted copy is never sealed | [`setup/artifacts.rs`](../../../../control/crates/layerfs-platform/src/setup/artifacts.rs) |
+| 2 | a bundle whose `bundle.json` has no file identities is refused `InvalidInput`, "rebuild it with `python3 tools/linux_bundle.py`"; an unchanged Sandbox image is never recopied; an interrupted copy is never sealed | [`setup/artifacts.rs`](../../../../control/crates/layerfs-platform/src/setup/artifacts.rs) |
 | 4 | a worker that ends meanwhile: `Failed` with the last 8 lines of `worker.log`. On `docker` the worker's end stops its container, which `docker exec` cannot enter: the log is copied out of the stopped container (`docker cp`, which reads its data volume) into `machine/docker/worker.log.ended`, read and removed | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs), [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
 
 The `docker` machine does steps 2 and 3 in its own container start (bundle
@@ -61,8 +61,6 @@ output to `/layerfs/data/log/worker.log` (`$LAYERFS_WORKER_LOG`; folder
 ```text
  launcher (VM launch script, docker's entry), once no earlier worker runs
    mkdir -p /layerfs/data/log
-   /layerfs/state/worker.log of an older build, when there is no log yet
-       -> moved to /layerfs/data/log/worker.log
    worker.log larger than 16 MiB -> mv -f to worker.1.log (replaces it)
    append "layerfs worker: launched <UTC time>"
    start the worker with  >> /layerfs/data/log/worker.log 2>&1

@@ -37,15 +37,32 @@ fn typed_fields_read_as_the_untyped_record_read_them() {
     let daemon = record.daemon().unwrap();
     assert_eq!(daemon.name(), Some("lfs-x-b"));
     assert!(daemon.retired());
+    // a Sandbox of the retired docker backend names the container its
+    // record keeps, and none when it keeps none: no name is computed
+    assert_eq!(record.retired_container(), None);
+    let retired = |daemon: &str| {
+        let text = format!(r#"{{"name":"b","backend":"docker","daemon":{daemon}}}"#);
+        SandboxRecord::from_record("b", value(&text)).retired_container()
+    };
     assert_eq!(
-        daemon.labels().unwrap(),
-        vec![("k".to_owned(), "v".to_owned())]
+        retired(r#"{"name":"lfs-x-b"}"#),
+        Some(Some("lfs-x-b".to_owned()))
     );
-    // an item without its key is refused as before
+    assert_eq!(retired("{}"), Some(None));
+    // labels of another shape than `[{ key, value }]` are refused
+    let refusal = daemon.labels().unwrap_err();
+    assert_eq!(refusal.code, "InvalidInput");
+    assert_eq!(refusal.message, "local Sandbox record labels");
+    // an item without its key is refused
     let broken = DaemonRecord::from_record(&value(r#"{"labels":[{"value":"v"}]}"#));
     let refusal = broken.labels().unwrap_err();
     assert_eq!(refusal.code, "InvalidInput");
-    assert_eq!(refusal.message, "missing text argument `key`");
+    // `[{ key, value }]` reads as it is
+    let good = DaemonRecord::from_record(&value(r#"{"labels":[{"key":"k","value":"v"}]}"#));
+    assert_eq!(
+        good.labels().unwrap(),
+        vec![("k".to_owned(), "v".to_owned())]
+    );
 }
 
 #[test]

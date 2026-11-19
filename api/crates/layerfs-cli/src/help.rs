@@ -1,7 +1,6 @@
 //! `layerfs help [family [call]]`, from the call table.
 use crate::output;
 use layerfs_api::{Arg, Call, Kind};
-use std::io::IsTerminal;
 use std::process::ExitCode;
 
 fn shell(name: &str) -> String {
@@ -74,29 +73,13 @@ pub fn print(topic: &[&str]) -> ExitCode {
             );
             for family in layerfs_api::families() {
                 let calls: Vec<String> = family.calls().iter().map(|c| shell(c.call)).collect();
-                let family_name = if std::io::stdout().is_terminal() {
-                    crate::banner::paint(family.name, "1")
-                } else {
-                    family.name.to_owned()
-                };
+                let family_name = crate::banner::bold(family.name);
                 text.push_str(&format!("  {:<10} {}\n", family_name, calls.join(", ")));
             }
-            let (imp_title, wrk_title, hlp_title) = if std::io::stdout().is_terminal() {
-                (
-                    crate::banner::paint("import-env", "1"),
-                    crate::banner::paint("worker", "1"),
-                    crate::banner::paint("help", "1"),
-                )
-            } else {
-                (
-                    "import-env".to_owned(),
-                    "worker".to_owned(),
-                    "help".to_owned(),
-                )
-            };
             text.push_str(&format!(
-                "\n  {:<10} write this environment's 1.1.0 settings as records, once\n  {:<10} serve this machine's worker (inside a machine)\n  {:<10} this help; `layerfs help <family> [<call>]` for more\n\n",
-                imp_title, wrk_title, hlp_title
+                "\n  {:<10} serve this machine's worker (inside a machine)\n  {:<10} this help; `layerfs help <family> [<call>]` for more\n\n",
+                crate::banner::bold("worker"),
+                crate::banner::bold("help")
             ));
             text.push_str("A result is one line of JSON: the short form, or with --detail the long form with every key. --with a,b adds the named sections a call lists.\n");
             text.push_str("The home is LAYERFS_HOME, else ~/.layerfs. Exit 0: done; 2: wrong command line; 125: refused, with {\"error\",\"message\",\"fix\"} on stderr.\n");

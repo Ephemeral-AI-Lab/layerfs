@@ -1,7 +1,7 @@
 //! `store.remove`: a sqlite Store deleted wherever it is, with its projects.
 use crate::place::{self, Executor};
 use crate::record::{self, StoreRef};
-use crate::sqlite::family::{advance, begin, ended, fields_map, record_of, settle, step_on};
+use crate::sqlite::family::{advance, begin, ended, settle, step_on};
 use crate::sqlite::transfer::step::StoreStep;
 use crate::Related;
 use layerfs_bridge::control::SdkValue;
@@ -16,8 +16,14 @@ use std::path::Path;
 /// clears an unresolved operation on the Store: a gone process's intent
 /// does not refuse it; a live one's is `Busy`.
 pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
-    let record = record_of(home, name)?;
-    let store_ref = record.store_ref()?;
+    let record = record::StoreRecord::of(home, name)?;
+    let Ok(store_ref) = record.store_ref() else {
+        record::forget_unread(home, name, related)?;
+        return Ok(SdkValue::map([
+            ("outcome", SdkValue::text("removed")),
+            ("store", SdkValue::text(name)),
+        ]));
+    };
     if let StoreRef::Postgres { .. } = store_ref {
         return Err(refused(
             "InvalidInput",
@@ -47,7 +53,7 @@ pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
     if let Some((left, _)) = &leftover_executor {
         fields.push(("leftover", SdkValue::text(&left.on)));
     }
-    let args = fields_map(fields);
+    let args = layerfs_home::helpers::map_of(fields);
     let mut op = Op::begin(crate::intent::REMOVE, "check", args)?;
     let previous = begin(home, name, &op, related, |record| {
         if record.machine()? != machine {

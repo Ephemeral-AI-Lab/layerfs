@@ -99,6 +99,8 @@ fn lima(home: &Path, name: &str, more: &[(&str, SdkValue)]) {
     let mut fields = vec![
         ("name".to_owned(), t(name)),
         ("platform".to_owned(), t("lima")),
+        // every 2.0 create records its VM's name
+        ("vm_name".to_owned(), t(&format!("layerfs-test-{name}"))),
     ];
     fields.extend(more.iter().map(|(n, v)| ((*n).to_owned(), v.clone())));
     write_record(&paths::machine_record(home, name), &SdkValue::Map(fields)).unwrap();
@@ -177,7 +179,9 @@ fn start_and_stop_a_machine() {
     let (stopped, phases) = called(&home, "machine.stop", "dev").unwrap();
     assert_eq!(json(&stopped), r#"{"ok":true}"#);
     assert_eq!(phases, ["check", "stop", "stop"]);
-    assert!(log(&tools).lines().any(|l| l.starts_with("stop lfs-")));
+    assert!(log(&tools)
+        .lines()
+        .any(|l| l.starts_with("stop layerfs-test-dev")));
     assert!(!paths::worker_record(&home, "dev").exists());
     let record = read_record(&paths::machine_record(&home, "dev"))
         .unwrap()

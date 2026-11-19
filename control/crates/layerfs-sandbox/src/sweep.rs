@@ -207,7 +207,7 @@ pub fn owner(folder: &Path) -> Option<PathBuf> {
 
 /// The Sandbox name a run folder belongs to: the folder its `owner` marker
 /// names (`<root>/sandbox/<name>`), else what follows the prefix LayerFS
-/// gives run folders (`layerfs-<8 hex>-`, or the earlier `lfs-<8 hex>-`).
+/// gives run folders (`layerfs-<8 hex>-`).
 pub fn sandbox_of(folder: &Path) -> Option<String> {
     if let Some(owner) = owner(folder) {
         let named = owner.file_name()?.to_str()?.to_owned();
@@ -215,11 +215,9 @@ pub fn sandbox_of(folder: &Path) -> Option<String> {
         return (parent == "sandbox").then_some(named);
     }
     let name = folder.file_name()?.to_str()?;
-    ["layerfs-", "lfs-"].into_iter().find_map(|prefix| {
-        let rest = name.strip_prefix(prefix)?;
-        let (home, sandbox) = (rest.get(..8)?, rest.get(8..)?.strip_prefix('-')?);
-        (hex(home) && !sandbox.is_empty()).then(|| sandbox.to_owned())
-    })
+    let rest = name.strip_prefix("layerfs-")?;
+    let (home, sandbox) = (rest.get(..8)?, rest.get(8..)?.strip_prefix('-')?);
+    (hex(home) && !sandbox.is_empty()).then(|| sandbox.to_owned())
 }
 
 /// One Sandbox folder of a side: its name, and the name of the run folder

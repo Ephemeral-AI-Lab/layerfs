@@ -261,12 +261,7 @@ pub fn refresh_except_within(
         }
         let token = token_of(&value)?;
         let remaining = deadline.saturating_duration_since(std::time::Instant::now());
-        let status = match workspace(&mut *crate::daemon::trace::control_within(
-            &state.controls,
-            remaining,
-        )?)
-        .status(token)
-        {
+        let status = match workspace(&mut *state.controls.lend_within(remaining)?).status(token) {
             Ok(status) => status,
             // Unmounted by the daemon; its owner removes the record next.
             Err(failure) if absent(&failure) => continue,

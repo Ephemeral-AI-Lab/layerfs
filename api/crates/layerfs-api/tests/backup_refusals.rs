@@ -38,7 +38,7 @@ fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
 /// A connected bucket whose endpoint answers nothing; its key's secret is
 /// in the home's secret folder.
 fn dead_bucket(home: &Path) {
-    layerfs_store::backup::secret::write(home, "bucket/dead", "secret").unwrap();
+    layerfs_store::backup::secret::write(home, "dead", "secret").unwrap();
     write_record(
         &paths::bucket_record(home, "dead"),
         &SdkValue::map([

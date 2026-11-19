@@ -52,10 +52,7 @@ pub fn get(home: &Path, project: &ProjectRef) -> Outcome {
     if live::find(&record, &target.project, &live).is_none() {
         return Err(refused("NoSuchProject", format!("no project {project}")));
     }
-    let fields = record.answer(&target.record).into_iter();
-    Ok(SdkValue::Map(
-        fields.map(|(key, value)| (key.to_owned(), value)).collect(),
-    ))
+    Ok(layerfs_home::helpers::map_of(record.answer(&target.record)))
 }
 
 /// `project.init`'s answer: the project's record fields, `commit` (main's
