@@ -450,7 +450,11 @@ fn forwarded_daemon_needs_no_worker_rpc_and_validates_carrier_identity() {
     let (address, server) = daemon(&home, Mode::Pages);
     write_entity(
         &paths::machine_record(&home, "vm1"),
-        &SdkValue::map([("platform", t("lima")), ("vm_name", t("layerfs-test-vm1")), ("state", t("running"))]),
+        &SdkValue::map([
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-test-vm1")),
+            ("state", t("running")),
+        ]),
     )
     .unwrap();
     on_vm1(&home);
@@ -508,7 +512,11 @@ fn missing_worker_record_and_reused_forward_pid_block_without_connecting() {
         listener.set_nonblocking(true).unwrap();
         write_entity(
             &paths::machine_record(&home, "vm1"),
-            &SdkValue::map([("platform", t("lima")), ("vm_name", t("layerfs-test-vm1")), ("state", t("running"))]),
+            &SdkValue::map([
+                ("platform", t("lima")),
+                ("vm_name", t("layerfs-test-vm1")),
+                ("state", t("running")),
+            ]),
         )
         .unwrap();
         on_vm1(&home);
@@ -599,7 +607,11 @@ fn worker_route_uses_fixed_root_without_lease_or_record_changes() {
     let (_, daemon) = daemon(&guest, Mode::Pages);
     write_entity(
         &paths::machine_record(&home, "vm1"),
-        &SdkValue::map([("platform", t("lima")), ("vm_name", t("layerfs-test-vm1")), ("state", t("running"))]),
+        &SdkValue::map([
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-test-vm1")),
+            ("state", t("running")),
+        ]),
     )
     .unwrap();
     on_vm1(&home);
@@ -833,7 +845,11 @@ fn a_workspace_whose_list_was_not_asked_for_waits_on_its_sandbox_not_lost() {
     let home = home();
     write_entity(
         &paths::machine_record(&home, "vm1"),
-        &SdkValue::map([("platform", t("lima")), ("vm_name", t("layerfs-test-vm1")), ("state", t("running"))]),
+        &SdkValue::map([
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-test-vm1")),
+            ("state", t("running")),
+        ]),
     )
     .unwrap();
     on_vm1(&home);
