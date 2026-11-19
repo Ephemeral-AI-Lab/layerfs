@@ -1108,7 +1108,9 @@ positional `machine`, except `create`, which takes `name` and `platform`.
   (`list`: every machine at the same time), within 10 s, starting nothing.
   The state, its companion, `message` and `observed_at` then come from the
   probe; `unknown` means the probe did not answer, and its `observed_at` is
-  the last probe that did. The record is written only when the state word
+  the last probe that did. A machine whose record alone makes it broken (a
+  removed platform's, `unsupported`; one with no `vm_name`, `outdated`) is
+  not probed: it keeps its record's state, `reason` and `fix`. The record is written only when the state word
   or reason changed (which moves the home's `generation`); `observed_at` is
   kept in `observed.json` beside the record, which does not. `get --with
   live` adds the `live` section: `disk_free_bytes`, `tool_version` (the

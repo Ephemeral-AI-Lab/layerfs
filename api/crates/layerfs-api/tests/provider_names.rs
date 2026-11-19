@@ -218,6 +218,44 @@ fn provider_names_and_their_refusals() {
         (got.get_text("message").unwrap_or("")).contains("has no vm_name"),
         "{got:?}"
     );
+    // a live read keeps what its record says (UI pass 2, F1): nothing is
+    // probed, and the long form, the short form and a live list all answer
+    // `broken` `outdated` with its fix, never `unknown`
+    let probes = std::fs::read_to_string(tools.join("calls.log")).unwrap_or_default();
+    let live = SdkValue::List(vec![t("live")]);
+    let mut asked = docker.to_vec();
+    asked.push(("with", live.clone()));
+    let got = call(&old, "machine.get", &asked).unwrap();
+    assert_eq!(got.get_text("state"), Some("broken"), "{got:?}");
+    assert_eq!(got.get_text("reason"), Some("outdated"), "{got:?}");
+    assert_eq!(got.get_text("fix"), Some("layerfs machine remove docker"));
+    assert!(
+        (got.get_text("message").unwrap_or("")).contains("has no vm_name"),
+        "{got:?}"
+    );
+    let short = [("machine", t("docker")), ("with", live.clone())];
+    let short = call(&old, "machine.get", &short).unwrap();
+    assert_eq!(short.get_text("reason"), Some("outdated"), "{short:?}");
+    assert_eq!(short.get_text("fix"), Some("layerfs machine remove docker"));
+    let list = call(&old, "machine.list", &[("with", live)]).unwrap();
+    let Some(SdkValue::List(items)) = list.get("items") else {
+        panic!("no items in {list:?}")
+    };
+    let item = (items.iter())
+        .find(|item| item.get_text("machine") == Some("docker"))
+        .unwrap();
+    assert_eq!(item.get_text("state"), Some("broken"), "{item:?}");
+    assert_eq!(item.get_text("reason"), Some("outdated"), "{item:?}");
+    assert_eq!(item.get_text("fix"), Some("layerfs machine remove docker"));
+    let after = std::fs::read_to_string(tools.join("calls.log")).unwrap_or_default();
+    assert_eq!(
+        after, probes,
+        "a live read probed a machine with no vm_name"
+    );
+    let kept = read_record(&paths::machine_record(&old, "docker"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(kept, old_docker, "a live read rewrote the record");
     // the remove takes the record alone; the next call records it again
     let removed = call(&old, "machine.remove", &docker).unwrap();
     assert_eq!(removed.get_text("outcome"), Some("removed"), "{removed:?}");

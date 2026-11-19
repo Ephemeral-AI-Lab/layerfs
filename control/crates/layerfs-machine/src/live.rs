@@ -18,7 +18,10 @@
 //! gone is settled here (correction C13): once the probe answers, the `op`
 //! is dropped with the write that records what was seen. An uncertain
 //! create or remove is `machine remove`'s to clear, and a machine a live
-//! process holds is not probed: its `op` is its state.
+//! process holds is not probed: its `op` is its state. Nor is a machine
+//! whose record alone makes it broken (a removed platform's, `unsupported`;
+//! an earlier build's with no `vm_name`, `outdated`): its record's state,
+//! reason and fix win over the live read (UI pass 2, F1).
 use super::record::{MachineRecord, CREATE, REMOVE};
 use super::spec::{self as record, refusal};
 use crate::worker::{self, Endpoint, Hello};
@@ -83,8 +86,8 @@ impl Seen {
 /// The `live` section of a machine that is not probed. `native` is this
 /// computer: its data disk is the one that holds the home, read with one
 /// `statvfs`; it has no provider tool and no worker (its calls run in the
-/// caller's process), so those are null. One an `op` holds or one of a
-/// removed platform: nothing was read.
+/// caller's process), so those are null. One an `op` holds, one of a
+/// removed platform or one with no `vm_name`: nothing was read.
 pub(super) fn unprobed(home: &Path, record: &MachineRecord) -> SdkValue {
     let native = record.removed().is_none() && record.platform().ok() == Some(Platform::Native);
     let free = native
@@ -193,10 +196,16 @@ fn probe(
 }
 
 /// Whether a live read probes the machine `record` describes: not
-/// `native`, not one of a removed platform, not one a live process holds,
-/// and not one a create or remove left unresolved.
+/// `native`, not one of a removed platform, not one whose record has no
+/// `vm_name` (an earlier build's, `broken` `outdated` by its record alone),
+/// not one a live process holds, and not one a create or remove left
+/// unresolved. A machine not probed keeps the state its record gives it,
+/// with its reason and fix: a live read never answers it `unknown`.
 fn probed(record: &MachineRecord) -> Result<bool> {
     if record.removed().is_some() || record.platform()? == Platform::Native {
+        return Ok(false);
+    }
+    if record.text("vm_name").is_none() {
         return Ok(false);
     }
     Ok(match record.op() {
