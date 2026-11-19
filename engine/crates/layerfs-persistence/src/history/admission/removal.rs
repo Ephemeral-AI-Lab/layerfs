@@ -227,3 +227,9 @@ pub(crate) fn intents(
 ) -> HistoryResult<Vec<GcIntent>> {
     provider.read(|tx| query(tx, LIST, params![scope_kind.as_str(), scope_id.to_vec()]))
 }
+
+/// Every intent the Store records, whatever its scope: the set a
+/// Store-scope intent conflicts with (`ALL_STORE`, excluding no op).
+pub(crate) fn all_intents(provider: &HistoryProvider) -> HistoryResult<Vec<GcIntent>> {
+    provider.read(|tx| query(tx, ALL_STORE, params![EMPTY_OP.to_vec()]))
+}

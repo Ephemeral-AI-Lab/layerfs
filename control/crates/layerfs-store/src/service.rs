@@ -173,3 +173,35 @@ pub fn head(
         .map_err(failed)?;
     Ok(page.records.first().map(|record| record.id))
 }
+
+/// Ends the mount intent Workspace `workspace` of Branch `branch` left in
+/// the Store `args` names, if one remains: a forced `sandbox.remove` calls
+/// it once the Sandbox whose daemon owned the intent is stopped, so the
+/// intent does not refuse every later compaction (RC-B F1). Each one left
+/// is released once, or marked uncertain when the Store refuses the delete
+/// (`release_or_mark`, the daemon's own unmount release); answers how many
+/// there were. Nothing is retried.
+pub fn end_mount(
+    args: &OpenArgs,
+    branch: layerfs_history::BranchId,
+    workspace: [u8; 32],
+) -> Result<usize, SdkRefusal> {
+    with_service(args, |service| {
+        let catalog = service.store.history();
+        let scope = layerfs_history::GcScopeKind::Branch;
+        let intents = catalog
+            .gc_intents(scope, branch.as_slice())
+            .map_err(failed)?;
+        let left = intents.iter().filter(|intent| {
+            intent.kind == layerfs_history::GcIntentKind::Mount
+                && intent.workspace == Some(workspace)
+        });
+        let mut ended = 0;
+        for intent in left {
+            layerfs_store_service::history::admission::release_or_mark(catalog, &intent.op_id)
+                .map_err(failed)?;
+            ended += 1;
+        }
+        Ok(ended)
+    })
+}

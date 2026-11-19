@@ -42,6 +42,9 @@ pub enum Removed {
     Stopped {
         /// The handles of the Workspaces the stop ended.
         unmounted: Vec<String>,
+        /// Each sentence about what may be left: a Workspace whose mount
+        /// intent could not be ended in its Store.
+        left: Vec<String>,
     },
     /// Its runtime was gone already, it never recorded one, or it was
     /// recorded under the retired docker backend; its record went.
@@ -223,8 +226,12 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
                 Some(SdkValue::List(paths)) => texts(paths).map(&handle_of).collect(),
                 _ => Vec::new(),
             };
+            let left = match value.get("left") {
+                Some(SdkValue::List(items)) => texts(items).map(str::to_owned).collect(),
+                _ => Vec::new(),
+            };
             done(events);
-            Ok(Removed::Stopped { unmounted })
+            Ok(Removed::Stopped { unmounted, left })
         }
         // a Sandbox already gone loses its record too
         Err(refusal) if refusal.code == "NoSuchSandbox" => {
