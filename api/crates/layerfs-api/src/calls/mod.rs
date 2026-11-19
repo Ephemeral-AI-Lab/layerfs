@@ -5,7 +5,7 @@
 //! what an entry declares of its answer (`form`), the one place that makes
 //! the short and the long form (`shape`) and the refusal every front end
 //! answers (`refusal`).
-//! The 85 entries in ten families live beside it, one folder per family and
+//! The 83 entries in ten families live beside it, one folder per family and
 //! one file per call; each function here that needs them takes that list.
 mod check;
 mod context;

@@ -777,7 +777,9 @@ fn is_flock_held(path: &Path) -> Result<bool> {
 
 /// Scans `lock_dir` for `ImageLock` files held by live processes and per-image
 /// lock probe errors (e.g. a symlink or unreadable `.lock` file).
-fn scan_image_locks(lock_dir: &Path) -> Result<(BTreeSet<String>, BTreeMap<String, String>)> {
+pub(crate) fn scan_image_locks(
+    lock_dir: &Path,
+) -> Result<(BTreeSet<String>, BTreeMap<String, String>)> {
     let mut locked = BTreeSet::new();
     let mut errors = BTreeMap::new();
     let entries = match std::fs::read_dir(lock_dir) {

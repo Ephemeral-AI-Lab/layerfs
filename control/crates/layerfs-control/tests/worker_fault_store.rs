@@ -2,8 +2,8 @@
 //! (layerfs-project#177): the Store and the Sandbox tables answer the next
 //! call, and a stalled `project.export` gives up the Store's lease. And a
 //! `project.init` whose answer is lost names its folder copy in the home's
-//! uncertain log, which is what lets `home.prune` remove that copy later
-//! (layerfs-project#180). Empty without the `worker-fault` cargo feature:
+//! uncertain log, and the `project delete` that settles that Init removes
+//! the copy (spec v20). Empty without the `worker-fault` cargo feature:
 //!
 //! `cargo test -p layerfs-control --features worker-fault --test worker_fault_store`
 #![cfg(feature = "worker-fault")]
@@ -88,6 +88,7 @@ fn a_stalled_export_ends_and_gives_up_the_store() {
             store: StoreName::parse("shop").unwrap(),
             project: "web".to_owned(),
             branch: None,
+            at: None,
             store_record: Some(worker_store::store_record(&placed.home)),
         }
         .encode()
@@ -139,7 +140,7 @@ fn a_stalled_export_ends_and_gives_up_the_store() {
 }
 
 #[test]
-fn a_lost_init_names_its_copy_for_doctor() {
+fn a_lost_init_names_its_copy_and_its_delete_removes_it() {
     let (placed, faults) = with("lostinit", Faults::default());
     let folder = worker_store::folder(&placed.scratch, 4096);
     // the copy is staged, then the worker's Init dies before it answers
@@ -171,24 +172,24 @@ fn a_lost_init_names_its_copy_for_doctor() {
     let staged = placed.root.join("incoming").join(format!("init-{copy}"));
     assert!(staged.join("README.md").is_file(), "the copy is there");
 
-    // `home leftovers` lists it as removable an hour after that deadline,
-    // and until then `home prune` leaves it
-    let listed = layerfs_control::doctor::leftover_list::list(&placed.home, None).unwrap();
-    let Some(SdkValue::List(left)) = listed.get("items") else {
-        panic!("{listed:?}");
-    };
-    assert_eq!(left.len(), 1, "{listed:?}");
-    let id = format!("box:init_copy:{copy}");
-    assert_eq!(left[0].get_text("leftover"), Some(id.as_str()));
-    assert_eq!(left[0].get_text("path"), staged.to_str());
-    assert!(!left[0].get_bool("report_only"), "{left:?}");
-    let removable_at = layerfs_home::time::iso(deadline + 3_600_000);
-    assert_eq!(
-        left[0].get_text("removable_at"),
-        Some(removable_at.as_str())
+    // the project is `broken` `unresolved` until `project delete` settles
+    // its Init, and settling it removes the copy (spec v20), logged in the
+    // home's `log/sweep.jsonl`; the uncertain line stays as a record
+    let project = layerfs_home::names::ProjectRef::parse("shop/web").unwrap();
+    let mut sink = |_| {};
+    let deleted = layerfs_control::project::delete(
+        &placed.home,
+        &mut layerfs_home::events::Events::new(&mut sink),
+        &project,
+    )
+    .unwrap_or_else(|refusal| panic!("project delete: {refusal:?}"));
+    assert_eq!(deleted.get_text("outcome"), Some("deleted"), "{deleted:?}");
+    assert!(!staged.exists(), "the settled Init's copy is removed");
+    let swept = std::fs::read_to_string(paths::log_dir(&placed.home).join("sweep.jsonl")).unwrap();
+    assert!(
+        swept.contains("\"init_copy\"") && swept.contains(&format!("init-{copy}")),
+        "{swept}"
     );
-    let early = layerfs_control::doctor::leftover_prune::prune(&placed.home, &id).unwrap_err();
-    assert_eq!(early.code, "InUse", "{early:?}");
-    assert!(staged.join("README.md").is_file());
+    assert_eq!(std::fs::read_to_string(&log).unwrap(), text);
     placed.remove();
 }

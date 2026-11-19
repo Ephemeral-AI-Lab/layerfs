@@ -1,5 +1,5 @@
 {
- "version": 19,
+ "version": 20,
  "frozen": "2026-11-19",
  "base": "caff58a43b",
  "states": [
@@ -5855,7 +5855,7 @@
        "why": "the global option, as on every call"
       }
      ],
-     "new_work": "The table call and the one doctor shape are new: today `layerfs doctor` is a shell command outside the call table that answers two reports (the whole-home sweep `{ok, findings, leftovers}` and the per-target `{checks, findings, counts, ...}`). The home's own checks exist as the `host` target and are renamed `home.*` (`checks.home`, in the order they run); `host.bundle_hashes` and `host.remote`, which are always skipped today, are left out. `home.capacity` measures and applies no threshold today: a finding for a nearly full disk needs one, which is new. Outcomes map: `pass` to `ok`, `fail` to its finding's severity, `unknown` and `skipped` to `not_checked` with a `reason` (or left out when the check does not apply), `blocked` to `not_checked` with `blocked_by`. New work: running the shallow check of each machine, PostgreSQL Store and bucket inside this call (today one call is one target), each with its own time budget; one event per finished thing; a records finding named by the thing's own word (today `entity {kind, name}`). The leftover list leaves the report for `home.leftovers`.",
+     "new_work": "The table call and the one doctor shape are new: today `layerfs doctor` is a shell command outside the call table that answers two reports (the whole-home sweep `{ok, findings, leftovers}` and the per-target `{checks, findings, counts, ...}`). The home's own checks exist as the `host` target and are renamed `home.*` (`checks.home`, in the order they run); `host.bundle_hashes` and `host.remote`, which are always skipped today, are left out. `home.capacity` measures and applies no threshold today: a finding for a nearly full disk needs one, which is new. Outcomes map: `pass` to `ok`, `fail` to its finding's severity, `unknown` and `skipped` to `not_checked` with a `reason` (or left out when the check does not apply), `blocked` to `not_checked` with `blocked_by`. New work: running the shallow check of each machine, PostgreSQL Store and bucket inside this call (today one call is one target), each with its own time budget; one event per finished thing; a records finding named by the thing's own word (today `entity {kind, name}`). The leftover list leaves the report: LayerFS removes leftovers itself (v20).",
      "off_table": [
       {
        "today": "layerfs doctor",
@@ -5942,154 +5942,6 @@
        }
       ]
      }
-    },
-    {
-     "call": "home.leftovers",
-     "badge": "new",
-     "today": [],
-     "help": "what earlier runs left behind on this computer and on each running machine",
-     "cli": "layerfs home leftovers [--machine M]",
-     "positionals": [],
-     "options": [
-      {
-       "name": "machine",
-       "kind": "Name",
-       "help": "list only this machine's leftovers; `native` is this computer"
-      }
-     ],
-     "stdin": null,
-     "with": {},
-     "paging": null,
-     "progress": false,
-     "quiet": false,
-     "profile": "full",
-     "short": {
-      "always": [
-       "items"
-      ],
-      "sometimes": [
-       "not_listed"
-      ]
-     },
-     "long": [
-      "items",
-      "not_listed",
-      "observed_at"
-     ],
-     "item": {
-      "short": {
-       "always": [
-        "leftover",
-        "modified_at"
-       ],
-       "sometimes": [
-        "size",
-        "report_only"
-       ]
-      },
-      "long": [
-       "leftover",
-       "modified_at",
-       "size",
-       "report_only",
-       "removable_at",
-       "kind",
-       "machine",
-       "path"
-      ]
-     },
-     "examples": {
-      "short": [
-       "{\"items\":[{\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344},{\"leftover\":\"dev:init_copy:shop-9a1f\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":524288000,\"report_only\":true}]}",
-       "a machine was not walked: {\"items\":[{\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344}],\"not_listed\":[{\"machine\":\"docker\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"},\"message\":\"machine docker is stopped\"}]}",
-       "Docker is not running: {\"items\":[{\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344}],\"not_listed\":[{\"machine\":\"native\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"engine_down\"},\"message\":\"Docker does not answer; its export containers were not listed\"}]}"
-      ],
-      "long": "{\"items\":[{\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344,\"report_only\":false,\"removable_at\":null,\"kind\":\"run_folder\",\"machine\":\"native\",\"path\":\"/Users/me/.layerfs/machine/native/run/tests-5f0c7a1e\"}],\"not_listed\":[],\"observed_at\":\"2026-11-18T09:16:59Z\"}"
-     },
-     "dropped": [],
-     "new_work": "The call is new; the walk is not. Today the list is part of the shell's `layerfs doctor` report (`findings[].leftover` and a `leftovers` row per machine): one bounded walk on `native` and one through each running machine's worker, with stopped and unanswering machines passed over in silence. New: a table call with `--machine`, and `not_listed` for a machine that was passed over or whose walk was cut (`complete: false` today). The kinds are snake_case, in `kind` and inside the id (`run-folder` and the rest have hyphens today). Renames per entry: `id` to `leftover`, `bytes` to `size`, `age` (seconds) to `modified_at`, `fixable: false` to `report_only: true`, `not_before` (milliseconds) to `removable_at`. The per-machine counts of image locks and unmount markers leave the answer. v19: the kind `export_container` is new (today a killed copy's export container is reclaimed only by the next load of the same image, or by a manual `docker rm`); `image_part` leaves the kinds (`machine images` and `machine prune` own parts, under the copy's lock).",
-     "nested": {
-      "not_listed": {
-       "short": {
-        "always": [
-         "machine",
-         "message"
-        ],
-        "sometimes": [
-         "blocked_by",
-         "reason"
-        ]
-       },
-       "long": [
-        "machine",
-        "blocked_by",
-        "reason",
-        "message"
-       ]
-      }
-     },
-     "kinds": [
-      "run_folder",
-      "empty_root",
-      "init_copy",
-      "backup_staging",
-      "image_tmp",
-      "export_container"
-     ]
-    },
-    {
-     "call": "home.prune",
-     "badge": "moved",
-     "today": [
-      "doctor.fix"
-     ],
-     "help": "remove one leftover that home leftovers listed",
-     "cli": "layerfs home prune <leftover>",
-     "positionals": [
-      {
-       "name": "leftover",
-       "kind": "Text"
-      }
-     ],
-     "options": [],
-     "stdin": null,
-     "with": {},
-     "paging": null,
-     "progress": false,
-     "quiet": false,
-     "profile": "full",
-     "short": {
-      "always": [],
-      "sometimes": [
-       "ok",
-       "freed_bytes"
-      ]
-     },
-     "long": [
-      "ok",
-      "freed_bytes",
-      "outcome",
-      "leftover",
-      "kind",
-      "machine",
-      "path"
-     ],
-     "item": null,
-     "examples": {
-      "short": [
-       "{\"freed_bytes\":11833344}",
-       "its size was not measured: {\"ok\":true}"
-      ],
-      "long": "{\"ok\":true,\"freed_bytes\":11833344,\"outcome\":\"removed\",\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"kind\":\"run_folder\",\"machine\":\"native\",\"path\":\"/Users/me/.layerfs/machine/native/run/tests-5f0c7a1e\"}"
-     },
-     "dropped": [
-      {
-       "today": "<id>",
-       "now": "<leftover>",
-       "why": "a thing goes by its own word"
-      }
-     ],
-     "new_work": "No new capability: the call moves from the `doctor` family. `bytes` becomes `freed_bytes`, `id` becomes `leftover`, `removed: true` becomes `outcome: removed`. The id carries the snake_case kind (`native:run_folder:...`). v19: removing an `export_container` (`docker rm -v` under the image's copy lock) is new; `image_part` is no longer a leftover (it was removed by its age, without the copy's lock)."
     }
    ]
   },

@@ -2,12 +2,10 @@
  "family": "home",
  "who": null,
  "old_count": 2,
- "blurb": "The home itself: its state, its call log, what is left behind in it, and the whole-home doctor.",
+ "blurb": "The home itself: its state, its call log and the whole-home doctor.",
  "reasons": [
   "<b>One doctor shape:</b> the six doctors answer the same keys, so a UI draws them with one component and an agent reads them with one rule: <code>{\"ok\":true}</code>, or what was found and what could not be checked.",
   "<b>Why <code>--with tree</code>:</b> a page that shows everything in the home needs one read that contacts nothing. Opening the Doctor page runs no doctor; it reads the tree and shows each thing as not checked.",
-  "<b>Why leftovers are their own call:</b> listing them walks disks, on this computer and through each machine's worker. That is neither a state read nor a health check, and <code>home prune</code> needs the list's ids.",
-  "<b>Why <code>prune</code>:</b> the call removes one leftover and repairs nothing; <code>doctor fix</code> promised more than that.",
   "<b>Why the call log lives here:</b> it is the home's own file. A machine's and a Sandbox's logs are read from their own families."
  ],
  "calls": [
@@ -60,7 +58,7 @@
   {
    "call": "home.get",
    "badge": "merged",
-   "note": "+ <code>machine.platforms</code> (<code>--with platforms</code>). Reads the home and changes nothing; it writes no call-log line. <code>state</code> is <code>ready</code>, or <code>broken</code> with <code>reason: missing</code> (no home yet) or <code>reason: outdated</code> (an older layout), each with <code>fix: layerfs home init</code>; a folder this build cannot read as a home is refused <code>Unsupported</code>. <code>generation</code> is a number that moves when any record in the home is written: a UI polls it and re-reads only when it moves. A live read (<code>--with live</code>, or <code>sandbox get</code>) writes a record only when the state word or its reason changes, and that write moves it; <code>observed_at</code> is kept beside the record in an observation file it does not cover. It does not move when the owner of a recorded <code>op</code> dies (a dead owner's op is ignored on read, with no write), nor for a Workspace the home does not record. <code>--with tree</code> is the whole home from records only, with no machine contacted: every machine with its sqlite Stores and its Sandboxes, then the PostgreSQL Stores and the buckets. A node holds what the records hold: a machine its <code>platform</code> (and <code>cpus</code>, <code>memory_bytes</code> where it has them), a Store its <code>engine</code> and <code>projects</code> (bare names, as <code>store get</code> answers them; a PostgreSQL Store also its <code>connections</code>), a Sandbox its <code>project</code>, <code>image</code> and <code>workspaces</code> (each <code>{workspace, branch}</code>), a bucket its <code>provider</code>. A node leaves <code>state</code> out when <code>ready</code>; the state is the last one its record holds, so a <code>blocked_by</code> can name <code>engine_down</code>, <code>not_answering</code>, <code>missing</code> or <code>unreachable</code> after a live read saw it. A project and a Workspace take their Store's or Sandbox's state. Workspaces are listed only where the home keeps their records (a Sandbox on <code>native</code>, or one reached directly); elsewhere the node says <code>workspaces_not_listed:true</code> while that machine is ready. On a stopped machine a Store and a Sandbox answer <code>blocked</code> with <code>blocked_by</code> naming the machine, and no Workspaces are listed. Leftovers are not a section here: <code>home leftovers</code> is its own call",
+   "note": "+ <code>machine.platforms</code> (<code>--with platforms</code>). Reads the home and changes nothing; it writes no call-log line. <code>state</code> is <code>ready</code>, or <code>broken</code> with <code>reason: missing</code> (no home yet) or <code>reason: outdated</code> (an older layout), each with <code>fix: layerfs home init</code>; a folder this build cannot read as a home is refused <code>Unsupported</code>. <code>generation</code> is a number that moves when any record in the home is written: a UI polls it and re-reads only when it moves. A live read (<code>--with live</code>, or <code>sandbox get</code>) writes a record only when the state word or its reason changes, and that write moves it; <code>observed_at</code> is kept beside the record in an observation file it does not cover. It does not move when the owner of a recorded <code>op</code> dies (a dead owner's op is ignored on read, with no write), nor for a Workspace the home does not record. <code>--with tree</code> is the whole home from records only, with no machine contacted: every machine with its sqlite Stores and its Sandboxes, then the PostgreSQL Stores and the buckets. A node holds what the records hold: a machine its <code>platform</code> (and <code>cpus</code>, <code>memory_bytes</code> where it has them), a Store its <code>engine</code> and <code>projects</code> (bare names, as <code>store get</code> answers them; a PostgreSQL Store also its <code>connections</code>), a Sandbox its <code>project</code>, <code>image</code> and <code>workspaces</code> (each <code>{workspace, branch}</code>), a bucket its <code>provider</code>. A node leaves <code>state</code> out when <code>ready</code>; the state is the last one its record holds, so a <code>blocked_by</code> can name <code>engine_down</code>, <code>not_answering</code>, <code>missing</code> or <code>unreachable</code> after a live read saw it. A project and a Workspace take their Store's or Sandbox's state. Workspaces are listed only where the home keeps their records (a Sandbox on <code>native</code>, or one reached directly); elsewhere the node says <code>workspaces_not_listed:true</code> while that machine is ready. On a stopped machine a Store and a Sandbox answer <code>blocked</code> with <code>blocked_by</code> naming the machine, and no Workspaces are listed. Leftovers are not a section here: LayerFS removes them itself where nothing owns them (v20)",
    "today": [
     "home.get",
     "machine.platforms"
@@ -650,7 +648,7 @@
   {
    "call": "home.doctor",
    "badge": "new",
-   "note": "replaces the shell's <code>layerfs doctor</code> (no alias). Checks the home itself (this build, its prerequisites, the Linux bundle, the home folder and its layout, free disk, and every record in the home), then gives each machine, PostgreSQL Store and bucket its own shallow check. It goes no deeper: a Store on a machine and a Sandbox are <code>machine doctor</code>'s. The records check (<code>home.records</code>) reads references between records, file modes, leases and half-finished operations, and its finding names the thing it is about, at any depth. Short: <code>{\"ok\":true}</code>, or <code>findings</code> and <code>not_checked</code>; a <code>not_checked</code> entry carries <code>blocked_by</code> or <code>reason</code> (<code>timeout</code>, <code>busy</code>, <code>lost</code>). A stopped machine is not a problem: its record and state are checked, and the checks that need it running do not apply. No option changes what it checks, and there is no <code>--timeout</code> (each thing has its own time budget), no leftovers (<code>home leftovers</code>). <code>--progress</code> sends one event per finished thing. The call repairs nothing and exits 0 once its report is made",
+   "note": "replaces the shell's <code>layerfs doctor</code> (no alias). Checks the home itself (this build, its prerequisites, the Linux bundle, the home folder and its layout, free disk, and every record in the home), then gives each machine, PostgreSQL Store and bucket its own shallow check. It goes no deeper: a Store on a machine and a Sandbox are <code>machine doctor</code>'s. The records check (<code>home.records</code>) reads references between records, file modes, leases and half-finished operations, and its finding names the thing it is about, at any depth. Short: <code>{\"ok\":true}</code>, or <code>findings</code> and <code>not_checked</code>; a <code>not_checked</code> entry carries <code>blocked_by</code> or <code>reason</code> (<code>timeout</code>, <code>busy</code>, <code>lost</code>). A stopped machine is not a problem: its record and state are checked, and the checks that need it running do not apply. No option changes what it checks, and there is no <code>--timeout</code> (each thing has its own time budget), no leftovers (LayerFS removes them itself, v20). <code>--progress</code> sends one event per finished thing. The call repairs nothing and exits 0 once its report is made",
    "today": [],
    "help": "check the home, then each machine, PostgreSQL Store and bucket, shallowly",
    "cli": "layerfs home doctor",
@@ -710,7 +708,7 @@
      "why": "the global option, as on every call"
     }
    ],
-   "new_work": "The table call and the one doctor shape are new: today `layerfs doctor` is a shell command outside the call table that answers two reports (the whole-home sweep `{ok, findings, leftovers}` and the per-target `{checks, findings, counts, ...}`). The home's own checks exist as the `host` target and are renamed `home.*` (`checks.home`, in the order they run); `host.bundle_hashes` and `host.remote`, which are always skipped today, are left out. `home.capacity` measures and applies no threshold today: a finding for a nearly full disk needs one, which is new. Outcomes map: `pass` to `ok`, `fail` to its finding's severity, `unknown` and `skipped` to `not_checked` with a `reason` (or left out when the check does not apply), `blocked` to `not_checked` with `blocked_by`. New work: running the shallow check of each machine, PostgreSQL Store and bucket inside this call (today one call is one target), each with its own time budget; one event per finished thing; a records finding named by the thing's own word (today `entity {kind, name}`). The leftover list leaves the report for `home.leftovers`.",
+   "new_work": "The table call and the one doctor shape are new: today `layerfs doctor` is a shell command outside the call table that answers two reports (the whole-home sweep `{ok, findings, leftovers}` and the per-target `{checks, findings, counts, ...}`). The home's own checks exist as the `host` target and are renamed `home.*` (`checks.home`, in the order they run); `host.bundle_hashes` and `host.remote`, which are always skipped today, are left out. `home.capacity` measures and applies no threshold today: a finding for a nearly full disk needs one, which is new. Outcomes map: `pass` to `ok`, `fail` to its finding's severity, `unknown` and `skipped` to `not_checked` with a `reason` (or left out when the check does not apply), `blocked` to `not_checked` with `blocked_by`. New work: running the shallow check of each machine, PostgreSQL Store and bucket inside this call (today one call is one target), each with its own time budget; one event per finished thing; a records finding named by the thing's own word (today `entity {kind, name}`). The leftover list leaves the report: LayerFS removes leftovers itself (v20).",
    "off_table": [
     {
      "today": "layerfs doctor",
@@ -797,156 +795,6 @@
      }
     ]
    }
-  },
-  {
-   "call": "home.leftovers",
-   "badge": "new",
-   "note": "what earlier runs left behind: on this computer (<code>native</code>) and on each running machine, or on the one <code>--machine</code> names. <code>leftover</code> is the id <code>home prune</code> takes (<code>&lt;machine&gt;:&lt;kind&gt;:&lt;name&gt;</code>); <code>kind</code> is <code>run_folder</code>, <code>empty_root</code>, <code>init_copy</code>, <code>backup_staging</code>, <code>image_tmp</code> or <code>export_container</code>; <code>size</code> is left out when it was not measured; <code>report_only:true</code> marks one <code>home prune</code> would refuse now (the copy of an Init whose outcome is not settled, the long form's <code>removable_at</code> saying when, if known; an export container while a copy of its image holds the image's lock). An <code>export_container</code> (<code>native:export_container:&lt;container&gt;</code>) is an image export container in the host's Docker that a killed copy left: one labelled with this home, or a legacy <code>layerfs-export-&lt;m&gt;-&lt;hex&gt;</code>; its <code>modified_at</code> is when it was created and its <code>path</code> is null. Image parts are not leftovers: <code>machine images</code> shows them and <code>machine prune</code> removes them, under the copy's lock. Not paged: each machine is one bounded walk (20,000 entries or 2 s). A machine that was not walked, or whose walk hit its bound, is named in <code>not_listed</code> as <code>{machine, blocked_by | reason, message}</code> (<code>reason</code> is <code>timeout</code>, <code>busy</code>, <code>lost</code> or <code>refused</code>); a stopped machine is not started. When the host's Docker does not answer, <code>native</code> is named there with <code>blocked_by {machine: docker, reason: engine_down}</code> and its export containers are not listed. Nothing left answers <code>{\"items\":[]}</code>. No doctor reports leftovers",
-   "today": [],
-   "help": "what earlier runs left behind on this computer and on each running machine",
-   "cli": "layerfs home leftovers [--machine M]",
-   "positionals": [],
-   "options": [
-    {
-     "name": "machine",
-     "kind": "Name",
-     "help": "list only this machine's leftovers; `native` is this computer"
-    }
-   ],
-   "stdin": null,
-   "with": {},
-   "paging": null,
-   "progress": false,
-   "quiet": false,
-   "profile": "full",
-   "short": {
-    "always": [
-     "items"
-    ],
-    "sometimes": [
-     "not_listed"
-    ]
-   },
-   "long": [
-    "items",
-    "not_listed",
-    "observed_at"
-   ],
-   "item": {
-    "short": {
-     "always": [
-      "leftover",
-      "modified_at"
-     ],
-     "sometimes": [
-      "size",
-      "report_only"
-     ]
-    },
-    "long": [
-     "leftover",
-     "modified_at",
-     "size",
-     "report_only",
-     "removable_at",
-     "kind",
-     "machine",
-     "path"
-    ]
-   },
-   "examples": {
-    "short": [
-     "{\"items\":[{\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344},{\"leftover\":\"dev:init_copy:shop-9a1f\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":524288000,\"report_only\":true}]}",
-     "a machine was not walked: {\"items\":[{\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344}],\"not_listed\":[{\"machine\":\"docker\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"},\"message\":\"machine docker is stopped\"}]}",
-     "Docker is not running: {\"items\":[{\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344}],\"not_listed\":[{\"machine\":\"native\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"engine_down\"},\"message\":\"Docker does not answer; its export containers were not listed\"}]}"
-    ],
-    "long": "{\"items\":[{\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"modified_at\":\"2026-11-18T09:02:11Z\",\"size\":11833344,\"report_only\":false,\"removable_at\":null,\"kind\":\"run_folder\",\"machine\":\"native\",\"path\":\"/Users/me/.layerfs/machine/native/run/tests-5f0c7a1e\"}],\"not_listed\":[],\"observed_at\":\"2026-11-18T09:16:59Z\"}"
-   },
-   "dropped": [],
-   "new_work": "The call is new; the walk is not. Today the list is part of the shell's `layerfs doctor` report (`findings[].leftover` and a `leftovers` row per machine): one bounded walk on `native` and one through each running machine's worker, with stopped and unanswering machines passed over in silence. New: a table call with `--machine`, and `not_listed` for a machine that was passed over or whose walk was cut (`complete: false` today). The kinds are snake_case, in `kind` and inside the id (`run-folder` and the rest have hyphens today). Renames per entry: `id` to `leftover`, `bytes` to `size`, `age` (seconds) to `modified_at`, `fixable: false` to `report_only: true`, `not_before` (milliseconds) to `removable_at`. The per-machine counts of image locks and unmount markers leave the answer. v19: the kind `export_container` is new (today a killed copy's export container is reclaimed only by the next load of the same image, or by a manual `docker rm`); `image_part` leaves the kinds (`machine images` and `machine prune` own parts, under the copy's lock).",
-   "nested": {
-    "not_listed": {
-     "short": {
-      "always": [
-       "machine",
-       "message"
-      ],
-      "sometimes": [
-       "blocked_by",
-       "reason"
-      ]
-     },
-     "long": [
-      "machine",
-      "blocked_by",
-      "reason",
-      "message"
-     ]
-    }
-   },
-   "kinds": [
-    "run_folder",
-    "empty_root",
-    "init_copy",
-    "backup_staging",
-    "image_tmp",
-    "export_container"
-   ]
-  },
-  {
-   "call": "home.prune",
-   "badge": "moved",
-   "note": "was <code>doctor.fix</code>: removes one leftover <code>home leftovers</code> listed, under the same guard as today (it is looked up again and must still be a leftover). <code>freed_bytes</code> is left out when its size was not measured. An <code>export_container</code> is removed with <code>docker rm -v</code> under its image's copy lock, taken without waiting (<code>InUse</code> while a copy holds it); its <code>path</code> and <code>freed_bytes</code> are null. Refused <code>NotFound</code> when it is no longer there, <code>InvalidInput</code> for one marked <code>report_only</code>, <code>InUse</code> when something holds it, <code>Unavailable</code> when its machine does not answer",
-   "today": [
-    "doctor.fix"
-   ],
-   "help": "remove one leftover that home leftovers listed",
-   "cli": "layerfs home prune <leftover>",
-   "positionals": [
-    {
-     "name": "leftover",
-     "kind": "Text"
-    }
-   ],
-   "options": [],
-   "stdin": null,
-   "with": {},
-   "paging": null,
-   "progress": false,
-   "quiet": false,
-   "profile": "full",
-   "short": {
-    "always": [],
-    "sometimes": [
-     "ok",
-     "freed_bytes"
-    ]
-   },
-   "long": [
-    "ok",
-    "freed_bytes",
-    "outcome",
-    "leftover",
-    "kind",
-    "machine",
-    "path"
-   ],
-   "item": null,
-   "examples": {
-    "short": [
-     "{\"freed_bytes\":11833344}",
-     "its size was not measured: {\"ok\":true}"
-    ],
-    "long": "{\"ok\":true,\"freed_bytes\":11833344,\"outcome\":\"removed\",\"leftover\":\"native:run_folder:tests-5f0c7a1e\",\"kind\":\"run_folder\",\"machine\":\"native\",\"path\":\"/Users/me/.layerfs/machine/native/run/tests-5f0c7a1e\"}"
-   },
-   "dropped": [
-    {
-     "today": "<id>",
-     "now": "<leftover>",
-     "why": "a thing goes by its own word"
-    }
-   ],
-   "new_work": "No new capability: the call moves from the `doctor` family. `bytes` becomes `freed_bytes`, `id` becomes `leftover`, `removed: true` becomes `outcome: removed`. The id carries the snake_case kind (`native:run_folder:...`). v19: removing an `export_container` (`docker rm -v` under the image's copy lock) is new; `image_part` is no longer a leftover (it was removed by its age, without the copy's lock)."
   }
  ]
 }

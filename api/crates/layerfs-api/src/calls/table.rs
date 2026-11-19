@@ -154,7 +154,7 @@ pub struct Call {
     pub quiet: bool,
     /// Whether the dispatcher opens (creates or converts) the home before
     /// it runs: every call but `home.init`, which opens it itself to say
-    /// what it did, and `home.get`, `home.leftovers` and the six doctors,
+    /// what it did, and `home.get` and the six doctors,
     /// which read a home without changing it (and answer without one).
     pub opens: bool,
     /// The keys of its answer (call surface 2.0). None while the call is

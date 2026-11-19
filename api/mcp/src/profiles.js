@@ -14,7 +14,7 @@ export const PROFILES = ["work", "admin"];
 
 /** What a family's calls are for; one line per family, in the doc. */
 const WHY = {
-  home: "set the home up, read its state and call log, check it and prune its leftovers",
+  home: "set the home up, read its state and call log, and check it",
   project: "import, list, read, count, export, delete or check a project, or hide a path in it",
   branch: "list, read, fork, merge, publish and remove Branches",
   commit: "read a Branch's Commit history and compare Commits",

@@ -191,6 +191,36 @@ pub fn log_line(home: &Path, name: &str, value: &SdkValue) -> Result<(), SdkRefu
     Ok(())
 }
 
+/// `log/sweep.jsonl`: what LayerFS removed of what interrupted operations
+/// left behind, and each removal that failed (spec v20).
+pub const SWEPT: &str = "sweep.jsonl";
+
+/// One line of [`SWEPT`] under `root` (a home, or a worker's root): `{ at,
+/// kind, path, outcome: removed | failed, bytes?, message? }`, `outcome`
+/// `removed` with the bytes freed when they were counted, else `failed`
+/// with why. A line that cannot be written changes nothing.
+pub fn log_swept(root: &Path, kind: &str, path: &Path, outcome: &Result<Option<u64>, String>) {
+    let mut fields = vec![
+        ("at", SdkValue::Int(now_ms())),
+        ("kind", SdkValue::text(kind)),
+        ("path", SdkValue::text(path.display().to_string())),
+    ];
+    match outcome {
+        Ok(bytes) => {
+            fields.push(("outcome", SdkValue::text("removed")));
+            if let Some(bytes) = bytes.and_then(|bytes| i64::try_from(bytes).ok()) {
+                fields.push(("bytes", SdkValue::Int(bytes)));
+            }
+        }
+        Err(why) => {
+            fields.push(("outcome", SdkValue::text("failed")));
+            fields.push(("message", SdkValue::text(why)));
+        }
+    }
+    let line = fields.into_iter().map(|(k, v)| (k.to_owned(), v)).collect();
+    let _ = log_line(root, SWEPT, &SdkValue::Map(line));
+}
+
 /// Milliseconds since the Unix epoch.
 pub fn now_ms() -> i64 {
     std::time::SystemTime::now()

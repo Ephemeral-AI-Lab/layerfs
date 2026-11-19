@@ -403,7 +403,7 @@ class Calls(unittest.TestCase):
             layerfs.FAMILIES,
             ["home", "project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup"],
         )
-        self.assertEqual(len(layerfs.TABLE), 85)
+        self.assertEqual(len(layerfs.TABLE), 83)
         for spec in layerfs.TABLE:
             self.assertTrue(callable(getattr(getattr(layerfs, spec["family"]), spec["call"])))
         # the options of `branch publish` (2.0 row: at, expected, force) are in

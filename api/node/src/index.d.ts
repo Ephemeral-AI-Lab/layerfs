@@ -123,11 +123,6 @@ export interface HomeDoctorOptions extends CallOptions {
   on_progress?: ProgressHandler;
 }
 
-/** Options of `home.leftovers`; an unknown option is refused. */
-export interface HomeLeftoversOptions extends CallOptions {
-  machine?: string;
-}
-
 /** Options of `project.init`; an unknown option is refused. */
 export interface ProjectInitOptions extends CallOptions {
   timeout?: WholeNumber;
@@ -583,10 +578,6 @@ export interface HomeFamily {
   clear_log(options?: CallOptions): Promise<Result>;
   /** check the home, then each machine, PostgreSQL Store and bucket, shallowly */
   doctor(options?: HomeDoctorOptions): Promise<Result>;
-  /** what earlier runs left behind on this computer and on each running machine */
-  leftovers(options?: HomeLeftoversOptions): Promise<Result>;
-  /** remove one leftover that home leftovers listed */
-  prune(leftover: string, options?: CallOptions): Promise<Result>;
 }
 
 export interface ProjectFamily {

@@ -10,10 +10,10 @@
 //! owner died is taken over at once (#175 R01). Each export uses its own
 //! container (`layerfs-export-<home8>-<machine>-<nonce>`) labeled with the
 //! home, machine, image and nonce, and removes only that container and its
-//! anonymous volumes on exit or error. A container a killed copy left is
-//! swept by the next copy of the same image to the same machine, under its
-//! [`ImageLock`], and is otherwise a `home leftovers` entry
-//! (`export_container`, [`left_exports`], [`remove_left_export`]). Progress
+//! anonymous volumes on exit or error. What killed copies left (their export
+//! containers, and unpack temporaries on the machine) is swept by the next
+//! copy to a machine, of every image whose lock is free
+//! ([`crate::image_sweep`], spec v20). Progress
 //! phases are `inspect`, `lock` (`{phase: "lock"}` once a second while another
 //! copy holds it), `export`, `send` (`done`/`total` bytes) and `unpack`; a copy
 //! records the phase it is in beside its lock ([`ImageLock::at`]).
@@ -87,7 +87,7 @@ impl<'a> Target<'a> {
     }
 
     /// One `image.artifact` step there.
-    fn step(&mut self, args: SdkValue) -> Outcome {
+    pub(crate) fn step(&mut self, args: SdkValue) -> Outcome {
         match &mut self.place {
             Place::Worker(worker) => worker
                 .attempt("image.artifact", args, &mut |_| {})
@@ -253,15 +253,8 @@ pub fn load_held(
     let machine = target.machine().to_owned();
     let lock = ImageLock::take(target.home(), &machine, id, events)?;
     // under the lock: the copy that held it may have published the image;
-    // an export container a killed copy of this image to this machine left
-    // is swept (any other is a `home leftovers` entry)
-    if let Some(home_id) = existing_home_id(target.home())? {
-        if let Ok(residual) = owned_for_home_id(docker, &home_id, Some(&machine), Some(id)) {
-            for entry in residual {
-                remove_container(docker, &entry.name);
-            }
-        }
-    }
+    // what killed copies left is swept, of every image whose lock is free
+    crate::image_sweep::sweep(docker, target, id);
     probe = target.probe(Some(id), None, archive, true)?;
     if held(&probe) {
         return Ok((reused(id, refs.clone(), kept(&probe)), Some(lock)));

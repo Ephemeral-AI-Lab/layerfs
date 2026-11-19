@@ -85,6 +85,20 @@ pub fn phase(home: &Path, store: &str, name: &str, phase: &str) -> Result<()> {
     }
 }
 
+/// Moves the operation this process holds on the project to `phase`,
+/// recording `args` with it: what settling it needs once its owner is gone
+/// (an Init's folder copy on a machine, `{ copy, machine }`).
+pub fn phase_with(home: &Path, store: &str, name: &str, phase: &str, args: SdkValue) -> Result<()> {
+    let _lock = lock::take(home)?;
+    let Some(record) = ProjectRecord::read(home, store, name)? else {
+        return Ok(());
+    };
+    match record.op() {
+        Some(op) if op.mine() => holding(record, &op.at(phase).with_args(args)).write(home),
+        _ => Ok(()),
+    }
+}
+
 /// Drops the operation this process holds from the project's record, when
 /// the record is still there.
 pub fn end(home: &Path, store: &str, name: &str) -> Result<()> {

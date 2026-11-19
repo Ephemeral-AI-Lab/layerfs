@@ -40,13 +40,11 @@ mod get;
 pub mod host;
 #[doc(hidden)]
 pub mod image_artifact;
-/// The export containers killed image copies left in the host's Docker
-/// (`home leftovers` kind `export_container`).
-pub mod image_exports;
 #[doc(hidden)]
 pub mod image_load;
 #[doc(hidden)]
 pub mod image_lock;
+mod image_sweep;
 #[doc(hidden)]
 pub mod image_tar;
 #[doc(hidden)]
@@ -75,6 +73,9 @@ pub mod run_folder;
 pub mod runtime;
 /// A Sandbox's state and a Workspace's, from records and daemon words.
 pub mod state;
+/// What interrupted Sandbox starts and removals left in a run root, removed
+/// where nothing can own it (spec v20).
+pub mod sweep;
 #[doc(hidden)]
 pub mod unmount_guard;
 #[cfg(unix)]

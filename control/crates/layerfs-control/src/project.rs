@@ -41,13 +41,17 @@ pub fn list(home: &Path, request: &ProjectList) -> Outcome {
 /// Store's own list does not hold (deleted from another home; the fix
 /// `project doctor` names). An Init through a machine's worker whose
 /// outcome is not known, recorded with no stack id, is resolved by that
-/// Store's list, read once: retired there when it is listed. Answers `{ ok, home_entry_kept,
+/// Store's list, read once: retired there when it is listed. Settling such
+/// an Init also removes the folder copy it sent ([`discard_copy`], spec
+/// v20). Answers `{ ok, home_entry_kept,
 /// outcome, deleted_at }`; a home entry it could not remove is kept for the
 /// next run, the project being retired already.
 pub fn delete(home: &Path, events: &mut Events<'_>, project: &ProjectRef) -> Outcome {
     let (store, name) = (project.store.as_str(), project.project.as_str());
     let prior = ProjectRecord::read(home, store, name)?.and_then(|record| record.op());
-    let left_init = prior.is_some_and(|op| op.name() == INIT && op.standing() != Standing::Running);
+    let left_init = prior
+        .as_ref()
+        .is_some_and(|op| op.name() == INIT && op.standing() != Standing::Running);
     op::begin(home, store, name, DELETE, "mark")?;
     let outcome =
         match layerfs_store::project::delete::delete(home, events, project, PROJECT_RELATED) {
@@ -70,7 +74,53 @@ pub fn delete(home: &Path, events: &mut Events<'_>, project: &ProjectRef) -> Out
             Err(refusal) => Err(refusal),
         };
     settle(home, store, name, &outcome);
+    // an Init this process ran ended once it was marked uncertain
+    let settled = prior.as_ref().filter(|op| {
+        op.name() == INIT && (op.standing() != Standing::Running || (op.mine() && op.uncertain()))
+    });
+    if let (Ok(_), Some(init)) = (&outcome, settled) {
+        discard_copy(home, (store, name), init.args());
+    }
     outcome
+}
+
+/// Removes the folder copy an Init whose owner is gone sent to a machine
+/// (`args`: its `op`'s `{ copy, machine }`), once the delete that settles
+/// that Init succeeded (spec v20): one `project.stage` `discard` there. A
+/// copy its Init still reads is held by that Init, which removes it when it
+/// ends, and is left. What was removed, and a removal that failed, is a
+/// line of the home's `log/sweep.jsonl`; the delete's outcome does not
+/// change.
+fn discard_copy(home: &Path, (store, name): (&str, &str), args: &SdkValue) {
+    use layerfs_store::place::{on_machine, Executor};
+    use layerfs_store::project::frame::{StageFrame, StageStep};
+    let (Some(copy), Some(machine)) = (args.get_text("copy"), args.get_text("machine")) else {
+        return;
+    };
+    let frame = StageFrame {
+        store: store.to_owned(),
+        name: name.to_owned(),
+        id: copy.to_owned(),
+        step: StageStep::Discard,
+    };
+    let discarded = match on_machine(home, machine) {
+        Ok(Executor::Worker(mut worker)) => {
+            (worker.attempt("project.stage", frame.encode(), &mut |_| {}))
+                .map_err(|unreached| unreached.0)
+                .and_then(|outcome| outcome)
+        }
+        Ok(Executor::Local) => layerfs_store::project::staged::run(home, &frame),
+        Err(refusal) => Err(refusal),
+    };
+    let shown = layerfs_store::project::send::left(machine, copy);
+    let log =
+        |outcome| layerfs_home::home::log_swept(home, "init_copy", Path::new(&shown), &outcome);
+    match discarded {
+        Ok(out) if out.get_bool("discarded") => log(Ok(None)),
+        // absent already, or held by the Init that still reads it
+        Ok(_) => {}
+        Err(refusal) => log(Err(refusal.message)),
+    }
 }
 
 /// Whether the home records project `name` of Store `store` and the Store's

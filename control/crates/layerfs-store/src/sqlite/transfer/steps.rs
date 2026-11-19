@@ -241,11 +241,16 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
             ))
         }
         StoreStep::Unstage => {
-            match std::fs::remove_file(with_suffix(&file, ".backup")) {
+            // `removed`: whether a staged snapshot was there
+            let removed = match std::fs::remove_file(with_suffix(&file, ".backup")) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(failed(e)),
-                _ => {}
-            }
-            Ok(SdkValue::map([("unstaged", SdkValue::Bool(true))]))
+                Err(_) => false,
+                Ok(()) => true,
+            };
+            Ok(SdkValue::map([
+                ("unstaged", SdkValue::Bool(true)),
+                ("removed", SdkValue::Bool(removed)),
+            ]))
         }
         StoreStep::Read {
             offset,

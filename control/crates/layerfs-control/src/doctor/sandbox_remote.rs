@@ -167,14 +167,8 @@ fn merge(report: SdkValue, checks: &mut Checks, seen: &mut Observed) {
 /// Worker-only fixed-root observation; no Store routes or caller-controlled
 /// paths: the live checks of Sandbox `name` from this root, its
 /// Workspaces (`workspaces`, named by this root's records) and how its
-/// daemon's list went (`listing`). With `leftovers: true` it answers this
-/// root's leftover walk instead (`leftovers::walk_in_worker`,
-/// layerfs-project#180): the same read-only operation, with no Sandbox
-/// named.
+/// daemon's list went (`listing`).
 pub(crate) fn worker_diagnose(root: &Path, args: SdkValue) -> Outcome {
-    if args.get_bool("leftovers") {
-        return Ok(super::super::leftovers::walk_in_worker(root, &args));
-    }
     let name = args
         .get_text("name")
         .ok_or_else(|| refused("InvalidInput", "sandbox diagnostic name"))?;
