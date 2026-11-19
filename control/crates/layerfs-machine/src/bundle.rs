@@ -8,6 +8,8 @@
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::outcome::refused;
 #[cfg(feature = "machine")]
+use layerfs_home::outcome::{shell_word, with_fix};
+#[cfg(feature = "machine")]
 use layerfs_platform::Bundle;
 use std::path::PathBuf;
 
@@ -32,19 +34,73 @@ pub fn bundle_place(os: &str) -> Result<(PathBuf, &'static str), SdkRefusal> {
             return Ok((PathBuf::from(dir), "env:LAYERFS_BUNDLE"));
         }
     }
-    let folder = format!("{os}-{}", std::env::consts::ARCH);
-    let command = std::env::current_exe().and_then(std::fs::canonicalize).ok();
-    let runtime = command.as_deref().and_then(|c| c.parent()?.parent());
-    if let Some(dir) = runtime.map(|r| r.join("bundle").join(&folder)) {
-        if dir.join("bundle.json").is_file() {
-            return Ok((dir, "runtime"));
-        }
+    if let Some(dir) = runtime_place(os) {
+        return Ok((dir, "runtime"));
     }
+    Ok((cache_place(os)?, "cache"))
+}
+
+/// The bundle an installed runtime carries beside its command, when it
+/// has a `bundle.json`.
+fn runtime_place(os: &str) -> Option<PathBuf> {
+    let command = std::env::current_exe()
+        .and_then(std::fs::canonicalize)
+        .ok()?;
+    let runtime = command.parent()?.parent()?;
+    let dir = runtime.join("bundle").join(folder(os));
+    dir.join("bundle.json").is_file().then_some(dir)
+}
+
+/// The cache's bundle of this version, which every build of it shares.
+fn cache_place(os: &str) -> Result<PathBuf, SdkRefusal> {
     let cache = cache_root()?;
-    let dir = (cache.join("layerfs").join("bundle"))
+    Ok((cache.join("layerfs").join("bundle"))
         .join(env!("CARGO_PKG_VERSION"))
-        .join(folder);
-    Ok((dir, "cache"))
+        .join(folder(os)))
+}
+
+/// A bundle's folder name for `os` on this host's architecture.
+fn folder(os: &str) -> String {
+    format!("{os}-{}", std::env::consts::ARCH)
+}
+
+/// The `fix` of a Linux bundle at `refused` (found as `source`) sealed
+/// from another commit than this build's (`ours`), and the sentence that
+/// says where this build's is: the first other place [`bundle_place`]
+/// looks that holds a sealed bundle of commit `ours`. Unsetting
+/// `LAYERFS_BUNDLE` when it is the place found without it; else
+/// `LAYERFS_BUNDLE` pointed at it. `None` when no place holds one: no
+/// command fixes it then (RT5 note 4).
+#[cfg(feature = "machine")]
+fn own_bundle(refused: &std::path::Path, source: &str, ours: &str) -> Option<(String, String)> {
+    // where it is looked for with LAYERFS_BUNDLE unset, in order
+    let places: Vec<PathBuf> = (runtime_place("linux").into_iter())
+        .chain(cache_place("linux").ok())
+        .collect();
+    let ours_at = |dir: &PathBuf| {
+        let manifest = layerfs_home::home::read_record(&dir.join("bundle.json"));
+        manifest.ok().flatten().is_some_and(|manifest| {
+            let head = manifest.get("source").and_then(|s| s.get_text("head"));
+            manifest.get_text("hash").is_some() && head == Some(ours)
+        })
+    };
+    let (at, dir) = (places.iter().enumerate()).find(|(_, dir)| *dir != refused && ours_at(dir))?;
+    let shown = dir.display();
+    Some(match source == "env:LAYERFS_BUNDLE" && at == 0 {
+        true => (
+            "unset LAYERFS_BUNDLE".to_owned(),
+            format!(
+                "this build's bundle is at {shown}, which is used once LAYERFS_BUNDLE is unset"
+            ),
+        ),
+        false => (
+            format!(
+                "export LAYERFS_BUNDLE={}",
+                shell_word(&dir.to_string_lossy())
+            ),
+            format!("this build's bundle is at {shown}: point LAYERFS_BUNDLE at it"),
+        ),
+    })
 }
 
 /// The commit this build was compiled from, as the build tools name it
@@ -56,9 +112,11 @@ fn build_commit() -> Option<&'static str> {
 }
 
 /// The bundle of this build, or `Unsupported` naming where it is expected.
+/// One sealed from another commit is refused `Unavailable`, with the `fix`
+/// that reaches this build's own when one is where LayerFS looks.
 #[cfg(feature = "machine")]
 pub fn bundle() -> Result<Bundle, SdkRefusal> {
-    let dir = bundle_dir("linux")?;
+    let (dir, source) = bundle_place("linux")?;
     let hash = crate::worker::sealed_hash(&dir)?.ok_or_else(|| {
             let mut refusal = refused(
                 "Unsupported",
@@ -100,15 +158,23 @@ pub fn bundle() -> Result<Bundle, SdkRefusal> {
         let sealed = manifest.get("source").and_then(|s| s.get_text("head"));
         if let (Some(ours), Some(theirs)) = (build_commit(), sealed) {
             if ours != theirs {
-                return Err(refused(
-                    "Unavailable",
-                    format!(
-                        "the Linux bundle at {} was sealed from {}, this build from {}; a worker started from it would not answer this build's calls: point LAYERFS_BUNDLE at this build's bundle, or rebuild it with `python3 tools/linux_bundle.py`",
-                        dir.display(),
-                        theirs.get(..10).unwrap_or(theirs),
-                        &ours[..10]
+                let said = format!(
+                    "the Linux bundle at {} was sealed from {}, this build from {}; a worker started from it would not answer this build's calls",
+                    dir.display(),
+                    theirs.get(..10).unwrap_or(theirs),
+                    &ours[..10]
+                );
+                return Err(match own_bundle(&dir, source, ours) {
+                    Some((fix, where_)) => {
+                        with_fix(refused("Unavailable", format!("{said}; {where_}")), fix)
+                    }
+                    None => refused(
+                        "Unavailable",
+                        format!(
+                            "{said}; no bundle of this build is where LayerFS looks (LAYERFS_BUNDLE, beside an installed runtime's command, or the cache): rebuild it with `python3 tools/linux_bundle.py`"
+                        ),
                     ),
-                ));
+                });
             }
         }
     }
