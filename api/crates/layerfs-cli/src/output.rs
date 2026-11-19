@@ -366,11 +366,36 @@ fn absent(column: &str) -> &'static str {
     }
 }
 
+/// The fields a row says beside its table, not in a column: its fix and
+/// its message, one line each under the table.
+const BESIDE: [&str; 2] = ["fix", "message"];
+
+/// A row's STATE cell: its state (`ready` when left out), with its
+/// `reason` (`broken: outdated`) and what it is blocked by (`blocked by
+/// machine docker (outdated)`).
+fn state(row: &SdkValue) -> String {
+    let mut cell = row.get_text("state").unwrap_or(absent("state")).to_owned();
+    if let Some(SdkValue::Map(by)) = row.get("blocked_by") {
+        if let Some((word, name)) = by.first() {
+            cell.push_str(&format!(" by {word} {}", self::cell(name)));
+        }
+        if let Some(reason) = row.get("blocked_by").and_then(|by| by.get_text("reason")) {
+            cell.push_str(&format!(" ({reason})"));
+        }
+    }
+    if let Some(reason) = row.get_text("reason") {
+        cell.push_str(&format!(": {reason}"));
+    }
+    cell
+}
+
 /// Rows as aligned columns under bold headers, each line after `pad`;
 /// nested values are left out. A row form (`declared`) whose rows carry a
 /// state keeps its STATE column when every row left `state: ready` out, in
-/// the place its long form gives it. A `*_not_listed` flag is no column:
-/// a note under the table names the rows it is set on.
+/// the place its long form gives it; the STATE cell carries the row's
+/// reason and what blocks it ([`state`]). A row's fix and message are
+/// lines under the table, named by the row's first cell. A `*_not_listed`
+/// flag is no column: a note under the table names the rows it is set on.
 fn table(rows: &[SdkValue], declared: Option<&Form>, pad: &str) -> String {
     let mut columns: Vec<&str> = Vec::new();
     let mut flags: Vec<&str> = Vec::new();
@@ -381,7 +406,10 @@ fn table(rows: &[SdkValue], declared: Option<&Form>, pad: &str) -> String {
                     if !flags.contains(&key.as_str()) {
                         flags.push(key);
                     }
-                } else if scalar(value) && !columns.contains(&key.as_str()) {
+                } else if scalar(value)
+                    && !BESIDE.contains(&key.as_str())
+                    && !columns.contains(&key.as_str())
+                {
                     columns.push(key);
                 }
             }
@@ -395,6 +423,15 @@ fn table(rows: &[SdkValue], declared: Option<&Form>, pad: &str) -> String {
             columns.insert(place, "state");
         }
     }
+    // the STATE cell says the reason; a row blocked by something says so
+    // there too, so a STATE column stands for both
+    let blocked = rows.iter().any(|row| row.get("blocked_by").is_some());
+    if blocked && !columns.contains(&"state") {
+        columns.push("state");
+    }
+    if columns.contains(&"state") {
+        columns.retain(|column| *column != "reason");
+    }
     if columns.is_empty() {
         return format!("{pad}(none)\n");
     }
@@ -403,10 +440,11 @@ fn table(rows: &[SdkValue], declared: Option<&Form>, pad: &str) -> String {
         .map(|row| {
             columns
                 .iter()
-                .map(|c| {
-                    row.get(c)
+                .map(|c| match *c {
+                    "state" => state(row),
+                    c => (row.get(c))
                         .map(|v| format_field(c, v))
-                        .unwrap_or_else(|| absent(c).to_owned())
+                        .unwrap_or_else(|| absent(c).to_owned()),
                 })
                 .collect()
         })
@@ -430,6 +468,29 @@ fn table(rows: &[SdkValue], declared: Option<&Form>, pad: &str) -> String {
     let mut out = format!("{}\n", crate::banner::bold(&line(&headers)));
     for row in &cells {
         out.push_str(&format!("{}\n", line(row)));
+    }
+    let beside: Vec<(String, String)> = (rows.iter().zip(&cells))
+        .flat_map(|(row, cells)| {
+            BESIDE.iter().filter_map(move |key| {
+                let said = row.get_text(key)?;
+                let named = match *key {
+                    "fix" => format!("fix {}:", cells[0]),
+                    _ => format!("{}:", cells[0]),
+                };
+                Some((named, said.to_owned()))
+            })
+        })
+        .collect();
+    if !beside.is_empty() {
+        out.push('\n');
+        let width = beside
+            .iter()
+            .map(|(n, _)| n.chars().count())
+            .max()
+            .unwrap_or(0);
+        for (named, said) in &beside {
+            out.push_str(&format!("{pad}{named:<width$} {said}\n"));
+        }
     }
     for flag in flags {
         let named: Vec<String> = (rows.iter().zip(&cells))
