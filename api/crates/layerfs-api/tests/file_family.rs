@@ -548,6 +548,14 @@ fn a_taken_branch_name_says_so_and_offers_another() {
         fix(&taken),
         "layerfs branch merge shop/api dev main --into dev-2"
     );
+    // main moves only by publish: a merge into it offers the publish
+    let into_main = refused(
+        &home,
+        "branch.merge",
+        &[p(), ("branch", t("main")), ("from", t("dev"))],
+    );
+    assert_eq!(into_main.code, "InvalidInput", "{into_main:?}");
+    assert_eq!(fix(&into_main), "layerfs branch publish shop/api dev");
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(folder).unwrap();
 }

@@ -252,8 +252,19 @@ pub fn merge(home: &Path, events: &mut Events<'_>, request: &BranchMerge) -> Out
         request.from,
         request.into.as_deref().unwrap_or_default(),
     );
-    let value = on_project(home, events, &request.project, StoreOp::Merge(request))
-        .map_err(|refusal| taken(next_fields(refusal), again))?;
+    // main moves only by publish: publishing `from` is the merge into it
+    let publish = format!(
+        "layerfs branch publish {} {}",
+        request.project, request.from
+    );
+    let into_main = request.branch == "main" && request.into.is_none();
+    let value =
+        on_project(home, events, &request.project, StoreOp::Merge(request)).map_err(|refusal| {
+            match into_main && refusal.code == "InvalidInput" {
+                true => with_fix(next_fields(refusal), publish),
+                false => taken(next_fields(refusal), again),
+            }
+        })?;
     let take = |key: &str| value.get(key).cloned().unwrap_or_default();
     let source = |at: usize| match value.get("sources") {
         Some(SdkValue::List(sources)) => sources
