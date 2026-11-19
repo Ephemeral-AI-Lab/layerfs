@@ -238,6 +238,56 @@ fn named_sandboxes_on_native() {
     );
     assert_eq!(read.get_text("text"), Some("made\n"));
 
+    // RC-A F2: `--expected` on a fork with no Commit of its own compares
+    // with the head `branch get` answers (the Commit it was forked at)
+    ok(
+        &home,
+        "branch.fork",
+        &[("project", t("shop/api")), ("name", t("fresh"))],
+    );
+    let head = ok(
+        &home,
+        "branch.get",
+        &[("project", t("shop/api")), ("branch", t("fresh"))],
+    );
+    let head = text(&head, "commit");
+    let mounted = ok(
+        &home,
+        "workspace.mount",
+        &[("sandbox", t("t1")), ("branch", t("fresh"))],
+    );
+    let fresh = text(&mounted, "workspace");
+    ok(
+        &home,
+        "workspace.exec",
+        &[("workspace", t(&fresh)), ("command", t("echo f > F.md"))],
+    );
+    // dev's head, a Commit that is not fresh's
+    let dev = ok(
+        &home,
+        "branch.get",
+        &[("project", t("shop/api")), ("branch", t("dev"))],
+    );
+    let dev = text(&dev, "commit");
+    assert_ne!(dev, head);
+    let wrong = layerfs_api::call(
+        Some(&home),
+        "workspace.commit",
+        SdkValue::map([("workspace", t(&fresh)), ("expected", t(&dev))]),
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert_eq!(wrong.code, "Conflict", "{wrong:?}");
+    let next = wrong.detail.get("next").expect("flat fields");
+    assert_eq!(next.get_text("commit"), Some(head.as_str()), "{wrong:?}");
+    let committed = ok(
+        &home,
+        "workspace.commit",
+        &[("workspace", t(&fresh)), ("expected", t(&head))],
+    );
+    assert!(committed.get_text("commit").is_some(), "{committed:?}");
+    ok(&home, "workspace.unmount", &[("workspace", t(&fresh))]);
+
     // #533 review P1-20: two Workspaces write one file; the second commit
     // conflicts, and with `force` publishes over the moved head
     let mut both = Vec::new();
@@ -338,6 +388,19 @@ fn named_sandboxes_on_native() {
     };
     assert_eq!(unmounted, 2, "{closed:?}");
     assert!(!paths::sandbox_dir(&home, "t1").exists());
+    // RV5 FAIL-2: its stop ended both Workspaces' mount intents, so
+    // nothing it says is left, and their Branch and the Store are free
+    assert!(
+        matches!(closed.get("left"), None | Some(SdkValue::Null))
+            || closed.get("left") == Some(&SdkValue::List(Vec::new())),
+        "{closed:?}"
+    );
+    ok(
+        &home,
+        "branch.remove",
+        &[("project", t("shop/api")), ("branch", t("dev"))],
+    );
+    ok(&home, "store.compact", &[("store", t("shop"))]);
     ok(
         &home,
         "sandbox.create",

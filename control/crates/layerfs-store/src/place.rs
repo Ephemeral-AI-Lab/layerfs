@@ -78,7 +78,9 @@ pub fn on_machine_read(home: &Path, machine: &str) -> Result<Executor> {
     // its remove as the fix, which the call boundary widens to the chain
     // of what is on it (UI2-8; RC-B F3)
     if let Some(record) = layerfs_machine::record::MachineRecord::read(home, machine)? {
-        record.provider_name()?;
+        if record.nameless() {
+            record.provider_name()?;
+        }
     }
     Ok(Executor::Worker(Worker {
         home: home.to_owned(),

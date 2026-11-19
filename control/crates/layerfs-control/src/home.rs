@@ -116,9 +116,16 @@ pub fn get(home: &Path, build: Build<'_>, with: With) -> Outcome {
             layout,
             Some(layerfs_home::home::layout::foreign(home).message),
         ),
-        // a `layerfs.json` this build cannot read is not a 2.0 home's
-        // (MIG): `outdated`, one of the row's reasons, with the fix that
-        // moves the folder aside (C11 gives a broken state its fix; RC-B N1)
+        // a home the system refuses to read (permissions, I/O) may be a
+        // real 2.0 home: `failed` with the OS error, never the move aside
+        Err(refusal) if refusal.detail.get_bool("unreadable") => (
+            State::broken(Reason::Failed, None),
+            None,
+            Some(refusal.message),
+        ),
+        // a `layerfs.json` this build cannot parse, or of no layout it
+        // knows, is not a 2.0 home's (MIG): `outdated` with the fix that
+        // moves the folder aside (C11 gives a broken state its fix; RC-8)
         Err(refusal) => (
             State::broken(
                 Reason::Outdated,

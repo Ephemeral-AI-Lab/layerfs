@@ -189,6 +189,30 @@ fn a_home_it_cannot_read_is_broken_not_refused() {
     let _ = std::fs::remove_dir_all(&home);
 }
 
+/// A real 2.0 home whose `layerfs.json` the system refuses to read
+/// (EACCES here) is `failed` with the OS error, and is never advised to be
+/// moved aside (RC-8, RV5).
+#[test]
+fn a_home_the_system_refuses_to_read_is_failed_with_no_move_aside() {
+    let home = place();
+    call(&home, "home.init");
+    let file = home.join("layerfs.json");
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let got = get(&home);
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+    assert_eq!(got.get_text("state"), Some("broken"));
+    assert_eq!(got.get_text("reason"), Some("failed"));
+    assert_eq!(got.get("fix"), Some(&SdkValue::Null));
+    let message = got.get_text("message").expect("message");
+    assert_eq!(
+        message,
+        format!("{}: Permission denied (os error 13)", file.display())
+    );
+    // the home is as it was, and reads as ready again
+    assert_eq!(get(&home).get_text("state"), Some("ready"));
+    let _ = std::fs::remove_dir_all(&home);
+}
+
 #[test]
 fn the_generation_moves_when_a_record_is_written_or_removed_and_not_on_a_read() {
     let home = place();

@@ -415,3 +415,52 @@ fn an_unreadable_bucket_record_is_not_listed() {
     );
     std::fs::remove_dir_all(home).unwrap();
 }
+
+/// A bucket whose key has no saved secret: `backup create` and `backup
+/// restore` are refused before any request with the connect-again line
+/// as their fix (V21-4, RC-A F4).
+#[test]
+fn create_and_restore_without_a_saved_secret_carry_the_connect_again_fix() {
+    let home = tempdir("no-secret");
+    home::open(&home).unwrap();
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    write_record(
+        &paths::bucket_record(&home, "nokey"),
+        &SdkValue::map([
+            ("name", t("nokey")),
+            ("provider", t("minio")),
+            ("endpoint", t("http://127.0.0.1:9")),
+            ("bucket", t("nothing")),
+            ("prefix", t("pre")),
+            ("region", t("us-east-1")),
+            ("access_key", t("user")),
+        ]),
+    )
+    .unwrap();
+    let fix = "layerfs backup connect nokey http://127.0.0.1:9/nothing/pre --access-key <key> \
+               --key-stdin";
+    let refused = |name: &str, args: &[(&str, SdkValue)]| {
+        let args = SdkValue::Map(
+            args.iter()
+                .map(|(n, v)| ((*n).to_owned(), v.clone()))
+                .collect(),
+        );
+        layerfs_api::call(Some(&home), name, args, &mut |_| {}).unwrap_err()
+    };
+    let created = refused(
+        "backup.create",
+        &[("store", t("shop")), ("bucket", t("nokey"))],
+    );
+    assert_eq!(created.detail.get_text("fix"), Some(fix), "{created:?}");
+    let restored = refused(
+        "backup.restore",
+        &[
+            ("bucket", t("nokey")),
+            ("file", t("shop")),
+            ("store", t("copy")),
+        ],
+    );
+    assert_eq!(restored.detail.get_text("fix"), Some(fix), "{restored:?}");
+    assert_eq!(created.code, restored.code);
+    std::fs::remove_dir_all(&home).unwrap();
+}

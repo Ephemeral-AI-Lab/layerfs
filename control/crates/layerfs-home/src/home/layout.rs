@@ -6,7 +6,7 @@
 //! record it as where they were exported from. A folder that is not such a
 //! home, and is not empty, is refused with a fix that moves it aside: this
 //! build writes nothing in it. Reading never changes anything.
-use super::records::{private_dir, read_record, write_record};
+use super::records::{private_dir, read_record, unreadable, write_record};
 use crate::outcome::{refused, shell_word, with_fix};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -39,7 +39,8 @@ pub enum Layout {
 
 /// The home's layout, read only. A `layerfs.json` that cannot be read, has
 /// no layout number, or names this layout with a bad id is refused
-/// `Failed`.
+/// `Failed`; one the system refused to read (or a home folder it refused to
+/// list) has `unreadable` in its detail ([`unreadable`]).
 pub fn detect(home: &Path) -> Result<Layout, SdkRefusal> {
     match read_record(&home.join("layerfs.json"))? {
         Some(value) => match value.get_int("layout") {
@@ -51,7 +52,7 @@ pub fn detect(home: &Path) -> Result<Layout, SdkRefusal> {
             Ok(true) => Ok(Layout::Empty),
             Ok(false) => Ok(Layout::Foreign),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Layout::Empty),
-            Err(error) => Err(refused("Failed", format!("{}: {error}", home.display()))),
+            Err(error) => Err(unreadable(home, &error)),
         },
     }
 }

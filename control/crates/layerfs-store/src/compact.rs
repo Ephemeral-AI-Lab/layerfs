@@ -354,11 +354,6 @@ fn compact_sqlite(
         identity.cursor_key,
     )
     .map_err(open_refusal)?;
-    // a home's own sqlite Store: mount intents its removed Sandboxes left
-    // go before the run is admitted (RC-B F1)
-    if here == IN_THIS_PROCESS {
-        end_removed_mounts(&home, &handles.history);
-    }
     let (owner_pid_start, owner_pid_boot) = match layerfs_home::process::me() {
         Some((start, boot)) => (Some(start), Some(boot)),
         None => (None, None),
@@ -391,36 +386,6 @@ fn compact_sqlite(
             naming_live_run(refusal, &path)
         })?;
     Ok(crate::report::compact_report(store, &receipt))
-}
-
-/// Whether a mount intent is one a Sandbox this home no longer records
-/// left: it names a Sandbox, and `home` has no folder of that name. A
-/// Sandbox's folder goes only once its remove stopped its daemon, the
-/// intent's owner (or found its runtime gone), so no live mount holds it.
-pub fn left_by_removed(home: &Path, intent: &layerfs_history::GcIntent) -> bool {
-    let sandbox = match (&intent.kind, &intent.sandbox) {
-        (layerfs_history::GcIntentKind::Mount, Some(sandbox)) => sandbox,
-        _ => return false,
-    };
-    layerfs_home::names::SandboxName::parse(sandbox).is_ok()
-        && !paths::sandbox_dir(home, sandbox).exists()
-}
-
-/// Ends, once each, the mount intents of home `home`'s sqlite Store that
-/// Sandboxes it no longer records left ([`left_by_removed`]): released, or
-/// marked uncertain when the Store refuses the delete, so the compaction's
-/// own admission then names them `Unresolved`. A Store that lists no
-/// intents is left as it is; the admission decides what holds it.
-fn end_removed_mounts(home: &Path, catalog: &dyn layerfs_history::HistoryCatalog) {
-    let Ok(intents) = catalog.gc_all_intents() else {
-        return;
-    };
-    for intent in intents
-        .iter()
-        .filter(|intent| left_by_removed(home, intent))
-    {
-        let _ = admission::release_or_mark(catalog, &intent.op_id);
-    }
 }
 
 /// The §8 PostgreSQL path: dial the Store's recorded URL, open its schema as

@@ -543,13 +543,6 @@ pub trait HistoryCatalog: Send + Sync {
         self.remove_path(request)
     }
 
-    /// Every intent the Store records, whatever its scope: the set a
-    /// Store-scope compaction is admitted against, for its sweep of mount
-    /// intents whose Sandbox the home no longer records, and its doctor.
-    fn gc_all_intents(&self) -> HistoryResult<Vec<GcIntent>> {
-        Err(crate::error::HistoryError::Unsupported("GC admission"))
-    }
-
     /// The live intents recorded at one scope, for `store.status` and tests.
     fn gc_intents(
         &self,
