@@ -3,7 +3,8 @@
 //! host and `docker` on macOS needs. It lives in a per-build user cache
 //! outside every home, `<cache>/layerfs/bundle/<version>/linux-<arch>/`,
 //! with its hash in `bundle.json`; `tools/linux_bundle.py` builds and places
-//! it. `LAYERFS_BUNDLE` (internal) names another folder.
+//! it. An installed runtime carries its own beside its command, which comes
+//! first; `LAYERFS_BUNDLE` (internal) names another folder.
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::outcome::refused;
 #[cfg(feature = "machine")]
@@ -13,22 +14,45 @@ use std::path::PathBuf;
 /// The Sandbox image archive (a docker-archive) a Linux bundle carries.
 pub const IMAGE_ARCHIVE: &str = "sandbox-image.tar";
 
-/// The sealed bundle's folder for `os` on this host's architecture (O16):
-/// `<cache>/layerfs/bundle/<version>/<os>-<arch>/`, the cache being
-/// `XDG_CACHE_HOME` or `~/.cache`; for Linux, `LAYERFS_BUNDLE` (internal)
-/// names another folder.
+/// The sealed bundle's folder for `os` on this host's architecture (O16).
 pub fn bundle_dir(os: &str) -> Result<PathBuf, SdkRefusal> {
+    bundle_place(os).map(|(dir, _)| dir)
+}
+
+/// The sealed bundle's folder for `os` and where it was found: for Linux,
+/// `LAYERFS_BUNDLE` (`env:LAYERFS_BUNDLE`); else the bundle an installed
+/// runtime carries beside its command, `<runtime>/bin/layerfs` beside
+/// `<runtime>/bundle/<os>-<arch>/` with its `bundle.json` (`runtime`); else
+/// `<cache>/layerfs/bundle/<version>/<os>-<arch>/`, the cache being
+/// `XDG_CACHE_HOME` or `~/.cache` (`cache`), which every build of this
+/// version shares.
+pub fn bundle_place(os: &str) -> Result<(PathBuf, &'static str), SdkRefusal> {
     if os == "linux" {
         if let Some(dir) = std::env::var_os("LAYERFS_BUNDLE").filter(|d| !d.is_empty()) {
-            return Ok(PathBuf::from(dir));
+            return Ok((PathBuf::from(dir), "env:LAYERFS_BUNDLE"));
+        }
+    }
+    let folder = format!("{os}-{}", std::env::consts::ARCH);
+    let command = std::env::current_exe().and_then(std::fs::canonicalize).ok();
+    let runtime = command.as_deref().and_then(|c| c.parent()?.parent());
+    if let Some(dir) = runtime.map(|r| r.join("bundle").join(&folder)) {
+        if dir.join("bundle.json").is_file() {
+            return Ok((dir, "runtime"));
         }
     }
     let cache = cache_root()?;
-    Ok(cache
-        .join("layerfs")
-        .join("bundle")
+    let dir = (cache.join("layerfs").join("bundle"))
         .join(env!("CARGO_PKG_VERSION"))
-        .join(format!("{os}-{}", std::env::consts::ARCH)))
+        .join(folder);
+    Ok((dir, "cache"))
+}
+
+/// The commit this build was compiled from, as the build tools name it
+/// (`LAYERFS_BUILD_COMMIT`); `None` when they named none.
+#[cfg(feature = "machine")]
+fn build_commit() -> Option<&'static str> {
+    option_env!("LAYERFS_BUILD_COMMIT")
+        .filter(|commit| commit.len() == 40 && commit.bytes().all(|b| b.is_ascii_hexdigit()))
 }
 
 /// The bundle of this build, or `Unsupported` naming where it is expected.
@@ -67,6 +91,22 @@ pub fn bundle() -> Result<Bundle, SdkRefusal> {
                     format!(
                         "the Linux bundle is for {platform}, not linux-{}",
                         std::env::consts::ARCH
+                    ),
+                ));
+            }
+        }
+        // a bundle sealed from another commit speaks this protocol but not
+        // this build's calls: a worker started from it answers them wrongly
+        let sealed = manifest.get("source").and_then(|s| s.get_text("head"));
+        if let (Some(ours), Some(theirs)) = (build_commit(), sealed) {
+            if ours != theirs {
+                return Err(refused(
+                    "Unavailable",
+                    format!(
+                        "the Linux bundle at {} was sealed from {}, this build from {}; a worker started from it would not answer this build's calls: point LAYERFS_BUNDLE at this build's bundle, or rebuild it with `python3 tools/linux_bundle.py`",
+                        dir.display(),
+                        theirs.get(..10).unwrap_or(theirs),
+                        &ours[..10]
                     ),
                 ));
             }

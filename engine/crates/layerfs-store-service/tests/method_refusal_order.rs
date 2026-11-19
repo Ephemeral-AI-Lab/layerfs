@@ -44,6 +44,10 @@ fn the_first_fault_met_is_the_refusal() {
     );
     assert_eq!(r.code, "NoSuchPath");
     assert!(r.message.starts_with("/absent does not exist at feat@"));
+    // the label's short id is a prefix a Commit lookup accepts
+    let label = r.message.rsplit('@').next().unwrap();
+    assert_eq!(label.len(), 14);
+    fixture.call("branch.get_commit", vec![("commit", t(label))]);
     let r = refused(
         &fixture,
         "fs.list",

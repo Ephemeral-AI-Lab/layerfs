@@ -129,16 +129,34 @@ impl Overlay {
     }
     /// Changed inodes of the active generation after `after`, from the same
     /// indexed window a capture reads. A diagnostic observation: membership
-    /// may change between windows.
+    /// may change between windows. A row carried for an mtime-only capture
+    /// ([`Self::keep_live_row`]) and not written since is no change and is
+    /// left out; a window of only such rows reads on, so an empty answer
+    /// still means the end.
     pub fn active_inodes(&self, after: u64) -> OverlayResult<Vec<Inode>> {
         let state = self.live()?;
-        self.query(
-            StatementKind::Capture,
-            sql::INODE_CAPTURE,
-            &[&state.active.0, &integer(after)?],
-            24,
-            inode::decode,
-        )
+        let mut after = after;
+        loop {
+            let window = self.query(
+                StatementKind::Capture,
+                sql::INODE_CAPTURE,
+                &[&state.active.0, &integer(after)?],
+                24,
+                inode::decode,
+            )?;
+            let Some(last) = window.last() else {
+                return Ok(window);
+            };
+            after = last.serial;
+            let open = self.open.borrow();
+            let kept = |row: &Inode| {
+                i64::try_from(row.serial).is_ok_and(|key| open.kept_live.rows.contains_key(&key))
+            };
+            let changed: Vec<Inode> = window.into_iter().filter(|row| !kept(row)).collect();
+            if !changed.is_empty() {
+                return Ok(changed);
+            }
+        }
     }
     /// Changed name bindings of the active generation after `(parent, name)`,
     /// as [`Self::active_inodes`] observes inodes.

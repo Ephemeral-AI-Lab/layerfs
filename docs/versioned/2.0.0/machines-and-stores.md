@@ -109,10 +109,15 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
 - A create checks the kind's tools first; a missing tool is `Unsupported`
   with `detail.missing`.
 - A create needs the sealed Linux bundle (O16): the guest worker, the
-  daemon, the Sandbox helper and the Sandbox image, in
-  `<cache>/layerfs/bundle/<version>/` with `bundle.json` holding its hash.
-  `<cache>` is `XDG_CACHE_HOME`, else `~/.cache`. Without it the create is
-  `Unsupported` with `detail.missing` = `bundle:<folder>`. Fetching the
+  daemon, the Sandbox helper and the Sandbox image, with `bundle.json`
+  holding its hash. An installed runtime carries its own in
+  `bundle/linux-<arch>/` beside its `bin/layerfs`; otherwise it is in
+  `<cache>/layerfs/bundle/<version>/`, which every build of the version
+  shares. `<cache>` is `XDG_CACHE_HOME`, else `~/.cache`. Without it the
+  create is `Unsupported` with `detail.missing` = `bundle:<folder>`. A
+  bundle sealed from another commit than the calling build is
+  `Unavailable`: a worker started from it would not answer this build's
+  calls. Fetching the
   bundle is not built; a build places it.
 - From the claim until the outcome is recorded, the record holds the
   create's `op` (`create`): its id, phase and process (process id, start
