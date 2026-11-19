@@ -29,25 +29,33 @@ pub enum Layout {
     /// No folder, or one holding only what 2.0's layout allows before its
     /// `layerfs.json` ([`own_only`]): a new home.
     Empty,
-    /// Not a home of this build: a `layerfs.json` of another layout, or
-    /// anything else in a folder with no `layerfs.json`. Refused
+    /// Not a home of this build: a `layerfs.json` of another layout or one
+    /// that cannot be parsed, or anything else in a folder with no
+    /// `layerfs.json`. Refused
     /// ([`foreign`]) and never written.
     Foreign,
     /// The current layout, with its `layerfs.json`.
     Current(HomeFile),
 }
 
-/// The home's layout, read only. A `layerfs.json` that cannot be read, has
-/// no layout number, or names this layout with a bad id is refused
-/// `Failed`; one the system refused to read (or a home folder it refused to
-/// list) has `unreadable` in its detail ([`unreadable`]).
+/// The home's layout, read only. A `layerfs.json` that cannot be parsed
+/// (not JSON, no layout number, or this layout with no 32-hex id) or that
+/// names another layout is not a 2.0 home's: [`Layout::Foreign`] (MIG,
+/// RC-8). Refused only when the system refused the read of `layerfs.json`
+/// or the home folder's listing: `Failed` with `unreadable` in its detail
+/// ([`unreadable`]), which may be a real 2.0 home.
 pub fn detect(home: &Path) -> Result<Layout, SdkRefusal> {
-    match read_record(&home.join("layerfs.json"))? {
-        Some(value) => match value.get_int("layout") {
-            Some(LAYOUT_VERSION) => parse(&value).map(Layout::Current),
-            Some(_) => Ok(Layout::Foreign),
-            None => Err(bad("no layout version")),
-        },
+    let read = match read_record(&home.join("layerfs.json")) {
+        Ok(read) => read,
+        Err(refusal) if refusal.detail.get_bool("unreadable") => return Err(refusal),
+        // [`record_of`]'s parse failure, which never sets `unreadable`
+        Err(_) => return Ok(Layout::Foreign),
+    };
+    match read {
+        Some(value) => Ok(match value.get_int("layout") {
+            Some(LAYOUT_VERSION) => parse(&value).map_or(Layout::Foreign, Layout::Current),
+            _ => Layout::Foreign,
+        }),
         None => match own_only(home) {
             Ok(true) => Ok(Layout::Empty),
             Ok(false) => Ok(Layout::Foreign),
@@ -109,19 +117,12 @@ pub fn foreign(home: &Path) -> SdkRefusal {
 }
 
 /// A `layerfs.json` of this layout: its id must be 32 hex digits.
-fn parse(value: &SdkValue) -> Result<HomeFile, SdkRefusal> {
-    let id = value.get_text("id").ok_or_else(|| bad("no home id"))?;
-    if id.len() != 32 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(bad("the home id is not 32 hex digits"));
-    }
-    Ok(HomeFile {
+fn parse(value: &SdkValue) -> Option<HomeFile> {
+    let id = value.get_text("id")?;
+    (id.len() == 32 && id.bytes().all(|b| b.is_ascii_hexdigit())).then(|| HomeFile {
         layout: LAYOUT_VERSION,
         id: id.to_owned(),
     })
-}
-
-fn bad(why: &str) -> SdkRefusal {
-    refused("Failed", format!("layerfs.json: {why}"))
 }
 
 /// The home's `layerfs.json`, written for an empty home; any other folder

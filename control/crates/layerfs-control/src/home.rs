@@ -52,8 +52,8 @@ pub struct With {
 /// The one command that makes a missing home.
 const INIT: &str = "layerfs home init";
 
-/// The home's state and layout, read only; a `layerfs.json` this build
-/// cannot read (or of a newer layout) is refused, as `detect` does.
+/// The home's state and layout, read only; a home the system refuses to
+/// read is refused, as `detect` does.
 fn state(home: &Path) -> Result<(Found, Option<i64>), layerfs_bridge::control::SdkRefusal> {
     Ok(match detect(home)? {
         Layout::Empty => (Found::Missing, None),
@@ -108,6 +108,9 @@ pub fn get(home: &Path, build: Build<'_>, with: With) -> Outcome {
             layout,
             Some(format!("no LayerFS home at {shown}; `{INIT}` creates it")),
         ),
+        // a `layerfs.json` this build cannot parse, or of no layout it
+        // knows, is not a 2.0 home's (MIG): `outdated` with the fix that
+        // moves the folder aside (C11 gives a broken state its fix; RC-8)
         Ok((Found::Foreign, layout)) => (
             State::broken(
                 Reason::Outdated,
@@ -116,21 +119,11 @@ pub fn get(home: &Path, build: Build<'_>, with: With) -> Outcome {
             layout,
             Some(layerfs_home::home::layout::foreign(home).message),
         ),
-        // a home the system refuses to read (permissions, I/O) may be a
-        // real 2.0 home: `failed` with the OS error, never the move aside
-        Err(refusal) if refusal.detail.get_bool("unreadable") => (
-            State::broken(Reason::Failed, None),
-            None,
-            Some(refusal.message),
-        ),
-        // a `layerfs.json` this build cannot parse, or of no layout it
-        // knows, is not a 2.0 home's (MIG): `outdated` with the fix that
-        // moves the folder aside (C11 gives a broken state its fix; RC-8)
+        // `detect` refuses only a read the system refused (permissions,
+        // I/O), which may be a real 2.0 home: `failed` with the OS error,
+        // never the move aside (RC-8)
         Err(refusal) => (
-            State::broken(
-                Reason::Outdated,
-                Some(&layerfs_home::home::layout::foreign_fix(home)),
-            ),
+            State::broken(Reason::Failed, None),
             None,
             Some(refusal.message),
         ),
