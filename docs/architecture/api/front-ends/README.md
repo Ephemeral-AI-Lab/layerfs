@@ -51,7 +51,7 @@ Entries outside the table: `close` in Node and Python
 (`layerfs_api::close()`: close this process's idle Stores and drop their
 leases, then end its idle Sandbox daemon sessions inside 250 ms; the CLI
 calls it after every call); in the CLI only, `worker`, `help` and
-`--version`. `layerfs import-env` was removed (owner, 2026-11-19). The six doctors are table calls of their families
+`--version`. The six doctors are table calls of their families
 ([Doctors](../../control/doctor/README.md)); the 1.x `doctor` entry outside
 the table, in every front end, was removed with no alias.
 

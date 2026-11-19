@@ -103,8 +103,8 @@ worker's root:
   is written once. The `docker` machine names its worker container with it (O33),
   VM, container and volume names and Sandbox run folders carry its first 8
   digits (`layerfs-<id8>-<name>`), and backups record it as where they
-  were exported from. A home of a newer layout is refused `Unsupported`;
-  an older LayerFS's home is not converted ([below](#an-older-home)).
+  were exported from. A folder that is not a home of this layout is not
+  converted or written ([below](#an-older-home)).
 - **`layerfs.lock`** guards record writes and Sandbox-name uniqueness.
   Taking it waits up to 120 s for another holder; that is a readiness wait,
   not a retry. If it is still held, the call is refused `Unavailable` and
@@ -294,16 +294,17 @@ layout number.)
 ## An older home
 
 This build converts no older home (owner, 2026-11-19: "cut and cleanup old
-incompatible aggressively, no lfs, and fallback to old 2.0 or 1.x"). A home
-whose `layerfs.json` says layout 2 (2.0 before #536), or a 1.1.0 home (its
-records and no `layerfs.json`), is never written: every call on it is
-refused `Unsupported`, `home get` answers it `broken` `outdated`, and the
-home doctor's `home.layout` check fails, each with the fix
+incompatible aggressively, no lfs, and fallback to old 2.0 or 1.x", and
+"just drop it. we will never need it"). A folder that is not a LayerFS 2.0
+home is never written: one whose `layerfs.json` names another layout, or
+one holding anything with no `layerfs.json` (beyond the `layerfs.lock` a
+first call takes). Every call on it is refused `Unsupported`, `home get`
+answers it `broken` `outdated`, and the home doctor's `home.layout` check
+fails, each with the fix
 
 ```console
 $ mv <home> <home>.old && layerfs home init
 ```
 
-which keeps the old folder and makes a new, empty home. Its Stores, Sandboxes
-and machines are not carried over; a 1.1.0 environment's settings are not
-imported (there is no `layerfs import-env`).
+which keeps the old folder and makes a new, empty home. Nothing in the old
+folder is carried over.

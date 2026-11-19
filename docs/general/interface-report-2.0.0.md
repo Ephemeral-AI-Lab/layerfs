@@ -88,8 +88,8 @@ reason and a pointer for every row, is the
 | Sandbox | numbered, project implicit | named, bound to one project and a machine | yes |
 | Workspace `mount` of `main` | allowed | refused; fork a Branch | yes |
 | Progress and events | event streams, job registry, trace feed | `on_progress` on five calls | yes |
-| Settings | the 1.1.0 platform settings | `LAYERFS_HOME`, records, `layerfs import-env` once | yes |
-| Homes | 1.1.0 layout | converted once on the first 2.0 call | yes (one way) |
+| Settings | the 1.1.0 platform settings | `LAYERFS_HOME` and records; a 1.1.0 environment is not imported | yes |
+| Homes | 1.1.0 layout | not converted: refused with the fix `mv <home> <home>.old && layerfs home init` | yes |
 | Store profile | Disposable | Disposable; Durable disabled | no |
 | Attempts | one attempt, no replay | one attempt, no replay | no |
 | MCP | `@layerfs/mcp` (#521) | none | yes (#521 only) |

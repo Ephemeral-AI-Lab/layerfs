@@ -16,8 +16,9 @@ secrets and logs every control call shares.
 | Flows | [Call](../../flows/call.md) |
 
 The crate knows no entity: machine, Store, Sandbox and Workspace records
-build on its record files, locks and `op` intent. Opening a home, and the
-refusal of an older LayerFS's home, is in [Migration](migration.md).
+build on its record files, locks and `op` intent. [Opening a home](#opening-a-home)
+says how the first call creates one and why a folder that is not a LayerFS
+2.0 home is refused rather than written.
 
 ## Picture
 
@@ -65,13 +66,61 @@ id its caller sent
 ([`home/guest.rs`](../../../../control/crates/layerfs-home/src/home/guest.rs)).
 [Files](#files) says who writes each entry and when it goes.
 
+## Opening a home
+
+This build converts nothing and knows no older layout (owner, 2026-11-19:
+"cut and cleanup old incompatible aggressively, no lfs, and fallback to old
+2.0 or 1.x", and of the conversion code, "just drop it. we will never need
+it").
+
+```text
+ open(home)
+   worker root? ----------------------> answer the caller's home id; no write
+   detect(home)  (reads only)
+     Current(3) ----------------------> use the home
+     Foreign -------------------------> Unsupported, fix
+                                        `mv <home> <home>.old && layerfs home init`;
+                                        nothing written
+     Empty
+       take layerfs.lock, detect again
+         Empty   -> create layerfs.json (layout 3, new id)
+         Foreign -> Unsupported, the same fix
+     unreadable or malformed layerfs.json -> Failed
+```
+
+| Layout | Recognised by | Source |
+| --- | --- | --- |
+| Empty | no folder; or no `layerfs.json` and nothing but what making a home writes before it: `layerfs.lock` (the home lock `open` takes first) and the temporary `.layerfs.json.<pid>.<n>.tmp` it is renamed from (seen mid-write, or left by a killed process). `log/` is not in the set: every `log/*.jsonl` writer runs after the home is open | [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs) `detect`, `own_only` |
+| Current (3) | `layerfs.json` with `layout: 3` and a 32-hex `id` | same, `LAYOUT_VERSION` |
+| Foreign | `layerfs.json` with any other layout number; or no `layerfs.json` and anything else in the folder | same |
+| refused `Failed` | a `layerfs.json` that cannot be read, is not JSON, has no layout number, or has layout 3 and a bad `id` | same, `parse` |
+
+Every call whose entry opens the home runs `open` first
+([`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs));
+`home.init` runs it itself, to say what it did. A current home costs one
+read of `layerfs.json`; an empty one, one listing of the folder.
+
+| Call | On a foreign folder | Source |
+| --- | --- | --- |
+| any call that opens the home | refused `Unsupported`, "not a LayerFS 2.0 home; this build writes nothing in it", with the fix `mv <home> <home>.old && layerfs home init`; refused before the home lock, so nothing is written, not even `layerfs.lock` or the call log | [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs) `foreign`, `foreign_fix`; [`logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs) `append` |
+| `home.init` | the same refusal; on an empty home `outcome: "created"`, on a current one `"unchanged"` | [`home.rs`](../../../../control/crates/layerfs-control/src/home.rs) `init` |
+| `home.get` | `state: "broken"`, `reason: "outdated"`, the same `fix`; it reads only | same, `get` |
+| `home.doctor` | `home.layout` fails with the same fix; `home.records` is not run | [`doctor/host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs) `layout` |
+
+The fix keeps the old folder and makes a new, empty home at the path.
+Nothing in it is carried over. A worker's root is not a home: `open`
+answers the home id its caller sent and writes nothing, and `home.init`
+there is refused `InvalidInput`. The root is never created, converted or
+cleared
+([`home/guest.rs`](../../../../control/crates/layerfs-home/src/home/guest.rs)).
+
 ## What it does
 
 | Behaviour | Detail | Source |
 | --- | --- | --- |
 | Finds the home | the call's explicit home, else `LAYERFS_HOME`, else `$HOME/.layerfs`; a relative path is `InvalidInput` | [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) |
 | Names each record's path | one folder per entity kind, one identity per entity (its name); projects nest under their Store, Workspaces under their Sandbox | [`home/paths.rs`](../../../../control/crates/layerfs-home/src/home/paths.rs) |
-| Reads the layout | `layerfs.json` holds `layout` and a 16-byte random `id` written once; a newer layout is `Unsupported`, an unreadable one `Failed`; reading never writes | [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs) |
+| Reads the layout | `layerfs.json` holds `layout` and a 16-byte random `id` written once; any other layout is a foreign home, `Unsupported` ([Opening a home](#opening-a-home)), an unreadable file `Failed`; reading never writes | [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs) |
 | Writes records | one JSON value per file, replaced whole by a rename; bytes as `{"hex": ..}`; entity records carry `"v": 1` first | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) |
 | Keeps unknown fields | a typed record reads its known fields and keeps every other field (unknown or mistyped) exactly as read, in file order; a changed field keeps its place, a new one comes last | [`home/fields.rs`](../../../../control/crates/layerfs-home/src/home/fields.rs) |
 | Records one intent | a multi-step operation writes `op` before its first effect and drops it with its result in one write | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) |
@@ -100,6 +149,28 @@ id its caller sent
 Relationships (a machine's Stores and Sandboxes, a Store's or project's
 Sandboxes) are derived when needed, never stored
 ([`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs)).
+
+### Inventory
+
+The relationships no record stores, read when a call needs them
+([`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs),
+in `layerfs-control`):
+
+| Read or check | Answers |
+| --- | --- |
+| `machines`, `stores_on`, `sandboxes_on`, `hosted_on` | every machine record; the sqlite Stores and Sandboxes of a machine; old Firecracker records a Lima machine hosted |
+| `sandboxes_of_store`, `sandboxes_of_project` | the Sandboxes of a Store or project |
+| `can_remove_machine` | `machine.remove`: `InUse` while it holds sqlite Stores, Sandboxes or hosted Firecracker records (a PostgreSQL Store is on no machine); next fields `stores`, `sandboxes`, `machines`; held by Sandboxes alone, `fix` `layerfs sandbox remove <s> && … && layerfs machine remove <m>`, none when its record says it is stopped |
+| `can_stop_machine` | `machine.stop`: `InUse` while Sandboxes are recorded on it; next field `sandboxes`; `fix` `layerfs sandbox remove <s> && … && layerfs machine stop <m>` (the message names `--force` as the other way) |
+| `can_change_machine` | `machine.update`: `InUse` while Sandboxes are recorded on it; next field `sandboxes`; `fix` `layerfs sandbox remove <s> && …` |
+| `store_idle` | `store.move`, `remove`, `disconnect`, `backup.restore`: `InUse` while another live process holds a lease or a project's Sandbox is recorded (removes stale leases); next field `sandboxes`; with no live holder, `fix` `layerfs sandbox remove <s> && …` |
+| `can_remove_project` | `project.delete`: `Busy` while a Sandbox of the project is recorded |
+
+Each `InUse` or `Busy` lists what holds the entity in `detail.related` as
+`{kind, name}`; an `InUse` also names them in the next fields above, flat
+beside `error` (ruling R-LF2-1), and a `fix` may join several commands
+with `&&`. Layout 3 keeps each Sandbox at `sandbox/<name>/`, so a Sandbox
+by name is one read; only the relationships list `sandbox/*`.
 
 ### Files
 
@@ -263,9 +334,7 @@ and orders nothing: two changes may share one read.
 A write moves it by calling `generation::moved(home)` (or `moved_above(path)`
 where the writer holds only a record's path), so a write opts out by not
 calling it: `layerfs.json`, secrets, a command's `exec` record, a lease, an
-observation a later package may keep in a file, and the conversion of an
-older home (which writes records through `write_record` directly) do not
-move it. Under a machine's worker root there is no `layerfs.json`, and
+observation a later package may keep in a file do not move it. Under a machine's worker root there is no `layerfs.json`, and
 nothing is counted. Counting is best effort under the file's own `flock`:
 a count that cannot be written changes no outcome. A reader takes no lock
 and reads 0 until the first change.
@@ -338,7 +407,7 @@ independent of `LAYERFS_TRACE`.
 | New machine whose VM name another machine has | `Exists`, before any effect: a VM name keeps no punctuation (`a.b` and `a_b` both give `…-a-b`), and the new name is compared with each machine's recorded `vm_name` (a record without one is skipped) | [`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs) `new_name` |
 | Sandbox name ending in `.root` | `InvalidInput`: `<name>.root` in the run root is another Sandbox's private root | [`create.rs`](../../../../control/crates/layerfs-sandbox/src/create.rs) |
 | PostgreSQL Store with no saved login (`auth`) | `InvalidInput`, fix `layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store update <store> --auth <auth>`; a named login not saved is `NotFound` | [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) `dial`, `read` |
-| Home of a newer layout | `Unsupported` | [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs) |
+| A folder that is not a LayerFS 2.0 home (a `layerfs.json` of another layout, or anything but `layerfs.lock` and no `layerfs.json`) | `Unsupported`, fix `mv <home> <home>.old && layerfs home init`; nothing written ([Opening a home](#opening-a-home)) | [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs) `foreign` |
 | Call log size | rotates past 16 MiB to the one `calls.1.jsonl` under a non-blocking `flock` on `calls.lock`; `home.clear_log` waits for that lock, truncates in place and removes the rotated file | [`logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs) |
 | Other log sizes | One rule: past 16 MiB a log moves once to its `.1` name, replacing the one before. `log/*.jsonl` (`leases`, and `exec` on the side that keeps the command records): a writer opens, appends one line and closes, and a log then past the size is renamed to `<name>.1.jsonl` under a non-blocking `flock` on `log/rotate.lock`; a writer that does not get the lock skips it. `log/uncertain.jsonl` never rotates: it is the only record of uncertain outcomes. `machine/<m>/forward.log` is checked when a forward starts: it is copied to `forward.1.log` and emptied in place, never renamed, since the machine's other forwards hold it open ([forwards](../machines/workers-and-reach.md#forwards)). A machine's `/layerfs/data/log/worker.log` is renamed to `worker.1.log` only when a worker starts, never while one runs ([workers](../machines/workers-and-reach.md#the-workers-log)). A Sandbox's `daemon.log` is new with its run folder and goes with it: it is never rotated and there is no `daemon.1.log` ([Backends](../sandboxes/backends.md#local-one-daemon-process-on-this-kernel)) | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) `log_line`, [`log_file.rs`](../../../../engine/crates/layerfs-bridge/src/log_file.rs), [`setup/forward.rs`](../../../../control/crates/layerfs-platform/src/setup/forward.rs), [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) `log_start` |
 | `home.log` page | default 200, at most 1000 lines, and at most 64 KiB of rows before it ends early with a cursor; a cursor carries its call and filters (another call's, or one given with different filters, is `InvalidInput`); a cursor after a rotation or clear is stale (`InvalidInput`); a torn line is counted in `skipped` | same |
@@ -347,15 +416,9 @@ independent of `LAYERFS_TRACE`.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| `layerfs-control/tests/home_layout.rs` | `cargo +1.85.1 test --locked -p layerfs-control --test home_layout` | macOS, Linux | `layerfs.json` and the layout version, one test per layout |
+| `layerfs-control/tests/home_layout.rs` | `cargo +1.85.1 test --locked -p layerfs-control --test home_layout` | macOS, Linux | an empty or missing home (a lone `layerfs.lock` and the temporary included) gets a layout and id; a stray file with no `layerfs.json`, and a `layerfs.json` of layout 1, 2 or 4, is `Foreign`, refused with the fix and left byte-identical; a broken `layerfs.json` is `Failed` |
 | `layerfs-control/tests/op_intent.rs` | `cargo +1.85.1 test --locked -p layerfs-control --test op_intent` | macOS, Linux | `Busy`, `Unresolved` and stale intents; the per-entity lock |
 | `layerfs-control/tests/typed_names.rs` | `cargo +1.85.1 test --locked -p layerfs-control --test typed_names` | macOS, Linux | each name kind's refusals and texts |
 | `layerfs-control/tests/typed_records.rs` | `cargo +1.85.1 test --locked -p layerfs-control --test typed_records` | macOS, Linux | typed records answer their stable shape and read past `"v"` |
 | `layerfs-home/tests/json_codec.rs` | `cargo +1.85.1 test --locked -p layerfs-home --test json_codec` | macOS, Linux | base64 and quoted strings round-trip exactly |
 | `layerfs-api/tests/logs.rs` | `cargo +1.85.1 test --locked -p layerfs-api --test logs` | macOS, Linux | the call log's lines, rotation and reset |
-
-## Pages
-
-| Page | What it covers |
-| --- | --- |
-| [Migration](migration.md) | Opening a home: creating an empty one, refusing an older LayerFS's home with the fix that moves it aside (no conversion since 2026-11-19), and worker roots |

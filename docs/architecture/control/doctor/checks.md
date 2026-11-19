@@ -18,8 +18,8 @@ left on disk, and the report all six doctors answer, within
    detect(home)             layout read only
      unreadable    -> home.layout fails
      Empty         -> no home.layout, no home.records; the home stays absent
-     Older         -> home.layout fails, fix `mv <home> <home>.old && layerfs home init`;
-                      no records (layout 2, or 1.1.0's records)
+     Foreign       -> home.layout fails, fix `mv <home> <home>.old && layerfs home init`;
+                      no records (not a LayerFS 2.0 home)
      Current (3)   -> home.records = scan -> checks::check_local
    inventory fingerprint before and after: changed or unreadable -> no verdict
    -> Findings [ { severity, entity {kind, name}, message, fix } ]
@@ -106,16 +106,16 @@ the worker's `stat`, fix `layerfs store move <s> <machine>` or `layerfs store
 move <s> native`) is in `check_scope`'s remote branch, which no doctor calls
 today.
 
-## Older homes
+## Foreign homes
 
-An older LayerFS's home (layout 2, or 1.1.0's records with no
-`layerfs.json`) gets no records check: `home.layout` fails, "the home of an
-older LayerFS: this build does not convert it; move it aside and make a new
-home", with the fix `mv <home> <home>.old && layerfs home init`, and
-`home.records` is not run. The conversion and its blocker survey were
-removed (owner, 2026-11-19;
+A folder that is not a LayerFS 2.0 home (a `layerfs.json` of another
+layout, or anything but `layerfs.lock` and no `layerfs.json`) gets no
+records check: `home.layout` fails, "not a LayerFS 2.0 home: this build
+writes nothing in it; move it aside and make a new home", with the fix
+`mv <home> <home>.old && layerfs home init`, and `home.records` is not run.
+The conversion and its blocker survey were removed (owner, 2026-11-19;
 [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs)
-`layout`, [Migration](../home/migration.md)).
+`layout`, [opening a home](../home/README.md#opening-a-home)).
 
 Worker reach and Sandbox daemon reach are not records checks: a machine's
 worker is `machine.doctor`'s (`machine.worker.*`), a Sandbox's daemon
