@@ -640,3 +640,12 @@ holds the LayerFS data, and manage logins. Spec `tmp/pg-store-v23/SPEC.md` (owne
     `auths` row's fix says; its old fields are not kept.
   - F3 (LF10): `store move` off a machine with no `vm_name` is refused like the Store's other
     calls: `Unavailable` with `blocked_by` and the machine's chain.
+
+## LF12 (follow-up round, 2026-11-20): the Store doctor reads the record's own state
+
+- **LF12** (completes UI2-2 and V23-6 for `store doctor`) `store doctor`'s `store.record` fails,
+  severity `error`, when a PostgreSQL Store's record alone makes it `broken`: naming no saved login
+  (`outdated`), naming one this home does not hold (`missing`), or holding what 2.0 no longer writes
+  (`outdated`, V23-6). Its message names the reason; its `fix` is the line `store list` and `store
+  get` give for that state (`layerfs store update <s> --auth <a>` for old fields). The remaining
+  checks still run, so a record with old fields whose server answers fails `store.record` alone.

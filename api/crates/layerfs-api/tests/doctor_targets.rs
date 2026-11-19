@@ -321,10 +321,12 @@ fn what_is_not_there_is_refused_and_no_home_is_made() {
 
 /// A Store whose record alone makes it broken (UI pass 2, F6): the doctor's
 /// finding carries the fix its state gives in `store.list`. A PostgreSQL
-/// Store naming no saved login fails `store.connection` with the save-auth
-/// fix, its `--user` the one its URL names, before anything is dialled; a
-/// record of a kind this build does not read fails `store.record` with
-/// `store remove`.
+/// Store naming no saved login fails `store.record` and `store.connection`
+/// with the save-auth fix, its `--user` the one its URL names, before
+/// anything is dialled; one with old fields (V23-6) or naming a login this
+/// home does not hold fails `store.record` with `store.list`'s fix (area
+/// 15); a record of a kind this build does not read fails `store.record`
+/// with `store remove`.
 #[test]
 fn a_store_s_broken_record_gives_its_state_s_fix() {
     let home = tempdir("store-fix");
@@ -342,6 +344,33 @@ fn a_store_s_broken_record_gives_its_state_s_fix() {
         ]),
     )
     .unwrap();
+    // a saved login, and a URL naming a user (V23-6), to a port nothing
+    // listens on: refused at once when the doctor dials it
+    short(
+        &home,
+        "store.save_auth",
+        &[
+            ("auth", t("a")),
+            ("user", t("owner")),
+            ("password", t("pw")),
+        ],
+    );
+    for (store, auth) in [("old", "a"), ("gone", "nosuch")] {
+        write_entity(
+            &paths::store_record(&home, store),
+            &SdkValue::map([
+                ("name", t(store)),
+                ("kind", t("postgresql")),
+                ("url", t("postgresql://owner@127.0.0.1:1/layerfs_db")),
+                ("auth", t(auth)),
+                ("schema", t("layerfs")),
+                ("synchronous_commit", t("local")),
+                ("binding", SdkValue::Bytes(vec![1; 16])),
+                ("cursor", SdkValue::Bytes(vec![7; 32])),
+            ]),
+        )
+        .unwrap();
+    }
     write_entity(
         &paths::store_record(&home, "odd"),
         &SdkValue::map([("name", t("odd")), ("kind", t("mysql"))]),
@@ -362,8 +391,21 @@ fn a_store_s_broken_record_gives_its_state_s_fix() {
         Some("layerfs store remove odd")
     );
 
+    assert_eq!(item("old").get_text("reason"), Some("outdated"));
+    let old_fix = "layerfs store update old --auth a";
+    assert_eq!(item("old").get_text("fix"), Some(old_fix));
+    assert_eq!(item("gone").get_text("reason"), Some("missing"));
+    let gone_fix = item("gone").get_text("fix").unwrap().to_owned();
+    assert!(
+        gone_fix.starts_with("layerfs store save-auth nosuch "),
+        "{gone_fix}"
+    );
+
     for (store, check, fix) in [
+        ("pg", "store.record", pg_fix),
         ("pg", "store.connection", pg_fix),
+        ("old", "store.record", old_fix),
+        ("gone", "store.record", gone_fix.as_str()),
         ("odd", "store.record", "layerfs store remove odd"),
     ] {
         let short_form = short(&home, "store.doctor", &[("store", t(store))]);

@@ -236,6 +236,20 @@ fn an_old_record_reads_outdated_until_its_update_writes_it_clean() {
         got.get_text("fix"),
         Some("layerfs store update pg --auth pg")
     );
+    // the doctor reports the record outdated, with the same fix (area 15)
+    let report = ok(&home, "store.doctor", &[("store", t("pg"))]);
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)), "{report:?}");
+    let found = match report.get("findings") {
+        Some(SdkValue::List(found)) => found.clone(),
+        _ => panic!("findings: {report:?}"),
+    };
+    let record = (found.iter())
+        .find(|f| f.get_text("check") == Some("store.record"))
+        .unwrap_or_else(|| panic!("{report:?}"));
+    assert_eq!(
+        record.get_text("fix"),
+        Some("layerfs store update pg --auth pg")
+    );
     ok(
         &home,
         "store.update",

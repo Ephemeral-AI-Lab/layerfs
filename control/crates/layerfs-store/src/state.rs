@@ -127,8 +127,9 @@ pub fn recorded_under(record: &StoreRecord, under: Option<&State>) -> Result<Sta
 /// it; naming one this home does not hold, `missing` with the same fix for
 /// that name; holding what 2.0 no longer writes (V23-6), `outdated` with
 /// the update that rewrites it. A missing login wins over the old fields:
-/// its fix clears both.
-fn postgresql(record: &StoreRecord) -> Option<State> {
+/// its fix clears both. The Store doctor's `store.record` reports the same
+/// state and fix. Only for a PostgreSQL record: a sqlite one names no login.
+pub fn postgresql(record: &StoreRecord) -> Option<State> {
     use crate::postgresql::login;
     let Some(auth) = record.text("auth") else {
         return Some(State::broken(

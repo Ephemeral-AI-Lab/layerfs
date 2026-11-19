@@ -126,7 +126,7 @@ fn resolve(home: &Path, name: &str, checks: &mut Checks) -> Option<(StoreRecord,
     }
     match identity::identity_in(&record) {
         Ok(identity) => {
-            checks.pass(RECORD, "its record names it, its engine and its id");
+            own_state(&record, checks);
             Some((record, identity))
         }
         Err(error) => {
@@ -136,6 +136,33 @@ fn resolve(home: &Path, name: &str, checks: &mut Checks) -> Option<(StoreRecord,
             );
             None
         }
+    }
+}
+
+/// `store.record` passes unless the record itself breaks a PostgreSQL
+/// Store (spec v23): naming no saved login, one this home does not hold,
+/// or holding what 2.0 no longer writes (V23-6). It then fails with the
+/// state's fix, the one `store list` and `store get` give.
+fn own_state(record: &StoreRecord, checks: &mut Checks) {
+    let own = match record.store_ref() {
+        Ok(StoreRef::Postgres { .. }) => layerfs_store::state::postgresql(record),
+        _ => None,
+    };
+    let Some(State::Broken { reason, fix }) = own else {
+        checks.pass(RECORD, "its record names it, its engine and its id");
+        return;
+    };
+    let why = match (reason, record.text("auth")) {
+        (Reason::Missing, Some(auth)) => {
+            format!("it names login {auth}, which this home does not hold")
+        }
+        (_, None) => "it names no saved login".to_owned(),
+        _ => "it holds what 2.0 no longer writes (a password, a login in a URL or an old machine entry)"
+            .to_owned(),
+    };
+    checks.fail(RECORD, format!("its record is {}: {why}", reason.word()));
+    if let Some(fix) = fix {
+        checks.fix(RECORD, fix);
     }
 }
 

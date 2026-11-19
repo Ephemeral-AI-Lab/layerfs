@@ -662,7 +662,9 @@ Python  layerfs.store.doctor(store, *, machine=None, on_progress=None)
 | call | sends progress; writes one call-log line; MCP `admin` |
 
 Checks a Store, then each of its projects shallowly. Its checks, in order:
-`store.record` (its record reads and names it), `store.operation` (an
+`store.record` (its record reads and names it; a PostgreSQL record that
+alone makes the Store `broken`, `outdated` or `missing`, fails with the `fix`
+`store list` gives), `store.operation` (an
 operation whose owner is gone with its outcome unknown is an error whose
 `fix` is the call that clears it; for a sqlite Store it also reads the
 compaction record beside the file through its machine), `store.connection`
