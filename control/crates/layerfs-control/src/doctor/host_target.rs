@@ -48,15 +48,14 @@ fn layout(home: &Path, budget: &Budget, checks: &mut Checks) -> Option<super::sc
         checks.timeout(LAYOUT, "its time ran out before the home was read");
         return None;
     }
-    let Ok(layout) = detect(home) else {
-        checks.fail(
-            LAYOUT,
-            format!(
-                "{}'s layerfs.json is unreadable or malformed; repair it by hand",
-                home.display()
-            ),
-        );
-        return None;
+    // `detect` refuses only a read the system refused, which may be a real
+    // 2.0 home: the OS error, and no fix (RC-8)
+    let layout = match detect(home) {
+        Ok(layout) => layout,
+        Err(refusal) => {
+            checks.fail(LAYOUT, refusal.message);
+            return None;
+        }
     };
     match layout {
         // a home not made yet: nothing to read

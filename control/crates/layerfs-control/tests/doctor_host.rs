@@ -123,17 +123,51 @@ fn current_and_foreign_layouts_are_observed_without_writing_files() {
     }
 }
 #[test]
-fn malformed_layout_has_a_blocked_record_check_and_changes_nothing() {
+fn malformed_layout_fails_with_the_move_fix_and_changes_nothing() {
+    // a `layerfs.json` that cannot be parsed is not a 2.0 home's (MIG,
+    // RC-8): the layout fails with the move-aside fix
+    for text in [
+        "{not json",
+        "{}",
+        r#"{"layout":"bad"}"#,
+        r#"{"layout":3,"id":"xyz"}"#,
+    ] {
+        let home = home(3);
+        std::fs::write(home.join("layerfs.json"), text).unwrap();
+        let before = tree(&home);
+        let report = run(&home);
+        assert_eq!(
+            outcome(&report, "home.layout").as_deref(),
+            Some("fail"),
+            "{text}"
+        );
+        let check = row(&report, "home.layout");
+        let fix = layerfs_home::home::layout::foreign_fix(&home);
+        assert_eq!(check.get_text("fix"), Some(fix.as_str()), "{check:?}");
+        // the records check waits on the layout: it does not apply
+        assert_eq!(outcome(&report, "home.records"), None, "{report:?}");
+        assert_eq!(before, tree(&home));
+        std::fs::remove_dir_all(home).unwrap();
+    }
+}
+#[test]
+fn a_layerfs_json_the_system_refuses_to_read_fails_with_the_os_error_and_no_fix() {
     let home = home(3);
-    write_record(
-        &home.join("layerfs.json"),
-        &SdkValue::map([("layout", t("bad"))]),
-    )
-    .unwrap();
+    let file = home.join("layerfs.json");
+    std::fs::remove_file(&file).unwrap();
+    // a folder in its place: EISDIR, for root too
+    std::fs::create_dir(&file).unwrap();
     let before = tree(&home);
     let report = run(&home);
     assert_eq!(outcome(&report, "home.layout").as_deref(), Some("fail"));
-    // the records check waits on the layout: it does not apply
+    let check = row(&report, "home.layout");
+    let message = format!("{}: Is a directory (os error 21)", file.display());
+    assert_eq!(
+        check.get_text("message"),
+        Some(message.as_str()),
+        "{check:?}"
+    );
+    assert_eq!(check.get("fix"), Some(&SdkValue::Null), "{check:?}");
     assert_eq!(outcome(&report, "home.records"), None, "{report:?}");
     assert_eq!(before, tree(&home));
     std::fs::remove_dir_all(home).unwrap();

@@ -85,15 +85,16 @@ it").
        take layerfs.lock, detect again
          Empty   -> create layerfs.json (layout 3, new id)
          Foreign -> Unsupported, the same fix
-     unreadable or malformed layerfs.json -> Failed
+     layerfs.json or the folder listing refused by the system -> Failed
+                                        (`unreadable`, the OS error, no fix)
 ```
 
 | Layout | Recognised by | Source |
 | --- | --- | --- |
 | Empty | no folder; or no `layerfs.json` and nothing but what 2.0's own layout allows before it: `layerfs.lock` (the home lock `open` takes first); the temporary `.layerfs.json.<pid>.<n>.tmp` it is renamed from (seen mid-write, or left by a killed process); the folders reserved for integrations, `runtime/`, `job/`, `stat/` and `preset/` ([Top-level names](#top-level-names); `@layerfs/runtime` makes `runtime/` before the first call), each a folder; and macOS's `.DS_Store`. `log/` is not in the set: every `log/*.jsonl` writer runs after the home is open | [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs) `detect`, `own_only`, `INTEGRATION` |
 | Current (3) | `layerfs.json` with `layout: 3` and a 32-hex `id` | same, `LAYOUT_VERSION` |
-| Foreign | `layerfs.json` with any other layout number; or no `layerfs.json` and anything else in the folder (a reserved name that is a file included) | same |
-| refused `Failed` | a `layerfs.json` that cannot be read, is not JSON, has no layout number, or has layout 3 and a bad `id` | same, `parse` |
+| Foreign | `layerfs.json` with any other layout number, or one that cannot be parsed: not JSON, no layout number, or layout 3 with no 32-hex `id` (MIG, RC-8); or no `layerfs.json` and anything else in the folder (a reserved name that is a file included) | same, `parse` |
+| refused `Failed` | a `layerfs.json` (or a home folder listing) the system refused to read (EACCES, EIO, EISDIR): `unreadable` in the detail, the OS error, no fix; it may be a real 2.0 home | same, `records.rs` `unreadable` |
 
 Every call whose entry opens the home runs `open` first
 ([`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs));
