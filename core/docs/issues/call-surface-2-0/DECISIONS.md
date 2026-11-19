@@ -612,7 +612,7 @@ holds the LayerFS data, and manage logins. Spec `tmp/pg-store-v23/SPEC.md` (owne
 
 ## LF10 ruling (overnight integration, 2026-11-20): a Store blocked by a nameless machine
 
-- **LF10** (amends RC-7 for Store calls) A call on a sqlite Store whose machine record has no
+- **LF10** (amends RC-7 and V20-8's "refused `Failed`" for Store calls) A call on a sqlite Store whose machine record has no
   `vm_name` is refused `Unavailable`, as a Store call is for its machine's other not-ready states
   (`store.compact`'s refusal rows), not `Failed`: the Store reads `blocked`, `blocked_by {machine,
   reason: outdated}`, in `store list` and `store get`, so the refusal carries that same
@@ -621,3 +621,22 @@ holds the LayerFS data, and manage logins. Spec `tmp/pg-store-v23/SPEC.md` (owne
   machine, then V20-8's sentence. Nothing is dialled. The machine's own calls (`machine start`,
   `machine stop`, `machine stats`, a PostgreSQL Store's reach check from it) stay `Failed` (RC-7):
   the machine itself is `broken`. `store remove` of such a Store still goes by its records alone.
+
+## LF11 (overnight integration, 2026-11-20): the URL-login refusal carries its fix
+
+- **LF11** (completes V23-13) `store connect` refusing a URL that names a user or carries a login
+  parameter (`user`, any `password`, `passfile`) answers `InvalidInput` with a `fix` that gives the
+  address alone (the URL with its user part and login parameters dropped) and never the password:
+  on a first connect `layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store
+  connect <s> <address> --auth <auth>` (`<user>` filled from the URL's user when it names one); on a
+  connected Store, which takes no `--auth` on connect, `layerfs store save-auth <auth> --user <user>
+  --password-stdin && layerfs store update <s> --auth <auth> && layerfs store connect <s> <address>`,
+  with `--machine <m>` for a machine's own address (the person who typed a login most likely meant
+  to change it; orchestrator review).
+- **LF11, conformance v23 fixes** (the overnight conformance review at `7ef14ed641`):
+  - F1 (V23-3): a `connections` row's `url` is login-free also for an outdated record whose URL
+    still holds a user or a login parameter (the row shows `without_login` of it).
+  - F2 (V23-8): `store save-auth` writes a login file that cannot be read again, as the broken
+    `auths` row's fix says; its old fields are not kept.
+  - F3 (LF10): `store move` off a machine with no `vm_name` is refused like the Store's other
+    calls: `Unavailable` with `blocked_by` and the machine's chain.

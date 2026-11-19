@@ -197,7 +197,7 @@ pub fn connect(
         ));
     }
     connect::refuse_settings(name, request)?;
-    connect::refuse_login(&request.url)?;
+    connect::refuse_login_with_fix(name, &request.url, false, Some(machine))?;
     connect::target(&request.url)?;
     runs_postgresql_sandboxes(home, name, machine)?;
     let own = OwnConnection {

@@ -16,7 +16,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_home::home::{self, paths};
 use layerfs_home::names::StoreName;
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::outcome::{failed, refused, shell_word, with_fix, Outcome};
 use layerfs_home::secrets::parts;
 use std::path::Path;
 
@@ -112,6 +112,37 @@ pub fn refuse_login(url: &str) -> Result<()> {
     Ok(())
 }
 
+/// [`refuse_login`]'s refusal for `store connect <store> <url>`, with its
+/// fix (spec v23 V23-13): the login saved by name, then the address alone.
+/// A first connect names the saved login with `--auth`; a connected Store
+/// takes no `--auth` on connect, so its fix names the login with `store
+/// update --auth` before the address alone (for `machine`'s own connection
+/// when given). The URL's user fills `--user` when it names one.
+pub fn refuse_login_with_fix(
+    store: &str,
+    url: &str,
+    first: bool,
+    machine: Option<&str>,
+) -> Result<()> {
+    // a URL that is not a PostgreSQL one is refused without a fix: its login
+    // cannot be told apart, so no line may repeat it
+    parts(url)?;
+    refuse_login(url).map_err(|refusal| {
+        let address = shell_word(&without_login(url));
+        let user = url_user(url).map_or("<user>".to_owned(), |user| shell_word(&user));
+        let store = shell_word(store);
+        let save = format!("layerfs store save-auth <auth> --user {user} --password-stdin");
+        let fix = match (first, machine) {
+            (true, _) => format!("{save} && layerfs store connect {store} {address} --auth <auth>"),
+            (false, machine) => {
+                let on = machine.map_or(String::new(), |m| format!(" --machine {}", shell_word(m)));
+                format!("{save} && layerfs store update {store} --auth <auth> && layerfs store connect {store} {address}{on}")
+            }
+        };
+        with_fix(refusal, fix)
+    })
+}
+
 /// Whether query parameter `name` carries a login: `user`, any
 /// `password` (`sslpassword`), or `passfile` (spec v23 V23-13). A client
 /// certificate's `sslkey` and `sslcert` name files, not secrets, and pass.
@@ -128,8 +159,10 @@ pub fn without_login(url: &str) -> String {
     let Ok((scheme, _, rest)) = parts(url) else {
         return url.to_owned();
     };
+    // a fragment holding `?` is where `query` reads parameters: dropped
+    // with them, so no login parameter survives in it
     let (path, fragment) = match rest.split_once('#') {
-        Some((path, fragment)) => (path, Some(fragment)),
+        Some((path, fragment)) => (path, Some(fragment).filter(|f| !f.contains('?'))),
         None => (rest, None),
     };
     let (path, kept) = match path.split_once('?') {
@@ -301,7 +334,8 @@ fn row(
     );
     SdkValue::map([
         ("machine", SdkValue::opt_text(machine)),
-        ("url", SdkValue::opt_text(url)),
+        // an outdated record may still hold a login in its URL: a row never shows it (V23-3)
+        ("url", SdkValue::opt_text(url.as_deref().map(without_login))),
         ("own", SdkValue::Bool(own)),
         ("server", server),
         ("reached", crate::observed::reached(reach.as_ref())),
@@ -346,7 +380,7 @@ pub fn answer(
 pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     let name = request.store.as_str();
     let given = request.url.as_str();
-    refuse_login(given)?;
+    refuse_login_with_fix(name, given, true, None)?;
     target(given)?;
     let auth = request.auth.as_deref().ok_or_else(|| {
         refused(
@@ -415,7 +449,7 @@ pub fn readdress(home_dir: &Path, request: &StoreConnect, sandboxes: &[String]) 
     let name = request.store.as_str();
     let record = super::check::postgresql_record(home_dir, name)?;
     refuse_settings(name, request)?;
-    refuse_login(&request.url)?;
+    refuse_login_with_fix(name, &request.url, false, None)?;
     target(&request.url)?;
     record.unblocked()?;
     let trial = record.clone().with("url", SdkValue::text(&request.url));

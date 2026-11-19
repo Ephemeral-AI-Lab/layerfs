@@ -54,7 +54,7 @@ pub fn plan(home: &Path, store: &StoreRef) -> Result<Executor> {
 /// not-ready states, with that `blocked_by` beside it and the machine's
 /// own fix, which the call boundary widens to the chain of what is on it
 /// (UI2-8). Any other refusal is kept.
-fn blocked(store: &str, machine: &str, refusal: SdkRefusal) -> SdkRefusal {
+pub(crate) fn blocked(store: &str, machine: &str, refusal: SdkRefusal) -> SdkRefusal {
     use layerfs_home::state::{BlockedBy, Reason};
     use layerfs_machine::record::{no_vm_name_fix, Holders};
     let bare = no_vm_name_fix(machine, Holders::default());

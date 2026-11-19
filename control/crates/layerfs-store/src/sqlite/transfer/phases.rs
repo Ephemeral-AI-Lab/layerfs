@@ -163,7 +163,9 @@ pub const HEADROOM: u64 = 1 << 30;
 /// plus [`HEADROOM`] free (#536 §7.3, §11 item 7). A stopped machine is
 /// `Unavailable`, with `layerfs machine start` as its fix (#535 D11).
 fn reach(home: &Path, name: &str, from: &str, to: &str) -> Result<(Executor, Executor)> {
-    let mut source = place::on_machine(home, from)?;
+    // the Store is blocked by a source machine with no vm_name (LF10)
+    let mut source =
+        place::on_machine(home, from).map_err(|why| place::blocked(name, from, why))?;
     let mut target = place::on_machine(home, to)?;
     for (machine, executor) in [(from, &mut source), (to, &mut target)] {
         if let Executor::Worker(worker) = executor {

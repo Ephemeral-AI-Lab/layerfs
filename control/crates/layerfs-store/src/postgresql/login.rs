@@ -169,7 +169,9 @@ pub fn save(home_dir: &Path, auth: &str, user: &str, password: &str) -> Outcome 
     }
     let _lock = home::lock::take(home_dir)?;
     let now = home::now_ms();
-    let before = read_secret(home_dir, KIND, auth)?;
+    // a login file that cannot be read is written again: that is the fix its
+    // broken `auths` row gives (V23-8), so its old fields are not kept
+    let before = read_secret(home_dir, KIND, auth).unwrap_or(None);
     let created = before
         .as_ref()
         .and_then(|saved| saved.get_int("created"))
