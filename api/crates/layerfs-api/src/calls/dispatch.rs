@@ -113,6 +113,14 @@ pub fn call_scoped(
     let outcome = layerfs_home::trace::stepped(name, || {
         scoped(families, home_path, scope, name, args, events, &mut log)
     });
+    // a call refused for a nameless machine names the chain of what is on
+    // it, read on the refusal path alone (UI2-8); a build without the
+    // machine calls (a worker) has no machines
+    #[cfg(feature = "machine")]
+    let outcome = outcome.map_err(|refusal| match home(home_path) {
+        Ok(home) => layerfs_control::machine::nameless_chain(&home, refusal),
+        Err(_) => refusal,
+    });
     // the log keeps the refusing code as it was raised; the caller gets its
     // public one
     log.finish(home_path, &outcome);

@@ -19,7 +19,7 @@ use crate::OperationCause;
 use crate::Unmounted;
 use layerfs_bridge::control::{CommitControl, MountPlace, Reply, SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, CommitId, WorkspaceId};
-use layerfs_home::helpers::{lock, random, required, SHOWN};
+use layerfs_home::helpers::{lock, random, required};
 use layerfs_home::names::WorkspaceName;
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{failed, with_next, Outcome};
@@ -290,10 +290,34 @@ pub fn commit(host: &Host, path: Option<&str>, force: bool, expected: Option<&st
         path,
         (force, expected),
         (
-            &mut |branch, _| layerfs_store::service::head(&open, branch).ok(),
+            &mut |id, name| {
+                let args = SdkValue::map([
+                    ("project", SdkValue::text(&host.project)),
+                    ("name", SdkValue::text(name?)),
+                ]);
+                let listed = layerfs_store::service::call("project.list_branches", &open, args);
+                listed_head(&listed.ok()?, id)
+            },
             &mut resolve,
         ),
     )
+}
+
+/// Reads a Branch's head as `branch get` answers it, given the Branch's id
+/// and name: its newest own Commit, else the Commit (a Layer) it was
+/// forked at; `None` when it could not be read.
+pub type BranchHead<'a> = dyn FnMut(BranchId, Option<&str>) -> Option<String> + 'a;
+
+/// The head `branch get` answers (its `commit`) of the one Branch a
+/// `project.list_branches` answer lists, when that Branch is `id`.
+pub fn listed_head(listed: &SdkValue, id: BranchId) -> Option<String> {
+    let item = match listed.get("items") {
+        Some(SdkValue::List(items)) => items.first()?,
+        _ => return None,
+    };
+    let same = item.get_text("id") == Some(&layerfs_bridge::sdk_values::hex(id.as_slice()));
+    same.then(|| item.get_text("commit").map(str::to_owned))
+        .flatten()
 }
 
 /// Reads the Commit a text names (`branch.get_commit`'s answer): F-hist's
@@ -324,13 +348,16 @@ fn expected_id(text: &str, resolve: &mut Resolve<'_>) -> Result<String, SdkRefus
 /// [`commit`], the Branch's head read by `head_of` when `expected` (a
 /// Commit id or prefix, resolved by `resolve`) names the head the Commit is
 /// made over: a head that is not it refuses the Commit `Conflict`, naming
-/// the head as `commit`, before anything is captured. The check is one read before the Commit
-/// is sent; a head that moves after it is merged as any Commit merges.
+/// the head as `commit`, before anything is captured. The head is the one
+/// `branch get` answers, so a Branch with no Commit of its own is at the
+/// Commit it was forked at (RC-A F2). The check is one read before the
+/// Commit is sent; a head that moves after it is merged as any Commit
+/// merges.
 pub fn commit_with(
     host: &Host,
     path: Option<&str>,
     (force, expected): (bool, Option<&str>),
-    (head_of, resolve): (&mut HeadOf<'_>, &mut Resolve<'_>),
+    (head_of, resolve): (&mut BranchHead<'_>, &mut Resolve<'_>),
 ) -> Outcome {
     let state = sandbox(host)?;
     let path = required(path, "path")?;
@@ -358,16 +385,14 @@ pub fn commit_with(
                 "the Branch's head could not be read to check --expected; nothing was committed",
             )
         })?;
-        let shown = head.map(|id| layerfs_bridge::sdk_values::hex(id.as_slice()));
-        if shown.as_deref() != Some(expected) {
+        if head != expected {
             let refusal = layerfs_home::outcome::refused(
                 "Conflict",
                 format!(
-                    "the Branch's head is {}, not --expected {expected}; nothing was committed",
-                    shown.as_deref().unwrap_or("none")
+                    "the Branch's head is {head}, not --expected {expected}; nothing was committed"
                 ),
             );
-            let refusal = with_next(refusal, "commit", SdkValue::opt_text(shown));
+            let refusal = with_next(refusal, "commit", SdkValue::text(head));
             return Err(with_next(refusal, "conflicts", SdkValue::List(Vec::new())));
         }
     }
@@ -512,39 +537,66 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     outcome
 }
 
-/// The entries a Dirty refusal of the Workspace at `path` lists, as
-/// `workspace status` lists them (call surface 2.0): `changes` (the first
-/// [`SHOWN`] entries of one bounded overlay read, each `{ path, change,
-/// type }`), `changes_count` (the entries read) and `pending_merge`. When
-/// that read fails, the daemon's own paths stand, each as `{ path }`.
+/// A Dirty refusal of the Workspace at `path`, with what [`dirty_fields`]
+/// lists from one bounded overlay read and V22-7's fix.
 fn dirty(state: &crate::registry::SandboxState, path: &str, refusal: SdkRefusal) -> SdkRefusal {
     let read = state
         .controls
         .lend()
         .and_then(|mut control| changed(&mut control, path, None));
-    let entries = match read.ok().and_then(|found| found.get("entries").cloned()) {
-        Some(SdkValue::List(entries)) => entries,
-        _ => match refusal.detail.get("changed") {
-            Some(SdkValue::List(paths)) => (paths.iter())
-                .map(|path| SdkValue::map([("path", path.clone())]))
-                .collect(),
-            _ => Vec::new(),
-        },
-    };
-    let pending = refusal.detail.get_bool("pendingMerge");
-    let count = SdkValue::Int(entries.len() as i64);
-    let shown = SdkValue::List(entries.into_iter().take(SHOWN).collect());
-    let refusal = with_next(refusal, "changes", shown);
-    let refusal = with_next(refusal, "changes_count", count);
-    let refusal = with_next(refusal, "pending_merge", SdkValue::Bool(pending));
     layerfs_home::outcome::with_fix(
-        refusal,
+        dirty_fields(refusal, read.ok().as_ref()),
         format!(
-            "layerfs workspace commit {}:{} -m <message>",
+            "layerfs workspace commit {}:{}",
             shell_word(&state.id),
             shell_word(&path_name(state, path))
         ),
     )
+}
+
+/// The fields a Dirty `refusal` names for the next call, as `workspace
+/// status`'s short form lists them (call surface 2.0): `changes` (the first
+/// [`layerfs_home::helpers::SHOWN`] entries of the overlay read `read`, each `{ path, change,
+/// type }`, `type` left out for a file), `changes_count` only beside a cut
+/// list (RC-A F3), and `pending_merge`. With no read, the daemon's own
+/// paths stand, each as `{ path }`.
+pub fn dirty_fields(refusal: SdkRefusal, read: Option<&SdkValue>) -> SdkRefusal {
+    let (entries, partial) = match read.and_then(|found| found.get("entries")) {
+        Some(SdkValue::List(entries)) => (
+            entries.iter().map(status_entry).collect(),
+            read.is_some_and(|found| found.get_bool("partial")),
+        ),
+        _ => match refusal.detail.get("changed") {
+            Some(SdkValue::List(paths)) => (
+                (paths.iter())
+                    .map(|path| SdkValue::map([("path", path.clone())]))
+                    .collect(),
+                refusal.detail.get_bool("truncated"),
+            ),
+            _ => (Vec::new(), false),
+        },
+    };
+    let pending = refusal.detail.get_bool("pendingMerge");
+    let (shown, count) = layerfs_home::helpers::shown(entries, 0, partial);
+    let mut refusal = with_next(refusal, "changes", shown);
+    if count != SdkValue::Null {
+        refusal = with_next(refusal, "changes_count", count);
+    }
+    with_next(refusal, "pending_merge", SdkValue::Bool(pending))
+}
+
+/// One change as `workspace status`'s short form shows it: `type` left
+/// out when it is `file`, the usual type.
+fn status_entry(entry: &SdkValue) -> SdkValue {
+    match entry {
+        SdkValue::Map(fields) => SdkValue::Map(
+            (fields.iter())
+                .filter(|(name, value)| !(name == "type" && *value == SdkValue::text("file")))
+                .cloned()
+                .collect(),
+        ),
+        other => other.clone(),
+    }
 }
 
 /// The name of the Workspace at `path` in its Sandbox's records, else its

@@ -43,7 +43,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let texts =
         |items: Vec<String>| SdkValue::List(items.into_iter().map(SdkValue::Text).collect());
     let (outcome, unmounted, left) = match remove(home, events, &request)? {
-        Removed::Stopped { unmounted } => ("removed", unmounted, Vec::new()),
+        Removed::Stopped { unmounted, left } => ("removed", unmounted, left),
         Removed::AlreadyGone { left } => ("already_gone", Vec::new(), left),
     };
     Ok(SdkValue::map([

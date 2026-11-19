@@ -176,9 +176,15 @@ fn a_home_it_cannot_read_is_broken_not_refused() {
         .unwrap();
     std::fs::write(home.join("layerfs.json"), "not json").unwrap();
     let got = get(&home);
+    // not a 2.0 home's `layerfs.json` (MIG): `outdated`, one of the row's
+    // reasons, with the fix that moves it aside (C11; RC-B N1)
     assert_eq!(got.get_text("state"), Some("broken"));
-    assert_eq!(got.get_text("reason"), Some("failed"));
-    assert_eq!(got.get("fix"), Some(&SdkValue::Null));
+    assert_eq!(got.get_text("reason"), Some("outdated"));
+    let shown = home.display().to_string();
+    assert_eq!(
+        got.get_text("fix"),
+        Some(format!("mv {shown} {shown}.old && layerfs home init").as_str())
+    );
     assert!(got.get_text("message").is_some());
     let _ = std::fs::remove_dir_all(&home);
 }

@@ -333,7 +333,7 @@ $ layerfs sandbox remove tests --progress
 A Sandbox's files: its roots, one page of a folder, or one byte window of a file.
 
 ```text
-CLI     layerfs sandbox files <sandbox> [<path>] [--depth 1] [--limit 100] [--cursor C] [--byte-offset 0] [--byte-length 262144]
+CLI     layerfs sandbox files <sandbox> [path] [--depth 1] [--limit 100] [--cursor C] [--byte-offset 0] [--byte-length 262144]
 Node    await layerfs.sandbox.files(sandbox, path?, { depth, limit, cursor, byte_offset, byte_length })
 Python  layerfs.sandbox.files(sandbox, path=None, *, depth=None, limit=None, cursor=None, byte_offset=None, byte_length=None)
 ```

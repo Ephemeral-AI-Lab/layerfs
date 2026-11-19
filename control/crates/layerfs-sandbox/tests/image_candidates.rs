@@ -113,3 +113,19 @@ fn a_docker_failure_never_fails_the_listing() {
         .unwrap()
         .contains("Cannot connect"));
 }
+
+/// A stopped machine's `Unavailable` keeps its fix when the image calls
+/// add `what` (RC-B F2): `machine images`, `prune`, `load-image` and
+/// `sandbox create --image` answer `layerfs machine start <m>`.
+#[test]
+fn a_stopped_machine_keeps_its_start_fix() {
+    let refusal = layerfs_home::outcome::refused("Unavailable", "machine lab is not running");
+    let refusal = layerfs_home::outcome::with_fix(refusal, "layerfs machine start lab");
+    let refusal = layerfs_sandbox::images::stopped(refusal);
+    assert_eq!(refusal.code, "Unavailable");
+    assert_eq!(
+        refusal.detail.get_text("fix"),
+        Some("layerfs machine start lab")
+    );
+    assert_eq!(refusal.detail.get_text("what"), Some("machine"));
+}

@@ -64,6 +64,26 @@ pub fn sqlite_schema(path: &Path, identity: &Identity) -> Result<(), SdkRefusal>
     .map_err(open_refusal)
 }
 
+/// The mount intents the sqlite Store file at `path` records, read on a
+/// diagnostic open: what `store doctor` judges against the home's Sandboxes
+/// ([`crate::compact::left_by_removed`]).
+pub fn sqlite_mounts(
+    path: &Path,
+    identity: &Identity,
+) -> Result<Vec<layerfs_history::GcIntent>, SdkRefusal> {
+    let handles = layerfs_persistence::SqliteHandles::open_diagnostic(
+        path,
+        &identity.binding,
+        identity.cursor_key,
+    )
+    .map_err(open_refusal)?;
+    let intents = layerfs_history::HistoryCatalog::gc_all_intents(&handles.history)
+        .map_err(|error| refused("Unavailable", error.to_string()))?;
+    Ok((intents.into_iter())
+        .filter(|intent| intent.kind == layerfs_history::GcIntentKind::Mount)
+        .collect())
+}
+
 /// Whether the sqlite Store file at `path` records this Store's id, read
 /// without the schema checks [`sqlite_schema`] adds.
 pub fn sqlite_identity(path: &Path, identity: &Identity) -> Result<bool, SdkRefusal> {

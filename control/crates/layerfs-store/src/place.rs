@@ -73,6 +73,13 @@ pub fn on_machine_read(home: &Path, machine: &str) -> Result<Executor> {
     if layerfs_machine::runs_here(home, machine)? {
         return Ok(Executor::Local);
     }
+    // a machine whose record has no `vm_name` has no worker this build
+    // reaches: refused `Failed` before anything is dialled (V20-8), with
+    // its remove as the fix, which the call boundary widens to the chain
+    // of what is on it (UI2-8; RC-B F3)
+    if let Some(record) = layerfs_machine::record::MachineRecord::read(home, machine)? {
+        record.provider_name()?;
+    }
     Ok(Executor::Worker(Worker {
         home: home.to_owned(),
         machine: machine.to_owned(),

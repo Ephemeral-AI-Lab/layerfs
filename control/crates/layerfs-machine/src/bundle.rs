@@ -121,7 +121,7 @@ pub fn bundle() -> Result<Bundle, SdkRefusal> {
             let mut refusal = refused(
                 "Unsupported",
                 format!(
-                    "no sealed Linux bundle at {} (bundle.json with its hash); `python3 tools/linux_bundle.py` builds and places it (O16)",
+                    "no sealed Linux bundle at {} (bundle.json with its hash); `python3 tools/linux_bundle.py` builds and places it",
                     dir.display()
                 ),
             );

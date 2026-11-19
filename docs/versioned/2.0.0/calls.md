@@ -198,9 +198,9 @@ $ echo $?
 - **`get`**, short: `{ home, state, version }`, with `generation` when the
   home is ready, and `reason` and `fix` when it is broken (`missing`: no
   home there, fixed by `layerfs home init`; `outdated`: a folder that is
-  not a LayerFS 2.0 home, fixed by `mv <home> <home>.old && layerfs home init`;
-  `failed`: `layerfs.json` cannot be read; the long form's `message` says
-  why). Long:
+  not a LayerFS 2.0 home, or one whose `layerfs.json` cannot be read, the
+  long form's `message` saying why, fixed by
+  `mv <home> <home>.old && layerfs home init`). Long:
   `home, state, version, generation, reason, fix, message, layout, mode,
   bundle, daemon, cache`. `mode` is the folder's permission bits as text
   (`"0700"`); `bundle` and `daemon` are
@@ -296,9 +296,9 @@ $ echo $?
 
 ```console
 $ layerfs home log --limit 5
-{"items":[{"call":"store.get","outcome":"refused","logged_at":"2026-11-18T13:32:21Z","error":"NotFound"},{"call":"store.create","outcome":"ok","logged_at":"2026-11-18T13:32:21Z"},{"call":"home.init","outcome":"ok","logged_at":"2026-11-18T13:32:21Z"}]}
+{"items":[{"call":"store.get","outcome":"refused","logged_at":"2026-11-18T13:32:21Z","error":"NotFound"},{"call":"store.create","outcome":"created","logged_at":"2026-11-18T13:32:21Z"},{"call":"home.init","outcome":"created","logged_at":"2026-11-18T13:32:21Z"}]}
 $ layerfs home log --limit 2 --detail
-{"items":[{"call":"store.get","outcome":"refused","logged_at":"2026-11-18T13:32:21Z","project":null,"error":"NotFound","duration_ms":0,"client":"cli","argv":["store","get","nope"],"commit":null,"tag":null},{"call":"store.create","outcome":"ok","logged_at":"2026-11-18T13:32:21Z","project":null,"error":null,"duration_ms":25,"client":"cli","argv":["store","create","shop"],"commit":null,"tag":null}],"next_cursor":"eyJmb3IiOiJob21lLmxvZyIsImF0IjoiYzEuMC40MzM3OTRiMy4zMGMwOGNmMTE1MjBlYTc2LjU3In0","skipped":0}
+{"items":[{"call":"store.get","outcome":"refused","logged_at":"2026-11-18T13:32:21Z","project":null,"error":"NotFound","duration_ms":0,"client":"cli","argv":["store","get","nope"],"commit":null,"tag":null},{"call":"store.create","outcome":"created","logged_at":"2026-11-18T13:32:21Z","project":null,"error":null,"duration_ms":25,"client":"cli","argv":["store","create","shop"],"commit":null,"tag":null}],"next_cursor":"eyJmb3IiOiJob21lLmxvZyIsImF0IjoiYzEuMC40MzM3OTRiMy4zMGMwOGNmMTE1MjBlYTc2LjU3In0","skipped":0}
 $ layerfs home clear-log --detail
 {"ok":true,"outcome":"cleared","line_count":4}
 ```
@@ -489,10 +489,12 @@ publication answers as a Commit. Every id in an answer is the full id.
   parent `branch`'s head. When `branch` already holds `from` nothing changes
   and the answer says `unchanged`. `--into NEW` writes the result to a new
   Branch and leaves `branch` as it is (1.1.0's form). `--expected C`
-  refuses `Conflict` unless `branch`'s head is `C`, its detail's `commit`
-  being the head it is at. `main` takes changes only by `publish`; merging
-  into it without `--into` is `InvalidInput`. A conflict changes nothing and
-  is `Conflict` with the conflicts in its detail. Short: `{ commit }`, with
+  refuses `Conflict` unless `branch`'s head is `C`, its `commit` being the
+  head it is at. `main` takes changes only by `publish`; merging
+  into it without `--into` is `InvalidInput`, with the fix
+  `layerfs branch publish <project> <from>`. A conflict changes nothing and
+  is `Conflict` with `commit` (`branch`'s head), `conflicts` (the first 20
+  paths) and `conflicts_count` only past those, beside the code. Short: `{ commit }`, with
   `unchanged`, `fast_forward`, `overwritten` (the paths one side's later
   write took, the first 20) when they are set and `overwritten_count` only
   past those; long:
@@ -694,8 +696,6 @@ on another machine through that machine's worker (see
   `end_line`, `from_line` and `line_count` became `--line` and `--limit`,
   and `page_size`/`page_pos` became `--limit` and `--cursor`.
 
-Run:
-
 Also run for this manual (macOS `native`, a debug build of `61960e3f5f`, a scratch
 home; ids shortened to 8 characters and `…`):
 
@@ -874,7 +874,10 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   (`next.workspaces` lists their handles). With `force`, each running
   command is cancelled first (a cancel not confirmed refuses it `Unknown`),
   then the Sandbox is stopped anyway: `unmounted` lists the Workspaces it
-  ended, whose uncommitted changes end with it. `outcome` (long form) is
+  ended, whose uncommitted changes end with it. Once its daemon is
+  stopped, each mount intent those Workspaces still hold in the Store is
+  ended; one that could not be is a sentence of `left`, since `store
+  compact` is refused while it remains. `outcome` (long form) is
   `removed`, `already_gone` (its runtime was gone, or it never recorded
   one, or it was a Sandbox of the retired docker backend; `left` says what
   may remain). A lost answer keeps the record with the `op` uncertain
@@ -1021,9 +1024,9 @@ handle is gone: `<sandbox>:/path` is refused `InvalidInput`.
   `commit` (the head), `conflicts` (first 20 paths) and `conflicts_count`.
 - `unmount` answers `{"ok":true}`; long: `outcome` (`unmounted` or
   `force_unmounted`) and a forced unmount's `abort`, `detach`, `cleanup`.
-  `Dirty` carries `changes` (the first 20 entries, as `status` lists
-  them), `changes_count` and `pending_merge`, with a `fix` naming
-  `workspace commit`; `Busy` and an unconfirmed forced cancel (`Unknown`)
+  `Dirty` carries `changes` (the first 20 entries, as `status`'s short
+  form lists them), `changes_count` past the 20 shown and `pending_merge`,
+  with the fix `layerfs workspace commit <workspace>`; `Busy` and an unconfirmed forced cancel (`Unknown`)
   carry `running` (the exec ids).
 - `status` answers `changes`: the first 20 entries of one bounded read of
   256 overlay rows, each `{path, change}` (`added`, `modified`,
@@ -1449,7 +1452,11 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   the machine or a compaction runs (here or in the worker); `Unknown` when
   the reply is lost and `Unresolved` when an earlier run left its outcome
   unknown (both `fix: layerfs store compact <store>`); `InUse` while
-  Workspaces are mounted. While a compaction runs on a machine, a move's or
+  Workspaces are mounted; `Failed` on a machine whose record has no
+  `vm_name`, with the chain of removes of what is on it as its fix. A
+  sqlite Store's compaction on this computer first ends the mount intents
+  that Sandboxes this home no longer records left behind (their remove
+  stopped the daemon that held them). While a compaction runs on a machine, a move's or
   remove's steps there are `Busy` naming it.
 
 Run (macOS, native; rerun at `61960e3f5f` on a fresh scratch home, all but
@@ -1555,7 +1562,10 @@ the Store.
   leaves the Store `broken` `unresolved` until `layerfs store get <store>
   --with live` settles it.
 - **`doctor`** runs the `bucket.*` checks: `bucket.configuration`,
-  `bucket.credentials`, `bucket.transport`, `bucket.list`; `--full` adds
+  `bucket.credentials` (a record with no key id or a home with no saved
+  secret fails with the fix `layerfs backup connect <bucket> <url>
+  --access-key <key> --key-stdin`, as `backup create` and `restore`
+  refuse it), `bucket.transport`, `bucket.list`; `--full` adds
   the write test (`bucket.write_capability`, `bucket.put`, `bucket.get`,
   `bucket.delete`, and `bucket.reconcile` after a put whose reply was
   lost). Without `--full` those checks are left out of the report.
@@ -1647,8 +1657,10 @@ every check was made and nothing was found; otherwise `findings` and
   outcome unknown is an error whose `fix` is the call that clears it; for a
   sqlite Store it also reads the compaction record beside the file through
   its machine: a run live there passes, one left unresolved is an error
-  with `fix: layerfs store compact <store>`; under a machine that is not
-  ready it waits with `store.connection`),
+  with `fix: layerfs store compact <store>`; on this computer a mount
+  intent a Sandbox this home no longer records left is a warning with the
+  same fix; under a machine that is not ready it waits with
+  `store.connection`),
   `store.connection` (a sqlite Store's file is where its record says,
   read through its machine; a PostgreSQL Store's server answers this
   computer with the saved login), `store.identity` (the Store's id is the
@@ -1754,7 +1766,7 @@ $ layerfs file read nope/p main /a --detail
 {"error":"NotFound","message":"no Store named nope","fix":null,"detail":{"code":"NoSuchStore"}}
 
 $ layerfs workspace mount tests main
-{"error":"InvalidInput","message":"main is the project's published line, not a Branch, and is not mounted: fork a Branch from it and mount that","fix":"layerfs branch fork shop/api <name> main"}
+{"error":"InvalidInput","message":"main is the project's published line, not a Branch, and is not mounted: fork a Branch from it and mount that","fix":"layerfs branch fork shop/api work && layerfs workspace mount tests work"}
 
 $ layerfs sandbox remove tests
 {"error":"InUse","message":"Sandbox tests still holds 1 Workspace(s); commit or unmount them first","workspaces":["tests:agent"]}

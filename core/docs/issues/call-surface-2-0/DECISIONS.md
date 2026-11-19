@@ -518,6 +518,41 @@ rule below (b2eb2de931).
   `--into` (refused `InvalidInput`) gives `layerfs branch publish <project> <from>`; a `Dirty`
   `workspace unmount` gives `layerfs workspace commit <workspace>`.
 
+## RC rulings (coordinator, 2026-11-19, final conformance RC-A and RC-B)
+
+- **RC-1** (RC-A F1) A path `Conflict` of `branch merge` carries, beside the code, `commit` (the
+  head of the Branch merged into), `conflicts` (the first 20 conflicting paths, text) and
+  `conflicts_count` only past those, as `workspace commit`'s does. The engine's conflict objects
+  stay in `detail`, with `paths` and `total` beside them; no camelCase key is a flat field.
+- **RC-2** (RC-A F2) `workspace commit --expected` compares with the head `branch get` answers: a
+  Branch with no Commit of its own is at the Commit it was forked at, and the refusal names that
+  head as `commit`.
+- **RC-3** (RC-A F3 and NOTE) A `Dirty` refusal's `changes` are `workspace status`'s short-form
+  entries (`type` left out for a file); `changes_count` only beside a cut list. Its fix is V22-7's
+  `layerfs workspace commit <workspace>`, with no `-m` placeholder.
+- **RC-4** (RC-A N5, RC-B N15) The fix of a mount of `main` is runnable:
+  `layerfs branch fork <project> work && layerfs workspace mount <sandbox> work`. A placeholder
+  stays only where LayerFS cannot know the value (a secret key, a saved login's name).
+- **RC-5** (RC-A N9) Unchanged long forms are kept as built, since neither the spec nor the manual
+  rules on them: `workspace commit`, the file writes and `branch publish` answer `parent`,
+  `message` and `created_at` (publish: `source_commit`, `base`, `root`, `size`) null when nothing
+  was made; `branch merge` unchanged fills `parent`, `second_parent` and `merge_base` with the
+  head it already holds.
+- **RC-6** (RC-B F1, N12) A forced `sandbox remove` ends, once its daemon is stopped, each mount
+  intent its Workspaces still hold, once each (released, or marked uncertain when the Store
+  refuses the delete); one it could not end is a sentence of `left`. A sqlite Store's
+  `store compact` on this computer first ends the mount intents Sandboxes this home no longer
+  records left, and `store doctor`'s `store.operation` warns of them with
+  `fix: layerfs store compact <store>`. No Store format change.
+- **RC-7** (RC-B F3) A call that needs the worker of a machine whose record has no `vm_name` is
+  refused `Failed` before anything is dialled (V20-8), with UI2-8's chain as its fix, built at the
+  call boundary on the refusal path alone.
+- **RC-8** (RC-B N1) A home whose `layerfs.json` cannot be read is `broken` `outdated` (MIG: not a
+  2.0 home) with V20-6's move-aside fix; `failed` is not a reason of `home get`.
+- **RC-9** (RC-B N3) Help prints an optional positional as the rows do, `[name]`.
+- **RC-10** (RC-B N13) A native Sandbox's `platform` stays `mac`, #529's Sandbox platform word: the
+  spec names no Sandbox platform for `native`.
+
 ## Version 23 (owner 2026-11-19): PostgreSQL Stores, who connects
 
 Owner, on Stores ▸ PostgreSQL: the screen must show which machines connect to the database that

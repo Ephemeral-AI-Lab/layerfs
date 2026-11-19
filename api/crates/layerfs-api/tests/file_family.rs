@@ -529,6 +529,77 @@ fn a_merge_answers_counts_only_beside_cut_lists() {
     std::fs::remove_dir_all(folder).unwrap();
 }
 
+/// Writes `count` files `/c<i>.txt` holding `text` to Branch `branch` in
+/// one Commit.
+fn write_many(home: &Path, branch: &str, count: usize, text: &str) {
+    let changes = (0..count)
+        .map(|i| {
+            map(&[
+                ("op", t("write")),
+                ("path", t(&format!("/c{i:02}.txt"))),
+                ("content", t(text)),
+            ])
+        })
+        .collect();
+    ok(
+        home,
+        "file.apply",
+        &[
+            p(),
+            ("branch", t(branch)),
+            ("changes", SdkValue::List(changes)),
+        ],
+    );
+}
+
+/// A merge's path `Conflict` (RC-A F1) answers as a Workspace Commit's
+/// does: the head of the Branch merged into as `commit`, the first 20
+/// conflicting paths as `conflicts` (text, no engine objects), and
+/// `conflicts_count` only when that list was cut.
+#[test]
+fn a_merge_conflict_names_the_head_and_cuts_its_paths_at_20() {
+    let (home, folder) = project();
+    for (count, from) in [(25, "wide"), (3, "narrow")] {
+        ok(
+            &home,
+            "branch.fork",
+            &[p(), ("name", t(from)), ("from", t("dev"))],
+        );
+        write_many(&home, from, count, "theirs\n");
+    }
+    write_many(&home, "dev", 25, "ours\n");
+    let dev_head = ok(&home, "branch.get", &[p(), dev()]);
+    let dev_head = head(&dev_head);
+    let wide = refused(&home, "branch.merge", &[p(), dev(), ("from", t("wide"))]);
+    assert_eq!(wide.code, "Conflict", "{wide:?}");
+    assert_eq!(next(&wide, "commit"), t(&dev_head), "{wide:?}");
+    let SdkValue::List(paths) = next(&wide, "conflicts") else {
+        panic!("{wide:?}")
+    };
+    assert_eq!(paths.len(), 20, "{wide:?}");
+    assert_eq!(paths[0], t("/c00.txt"));
+    assert_eq!(next(&wide, "conflicts_count"), SdkValue::Int(25));
+    let narrow = refused(&home, "branch.merge", &[p(), dev(), ("from", t("narrow"))]);
+    assert_eq!(
+        next(&narrow, "conflicts"),
+        SdkValue::List(vec![t("/c00.txt"), t("/c01.txt"), t("/c02.txt")]),
+        "{narrow:?}"
+    );
+    assert_eq!(next(&narrow, "conflicts_count"), SdkValue::Null);
+    assert_eq!(next(&narrow, "commit"), t(&dev_head));
+    // `--at` with one of main's publications says what `--at` takes (RC-A N8)
+    let main = ok(&home, "branch.get", &[p(), ("branch", t("main"))]);
+    let at = [p(), dev(), ("at", t(&head(&main)))];
+    let publication = refused(&home, "branch.publish", &at);
+    assert_eq!(publication.code, "InvalidInput", "{publication:?}");
+    assert!(
+        publication.message.contains("--at takes a Commit of dev"),
+        "{publication:?}"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+    std::fs::remove_dir_all(folder).unwrap();
+}
+
 /// A taken Branch name (conformance R1 N5) is refused `Exists` in a plain
 /// sentence, with the call again under another name as its `fix`.
 #[test]

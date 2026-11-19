@@ -79,8 +79,14 @@ def shell(home, words, data=b""):
     )
     if run.returncode == 0:
         return {"status": 0, "value": decode(run.stdout.decode())}
-    last = run.stderr.decode().strip().splitlines()[-1]
-    return {"status": run.returncode, "refused": decode(last) if last.startswith("{") else last}
+    lines = run.stderr.decode().strip().splitlines()
+    last = lines[-1]
+    if last.startswith("{"):
+        return {"status": run.returncode, "refused": decode(last)}
+    # a wrong command line (V22): the `layerfs: ...` message, then the call's
+    # usage line and where its help is
+    said = next((line for line in lines if line.startswith("layerfs: ")), last)
+    return {"status": run.returncode, "refused": said}
 
 
 def python(lfs, family, call, positionals):

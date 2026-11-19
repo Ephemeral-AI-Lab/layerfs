@@ -206,6 +206,17 @@ fn a_nameless_machines_holders_and_the_machine_go_by_their_records() {
     let force = [("machine", t("old")), ("force", SdkValue::Bool(true))];
     let stop = call(&home, "machine.stop", &force).unwrap_err();
     assert_eq!(stop.detail.get_text("fix"), Some(chain), "{stop:?}");
+    // so is a call that needs its worker, before anything is dialled, in
+    // place of a `machine start` that is itself refused (RC-B F3)
+    for (name, args) in [
+        ("machine.stats", vec![("machine", t("old"))]),
+        ("store.compact", vec![("store", t("shop"))]),
+    ] {
+        let refused = call(&home, name, &args).unwrap_err();
+        assert_eq!(refused.code, "Failed", "{name}: {refused:?}");
+        assert!(refused.message.contains("has no vm_name"), "{refused:?}");
+        assert_eq!(refused.detail.get_text("fix"), Some(chain), "{refused:?}");
+    }
 
     let refused = call(&home, "machine.remove", &[("machine", t("old"))]).unwrap_err();
     assert_eq!(refused.code, "InUse", "{refused:?}");

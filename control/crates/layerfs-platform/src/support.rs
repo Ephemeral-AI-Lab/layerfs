@@ -68,7 +68,7 @@ pub struct Supports {
 }
 
 const OTHER_HOST: &str = "LayerFS names no host other than macOS, Linux and Windows";
-const NO_BACKEND: &str = "no Sandbox backend on Windows (O5)";
+const NO_BACKEND: &str = "no Sandbox backend on Windows";
 
 /// Why `platform` cannot be on `host`, or `None` where it can.
 fn host_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
