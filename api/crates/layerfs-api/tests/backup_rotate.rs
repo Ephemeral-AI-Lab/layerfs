@@ -386,8 +386,7 @@ fn a_record_with_no_key_id_is_fixed_by_connecting_again() {
     let refused = BucketRecord::of(&home, "b1")
         .unwrap()
         .credentials(&home)
-        .err()
-        .expect("no key id");
+        .expect_err("no key id");
     assert_eq!(refused.code, "Failed");
     assert_eq!(
         refused.detail.get_text("fix"),
