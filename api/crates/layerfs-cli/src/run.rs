@@ -1,6 +1,6 @@
 //! One command line, start to exit code.
 use crate::parse::{parse, Usage};
-use crate::{help, output, worker};
+use crate::{help, output, view, worker};
 use layerfs_api::Scope;
 use layerfs_bridge::control::SdkValue;
 use std::io::{IsTerminal, Write};
@@ -28,6 +28,9 @@ pub fn main(words: Vec<String>) -> ExitCode {
             let Some(name) = words.get(1) else {
                 return help::print(&[family]);
             };
+            if name == "-h" || name == "--help" {
+                return help::print(&[family]);
+            }
             if words[2..].iter().any(|w| w == "-h" || w == "--help") {
                 return help::print(&[family, name]);
             }
@@ -97,16 +100,30 @@ pub fn wrong(message: String) -> ExitCode {
     ExitCode::from(USAGE)
 }
 
+/// A wrong command line of `call`: the message, the call's usage line and
+/// where its help is.
+fn wrong_call(call: &layerfs_api::Call, message: String) -> ExitCode {
+    let name = format!("{} {}", call.family, call.call.replace('_', "-"));
+    output::diagnostic(&format!(
+        "layerfs: {message}\nusage: {}\n`layerfs help {name}` for more",
+        help::usage(call)
+    ));
+    ExitCode::from(USAGE)
+}
+
 /// One call of the table, made once.
 fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
     let parsed = match parse(call, words, &mut std::io::stdin()) {
         Ok(parsed) => parsed,
-        Err(Usage(message)) => return wrong(message),
+        Err(Usage(message)) => return wrong_call(call, message),
     };
     let switches = parsed.switches;
+    // the readable form on a terminal, JSON for a pipe; --text and --json
+    // choose either anywhere
+    let text = switches.text || (!switches.json && std::io::stdout().is_terminal());
     let scope = match switches.scope.as_ref().map(Scope::parse).transpose() {
         Ok(scope) => scope,
-        Err(refusal) => return output::refusal(&refusal, switches.detail),
+        Err(refusal) => return output::refusal(&refusal, switches.detail, text),
     };
     let (progress, stream) = (switches.progress, switches.stream);
     let is_term =
@@ -169,15 +186,19 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
     // sessions end before the process does; bounded, the result is ready
     layerfs_api::close();
     // `workspace exec` exits with the command's own code in every form
-    // (call surface 2.0); its result JSON is still printed, except with
-    // `--stream`, which wrote the output itself
+    // (call surface 2.0); its result JSON is still printed, its readable
+    // form is the command's own output, and `--stream` wrote that itself
     let exits = call.arg("stream").is_some();
     match outcome {
-        Err(refusal) => output::refusal(&refusal, switches.detail),
+        Err(refusal) => output::refusal(&refusal, switches.detail, text),
         Ok(value) if exits => {
-            let printed = match stream {
-                true => ExitCode::SUCCESS,
-                false => output::result(&value, switches.text, call.form),
+            let printed = match (stream, text) {
+                (true, _) => ExitCode::SUCCESS,
+                (false, true) => {
+                    view::exec(&value);
+                    ExitCode::SUCCESS
+                }
+                (false, false) => output::result(&value, false, call.form),
             };
             let _ = std::io::stdout().flush();
             // a result with none is a plain success (125 is for refusals)
@@ -187,7 +208,8 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
             }
         }
         // a doctor's report reads as its findings and what it could not check
-        Ok(value) if switches.text && call.call == "doctor" => output::doctor(&value),
-        Ok(value) => output::result(&value, switches.text, call.form),
+        Ok(value) if text && call.call == "doctor" => output::doctor(&value),
+        Ok(value) if text => view::show(call, words, &value),
+        Ok(value) => output::result(&value, false, call.form),
     }
 }

@@ -1,21 +1,48 @@
 //! What a call prints (S §2.6): the result as one line of JSON on stdout,
-//! or with `--text` a readable form; a refusal as JSON on stderr, exit 125.
+//! or a readable form (`--text`, the default on a terminal); a refusal on
+//! stderr in the same form, exit 125.
 use crate::run::REFUSED;
 use layerfs_api::{json, Form, Part};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::io::Write;
 use std::process::ExitCode;
 
-/// Prints `refusal` as one line of JSON on stderr: `{"error","message"}`,
+/// Prints `refusal` on stderr: one line of JSON, `{"error","message"}`,
 /// `fix` when there is one and the fields the next call needs; with
-/// `detail` (`--detail`) its long form, which adds `detail`.
-pub fn refusal(refusal: &SdkRefusal, detail: bool) -> ExitCode {
-    diagnostic(&json::print(&layerfs_api::refusal::value(refusal, detail)));
+/// `detail` (`--detail`) its long form, which adds `detail`. With `text`
+/// it reads as `error: <message>  (<code>)`, then the fix and the fields.
+pub fn refusal(refusal: &SdkRefusal, detail: bool, text: bool) -> ExitCode {
+    let value = layerfs_api::refusal::value(refusal, detail);
+    match text {
+        true => diagnostic(refusal_text(&value).trim_end()),
+        false => diagnostic(&json::print(&value)),
+    }
     ExitCode::from(REFUSED)
 }
 
+/// A refusal's readable form: its message and code, then `fix:` and each
+/// other field it carries, indented.
+pub fn refusal_text(value: &SdkValue) -> String {
+    let code = value.get_text("error").unwrap_or("Refused");
+    let message = value.get_text("message").unwrap_or("");
+    let mut text = format!("error: {message}  ({code})\n");
+    if let Some(fix) = value.get_text("fix") {
+        text.push_str(&format!("  fix: {fix}\n"));
+    }
+    if let SdkValue::Map(fields) = value {
+        let shown = ["error", "message", "fix"];
+        for (key, field) in fields.iter().filter(|(k, _)| !shown.contains(&k.as_str())) {
+            let news = !matches!(field, SdkValue::Null | SdkValue::Bool(false));
+            if news {
+                text.push_str(&format!("  {}: {}\n", label(key), inline(key, field)));
+            }
+        }
+    }
+    text
+}
+
 /// Prints a call's result; `form` is the call's declared answer, which
-/// `--text` reads for the columns its rows may leave out.
+/// the readable form reads for the columns its rows may leave out.
 pub fn result(value: &SdkValue, text: bool, form: Option<&Form>) -> ExitCode {
     let printed = if text {
         readable(value, form)
@@ -25,7 +52,7 @@ pub fn result(value: &SdkValue, text: bool, form: Option<&Form>) -> ExitCode {
     print(&printed)
 }
 
-/// A doctor's report with `--text`: a count line, then each finding as
+/// A doctor's report in the readable form: a count line, then each finding as
 /// `<severity> <thing> <name> <check>: <message>` with its fix on the next
 /// line, then each check that could not be made and why.
 pub fn doctor(report: &SdkValue) -> ExitCode {
@@ -120,8 +147,13 @@ pub fn print(printed: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Fields formatted as human sizes in `--text`.
-const SIZE_FIELDS: &[&str] = &["size", "bytes", "stdout_bytes", "stderr_bytes"];
+/// Fields shown as human sizes, beside every `*_bytes`.
+const SIZE_FIELDS: &[&str] = &["size", "bytes"];
+
+/// Whether field `key` holds a byte count.
+fn is_size(key: &str) -> bool {
+    SIZE_FIELDS.contains(&key) || key.ends_with("_bytes")
+}
 
 /// The progress phases whose `done` and `total` are bytes: a Store, a
 /// project's parts or an image sent to a machine (`send`), a Store move's
@@ -182,12 +214,22 @@ pub fn format_size(bytes: i64) -> String {
     format!("{bytes} B")
 }
 
-/// One scalar as a table cell, formatted for human reading if field name matches.
+/// One scalar as the readable form shows it: a byte count as a size, a
+/// Commit id by its first 14 characters (a prefix every lookup takes).
 pub fn format_field(key: &str, value: &SdkValue) -> String {
     match value {
-        SdkValue::Int(n) if SIZE_FIELDS.contains(&key) => format_size(*n),
+        SdkValue::Int(n) if is_size(key) => format_size(*n),
+        SdkValue::Text(text) if is_node(text) => text[..SHORT_ID].to_owned(),
         _ => cell(value),
     }
+}
+
+/// The characters a Commit id shows: its tag and six bytes.
+const SHORT_ID: usize = 14;
+
+/// Whether `text` is a Commit or publication id: 66 hex characters.
+fn is_node(text: &str) -> bool {
+    text.len() == 66 && text.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// One scalar as a table cell.
@@ -201,9 +243,43 @@ fn cell(value: &SdkValue) -> String {
     }
 }
 
-/// `--text`: a file's text as it is; a result whose one list holds records
-/// as a table of their scalar fields; anything else as `key  value` lines.
-/// `form`, the call's declared answer, gives each list's row form.
+/// A value on one line: a scalar as [`format_field`], a list joined by
+/// commas (a record by its first value: a change by its path), anything
+/// else as JSON.
+fn inline(key: &str, value: &SdkValue) -> String {
+    let first = |item: &SdkValue| match item {
+        SdkValue::Map(fields) => fields.first().map(|(k, v)| format_field(k, v)),
+        other => Some(format_field(key, other)),
+    };
+    match value {
+        SdkValue::List(items) => {
+            let items: Vec<String> = items.iter().filter_map(first).collect();
+            items.join(", ")
+        }
+        other => format_field(key, other),
+    }
+}
+
+fn scalar(value: &SdkValue) -> bool {
+    !matches!(value, SdkValue::Map(_) | SdkValue::List(_))
+}
+
+/// A key as a label: `memory_used_bytes` reads `memory used` (its value
+/// shows as a size), `file_count` reads `file count`.
+fn label(key: &str) -> String {
+    let key = match key.strip_suffix("_bytes") {
+        Some(base) if !base.is_empty() => base,
+        _ => key,
+    };
+    key.replace('_', " ")
+}
+
+/// The readable form: a file's text as it is; `done` for a result that
+/// says only that it worked; otherwise each scalar as an aligned `label
+/// value` line, each map as an indented block under its label, each list
+/// of records as a table (a list other than `items` under its label) and
+/// each list of plain values one per line. `form`, the call's declared
+/// answer, gives each list's row form.
 pub fn readable(value: &SdkValue, form: Option<&Form>) -> String {
     if let Some(SdkValue::Text(text)) = value.get("text") {
         return text.clone();
@@ -211,23 +287,73 @@ pub fn readable(value: &SdkValue, form: Option<&Form>) -> String {
     let SdkValue::Map(fields) = value else {
         return format!("{}\n", cell(value));
     };
+    let only_ok = matches!(&fields[..], [(key, SdkValue::Bool(true))] if key == "ok");
+    if fields.is_empty() || only_ok {
+        return "done\n".to_owned();
+    }
     let mut out = String::new();
+    block(fields, form, 0, &mut out);
+    out
+}
+
+/// The fields of one map at `indent`, as [`readable`] lays them out.
+fn block(fields: &[(String, SdkValue)], form: Option<&Form>, indent: usize, out: &mut String) {
+    let pad = " ".repeat(indent);
+    let width = (fields.iter())
+        .filter(|(_, v)| scalar(v) || matches!(v, SdkValue::List(l) if l.iter().all(scalar)))
+        .map(|(k, _)| label(k).chars().count())
+        .max()
+        .unwrap_or(0);
     for (name, field) in fields {
         match field {
-            SdkValue::List(rows) if rows.iter().all(|r| matches!(r, SdkValue::Map(_))) => {
-                if !out.is_empty() {
-                    out.push('\n');
-                }
+            SdkValue::List(rows) if !rows.is_empty() && rows.iter().all(|r| !scalar(r)) => {
                 let declared = match form.and_then(|form| form.part(name)) {
                     Some(Part::Rows(rows)) => Some(*rows),
                     _ => None,
                 };
-                out.push_str(&table(name, rows, declared));
+                if !out.is_empty() {
+                    out.push('\n');
+                }
+                if name != "items" {
+                    out.push_str(&format!("{pad}{}\n", crate::banner::bold(&label(name))));
+                }
+                out.push_str(&table(rows, declared, &pad));
             }
-            _ => out.push_str(&format!("{name}  {}\n", format_field(name, field))),
+            SdkValue::List(items) if name == "items" && indent == 0 => match items.is_empty() {
+                true => out.push_str("(none)\n"),
+                false => {
+                    for item in items {
+                        out.push_str(&format!("{}\n", format_field(name, item)));
+                    }
+                }
+            },
+            SdkValue::Map(inner) => {
+                out.push_str(&format!("{pad}{}\n", label(name)));
+                let declared = match form.and_then(|form| form.part(name)) {
+                    Some(Part::Rows(rows)) => Some(*rows),
+                    _ => None,
+                };
+                block(inner, declared, indent + 2, out);
+            }
+            other => {
+                let shown = match other {
+                    SdkValue::List(items) if items.is_empty() => "(none)".to_owned(),
+                    other => inline(name, other),
+                };
+                out.push_str(&format!("{pad}{:<width$}  {shown}\n", label(name)));
+            }
         }
     }
-    out
+}
+
+/// What a `*_not_listed` flag says under a table.
+fn note(flag: &str) -> String {
+    match flag {
+        "workspaces_not_listed" => {
+            "Workspaces kept on the machine (`layerfs workspace list` reads them)".to_owned()
+        }
+        other => format!("{} here", label(other)),
+    }
 }
 
 /// The cell of column `column` in a row that left it out. The short form
@@ -240,18 +366,22 @@ fn absent(column: &str) -> &'static str {
     }
 }
 
-/// Rows as aligned columns, upper-case headers; nested values are left out.
-/// A row form (`declared`) whose rows carry a state keeps its STATE column
-/// when every row left `state: ready` out, in the place its long form
-/// gives it.
-fn table(name: &str, rows: &[SdkValue], declared: Option<&Form>) -> String {
+/// Rows as aligned columns under bold headers, each line after `pad`;
+/// nested values are left out. A row form (`declared`) whose rows carry a
+/// state keeps its STATE column when every row left `state: ready` out, in
+/// the place its long form gives it. A `*_not_listed` flag is no column:
+/// a note under the table names the rows it is set on.
+fn table(rows: &[SdkValue], declared: Option<&Form>, pad: &str) -> String {
     let mut columns: Vec<&str> = Vec::new();
+    let mut flags: Vec<&str> = Vec::new();
     for row in rows {
         if let SdkValue::Map(fields) = row {
             for (key, value) in fields {
-                if !matches!(value, SdkValue::Map(_) | SdkValue::List(_))
-                    && !columns.contains(&key.as_str())
-                {
+                if key.ends_with("_not_listed") {
+                    if !flags.contains(&key.as_str()) {
+                        flags.push(key);
+                    }
+                } else if scalar(value) && !columns.contains(&key.as_str()) {
                     columns.push(key);
                 }
             }
@@ -265,8 +395,8 @@ fn table(name: &str, rows: &[SdkValue], declared: Option<&Form>) -> String {
             columns.insert(place, "state");
         }
     }
-    if rows.is_empty() || columns.is_empty() {
-        return format!("{}  (none)\n", name.to_uppercase());
+    if columns.is_empty() {
+        return format!("{pad}(none)\n");
     }
     let cells: Vec<Vec<String>> = rows
         .iter()
@@ -281,36 +411,34 @@ fn table(name: &str, rows: &[SdkValue], declared: Option<&Form>) -> String {
                 .collect()
         })
         .collect();
-    let widths: Vec<usize> = columns
-        .iter()
-        .enumerate()
-        .map(|(i, c)| {
-            cells
-                .iter()
-                .map(|r| r[i].chars().count())
+    let headers: Vec<String> = columns.iter().map(|c| label(c).to_uppercase()).collect();
+    let widths: Vec<usize> = (headers.iter().enumerate())
+        .map(|(i, header)| {
+            (cells.iter().map(|r| r[i].chars().count()))
                 .max()
                 .unwrap_or(0)
-                .max(c.len())
+                .max(header.chars().count())
         })
         .collect();
-    let line = |values: Vec<String>| {
-        let mut text = values
-            .iter()
-            .zip(&widths)
+    let line = |values: &[String]| {
+        let text = (values.iter().zip(&widths))
             .map(|(v, w)| format!("{v:<w$}"))
             .collect::<Vec<_>>()
             .join("  ");
-        text.truncate(text.trim_end().len());
-        text.push('\n');
-        text
+        format!("{pad}{}", text.trim_end())
     };
-    let raw_header = line(columns.iter().map(|c| c.to_uppercase()).collect());
-    let mut out = format!(
-        "{}\n",
-        crate::banner::bold(raw_header.trim_end_matches('\n'))
-    );
-    for row in cells {
-        out.push_str(&line(row));
+    let mut out = format!("{}\n", crate::banner::bold(&line(&headers)));
+    for row in &cells {
+        out.push_str(&format!("{}\n", line(row)));
+    }
+    for flag in flags {
+        let named: Vec<String> = (rows.iter().zip(&cells))
+            .filter(|(row, _)| row.get(flag) == Some(&SdkValue::Bool(true)))
+            .map(|(_, cells)| cells[0].clone())
+            .collect();
+        if !named.is_empty() {
+            out.push_str(&format!("{pad}{}: {}\n", note(flag), named.join(", ")));
+        }
     }
     out
 }
