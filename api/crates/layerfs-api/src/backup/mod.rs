@@ -2,6 +2,7 @@
 mod connect;
 mod create;
 mod disconnect;
+mod doctor;
 mod list;
 mod restore;
 
@@ -15,6 +16,6 @@ pub(crate) fn calls() -> Calls {
         list::CALL,
         create::CALL,
         restore::CALL,
-        crate::doctor::backup::CALL,
+        doctor::CALL,
     ]
 }

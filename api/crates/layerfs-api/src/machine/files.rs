@@ -1,16 +1,15 @@
 //! `machine.files`: a machine's files: its LayerFS folders, or a folder
 //! or file of it.
-use super::stats::{at, field, rows};
+use super::stats::field;
 use crate::calls::table::Kind::{Int, Name, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::{Context, Form, Paging, Part};
+use crate::sandbox::files::{self, LIMIT};
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::home::with_field;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
 use layerfs_sandbox::inspect::{machine_files, FilesRequest};
-
-/// The entries a folder page holds when `--limit` is not given.
-const LIMIT: i64 = 100;
 
 /// One entry of a folder page.
 const ENTRY: Form = Form::of(
@@ -93,76 +92,15 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         length: args.get_int("byte_length"),
     };
     let read = machine_files(&context.home, &machine, &request)?;
-    Ok(shown(&read))
+    Ok(files::shown(&read, entry))
 }
 
-/// A folder page or a file window as the row names it.
-fn shown(read: &SdkValue) -> SdkValue {
-    if read.get_text("kind") == Some("file") {
-        let binary = read.get_bool("binary");
-        let content = if binary {
-            SdkValue::Null
-        } else {
-            field(read, "content")
-        };
-        return SdkValue::map([
-            ("text", content),
-            ("binary", SdkValue::Bool(binary)),
-            (
-                "size",
-                if binary {
-                    field(read, "size")
-                } else {
-                    SdkValue::Null
-                },
-            ),
-            ("next_byte_offset", field(read, "next")),
-            ("type", SdkValue::text("file")),
-        ]);
-    }
-    let more = read.get_bool("has_more");
-    SdkValue::map([
-        ("items", rows(read.get("entries"), entry)),
-        (
-            "next_cursor",
-            if more {
-                field(read, "next")
-            } else {
-                SdkValue::Null
-            },
-        ),
-        ("type", SdkValue::text("dir")),
-    ])
-}
-
-/// One entry: its `type` (`file`, `dir`, `symlink`, `other`) and, for one
-/// listed and not read, why (`system`, `mount`, `unreadable`,
-/// `restricted`). An unreadable or restricted entry whose size was read is
-/// a file, any other a folder.
+/// One entry as `sandbox.files` names it, with the free space of the
+/// filesystem it is on.
 fn entry(found: &SdkValue) -> SdkValue {
-    let sized = !matches!(found.get("size"), None | Some(SdkValue::Null));
-    let (kind, not_read) = match found.get_text("kind").unwrap_or("other") {
-        "folder" => ("dir", None),
-        "file" => ("file", None),
-        "symlink" => ("symlink", None),
-        why @ ("system" | "mount") => ("dir", Some(why)),
-        why @ ("unreadable" | "restricted") => (if sized { "file" } else { "dir" }, Some(why)),
-        _ => ("other", None),
-    };
-    let mode = found.get_int("mode");
-    let mode = mode.map(|bits| SdkValue::Text(format!("{:04o}", bits & 0o7777)));
-    SdkValue::map([
-        ("path", field(found, "path")),
-        ("type", SdkValue::text(kind)),
-        ("size", field(found, "size")),
-        ("not_read", SdkValue::opt_text(not_read)),
-        ("role", field(found, "role")),
-        ("depth", field(found, "depth")),
-        ("mode", mode.unwrap_or_default()),
-        ("modified_at", at(field(found, "mtime"))),
-        ("target", field(found, "target")),
-        ("fs", field(found, "fs")),
-        ("workspace", field(found, "workspace")),
-        ("disk_free_bytes", field(found, "free_bytes")),
-    ])
+    with_field(
+        files::entry(found),
+        "disk_free_bytes",
+        field(found, "free_bytes"),
+    )
 }

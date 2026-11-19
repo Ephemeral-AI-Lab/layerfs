@@ -10,6 +10,7 @@ mod compact;
 mod connect;
 mod create;
 mod disconnect;
+mod doctor;
 mod get;
 mod list;
 mod r#move;
@@ -35,6 +36,6 @@ pub(crate) fn calls() -> Calls {
         r#move::CALL,
         remove::CALL,
         compact::CALL,
-        crate::doctor::store::CALL,
+        doctor::CALL,
     ]
 }

@@ -164,19 +164,15 @@ impl Shaping<'_> {
             }
         }
         // an item takes the flat keys of the sections asked for; the top
-        // level takes those of the sections that answer there
+        // level takes their own maps
         let (asked, flat): (&[&Section], &[&str]) = match level {
             Level::Top => (&self.asked, &[]),
             Level::Item => (&[], &self.flat),
             Level::Inner => (&[], &[]),
         };
-        let at_top = asked.iter().filter(|section| section.place == Place::Top);
-        let flat_keys = flat
-            .iter()
-            .chain(at_top.flat_map(|section| section.keys.iter()));
         // a section key the form lists too (`machine list --with live`'s
         // `observed_at`) was answered in its place above
-        for key in flat_keys.filter(|key| !form.long.contains(key)) {
+        for key in flat.iter().filter(|key| !form.long.contains(key)) {
             let value = take(&mut fields, key).unwrap_or_default();
             // a section's form may shape one of its keys (`hunks` rows)
             let part = (self.asked.iter())
@@ -273,9 +269,8 @@ pub fn shape(
             .flat_map(|section| section.keys.iter().copied())
             .collect()
     };
-    let mut spare_top = keys(&spare, Place::Top);
     let own = spare.iter().filter(|section| section.place == Place::Own);
-    spare_top.extend(own.map(|section| section.name));
+    let spare_top = own.map(|section| section.name).collect();
     let shaping = Shaping {
         what,
         detail: asked.detail,

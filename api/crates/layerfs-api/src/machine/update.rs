@@ -2,8 +2,12 @@
 //! socket, WSL distribution and daemon.
 use crate::calls::table::Kind::{Int, Name, Size, Text};
 use crate::calls::table::{a, call, opt, Call};
-use crate::calls::{Context, Form, Policy};
+#[cfg(feature = "machine")]
+use crate::calls::Context;
+use crate::calls::{Form, Policy};
+#[cfg(feature = "machine")]
 use layerfs_bridge::control::SdkValue;
+#[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
 
 /// Its answer: `ok`; the long form adds the settings as recorded.
@@ -63,9 +67,4 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 /// Without the `machine` feature (the guest worker's build) it is
 /// refused before any effect.
 #[cfg(not(feature = "machine"))]
-fn run(_context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
-    Err(layerfs_home::outcome::refused(
-        "Unsupported",
-        "machine.update runs on the host",
-    ))
-}
+use super::host_only as run;

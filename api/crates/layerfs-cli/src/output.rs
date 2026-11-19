@@ -119,55 +119,8 @@ pub fn print(printed: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Fields formatted as dates in UTC (YYYY-MM-DD HH:MM:SS) in `--text`.
-const TIME_FIELDS: &[&str] = &["created", "modified", "at"];
-
 /// Fields formatted as human sizes in `--text`.
-const SIZE_FIELDS: &[&str] = &[
-    "size",
-    "bytes",
-    "part_size",
-    "memory",
-    "disk",
-    "free",
-    "free_disk",
-    "wal_bytes",
-    "incoming_bytes",
-    "stdout_bytes",
-    "stderr_bytes",
-    "logical",
-    "new_canonical",
-    "new_stored",
-    "new_metadata",
-];
-
-/// Formats epoch milliseconds as `YYYY-MM-DD HH:MM:SS` UTC.
-pub fn format_time(ms: i64) -> String {
-    if ms < 0 {
-        return ms.to_string();
-    }
-    let s = ms / 1000;
-    let rem_s = s % 86400;
-    let sec = rem_s % 60;
-    let rem_m = rem_s / 60;
-    let min = rem_m % 60;
-    let hour = rem_m / 60;
-    let days = s / 86400;
-
-    let z = days + 719468;
-    let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
-    let doe = z - era * 146097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let mut y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    if m <= 2 {
-        y += 1;
-    }
-    format!("{y:04}-{m:02}-{d:02} {hour:02}:{min:02}:{sec:02}")
-}
+const SIZE_FIELDS: &[&str] = &["size", "bytes", "stdout_bytes", "stderr_bytes"];
 
 /// The progress phases whose `done` and `total` are bytes: a Store, a
 /// project's parts or an image sent to a machine (`send`), a Store move's
@@ -231,7 +184,6 @@ pub fn format_size(bytes: i64) -> String {
 /// One scalar as a table cell, formatted for human reading if field name matches.
 pub fn format_field(key: &str, value: &SdkValue) -> String {
     match value {
-        SdkValue::Int(n) if TIME_FIELDS.contains(&key) => format_time(*n),
         SdkValue::Int(n) if SIZE_FIELDS.contains(&key) => format_size(*n),
         _ => cell(value),
     }

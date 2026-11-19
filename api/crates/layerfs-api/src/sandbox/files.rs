@@ -10,7 +10,7 @@ use layerfs_home::time::iso;
 use layerfs_sandbox::inspect::{sandbox_files, FilesRequest};
 
 /// The entries a folder page holds when `--limit` is not given.
-const LIMIT: i64 = 100;
+pub(crate) const LIMIT: i64 = 100;
 
 /// One entry of a folder page.
 const ENTRY: Form = Form::of(
@@ -93,11 +93,12 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         length: args.get_int("byte_length"),
     };
     let read = sandbox_files(&context.home, sandbox, &request)?;
-    Ok(shown(&read))
+    Ok(shown(&read, entry))
 }
 
-/// A folder page or a file window as the row names it.
-fn shown(read: &SdkValue) -> SdkValue {
+/// A folder page or a file window as the row names it, each entry of a
+/// page as `entry` names it (`machine.files` adds one key to [`entry`]).
+pub(crate) fn shown(read: &SdkValue, entry: fn(&SdkValue) -> SdkValue) -> SdkValue {
     if read.get_text("kind") == Some("file") {
         let binary = read.get_bool("binary");
         let (text, size) = match binary {
@@ -131,7 +132,7 @@ fn shown(read: &SdkValue) -> SdkValue {
 /// listed and not read, why (`system`, `mount`, `unreadable`,
 /// `restricted`). An unreadable or restricted entry whose size was read is
 /// a file, any other a folder. Its `mode` is octal text.
-fn entry(found: &SdkValue) -> SdkValue {
+pub(crate) fn entry(found: &SdkValue) -> SdkValue {
     let sized = !matches!(found.get("size"), None | Some(SdkValue::Null));
     let (kind, not_read) = match found.get_text("kind").unwrap_or("other") {
         "folder" => ("dir", None),

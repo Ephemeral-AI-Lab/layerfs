@@ -56,13 +56,10 @@ const COMMON = {
 };
 
 /**
- * The global options of a migrated call (call surface 2.0), as schema
- * properties: `detail` for the long form, and `with` when the entry lists
- * sections. A call that is not migrated has one form and no section, so it
- * is offered neither.
+ * The global options of a call (call surface 2.0), as schema properties:
+ * `detail` for the long form, and `with` when the entry lists sections.
  */
 export function globalOptions(spec) {
-  if (!spec.form) return {};
   const out = {
     detail: { type: "boolean", description: "the long form: every key, nulls included" },
   };

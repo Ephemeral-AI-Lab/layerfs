@@ -2,10 +2,14 @@
 //! probe of its provider and one hello to its worker.
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call};
-use crate::calls::{Context, Form, Section};
+#[cfg(feature = "machine")]
+use crate::calls::Context;
+use crate::calls::{Form, Section};
+#[cfg(feature = "machine")]
 use layerfs_bridge::control::SdkValue;
 #[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
+#[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
 
 /// Its answer: the platform and the state with its companion, then what
@@ -67,9 +71,4 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 /// Without the `machine` feature (the guest worker's build) it is
 /// refused before any effect.
 #[cfg(not(feature = "machine"))]
-fn run(_context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
-    Err(layerfs_home::outcome::refused(
-        "Unsupported",
-        "machine.get runs on the host",
-    ))
-}
+use super::host_only as run;

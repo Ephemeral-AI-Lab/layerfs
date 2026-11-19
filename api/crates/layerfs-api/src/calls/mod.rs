@@ -23,11 +23,10 @@ mod text;
 
 pub use check::size;
 pub use context::Context;
-pub use dispatch::{asks_detail, call, call_scoped, home, Client, DETAIL, WITH};
+pub use dispatch::{asks_detail, call, call_scoped, close, home, Client, DETAIL, WITH};
 pub use form::{Asked, Form, Paging, Part, Place, Profile, Section, THING};
 pub use layerfs_home::json;
 pub use platform_policy::Policy;
-pub use render::Saves;
 pub use scope::Scope;
 pub use table::{find, table_json, Arg, Call, CallRef, Calls, Families, Family, Kind, Redact, Run};
 pub use text::call_json;

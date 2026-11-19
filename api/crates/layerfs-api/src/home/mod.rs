@@ -5,6 +5,7 @@
 //! say what it did; `get` and `doctor` never open it. What earlier runs
 //! left behind has no call: LayerFS removes it itself (spec v20).
 mod clear_log;
+mod doctor;
 mod get;
 mod init;
 mod log;
@@ -19,6 +20,6 @@ pub(crate) fn calls() -> Calls {
         get::CALL,
         log::CALL,
         clear_log::CALL,
-        crate::doctor::home::CALL,
+        doctor::CALL,
     ]
 }

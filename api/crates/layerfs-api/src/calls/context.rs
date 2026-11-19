@@ -41,18 +41,6 @@ impl<'a> Context<'a> {
         self.asked.with(name)
     }
 
-    /// Whether the caller asked for the long form (`--detail`). A run
-    /// function never reads more for it: the long form shows what was
-    /// already read.
-    pub fn detail(&self) -> bool {
-        self.asked.detail
-    }
-
-    /// The call's event stream, for the entity function it runs.
-    pub fn events(&mut self) -> &mut Events<'a> {
-        &mut self.events
-    }
-
     /// The home and the event stream at once, for an entity function that
     /// takes both.
     pub fn parts(&mut self) -> (&Path, &mut Events<'a>) {

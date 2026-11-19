@@ -157,11 +157,7 @@ impl Scope {
 
     /// A Commit id stays as it is; a Branch name is composed.
     fn reference(&self, name: &str) -> Result<String, SdkRefusal> {
-        let commit = name.len() == 66
-            && name
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
-        if commit {
+        if super::render::is_id(name) {
             Ok(name.to_owned())
         } else {
             self.compose(name)

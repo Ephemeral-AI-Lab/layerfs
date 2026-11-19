@@ -2,7 +2,7 @@
 use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Bool, Name, Project};
 use crate::calls::table::{a, call, opt, Call};
-use crate::calls::{Context, Form, Policy, Saves};
+use crate::calls::{Context, Form, Policy};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::branch::{publish, BranchPublish};
@@ -36,7 +36,7 @@ pub(crate) const CALL: Call = call(
 )
 .scoped(Rule::BranchPublish)
 .policy(Policy::Project("project"))
-.saves(Saves::Publish)
+.saves()
 .form(&FORM);
 
 /// Runs `branch.publish`.

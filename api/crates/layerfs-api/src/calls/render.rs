@@ -19,23 +19,6 @@ fn path_len(text: &str) -> usize {
 /// The most characters a logged value keeps.
 const CUT: usize = 200;
 
-/// Which saved version a call's log line names, from its result; its
-/// table entry says which. For a call that is not migrated yet: a migrated
-/// call's line names its `outcome` word and, when it saves, its `commit`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Saves {
-    /// None.
-    Nothing,
-    /// The Commit a `Committed` or `UpToDate` result names.
-    Commit,
-    /// The head, else the base Layer, of a `Forked` result.
-    Fork,
-    /// The head of a `Merged` result.
-    Merge,
-    /// The Layer a publish added or found.
-    Publish,
-}
-
 fn cut(text: &str) -> String {
     match text.char_indices().nth(CUT) {
         Some((at, _)) => format!("{}…", &text[..at]),
@@ -140,65 +123,36 @@ pub fn argv(spec: &Call, args: &SdkValue, asked: &Asked, scope: Option<&Scope>) 
     words
 }
 
-/// A Commit or Layer id: 66 lowercase hex digits.
+/// Whether `text` is a Commit or Layer id: 66 lowercase hex digits.
+pub(super) fn is_id(text: &str) -> bool {
+    text.len() == 66
+        && text
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+/// `value` when it is a Commit or Layer id ([`is_id`]).
 fn id(value: Option<&SdkValue>) -> Option<String> {
     match value {
-        Some(SdkValue::Text(text))
-            if text.len() == 66
-                && text
-                    .bytes()
-                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) =>
-        {
-            Some(text.clone())
-        }
+        Some(SdkValue::Text(text)) if is_id(text) => Some(text.clone()),
         _ => None,
     }
 }
 
 /// The result's word and the saved version it names (§4.2), as the line's
-/// `kind` and `commit` or `layer`. A migrated call's full result names its
-/// word as `outcome` and its Commit as `commit` (a read's `commit` is no
-/// saved version); any other's names its word as `kind`, and `saves` says
-/// where its saved version is.
+/// `kind` and `commit`: a call's full result names its word as `outcome`
+/// and, for a call that saves, its Commit as `commit` (a read's `commit`
+/// is no saved version).
 pub fn saved(spec: &Call, value: &SdkValue) -> Vec<(String, SdkValue)> {
-    if spec.form.is_some() {
-        let mut fields = Vec::new();
-        if let Some(word) = value.get_text("outcome") {
-            fields.push(("kind".to_owned(), SdkValue::Text(cut(word))));
-        }
-        match id(value.get("commit")) {
-            Some(commit) if spec.saves != Saves::Nothing => {
-                fields.push(("commit".to_owned(), SdkValue::Text(commit)));
-            }
-            _ => {}
-        }
-        return fields;
+    let mut fields = Vec::new();
+    if let Some(word) = value.get_text("outcome") {
+        fields.push(("kind".to_owned(), SdkValue::Text(cut(word))));
     }
-    // a result's word is capitalized (`Committed`, `Forked`); a record's
-    // lowercase `kind` (a Store's `sqlite`) is what it is, not what happened
-    let word = |kind: &&str| kind.starts_with(|first: char| first.is_ascii_uppercase());
-    let Some(kind) = value.get_text("kind").filter(word) else {
-        return Vec::new();
-    };
-    let inner = |outer: &str| value.get(outer).and_then(|v| v.get("id"));
-    let either = |commit: Option<String>, layer: Option<String>| match (commit, layer) {
-        (Some(commit), _) => Some(("commit", commit)),
-        (None, Some(layer)) => Some(("layer", layer)),
-        _ => None,
-    };
-    let version = match (spec.saves, kind) {
-        (Saves::Commit, "Committed") => either(id(inner("commit")).or(id(value.get("head"))), None),
-        (Saves::Commit, "UpToDate") => either(id(value.get("head")), id(value.get("base"))),
-        (Saves::Fork, "Forked") => either(id(value.get("head")), id(value.get("base"))),
-        (Saves::Merge, "Merged") => either(id(value.get("head")), None),
-        (Saves::Publish, "Added") => either(None, id(inner("published_layer"))),
-        (Saves::Publish, "UpToDate") => either(None, id(value.get("layer"))),
-        (Saves::Publish, "NoChanges") => either(None, id(value.get("head_layer"))),
-        _ => None,
-    };
-    let mut fields = vec![("kind".to_owned(), SdkValue::Text(cut(kind)))];
-    if let Some((field, id)) = version {
-        fields.push((field.to_owned(), SdkValue::Text(id)));
+    match id(value.get("commit")) {
+        Some(commit) if spec.saves => {
+            fields.push(("commit".to_owned(), SdkValue::Text(commit)));
+        }
+        _ => {}
     }
     fields
 }

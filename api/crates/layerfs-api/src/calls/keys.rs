@@ -36,20 +36,3 @@ pub fn snake_name(name: &str) -> String {
     }
     out
 }
-
-/// `start_line` as `startLine`: the 1.1.0 Store methods' argument names.
-pub fn camel_name(name: &str) -> String {
-    let mut out = String::with_capacity(name.len());
-    let mut upper = false;
-    for c in name.chars() {
-        if c == '_' {
-            upper = true;
-        } else if upper {
-            out.push(c.to_ascii_uppercase());
-            upper = false;
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}

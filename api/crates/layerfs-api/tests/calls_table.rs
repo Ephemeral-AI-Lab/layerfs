@@ -530,7 +530,6 @@ fn sizes_and_keys() {
     assert_eq!(keys::snake_name("nextPagePos"), "next_page_pos");
     assert_eq!(keys::snake_name("/src/README.md"), "/src/README.md");
     assert_eq!(keys::snake_name("Makefile"), "Makefile");
-    assert_eq!(keys::camel_name("start_line"), "startLine");
     assert!(layerfs_api::calls()
         .into_iter()
         .flat_map(|c| c.args.iter().chain(c.options))

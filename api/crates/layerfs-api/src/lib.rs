@@ -30,17 +30,17 @@ mod store;
 mod workspace;
 
 use calls as machinery;
-// the six doctors' shared answer and entries (`calls/doctor/`), by the
-// path each family's entry names
+// the six doctors' shared answer (`calls/doctor/`), which each
+// family's doctor entry names
 use calls::doctor;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use std::path::Path;
 
 pub use calls::{
-    asks_detail, home, json, keys, refusal, shape, size, Arg, Asked, Call, CallRef, Calls, Client,
-    Context, Families, Family, Form, Kind, Paging, Part, Place, Policy, Profile, Redact, Run,
-    Saves, Scope, Section, DETAIL, WITH,
+    asks_detail, close, home, json, keys, refusal, shape, size, Arg, Asked, Call, CallRef, Calls,
+    Client, Context, Families, Family, Form, Kind, Paging, Part, Place, Policy, Profile, Redact,
+    Run, Scope, Section, DETAIL, WITH,
 };
 pub use layerfs_home::names;
 /// The home (`layerfs-home`) and the Store leases, for the front ends and
@@ -60,10 +60,6 @@ pub mod worker {
     pub use layerfs_machine::worker::*;
 }
 pub use layerfs_control::store::close_idle;
-/// Ends this process's idle Sandbox daemon sessions inside a bound
-/// (layerfs-project#181): what a one-shot process calls when its call is
-/// over, beside [`close_idle`].
-pub use layerfs_sandbox::registry::{end_idle_sessions, SESSION_END};
 
 /// The ten families, in the order help lists them, the same from the
 /// `layerfs` binary, Node and Python.

@@ -165,14 +165,9 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
         let _ = write!(err, "\r{}\r", " ".repeat(last_progress_len));
         let _ = err.flush();
     }
-    // the Stores this one call opened close before the process ends, so a
-    // sqlite Store leaves no write-ahead log behind (lane K2: a later
-    // `store push` refused it)
-    layerfs_api::close_idle(std::time::Duration::ZERO);
-    // and its idle Sandbox daemon connections end their sessions, so this
-    // process's exit is not a dropped connection in the daemon's log and
-    // retained failures (layerfs-project#181). Bounded; the result is ready.
-    layerfs_api::end_idle_sessions(layerfs_api::SESSION_END);
+    // the Stores this one call opened close and its idle Sandbox daemon
+    // sessions end before the process does; bounded, the result is ready
+    layerfs_api::close();
     // `workspace exec` exits with the command's own code in every form
     // (call surface 2.0); its result JSON is still printed, except with
     // `--stream`, which wrote the output itself

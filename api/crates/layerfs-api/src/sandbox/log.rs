@@ -10,7 +10,8 @@ use layerfs_sandbox::inspect::{sandbox_log, Window};
 
 /// One line, or a piece of a line longer than a read.
 const LINE: Form = Form::of(&["text"], &["continued"], &["text", "continued"]);
-const FORM: Form = Form::of(&["items"], &["next_cursor"], &["items", "next_cursor"])
+/// A page of lines, `machine.log`'s too.
+pub(crate) const FORM: Form = Form::of(&["items"], &["next_cursor"], &["items", "next_cursor"])
     .parts(&[("items", Part::Rows(&LINE))]);
 
 /// Its table entry: a read a UI polls, so it writes no log line.
@@ -38,7 +39,12 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         before: args.get_text("cursor").map(str::to_owned),
         limit: args.get_int("limit"),
     };
-    let read = sandbox_log(&context.home, sandbox, &window)?;
+    Ok(page(&sandbox_log(&context.home, sandbox, &window)?))
+}
+
+/// A log read (`{ lines, before }`) as [`FORM`] names it, `machine.log`'s
+/// too.
+pub(crate) fn page(read: &SdkValue) -> SdkValue {
     let items = match read.get("lines") {
         Some(SdkValue::List(lines)) => (lines.iter())
             .map(|line| {
@@ -50,8 +56,8 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             .collect(),
         _ => Vec::new(),
     };
-    Ok(SdkValue::map([
+    SdkValue::map([
         ("items", SdkValue::List(items)),
-        ("next_cursor", field(&read, "before")),
-    ]))
+        ("next_cursor", field(read, "before")),
+    ])
 }

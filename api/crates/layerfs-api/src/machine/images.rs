@@ -4,10 +4,14 @@
 //! Docker images it could copy.
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call};
-use crate::calls::{Context, Form, Part, Section};
+#[cfg(feature = "machine")]
+use crate::calls::Context;
+use crate::calls::{Form, Part, Section};
+#[cfg(feature = "machine")]
 use layerfs_bridge::control::SdkValue;
 #[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
+#[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
 
 /// One image the machine holds, with its state.
@@ -133,9 +137,4 @@ fn shown(answer: &SdkValue, docker: bool) -> SdkValue {
 /// Without the `machine` feature (the guest worker's build) it is
 /// refused before any effect.
 #[cfg(not(feature = "machine"))]
-fn run(_context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
-    Err(layerfs_home::outcome::refused(
-        "Unsupported",
-        "machine.images runs on the host",
-    ))
-}
+use super::host_only as run;

@@ -54,7 +54,7 @@ pub(crate) const CALL: Call = call(
 .policy(Policy::Workspace("workspace"));
 
 /// `env` as `K=V` entries: one object of names to text (Node, Python and
-/// the shell's repeated `--env K=V`), or a list of `K=V` texts.
+/// the shell's repeated `--env K=V`).
 fn env(value: Option<&SdkValue>) -> Result<Vec<String>, SdkRefusal> {
     let wrong = || refused("InvalidInput", "env is an object of names to text");
     match value {
@@ -65,13 +65,6 @@ fn env(value: Option<&SdkValue>) -> Result<Vec<String>, SdkRefusal> {
                 _ => Err(wrong()),
             })
             .collect(),
-        Some(SdkValue::List(items)) => (items.iter())
-            .map(|item| match item {
-                SdkValue::Text(text) => Ok(text.clone()),
-                _ => Err(wrong()),
-            })
-            .collect(),
-        Some(SdkValue::Text(text)) => Ok(vec![text.clone()]),
         Some(_) => Err(wrong()),
     }
 }
