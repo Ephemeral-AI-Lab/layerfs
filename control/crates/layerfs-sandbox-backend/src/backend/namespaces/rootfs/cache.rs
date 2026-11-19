@@ -1,7 +1,9 @@
 //! Where unpacked images live and how one digest is unpacked exactly once:
 //! `<root>/images/<64 hex>.2`, published by a rename, guarded by a per-digest
-//! `flock`. A Sandbox made before file times were restored keeps the
-//! `<64 hex>` it was built on.
+//! `flock`. A folder of the layout before file times were restored
+//! (`<64 hex>`, no `.2`) is neither read nor removed: a Sandbox an earlier
+//! build started on one may still run on it as its lower root, and no lock
+//! or record says which (RV3 NOTE 10).
 use super::{
     archive::{unpack, unpack_flat},
     refuse, ImageRoot,

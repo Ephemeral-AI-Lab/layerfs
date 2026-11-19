@@ -9,6 +9,7 @@ use crate::route::{on_machine, reach, Asked};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::names::{WorkspaceAt, WorkspaceName, WorkspaceRef};
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, with_fix, Outcome};
 use layerfs_machine::worker::Unreached;
 use std::path::{Path, PathBuf};
@@ -61,7 +62,11 @@ pub fn default_name(sandbox: &str, branch: &str) -> Result<WorkspaceName> {
         );
         with_fix(
             refusal,
-            format!("layerfs workspace mount {sandbox} {branch} --name <name>"),
+            format!(
+                "layerfs workspace mount {sandbox} {branch} --name <name>",
+                sandbox = shell_word(sandbox),
+                branch = shell_word(branch)
+            ),
         )
     })
 }
@@ -118,7 +123,10 @@ pub fn mount(home: &Path, events: &mut Events<'_>, request: &MountRequest) -> Re
         );
         return Err(with_fix(
             refusal,
-            format!("layerfs branch fork {project} <name> main"),
+            format!(
+                "layerfs branch fork {project} <name> main",
+                project = shell_word(&project)
+            ),
         ));
     }
     // a name, unique in the Sandbox, which `ws` then uses (#536 C3); by
@@ -134,7 +142,12 @@ pub fn mount(home: &Path, events: &mut Events<'_>, request: &MountRequest) -> Re
     let taken = |refusal: SdkRefusal| match refusal.code.as_str() {
         "Exists" => with_fix(
             refusal,
-            format!("layerfs workspace mount {name} {branch} --name {named}-2"),
+            format!(
+                "layerfs workspace mount {name} {branch} --name {named}-2",
+                name = shell_word(name),
+                branch = shell_word(branch),
+                named = shell_word(&named)
+            ),
         ),
         _ => refusal,
     };

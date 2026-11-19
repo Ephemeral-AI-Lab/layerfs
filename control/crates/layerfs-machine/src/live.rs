@@ -205,7 +205,7 @@ fn probed(record: &MachineRecord) -> Result<bool> {
     if record.removed().is_some() || record.platform()? == Platform::Native {
         return Ok(false);
     }
-    if record.text("vm_name").is_none() {
+    if record.nameless() {
         return Ok(false);
     }
     Ok(match record.op() {

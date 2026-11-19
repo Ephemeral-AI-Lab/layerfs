@@ -417,6 +417,40 @@ added; the table keeps 83 calls.
   `layerfs.json`, or anything else in a folder with no `layerfs.json`, is not a LayerFS 2.0 home
   and gets V20-6's refusal, state and fix, and nothing is written in it.
 
+## RV3 rulings (coordinator, 2026-11-19)
+
+The RV3 review of the cut (CUT + CUT2 + BK2) found three dead ends for state an earlier build left;
+the coordinator ruled on each. No call is added; the table keeps 83 calls. No record is migrated or
+rewritten, and 2.0 state answers as before.
+
+- **RV3-1** (FAIL 1) A machine whose record has no 2.0 name (`vm_name`; `native` never counts) that
+  still holds Stores or Sandboxes is no longer a dead end. `store remove` of a sqlite Store on it,
+  and `sandbox remove` of a Sandbox on it, take their records alone: nothing on the machine is
+  reached (not its worker), and `left` names what may remain there (the Store's file; the
+  Sandbox's daemon and run folder). `store.remove` gains `left` (short: sometimes; long: last),
+  answered only when records alone went; its record-not-read case answers it too, naming the Store
+  file it keeps with the line that removes it. `machine remove` of such a machine is refused
+  `InUse` with the whole chain as its fix: `layerfs sandbox remove <s> && … && layerfs store
+  remove <s> && … && layerfs machine remove <m>` (Sandboxes, then Stores, then old Firecracker
+  records, then the machine). There is no silent cascade.
+- **RV3-2** (FAIL 2) A local Sandbox record that fails the 2.0 parse (a field a 2.0 record always
+  has missing or of another shape: `directory`, `name`, `container`, `pid`, `boot`, `start`,
+  `port`, `labels`, a namespaces record's `image`) is removed by `sandbox remove`, forced or not,
+  by its records alone, with no signal sent, since its identity cannot be checked. It answers as
+  the other records-only removes do: `already_gone` with `left` naming its run folder. Every other
+  call refuses it `InvalidInput` with the fix `layerfs sandbox remove <s>`. A worker's own record
+  of that kind is forgotten the same way when the caller's home holds only the forward to it.
+- **RV3-3** (FAIL 3) No 2.0 path creates a native (host-process) Sandbox record on Linux: the
+  launch refuses `native` there before any effect (#533 O27), the worker and the daemon start only
+  namespaces Sandboxes on Linux, and the in-process SDK in a Linux worker reaches the same launch.
+  The host-process backend is therefore macOS only; a native record found on Linux is refused as
+  RV3-2 says, its fix the records-only `sandbox remove`.
+- **RV3-4** (FAIL 4, NOTE 5) A records-only remove's `left` names a daemon's process id, with its
+  `kill` line, only while the process its record identifies (id, start time and boot) still runs;
+  otherwise it says the process is gone. Folders in a `left` or `fix` line are one shell word. A
+  bucket's same place compares the host (and r2's account) in lower case and leaves out an
+  endpoint's default port.
+
 ## UI pass 2 rulings (coordinator, 2026-11-19)
 
 - **UI2-1** (F1) A machine whose record alone makes it broken (a removed platform's, `unsupported`;

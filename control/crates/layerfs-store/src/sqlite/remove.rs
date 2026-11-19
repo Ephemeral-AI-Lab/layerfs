@@ -14,15 +14,14 @@ use std::path::Path;
 /// in it. Its backups stay in their buckets. A stopped machine is started
 /// before the locks are taken, never under them. It is also the call that
 /// clears an unresolved operation on the Store: a gone process's intent
-/// does not refuse it; a live one's is `Busy`.
+/// does not refuse it; a live one's is `Busy`. A Store whose record this
+/// build does not read, or on a machine whose record has no 2.0 name, goes
+/// by its records alone, and `left` says what may remain.
 pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
     let record = record::StoreRecord::of(home, name)?;
     let Ok(store_ref) = record.store_ref() else {
-        record::forget_unread(home, name, related)?;
-        return Ok(SdkValue::map([
-            ("outcome", SdkValue::text("removed")),
-            ("store", SdkValue::text(name)),
-        ]));
+        let left = record::forget_unread(home, name, related)?;
+        return Ok(answer(name, left));
     };
     if let StoreRef::Postgres { .. } = store_ref {
         return Err(refused(
@@ -31,6 +30,10 @@ pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
         ));
     }
     let machine = store_ref.machine()?.to_owned();
+    if nameless(home, &machine)? {
+        let left = forget_on_nameless(home, name, &machine, related)?;
+        return Ok(answer(name, left));
+    }
     let mut executor = place::plan(home, store_ref)?;
     if let Executor::Worker(worker) = &mut executor {
         worker.ready()?;
@@ -114,8 +117,68 @@ pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
     let _store = record::lock(home, name)?;
     std::fs::remove_dir_all(paths::store_dir(home, name)).map_err(failed)?;
     layerfs_home::home::generation::moved(home);
-    Ok(SdkValue::map([
+    Ok(answer(name, Vec::new()))
+}
+
+/// What a remove answers: `left` (each sentence about what may remain)
+/// only when it took records alone.
+fn answer(name: &str, left: Vec<String>) -> SdkValue {
+    let mut fields = vec![
         ("outcome", SdkValue::text("removed")),
         ("store", SdkValue::text(name)),
-    ]))
+    ];
+    if !left.is_empty() {
+        let left = left.into_iter().map(SdkValue::Text).collect();
+        fields.push(("left", SdkValue::List(left)));
+    }
+    layerfs_home::helpers::map_of(fields)
+}
+
+/// Whether machine `machine`'s record has no 2.0 name (RV3 FAIL 1): this
+/// build reaches nothing on it, so a Store on it goes by its records alone.
+fn nameless(home: &Path, machine: &str) -> Result<bool, layerfs_bridge::control::SdkRefusal> {
+    let record = layerfs_machine::record::MachineRecord::read(home, machine)?;
+    Ok(record.is_some_and(|record| record.nameless()))
+}
+
+/// Forgets sqlite Store `name` on machine `machine`, whose record has no
+/// 2.0 name (RV3 FAIL 1): under the home lock and the Store's, once
+/// nothing uses it ([`Related::store_idle`]) and no live operation holds
+/// it, its folder in the home goes (its record, its projects' records and
+/// leases). Nothing on the machine is reached or touched; the answer says
+/// what may remain there, and on the machine an ended move left a copy on.
+fn forget_on_nameless(
+    home: &Path,
+    name: &str,
+    machine: &str,
+    related: Related,
+) -> Result<Vec<String>, layerfs_bridge::control::SdkRefusal> {
+    let _lock = home::lock::take(home)?;
+    let _store = record::lock(home, name)?;
+    let now = record::StoreRecord::of(home, name)?;
+    if now.machine().ok().as_deref() != Some(machine) || !nameless(home, machine)? {
+        return Err(refused(
+            "Conflict",
+            format!("Store {name} changed meanwhile; nothing was removed"),
+        ));
+    }
+    if now.op().as_ref().map(Op::standing) == Some(Standing::Running) {
+        now.unheld()?;
+    }
+    (related.store_idle)(home, name)?;
+    let leftover = crate::sqlite::transfer::resolve::leftover(&now).filter(|l| l.on != machine);
+    std::fs::remove_dir_all(paths::store_dir(home, name)).map_err(failed)?;
+    layerfs_home::home::generation::moved(home);
+    let mut left = vec![format!(
+        "machine {machine}'s record has no 2.0 name, so only Store {name}'s records were \
+         removed: its file stays on that machine's disk, in the VM or container an earlier \
+         build made, which no call reaches"
+    )];
+    if let Some(leftover) = leftover {
+        left.push(format!(
+            "the copy an ended move left on machine {} was not touched either",
+            leftover.on
+        ));
+    }
+    Ok(left)
 }

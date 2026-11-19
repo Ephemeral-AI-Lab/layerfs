@@ -4,6 +4,7 @@ use super::spec::machine_of;
 use crate::Related;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{lock, paths};
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_platform::HostOs;
 use std::path::Path;
@@ -85,7 +86,7 @@ pub fn update(home: &Path, request: &MachineUpdate, related: Related) -> Outcome
         );
         return Err(layerfs_home::outcome::with_fix(
             refusal,
-            format!("layerfs machine stop {name}"),
+            format!("layerfs machine stop {name}", name = shell_word(name)),
         ));
     }
     if request.wsl.is_some() && HostOs::current() != HostOs::Windows {

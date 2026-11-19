@@ -165,7 +165,6 @@ fn check(request: &ExecRequest) -> Result<(), RuntimeError> {
 /// The caller's Rust and Git locations on macOS, when present, so a command
 /// whose `HOME` is the Sandbox's scratch directory still sees them unless the
 /// caller's environment or the request sets its own.
-#[cfg(target_os = "macos")]
 fn user_environment() -> Vec<(&'static str, OsString)> {
     use std::path::PathBuf;
     let home = non_empty_env("HOME").map(PathBuf::from);
@@ -192,12 +191,6 @@ fn user_environment() -> Vec<(&'static str, OsString)> {
     vars
 }
 
-#[cfg(not(target_os = "macos"))]
-fn user_environment() -> Vec<(&'static str, OsString)> {
-    Vec::new()
-}
-
-#[cfg(target_os = "macos")]
 fn non_empty_env(name: &str) -> Option<OsString> {
     std::env::var_os(name).filter(|value| !value.is_empty())
 }

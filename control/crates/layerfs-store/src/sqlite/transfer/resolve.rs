@@ -27,6 +27,7 @@ use crate::sqlite::transfer::step::StoreStep;
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::op::{Op, Standing};
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, with_fix};
 use layerfs_machine::record::MachineRecord;
 use std::path::Path;
@@ -266,7 +267,10 @@ pub fn can_move(home: &Path, record: &StoreRecord, to: &str) -> Result<String> {
                      only; `layerfs store move {name} {NATIVE}` brings it here first"
                 ),
             ),
-            format!("layerfs store move {name} {NATIVE}"),
+            format!(
+                "layerfs store move {name} {NATIVE}",
+                name = shell_word(name)
+            ),
         ));
     }
     if to != NATIVE && MachineRecord::read(home, to)?.is_none() {

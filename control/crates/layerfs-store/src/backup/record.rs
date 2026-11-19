@@ -98,10 +98,39 @@ impl BucketRecord {
 
     /// Whether `other` names the same place: the same provider and the
     /// same URL after parsing (account or endpoint, bucket, prefix and r2's
-    /// jurisdiction). The key and the name are not compared.
+    /// jurisdiction), with the host (an endpoint's, or r2's account) in
+    /// lower case and an endpoint's default port (`:443` for https, `:80`
+    /// for http) left out; slashes around the bucket and prefix are already
+    /// gone when the record is made (RV3 NOTE 5). The key and the name are
+    /// not compared.
     pub fn same_place(&self, other: &Self) -> bool {
         self.fields.get_text("provider") == other.fields.get_text("provider")
-            && self.url() == other.url()
+            && self.place() == other.place()
+    }
+
+    /// The URL [`Self::same_place`] compares: [`Self::url`] with its host
+    /// in lower case and without a default port.
+    fn place(&self) -> String {
+        let text = |name: &str| self.fields.get_text(name).unwrap_or("");
+        let host = match self.fields.get_text("provider") {
+            Some("r2") => text("account").to_ascii_lowercase(),
+            _ => {
+                let endpoint = text("endpoint");
+                let (scheme, host) = endpoint.split_once("://").unwrap_or(("", endpoint));
+                let host = host.to_ascii_lowercase();
+                let host = match scheme {
+                    "https" => host.strip_suffix(":443").unwrap_or(&host),
+                    "http" => host.strip_suffix(":80").unwrap_or(&host),
+                    _ => &host,
+                };
+                format!("{scheme}://{host}")
+            }
+        };
+        let path = match text("prefix") {
+            "" => text("bucket").to_owned(),
+            prefix => format!("{}/{prefix}", text("bucket")),
+        };
+        format!("{host}/{path}?{}", text("jurisdiction"))
     }
 
     /// This record with key id `access_key`; every other field is kept as

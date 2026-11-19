@@ -1,29 +1,42 @@
 //! One local daemon start: the Sandbox's private directory, its 0600 setup,
 //! one spawn and its listener line. Nothing is retried.
-use super::listener;
-use super::search::search_path;
-use crate::backend::host_process::sandbox::{Sandbox, LOG};
 use crate::RuntimeError;
-use layerfs_bridge::process::LocalProcess;
-use nix::fcntl::OFlag;
 use std::{
-    fs::{self, File, OpenOptions, Permissions},
-    io::{self, Write},
-    os::unix::{
-        fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt},
-        process::CommandExt,
-    },
+    fs, io,
+    os::unix::fs::MetadataExt,
     path::{Component, Path, PathBuf},
-    process::{Command, Stdio},
-    time::Duration,
 };
+// a native daemon's start (macOS only)
+#[cfg(target_os = "macos")]
+use {
+    super::{listener, search::search_path},
+    crate::backend::host_process::sandbox::Sandbox,
+    layerfs_bridge::process::LocalProcess,
+    nix::fcntl::OFlag,
+    std::{
+        fs::{File, OpenOptions, Permissions},
+        io::Write,
+        os::unix::{
+            fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt},
+            process::CommandExt,
+        },
+        process::{Command, Stdio},
+        time::Duration,
+    },
+};
+
+/// A local Sandbox's daemon output file in its directory, stdout and
+/// stderr together.
+pub(crate) const LOG: &str = "daemon.log";
 
 /// A local runtime root: one directory per Sandbox under it.
 #[derive(Clone, Debug)]
 pub struct Local {
     root: PathBuf,
     name: Option<String>,
-    /// Variables the daemon starts with besides `PATH`.
+    /// Variables the daemon starts with besides `PATH` (a native daemon's,
+    /// macOS only).
+    #[cfg(target_os = "macos")]
     environment: Vec<(String, String)>,
 }
 
@@ -60,6 +73,7 @@ pub enum LocalPhase {
 
 /// A failed create. `sandbox` holds what it made (its directory, and its
 /// daemon once spawned), for the caller to stop and delete once.
+#[cfg(target_os = "macos")]
 #[derive(Debug)]
 pub struct LocalCreateFailure {
     pub phase: LocalPhase,
@@ -119,12 +133,14 @@ impl Local {
         Ok(Self {
             root: root.to_owned(),
             name: None,
+            #[cfg(target_os = "macos")]
             environment: Vec::new(),
         })
     }
     /// Starts the next daemon with `environment` besides its search path (the
     /// kernel route its provider chose and the NFS mount helpers). Nothing
     /// else of this process's environment reaches it.
+    #[cfg(target_os = "macos")]
     pub fn environment(mut self, environment: Vec<(String, String)>) -> Self {
         self.environment = environment;
         self
@@ -166,7 +182,9 @@ impl Local {
     /// daemon setup naming [`Self::paths`]) 0600, spawns `executable
     /// --config <setup>` in its own process group with no inherited
     /// environment but the search path, and waits up to `wait` for its
-    /// listener line. Once anything is made, a failure returns it.
+    /// listener line. Once anything is made, a failure returns it. A native
+    /// daemon's start, macOS only.
+    #[cfg(target_os = "macos")]
     pub fn create(
         &self,
         executable: &Path,
@@ -259,6 +277,7 @@ impl Local {
 /// The setup and overlay directories (0700), the scratch directory (1777),
 /// the setup file (0600, written once) and the empty log file (0600) it
 /// returns.
+#[cfg(target_os = "macos")]
 fn prepare(paths: &LocalPaths, config: &[u8]) -> io::Result<File> {
     // the process umask may narrow the create mode
     fs::set_permissions(&paths.directory, Permissions::from_mode(0o755))?;

@@ -102,7 +102,7 @@ pub fn no_auth_fix(record: &StoreRecord) -> String {
     let user = user.map_or_else(|| "<user>".to_owned(), |user| shell_word(&user));
     format!(
         "layerfs store save-auth <auth> --user {user} --password-stdin && layerfs store update {} --auth <auth>",
-        record.name()
+        shell_word(record.name())
     )
 }
 

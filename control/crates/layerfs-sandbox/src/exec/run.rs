@@ -63,7 +63,7 @@ fn run(
     let mut environment = vec![format!("HOME={}", crate::runtime::scratch(runtime))];
     environment.extend(env.iter().cloned());
     let ran = crate::runtime::run(
-        runtime,
+        (&state.id, runtime),
         state.identity,
         (arguments, environment, stdin.map(<[u8]>::to_vec)),
         (directory, place),

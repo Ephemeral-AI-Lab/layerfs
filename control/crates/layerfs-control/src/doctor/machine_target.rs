@@ -21,6 +21,8 @@
 //! is blocked), else what blocks the things on it (the frame's `blocked_by`
 //! reason), or `Err(None)` when a check gave no verdict.
 use super::target::{Budget, Checks};
+#[cfg(feature = "machine")]
+use layerfs_home::outcome::shell_word;
 use std::path::Path;
 
 #[cfg(not(feature = "machine"))]
@@ -133,7 +135,10 @@ fn record(
         Ok(kind) => kind,
         Err(refusal) if refusal.code == "Unsupported" => {
             checks.fail(ID, refusal.message);
-            checks.fix(ID, format!("layerfs machine remove {name}"));
+            checks.fix(
+                ID,
+                format!("layerfs machine remove {name}", name = shell_word(name)),
+            );
             return Err("unsupported");
         }
         Err(refusal) => {
@@ -337,13 +342,18 @@ impl Machine<'_> {
             Some(State::Missing) => {
                 let message = format!("its provider holds no VM named {}", spec.vm_name);
                 self.checks.fail(ID, message);
-                self.checks
-                    .fix(ID, format!("layerfs machine remove {name}"));
+                self.checks.fix(
+                    ID,
+                    format!("layerfs machine remove {name}", name = shell_word(name)),
+                );
                 Some("missing")
             }
             Some(State::Failed) => {
                 self.checks.fail(ID, "its provider reports it broken");
-                self.checks.fix(ID, format!("layerfs machine start {name}"));
+                self.checks.fix(
+                    ID,
+                    format!("layerfs machine start {name}", name = shell_word(name)),
+                );
                 Some("failed")
             }
             Some(State::Stopped) => {
@@ -401,8 +411,13 @@ impl Machine<'_> {
                 ID,
                 format!("its record says {said}, but its provider reports it {seen}"),
             );
-            self.checks
-                .fix(ID, format!("layerfs machine get {name} --with live"));
+            self.checks.fix(
+                ID,
+                format!(
+                    "layerfs machine get {name} --with live",
+                    name = shell_word(name)
+                ),
+            );
         }
     }
 
@@ -414,7 +429,7 @@ impl Machine<'_> {
         use layerfs_machine::worker::{diagnostic_connect, Endpoint};
         use std::time::{Duration, Instant};
         let name = self.name;
-        let start = format!("layerfs machine start {name}");
+        let start = format!("layerfs machine start {name}", name = shell_word(name));
         let replace = replace_worker(name, self.sandboxes);
         let endpoint = match layerfs_home::secrets::worker_secret(self.home, name) {
             Ok(Some(value))
@@ -553,7 +568,7 @@ impl Machine<'_> {
             .map(|listed| layerfs_sandbox::images::reclaimable(&listed));
         let fix = reclaimable
             .filter(|bytes| *bytes > 0)
-            .map(|_| format!("layerfs machine prune {} --unused", self.name));
+            .map(|_| format!("layerfs machine prune {} --unused", shell_word(self.name)));
         let bytes = reclaimable.and_then(|n| i64::try_from(n).ok());
         let evidence = vec![(
             "reclaimable_image_bytes",

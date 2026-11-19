@@ -361,7 +361,9 @@ run as `store push` and `store pull` on 2026-11-08 on `docker`, `lima` and
   project in it. Its backups stay in their buckets. It is `InUse` while the
   Store is held and `Busy` while a live process runs an operation on it; a
   stopped machine is `Unavailable`, naming `machine start`. It is the call
-  that clears an unresolved move or remove.
+  that clears an unresolved move or remove. A Store whose record this build
+  does not read, or on a machine whose record has no 2.0 name, goes by its
+  records alone, and `left` says what may remain (its file).
 - `store get` starts no machine. Its state comes from the home's records;
   `--with live` reads the Store where it lives (its file through its
   machine) and settles an uncertain backup or restore whose owner is gone;
@@ -477,7 +479,8 @@ layerfs backup doctor lab --full
   (`secret/bucket/<bucket>`, 0600), never answered or logged. One
   listing checks the bucket and key before anything is recorded: a bucket
   that does not answer or refuses the key is `Unavailable`. To change a
-  key, connect again under the same name at the same URL: the new key is
+  key, connect again under the same name at the same URL (the host's case,
+  a default port and slashes around the bucket and prefix aside): the new key is
   proven first (nothing changes when it fails), then it replaces the old
   one and the Stores' links stay (`outcome: "rotated"`). A taken name at
   another URL is `Exists`, with the fix `layerfs backup disconnect <name>`;
@@ -531,6 +534,10 @@ connect --key-stdin`) are kept in the home's secret folder (`secret/`, 0700;
 each file 0600), read from stdin only in the shell, and never answered,
 logged or traced; the call log records a secret's byte count. A Store
 record names its login by name (`auth`). Anyone who can read the home can
-make every call. There is no keychain (O1). A record written before 2.0 that
-names a reference (`env:NAME` or `file:/absolute/path`) is still read for
-that record; no 2.0 call takes one.
+make every call. There is no keychain (O1). A reference an older record
+names (`env:NAME` or `file:/absolute/path`) is not read: a PostgreSQL Store
+whose record names no saved login reads `broken` `outdated` with the fix
+`layerfs store save-auth <auth> --user <user> --password-stdin && layerfs
+store update <store> --auth <auth>`, and a bucket record with no key id is
+refused with the fix that connects it again (`layerfs backup connect <name>
+<url> --access-key <key> --key-stdin`).

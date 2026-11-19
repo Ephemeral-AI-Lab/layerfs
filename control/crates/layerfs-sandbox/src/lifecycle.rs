@@ -258,7 +258,9 @@ pub fn create(host: &Host, named: Option<&str>) -> Outcome {
 /// Stop, then delete, each attempted once: a failed stop is not followed by
 /// a delete and keeps its cause; the folder goes after the delete. A
 /// Sandbox whose runtime ended by itself is reclaimed ([`reclaim`]) and
-/// answered `NoSuchSandbox`, as gone.
+/// answered `NoSuchSandbox`, as gone. A local record this build does not
+/// read is forgotten ([`forget_unread`]), no signal sent: a worker's own
+/// record, when the caller's home keeps only the forward to it.
 pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     let id = host.sandbox()?.to_owned();
     let directory = crate::files::sandbox_dir(host)?;
@@ -270,6 +272,9 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     };
     if recorded.retired() {
         return forget(&id, &directory, &recorded);
+    }
+    if let Some(why) = crate::reopen::unread(&recorded) {
+        return forget_unread(&id, &directory, &recorded, &why);
     }
     let state = match crate::registry::sandbox_live(host) {
         Ok(state) => state,
@@ -369,6 +374,43 @@ fn forget(id: &str, directory: &Path, recorded: &DaemonRecord) -> Outcome {
             SdkValue::text(format!("docker rm -f {container}")),
         ),
     ]))
+}
+
+/// Forgets Sandbox `id`, recorded in `directory` by a local record this
+/// build does not read (`why`, [`crate::reopen::unread`]; RV3 FAIL 2, 3):
+/// its identity cannot be checked, so nothing is signalled. Its folder goes
+/// under its guard, and the answer (`Forgotten`, with `left`) says what may
+/// remain: its daemon or init process and its run folder.
+fn forget_unread(id: &str, directory: &Path, recorded: &DaemonRecord, why: &str) -> Outcome {
+    let _guard = layerfs_store::project::discovery::guard(directory)?;
+    discard(directory, recorded)?;
+    std::fs::remove_dir_all(directory).map_err(failed)?;
+    layerfs_home::home::generation::moved_above(directory);
+    Ok(SdkValue::map([
+        ("kind", SdkValue::text("Forgotten")),
+        ("sandbox", SdkValue::text(id)),
+        (
+            "left",
+            SdkValue::List(vec![SdkValue::text(unread_left(recorded, why))]),
+        ),
+    ]))
+}
+
+/// What a Sandbox forgotten by [`forget_unread`] may have left, and the
+/// line that removes its run folder once nothing runs in it.
+pub fn unread_left(recorded: &DaemonRecord, why: &str) -> String {
+    let said = format!(
+        "its record is not one this build reads ({why}), so only its records were removed and \
+         no signal was sent: its daemon process, if it still runs, was not stopped"
+    );
+    match recorded.directory() {
+        Some(folder) => format!(
+            "{said}, and its run folder {folder} stays: `rm -rf {}` removes it once nothing \
+             runs in it",
+            layerfs_home::outcome::shell_word(folder)
+        ),
+        None => said,
+    }
 }
 
 /// Removes what folder `directory` holds of a Sandbox the retired docker

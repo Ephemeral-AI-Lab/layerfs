@@ -741,7 +741,7 @@
     {
       "call": "store.remove",
       "badge": "reshaped",
-      "note": "sqlite only: deletes the file and every project in it. A record that is not read (no <code>kind</code>, or a <code>machine</code> that is not text) goes alone, its file untouched. Refused <code>InUse</code> while a process holds it or a Sandbox of its projects exists. It clears an unresolved move or remove. A PostgreSQL Store is <code>InvalidInput</code>, naming <code>store disconnect</code>",
+      "note": "sqlite only: deletes the file and every project in it. A record that is not read (no <code>kind</code>, or a <code>machine</code> that is not text) goes alone, its file untouched, and <code>left</code> names that file with the line that removes it. A Store on a machine whose record has no 2.0 name (no <code>vm_name</code>) also goes by its records alone: nothing on the machine is reached, and <code>left</code> says its file stays on that machine (RV3 FAIL 1). Refused <code>InUse</code> while a process holds it or a Sandbox of its projects exists. It clears an unresolved move or remove. A PostgreSQL Store is <code>InvalidInput</code>, naming <code>store disconnect</code>",
       "today": [
         "store.remove"
       ],
@@ -761,22 +761,25 @@
       "quiet": false,
       "profile": "full",
       "short": {
-        "always": [
-          "ok"
-        ],
-        "sometimes": []
+        "always": [],
+        "sometimes": [
+          "ok",
+          "left"
+        ]
       },
       "long": [
         "ok",
         "outcome",
-        "store"
+        "store",
+        "left"
       ],
       "item": null,
       "examples": {
         "short": [
-          "{\"ok\":true}"
+          "{\"ok\":true}",
+          "records alone: {\"left\":[\"machine old's record has no 2.0 name, so only Store shop's records were removed: its file stays on that machine's disk, in the VM or container an earlier build made, which no call reaches\"]}"
         ],
-        "long": "{\"ok\":true,\"outcome\":\"removed\",\"store\":\"shop\"}"
+        "long": "{\"ok\":true,\"outcome\":\"removed\",\"store\":\"shop\",\"left\":null}"
       },
       "dropped": [
         {

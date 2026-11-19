@@ -1,8 +1,11 @@
 //! What a Sandbox's record says runs it (#536 §9.2): a local daemon process
-//! (native) or a namespaces Sandbox, read from the record alone and
-//! reopened or deleted through its backend. A record of the retired docker
-//! backend (D-8, layerfs-project#111) is refused: nothing it names is
-//! reopened or deleted here.
+//! (native, macOS) or a namespaces Sandbox (Linux), read from the record
+//! alone and reopened or deleted through its backend. A record of the
+//! retired docker backend (D-8, layerfs-project#111) is refused: nothing it
+//! names is reopened or deleted here. A local record this build does not
+//! read ([`unread`]: a field missing or of another shape, or a native
+//! record on Linux) is refused with the records-only `sandbox remove` as
+//! its fix, and that remove takes it without a signal (RV3 FAIL 2, 3).
 use crate::host::Host;
 use crate::record::DaemonRecord;
 #[cfg(target_os = "linux")]
@@ -11,8 +14,9 @@ use crate::runtime::NATIVE;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::process::LocalProcess;
 use layerfs_home::helpers;
-use layerfs_home::outcome::{failed, refused};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+use layerfs_home::outcome::shell_word;
+use layerfs_home::outcome::{failed, refused, with_fix};
+#[cfg(target_os = "macos")]
 use layerfs_sandbox_backend::host_process;
 use layerfs_sandbox_backend::LocalRecord;
 #[cfg(target_os = "linux")]
@@ -78,7 +82,7 @@ pub fn container_fix(container: Option<&str>) -> String {
 /// `native`) with its directory and port, or a namespace Sandbox (`runtime`
 /// `namespaces`) with its own runtime, record and directory.
 pub enum Recorded {
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(target_os = "macos")]
     Local {
         directory: PathBuf,
         id: ContainerId,
@@ -93,10 +97,21 @@ pub enum Recorded {
 /// The record alone decides (#529): a caller's deployment backend is not
 /// consulted, so every call on a Sandbox reopens it by its own runtime.
 pub fn recorded(host: &Host, id: &str, value: &DaemonRecord) -> Result<Recorded> {
+    if let Some(why) = unread(value) {
+        let refusal = refused(
+            "InvalidInput",
+            format!(
+                "Sandbox {id}'s record is not one this build reads ({why}), so it is neither \
+                 reopened nor signalled: `layerfs sandbox remove {id}` removes its records alone"
+            ),
+        );
+        return Err(with_fix(refusal, crate::state::remove_fix(id)));
+    }
     #[cfg(target_os = "linux")]
     if value.runtime() == Some(NAMESPACES) {
         return namespaces_record(host, id, value);
     }
+    #[cfg(target_os = "macos")]
     if value.runtime() == Some(NATIVE) {
         return local_record(host, id, value);
     }
@@ -115,20 +130,52 @@ pub fn recorded(host: &Host, id: &str, value: &DaemonRecord) -> Result<Recorded>
         )),
     }
 }
+/// Why a local Sandbox record (`runtime` `native` or `namespaces`) is not
+/// one this build reads, or `None` when it is, or is not local: a native
+/// record anywhere but macOS (Linux starts none, #533 O27), or a field a
+/// 2.0 record always has that is missing or of another shape (`directory`,
+/// `name`, `container`, `pid`, `boot`, `start`, `port`, `labels`; a
+/// namespaces record's `image`). Its identity cannot be checked, so
+/// nothing is signalled through it.
+pub fn unread(value: &DaemonRecord) -> Option<String> {
+    let runtime = value.runtime()?;
+    if runtime == NATIVE && !cfg!(target_os = "macos") {
+        return Some("a native Sandbox, which this build runs on macOS only".to_owned());
+    }
+    if runtime != NATIVE && runtime != crate::runtime::NAMESPACES {
+        return None;
+    }
+    let checked = || -> Result<()> {
+        helpers::required(value.directory(), "directory")?;
+        helpers::required(value.name(), "name")?;
+        ContainerId::parse(container(value)?).map_err(failed)?;
+        recorded_process(value)?;
+        let port = value
+            .port()
+            .ok_or_else(|| refused("InvalidInput", "local Sandbox record port"))?;
+        u16::try_from(port).map_err(failed)?;
+        value.labels()?;
+        if runtime == crate::runtime::NAMESPACES {
+            let image = helpers::required(value.image(), "image")?;
+            layerfs_sandbox_backend::Image::parse(image).map_err(failed)?;
+        }
+        Ok(())
+    };
+    checked().err().map(|refusal| refusal.message)
+}
 /// A local record is used only where this deployment puts that Sandbox:
 /// its own `name` must be exactly the one this deployment gives Sandbox `id`
 /// (`<prefix><id>`, [`crate::lifecycle::sandbox_name`]) and its
 /// directory exactly `<LAYERFS_LOCAL_DIR>/<that name>`, so a damaged,
 /// edited or stale record (another
-/// LAYERFS_LOCAL_DIR or prefix) never points a delete elsewhere. A record
-/// without `boot` is refused.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+/// LAYERFS_LOCAL_DIR or prefix) never points a delete elsewhere.
+#[cfg(target_os = "macos")]
 fn local_record(host: &Host, id: &str, value: &DaemonRecord) -> Result<Recorded> {
     let (directory, record) = local_record_of(host, id, value)?;
     local(directory, record, value)
 }
 /// The local Sandbox in `directory` that `record` names.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "macos")]
 fn local(directory: PathBuf, record: LocalRecord, value: &DaemonRecord) -> Result<Recorded> {
     Ok(Recorded::Local {
         directory,
@@ -174,9 +221,10 @@ fn local_record_of(host: &Host, id: &str, value: &DaemonRecord) -> Result<(PathB
         // a name this deployment does not give: `sandbox remove` removes
         // its records alone
         return Err(match named {
-            false => {
-                layerfs_home::outcome::with_fix(refusal, format!("layerfs sandbox remove {id}"))
-            }
+            false => layerfs_home::outcome::with_fix(
+                refusal,
+                format!("layerfs sandbox remove {id}", id = shell_word(id)),
+            ),
             true => refusal,
         });
     }
@@ -209,7 +257,6 @@ fn local_parts(value: &DaemonRecord) -> Result<(PathBuf, LocalRecord)> {
 }
 /// The daemon (native) or init (namespaces) process a local record names:
 /// its id, start time and boot.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn recorded_process(value: &DaemonRecord) -> Result<LocalProcess> {
     let pid = value
         .pid()
@@ -273,15 +320,6 @@ fn namespaces(
     ))
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-fn local_record(_: &Host, id: &str, _: &DaemonRecord) -> Result<Recorded> {
-    Err(refused(
-        "Unsupported",
-        format!(
-            "Sandbox {id} is a native Sandbox (LAYERFS_SANDBOX=native), which needs Linux or macOS"
-        ),
-    ))
-}
 impl Recorded {
     /// Stop an exact recorded runtime without endpoint admission or daemon RPC.
     pub fn stop_now(self) -> Result<()> {
@@ -295,7 +333,7 @@ impl Recorded {
     /// `None`: the runtime is already stopped.
     pub fn for_stop(self) -> Result<Option<Box<Sandbox>>> {
         Ok(Some(match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::Local {
                 directory,
                 id,
@@ -317,7 +355,7 @@ impl Recorded {
     /// The runtime, observed running once (it starts nothing).
     pub fn reopen(self) -> std::result::Result<Box<Sandbox>, Box<WireFailure>> {
         match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::Local {
                 directory,
                 id,
@@ -333,7 +371,7 @@ impl Recorded {
     /// The runtime found stopped: only its one Delete is admitted.
     pub fn stopped(self) -> Box<Sandbox> {
         match self {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::Local {
                 directory,
                 id,

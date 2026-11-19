@@ -9,23 +9,32 @@
 //! known by it; a leader found with another start time means the id was
 //! reused and the group is not this Sandbox's. A process that leaves its
 //! group (`setsid`) is not followed unless it is named here too
-//! ([`super::Sandbox::track`]).
+//! ([`super::Sandbox::track`]). Only the native (macOS) runtime names and
+//! ends groups; a group's stop handle ([`Led`]) is shared.
 use layerfs_bridge::process::{self, LocalProcess};
-use nix::{fcntl::OFlag, sys::signal::Signal};
-use std::{
-    fs::{self, OpenOptions},
-    io,
-    os::unix::fs::{DirBuilderExt, OpenOptionsExt},
-    path::Path,
-    time::{Duration, Instant},
+use nix::sys::signal::Signal;
+use std::io;
+// naming and ending groups (the native runtime, macOS only)
+#[cfg(target_os = "macos")]
+use {
+    nix::fcntl::OFlag,
+    std::{
+        fs::{self, OpenOptions},
+        os::unix::fs::{DirBuilderExt, OpenOptionsExt},
+        path::Path,
+        time::{Duration, Instant},
+    },
 };
 
 /// The directory of a Sandbox that names its groups, one empty file each.
+#[cfg(target_os = "macos")]
 pub(super) const GROUPS: &str = "groups";
 /// Pause between two looks at a killed group.
+#[cfg(target_os = "macos")]
 const PAUSE: Duration = Duration::from_millis(20);
 
 /// Names the group `leader` leads (its id is the group's), once.
+#[cfg(target_os = "macos")]
 pub(crate) fn name(directory: &Path, leader: LocalProcess) -> io::Result<()> {
     let groups = directory.join(GROUPS);
     // a Sandbox started before groups were named has no directory yet
@@ -45,6 +54,7 @@ pub(crate) fn name(directory: &Path, leader: LocalProcess) -> io::Result<()> {
 
 /// Forgets the group `leader` led once no member of it is left. Called after
 /// the leader was reaped; a group that still has members stays named.
+#[cfg(target_os = "macos")]
 pub(crate) fn forget_if_empty(directory: &Path, leader: LocalProcess) -> io::Result<()> {
     match nix::sys::signal::killpg(process::pid(leader.pid)?, None) {
         Err(nix::errno::Errno::ESRCH) => {}
@@ -60,6 +70,7 @@ pub(crate) fn forget_if_empty(directory: &Path, leader: LocalProcess) -> io::Res
 /// `daemon` (its leader), once with KILL, as a container's end kills what
 /// ran in it, then waits up to `wait` for their members to be gone. Groups
 /// of another boot ended with it.
+#[cfg(target_os = "macos")]
 pub(crate) fn end(
     directory: &Path,
     daemon: Option<LocalProcess>,
@@ -129,6 +140,7 @@ pub(crate) fn processes() -> io::Result<Vec<(u32, process::Stat)>> {
 }
 
 /// A group's file name: `<boot as 32 hex>-<leader id>-<leader start>`.
+#[cfg(target_os = "macos")]
 fn entry(leader: LocalProcess) -> io::Result<String> {
     let boot = leader
         .boot
@@ -136,6 +148,7 @@ fn entry(leader: LocalProcess) -> io::Result<String> {
     Ok(format!("{boot:032x}-{}-{}", leader.pid, leader.start))
 }
 
+#[cfg(target_os = "macos")]
 fn parse(name: &str) -> Option<LocalProcess> {
     let mut parts = name.split('-');
     let boot = parts.next().filter(|b| b.len() == 32)?;

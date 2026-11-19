@@ -7,9 +7,10 @@
 //! only the relationships (by machine, Store or project) list `sandbox/*`.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
-use layerfs_home::outcome::{failed, refused, with_fix, with_next};
+use layerfs_home::outcome::{failed, refused, shell_word, with_fix, with_next};
 use layerfs_home::state::State;
 use layerfs_machine::record::MachineRecord;
+use layerfs_sandbox::state::remove_fix;
 use layerfs_store::lease;
 use layerfs_store::record::StoreRef;
 use std::path::Path;
@@ -117,7 +118,10 @@ pub fn sandboxes_of_project(home: &Path, project: &str) -> Result<Vec<String>> {
 /// `sandboxes` and `machines` name each kind that holds it. Held by
 /// Sandboxes alone, its `fix` removes them, then the machine; a stopped
 /// machine (its record says so) gets none, since `sandbox remove` cannot
-/// reach a daemon on it. A PostgreSQL Store is on no machine and holds none.
+/// reach a daemon on it. A machine whose record has no 2.0 name gets the
+/// whole chain (RV3 FAIL 1): each Sandbox's and Store's remove, then each
+/// old Firecracker record's, then the machine's, every one of which takes
+/// records alone. A PostgreSQL Store is on no machine and holds none.
 pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
     let stores = stores_on(home, name)?;
     let sandboxes = sandboxes_on(home, name)?;
@@ -135,10 +139,20 @@ pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
         .map(|(kind, _, names)| format!("{kind} {}", names.join(", ")))
         .collect();
     let mut message = format!("machine {name} holds {}", holds.join("; "));
+    let record = MachineRecord::read(home, name)?;
+    // a record without a 2.0 name: each holder's remove takes its records
+    // alone (nothing on the machine is reached), so the fix forgets them,
+    // then the machine
+    let nameless = record.as_ref().is_some_and(MachineRecord::nameless);
+    if nameless {
+        message.push_str(
+            "; its record has no 2.0 name, so removing each of them forgets its records alone",
+        );
+    }
     // a stopped machine's Sandboxes cannot be removed: `sandbox remove`
     // reaches their daemons only while it runs, so no removal is offered
-    let stopped = MachineRecord::read(home, name)?
-        .is_some_and(|machine| machine.recorded_state() == Some("stopped"));
+    let stopped =
+        !nameless && record.is_some_and(|machine| machine.recorded_state() == Some("stopped"));
     if stopped && !sandboxes.is_empty() {
         message.push_str(
             "; it is stopped, and `layerfs sandbox remove` reaches a Sandbox's daemon only while it runs",
@@ -151,12 +165,26 @@ pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
     for (_, field, names) in parts.iter().filter(|(_, _, names)| !names.is_empty()) {
         refusal = with_next(refusal, field, listed(names));
     }
-    // Sandboxes alone: removing them lets the machine go, when it runs
-    if stores.is_empty() && hosted.is_empty() && !stopped {
-        refusal = with_fix(
-            refusal,
-            then(&sandboxes, &format!("layerfs machine remove {name}")),
+    let last = format!("layerfs machine remove {}", shell_word(name));
+    if nameless {
+        // Sandboxes first (they hold their projects' Stores), then the
+        // Stores and the old Firecracker records, then the machine
+        let mut steps: Vec<String> = sandboxes.iter().map(|s| remove_fix(s)).collect();
+        steps.extend(
+            stores
+                .iter()
+                .map(|s| format!("layerfs store remove {}", shell_word(s))),
         );
+        steps.extend(
+            hosted
+                .iter()
+                .map(|m| format!("layerfs machine remove {}", shell_word(m))),
+        );
+        steps.push(last);
+        refusal = with_fix(refusal, steps.join(" && "));
+    } else if stores.is_empty() && hosted.is_empty() && !stopped {
+        // Sandboxes alone: removing them lets the machine go, when it runs
+        refusal = with_fix(refusal, then(&sandboxes, &last));
     }
     Err(refusal)
 }
@@ -180,7 +208,10 @@ pub fn can_stop_machine(home: &Path, name: &str) -> Result<()> {
     let refusal = with_next(refusal, "sandboxes", listed(&sandboxes));
     Err(with_fix(
         refusal,
-        then(&sandboxes, &format!("layerfs machine stop {name}")),
+        then(
+            &sandboxes,
+            &format!("layerfs machine stop {}", shell_word(name)),
+        ),
     ))
 }
 
@@ -200,9 +231,7 @@ fn listed(names: &[String]) -> SdkValue {
 /// One shell line: `layerfs sandbox remove` of each of `sandboxes`, then
 /// `last` when there is one, joined by `&&`.
 fn then(sandboxes: &[String], last: &str) -> String {
-    let removes = sandboxes
-        .iter()
-        .map(|s| layerfs_sandbox::state::remove_fix(s));
+    let removes = sandboxes.iter().map(|s| remove_fix(s));
     let steps: Vec<String> = removes
         .chain((!last.is_empty()).then(|| last.to_owned()))
         .collect();

@@ -22,6 +22,7 @@
 use super::record::{MachineRecord, CREATE, REMOVE};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::op::{Op, Standing};
+use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{with_fix, with_next};
 use layerfs_home::state::{Reason, State};
 
@@ -56,7 +57,10 @@ pub fn start_docker() -> &'static str {
 /// machine (nothing can be sent through the old worker to remove them).
 pub fn replace_worker(machine: &str, sandboxes: usize) -> String {
     let force = if sandboxes > 0 { " --force" } else { "" };
-    format!("layerfs machine stop {machine}{force} && layerfs machine start {machine}")
+    format!(
+        "layerfs machine stop {machine}{force} && layerfs machine start {machine}",
+        machine = shell_word(machine)
+    )
 }
 
 /// The call that settles an unresolved `op`: a create or remove is cleared
@@ -64,8 +68,14 @@ pub fn replace_worker(machine: &str, sandboxes: usize) -> String {
 /// machine (correction C13).
 pub fn settle(machine: &str, op: &Op) -> String {
     match op.name() {
-        CREATE | REMOVE => format!("layerfs machine remove {machine}"),
-        _ => format!("layerfs machine get {machine} --with live"),
+        CREATE | REMOVE => format!(
+            "layerfs machine remove {machine}",
+            machine = shell_word(machine)
+        ),
+        _ => format!(
+            "layerfs machine get {machine} --with live",
+            machine = shell_word(machine)
+        ),
     }
 }
 
@@ -75,9 +85,18 @@ fn fix(machine: &str, reason: Reason, removed: bool, sandboxes: usize) -> Option
     match reason {
         Reason::EngineDown => Some(start_docker().to_owned()),
         Reason::Outdated => Some(replace_worker(machine, sandboxes)),
-        Reason::NotAnswering | Reason::Failed => Some(format!("layerfs machine start {machine}")),
-        Reason::Missing => Some(format!("layerfs machine remove {machine}")),
-        Reason::Unsupported if removed => Some(format!("layerfs machine remove {machine}")),
+        Reason::NotAnswering | Reason::Failed => Some(format!(
+            "layerfs machine start {machine}",
+            machine = shell_word(machine)
+        )),
+        Reason::Missing => Some(format!(
+            "layerfs machine remove {machine}",
+            machine = shell_word(machine)
+        )),
+        Reason::Unsupported if removed => Some(format!(
+            "layerfs machine remove {machine}",
+            machine = shell_word(machine)
+        )),
         _ => None,
     }
 }
@@ -137,7 +156,7 @@ impl MachineRecord {
         }
         // a record an earlier build made, with no provider name: only its
         // record can go
-        if self.text("vm_name").is_none() {
+        if self.nameless() {
             let fix = super::record::no_vm_name_fix(name);
             return State::broken(Reason::Outdated, Some(&fix));
         }
@@ -159,7 +178,7 @@ impl MachineRecord {
         let State::Broken { reason, .. } = state else {
             return None;
         };
-        if self.name() != "native" && self.text("vm_name").is_none() {
+        if self.nameless() {
             return Some(super::record::no_vm_name(self.name()));
         }
         let said = self.text("error").map(str::to_owned);
@@ -228,5 +247,5 @@ pub fn unreadable(name: &str) -> State {
 
 /// The fix of machine `name` whose record cannot be read.
 pub fn unreadable_fix(name: &str) -> String {
-    format!("layerfs machine doctor {name}")
+    format!("layerfs machine doctor {name}", name = shell_word(name))
 }

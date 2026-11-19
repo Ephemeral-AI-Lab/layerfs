@@ -17,7 +17,7 @@ fn sent(call: Call, message: Message) -> Sent {
         project: "api".to_owned(),
         store_record: StoreRecord::from_record(
             "shop",
-            parse(r#"{"name":"shop","url":"postgresql://u@h/d","password":"env:P"}"#).unwrap(),
+            parse(r#"{"name":"shop","url":"postgresql://u@h/d"}"#).unwrap(),
         ),
         project_record: ProjectRecord::from_record("shop", "api", SdkValue::Null),
         choice: Choice {
@@ -46,7 +46,7 @@ fn a_frame_keeps_the_untyped_request_s_fields_and_order() {
     };
     assert_eq!(
         print(&encode(&sent(exec, Message::Null)).unwrap()),
-        r#"{"op":"workspace.exec","store":"shop","project":"api","store_record":{"name":"shop","url":"postgresql://u@h/d","password":"env:P"},"project_record":null,"deploy":{"backend":"local","platform":"docker"},"more":{"path":"/w/1","command":"ls","message":null,"sandbox":"t1"}}"#
+        r#"{"op":"workspace.exec","store":"shop","project":"api","store_record":{"name":"shop","url":"postgresql://u@h/d"},"project_record":null,"deploy":{"backend":"local","platform":"docker"},"more":{"path":"/w/1","command":"ls","message":null,"sandbox":"t1"}}"#
     );
     let close = Call::Close {
         force: false,
@@ -123,7 +123,7 @@ fn a_frame_reads_back_to_its_request() {
         assert_eq!(read.sandbox.as_deref(), Some("t1"));
         assert_eq!(read.message, Message::Absent);
         assert_eq!(read.choice.platform.as_deref(), Some("docker"));
-        // the URL and its password reference stay with the caller
+        // the URL stays with the caller
         let record = print(read.store_record.to_record());
         assert_eq!(record, r#"{"name":"shop"}"#);
     }

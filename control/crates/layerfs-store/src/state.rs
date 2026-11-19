@@ -16,6 +16,7 @@ use crate::intent;
 use crate::record::{StoreRecord, StoreRef};
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::op::Standing;
+use layerfs_home::outcome::shell_word;
 use layerfs_home::state::{Reason, State};
 use std::path::Path;
 
@@ -66,12 +67,14 @@ pub fn broken(record: &StoreRecord, reason: Reason) -> State {
         Reason::Missing => match record.links().first() {
             Some((bucket, link)) => format!(
                 "layerfs backup restore {bucket} {} {store}",
-                link.file().unwrap_or(store)
+                link.file().unwrap_or(store),
+                bucket = shell_word(bucket),
+                store = shell_word(store)
             ),
-            None => format!("layerfs store remove {store}"),
+            None => format!("layerfs store remove {store}", store = shell_word(store)),
         },
-        Reason::Unreachable => format!("layerfs store doctor {store}"),
-        Reason::Unresolved => format!("layerfs store compact {store}"),
+        Reason::Unreachable => format!("layerfs store doctor {store}", store = shell_word(store)),
+        Reason::Unresolved => format!("layerfs store compact {store}", store = shell_word(store)),
         _ => return State::broken(reason, None),
     };
     State::broken(reason, Some(&fix))

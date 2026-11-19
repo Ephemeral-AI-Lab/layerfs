@@ -25,7 +25,7 @@ pub struct Sent {
     pub store: String,
     /// The project's name, as sent (the worker parses it).
     pub project: String,
-    /// The Store's record; the worker drops its URL and password reference.
+    /// The Store's record; the worker drops its URL.
     pub store_record: StoreRecord,
     /// The project's record (from nothing when the caller has none).
     pub project_record: ProjectRecord,
@@ -207,16 +207,12 @@ pub fn decode(frame: &SdkValue) -> Result<Sent, SdkRefusal> {
     };
     let store = frame.get_text("store").unwrap_or("").to_owned();
     let project = frame.get_text("project").unwrap_or("").to_owned();
-    // a PostgreSQL Store's URL and saved login stay with the caller (a
-    // `password` field an older record kept is not sent either): the
+    // a PostgreSQL Store's URL and saved login stay with the caller: the
     // request's `postgresql` carries what this side dials (#535 §7.4)
     let record = match frame.get("store_record").cloned().unwrap_or_default() {
-        SdkValue::Map(fields) => SdkValue::Map(
-            fields
-                .into_iter()
-                .filter(|(n, _)| !matches!(n.as_str(), "url" | "password"))
-                .collect(),
-        ),
+        SdkValue::Map(fields) => {
+            SdkValue::Map(fields.into_iter().filter(|(n, _)| n != "url").collect())
+        }
         other => other,
     };
     let sent_project = frame.get("project_record").cloned().unwrap_or_default();
