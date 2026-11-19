@@ -53,7 +53,8 @@ pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> 
                 ));
             }
         }
-        let spec = machine_spec(&home, &machine)?;
+        let spec = machine_spec(&home, &machine)
+            .map_err(|r| crate::machine::RELATED.nameless_fix(&home, name, r))?;
         for child in &hosted {
             force_record(&home, child)?;
         }

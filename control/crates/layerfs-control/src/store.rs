@@ -255,6 +255,12 @@ pub(crate) fn check_from(
     let name = record.name();
     let (postgresql, hint) = match layerfs_sandbox::route::reached(home, machine, record) {
         Ok(reached) => reached,
+        #[cfg(feature = "machine")]
+        Err(refusal) => {
+            let refusal = crate::machine::RELATED.nameless_fix(home, machine, refusal);
+            return (None, Err(refusal));
+        }
+        #[cfg(not(feature = "machine"))]
         Err(refusal) => return (None, Err(refusal)),
     };
     let host = match postgresql.url().and_then(connect::target) {
