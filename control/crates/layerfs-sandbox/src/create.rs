@@ -71,7 +71,7 @@ pub fn create(
     if matches!(name, "native" | "docker") {
         return Err(refused(
             "InvalidInput",
-            format!("a Sandbox is not named {name}: that names a built-in machine (H §7.6)"),
+            format!("a Sandbox is not named {name}: that names a built-in machine"),
         ));
     }
     // `<name>.root` in the run folder is Sandbox `<name>`'s private root

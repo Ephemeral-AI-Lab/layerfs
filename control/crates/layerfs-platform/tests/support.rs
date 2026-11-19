@@ -87,7 +87,7 @@ fn postgresql_sandboxes_run_on_every_platform_with_a_backend() {
     }
     assert_eq!(
         allowed(Platform::Native, HostOs::Windows),
-        Err("no Sandbox backend on Windows (O5)")
+        Err("no Sandbox backend on Windows")
     );
     assert_eq!(
         allowed(Platform::Docker, HostOs::Windows),
