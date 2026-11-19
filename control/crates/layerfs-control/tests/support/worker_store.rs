@@ -65,7 +65,11 @@ pub fn placed(tag: &str, serve: impl FnOnce(TcpListener, PathBuf)) -> Placed {
     let address = listener.local_addr().unwrap();
     write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-00000000-box")),
+        ]),
     )
     .unwrap();
     write_record(

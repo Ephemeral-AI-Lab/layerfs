@@ -146,6 +146,7 @@ fn native_sqlite_and_worker_statistics_use_the_same_counters() {
         &SdkValue::map([
             ("name", t("box")),
             ("platform", t("lima")),
+            ("vm_name", t("layerfs-00000000-box")),
             ("state", t("running")),
         ]),
     )

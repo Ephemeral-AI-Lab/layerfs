@@ -54,7 +54,11 @@ fn init_files_branches_move_and_remove() {
     home::open(&home).unwrap();
     write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-00000000-box")),
+        ]),
     )
     .unwrap();
     // a guest root as a data disk mounts it; the worker makes it private

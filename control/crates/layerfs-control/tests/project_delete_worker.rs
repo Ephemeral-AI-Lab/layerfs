@@ -189,7 +189,11 @@ fn the_worker_path_writes_the_sidecar_then_admits_and_releases_after_the_marker(
     move_store_file(&home, &root, "shop");
     home::write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", text("box")), ("platform", text("lima"))]),
+        &SdkValue::map([
+            ("name", text("box")),
+            ("platform", text("lima")),
+            ("vm_name", text("layerfs-00000000-box")),
+        ]),
     )
     .unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -508,7 +512,11 @@ fn caller_home(tag: &str, address: &str, stack: LayerStackId) -> PathBuf {
     .unwrap();
     home::write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", text("box")), ("platform", text("lima"))]),
+        &SdkValue::map([
+            ("name", text("box")),
+            ("platform", text("lima")),
+            ("vm_name", text("layerfs-00000000-box")),
+        ]),
     )
     .unwrap();
     home::write_record(

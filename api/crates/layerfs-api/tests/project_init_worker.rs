@@ -68,7 +68,11 @@ fn home_with_box(tag: &str, listener: &TcpListener) -> PathBuf {
     home::open(&home).unwrap();
     write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-00000000-box")),
+        ]),
     )
     .unwrap();
     let address = listener.local_addr().unwrap().to_string();

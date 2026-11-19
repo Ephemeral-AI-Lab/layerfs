@@ -103,7 +103,11 @@ fn a_store_on_another_machine_goes_to_its_worker_with_its_record() {
     let home = home_with(sqlite_record(t("box")));
     write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-00000000-box")),
+        ]),
     )
     .unwrap();
     // no worker yet: refused, nothing sent (with the machine adapters the

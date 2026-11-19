@@ -74,15 +74,17 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
 /// record when it runs, sqlite Store `shop` on it and project `api`.
 fn home_records(home: &Path, machine: &str, platform: &str, worker: Option<(SocketAddr, &str)>) {
     let daemon = std::env::current_exe().unwrap().display().to_string();
-    write_record(
-        &paths::machine_record(home, machine),
-        &map(&[
-            ("name", t(machine)),
-            ("platform", t(platform)),
-            ("daemon", t(&daemon)),
-        ]),
-    )
-    .unwrap();
+    // every 2.0 machine but `native` records its provider name (`vm_name`)
+    let vm_name = format!("layerfs-00000000-{machine}");
+    let mut fields = vec![
+        ("name", t(machine)),
+        ("platform", t(platform)),
+        ("daemon", t(&daemon)),
+    ];
+    if machine != "native" {
+        fields.push(("vm_name", t(&vm_name)));
+    }
+    write_record(&paths::machine_record(home, machine), &map(&fields)).unwrap();
     if let Some((address, secret)) = worker {
         write_record(
             &paths::worker_record(home, machine),

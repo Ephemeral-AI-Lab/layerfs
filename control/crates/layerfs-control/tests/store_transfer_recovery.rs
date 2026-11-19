@@ -48,7 +48,11 @@ fn related() -> Related {
 /// A home with machine `box` (a Lima VM) whose calls the worker at `address`
 /// answers.
 fn box_machine(home: &Path, address: &str) {
-    let machine = SdkValue::map([("name", t("box")), ("platform", t("lima"))]);
+    let machine = SdkValue::map([
+        ("name", t("box")),
+        ("platform", t("lima")),
+        ("vm_name", t("layerfs-00000000-box")),
+    ]);
     write_entity(&paths::machine_record(home, "box"), &machine).unwrap();
     let worker = SdkValue::map([("address", t(address)), ("secret", t("k"))]);
     write_record(&paths::worker_record(home, "box"), &worker).unwrap();

@@ -145,6 +145,10 @@ fn machine(
     let mut fields = vec![
         ("name".to_owned(), t(machine)),
         ("platform".to_owned(), t(platform)),
+        (
+            "vm_name".to_owned(),
+            t(&format!("layerfs-00000000-{machine}")),
+        ),
     ];
     fields.extend(extra.iter().map(|(n, v)| ((*n).to_owned(), v.clone())));
     write_record(
