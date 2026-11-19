@@ -26,8 +26,8 @@ pub struct HomeFile {
 /// Which layout a home has.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Layout {
-    /// No folder, or one holding only what making a home writes before
-    /// its `layerfs.json` ([`own_only`]): a new home.
+    /// No folder, or one holding only what 2.0's layout allows before its
+    /// `layerfs.json` ([`own_only`]): a new home.
     Empty,
     /// Not a home of this build: a `layerfs.json` of another layout, or
     /// anything else in a folder with no `layerfs.json`. Refused
@@ -56,17 +56,27 @@ pub fn detect(home: &Path) -> Result<Layout, SdkRefusal> {
     }
 }
 
-/// Whether `home` holds nothing but what making a home writes before its
-/// `layerfs.json`: the home lock [`open`] takes first, `layerfs.lock`, and
-/// the temporary `layerfs.json` is renamed from (`.layerfs.json.<pid>.<n>.tmp`,
+/// The top-level folders the home reserves for integrations (the Home
+/// README's top-level names). LayerFS creates none of them, but an
+/// integration may make them before the home's first call, as
+/// `@layerfs/runtime` does with `runtime/`.
+const INTEGRATION: [&str; 4] = ["runtime", "job", "stat", "preset"];
+
+/// Whether `home` holds nothing but what 2.0's own layout allows before its
+/// `layerfs.json`: the home lock [`open`] takes first, `layerfs.lock`; the
+/// temporary `layerfs.json` is renamed from (`.layerfs.json.<pid>.<n>.tmp`,
 /// [`write_record`]), which another process may see mid-write or a killed
-/// one may leave.
+/// one may leave; the [`INTEGRATION`] folders; and macOS's `.DS_Store`.
 fn own_only(home: &Path) -> std::io::Result<bool> {
     for entry in std::fs::read_dir(home)? {
-        let name = entry?.file_name();
+        let entry = entry?;
+        let name = entry.file_name();
         let name = name.to_string_lossy();
-        let temporary = name.starts_with(".layerfs.json.") && name.ends_with(".tmp");
-        if name != "layerfs.lock" && !temporary {
+        let own = name == "layerfs.lock"
+            || name == ".DS_Store"
+            || (name.starts_with(".layerfs.json.") && name.ends_with(".tmp"))
+            || (INTEGRATION.contains(&name.as_ref()) && entry.path().is_dir());
+        if !own {
             return Ok(false);
         }
     }

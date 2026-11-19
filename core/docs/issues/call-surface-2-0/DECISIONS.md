@@ -412,6 +412,7 @@ added; the table keeps 83 calls.
   same.
 - MIG: owner, verbatim, of the conversion code: "just drop it. we will never need it". The home's
   detection knows no older layout: no folder, or one holding only `layerfs.lock` (and the temporary
-  `layerfs.json` is renamed from), is a new home; `layerfs.json` at layout 3 is current; any other
+  `layerfs.json` is renamed from), the integration folders `runtime/`, `job/`, `stat/`, `preset/` and
+  `.DS_Store`, is a new home; `layerfs.json` at layout 3 is current; any other
   `layerfs.json`, or anything else in a folder with no `layerfs.json`, is not a LayerFS 2.0 home
   and gets V20-6's refusal, state and fix, and nothing is written in it.

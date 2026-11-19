@@ -109,7 +109,8 @@ today.
 ## Foreign homes
 
 A folder that is not a LayerFS 2.0 home (a `layerfs.json` of another
-layout, or anything but `layerfs.lock` and no `layerfs.json`) gets no
+layout, or anything but `layerfs.lock`, the integration folders and
+`.DS_Store` with no `layerfs.json`) gets no
 records check: `home.layout` fails, "not a LayerFS 2.0 home: this build
 writes nothing in it; move it aside and make a new home", with the fix
 `mv <home> <home>.old && layerfs home init`, and `home.records` is not run.

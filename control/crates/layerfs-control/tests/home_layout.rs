@@ -86,6 +86,34 @@ fn what_making_a_home_writes_first_still_reads_as_empty() {
 }
 
 #[test]
+fn integration_folders_and_ds_store_read_as_empty_and_init_leaves_them() {
+    // an integration's reserved folders, made before the first call (as
+    // `@layerfs/runtime` makes `runtime/`), and macOS's `.DS_Store`
+    let home = tempdir("integration");
+    std::fs::write(home.join("layerfs.lock"), "").unwrap();
+    for folder in ["runtime", "job"] {
+        std::fs::create_dir(home.join(folder)).unwrap();
+        std::fs::write(home.join(folder).join("kept"), folder).unwrap();
+    }
+    std::fs::write(home.join(".DS_Store"), "finder").unwrap();
+    let before = snapshot(&home);
+    assert_eq!(detect(&home).unwrap(), Layout::Empty);
+    let created = layerfs_control::home::init(&home).unwrap();
+    assert_eq!(created.get_text("outcome"), Some("created"));
+    assert!(matches!(detect(&home).unwrap(), Layout::Current(_)));
+    let after = snapshot(&home);
+    for entry in &before {
+        assert!(after.contains(entry), "{:?} changed", entry.0);
+    }
+    // a reserved name that is a file, not a folder, is not the integration's
+    let other = tempdir("integration-file");
+    std::fs::write(other.join("runtime"), "a file").unwrap();
+    assert_eq!(detect(&other).unwrap(), Layout::Foreign);
+    std::fs::remove_dir_all(home).unwrap();
+    std::fs::remove_dir_all(other).unwrap();
+}
+
+#[test]
 fn a_folder_with_a_stray_file_and_no_layerfs_json_is_foreign_and_left_as_it_was() {
     let home = tempdir("stray");
     std::fs::write(home.join("notes.txt"), "kept").unwrap();

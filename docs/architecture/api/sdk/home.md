@@ -71,7 +71,8 @@ records it writes move the generation. Nothing is converted (owner,
 
 Refused `InvalidInput` inside a machine's worker root (not a home);
 `Unsupported` for a folder that is not a LayerFS 2.0 home (a `layerfs.json`
-of another layout, or anything but `layerfs.lock` and no `layerfs.json`),
+of another layout, or anything but `layerfs.lock`, the integration folders
+and `.DS_Store` with no `layerfs.json`),
 with the fix `mv <home> <home>.old && layerfs home init`, writing nothing;
 and as opening a home is refused otherwise (an unreadable `layerfs.json` is
 `Failed`) ([opening a home](../../control/home/README.md#opening-a-home)).
@@ -106,7 +107,7 @@ and it answers for a home that does not exist yet, creating nothing.
 | Field | Meaning |
 | --- | --- |
 | `home` | the home's path |
-| `state`, `reason`, `fix` | `ready`, or `broken` with why and the one shell line that fixes it ([`state.rs`](../../../../control/crates/layerfs-home/src/state.rs)): `missing` (no folder, or one holding only `layerfs.lock`; `layerfs home init`), `outdated` (a folder that is not a LayerFS 2.0 home: a `layerfs.json` of another layout, or other files and no `layerfs.json`; `mv <home> <home>.old && layerfs home init`), `failed` (a `layerfs.json` this build cannot read; `message` says why; no fix line) |
+| `state`, `reason`, `fix` | `ready`, or `broken` with why and the one shell line that fixes it ([`state.rs`](../../../../control/crates/layerfs-home/src/state.rs)): `missing` (no folder, or one holding only `layerfs.lock`, the integration folders `runtime/`, `job/`, `stat/`, `preset/` and `.DS_Store`; `layerfs home init`), `outdated` (a folder that is not a LayerFS 2.0 home: a `layerfs.json` of another layout, or other files and no `layerfs.json`; `mv <home> <home>.old && layerfs home init`), `failed` (a `layerfs.json` this build cannot read; `message` says why; no fix line) |
 | `version` | this build's version |
 | `generation` | the home's [generation](../../control/home/README.md#the-generation-counter): a number that moves when a record is written or removed and never for a read. Null unless the home is ready |
 | `message` | a sentence saying what is wrong, null when ready |

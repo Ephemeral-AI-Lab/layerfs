@@ -297,8 +297,9 @@ This build converts no older home (owner, 2026-11-19: "cut and cleanup old
 incompatible aggressively, no lfs, and fallback to old 2.0 or 1.x", and
 "just drop it. we will never need it"). A folder that is not a LayerFS 2.0
 home is never written: one whose `layerfs.json` names another layout, or
-one holding anything with no `layerfs.json` (beyond the `layerfs.lock` a
-first call takes). Every call on it is refused `Unsupported`, `home get`
+one holding anything with no `layerfs.json` beyond the `layerfs.lock` a
+first call takes, an integration's `runtime/`, `job/`, `stat/` and
+`preset/` folders, and macOS's `.DS_Store`. Every call on it is refused `Unsupported`, `home get`
 answers it `broken` `outdated`, and the home doctor's `home.layout` check
 fails, each with the fix
 

@@ -12,7 +12,7 @@
   {
    "call": "home.init",
    "badge": "reshaped",
-   "note": "creates the home; a current home is left as it is and answers <code>unchanged:true</code>. No <code>[path]</code>: the home is the folder <code>LAYERFS_HOME</code> names, else <code>~/.layerfs</code>, as for every call. This build converts no older home (v20, owner 2026-11-19; MIG): a folder that is not a LayerFS 2.0 home (a <code>layerfs.json</code> of another layout, or anything but <code>layerfs.lock</code> in a folder with no <code>layerfs.json</code>) is refused <code>Unsupported</code> with a fix that moves it aside (<code>mv &lt;home&gt; &lt;home&gt;.old &amp;&amp; layerfs home init</code>) and is never written; a broken <code>layerfs.json</code> is refused and left untouched",
+   "note": "creates the home; a current home is left as it is and answers <code>unchanged:true</code>. No <code>[path]</code>: the home is the folder <code>LAYERFS_HOME</code> names, else <code>~/.layerfs</code>, as for every call. This build converts no older home (v20, owner 2026-11-19; MIG): a folder that is not a LayerFS 2.0 home (a <code>layerfs.json</code> of another layout, or anything but <code>layerfs.lock</code>, the integration folders and <code>.DS_Store</code> in a folder with no <code>layerfs.json</code>) is refused <code>Unsupported</code> with a fix that moves it aside (<code>mv &lt;home&gt; &lt;home&gt;.old &amp;&amp; layerfs home init</code>) and is never written; a broken <code>layerfs.json</code> is refused and left untouched",
    "today": [
     "home.init"
    ],
