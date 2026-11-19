@@ -5639,7 +5639,8 @@
      "states": {
       "reasons": [
        "missing",
-       "outdated"
+       "outdated",
+       "failed"
       ],
       "ops": []
      }
