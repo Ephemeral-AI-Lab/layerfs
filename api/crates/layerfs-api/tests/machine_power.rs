@@ -161,6 +161,15 @@ fn start_and_stop_a_machine() {
     let related = refusal.detail.get("related").cloned().unwrap_or_default();
     let named = |name: &str| SdkValue::map([("kind", t("sandbox")), ("name", t(name))]);
     assert_eq!(related, SdkValue::List(vec![named("s1")]));
+    // the next call's fields: the Sandboxes, and a fix that removes them
+    // and stops the machine (UI pass 1 FAIL 5)
+    let next = refusal.detail.get("next").cloned().unwrap_or_default();
+    assert_eq!(next.get("sandboxes"), Some(&SdkValue::List(vec![t("s1")])));
+    assert_eq!(
+        refusal.detail.get_text("fix"),
+        Some("layerfs sandbox remove s1 && layerfs machine stop dev")
+    );
+    assert!(!refusal.message.contains('['), "{}", refusal.message);
     assert!(!log(&tools).contains("stop"), "{}", log(&tools));
     std::fs::remove_dir_all(paths::sandbox_dir(&home, "s1")).unwrap();
 

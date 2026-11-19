@@ -98,7 +98,7 @@ fn unreadable(request: &layerfs_bridge::control::Request) -> SdkRefusal {
 }
 
 /// A retained teardown stage as the machine's unmount record writes it.
-fn stage_text(stage: TeardownStage) -> &'static str {
+pub(crate) fn stage_text(stage: TeardownStage) -> &'static str {
     match stage {
         TeardownStage::Detach => "Detach",
         TeardownStage::Join => "Join",

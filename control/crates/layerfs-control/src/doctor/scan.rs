@@ -374,7 +374,7 @@ fn file_mode(path: &Path, entity: (&str, &str), findings: &mut Findings) {
 
 /// `path` as one shell word: as it is when it holds only characters a
 /// shell takes literally, else single-quoted.
-pub(super) fn shell(path: &Path) -> String {
+pub(crate) fn shell(path: &Path) -> String {
     let text = path.display().to_string();
     let plain = |c: char| c.is_ascii_alphanumeric() || "/._-+:@%,=".contains(c);
     if !text.is_empty() && text.chars().all(plain) {

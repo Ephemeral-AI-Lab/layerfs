@@ -79,9 +79,13 @@ pub fn update(home: &Path, request: &MachineUpdate, related: Related) -> Outcome
     // its worker container is in the Engine it records: moving the socket
     // under it would leave the container running where no call reaches it
     if docker.is_some() && paths::worker_record(&home, name).exists() {
-        return Err(refused(
+        let refusal = refused(
             "InUse",
-            format!("machine {name} is running on its Docker socket; `layerfs machine stop {name}` before changing it"),
+            format!("machine {name} is running on its Docker socket: stop it before changing the socket"),
+        );
+        return Err(layerfs_home::outcome::with_fix(
+            refusal,
+            format!("layerfs machine stop {name}"),
         ));
     }
     if request.wsl.is_some() && HostOs::current() != HostOs::Windows {

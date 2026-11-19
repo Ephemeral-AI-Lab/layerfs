@@ -9,7 +9,7 @@
 //! its `reason` and `fix`, the build's `version`, the home's `generation`,
 //! and, only when asked, the platforms this computer supports (a probe)
 //! and the tree of everything in the home ([`crate::home_tree`]).
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::layout::{detect, Layout};
 use layerfs_home::home::{generation, read_record, with_field};
 use layerfs_home::outcome::{refused, Outcome};
@@ -348,6 +348,68 @@ impl NativeDaemon {
             )
         })
     }
+}
+
+/// `refusal` of a Sandbox start whose daemon (its detail's `daemon`) is the
+/// native machine's and of another build than `build`, or names no build
+/// at all (one older than the build marker, or no daemon): it says so, and its `fix`
+/// records this build's daemon when [`own_daemon`] finds one, else runs
+/// `layerfs home doctor`, which names the daemon and its build. Any other
+/// refusal comes back as it is.
+pub fn native_start(home: &Path, build: Build<'_>, refusal: SdkRefusal) -> SdkRefusal {
+    let started = refusal.detail.get_text("daemon").map(Path::new);
+    let Some(daemon) = NativeDaemon::of(home).filter(|d| Some(d.path.as_path()) == started) else {
+        return refusal;
+    };
+    let Some(ours) = build.commit else {
+        return refusal;
+    };
+    let said = match &daemon.stamp {
+        Some((theirs, _)) if daemon.matches(build) == SdkValue::Bool(false) => format!(
+            "The native machine's daemon {} was built from {}, this build from {}: \
+             it cannot be expected to read what this build writes",
+            daemon.path.display(),
+            short(theirs),
+            short(ours)
+        ),
+        Some(_) => return refusal,
+        None if daemon.present => format!(
+            "The native machine's daemon {} names no build: it is not this build ({}) \
+             and may not read what this build writes",
+            daemon.path.display(),
+            short(ours)
+        ),
+        None => return refusal,
+    };
+    let fix = match own_daemon(build) {
+        Some(path) => format!(
+            "layerfs machine update native --daemon {}",
+            crate::doctor::shell(&path)
+        ),
+        None => "layerfs home doctor".to_owned(),
+    };
+    let message = format!("{}. {said}", refusal.message);
+    layerfs_home::outcome::with_fix(SdkRefusal { message, ..refusal }, fix)
+}
+
+/// This build's own `layerfs-daemon`: the one beside the running program
+/// (a runtime's `bin/`), else the default beside this host's bundle, the
+/// first that is a file stamped with `build`'s commit. Read from files only.
+pub fn own_daemon(build: Build<'_>) -> Option<std::path::PathBuf> {
+    let ours = build.commit?;
+    let beside = std::env::current_exe()
+        .ok()
+        .and_then(|exe| Some(exe.parent()?.join("layerfs-daemon")));
+    let bundle = layerfs_machine::bundle_dir(std::env::consts::OS)
+        .ok()
+        .map(|dir| dir.join("layerfs-daemon"));
+    [beside, bundle].into_iter().flatten().find(|path| {
+        path.is_file()
+            && std::fs::read(path)
+                .ok()
+                .and_then(|bytes| stamp(&bytes))
+                .is_some_and(|(commit, _)| commit == ours)
+    })
 }
 
 /// The native machine's daemon (macOS only; null elsewhere): the one its

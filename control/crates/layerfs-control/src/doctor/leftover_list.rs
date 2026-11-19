@@ -273,14 +273,23 @@ impl List {
         match worker.attempt("doctor.sandbox", args, &mut |_| {}) {
             Ok(Ok(walked)) => self.walked(home, machine, &walked),
             Ok(Err(refusal)) => self.refused(machine, refusal),
-            Err(unreached) => self.not_listed(
-                machine,
-                ("reason", SdkValue::text("timeout")),
-                format!(
-                    "machine {machine}'s worker did not answer: {}",
-                    unreached.0.message
-                ),
-            ),
+            // a VM that stopped under a worker record it left is stopped,
+            // as its provider says, not a worker that ran out of time
+            Err(_) if provider_stopped(home, record.as_ref()) => {
+                if let Some(State::Blocked(by)) = State::Stopped.blocks("machine", machine) {
+                    let message = format!("machine {} is {}", by.handle, by.reason);
+                    self.not_listed(machine, ("blocked_by", by.to_sdk()), message);
+                }
+            }
+            Err(unreached) => {
+                // a worker that did not answer names its machine already
+                let why = unreached.0.message;
+                let message = match why.contains(&format!("machine {machine}")) {
+                    true => why,
+                    false => format!("machine {machine}'s worker did not answer: {why}"),
+                };
+                self.not_listed(machine, ("reason", SdkValue::text("timeout")), message)
+            }
         }
     }
 
@@ -294,6 +303,37 @@ impl List {
         let message = format!("{}: {}", refusal.code, refusal.message);
         self.not_listed(machine, ("reason", SdkValue::text(reason)), message);
     }
+}
+
+/// Whether the provider of the machine `record` names says its VM or
+/// container is stopped: one probe, bounded like the walk, asked only after
+/// its worker did not answer. No answer, or no record, is not stopped.
+#[cfg(feature = "machine")]
+fn provider_stopped(home: &Path, record: Option<&MachineRecord>) -> bool {
+    use layerfs_machine::platform::{status_within, State as Kernel};
+    let Some(record) = record else {
+        return false;
+    };
+    let spec = layerfs_home::home::opened(home)
+        .and_then(|file| layerfs_machine::machine_provider_spec(home, &file.id, record));
+    let Ok(spec) = spec else {
+        return false;
+    };
+    let spec = layerfs_machine::platform::Spec {
+        worker: None,
+        ..spec
+    };
+    let deadline = std::time::Instant::now() + BOUNDS.within;
+    matches!(
+        status_within(&spec, deadline),
+        Ok(status) if status.kernel == Some(Kernel::Stopped)
+    )
+}
+
+/// Without the machine calls no provider is asked.
+#[cfg(not(feature = "machine"))]
+fn provider_stopped(_home: &Path, _record: Option<&MachineRecord>) -> bool {
+    false
 }
 
 /// The Sandboxes `home` records on `machine`: a machine's Sandboxes are

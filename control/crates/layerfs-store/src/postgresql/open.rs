@@ -11,7 +11,7 @@ use crate::identity::{Identity, Kind};
 use crate::open_args::{OpenArgs, PgSelection};
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::outcome::{refused, Outcome};
-use layerfs_store_service::StoreService;
+use layerfs_store_service::{OpenRefusal, StoreService};
 use std::path::Path;
 
 /// `synchronous_commit` as the call or record names it: off, local (the
@@ -88,7 +88,15 @@ pub fn open(
             identity.cursor_key,
             template,
         )
-        .map_err(|refusal| refused("Failed", format!("{refusal:?}")))
+        .map_err(|refusal| {
+            let reason = match refusal {
+                OpenRefusal::Unsupported(reason) => reason.0,
+                OpenRefusal::Missing(reason)
+                | OpenRefusal::Busy(reason)
+                | OpenRefusal::Failed(reason) => reason,
+            };
+            refused("Failed", reason)
+        })
     }
 }
 

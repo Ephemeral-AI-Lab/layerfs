@@ -3,7 +3,7 @@ use crate::{internal::Control, OperationFailure};
 use layerfs_bridge::control::{ControlError, DaemonStatus, HelloRequest, Reply, Request};
 use layerfs_bridge::duplex::ChannelError;
 use layerfs_sandbox_backend::Runtime;
-use std::{io, sync::Arc};
+use std::{fmt, io, sync::Arc};
 
 /// Concrete boundary reached by one original lifecycle operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -55,6 +55,54 @@ pub enum SandboxCause {
     Control(Box<OperationFailure>),
     /// Original streaming installation failure and exact publication knowledge.
     Install(Box<layerfs_project::store::InstallFailure>),
+}
+
+impl SandboxPhase {
+    /// Where a start stopped, in plain words.
+    pub fn words(self) -> &'static str {
+        match self {
+            Self::Validate => "while its launch was checked",
+            Self::Executable => "while its daemon program was opened",
+            Self::Create => "while its daemon was created",
+            Self::Upload => "while its daemon's files were copied in",
+            Self::Start => "while its daemon was started",
+            Self::Listener => "before its daemon said it was listening",
+            Self::Endpoint => "while its daemon's address was read",
+            Self::Connect => "while this side connected to its daemon",
+            Self::Authenticate => "while its daemon's identity was checked",
+            Self::Policy => "after its daemon's identity was checked",
+            Self::Hello => "at its daemon's first answer",
+            Self::Install => "while the Store was installed into it",
+            Self::Stop => "while it was stopped",
+            Self::Delete => "while it was deleted",
+        }
+    }
+}
+
+/// In plain words, never `Debug` text.
+impl fmt::Display for SandboxCause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use layerfs_project::store::InstallError;
+        use layerfs_sandbox_backend::RuntimeError;
+        match self {
+            Self::Io(error) => write!(f, "{error}"),
+            Self::Setup(error) => write!(f, "{error}"),
+            Self::Runtime(failure) => write!(f, "{failure}"),
+            Self::Provider(failure) => match &failure.cause {
+                RuntimeError::Io(error) => write!(f, "{error}"),
+                RuntimeError::Protocol(said) => f.write_str(said),
+                RuntimeError::Unsupported(what) => write!(f, "not supported here: {what}"),
+            },
+            Self::Channel(error) => write!(f, "{error}"),
+            Self::Control(failure) => write!(f, "{failure}"),
+            Self::Install(failure) => match &failure.error {
+                InstallError::Io(error) => write!(f, "the Store's file: {error}"),
+                InstallError::Channel(error) => write!(f, "{error}"),
+                InstallError::Protocol(error) => write!(f, "{error}"),
+                InstallError::Remote(_) => f.write_str("its daemon refused the Store"),
+            },
+        }
+    }
 }
 
 /// Actual local Engine and authenticated daemon lifecycle organization.

@@ -149,7 +149,7 @@ fn start_named(
     let request = ProviderCreate {
         launch: LaunchRequest {
             name: sandbox_name.clone(),
-            daemon_executable: executable,
+            daemon_executable: executable.clone(),
             daemon_config: Vec::new(),
             labels,
             startup_timeout: crate::lifecycle::STARTUP,
@@ -172,10 +172,12 @@ fn start_named(
         abandon(
             id,
             format!(
-                "native sandbox stopped at {:?}: {:?}",
-                failure.phase, failure.cause
+                "Sandbox {id} did not start: it stopped {}: {}",
+                failure.phase.words(),
+                failure.cause
             ),
             failure.runtime.take(),
+            &executable,
         )
     })?;
     let instance = created.startup.instance;
@@ -186,8 +188,11 @@ fn start_named(
             drop(control);
             return Err(abandon(
                 id,
-                format!("native endpoint after startup: {error:?}"),
+                format!(
+                    "Sandbox {id} did not start: its daemon's address could not be read: {error}"
+                ),
                 Some(sandbox),
+                &executable,
             ));
         }
     };
@@ -227,8 +232,12 @@ fn start_named(
         let _ = std::fs::remove_file(directory.join("control.json"));
         return Err(abandon(
             id,
-            format!("local sandbox records: {}", refusal.message),
+            format!(
+                "Sandbox {id} did not start: its records could not be written: {}",
+                refusal.message
+            ),
             runtime,
+            &executable,
         ));
     }
     let state = Arc::new(state);
@@ -413,10 +422,18 @@ pub fn owned(host: &Host, id: &str, own: &Path) -> Result<(), SdkRefusal> {
 
 /// The refusal for a failed start. Everything a local start makes is its
 /// own (a directory and a child process), so each effect is known: the
-/// daemon's last log lines are read once, then it is stopped and its
+/// daemon's last log lines are read once (the message quotes the last one,
+/// the detail's `log` keeps them all), then it is stopped and its
 /// directory deleted, each once (`Failed`). If that cleanup fails, the
-/// outcome is `Unknown`, saying what is left.
-fn abandon(id: &str, mut cause: String, sandbox: Option<Box<Sandbox>>) -> SdkRefusal {
+/// outcome is `Unknown`, saying what is left. The detail's `daemon` is the
+/// program that was started, which the call layer compares with this
+/// build's.
+fn abandon(
+    id: &str,
+    mut cause: String,
+    sandbox: Option<Box<Sandbox>>,
+    daemon: &Path,
+) -> SdkRefusal {
     let container = sandbox.as_ref().map(|s| s.identity().to_string());
     let mut log = None;
     let mut left = None;
@@ -424,15 +441,17 @@ fn abandon(id: &str, mut cause: String, sandbox: Option<Box<Sandbox>>) -> SdkRef
         match sandbox.log_tail(crate::lifecycle::LOG_LINES, crate::lifecycle::LOG_BYTES) {
             Ok(bytes) => {
                 let text = String::from_utf8_lossy(&bytes).trim_end().to_owned();
-                cause = format!("{cause}; its daemon's last log lines:\n{text}");
+                if let Some(last) = text.lines().rev().map(str::trim).find(|l| !l.is_empty()) {
+                    cause = format!("{cause}. Its daemon's last error: {last}");
+                }
                 log = Some(text);
             }
-            Err(error) => cause = format!("{cause}; its daemon log was unreadable: {error:?}"),
+            Err(error) => cause = format!("{cause}; its daemon's log could not be read: {error}"),
         }
         let removed = sandbox.stop(1).and_then(|()| sandbox.delete());
         left = removed.err().map(|error| {
             format!(
-                "its local Sandbox {} could not be removed: {error:?}",
+                "its daemon {} could not be stopped and removed: {error}",
                 sandbox.identity()
             )
         });
@@ -452,6 +471,7 @@ fn abandon(id: &str, mut cause: String, sandbox: Option<Box<Sandbox>>) -> SdkRef
             ("container", SdkValue::opt_text(container)),
             ("removed", SdkValue::Bool(removed)),
             ("log", SdkValue::opt_text(log)),
+            ("daemon", SdkValue::text(daemon.display().to_string())),
         ]),
     }
 }

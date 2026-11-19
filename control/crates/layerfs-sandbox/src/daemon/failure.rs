@@ -64,9 +64,21 @@ impl OperationFailure {
         })
     }
 }
+/// In plain words, never `Debug` text.
 impl fmt::Display for OperationFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "SDK operation: {:?}", self.cause)
+        match &self.cause {
+            OperationCause::Exchange(exchange) => write!(f, "{exchange}"),
+            OperationCause::Remote(refused) => f.write_str(&refused.detail),
+            OperationCause::Retained(custody) => write!(
+                f,
+                "the Sandbox's daemon stopped the teardown at its {} step and keeps it",
+                crate::daemon::values::stage_text(custody.stage)
+            ),
+            OperationCause::Unexpected(_) => {
+                f.write_str("the Sandbox's daemon answered something this call does not expect")
+            }
+        }
     }
 }
 impl std::error::Error for OperationFailure {}

@@ -178,7 +178,11 @@ fn inspect(
                     return nothing;
                 }
                 phase => {
-                    checks.warning(READY, format!("its daemon is still starting ({phase:?})"));
+                    let step = match phase {
+                        DaemonPhase::Installing => "its Store is being installed",
+                        _ => "its Store is not installed yet",
+                    };
+                    checks.warning(READY, format!("its daemon is still starting ({step})"));
                     return nothing;
                 }
             }

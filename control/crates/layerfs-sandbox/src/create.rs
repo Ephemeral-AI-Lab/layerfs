@@ -12,7 +12,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
 use layerfs_home::op::Op;
-use layerfs_home::outcome::refused;
+use layerfs_home::outcome::{public_code, refused, with_fix, FIX};
 use layerfs_store::record::StoreRef;
 use layerfs_store::resolve;
 use std::path::Path;
@@ -191,10 +191,17 @@ pub fn create(
             op.log_uncertain(&home, "sandbox", name, &refusal.message);
             Err(refusal)
         }
+        // a start that failed is the machine's to explain: its doctor is
+        // the fix unless the refusal names a closer one
         Err(refusal) => {
             remove_folder(&record.dir(&home))?;
             drop(sandbox);
-            Err(refusal)
+            let start_failed =
+                public_code(&refusal.code) == "Failed" && refusal.detail.get(FIX).is_none();
+            Err(match start_failed {
+                true => with_fix(refusal, format!("layerfs machine doctor {machine}")),
+                false => refusal,
+            })
         }
     }
 }

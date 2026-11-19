@@ -141,8 +141,8 @@ fn notice_refusal(notice: AdmissionNotice) -> SdkRefusal {
         other => SdkRefusal {
             code: "Unknown".to_owned(),
             message: format!(
-                "the Sandbox's daemon refused admission with a reason this client does not know ({:?}); the call was not admitted. Retrying is safe",
-                other
+                "the Sandbox's daemon refused admission with a reason this client does not know ({}); the call was not admitted. Retrying is safe",
+                other.as_str()
             ),
             detail: SdkValue::map([
                 ("observed", SdkValue::text(other.as_str())),

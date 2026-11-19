@@ -18,9 +18,10 @@ pub fn refused(code: &str, message: impl Into<String>) -> SdkRefusal {
     }
 }
 
-/// A failure that has no SDK code of its own.
-pub fn failed(error: impl std::fmt::Debug) -> SdkRefusal {
-    refused("Failed", format!("{error:?}"))
+/// A failure that has no SDK code of its own, in the error's own words
+/// (its `Display`): no public answer carries Rust `Debug` text.
+pub fn failed(error: impl std::fmt::Display) -> SdkRefusal {
+    refused("Failed", error.to_string())
 }
 
 /// Which shape of an entity a call answers (#536 §9.7): a get's whole

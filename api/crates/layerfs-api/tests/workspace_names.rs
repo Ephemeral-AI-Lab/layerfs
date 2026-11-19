@@ -185,3 +185,41 @@ fn every_workspace_call_takes_the_name_and_refuses_the_path() {
     }
     std::fs::remove_dir_all(&home).unwrap();
 }
+
+/// A Sandbox whose daemon does not start is refused in words, never Rust
+/// `Debug` text, with a fix (UI pass 1 FAIL 1): the machine's doctor, or,
+/// for a native daemon of another build, what records this build's.
+#[cfg(target_os = "macos")]
+#[test]
+fn a_start_that_fails_is_refused_in_words_with_a_fix() {
+    let home = home_with_a_named_workspace("start");
+    let folder = home.join("source");
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(folder.join("a.txt"), b"a").unwrap();
+    let folder = t(&folder.display().to_string());
+    call(
+        &home,
+        "project.init",
+        &[("project", t("shop/web")), ("folder", folder)],
+    )
+    .unwrap();
+    let args = SdkValue::map([("project", t("shop/web")), ("name", t("two"))]);
+    let refusal = layerfs_api::call(Some(&home), "sandbox.create", args, &mut |_| {}).unwrap_err();
+    assert_eq!(refusal.code, "Failed", "{refusal:?}");
+    assert!(
+        refusal.message.starts_with("Sandbox two did not start: "),
+        "{refusal:?}"
+    );
+    for debug in ["{", "Some(", "LaunchFailure", "Provider(", "Os {", "kind:"] {
+        assert!(!refusal.message.contains(debug), "{debug}: {refusal:?}");
+    }
+    let fix = refusal.detail.get_text("fix").unwrap_or("");
+    assert!(
+        ["layerfs machine doctor native", "layerfs home doctor"].contains(&fix)
+            || fix.starts_with("layerfs machine update native --daemon "),
+        "{refusal:?}"
+    );
+    // the name is free again
+    assert!(!paths::sandbox_dir(&home, "two").exists());
+    std::fs::remove_dir_all(&home).unwrap();
+}

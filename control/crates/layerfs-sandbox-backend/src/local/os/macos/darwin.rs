@@ -109,7 +109,10 @@ pub(crate) fn force_unmount(point: &Path) -> io::Result<()> {
         Ok(status) => status,
         Err(error) => {
             let pid = child.id();
-            let kill = child.kill();
+            let kill = match child.kill() {
+                Ok(()) => "it was killed".to_owned(),
+                Err(error) => format!("killing it failed: {error}"),
+            };
             let deadline = Instant::now() + REAP_WAIT;
             let reaped = loop {
                 unmount_output(&mut stderr, &mut output);
@@ -135,7 +138,7 @@ pub(crate) fn force_unmount(point: &Path) -> io::Result<()> {
             return Err(io::Error::new(
                 error.kind(),
                 format!(
-                    "umount -f {}: {error}; pid={pid}; KILL={kill:?}; {disposition}: {}",
+                    "umount -f {}: {error}; process {pid}: {kill}; {disposition}: {}",
                     point.display(),
                     String::from_utf8_lossy(&output).trim()
                 ),

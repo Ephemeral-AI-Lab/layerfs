@@ -22,7 +22,11 @@ impl Limits {
             || self.piece_size == 0
             || self.piece_size > self.max_file
         {
-            return Err(RemoteError::Invalid(format!("limits {self:?}")));
+            return Err(RemoteError::Invalid(format!(
+                "size limits: largest file {}, largest request {} and piece size {} bytes; \
+                 each is above 0 and a piece is no larger than a file",
+                self.max_file, self.max_request, self.piece_size
+            )));
         }
         Ok(())
     }

@@ -156,7 +156,7 @@ fn a_postgresql_store_holds_no_machine() {
     assert_eq!(inventory::stores_on(&home, "dev").unwrap(), ["shop"]);
     let refusal = inventory::can_remove_machine(&home, "dev").unwrap_err();
     assert!(
-        refusal.message.contains("Stores [shop]"),
+        refusal.message.contains("Stores shop;"),
         "{}",
         refusal.message
     );
@@ -170,8 +170,16 @@ fn the_checks_refuse_in_use_with_the_same_texts() {
     assert_eq!(refusal.code, "InUse");
     assert_eq!(
         refusal.message,
-        "machine dev holds Stores [shop], Sandboxes [a, c] and hosts [fc]"
+        "machine dev holds Stores shop; Sandboxes a, c; old Firecracker machines fc"
     );
+    // each kind as a next field; Stores hold it too, so no single fix
+    let listed =
+        |names: &[&str]| SdkValue::List(names.iter().map(|n| SdkValue::text(*n)).collect());
+    let next = refusal.detail.get("next").unwrap();
+    assert_eq!(next.get("stores"), Some(&listed(&["shop"])));
+    assert_eq!(next.get("sandboxes"), Some(&listed(&["a", "c"])));
+    assert_eq!(next.get("machines"), Some(&listed(&["fc"])));
+    assert_eq!(refusal.detail.get("fix"), None);
     // #536 §10b: what holds it, in `detail.related`
     let held = |kind: &str, name: &str| {
         SdkValue::map([
@@ -191,7 +199,13 @@ fn the_checks_refuse_in_use_with_the_same_texts() {
     let refusal = inventory::can_stop_machine(&home, "dev").unwrap_err();
     assert_eq!(
         refusal.message,
-        "machine dev runs Sandboxes [a, c]; close them first"
+        "machine dev runs Sandboxes a, c: remove them first, or stop it with --force"
+    );
+    let next = refusal.detail.get("next").unwrap();
+    assert_eq!(next.get("sandboxes"), Some(&listed(&["a", "c"])));
+    assert_eq!(
+        refusal.detail.get_text("fix"),
+        Some("layerfs sandbox remove a && layerfs sandbox remove c && layerfs machine stop dev")
     );
     let related = refusal.detail.get("related").unwrap();
     assert_eq!(
@@ -209,10 +223,22 @@ fn the_checks_refuse_in_use_with_the_same_texts() {
     let refusal = inventory::can_change_machine(&home, "native").unwrap_err();
     assert_eq!(
         refusal.message,
-        "Sandboxes [b] run on native; close them before changing it"
+        "Sandbox b runs on machine native: remove it before changing it"
+    );
+    let next = refusal.detail.get("next").unwrap();
+    assert_eq!(next.get("sandboxes"), Some(&listed(&["b"])));
+    assert_eq!(
+        refusal.detail.get_text("fix"),
+        Some("layerfs sandbox remove b")
     );
     let refusal = inventory::store_idle(&home, "shop").unwrap_err();
     assert_eq!(refusal.message, "Store shop has running Sandboxes: a, c");
+    let next = refusal.detail.get("next").unwrap();
+    assert_eq!(next.get("sandboxes"), Some(&listed(&["a", "c"])));
+    assert_eq!(
+        refusal.detail.get_text("fix"),
+        Some("layerfs sandbox remove a && layerfs sandbox remove c")
+    );
     let names = |related: &SdkValue| match related {
         SdkValue::List(items) => items
             .iter()
