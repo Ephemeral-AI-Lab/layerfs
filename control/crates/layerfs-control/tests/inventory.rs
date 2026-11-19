@@ -337,3 +337,39 @@ fn a_stopped_machine_offers_no_sandbox_removal() {
     );
     let _ = std::fs::remove_dir_all(&home);
 }
+
+/// A machine whose record has no 2.0 name (`vm_name`) and still holds
+/// Sandboxes, a Store and an old Firecracker record: its state, as the
+/// records give it, shows the same fix chain as its remove's `InUse`
+/// refusal (RT5 note 3), built by the one builder; with nothing on it the
+/// fix is the bare remove.
+#[test]
+fn a_nameless_machines_state_shows_its_refusals_chain() {
+    let home = home();
+    let machine = paths::machine_record(&home, "dev");
+    record(&machine, r#"{"platform":"lima","state":"running"}"#);
+    let chain = "layerfs sandbox remove a && layerfs sandbox remove c && \
+                 layerfs store remove shop && layerfs machine remove fc && \
+                 layerfs machine remove dev";
+    let refusal = inventory::can_remove_machine(&home, "dev").unwrap_err();
+    assert_eq!(refusal.code, "InUse");
+    assert_eq!(refusal.detail.get_text("fix"), Some(chain));
+    let read = layerfs_machine::record::MachineRecord::read(&home, "dev").unwrap();
+    let state = inventory::machine_state(&home, "dev", read.as_ref()).unwrap();
+    let fields = state.write(SdkValue::Map(Vec::new()));
+    assert_eq!(fields.get_text("reason"), Some("outdated"), "{fields:?}");
+    assert_eq!(fields.get_text("fix"), Some(chain));
+    // the same machine with nothing recorded on it
+    let bare = tempdir();
+    record(
+        &paths::machine_record(&bare, "dev"),
+        r#"{"platform":"lima","state":"running"}"#,
+    );
+    let read = layerfs_machine::record::MachineRecord::read(&bare, "dev").unwrap();
+    let state = inventory::machine_state(&bare, "dev", read.as_ref()).unwrap();
+    let fields = state.write(SdkValue::Map(Vec::new()));
+    assert_eq!(fields.get_text("fix"), Some("layerfs machine remove dev"));
+    inventory::can_remove_machine(&bare, "dev").unwrap();
+    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(&bare);
+}

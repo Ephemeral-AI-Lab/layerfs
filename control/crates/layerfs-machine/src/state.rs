@@ -12,14 +12,15 @@
 //! certain `op` is ignored (a read writes nothing); a platform removed in
 //! 2.0 is `broken` `unsupported`; `native` is always `ready`; a record
 //! with no `vm_name` (an earlier build's) is `broken` `outdated` with the
-//! fix `machine remove`; a recorded `reason` is `broken` with it; then
+//! fix `machine remove`, after the removes of what is recorded on it
+//! ([`MachineRecord::status_held`]); a recorded `reason` is `broken` with it; then
 //! `running` is `ready` and anything else `stopped`. `unknown` is never
 //! recorded: only a live read that could not be made answers it.
 //!
 //! Built without the `machine` feature too: the caller says whether the
 //! record's platform was removed (`layerfs-control`'s
 //! `inventory::machine_state` asks the platform policy).
-use super::record::{MachineRecord, CREATE, REMOVE};
+use super::record::{Holders, MachineRecord, CREATE, REMOVE};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::op::{Op, Standing};
 use layerfs_home::outcome::shell_word;
@@ -157,7 +158,7 @@ impl MachineRecord {
         // a record an earlier build made, with no provider name: only its
         // record can go
         if self.nameless() {
-            let fix = super::record::no_vm_name_fix(name);
+            let fix = super::record::no_vm_name_fix(name, Holders::default());
             return State::broken(Reason::Outdated, Some(&fix));
         }
         if let Some(reason) = self.reason() {
@@ -167,6 +168,25 @@ impl MachineRecord {
         match self.recorded_state() {
             Some("running") => State::Ready,
             _ => State::Stopped,
+        }
+    }
+
+    /// [`Self::status`] with what is recorded on the machine named
+    /// (`held`): a record with no `vm_name` that still holds Sandboxes,
+    /// Stores or old Firecracker records shows the line its remove's
+    /// `InUse` refusal carries ([`super::record::no_vm_name_fix`]), not a
+    /// bare remove that is refused. Of such a record only the `vm_name`
+    /// branch answers `broken` `outdated`.
+    pub fn status_held(&self, removed: bool, held: Holders<'_>) -> State {
+        match self.status(removed, held.sandboxes.len()) {
+            State::Broken {
+                reason: Reason::Outdated,
+                ..
+            } if self.nameless() => {
+                let fix = super::record::no_vm_name_fix(self.name(), held);
+                State::broken(Reason::Outdated, Some(&fix))
+            }
+            state => state,
         }
     }
 

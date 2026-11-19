@@ -2,7 +2,7 @@
 //! home's records alone (call surface 2.0). Nothing is probed unless the
 //! caller asks for `live` (`live.rs`).
 use super::live::{self, Seen};
-use super::record::MachineRecord;
+use super::record::{Holders, MachineRecord};
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{observed, paths};
@@ -59,7 +59,19 @@ pub(super) fn summary(
     let (state, message, observed) = match seen {
         Some(seen) => (seen.state.clone(), seen.message.clone(), seen.at),
         None => {
-            let state = record.recorded(sandboxes.len());
+            // a record with no `vm_name` shows the line that removes what
+            // is on it first; the old Firecracker records it hosted are
+            // read for it alone
+            let hosted = match record.nameless() {
+                true => (related.hosted_on)(home, record.name())?,
+                false => Vec::new(),
+            };
+            let held = Holders {
+                sandboxes: &sandboxes,
+                stores: &stores,
+                hosted: &hosted,
+            };
+            let state = record.recorded_held(held);
             let message = match record.removed() {
                 Some(reason) => Some(reason.to_owned()),
                 None => record.message(&state, sandboxes.len()),

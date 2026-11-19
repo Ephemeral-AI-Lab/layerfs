@@ -15,6 +15,7 @@ use std::path::Path;
 pub const RELATED: Related = Related {
     stores_on: inventory::stores_on,
     sandboxes_on: inventory::sandboxes_on,
+    hosted_on: inventory::hosted_on,
     can_remove: inventory::can_remove_machine,
     can_stop: inventory::can_stop_machine,
     can_change: inventory::can_change_machine,
