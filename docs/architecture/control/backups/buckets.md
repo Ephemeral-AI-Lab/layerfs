@@ -115,7 +115,7 @@ last count ([Backups](README.md)).
 
 | Rule | Source |
 | --- | --- |
-| The caller reads the key (its id from the bucket's record, its secret from the home's secret folder) and hands it to the driver; no `env:` or `file:` key reference is read. A record with no `access_key` is refused `Failed` with the fix that disconnects and connects it again | [`credentials.rs`](../../../../control/crates/layerfs-bucket/src/bucket/credentials.rs), [`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) `credentials` |
+| The caller reads the key (its id from the bucket's record, its secret from the home's secret folder) and hands it to the driver; no `env:` or `file:` key reference is read. A record with no `access_key` is refused `Failed` with the fix that connects it again at its URL, which keeps its Stores' links. A new key replaces the old one by connecting again at the same URL (spec v21) | [`credentials.rs`](../../../../control/crates/layerfs-bucket/src/bucket/credentials.rs), [`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) `credentials` |
 | Keys must be non-empty printable ASCII, else `Invalid` "empty or unprintable credentials". | [`credentials.rs`](../../../../control/crates/layerfs-bucket/src/bucket/credentials.rs) `checked` |
 | `connect` checks the key and sends nothing. | [`minio/provider.rs`](../../../../control/crates/layerfs-bucket/src/bucket/minio/provider.rs), [`r2/provider.rs`](../../../../control/crates/layerfs-bucket/src/bucket/r2/provider.rs) |
 

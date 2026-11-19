@@ -96,6 +96,25 @@ impl BucketRecord {
         ])
     }
 
+    /// Whether `other` names the same place: the same provider and the
+    /// same URL after parsing (account or endpoint, bucket, prefix and r2's
+    /// jurisdiction). The key and the name are not compared.
+    pub fn same_place(&self, other: &Self) -> bool {
+        self.fields.get_text("provider") == other.fields.get_text("provider")
+            && self.url() == other.url()
+    }
+
+    /// This record with key id `access_key`; every other field is kept as
+    /// read.
+    pub fn with_access_key(&self, access_key: &str) -> Self {
+        let fields = home::with_field(
+            self.fields.clone(),
+            "access_key",
+            SdkValue::text(access_key),
+        );
+        Self::from_record(&self.name, fields)
+    }
+
     /// The URL the record was made from: `r2://<account>/<bucket>/<prefix>`
     /// (with `?jurisdiction=`) or `<endpoint>/<bucket>/<prefix>`.
     pub fn url(&self) -> String {
@@ -118,18 +137,20 @@ impl BucketRecord {
 
     /// The bucket's key: its id from the record and its secret from the
     /// home's secret folder. A record with no key id (written before 2.0)
-    /// is refused with the fix that connects it again.
+    /// is refused with the fix that connects it again at its URL, which
+    /// keeps its key and its Stores' links (spec v21).
     pub fn credentials(&self, home: &Path) -> Result<Credentials> {
         let Some(access_key) = self.fields.get_text("access_key") else {
             let name = &self.name;
             let refusal = refused(
                 "Failed",
-                format!("bucket {name}'s record names no access key; disconnect it and connect it again"),
+                format!("bucket {name}'s record names no access key; connect it again at its URL with its key"),
             );
             return Err(layerfs_home::outcome::with_fix(
                 refusal,
                 format!(
-                    "layerfs backup disconnect {name} && layerfs backup connect {name} {} --access-key <key> --key-stdin",
+                    "layerfs backup connect {} {} --access-key <key> --key-stdin",
+                    layerfs_home::outcome::shell_word(name),
                     layerfs_home::outcome::shell_word(&self.url())
                 ),
             ));

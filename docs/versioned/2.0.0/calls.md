@@ -1464,9 +1464,18 @@ the Store.
   0600), never answered, and the call log records its byte count only, as
   it does for the URL. `connect` makes one listing before it records
   anything: a bucket that does not answer or refuses the key is
-  `Unavailable`; a name that is taken is `Exists` (to change a key,
-  disconnect and connect). A bucket connected before 2.0 keeps the key
-  reference its record names.
+  `Unavailable`. Its outcome is `connected`.
+- **A new key (spec v21).** `connect` under a taken name at the same URL
+  (the same provider, bucket and prefix after parsing, with r2's account
+  and `?jurisdiction=`) replaces the key: the one listing proves the new
+  key first, and on `Unavailable` nothing changes. Then the secret and the
+  record's `access_key` are replaced, and every Store's link to the bucket
+  stays. The long form's `outcome` is `rotated`; the short form is
+  `{"ok":true}`, as for a first connect. A taken name at another URL is
+  `Exists`, with the fix `layerfs backup disconnect <name>`; a new name
+  works too. A bucket record written before 2.0 has no key id: every call
+  that needs its key is refused with the fix that connects it again at its
+  URL.
 - **`list`** answers one row per Store file in each bucket, and one per
   link whose file the bucket does not hold (`missing: true`). `behind` says
   the Store changed since its last backup (its heads read where it lives:

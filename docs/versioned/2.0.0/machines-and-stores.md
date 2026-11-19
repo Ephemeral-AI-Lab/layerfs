@@ -476,9 +476,13 @@ layerfs backup doctor lab --full
   `secret_key`) and is kept in the home's secret folder
   (`secret/bucket/<bucket>`, 0600), never answered or logged. One
   listing checks the bucket and key before anything is recorded: a bucket
-  that does not answer or refuses the key is `Unavailable`, a name already
-  connected `Exists` (to change a key, disconnect and connect). A bucket
-  connected before 2.0 keeps the key reference its record names.
+  that does not answer or refuses the key is `Unavailable`. To change a
+  key, connect again under the same name at the same URL: the new key is
+  proven first (nothing changes when it fails), then it replaces the old
+  one and the Stores' links stay (`outcome: "rotated"`). A taken name at
+  another URL is `Exists`, with the fix `layerfs backup disconnect <name>`;
+  a new name works too. A bucket record written before 2.0 has no key id
+  and is refused with the fix that connects it again at its URL.
 - **`backup create <store> <bucket> [--file F]`.** `F` defaults to the
   Store's name. The snapshot is taken on the Store's own machine; its bytes
   pass through the caller's process, so machines never hold bucket keys.
