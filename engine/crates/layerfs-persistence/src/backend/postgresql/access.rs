@@ -116,14 +116,7 @@ pub(crate) fn compaction_missing(session: &Session) -> HistoryResult<Option<&'st
 pub fn access(url: &str, schema: &str) -> Result<PostgresAccess, PostgresStatusError> {
     let connector = Connector::new(&PostgresSelection::new(url, "public"))
         .map_err(|_| PostgresStatusError::Unreachable("the URL does not parse".to_owned()))?;
-    let mut client = connector
-        .connect_raw()
-        .map_err(|error| match error.code() {
-            Some(code) if code.code().starts_with("28") || code.code() == "3D000" => {
-                PostgresStatusError::Denied(error.to_string())
-            }
-            _ => PostgresStatusError::Unreachable(error.to_string()),
-        })?;
+    let mut client = connector.connect_status()?;
     let failed = |error: postgres::Error| PostgresStatusError::Failed(error.to_string());
     let started = Instant::now();
     let server_version: String = client

@@ -7,6 +7,8 @@ use layerfs_home::outcome::refused;
 pub use layerfs_persistence::diagnostic::{
     Observation, Options, Outcome, ProjectCoverage, PROJECT_CHECK,
 };
+/// How long a PostgreSQL connection may take to be made and logged in.
+pub use layerfs_persistence::POSTGRESQL_HANDSHAKE;
 use std::path::Path;
 
 /// Diagnoses the authoritative same-kernel SQLite file without modifying it.

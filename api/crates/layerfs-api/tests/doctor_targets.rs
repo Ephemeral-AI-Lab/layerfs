@@ -421,3 +421,84 @@ fn a_store_s_broken_record_gives_its_state_s_fix() {
     }
     let _ = std::fs::remove_dir_all(home);
 }
+
+/// A server that accepts the socket and then says nothing (a paused
+/// container, area 4): `store doctor` fails `store.connection` within the
+/// handshake limit, inside its 10 s budget, and records this computer's
+/// reach as `failed` without dialling twice; `store get --with live` reads
+/// the Store `broken` `unreachable` within the same limit.
+#[test]
+fn a_silent_server_fails_its_connection_within_the_handshake_limit() {
+    use std::time::{Duration, Instant};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    // holds every socket it accepts and never answers; it ends with the
+    // test process, and no other thread waits on it
+    std::thread::spawn(move || {
+        let mut held = Vec::new();
+        for stream in listener.incoming() {
+            held.push(stream);
+        }
+    });
+    let home = tempdir("silent");
+    short(&home, "home.init", &[]);
+    short(
+        &home,
+        "store.save_auth",
+        &[
+            ("auth", t("a")),
+            ("user", t("owner")),
+            ("password", t("pw")),
+        ],
+    );
+    let url = format!("postgresql://127.0.0.1:{port}/layerfs_db?sslmode=disable");
+    write_entity(
+        &paths::store_record(&home, "silent"),
+        &SdkValue::map([
+            ("name", t("silent")),
+            ("kind", t("postgresql")),
+            ("url", t(&url)),
+            ("auth", t("a")),
+            ("schema", t("layerfs")),
+            ("synchronous_commit", t("local")),
+            ("binding", SdkValue::Bytes(vec![1; 16])),
+            ("cursor", SdkValue::Bytes(vec![7; 32])),
+        ]),
+    )
+    .unwrap();
+
+    let started = Instant::now();
+    let report = long(&home, "store.doctor", &[("store", t("silent"))]);
+    let took = started.elapsed();
+    assert!(took < Duration::from_secs(9), "{took:?}");
+    let found = (list(&report, "findings").iter())
+        .find(|f| f.get_text("check") == Some("store.connection"))
+        .unwrap_or_else(|| panic!("{report:?}"));
+    assert_eq!(found.get_text("severity"), Some("error"), "{found:?}");
+    let message = found.get_text("message").unwrap();
+    assert!(message.contains("did not answer within 5 s"), "{message}");
+    assert!(list(&report, "not_checked")
+        .iter()
+        .all(|n| n.get_text("check") != Some("store.connection")));
+
+    let got = long(&home, "store.get", &[("store", t("silent"))]);
+    let here = (list(&got, "connections").iter())
+        .find(|row| row.get("machine") == Some(&SdkValue::Null))
+        .unwrap_or_else(|| panic!("{got:?}"));
+    assert_eq!(here.get_text("reached"), Some("failed"), "{here:?}");
+
+    let started = Instant::now();
+    let live = long(
+        &home,
+        "store.get",
+        &[
+            ("store", t("silent")),
+            ("with", SdkValue::List(vec![t("live")])),
+        ],
+    );
+    let took = started.elapsed();
+    assert!(took < Duration::from_secs(9), "{took:?}");
+    assert_eq!(live.get_text("state"), Some("broken"), "{live:?}");
+    assert_eq!(live.get_text("reason"), Some("unreachable"), "{live:?}");
+    let _ = std::fs::remove_dir_all(home);
+}

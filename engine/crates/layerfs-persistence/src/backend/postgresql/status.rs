@@ -55,14 +55,7 @@ const SIZES: &str = "SELECT s.name, CASE WHEN n.oid IS NULL THEN NULL ELSE \
 pub fn status(url: &str, schemas: &[String]) -> Result<PostgresStatus, PostgresStatusError> {
     let connector = Connector::new(&PostgresSelection::new(url, "public"))
         .map_err(|_| PostgresStatusError::Unreachable("the URL does not parse".to_owned()))?;
-    let mut client = connector
-        .connect_raw()
-        .map_err(|error| match error.code() {
-            Some(code) if code.code().starts_with("28") || code.code() == "3D000" => {
-                PostgresStatusError::Denied(error.to_string())
-            }
-            _ => PostgresStatusError::Unreachable(error.to_string()),
-        })?;
+    let mut client = connector.connect_status()?;
     let failed = |error: postgres::Error| PostgresStatusError::Failed(error.to_string());
     let started = Instant::now();
     let server_version: String = client
@@ -194,14 +187,7 @@ pub fn compact_status(
 ) -> Result<Option<PostgresCompactOpStatus>, PostgresStatusError> {
     let connector = Connector::new(&PostgresSelection::new(url, schema))
         .map_err(|_| PostgresStatusError::Unreachable("the URL does not parse".to_owned()))?;
-    let mut client = connector
-        .connect_raw()
-        .map_err(|error| match error.code() {
-            Some(code) if code.code().starts_with("28") || code.code() == "3D000" => {
-                PostgresStatusError::Denied(error.to_string())
-            }
-            _ => PostgresStatusError::Unreachable(error.to_string()),
-        })?;
+    let mut client = connector.connect_status()?;
     let table = quote_ident(schema);
     let sql = format!(
         "SELECT COALESCE(o.generation,i.generation,0),\

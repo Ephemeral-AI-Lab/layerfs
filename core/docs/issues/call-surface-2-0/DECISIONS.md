@@ -649,3 +649,18 @@ holds the LayerFS data, and manage logins. Spec `tmp/pg-store-v23/SPEC.md` (owne
   (`outdated`, V23-6). Its message names the reason; its `fix` is the line `store list` and `store
   get` give for that state (`layerfs store update <s> --auth <a>` for old fields). The remaining
   checks still run, so a record with old fields whose server answers fails `store.record` alone.
+
+## LF13 (follow-up round, 2026-11-20): a silent PostgreSQL server is unreachable within 5 s
+
+- **LF13** (area 4) Every new PostgreSQL connection is made and logged in within 5 s, or within
+  the URL's `connect_timeout` when it sets one; the driver bounds only the socket, so a server
+  that accepts it and then says nothing (a paused container, a stopped process behind a live port)
+  held the call until the host stopped it and the Store read `unknown`. One attempt, no retry. A
+  status read past the limit is unreachable ("the server did not answer within 5 s (connect and
+  login)"), so `store get --with live` reads `broken` `unreachable`, a reach check is refused
+  `Unavailable`, and a Store open has no session (`Unavailable`, "no connection to the server was
+  made"). The diagnostic driver's connect and login get the same 5 s under a longer deadline, half a
+  Store doctor's 10 s budget: `store doctor`'s `store.connection` fails ("did not answer within
+  5 s", evidence `step: handshake`) instead of reading `not_checked`, this computer's reach is
+  recorded `failed` from that answer, and the server is not dialled a second time. A dial left
+  waiting past the limit ends on its own thread when the server answers or the socket closes.

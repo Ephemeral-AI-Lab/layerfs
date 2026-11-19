@@ -1,5 +1,6 @@
 //! One PostgreSQL connection per session, with TLS and counted work.
 use super::{profile::Settings, rows};
+use crate::backend::postgresql::status::PostgresStatusError;
 use crate::backend::{admission::Admission, records::BackendError};
 use crate::{PostgresSelection, SqlWork};
 use layerfs_storage::StoragePolicy;
@@ -14,7 +15,7 @@ use std::{
         atomic::{AtomicI64, AtomicU64, Ordering},
         Mutex, OnceLock,
     },
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 /// Prepared statements kept per connection before the cache is cleared.
@@ -81,22 +82,87 @@ impl Connector {
         };
         Ok(Self { config, tls })
     }
-    /// One new client, with the driver's own error (for a status read).
-    pub(crate) fn connect_raw(&self) -> Result<Client, postgres::Error> {
-        match &self.tls {
-            Some(tls) => self.config.connect(tls.clone()),
-            None => self.config.connect(NoTls),
+    /// One new client, made within [`HANDSHAKE`] (the URL's
+    /// `connect_timeout` when it sets one): the driver bounds only the
+    /// socket, so a server that accepts it and then says nothing (paused or
+    /// stopped behind a live port) would hold the call forever. The dial
+    /// runs on its own thread; past the limit the call answers
+    /// [`Dial::Silent`] and the thread, left with no one to answer, ends
+    /// when the server answers or the socket closes. One attempt, no retry.
+    pub(crate) fn connect_raw(&self) -> Result<Client, Dial> {
+        let limit = self.config.get_connect_timeout().copied();
+        let limit = limit.unwrap_or(HANDSHAKE);
+        let (config, tls) = (self.config.clone(), self.tls.clone());
+        let (answer, answered) = std::sync::mpsc::sync_channel(1);
+        let dial = move || {
+            let _ = answer.send(match tls {
+                Some(tls) => config.connect(tls),
+                None => config.connect(NoTls),
+            });
+        };
+        let thread = std::thread::Builder::new().name("layerfs-pg-dial".to_owned());
+        thread
+            .spawn(dial)
+            .map_err(|_| Dial::Silent(Duration::ZERO))?;
+        match answered.recv_timeout(limit) {
+            Ok(made) => made.map_err(Dial::Driver),
+            Err(_) => Err(Dial::Silent(limit)),
         }
     }
     pub(crate) fn connect(&self) -> Result<Client, BackendError> {
-        self.connect_raw()
-            .map_err(|e| match (rows::error(&e), e.code()) {
-                // No session exists, so no work can have started: the
-                // server refused it with an error, or no connection was made.
+        self.connect_raw().map_err(|dial| match dial {
+            // No session exists, so no work can have started: the
+            // server refused it with an error, or no connection was made.
+            Dial::Driver(e) => match (rows::error(&e), e.code()) {
                 (BackendError::Unknown, Some(_)) => BackendError::Rejected,
                 (BackendError::Unknown, None) => BackendError::Closed,
                 (other, _) => other,
-            })
+            },
+            Dial::Silent(_) => BackendError::Closed,
+        })
+    }
+    /// One new client for a status read: a refused login or a database that
+    /// does not exist is `Denied`, anything else `Unreachable`.
+    pub(crate) fn connect_status(&self) -> Result<Client, PostgresStatusError> {
+        self.connect_raw().map_err(|dial| match dial {
+            Dial::Driver(error) => match error.code() {
+                Some(code) if code.code().starts_with("28") || code.code() == "3D000" => {
+                    PostgresStatusError::Denied(error.to_string())
+                }
+                _ => PostgresStatusError::Unreachable(error.to_string()),
+            },
+            Dial::Silent(_) => PostgresStatusError::Unreachable(dial.to_string()),
+        })
+    }
+}
+
+/// How long a new connection may take to be made and logged in when its
+/// URL sets no `connect_timeout`, and the diagnostic driver's admission
+/// limit: half a Store doctor's 10 s budget, so a silent server fails its
+/// check with time left to say so (the worker's diagnostic connect has 5 s
+/// too).
+pub const HANDSHAKE: Duration = Duration::from_secs(5);
+
+/// Why [`Connector::connect_raw`] made no client.
+pub(crate) enum Dial {
+    /// The driver's own error: the socket refused, or the server answered
+    /// with an error.
+    Driver(postgres::Error),
+    /// No answer within the limit (zero: the dial could not be started).
+    Silent(Duration),
+}
+
+impl std::fmt::Display for Dial {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Driver(error) => error.fmt(f),
+            Self::Silent(limit) if limit.is_zero() => f.write_str("the dial could not be started"),
+            Self::Silent(limit) => write!(
+                f,
+                "the server did not answer within {} s (connect and login)",
+                limit.as_secs_f64()
+            ),
+        }
     }
 }
 

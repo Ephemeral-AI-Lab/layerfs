@@ -14,6 +14,7 @@ pub(crate) use store::config;
 mod history;
 mod report;
 pub use backend::postgresql::access::{access as postgresql_access, PostgresAccess};
+pub use backend::postgresql::session::connection::HANDSHAKE as POSTGRESQL_HANDSHAKE;
 pub use backend::postgresql::status::{
     compact_status as postgresql_compact_status, status as postgresql_status,
     PostgresCompactOpStatus, PostgresStatus, PostgresStatusError,

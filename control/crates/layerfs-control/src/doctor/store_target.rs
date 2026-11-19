@@ -482,10 +482,15 @@ fn postgresql(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, chec
             let failed = layerfs_store::observed::Reach::failed(&error.message);
             layerfs_store::observed::record(probe.home, record.name(), None, &failed);
         }
-        _ => {
-            fold(record, &seen, checks);
-            here(probe.home, record);
-        }
+        // a server that said nothing within the handshake limit is not
+        // dialled a second time: its silence is the reach recorded
+        _ => match fold(record, &seen, probe.budget.expired(), checks) {
+            Some(silent) => {
+                let failed = layerfs_store::observed::Reach::failed(&silent);
+                layerfs_store::observed::record(probe.home, record.name(), None, &failed);
+            }
+            None => here(probe.home, record),
+        },
     }
     reach(probe, record, checks);
 }
@@ -505,8 +510,16 @@ fn step(o: &Observation) -> &str {
     o.id.strip_prefix("store.connection.").unwrap_or(o.id)
 }
 
-/// Today's connection steps as the three frozen checks.
-fn fold(record: &StoreRecord, seen: &[Observation], checks: &mut Checks) {
+/// Today's connection steps as the three frozen checks. A connection the
+/// handshake limit cut while the Store's budget had time left
+/// (`expired` false) is a server that did not answer: `store.connection`
+/// fails, and its message is returned.
+fn fold(
+    record: &StoreRecord,
+    seen: &[Observation],
+    expired: bool,
+    checks: &mut Checks,
+) -> Option<String> {
     let host = record
         .text("url")
         .and_then(|url| layerfs_store::postgresql::connect::target(url).ok())
@@ -535,7 +548,19 @@ fn fold(record: &StoreRecord, seen: &[Observation], checks: &mut Checks) {
             );
             checks.evidence(CONNECTION, evidence(o));
         }
-        (None, Some(o)) if step(o) == "cancelled" => checks.unknown(CONNECTION, o.message.clone()),
+        (None, Some(o)) if step(o) == "cancelled" && expired => {
+            checks.unknown(CONNECTION, o.message.clone())
+        }
+        (None, Some(o)) if step(o) == "cancelled" => {
+            let limit = diagnostic::POSTGRESQL_HANDSHAKE.as_secs();
+            let message = format!(
+                "this computer cannot reach the server at {host}: it did not answer within {limit} s (connect and login)"
+            );
+            checks.fail(CONNECTION, message.clone());
+            let step = SdkValue::map([("step", SdkValue::text("handshake"))]);
+            checks.evidence(CONNECTION, step);
+            return Some(message);
+        }
         (None, Some(o)) => {
             checks.fail(
                 CONNECTION,
@@ -552,7 +577,7 @@ fn fold(record: &StoreRecord, seen: &[Observation], checks: &mut Checks) {
         ),
         (None, None) => {
             checks.lost(CONNECTION, "the connection gave no answer");
-            return;
+            return None;
         }
     }
     // in the frozen order: identity (or the read that could not make it),
@@ -571,6 +596,7 @@ fn fold(record: &StoreRecord, seen: &[Observation], checks: &mut Checks) {
             }
         }
     }
+    None
 }
 
 /// `store.connection` of PostgreSQL Store `record` from each machine that

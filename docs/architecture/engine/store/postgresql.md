@@ -75,7 +75,13 @@ There is no `postgresql` cargo feature: every build serves both Store kinds.
 
 `access` and `status` open one connection for the call and close it, run
 read-only queries only and never retry. An authentication or unknown
-database error is `Denied`; any other connection failure `Unreachable`. The
+database error is `Denied`; any other connection failure `Unreachable`,
+including a server silent past the 5 s connect-and-login limit
+(`POSTGRESQL_HANDSHAKE`). The driver bounds only the socket, so every new
+connection is dialled on its own thread and waited for within that limit; a
+dial left waiting ends when the server answers or the socket closes. The
+diagnostic driver gives its connect and login the same limit under a longer
+deadline. The
 session keeps the frozen policy and server version the open check read, so
 `PackPersistence::policy` costs no round trip afterwards.
 `compaction_missing(session)` applies the same five Store-wide checks to the
@@ -102,7 +108,7 @@ compaction holds one already and never retains the URL.
 | Event or counter | Meaning | Source |
 | --- | --- | --- |
 | New connection answered with an error | `Rejected` | [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/connection.rs) |
-| No connection made | `Closed` | same |
+| No connection made, or none made and logged in within 5 s (the URL's `connect_timeout` when set; LF13) | `Closed` | same |
 | Lost reply inside a transaction | `Unknown`; session quarantined | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs) |
 | `COMMIT` refused (deferred constraint) | the error; counted as a rollback | same |
 | `round_trips` | each exchange that waits for the server; the handshake is not one | same |

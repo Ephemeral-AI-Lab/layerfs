@@ -65,7 +65,10 @@ impl Driver {
         resolver: &mut crate::diagnostic::Resolver<'_>,
         cancelled: Option<&std::sync::atomic::AtomicBool>,
     ) -> Result<Self, Error> {
-        let admission = deadline.unwrap_or_else(|| Instant::now() + Duration::from_secs(10));
+        // connect and login get the handshake limit even under a longer
+        // deadline: a server that says nothing is unreachable, not slow
+        let limit = Instant::now() + super::connection::HANDSHAKE;
+        let admission = deadline.map_or(limit, |deadline| deadline.min(limit));
         Self::diagnostic_selection(selection, deadline, admission, resolver, cancelled)
     }
     pub(crate) fn diagnostic_admitted(
