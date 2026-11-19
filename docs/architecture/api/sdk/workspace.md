@@ -449,7 +449,7 @@ $ layerfs workspace status tests:agent
 | `Unavailable` | the machine's worker is not recorded or does not answer; a saved daemon that is not ready (raised `StaleSandbox`) | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs), `daemon/pool.rs` |
 | `InvalidInput` | a request over one control record (raised `TooLarge`) | [`daemon/call.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/call.rs) |
 | daemon codes | a daemon control refusal keeps its own code with `detail.phase`, folded to its public code | `daemon/values.rs` |
-| `Failed` | a daemon exchange failed; the message carries the `OperationFailure`, whose `attempted` says the request may have had effects | [`daemon/failure.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/failure.rs) |
+| `Failed` | a daemon exchange failed, in words. When the request was sent and no answer settled it, the message ends "the request was sent; its outcome is not known" and the refusal carries `attempted: true` (beside `error`, and in the long form's `detail`): read the Workspace's state before acting again | [`daemon/values.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) `failure`, [`daemon/failure.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/failure.rs) |
 | `Unknown` | the worker's answer was lost after the request was sent | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 ## Related

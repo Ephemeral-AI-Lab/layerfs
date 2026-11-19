@@ -34,9 +34,18 @@ test("an uncertain outcome says so; a known Failed does not", () => {
   assert.equal(unresolved.content.length, 2);
   assert.equal(isUncertain({ code: "Unresolved" }), true);
 
-  const attempted = errorResult(new LayerFSError("Failed", "SDK operation: Exchange { attempted: true }", null));
+  // a request sent with no answer that settled it: `attempted` flat (the
+  // short form) and in the long form's detail
+  const sent = "the connection to the Sandbox's daemon failed while the request was sent: reset; the request was sent; its outcome is not known";
+  const attempted = errorResult(LayerFSError.from({ error: "Failed", message: sent, attempted: true }));
   assert.equal(attempted.content.length, 2);
+  assert.equal(body(attempted).attempted, true);
+  const long = errorResult(LayerFSError.from({ error: "Failed", message: sent, fix: null, attempted: true, detail: { attempted: true } }));
+  assert.equal(long.content.length, 2);
   assert.equal(isUncertain({ code: "Failed", message: "", detail: { attempted: true } }), true);
+  assert.equal(isUncertain({ code: "Unavailable", message: "", attempted: true }), true);
+  // the words alone, or the retired Debug form, are not read
+  assert.equal(isUncertain({ code: "Failed", message: "SDK operation: Exchange { attempted: true }" }), false);
 
   const known = errorResult(new LayerFSError("Failed", "nothing was attempted", { attempted: false }));
   assert.equal(known.content.length, 1);

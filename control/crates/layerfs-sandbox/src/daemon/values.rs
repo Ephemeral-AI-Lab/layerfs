@@ -66,12 +66,70 @@ pub fn refusal(failure: &OperationFailure) -> Option<SdkRefusal> {
                 detail: SdkValue::map([
                     ("outcome", SdkValue::text("unknown")),
                     ("retryable", SdkValue::Bool(false)),
+                    (ATTEMPTED, SdkValue::Bool(true)),
                 ]),
             })
+            .map(|refusal| layerfs_home::outcome::with_next(refusal, ATTEMPTED, SdkValue::Bool(true)))
         }
         _ => None,
     }
 }
+
+/// The refusal of a daemon operation's `failure`: the daemon's own code when
+/// [`refusal`] gives one, else `Failed` in the failure's words, uncertain
+/// ([`uncertain`]) when its request was sent and no answer settled it.
+pub fn failure(failure: Box<OperationFailure>) -> SdkRefusal {
+    refusal(&failure).unwrap_or_else(|| uncertain(&failure, failure.attempted()))
+}
+
+/// The refusal of one SDK call's `error`: the daemon's refusal as it
+/// answered it, else [`failure`] or [`mount_failure`].
+pub fn sdk_error(error: crate::SdkError) -> SdkRefusal {
+    match error {
+        crate::SdkError::Refused(refusal) => refusal,
+        crate::SdkError::Operation(failed) => failure(failed),
+        crate::SdkError::Mount(failed) => mount_failure(failed),
+    }
+}
+
+/// [`failure`] of a mount: the step that stopped, in words, and whether the
+/// Workspace stayed bound.
+pub fn mount_failure(failure: Box<crate::MountFailure>) -> SdkRefusal {
+    uncertain(&failure, failure.failure.attempted())
+}
+
+/// The refusal of a runtime request's `failure` (a stop, delete or reopen
+/// of a Sandbox's daemon): uncertain when it was sent and nothing observed
+/// settles it.
+pub fn wire(failure: Box<layerfs_sandbox_backend::WireFailure>) -> SdkRefusal {
+    uncertain(&failure, failure.unsettled())
+}
+
+/// `Failed` in `error`'s words. When `attempted`, the request was sent and
+/// its outcome is not known: the words say so, and the refusal carries
+/// `attempted: true` in its detail and flat beside `error`, so the short
+/// form shows it too. Nothing is resent.
+pub fn uncertain(error: impl std::fmt::Display, attempted: bool) -> SdkRefusal {
+    let refusal = layerfs_home::outcome::failed(error);
+    match attempted {
+        false => refusal,
+        true => with_attempted(refusal),
+    }
+}
+
+/// `refusal` marked uncertain: `attempted: true` in its detail and flat.
+fn with_attempted(mut refusal: SdkRefusal) -> SdkRefusal {
+    let sent = layerfs_sandbox_backend::OUTCOME_UNKNOWN;
+    if !refusal.message.contains(sent) {
+        refusal.message = format!("{}; {sent}", refusal.message);
+    }
+    refusal.detail =
+        layerfs_home::home::with_field(refusal.detail, ATTEMPTED, SdkValue::Bool(true));
+    layerfs_home::outcome::with_next(refusal, ATTEMPTED, SdkValue::Bool(true))
+}
+
+/// The key that marks an uncertain refusal: its request was sent.
+pub const ATTEMPTED: &str = "attempted";
 
 /// The refusal of `request` whose answer this build could not read (a
 /// Sandbox daemon of another LayerFS build): `Failed` for a read, which

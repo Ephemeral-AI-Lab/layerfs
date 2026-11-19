@@ -14,7 +14,7 @@ pub use capabilities::{IsolationModel, MountDriver, ProviderCapabilities, Search
 pub use execution::CommandIdentity;
 #[cfg(unix)]
 pub(crate) use failure::STOPPED;
-pub use failure::{RuntimeError, WireFailure};
+pub use failure::{RuntimeError, WireFailure, OUTCOME_UNKNOWN};
 pub use identity::ContainerId;
 pub use image::Image;
 pub use options::{

@@ -53,5 +53,5 @@ pub use types::{
     Bind, CommandIdentity, ContainerId, ExecExit, ExecRequest, Image, IsolationModel, LaunchPhase,
     LaunchRequest, LocalRecord, MountDriver, NamespaceRecord, PendingRequest, ProviderCapabilities,
     ProviderLaunchOptions, RuntimeError, SandboxId, SandboxInspection, SandboxRecord,
-    SearchPathPolicy, WireFailure,
+    SearchPathPolicy, WireFailure, OUTCOME_UNKNOWN,
 };

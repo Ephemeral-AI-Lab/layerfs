@@ -420,9 +420,10 @@ fn reclaim(entry: &Numbered) -> Result<()> {
             ))
         }
         Err(failure) if failure.container_stopped() => {}
-        Err(failure) => return Err(failed(failure)),
+        Err(failure) => return Err(layerfs_sandbox::daemon::values::wire(failure)),
     }
-    (unchecked(&entry.id, &entry.record)?.stopped().delete()).map_err(failed)?;
+    (unchecked(&entry.id, &entry.record)?.stopped().delete())
+        .map_err(layerfs_sandbox::daemon::values::wire)?;
     match std::fs::remove_dir_all(&entry.dir) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(failed(error)),
         _ => Ok(()),

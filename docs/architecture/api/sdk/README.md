@@ -125,7 +125,7 @@ The 1.x names below are gone in 2.0; nothing answers to them.
 | --- | --- | --- |
 | Refusals before any effect | `InvalidInput` (unknown call or argument, wrong kind, a section the call does not list, out of scope); a missing required option | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs) |
 | New work on a removed platform | `Unsupported`, before the home is opened | [`calls/platform_policy.rs`](../../../../api/crates/layerfs-api/src/calls/platform_policy.rs) |
-| Uncertain outcomes | `Unknown`; `Failed` with `attempted`; `Unresolved` on later calls | [Errors and events](../calls/errors-and-events.md#uncertain-outcomes) |
+| Uncertain outcomes | `Unknown`; a refusal with `attempted: true` beside its code (`Failed`, or a daemon's `Unavailable`); `Unresolved` on later calls | [Errors and events](../calls/errors-and-events.md#uncertain-outcomes) |
 | Each call's own refusals | under each call and in "Family errors" | the family pages |
 
 ## Demonstration

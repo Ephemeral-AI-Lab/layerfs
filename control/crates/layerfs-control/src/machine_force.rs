@@ -96,7 +96,9 @@ pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> 
                             continue;
                         }
                         native_attempt = Some(sandbox);
-                        runtime.stop(0).map_err(failed)?;
+                        runtime
+                            .stop(0)
+                            .map_err(layerfs_sandbox::daemon::values::wire)?;
                     }
                 }
                 mark(&home, sandbox, true)?;

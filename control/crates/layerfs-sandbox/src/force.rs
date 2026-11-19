@@ -92,7 +92,7 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
         .map_err(after_stop)?
         .stopped()
         .delete()
-        .map_err(|error| after_stop(failed(error)))?;
+        .map_err(|error| after_stop(crate::daemon::values::wire(error)))?;
     // the table is whole after a holder's panic (layerfs-project#177)
     crate::registry::SANDBOXES
         .lock()

@@ -177,7 +177,7 @@ pub fn reopen(host: &Host) -> Result<Arc<SandboxState>> {
         }
         None => {
             let runtime = observed(host, id, &value)?;
-            let endpoint = runtime.endpoint().map_err(failed)?;
+            let endpoint = runtime.endpoint().map_err(crate::daemon::values::wire)?;
             (Some(runtime), endpoint)
         }
     };
@@ -213,7 +213,7 @@ fn observed(host: &Host, id: &str, value: &DaemonRecord) -> Result<Box<Sandbox>>
         if failure.container_stopped() {
             gone(id, container, true)
         } else {
-            failed(failure)
+            crate::daemon::values::wire(failure)
         }
     })
 }
@@ -272,7 +272,7 @@ pub fn refresh_except_within(
             Err(failure) if absent(&failure) => continue,
             // its refusal, never the raw failure (an unreadable answer
             // from a daemon of another build is a public refusal with a fix)
-            Err(failure) => return Err(crate::lifecycle::operation(failure)),
+            Err(failure) => return Err(crate::daemon::values::failure(failure)),
         };
         let ready = status
             .kernel

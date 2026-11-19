@@ -42,6 +42,9 @@ pub struct WireFailure {
     /// Original request selectors, never described as decoded response facts.
     pub requested_container: Option<super::ContainerId>,
 }
+/// What a failure whose request was sent says of its outcome, in words: an
+/// answer that carries it is uncertain (`attempted: true`), never resent.
+pub const OUTCOME_UNKNOWN: &str = "the request was sent; its outcome is not known";
 /// The cause [`WireFailure::container_stopped`] reports.
 pub(crate) const STOPPED: &str = "exact stopped container observation";
 impl WireFailure {
@@ -67,10 +70,16 @@ impl WireFailure {
             && self.observed_container == self.requested_container
             && matches!(self.cause, RuntimeError::Protocol(STOPPED))
     }
+    /// The request was sent and nothing observed settles what it did: its
+    /// outcome is not known. A stopped daemon observed exactly is settled.
+    pub fn unsettled(&self) -> bool {
+        self.attempted && !self.container_stopped()
+    }
 }
 /// In plain words, never `Debug` text: a daemon that is not running, else
-/// the cause, the runtime's HTTP status when it answered one, and whether
-/// anything was sent.
+/// the cause, the runtime's HTTP status when it answered one, whether
+/// anything was sent (and then that its outcome is not known), and a
+/// failed connection fence.
 impl fmt::Display for WireFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.container_stopped() {
@@ -80,8 +89,12 @@ impl fmt::Display for WireFailure {
         if let Some(status) = self.status {
             write!(f, " (the runtime answered HTTP {status})")?;
         }
-        if !self.attempted {
-            f.write_str("; nothing was sent")?;
+        match self.attempted {
+            true => write!(f, "; {OUTCOME_UNKNOWN}")?,
+            false => f.write_str("; nothing was sent")?,
+        }
+        if let Some(error) = &self.fence_error {
+            write!(f, "; closing its connection also failed: {error}")?;
         }
         Ok(())
     }

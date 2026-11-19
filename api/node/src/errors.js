@@ -2,8 +2,9 @@
  * NotFound, Exists, InUse, Busy, Unresolved, Conflict, Dirty, Capacity,
  * InvalidInput, Unsupported, Unavailable, Failed, Unknown. `fix` is one
  * runnable shell line, or null. The fields the next call needs (a
- * Conflict's `commit`, a Busy's `op`, a Dirty's `paths`) are properties of
- * the error. `detail` is the library's structured detail, present when the
+ * Conflict's `commit`, a Busy's `op`, a Dirty's `paths`, and `attempted:
+ * true` when the request was sent and its outcome is not known) are
+ * properties of the error. `detail` is the library's structured detail, present when the
  * call asked for the long form (`{ detail: true }`), else null. */
 export class LayerFSError extends Error {
   constructor(code, message, detail) {

@@ -11,7 +11,6 @@ use crate::daemon::values;
 use crate::host::{Deploy, Host, Started};
 use crate::record::DaemonRecord;
 use crate::registry::{SandboxState, SANDBOXES};
-use crate::OperationFailure;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::daemon_setup::{DaemonLimits, DaemonSetup};
 use layerfs_bridge::provision::StoreManifest;
@@ -31,10 +30,6 @@ pub const LOG_BYTES: usize = 2048;
 /// it returns the exact admission refusal. The close's `op` intent must not
 /// be held for the whole admission wait (#540).
 const CLOSE_STATUS_WAIT: Duration = Duration::from_secs(2);
-
-pub fn operation(failure: Box<OperationFailure>) -> SdkRefusal {
-    values::refusal(&failure).unwrap_or_else(|| failed(failure))
-}
 
 /// Workspaces one Sandbox holds at once; a mount into a full one is refused
 /// `Capacity`.
@@ -354,9 +349,9 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
         .ok_or_else(|| refused("NoSuchSandbox", format!("Sandbox {id} was closed")))?;
     let mut owner = crate::reopen::recorded(host, &id, &value)?
         .reopen()
-        .map_err(failed)?;
-    owner.stop(STOP_S).map_err(failed)?;
-    owner.delete().map_err(failed)?;
+        .map_err(values::wire)?;
+    owner.stop(STOP_S).map_err(values::wire)?;
+    owner.delete().map_err(values::wire)?;
     lock(&SANDBOXES)?.remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(failed)?;
     layerfs_home::home::generation::moved_above(&directory);
@@ -438,7 +433,7 @@ pub fn reclaim(host: &Host, container: &str, stopped: bool) -> Outcome {
         crate::reopen::recorded(host, id, &value)?
             .stopped()
             .delete()
-            .map_err(failed)?;
+            .map_err(values::wire)?;
     }
     lock(&SANDBOXES)?.remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(failed)?;

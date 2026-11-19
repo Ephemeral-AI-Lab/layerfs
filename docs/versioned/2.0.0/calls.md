@@ -1725,7 +1725,11 @@ answers the public one.
 | `Failed` | `UnknownMethod`, and any code this table does not name |
 
 Every call is one attempt. After `Unknown`, read the state with `list`,
-`get` or `status` before acting again.
+`get` or `status` before acting again. A refusal that carries
+`attempted: true` beside its code (a `Failed`, or an `Unavailable` whose
+daemon ended the connection before it answered) is uncertain the same way:
+the request was sent and no answer settled it, and its message says so
+("the request was sent; its outcome is not known").
 
 ## Shell switches
 

@@ -351,8 +351,9 @@ fn matches_reply(request: &Request, reply: &Reply) -> bool {
     }
 }
 
-/// In plain words, never `Debug` text: where the exchange stopped, then
-/// its cause.
+/// In plain words, never `Debug` text: where the exchange stopped, its
+/// cause, whether the request was sent (then its outcome is not known) and
+/// a failed connection fence.
 impl fmt::Display for ControlFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let at = match self.phase {
@@ -364,9 +365,16 @@ impl fmt::Display for ControlFailure {
         };
         write!(f, "the connection to the Sandbox's daemon failed {at}: ")?;
         match &self.cause {
-            ControlCause::Channel(error) => write!(f, "{error}"),
-            ControlCause::Protocol(error) => write!(f, "{error}"),
+            ControlCause::Channel(error) => write!(f, "{error}")?,
+            ControlCause::Protocol(error) => write!(f, "{error}")?,
         }
+        if self.attempted {
+            write!(f, "; {}", layerfs_sandbox_backend::OUTCOME_UNKNOWN)?;
+        }
+        if let Some(error) = &self.fence_error {
+            write!(f, "; closing the connection also failed: {error}")?;
+        }
+        Ok(())
     }
 }
 impl std::error::Error for ControlFailure {}

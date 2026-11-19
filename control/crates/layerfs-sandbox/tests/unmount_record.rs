@@ -5,7 +5,7 @@ use layerfs_bridge::control::{
 };
 use layerfs_history::WorkspaceId;
 use layerfs_sandbox::unmount_guard::{begin_at, cancel, find_in, finish, forceable, repeat};
-use layerfs_sandbox::{lifecycle, OperationCause, OperationFailure};
+use layerfs_sandbox::{OperationCause, OperationFailure};
 use layerfs_store::project::discovery;
 use std::{
     os::unix::fs::PermissionsExt,
@@ -189,7 +189,7 @@ fn a_retained_answer_carries_its_stage_into_the_record() {
             })),
         })
     };
-    let refusal = lifecycle::operation(failure(TeardownStage::Detach));
+    let refusal = layerfs_sandbox::daemon::values::failure(failure(TeardownStage::Detach));
     assert_eq!(refusal.code, "Failed");
     assert_eq!(refusal.detail.get_text("stage"), Some("Detach"));
     assert!(!refusal.detail.get_bool("detached"));
@@ -209,7 +209,7 @@ fn a_retained_answer_carries_its_stage_into_the_record() {
     }
 }
 
-/// The refusal shape `lifecycle::operation` builds from a daemon `Retained`
+/// The refusal shape `daemon::values::failure` builds from a daemon `Retained`
 /// answer at `stage`.
 fn refusal_at(stage: &str) -> SdkRefusal {
     SdkRefusal {

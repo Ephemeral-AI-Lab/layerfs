@@ -131,11 +131,5 @@ fn query(
 
 /// The one exchange: the daemon's answer, or the refusal it gave, kept exact.
 fn exchange(control: &mut Control) -> Result<SdkValue, SdkRefusal> {
-    operator::call(control, OPERATION, SdkValue::Null).map_err(|error| match error {
-        crate::SdkError::Refused(refusal) => refusal,
-        crate::SdkError::Operation(failure) => {
-            crate::daemon::values::refusal(&failure).unwrap_or_else(|| failed(failure))
-        }
-        crate::SdkError::Mount(failure) => failed(failure),
-    })
+    operator::call(control, OPERATION, SdkValue::Null).map_err(crate::daemon::values::sdk_error)
 }
