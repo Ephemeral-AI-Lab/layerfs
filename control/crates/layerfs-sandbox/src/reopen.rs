@@ -30,12 +30,14 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// A Sandbox whose daemon no longer runs: its process is gone, or stopped
 /// (it closed when idle), which lost every mount in it. Only its records
 /// hold its name; the next mount reclaims them.
+/// Its daemon is a process on either backend (native or namespaces), so
+/// the message names the daemon, not a container.
 pub fn gone(id: &str, container: &str, stopped: bool) -> SdkRefusal {
-    let state = if stopped { "stopped" } else { "gone" };
+    let state = if stopped { "has stopped" } else { "is gone" };
     SdkRefusal {
         code: "NoSuchSandbox".to_owned(),
         message: format!(
-            "the container of Sandbox {id} is {state}, with every Workspace that was in it"
+            "the daemon of Sandbox {id} {state}, and every Workspace that was in it with it"
         ),
         detail: SdkValue::map([
             ("sandbox", SdkValue::text(id)),

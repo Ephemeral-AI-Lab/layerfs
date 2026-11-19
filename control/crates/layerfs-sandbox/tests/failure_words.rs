@@ -102,3 +102,18 @@ fn an_unexpected_failure_refusal_is_its_display() {
     let quoted = layerfs_home::outcome::failed("a \"quoted\" word".to_owned());
     assert_eq!(quoted.message, "a \"quoted\" word");
 }
+
+/// A Sandbox whose daemon ended is named by its daemon, a process on
+/// either backend, never a "container" (UI pass 1, minor).
+#[test]
+fn a_sandbox_whose_daemon_ended_names_its_daemon() {
+    let stopped = layerfs_sandbox::reopen::gone("t1", "c0ffee", true);
+    assert_eq!(stopped.code, "NoSuchSandbox");
+    assert_eq!(
+        stopped.message,
+        "the daemon of Sandbox t1 has stopped, and every Workspace that was in it with it"
+    );
+    let gone = layerfs_sandbox::reopen::gone("t1", "c0ffee", false);
+    assert!(gone.message.starts_with("the daemon of Sandbox t1 is gone"));
+    assert!(!gone.message.contains("container"), "{gone:?}");
+}
