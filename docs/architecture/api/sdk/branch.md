@@ -136,7 +136,7 @@ answer was lost.
 A new Branch from another Branch's head, or from a Commit.
 
 ```text
-CLI     layerfs branch fork <project> <name> [<from>] [--at C]
+CLI     layerfs branch fork <project> <name> [from] [--at C]
 Node    await layerfs.branch.fork(project, name, from?, { at })
 Python  layerfs.branch.fork(project, name, from_=None, *, at=None)
 ```

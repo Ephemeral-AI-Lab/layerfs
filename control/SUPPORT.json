@@ -100,7 +100,7 @@
           "backend": null,
           "kernel": null,
           "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "no Sandbox backend on Windows (O5)" },
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "no Sandbox backend on Windows" },
           "options": [],
           "description": "this host"
         },

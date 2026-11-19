@@ -232,8 +232,21 @@ fn a_key_the_home_does_not_keep_blocks_all_network() {
     let report = f.report(true);
     outcome(&report, "bucket.configuration", "pass");
     outcome(&report, "bucket.credentials", "fail");
+    // the connect-again fix the record's backup calls carry (V21-4, RC-A F4)
+    assert_eq!(
+        check(&report, "bucket.credentials").get_text("fix"),
+        Some(connect_again(&f).as_str())
+    );
     absent(&report, "bucket.list");
     assert!(f.server.state.lock().unwrap().requests.is_empty());
+}
+
+/// The fix of fixture `f`'s bucket when its key is missing (V21-4).
+fn connect_again(f: &Fixture) -> String {
+    format!(
+        "layerfs backup connect production {}/bucket/saved/prefix --access-key <key> --key-stdin",
+        f.server.endpoint
+    )
 }
 
 #[test]
@@ -254,6 +267,10 @@ fn a_record_from_before_2_0_with_no_access_key_fails_credentials_and_sends_nothi
     .unwrap();
     let report = f.report(false);
     outcome(&report, "bucket.credentials", "fail");
+    assert_eq!(
+        check(&report, "bucket.credentials").get_text("fix"),
+        Some(connect_again(&f).as_str())
+    );
     absent(&report, "bucket.list");
     assert!(f.server.state.lock().unwrap().requests.is_empty());
 }

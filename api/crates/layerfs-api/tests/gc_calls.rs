@@ -342,6 +342,75 @@ fn store_compact_sends_each_phase_as_a_progress_event() {
     let _ = std::fs::remove_dir_all(folder);
 }
 
+/// Registers a mount intent on a new Branch `sandbox` of `shop/api`,
+/// placed with Sandbox `sandbox` and owned by this live process, as a
+/// daemon's mount registers one.
+fn plant_mount(home: &Path, sandbox: &str) {
+    use layerfs_history::{GcIntent, GcIntentKind, GcScopeKind};
+    use layerfs_store_service::history::admission;
+    ok(home, "branch.fork", &[p(), ("name", t(sandbox))]);
+    let got = ok(
+        home,
+        "branch.get",
+        &[
+            p(),
+            ("branch", t(sandbox)),
+            ("detail", SdkValue::Bool(true)),
+        ],
+    );
+    let id = got.get_text("id").expect("the Branch's id");
+    let branch = layerfs_bridge::sdk_values::unhex(id).expect("hex");
+    let record = layerfs_store::record::StoreRecord::read(home, "shop")
+        .unwrap()
+        .unwrap();
+    let args =
+        layerfs_store::open_args::OpenArgs::in_root(home, "shop", Some(record.to_record().clone()));
+    let (runtime, boot) = admission::owner_tokens(&format!("ws:{sandbox}"));
+    let intent = GcIntent::shared(
+        admission::op_id(),
+        GcIntentKind::Mount,
+        GcScopeKind::Branch,
+        branch,
+    )
+    .named(Some("api"), Some(sandbox))
+    .placed(Some([7; 32]), Some(sandbox), Some("native"))
+    .owned(Some(&runtime), Some(&boot));
+    layerfs_store::service::with_service(&args, |service| {
+        let catalog = service.store.history();
+        catalog
+            .gc_register(&intent)
+            .map_err(|error| layerfs_home::outcome::failed(error.to_string()))
+    })
+    .unwrap();
+}
+
+/// A mount intent a Sandbox this home no longer records left (RC-B F1: a
+/// forced remove whose daemon stopped before its queued release) is named
+/// by `store doctor` with the compaction as its fix, and `store compact`
+/// ends it before its run; one of a Sandbox the home still records keeps
+/// holding the Store.
+#[test]
+fn store_compact_ends_mount_intents_of_removed_sandboxes() {
+    let (home, folder) = project();
+    plant_mount(&home, "gone");
+    let doctor = ok(&home, "store.doctor", &[("store", t("shop"))]);
+    let findings = format!("{doctor:?}");
+    assert!(findings.contains("gone"), "{findings}");
+    assert!(
+        findings.contains("layerfs store compact shop"),
+        "{findings}"
+    );
+    // answered, not refused InUse
+    ok(&home, "store.compact", &[("store", t("shop"))]);
+    // a Sandbox the home still records: its mount still holds the Store
+    std::fs::create_dir_all(home.join("sandbox").join("kept")).unwrap();
+    plant_mount(&home, "kept");
+    let (code, message) = refused(&home, "store.compact", &[("store", t("shop"))]);
+    assert_eq!(code, "InUse", "{message}");
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(folder);
+}
+
 #[test]
 fn store_compact_refuses_an_unknown_store_and_reports_a_run() {
     let home = tempdir("compact-none");

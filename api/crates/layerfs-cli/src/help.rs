@@ -57,16 +57,16 @@ const OPTIONS: &[&str] = &[
 pub fn usage(call: &Call) -> String {
     let mut line = format!("layerfs {} {}", call.family, shell(call.call));
     for arg in call.args {
-        let word = match arg.kind {
-            Kind::Content | Kind::Json => continue,
-            _ => format!("<{}>", shell(arg.name)),
+        if matches!(arg.kind, Kind::Content | Kind::Json) {
+            continue;
+        }
+        // as the rows write them: `<name>`, and `[name]` when optional
+        let word = match arg.optional {
+            true => format!("[{}]", shell(arg.name)),
+            false => format!("<{}>", shell(arg.name)),
         };
         line.push(' ');
-        line.push_str(&if arg.optional {
-            format!("[{word}]")
-        } else {
-            word
-        });
+        line.push_str(&word);
     }
     for arg in call.options {
         if let Some(word) = option_word(call, arg) {

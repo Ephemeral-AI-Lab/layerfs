@@ -63,7 +63,14 @@ pub(super) fn diagnose(
                 "bucket.configuration",
                 "saved S3 endpoint, region, bucket and prefix configuration is valid",
             );
+            // the connect-again fix the same record's backup calls carry
+            // (V20-7, V21-4; RC-A F4)
+            let fix = refusal.detail.get_text(layerfs_home::outcome::FIX);
+            let fix = fix.map(str::to_owned);
             checks.fail("bucket.credentials", refusal.message);
+            if let Some(fix) = fix {
+                checks.fix("bucket.credentials", fix);
+            }
             return;
         }
     };

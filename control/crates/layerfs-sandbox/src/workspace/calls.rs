@@ -121,11 +121,13 @@ pub fn mount(home: &Path, events: &mut Events<'_>, request: &MountRequest) -> Re
             "InvalidInput",
             "main is the project's published line, not a Branch, and is not mounted: fork a Branch from it and mount that",
         );
+        // a runnable line (RC-A N5): fork `work` from main, then mount it
         return Err(with_fix(
             refusal,
             format!(
-                "layerfs branch fork {project} <name> main",
-                project = shell_word(&project)
+                "layerfs branch fork {project} work && layerfs workspace mount {sandbox} work",
+                project = shell_word(&project),
+                sandbox = shell_word(name),
             ),
         ));
     }

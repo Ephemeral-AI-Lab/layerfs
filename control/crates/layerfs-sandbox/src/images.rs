@@ -48,11 +48,11 @@ pub fn host_only(machine: &str) -> SdkRefusal {
 }
 
 /// `Unavailable` `{what: 'machine'}`: the machine's worker was not reached.
+/// What the refusal already carries stays beside `what`, its `fix` (`layerfs
+/// machine start <m>`) among it (RC-B F2).
 pub fn stopped(refusal: SdkRefusal) -> SdkRefusal {
-    SdkRefusal {
-        detail: SdkValue::map([("what", SdkValue::text("machine"))]),
-        ..refusal
-    }
+    let detail = layerfs_home::home::with_field(refusal.detail, "what", SdkValue::text("machine"));
+    SdkRefusal { detail, ..refusal }
 }
 
 /// Whether Sandboxes run by `executor` are host processes (macOS native).

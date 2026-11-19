@@ -172,7 +172,7 @@ $ layerfs file list shop/api agent /
 Paths under a folder that match a glob.
 
 ```text
-CLI     layerfs file glob <project> <branch> <pattern> [<path>] [--exclude G] [--at C] [--limit 100] [--cursor C]
+CLI     layerfs file glob <project> <branch> <pattern> [path] [--exclude G] [--at C] [--limit 100] [--cursor C]
 Node    await layerfs.file.glob(project, branch, pattern, path?, { exclude, at, limit, cursor })
 Python  layerfs.file.glob(project, branch, pattern, path=None, *, exclude=None, at=None, limit=None, cursor=None)
 ```
@@ -209,7 +209,7 @@ $ layerfs file glob shop/api agent **/*.txt
 Lines under a folder that contain a literal text.
 
 ```text
-CLI     layerfs file grep <project> <branch> <pattern> [<path>] [--include G] [--exclude G] [--ignore-case] [--at C] [--limit 100] [--cursor C]
+CLI     layerfs file grep <project> <branch> <pattern> [path] [--include G] [--exclude G] [--ignore-case] [--at C] [--limit 100] [--cursor C]
 Node    await layerfs.file.grep(project, branch, pattern, path?, { include, exclude, ignore_case, at, limit, cursor })
 Python  layerfs.file.grep(project, branch, pattern, path=None, *, include=None, exclude=None, ignore_case=None, at=None, limit=None, cursor=None)
 ```

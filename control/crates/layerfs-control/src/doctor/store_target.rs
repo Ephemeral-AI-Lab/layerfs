@@ -200,6 +200,37 @@ fn operation(
     }
 }
 
+/// `store.operation` on a sqlite Store on this computer: a mount intent a
+/// Sandbox this home no longer records left (RC-B F1, N12) holds the Store
+/// against compaction; `store compact` ends such intents before its run.
+/// A Store whose intents cannot be read adds nothing here: its connection
+/// and schema checks say why.
+fn removed_mounts(home: &Path, record: &StoreRecord, identity: &Identity, checks: &mut Checks) {
+    let path = paths::store_file(home, record.name());
+    let Ok(mounts) = diagnostic::sqlite_mounts(&path, identity) else {
+        return;
+    };
+    let mut sandboxes: Vec<&str> = (mounts.iter())
+        .filter(|intent| layerfs_store::compact::left_by_removed(home, intent))
+        .filter_map(|intent| intent.sandbox.as_deref())
+        .collect();
+    sandboxes.dedup();
+    if sandboxes.is_empty() {
+        return;
+    }
+    checks.warning(
+        OPERATION,
+        format!(
+            "mount intents of Sandboxes this home no longer records remain ({}); they refuse a compaction until `store compact` ends them",
+            sandboxes.join(", ")
+        ),
+    );
+    checks.fix(
+        OPERATION,
+        format!("layerfs store compact {}", shell_word(record.name())),
+    );
+}
+
 /// A sqlite Store reached where it lives: on this computer for `native`,
 /// through its machine's worker elsewhere.
 fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: &mut Checks) {
@@ -230,6 +261,9 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
         }
     };
     operation(probe.home, record, found.get("compaction"), checks);
+    if let Ok(Executor::Local) = place::on_machine_read(probe.home, &machine) {
+        removed_mounts(probe.home, record, identity, checks);
+    }
     let text = |key: &str| found.get_text(key).map(str::to_owned);
     if found.get("found") != Some(&SdkValue::Bool(true)) {
         checks.fail(

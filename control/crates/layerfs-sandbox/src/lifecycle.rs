@@ -329,9 +329,11 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
         });
     }
     // §5.1: the daemon unmount transaction releases each mount intent; a
-    // force close drains the Workspaces it is about to kill first, so a
-    // stopped Sandbox leaves no live intent that would refuse a later GC
-    // call. A Workspace the daemon cannot drain is reported as unknown below.
+    // force close drains the Workspaces it is about to kill first. A forced
+    // unmount may leave its release queued in the daemon it then stops, so
+    // each mount intent still left is ended below once the daemon is gone.
+    // A Workspace the daemon cannot drain is reported as unknown below.
+    let bound = bound_mounts(&state, &mounted)?;
     drop(_guard);
     for path in &mounted {
         let _ = crate::workspace::serve::unmount(host, Some(path), true, true);
@@ -343,6 +345,7 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
         .map_err(values::wire)?;
     owner.stop(STOP_S).map_err(values::wire)?;
     owner.delete().map_err(values::wire)?;
+    let left = end_mounts(host, &bound);
     lock(&SANDBOXES)?.remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(failed)?;
     layerfs_home::home::generation::moved_above(&directory);
@@ -353,7 +356,45 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
             "unknown",
             SdkValue::List(mounted.into_iter().map(SdkValue::Text).collect()),
         ),
+        ("left", SdkValue::List(left)),
     ]))
+}
+
+/// The Branch and Workspace identity of each of `mounted` this process
+/// holds, read before a forced close drains them.
+fn bound_mounts(
+    state: &crate::registry::SandboxState,
+    mounted: &[String],
+) -> Result<Vec<(String, layerfs_history::BranchId, [u8; 32])>, SdkRefusal> {
+    let mounts = lock(&state.mounts)?;
+    Ok((mounted.iter())
+        .filter_map(|path| {
+            let bound = &mounts.get(path)?.workspace.bound;
+            let workspace = bound.token.workspace.to_bytes();
+            Some((path.clone(), bound.binding.branch.id, workspace))
+        })
+        .collect())
+}
+
+/// Ends the mount intents `bound` left in the Sandbox's Store now that its
+/// daemon, their owner, is stopped (RC-B F1): one attempt each. A
+/// Workspace whose intent could not be ended is a sentence of `left`, the
+/// custody it leaves: the intent may remain, marked uncertain when the
+/// Store refused its delete, and `store compact` then names it.
+fn end_mounts(
+    host: &Host,
+    bound: &[(String, layerfs_history::BranchId, [u8; 32])],
+) -> Vec<SdkValue> {
+    let open = host.open_args();
+    (bound.iter())
+        .filter_map(|(path, branch, workspace)| {
+            let refusal = layerfs_store::service::end_mount(&open, *branch, *workspace).err()?;
+            Some(SdkValue::text(format!(
+                "Workspace {path}'s mount intent may remain in its Store ({}): `layerfs store compact` is refused while it does",
+                refusal.message
+            )))
+        })
+        .collect()
 }
 
 /// Forgets Sandbox `id`, recorded in `directory` (its daemon record

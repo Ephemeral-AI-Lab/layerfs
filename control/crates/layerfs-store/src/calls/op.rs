@@ -9,6 +9,7 @@ use crate::call::store_call;
 use crate::resolve::target;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
+use layerfs_home::helpers::shown;
 use layerfs_home::outcome::{with_next, Outcome};
 use std::path::Path;
 
@@ -222,8 +223,8 @@ pub(super) fn on_project(
 
 /// `refusal` with the fields its caller's next call needs, flat beside it
 /// (call surface 2.0): the head a write expected, as `commit`, on a moved
-/// head; how many Commits a prefix matches, as `matches`; the conflicting
-/// paths of a merge, as `conflicts`.
+/// head; how many Commits a prefix matches, as `matches`; and a merge's
+/// [`conflicts`].
 pub(super) fn next_fields(refusal: SdkRefusal) -> SdkRefusal {
     let mut refusal = refusal;
     let detail = refusal.detail.clone();
@@ -231,12 +232,45 @@ pub(super) fn next_fields(refusal: SdkRefusal) -> SdkRefusal {
         ("HeadMoved", "head", "commit"),
         ("InvalidInput", "matches", "matches"),
         ("AmbiguousMatch", "matches", "matches"),
-        ("Conflict", "conflicts", "conflicts"),
     ];
     for (code, held, next) in carried {
         if let (true, Some(value)) = (refusal.code == code, detail.get(held)) {
             refusal = with_next(refusal, next, value.clone());
         }
     }
-    refusal
+    match refusal.code == "Conflict" && detail.get("conflicts").is_some() {
+        true => conflicts(refusal),
+        false => refusal,
+    }
+}
+
+/// A path `Conflict` (a merge's, or a file write's over a moved head) with
+/// what the caller needs next, as a Workspace Commit's carries it (RC-A
+/// F1): the head of the Branch written to as `commit`, the first 20
+/// conflicting paths as `conflicts`, and `conflicts_count` only when that
+/// list was cut. A merge's engine conflict objects stay in `detail`.
+fn conflicts(refusal: SdkRefusal) -> SdkRefusal {
+    let detail = &refusal.detail;
+    let head = match detail.get("sources") {
+        // a merge: the Branch merged into is its first source
+        Some(SdkValue::List(sources)) => sources.first().and_then(|side| side.get("node")),
+        _ => detail.get("head"),
+    };
+    let head = head.cloned().unwrap_or_default();
+    let text = |value: &SdkValue| match value {
+        SdkValue::Text(_) => Some(value.clone()),
+        _ => value.get("path").cloned(),
+    };
+    let paths: Vec<SdkValue> = match detail.get("paths").or(detail.get("conflicts")) {
+        Some(SdkValue::List(paths)) => paths.iter().filter_map(text).collect(),
+        _ => Vec::new(),
+    };
+    let total = detail.get_int("total").map_or(0, |total| total as usize);
+    let (paths, count) = shown(paths, total, false);
+    let refusal = with_next(refusal, "commit", head);
+    let refusal = with_next(refusal, "conflicts", paths);
+    match count {
+        SdkValue::Null => refusal,
+        count => with_next(refusal, "conflicts_count", count),
+    }
 }

@@ -123,3 +123,78 @@ fn a_status_names_the_head_commit_else_the_fork_layer() {
     let unread = status(SdkValue::Null, SdkValue::Null, SdkValue::Null);
     assert_eq!(unread.get("branch_head"), Some(&SdkValue::Null));
 }
+
+/// `workspace commit --expected` compares with the head `branch get`
+/// answers (RC-A F2): the listed Branch's `commit`, which is the Layer it
+/// was forked at while it has no Commit of its own, and only for the
+/// Branch the Workspace is bound to.
+#[test]
+fn expected_reads_the_head_branch_get_answers() {
+    use layerfs_history::BranchId;
+    use layerfs_sandbox::workspace::serve::listed_head;
+    let mut bytes = [7; layerfs_history::identity::BRANCH_BYTES];
+    bytes[0] = layerfs_history::identity::BRANCH_TAG;
+    let id = BranchId::from_slice(&bytes).unwrap();
+    let hex = layerfs_bridge::sdk_values::hex(id.as_slice());
+    let listed = |id: &str| {
+        let item = SdkValue::map([
+            ("branch", SdkValue::text("w3")),
+            ("commit", SdkValue::text(LAYER)),
+            ("id", SdkValue::text(id)),
+            ("head", SdkValue::Null),
+        ]);
+        SdkValue::map([("items", SdkValue::List(vec![item]))])
+    };
+    assert_eq!(listed_head(&listed(&hex), id).as_deref(), Some(LAYER));
+    assert_eq!(listed_head(&listed("other"), id), None);
+    let none = SdkValue::map([("items", SdkValue::List(Vec::new()))]);
+    assert_eq!(listed_head(&none, id), None);
+}
+
+fn change(path: &str, kind: &str) -> SdkValue {
+    SdkValue::map([
+        ("path", SdkValue::text(path)),
+        ("change", SdkValue::text("added")),
+        ("type", SdkValue::text(kind)),
+    ])
+}
+
+fn dirty(entries: Vec<SdkValue>, partial: bool) -> SdkValue {
+    let refusal = layerfs_home::outcome::refused("Dirty", "1 uncommitted change(s)");
+    let read = SdkValue::map([
+        ("entries", SdkValue::List(entries)),
+        ("partial", SdkValue::Bool(partial)),
+    ]);
+    let refusal = layerfs_sandbox::workspace::serve::dirty_fields(refusal, Some(&read));
+    refusal.detail.get("next").cloned().unwrap()
+}
+
+/// A Dirty refusal lists its changes as `workspace status`'s short form
+/// does (RC-A F3 and NOTE): `type` left out for a file, and
+/// `changes_count` only beside a list cut at its first 20.
+#[test]
+fn a_dirty_refusal_counts_only_a_cut_list_and_lists_as_status_does() {
+    let next = dirty(vec![change("/a.txt", "file"), change("/d", "dir")], false);
+    assert_eq!(next.get("changes_count"), None, "{next:?}");
+    assert_eq!(
+        next.get("changes"),
+        Some(&SdkValue::List(vec![
+            SdkValue::map([
+                ("path", SdkValue::text("/a.txt")),
+                ("change", SdkValue::text("added")),
+            ]),
+            change("/d", "dir"),
+        ]))
+    );
+    assert_eq!(next.get("pending_merge"), Some(&SdkValue::Bool(false)));
+    let many = (0..25).map(|i| change(&format!("/{i}"), "file")).collect();
+    let next = dirty(many, false);
+    let Some(SdkValue::List(shown)) = next.get("changes") else {
+        panic!("{next:?}")
+    };
+    assert_eq!(shown.len(), 20);
+    assert_eq!(next.get_int("changes_count"), Some(25));
+    // a read that hit its bound is cut too
+    let next = dirty(vec![change("/a.txt", "file")], true);
+    assert_eq!(next.get_int("changes_count"), Some(1));
+}
