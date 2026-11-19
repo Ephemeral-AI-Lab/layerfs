@@ -60,6 +60,9 @@ pub mod worker {
     pub use layerfs_machine::worker::*;
 }
 pub use layerfs_control::store::close_idle;
+/// Names the calling program's build, so a bundle sealed from it beside
+/// the executable is used before the cache (`layerfs-machine`).
+pub use layerfs_machine::this_build;
 
 /// The ten families, in the order help lists them, the same from the
 /// `layerfs` binary, Node and Python.
