@@ -609,3 +609,15 @@ holds the LayerFS data, and manage logins. Spec `tmp/pg-store-v23/SPEC.md` (owne
   (`InvalidInput`); `sslkey` and `sslcert` name files and pass.
 - **V23-12** A replica or copy of a Store's database carries its binding, so it counts as the same
   Store (`Exists` for a second name); the manual says so.
+
+## LF10 ruling (overnight integration, 2026-11-20): a Store blocked by a nameless machine
+
+- **LF10** (amends RC-7 for Store calls) A call on a sqlite Store whose machine record has no
+  `vm_name` is refused `Unavailable`, as a Store call is for its machine's other not-ready states
+  (`store.compact`'s refusal rows), not `Failed`: the Store reads `blocked`, `blocked_by {machine,
+  reason: outdated}`, in `store list` and `store get`, so the refusal carries that same
+  `blocked_by` flat beside `error` and `message`, and the machine's own fix (UI2-8's chain, built at
+  the call boundary on the refusal path alone). Its message says the Store is blocked by the
+  machine, then V20-8's sentence. Nothing is dialled. The machine's own calls (`machine start`,
+  `machine stop`, `machine stats`, a PostgreSQL Store's reach check from it) stay `Failed` (RC-7):
+  the machine itself is `broken`. `store remove` of such a Store still goes by its records alone.

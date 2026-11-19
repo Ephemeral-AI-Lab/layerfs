@@ -178,8 +178,10 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   checkpointed into the file and truncated (#86), unless another process
   was still writing or reading it then.
 - A call that needs the worker of a machine whose record has no `vm_name`
-  is refused `Failed` before anything is dialled, with the chain of removes
-  of what is on it (the machine's own last) as its fix.
+  is refused before anything is dialled, with the chain of removes of what
+  is on it (the machine's own last) as its fix: a machine call `Failed`, a
+  call on a sqlite Store on it `Unavailable` with `blocked_by {machine,
+  reason: outdated}`, as `store list` shows that Store.
 - A call that needs a stopped machine is refused `Unavailable`, naming the
   start command: "machine <m> is not running; start it with `layerfs
   machine start <m>`". It dials the worker `worker.json` records once, with
