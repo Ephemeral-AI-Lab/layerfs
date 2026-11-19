@@ -306,13 +306,11 @@ impl List {
 }
 
 /// Whether the provider of the machine `record` names says its VM or
-/// container is stopped: one provider-only probe (`provider_within`, which
-/// dials no worker and runs no guest command), bounded like the walk, asked
-/// only after its worker did not answer. No answer, or no record, is not
-/// stopped.
+/// container is stopped: one probe, bounded like the walk, asked only after
+/// its worker did not answer. No answer, or no record, is not stopped.
 #[cfg(feature = "machine")]
 fn provider_stopped(home: &Path, record: Option<&MachineRecord>) -> bool {
-    use layerfs_machine::platform::{provider_within, State as Kernel};
+    use layerfs_machine::platform::{status_within, State as Kernel};
     let Some(record) = record else {
         return false;
     };
@@ -327,7 +325,7 @@ fn provider_stopped(home: &Path, record: Option<&MachineRecord>) -> bool {
     };
     let deadline = std::time::Instant::now() + BOUNDS.within;
     matches!(
-        provider_within(&spec, deadline),
+        status_within(&spec, deadline),
         Ok(status) if status.kernel == Some(Kernel::Stopped)
     )
 }

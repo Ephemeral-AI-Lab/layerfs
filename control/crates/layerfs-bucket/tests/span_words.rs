@@ -12,7 +12,9 @@ fn a_range_beyond_its_file_reads_as_words() {
         offset: 8,
         length: 4,
     };
-    let refused = open_span(&file, Some(span)).err().expect("beyond the file");
+    let Err(refused) = open_span(&file, Some(span)) else {
+        panic!("a range beyond the file was opened");
+    };
     let said = refused.to_string();
     std::fs::remove_dir_all(&dir).unwrap();
     assert!(
