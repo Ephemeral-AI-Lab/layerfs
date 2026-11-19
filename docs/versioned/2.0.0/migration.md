@@ -37,10 +37,10 @@ Nothing here is published to npm, PyPI or crates.io.
 | Old | 2.0.0 | Status and reason |
 | --- | --- | --- |
 | npm `@layerfs/agent` (`import { LayerFS } from "@layerfs/agent"`) | npm `@layerfs/node` (`api/node`): `import layerfs from "@layerfs/node"` or `import { client, LayerFSError } from "@layerfs/node"`. An ES module for Node 22 or later, MIT | **Replaced.** One package, one native addon. [`api/node/package.json`](../../../api/node/package.json), [Node](../../architecture/api/front-ends/bindings.md#layerfs-node) |
-| npm `@layerfs/cli` (the Node `layerfs` command; #521: 106 commands) | the native `layerfs` command, one Rust binary: the 85 calls plus `import-env`, `worker`, `help` and `--version` | **Replaced.** It is not an npm package: `layerfs-cli` has `publish = false`. The command counts are not comparable (the old ones included the backend and runtime commands). [CLI](../../architecture/api/front-ends/README.md#the-layerfs-command) |
+| npm `@layerfs/cli` (the Node `layerfs` command; #521: 106 commands) | the native `layerfs` command, one Rust binary: the 83 calls plus `import-env`, `worker`, `help` and `--version` | **Replaced.** It is not an npm package: `layerfs-cli` has `publish = false`. The command counts are not comparable (the old ones included the backend and runtime commands). [CLI](../../architecture/api/front-ends/README.md#the-layerfs-command) |
 | npm `@layerfs/backend` (`LayerFSBackend.of(client)`, 14 operator and diagnostic calls) | none, except `layerfs.workspace.status(workspace)` | **Removed** (O25). [Limitations](limitations.md#not-built-refused-as-unsupported), [README](README.md#compatibility-with-110) |
 | npm `@layerfs/runtime` (`LayerFSRuntime.open`, worker start and restart, `project.start_init` / `get_init` / `subscribe_init`, Sandbox and volume sweep) | no package. The `machine`, `store`, `project` and `sandbox` families; `project.init` with `on_progress`; `machine start` and `machine stop` by hand (nothing starts a machine on demand, D11) | **Replaced** in part, **Removed** for the job registry (O22) and the sweep. [Machines and Stores](machines-and-stores.md#starting-and-stopping-manual-535-d11), [Node and Python](sdk.md#functions-as-options) |
-| npm `@layerfs/mcp` (#521: 50 tools, stdio) | `@layerfs/mcp` in `api/mcp` (`layerfs-mcp`, stdio; not published): one tool per call, named `<family>_<call>`; the default `work` profile lists the 17 `agent` calls, `--profile admin` all 85 | **Replaced.** Generated from the Node package's table. [MCP](../../architecture/api/front-ends/mcp.md) |
+| npm `@layerfs/mcp` (#521: 50 tools, stdio) | `@layerfs/mcp` in `api/mcp` (`layerfs-mcp`, stdio; not published): one tool per call, named `<family>_<call>`; the default `work` profile lists the 17 `agent` calls, `--profile admin` all 83 | **Replaced.** Generated from the Node package's table. [MCP](../../architecture/api/front-ends/mcp.md) |
 | Python `layerfs` (#521: `LayerFS.open/init`, `client.fs.*`) | Python `layerfs`: `import layerfs; layerfs.file.read(...)`, `layerfs.client(home=, scope=)`, and `layerfs.aio` for coroutines. Python 3.10 or later | **Replaced.** [Python](../../architecture/api/front-ends/bindings.md#layerfs-python) |
 | `plugins/*` (`dsh-layerfs`, `cursor-agents`, `pi-layerfs`, `magpie-layerfs`, `herdr-layerfs`, `codex-parallel-verify`) | not migrated | **Unavailable.** Their documents still name `@layerfs/agent`, `@layerfs/runtime` or `@layerfs/backend` and break on 2.0 until each is rewritten |
 
@@ -88,7 +88,7 @@ that built it (2.39 on the host used). See
 
 ## 3. Methods
 
-2.0 has one call table of 85 calls in ten families, the same in the shell,
+2.0 has one call table of 83 calls in ten families, the same in the shell,
 Node, Python and MCP ([the calls](calls.md)). Positionals go from the outside
 in: project, Branch, path or new name, other inputs; anything optional is an
 option, and a Commit to read at is the option `at`. Every call takes the
@@ -159,8 +159,8 @@ calls:
 | `machine.platforms` | `home.get --with platforms` |
 | `store.status`, `store.stats` | `store.get --with live`, `store.get --with stats` |
 | `store.push`, `store.pull` | `store.move <store> <machine>` (to or from this computer) |
-| `doctor.fix` | `home.prune <leftover>` |
-| `layerfs doctor` (outside the table), Node `doctor()`, Python `layerfs.doctor()` | the six doctors `home.doctor`, `project.doctor`, `sandbox.doctor`, `machine.doctor`, `store.doctor`, `backup.doctor`; leftovers `home.leftovers` |
+| `doctor.fix` | none: LayerFS removes leftovers itself (v20) |
+| `layerfs doctor` (outside the table), Node `doctor()`, Python `layerfs.doctor()` | the six doctors `home.doctor`, `project.doctor`, `sandbox.doctor`, `machine.doctor`, `store.doctor`, `backup.doctor` |
 
 Every call of the table, its shell line and what it was:
 
@@ -216,8 +216,6 @@ Every call of the table, its shell line and what it was:
 | `home.log` | `layerfs home log [--call C] [--project P] [--client C] [--tag T] [--outcome O] [--since T] [--limit 200] [--cursor C]` | `logs.list` |
 | `home.clear_log` | `layerfs home clear-log` | `logs.reset` |
 | `home.doctor` | `layerfs home doctor` | new |
-| `home.leftovers` | `layerfs home leftovers [--machine M]` | new |
-| `home.prune` | `layerfs home prune <leftover>` | `doctor.fix` |
 | `machine.list` | `layerfs machine list [--with live]` | same name |
 | `machine.get` | `layerfs machine get <machine> [--with live]` | `machine.get`, `machine.status` |
 | `machine.images` | `layerfs machine images <machine> [--with docker]` | same name |
@@ -342,7 +340,6 @@ Every argument the table renamed or dropped, from the frozen rows
 | `home.doctor` | `--quick (layerfs doctor store integrity)` | gone | the whole-Store scan leaves the doctors; `store doctor` stops after the schema check |
 | `home.doctor` | `--write-test (layerfs doctor backup connection)` | `backup doctor --full` | R5 |
 | `home.doctor` | `--text (layerfs doctor)` | `--text` | the global option, as on every call |
-| `home.prune` | `<id>` | `<leftover>` | a thing goes by its own word |
 | `machine.get` | `<name> (machine.get, machine.status)` | `<machine>` | an existing thing is named by its own word, never `name` |
 | `machine.images` | `<name>` | `<machine>` | an existing thing is named by its own word, never `name` |
 | `machine.load_image` | `<name>` | `<machine>` | an existing thing is named by its own word, never `name` |
@@ -471,7 +468,7 @@ not the native call.
 | `client.results(after?)`, a ring of per-call results (#521) | none | **Not restored** (owner decision, [#31](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/31#issuecomment-6657201351)) |
 | the call trace and operator reads of `@layerfs/backend` | the home's call log: one line per call in `<home>/trace/calls.jsonl` (CLI words with redacted values, outcome, time, client, an optional tag), read with `home.log` and cleared with `home.clear_log`; `LAYERFS_TRACE=<file>` appends one `worker.connection` line per connection to a machine's worker | **Changed** (#659). [home and records](../../architecture/control/home/README.md#traces-and-the-call-log) |
 | a health check (`layerfs doctor` of the 2.0 previews, Node `doctor()`, Python `layerfs.doctor()`) | six table calls: `home.doctor`, `project.doctor` (`--full` reads the data), `sandbox.doctor`, `machine.doctor`, `store.doctor`, `backup.doctor` (`--full` tests a write). Each checks its own thing, then each thing on it shallowly, and changes nothing | **Replaced**, with no alias (R1). [The doctors](calls.md#the-doctors) |
-| leftovers in the doctor's report, `doctor.fix` | `home.leftovers` lists them, `home.prune <leftover>` removes one | **Replaced** (R6) |
+| leftovers in the doctor's report, `doctor.fix` | none: LayerFS removes what interrupted operations left itself, at fixed points in later calls and only where it can prove nothing owns it; each removal is a line of `log/sweep.jsonl` ([`home`](calls.md#home-5)). The 2.0 previews' `home.leftovers` and `home.prune` were removed in spec v20 (owner 2026-11-19) with no alias; both exit 2 | **Removed** (v20) |
 | `close()` | `close()` closes idle Stores; the command does it after every call | **Changed** (section 2) |
 
 A doctor **exits 0 once its report is made**, whatever it found; the short

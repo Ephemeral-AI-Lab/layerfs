@@ -175,8 +175,11 @@ worker's root:
 - **`log/uncertain.jsonl`** lists every outcome that is not known
   (`Unknown`), with what was kept. A `project init` whose answer was lost
   names the folder copy that may remain on the machine (`machine`, `copy`,
-  `deadline`), which is what lets `layerfs home prune` remove that copy
-  later. It is never rotated.
+  `deadline`); `project delete` of that project removes the copy. It is
+  never rotated.
+- **`log/sweep.jsonl`** lists each leftover LayerFS removed itself, and
+  each removal that failed and waits for the next sweep: `{ at, kind, path,
+  outcome, bytes, message }` ([`home`](calls.md#home-5)).
 - **Log sizes.** Every other `log/*.jsonl` file rotates once past 16 MiB
   to `log/<name>.1.jsonl`, replacing the one before, as the call log
   does. A machine's `forward.log` is copied to `forward.1.log` and
@@ -213,9 +216,9 @@ worker's root:
   and no doctor lists or reports them.
 - **Leftovers.** What an interrupted call left in these folders (a run
   folder with no record, a staged snapshot, a folder copy, an image
-  temporary) is in no [doctor](calls.md#the-doctors)'s report: `layerfs
-  home leftovers` lists it, and it is removed only by `layerfs home prune
-  <leftover>` ([`home`](calls.md#home-7)).
+  temporary) is in no [doctor](calls.md#the-doctors)'s report: LayerFS
+  removes it itself at fixed points in later calls, only where it can prove
+  nothing owns it ([`home`](calls.md#home-5)).
 
 ### Where each record lives
 

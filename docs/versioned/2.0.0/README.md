@@ -28,7 +28,7 @@ Commit, merge, and publish to `main`.
   Stores: a sqlite Store is one file on one machine, a postgresql Store is a
   database. Backups of sqlite Stores go to r2 or MinIO buckets. See
   [machines, Stores and backups](machines-and-stores.md).
-- **One call table.** 85 calls in ten families: `home`, `project`, `branch`,
+- **One call table.** 83 calls in ten families: `home`, `project`, `branch`,
   `commit`, `file`, `sandbox`, `workspace`, `machine`, `store` and `backup`.
   The `layerfs` command, the Node package, the Python package and the MCP
   server are thin front ends over one Rust library and take the same
@@ -48,7 +48,7 @@ Commit, merge, and publish to `main`.
    Python.
 2. [The home](home.md): the layout of `LAYERFS_HOME`, the one-time
    conversion of a 1.1.0 home, and `layerfs import-env`.
-3. [The calls](calls.md): all 85 calls with their positionals and options,
+3. [The calls](calls.md): all 83 calls with their positionals and options,
    the form of their answers, the doctors, errors and exit codes, the shell
    switches and the folder scope.
 4. [Machines, Stores and backups](machines-and-stores.md): machine kinds,
@@ -70,7 +70,7 @@ Commit, merge, and publish to `main`.
 The code wins over every document below where they differ.
 
 - [The call table](../../../api/crates/layerfs-api/src/), one file per call
-  under its family (`<family>/<call>.rs`): the 85 calls, their arguments,
+  under its family (`<family>/<call>.rs`): the 83 calls, their arguments,
   options and the form of their answers (`layerfs help --json` prints it).
 - [The frozen call surface specification](../../../core/docs/issues/call-surface-2-0/README.md):
   each call's row (`calls.json`) and the rulings (`DECISIONS.md`); a

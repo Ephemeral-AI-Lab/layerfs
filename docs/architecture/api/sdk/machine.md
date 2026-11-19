@@ -251,8 +251,8 @@ The machine's free bytes are checked before anything is created on either
 side. Only then does the host create an exclusive export container
 (labelled with this home, removed with its anonymous volumes on exit or
 error; one a killed copy left is swept by the next copy of the same image to
-the same machine, and any other is a `home leftovers` entry of kind
-`export_container`) and stream `docker export` without the init layer's
+the same machine, and any other by the next copy of an image no copy holds
+([Checks: leftovers](../../control/doctor/checks.md#leftovers))) and stream `docker export` without the init layer's
 files and device or FIFO entries, with the modification times of the folders
 the init layer stamps normalized to epoch 0, so separate exports are
 byte-identical for resume. Sparse entries are expanded while streaming, and

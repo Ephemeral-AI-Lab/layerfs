@@ -5,7 +5,7 @@ description: Use when observing, measuring or troubleshooting a LayerFS 2.0 run 
 
 # Observing a LayerFS run
 
-> **Status:** Current general guide for the LayerFS 2.0 call surface (85
+> **Status:** Current general guide for the LayerFS 2.0 call surface (83
 > calls in 10 families). For whoever watches or troubleshoots a run (an
 > orchestrator, a maintainer), not for an agent doing the work; that is the
 > [`layerfs-js-sdk`](../layerfs-js-sdk/SKILL.md) skill, whose method pages
@@ -27,7 +27,7 @@ key, and `with: [...]` for the sections a call lists.
 | Is storage deduplicating and compressing over a long history? | Per Commit `new_canonical_bytes`, `new_stored_bytes`, `new_metadata_bytes`; Store totals from `store.get(store, { with: ["stats"] })` | [storage metrics](references/storage-metrics.md) |
 | Is a Workspace behind its Branch, what does it hold uncommitted? | `workspace.status` (changed paths, `branch_moved`), `workspace.list`, `sandbox.get` | [reads](references/reads.md#workspaces-and-sandboxes) |
 | Where do Stores and Sandboxes live, are machines up? | `home.get({ with: ["tree"] })`, `store.list`, `store.get`, `machine.list`, `machine.get`, `sandbox.list` | [reads](references/reads.md#stores-and-machines) |
-| Is anything broken in the home? | `home.doctor` and the other five doctors; `home.leftovers` | [reads](references/reads.md#doctors) |
+| Is anything broken in the home? | `home.doctor` and the other five doctors | [reads](references/reads.md#doctors) |
 | What did the Sandbox's daemon or a machine's worker print? | `sandbox.log`, `machine.log`, `sandbox.files` | [daemon logs](references/daemon-logs.md) |
 
 ## What 2.0 cannot tell you

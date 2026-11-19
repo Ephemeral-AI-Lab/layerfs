@@ -104,6 +104,5 @@ for (const n of report.not_checked) console.log("not checked:", JSON.stringify(n
   (`bucket.write_capability`, `bucket.put`, `bucket.get`, `bucket.delete`,
   and `bucket.reconcile` after a put whose reply was lost).
 
-Leftovers of interrupted operations are in no doctor's report:
-[`home.leftovers`](home.md#homeleftovers-and-homeprune) lists them and
-`home.prune(leftover)` removes one.
+Leftovers of interrupted operations are in no doctor's report: LayerFS
+removes them itself ([home: leftovers](home.md#leftovers)).

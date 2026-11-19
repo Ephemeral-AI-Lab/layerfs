@@ -113,7 +113,7 @@ is the home or a worker's root.
 | `layerfs.json`, `layerfs.lock`, `machine/native/`, `machine/docker/` | `home.init`, or the first call of any other kind except `home.get` (which reads a home without opening it), on an empty or missing folder; `docker`'s record carries its `vm_name` | never | [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs), [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs) `ensure_built_ins` |
 | `machine/<m>/forward.log`, `forward.1.log` | the stderr of each detached `ssh -N -L` a `lima` machine's forwards run. Lima's `ssh.config` is not here: it stays in Lima's own instance folder and is only read | with the machine's folder, at `machine.remove` | [`setup/forward.rs`](../../../../control/crates/layerfs-platform/src/setup/forward.rs), [`lima/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/observe.rs) `tunnel` |
 | `machine/docker/worker.log.ended` | a copy of an ended worker's log, taken out of its stopped container | in the call that read it | [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) `ended` |
-| `<home>/run/image-lock/<machine>/<hex>.lock`, `<hex>.json` | one copy of an image on one machine: the `flock` it holds to its end, and its owner record (`pid`, `pid_start`, `pid_boot`, machine, image, since, `since_ms`, and `phase` once the copy names one: `export`, `send`, `unpack`), which `machine.images` reads for a copy's `busy` item and `home.leftovers` for an export container's `report_only`, never testing the `flock`; the folder itself is the prune gate, an exclusive `flock` `machine.prune` holds while it runs and a copy passes before it writes | both end with the copy, and the next copy overwrites a record an owner left by dying; `machine.remove` deletes the machine's folder | [`image_lock.rs`](../../../../control/crates/layerfs-sandbox/src/image_lock.rs) `ImageLock`, `PruneGate` |
+| `<home>/run/image-lock/<machine>/<hex>.lock`, `<hex>.json` | one copy of an image on one machine: the `flock` it holds to its end, and its owner record (`pid`, `pid_start`, `pid_boot`, machine, image, since, `since_ms`, and `phase` once the copy names one: `export`, `send`, `unpack`), which `machine.images` reads for a copy's `busy` item, never testing the `flock`; the folder itself is the prune gate, an exclusive `flock` `machine.prune` holds while it runs and a copy passes before it writes | both end with the copy, and the next copy overwrites a record an owner left by dying; `machine.remove` deletes the machine's folder | [`image_lock.rs`](../../../../control/crates/layerfs-sandbox/src/image_lock.rs) `ImageLock`, `PruneGate` |
 | `<root>/store/<s>/store.sqlite.incoming` | the receiving side of a `store.move` | renamed to `store.sqlite` at install | [`transfer/steps.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) |
 | `store/<s>/backup.lock` | `backup.create`, which holds its `flock` to its end | never; the file stays | [`backup/create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) `Creating` |
 | `<root>/store/<s>/store.sqlite.backup`; `store/<s>/backup.staging` | `backup.create`: the snapshot staged beside the Store's file, and in the home the copy fetched from a worker | when the create ends | same, [`transfer/steps.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) `Stage`, `Unstage` |
@@ -125,9 +125,10 @@ is the home or a worker's root.
 | `/layerfs/data/.layout-3`; `/layerfs/state/secret`, `worker.pid` | the worker's first start from a layout 3 bundle; each worker launch | the marker never. `/layerfs/state` is a tmpfs on `docker` and goes with each container; on a VM its files are replaced by the next launch | [`home/guest.rs`](../../../../control/crates/layerfs-home/src/home/guest.rs), [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs), [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
 
 The run root's entries are in [Backends](../sandboxes/backends.md#the-run-folder).
-What an interrupted operation leaves of these, `layerfs home leftovers`
-(`home.leftovers`) lists and `layerfs home prune <leftover>` (`home.prune`)
-removes: [Doctor: leftovers](../doctor/checks.md#leftovers).
+What an interrupted operation leaves of these LayerFS removes itself, at
+fixed points in later calls and only where it can prove nothing owns it;
+each removal is a line of `log/sweep.jsonl`
+([Doctor: leftovers](../doctor/checks.md#leftovers)).
 
 ### Where each record lives
 
@@ -148,7 +149,7 @@ is in the home; a worker's root that holds a sqlite Store's file keeps
 | Names | Whose | Source |
 | --- | --- | --- |
 | `layerfs.json`, `layerfs.lock`, `generation`, `machine/`, `store/`, `sandbox/`, `backup/`, `log/`, `trace/` | LayerFS's: every path it builds in a home starts with one of them | [`home/paths.rs`](../../../../control/crates/layerfs-home/src/home/paths.rs) |
-| `secret/`, `runtime/`, `job/`, `stat/`, `preset/` | an integration's. LayerFS creates none of them, and neither the home doctor's records scan (four fixed folders) nor the leftover walk of `home.leftovers` (which never lists the home itself) lists, reads or reports them | [`doctor/scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `scan`, [`doctor/leftovers.rs`](../../../../control/crates/layerfs-control/src/doctor/leftovers.rs) |
+| `secret/`, `runtime/`, `job/`, `stat/`, `preset/` | an integration's. LayerFS creates none of them, and neither the home doctor's records scan (four fixed folders) nor a leftover sweep (which never lists the home itself) lists, reads or reports them | [`doctor/scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `scan`, [`sweep.rs`](../../../../control/crates/layerfs-sandbox/src/sweep.rs) |
 
 ### The `op` intent
 
@@ -230,7 +231,7 @@ and both prefixes
 | Worker secret | `machine/<m>/worker.json` (0600) | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) |
 | Sandbox daemon keys | `sandbox/<n>/control.json` (0600) | same |
 | A daemon's private key and, for a PostgreSQL Store, its URL with the password | `config/daemon.setup` (0600, in a 0700 folder) of a started Sandbox's run folder: under the home for a `native` Sandbox | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs) `prepare`, [`store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs) `DaemonStore` |
-| An integration's own secrets | `secret/`, which LayerFS never reads ([top-level names](#top-level-names)) | [`doctor/leftovers.rs`](../../../../control/crates/layerfs-control/src/doctor/leftovers.rs) |
+| An integration's own secrets | `secret/`, which LayerFS never reads ([top-level names](#top-level-names)) | [`doctor/scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) |
 
 A copy of a home carries its secrets: every `worker.json` and
 `control.json`, each started `native` Sandbox's `daemon.setup`, and what an

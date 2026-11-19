@@ -178,7 +178,7 @@ Build first (`--no-run`), then each under a 120 s wall limit.
 | --- | --- | --- | --- |
 | [`exit_codes.rs`](../../../../api/crates/layerfs-cli/tests/exit_codes.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test exit_codes` | Unix | 0, 2 and 125 as above |
 | [`stream.rs`](../../../../api/crates/layerfs-cli/tests/stream.rs), [`stream_exit.rs`](../../../../api/crates/layerfs-cli/tests/stream_exit.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test stream --test stream_exit` | Unix; `stream.rs`'s live half needs `LAYERFS_DAEMON`, else `NOT_RUN`; `stream_exit.rs` uses a stand-in worker | `--stream` passes output; `workspace exec` exits with the command's code with or without it |
-| [`doctor.rs`](../../../../api/crates/layerfs-cli/tests/doctor.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test doctor` | Unix | `layerfs home doctor` prints one report and changes nothing; `home leftovers`, `home prune` |
+| [`doctor.rs`](../../../../api/crates/layerfs-cli/tests/doctor.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test doctor` | Unix | `layerfs home doctor` prints one report and changes nothing; `home leftovers` and `home prune` exit 2 |
 | [`progress.rs`](../../../../api/crates/layerfs-cli/tests/progress.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test progress` | Unix | progress lines on stderr; refusal before any event; closed stderr |
 | [`capabilities.rs`](../../../../api/crates/layerfs-cli/tests/capabilities.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test capabilities` | Unix | `--version --json`, `help --json` without a home |
 | [`package.mjs`](../../../../api/cli/test/package.mjs) | `node --test api/cli/test/package.mjs` | any | the CLI package's licence, platform fields and file list |
