@@ -467,3 +467,11 @@ rewritten, and 2.0 state answers as before.
 - **UI2-4** `--text` prints `ready` in a list's STATE column for a row whose short form left
   `state: ready` out, and keeps the column when every row was ready; `-` stays for any other
   absent value. `layerfs help` says `--text` prints a readable form.
+- **UI2-5** (item d) `store doctor` on a sqlite Store whose file another writer holds reports
+  `store.identity` and `store.schema` as `not_checked` with reason `busy`, never as a schema or id
+  error; `store.connection` passes when the file is there.
+- **UI2-6** (item e) The `layerfs` command uses the Linux bundle beside its executable (symlinks
+  resolved: `<exe dir>/../bundle/<os>-<arch>/`) before the user cache when no `LAYERFS_BUNDLE` is
+  set and its `bundle.json` names this version, worker protocol and the command's own build
+  (commit and dirty flag). `home get --detail` answers the bundle's `source` as
+  `env:LAYERFS_BUNDLE`, `beside` or `cache`.
