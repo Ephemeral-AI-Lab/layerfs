@@ -98,9 +98,10 @@ function usage(words) {
   // an option is `[--name]` or `[--name WORD]` (the row's value word, a
   // default, or `<name>`), a required one the same without brackets, a
   // repeated object option `[--name K=V]...`; a Commit message shows as
-  // `[-m msg]`; `[--with a,b]` lists the sections, no option
+  // `[-m msg]`; `[--with a,b]` lists the sections, no option. A positional
+  // is `<name>`, an optional one `[name]` (a word, never a `-`, in brackets)
   const pattern =
-    /\[<([\w-]+)>\]|\[--([\w-]+) K=V\]\.\.\.|\[(--[\w-]+|-m)(?: (<[\w-]+>|[^\s\][<]+))?\]|(?<=\s)(--[\w-]+)(?: (<[\w-]+>|[^\s\][<-][^\s\][]*))?(?=\s|$)|<([\w-]+)>/g;
+    /\[(\w[\w-]*)\]|\[--([\w-]+) K=V\]\.\.\.|\[(--[\w-]+|-m)(?: (<[\w-]+>|[^\s\][<]+))?\]|(?<=\s)(--[\w-]+)(?: (<[\w-]+>|[^\s\][<-][^\s\][]*))?(?=\s|$)|<([\w-]+)>/g;
   const flagName = (word) => (word === "-m" ? "message" : word?.replace(/^--/, ""));
   for (const [, optionalPositional, repeated, bracketed, bracketedValue, bare, bareValue, positional] of words.matchAll(pattern)) {
     const flag = repeated ?? flagName(bracketed ?? bare);
