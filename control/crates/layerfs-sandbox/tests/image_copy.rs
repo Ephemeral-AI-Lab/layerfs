@@ -81,6 +81,9 @@ fn setup(name: &str) -> (Scratch, Standin, std::path::PathBuf) {
     let standin = Standin::new(&scratch.base.join("standin"));
     let home = scratch.base.join("home");
     fs::create_dir_all(&home).unwrap();
+    // the home is opened, as every call opens it before a copy: a folder
+    // holding a lock record and no `layerfs.json` is not a 2.0 home
+    layerfs_home::home::open(&home).unwrap();
     standin.image(ID, &["demo/pg:17"], ("linux", architecture()), 4000);
     standin.export(&export());
     (scratch, standin, home)
